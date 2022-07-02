@@ -1,9 +1,9 @@
 import { ButtonComponent, ItemView, Notice, Setting, TextComponent } from "obsidian";
-import { VIEW_TYPE } from "./constants";
-import { PocketCastsParser } from "./parser/pcastParser";
-import { Player, PlayerEvents } from "./Player";
-import { Podcast } from "./types/podcast";
-import { formatSeconds } from "./utility/formatSeconds";
+import { VIEW_TYPE } from "../constants";
+import { PocketCastsParser } from "../parser/pcastParser";
+import { Player, PlayerEvents } from "../Player";
+import { Podcast } from "../types/podcast";
+import { formatSeconds } from "../utility/formatSeconds";
 
 export class PodcastView extends ItemView {
     public get podcast(): Podcast { return this._podcast; }
@@ -25,6 +25,13 @@ export class PodcastView extends ItemView {
     getIcon(): string {
         return "dice";
     }
+
+	public clearPodcast() {
+		//@ts-ignore
+		this._podcast = null;
+		console.log("Podcast cleared.", this._podcast);
+		this.render();
+	}
     
     protected async onOpen(): Promise<void> {
         this.render();
@@ -51,8 +58,14 @@ export class PodcastView extends ItemView {
     }
 
     private initialState(): void {
-        const inputEl = new TextComponent(this.contentEl);
-        const buttonEl = new ButtonComponent(this.contentEl);
+        const container = this.contentEl.createDiv();
+        container.addClass('podcast-input-container');
+
+        const inputEl = new TextComponent(container);
+		inputEl.inputEl.style.marginBottom = "0.25rem";
+		inputEl.setPlaceholder("Podcast URL");
+		
+        const buttonEl = new ButtonComponent(container);
         buttonEl.setButtonText("Go!")
         buttonEl.onClick(() => {
             this.getPodcast(inputEl.getValue()).then(() => this.render());
@@ -60,6 +73,12 @@ export class PodcastView extends ItemView {
     }
 
     private podcastState(): void {
+		const imageContainer = this.contentEl.createDiv();
+		imageContainer.addClass('image-container');
+		const img = imageContainer.createEl('img');
+		img.src = this._podcast.artworkUrl || "";
+		img.addClass('podcast-artwork');
+
         const title = this.contentEl.createEl('h2', {text: this._podcast.title});
         title.style.textAlign = "center";
 
@@ -92,30 +111,23 @@ export class PodcastView extends ItemView {
 
         // Sleep until the audio element is loaded.
         // This is a hacky way to do this, but it works.
-        const interval = setInterval(() => {
-            if (this.audioEl.readyState === 4) {
-                clearInterval(interval);
-                this.addProgressBar();
-            }
+        const interval = window.setInterval(() => {
+			if (this.audioEl.readyState === 4) {
+				clearInterval(interval);
+				this.addProgressBar();
+			}
         }, 100);
 
+		this.registerInterval(interval);
 
-        this.audioEl.addEventListener('ended', () => {
-            Player.Instance.stop();
-        });
 
-        this.audioEl.addEventListener('pause', () => {
-            Player.Instance.stop();
-        });
-
-        this.audioEl.addEventListener('play', () => {
-            Player.Instance.start();
-        });
-
-        this.audioEl.addEventListener('error', () => {
+		this.registerDomEvent(this.audioEl, 'ended', Player.Instance.stop.bind(Player.Instance));
+		this.registerDomEvent(this.audioEl, 'pause', Player.Instance.stop.bind(Player.Instance));
+		this.registerDomEvent(this.audioEl, 'play', Player.Instance.start.bind(Player.Instance));
+		this.registerDomEvent(this.audioEl, 'error', () => {
             new Notice("Error playing podcast.");
             Player.Instance.stop();
-        });
+		});
     }
 
     private addProgressBar(): void {
@@ -134,15 +146,15 @@ export class PodcastView extends ItemView {
         const endTimeEl = statusContainer.createEl('span');
         endTimeEl.setText(formatSeconds(endTime, "HH:mm:ss"));
 
-        this.audioEl.addEventListener('timeupdate', () => {
-            ctimeEl.setText(formatSeconds(this.audioEl.currentTime, "HH:mm:ss"));
-            this.progressBarEl.value = this.audioEl.currentTime;
-        });
+		this.registerDomEvent(this.audioEl, 'timeupdate', () => {
+			ctimeEl.setText(formatSeconds(this.audioEl.currentTime, "HH:mm:ss"));
+			this.progressBarEl.value = this.audioEl.currentTime;
+		});
 
-        this.progressBarEl.addEventListener('click', (e: MouseEvent) => {
-            const percent = e.offsetX / this.progressBarEl.offsetWidth;
-            this.audioEl.currentTime = percent * this.audioEl.duration;
-        });
+		this.registerDomEvent(this.progressBarEl, 'click', (e: MouseEvent) => {
+			const percent = e.offsetX / this.progressBarEl.offsetWidth;
+			this.audioEl.currentTime = percent * this.audioEl.duration;
+		});
     }
 
     private onStartPodcast() {
@@ -160,8 +172,7 @@ export class PodcastView extends ItemView {
     private async getPodcast(url: string) {
         try {
             const parser = new PocketCastsParser(url);
-            this._podcast = await parser.parse();
-            console.log(this._podcast);
+			this._podcast = await parser.parse();
         } catch (error) {
             new Notice(error, 5000);
         }

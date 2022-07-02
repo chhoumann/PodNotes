@@ -3,7 +3,7 @@ import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
 import { DEFAULT_SETTINGS, VIEW_TYPE } from 'src/constants';
 import { Player } from 'src/Player';
-import { PodcastView } from 'src/PodcastView';
+import { PodcastView } from 'src/ui/PodcastView';
 import { IPodNotesSettings } from './IPodNotesSettings';
 
 export default class PodNotes extends Plugin {
@@ -33,6 +33,25 @@ export default class PodNotes extends Plugin {
 			callback: () => {
 				this.api.stop();
 			},
+		})
+
+		this.addCommand({
+			id: 'clear-podcast',
+			name: 'Clear Podcast',
+			callback: () => {
+				this.api.clearPodcast();
+				this.api.stop();
+			}
+		})
+
+		this.addCommand({
+			id: 'hrpn',
+			name: 'Reload PodNotes',
+			callback: () => {
+				const id = 'podnotes';
+				//@ts-ignore
+				this.app.plugins.disablePlugin(id).then(() => this.app.plugins.enablePlugin(id))
+			}
 		})
 
 		//this.addSettingTab(new SampleSettingTab(this.app, this));

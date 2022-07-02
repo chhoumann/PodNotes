@@ -9,4 +9,5 @@ export interface IAPI {
 	getPodcastTimeFormatted(format: string): string;
 	start(): void;
 	stop(): void;
+	clearPodcast(): void;
 }

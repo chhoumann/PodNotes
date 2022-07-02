@@ -1,5 +1,5 @@
 import { Player } from "src/Player";
-import { PodcastView } from "src/PodcastView";
+import { PodcastView } from "src/ui/PodcastView";
 import { Podcast } from "src/types/podcast";
 import { formatSeconds } from "src/utility/formatSeconds";
 import { IAPI } from "./IAPI";
@@ -34,4 +34,8 @@ export class API implements IAPI {
     stop(): void {
         Player.Instance.stop();
     }
+
+	clearPodcast(): void {
+		this.view.clearPodcast();
+	}
 }
