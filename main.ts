@@ -18,19 +18,23 @@ export default class PodNotes extends Plugin {
 		this.addCommand({
 			id: 'start-playing',
 			name: 'Play Podcast',
-			checkCallback: () => !Player.Instance.isPlaying && !!this.view.podcast,
-			callback: () => {
-				this.api.stop();
-			}
+			checkCallback: (checking) => {
+				if (checking) {
+					return !Player.Instance.isPlaying && !!this.view.podcast;
+				}
+
+				this.api.start();
+			},
 		});
 
 		this.addCommand({
 			id: 'stop-playing',
 			name: 'Stop Podcast',
-			checkCallback: () => {
-				return this.api.isPlaying && !!this.api.podcast;
-			},
-			callback: () => {
+			checkCallback: (checking) => {
+				if (checking) {
+					return this.api.isPlaying && !!this.api.podcast;
+				}
+
 				this.api.stop();
 			},
 		})
@@ -38,7 +42,11 @@ export default class PodNotes extends Plugin {
 		this.addCommand({
 			id: 'clear-podcast',
 			name: 'Clear Podcast',
-			callback: () => {
+			checkCallback: (checking) => {
+				if (checking) {
+					return !!this.api.podcast;
+				}
+
 				this.api.clearPodcast();
 				this.api.stop();
 			}

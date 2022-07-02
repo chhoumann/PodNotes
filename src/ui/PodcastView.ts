@@ -13,6 +13,7 @@ export class PodcastView extends ItemView {
     private _podcast: Podcast;
     private audioEl: HTMLAudioElement;
     private progressBarEl: HTMLProgressElement;
+	private controlsButton: ButtonComponent;
 
     getViewType(): string {
         return VIEW_TYPE;
@@ -29,7 +30,6 @@ export class PodcastView extends ItemView {
 	public clearPodcast() {
 		//@ts-ignore
 		this._podcast = null;
-		console.log("Podcast cleared.", this._podcast);
 		this.render();
 	}
     
@@ -88,15 +88,15 @@ export class PodcastView extends ItemView {
         const controlsContainer = this.contentEl.createEl('div');
         controlsContainer.classList.add('controls-container');
 
-        const controlButton = new ButtonComponent(controlsContainer);
-        controlButton.setButtonText("Play")
-        controlButton.onClick(() => {
+        this.controlsButton = new ButtonComponent(controlsContainer);
+        this.controlsButton.setButtonText("Play")
+        this.controlsButton.onClick(() => {
             if (Player.Instance.isPlaying) {
                 Player.Instance.stop();
-                controlButton.setButtonText("Play");
+                this.controlsButton.setButtonText("Play");
             } else {
                 Player.Instance.start();
-                controlButton.setButtonText("Pause");
+                this.controlsButton.setButtonText("Pause");
             }
         });
 
@@ -121,9 +121,9 @@ export class PodcastView extends ItemView {
 		this.registerInterval(interval);
 
 
-		this.registerDomEvent(this.audioEl, 'ended', Player.Instance.stop.bind(Player.Instance));
-		this.registerDomEvent(this.audioEl, 'pause', Player.Instance.stop.bind(Player.Instance));
-		this.registerDomEvent(this.audioEl, 'play', Player.Instance.start.bind(Player.Instance));
+		this.registerDomEvent(this.audioEl, 'play', this.onStartPodcast.bind(this));
+		this.registerDomEvent(this.audioEl, 'pause', this.onStopPodcast.bind(this));
+		this.registerDomEvent(this.audioEl, 'ended', this.onStopPodcast.bind(this));
 		this.registerDomEvent(this.audioEl, 'error', () => {
             new Notice("Error playing podcast.");
             Player.Instance.stop();
@@ -160,13 +160,16 @@ export class PodcastView extends ItemView {
     private onStartPodcast() {
         if (!this.audioEl.paused) return;
 
-        this.audioEl.play();
+        this.audioEl.play()
+		this.controlsButton.setButtonText("Pause");
+
     }
 
     private onStopPodcast() {
         if (this.audioEl.paused) return;
 
         this.audioEl.pause();
+		this.controlsButton.setButtonText("Play");
     }
 
     private async getPodcast(url: string) {
