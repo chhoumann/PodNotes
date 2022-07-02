@@ -76,3 +76,11 @@
 	align-items: center;
 	justify-content: center;
 }
+
+.feed-grid {
+	grid-gap: 0rem;
+}
+
+.feed-image {
+	width: 100%;
+}

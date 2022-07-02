@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 export enum PlayerEvents {
     START_PLAYING="start",
     STOP_PLAYING="stop",
-
+	NEW_PODCAST="new",
 }
 
 export interface IPlayer {
@@ -12,7 +12,8 @@ export interface IPlayer {
     /** Remove event listener. */
     off: (event: PlayerEvents, callback: () => void) => void;
     start: () => void;
-    stop: () => void;
+	stop: () => void;
+	new: () => void;
     /** Returns true if the player is playing and false if it is not. */
     isPlaying: boolean;
 }
@@ -51,5 +52,9 @@ export class Player extends EventEmitter implements IPlayer {
     stop(): void {
         this._isPlaying = false;
         this.emit(PlayerEvents.STOP_PLAYING);
-    }
+	}
+	
+	new(): void {
+		this.emit(PlayerEvents.NEW_PODCAST);
+	}
 }

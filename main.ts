@@ -7,7 +7,13 @@ import { PodNotesSettingsTab } from 'src/ui/settings/PodNotesSettingsTab';
 import { PodcastView } from 'src/ui/PodcastView';
 import { IPodNotesSettings } from './src/types/IPodNotesSettings';
 
-export default class PodNotes extends Plugin {
+export interface IPodNotes {
+	settings: IPodNotesSettings;
+	api: IAPI;
+	saveSettings(): Promise<void>;
+}
+
+export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
 	public settings: IPodNotesSettings;
 	
@@ -68,7 +74,7 @@ export default class PodNotes extends Plugin {
 		this.registerView(
 			VIEW_TYPE,
 			(leaf: WorkspaceLeaf) => {
-				this.view = new PodcastView(leaf)
+				this.view = new PodcastView(leaf, this);
 				this.api = new API(this.view);
 				return this.view;
 			}

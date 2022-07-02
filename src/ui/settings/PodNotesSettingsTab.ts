@@ -21,7 +21,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const settingsContainer = containerEl.createDiv();
 		settingsContainer.classList.add('settings-container');
 
-		PodcastQueryGrid(settingsContainer);
+		PodcastQueryGrid(settingsContainer, this.plugin);
 	}
 
 }

@@ -3,9 +3,3 @@ export type PodNote = {
 	filePath: string;
 	podcastFeedKey: string;
 }
-
-/**
- * @param {string} Episode name
- * @param {PodNote} Note
- */
-export type PodNotes = Map<string, PodNote>;

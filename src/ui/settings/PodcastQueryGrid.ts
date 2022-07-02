@@ -1,11 +1,13 @@
+import { IPodNotes } from './../../../main';
 import { ButtonComponent, debounce, TextComponent } from "obsidian";
 import { consume } from "src/iTunesAPIConsumer";
+import { Player } from "src/Player";
 import { PodcastFeed } from "src/types/PodcastFeed";
 
-export function PodcastQueryGrid(container: HTMLElement) {
+export function PodcastQueryGrid(container: HTMLElement, plugin: IPodNotes) {
 	container.empty();
 
-	const heading = container.createEl('h3', { text: 'Search for a podcast' });
+	container.createEl('h3', { text: 'Search for a podcast' });
 	
 	const inputEl = new TextComponent(container);
 	inputEl.inputEl.style.marginBottom = '0.5rem';
@@ -14,7 +16,7 @@ export function PodcastQueryGrid(container: HTMLElement) {
 
 	const debouncedUpdate = debounce(async (value: string) => {
 		const results = await consume(value);
-		renderSearchResults(searchResultsContainer, results);
+		renderSearchResults(searchResultsContainer, results, plugin);
 	}, 500, true);
 	inputEl.onChange(debouncedUpdate);
 
@@ -22,7 +24,7 @@ export function PodcastQueryGrid(container: HTMLElement) {
 	searchResultsContainer.classList.add('search-results-container');
 }
 
-function renderSearchResults(container: HTMLElement, results: PodcastFeed[]) {
+function renderSearchResults(container: HTMLElement, results: PodcastFeed[], plugin: IPodNotes) {
 	container.empty();
 
 	if (results.length === 0) {
@@ -60,7 +62,11 @@ function renderSearchResults(container: HTMLElement, results: PodcastFeed[]) {
 		const buttonEl = new ButtonComponent(resultEl);
 		buttonEl.setButtonText("Add");
 		buttonEl.onClick(() => {
-			this.plugin.settings.savedFeeds.set(result.url, result);
+			plugin.settings.savedFeeds[result.title] = result;
+			Player.Instance.new();
+			buttonEl.setDisabled(true);
+			buttonEl.setButtonText("Added");
+			plugin.saveSettings();
 		});
 	}
 }

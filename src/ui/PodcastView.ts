@@ -1,11 +1,17 @@
-import { ButtonComponent, ItemView, Notice, Setting, TextComponent } from "obsidian";
+import { PodcastFeed } from 'src/types/PodcastFeed';
+import { IPodNotes } from './../../main';
+import { ButtonComponent, ItemView, Notice, Setting, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../constants";
-import { PocketCastsParser } from "../parser/pcastParser";
 import { Player, PlayerEvents } from "../Player";
 import { Episode } from "../types/Episode";
 import { formatSeconds } from "../utility/formatSeconds";
+import FeedParser from 'src/parser/feedParser';
 
 export class PodcastView extends ItemView {
+	constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
+		super(leaf);
+	}   
+
     public get podcast(): Episode { return this._podcast; }
     public get currentTime(): number { return this.audioEl.currentTime; }
     public get duration(): number { return this.audioEl.duration; }
@@ -38,6 +44,7 @@ export class PodcastView extends ItemView {
 
         Player.Instance.on(PlayerEvents.START_PLAYING, this.onStartPodcast.bind(this));
         Player.Instance.on(PlayerEvents.STOP_PLAYING, this.onStopPodcast.bind(this));
+        Player.Instance.on(PlayerEvents.NEW_PODCAST, this.onNewPodcast.bind(this));
     }
 
     protected async onClose(): Promise<void> {
@@ -45,7 +52,14 @@ export class PodcastView extends ItemView {
 
         Player.Instance.off(PlayerEvents.START_PLAYING, this.onStartPodcast.bind(this));
         Player.Instance.off(PlayerEvents.STOP_PLAYING, this.onStopPodcast.bind(this));
+        Player.Instance.off(PlayerEvents.NEW_PODCAST, this.onNewPodcast.bind(this));
     }
+
+	private onNewPodcast() {
+		if (this._podcast) return;
+
+		this.render();
+	}
 
     private render() {
         this.contentEl.empty();        
@@ -57,8 +71,34 @@ export class PodcastView extends ItemView {
         }
     }
 
-    private initialState(): void {
-        const container = this.contentEl.createDiv();
+	private initialState(): void {
+		const savedFeeds = Object.values(this.plugin.settings.savedFeeds);
+
+		if (!savedFeeds.length) {
+			const noPodcastsIndicator = this.contentEl.createEl('p', { text: 'No saved podcasts' });
+			noPodcastsIndicator.style.textAlign = "center";
+
+			return;
+		}
+		
+		// Create feed grid
+		const feedGrid = this.contentEl.createDiv();
+		feedGrid.classList.add('feed-grid', 'grid-3');
+
+		// Make clickable image for each entry
+		savedFeeds.forEach(feed => {
+			const feedImage = feedGrid.createEl('img');
+			feedImage.src = feed.artworkUrl;
+			feedImage.addClass('feed-image');
+			feedImage.onclick = async () => {
+				await this.getPodcast(feed);
+				this.render();
+			}
+		});
+		
+
+
+/*         const container = this.contentEl.createDiv();
         container.addClass('podcast-input-container');
 
         const inputEl = new TextComponent(container);
@@ -69,7 +109,7 @@ export class PodcastView extends ItemView {
         buttonEl.setButtonText("Go!")
         buttonEl.onClick(() => {
             this.getPodcast(inputEl.getValue()).then(() => this.render());
-        });
+        }); */
     }
 
     private podcastState(): void {
@@ -172,10 +212,13 @@ export class PodcastView extends ItemView {
 		this.controlsButton.setButtonText("Play");
     }
 
-    private async getPodcast(url: string) {
+    private async getPodcast(feed: PodcastFeed) {
         try {
-            const parser = new PocketCastsParser(url);
-			this._podcast = await parser.parse();
+			const parser = new FeedParser(feed);
+            const episode = (await parser.parse(feed.url))[0];
+			this._podcast = episode;
+			//const parser = new PocketCastsParser(url);
+			//this._podcast = await parser.parse();
         } catch (error) {
             new Notice(error, 5000);
         }
