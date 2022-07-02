@@ -3,8 +3,9 @@ import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
 import { DEFAULT_SETTINGS, VIEW_TYPE } from 'src/constants';
 import { Player } from 'src/Player';
+import { PodNotesSettingsTab } from 'src/ui/settings/PodNotesSettingsTab';
 import { PodcastView } from 'src/ui/PodcastView';
-import { IPodNotesSettings } from './IPodNotesSettings';
+import { IPodNotesSettings } from './src/types/IPodNotesSettings';
 
 export default class PodNotes extends Plugin {
 	public api: IAPI;
@@ -62,7 +63,7 @@ export default class PodNotes extends Plugin {
 			}
 		})
 
-		//this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
 		this.registerView(
 			VIEW_TYPE,

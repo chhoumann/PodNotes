@@ -1,9 +1,8 @@
 import { requestUrl } from "obsidian";
-import { Podcast } from "src/types/podcast";
+import { Episode } from "src/types/Episode";
 
 export abstract class Parser {
     url: string;
-    private parsed: any;
 
     constructor(url: string) {
         this.url = url;
@@ -18,5 +17,5 @@ export abstract class Parser {
         return this.parsePage(body);
     }
 
-    protected abstract parsePage(page: Document): Podcast;
+    protected abstract parsePage(page: Document): Episode;
 }

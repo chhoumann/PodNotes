@@ -1,4 +1,4 @@
-export interface Podcast {
+export interface Episode {
     title: string,
 	streamUrl: string
 	url: string,

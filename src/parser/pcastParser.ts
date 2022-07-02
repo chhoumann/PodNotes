@@ -1,8 +1,8 @@
-import { Podcast } from "src/types/podcast";
+import { Episode } from "src/types/Episode";
 import { Parser } from "./parser";
 
 export class PocketCastsParser extends Parser {
-    protected parsePage(page: Document): Podcast {
+    protected parsePage(page: Document): Episode {
         const audioPlayerEl = page.getElementById('audio_player');
 		const headingEl = page.getElementsByTagName('h1')[0];
 		const titleEl = page.querySelector('[property="og:title"]');

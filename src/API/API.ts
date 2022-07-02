@@ -1,13 +1,13 @@
 import { Player } from "src/Player";
 import { PodcastView } from "src/ui/PodcastView";
-import { Podcast } from "src/types/podcast";
+import { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
 import { IAPI } from "./IAPI";
 
 export class API implements IAPI {
     constructor(private view: PodcastView) {}
 
-    public get podcast(): Podcast {
+    public get podcast(): Episode {
         return this.view.podcast;
     }
 

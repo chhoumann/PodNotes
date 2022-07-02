@@ -1,7 +1,7 @@
-import { Podcast } from 'src/types/podcast';
+import { Episode } from 'src/types/Episode';
 
 export interface IAPI {
-	podcast: Podcast;
+	podcast: Episode;
 	isPlaying: boolean;
 	length: number;
 	currentTime: number;

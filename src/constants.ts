@@ -1,7 +1,9 @@
-import { IPodNotesSettings } from "IPodNotesSettings";
+import { PodNote } from './types/PodNotes';
+import { IPodNotesSettings } from "src/types/IPodNotesSettings";
 
 export const VIEW_TYPE = "podcast_player_view";
 
 export const DEFAULT_SETTINGS: IPodNotesSettings = {
-	mySetting: 'default'
+	savedFeeds: [],
+	podNotes: new Map<string, PodNote>(),
 }

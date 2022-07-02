@@ -2,15 +2,15 @@ import { ButtonComponent, ItemView, Notice, Setting, TextComponent } from "obsid
 import { VIEW_TYPE } from "../constants";
 import { PocketCastsParser } from "../parser/pcastParser";
 import { Player, PlayerEvents } from "../Player";
-import { Podcast } from "../types/podcast";
+import { Episode } from "../types/Episode";
 import { formatSeconds } from "../utility/formatSeconds";
 
 export class PodcastView extends ItemView {
-    public get podcast(): Podcast { return this._podcast; }
+    public get podcast(): Episode { return this._podcast; }
     public get currentTime(): number { return this.audioEl.currentTime; }
     public get duration(): number { return this.audioEl.duration; }
 
-    private _podcast: Podcast;
+    private _podcast: Episode;
     private audioEl: HTMLAudioElement;
     private progressBarEl: HTMLProgressElement;
 	private controlsButton: ButtonComponent;
