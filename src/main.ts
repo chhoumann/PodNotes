@@ -63,7 +63,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			id: 'hrpn',
 			name: 'Reload PodNotes',
 			callback: () => {
-				const id = 'podnotes';
+				const id = this.manifest.id;	
 				//@ts-ignore
 				this.app.plugins.disablePlugin(id).then(() => this.app.plugins.enablePlugin(id))
 			}
