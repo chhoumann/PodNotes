@@ -1,5 +1,5 @@
 import { PodcastFeed } from 'src/types/PodcastFeed';
-import { IPodNotes } from './../../main';
+import { IPodNotes } from './../main';
 import { ButtonComponent, ItemView, Notice, Setting, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../constants";
 import { Player, PlayerEvents } from "../Player";

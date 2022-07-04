@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, VIEW_TYPE } from 'src/constants';
 import { Player } from 'src/Player';
 import { PodNotesSettingsTab } from 'src/ui/settings/PodNotesSettingsTab';
 import { PodcastView } from 'src/ui/PodcastView';
-import { IPodNotesSettings } from './src/types/IPodNotesSettings';
+import { IPodNotesSettings } from './types/IPodNotesSettings';
 
 export interface IPodNotes {
 	settings: IPodNotesSettings;

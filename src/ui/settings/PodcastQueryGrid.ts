@@ -1,4 +1,4 @@
-import { IPodNotes } from './../../../main';
+import { IPodNotes } from './../../main';
 import { ButtonComponent, debounce, TextComponent } from "obsidian";
 import { consume } from "src/iTunesAPIConsumer";
 import { Player } from "src/Player";

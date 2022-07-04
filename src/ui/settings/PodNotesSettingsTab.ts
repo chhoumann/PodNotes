@@ -1,5 +1,5 @@
 import { App, PluginSettingTab } from 'obsidian';
-import PodNotes from '../../../main';
+import PodNotes from '../../main';
 import { PodcastQueryGrid } from './PodcastQueryGrid';
 
 export class PodNotesSettingsTab extends PluginSettingTab {
