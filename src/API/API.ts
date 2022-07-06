@@ -26,6 +26,12 @@ export class API implements IAPI {
 		return !get(isPaused);
     }
 
+	/**
+	* Gets the current time in the given moment format.
+	* @param format Moment format.
+	* @param linkify Linking to the podcast so PodNotes can open it at this time later.
+	* @returns 
+	*/
     getPodcastTimeFormatted(format: string, linkify = false): string {
 		if (!this.podcast) {
 			throw new Error("No podcast loaded");
