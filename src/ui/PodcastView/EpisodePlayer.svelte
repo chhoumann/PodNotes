@@ -1,6 +1,4 @@
 <script lang="ts">
-import { get } from "http";
-
     import { ButtonComponent, Setting } from "obsidian";
 	import { duration, currentTime, currentEpisode, isPaused } from "src/store";
 
@@ -30,12 +28,10 @@ import { get } from "http";
 		});
 
         const playbackRateComponent = new Setting(playbackRateRef);
-        //playbackRateComponent.setName("Playback Rate");
         playbackRateComponent.addSlider(slider => slider
             .setLimits(0.5, 4, 0.1)
             .setValue(playbackRate)
             .onChange(value => playbackRate = value)
-            //.setDynamicTooltip()
         );
     });
 
