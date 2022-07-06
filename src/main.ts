@@ -5,7 +5,7 @@ import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
 import { DEFAULT_SETTINGS, VIEW_TYPE } from 'src/constants';
 import { PodNotesSettingsTab } from 'src/ui/settings/PodNotesSettingsTab';
-import { PodcastView } from 'src/ui/PodcastView';
+import { MainView } from 'src/ui/PodcastView';
 import { IPodNotesSettings } from './types/IPodNotesSettings';
 import { plugin } from './store';
 import { get } from 'svelte/store';
@@ -20,7 +20,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
 	public settings: IPodNotesSettings;
 	
-	private view: PodcastView;
+	private view: MainView;
 
 	async onload() {
 		plugin.set(this);
@@ -78,7 +78,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.registerView(
 			VIEW_TYPE,
 			(leaf: WorkspaceLeaf) => {
-				this.view = new PodcastView(leaf, this);
+				this.view = new MainView(leaf, this);
 				this.api = new API();
 				return this.view;
 			}

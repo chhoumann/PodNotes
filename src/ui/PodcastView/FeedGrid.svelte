@@ -1,8 +1,14 @@
 <script lang="ts">
     import { PodcastFeed } from "src/types/PodcastFeed";
+	import { createEventDispatcher } from "svelte";
 
     export let feeds: PodcastFeed[] = [];
-    export let onClickFeed: (feed: PodcastFeed) => void;
+
+	const dispatcher = createEventDispatcher();
+
+	function onClickFeed(feed: PodcastFeed) {
+		dispatcher("clickFeed", { feed });
+	}
 </script>
 
 <div class="feed-grid grid-3">
@@ -12,7 +18,7 @@
                 id={feed.title}
                 src={feed.artworkUrl} 
                 alt={feed.title} 
-                on:click={() => onClickFeed(feed)} 
+                on:click={onClickFeed.bind(null, feed)} 
                 class="feed-image"
             />
         {/each}

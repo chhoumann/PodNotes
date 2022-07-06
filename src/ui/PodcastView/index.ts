@@ -3,22 +3,15 @@ import { IPodNotes } from '../../main';
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../../constants";
 import FeedParser from 'src/parser/feedParser';
-import FeedGrid from './FeedGrid.svelte';
-import EpisodePlayer from './EpisodePlayer.svelte';
+import PodcastView from './PodcastView.svelte';
 import { Episode } from 'src/types/Episode';
-import { currentEpisode } from 'src/store';
-import { Unsubscriber } from 'svelte/store';
 
-export class PodcastView extends ItemView {
+export class MainView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
 		super(leaf);
 	}   
 
-    private FeedGrid: FeedGrid;
-    private EpisodePlayer: EpisodePlayer;
-
-	private episode: Episode;
-	private unsubscribeEpisode: Unsubscriber;
+	private PodcastView: PodcastView;
 
     getViewType(): string {
         return VIEW_TYPE;
@@ -33,61 +26,36 @@ export class PodcastView extends ItemView {
     }
 
     protected async onOpen(): Promise<void> {
-		this.unsubscribeEpisode = currentEpisode.subscribe((episode: Episode) => {
-			this.episode = episode;
-			this.render();
-		});
+		this.render();
     }
 
     protected async onClose(): Promise<void> {
-        this.FeedGrid?.$destroy();
-        this.EpisodePlayer?.$destroy();
-		this.unsubscribeEpisode();
+		this.PodcastView?.$destroy();
 
         this.contentEl.empty();    
     }
 
     private render() {
-		this.FeedGrid?.$destroy();
-        this.EpisodePlayer?.$destroy();
-
-        if (!this.episode) {
-            this.showFeedGrid();
-        } else {
-            this.showEpisodeView();
-        }
-    }
-
-	private showFeedGrid(): void {
         const savedFeeds: PodcastFeed[] = Object.values(this.plugin.settings.savedFeeds);
 
-        this.FeedGrid = new FeedGrid({
-            target: this.contentEl,
-            props: {
-                feeds: savedFeeds,
-                onClickFeed: async (feed: PodcastFeed) => {
-                    await this.getPodcast(feed);
-                    this.render();
-                },
-            }
-        });
+		this.PodcastView = new PodcastView({
+			target: this.contentEl,
+			props: {
+				feeds: savedFeeds,
+			}
+		})
     }
 
-    private showEpisodeView(): void {
-        this.EpisodePlayer = new EpisodePlayer({
-            target: this.contentEl,
-		});
-    }
-
-    private async getPodcast(feed: PodcastFeed): Promise<void> {
+    private async getPodcast(feed: PodcastFeed): Promise<Episode[]> {
         try {
 			const parser = new FeedParser(feed);
-            const episode = (await parser.parse(feed.url))[0];
-			currentEpisode.set(episode);
-			//const parser = new PocketCastsParser(url);
-			//this._podcast = await parser.parse();
+            const episodes = (await parser.parse(feed.url));
+			return episodes;
+
+			//currentEpisode.set(episode);
         } catch (error) {
-            new Notice(error, 5000);
+			new Notice(error, 5000);
+			throw new Error(error);
         }
     }
 }
