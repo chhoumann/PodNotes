@@ -32,12 +32,6 @@ export class PodcastView extends ItemView {
         return "dice";
     }
 
-	public clearPodcast() {
-		//@ts-ignore
-		this._podcast = null;
-		this.render();
-	}
-    
     protected async onOpen(): Promise<void> {
 		this.unsubscribeEpisode = currentEpisode.subscribe((episode: Episode) => {
 			this.episode = episode;
@@ -51,7 +45,6 @@ export class PodcastView extends ItemView {
 		this.unsubscribeEpisode();
 
         this.contentEl.empty();    
-
     }
 
     private render() {
