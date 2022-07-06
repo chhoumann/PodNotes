@@ -3,6 +3,7 @@ import { formatSeconds } from "src/utility/formatSeconds";
 import { IAPI } from "./IAPI";
 import { currentEpisode, currentTime, duration, isPaused } from "src/store";
 import { get } from "svelte/store";
+import encodePodnotesURI from "src/utility/encodePodnotesURI";
 
 export class API implements IAPI {
     public get podcast(): Episode {
@@ -31,16 +32,20 @@ export class API implements IAPI {
 		}
 
 		const time = formatSeconds(this.currentTime, format);
+		
 		if (!linkify) return time;
 
 		if (!this.podcast.feedUrl) {
-			throw new Error("No feed url");
+			// Considered handling this as an error case, but I think 
+			// it's better UX to just show the time rather than getting an error.
+			return time;
 		}
 
-		const url = new URL(`obsidian://podnotes`);
-		url.searchParams.set('time', `${this.currentTime}`);
-		url.searchParams.set('url', this.podcast.feedUrl);
-		url.searchParams.set('episodeName', this.podcast.title);
+		const url = encodePodnotesURI(
+			this.podcast.title,
+			this.podcast.feedUrl,
+			this.currentTime
+		);
 
 		return `[${time}](${url.href})`;
     }
