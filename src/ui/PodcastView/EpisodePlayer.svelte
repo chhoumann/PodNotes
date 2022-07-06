@@ -1,22 +1,17 @@
 <script lang="ts">
+import { get } from "http";
+
     import { ButtonComponent, Setting } from "obsidian";
-    import { Player } from "src/Player";
+	import { duration, currentTime, currentEpisode, isPaused } from "src/store";
 
-    import { Episode } from "src/types/Episode";
     import { formatSeconds } from "src/utility/formatSeconds";
-    import { onMount } from "svelte";
-
-    export let episode: Episode;
-    export let audioEl: HTMLAudioElement;
-    export let duration: number = 0;
-    export let currentTime: number = 0;
-
-    export let onStart: () => void;
-    export let onStop: () => void;
-    export let onEnded: () => void;
+    import { onDestroy, onMount } from "svelte";
+	import { Unsubscriber } from "svelte/store";
 
     let buttonRef: HTMLSpanElement;
     let playbackRateRef: HTMLSpanElement;
+	let unsubscriber: Unsubscriber;
+	let playbackRate: number = 1;
 
     onMount(() => {
         const buttonComponent = new ButtonComponent(buttonRef);
@@ -24,51 +19,64 @@
         buttonComponent.setClass("play-button");
         buttonComponent.setCta();
         buttonComponent.onClick(() => {
-        if (Player.Instance.isPlaying) {
-            Player.Instance.stop();
-            buttonComponent.setButtonText("Play");
-        } else {
-            Player.Instance.start();
-            buttonComponent.setButtonText("Pause");
-        }
+			isPaused.update((value) => {
+				return !value;
+			});
         });
 
+		unsubscriber = isPaused.subscribe(value => {
+			const btnText = value ? "Play" : "Pause";
+			buttonComponent.setButtonText(btnText);
+		});
+
         const playbackRateComponent = new Setting(playbackRateRef);
-        playbackRateComponent.setName("Playback Rate");
+        //playbackRateComponent.setName("Playback Rate");
         playbackRateComponent.addSlider(slider => slider
             .setLimits(0.5, 4, 0.1)
-            .setValue(audioEl.playbackRate)
-            .onChange(value => audioEl.playbackRate = value)
-            .setDynamicTooltip()
+            .setValue(playbackRate)
+            .onChange(value => playbackRate = value)
+            //.setDynamicTooltip()
         );
-    })
+    });
+
+	onDestroy(() => unsubscriber());
+
+	function onClickProgressbar(e: MouseEvent) {
+		const progressbar = e.target as HTMLDivElement;
+		const percent = e.offsetX / progressbar.offsetWidth;
+		currentTime.set(percent * $duration);
+	}
+
 </script>
 
 <div class="episode-player">
     <div class="image-container">
         <img 
             class="podcast-artwork"
-            src={episode.artworkUrl}
-            alt={episode.title}
+            src={$currentEpisode.artworkUrl}
+            alt={$currentEpisode.title}
         />
     </div>
 
-    <h2 class="podcast-title">{episode.title}</h2>
+    <h2 class="podcast-title">{$currentEpisode.title}</h2>
 
     <audio 
-        src={episode.streamUrl} 
-        bind:this={audioEl} 
-        bind:duration={duration}
-        bind:currentTime={currentTime}
-        on:play={onStart}
-        on:pause={onStop}
-        on:ended={onEnded}
+        src={$currentEpisode.streamUrl} 
+        bind:duration={$duration}
+        bind:currentTime={$currentTime}
+		bind:paused={$isPaused}
+		bind:playbackRate={playbackRate}
     />
 
     <div class="status-container">
-        <span>{formatSeconds(currentTime, "HH:mm:ss")}</span>
-        <progress style="height: 2rem;" max={duration} value={currentTime} />
-        <span>{formatSeconds(duration, "HH:mm:ss")}</span>
+        <span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
+        <progress
+			style="height: 2rem;" 
+			max={$duration} 
+			value={$currentTime} 
+			on:click={onClickProgressbar}
+		/>
+        <span>{formatSeconds($duration, "HH:mm:ss")}</span>
     </div>
 
     <div class="play-button-container">
@@ -76,6 +84,7 @@
     </div>
     
     <div class="controls-container">
-        <span bind:this={playbackRateRef} />
+		<span>{playbackRate}x</span>
+   	    <span bind:this={playbackRateRef} />
     </div>
 </div>

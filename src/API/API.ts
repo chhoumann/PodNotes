@@ -1,26 +1,24 @@
-import { Player } from "src/Player";
-import { PodcastView } from "src/ui/PodcastView";
 import { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
 import { IAPI } from "./IAPI";
+import { currentEpisode, currentTime, duration, isPaused } from "src/store";
+import { get } from "svelte/store";
 
 export class API implements IAPI {
-    constructor(private view: PodcastView) {}
-
     public get podcast(): Episode {
-        return this.view.podcast;
+		return get(currentEpisode);
     }
 
     public get length(): number {
-        return this.view.duration;
+		return get(duration);
     }
 
     public get currentTime(): number {
-        return this.view.currentTime;
+		return get(currentTime);
     }
  
     public get isPlaying(): boolean {
-        return Player.Instance.isPlaying;
+		return !get(isPaused);
     }
 
     getPodcastTimeFormatted(format: string): string {
@@ -28,14 +26,15 @@ export class API implements IAPI {
     }
 
     start(): void {
-        Player.Instance.start();
+		isPaused.update((_) => false);
     }
 
     stop(): void {
-        Player.Instance.stop();
+		isPaused.update((_) => true);
     }
 
 	clearPodcast(): void {
-		this.view.clearPodcast();
+		//@ts-ignore
+		currentEpisode.update((_) => null);
 	}
 }

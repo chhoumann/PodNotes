@@ -2,10 +2,10 @@ import { Plugin, WorkspaceLeaf } from 'obsidian';
 import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
 import { DEFAULT_SETTINGS, VIEW_TYPE } from 'src/constants';
-import { Player } from 'src/Player';
 import { PodNotesSettingsTab } from 'src/ui/settings/PodNotesSettingsTab';
 import { PodcastView } from 'src/ui/PodcastView';
 import { IPodNotesSettings } from './types/IPodNotesSettings';
+import { plugin } from './store';
 
 export interface IPodNotes {
 	settings: IPodNotesSettings;
@@ -20,6 +20,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private view: PodcastView;
 
 	async onload() {
+		plugin.set(this);
 		await this.loadSettings();
 
 		this.addCommand({
@@ -27,7 +28,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			name: 'Play Podcast',
 			checkCallback: (checking) => {
 				if (checking) {
-					return !Player.Instance.isPlaying && !!this.view.podcast;
+					return !this.api.isPlaying && !!this.api.podcast;
 				}
 
 				this.api.start();
@@ -75,7 +76,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			VIEW_TYPE,
 			(leaf: WorkspaceLeaf) => {
 				this.view = new PodcastView(leaf, this);
-				this.api = new API(this.view);
+				this.api = new API();
 				return this.view;
 			}
 		)
