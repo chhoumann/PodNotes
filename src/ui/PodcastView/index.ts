@@ -55,6 +55,9 @@ export class PodcastView extends ItemView {
     }
 
     private render() {
+		this.FeedGrid?.$destroy();
+        this.EpisodePlayer?.$destroy();
+
         if (!this.episode) {
             this.showFeedGrid();
         } else {
@@ -63,8 +66,6 @@ export class PodcastView extends ItemView {
     }
 
 	private showFeedGrid(): void {
-        this.FeedGrid?.$destroy();
-
         const savedFeeds: PodcastFeed[] = Object.values(this.plugin.settings.savedFeeds);
 
         this.FeedGrid = new FeedGrid({
@@ -73,7 +74,6 @@ export class PodcastView extends ItemView {
                 feeds: savedFeeds,
                 onClickFeed: async (feed: PodcastFeed) => {
                     await this.getPodcast(feed);
-                    this.FeedGrid.$destroy();
                     this.render();
                 },
             }
@@ -81,12 +81,9 @@ export class PodcastView extends ItemView {
     }
 
     private showEpisodeView(): void {
-        this.EpisodePlayer?.$destroy();
-
         this.EpisodePlayer = new EpisodePlayer({
             target: this.contentEl,
 		});
-
     }
 
     private async getPodcast(feed: PodcastFeed): Promise<void> {

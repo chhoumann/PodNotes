@@ -16,13 +16,33 @@ export class API implements IAPI {
     public get currentTime(): number {
 		return get(currentTime);
     }
+
+	public set currentTime(value: number) {
+		currentTime.update((_) => value);
+	}
  
     public get isPlaying(): boolean {
 		return !get(isPaused);
     }
 
-    getPodcastTimeFormatted(format: string): string {
-        return formatSeconds(this.currentTime, format);
+    getPodcastTimeFormatted(format: string, linkify = false): string {
+		if (!this.podcast) {
+			throw new Error("No podcast loaded");
+		}
+
+		const time = formatSeconds(this.currentTime, format);
+		if (!linkify) return time;
+
+		if (!this.podcast.feedUrl) {
+			throw new Error("No feed url");
+		}
+
+		const url = new URL(`obsidian://podnotes`);
+		url.searchParams.set('time', `${this.currentTime}`);
+		url.searchParams.set('url', this.podcast.feedUrl);
+		url.searchParams.set('episodeName', this.podcast.title);
+
+		return `[${time}](${url.href})`;
     }
 
     start(): void {
