@@ -4,6 +4,7 @@ export interface Episode {
 	url: string,
 	description: string,
 	podcastName: string,
+	feedUrl?: string,
 	artworkUrl?: string;
 	episodeDate?: Date;
 }

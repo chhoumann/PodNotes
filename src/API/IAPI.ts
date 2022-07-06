@@ -1,12 +1,12 @@
 import { Episode } from 'src/types/Episode';
 
 export interface IAPI {
-	podcast: Episode;
-	isPlaying: boolean;
-	length: number;
+	readonly podcast: Episode;
+	readonly isPlaying: boolean;
+	readonly length: number;
 	currentTime: number;
 
-	getPodcastTimeFormatted(format: string): string;
+	getPodcastTimeFormatted(format: string, linkify?: boolean): string;
 	start(): void;
 	stop(): void;
 	clearPodcast(): void;

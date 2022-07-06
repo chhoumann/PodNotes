@@ -1,11 +1,14 @@
-import { Plugin, WorkspaceLeaf } from 'obsidian';
+import FeedParser from 'src/parser/feedParser';
+import { currentEpisode } from 'src/store';
+import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
 import { DEFAULT_SETTINGS, VIEW_TYPE } from 'src/constants';
-import { Player } from 'src/Player';
 import { PodNotesSettingsTab } from 'src/ui/settings/PodNotesSettingsTab';
-import { PodcastView } from 'src/ui/PodcastView';
+import { MainView } from 'src/ui/PodcastView';
 import { IPodNotesSettings } from './types/IPodNotesSettings';
+import { plugin } from './store';
+import { get } from 'svelte/store';
 
 export interface IPodNotes {
 	settings: IPodNotesSettings;
@@ -17,9 +20,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
 	public settings: IPodNotesSettings;
 	
-	private view: PodcastView;
+	private view: MainView;
 
 	async onload() {
+		plugin.set(this);
 		await this.loadSettings();
 
 		this.addCommand({
@@ -27,7 +31,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			name: 'Play Podcast',
 			checkCallback: (checking) => {
 				if (checking) {
-					return !Player.Instance.isPlaying && !!this.view.podcast;
+					return !this.api.isPlaying && !!this.api.podcast;
 				}
 
 				this.api.start();
@@ -74,13 +78,33 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.registerView(
 			VIEW_TYPE,
 			(leaf: WorkspaceLeaf) => {
-				this.view = new PodcastView(leaf, this);
-				this.api = new API(this.view);
+				this.view = new MainView(leaf, this);
+				this.api = new API();
 				return this.view;
 			}
 		)
 
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
+
+		this.registerObsidianProtocolHandler('podnotes', async ({url, episodeName, time}) => {
+			if (!url || !episodeName) {
+				new Notice("No good");
+				return;
+			}
+
+			const decodedName = episodeName.replace(/\+/g, ' ');
+			const currentEp = get(currentEpisode);
+
+			if (currentEp?.feedUrl !== url && currentEp?.title !== decodedName) {
+				const pcastParser = new FeedParser();
+				const episode = await pcastParser.findItemByTitle(decodedName, url);
+				currentEpisode.set(episode);
+			}
+
+			if (time) {
+				this.api.currentTime = parseFloat(time);
+			}
+		});
 	}
 
 	onLayoutReady(): void {

@@ -3,24 +3,37 @@ import { requestUrl } from "obsidian";
 import { Episode } from "src/types/Episode";
 
 export default class FeedParser {
-	private feed: PodcastFeed;
+	private feed: PodcastFeed | undefined;
 
-	constructor(feed: PodcastFeed) {
+	constructor(feed?: PodcastFeed) {
 		this.feed = feed;
 	}
 
-	public async parse(url: string) {
-		const req = await requestUrl({url: url});
-		const dp = new DOMParser();
+	public async findItemByTitle(title: string, url: string): Promise<Episode> {
+		const body = await this.parseFeed(url);
 
-		const body = dp.parseFromString(req.text, "text/xml");
+		const items = body.querySelectorAll("item");
+
+		const item = Array.from(items).find(item => {
+			const parsed = this.parseItem(item);
+			return parsed.title === title;
+		});
+
+		if (!item) {
+			throw new Error("Could not find episode");
+		}
+
+		return this.parseItem(item);
+	}
+
+	public async parse(url: string) {
+		const body = await this.parseFeed(url);
 
 		return this.parsePage(body);
 	}
 
 	protected parsePage(page: Document): Episode[] {
 		const items = page.querySelectorAll("item");
-		return [this.parseItem(items[0])];
 
 		return Array.from(items).map(this.parseItem.bind(this));
 	}
@@ -43,16 +56,26 @@ export default class FeedParser {
 		const url = linkEl?.textContent || "";
 		const description = descriptionEl.textContent || "";
 		const pubDate = new Date(pubDateEl.textContent as string);
-		const artworkUrl = itunesImageEl?.getAttribute("href") || this.feed.artworkUrl;
+		const artworkUrl = itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 
 		return {
 			title,
 			streamUrl,
-			url: url || this.feed.url,
+			url: url || this.feed?.url || "",
 			description,
-			podcastName: this.feed.title,
+			podcastName: this.feed?.title || "",
 			artworkUrl,
-			episodeDate: pubDate
+			episodeDate: pubDate,
+			feedUrl: this.feed?.url || "",
 		}
+	}
+
+	private async parseFeed(feedUrl: string): Promise<Document> {
+		const req = await requestUrl({url: feedUrl});
+		const dp = new DOMParser();
+
+		const body = dp.parseFromString(req.text, "text/xml");
+
+		return body;
 	}
 }

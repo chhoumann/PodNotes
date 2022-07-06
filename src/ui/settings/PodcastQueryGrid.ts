@@ -1,7 +1,6 @@
 import { IPodNotes } from './../../main';
 import { ButtonComponent, debounce, TextComponent } from "obsidian";
 import { consume } from "src/iTunesAPIConsumer";
-import { Player } from "src/Player";
 import { PodcastFeed } from "src/types/PodcastFeed";
 
 export function PodcastQueryGrid(container: HTMLElement, plugin: IPodNotes) {
@@ -63,7 +62,6 @@ function renderSearchResults(container: HTMLElement, results: PodcastFeed[], plu
 		buttonEl.setButtonText("Add");
 		buttonEl.onClick(() => {
 			plugin.settings.savedFeeds[result.title] = result;
-			Player.Instance.new();
 			buttonEl.setDisabled(true);
 			buttonEl.setButtonText("Added");
 			plugin.saveSettings();

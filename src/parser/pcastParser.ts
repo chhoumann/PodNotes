@@ -10,6 +10,7 @@ export class PocketCastsParser extends Parser {
 		const descriptionEl = page.querySelector('[property="og:description"]');
 		const episodeDateEl = page.getElementById('episode_date');
 		const artworkEl = page.getElementsByTagName('img');
+		const rssLink = page.getElementsByClassName('rss_button')[0]?.getElementsByTagName('a')[0];
 
 		if (!audioPlayerEl || !headingEl || !titleEl || !episodeDateEl || !artworkEl || !urlEl) {
 			throw new Error("Could not parse podcast");
@@ -35,6 +36,7 @@ export class PocketCastsParser extends Parser {
 			episodeDate: (episodeDate && new Date(episodeDate)) || undefined,
 			artworkUrl: artwork,
 			description,
+			feedUrl: rssLink?.getAttribute('href') || undefined,
 		};
 	}
 	
