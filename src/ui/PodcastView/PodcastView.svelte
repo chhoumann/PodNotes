@@ -22,12 +22,11 @@
 
 </script>
 
-<div>
-	{#if $currentEpisode}
-		<EpisodePlayer />
-	{:else if selectedFeed}
-		<EpisodeList feed={selectedFeed} episodes={episodeList} />
-	{:else}
-		<FeedGrid feeds={feeds} on:clickFeed={handleClickFeed} />
-	{/if}
-</div>
+{#if $currentEpisode}
+	<EpisodePlayer />
+{:else if selectedFeed}
+	<EpisodeList feed={selectedFeed} episodes={episodeList} />
+{:else}
+	<FeedGrid feeds={feeds} on:clickFeed={handleClickFeed} />
+{/if}
+

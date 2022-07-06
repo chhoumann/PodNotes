@@ -1,15 +1,15 @@
 <script lang="ts">
     import { ButtonComponent, Setting } from "obsidian";
-	import { duration, currentTime, currentEpisode, isPaused } from "src/store";
+	import { duration, currentTime, currentEpisode, isPaused, plugin } from "src/store";
 
     import { formatSeconds } from "src/utility/formatSeconds";
     import { onDestroy, onMount } from "svelte";
-	import { Unsubscriber } from "svelte/store";
+	import { get, Unsubscriber } from "svelte/store";
 
     let buttonRef: HTMLSpanElement;
     let playbackRateRef: HTMLSpanElement;
 	let unsubscriber: Unsubscriber;
-	let playbackRate: number = 1;
+	let playbackRate: number = get(plugin).settings.defaultPlaybackRate || 1;
 
     onMount(() => {
         const buttonComponent = new ButtonComponent(buttonRef);
