@@ -12,6 +12,9 @@
 	let playbackRate: number = get(plugin).settings.defaultPlaybackRate || 1;
 
     onMount(() => {
+		duration.set(0);
+		currentTime.set(0);
+
         const buttonComponent = new ButtonComponent(buttonRef);
         buttonComponent.setButtonText("Play");
         buttonComponent.setClass("play-button");
