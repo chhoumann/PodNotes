@@ -7,45 +7,6 @@
   height: 100%;
 }
 
-.status-container {
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-}
-
-.controls-container {
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    margin-bottom: 2.5rem;
-    flex-direction: column;
-	margin-top: auto;
-}
-
-.image-container {
-	width: 100%;
-	padding: 5% 20%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-.podcast-artwork {
-	width: 100%;
-	height: 100%;
-	background-size: cover;
-	background-position: center;
-	background-repeat: no-repeat;
-}
-
-.podcast-title {
-	font-size: 1.5rem;
-	font-weight: bold;
-	margin: 0%;
-	margin-bottom: 0.5rem;
-	text-align: center;
-}
-
 /* Grid with 3 rows per column */
 .search-results-container {
 	width: 100%;
@@ -93,24 +54,4 @@
 
 .feed-image {
 	width: 100%;
-}
-
-.episode-player {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-}
-
-.play-button-container {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	width: 100%;
-	height: 100%;
-	margin-top: 0.5rem;
-}
-
-.play-button {
-	width: 6rem;
-	height: 3rem;
 }
