@@ -13,6 +13,7 @@
   "author": "Christian Bager Bach Houmann",
   "license": "MIT",
   "devDependencies": {
+    "@semantic-release/git": "^10.0.1",
     "@types/node": "^16.11.6",
     "@typescript-eslint/eslint-plugin": "5.29.0",
     "@typescript-eslint/parser": "5.29.0",
@@ -38,13 +39,72 @@
   },
   "release": {
     "plugins": [
-      ["@semantic-release/github", {
-        "assets": [
-          {"path": "main.js", "label": "Plugin JS"},
-          {"path": "styles.css", "label": "Plugin CSS"},
-          {"path": "manifest.json", "label": "Plugin Manifest"}
-        ]
-      }]
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "releaseRules": [
+            {
+              "type": "build",
+              "release": "patch"
+            },
+            {
+              "type": "ci",
+              "release": "patch"
+            },
+            {
+              "type": "chore",
+              "release": "patch"
+            },
+            {
+              "type": "docs",
+              "release": "patch"
+            },
+            {
+              "type": "refactor",
+              "release": "patch"
+            },
+            {
+              "type": "style",
+              "release": "patch"
+            },
+            {
+              "type": "test",
+              "release": "patch"
+            }
+          ]
+        }
+      ],
+      "@semantic-release/release-notes-generator",
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "package.json",
+            "package-lock.json",
+            "manifest.json"
+          ],
+          "message": "release(version): Release ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+        }
+      ],
+      [
+        "@semantic-release/github",
+        {
+          "assets": [
+            {
+              "path": "main.js",
+              "label": "Plugin JS"
+            },
+            {
+              "path": "styles.css",
+              "label": "Plugin CSS"
+            },
+            {
+              "path": "manifest.json",
+              "label": "Plugin Manifest"
+            }
+          ]
+        }
+      ]
     ]
   }
 }
