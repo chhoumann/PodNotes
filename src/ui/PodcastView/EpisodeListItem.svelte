@@ -3,6 +3,7 @@
 	import { createEventDispatcher } from "svelte";
 
 	export let episode: Episode;
+	export let episodeFinished: boolean = false;
 
 	const dispatch = createEventDispatcher();
 
@@ -20,7 +21,7 @@
 >
 	<div class="podcast-episode-information">
 		<span class="episode-item-date">{date.toUpperCase()}</span>
-		<span class="episode-item-title">{episode.title}</span>
+		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
 	</div>
 </div>
 
@@ -41,6 +42,10 @@
 
 	.podcast-episode-item:hover {
 		cursor: pointer;
+	}
+
+	.strikeout {
+		text-decoration: line-through;
 	}
 
 	.podcast-episode-information {
