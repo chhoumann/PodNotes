@@ -1,6 +1,6 @@
 {
   "name": "podnotes",
-  "version": "0.0.0-development",
+  "version": "1.1.1",
   "description": "Helps you write notes on podcasts.",
   "main": "main.js",
   "scripts": {
@@ -75,9 +75,12 @@
         }
       ],
       "@semantic-release/release-notes-generator",
-      ["@semantic-release/npm", {
-        "npmPublish": false
-      }],
+      [
+        "@semantic-release/npm",
+        {
+          "npmPublish": false
+        }
+      ],
       [
         "@semantic-release/git",
         {
