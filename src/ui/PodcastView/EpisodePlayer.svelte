@@ -6,8 +6,8 @@
 		currentEpisode,
 		isPaused,
 		plugin,
+		playedEpisodes,
 	} from "src/store";
-
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
 	import { get, Unsubscriber } from "svelte/store";
@@ -17,35 +17,53 @@
 	let unsubscriber: Unsubscriber;
 	let playbackRate: number = get(plugin).settings.defaultPlaybackRate || 1;
 
-	let isHoveringArtwork: boolean = true;
+	let isHoveringArtwork: boolean = false;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
 	}
-
-	onMount(() => {
-		duration.set(0);
-		currentTime.set(0);
-
-		unsubscriber = isPaused.subscribe((value) => {
-			const btnIcon = value ? "pause" : "play";
-			setIcon(iconRef, btnIcon);
-		});
-
-		const playbackRateComponent = new SliderComponent(playbackRateRef);
-		playbackRateComponent
-			.setLimits(0.5, 3.5, 0.1)
-			.setValue(playbackRate)
-			.onChange((value) => (playbackRate = value));
-	});
-
-	onDestroy(() => unsubscriber());
 
 	function onClickProgressbar(e: MouseEvent) {
 		const progressbar = e.target as HTMLDivElement;
 		const percent = e.offsetX / progressbar.offsetWidth;
 		currentTime.set(percent * $duration);
 	}
+
+	onMount(() => {
+		const playedEps = $playedEpisodes;
+		const currentEp = $currentEpisode;
+
+		if (playedEps[currentEp.title]) {
+			currentTime.set(playedEps[currentEp.title].time);
+			duration.set(playedEps[currentEp.title].duration);
+			isPaused.set(false);
+		} else {
+			duration.set(0);
+			currentTime.set(0);
+		}
+
+		unsubscriber = isPaused.subscribe((value) => {
+			const btnIcon = value ? "pause" : "play";
+			setIcon(iconRef, btnIcon);
+		});
+
+		new SliderComponent(playbackRateRef)
+			.setLimits(0.5, 3.5, 0.1)
+			.setValue(playbackRate)
+			.onChange((value) => (playbackRate = value));
+	});
+
+	onDestroy(() => {
+		unsubscriber()
+
+		playedEpisodes.update((playedEpisodes) => {
+			const currentEp = $currentEpisode;
+			playedEpisodes[currentEp.title] = {...currentEp, time: $currentTime, duration: $duration};
+			return playedEpisodes;
+		});
+
+		isPaused.set(true);
+	});
 </script>
 
 <div class="episode-player">

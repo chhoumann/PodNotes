@@ -14,6 +14,16 @@
 	const date = window.moment(_date).format("DD MMMM YYYY");
 </script>
 
+<div 
+	class="podcast-episode-item" 
+	on:click={onClickEpisode} 
+>
+	<div class="podcast-episode-information">
+		<span class="episode-item-date">{date.toUpperCase()}</span>
+		<span class="episode-item-title">{episode.title}</span>
+	</div>
+</div>
+
 <style>
 	.podcast-episode-item {
 		display: flex;
@@ -22,6 +32,11 @@
 		align-items: center;
 		padding: 0.5rem;
 		width: 100%;
+		border: solid 1px var(--background-divider);
+	}
+
+	.podcast-episode-item:hover {
+		background-color: var(--background-divider);
 	}
 
 	.podcast-episode-item:hover {
@@ -40,13 +55,3 @@
 		color: gray;
 	}
 </style>
-
-<div 
-	class="podcast-episode-item" 
-	on:click={onClickEpisode} 
->
-	<div class="podcast-episode-information">
-		<span class="episode-item-date">{date.toUpperCase()}</span>
-		<span class="episode-item-title">{episode.title}</span>
-	</div>
-</div>
