@@ -2,9 +2,7 @@ import { PodcastFeed } from 'src/types/PodcastFeed';
 import { IPodNotes } from '../../main';
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../../constants";
-import FeedParser from 'src/parser/feedParser';
 import PodcastView from './PodcastView.svelte';
-import { Episode } from 'src/types/Episode';
 
 export class MainView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
@@ -44,18 +42,5 @@ export class MainView extends ItemView {
 				feeds: savedFeeds,
 			}
 		})
-    }
-
-    private async getPodcast(feed: PodcastFeed): Promise<Episode[]> {
-        try {
-			const parser = new FeedParser(feed);
-            const episodes = (await parser.parse(feed.url));
-			return episodes;
-
-			//currentEpisode.set(episode);
-        } catch (error) {
-			new Notice(error, 5000);
-			throw new Error(error);
-        }
     }
 }
