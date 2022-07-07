@@ -16,9 +16,8 @@
 		currentTime.set(0);
 
         const buttonComponent = new ButtonComponent(buttonRef);
-        buttonComponent.setButtonText("Play");
+        buttonComponent.setIcon("play")
         buttonComponent.setClass("play-button");
-        buttonComponent.setCta();
         buttonComponent.onClick(() => {
 			isPaused.update((value) => {
 				return !value;
@@ -26,8 +25,8 @@
         });
 
 		unsubscriber = isPaused.subscribe(value => {
-			const btnText = value ? "Play" : "Pause";
-			buttonComponent.setButtonText(btnText);
+			const btnIcon = value ? "play" : "pause";
+			buttonComponent.setIcon(btnIcon);
 		});
 
         const playbackRateComponent = new Setting(playbackRateRef);
