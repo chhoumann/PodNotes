@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ButtonComponent, Setting } from "obsidian";
+    import { ButtonComponent, Setting, SliderComponent } from "obsidian";
 	import { duration, currentTime, currentEpisode, isPaused, plugin } from "src/store";
 
     import { formatSeconds } from "src/utility/formatSeconds";
@@ -29,13 +29,11 @@
 			buttonComponent.setIcon(btnIcon);
 		});
 
-        const playbackRateComponent = new Setting(playbackRateRef);
-        playbackRateComponent.addSlider(slider => slider
+        const playbackRateComponent = new SliderComponent(playbackRateRef);
+        playbackRateComponent
             .setLimits(0.5, 4, 0.1)
             .setValue(playbackRate)
             .onChange(value => playbackRate = value)
-        );
-    });
 
 	onDestroy(() => unsubscriber());
 
