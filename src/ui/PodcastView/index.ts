@@ -1,15 +1,15 @@
 import { PodcastFeed } from 'src/types/PodcastFeed';
 import { IPodNotes } from "../../types/IPodNotes";
-import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../../constants";
 import PodcastView from './PodcastView.svelte';
 
 export class MainView extends ItemView {
-	constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
-		super(leaf);
-	}   
+    constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
+        super(leaf);
+    }
 
-	private PodcastView: PodcastView;
+    private PodcastView: PodcastView;
 
     getViewType(): string {
         return VIEW_TYPE;
@@ -20,27 +20,28 @@ export class MainView extends ItemView {
     }
 
     getIcon(): string {
-        return "dice";
+        return "play-circle";
     }
 
     protected async onOpen(): Promise<void> {
-		this.render();
+        this.render();
     }
 
     protected async onClose(): Promise<void> {
-		this.PodcastView?.$destroy();
+        this.PodcastView?.$destroy();
 
-        this.contentEl.empty();    
+        this.contentEl.empty();
     }
 
     private render() {
         const savedFeeds: PodcastFeed[] = Object.values(this.plugin.settings.savedFeeds);
 
-		this.PodcastView = new PodcastView({
-			target: this.contentEl,
-			props: {
-				feeds: savedFeeds,
-			}
-		})
+        this.PodcastView = new PodcastView({
+            target: this.contentEl,
+            props: {
+                feeds: savedFeeds,
+            }
+        })
     }
 }
+
