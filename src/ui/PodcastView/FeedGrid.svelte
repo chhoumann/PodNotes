@@ -4,10 +4,10 @@
 
     export let feeds: PodcastFeed[] = [];
 
-	const dispatcher = createEventDispatcher();
+	const dispatch = createEventDispatcher();
 
 	function onClickFeed(feed: PodcastFeed) {
-		dispatcher("clickFeed", { feed });
+		dispatch("clickFeed", { feed });
 	}
 </script>
 

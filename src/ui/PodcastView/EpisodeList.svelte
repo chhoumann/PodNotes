@@ -14,7 +14,27 @@
 	}
 </script>
 
+<div class="episode-list-view-container">
+	<div class="podcast-header">
+		<img id="podcast-artwork" src={feed?.artworkUrl} alt={feed?.title} />
+		<h2 class="podcast-heading">{feed?.title}</h2>
+	</div>
+
+	<div class="podcast-episode-list">
+		{#each episodes as episode}
+			<EpisodeListItem episode={episode} on:clickEpisode={forwardClickEpisode} />
+		{/each}
+	</div>
+</div>
+
 <style>
+	.episode-list-view-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+	}
+
 	.podcast-header {
 		display: flex;
 		flex-direction: column;
@@ -23,7 +43,7 @@
 		padding: 0.5rem;
 	}
 
-	#podcast-header {
+	.podcast-heading {
 		text-align: center;
 	}
 
@@ -36,16 +56,3 @@
 		height: 100%;
 	}
 </style>
-
-<div>
-	<div class="podcast-header">
-		<img id="podcast-artwork" src={feed?.artworkUrl} alt={feed?.title} />
-		<h2 id="podcast-header">{feed?.title}</h2>
-	</div>
-
-	<div class="podcast-episode-list">
-		{#each episodes as episode}
-			<EpisodeListItem episode={episode} on:clickEpisode={forwardClickEpisode} />
-		{/each}
-	</div>
-</div>
