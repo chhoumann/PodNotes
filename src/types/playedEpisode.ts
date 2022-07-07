@@ -1,6 +1,7 @@
-import { Episode } from "./Episode";
-
-export interface PlayedEpisode extends Episode {
+export interface PlayedEpisode {
+    title: string;
+    podcastName: string;
     time: number;
     duration: number;
+    finished: boolean;
 }

@@ -6,4 +6,5 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	savedFeeds: {},
 	podNotes: {},
 	defaultPlaybackRate: 1,
+	playedEpisodes: {},
 }

@@ -51,6 +51,8 @@
 			.setLimits(0.5, 3.5, 0.1)
 			.setValue(playbackRate)
 			.onChange((value) => (playbackRate = value));
+
+		isPaused.set(false);
 	});
 
 	onDestroy(() => {
@@ -58,12 +60,37 @@
 
 		playedEpisodes.update((playedEpisodes) => {
 			const currentEp = $currentEpisode;
-			playedEpisodes[currentEp.title] = {...currentEp, time: $currentTime, duration: $duration};
+			const curTime = $currentTime;
+			const dur = $duration;
+
+			playedEpisodes[currentEp.title] = {
+				title: currentEp.title,
+				podcastName: currentEp.podcastName,
+				time: curTime,
+				duration: dur,
+				finished: curTime === dur,
+			};
+			
 			return playedEpisodes;
 		});
 
 		isPaused.set(true);
 	});
+
+	function markEpisodeAsPlayed() {
+		playedEpisodes.update((playedEpisodes) => {
+			const currentEp = $currentEpisode;
+
+			playedEpisodes[currentEp.title] = {
+				...currentEp,
+				time: $currentTime,
+				duration: $duration,
+				finished: true,
+			};
+			
+			return playedEpisodes;
+		});
+	}
 </script>
 
 <div class="episode-player">
@@ -99,6 +126,7 @@
 		bind:currentTime={$currentTime}
 		bind:paused={$isPaused}
 		bind:playbackRate
+		on:ended={markEpisodeAsPlayed}
 	/>
 
 	<div class="status-container">
