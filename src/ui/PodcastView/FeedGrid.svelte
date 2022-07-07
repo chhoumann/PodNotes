@@ -29,3 +29,13 @@
     {/if}
 </div>
 
+<style>
+    .feed-image {
+        width: 100%;
+        cursor: pointer !important;
+    }
+
+    .feed-grid {
+        grid-gap: 0rem;
+    }
+</style>
