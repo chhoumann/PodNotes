@@ -35,5 +35,16 @@
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
     }
+  },
+  "release": {
+    "plugins": [
+      ["@semantic-release/github", {
+        "assets": [
+          {"path": "main.js", "label": "Plugin JS"},
+          {"path": "styles.css", "label": "Plugin CSS"},
+          {"path": "manifest.json", "label": "Plugin Manifest"}
+        ]
+      }]
+    ]
   }
 }
