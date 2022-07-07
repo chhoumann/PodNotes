@@ -1,5 +1,5 @@
 import { PodcastFeed } from 'src/types/PodcastFeed';
-import { IPodNotes } from '../../main';
+import { IPodNotes } from "../../types/IPodNotes";
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../../constants";
 import PodcastView from './PodcastView.svelte';
