@@ -1,10 +1,17 @@
 <script lang="ts">
 	import { Episode } from "src/types/Episode";
-import { PodcastFeed } from "src/types/PodcastFeed";
+	import { PodcastFeed } from "src/types/PodcastFeed";
+	import { createEventDispatcher } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 
 	export let episodes: Episode[] = [];
 	export let feed: PodcastFeed | null = null;
+
+	const dispatch = createEventDispatcher();
+
+	function forwardClickEpisode(event: CustomEvent<{ episode: Episode }>) {
+		dispatch("clickEpisode", { episode: event.detail.episode });
+	}
 </script>
 
 <style>
@@ -38,7 +45,7 @@ import { PodcastFeed } from "src/types/PodcastFeed";
 
 	<div class="podcast-episode-list">
 		{#each episodes as episode}
-			<EpisodeListItem episode={episode} />
+			<EpisodeListItem episode={episode} on:clickEpisode={forwardClickEpisode} />
 		{/each}
 	</div>
 </div>

@@ -20,13 +20,26 @@
 		});
 	}
 
+	function handleClickEpisode(event: CustomEvent<{episode: Episode}>) {
+		const { episode } = event.detail;
+		currentEpisode.set(episode);
+	}
 </script>
 
-{#if $currentEpisode}
-	<EpisodePlayer />
-{:else if selectedFeed}
-	<EpisodeList feed={selectedFeed} episodes={episodeList} />
-{:else}
-	<FeedGrid feeds={feeds} on:clickFeed={handleClickFeed} />
-{/if}
+<div class="podcast-view">
+	{#if $currentEpisode}
+		<EpisodePlayer />
+	{:else if selectedFeed}
+		<EpisodeList feed={selectedFeed} episodes={episodeList} on:clickEpisode={handleClickEpisode} />
+	{:else}
+		<FeedGrid feeds={feeds} on:clickFeed={handleClickFeed} />
+	{/if}
+</div>
 
+<style>
+	.podcast-view {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+</style>

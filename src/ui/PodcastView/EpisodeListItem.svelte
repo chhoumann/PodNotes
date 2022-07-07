@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { currentEpisode } from "src/store";
 	import { Episode } from "src/types/Episode";
+	import { createEventDispatcher } from "svelte";
 
 	export let episode: Episode;
 
+	const dispatch = createEventDispatcher();
+
 	function onClickEpisode() {
-		currentEpisode.set(episode);
+		dispatch("clickEpisode", { episode });
 	}
 
 	const _date = new Date(episode.episodeDate || "");
