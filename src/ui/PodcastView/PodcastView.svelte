@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
-	import FeedGrid from "./FeedGrid.svelte";
+	import FeedGrid from "./PodcastGrid.svelte";
 	import { currentEpisode } from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
@@ -15,18 +15,18 @@
 
 	let viewState: ViewState;
 
-	function handleClickFeed(event: CustomEvent<{feed: PodcastFeed}>) {
+	function handleclickPodcast(event: CustomEvent<{ feed: PodcastFeed }>) {
 		const { feed } = event.detail;
 		selectedFeed = feed;
 
-		new FeedParser(feed).parse(feed.url).then(episodes => {
+		new FeedParser(feed).parse(feed.url).then((episodes) => {
 			episodeList = episodes;
 		});
 
 		viewState = ViewState.EpisodeList;
 	}
 
-	function handleClickEpisode(event: CustomEvent<{episode: Episode}>) {
+	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		const { episode } = event.detail;
 		currentEpisode.set(episode);
 
@@ -35,8 +35,8 @@
 </script>
 
 <div class="podcast-view">
-	<TopBar 
-		bind:viewState={viewState}
+	<TopBar
+		bind:viewState
 		canShowEpisodeList={!!selectedFeed}
 		canShowPlayer={!!$currentEpisode}
 	/>
@@ -44,16 +44,13 @@
 	{#if viewState === ViewState.Player}
 		<EpisodePlayer />
 	{:else if viewState === ViewState.EpisodeList}
-		<EpisodeList 
-			feed={selectedFeed} 
-			episodes={episodeList} 
-			on:clickEpisode={handleClickEpisode} 
+		<EpisodeList
+			feed={selectedFeed}
+			episodes={episodeList}
+			on:clickEpisode={handleClickEpisode}
 		/>
-	{:else if viewState === ViewState.FeedGrid}
-		<FeedGrid 
-			feeds={feeds} 
-			on:clickFeed={handleClickFeed} 
-		/>
+	{:else if viewState === ViewState.PodcastGrid}
+		<FeedGrid {feeds} on:clickPodcast={handleclickPodcast} />
 	{/if}
 </div>
 

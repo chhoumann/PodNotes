@@ -3,7 +3,7 @@
 	import { ViewState } from "src/types/ViewState";
 	import { onMount } from "svelte";
 
-	export let viewState: ViewState = ViewState.FeedGrid;
+	export let viewState: ViewState = ViewState.PodcastGrid;
 	export let canShowEpisodeList: boolean = false;
 	export let canShowPlayer: boolean = false;
 
@@ -30,11 +30,11 @@
 
 <div class="topbar-container">
 	<div
-		on:click={handleClickMenuItem.bind(null, ViewState.FeedGrid)}
+		on:click={handleClickMenuItem.bind(null, ViewState.PodcastGrid)}
 		class={`
             topbar-menu-button
             topbar-selectable
-            ${viewState === ViewState.FeedGrid ? "topbar-selected" : ""}
+            ${viewState === ViewState.PodcastGrid ? "topbar-selected" : ""}
         `}
 	>
 		<span bind:this={feedGridIconRef} />
