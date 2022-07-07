@@ -92,15 +92,15 @@
           "assets": [
             {
               "path": "main.js",
-              "label": "Plugin JS"
+              "label": "main.js"
             },
             {
               "path": "styles.css",
-              "label": "Plugin CSS"
+              "label": "styles.css"
             },
             {
               "path": "manifest.json",
-              "label": "Plugin Manifest"
+              "label": "manifest.json"
             }
           ]
         }
