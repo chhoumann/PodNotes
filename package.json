@@ -1,5 +1,5 @@
 {
-  "name": "PodNotes",
+  "name": "podnotes",
   "version": "0.0.0-development",
   "description": "Helps you write notes on podcasts.",
   "main": "main.js",
