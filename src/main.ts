@@ -9,12 +9,7 @@ import { MainView } from 'src/ui/PodcastView';
 import { IPodNotesSettings } from './types/IPodNotesSettings';
 import { plugin } from './store';
 import { get } from 'svelte/store';
-
-export interface IPodNotes {
-	settings: IPodNotesSettings;
-	api: IAPI;
-	saveSettings(): Promise<void>;
-}
+import { IPodNotes } from './types/IPodNotes';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
