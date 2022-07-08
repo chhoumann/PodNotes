@@ -1,6 +1,6 @@
 {
   "name": "podnotes",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Helps you write notes on podcasts.",
   "main": "main.js",
   "scripts": {
