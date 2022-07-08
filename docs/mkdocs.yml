@@ -1,0 +1,21 @@
+site_name: PodNotes
+repo_url: https://github.com/chhoumann/podnotes
+edit_uri: edit/master/docs/docs
+theme:
+  name: material
+  palette:
+    primary: blue
+# markdown_extensions:
+#   - abbr
+#   - admonition
+#   - pymdownx.highlight
+#   - pymdownx.superfences
+#   - pymdownx.tabbed
+#   - pymdownx.tasklist
+# nav:
+#   - Overview: 'index.md'
+# plugins:
+#   - search
+#   - redirects:
+#       redirect_maps:
+  
