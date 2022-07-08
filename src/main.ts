@@ -54,19 +54,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		})
 
 		this.addCommand({
-			id: 'clear-podcast',
-			name: 'Clear Podcast',
-			checkCallback: (checking) => {
-				if (checking) {
-					return !!this.api.podcast;
-				}
-
-				this.api.clearPodcast();
-				this.api.stop();
-			}
-		})
-
-		this.addCommand({
 			id: 'hrpn',
 			name: 'Reload PodNotes',
 			callback: () => {
