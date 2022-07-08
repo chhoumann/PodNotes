@@ -1,19 +1,24 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
 	import FeedGrid from "./PodcastGrid.svelte";
-	import { currentEpisode } from "src/store";
+	import { currentEpisode, savedFeeds } from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import { Episode } from "src/types/Episode";
 	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
+	import { onDestroy } from "svelte";
 
-	export let feeds: PodcastFeed[] = [];
+	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
 	let episodeList: Episode[] = [];
 
 	let viewState: ViewState;
+
+	const unsubscribe = savedFeeds.subscribe(storeValue => {
+		feeds = Object.values(storeValue);
+	});
 
 	function handleclickPodcast(event: CustomEvent<{ feed: PodcastFeed }>) {
 		const { feed } = event.detail;
@@ -32,6 +37,8 @@
 
 		viewState = ViewState.Player;
 	}
+
+	onDestroy(unsubscribe);
 </script>
 
 <div class="podcast-view">
@@ -50,7 +57,7 @@
 			on:clickEpisode={handleClickEpisode}
 		/>
 	{:else if viewState === ViewState.PodcastGrid}
-		<FeedGrid {feeds} on:clickPodcast={handleclickPodcast} />
+		<FeedGrid feeds={feeds} on:clickPodcast={handleclickPodcast} />
 	{/if}
 </div>
 
