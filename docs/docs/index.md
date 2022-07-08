@@ -15,7 +15,6 @@ Here's the features that'll help you do that 👇.
     - Episode URL
     - Episode podcast name
     - Episode publish date
-    - A 'safe' filename for the episode (using the title)
     - Current playback time, both raw and formatted (with customn formatting). This can link to the episode at a given time, which PodNotes can pick up and play
 - API allows controlling the player
 
