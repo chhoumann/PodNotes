@@ -24,7 +24,7 @@
 		return await (new FeedParser(feed).parse(feed.url));
 	}
 
-	function handleClickPodcast(event: CustomEvent<{ feed: PodcastFeed }>) {
+	async function handleClickPodcast(event: CustomEvent<{ feed: PodcastFeed }>) {
 		episodeList = [];
 
 		const { feed } = event.detail;
@@ -35,10 +35,10 @@
 		if (cachedEpisodesInFeed && cachedEpisodesInFeed.length > 0) {
 			episodeList = cachedEpisodesInFeed;
 		} else {
-			fetchEpisodes(feed).then(episodes => {
-				episodeList = episodes;
-				episodeCache.update(cache => ({ ...cache, [feed.title]: episodes }));
-			});
+			const episodes = await fetchEpisodes(feed);
+			
+			episodeList = episodes;
+			episodeCache.update(cache => ({ ...cache, [feed.title]: episodes }));
 		}
 
 		viewState = ViewState.EpisodeList;
@@ -49,6 +49,15 @@
 		currentEpisode.set(episode);
 
 		viewState = ViewState.Player;
+	}
+
+	async function handleClickRefresh() {
+		if (!selectedFeed) return;
+		const { title } = selectedFeed;
+		const episodes = await fetchEpisodes(selectedFeed)
+
+		episodeList = episodes;
+		episodeCache.update(cache => ({ ...cache, [title]: episodes }));
 	}
 
 	onDestroy(unsubscribe);
@@ -68,6 +77,7 @@
 			feed={selectedFeed}
 			episodes={episodeList}
 			on:clickEpisode={handleClickEpisode}
+			on:clickRefresh={handleClickRefresh}
 		/>
 	{:else if viewState === ViewState.PodcastGrid}
 		<FeedGrid 

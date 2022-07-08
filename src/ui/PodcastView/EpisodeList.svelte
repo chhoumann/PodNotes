@@ -32,6 +32,7 @@
 		<Icon
 			 icon="refresh-cw"
 			 size={25}
+			 on:click={() => dispatch("clickRefresh")}
 		/>
 	</div>
 
