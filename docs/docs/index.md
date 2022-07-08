@@ -19,6 +19,23 @@ Here's the features that'll help you do that 👇.
     - Current playback time, both raw and formatted (with customn formatting). This can link to the episode at a given time, which PodNotes can pick up and play
 - API allows controlling the player
 
+## Installation
+This plugin is currently not in the Obsidian plugin repository. Therefore, you'll need to install it manually.
+
+### Installation with BRAT
+BRAT is an Obsidian plugin that helps you test beta plugins and themes. Click [here](obsidian://show-plugin?id=obsidian42-brat) to install it in Obsidian.
+
+Add `chhoumann/PodNotes` to BRAT with the `Add a beta plugin for testing` command.
+
+Now follow the appropriate instructions, which most likely will have you go and enable the plugin once it has finished installing.
+
+### Manual installation
+Go to the [releases](https://github.com/chhoumann/podnotes/releases/latest) page.
+Download `main.js` and `manifest.json`.
+Create a new directory in your Obsidian vaults `.obsidian/plugins/` folder called `podnotes` and place the downloaded files there.
+
+Now refresh the plugins in Obsidian and enable PodNotes.
+
 ## Screenshots
 ### Demo
 ![Demo](resources/demo.gif)

@@ -5,17 +5,3 @@ theme:
   name: material
   palette:
     primary: blue
-# markdown_extensions:
-#   - abbr
-#   - admonition
-#   - pymdownx.highlight
-#   - pymdownx.superfences
-#   - pymdownx.tabbed
-#   - pymdownx.tasklist
-# nav:
-#   - Overview: 'index.md'
-# plugins:
-#   - search
-#   - redirects:
-#       redirect_maps:
-  
