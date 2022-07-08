@@ -9,5 +9,4 @@ export interface IAPI {
 	getPodcastTimeFormatted(format: string, linkify?: boolean): string;
 	start(): void;
 	stop(): void;
-	clearPodcast(): void;
 }

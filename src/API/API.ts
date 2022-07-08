@@ -63,9 +63,4 @@ export class API implements IAPI {
     stop(): void {
 		isPaused.update((_) => true);
     }
-
-	clearPodcast(): void {
-		//@ts-ignore
-		currentEpisode.update((_) => null);
-	}
 }
