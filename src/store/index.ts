@@ -13,3 +13,5 @@ export const playedEpisodes = writable<{
     [key: string]: PlayedEpisode;
 }>({});
 export const savedFeeds = writable<{[podcastName: string]: PodcastFeed}>({});
+
+export const episodeCache = writable<{[podcastName: string]: Episode[]}>({});
