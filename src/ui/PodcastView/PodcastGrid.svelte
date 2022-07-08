@@ -11,7 +11,7 @@
 	}
 </script>
 
-<div class="podcast-grid grid-3">
+<div class="podcast-grid">
 	{#if feeds.length > 0}
 		{#each feeds as feed}
 			<img
@@ -36,6 +36,8 @@
 	}
 
 	.podcast-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
 		grid-gap: 0rem;
 	}
 </style>

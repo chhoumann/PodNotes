@@ -103,10 +103,6 @@
               "label": "main.js"
             },
             {
-              "path": "styles.css",
-              "label": "styles.css"
-            },
-            {
               "path": "manifest.json",
               "label": "manifest.json"
             }

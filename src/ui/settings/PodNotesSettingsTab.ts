@@ -1,9 +1,11 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import PodNotes from '../../main';
-import { PodcastQueryGrid } from './PodcastQueryGrid';
+import PodcastQueryGrid from './PodcastQueryGrid.svelte';
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
+	
+	private podcastQueryGrid: PodcastQueryGrid;
 
 	constructor(app: App, plugin: PodNotes) {
 		super(app, plugin);
@@ -21,8 +23,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const settingsContainer = containerEl.createDiv();
 		settingsContainer.classList.add('settings-container');
 
-		PodcastQueryGrid(settingsContainer, this.plugin);
-
+		const queryGridContainer = settingsContainer.createDiv();
+		this.podcastQueryGrid = new PodcastQueryGrid({
+			target: queryGridContainer
+		});
+			
 		const defaultPlaybackRateSetting = new Setting(this.containerEl);
 		defaultPlaybackRateSetting.setName('Default Playback Rate');
 		defaultPlaybackRateSetting.addSlider((slider) => slider
@@ -36,4 +41,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		);
 	}
 
+	hide(): void {
+		this.podcastQueryGrid?.$destroy();
+	}
 }
