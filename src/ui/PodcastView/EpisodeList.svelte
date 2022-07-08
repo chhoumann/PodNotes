@@ -4,21 +4,11 @@
 	import { createEventDispatcher, onMount } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 	import { playedEpisodes } from "src/store";
-	import { Setting } from "obsidian";
+	import Icon from "../Icon.svelte";
 
 	export let episodes: Episode[] = [];
 	export let feed: PodcastFeed | null = null;
 	let hidePlayedEpisodes: boolean = false;
-	let toggleRef: HTMLSpanElement;
-
-	onMount(() => {
-		new Setting(toggleRef)
-			.setName("Hide played episodes")
-			.addToggle(toggleComponent => toggleComponent
-				.setValue(hidePlayedEpisodes)
-				.onChange((value) => (hidePlayedEpisodes = value))
-			);
-	});
 
 	const dispatch = createEventDispatcher();
 
@@ -34,7 +24,15 @@
 	</div>
 
 	<div class="episode-list-menu">
-		<span bind:this={toggleRef} />
+		<Icon 
+			icon={hidePlayedEpisodes ? "eye-off" : "eye"}
+			size={25}
+			on:click={() => hidePlayedEpisodes = !hidePlayedEpisodes}
+		/>
+		<Icon
+			 icon="refresh-cw"
+			 size={25}
+		/>
 	</div>
 
 	<div class="podcast-episode-list">
@@ -82,14 +80,13 @@
 
 	.episode-list-menu {
 		display: flex;
-		flex-direction: row-reverse;
-		justify-content: center;
+		flex-direction: row;
+		justify-content: right;
 		align-items: center;
+		gap: 1rem;
 		width: 100%;
-	}
-	
-	.episode-list-menu .setting-item .setting-item-info .setting-item-description {
-		padding-top: 0;
+		padding-left: 0.5rem;
+		padding-right: 0.5rem;
 	}
 </style>
 
