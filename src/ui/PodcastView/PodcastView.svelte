@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
 	import FeedGrid from "./PodcastGrid.svelte";
-	import { currentEpisode, savedFeeds } from "src/store";
+	import { currentEpisode, savedFeeds, episodeCache } from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import { Episode } from "src/types/Episode";
@@ -20,13 +20,26 @@
 		feeds = Object.values(storeValue);
 	});
 
-	function handleclickPodcast(event: CustomEvent<{ feed: PodcastFeed }>) {
+	async function fetchEpisodes(feed: PodcastFeed): Promise<Episode[]> {
+		return await (new FeedParser(feed).parse(feed.url));
+	}
+
+	function handleClickPodcast(event: CustomEvent<{ feed: PodcastFeed }>) {
+		episodeList = [];
+
 		const { feed } = event.detail;
 		selectedFeed = feed;
 
-		new FeedParser(feed).parse(feed.url).then((episodes) => {
-			episodeList = episodes;
-		});
+		const cachedEpisodesInFeed = $episodeCache[feed.title];
+
+		if (cachedEpisodesInFeed && cachedEpisodesInFeed.length > 0) {
+			episodeList = cachedEpisodesInFeed;
+		} else {
+			fetchEpisodes(feed).then(episodes => {
+				episodeList = episodes;
+				episodeCache.update(cache => ({ ...cache, [feed.title]: episodes }));
+			});
+		}
 
 		viewState = ViewState.EpisodeList;
 	}
@@ -57,7 +70,10 @@
 			on:clickEpisode={handleClickEpisode}
 		/>
 	{:else if viewState === ViewState.PodcastGrid}
-		<FeedGrid feeds={feeds} on:clickPodcast={handleclickPodcast} />
+		<FeedGrid 
+			feeds={feeds} 
+			on:clickPodcast={handleClickPodcast} 
+		/>
 	{/if}
 </div>
 
