@@ -1,28 +1,20 @@
-import { Unsubscriber } from "svelte/store";
-import { playedEpisodes } from "./store";
+import { Writable } from "svelte/store";
+import { StoreController } from "./types/StoreController";
 import { IPodNotes } from "./types/IPodNotes";
 import { PlayedEpisode } from "./types/playedEpisode";
 
-export class EpisodeStatusController {
-    private plugin: IPodNotes;
-    private unsubscribe: Unsubscriber;
+type TPlayedStoreValue = { [episodeName: string]: PlayedEpisode };
 
-    constructor(plugin: IPodNotes) {
+export class EpisodeStatusController extends StoreController<TPlayedStoreValue> {
+    private plugin: IPodNotes;
+
+    constructor(store: Writable<TPlayedStoreValue>, plugin: IPodNotes) {
+        super(store)
         this.plugin = plugin;
     }
 
-    public on(): EpisodeStatusController {
-        this.unsubscribe = playedEpisodes.subscribe(this.onStoreUpdate.bind(this));
-        return this;
-    }
-
-    public off(): EpisodeStatusController {
-        this.unsubscribe();
-        return this;
-    }
-
-    private onStoreUpdate(store: {[episodeName: string]: PlayedEpisode}) {
-        this.plugin.settings.playedEpisodes = store;
+    protected onChange(value: TPlayedStoreValue) {
+        this.plugin.settings.playedEpisodes = value;
 
         this.plugin.saveSettings();
     }

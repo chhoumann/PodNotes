@@ -1,5 +1,5 @@
 import FeedParser from 'src/parser/feedParser';
-import { currentEpisode, playedEpisodes } from 'src/store';
+import { currentEpisode, playedEpisodes, savedFeeds } from 'src/store';
 import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
@@ -10,7 +10,11 @@ import { IPodNotesSettings } from './types/IPodNotesSettings';
 import { plugin } from './store';
 import { get } from 'svelte/store';
 import { IPodNotes } from './types/IPodNotes';
-import { EpisodeStatusController } from './episodeStatusController';
+import { EpisodeStatusController } from './EpisodeStatusController';
+import { StoreController } from './types/StoreController';
+import { PlayedEpisode } from './types/playedEpisode';
+import { PodcastFeed } from './types/PodcastFeed';
+import { SavedFeedsController } from './SavedFeedsController';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -18,7 +22,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	
 	private view: MainView;
 
-	private playedEpisodeController: EpisodeStatusController;
+	private playedEpisodeController: StoreController<{[episodeName: string]: PlayedEpisode}>;
+	private savedFeedsController: StoreController<{[podcastName: string]: PodcastFeed}>;
 
 	async onload() {
 		plugin.set(this);
@@ -26,8 +31,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		await this.loadSettings();
 
 		playedEpisodes.set(this.settings.playedEpisodes);
+		savedFeeds.set(this.settings.savedFeeds);
 
-		this.playedEpisodeController = new EpisodeStatusController(this).on();
+		this.playedEpisodeController = new EpisodeStatusController(playedEpisodes, this).on();
+		this.savedFeedsController = new SavedFeedsController(savedFeeds, this).on();
 
 		this.addCommand({
 			id: 'start-playing',
@@ -109,6 +116,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	onunload() {
 		this?.playedEpisodeController.off();
+		this?.savedFeedsController.off();
 	}
 
 	async loadSettings() {

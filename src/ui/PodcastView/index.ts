@@ -1,4 +1,3 @@
-import { PodcastFeed } from 'src/types/PodcastFeed';
 import { IPodNotes } from "../../types/IPodNotes";
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../../constants";
@@ -24,24 +23,15 @@ export class MainView extends ItemView {
     }
 
     protected async onOpen(): Promise<void> {
-        this.render();
+        this.PodcastView = new PodcastView({
+            target: this.contentEl,
+        })
     }
 
     protected async onClose(): Promise<void> {
         this.PodcastView?.$destroy();
 
         this.contentEl.empty();
-    }
-
-    private render() {
-        const savedFeeds: PodcastFeed[] = Object.values(this.plugin.settings.savedFeeds);
-
-        this.PodcastView = new PodcastView({
-            target: this.contentEl,
-            props: {
-                feeds: savedFeeds,
-            }
-        })
     }
 }
 
