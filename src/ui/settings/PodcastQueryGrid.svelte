@@ -21,9 +21,7 @@
 
     onMount(() => {
         const debouncedUpdate = debounce(async (value: string) => {
-            searchResults = await (await consume(value)).filter(
-                (feed: PodcastFeed) => !$savedFeeds[feed.title]
-            );
+            searchResults = await consume(value);
         }, 300, true);
 
         const textInput = new TextComponent(inputRef)
@@ -38,6 +36,16 @@
         const { podcast } = event.detail;
 
         savedFeeds.update(feeds => ({ ...feeds, [podcast.title]: podcast }));
+    }
+
+    function removePodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
+        const { podcast } = event.detail;
+
+        savedFeeds.update(feeds => {
+            const newFeeds = { ...feeds };
+            delete newFeeds[podcast.title];
+            return newFeeds;
+        });
     }
 </script>
 
@@ -54,7 +62,9 @@
         {#each searchResults as podcast}
             <PodcastResultCard 
                 podcast={podcast} 
-                on:addPodcast={addPodcast}    
+                isSaved={$savedFeeds[podcast.title] !== undefined}
+                on:addPodcast={addPodcast}
+                on:removePodcast={removePodcast}
             />
         {/each}
     </div>

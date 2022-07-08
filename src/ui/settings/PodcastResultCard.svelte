@@ -3,15 +3,17 @@
     import { createEventDispatcher } from "svelte";
 
     export let podcast: PodcastFeed;
-    let wasAdded: boolean = false;
+    export let isSaved: boolean = false;
 
     const dispatch = createEventDispatcher();
 
     function onClickAddPodcast() {
         dispatch("addPodcast", { podcast });
-        wasAdded = true;
     }
 
+    function onClickRemovePodcast() {
+        dispatch("removePodcast", { podcast });
+    }
 </script>
 
 <div class="podcast-query-card">
@@ -21,13 +23,14 @@
     
     <h4 class="podcast-query-heading">{podcast.title}</h4>
 
-    <button 
-        class="podcast-query-button" 
-        disabled={wasAdded}
-        on:click={onClickAddPodcast}
-    >
-        {wasAdded ? "Added" : "Add"}
-    </button>
+    <div class="podcast-query-button-container">
+        <button 
+            class={`${isSaved && "mod-warning"} podcast-query-button`}
+            on:click={isSaved ? onClickRemovePodcast : onClickAddPodcast}
+        >
+            {isSaved ? "Remove" : "Add"}
+        </button>
+    </div>
 </div>
 
 <style>
@@ -51,7 +54,11 @@
         text-align: center;
     }
 
-    .podcast-query-button {
+    .podcast-query-button-container {
         margin-top: auto;
+    }
+
+    .podcast-query-button {
+        cursor: pointer !important;
     }
 </style>
