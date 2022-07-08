@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 	import { playedEpisodes } from "src/store";
-	import { ToggleComponent } from "obsidian";
+	import { Setting } from "obsidian";
 
 	export let episodes: Episode[] = [];
 	export let feed: PodcastFeed | null = null;
@@ -12,10 +12,12 @@
 	let toggleRef: HTMLSpanElement;
 
 	onMount(() => {
-		new ToggleComponent(toggleRef)
-			.setValue(hidePlayedEpisodes)
-			.onChange((value) => (hidePlayedEpisodes = value))
-			.setTooltip(`Toggle hiding of played episodes.`);
+		new Setting(toggleRef)
+			.setName("Hide played episodes")
+			.addToggle(toggleComponent => toggleComponent
+				.setValue(hidePlayedEpisodes)
+				.onChange((value) => (hidePlayedEpisodes = value))
+			);
 	});
 
 	const dispatch = createEventDispatcher();
@@ -81,10 +83,13 @@
 	.episode-list-menu {
 		display: flex;
 		flex-direction: row-reverse;
-		justify-content: space-between;
+		justify-content: center;
 		align-items: center;
-		padding: 0.5rem;
 		width: 100%;
+	}
+	
+	.episode-list-menu .setting-item .setting-item-info .setting-item-description {
+		padding-top: 0;
 	}
 </style>
 
