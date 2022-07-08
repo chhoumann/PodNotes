@@ -1,25 +1,16 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
-	import { createEventDispatcher } from "svelte";
+	import PodcastGridCard from "./PodcastGridCard.svelte";
 
 	export let feeds: PodcastFeed[] = [];
-
-	const dispatch = createEventDispatcher();
-
-	function onclickPodcast(feed: PodcastFeed) {
-		dispatch("clickPodcast", { feed });
-	}
 </script>
 
 <div class="podcast-grid">
 	{#if feeds.length > 0}
 		{#each feeds as feed}
-			<img
-				id={feed.title}
-				src={feed.artworkUrl}
-				alt={feed.title}
-				on:click={onclickPodcast.bind(null, feed)}
-				class="podcast-image"
+			<PodcastGridCard
+				feed={feed}
+				on:clickPodcast
 			/>
 		{/each}
 	{:else}
@@ -30,11 +21,6 @@
 </div>
 
 <style>
-	.podcast-image {
-		width: 100%;
-		cursor: pointer !important;
-	}
-
 	.podcast-grid {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
