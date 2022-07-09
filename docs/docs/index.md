@@ -2,7 +2,7 @@
 
 The one goal for PodNotes is to make it easier to write notes on podcasts.
 
-Here's the features that'll help you do that 👇.
+Here are the features that will help you do that 👇.
 
 ## Features
 - Mobile friendly
