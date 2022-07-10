@@ -5,16 +5,49 @@
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 	import { playedEpisodes } from "src/store";
 	import Icon from "../Icon.svelte";
+	import { debounce, TextComponent } from "obsidian";
+	import Fuse from "fuse.js";
 
 	export let episodes: Episode[] = [];
 	export let feed: PodcastFeed | null = null;
 	let hidePlayedEpisodes: boolean = false;
+	let searchInputRef: HTMLSpanElement;
+
+	let displayedEpisodes: Episode[] = [];
 
 	const dispatch = createEventDispatcher();
 
 	function forwardClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		dispatch("clickEpisode", { episode: event.detail.episode });
 	}
+
+	function searchEpisodes(query: string) {
+		if (query.length === 0) {
+			displayedEpisodes = episodes;
+			return;
+		} 
+
+		const fuse = new Fuse(episodes, {
+			shouldSort: true,
+			findAllMatches: true,
+			threshold: 0.4,
+			isCaseSensitive: false,
+			keys: ['title'],
+		});
+		
+		const searchResults = fuse.search(query);
+		displayedEpisodes = searchResults.map(resItem => resItem.item);
+	}
+
+	onMount(() => {
+		displayedEpisodes = episodes;
+
+		const searchComponent = new TextComponent(searchInputRef)
+			.setPlaceholder("Search episodes")
+			.onChange(debounce(searchEpisodes, 250));
+
+		searchComponent.inputEl.style.width = "100%";
+	});
 </script>
 
 <div class="episode-list-view-container">
@@ -24,6 +57,9 @@
 	</div>
 
 	<div class="episode-list-menu">
+		<div class="episode-list-search">
+			<span bind:this={searchInputRef} />
+		</div>
 		<Icon 
 			icon={hidePlayedEpisodes ? "eye-off" : "eye"}
 			size={25}
@@ -37,7 +73,7 @@
 	</div>
 
 	<div class="podcast-episode-list">
-		{#each episodes as episode}
+		{#each displayedEpisodes as episode}
 			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
 			{#if !hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
@@ -88,6 +124,11 @@
 		width: 100%;
 		padding-left: 0.5rem;
 		padding-right: 0.5rem;
+	}
+
+	.episode-list-search {
+		width: 100%;
+		margin-bottom: 0.5rem;
 	}
 </style>
 
