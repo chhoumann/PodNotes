@@ -58,7 +58,31 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 				this.api.stop();
 			},
-		})
+		});
+
+		this.addCommand({
+			id: 'skip-backward',
+			name: 'Skip Backward',
+			checkCallback: (checking) => {
+				if (checking) {
+					return this.api.isPlaying && !!this.api.podcast;
+				}
+
+				this.api.skipBackward();
+			}
+		});
+
+		this.addCommand({
+			id: 'skip-forward',
+			name: 'Skip Forward',
+			checkCallback: (checking) => {
+				if (checking) {
+					return this.api.isPlaying && !!this.api.podcast;
+				}
+
+				this.api.skipForward();
+			}
+		});
 
 		this.addCommand({
 			id: 'hrpn',

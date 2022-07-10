@@ -28,20 +28,53 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			target: queryGridContainer
 		});
 			
-		const defaultPlaybackRateSetting = new Setting(this.containerEl);
-		defaultPlaybackRateSetting.setName('Default Playback Rate');
-		defaultPlaybackRateSetting.addSlider((slider) => slider
-			.setLimits(0.5, 4, 0.1)
-			.setValue(this.plugin.settings.defaultPlaybackRate)
-			.onChange(value => {
-				this.plugin.settings.defaultPlaybackRate = value;
-				this.plugin.saveSettings();
-			})
-			.setDynamicTooltip()
-		);
+		this.addDefaultPlaybackRateSetting(settingsContainer);
+		this.addSkipLengthSettings(settingsContainer);
 	}
 
 	hide(): void {
 		this.podcastQueryGrid?.$destroy();
+	}
+
+	private addDefaultPlaybackRateSetting(container: HTMLElement): void {
+		new Setting(container)
+			.setName('Default Playback Rate')
+			.addSlider((slider) => slider
+				.setLimits(0.5, 4, 0.1)
+				.setValue(this.plugin.settings.defaultPlaybackRate)
+				.onChange(value => {
+					this.plugin.settings.defaultPlaybackRate = value;
+					this.plugin.saveSettings();
+				})
+				.setDynamicTooltip()
+			);
+	}
+
+	private addSkipLengthSettings(container: HTMLElement): void {
+		new Setting(container)
+			.setName('Skip backward length (s)')
+			.addText((textComponent) => {
+				textComponent.inputEl.type = 'number';
+				textComponent
+					.setValue(`${this.plugin.settings.skipBackwardLength}`)
+					.onChange(value => {
+						this.plugin.settings.skipBackwardLength = parseInt(value);
+						this.plugin.saveSettings();
+					})
+					.setPlaceholder('seconds');
+			});
+
+		new Setting(container)
+			.setName('Skip forward length (s)')
+			.addText((textComponent) => {
+				textComponent.inputEl.type = 'number';
+				textComponent
+					.setValue(`${this.plugin.settings.skipForwardLength}`)
+					.onChange(value => {
+						this.plugin.settings.skipForwardLength = parseInt(value);
+						this.plugin.saveSettings();
+					})
+					.setPlaceholder('seconds');
+			});
 	}
 }

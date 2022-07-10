@@ -7,6 +7,10 @@ export interface IAPI {
 	currentTime: number;
 
 	getPodcastTimeFormatted(format: string, linkify?: boolean): string;
+	
 	start(): void;
 	stop(): void;
+
+	skipBackward(): void;
+	skipForward(): void;
 }

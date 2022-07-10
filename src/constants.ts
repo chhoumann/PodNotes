@@ -7,4 +7,6 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	podNotes: {},
 	defaultPlaybackRate: 1,
 	playedEpisodes: {},
+	skipBackwardLength: 15,
+	skipForwardLength: 15,
 }

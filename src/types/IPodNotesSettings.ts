@@ -7,4 +7,6 @@ export interface IPodNotesSettings {
 	podNotes: { [episodeName: string]: PodNote }
 	defaultPlaybackRate: number;
 	playedEpisodes: { [episodeName: string]: PlayedEpisode }
+	skipBackwardLength: number;
+	skipForwardLength: number;
 }
