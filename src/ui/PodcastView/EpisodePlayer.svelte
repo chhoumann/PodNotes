@@ -137,7 +137,7 @@
 			value={$currentTime}
 			on:click={onClickProgressbar}
 		/>
-		<span>{formatSeconds($duration, "HH:mm:ss")}</span>
+		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
 	</div>
 
 	<div class="controls-container">
