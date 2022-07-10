@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { setIcon, SliderComponent } from "obsidian";
+	import { ButtonComponent, setIcon, SliderComponent } from "obsidian";
 	import {
 		duration,
 		currentTime,
@@ -8,15 +8,17 @@
 		plugin,
 		playedEpisodes,
 	} from "src/store";
+	import { IconType } from "src/types/IconType";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
 	import { get, Unsubscriber } from "svelte/store";
 
 	let playbackRateRef: HTMLSpanElement;
 	let iconRef: HTMLSpanElement;
+	let skipBackwardRef: HTMLSpanElement;
+	let skipForwardRef: HTMLSpanElement;
 	let unsubscriber: Unsubscriber;
 	let playbackRate: number = get(plugin).settings.defaultPlaybackRate || 1;
-
 	let isHoveringArtwork: boolean = false;
 
 	function togglePlayback() {
@@ -52,11 +54,26 @@
 			.setValue(playbackRate)
 			.onChange((value) => (playbackRate = value));
 
+		const skipBackBtn = new ButtonComponent(skipBackwardRef)
+			.setIcon("skip-back" as IconType)
+			.setTooltip("Skip backward")
+			.onClick($plugin.api.skipBackward.bind($plugin.api));
+
+		const skipForwardBtn = new ButtonComponent(skipForwardRef)
+			.setIcon("skip-forward" as IconType)
+			.setTooltip("Skip forward")
+			.onClick($plugin.api.skipForward.bind($plugin.api));
+
+		skipBackBtn.buttonEl.style.margin = "0";
+		skipBackBtn.buttonEl.style.cursor = "pointer";
+		skipForwardBtn.buttonEl.style.margin = "0";
+		skipForwardBtn.buttonEl.style.cursor = "pointer";
+
 		isPaused.set(false);
 	});
 
 	onDestroy(() => {
-		unsubscriber()
+		unsubscriber();
 
 		playedEpisodes.update((playedEpisodes) => {
 			const currentEp = $currentEpisode;
@@ -70,7 +87,7 @@
 				duration: dur,
 				finished: curTime === dur,
 			};
-			
+
 			return playedEpisodes;
 		});
 
@@ -87,7 +104,7 @@
 				duration: $duration,
 				finished: true,
 			};
-			
+
 			return playedEpisodes;
 		});
 	}
@@ -141,6 +158,11 @@
 	</div>
 
 	<div class="controls-container">
+		<span bind:this={skipBackwardRef} />
+		<span bind:this={skipForwardRef} />
+	</div>
+
+	<div class="playbackrate-container">
 		<span>{playbackRate}x</span>
 		<span bind:this={playbackRateRef} />
 	</div>
@@ -206,6 +228,15 @@
 	}
 
 	.controls-container {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 1rem;
+		margin-left: 25%;
+		margin-right: 25%;
+	}
+
+	.playbackrate-container {
 		display: flex;
 		align-items: center;
 		justify-content: space-around;

@@ -1,7 +1,7 @@
 import { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
 import { IAPI } from "./IAPI";
-import { currentEpisode, currentTime, duration, isPaused } from "src/store";
+import { currentEpisode, currentTime, duration, isPaused, plugin } from "src/store";
 import { get } from "svelte/store";
 import encodePodnotesURI from "src/utility/encodePodnotesURI";
 
@@ -63,4 +63,14 @@ export class API implements IAPI {
     stop(): void {
 		isPaused.update((_) => true);
     }
+
+	skipBackward(): void {
+		const skipBackLen = get(plugin).settings.skipBackwardLength;
+		this.currentTime -= skipBackLen;
+	}
+
+	skipForward(): void {
+		const skipForwardLen = get(plugin).settings.skipForwardLength;
+		this.currentTime += skipForwardLen;
+	}
 }
