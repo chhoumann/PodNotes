@@ -86,9 +86,20 @@ function replaceIllegalFileNameCharactersInString(string) {
 }
 ```
 
-The macro itself is pretty simple. You add the script as the first step and the template as the second step.
+First, create a new macro in the macro panel. This is accessed by clicking `Manage Macros`.
+Add a macro with any name you like.
+
+Now, add the script as the first step and the template as the second step.
 Adding these requires that the script and template is saved as files in your Obsidian vault.
 Their file names are up to you, but ensure that they end in .js and .md, for the script and template respectively.
+
+Once you have created the macro in the macro panel, you should add a macro action to the QuickAdd menu.
+This is done from the main QuickAdd settings. You should see an input field where you can input the name of the macro choice.
+Right next to it is a dropdown menu with the type of choice you'd like to add—select macro here. Then click `Add Choice`.
+
+Once the choice has been added, you should see the macro in the QuickAdd menu in the settings panel.
+Click the cogwheel next to the macro choice to edit the macro. You'll want to select the appropriate macro that you created in the macros panel.
+Notably, we distinguish between a macro and a macro choice. Selecting a macro in the menu that pops up 'links' it to the macro choice, so the macro choice can execute the macro.
 
 My settings for the Template action/step in the macro are as follows:
 ![Template action](resources/quickadd_create_note_settings.png)
