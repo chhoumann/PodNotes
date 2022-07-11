@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { ButtonComponent, setIcon, SliderComponent } from "obsidian";
 	import {
 		duration,
 		currentTime,
@@ -8,17 +7,13 @@
 		plugin,
 		playedEpisodes,
 	} from "src/store";
-	import { IconType } from "src/types/IconType";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
-	import { get, Unsubscriber } from "svelte/store";
+	import Icon from "../obsidian/Icon.svelte";
+	import Button from "../obsidian/Button.svelte";
+	import Slider from "../obsidian/Slider.svelte";
 
-	let playbackRateRef: HTMLSpanElement;
-	let iconRef: HTMLSpanElement;
-	let skipBackwardRef: HTMLSpanElement;
-	let skipForwardRef: HTMLSpanElement;
-	let unsubscriber: Unsubscriber;
-	let playbackRate: number = get(plugin).settings.defaultPlaybackRate || 1;
+	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
 
 	function togglePlayback() {
@@ -47,6 +42,26 @@
 		onClickProgressbar(e);
 	}
 
+	function markEpisodeAsPlayed() {
+		playedEpisodes.update((playedEpisodes) => {
+			const currentEp = $currentEpisode;
+
+			playedEpisodes[currentEp.title] = {
+				...currentEp,
+				time: $currentTime,
+				duration: $duration,
+				finished: true,
+			};
+
+			return playedEpisodes;
+		});
+	}
+
+	function onPlaybackRateChange(event: CustomEvent<{value: number}>) {
+		console.log(event.detail.value);
+		playbackRate = event.detail.value;
+	}
+
 	onMount(() => {
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
@@ -60,37 +75,10 @@
 			currentTime.set(0);
 		}
 
-		unsubscriber = isPaused.subscribe((value) => {
-			const btnIcon = value ? "pause" : "play";
-			setIcon(iconRef, btnIcon);
-		});
-
-		new SliderComponent(playbackRateRef)
-			.setLimits(0.5, 3.5, 0.1)
-			.setValue(playbackRate)
-			.onChange((value) => (playbackRate = value));
-
-		const skipBackBtn = new ButtonComponent(skipBackwardRef)
-			.setIcon("skip-back" as IconType)
-			.setTooltip("Skip backward")
-			.onClick($plugin.api.skipBackward.bind($plugin.api));
-
-		const skipForwardBtn = new ButtonComponent(skipForwardRef)
-			.setIcon("skip-forward" as IconType)
-			.setTooltip("Skip forward")
-			.onClick($plugin.api.skipForward.bind($plugin.api));
-
-		skipBackBtn.buttonEl.style.margin = "0";
-		skipBackBtn.buttonEl.style.cursor = "pointer";
-		skipForwardBtn.buttonEl.style.margin = "0";
-		skipForwardBtn.buttonEl.style.cursor = "pointer";
-
 		isPaused.set(false);
 	});
 
 	onDestroy(() => {
-		unsubscriber();
-
 		playedEpisodes.update((playedEpisodes) => {
 			const currentEp = $currentEpisode;
 			const curTime = $currentTime;
@@ -109,21 +97,6 @@
 
 		isPaused.set(true);
 	});
-
-	function markEpisodeAsPlayed() {
-		playedEpisodes.update((playedEpisodes) => {
-			const currentEp = $currentEpisode;
-
-			playedEpisodes[currentEp.title] = {
-				...currentEp,
-				time: $currentTime,
-				duration: $duration,
-				finished: true,
-			};
-
-			return playedEpisodes;
-		});
-	}
 </script>
 
 <div class="episode-player">
@@ -146,7 +119,7 @@
 					isHoveringArtwork || $isPaused ? "block" : "none"
 				}`}
 			>
-				<span bind:this={iconRef} />
+				<Icon icon={$isPaused ? "play" : "pause"} />
 			</div>
 		</div>
 	</div>
@@ -177,13 +150,33 @@
 	</div>
 
 	<div class="controls-container">
-		<span bind:this={skipBackwardRef} />
-		<span bind:this={skipForwardRef} />
+		<Button
+			icon="skip-back"
+			tooltip="Skip backward"
+			on:click={$plugin.api.skipBackward.bind($plugin.api)}
+			style={{
+				"margin": "0",
+				"cursor": "pointer",
+			}}
+		/>
+		<Button
+			icon="skip-forward"
+			tooltip="Skip forward"
+			on:click={$plugin.api.skipForward.bind($plugin.api)}
+			style={{
+				"margin": "0",
+				"cursor": "pointer",
+			}}
+		/>
 	</div>
 
 	<div class="playbackrate-container">
 		<span>{playbackRate}x</span>
-		<span bind:this={playbackRateRef} />
+		<Slider
+			on:change={onPlaybackRateChange}
+			value={playbackRate}
+			limits={[0.5, 3.5, 0.1]}
+		/>
 	</div>
 </div>
 

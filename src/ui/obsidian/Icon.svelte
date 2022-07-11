@@ -1,7 +1,7 @@
 <script lang="ts">
     import { setIcon } from "obsidian";
     import { IconType } from "src/types/IconType";
-    import { afterUpdate, createEventDispatcher, onMount, tick } from "svelte";
+    import { afterUpdate, createEventDispatcher, onMount } from "svelte";
 
     export let size: number = 16;
     export let icon: IconType;

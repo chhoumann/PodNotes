@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 	import { playedEpisodes } from "src/store";
-	import Icon from "../Icon.svelte";
+	import Icon from "../obsidian/Icon.svelte";
 	import { debounce, TextComponent } from "obsidian";
 	import Fuse from "fuse.js";
 
