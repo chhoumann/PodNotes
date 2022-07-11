@@ -1,6 +1,7 @@
 <script lang="ts">
     import { PodcastFeed } from "src/types/PodcastFeed";
     import { createEventDispatcher } from "svelte";
+import Button from "../obsidian/Button.svelte";
 
     export let podcast: PodcastFeed;
     export let isSaved: boolean = false;
@@ -24,12 +25,12 @@
     <h4 class="podcast-query-heading">{podcast.title}</h4>
 
     <div class="podcast-query-button-container">
-        <button 
-            class={`${isSaved && "mod-warning"} podcast-query-button`}
+        <Button
+            text={isSaved ? "Remove" : "Add"}
+            warning={isSaved}
             on:click={isSaved ? onClickRemovePodcast : onClickAddPodcast}
-        >
-            {isSaved ? "Remove" : "Add"}
-        </button>
+            style={{"cursor": "pointer"}}
+        />
     </div>
 </div>
 
@@ -56,9 +57,5 @@
 
     .podcast-query-button-container {
         margin-top: auto;
-    }
-
-    .podcast-query-button {
-        cursor: pointer !important;
     }
 </style>
