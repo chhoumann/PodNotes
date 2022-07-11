@@ -1,9 +1,11 @@
 name: Documentation
 on:
   workflow_dispatch:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - 'master'
+    paths:
+      - 'docs/**'
 
 jobs:
   deploy:
