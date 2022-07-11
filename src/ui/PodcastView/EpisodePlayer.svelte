@@ -31,6 +31,22 @@
 		currentTime.set(percent * $duration);
 	}
 
+	let isDragging: boolean = false;
+
+	function onDragStart() {
+		isDragging = true;
+	}
+
+	function onDragEnd() {
+		isDragging = false;
+	}
+
+	function handleDragging(e: MouseEvent) {
+		if (!isDragging) return;
+		
+		onClickProgressbar(e);
+	}
+
 	onMount(() => {
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
@@ -153,6 +169,9 @@
 			max={$duration}
 			value={$currentTime}
 			on:click={onClickProgressbar}
+			on:mousedown={onDragStart}
+			on:mouseup={onDragEnd}
+			on:mousemove={handleDragging}
 		/>
 		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
 	</div>
