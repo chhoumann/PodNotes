@@ -1,21 +1,10 @@
 <script lang="ts">
-	import { setIcon } from "obsidian";
 	import { ViewState } from "src/types/ViewState";
-	import { onMount } from "svelte";
+	import Icon from "../obsidian/Icon.svelte";
 
 	export let viewState: ViewState = ViewState.PodcastGrid;
 	export let canShowEpisodeList: boolean = false;
 	export let canShowPlayer: boolean = false;
-
-	let feedGridIconRef: HTMLSpanElement;
-	let episodeListIconRef: HTMLSpanElement;
-	let playerIconRef: HTMLSpanElement;
-
-	onMount(() => {
-		setIcon(feedGridIconRef, "grid");
-		setIcon(episodeListIconRef, "list-minus");
-		setIcon(playerIconRef, "play");
-	});
 
 	function handleClickMenuItem(newState: ViewState) {
 		if (viewState === newState) return;
@@ -37,7 +26,7 @@
             ${viewState === ViewState.PodcastGrid ? "topbar-selected" : ""}
         `}
 	>
-		<span bind:this={feedGridIconRef} />
+		<Icon icon="grid" size={20} />
 	</div>
 	<div
 		on:click={handleClickMenuItem.bind(null, ViewState.EpisodeList)}
@@ -47,7 +36,7 @@
             ${canShowEpisodeList ? "topbar-selectable" : ""}
         `}
 	>
-		<span bind:this={episodeListIconRef} />
+		<Icon icon="list-minus" size={20} />
 	</div>
 	<div
 		on:click={handleClickMenuItem.bind(null, ViewState.Player)}
@@ -57,7 +46,7 @@
             ${canShowPlayer ? "topbar-selectable" : ""}
         `}
 	>
-		<span bind:this={playerIconRef} />
+		<Icon icon="play" size={20} />
 	</div>
 </div>
 
