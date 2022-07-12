@@ -1,14 +1,12 @@
 <script lang="ts">
-    import { debounce, TextComponent } from "obsidian";
+    import { debounce } from "obsidian";
     import { consume } from "src/iTunesAPIConsumer";
     import { savedFeeds } from "src/store";
     import { PodcastFeed } from "src/types/PodcastFeed";
-    import { onMount } from "svelte";
+    import Text from "../obsidian/Text.svelte";
     import PodcastResultCard from "./PodcastResultCard.svelte";
 
-    let inputRef: HTMLSpanElement;
     let searchResults: PodcastFeed[] = [];
-
     let gridSizeClass: string = "grid-3";
 
 	if (searchResults.length % 3 === 0 || searchResults.length > 3) {
@@ -19,18 +17,9 @@
 		gridSizeClass = "grid-1";
 	}
 
-    onMount(() => {
-        const debouncedUpdate = debounce(async (value: string) => {
-            searchResults = await consume(value);
-        }, 300, true);
-
-        const textInput = new TextComponent(inputRef)
-            .setPlaceholder("Search...")
-            .onChange(debouncedUpdate)
-    
-        textInput.inputEl.style.width = "100%";
-        textInput.inputEl.style.marginBottom = "1rem";
-    });
+    const debouncedUpdate = debounce(async (event: CustomEvent<{value: string}>) => {
+        searchResults = await consume(event.detail.value);
+    }, 300, true);
 
     function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
         const { podcast } = event.detail;
@@ -51,7 +40,14 @@
 
 <div class="podcast-query-container">
     <h3 class="podcast-query-heading">Search for a podcast</h3>
-    <span bind:this={inputRef} />
+    <Text 
+        placeholder="Search..."
+        on:change={debouncedUpdate}
+        style={{
+            width: "100%",
+            "margin-bottom": "1rem",
+        }}
+    />
 
     <div 
         class={`
