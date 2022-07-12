@@ -7,11 +7,11 @@
 	import Icon from "../obsidian/Icon.svelte";
 	import { debounce, TextComponent } from "obsidian";
 	import Fuse from "fuse.js";
+	import Text from "../obsidian/Text.svelte";
 
 	export let episodes: Episode[] = [];
 	export let feed: PodcastFeed | null = null;
 	let hidePlayedEpisodes: boolean = false;
-	let searchInputRef: HTMLSpanElement;
 
 	let displayedEpisodes: Episode[] = [];
 
@@ -39,14 +39,12 @@
 		displayedEpisodes = searchResults.map(resItem => resItem.item);
 	}
 
+	const onSearchInput = debounce((event: CustomEvent<{value: string}>) => {
+		searchEpisodes(event.detail.value);
+	}, 250);
+
 	onMount(() => {
 		displayedEpisodes = episodes;
-
-		const searchComponent = new TextComponent(searchInputRef)
-			.setPlaceholder("Search episodes")
-			.onChange(debounce(searchEpisodes, 250));
-
-		searchComponent.inputEl.style.width = "100%";
 	});
 </script>
 
@@ -58,7 +56,13 @@
 
 	<div class="episode-list-menu">
 		<div class="episode-list-search">
-			<span bind:this={searchInputRef} />
+			<Text 
+				placeholder="Search episodes"
+				on:change={onSearchInput}
+				style={{
+					width: "100%",
+				}}
+			/>
 		</div>
 		<Icon 
 			icon={hidePlayedEpisodes ? "eye-off" : "eye"}
