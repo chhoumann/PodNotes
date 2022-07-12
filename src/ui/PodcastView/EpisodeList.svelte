@@ -1,19 +1,15 @@
 <script lang="ts">
 	import { Episode } from "src/types/Episode";
-	import { PodcastFeed } from "src/types/PodcastFeed";
 	import { createEventDispatcher, onMount } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 	import { playedEpisodes } from "src/store";
 	import Icon from "../obsidian/Icon.svelte";
-	import { debounce } from "obsidian";
-	import Fuse from "fuse.js";
 	import Text from "../obsidian/Text.svelte";
 
 	export let episodes: Episode[] = [];
-	export let feed: PodcastFeed | null = null;
+	export let showThumbnails: boolean = false;
 	let hidePlayedEpisodes: boolean = false;
-
-	let displayedEpisodes: Episode[] = [];
+	let searchInputQuery: string = "";
 
 	const dispatch = createEventDispatcher();
 
@@ -21,44 +17,20 @@
 		dispatch("clickEpisode", { episode: event.detail.episode });
 	}
 
-	function searchEpisodes(query: string) {
-		if (query.length === 0) {
-			displayedEpisodes = episodes;
-			return;
-		} 
-
-		const fuse = new Fuse(episodes, {
-			shouldSort: true,
-			findAllMatches: true,
-			threshold: 0.4,
-			isCaseSensitive: false,
-			keys: ['title'],
-		});
-		
-		const searchResults = fuse.search(query);
-		displayedEpisodes = searchResults.map(resItem => resItem.item);
+	function forwardSearchInput(event: CustomEvent<{ query: string }>) {
+		dispatch("search", { query: event.detail.query });
 	}
-
-	const onSearchInput = debounce((event: CustomEvent<{value: string}>) => {
-		searchEpisodes(event.detail.value);
-	}, 250);
-
-	onMount(() => {
-		displayedEpisodes = episodes;
-	});
 </script>
 
 <div class="episode-list-view-container">
-	<div class="podcast-header">
-		<img id="podcast-artwork" src={feed?.artworkUrl} alt={feed?.title} />
-		<h2 class="podcast-heading">{feed?.title}</h2>
-	</div>
+	<slot name="header">Fallback</slot>
 
 	<div class="episode-list-menu">
 		<div class="episode-list-search">
 			<Text 
+			 	bind:value={searchInputQuery}
+				on:change={forwardSearchInput}
 				placeholder="Search episodes"
-				on:change={onSearchInput}
 				style={{
 					width: "100%",
 				}}
@@ -77,12 +49,13 @@
 	</div>
 
 	<div class="podcast-episode-list">
-		{#each displayedEpisodes as episode}
+		{#each episodes as episode}
 			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
 			{#if !hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
 					episode={episode}
 					episodeFinished={episodePlayed}
+					showEpisodeImage={showThumbnails}
 					on:clickEpisode={forwardClickEpisode} 
 				/>
 			{/if}
@@ -96,18 +69,6 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-	}
-
-	.podcast-header {
-		display: flex;
-		flex-direction: column;
-		justify-content: space-around;
-		align-items: center;
-		padding: 0.5rem;
-	}
-
-	.podcast-heading {
-		text-align: center;
 	}
 
 	.podcast-episode-list {
