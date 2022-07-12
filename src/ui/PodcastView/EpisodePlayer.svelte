@@ -58,7 +58,6 @@
 	}
 
 	function onPlaybackRateChange(event: CustomEvent<{value: number}>) {
-		console.log(event.detail.value);
 		playbackRate = event.detail.value;
 	}
 
