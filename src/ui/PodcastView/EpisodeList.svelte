@@ -5,7 +5,7 @@
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 	import { playedEpisodes } from "src/store";
 	import Icon from "../obsidian/Icon.svelte";
-	import { debounce, TextComponent } from "obsidian";
+	import { debounce } from "obsidian";
 	import Fuse from "fuse.js";
 	import Text from "../obsidian/Text.svelte";
 
