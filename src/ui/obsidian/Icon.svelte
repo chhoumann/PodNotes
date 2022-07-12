@@ -1,6 +1,8 @@
 <script lang="ts">
     import { setIcon } from "obsidian";
+    import { CSSObject } from "src/types/CSSObject";
     import { IconType } from "src/types/IconType";
+    import extractStylesFromObj from "src/utility/extractStylesFromObj";
     import { afterUpdate, createEventDispatcher, onMount } from "svelte";
 
     export let size: number = 16;
@@ -8,16 +10,21 @@
     export {styles as style};
 
     let ref: HTMLSpanElement;
-    let styles: string = "";
+    let styles: CSSObject = {};
+    let stylesStr: string;
+
+    $: stylesStr = extractStylesFromObj(styles);
 
     const dispatch = createEventDispatcher();
 
     onMount(() => {
         setIcon(ref, icon, size);
+        ref.style.cssText = stylesStr;
     });
 
     afterUpdate(() => {
         setIcon(ref, icon, size);
+        ref.style.cssText = stylesStr;
     });
 
     function forwardClick(event: MouseEvent) {
@@ -28,7 +35,6 @@
 <div 
     on:click={forwardClick} 
     class="icon-clickable" 
-    style={styles}
 >
     <span bind:this={ref} />
 </div>
