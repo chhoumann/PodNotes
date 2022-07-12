@@ -45,8 +45,7 @@
         });
 
         if (styles) {
-            const oldStyles = btn.buttonEl.style;
-            btn.buttonEl.setAttr('style', `${oldStyles}; ${extractStylesFromObj(styles)}`);
+            btn.buttonEl.setAttr('style', extractStylesFromObj(styles));
         }
     }
 
