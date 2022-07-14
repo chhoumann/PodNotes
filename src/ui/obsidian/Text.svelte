@@ -28,10 +28,6 @@
     });
 
     function updateTextComponentAttributes(component: TextComponent) {
-        component.onChange((value: string) => {
-            dispatch("change", { value });
-        });
-
         if (value) component.setValue(value);
         if (disabled) component.setDisabled(disabled);
         if (placeholder) component.setPlaceholder(placeholder);
@@ -39,6 +35,11 @@
         if (styles) {
             text.inputEl.setAttr("style", extractStylesFromObj(styles));
         }
+
+        component.onChange((newValue: string) => {
+            value = newValue;
+            dispatch("change", { value: newValue });
+        });
     }
 </script>
 
