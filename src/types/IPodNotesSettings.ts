@@ -1,6 +1,6 @@
 import { PodNote } from './PodNotes';
 import { PodcastFeed } from "./PodcastFeed";
-import { PlayedEpisode } from './playedEpisode';
+import { PlayedEpisode } from './PlayedEpisode';
 
 export interface IPodNotesSettings {
 	savedFeeds: { [podcastName: string]: PodcastFeed };

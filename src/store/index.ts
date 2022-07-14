@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 import type PodNotes from 'src/main';
 import { Episode } from 'src/types/Episode';
-import { PlayedEpisode } from 'src/types/playedEpisode';
+import { PlayedEpisode } from 'src/types/PlayedEpisode';
 import { PodcastFeed } from 'src/types/PodcastFeed';
 
 export const plugin = writable<PodNotes>();

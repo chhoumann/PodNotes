@@ -12,7 +12,7 @@ import { get } from 'svelte/store';
 import { IPodNotes } from './types/IPodNotes';
 import { EpisodeStatusController } from './EpisodeStatusController';
 import { StoreController } from './types/StoreController';
-import { PlayedEpisode } from './types/playedEpisode';
+import { PlayedEpisode } from './types/PlayedEpisode';
 import { PodcastFeed } from './types/PodcastFeed';
 import { SavedFeedsController } from './SavedFeedsController';
 
