@@ -61,7 +61,7 @@
 		playbackRate = event.detail.value;
 	}
 
-	onMount(() => {
+	function updateTime() {
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
 
@@ -72,10 +72,9 @@
 		} else {
 			duration.set(0);
 			currentTime.set(0);
+			isPaused.set(false);
 		}
-
-		isPaused.set(false);
-	});
+	};
 
 	onDestroy(() => {
 		playedEpisodes.update((playedEpisodes) => {
@@ -132,6 +131,7 @@
 		bind:paused={$isPaused}
 		bind:playbackRate
 		on:ended={markEpisodeAsPlayed}
+		on:loadedmetadata={updateTime}
 	/>
 
 	<div class="status-container">
