@@ -4,6 +4,7 @@
 
 	export let episode: Episode;
 	export let episodeFinished: boolean = false;
+	export let showEpisodeImage: boolean = false;
 
 	const dispatch = createEventDispatcher();
 
@@ -19,7 +20,15 @@
 	class="podcast-episode-item" 
 	on:click={onClickEpisode} 
 >
-	<div class="podcast-episode-information">
+	{#if showEpisodeImage && episode?.artworkUrl} 
+		<div class="podcast-episode-thumbnail-container">
+			<img class="podcast-episode-thumbnail" src={episode?.artworkUrl} alt={episode.title} />
+		</div>
+	{/if}
+	<div 
+		class="podcast-episode-information" 
+		style:flex-basis={showEpisodeImage ? "80%" : ""}
+	>
 		<span class="episode-item-date">{date.toUpperCase()}</span>
 		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
 	</div>
@@ -34,6 +43,7 @@
 		padding: 0.5rem;
 		width: 100%;
 		border: solid 1px var(--background-divider);
+		gap: 0.25rem;
 	}
 
 	.podcast-episode-item:hover {
@@ -58,5 +68,19 @@
 
 	.episode-item-date {
 		color: gray;
+	}
+
+	.podcast-episode-thumbnail-container {
+		flex-basis: 20%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.podcast-episode-thumbnail {
+		border-radius: 15%;
+		max-width: 5rem;
+		max-height: 5rem;
+		cursor: pointer;
 	}
 </style>
