@@ -22,7 +22,15 @@
 	let selectedFeed: PodcastFeed | null = null;
 	let displayedEpisodes: Episode[] = [];
 	let latestEpisodes: Episode[] = [];
-	let viewState: ViewState;
+	let _viewState: ViewState;
+
+	let view: HTMLDivElement;
+
+	function updateViewState(viewState: ViewState) {
+		_viewState = viewState;
+
+		view.scrollIntoView();
+	}
 
 	onMount(async () => {
 		await fetchEpisodesInAllFeeds(feeds);
@@ -83,14 +91,14 @@
 		
 		selectedFeed = feed;
 		displayedEpisodes = await fetchEpisodes(feed);
-		viewState = ViewState.EpisodeList;
+		updateViewState(ViewState.EpisodeList);
 	}
 
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		const { episode } = event.detail;
 		currentEpisode.set(episode);
 
-		viewState = ViewState.Player;
+		updateViewState(ViewState.Player);
 	}
 
 	async function handleClickRefresh() {
@@ -114,16 +122,19 @@
 	onDestroy(unsubscribe);
 </script>
 
-<div class="podcast-view">
+<div 
+	class="podcast-view"
+	bind:this={view}
+>
 	<TopBar
-		bind:viewState
+		bind:viewState={_viewState}
 		canShowEpisodeList={true}
 		canShowPlayer={!!$currentEpisode}
 	/>
 
-	{#if viewState === ViewState.Player}
+	{#if _viewState === ViewState.Player}
 		<EpisodePlayer />
-	{:else if viewState === ViewState.EpisodeList}
+	{:else if _viewState === ViewState.EpisodeList}
 		<EpisodeList
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed}
@@ -138,7 +149,7 @@
 						on:click={() => {
 							selectedFeed = null;
 							displayedEpisodes = latestEpisodes;
-							viewState = ViewState.EpisodeList;
+							updateViewState(ViewState.EpisodeList);
 
 						}}
 					>
@@ -160,7 +171,7 @@
 				{/if}
 			</svelte:fragment>
 		</EpisodeList>
-	{:else if viewState === ViewState.PodcastGrid}
+	{:else if _viewState === ViewState.PodcastGrid}
 		<FeedGrid {feeds} on:clickPodcast={handleClickPodcast} />
 	{/if}
 </div>
