@@ -39,6 +39,10 @@
 				});
 		});
 
+		if (!selectedFeed) {
+			displayedEpisodes = latestEpisodes;
+		}
+
 		return () => {
 			unsubscribe();
 		};
@@ -95,9 +99,16 @@
 		displayedEpisodes = await fetchEpisodes(selectedFeed, false);
 	}
 
-	const handleSearch = debounce((event: CustomEvent<{value: string}>) => {
-		console.log("searching for", event.detail.value);
-		searchEpisodes(event.detail.value, displayedEpisodes);
+	const handleSearch = debounce((event: CustomEvent<{query: string}>) => {
+		const { query } = event.detail;
+
+		if (selectedFeed) {
+			const episodesInFeed = $episodeCache[selectedFeed.title];
+			displayedEpisodes = searchEpisodes(query, episodesInFeed);
+			return;
+		}
+
+		displayedEpisodes = searchEpisodes(query, latestEpisodes);
 	}, 250);
 
 	onDestroy(unsubscribe);
@@ -114,7 +125,7 @@
 		<EpisodePlayer />
 	{:else if viewState === ViewState.EpisodeList}
 		<EpisodeList
-			episodes={selectedFeed ? displayedEpisodes : latestEpisodes}
+			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed}
 			on:clickEpisode={handleClickEpisode}
 			on:clickRefresh={handleClickRefresh}
@@ -126,6 +137,7 @@
 						class="go-back"
 						on:click={() => {
 							selectedFeed = null;
+							displayedEpisodes = latestEpisodes;
 							viewState = ViewState.EpisodeList;
 
 						}}
