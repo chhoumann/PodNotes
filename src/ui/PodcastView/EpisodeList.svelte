@@ -17,8 +17,8 @@
 		dispatch("clickEpisode", { episode: event.detail.episode });
 	}
 
-	function forwardSearchInput(event: CustomEvent<{ query: string }>) {
-		dispatch("search", { query: event.detail.query });
+	function forwardSearchInput(event: CustomEvent<{ value: string }>) {
+		dispatch("search", { query: event.detail.value });
 	}
 </script>
 
@@ -49,6 +49,9 @@
 	</div>
 
 	<div class="podcast-episode-list">
+		{#if episodes.length === 0}
+			<p>No episodes found.</p>
+		{/if}
 		{#each episodes as episode}
 			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
 			{#if !hidePlayedEpisodes || !episodePlayed}

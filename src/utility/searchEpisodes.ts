@@ -2,8 +2,10 @@ import Fuse from "fuse.js";
 import { Episode } from "src/types/Episode";
 
 export default function searchEpisodes(query: string, episodes: Episode[]): Episode[] {
-    if (query.length === 0 || episodes.length === 0) {
-        return [];
+	if (episodes.length === 0) return;
+
+    if (query.length === 0) {
+        return episodes;
     } 
 
     const fuse = new Fuse(episodes, {
