@@ -2,7 +2,7 @@ import Fuse from "fuse.js";
 import { Episode } from "src/types/Episode";
 
 export default function searchEpisodes(query: string, episodes: Episode[]): Episode[] {
-	if (episodes.length === 0) return;
+	if (episodes.length === 0) return [];
 
     if (query.length === 0) {
         return episodes;
