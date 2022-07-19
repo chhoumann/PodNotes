@@ -22,7 +22,15 @@
 	let selectedFeed: PodcastFeed | null = null;
 	let displayedEpisodes: Episode[] = [];
 	let latestEpisodes: Episode[] = [];
-	let viewState: ViewState;
+	let _viewState: ViewState;
+
+	let view: HTMLDivElement;
+
+	function updateViewState(viewState: ViewState) {
+		_viewState = viewState;
+
+		view.scrollIntoView();
+	}
 
 	onMount(async () => {
 		await fetchEpisodesInAllFeeds(feeds);
@@ -33,8 +41,8 @@
 				.flat()
 				.sort((a, b) => {
 					if (a.episodeDate && b.episodeDate)
-						return Number(b.episodeDate) - Number(a.episodeDate)
-					
+						return Number(b.episodeDate) - Number(a.episodeDate);
+
 					return 0;
 				});
 		});
@@ -52,14 +60,21 @@
 		feeds = Object.values(storeValue);
 	});
 
-	async function fetchEpisodes(feed: PodcastFeed, useCache: boolean = true): Promise<Episode[]> {
+	async function fetchEpisodes(
+		feed: PodcastFeed,
+		useCache: boolean = true
+	): Promise<Episode[]> {
 		const cachedEpisodesInFeed = $episodeCache[feed.title];
 
-		if (useCache && cachedEpisodesInFeed && cachedEpisodesInFeed.length > 0) {
+		if (
+			useCache &&
+			cachedEpisodesInFeed &&
+			cachedEpisodesInFeed.length > 0
+		) {
 			return cachedEpisodesInFeed;
 		}
-		
-		const episodes = await new FeedParser(feed).parse(feed.url);
+
+		const episodes = await new FeedParser(feed).getEpisodes(feed.url);
 
 		episodeCache.update((cache) => ({
 			...cache,
@@ -69,8 +84,12 @@
 		return episodes;
 	}
 
-	function fetchEpisodesInAllFeeds(feedsToSearch: PodcastFeed[]): Promise<Episode[]> {
-		return Promise.all(feedsToSearch.map((feed) => fetchEpisodes(feed))).then((episodes) => {
+	function fetchEpisodesInAllFeeds(
+		feedsToSearch: PodcastFeed[]
+	): Promise<Episode[]> {
+		return Promise.all(
+			feedsToSearch.map((feed) => fetchEpisodes(feed))
+		).then((episodes) => {
 			return episodes.flat();
 		});
 	}
@@ -80,17 +99,17 @@
 	) {
 		const { feed } = event.detail;
 		displayedEpisodes = [];
-		
+
 		selectedFeed = feed;
 		displayedEpisodes = await fetchEpisodes(feed);
-		viewState = ViewState.EpisodeList;
+		updateViewState(ViewState.EpisodeList);
 	}
 
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		const { episode } = event.detail;
 		currentEpisode.set(episode);
 
-		viewState = ViewState.Player;
+		updateViewState(ViewState.Player);
 	}
 
 	async function handleClickRefresh() {
@@ -99,7 +118,7 @@
 		displayedEpisodes = await fetchEpisodes(selectedFeed, false);
 	}
 
-	const handleSearch = debounce((event: CustomEvent<{query: string}>) => {
+	const handleSearch = debounce((event: CustomEvent<{ query: string }>) => {
 		const { query } = event.detail;
 
 		if (selectedFeed) {
@@ -114,16 +133,16 @@
 	onDestroy(unsubscribe);
 </script>
 
-<div class="podcast-view">
+<div class="podcast-view" bind:this={view}>
 	<TopBar
-		bind:viewState
+		bind:viewState={_viewState}
 		canShowEpisodeList={true}
 		canShowPlayer={!!$currentEpisode}
 	/>
 
-	{#if viewState === ViewState.Player}
+	{#if _viewState === ViewState.Player}
 		<EpisodePlayer />
-	{:else if viewState === ViewState.EpisodeList}
+	{:else if _viewState === ViewState.EpisodeList}
 		<EpisodeList
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed}
@@ -133,21 +152,20 @@
 		>
 			<svelte:fragment slot="header">
 				{#if selectedFeed}
-				 	<span 
+					<span
 						class="go-back"
 						on:click={() => {
 							selectedFeed = null;
 							displayedEpisodes = latestEpisodes;
-							viewState = ViewState.EpisodeList;
-
+							updateViewState(ViewState.EpisodeList);
 						}}
 					>
-						<Icon 
-							icon={"arrow-left"} 
+						<Icon
+							icon={"arrow-left"}
 							style={{
 								display: "flex",
 								"align-items": "center",
-							}} 
+							}}
 							size={20}
 						/> Latest Episodes
 					</span>
@@ -160,7 +178,7 @@
 				{/if}
 			</svelte:fragment>
 		</EpisodeList>
-	{:else if viewState === ViewState.PodcastGrid}
+	{:else if _viewState === ViewState.PodcastGrid}
 		<FeedGrid {feeds} on:clickPodcast={handleClickPodcast} />
 	{/if}
 </div>

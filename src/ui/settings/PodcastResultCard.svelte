@@ -19,7 +19,7 @@ import Button from "../obsidian/Button.svelte";
 
 <div class="podcast-query-card">
     <div class="podcast-query-image-container">
-        <img src={podcast.artworkUrl} alt={podcast.title} />
+        <img style="width: 100%;" src={podcast.artworkUrl} alt={podcast.title} />
     </div>
     
     <h4 class="podcast-query-heading">{podcast.title}</h4>

@@ -8,13 +8,16 @@
 		playedEpisodes,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
-	import { onDestroy, onMount } from "svelte";
+	import { onDestroy } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
+	import Loading from "./Loading.svelte";
 
 	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
+	let isLoading: boolean = true;
+	let isDragging: boolean = false;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
@@ -25,8 +28,6 @@
 		const percent = e.offsetX / progressbar.offsetWidth;
 		currentTime.set(percent * $duration);
 	}
-
-	let isDragging: boolean = false;
 
 	function onDragStart() {
 		isDragging = true;
@@ -61,21 +62,23 @@
 		playbackRate = event.detail.value;
 	}
 
-	onMount(() => {
+	function onMetadataLoaded() {
+		isLoading = false;
+		updateTime();
+	}
+
+	function updateTime() {
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
 
 		if (playedEps[currentEp.title]) {
 			currentTime.set(playedEps[currentEp.title].time);
-			duration.set(playedEps[currentEp.title].duration);
-			isPaused.set(false);
 		} else {
-			duration.set(0);
 			currentTime.set(0);
 		}
 
 		isPaused.set(false);
-	});
+	};
 
 	onDestroy(() => {
 		playedEpisodes.update((playedEpisodes) => {
@@ -112,14 +115,20 @@
 				src={$currentEpisode.artworkUrl}
 				alt={$currentEpisode.title}
 			/>
-			<div
-				class="podcast-artwork-overlay"
-				style={`display: ${
-					isHoveringArtwork || $isPaused ? "block" : "none"
-				}`}
-			>
-				<Icon icon={$isPaused ? "play" : "pause"} />
-			</div>
+			{#if isLoading}
+				<div class="podcast-artwork-isloading-overlay">
+					<Loading />
+				</div>
+			{:else}
+				<div
+					class="podcast-artwork-overlay"
+					style={`display: ${
+						isHoveringArtwork || $isPaused ? "block" : "none"
+					}`}
+				>
+					<Icon icon={$isPaused ? "play" : "pause"} />
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -132,6 +141,7 @@
 		bind:paused={$isPaused}
 		bind:playbackRate
 		on:ended={markEpisodeAsPlayed}
+		on:loadedmetadata={onMetadataLoaded}
 	/>
 
 	<div class="status-container">
@@ -214,6 +224,11 @@
 
 	.podcast-artwork-overlay {
 		position: absolute;
+	}
+
+	.podcast-artwork-isloading-overlay {
+		position: absolute;
+		display: block;
 	}
 
 	.podcast-artwork-overlay:hover {

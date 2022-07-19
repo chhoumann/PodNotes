@@ -25,6 +25,7 @@
             topbar-selectable
             ${viewState === ViewState.PodcastGrid ? "topbar-selected" : ""}
         `}
+		aria-label="Podcast grid"
 	>
 		<Icon icon="grid" size={20} />
 	</div>
@@ -35,6 +36,7 @@
             ${viewState === ViewState.EpisodeList ? "topbar-selected" : ""}
             ${canShowEpisodeList ? "topbar-selectable" : ""}
         `}
+		aria-label="Episode list"
 	>
 		<Icon icon="list-minus" size={20} />
 	</div>
@@ -45,6 +47,7 @@
             ${viewState === ViewState.Player ? "topbar-selected" : ""}
             ${canShowPlayer ? "topbar-selectable" : ""}
         `}
+		aria-label="Player"
 	>
 		<Icon icon="play" size={20} />
 	</div>

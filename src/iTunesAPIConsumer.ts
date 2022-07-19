@@ -1,7 +1,7 @@
 import { requestUrl } from "obsidian";
 import { PodcastFeed } from "./types/PodcastFeed";
 
-export async function consume(query: string): Promise<PodcastFeed[]> {
+export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]> {
 	const url = new URL("https://itunes.apple.com/search?");
 	url.searchParams.append("term", query);
 	url.searchParams.append("media", "podcast");
@@ -11,7 +11,7 @@ export async function consume(query: string): Promise<PodcastFeed[]> {
 	const res = await requestUrl({ url: url.href });
 	const data = res.json.results;
 
-	return data.map((d: {collectionName: string, feedUrl: string, artworkUrl100: string}) => ({
+	return data.map((d: { collectionName: string, feedUrl: string, artworkUrl100: string }) => ({
 		title: d.collectionName,
 		url: d.feedUrl,
 		artworkUrl: d.artworkUrl100

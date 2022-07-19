@@ -81,6 +81,6 @@
 		border-radius: 15%;
 		max-width: 5rem;
 		max-height: 5rem;
-		cursor: pointer;
+		cursor: pointer !important;
 	}
 </style>

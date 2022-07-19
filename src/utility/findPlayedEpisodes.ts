@@ -6,9 +6,8 @@ import { PodcastFeed } from "src/types/PodcastFeed";
 export default async function findPlayedEpisodesInFeeds(
     playedEpisodes: PlayedEpisode[],
     feeds: PodcastFeed[],
-): Promise<Episode[]>
-{
-    const episodesByPodcast = playedEpisodes.reduce((acc: {[podcastName: string]: PlayedEpisode[]}, episode) => {
+): Promise<Episode[]> {
+    const episodesByPodcast = playedEpisodes.reduce((acc: { [podcastName: string]: PlayedEpisode[] }, episode) => {
         const podcastName = episode.podcastName;
         const episodes = acc[podcastName] || [];
         episodes.push(episode);
@@ -23,7 +22,7 @@ export default async function findPlayedEpisodesInFeeds(
         if (!feed) continue;
 
         const parser = new FeedParser(feed);
-        const episodesInFeed = await parser.parse(feed.url);
+        const episodesInFeed = await parser.getEpisodes(feed.url);
 
         for (const episode of episodes) {
             const episodeInFeed = episodesInFeed.find(e => e.title === episode.title);
