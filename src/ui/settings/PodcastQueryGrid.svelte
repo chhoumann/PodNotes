@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { debounce } from "obsidian";
 	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
+	import FeedParser from "src/parser/feedParser";
 	import { savedFeeds } from "src/store";
 	import { PodcastFeed } from "src/types/PodcastFeed";
+	import checkStringIsUrl from "src/utility/checkStringIsUrl";
 	import Text from "../obsidian/Text.svelte";
 	import PodcastResultCard from "./PodcastResultCard.svelte";
 
@@ -18,8 +20,17 @@
 	}
 
 	const debouncedUpdate = debounce(
-		async (event: CustomEvent<{ value: string }>) => {
-			searchResults = await queryiTunesPodcasts(event.detail.value);
+		async ({detail: { value }}: CustomEvent<{ value: string }>) => {	
+			const customFeedUrl = checkStringIsUrl(value);
+			
+			if (customFeedUrl) {
+				const feed = await (new FeedParser().getFeed(customFeedUrl.href));
+
+				searchResults = [feed];
+				return;
+			} 
+
+			searchResults = await queryiTunesPodcasts(value);
 		},
 		300,
 		true

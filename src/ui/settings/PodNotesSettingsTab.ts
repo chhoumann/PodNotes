@@ -23,7 +23,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const settingsContainer = containerEl.createDiv();
 		settingsContainer.classList.add('settings-container');
 
-		new Setting(settingsContainer).setName('Search Podcasts').setHeading();
+		new Setting(settingsContainer)
+			.setName('Search Podcasts')
+			.setHeading()
+			.setDesc('Search for podcasts by name or custom feed URL.');
+		
 		const queryGridContainer = settingsContainer.createDiv();
 		this.podcastQueryGrid = new PodcastQueryGrid({
 			target: queryGridContainer

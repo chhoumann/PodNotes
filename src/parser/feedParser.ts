@@ -26,10 +26,33 @@ export default class FeedParser {
 		return this.parseItem(item);
 	}
 
-	public async parse(url: string) {
+	public async getEpisodes(url: string): Promise<Episode[]> {
 		const body = await this.parseFeed(url);
 
 		return this.parsePage(body);
+	}
+
+	public async getFeed(url: string): Promise<PodcastFeed> {
+		const body = await this.parseFeed(url);
+
+		const titleEl = body.querySelector("title");
+		const linkEl = body.querySelector("link");
+		const itunesImageEl = body.querySelector("image");
+		
+		if (!titleEl || !linkEl) {
+			throw new Error("Invalid RSS feed");
+		}
+
+		const title = titleEl.textContent || "";
+		const artworkUrl =  itunesImageEl?.getAttribute("href") ||
+			itunesImageEl?.querySelector('url')?.textContent ||
+			"";
+
+		return {
+			title,
+			url,
+			artworkUrl,
+		};
 	}
 
 	protected parsePage(page: Document): Episode[] {
@@ -71,7 +94,7 @@ export default class FeedParser {
 	}
 
 	private async parseFeed(feedUrl: string): Promise<Document> {
-		const req = await requestUrl({url: feedUrl});
+		const req = await requestUrl({ url: feedUrl });
 		const dp = new DOMParser();
 
 		const body = dp.parseFromString(req.text, "text/xml");
