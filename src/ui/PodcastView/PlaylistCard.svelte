@@ -1,11 +1,18 @@
 <script lang="ts">
 	import { Playlist } from "src/types/Playlist";
+	import { createEventDispatcher } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 
 	export let playlist: Playlist;
+
+	const dispatch = createEventDispatcher();
+
+	function onClickPlaylist(event: MouseEvent) {
+		dispatch("clickPlaylist", { playlist, event });
+	}
 </script>
 
-<div class="playlist-card" aria-label={playlist.name}>
+<div class="playlist-card" aria-label={playlist.name} on:click={onClickPlaylist}>
 	<Icon icon={playlist.icon} size={40} clickable={true}/>
 	<span>
 		({playlist.episodes.length})

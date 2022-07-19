@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
-	import FeedGrid from "./PodcastGrid.svelte";
+	import PodcastGrid from "./PodcastGrid.svelte";
 	import {
 		currentEpisode,
 		savedFeeds,
@@ -25,6 +25,7 @@
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
+	let selectedPlaylist: Playlist | null = null;
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
@@ -149,6 +150,19 @@
 
 		displayedEpisodes = searchEpisodes(query, latestEpisodes);
 	}, 250);
+
+	function handleClickPlaylist(event: CustomEvent<{event: MouseEvent, playlist: Playlist}>) {
+		const { event: clickEvent, playlist } = event.detail;
+
+		if (playlist.name === $queue.name && $queue.episodes.length > 0) {
+			currentEpisode.set($queue.episodes[0]);
+			updateViewState(ViewState.Player);
+		} else {
+			selectedPlaylist = playlist;
+			displayedEpisodes = playlist.episodes;
+			updateViewState(ViewState.EpisodeList);
+		}
+	}
 </script>
 
 <div class="podcast-view" bind:this={view}>
@@ -163,7 +177,7 @@
 	{:else if _viewState === ViewState.EpisodeList}
 		<EpisodeList
 			episodes={displayedEpisodes}
-			showThumbnails={!selectedFeed}
+			showThumbnails={!selectedFeed || !selectedPlaylist}
 			on:clickEpisode={handleClickEpisode}
 			on:contextMenuEpisode={handleContextMenuEpisode}
 			on:clickRefresh={handleClickRefresh}
@@ -192,16 +206,43 @@
 						text={selectedFeed.title}
 						artworkUrl={selectedFeed.artworkUrl}
 					/>
+				{:else if selectedPlaylist}
+					<span
+						class="go-back"
+						on:click={() => {
+							selectedPlaylist = null;
+							displayedEpisodes = latestEpisodes;
+							updateViewState(ViewState.EpisodeList);
+						}}
+					>
+						<Icon
+							icon={"arrow-left"}
+							style={{
+								display: "flex",
+								"align-items": "center",
+							}}
+							size={20}
+						/> Latest Episodes
+					</span>
+					<div style="display: flex; align-items: center; justify-content: center;">
+						<Icon
+							icon={selectedPlaylist.icon}
+							size={40}
+							clickable={false}
+						/>
+					</div>
+					<EpisodeListHeader text={selectedPlaylist.name} />
 				{:else}
 					<EpisodeListHeader text="Latest Episodes" />
 				{/if}
 			</svelte:fragment>
 		</EpisodeList>
 	{:else if _viewState === ViewState.PodcastGrid}
-		<FeedGrid
+		<PodcastGrid
 			{feeds}
 			playlists={displayedPlaylists}
 			on:clickPodcast={handleClickPodcast}
+			on:clickPlaylist={handleClickPlaylist}
 		/>
 	{/if}
 </div>

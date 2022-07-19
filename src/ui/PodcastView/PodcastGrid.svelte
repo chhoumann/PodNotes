@@ -3,15 +3,22 @@
 	import { PodcastFeed } from "src/types/PodcastFeed";
 	import PlaylistCard from "./PlaylistCard.svelte";
 	import PodcastGridCard from "./PodcastGridCard.svelte";
+	import { createEventDispatcher } from "svelte";
 
 	export let feeds: PodcastFeed[] = [];
 	export let playlists: Playlist[] = [];
+
+	const dispatch = createEventDispatcher();
+
+	function forwardClickPlaylist({detail: {playlist, event}}: CustomEvent<{event: MouseEvent, playlist: Playlist}>) {
+		dispatch("clickPlaylist", { playlist, event });
+	}
 </script>
 
 <div class="podcast-grid">
 	{#if playlists.length > 0}
 		{#each playlists as playlist}
-			<PlaylistCard playlist={playlist} />
+			<PlaylistCard playlist={playlist} on:clickPlaylist={forwardClickPlaylist} />
 		{/each}
 	{/if}
 
