@@ -64,14 +64,26 @@ export default function spawnEpisodeContextMenu(
 
 	const playlistsInStore = get(playlists);
 	for (const playlist of Object.values(playlistsInStore)) {
+		const episodeIsInPlaylist = playlist.episodes.find(e => e.title === episode.title);
+
 		menu.addItem(item => item
 			.setIcon(playlist.icon)
-			.setTitle(`Add to ${playlist.name}`)
+			.setTitle(`${episodeIsInPlaylist ? "Remove from" : "Add to"} ${playlist.name}`)
 			.onClick(() => {
-				playlists.update((value => {
-					value[playlist.name].episodes.push(episode);
-					return value;
-				}));
+				if (episodeIsInPlaylist) {
+					playlists.update(playlists => {
+						playlists[playlist.name].episodes = playlists[playlist.name].episodes.filter(e => e.title !== episode.title);
+
+						return playlists;
+					});
+				} else {
+					playlists.update(playlists => {
+						const newEpisodes = [...playlists[playlist.name].episodes, episode];
+						playlists[playlist.name].episodes = newEpisodes;
+
+						return playlists;
+					});
+				}
 			}));
 	}
 
