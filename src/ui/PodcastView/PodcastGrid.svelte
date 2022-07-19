@@ -32,7 +32,7 @@
 <style>
 	.podcast-grid {
 		display: grid;
- 		grid-template-columns: repeat(3, minmax(0, 1fr));
+ 		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
 		grid-auto-flow: row;
 		grid-auto-rows: 1fr;
 		grid-gap: 0rem;
