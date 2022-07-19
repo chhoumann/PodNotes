@@ -28,7 +28,7 @@
     });
 
     function updateTextComponentAttributes(component: TextComponent) {
-        if (value) component.setValue(value);
+        if (value !== undefined) component.setValue(value);
         if (disabled) component.setDisabled(disabled);
         if (placeholder) component.setPlaceholder(placeholder);
         if (type) component.inputEl.type = type;

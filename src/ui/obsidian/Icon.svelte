@@ -7,6 +7,8 @@
 
     export let size: number = 16;
     export let icon: IconType;
+	export let clickable: boolean = true;
+	export let label: string = "";
     export {styles as style};
 
     let ref: HTMLSpanElement;
@@ -34,7 +36,8 @@
 
 <div 
     on:click={forwardClick} 
-    class="icon-clickable" 
+    class={clickable ? "icon-clickable" : ""}
+	aria-label={label}
 >
     <span bind:this={ref} />
 </div>

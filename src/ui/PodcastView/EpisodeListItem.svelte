@@ -12,6 +12,10 @@
 		dispatch("clickEpisode", { episode });
 	}
 
+	function onContextMenu(event: MouseEvent) {
+		dispatch("contextMenu", { episode, event });
+	}
+
 	const _date = new Date(episode.episodeDate || "");
 	const date = window.moment(_date).format("DD MMMM YYYY");
 </script>
@@ -19,6 +23,7 @@
 <div 
 	class="podcast-episode-item" 
 	on:click={onClickEpisode} 
+	on:contextmenu={onContextMenu}
 >
 	{#if showEpisodeImage && episode?.artworkUrl} 
 		<div class="podcast-episode-thumbnail-container">

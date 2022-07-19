@@ -1,11 +1,13 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import PodNotes from '../../main';
 import PodcastQueryGrid from './PodcastQueryGrid.svelte';
+import PlaylistManager from './PlaylistManager.svelte';
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 	
 	private podcastQueryGrid: PodcastQueryGrid;
+	private playlistManager: PlaylistManager;
 
 	constructor(app: App, plugin: PodNotes) {
 		super(app, plugin);
@@ -33,12 +35,23 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			target: queryGridContainer
 		});
 
+		new Setting(settingsContainer)
+			.setName('Playlists')
+			.setHeading()
+			.setDesc(`Add playlists to gather podcast episodes.`);
+
+		const playlistManagerContainer = settingsContainer.createDiv();
+		this.playlistManager = new PlaylistManager({
+			target: playlistManagerContainer
+		});
+		
 		this.addDefaultPlaybackRateSetting(settingsContainer);
 		this.addSkipLengthSettings(settingsContainer);
 	}
 
 	hide(): void {
 		this.podcastQueryGrid?.$destroy();
+		this.playlistManager?.$destroy();
 	}
 
 	private addDefaultPlaybackRateSetting(container: HTMLElement): void {

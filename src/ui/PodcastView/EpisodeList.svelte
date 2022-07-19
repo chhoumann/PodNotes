@@ -8,6 +8,7 @@
 
 	export let episodes: Episode[] = [];
 	export let showThumbnails: boolean = false;
+	export let showListMenu: boolean = true;
 	let hidePlayedEpisodes: boolean = false;
 	let searchInputQuery: string = "";
 
@@ -15,6 +16,15 @@
 
 	function forwardClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		dispatch("clickEpisode", { episode: event.detail.episode });
+	}
+
+	function forwardContextMenuEpisode(
+		event: CustomEvent<{ episode: Episode; event: MouseEvent }>
+	) {
+		dispatch("contextMenuEpisode", {
+			episode: event.detail.episode,
+			event: event.detail.event,
+		});
 	}
 
 	function forwardSearchInput(event: CustomEvent<{ value: string }>) {
@@ -25,28 +35,30 @@
 <div class="episode-list-view-container">
 	<slot name="header">Fallback</slot>
 
-	<div class="episode-list-menu">
-		<div class="episode-list-search">
-			<Text 
-			 	bind:value={searchInputQuery}
-				on:change={forwardSearchInput}
-				placeholder="Search episodes"
-				style={{
-					width: "100%",
-				}}
+	{#if showListMenu}
+		<div class="episode-list-menu">
+			<div class="episode-list-search">
+				<Text
+					bind:value={searchInputQuery}
+					on:change={forwardSearchInput}
+					placeholder="Search episodes"
+					style={{
+						width: "100%",
+					}}
+				/>
+			</div>
+			<Icon
+				icon={hidePlayedEpisodes ? "eye-off" : "eye"}
+				size={25}
+				on:click={() => (hidePlayedEpisodes = !hidePlayedEpisodes)}
+			/>
+			<Icon
+				icon="refresh-cw"
+				size={25}
+				on:click={() => dispatch("clickRefresh")}
 			/>
 		</div>
-		<Icon 
-			icon={hidePlayedEpisodes ? "eye-off" : "eye"}
-			size={25}
-			on:click={() => hidePlayedEpisodes = !hidePlayedEpisodes}
-		/>
-		<Icon
-			 icon="refresh-cw"
-			 size={25}
-			 on:click={() => dispatch("clickRefresh")}
-		/>
-	</div>
+	{/if}
 
 	<div class="podcast-episode-list">
 		{#if episodes.length === 0}
@@ -56,10 +68,11 @@
 			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
 			{#if !hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
-					episode={episode}
+					{episode}
 					episodeFinished={episodePlayed}
 					showEpisodeImage={showThumbnails}
-					on:clickEpisode={forwardClickEpisode} 
+					on:clickEpisode={forwardClickEpisode}
+					on:contextMenu={forwardContextMenuEpisode}
 				/>
 			{/if}
 		{/each}
@@ -99,4 +112,3 @@
 		margin-bottom: 0.5rem;
 	}
 </style>
-
