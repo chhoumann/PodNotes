@@ -5,9 +5,9 @@
 		currentEpisode,
 		savedFeeds,
 		episodeCache,
-playlists,
-queue,
-favorites,
+		playlists,
+		queue,
+		favorites,
 	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
@@ -18,10 +18,10 @@ favorites,
 	import { onMount } from "svelte";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
-	import { debounce, Menu } from "obsidian";
+	import { debounce } from "obsidian";
 	import searchEpisodes from "src/utility/searchEpisodes";
 	import { Playlist } from "src/types/Playlist";
-import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
@@ -39,6 +39,14 @@ import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	}
 
 	onMount(async () => {
+		const unsubscribePlaylists = playlists.subscribe((pl) => {
+			displayedPlaylists = [$queue, $favorites, ...Object.values(pl)];
+		});
+
+		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
+			feeds = Object.values(storeValue);
+		});
+		
 		await fetchEpisodesInAllFeeds(feeds);
 
 		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
@@ -51,14 +59,8 @@ import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 
 					return 0;
 				});
-		});
 
-		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
-			feeds = Object.values(storeValue);
-		});
-
-		const unsubscribePlaylists = playlists.subscribe((pl) => {
-			displayedPlaylists = [$queue, $favorites, ...Object.values(pl)];
+			console.log("Latest episodes: ", latestEpisodes);
 		});
 
 		if (!selectedFeed) {
@@ -71,7 +73,6 @@ import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 			unsubscribePlaylists();
 		};
 	});
-
 
 	async function fetchEpisodes(
 		feed: PodcastFeed,
@@ -97,12 +98,8 @@ import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 		return episodes;
 	}
 
-	function fetchEpisodesInAllFeeds(
-		feedsToSearch: PodcastFeed[]
-	): Promise<Episode[]> {
-		return Promise.all(
-			feedsToSearch.map((feed) => fetchEpisodes(feed))
-		).then((episodes) => {
+	function fetchEpisodesInAllFeeds(feedsToSearch: PodcastFeed[]): Promise<Episode[]> {
+		return Promise.all(feedsToSearch.map((feed) => fetchEpisodes(feed))).then((episodes) => {
 			return episodes.flat();
 		});
 	}
@@ -125,7 +122,9 @@ import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 		updateViewState(ViewState.Player);
 	}
 
-	function handleContextMenuEpisode({detail: {event, episode}}: CustomEvent<{ episode: Episode, event: MouseEvent }>) {
+	function handleContextMenuEpisode({
+		detail: { event, episode },
+	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
 		spawnEpisodeContextMenu(episode, event, () => {
 			updateViewState(ViewState.Player);
 		});
@@ -197,7 +196,11 @@ import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 			</svelte:fragment>
 		</EpisodeList>
 	{:else if _viewState === ViewState.PodcastGrid}
-		<FeedGrid {feeds} playlists={displayedPlaylists} on:clickPodcast={handleClickPodcast} />
+		<FeedGrid
+			{feeds}
+			playlists={displayedPlaylists}
+			on:clickPodcast={handleClickPodcast}
+		/>
 	{/if}
 </div>
 
