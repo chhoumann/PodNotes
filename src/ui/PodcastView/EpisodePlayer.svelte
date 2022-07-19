@@ -6,6 +6,8 @@
 		isPaused,
 		plugin,
 		playedEpisodes,
+		queue,
+		playlists,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy } from "svelte";
@@ -13,6 +15,7 @@
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
 	import Loading from "./Loading.svelte";
+	import EpisodeList from "./EpisodeList.svelte";
 
 	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
@@ -39,7 +42,7 @@
 
 	function handleDragging(e: MouseEvent) {
 		if (!isDragging) return;
-		
+
 		onClickProgressbar(e);
 	}
 
@@ -58,7 +61,31 @@
 		});
 	}
 
-	function onPlaybackRateChange(event: CustomEvent<{value: number}>) {
+	function removeEpisodeFromPlaylists() {
+		playlists.update((lists) => {
+			Object.values(lists).forEach((playlist) => {
+				playlist.episodes = playlist.episodes.filter(
+					(ep) => ep.title !== $currentEpisode.title
+				);
+			});
+
+			return lists;
+		});
+
+		queue.update((q) => {
+			q.episodes = q.episodes.filter(
+				(ep) => ep.title !== $currentEpisode.title
+			);
+			return q;
+		});
+	}
+
+	function onEpisodeEnded() {
+		markEpisodeAsPlayed();
+		removeEpisodeFromPlaylists();
+	}
+
+	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
 		playbackRate = event.detail.value;
 	}
 
@@ -78,7 +105,7 @@
 		}
 
 		isPaused.set(false);
-	};
+	}
 
 	onDestroy(() => {
 		playedEpisodes.update((playedEpisodes) => {
@@ -140,7 +167,7 @@
 		bind:currentTime={$currentTime}
 		bind:paused={$isPaused}
 		bind:playbackRate
-		on:ended={markEpisodeAsPlayed}
+		on:ended={onEpisodeEnded}
 		on:loadedmetadata={onMetadataLoaded}
 	/>
 
@@ -164,8 +191,8 @@
 			tooltip="Skip backward"
 			on:click={$plugin.api.skipBackward.bind($plugin.api)}
 			style={{
-				"margin": "0",
-				"cursor": "pointer",
+				margin: "0",
+				cursor: "pointer",
 			}}
 		/>
 		<Button
@@ -173,8 +200,8 @@
 			tooltip="Skip forward"
 			on:click={$plugin.api.skipForward.bind($plugin.api)}
 			style={{
-				"margin": "0",
-				"cursor": "pointer",
+				margin: "0",
+				cursor: "pointer",
 			}}
 		/>
 	</div>
@@ -187,6 +214,12 @@
 			limits={[0.5, 3.5, 0.1]}
 		/>
 	</div>
+
+	<EpisodeList episodes={$queue.episodes} showListMenu={false}>
+		<svelte:fragment slot="header">
+			<h3>Queue</h3>
+		</svelte:fragment>
+	</EpisodeList>
 </div>
 
 <style>
