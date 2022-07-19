@@ -17,6 +17,15 @@
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 
+	// Circumventing the forced two-way binding of the playback rate.
+	class Pr {
+		public get _playbackRate () {
+			return playbackRate;
+		}
+	}
+
+	const pr = new Pr();
+
 	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
@@ -80,9 +89,23 @@
 		});
 	}
 
+	function playNextInQueue() {
+		queue.update((q) => {
+			const nextEp = q.episodes.shift();
+
+			if (nextEp) {
+				currentEpisode.set(nextEp);
+			}
+
+			return q;
+		});
+	}
+
 	function onEpisodeEnded() {
 		markEpisodeAsPlayed();
 		removeEpisodeFromPlaylists();
+
+		playNextInQueue();
 	}
 
 	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
@@ -166,7 +189,7 @@
 		bind:duration={$duration}
 		bind:currentTime={$currentTime}
 		bind:paused={$isPaused}
-		bind:playbackRate
+		bind:playbackRate={pr._playbackRate}
 		on:ended={onEpisodeEnded}
 		on:loadedmetadata={onMetadataLoaded}
 	/>
