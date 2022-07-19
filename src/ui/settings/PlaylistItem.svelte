@@ -3,6 +3,9 @@
 	import { createEventDispatcher } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 
+	export let playlist: Playlist;
+	export let showDeleteButton: boolean = true;
+
 	let clickedDelete: boolean = false;
 	const dispatch = createEventDispatcher();
 
@@ -22,8 +25,6 @@
 	function onClickedRepeat(event: CustomEvent) {
 		dispatch("toggleRepeat", { value: playlist });
 	}
-
-	export let playlist: Playlist;
 </script>
 
 <div class="playlist-item">
@@ -49,13 +50,15 @@
 			style={{ color: playlist.shouldRepeat ? "green" : "" }}
 			on:click={onClickedRepeat}
 		/> -->
-		<Icon
-			icon={clickedDelete ? "check" : "trash"}
-			label={clickedDelete ? "Confirm deletion" : "Delete playlist"}
-			size={20}
-			style={{ color: "red" }}
-			on:click={onClickedDelete}
-		/>
+		{#if showDeleteButton}
+			<Icon
+				icon={clickedDelete ? "check" : "trash"}
+				label={clickedDelete ? "Confirm deletion" : "Delete playlist"}
+				size={20}
+				style={{ color: "red" }}
+				on:click={onClickedDelete}
+			/>
+		{/if}
 	</div>
 </div>
 

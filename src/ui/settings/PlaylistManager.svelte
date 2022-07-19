@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { playlists } from "src/store";
+	import { favorites, playlists, queue } from "src/store";
 	import { Playlist } from "src/types/Playlist";
 	import { onMount } from "svelte";
 	import Button from "../obsidian/Button.svelte";
@@ -67,6 +67,14 @@
 
 <div class="playlist-manager-container">
 	<div class="playlist-list">
+		<PlaylistItem
+			playlist={$queue}
+			showDeleteButton={false}
+		/>
+		<PlaylistItem
+			playlist={$favorites}
+			showDeleteButton={false}
+		/>
 		{#each playlistArr as playlist}
 			<PlaylistItem
 				{playlist}
