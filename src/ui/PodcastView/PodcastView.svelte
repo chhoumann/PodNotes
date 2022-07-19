@@ -51,7 +51,7 @@
 
 		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
 			latestEpisodes = Object.entries(cache)
-				.map(([_, episodes]) => episodes.splice(0, 10))
+				.map(([_, episodes]) => episodes.slice(0, 10))
 				.flat()
 				.sort((a, b) => {
 					if (a.episodeDate && b.episodeDate)
