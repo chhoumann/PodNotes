@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
 	import FeedGrid from "./PodcastGrid.svelte";
-	import { currentEpisode, savedFeeds, episodeCache } from "src/store";
+	import {
+		currentEpisode,
+		savedFeeds,
+		episodeCache,
+	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import { Episode } from "src/types/Episode";
