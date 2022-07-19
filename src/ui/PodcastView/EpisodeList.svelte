@@ -17,6 +17,10 @@
 		dispatch("clickEpisode", { episode: event.detail.episode });
 	}
 
+	function forwardContextMenuEpisode(event: CustomEvent<{ episode: Episode, event: MouseEvent }>) {
+		dispatch("contextMenuEpisode", { episode: event.detail.episode, event: event.detail.event });
+	}
+
 	function forwardSearchInput(event: CustomEvent<{ value: string }>) {
 		dispatch("search", { query: event.detail.value });
 	}
@@ -60,6 +64,7 @@
 					episodeFinished={episodePlayed}
 					showEpisodeImage={showThumbnails}
 					on:clickEpisode={forwardClickEpisode} 
+					on:contextMenu={forwardContextMenuEpisode}
 				/>
 			{/if}
 		{/each}

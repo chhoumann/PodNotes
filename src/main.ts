@@ -1,5 +1,5 @@
 import FeedParser from 'src/parser/feedParser';
-import { currentEpisode, playedEpisodes, savedFeeds } from 'src/store';
+import { currentEpisode, favorites, playedEpisodes, playlists, queue, savedFeeds } from 'src/store';
 import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
@@ -15,6 +15,10 @@ import { StoreController } from './types/StoreController';
 import { PlayedEpisode } from './types/PlayedEpisode';
 import { PodcastFeed } from './types/PodcastFeed';
 import { SavedFeedsController } from './SavedFeedsController';
+import { Playlist } from './types/Playlist';
+import { PlaylistController } from './PlaylistController';
+import { QueueController } from './QueueController';
+import { FavoritesController } from './FavoritesController';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -24,6 +28,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private playedEpisodeController: StoreController<{[episodeName: string]: PlayedEpisode}>;
 	private savedFeedsController: StoreController<{[podcastName: string]: PodcastFeed}>;
+	private playlistController: StoreController<{ [playlistName: string]: Playlist }>;
+	private queueController: StoreController<Playlist>;
+	private favoritesController: StoreController<Playlist>;
 
 	async onload() {
 		plugin.set(this);
@@ -32,9 +39,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		playedEpisodes.set(this.settings.playedEpisodes);
 		savedFeeds.set(this.settings.savedFeeds);
+		playlists.set(this.settings.playlists);
+		queue.set(this.settings.queue);
+		favorites.set(this.settings.favorites);
 
 		this.playedEpisodeController = new EpisodeStatusController(playedEpisodes, this).on();
 		this.savedFeedsController = new SavedFeedsController(savedFeeds, this).on();
+		this.playlistController = new PlaylistController(playlists, this).on();
+		this.queueController = new QueueController(queue, this).on();
+		this.favoritesController = new FavoritesController(favorites, this).on();
 
 		this.addCommand({
 			id: 'start-playing',
@@ -141,6 +154,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	onunload() {
 		this?.playedEpisodeController.off();
 		this?.savedFeedsController.off();
+		this?.playlistController.off();
+		this?.queueController.off();
+		this?.favoritesController.off();
 	}
 
 	async loadSettings() {

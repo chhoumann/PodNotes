@@ -34,5 +34,6 @@
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;
+		border: 1px solid var(--background-modifier-border);
 	}
 </style>

@@ -5,6 +5,9 @@
 		currentEpisode,
 		savedFeeds,
 		episodeCache,
+playlists,
+queue,
+favorites,
 	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
@@ -12,15 +15,18 @@
 	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
-	import { onDestroy, onMount } from "svelte";
+	import { onMount } from "svelte";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
-	import { debounce } from "obsidian";
+	import { debounce, Menu } from "obsidian";
 	import searchEpisodes from "src/utility/searchEpisodes";
+	import { Playlist } from "src/types/Playlist";
+import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
 	let displayedEpisodes: Episode[] = [];
+	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
 	let _viewState: ViewState;
 
@@ -35,7 +41,7 @@
 	onMount(async () => {
 		await fetchEpisodesInAllFeeds(feeds);
 
-		const unsubscribe = episodeCache.subscribe((cache) => {
+		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
 			latestEpisodes = Object.entries(cache)
 				.map(([_, episodes]) => episodes.splice(0, 10))
 				.flat()
@@ -47,18 +53,25 @@
 				});
 		});
 
+		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
+			feeds = Object.values(storeValue);
+		});
+
+		const unsubscribePlaylists = playlists.subscribe((pl) => {
+			displayedPlaylists = [$queue, $favorites, ...Object.values(pl)];
+		});
+
 		if (!selectedFeed) {
 			displayedEpisodes = latestEpisodes;
 		}
 
 		return () => {
-			unsubscribe();
+			unsubscribeEpisodeCache();
+			unsubscribeSavedFeeds();
+			unsubscribePlaylists();
 		};
 	});
 
-	const unsubscribe = savedFeeds.subscribe((storeValue) => {
-		feeds = Object.values(storeValue);
-	});
 
 	async function fetchEpisodes(
 		feed: PodcastFeed,
@@ -112,6 +125,12 @@
 		updateViewState(ViewState.Player);
 	}
 
+	function handleContextMenuEpisode({detail: {event, episode}}: CustomEvent<{ episode: Episode, event: MouseEvent }>) {
+		spawnEpisodeContextMenu(episode, event, () => {
+			updateViewState(ViewState.Player);
+		});
+	}
+
 	async function handleClickRefresh() {
 		if (!selectedFeed) return;
 
@@ -129,8 +148,6 @@
 
 		displayedEpisodes = searchEpisodes(query, latestEpisodes);
 	}, 250);
-
-	onDestroy(unsubscribe);
 </script>
 
 <div class="podcast-view" bind:this={view}>
@@ -147,6 +164,7 @@
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed}
 			on:clickEpisode={handleClickEpisode}
+			on:contextMenuEpisode={handleContextMenuEpisode}
 			on:clickRefresh={handleClickRefresh}
 			on:search={handleSearch}
 		>
@@ -179,7 +197,7 @@
 			</svelte:fragment>
 		</EpisodeList>
 	{:else if _viewState === ViewState.PodcastGrid}
-		<FeedGrid {feeds} on:clickPodcast={handleClickPodcast} />
+		<FeedGrid {feeds} playlists={displayedPlaylists} on:clickPodcast={handleClickPodcast} />
 	{/if}
 </div>
 
