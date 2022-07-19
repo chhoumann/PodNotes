@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { debounce } from "obsidian";
-	import { queryiTunesPodcasts} from "src/iTunesAPIConsumer";
+	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
 	import { savedFeeds } from "src/store";
 	import { PodcastFeed } from "src/types/PodcastFeed";
 	import Text from "../obsidian/Text.svelte";
@@ -43,7 +43,6 @@
 </script>
 
 <div class="podcast-query-container">
-    <h3 class="podcast-query-heading">Search for a podcast</h3>
 	<Text
 		placeholder="Search..."
 		on:change={debouncedUpdate}
