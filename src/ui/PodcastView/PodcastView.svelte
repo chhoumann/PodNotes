@@ -46,7 +46,7 @@
 		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
 			feeds = Object.values(storeValue);
 		});
-		
+
 		await fetchEpisodesInAllFeeds(feeds);
 
 		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
@@ -59,8 +59,6 @@
 
 					return 0;
 				});
-
-			console.log("Latest episodes: ", latestEpisodes);
 		});
 
 		if (!selectedFeed) {
@@ -98,8 +96,12 @@
 		return episodes;
 	}
 
-	function fetchEpisodesInAllFeeds(feedsToSearch: PodcastFeed[]): Promise<Episode[]> {
-		return Promise.all(feedsToSearch.map((feed) => fetchEpisodes(feed))).then((episodes) => {
+	function fetchEpisodesInAllFeeds(
+		feedsToSearch: PodcastFeed[]
+	): Promise<Episode[]> {
+		return Promise.all(
+			feedsToSearch.map((feed) => fetchEpisodes(feed))
+		).then((episodes) => {
 			return episodes.flat();
 		});
 	}
