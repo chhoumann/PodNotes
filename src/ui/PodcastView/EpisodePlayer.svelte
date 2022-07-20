@@ -16,10 +16,11 @@
 	import Slider from "../obsidian/Slider.svelte";
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
+	import Progressbar from "../common/Progressbar.svelte";
 
 	// Circumventing the forced two-way binding of the playback rate.
 	class Pr {
-		public get _playbackRate () {
+		public get _playbackRate() {
 			return playbackRate;
 		}
 	}
@@ -29,30 +30,16 @@
 	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
-	let isDragging: boolean = false;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
 	}
 
-	function onClickProgressbar(e: MouseEvent) {
-		const progressbar = e.target as HTMLDivElement;
-		const percent = e.offsetX / progressbar.offsetWidth;
+	function onClickProgressbar({ detail: { event } }: CustomEvent<{ event: MouseEvent }>) {
+		const progressbar = event.target as HTMLDivElement;
+		const percent = event.offsetX / progressbar.offsetWidth;
+
 		currentTime.set(percent * $duration);
-	}
-
-	function onDragStart() {
-		isDragging = true;
-	}
-
-	function onDragEnd() {
-		isDragging = false;
-	}
-
-	function handleDragging(e: MouseEvent) {
-		if (!isDragging) return;
-
-		onClickProgressbar(e);
 	}
 
 	function markEpisodeAsPlayed() {
@@ -114,6 +101,7 @@
 
 	function onMetadataLoaded() {
 		isLoading = false;
+
 		updateTime();
 	}
 
@@ -196,14 +184,13 @@
 
 	<div class="status-container">
 		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
-		<progress
-			style="height: 2rem;"
-			max={$duration}
-			value={$currentTime}
+		<Progressbar 
 			on:click={onClickProgressbar}
-			on:mousedown={onDragStart}
-			on:mouseup={onDragEnd}
-			on:mousemove={handleDragging}
+			value={$currentTime}
+			max={$duration}
+			style={{
+				"height": "2rem",
+			}}
 		/>
 		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
 	</div>
