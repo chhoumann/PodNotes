@@ -16,8 +16,13 @@
 		dispatch("contextMenu", { episode, event });
 	}
 
-	const _date = new Date(episode.episodeDate || "");
-	const date = window.moment(_date).format("DD MMMM YYYY");
+	let _date: Date;
+	let date: string;
+
+	$: {
+		_date = new Date(episode.episodeDate || "");
+		date = window.moment(_date).format("DD MMMM YYYY");
+	}
 </script>
 
 <div 
