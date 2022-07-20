@@ -19,13 +19,13 @@
 	import Progressbar from "../common/Progressbar.svelte";
 
 	// Circumventing the forced two-way binding of the playback rate.
-	class Pr {
+	class CircumentForcedTwoWayBinding {
 		public get _playbackRate() {
 			return playbackRate;
 		}
 	}
 
-	const pr = new Pr();
+	const offBinding = new CircumentForcedTwoWayBinding();
 
 	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
@@ -112,8 +112,11 @@
 		if (playedEps[currentEp.title]) {
 			currentTime.set(playedEps[currentEp.title].time);
 		} else {
+			console.warn(`No played episode for ${currentEp.title}. Setting time to 0.`);
 			currentTime.set(0);
 		}
+
+		console.log(`Updated time for ${currentEp.title} to ${$currentTime}`);
 
 		isPaused.set(false);
 	}
@@ -177,7 +180,7 @@
 		bind:duration={$duration}
 		bind:currentTime={$currentTime}
 		bind:paused={$isPaused}
-		bind:playbackRate={pr._playbackRate}
+		bind:playbackRate={offBinding._playbackRate}
 		on:ended={onEpisodeEnded}
 		on:loadedmetadata={onMetadataLoaded}
 	/>
