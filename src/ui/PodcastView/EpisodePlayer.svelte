@@ -10,49 +10,37 @@
 		playlists,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
-	import { onDestroy } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
+	import Progressbar from "../common/Progressbar.svelte";
 
-	// Circumventing the forced two-way binding of the playback rate.
-	class Pr {
-		public get _playbackRate () {
+	// #region Circumventing the forced two-way binding of the playback rate.
+	class CircumentForcedTwoWayBinding {
+		public get _playbackRate() {
 			return playbackRate;
 		}
 	}
 
-	const pr = new Pr();
+	const offBinding = new CircumentForcedTwoWayBinding();
+	//#endregion
 
 	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
-	let isDragging: boolean = false;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
 	}
 
-	function onClickProgressbar(e: MouseEvent) {
-		const progressbar = e.target as HTMLDivElement;
-		const percent = e.offsetX / progressbar.offsetWidth;
+	function onClickProgressbar({ detail: { event } }: CustomEvent<{ event: MouseEvent }>) {
+		const progressbar = event.target as HTMLDivElement;
+		const percent = event.offsetX / progressbar.offsetWidth;
+
 		currentTime.set(percent * $duration);
-	}
-
-	function onDragStart() {
-		isDragging = true;
-	}
-
-	function onDragEnd() {
-		isDragging = false;
-	}
-
-	function handleDragging(e: MouseEvent) {
-		if (!isDragging) return;
-
-		onClickProgressbar(e);
 	}
 
 	function markEpisodeAsPlayed() {
@@ -114,10 +102,11 @@
 
 	function onMetadataLoaded() {
 		isLoading = false;
-		updateTime();
+
+		restorePlaybackTime();
 	}
 
-	function updateTime() {
+	function restorePlaybackTime() {
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
 
@@ -130,7 +119,27 @@
 		isPaused.set(false);
 	}
 
-	onDestroy(() => {
+	// #region Keep player time and currentTime in sync
+	// Simply binding currentTime to the audio element will result in resets.
+	// Hence the following solution.
+	let playerTime: number = 0;
+
+	onMount(() => {
+		const unsub = currentTime.subscribe((ct) => {
+			playerTime = ct;
+		});
+
+		return () => {
+			unsub();
+		};
+	});
+
+	$: {
+		currentTime.set(playerTime);
+	}
+	// #endregion
+
+	function addCurrentEpisodeToPlayedEpisodes() {
 		playedEpisodes.update((playedEpisodes) => {
 			const currentEp = $currentEpisode;
 			const curTime = $currentTime;
@@ -146,7 +155,10 @@
 
 			return playedEpisodes;
 		});
+	}
 
+	onDestroy(() => {
+		addCurrentEpisodeToPlayedEpisodes();
 		isPaused.set(true);
 	});
 </script>
@@ -187,23 +199,23 @@
 	<audio
 		src={$currentEpisode.streamUrl}
 		bind:duration={$duration}
-		bind:currentTime={$currentTime}
+		bind:currentTime={playerTime}
 		bind:paused={$isPaused}
-		bind:playbackRate={pr._playbackRate}
+		bind:playbackRate={offBinding._playbackRate}
 		on:ended={onEpisodeEnded}
 		on:loadedmetadata={onMetadataLoaded}
+		on:play|preventDefault
 	/>
 
 	<div class="status-container">
 		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
-		<progress
-			style="height: 2rem;"
-			max={$duration}
-			value={$currentTime}
+		<Progressbar 
 			on:click={onClickProgressbar}
-			on:mousedown={onDragStart}
-			on:mouseup={onDragEnd}
-			on:mousemove={handleDragging}
+			value={$currentTime}
+			max={$duration}
+			style={{
+				"height": "2rem",
+			}}
 		/>
 		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
 	</div>
