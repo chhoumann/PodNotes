@@ -10,7 +10,7 @@
 		playlists,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
-	import { onDestroy } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
@@ -18,7 +18,7 @@
 	import EpisodeList from "./EpisodeList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
 
-	// Circumventing the forced two-way binding of the playback rate.
+	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
 		public get _playbackRate() {
 			return playbackRate;
@@ -26,6 +26,7 @@
 	}
 
 	const offBinding = new CircumentForcedTwoWayBinding();
+	//#endregion
 
 	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
@@ -102,26 +103,43 @@
 	function onMetadataLoaded() {
 		isLoading = false;
 
-		updateTime();
+		restorePlaybackTime();
 	}
 
-	function updateTime() {
+	function restorePlaybackTime() {
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
 
 		if (playedEps[currentEp.title]) {
 			currentTime.set(playedEps[currentEp.title].time);
 		} else {
-			console.warn(`No played episode for ${currentEp.title}. Setting time to 0.`);
 			currentTime.set(0);
 		}
-
-		console.log(`Updated time for ${currentEp.title} to ${$currentTime}`);
 
 		isPaused.set(false);
 	}
 
-	onDestroy(() => {
+	// #region Keep player time and currentTime in sync
+	// Simply binding currentTime to the audio element will result in resets.
+	// Hence the following solution.
+	let playerTime: number = 0;
+
+	onMount(() => {
+		const unsub = currentTime.subscribe((ct) => {
+			playerTime = ct;
+		});
+
+		return () => {
+			unsub();
+		};
+	});
+
+	$: {
+		currentTime.set(playerTime);
+	}
+	// #endregion
+
+	function addCurrentEpisodeToPlayedEpisodes() {
 		playedEpisodes.update((playedEpisodes) => {
 			const currentEp = $currentEpisode;
 			const curTime = $currentTime;
@@ -137,7 +155,10 @@
 
 			return playedEpisodes;
 		});
+	}
 
+	onDestroy(() => {
+		addCurrentEpisodeToPlayedEpisodes();
 		isPaused.set(true);
 	});
 </script>
@@ -178,11 +199,12 @@
 	<audio
 		src={$currentEpisode.streamUrl}
 		bind:duration={$duration}
-		bind:currentTime={$currentTime}
+		bind:currentTime={playerTime}
 		bind:paused={$isPaused}
 		bind:playbackRate={offBinding._playbackRate}
 		on:ended={onEpisodeEnded}
 		on:loadedmetadata={onMetadataLoaded}
+		on:play|preventDefault
 	/>
 
 	<div class="status-container">
