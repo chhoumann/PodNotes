@@ -8,7 +8,7 @@
 		playedEpisodes,
 		queue,
 		playlists,
-viewState,
+		viewState,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";

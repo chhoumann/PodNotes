@@ -1,5 +1,5 @@
 import FeedParser from 'src/parser/feedParser';
-import { currentEpisode, favorites, playedEpisodes, playlists, queue, savedFeeds } from 'src/store';
+import { currentEpisode, favorites, playedEpisodes, playlists, queue, savedFeeds, viewState } from 'src/store';
 import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
@@ -21,15 +21,16 @@ import { QueueController } from './store_controllers/QueueController';
 import { FavoritesController } from './store_controllers/FavoritesController';
 import { Episode } from './types/Episode';
 import CurrentEpisodeController from './store_controllers/CurrentEpisodeController';
+import { ViewState } from './types/ViewState';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
 	public settings: IPodNotesSettings;
-	
+
 	private view: MainView;
 
-	private playedEpisodeController: StoreController<{[episodeName: string]: PlayedEpisode}>;
-	private savedFeedsController: StoreController<{[podcastName: string]: PodcastFeed}>;
+	private playedEpisodeController: StoreController<{ [episodeName: string]: PlayedEpisode }>;
+	private savedFeedsController: StoreController<{ [podcastName: string]: PodcastFeed }>;
 	private playlistController: StoreController<{ [playlistName: string]: Playlist }>;
 	private queueController: StoreController<Playlist>;
 	private favoritesController: StoreController<Playlist>;
@@ -106,7 +107,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			id: 'hrpn',
 			name: 'Reload PodNotes',
 			callback: () => {
-				const id = this.manifest.id;	
+				const id = this.manifest.id;
 				//@ts-ignore
 				this.app.plugins.disablePlugin(id).then(() => this.app.plugins.enablePlugin(id))
 			}
@@ -125,23 +126,34 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
-		this.registerObsidianProtocolHandler('podnotes', async ({url, episodeName, time}) => {
-			if (!url || !episodeName) {
-				new Notice("No good");
+		this.registerObsidianProtocolHandler('podnotes', async ({ url, episodeName, time }) => {
+			if (!url || !episodeName || !time) {
+				new Notice("URL, episode name, and timestamp are required to play an episode");
 				return;
 			}
 
 			const decodedName = episodeName.replace(/\+/g, ' ');
 			const currentEp = get(currentEpisode);
+			const episodeIsPlaying = currentEp?.title === decodedName;
 
-			if (currentEp?.feedUrl !== url && currentEp?.title !== decodedName) {
-				const pcastParser = new FeedParser();
-				const episode = await pcastParser.findItemByTitle(decodedName, url);
-				currentEpisode.set(episode);
+			if (episodeIsPlaying) {
+				viewState.set(ViewState.Player);
+				this.api.currentTime = parseFloat(time);
 			}
 
-			if (time) {
-				this.api.currentTime = parseFloat(time);
+			if (!episodeIsPlaying) {
+				const pcastParser = new FeedParser();
+				const episode = await pcastParser.findItemByTitle(decodedName, url);
+
+				if (!episode) {
+					new Notice("Episode not found");
+					return;
+				}
+
+				currentEpisode.set(episode);
+				viewState.set(ViewState.Player);
+
+				new Notice("Episode found, playing now. Please click timestamp again to play at specific time.");
 			}
 		});
 	}
