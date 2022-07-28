@@ -122,6 +122,13 @@
 		spawnEpisodeContextMenu(episode, event);
 	}
 
+	function handleContextMenuEpisodeImage(event: MouseEvent) {
+		spawnEpisodeContextMenu($currentEpisode, event, {
+			play: true,
+			markPlayed: true
+		});
+	}
+
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		const { episode } = event.detail;
 		currentEpisode.set(episode);
@@ -135,6 +142,7 @@
 		<div
 			class="hover-container"
 			on:click={togglePlayback}
+			on:contextmenu={handleContextMenuEpisodeImage}
 			on:mouseenter={() => (isHoveringArtwork = true)}
 			on:mouseleave={() => (isHoveringArtwork = false)}
 		>
