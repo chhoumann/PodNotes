@@ -1,12 +1,12 @@
 import { Menu } from "obsidian";
-import { currentEpisode, favorites, playlists, queue } from "src/store";
+import { currentEpisode, favorites, playlists, queue, viewState } from "src/store";
 import { Episode } from "src/types/Episode";
+import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 
 export default function spawnEpisodeContextMenu(
 	episode: Episode,
 	event: MouseEvent,
-    onClickPlay: () => void,
 ) {
 	const menu = new Menu();
 
@@ -15,7 +15,7 @@ export default function spawnEpisodeContextMenu(
 		.setTitle("Play")
 		.onClick(() => {
 			currentEpisode.set(episode);
-			onClickPlay();
+			viewState.set(ViewState.Player);
 		}));
 
 	const episodeIsFavorite = get(favorites).episodes.find(e => e.title === episode.title);

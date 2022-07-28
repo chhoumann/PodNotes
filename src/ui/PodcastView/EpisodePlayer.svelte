@@ -17,8 +17,8 @@
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
-import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-import { Episode } from "src/types/Episode";
+	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+	import { Episode } from "src/types/Episode";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -45,21 +45,6 @@ import { Episode } from "src/types/Episode";
 		currentTime.set(percent * $duration);
 	}
 
-	function markEpisodeAsPlayed() {
-		playedEpisodes.update((playedEpisodes) => {
-			const currentEp = $currentEpisode;
-
-			playedEpisodes[currentEp.title] = {
-				...currentEp,
-				time: $currentTime,
-				duration: $duration,
-				finished: true,
-			};
-
-			return playedEpisodes;
-		});
-	}
-
 	function removeEpisodeFromPlaylists() {
 		playlists.update((lists) => {
 			Object.values(lists).forEach((playlist) => {
@@ -71,31 +56,14 @@ import { Episode } from "src/types/Episode";
 			return lists;
 		});
 
-		queue.update((q) => {
-			q.episodes = q.episodes.filter(
-				(ep) => ep.title !== $currentEpisode.title
-			);
-			return q;
-		});
-	}
-
-	function playNextInQueue() {
-		queue.update((q) => {
-			const nextEp = q.episodes.shift();
-
-			if (nextEp) {
-				currentEpisode.set(nextEp);
-			}
-
-			return q;
-		});
+		queue.remove($currentEpisode);
 	}
 
 	function onEpisodeEnded() {
-		markEpisodeAsPlayed();
+		playedEpisodes.markAsPlayed($currentEpisode);
 		removeEpisodeFromPlaylists();
 
-		playNextInQueue();
+		queue.playNext();
 	}
 
 	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
@@ -141,33 +109,15 @@ import { Episode } from "src/types/Episode";
 	}
 	// #endregion
 
-	function addCurrentEpisodeToPlayedEpisodes() {
-		playedEpisodes.update((playedEpisodes) => {
-			const currentEp = $currentEpisode;
-			const curTime = $currentTime;
-			const dur = $duration;
-
-			playedEpisodes[currentEp.title] = {
-				title: currentEp.title,
-				podcastName: currentEp.podcastName,
-				time: curTime,
-				duration: dur,
-				finished: curTime === dur,
-			};
-
-			return playedEpisodes;
-		});
-	}
-
 	onDestroy(() => {
-		addCurrentEpisodeToPlayedEpisodes();
+		playedEpisodes.add($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
 		isPaused.set(true);
 	});
 
 	function handleContextMenuEpisode({
 		detail: { event, episode },
 	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(episode, event, () => {});
+		spawnEpisodeContextMenu(episode, event);
 	}
 </script>
 
@@ -213,6 +163,7 @@ import { Episode } from "src/types/Episode";
 		on:ended={onEpisodeEnded}
 		on:loadedmetadata={onMetadataLoaded}
 		on:play|preventDefault
+		autoplay={true}
 	/>
 
 	<div class="status-container">
