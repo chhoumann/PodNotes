@@ -35,5 +35,6 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	playlists: {},
 	skipBackwardLength: 15,
 	skipForwardLength: 15,
+	currentEpisode: undefined,
 }
 

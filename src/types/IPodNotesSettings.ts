@@ -2,6 +2,7 @@ import { PodNote } from './PodNotes';
 import { PodcastFeed } from "./PodcastFeed";
 import { PlayedEpisode } from './PlayedEpisode';
 import { Playlist } from './Playlist';
+import { Episode } from './Episode';
 
 export interface IPodNotesSettings {
 	savedFeeds: { [podcastName: string]: PodcastFeed };
@@ -13,4 +14,5 @@ export interface IPodNotesSettings {
 	playlists: { [playlistName: string]: Playlist }
 	queue: Playlist,
 	favorites: Playlist,
+	currentEpisode?: Episode,
 }

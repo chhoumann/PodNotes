@@ -8,6 +8,8 @@
 		playlists,
 		queue,
 		favorites,
+		podcastView,
+		viewState,
 	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
@@ -29,15 +31,6 @@
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
-	let _viewState: ViewState;
-
-	let view: HTMLDivElement;
-
-	function updateViewState(viewState: ViewState) {
-		_viewState = viewState;
-
-		view.scrollIntoView();
-	}
 
 	onMount(async () => {
 		const unsubscribePlaylists = playlists.subscribe((pl) => {
@@ -115,22 +108,20 @@
 
 		selectedFeed = feed;
 		displayedEpisodes = await fetchEpisodes(feed);
-		updateViewState(ViewState.EpisodeList);
+		viewState.set(ViewState.EpisodeList);
 	}
 
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		const { episode } = event.detail;
 		currentEpisode.set(episode);
 
-		updateViewState(ViewState.Player);
+		viewState.set(ViewState.Player);
 	}
 
 	function handleContextMenuEpisode({
 		detail: { event, episode },
 	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(episode, event, () => {
-			updateViewState(ViewState.Player);
-		});
+		spawnEpisodeContextMenu(episode, event);
 	}
 
 	async function handleClickRefresh() {
@@ -151,30 +142,38 @@
 		displayedEpisodes = searchEpisodes(query, latestEpisodes);
 	}, 250);
 
-	function handleClickPlaylist(event: CustomEvent<{event: MouseEvent, playlist: Playlist}>) {
+	function handleClickPlaylist(
+		event: CustomEvent<{ event: MouseEvent; playlist: Playlist }>
+	) {
 		const { event: clickEvent, playlist } = event.detail;
 
 		if (playlist.name === $queue.name && $queue.episodes.length > 0) {
-			currentEpisode.set($queue.episodes[0]);
-			updateViewState(ViewState.Player);
+			// Only need to set the current episode if there isn't any.
+			// The current episode _is_ the front of the queue.
+			if (!$currentEpisode) {
+				currentEpisode.set($queue.episodes[0]);
+			}
+
+			viewState.set(ViewState.Player);
 		} else {
 			selectedPlaylist = playlist;
 			displayedEpisodes = playlist.episodes;
-			updateViewState(ViewState.EpisodeList);
+
+			viewState.set(ViewState.Player);
 		}
 	}
 </script>
 
-<div class="podcast-view" bind:this={view}>
+<div class="podcast-view" bind:this={$podcastView}>
 	<TopBar
-		bind:viewState={_viewState}
+		bind:viewState={$viewState}
 		canShowEpisodeList={true}
 		canShowPlayer={!!$currentEpisode}
 	/>
 
-	{#if _viewState === ViewState.Player}
+	{#if $viewState === ViewState.Player}
 		<EpisodePlayer />
-	{:else if _viewState === ViewState.EpisodeList}
+	{:else if $viewState === ViewState.EpisodeList}
 		<EpisodeList
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed || !selectedPlaylist}
@@ -190,7 +189,7 @@
 						on:click={() => {
 							selectedFeed = null;
 							displayedEpisodes = latestEpisodes;
-							updateViewState(ViewState.EpisodeList);
+							viewState.set(ViewState.EpisodeList);
 						}}
 					>
 						<Icon
@@ -212,7 +211,7 @@
 						on:click={() => {
 							selectedPlaylist = null;
 							displayedEpisodes = latestEpisodes;
-							updateViewState(ViewState.EpisodeList);
+							viewState.set(ViewState.EpisodeList);
 						}}
 					>
 						<Icon
@@ -224,7 +223,9 @@
 							size={20}
 						/> Latest Episodes
 					</span>
-					<div style="display: flex; align-items: center; justify-content: center;">
+					<div
+						style="display: flex; align-items: center; justify-content: center;"
+					>
 						<Icon
 							icon={selectedPlaylist.icon}
 							size={40}
@@ -237,7 +238,7 @@
 				{/if}
 			</svelte:fragment>
 		</EpisodeList>
-	{:else if _viewState === ViewState.PodcastGrid}
+	{:else if $viewState === ViewState.PodcastGrid}
 		<PodcastGrid
 			{feeds}
 			playlists={displayedPlaylists}

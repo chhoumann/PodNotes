@@ -8,6 +8,7 @@
 		playedEpisodes,
 		queue,
 		playlists,
+		viewState,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
@@ -17,6 +18,9 @@
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
+	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+	import { Episode } from "src/types/Episode";
+	import { ViewState } from "src/types/ViewState";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -43,21 +47,6 @@
 		currentTime.set(percent * $duration);
 	}
 
-	function markEpisodeAsPlayed() {
-		playedEpisodes.update((playedEpisodes) => {
-			const currentEp = $currentEpisode;
-
-			playedEpisodes[currentEp.title] = {
-				...currentEp,
-				time: $currentTime,
-				duration: $duration,
-				finished: true,
-			};
-
-			return playedEpisodes;
-		});
-	}
-
 	function removeEpisodeFromPlaylists() {
 		playlists.update((lists) => {
 			Object.values(lists).forEach((playlist) => {
@@ -69,31 +58,14 @@
 			return lists;
 		});
 
-		queue.update((q) => {
-			q.episodes = q.episodes.filter(
-				(ep) => ep.title !== $currentEpisode.title
-			);
-			return q;
-		});
-	}
-
-	function playNextInQueue() {
-		queue.update((q) => {
-			const nextEp = q.episodes.shift();
-
-			if (nextEp) {
-				currentEpisode.set(nextEp);
-			}
-
-			return q;
-		});
+		queue.remove($currentEpisode);
 	}
 
 	function onEpisodeEnded() {
-		markEpisodeAsPlayed();
+		playedEpisodes.markAsPlayed($currentEpisode);
 		removeEpisodeFromPlaylists();
 
-		playNextInQueue();
+		queue.playNext();
 	}
 
 	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
@@ -139,28 +111,30 @@
 	}
 	// #endregion
 
-	function addCurrentEpisodeToPlayedEpisodes() {
-		playedEpisodes.update((playedEpisodes) => {
-			const currentEp = $currentEpisode;
-			const curTime = $currentTime;
-			const dur = $duration;
+	onDestroy(() => {
+		playedEpisodes.setEpisodeTime($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
+		isPaused.set(true);
+	});
 
-			playedEpisodes[currentEp.title] = {
-				title: currentEp.title,
-				podcastName: currentEp.podcastName,
-				time: curTime,
-				duration: dur,
-				finished: curTime === dur,
-			};
+	function handleContextMenuEpisode({
+		detail: { event, episode },
+	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
+		spawnEpisodeContextMenu(episode, event);
+	}
 
-			return playedEpisodes;
+	function handleContextMenuEpisodeImage(event: MouseEvent) {
+		spawnEpisodeContextMenu($currentEpisode, event, {
+			play: true,
+			markPlayed: true
 		});
 	}
 
-	onDestroy(() => {
-		addCurrentEpisodeToPlayedEpisodes();
-		isPaused.set(true);
-	});
+	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
+		const { episode } = event.detail;
+		currentEpisode.set(episode);
+
+		viewState.set(ViewState.Player);
+	}
 </script>
 
 <div class="episode-player">
@@ -168,6 +142,7 @@
 		<div
 			class="hover-container"
 			on:click={togglePlayback}
+			on:contextmenu={handleContextMenuEpisodeImage}
 			on:mouseenter={() => (isHoveringArtwork = true)}
 			on:mouseleave={() => (isHoveringArtwork = false)}
 		>
@@ -205,6 +180,7 @@
 		on:ended={onEpisodeEnded}
 		on:loadedmetadata={onMetadataLoaded}
 		on:play|preventDefault
+		autoplay={true}
 	/>
 
 	<div class="status-container">
@@ -250,7 +226,13 @@
 		/>
 	</div>
 
-	<EpisodeList episodes={$queue.episodes} showListMenu={false}>
+	<EpisodeList 
+		episodes={$queue.episodes} 
+		showListMenu={false}
+		showThumbnails={true}
+		on:contextMenuEpisode={handleContextMenuEpisode}
+		on:clickEpisode={handleClickEpisode}
+	>
 		<svelte:fragment slot="header">
 			<h3>Queue</h3>
 		</svelte:fragment>

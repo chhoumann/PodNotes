@@ -23,7 +23,23 @@ export default class FeedParser {
 			throw new Error("Could not find episode");
 		}
 
-		return this.parseItem(item);
+		const episode =  this.parseItem(item);
+		
+		const feed = await this.getFeed(url);
+
+		if (!episode.artworkUrl) {
+			episode.artworkUrl = feed.artworkUrl;
+		}
+
+		if (!episode.podcastName) {
+			episode.podcastName = feed.title;
+		}
+
+		if (!episode.feedUrl) {
+			episode.feedUrl = feed.url;
+		}
+
+		return episode;
 	}
 
 	public async getEpisodes(url: string): Promise<Episode[]> {
