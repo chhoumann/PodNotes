@@ -16,6 +16,7 @@ export const currentEpisode = function () {
 
 	return {
 		subscribe,
+		update,
 		set: (newEpisode: Episode) => {
 			update(previousEpisode => {
 				if (previousEpisode) {
@@ -27,7 +28,6 @@ export const currentEpisode = function () {
 		}
 	}
 }();
-
 
 export const isPaused = writable<boolean>(true);
 export const playedEpisodes = function () {

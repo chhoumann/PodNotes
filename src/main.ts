@@ -19,6 +19,8 @@ import { Playlist } from './types/Playlist';
 import { PlaylistController } from './store_controllers/PlaylistController';
 import { QueueController } from './store_controllers/QueueController';
 import { FavoritesController } from './store_controllers/FavoritesController';
+import { Episode } from './types/Episode';
+import CurrentEpisodeController from './store_controllers/CurrentEpisodeController';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -31,6 +33,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private playlistController: StoreController<{ [playlistName: string]: Playlist }>;
 	private queueController: StoreController<Playlist>;
 	private favoritesController: StoreController<Playlist>;
+	private currentEpisodeController: StoreController<Episode>;
 
 	async onload() {
 		plugin.set(this);
@@ -42,12 +45,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		playlists.set(this.settings.playlists);
 		queue.set(this.settings.queue);
 		favorites.set(this.settings.favorites);
+		currentEpisode.set(this.settings.currentEpisode);
 
 		this.playedEpisodeController = new EpisodeStatusController(playedEpisodes, this).on();
 		this.savedFeedsController = new SavedFeedsController(savedFeeds, this).on();
 		this.playlistController = new PlaylistController(playlists, this).on();
 		this.queueController = new QueueController(queue, this).on();
 		this.favoritesController = new FavoritesController(favorites, this).on();
+		this.currentEpisodeController = new CurrentEpisodeController(currentEpisode, this).on();
 
 		this.addCommand({
 			id: 'start-playing',
@@ -157,6 +162,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this?.playlistController.off();
 		this?.queueController.off();
 		this?.favoritesController.off();
+		this?.currentEpisodeController.off();
 	}
 
 	async loadSettings() {
