@@ -8,6 +8,7 @@
 		playedEpisodes,
 		queue,
 		playlists,
+viewState,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
@@ -19,6 +20,7 @@
 	import Progressbar from "../common/Progressbar.svelte";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import { Episode } from "src/types/Episode";
+	import { ViewState } from "src/types/ViewState";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -119,6 +121,13 @@
 	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
 		spawnEpisodeContextMenu(episode, event);
 	}
+
+	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
+		const { episode } = event.detail;
+		currentEpisode.set(episode);
+
+		viewState.set(ViewState.Player);
+	}
 </script>
 
 <div class="episode-player">
@@ -214,6 +223,7 @@
 		showListMenu={false}
 		showThumbnails={true}
 		on:contextMenuEpisode={handleContextMenuEpisode}
+		on:clickEpisode={handleClickEpisode}
 	>
 		<svelte:fragment slot="header">
 			<h3>Queue</h3>
