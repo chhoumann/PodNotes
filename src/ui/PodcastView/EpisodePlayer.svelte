@@ -17,6 +17,8 @@
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
+import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+import { Episode } from "src/types/Episode";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -161,6 +163,12 @@
 		addCurrentEpisodeToPlayedEpisodes();
 		isPaused.set(true);
 	});
+
+	function handleContextMenuEpisode({
+		detail: { event, episode },
+	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
+		spawnEpisodeContextMenu(episode, event, () => {});
+	}
 </script>
 
 <div class="episode-player">
@@ -250,7 +258,12 @@
 		/>
 	</div>
 
-	<EpisodeList episodes={$queue.episodes} showListMenu={false}>
+	<EpisodeList 
+		episodes={$queue.episodes} 
+		showListMenu={false}
+		showThumbnails={true}
+		on:contextMenuEpisode={handleContextMenuEpisode}
+	>
 		<svelte:fragment slot="header">
 			<h3>Queue</h3>
 		</svelte:fragment>
