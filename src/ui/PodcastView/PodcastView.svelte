@@ -148,12 +148,18 @@ viewState,
 		const { event: clickEvent, playlist } = event.detail;
 
 		if (playlist.name === $queue.name && $queue.episodes.length > 0) {
-			currentEpisode.set($queue.episodes[0]);
+			// Only need to set the current episode if there isn't any.
+			// The current episode _is_ the front of the queue.
+			if (!$currentEpisode) {
+				currentEpisode.set($queue.episodes[0]);
+			}
+
 			viewState.set(ViewState.Player);
 		} else {
 			selectedPlaylist = playlist;
 			displayedEpisodes = playlist.episodes;
-			viewState.set(ViewState.EpisodeList);
+
+			viewState.set(ViewState.Player);
 		}
 	}
 </script>
