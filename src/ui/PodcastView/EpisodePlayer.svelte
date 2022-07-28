@@ -112,7 +112,7 @@ viewState,
 	// #endregion
 
 	onDestroy(() => {
-		playedEpisodes.add($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
+		playedEpisodes.setEpisodeTime($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
 		isPaused.set(true);
 	});
 

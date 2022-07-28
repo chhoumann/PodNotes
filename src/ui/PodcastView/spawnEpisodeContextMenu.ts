@@ -1,5 +1,5 @@
 import { Menu } from "obsidian";
-import { currentEpisode, favorites, playlists, queue, viewState } from "src/store";
+import { currentEpisode, favorites, playedEpisodes, playlists, queue, viewState } from "src/store";
 import { Episode } from "src/types/Episode";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
@@ -19,7 +19,8 @@ export default function spawnEpisodeContextMenu(
 		}));
 
 	const episodeIsFavorite = get(favorites).episodes.find(e => e.title === episode.title);
-	const episodeIsInQueue = get(queue).episodes.find(e => e.title === episode.title);-
+	const episodeIsInQueue = get(queue).episodes.find(e => e.title === episode.title);
+	const episodeIsPlayed = Object.values(get(playedEpisodes)).find(e => (e.title === episode.title && e.finished));
 
 	menu.addItem(item => item
 		.setIcon("lucide-star")
@@ -59,6 +60,18 @@ export default function spawnEpisodeContextMenu(
 				});
 			}
 		}));
+	
+	menu.addItem(item => item
+		.setIcon(episodeIsPlayed ? "cross" : "check")
+		.setTitle(`Mark as ${episodeIsPlayed ? "Unplayed" : "Played"}`)
+		.onClick(() => {
+			if (episodeIsPlayed) {
+				playedEpisodes.markAsUnplayed(episode);
+			} else {
+				playedEpisodes.markAsPlayed(episode);
+			}
+		})
+	);
 
 	menu.addSeparator();
 

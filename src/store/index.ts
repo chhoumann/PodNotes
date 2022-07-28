@@ -17,10 +17,17 @@ export const currentEpisode = function () {
 	return {
 		subscribe,
 		update,
-		set: (newEpisode: Episode) => {
+		set: (newEpisode: Episode, addPrevToQueue = true) => {
 			update(previousEpisode => {
 				if (previousEpisode) {
-					addEpisodeToQueue(previousEpisode);
+					if (addPrevToQueue) {
+						addEpisodeToQueue(previousEpisode);
+					}
+
+					const ct = get(currentTime);
+					const dur = get(duration);
+					const isFinished = ct === dur;
+					playedEpisodes.setEpisodeTime(previousEpisode, ct, dur, isFinished);
 				}
 
 				return newEpisode;
@@ -38,7 +45,7 @@ export const playedEpisodes = function () {
 		subscribe,
 		set,
 		update,
-		add: (episode: Episode, time: number, duration: number, finished: boolean) => {
+		setEpisodeTime: (episode: Episode, time: number, duration: number, finished: boolean) => {
 			update(playedEpisodes => {
 				playedEpisodes[episode.title] = {
 					title: episode.title,
@@ -56,7 +63,21 @@ export const playedEpisodes = function () {
 				const playedEpisode = playedEpisodes[episode.title];
 
 				if (playedEpisode) {
+					playedEpisode.time = playedEpisode.duration;
 					playedEpisode.finished = true;
+				}
+
+				playedEpisodes[episode.title] = playedEpisode;
+				return playedEpisodes;
+			});
+		},
+		markAsUnplayed: (episode: Episode) => {
+			update(playedEpisodes => {
+				const playedEpisode = playedEpisodes[episode.title];
+
+				if (playedEpisode) {
+					playedEpisode.time = 0;
+					playedEpisode.finished = false;
 				}
 
 				playedEpisodes[episode.title] = playedEpisode;
@@ -101,7 +122,7 @@ export const queue = function () {
 				const nextEp = queue.episodes.shift();
 
 				if (nextEp) {
-					currentEpisode.set(nextEp);
+					currentEpisode.set(nextEp, false);
 				}
 
 				return queue;

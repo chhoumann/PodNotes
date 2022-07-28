@@ -9,7 +9,7 @@
 		queue,
 		favorites,
 		podcastView,
-viewState,
+		viewState,
 	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
