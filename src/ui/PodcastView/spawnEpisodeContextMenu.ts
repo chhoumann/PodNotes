@@ -23,6 +23,18 @@ export default function spawnEpisodeContextMenu(
 	const episodeIsPlayed = Object.values(get(playedEpisodes)).find(e => (e.title === episode.title && e.finished));
 
 	menu.addItem(item => item
+		.setIcon(episodeIsPlayed ? "cross" : "check")
+		.setTitle(`Mark as ${episodeIsPlayed ? "Unplayed" : "Played"}`)
+		.onClick(() => {
+			if (episodeIsPlayed) {
+				playedEpisodes.markAsUnplayed(episode);
+			} else {
+				playedEpisodes.markAsPlayed(episode);
+			}
+		})
+	);
+
+	menu.addItem(item => item
 		.setIcon("lucide-star")
 		.setTitle(`${episodeIsFavorite ? "Remove from" : "Add to"} Favorites`)
 		.onClick(() => {
@@ -60,18 +72,6 @@ export default function spawnEpisodeContextMenu(
 				});
 			}
 		}));
-	
-	menu.addItem(item => item
-		.setIcon(episodeIsPlayed ? "cross" : "check")
-		.setTitle(`Mark as ${episodeIsPlayed ? "Unplayed" : "Played"}`)
-		.onClick(() => {
-			if (episodeIsPlayed) {
-				playedEpisodes.markAsUnplayed(episode);
-			} else {
-				playedEpisodes.markAsPlayed(episode);
-			}
-		})
-	);
 
 	menu.addSeparator();
 
