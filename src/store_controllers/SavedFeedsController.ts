@@ -1,7 +1,7 @@
 import { Writable } from "svelte/store";
-import { IPodNotes } from "./types/IPodNotes";
-import { PodcastFeed } from "./types/PodcastFeed";
-import { StoreController } from "./types/StoreController";
+import { IPodNotes } from "../types/IPodNotes";
+import { PodcastFeed } from "../types/PodcastFeed";
+import { StoreController } from "../types/StoreController";
 
 type TSavedFeedsStoreValue = { [podcastName: string]: PodcastFeed };
 

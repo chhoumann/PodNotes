@@ -1,9 +1,9 @@
 import { get, Unsubscriber, Writable } from "svelte/store";
-import { QUEUE_SETTINGS } from "./constants";
-import { currentEpisode } from "./store";
-import { IPodNotes } from "./types/IPodNotes";
-import { Playlist } from "./types/Playlist";
-import { StoreController } from "./types/StoreController";
+import { QUEUE_SETTINGS } from "../constants";
+import { currentEpisode } from "../store";
+import { IPodNotes } from "../types/IPodNotes";
+import { Playlist } from "../types/Playlist";
+import { StoreController } from "../types/StoreController";
 
 export class QueueController extends StoreController<Playlist> {
 	private plugin: IPodNotes;
@@ -25,7 +25,7 @@ export class QueueController extends StoreController<Playlist> {
 	}
 
 	public on(): StoreController<Playlist> {
-		this.putCurrentEpisodeInQueue();
+		this.removeCurrentEpisodeFromQueue();
 		return super.on();
 	}
 
@@ -34,7 +34,7 @@ export class QueueController extends StoreController<Playlist> {
 		return super.off();
 	}
 
-	private putCurrentEpisodeInQueue() {
+	private removeCurrentEpisodeFromQueue() {
 		this.unsubscribeCurrentEpisode = currentEpisode.subscribe(episode => {
 			if (!episode) return;
 			
@@ -42,14 +42,9 @@ export class QueueController extends StoreController<Playlist> {
 			const episodeIsInQueue = queue.episodes.find(e => e.title === episode.title);
 
 			this.store.update(playlist => {
-				// Move episode to front of queue
-				if (episodeIsInQueue) {
-					playlist.episodes = playlist.episodes.filter(e => e.title !== episode.title);
-				}
+				if (!episodeIsInQueue) return playlist;
 
-				const newEpisodes = [episode, ...playlist.episodes];
-				playlist.episodes = newEpisodes;
-
+				playlist.episodes = playlist.episodes.filter(e => e.title !== episode.title);
 				return playlist;
 			});
 		});

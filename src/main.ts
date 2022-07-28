@@ -10,15 +10,15 @@ import { IPodNotesSettings } from './types/IPodNotesSettings';
 import { plugin } from './store';
 import { get } from 'svelte/store';
 import { IPodNotes } from './types/IPodNotes';
-import { EpisodeStatusController } from './EpisodeStatusController';
+import { EpisodeStatusController } from './store_controllers/EpisodeStatusController';
 import { StoreController } from './types/StoreController';
 import { PlayedEpisode } from './types/PlayedEpisode';
 import { PodcastFeed } from './types/PodcastFeed';
-import { SavedFeedsController } from './SavedFeedsController';
+import { SavedFeedsController } from './store_controllers/SavedFeedsController';
 import { Playlist } from './types/Playlist';
-import { PlaylistController } from './PlaylistController';
-import { QueueController } from './QueueController';
-import { FavoritesController } from './FavoritesController';
+import { PlaylistController } from './store_controllers/PlaylistController';
+import { QueueController } from './store_controllers/QueueController';
+import { FavoritesController } from './store_controllers/FavoritesController';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;

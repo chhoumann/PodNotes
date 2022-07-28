@@ -1,7 +1,7 @@
 import { Writable } from "svelte/store";
-import { IPodNotes } from "./types/IPodNotes";
-import { Playlist } from "./types/Playlist";
-import { StoreController } from "./types/StoreController";
+import { IPodNotes } from "../types/IPodNotes";
+import { Playlist } from "../types/Playlist";
+import { StoreController } from "../types/StoreController";
 
 export class PlaylistController extends StoreController<{[playlistName: string]: Playlist}> {
 	private plugin: IPodNotes;
@@ -16,4 +16,6 @@ export class PlaylistController extends StoreController<{[playlistName: string]:
 
 		this.plugin.saveSettings();
 	}
+
 }
+

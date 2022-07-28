@@ -1,8 +1,8 @@
 import { Writable } from "svelte/store";
-import { FAVORITES_SETTINGS } from "./constants";
-import { IPodNotes } from "./types/IPodNotes";
-import { Playlist } from "./types/Playlist";
-import { StoreController } from "./types/StoreController";
+import { FAVORITES_SETTINGS } from "../constants";
+import { IPodNotes } from "../types/IPodNotes";
+import { Playlist } from "../types/Playlist";
+import { StoreController } from "../types/StoreController";
 
 export class FavoritesController extends StoreController<Playlist> {
 	private plugin: IPodNotes;
