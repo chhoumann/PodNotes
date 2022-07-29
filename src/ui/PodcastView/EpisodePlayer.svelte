@@ -247,16 +247,20 @@
 	}
 
 	.episode-image-container {
-		width: 100%;
+		width:  100%;
+		height: auto;
 		padding: 5% 20%;
 	}
 
 	.hover-container {
-		width: 100%;
-		height: 100%;
+		width:  15rem;
+		height: 15rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		position: relative;
+		margin-left: auto;
+		margin-right: auto;
 	}
 
 	.podcast-artwork {
@@ -265,6 +269,7 @@
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;
+		position: absolute;
 	}
 
 	/* Some themes override this, so opting to force like so. */
