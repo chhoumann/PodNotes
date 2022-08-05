@@ -15,4 +15,13 @@ export interface IPodNotesSettings {
 	queue: Playlist,
 	favorites: Playlist,
 	currentEpisode?: Episode,
+
+	timestamp: {
+		template: string;
+	},
+
+	note: {
+		path: string;
+		template: string;
+	}
 }

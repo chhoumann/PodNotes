@@ -36,5 +36,14 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	skipBackwardLength: 15,
 	skipForwardLength: 15,
 	currentEpisode: undefined,
+
+	timestamp: {
+		template: "- {{time}} ",
+	},
+
+	note: {
+		path: "",
+		template: "",
+	}
 }
 

@@ -8,7 +8,7 @@
 	import { Episode } from "src/types/Episode";
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
-	import { NoteTemplateEngine } from "../TemplateEngine";
+	import { NoteTemplateEngine } from "../../TemplateEngine";
 
 	let demoEpisode: Episode;
 	let markdownDemoEl: HTMLDivElement;

@@ -44,9 +44,16 @@ function TemplateEngine(template: string, tags: Tags) {
 export function NoteTemplateEngine(template: string, episode: Episode) {
 	return TemplateEngine(template, {
 		"title": episode.title,
-		"description": (prependLine?: string) => prependLine ?
-			htmlToMarkdown(episode.description)
-			: htmlToMarkdown(episode.description).split('\n').map(line => `${prependLine}${line}`).join('\n'),
+		"description": (prependToLines?: string) => {
+			if (prependToLines) {
+				return htmlToMarkdown(episode.description)
+					.split("\n")
+					.map(prepend(prependToLines))
+					.join("\n")
+			}
+
+			return htmlToMarkdown(episode.description)
+		},
 		"url": episode.url,
 		"date": (format?: string) => episode.episodeDate ?
 			window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
@@ -56,9 +63,27 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	});
 }
 
+function prepend(prepend: string) {
+	return (str: string) => `${prepend}${str}`;
+}
+
 export function TimestampTemplateEngine(template: string) {
 	return TemplateEngine(template, {
 		"time": (format?: string) => get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss"),
 		"linktime": (format?: string) => get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true),
 	});
+}
+
+export function FilePathTemplateEngine(template: string, episode: Episode) {
+	return TemplateEngine(template, {
+		"title": replaceIllegalFileNameCharactersInString(episode.title),
+		"podcast": replaceIllegalFileNameCharactersInString(episode.podcastName),
+	});
+}
+
+function replaceIllegalFileNameCharactersInString(string: string) {
+    return string
+        .replace(/[\\,#%&{}/*<>$'":@\u2023|?]*/g, '') // Replace illegal file name characters with empty string
+        .replace(/\n/, ' ') // replace newlines with spaces
+        .replace('  ', ' '); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
 }
