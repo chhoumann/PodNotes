@@ -49,7 +49,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		favorites.set(this.settings.favorites);
 		if (this.settings.currentEpisode) {
 			currentEpisode.set(this.settings.currentEpisode);
-		}	
+		}
 
 		this.playedEpisodeController = new EpisodeStatusController(playedEpisodes, this).on();
 		this.savedFeedsController = new SavedFeedsController(savedFeeds, this).on();
@@ -140,27 +140,36 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			name: 'Create Podcast Note',
 			checkCallback: (checking) => {
 				if (checking) {
-					return !!this.api.podcast && 
+					return !!this.api.podcast &&
 						!!this.settings.note.path &&
 						!!this.settings.note.template;
 				}
 
-				const filePath = FilePathTemplateEngine(
-					this.settings.note.path,
-					this.api.podcast
-				);
+				(async function createPodcastNote() {
+					const filePath = FilePathTemplateEngine(
+						this.settings.note.path,
+						this.api.podcast
+					);
 
-				const content = NoteTemplateEngine(
-					this.settings.note.template,
-					this.api.podcast
-				);
+					const content = NoteTemplateEngine(
+						this.settings.note.template,
+						this.api.podcast
+					);
 
-				this.app.vault.create(
-					filePath.endsWith('.md') ? filePath : `${filePath}.md`,
-					content
-				).then((createdFile) => 
-					this.app.workspace.getLeaf().openFile(createdFile)
-				)
+					try {
+						const createdFile = await this.app.vault.create(
+							filePath.endsWith('.md') ? filePath : `${filePath}.md`,
+							content
+						)
+
+						this.app.workspace
+							.getLeaf()
+							.openFile(createdFile)
+					} catch (error) {
+						console.error(error);
+						new Notice(error);
+					}
+				}).bind(this)();
 			},
 		})
 
