@@ -1,7 +1,5 @@
 <script lang="ts">
 	import {
-		htmlToMarkdown,
-		MarkdownPreviewRenderer,
 		MarkdownRenderer,
 	} from "obsidian";
 
@@ -10,6 +8,7 @@
 	import { Episode } from "src/types/Episode";
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
+	import { NoteTemplateEngine } from "../TemplateEngine";
 
 	let demoEpisode: Episode;
 	let markdownDemoEl: HTMLDivElement;
@@ -18,16 +17,16 @@
 		demoEpisode = getRandomEpisode();
 
 		const temp = `## {{title}}
-![]({{artworkUrl}})
+![]({{artwork}})
 ### Metadata
-Podcast:: {{podcastName}}
+Podcast:: {{podcast}}
 Episode:: {{title}}
-PublishDate:: {{episodeDate}}
+PublishDate:: {{date: YYYY-MM-DD-HH-MM-SS}}
 
 ### Description
-> {{description}}`;
+> {{description:> }}`;
 
-		//renderMarkdown(temp, markdownDemoEl);
+		renderMarkdown(temp, markdownDemoEl);
 	});
 
 	function getRandomEpisode(): Episode {
@@ -58,7 +57,7 @@ PublishDate:: {{episodeDate}}
 	function renderMarkdown(markdown: string, el: HTMLElement) {
 		el.empty();
 
-		const mkdwn = expandFormatSyntax(markdown, demoEpisode);
+		const mkdwn = NoteTemplateEngine(markdown, demoEpisode);
 
 		MarkdownRenderer.renderMarkdown(
 			mkdwn,
@@ -73,19 +72,6 @@ PublishDate:: {{episodeDate}}
 		markdownDemoEl.querySelectorAll("img").forEach((img) => {
 			img.style.width = "50%";
 		});
-	}
-
-	function expandFormatSyntax(text: string, episode: Episode): string {
-		const { title, streamUrl, description, podcastName, artworkUrl, episodeDate } =
-			episode;
-
-		return text
-			.replace(/\{\{title\}\}/g, title)
-			.replace(/\{\{streamUrl\}\}/g, streamUrl)
-			.replace(/\{\{description\}\}/g, htmlToMarkdown(description))
-			.replace(/\{\{podcastName\}\}/g, podcastName)
-			.replace(/\{\{episodeDate\}\}/g, window.moment(episodeDate).format("YYYY-MM-DD"))
-			.replace(/\{\{artworkUrl\}\}/g, artworkUrl || "");
 	}
 </script>
 

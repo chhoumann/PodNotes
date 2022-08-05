@@ -1,19 +1,15 @@
-import { App, debounce, MarkdownRenderer, PluginSettingTab, Setting } from 'obsidian';
+import { App, MarkdownRenderer, PluginSettingTab, Setting } from 'obsidian';
 import PodNotes from '../../main';
 import PodcastQueryGrid from './PodcastQueryGrid.svelte';
 import PlaylistManager from './PlaylistManager.svelte';
-import CaptureSettings from './CaptureSettings.svelte';
-import { get } from 'svelte/store';
-import { episodeCache } from 'src/store';
-import { Episode } from 'src/types/Episode';
-import { IconType } from 'src/types/IconType';
+import { TimestampTemplateEngine } from '../TemplateEngine';
+
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
 	private podcastQueryGrid: PodcastQueryGrid;
 	private playlistManager: PlaylistManager;
-	private captureSettings: CaptureSettings;
 
 	constructor(app: App, plugin: PodNotes) {
 		super(app, plugin);
@@ -59,7 +55,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	hide(): void {
 		this.podcastQueryGrid?.$destroy();
 		this.playlistManager?.$destroy();
-		this.captureSettings?.$destroy();
 	}
 
 	private addDefaultPlaybackRateSetting(container: HTMLElement): void {
@@ -108,28 +103,26 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const container = settingsContainer.createDiv();
 
 		container.createEl('h4', { text: 'Note settings' });
-		const captureSettingsContainer = container.createDiv();
 
-		this.captureSettings = new CaptureSettings({
-			target: captureSettingsContainer,
-		});
-
-		new Setting(container)
+		const timestampSetting = new Setting(container)
 			.setName('Capture timestamp format')
-			.addMomentFormat((momentFormatComponent) => {
-				momentFormatComponent
-					.setValue("") // this.plugin.settings.captureTimestampFormat
-					.onChange(value => {
-						//this.plugin.settings.captureTimestampFormat = value;
-						this.plugin.saveSettings();
-					});
+			.addTextArea(textArea => {
+				textArea.setValue("") // format is not saved yet
+				textArea.onChange(value => {
+					//this.plugin.settings.timestampFormat = value;
+					this.plugin.saveSettings();
+					const demoVal = TimestampTemplateEngine(value);
+					timestampFormatDemoEl.empty();
+					MarkdownRenderer.renderMarkdown(demoVal, timestampFormatDemoEl, "", textArea);
+
+				});
+				textArea.inputEl.style.width = "100%";
 			})
-			.addExtraButton((extraButtonComponent) => {
-				extraButtonComponent
-					.setIcon("link-2" as IconType)
-					.
-					.onClick(() => {
-					});
-			});
+
+		timestampSetting.settingEl.style.flexDirection = 'column';
+		timestampSetting.settingEl.style.alignItems = '';
+		timestampSetting.settingEl.style.gap = '10px';
+
+		const timestampFormatDemoEl = container.createDiv();
 	}
 }
