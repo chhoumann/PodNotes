@@ -1,7 +1,9 @@
 site_name: PodNotes
 repo_url: https://github.com/chhoumann/podnotes
 edit_uri: edit/master/docs/docs
+nav:
+    - Home: index.md
 theme:
-  name: material
-  palette:
-    primary: blue
+    name: material
+    palette:
+        primary: blue
