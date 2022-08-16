@@ -158,15 +158,22 @@ export default class PodNotes extends Plugin implements IPodNotes {
 						this.api.podcast
 					);
 
+					const createOrGetFile = async (path: string, content: string) => {
+						const file = app.vault.getAbstractFileByPath(path);
+						if (file) {
+							new Notice(`Note for "${this.api.podcast.title}" already exists`);
+							return file;
+						}
+
+						return await this.app.vault.create(path, content);
+					}
+
 					try {
-						const createdFile = await this.app.vault.create(
-							filePathDotMd,
-							content
-						);
+						const file = await createOrGetFile(filePathDotMd, content);
 
 						this.app.workspace
 							.getLeaf()
-							.openFile(createdFile)
+							.openFile(file)
 					} catch (error) {
 						console.error(error);
 						new Notice(`Failed to create note: "${filePathDotMd}"`);
