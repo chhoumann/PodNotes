@@ -151,6 +151,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 						this.api.podcast
 					);
 
+					const filePathDotMd = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
+
 					const content = NoteTemplateEngine(
 						this.settings.note.template,
 						this.api.podcast
@@ -158,16 +160,16 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 					try {
 						const createdFile = await this.app.vault.create(
-							filePath.endsWith('.md') ? filePath : `${filePath}.md`,
+							filePathDotMd,
 							content
-						)
+						);
 
 						this.app.workspace
 							.getLeaf()
 							.openFile(createdFile)
 					} catch (error) {
 						console.error(error);
-						new Notice(error);
+						new Notice(`Failed to create note: "${filePathDotMd}"`);
 					}
 				}).bind(this)();
 			},
