@@ -120,12 +120,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textArea.onChange(value => {
 					this.plugin.settings.timestamp.template = value;
 					this.plugin.saveSettings();
-
-					const demoVal = TimestampTemplateEngine(value);
-					timestampFormatDemoEl.empty();
-					// @ts-ignore - documentation says component is optional, yet not providing one causes an error
-					MarkdownRenderer.renderMarkdown(demoVal, timestampFormatDemoEl, "", null);
-
+					updateTimestampDemo(value);
 				});
 				textArea.inputEl.style.width = "100%";
 			})
@@ -135,6 +130,16 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		timestampSetting.settingEl.style.gap = '10px';
 
 		const timestampFormatDemoEl = container.createDiv();
+
+		const updateTimestampDemo = (value: string) => {
+			const demoVal = TimestampTemplateEngine(value);
+			timestampFormatDemoEl.empty();
+			// @ts-ignore - documentation says component is optional, yet not providing one causes an error
+			MarkdownRenderer.renderMarkdown(demoVal, timestampFormatDemoEl, "", null);
+		}
+
+		updateTimestampDemo(this.plugin.settings.timestamp.template);
+		
 		const randomEpisode = getRandomEpisode();
 
 		const noteCreationFilePathSetting = new Setting(container)
