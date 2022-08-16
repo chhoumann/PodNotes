@@ -4,6 +4,12 @@ edit_uri: edit/master/docs/docs
 nav:
     - Home: index.md
     - Podcasts: podcasts.md
+    - 'Notes':
+        - Timestamps: timestamps.md
+        - Templates: templates.md
+    - Advanced:
+          - API: api.md
+          - Usage with QuickAdd: QuickAdd.md
 theme:
     name: material
     palette:
