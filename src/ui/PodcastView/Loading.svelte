@@ -24,9 +24,9 @@
     font-size: 0;
     color: #fff;
 }
-.la-line-scale.la-dark {
+/* .la-line-scale.la-dark {
     color: #333;
-}
+} */
 .la-line-scale > div {
     display: inline-block;
     float: none;
@@ -79,7 +79,7 @@
          -o-animation-delay: -.8s;
             animation-delay: -.8s;
 }
-.la-line-scale.la-sm {
+/* .la-line-scale.la-sm {
     width: 20px;
     height: 16px;
 }
@@ -100,7 +100,7 @@
     margin: 4px;
     margin-top: 0;
     margin-bottom: 0;
-}
+} 
 .la-line-scale.la-3x {
     width: 120px;
     height: 96px;
@@ -111,7 +111,7 @@
     margin: 6px;
     margin-top: 0;
     margin-bottom: 0;
-}
+}*/
 /*
  * Animation
  */

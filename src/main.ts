@@ -22,6 +22,7 @@ import { FavoritesController } from './store_controllers/FavoritesController';
 import { Episode } from './types/Episode';
 import CurrentEpisodeController from './store_controllers/CurrentEpisodeController';
 import { ViewState } from './types/ViewState';
+import { FilePathTemplateEngine, NoteTemplateEngine, TimestampTemplateEngine } from './TemplateEngine';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -48,7 +49,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		favorites.set(this.settings.favorites);
 		if (this.settings.currentEpisode) {
 			currentEpisode.set(this.settings.currentEpisode);
-		}	
+		}
 
 		this.playedEpisodeController = new EpisodeStatusController(playedEpisodes, this).on();
 		this.savedFeedsController = new SavedFeedsController(savedFeeds, this).on();
@@ -113,6 +114,72 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				//@ts-ignore
 				this.app.plugins.disablePlugin(id).then(() => this.app.plugins.enablePlugin(id))
 			}
+		});
+
+		this.addCommand({
+			id: 'capture-timestamp',
+			name: 'Capture Timestamp',
+			editorCheckCallback: (checking, editor, view) => {
+				if (checking) {
+					return !!this.api.podcast &&
+						!!this.settings.timestamp.template;
+				}
+
+				const cursorPos = editor.getCursor();
+				const capture = TimestampTemplateEngine(
+					this.settings.timestamp.template,
+				);
+
+				editor.replaceRange(capture, cursorPos);
+				editor.setCursor(cursorPos.line, cursorPos.ch + capture.length);
+			}
+		});
+
+		this.addCommand({
+			id: 'create-podcast-note',
+			name: 'Create Podcast Note',
+			checkCallback: (checking) => {
+				if (checking) {
+					return !!this.api.podcast &&
+						!!this.settings.note.path &&
+						!!this.settings.note.template;
+				}
+
+				(async function createPodcastNote() {
+					const filePath = FilePathTemplateEngine(
+						this.settings.note.path,
+						this.api.podcast
+					);
+
+					const filePathDotMd = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
+
+					const content = NoteTemplateEngine(
+						this.settings.note.template,
+						this.api.podcast
+					);
+
+					const createOrGetFile = async (path: string, content: string) => {
+						const file = app.vault.getAbstractFileByPath(path);
+						if (file) {
+							new Notice(`Note for "${this.api.podcast.title}" already exists`);
+							return file;
+						}
+
+						return await this.app.vault.create(path, content);
+					}
+
+					try {
+						const file = await createOrGetFile(filePathDotMd, content);
+
+						this.app.workspace
+							.getLeaf()
+							.openFile(file)
+					} catch (error) {
+						console.error(error);
+						new Notice(`Failed to create note: "${filePathDotMd}"`);
+					}
+				}).bind(this)();
+			},
 		})
 
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
