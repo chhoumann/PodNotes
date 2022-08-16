@@ -173,15 +173,16 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 				textArea.inputEl.style.width = "100%";
 				textArea.inputEl.style.height = "25vh";
-				textArea.setPlaceholder(`## {{title}}
-![]({{artwork}})
-### Metadata
-Podcast:: {{podcast}}
-Episode:: {{title}}
-PublishDate:: {{date:YYYY-MM-DD}}
-
-### Description
-> {{description}}`)
+				textArea.setPlaceholder(
+					"## {{title}}" +
+					"\n![]({{artwork}})" + 
+					"\n### Metadata" +
+					"\nPodcast:: {{podcast}}" +
+					"\nEpisode:: {{title}}" +
+					"\nPublishDate:: {{date:YYYY-MM-DD}}" +
+					"\n### Description" +
+					"\n> {{description}}"
+				);
 			});
 
 		noteCreationSetting.settingEl.style.flexDirection = 'column';
