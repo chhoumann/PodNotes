@@ -22,7 +22,8 @@ import { FavoritesController } from './store_controllers/FavoritesController';
 import { Episode } from './types/Episode';
 import CurrentEpisodeController from './store_controllers/CurrentEpisodeController';
 import { ViewState } from './types/ViewState';
-import { FilePathTemplateEngine, NoteTemplateEngine, TimestampTemplateEngine } from './TemplateEngine';
+import { TimestampTemplateEngine } from './TemplateEngine';
+import createPodcastNote from './createPodcastNote';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -145,40 +146,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 						!!this.settings.note.template;
 				}
 
-				(async function createPodcastNote() {
-					const filePath = FilePathTemplateEngine(
-						this.settings.note.path,
-						this.api.podcast
-					);
-
-					const filePathDotMd = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
-
-					const content = NoteTemplateEngine(
-						this.settings.note.template,
-						this.api.podcast
-					);
-
-					const createOrGetFile = async (path: string, content: string) => {
-						const file = app.vault.getAbstractFileByPath(path);
-						if (file) {
-							new Notice(`Note for "${this.api.podcast.title}" already exists`);
-							return file;
-						}
-
-						return await this.app.vault.create(path, content);
-					}
-
-					try {
-						const file = await createOrGetFile(filePathDotMd, content);
-
-						this.app.workspace
-							.getLeaf()
-							.openFile(file)
-					} catch (error) {
-						console.error(error);
-						new Notice(`Failed to create note: "${filePathDotMd}"`);
-					}
-				}).bind(this)();
+				createPodcastNote(
+					this.api.podcast,
+				);
 			},
 		})
 
