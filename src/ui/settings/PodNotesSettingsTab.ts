@@ -2,7 +2,7 @@ import { App, MarkdownRenderer, PluginSettingTab, Setting } from 'obsidian';
 import PodNotes from '../../main';
 import PodcastQueryGrid from './PodcastQueryGrid.svelte';
 import PlaylistManager from './PlaylistManager.svelte';
-import { TimestampTemplateEngine } from '../../TemplateEngine';
+import { DownloadPathTemplateEngine, TimestampTemplateEngine } from '../../TemplateEngine';
 import { FilePathTemplateEngine } from '../../TemplateEngine';
 import { episodeCache } from 'src/store';
 import { Episode } from 'src/types/Episode';
@@ -57,6 +57,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addDefaultPlaybackRateSetting(settingsContainer);
 		this.addSkipLengthSettings(settingsContainer);
 		this.addNoteSettings(settingsContainer);
+		this.addDownloadSettings(settingsContainer);
 	}
 
 	hide(): void {
@@ -193,6 +194,37 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		noteCreationSetting.settingEl.style.flexDirection = 'column';
 		noteCreationSetting.settingEl.style.alignItems = 'unset';
 		noteCreationSetting.settingEl.style.gap = '10px';
+	}
+
+	private addDownloadSettings(container: HTMLDivElement) {
+		container.createEl('h4', { text: 'Download settings' });
+
+		const randomEpisode = getRandomEpisode();
+
+		const downloadPathSetting = new Setting(container)
+			.setName('Episode download path')
+			.setDesc('The path where the episode will be downloaded to. Avoid setting an extension, as it will be added automatically.')
+			.setHeading()
+			.addText((textComponent) => {
+				textComponent.setValue(this.plugin.settings.download.path)
+				textComponent.setPlaceholder('inputs/podcasts/{{podcast}} - {{title}}')
+				textComponent.onChange(value => {
+					this.plugin.settings.download.path = value;
+					this.plugin.saveSettings();
+
+					const demoVal = DownloadPathTemplateEngine(value, randomEpisode);
+					downloadFilePathDemoEl.empty();
+					// @ts-ignore - documentation says component is optional, yet not providing one causes an error
+					MarkdownRenderer.renderMarkdown(`${demoVal}.mp3`, downloadFilePathDemoEl, "", null);
+				});
+				textComponent.inputEl.style.width = "100%";
+			});
+
+		downloadPathSetting.settingEl.style.flexDirection = 'column';
+		downloadPathSetting.settingEl.style.alignItems = 'unset';
+		downloadPathSetting.settingEl.style.gap = '10px';
+
+		const downloadFilePathDemoEl = container.createDiv();
 	}
 }
 

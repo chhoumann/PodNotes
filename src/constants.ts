@@ -44,6 +44,10 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	note: {
 		path: "",
 		template: "",
+	},
+
+	download: {
+		path: "",
 	}
 }
 

@@ -23,5 +23,9 @@ export interface IPodNotesSettings {
 	note: {
 		path: string;
 		template: string;
+	},
+
+	download: {
+		path: string,
 	}
 }
