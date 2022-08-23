@@ -1,4 +1,5 @@
 import { Notice } from "obsidian";
+import { downloadedEpisodes } from "./store";
 import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import { Episode } from "./types/Episode";
 import getUrlExtension from "./utility/getUrlExtension";
@@ -21,7 +22,18 @@ export default async function downloadEpisode(episode: Episode, downloadPathTemp
 		const buffer = await blob.arrayBuffer();
 
 		await app.vault.createBinary(filePath, buffer);
-		new Notice(`Downloaded ${episode.title}`);
+		downloadedEpisodes.update(podcasts => {
+			podcasts[episode.podcastName] = podcasts[episode.podcastName] || [];
+			
+			podcasts[episode.podcastName].push({
+				...episode,
+				filePath,
+			});
+
+			return podcasts;
+		});
+
+		new Notice(`Downloaded "${episode.title}" from ${episode.podcastName}`);
 	} catch (error) {
 		console.error(error);
 		new Notice(error);

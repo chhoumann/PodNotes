@@ -5,6 +5,7 @@ import { PlayedEpisode } from 'src/types/PlayedEpisode';
 import { PodcastFeed } from 'src/types/PodcastFeed';
 import { Playlist } from 'src/types/Playlist';
 import { ViewState } from 'src/types/ViewState';
+import DownloadedEpisode from 'src/types/DownloadedEpisode';
 
 export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
@@ -90,6 +91,8 @@ export const playedEpisodes = function () {
 export const savedFeeds = writable<{ [podcastName: string]: PodcastFeed }>({});
 
 export const episodeCache = writable<{ [podcastName: string]: Episode[] }>({});
+
+export const downloadedEpisodes = writable<{ [podcastName: string]: DownloadedEpisode[] }>({});
 
 export const queue = function () {
 	const store = writable<Playlist>({

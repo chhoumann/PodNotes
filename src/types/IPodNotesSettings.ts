@@ -3,6 +3,7 @@ import { PodcastFeed } from "./PodcastFeed";
 import { PlayedEpisode } from './PlayedEpisode';
 import { Playlist } from './Playlist';
 import { Episode } from './Episode';
+import DownloadedEpisode from './DownloadedEpisode';
 
 export interface IPodNotesSettings {
 	savedFeeds: { [podcastName: string]: PodcastFeed };
@@ -28,4 +29,5 @@ export interface IPodNotesSettings {
 	download: {
 		path: string,
 	}
+	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] }
 }

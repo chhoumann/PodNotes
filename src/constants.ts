@@ -48,6 +48,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 
 	download: {
 		path: "",
-	}
+	},
+	downloadedEpisodes: {},
 }
 

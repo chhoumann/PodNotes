@@ -1,5 +1,5 @@
 import FeedParser from 'src/parser/feedParser';
-import { currentEpisode, favorites, playedEpisodes, playlists, queue, savedFeeds, viewState } from 'src/store';
+import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, queue, savedFeeds, viewState } from 'src/store';
 import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
@@ -25,6 +25,8 @@ import { ViewState } from './types/ViewState';
 import {TimestampTemplateEngine } from './TemplateEngine';
 import createPodcastNote from './createPodcastNote';
 import downloadEpisode from './downloadEpisode';
+import DownloadedEpisode from './types/DownloadedEpisode';
+import DownloadedEpisodesController from './store_controllers/DownloadedEpisodesController';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -38,6 +40,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private queueController: StoreController<Playlist>;
 	private favoritesController: StoreController<Playlist>;
 	private currentEpisodeController: StoreController<Episode>;
+	private downloadedEpisodesController: StoreController<{ [podcastName: string]: DownloadedEpisode[] }>;
 
 	async onload() {
 		plugin.set(this);
@@ -49,6 +52,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		playlists.set(this.settings.playlists);
 		queue.set(this.settings.queue);
 		favorites.set(this.settings.favorites);
+		downloadedEpisodes.set(this.settings.downloadedEpisodes);
 		if (this.settings.currentEpisode) {
 			currentEpisode.set(this.settings.currentEpisode);
 		}
@@ -58,6 +62,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.playlistController = new PlaylistController(playlists, this).on();
 		this.queueController = new QueueController(queue, this).on();
 		this.favoritesController = new FavoritesController(favorites, this).on();
+		this.downloadedEpisodesController = new DownloadedEpisodesController(downloadedEpisodes, this).on();
 		this.currentEpisodeController = new CurrentEpisodeController(currentEpisode, this).on();
 
 		this.addCommand({
@@ -227,6 +232,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this?.playlistController.off();
 		this?.queueController.off();
 		this?.favoritesController.off();
+		this?.downloadedEpisodesController.off();
 		this?.currentEpisodeController.off();
 	}
 
