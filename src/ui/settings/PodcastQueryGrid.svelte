@@ -72,7 +72,7 @@
 		{#each searchResults as podcast}
 			<PodcastResultCard
 				{podcast}
-				isSaved={$savedFeeds[podcast.title] !== undefined}
+				isSaved={$savedFeeds[podcast.title]?.url === podcast.url}
 				on:addPodcast={addPodcast}
 				on:removePodcast={removePodcast}
 			/>
