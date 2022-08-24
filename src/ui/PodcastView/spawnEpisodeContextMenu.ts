@@ -71,13 +71,6 @@ export default function spawnEpisodeContextMenu(
 
 	if (!disabledMenuItems?.createNote) {
 		const episodeNoteExists = Boolean(getPodcastNote(episode));
-		const { path, template } = get(plugin).settings.note;
-		const canCreateNote = Boolean(path && template);
-
-		if (!canCreateNote) {
-			new Notice(`Please set a note path and template in the settings.`);
-			return;
-		}
 
 		menu.addItem(item => item
 			.setIcon("pencil")
@@ -86,6 +79,14 @@ export default function spawnEpisodeContextMenu(
 				if (episodeNoteExists) {
 					openPodcastNote(episode);
 				} else {
+					const { path, template } = get(plugin).settings.note;
+					const canCreateNote = Boolean(path && template);
+
+					if (!canCreateNote) {
+						new Notice(`Please set a note path and template in the settings.`);
+						return;
+					}
+
 					await createPodcastNote(episode);
 				}
 			}));
