@@ -12,6 +12,8 @@ Here are the features that will help you do that 👇.
 - Track played episodes & playback progress
 - Create podcast notes from templates with metadata about episodes
 - Capture timestamps & link directly to the time in the episode
+- Download episodes for offline playback
+- Support for non-podcast local audio files
 - API that can be used by plugins like [QuickAdd](https://github.com/chhoumann/QuickAdd) or [Templater](https://github.com/silentvoid13/Templater) for custom workflows
 
 ## Installation

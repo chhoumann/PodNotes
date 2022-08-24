@@ -33,6 +33,7 @@ The context menu will let you
 
 - Play the episode
 - Mark the episode as played
+- Download / remove the episode
 - Add / remove the episode to favorites
 - Add / remove the episode to queue
 - Add / remove the episode to a playlist

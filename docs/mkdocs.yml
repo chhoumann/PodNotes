@@ -4,6 +4,7 @@ edit_uri: edit/master/docs/docs
 nav:
     - Home: index.md
     - Podcasts: podcasts.md
+    - 'Local files': local_files.md
     - 'Notes':
         - Timestamps: timestamps.md
         - Templates: templates.md
