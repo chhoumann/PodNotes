@@ -22,9 +22,9 @@ import { FavoritesController } from './store_controllers/FavoritesController';
 import { Episode } from './types/Episode';
 import CurrentEpisodeController from './store_controllers/CurrentEpisodeController';
 import { ViewState } from './types/ViewState';
-import {TimestampTemplateEngine } from './TemplateEngine';
+import { TimestampTemplateEngine } from './TemplateEngine';
 import createPodcastNote from './createPodcastNote';
-import downloadEpisode from './downloadEpisode';
+import downloadEpisodeWithProgressNotice from './downloadEpisode';
 import DownloadedEpisode from './types/DownloadedEpisode';
 import DownloadedEpisodesController from './store_controllers/DownloadedEpisodesController';
 
@@ -122,7 +122,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				}
 
 				const episode = this.api.podcast;
-				downloadEpisode(episode, this.settings.download.path);
+				downloadEpisodeWithProgressNotice(episode, this.settings.download.path);
 			}
 		})
 
