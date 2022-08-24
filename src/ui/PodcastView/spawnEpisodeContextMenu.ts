@@ -1,6 +1,7 @@
 import { Menu } from "obsidian";
 import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPodcastNote";
-import { currentEpisode, favorites, playedEpisodes, playlists, queue, viewState } from "src/store";
+import downloadEpisodeWithProgessNotice from "src/downloadEpisode";
+import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, viewState } from "src/store";
 import { Episode } from "src/types/Episode";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
@@ -8,6 +9,7 @@ import { get } from "svelte/store";
 interface DisabledMenuItems {
 	play: boolean;
 	markPlayed: boolean;
+	download: boolean;
 	createNote: boolean;
 	favorite: boolean;
 	queue: boolean;
@@ -44,6 +46,21 @@ export default function spawnEpisodeContextMenu(
 				}
 			})
 		);
+	}
+
+	if (!disabledMenuItems?.download) {
+		const isDownloaded = downloadedEpisodes.isEpisodeDownloaded(episode);
+
+		menu.addItem(item => item
+			.setIcon(isDownloaded ? "cross" : "download")
+			.setTitle(isDownloaded ? "Remove download" : "Download")
+			.onClick(() => {
+				if (isDownloaded) {
+					downloadedEpisodes.removeEpisode(episode, true);
+				} else {
+					downloadEpisodeWithProgessNotice(episode, get(plugin).settings.download.path);
+				}
+			}));
 	}
 
 	if (!disabledMenuItems?.createNote) {
