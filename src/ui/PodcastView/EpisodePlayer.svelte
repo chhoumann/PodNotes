@@ -9,6 +9,7 @@
 		queue,
 		playlists,
 		viewState,
+		downloadedEpisodes,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
@@ -21,6 +22,7 @@
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import { Episode } from "src/types/Episode";
 	import { ViewState } from "src/types/ViewState";
+	import { TFile } from "obsidian";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -91,6 +93,8 @@
 		isPaused.set(false);
 	}
 
+	let srcPromise: Promise<string> = getSrc($currentEpisode);
+
 	// #region Keep player time and currentTime in sync
 	// Simply binding currentTime to the audio element will result in resets.
 	// Hence the following solution.
@@ -101,8 +105,15 @@
 			playerTime = ct;
 		});
 
+		// This only happens when the player is open and the user downloads the episode via the context menu.
+		// So we want to update the source of the audio element to local file / online stream.
+		const unsubDownloadedSource = downloadedEpisodes.subscribe(_ => {
+			srcPromise = getSrc($currentEpisode);
+		});
+
 		return () => {
 			unsub();
+			unsubDownloadedSource();
 		};
 	});
 
@@ -134,6 +145,22 @@
 		currentEpisode.set(episode);
 
 		viewState.set(ViewState.Player);
+	}
+
+	async function getSrc(episode: Episode): Promise<string> {
+		if (downloadedEpisodes.isEpisodeDownloaded(episode)) {
+			const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
+			if (!downloadedEpisode) return '';
+
+			const file = app.vault.getAbstractFileByPath(downloadedEpisode.filePath);
+			if (!file || !(file instanceof TFile)) return '';
+
+			const binary = await app.vault.readBinary(file);
+
+			return URL.createObjectURL(new Blob([binary], { type: "audio/mpeg" }));
+		} else {
+			return episode.streamUrl;
+		}
 	}
 </script>
 
@@ -171,17 +198,19 @@
 
 	<h2 class="podcast-title">{$currentEpisode.title}</h2>
 
-	<audio
-		src={$currentEpisode.streamUrl}
-		bind:duration={$duration}
-		bind:currentTime={playerTime}
-		bind:paused={$isPaused}
-		bind:playbackRate={offBinding._playbackRate}
-		on:ended={onEpisodeEnded}
-		on:loadedmetadata={onMetadataLoaded}
-		on:play|preventDefault
-		autoplay={true}
-	/>
+	{#await srcPromise then src}
+		<audio
+			src={src}
+			bind:duration={$duration}
+			bind:currentTime={playerTime}
+			bind:paused={$isPaused}
+			bind:playbackRate={offBinding._playbackRate}
+			on:ended={onEpisodeEnded}
+			on:loadedmetadata={onMetadataLoaded}
+			on:play|preventDefault
+			autoplay={true}
+		/>
+	{/await}
 
 	<div class="status-container">
 		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
