@@ -12,7 +12,7 @@ interface Tags {
 function TemplateEngine(template: string, tags: Tags) {
 	return template.replace(/\{\{(.*?)(:\s*?.+?)?\}\}/g, (match: string, tagId: string, params: string) => {
 		const tagValue = tags[tagId.toLowerCase()];
-		if (!tagValue) {
+		if (tagValue === null || tagValue === undefined) {
 			const fuse = new Fuse(Object.keys(tags), {
 				shouldSort: true,
 				findAllMatches: false,
