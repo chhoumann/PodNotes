@@ -63,7 +63,7 @@ export default function spawnEpisodeContextMenu(
 						new Notice(`Please set a download path in the settings.`);
 						return;
 					}
-					
+
 					downloadEpisodeWithProgessNotice(episode, downloadPath);
 				}
 			}));
@@ -71,6 +71,13 @@ export default function spawnEpisodeContextMenu(
 
 	if (!disabledMenuItems?.createNote) {
 		const episodeNoteExists = Boolean(getPodcastNote(episode));
+		const { path, template } = get(plugin).settings.note;
+		const canCreateNote = Boolean(path && template);
+
+		if (!canCreateNote) {
+			new Notice(`Please set a note path and template in the settings.`);
+			return;
+		}
 
 		menu.addItem(item => item
 			.setIcon("pencil")
