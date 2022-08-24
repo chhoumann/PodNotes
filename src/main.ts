@@ -247,8 +247,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 							})
 						}
 
-						// A bug occurs where the episode won't play if it has been played. 
-						// This fixes that.
+						// Fixes where the episode won't play if it has been played. 
 						if (get(playedEpisodes)[file.basename]?.finished) {
 							playedEpisodes.markAsUnplayed(localEpisode);
 						}
