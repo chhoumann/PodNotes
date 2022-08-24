@@ -1,4 +1,4 @@
-import { Menu } from "obsidian";
+import { Menu, Notice } from "obsidian";
 import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPodcastNote";
 import downloadEpisodeWithProgessNotice from "src/downloadEpisode";
 import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, viewState } from "src/store";
@@ -58,7 +58,13 @@ export default function spawnEpisodeContextMenu(
 				if (isDownloaded) {
 					downloadedEpisodes.removeEpisode(episode, true);
 				} else {
-					downloadEpisodeWithProgessNotice(episode, get(plugin).settings.download.path);
+					const downloadPath = get(plugin).settings.download.path;
+					if (!downloadPath) {
+						new Notice(`Please set a download path in the settings.`);
+						return;
+					}
+					
+					downloadEpisodeWithProgessNotice(episode, downloadPath);
 				}
 			}));
 	}
