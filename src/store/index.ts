@@ -198,6 +198,14 @@ export const favorites = writable<Playlist>({
 	shouldRepeat: false,
 });
 
+export const localFiles = writable<Playlist>({
+	icon: 'folder',
+	name: 'Local Files',
+	episodes: [],
+	shouldEpisodeRemoveAfterPlay: false,
+	shouldRepeat: false,
+});
+
 export const playlists = writable<{ [name: string]: Playlist }>({});
 
 export const podcastView = writable<HTMLDivElement>();

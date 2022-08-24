@@ -53,7 +53,7 @@ export default function spawnEpisodeContextMenu(
 
 		menu.addItem(item => item
 			.setIcon(isDownloaded ? "cross" : "download")
-			.setTitle(isDownloaded ? "Remove download" : "Download")
+			.setTitle(isDownloaded ? "Remove file" : "Download")
 			.onClick(() => {
 				if (isDownloaded) {
 					downloadedEpisodes.removeEpisode(episode, true);

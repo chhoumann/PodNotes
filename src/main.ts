@@ -1,6 +1,6 @@
 import FeedParser from 'src/parser/feedParser';
-import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, queue, savedFeeds, viewState } from 'src/store';
-import { Notice, Plugin, WorkspaceLeaf } from 'obsidian';
+import { currentEpisode, downloadedEpisodes, favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds, viewState } from 'src/store';
+import { Notice, Plugin, TAbstractFile, WorkspaceLeaf } from 'obsidian';
 import { API } from 'src/API/API';
 import { IAPI } from 'src/API/IAPI';
 import { DEFAULT_SETTINGS, VIEW_TYPE } from 'src/constants';
@@ -27,6 +27,9 @@ import createPodcastNote from './createPodcastNote';
 import downloadEpisodeWithProgressNotice from './downloadEpisode';
 import DownloadedEpisode from './types/DownloadedEpisode';
 import DownloadedEpisodesController from './store_controllers/DownloadedEpisodesController';
+import { TFile } from 'obsidian';
+import { createUrlObjectFromFilePath } from './utility/createUrlObjectFromFilePath';
+import { LocalFilesController } from './store_controllers/LocalFilesController';
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -39,6 +42,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private playlistController: StoreController<{ [playlistName: string]: Playlist }>;
 	private queueController: StoreController<Playlist>;
 	private favoritesController: StoreController<Playlist>;
+	private localFilesController: StoreController<Playlist>;
 	private currentEpisodeController: StoreController<Episode>;
 	private downloadedEpisodesController: StoreController<{ [podcastName: string]: DownloadedEpisode[] }>;
 
@@ -52,6 +56,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		playlists.set(this.settings.playlists);
 		queue.set(this.settings.queue);
 		favorites.set(this.settings.favorites);
+		localFiles.set(this.settings.localFiles);
 		downloadedEpisodes.set(this.settings.downloadedEpisodes);
 		if (this.settings.currentEpisode) {
 			currentEpisode.set(this.settings.currentEpisode);
@@ -62,6 +67,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.playlistController = new PlaylistController(playlists, this).on();
 		this.queueController = new QueueController(queue, this).on();
 		this.favoritesController = new FavoritesController(favorites, this).on();
+		this.localFilesController = new LocalFilesController(localFiles, this).on();
 		this.downloadedEpisodesController = new DownloadedEpisodesController(downloadedEpisodes, this).on();
 		this.currentEpisodeController = new CurrentEpisodeController(currentEpisode, this).on();
 
@@ -214,6 +220,45 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				new Notice("Episode found, playing now. Please click timestamp again to play at specific time.");
 			}
 		});
+
+		this.registerEvent(
+			this.app.workspace.on('file-menu', (menu, file: TAbstractFile) => {
+				if (!(file instanceof TFile)) return;
+				if (!file.extension.match(/mp3|mp4|wma|aac|wav|webm|aac|flac|m4a|/)) return;
+
+				menu.addItem(item => item
+					.setIcon('play')
+					.setTitle('Play with PodNotes')
+					.onClick(async () => {
+						const localEpisode: Episode = {
+							title: file.basename,
+							description: '',
+							podcastName: 'local file',
+							url: app.fileManager.generateMarkdownLink(file, ''),
+							streamUrl: await createUrlObjectFromFilePath(file.path),
+							episodeDate: new Date(file.stat.ctime),
+						}
+
+						if (!downloadedEpisodes.isEpisodeDownloaded(localEpisode)) {
+							downloadedEpisodes.addEpisode(localEpisode, file.path, file.stat.size);
+							localFiles.update(localFiles => {
+								localFiles.episodes.push(localEpisode);
+								return localFiles;
+							})
+						}
+
+						// A bug occurs where the episode won't play if it has been played. 
+						// This fixes that.
+						if (get(playedEpisodes)[file.basename]?.finished) {
+							playedEpisodes.markAsUnplayed(localEpisode);
+						}
+
+						currentEpisode.set(localEpisode);
+						viewState.set(ViewState.Player);
+					})
+				);
+			})
+		)
 	}
 
 	onLayoutReady(): void {
@@ -232,6 +277,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this?.playlistController.off();
 		this?.queueController.off();
 		this?.favoritesController.off();
+		this?.localFilesController.off();
 		this?.downloadedEpisodesController.off();
 		this?.currentEpisodeController.off();
 	}

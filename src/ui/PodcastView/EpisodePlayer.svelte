@@ -22,7 +22,7 @@
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import { Episode } from "src/types/Episode";
 	import { ViewState } from "src/types/ViewState";
-	import { TFile } from "obsidian";
+	import { createUrlObjectFromFilePath } from "src/utility/createUrlObjectFromFilePath";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -111,9 +111,14 @@
 			srcPromise = getSrc($currentEpisode);
 		});
 
+		const unsubCurrentEpisode = currentEpisode.subscribe(_ => {
+			srcPromise = getSrc($currentEpisode);
+		});
+
 		return () => {
 			unsub();
 			unsubDownloadedSource();
+			unsubCurrentEpisode();
 		};
 	});
 
@@ -152,12 +157,7 @@
 			const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
 			if (!downloadedEpisode) return '';
 
-			const file = app.vault.getAbstractFileByPath(downloadedEpisode.filePath);
-			if (!file || !(file instanceof TFile)) return '';
-
-			const binary = await app.vault.readBinary(file);
-
-			return URL.createObjectURL(new Blob([binary], { type: "audio/mpeg" }));
+			return createUrlObjectFromFilePath(downloadedEpisode.filePath);
 		} else {
 			return episode.streamUrl;
 		}
@@ -173,12 +173,18 @@
 			on:mouseenter={() => (isHoveringArtwork = true)}
 			on:mouseleave={() => (isHoveringArtwork = false)}
 		>
+		 {#if $currentEpisode.artworkUrl}
 			<img
 				class={"podcast-artwork" +
 					(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
 				src={$currentEpisode.artworkUrl}
 				alt={$currentEpisode.title}
 			/>
+		 {:else}
+			<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
+				<Icon icon="image" size={150} />
+			</div>
+		 {/if}
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />
@@ -299,6 +305,18 @@
 		background-position: center;
 		background-repeat: no-repeat;
 		position: absolute;
+	}
+
+	.podcast-artwork-placeholder {
+		width: 100%;
+		height: 100%;
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+		position: absolute;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	/* Some themes override this, so opting to force like so. */

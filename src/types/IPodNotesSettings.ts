@@ -15,6 +15,7 @@ export interface IPodNotesSettings {
 	playlists: { [playlistName: string]: Playlist }
 	queue: Playlist,
 	favorites: Playlist,
+	localFiles: Playlist,
 	currentEpisode?: Episode,
 
 	timestamp: {
@@ -29,5 +30,5 @@ export interface IPodNotesSettings {
 	download: {
 		path: string,
 	}
-	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] }
+	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] },
 }
