@@ -160,7 +160,7 @@
 			selectedPlaylist = playlist;
 			displayedEpisodes = playlist.episodes;
 
-			viewState.set(ViewState.Player);
+			viewState.set(ViewState.EpisodeList);
 		}
 	}
 </script>
