@@ -133,6 +133,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const timestampFormatDemoEl = container.createDiv();
 
 		const updateTimestampDemo = (value: string) => {
+			if (!this.plugin.api.podcast) return;
+
 			const demoVal = TimestampTemplateEngine(value);
 			timestampFormatDemoEl.empty();
 			// @ts-ignore - documentation says component is optional, yet not providing one causes an error
