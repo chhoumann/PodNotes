@@ -160,16 +160,7 @@ async function createEpisodeFile({episode, downloadPathTemplate, blob, responseU
 		throw new Error(`Failed to write file "${filePath}": ${error.message}`);
 	}
 
-	downloadedEpisodes.update(podcasts => {
-		podcasts[episode.podcastName] = podcasts[episode.podcastName] || [];
-
-		podcasts[episode.podcastName].push({
-			...episode,
-			filePath,
-		});
-
-		return podcasts;
-	});
+	downloadedEpisodes.addEpisode(episode, filePath, blob.size);
 }
 
 export async function downloadEpisode(episode: Episode, downloadPathTemplate: string) {

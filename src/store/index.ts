@@ -106,13 +106,14 @@ export const downloadedEpisodes = function () {
 		set,
 		update,
 		isEpisodeDownloaded,
-		addEpisode: (episode: Episode, filePath: string) => {
+		addEpisode: (episode: Episode, filePath: string, size: number) => {
 			update(downloadedEpisodes => {
 				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
 
 				podcastEpisodes.push({
 					...episode,
-					filePath
+					filePath,
+					size
 				});
 
 				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
@@ -142,6 +143,9 @@ export const downloadedEpisodes = function () {
 				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
 				return downloadedEpisodes;
 			});
+		},
+		getEpisode: (episode: Episode) => {
+			return get(store)[episode.podcastName]?.find(e => e.title === episode.title);
 		}
 	}
 }();
