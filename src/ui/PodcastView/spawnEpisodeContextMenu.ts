@@ -1,5 +1,7 @@
 import { Menu } from "obsidian";
-import { currentEpisode, favorites, playedEpisodes, playlists, queue, viewState } from "src/store";
+import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPodcastNote";
+import downloadEpisodeWithProgessNotice from "src/downloadEpisode";
+import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, viewState } from "src/store";
 import { Episode } from "src/types/Episode";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
@@ -7,6 +9,8 @@ import { get } from "svelte/store";
 interface DisabledMenuItems {
 	play: boolean;
 	markPlayed: boolean;
+	download: boolean;
+	createNote: boolean;
 	favorite: boolean;
 	queue: boolean;
 	playlists: boolean;
@@ -26,7 +30,7 @@ export default function spawnEpisodeContextMenu(
 			.onClick(() => {
 				currentEpisode.set(episode);
 				viewState.set(ViewState.Player);
-		}));
+			}));
 	}
 
 	if (!disabledMenuItems?.markPlayed) {
@@ -42,6 +46,36 @@ export default function spawnEpisodeContextMenu(
 				}
 			})
 		);
+	}
+
+	if (!disabledMenuItems?.download) {
+		const isDownloaded = downloadedEpisodes.isEpisodeDownloaded(episode);
+
+		menu.addItem(item => item
+			.setIcon(isDownloaded ? "cross" : "download")
+			.setTitle(isDownloaded ? "Remove file" : "Download")
+			.onClick(() => {
+				if (isDownloaded) {
+					downloadedEpisodes.removeEpisode(episode, true);
+				} else {
+					downloadEpisodeWithProgessNotice(episode, get(plugin).settings.download.path);
+				}
+			}));
+	}
+
+	if (!disabledMenuItems?.createNote) {
+		const episodeNoteExists = Boolean(getPodcastNote(episode));
+
+		menu.addItem(item => item
+			.setIcon("pencil")
+			.setTitle(`${episodeNoteExists ? "Open" : "Create"} Note`)
+			.onClick(async () => {
+				if (episodeNoteExists) {
+					openPodcastNote(episode);
+				} else {
+					await createPodcastNote(episode);
+				}
+			}));
 	}
 
 	if (!disabledMenuItems?.favorite) {
@@ -82,7 +116,7 @@ export default function spawnEpisodeContextMenu(
 					queue.update(playlist => {
 						const newEpisodes = [...playlist.episodes, episode];
 						playlist.episodes = newEpisodes;
-					
+
 						return playlist;
 					});
 				}

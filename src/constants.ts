@@ -19,6 +19,13 @@ export const QUEUE_SETTINGS: PlaylistSettings = {
 	shouldRepeat: false,
 }
 
+export const LOCAL_FILES_SETTINGS: PlaylistSettings = {
+	icon: "folder",
+	name: "Local Files",
+	shouldEpisodeRemoveAfterPlay: false,
+	shouldRepeat: false,
+}
+
 export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	savedFeeds: {},
 	podNotes: {},
@@ -44,6 +51,15 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	note: {
 		path: "",
 		template: "",
+	},
+
+	download: {
+		path: "",
+	},
+	downloadedEpisodes: {},
+	localFiles: {
+		...LOCAL_FILES_SETTINGS,
+		episodes: [],
 	}
 }
 

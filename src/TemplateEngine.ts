@@ -3,6 +3,7 @@ import { Episode } from "src/types/Episode";
 import Fuse from "fuse.js";
 import { plugin } from "src/store";
 import { get } from "svelte/store";
+import getUrlExtension from "./utility/getUrlExtension";
 
 interface Tags {
 	[tag: string]: string | ((...args: unknown[]) => string);
@@ -11,7 +12,7 @@ interface Tags {
 function TemplateEngine(template: string, tags: Tags) {
 	return template.replace(/\{\{(.*?)(:\s*?.+?)?\}\}/g, (match: string, tagId: string, params: string) => {
 		const tagValue = tags[tagId.toLowerCase()];
-		if (!tagValue) {
+		if (tagValue === null || tagValue === undefined) {
 			const fuse = new Fuse(Object.keys(tags), {
 				shouldSort: true,
 				findAllMatches: false,
@@ -76,6 +77,19 @@ export function TimestampTemplateEngine(template: string) {
 
 export function FilePathTemplateEngine(template: string, episode: Episode) {
 	return TemplateEngine(template, {
+		"title": replaceIllegalFileNameCharactersInString(episode.title),
+		"podcast": replaceIllegalFileNameCharactersInString(episode.podcastName),
+	});
+}
+
+export function DownloadPathTemplateEngine(template: string, episode: Episode) {
+	// Removing the template extension, as this is added automatically depending on file type.
+	const templateExtension = getUrlExtension(template);
+	const templateWithoutExtension = templateExtension ?
+		template.replace(templateExtension, '') :
+		template;
+
+	return TemplateEngine(templateWithoutExtension, {
 		"title": replaceIllegalFileNameCharactersInString(episode.title),
 		"podcast": replaceIllegalFileNameCharactersInString(episode.podcastName),
 	});

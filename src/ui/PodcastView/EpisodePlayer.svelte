@@ -9,6 +9,7 @@
 		queue,
 		playlists,
 		viewState,
+		downloadedEpisodes,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
@@ -21,6 +22,7 @@
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import { Episode } from "src/types/Episode";
 	import { ViewState } from "src/types/ViewState";
+	import { createUrlObjectFromFilePath } from "src/utility/createUrlObjectFromFilePath";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -91,6 +93,8 @@
 		isPaused.set(false);
 	}
 
+	let srcPromise: Promise<string> = getSrc($currentEpisode);
+
 	// #region Keep player time and currentTime in sync
 	// Simply binding currentTime to the audio element will result in resets.
 	// Hence the following solution.
@@ -101,8 +105,20 @@
 			playerTime = ct;
 		});
 
+		// This only happens when the player is open and the user downloads the episode via the context menu.
+		// So we want to update the source of the audio element to local file / online stream.
+		const unsubDownloadedSource = downloadedEpisodes.subscribe(_ => {
+			srcPromise = getSrc($currentEpisode);
+		});
+
+		const unsubCurrentEpisode = currentEpisode.subscribe(_ => {
+			srcPromise = getSrc($currentEpisode);
+		});
+
 		return () => {
 			unsub();
+			unsubDownloadedSource();
+			unsubCurrentEpisode();
 		};
 	});
 
@@ -135,6 +151,17 @@
 
 		viewState.set(ViewState.Player);
 	}
+
+	async function getSrc(episode: Episode): Promise<string> {
+		if (downloadedEpisodes.isEpisodeDownloaded(episode)) {
+			const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
+			if (!downloadedEpisode) return '';
+
+			return createUrlObjectFromFilePath(downloadedEpisode.filePath);
+		} else {
+			return episode.streamUrl;
+		}
+	}
 </script>
 
 <div class="episode-player">
@@ -146,12 +173,18 @@
 			on:mouseenter={() => (isHoveringArtwork = true)}
 			on:mouseleave={() => (isHoveringArtwork = false)}
 		>
+		 {#if $currentEpisode.artworkUrl}
 			<img
 				class={"podcast-artwork" +
 					(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
 				src={$currentEpisode.artworkUrl}
 				alt={$currentEpisode.title}
 			/>
+		 {:else}
+			<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
+				<Icon icon="image" size={150} />
+			</div>
+		 {/if}
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />
@@ -171,17 +204,19 @@
 
 	<h2 class="podcast-title">{$currentEpisode.title}</h2>
 
-	<audio
-		src={$currentEpisode.streamUrl}
-		bind:duration={$duration}
-		bind:currentTime={playerTime}
-		bind:paused={$isPaused}
-		bind:playbackRate={offBinding._playbackRate}
-		on:ended={onEpisodeEnded}
-		on:loadedmetadata={onMetadataLoaded}
-		on:play|preventDefault
-		autoplay={true}
-	/>
+	{#await srcPromise then src}
+		<audio
+			src={src}
+			bind:duration={$duration}
+			bind:currentTime={playerTime}
+			bind:paused={$isPaused}
+			bind:playbackRate={offBinding._playbackRate}
+			on:ended={onEpisodeEnded}
+			on:loadedmetadata={onMetadataLoaded}
+			on:play|preventDefault
+			autoplay={true}
+		/>
+	{/await}
 
 	<div class="status-container">
 		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
@@ -270,6 +305,18 @@
 		background-position: center;
 		background-repeat: no-repeat;
 		position: absolute;
+	}
+
+	.podcast-artwork-placeholder {
+		width: 100%;
+		height: 100%;
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+		position: absolute;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	/* Some themes override this, so opting to force like so. */

@@ -8,6 +8,7 @@
 		playlists,
 		queue,
 		favorites,
+		localFiles,
 		podcastView,
 		viewState,
 	} from "src/store";
@@ -34,7 +35,7 @@
 
 	onMount(async () => {
 		const unsubscribePlaylists = playlists.subscribe((pl) => {
-			displayedPlaylists = [$queue, $favorites, ...Object.values(pl)];
+			displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
 		});
 
 		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
@@ -159,7 +160,7 @@
 			selectedPlaylist = playlist;
 			displayedEpisodes = playlist.episodes;
 
-			viewState.set(ViewState.Player);
+			viewState.set(ViewState.EpisodeList);
 		}
 	}
 </script>

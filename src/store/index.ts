@@ -5,6 +5,8 @@ import { PlayedEpisode } from 'src/types/PlayedEpisode';
 import { PodcastFeed } from 'src/types/PodcastFeed';
 import { Playlist } from 'src/types/Playlist';
 import { ViewState } from 'src/types/ViewState';
+import DownloadedEpisode from 'src/types/DownloadedEpisode';
+import { TFile } from 'obsidian';
 
 export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
@@ -91,6 +93,63 @@ export const savedFeeds = writable<{ [podcastName: string]: PodcastFeed }>({});
 
 export const episodeCache = writable<{ [podcastName: string]: Episode[] }>({});
 
+export const downloadedEpisodes = function () { 
+	const store = writable<{ [podcastName: string]: DownloadedEpisode[] }>({});
+	const { subscribe, update, set } = store;
+
+	function isEpisodeDownloaded(episode: Episode): boolean {
+		return get(store)[episode.podcastName]?.some(e => e.title === episode.title);
+	}
+
+	return {
+		subscribe,
+		set,
+		update,
+		isEpisodeDownloaded,
+		addEpisode: (episode: Episode, filePath: string, size: number) => {
+			update(downloadedEpisodes => {
+				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
+
+				podcastEpisodes.push({
+					...episode,
+					filePath,
+					size
+				});
+
+				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
+				return downloadedEpisodes;
+			});
+		},
+		removeEpisode: (episode: Episode, removeFile: boolean) => {
+			update(downloadedEpisodes => {
+				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
+				const index = podcastEpisodes.findIndex(e => e.title === episode.title)
+				const filePath = podcastEpisodes[index].filePath;
+
+				podcastEpisodes.splice(index, 1);
+
+				if (removeFile) {
+					try {
+						const file = app.vault.getAbstractFileByPath(filePath);
+
+						if ((file instanceof TFile)) {
+							app.vault.delete(file);
+						}
+					} catch (error) {
+						console.error(error);
+					}
+				}
+					
+				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
+				return downloadedEpisodes;
+			});
+		},
+		getEpisode: (episode: Episode) => {
+			return get(store)[episode.podcastName]?.find(e => e.title === episode.title);
+		}
+	}
+}();
+
 export const queue = function () {
 	const store = writable<Playlist>({
 		icon: 'list-ordered',
@@ -134,6 +193,14 @@ export const queue = function () {
 export const favorites = writable<Playlist>({
 	icon: 'lucide-star',
 	name: 'Favorites',
+	episodes: [],
+	shouldEpisodeRemoveAfterPlay: false,
+	shouldRepeat: false,
+});
+
+export const localFiles = writable<Playlist>({
+	icon: 'folder',
+	name: 'Local Files',
 	episodes: [],
 	shouldEpisodeRemoveAfterPlay: false,
 	shouldRepeat: false,
