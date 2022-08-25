@@ -23,6 +23,7 @@
 	import { Episode } from "src/types/Episode";
 	import { ViewState } from "src/types/ViewState";
 	import { createUrlObjectFromFilePath } from "src/utility/createUrlObjectFromFilePath";
+	import Image from "../common/Image.svelte";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -173,18 +174,18 @@
 			on:mouseenter={() => (isHoveringArtwork = true)}
 			on:mouseleave={() => (isHoveringArtwork = false)}
 		>
-		 {#if $currentEpisode.artworkUrl}
-			<img
-				class={"podcast-artwork" +
-					(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
-				src={$currentEpisode.artworkUrl}
-				alt={$currentEpisode.title}
-			/>
-		 {:else}
-			<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
-				<Icon icon="image" size={150} />
-			</div>
-		 {/if}
+		 <Image 
+			class={"podcast-artwork" +
+				(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
+			src={$currentEpisode.artworkUrl ?? ""}
+			alt={$currentEpisode.title}
+		 >
+			<svelte:fragment slot="fallback">
+				<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
+					<Icon icon="image" size={150} />
+				</div>
+			</svelte:fragment>
+		 </Image>
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />

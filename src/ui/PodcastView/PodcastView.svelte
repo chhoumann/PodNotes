@@ -11,6 +11,7 @@
 		localFiles,
 		podcastView,
 		viewState,
+		downloadedEpisodes,
 	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
@@ -72,7 +73,7 @@
 		useCache: boolean = true
 	): Promise<Episode[]> {
 		const cachedEpisodesInFeed = $episodeCache[feed.title];
-
+		
 		if (
 			useCache &&
 			cachedEpisodesInFeed &&
@@ -81,14 +82,18 @@
 			return cachedEpisodesInFeed;
 		}
 
-		const episodes = await new FeedParser(feed).getEpisodes(feed.url);
+		try {
+			const episodes = await new FeedParser(feed).getEpisodes(feed.url);
 
-		episodeCache.update((cache) => ({
-			...cache,
-			[feed.title]: episodes,
-		}));
+			episodeCache.update((cache) => ({
+				...cache,
+				[feed.title]: episodes,
+			}));
 
-		return episodes;
+			return episodes;
+		} catch (error) {
+			return $downloadedEpisodes[feed.title];
+		}
 	}
 
 	function fetchEpisodesInAllFeeds(

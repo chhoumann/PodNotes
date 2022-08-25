@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Episode } from "src/types/Episode";
 	import { createEventDispatcher } from "svelte";
+	import ImageLoader from "../common/ImageLoader.svelte";
 
 	export let episode: Episode;
 	export let episodeFinished: boolean = false;
@@ -25,14 +26,19 @@
 	}
 </script>
 
-<div 
+<div
 	class="podcast-episode-item" 
 	on:click={onClickEpisode} 
 	on:contextmenu={onContextMenu}
 >
 	{#if showEpisodeImage && episode?.artworkUrl} 
 		<div class="podcast-episode-thumbnail-container">
-			<img class="podcast-episode-thumbnail" src={episode?.artworkUrl} alt={episode.title} />
+			<ImageLoader
+				src={episode.artworkUrl}
+				alt={episode.title}
+				fadeIn={true}
+				class="podcast-episode-thumbnail"
+			/>
 		</div>
 	{/if}
 	<div 
@@ -87,7 +93,7 @@
 		justify-content: center;
 	}
 
-	.podcast-episode-thumbnail {
+	:global(.podcast-episode-thumbnail) {
 		border-radius: 15%;
 		max-width: 5rem;
 		max-height: 5rem;
