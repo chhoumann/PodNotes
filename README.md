@@ -1,5 +1,7 @@
 # [PodNotes](https://chhoumann.github.io/PodNotes)
 
+<img src="https://github.com/chhoumann/PodNotes/blob/master/docs/docs/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
+
 <h3 align="center">You can find the documentation <a href="https://chhoumann.github.io/PodNotes">here</a>.</h3>
 
 ---
