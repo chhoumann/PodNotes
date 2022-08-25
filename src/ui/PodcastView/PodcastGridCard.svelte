@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
 	import { createEventDispatcher } from "svelte";
+	import ImageLoader from "../common/ImageLoader.svelte";
 
 	export let feed: PodcastFeed;
 
@@ -11,25 +12,17 @@
 	}
 </script>
 
-<img
-    id={feed.title}
-    src={feed.artworkUrl}
-    alt={feed.title}
+<ImageLoader 
+	src={feed.artworkUrl} 
+	alt={feed.title} 
     on:click={onclickPodcast.bind(null, feed)}
-    class={`podcast-image`}
+    class="podcast-image"
 />
 
 <style>
-	.hover-container {
+	:global(.podcast-image) {
 		width: 100%;
 		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.podcast-image {
-		width: 100%;
 		cursor: pointer !important;
 		background-size: cover;
 		background-position: center;
