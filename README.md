@@ -24,21 +24,7 @@ Here are the features that will help you do that 👇.
 
 **This plugin is in the Obsidian community plugin store. You can find it by searching in the store.**
 
-### Installation with BRAT
-
-BRAT is an Obsidian plugin that helps you test beta plugins and themes. Click [here](obsidian://show-plugin?id=obsidian42-brat) to install it in Obsidian.
-
-Add `chhoumann/PodNotes` to BRAT with the `Add a beta plugin for testing` command.
-
-Now follow the appropriate instructions, which most likely will have you go and enable the plugin once it has finished installing.
-
-### Manual installation
-
-Go to the [releases](https://github.com/chhoumann/podnotes/releases/latest) page.
-Download `main.js` and `manifest.json`.
-Create a new directory in your Obsidian vaults `.obsidian/plugins/` folder called `podnotes` and place the downloaded files there.
-
-Now refresh the plugins in Obsidian and enable PodNotes.
+Other installation options can be found in the [documentation](https://chhoumann.github.io/PodNotes).
 
 ## Screenshots
 
