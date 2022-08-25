@@ -27,15 +27,16 @@
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
+		public playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
+
 		public get _playbackRate() {
-			return playbackRate;
+			return this.playbackRate;
 		}
 	}
 
 	const offBinding = new CircumentForcedTwoWayBinding();
 	//#endregion
 
-	let playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 
@@ -72,7 +73,7 @@
 	}
 
 	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
-		playbackRate = event.detail.value;
+		offBinding.playbackRate = event.detail.value;
 	}
 
 	function onMetadataLoaded() {
@@ -254,10 +255,10 @@
 	</div>
 
 	<div class="playbackrate-container">
-		<span>{playbackRate}x</span>
+		<span>{offBinding.playbackRate}x</span>
 		<Slider
 			on:change={onPlaybackRateChange}
-			value={playbackRate}
+			value={offBinding.playbackRate}
 			limits={[0.5, 3.5, 0.1]}
 		/>
 	</div>
