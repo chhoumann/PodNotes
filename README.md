@@ -1,6 +1,67 @@
 # [PodNotes](https://chhoumann.github.io/PodNotes)
 
-You can find the documentation [here](https://chhoumann.github.io/PodNotes).
+<h3 align="center">You can find the documentation <a href="https://chhoumann.github.io/PodNotes">here</a>.</h3>
 
-## Demo
-![Obsidian_pDfxY95S9F](https://user-images.githubusercontent.com/29108628/178024885-8ab12254-6f8e-4bda-a4f6-b76088f291c7.gif)
+---
+
+The one goal for PodNotes is to make it easier to write notes on podcasts.
+
+Here are the features that will help you do that 👇.
+
+## Features
+
+- Mobile friendly
+- Podcast player built into Obsidian
+- Add any publicly available podcast through search, or custom feeds by URL
+- Track played episodes & playback progress
+- Create podcast notes from templates with metadata about episodes
+- Capture timestamps & link directly to the time in the episode
+- Download episodes for offline playback
+- Support for non-podcast local audio files
+- API that can be used by plugins like [QuickAdd](https://github.com/chhoumann/QuickAdd) or [Templater](https://github.com/silentvoid13/Templater) for custom workflows
+
+## Installation
+
+**This plugin is in the Obsidian community plugin store. You can find it by searching in the store.**
+
+### Installation with BRAT
+
+BRAT is an Obsidian plugin that helps you test beta plugins and themes. Click [here](obsidian://show-plugin?id=obsidian42-brat) to install it in Obsidian.
+
+Add `chhoumann/PodNotes` to BRAT with the `Add a beta plugin for testing` command.
+
+Now follow the appropriate instructions, which most likely will have you go and enable the plugin once it has finished installing.
+
+### Manual installation
+
+Go to the [releases](https://github.com/chhoumann/podnotes/releases/latest) page.
+Download `main.js` and `manifest.json`.
+Create a new directory in your Obsidian vaults `.obsidian/plugins/` folder called `podnotes` and place the downloaded files there.
+
+Now refresh the plugins in Obsidian and enable PodNotes.
+
+## Screenshots
+
+### Demo
+
+![Demo](docs/docs/resources/demo.gif)
+
+### Podcast Grid
+
+![Podcast Grid](docs/docs/resources/podcast_grid.png)
+
+### Episode List
+
+![Episode List](docs/docs/resources/episode_list.png)
+
+### Player
+
+![Player](docs/docs/resources/player.png)
+
+### Podcast Note Editing
+
+![Podcast Note Editing](docs/docs/resources/podcast_note.png)
+
+### Podcast search
+
+![Podcast Search](docs/docs/resources/podcast_search.png)
