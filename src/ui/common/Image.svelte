@@ -24,7 +24,7 @@
 		{src} 
 		{alt} 
 		class={_class}
-		style:opacity={loaded ? 1 : 0}
+		style:opacity={!fadeIn ? 1 : loaded ? 1 : 0}
 		style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
 		on:load={() => {loaded = true; loading = false;}}
 		on:error={() => {failed = true; loading = false;}}
