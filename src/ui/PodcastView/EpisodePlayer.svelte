@@ -186,18 +186,6 @@
 				</div>
 			</svelte:fragment>
 		 </Image>
-<!-- 		 {#if $currentEpisode.artworkUrl}
-			<img
-				class={"podcast-artwork" +
-					(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
-				src={$currentEpisode.artworkUrl}
-				alt={$currentEpisode.title}
-			/>
-		 {:else}
-			<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
-				<Icon icon="image" size={150} />
-			</div>
-		 {/if} -->
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />
