@@ -1,10 +1,13 @@
 export default function getUrlExtension(url: string): string {
-	const extension = url.split('.').pop()?.split(/[#?]/).pop();
+	const regexp = new RegExp(/\.([0-9a-z]+)(?:[?#]|$)/i);
+	const match = regexp.exec(url);
 
-	if (extension?.contains(url)) {
-		// Extraction failed
-		return "";
+	if (!match) {
+		return '';
 	}
 
-	return extension ?? "";
+	const [, extension] = match;
+
+	return extension;
 }
+
