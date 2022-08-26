@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { PodcastFeed } from "src/types/PodcastFeed";
 	import { createEventDispatcher } from "svelte";
-	import ImageLoader from "../common/ImageLoader.svelte";
+	import Image from "../common/Image.svelte";
 
 	export let feed: PodcastFeed;
 
@@ -12,7 +12,7 @@
 	}
 </script>
 
-<ImageLoader 
+<Image 
 	src={feed.artworkUrl} 
 	alt={feed.title} 
     on:click={onclickPodcast.bind(null, feed)}
