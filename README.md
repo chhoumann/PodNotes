@@ -4,6 +4,9 @@
 
 <h3 align="center">You can find the documentation <a href="https://chhoumann.github.io/PodNotes">here</a>.</h3>
 
+## Demo Video
+[![Demo video](https://img.youtube.com/vi/SGLfuN15uJY/0.jpg)](https://www.youtube.com/watch?v=SGLfuN15uJY)
+
 ---
 
 The one goal for PodNotes is to make it easier to write notes on podcasts.
