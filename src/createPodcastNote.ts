@@ -4,7 +4,9 @@ import { Episode } from "./types/Episode";
 import { get } from "svelte/store";
 import { plugin } from "./store";
 
-export default async function createPodcastNote(episode: Episode): Promise<void> {
+export default async function createPodcastNote(
+	episode: Episode
+): Promise<void> {
 	const pluginInstance = get(plugin);
 
 	const filePath = FilePathTemplateEngine(
@@ -12,31 +14,45 @@ export default async function createPodcastNote(episode: Episode): Promise<void>
 		episode
 	);
 
-	const filePathDotMd = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
+	const filePathDotMd = filePath.endsWith(".md")
+		? filePath
+		: `${filePath}.md`;
 
 	const content = NoteTemplateEngine(
 		pluginInstance.settings.note.template,
-		episode,
+		episode
 	);
 
-	const createOrGetFile: (path: string, content: string) => Promise<TFile>
-		= async (path: string, content: string) => {
-			const file = getPodcastNote(episode);
+	const createOrGetFile: (
+		path: string,
+		content: string
+	) => Promise<TFile> = async (path: string, content: string) => {
+		const file = getPodcastNote(episode);
 
-			if (file) {
-				new Notice(`Note for "${pluginInstance.api.podcast.title}" already exists`);
-				return file;
-			}
-
-			return await app.vault.create(path, content);
+		if (file) {
+			new Notice(
+				`Note for "${pluginInstance.api.podcast.title}" already exists`
+			);
+			return file;
 		}
+
+		const foldersInPath = path.split("/").slice(0, -1);
+		for (let i = 0; i < foldersInPath.length; i++) {
+			const folderPath = foldersInPath.slice(0, i + 1).join("/");
+			const folder = app.vault.getAbstractFileByPath(folderPath);
+
+			if (!folder) {
+				await app.vault.createFolder(folderPath);
+			}
+		}
+
+		return await app.vault.create(path, content);
+	};
 
 	try {
 		const file = await createOrGetFile(filePathDotMd, content);
 
-		app.workspace
-			.getLeaf()
-			.openFile(file)
+		app.workspace.getLeaf().openFile(file);
 	} catch (error) {
 		console.error(error);
 		new Notice(`Failed to create note: "${filePathDotMd}"`);
@@ -51,7 +67,9 @@ export function getPodcastNote(episode: Episode): TFile | null {
 		episode
 	);
 
-	const filePathDotMd = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
+	const filePathDotMd = filePath.endsWith(".md")
+		? filePath
+		: `${filePath}.md`;
 	const file = app.vault.getAbstractFileByPath(filePathDotMd);
 
 	if (!file || !(file instanceof TFile)) {
@@ -69,7 +87,5 @@ export function openPodcastNote(epiosode: Episode): void {
 		return;
 	}
 
-	app.workspace
-		.getLeaf()
-		.openFile(file);
+	app.workspace.getLeaf().openFile(file);
 }
