@@ -7,7 +7,8 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
-    "semantic-release": "semantic-release"
+    "semantic-release": "semantic-release",
+    "test": "vitest"
   },
   "keywords": [],
   "author": "Christian Bager Bach Houmann",
@@ -26,7 +27,8 @@
     "svelte": "^3.48.0",
     "svelte-preprocess": "^4.10.7",
     "tslib": "2.4.0",
-    "typescript": "4.7.4"
+    "typescript": "4.7.4",
+    "vitest": "^0.25.0"
   },
   "repository": {
     "type": "git",
