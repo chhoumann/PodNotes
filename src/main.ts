@@ -40,10 +40,12 @@ import DownloadedEpisodesController from "./store_controllers/DownloadedEpisodes
 import { TFile } from "obsidian";
 import { createMediaUrlObjectFromFilePath } from "./utility/createUrlObjectFromFilePath";
 import { LocalFilesController } from "./store_controllers/LocalFilesController";
+import PartialAppExtension from "./global";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
 	public settings: IPodNotesSettings;
+	public app: PartialAppExtension;
 
 	private view: MainView;
 
@@ -176,7 +178,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			name: "Reload PodNotes",
 			callback: () => {
 				const id = this.manifest.id;
-				//@ts-ignore
+
 				this.app.plugins
 					.disablePlugin(id)
 					.then(() => this.app.plugins.enablePlugin(id));
