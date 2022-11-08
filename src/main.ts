@@ -38,7 +38,7 @@ import downloadEpisodeWithProgressNotice from "./downloadEpisode";
 import DownloadedEpisode from "./types/DownloadedEpisode";
 import DownloadedEpisodesController from "./store_controllers/DownloadedEpisodesController";
 import { TFile } from "obsidian";
-import { createMediaUrlObjectFromFilePath } from "./utility/createUrlObjectFromFilePath";
+import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
 import { LocalFilesController } from "./store_controllers/LocalFilesController";
 import PartialAppExtension from "./global";
 
