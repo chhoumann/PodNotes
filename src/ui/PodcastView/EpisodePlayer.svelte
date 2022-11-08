@@ -22,7 +22,7 @@
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import { Episode } from "src/types/Episode";
 	import { ViewState } from "src/types/ViewState";
-	import { createUrlObjectFromFilePath } from "src/utility/createUrlObjectFromFilePath";
+	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
@@ -159,7 +159,7 @@
 			const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
 			if (!downloadedEpisode) return '';
 
-			return createUrlObjectFromFilePath(downloadedEpisode.filePath);
+			return createMediaUrlObjectFromFilePath(downloadedEpisode.filePath);
 		} else {
 			return episode.streamUrl;
 		}
