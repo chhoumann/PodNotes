@@ -1,9 +1,9 @@
-name: Release
+name: Test
 on: push
 
 jobs:
-  release:
-    name: Release
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
