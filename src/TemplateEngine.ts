@@ -49,7 +49,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 			if (prependToLines) {
 				return htmlToMarkdown(episode.description)
 					.split("\n")
-					.map(prepend(prependToLines))
+					.map((str) => `${prependToLines}${str}`)
 					.join("\n")
 			}
 
@@ -62,10 +62,6 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 		"podcast": episode.podcastName,
 		"artwork": episode.artworkUrl ?? "",
 	});
-}
-
-function prepend(prepend: string) {
-	return (str: string) => `${prepend}${str}`;
 }
 
 export function TimestampTemplateEngine(template: string) {
