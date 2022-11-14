@@ -3,6 +3,7 @@ import { FilePathTemplateEngine, NoteTemplateEngine } from "./TemplateEngine";
 import { Episode } from "./types/Episode";
 import { get } from "svelte/store";
 import { plugin } from "./store";
+import addExtension from "./utility/addExtension";
 
 export default async function createPodcastNote(
 	episode: Episode
@@ -14,43 +15,19 @@ export default async function createPodcastNote(
 		episode
 	);
 
-	const filePathDotMd = filePath.endsWith(".md")
-		? filePath
-		: `${filePath}.md`;
+	const filePathDotMd = addExtension(filePath, "md");
 
 	const content = NoteTemplateEngine(
 		pluginInstance.settings.note.template,
 		episode
 	);
 
-	const createOrGetFile: (
-		path: string,
-		content: string
-	) => Promise<TFile> = async (path: string, content: string) => {
-		const file = getPodcastNote(episode);
-
-		if (file) {
-			new Notice(
-				`Note for "${pluginInstance.api.podcast.title}" already exists`
-			);
-			return file;
-		}
-
-		const foldersInPath = path.split("/").slice(0, -1);
-		for (let i = 0; i < foldersInPath.length; i++) {
-			const folderPath = foldersInPath.slice(0, i + 1).join("/");
-			const folder = app.vault.getAbstractFileByPath(folderPath);
-
-			if (!folder) {
-				await app.vault.createFolder(folderPath);
-			}
-		}
-
-		return await app.vault.create(path, content);
-	};
-
 	try {
-		const file = await createOrGetFile(filePathDotMd, content);
+		const file = await createFileIfNotExists(
+			filePathDotMd,
+			content,
+			episode
+		);
 
 		app.workspace.getLeaf().openFile(file);
 	} catch (error) {
@@ -67,9 +44,7 @@ export function getPodcastNote(episode: Episode): TFile | null {
 		episode
 	);
 
-	const filePathDotMd = filePath.endsWith(".md")
-		? filePath
-		: `${filePath}.md`;
+	const filePathDotMd = addExtension(filePath, "md");
 	const file = app.vault.getAbstractFileByPath(filePathDotMd);
 
 	if (!file || !(file instanceof TFile)) {
@@ -88,4 +63,31 @@ export function openPodcastNote(epiosode: Episode): void {
 	}
 
 	app.workspace.getLeaf().openFile(file);
+}
+
+async function createFileIfNotExists(
+	path: string,
+	content: string,
+	episode: Episode,
+	createFolder = true
+): Promise<TFile> {
+	const file = getPodcastNote(episode);
+
+	if (file) {
+		new Notice(`Note for "${episode.title}" already exists`);
+
+		return file;
+	}
+
+	const foldersInPath = path.split("/").slice(0, -1);
+	for (let i = 0; i < foldersInPath.length; i++) {
+		const folderPath = foldersInPath.slice(0, i + 1).join("/");
+		const folder = app.vault.getAbstractFileByPath(folderPath);
+
+		if (!folder && createFolder) {
+			await app.vault.createFolder(folderPath);
+		}
+	}
+
+	return await app.vault.create(path, content);
 }

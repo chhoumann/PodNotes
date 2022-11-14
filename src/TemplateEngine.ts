@@ -9,77 +9,94 @@ interface Tags {
 	[tag: string]: string | ((...args: unknown[]) => string);
 }
 
-function TemplateEngine(template: string, tags: Tags) {
-	return template.replace(/\{\{(.*?)(:\s*?.+?)?\}\}/g, (match: string, tagId: string, params: string) => {
-		const tagValue = tags[tagId.toLowerCase()];
-		if (tagValue === null || tagValue === undefined) {
-			const fuse = new Fuse(Object.keys(tags), {
-				shouldSort: true,
-				findAllMatches: false,
-				threshold: 0.4,
-				isCaseSensitive: false,
-			});
+type AddTagFn = (tag: Lowercase<string>, value: string | ((...args: unknown[]) => string)) => void;
+type ReplacerFn = (template: string) => string;
 
-			const similarTag = fuse.search(tagId);
+function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
+	const tags: Tags = {};
 
-			new Notice(`Tag ${tagId} is invalid.${similarTag.length > 0 ? ` Did you mean ${similarTag[0].item}?` : ""}`);
-			return match;
-		}
+	function addTag(tag: Lowercase<string>, value: string | ((...args: unknown[]) => string)): void {
+		tags[tag] = value;
+	}
+	
+	function replacer(template: string): string {
+		return template.replace(/\{\{(.*?)(:\s*?.+?)?\}\}/g, (match: string, tagId: string, params: string) => {
+			const tagValue = tags[tagId.toLowerCase()];
+			if (tagValue === null || tagValue === undefined) {
+				const fuse = new Fuse(Object.keys(tags), {
+					shouldSort: true,
+					findAllMatches: false,
+					threshold: 0.4,
+					isCaseSensitive: false,
+				});
 
-		if (typeof tagValue === 'function') {
-			if (params) {
-				// Remove initial colon with splice.
-				const splitParams = params.slice(1).split(',');
-				const args = Array.isArray(splitParams) ? splitParams : [params];
-				
-				return tagValue(...args);
+				const similarTag = fuse.search(tagId);
+
+				new Notice(`Tag ${tagId} is invalid.${similarTag.length > 0 ? ` Did you mean ${similarTag[0].item}?` : ""}`);
+				return match;
 			}
 
-			return tagValue();
-		}
+			if (typeof tagValue === 'function') {
+				if (params) {
+					// Remove initial colon with splice.
+					const splitParams = params.slice(1).split(',');
+					const args = Array.isArray(splitParams) ? splitParams : [params];
+				
+					return tagValue(...args);
+				}
+
+				return tagValue();
+			}
 		
-		return tagValue;
-	});
+			return tagValue;
+		});
+	}
+
+	return [replacer, addTag] as const;
 }
 
+
 export function NoteTemplateEngine(template: string, episode: Episode) {
-	return TemplateEngine(template, {
-		"title": episode.title,
-		"description": (prependToLines?: string) => {
+	const [replacer, addTag] = useTemplateEngine();
+
+	addTag('title', episode.title);
+	addTag('description', (prependToLines?: string) => {
 			if (prependToLines) {
 				return htmlToMarkdown(episode.description)
 					.split("\n")
-					.map(prepend(prependToLines))
+					.map((str) => `${prependToLines}${str}`)
 					.join("\n")
 			}
 
 			return htmlToMarkdown(episode.description)
-		},
-		"url": episode.url,
-		"date": (format?: string) => episode.episodeDate ?
+		});
+	addTag('safetitle', replaceIllegalFileNameCharactersInString(episode.title));
+	addTag('url', episode.url);
+	addTag('date', (format?: string) => episode.episodeDate ?
 			window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
-			: "",
-		"podcast": episode.podcastName,
-		"artwork": episode.artworkUrl ?? "",
-	});
-}
+			: "");
+	addTag('podcast', episode.podcastName);
+	addTag('artwork', episode.artworkUrl ?? "");
 
-function prepend(prepend: string) {
-	return (str: string) => `${prepend}${str}`;
+	return replacer(template);
 }
 
 export function TimestampTemplateEngine(template: string) {
-	return TemplateEngine(template, {
-		"time": (format?: string) => get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss"),
-		"linktime": (format?: string) => get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true),
-	});
+	const [replacer, addTag] = useTemplateEngine();
+
+	addTag('time', (format?: string) => get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss"))
+	addTag('linktime', (format?: string) => get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true))
+	
+	return replacer(template);
 }
 
 export function FilePathTemplateEngine(template: string, episode: Episode) {
-	return TemplateEngine(template, {
-		"title": replaceIllegalFileNameCharactersInString(episode.title),
-		"podcast": replaceIllegalFileNameCharactersInString(episode.podcastName),
-	});
+	const [replacer, addTag] = useTemplateEngine();
+
+	addTag('title', replaceIllegalFileNameCharactersInString(episode.title));
+	addTag('podcast', replaceIllegalFileNameCharactersInString(episode.podcastName));
+
+	return replacer(template);
 }
 
 export function DownloadPathTemplateEngine(template: string, episode: Episode) {
@@ -89,10 +106,12 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 		template.replace(templateExtension, '') :
 		template;
 
-	return TemplateEngine(templateWithoutExtension, {
-		"title": replaceIllegalFileNameCharactersInString(episode.title),
-		"podcast": replaceIllegalFileNameCharactersInString(episode.podcastName),
-	});
+	const [replacer, addTag] = useTemplateEngine();
+
+	addTag("title", replaceIllegalFileNameCharactersInString(episode.title));
+	addTag("podcast", replaceIllegalFileNameCharactersInString(episode.podcastName));
+
+	return replacer(templateWithoutExtension);
 }
 
 function replaceIllegalFileNameCharactersInString(string: string) {
