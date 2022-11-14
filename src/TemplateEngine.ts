@@ -70,6 +70,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 
 			return htmlToMarkdown(episode.description)
 		});
+	addTag('safetitle', replaceIllegalFileNameCharactersInString(episode.title));
 	addTag('url', episode.url);
 	addTag('date', (format?: string) => episode.episodeDate ?
 			window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
