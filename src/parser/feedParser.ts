@@ -85,7 +85,7 @@ export default class FeedParser {
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = item.querySelector("image");
 
-		if (!titleEl || !streamUrlEl || !descriptionEl || !pubDateEl) {
+		if (!titleEl || !streamUrlEl || !pubDateEl) {
 			console.log(titleEl, streamUrlEl, linkEl, descriptionEl, pubDateEl);
 			throw new Error("Invalid RSS feed");
 		}
@@ -93,7 +93,7 @@ export default class FeedParser {
 		const title = titleEl.textContent || "";
 		const streamUrl = streamUrlEl.getAttribute("url") || "";
 		const url = linkEl?.textContent || "";
-		const description = descriptionEl.textContent || "";
+		const description = descriptionEl?.textContent || "";
 		const pubDate = new Date(pubDateEl.textContent as string);
 		const artworkUrl = itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 
