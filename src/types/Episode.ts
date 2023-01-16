@@ -3,6 +3,7 @@ export interface Episode {
 	streamUrl: string
 	url: string,
 	description: string,
+	content: string,
 	podcastName: string,
 	feedUrl?: string,
 	artworkUrl?: string;

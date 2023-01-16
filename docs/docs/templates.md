@@ -19,6 +19,9 @@ This template will be used to create the note text. You can use the following sy
 - `{{safeTitle}}`: The title of the podcast episode, but with all special characters removed (like `{{title}}` in file path templates).
 - `{{description}}`: The description of the podcast episode.
 	-  You can use `{{description:> }}` to prepend each new line with a `>` (to put the entire description in a blockquote).
+- `{{content}}`: The content of the podcast episode from `<content:encoded>`. Show notes will sometimes land here.
+	-  You can use `{{content:> }}` to prepend each new line with a `>` (to put the entire content in a blockquote).
+
 - `{{podcast}}`: The name of the podcast.
 - `{{url}}`: The URL of the podcast episode.
 - `{{date}}`: The publish date of the podcast episode.

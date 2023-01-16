@@ -233,6 +233,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 function getRandomEpisode(): Episode {
 	const fallbackDemoObj = {
 		description: "demo",
+		content: "demo",
 		podcastName: "demo",
 		title: "demo",
 		url: "demo",
