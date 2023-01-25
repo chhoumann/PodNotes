@@ -110,6 +110,20 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		).on();
 
 		this.addCommand({
+			id: "podnotes-show-leaf",
+			name: "Show PodNotes",
+			checkCallback(checking: boolean) {
+				if (checking) {
+					return !app.workspace.getLeavesOfType(VIEW_TYPE).length;
+				}
+
+				app.workspace.getRightLeaf(false).setViewState({
+					type: VIEW_TYPE,
+				});
+			}
+		})
+
+		this.addCommand({
 			id: "start-playing",
 			name: "Play Podcast",
 			checkCallback: (checking) => {
