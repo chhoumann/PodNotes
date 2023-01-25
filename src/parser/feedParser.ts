@@ -82,6 +82,7 @@ export default class FeedParser {
 		const streamUrlEl = item.querySelector("enclosure");
 		const linkEl = item.querySelector("link");
 		const descriptionEl = item.querySelector("description");
+		const contentEl = item.querySelector("*|encoded")
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = item.querySelector("image");
 
@@ -94,6 +95,7 @@ export default class FeedParser {
 		const streamUrl = streamUrlEl.getAttribute("url") || "";
 		const url = linkEl?.textContent || "";
 		const description = descriptionEl?.textContent || "";
+		const content = contentEl?.textContent || "";
 		const pubDate = new Date(pubDateEl.textContent as string);
 		const artworkUrl = itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 
@@ -102,6 +104,7 @@ export default class FeedParser {
 			streamUrl,
 			url: url || this.feed?.url || "",
 			description,
+			content,
 			podcastName: this.feed?.title || "",
 			artworkUrl,
 			episodeDate: pubDate,

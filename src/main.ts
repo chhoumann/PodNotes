@@ -304,6 +304,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 							const localEpisode: Episode = {
 								title: file.basename,
 								description: "",
+								content: "",
 								podcastName: "local file",
 								url: app.fileManager.generateMarkdownLink(
 									file,

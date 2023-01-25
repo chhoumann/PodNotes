@@ -19,6 +19,7 @@ export class PocketCastsParser extends Parser {
         const {title, podcastName} = this.parseTitleAndPodcastName(headingEl.innerText, titleEl.getAttribute('content') || "");
 		const url = urlEl?.getAttribute('content') || "";
 		const description = descriptionEl?.getAttribute('content') || "";
+		const content = "";
 		const streamUrl = audioPlayerEl?.getAttribute('src');
 		const episodeDate = episodeDateEl?.textContent;
 		const artwork = artworkEl?.item(0)?.getAttribute('src') || undefined;
@@ -36,6 +37,7 @@ export class PocketCastsParser extends Parser {
 			episodeDate: (episodeDate && new Date(episodeDate)) || undefined,
 			artworkUrl: artwork,
 			description,
+			content,
 			feedUrl: rssLink?.getAttribute('href') || undefined,
 		};
 	}
