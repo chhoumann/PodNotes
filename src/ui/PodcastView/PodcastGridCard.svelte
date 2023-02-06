@@ -24,6 +24,7 @@
 		width: 100%;
 		height: 100%;
 		cursor: pointer !important;
+		object-fit: cover;
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;

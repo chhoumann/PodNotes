@@ -19,6 +19,7 @@
 </script>
 
 {#if loading || loaded}
+<div class="pn_image_container">
 	<img 
 		on:click={e => onClick(e)} 
 		{src} 
@@ -29,6 +30,7 @@
 		on:load={() => {loaded = true; loading = false;}}
 		on:error={() => {failed = true; loading = false;}}
 	/>
+</div>
 {:else if failed}
 	<slot name="fallback" />
 {/if}
@@ -36,5 +38,13 @@
 <style>
 	img:hover {
 		cursor: pointer !important;
+	}
+
+	.pn_image_container {
+		width: 100%;
+		height: 100%;
+		display: block;
+		position: relative;
+		overflow: hidden;
 	}
 </style>
