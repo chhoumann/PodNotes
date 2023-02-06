@@ -1,4 +1,4 @@
-import { PodcastFeed } from 'src/types/PodcastFeed';
+import { PodcastFeed } from "src/types/PodcastFeed";
 import { requestUrl } from "obsidian";
 import { Episode } from "src/types/Episode";
 
@@ -14,7 +14,7 @@ export default class FeedParser {
 
 		const items = body.querySelectorAll("item");
 
-		const item = Array.from(items).find(item => {
+		const item = Array.from(items).find((item) => {
 			const parsed = this.parseItem(item);
 			return parsed.title === title;
 		});
@@ -23,8 +23,8 @@ export default class FeedParser {
 			throw new Error("Could not find episode");
 		}
 
-		const episode =  this.parseItem(item);
-		
+		const episode = this.parseItem(item);
+
 		const feed = await this.getFeed(url);
 
 		if (!episode.artworkUrl) {
@@ -54,14 +54,15 @@ export default class FeedParser {
 		const titleEl = body.querySelector("title");
 		const linkEl = body.querySelector("link");
 		const itunesImageEl = body.querySelector("image");
-		
+
 		if (!titleEl || !linkEl) {
 			throw new Error("Invalid RSS feed");
 		}
 
 		const title = titleEl.textContent || "";
-		const artworkUrl =  itunesImageEl?.getAttribute("href") ||
-			itunesImageEl?.querySelector('url')?.textContent ||
+		const artworkUrl =
+			itunesImageEl?.getAttribute("href") ||
+			itunesImageEl?.querySelector("url")?.textContent ||
 			"";
 
 		return {
@@ -74,21 +75,27 @@ export default class FeedParser {
 	protected parsePage(page: Document): Episode[] {
 		const items = page.querySelectorAll("item");
 
-		return Array.from(items).map(this.parseItem.bind(this));
+		function isEpisode(ep: Episode | null): ep is Episode {
+			return !!ep;
+		}
+
+		return Array.from(items)
+			.map(this.parseItem.bind(this))
+			.filter(isEpisode);
 	}
 
-	protected parseItem(item: Element): Episode {
+	protected parseItem(item: Element): Episode | null {
 		const titleEl = item.querySelector("title");
 		const streamUrlEl = item.querySelector("enclosure");
 		const linkEl = item.querySelector("link");
 		const descriptionEl = item.querySelector("description");
-		const contentEl = item.querySelector("*|encoded")
+		const contentEl = item.querySelector("*|encoded");
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = item.querySelector("image");
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
 			console.log(titleEl, streamUrlEl, linkEl, descriptionEl, pubDateEl);
-			throw new Error("Invalid RSS feed");
+			return null;
 		}
 
 		const title = titleEl.textContent || "";
@@ -97,7 +104,10 @@ export default class FeedParser {
 		const description = descriptionEl?.textContent || "";
 		const content = contentEl?.textContent || "";
 		const pubDate = new Date(pubDateEl.textContent as string);
-		const artworkUrl = itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
+		const artworkUrl =
+			itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
+
+		console.log(`Got this far`, title);
 
 		return {
 			title,
@@ -109,7 +119,7 @@ export default class FeedParser {
 			artworkUrl,
 			episodeDate: pubDate,
 			feedUrl: this.feed?.url || "",
-		}
+		};
 	}
 
 	private async parseFeed(feedUrl: string): Promise<Document> {
