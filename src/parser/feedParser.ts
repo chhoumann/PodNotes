@@ -11,12 +11,13 @@ export default class FeedParser {
 
 	public async findItemByTitle(title: string, url: string): Promise<Episode> {
 		const body = await this.parseFeed(url);
-
 		const items = body.querySelectorAll("item");
 
 		const item = Array.from(items).find((item) => {
 			const parsed = this.parseItem(item);
-			return parsed.title === title;
+			const isMatch = parsed && parsed.title === title;
+
+			return isMatch;
 		});
 
 		if (!item) {
@@ -24,8 +25,11 @@ export default class FeedParser {
 		}
 
 		const episode = this.parseItem(item);
-
 		const feed = await this.getFeed(url);
+
+		if (!episode) {
+			throw new Error("Episode is invalid.");
+		}
 
 		if (!episode.artworkUrl) {
 			episode.artworkUrl = feed.artworkUrl;
