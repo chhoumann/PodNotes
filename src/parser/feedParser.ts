@@ -111,8 +111,6 @@ export default class FeedParser {
 		const artworkUrl =
 			itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 
-		console.log(`Got this far`, title);
-
 		return {
 			title,
 			streamUrl,
