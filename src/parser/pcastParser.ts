@@ -47,8 +47,6 @@ export class PocketCastsParser extends Parser {
 			return {title: heading, podcastName: meta.replace(`${heading} - `, "")};
 		}
 
-		console.log(meta);
-
 		return {title: heading, podcastName: ""};
 	}
 }

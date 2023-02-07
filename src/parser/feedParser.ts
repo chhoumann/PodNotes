@@ -98,7 +98,6 @@ export default class FeedParser {
 		const itunesImageEl = item.querySelector("image");
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
-			console.log(titleEl, streamUrlEl, linkEl, descriptionEl, pubDateEl);
 			return null;
 		}
 
