@@ -41,6 +41,7 @@ import { TFile } from "obsidian";
 import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
 import { LocalFilesController } from "./store_controllers/LocalFilesController";
 import PartialAppExtension from "./global";
+import { LocalEpisode } from "./types/LocalEpisode";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -266,11 +267,20 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					return;
 				}
 
-				const feedparser = new FeedParser();
-				const episode = await feedparser.findItemByTitle(
-					decodedName,
-					url
-				);
+				const localFile = app.vault.getAbstractFileByPath(url);
+				
+				let episode: Episode | undefined;
+
+				if (localFile) {
+					episode = localFiles.getLocalEpisode(decodedName);
+				} else {
+					const feedparser = new FeedParser();
+					
+					episode = await feedparser.findItemByTitle(
+						decodedName,
+						url
+					);
+				}
 
 				if (!episode) {
 					new Notice("Episode not found");
@@ -301,7 +311,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 						.setIcon("play")
 						.setTitle("Play with PodNotes")
 						.onClick(async () => {
-							const localEpisode: Episode = {
+							const localEpisode: LocalEpisode = {
 								title: file.basename,
 								description: "",
 								content: "",
@@ -327,10 +337,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 									file.path,
 									file.stat.size
 								);
-								localFiles.update((localFiles) => {
-									localFiles.episodes.push(localEpisode);
-									return localFiles;
-								});
+
+								localFiles.addEpisode(localEpisode);
 							}
 
 							// Fixes where the episode won't play if it has been played.
