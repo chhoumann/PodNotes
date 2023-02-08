@@ -105,6 +105,9 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 
 	addTag('title', replaceIllegalFileNameCharactersInString(episode.title));
 	addTag('podcast', replaceIllegalFileNameCharactersInString(episode.podcastName));
+	addTag('date', (format?: string) => episode.episodeDate ?
+			window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+			: "");
 
 	return replacer(template);
 }
