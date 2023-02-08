@@ -160,9 +160,9 @@
 			if (!downloadedEpisode) return '';
 
 			return createMediaUrlObjectFromFilePath(downloadedEpisode.filePath);
-		} else {
-			return episode.streamUrl;
 		}
+		
+		return episode.streamUrl;
 	}
 </script>
 

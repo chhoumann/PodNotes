@@ -262,27 +262,27 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				if (episodeIsPlaying) {
 					viewState.set(ViewState.Player);
 					this.api.currentTime = parseFloat(time);
+
+					return;
 				}
 
-				if (!episodeIsPlaying) {
-					const pcastParser = new FeedParser();
-					const episode = await pcastParser.findItemByTitle(
-						decodedName,
-						url
-					);
+				const feedparser = new FeedParser();
+				const episode = await feedparser.findItemByTitle(
+					decodedName,
+					url
+				);
 
-					if (!episode) {
-						new Notice("Episode not found");
-						return;
-					}
-
-					currentEpisode.set(episode);
-					viewState.set(ViewState.Player);
-
-					new Notice(
-						"Episode found, playing now. Please click timestamp again to play at specific time."
-					);
+				if (!episode) {
+					new Notice("Episode not found");
+					return;
 				}
+
+				currentEpisode.set(episode);
+				viewState.set(ViewState.Player);
+
+				new Notice(
+					"Episode found, playing now. Please click timestamp again to play at specific time."
+				);
 			}
 		);
 
