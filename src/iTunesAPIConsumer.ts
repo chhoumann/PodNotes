@@ -11,9 +11,10 @@ export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]>
 	const res = await requestUrl({ url: url.href });
 	const data = res.json.results;
 
-	return data.map((d: { collectionName: string, feedUrl: string, artworkUrl100: string }) => ({
+	return data.map((d: { collectionName: string, feedUrl: string, artworkUrl100: string, collectionId: string }) => ({
 		title: d.collectionName,
 		url: d.feedUrl,
-		artworkUrl: d.artworkUrl100
+		artworkUrl: d.artworkUrl100,
+		collectionId: d.collectionId
 	}));
 }

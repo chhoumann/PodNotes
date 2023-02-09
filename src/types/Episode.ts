@@ -8,4 +8,5 @@ export interface Episode {
 	feedUrl?: string,
 	artworkUrl?: string;
 	episodeDate?: Date;
+	itunesTitle?: string;
 }

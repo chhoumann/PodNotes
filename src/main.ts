@@ -10,7 +10,13 @@ import {
 	savedFeeds,
 	viewState,
 } from "src/store";
-import { Notice, Plugin, TAbstractFile, WorkspaceLeaf } from "obsidian";
+import {
+	Notice,
+	Plugin,
+	requestUrl,
+	TAbstractFile,
+	WorkspaceLeaf,
+} from "obsidian";
 import { API } from "src/API/API";
 import { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
@@ -42,6 +48,7 @@ import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObject
 import { LocalFilesController } from "./store_controllers/LocalFilesController";
 import PartialAppExtension from "./global";
 import { LocalEpisode } from "./types/LocalEpisode";
+import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -121,8 +128,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				app.workspace.getRightLeaf(false).setViewState({
 					type: VIEW_TYPE,
 				});
-			}
-		})
+			},
+		});
 
 		this.addCommand({
 			id: "start-playing",
@@ -236,6 +243,76 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			},
 		});
 
+		this.addCommand({
+			id: "get-share-link-episode",
+			name: "Copy universal episode link to clipboard",
+			checkCallback: (checking) => {
+				if (checking) {
+					return !!this.api.podcast;
+				}
+
+				const api = this.api;
+				const { title, itunesTitle, podcastName, feedUrl } = api.podcast;
+
+				(async function () {
+					try {
+						const iTunesResponse = await queryiTunesPodcasts(
+							api.podcast.podcastName
+						);
+						const podcast = iTunesResponse.find(
+							(pod) =>
+								pod.title === podcastName && pod.url === feedUrl
+						);
+
+						if (!podcast || !podcast.collectionId) {
+							throw new Error(
+								"Failed to get podcast from iTunes."
+							);
+						}
+
+						const podLinkUrl = `https://pod.link/${podcast.collectionId}.json?limit=1000`;
+						const res = await requestUrl({
+							url: podLinkUrl,
+						});
+
+						if (res.status !== 200) {
+							throw new Error(
+								`Failed to get response from pod.link: ${podLinkUrl}`
+							);
+						}
+
+						const targetTitle = itunesTitle ?? title;
+
+						const ep = res.json.episodes.find(
+							(episode: {
+								episodeId: string;
+								title: string;
+								[key: string]: string;
+							}) => episode.title === targetTitle
+						);
+						if (!ep) {
+							throw new Error(
+								`Failed to find episode "${targetTitle}" on pod.link. URL: ${podLinkUrl}`
+							);
+						}
+
+						window.navigator.clipboard.writeText(
+							`https://pod.link/${podcast.collectionId}/episode/${ep.episodeId}`
+						);
+
+						new Notice(
+							"Universal episode link copied to clipboard."
+						);
+					} catch (error) {
+						new Notice("Could not get podcast link.");
+						console.error(error);
+
+						return;
+					}
+				})();
+			},
+		});
+
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
 		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {
@@ -268,14 +345,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				}
 
 				const localFile = app.vault.getAbstractFileByPath(url);
-				
+
 				let episode: Episode | undefined;
 
 				if (localFile) {
 					episode = localFiles.getLocalEpisode(decodedName);
 				} else {
 					const feedparser = new FeedParser();
-					
+
 					episode = await feedparser.findItemByTitle(
 						decodedName,
 						url
