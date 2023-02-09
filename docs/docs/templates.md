@@ -6,8 +6,8 @@ This requires you to have defined a template for both the file path and note tex
 ## File path
 This template will be used to create the file path for the note. You can use the following syntax:
 
-- `{{title}}`: The title of the podcast episode.
-- `{{podcast}}`: The name of the podcast.
+- `{{title}}`: The title of the podcast episode. You can add a format, e.g. `{{title:_}}` to replace spaces with underscores.
+- `{{podcast}}`: The name of the podcast. You can add a format, e.g. `{{podcast:_}}` to replace spaces with underscores.
 - `{{date}}`: The publish date of the podcast episode. Please note that this is not always available, and will be empty if it is not.
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
 
