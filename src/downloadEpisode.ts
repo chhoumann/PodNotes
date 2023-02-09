@@ -1,4 +1,4 @@
-import { Notice } from "obsidian";
+import { Notice, requestUrl } from "obsidian";
 import { downloadedEpisodes } from "./store";
 import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import { Episode } from "./types/Episode";
@@ -13,38 +13,21 @@ async function downloadFile(
 	}>
 ) {
 	try {
-		const response = await fetch(url);
-		const reader = response.body?.getReader();
-		if (!reader) {
-			throw new Error("No reader");
+		const response = await requestUrl({ url, method: "GET" });
+
+		if (response.status !== 200) {
+			throw new Error("Could not download episode.");
 		}
 
-		const contentLength = +response.headers.get('Content-Length')!;
-
-		const chunks = [];
-		let receivedLength = 0;
-
-		// eslint-disable-next-line no-constant-condition
-		while (true) {
-			const { done, value } = await reader.read();
-
-			if (done) {
-				break;
-			}
-
-			chunks.push(value);
-			receivedLength += value.length;
-
-			options?.onProgress?.(receivedLength, contentLength);
-		}
+		const contentLength = response.arrayBuffer.byteLength;
 
 		options?.onFinished?.();
 
 		return {
-			blob: new Blob(chunks, { type: response.headers.get('Content-Type') ?? "" }),
+			blob: new Blob([response.arrayBuffer], { type: response.headers['content-type'] ?? "" }),
 			contentLength,
-			receivedLength,
-			responseUrl: response.url,
+			receivedLength: contentLength,
+			responseUrl: url,
 		};
 	} catch (error) {
 		throw new Error(`Failed to download ${url}: ${error.message}`);
@@ -87,6 +70,8 @@ export default async function downloadEpisodeWithProgressNotice(episode: Episode
 			update(bodyEl => bodyEl.createEl('p', { text: 'Download complete!' }));
 		}
 	});
+
+	console.log(blob);
 
 	if (!blob.type.contains('audio')) {
 		throw new Error('Not an audio file');
