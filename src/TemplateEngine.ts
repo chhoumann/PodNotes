@@ -103,8 +103,22 @@ export function TimestampTemplateEngine(template: string) {
 export function FilePathTemplateEngine(template: string, episode: Episode) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	addTag('title', replaceIllegalFileNameCharactersInString(episode.title));
-	addTag('podcast', replaceIllegalFileNameCharactersInString(episode.podcastName));
+	addTag('title', (whitespaceReplacement?: string) => {
+		const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
+		if (whitespaceReplacement) {
+			return legalTitle.replace(/\s+/g, whitespaceReplacement)
+		}
+
+		return legalTitle;
+	});
+	addTag('podcast', (whitespaceReplacement?: string) => {
+		const legalName = replaceIllegalFileNameCharactersInString(episode.podcastName);
+		if (whitespaceReplacement) {
+			return legalName.replace(/\s+/g, whitespaceReplacement)
+		}
+
+		return legalName;
+	});
 	addTag('date', (format?: string) => episode.episodeDate ?
 			window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
 			: "");
