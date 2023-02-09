@@ -3,6 +3,7 @@ repo_url: https://github.com/chhoumann/podnotes
 edit_uri: edit/master/docs/docs
 nav:
     - Home: index.md
+    - Commands: commands.md
     - Podcasts: podcasts.md
     - 'Local files': local_files.md
     - 'Notes':
