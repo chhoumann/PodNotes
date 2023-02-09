@@ -96,6 +96,7 @@ export default class FeedParser {
 		const contentEl = item.querySelector("*|encoded");
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = item.querySelector("image");
+		const itunesTitleEl = item.getElementsByTagName('itunes:title')[0];
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
 			return null;
@@ -109,6 +110,7 @@ export default class FeedParser {
 		const pubDate = new Date(pubDateEl.textContent as string);
 		const artworkUrl =
 			itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
+		const itunesTitle = itunesTitleEl?.textContent;
 
 		return {
 			title,
@@ -120,6 +122,7 @@ export default class FeedParser {
 			artworkUrl,
 			episodeDate: pubDate,
 			feedUrl: this.feed?.url || "",
+			itunesTitle: itunesTitle || ""
 		};
 	}
 
