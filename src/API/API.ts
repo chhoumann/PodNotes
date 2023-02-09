@@ -77,6 +77,10 @@ export class API implements IAPI {
 		isPaused.update((_) => true);
 	}
 
+	togglePlayback(): void { 
+		isPaused.update((isPaused) => !isPaused);
+	}
+
 	skipBackward(): void {
 		const skipBackLen = get(plugin).settings.skipBackwardLength;
 		this.currentTime -= skipBackLen;

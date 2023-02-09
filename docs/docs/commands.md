@@ -11,6 +11,9 @@ This will start playback if the current episode is paused.
 ## Stop Podcast
 This will stop playback if the current episode is playing.
 
+## Toggle playback
+This will toggle playback between playing and paused.
+
 ## Skip Backward
 This will skip the current episode back by the amount of seconds specified in the settings.
 
