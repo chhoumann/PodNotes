@@ -1,4 +1,3 @@
-import FeedParser from "src/parser/feedParser";
 import {
 	currentEpisode,
 	downloadedEpisodes,
@@ -49,6 +48,7 @@ import { LocalFilesController } from "./store_controllers/LocalFilesController";
 import PartialAppExtension from "./global";
 import { LocalEpisode } from "./types/LocalEpisode";
 import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
+import podNotesURIHandler from "./URIHandler";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -325,52 +325,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.registerObsidianProtocolHandler(
 			"podnotes",
-			async ({ url, episodeName, time }) => {
-				if (!url || !episodeName || !time) {
-					new Notice(
-						"URL, episode name, and timestamp are required to play an episode"
-					);
-					return;
-				}
-
-				const decodedName = episodeName.replace(/\+/g, " ");
-				const currentEp = get(currentEpisode);
-				const episodeIsPlaying = currentEp?.title === decodedName;
-
-				if (episodeIsPlaying) {
-					viewState.set(ViewState.Player);
-					this.api.currentTime = parseFloat(time);
-
-					return;
-				}
-
-				const localFile = app.vault.getAbstractFileByPath(url);
-
-				let episode: Episode | undefined;
-
-				if (localFile) {
-					episode = localFiles.getLocalEpisode(decodedName);
-				} else {
-					const feedparser = new FeedParser();
-
-					episode = await feedparser.findItemByTitle(
-						decodedName,
-						url
-					);
-				}
-
-				if (!episode) {
-					new Notice("Episode not found");
-					return;
-				}
-
-				currentEpisode.set(episode);
-				viewState.set(ViewState.Player);
-
-				new Notice(
-					"Episode found, playing now. Please click timestamp again to play at specific time."
-				);
-			}
+			podNotesURIHandler
 		);
 
 		this.registerEvent(
