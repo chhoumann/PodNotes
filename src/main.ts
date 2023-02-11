@@ -244,6 +244,18 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			},
 		});
 
+		this.addCommand({
+			id: 'podnotes-toggle-playback',
+			name: 'Toggle playback',
+			checkCallback: (checking) => {
+				if (checking) {
+					return !!this.api.podcast;
+				}
+
+				this.api.togglePlayback();
+			}
+		})
+
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
 		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {

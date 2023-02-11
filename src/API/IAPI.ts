@@ -10,6 +10,7 @@ export interface IAPI {
 	
 	start(): void;
 	stop(): void;
+	togglePlayback(): void;
 
 	skipBackward(): void;
 	skipForward(): void;
