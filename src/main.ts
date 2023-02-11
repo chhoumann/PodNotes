@@ -7,13 +7,9 @@ import {
 	playlists,
 	queue,
 	savedFeeds,
-	viewState,
 } from "src/store";
 import {
-	Notice,
 	Plugin,
-	requestUrl,
-	TAbstractFile,
 	WorkspaceLeaf,
 } from "obsidian";
 import { API } from "src/API/API";
@@ -23,7 +19,6 @@ import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { plugin } from "./store";
-import { get } from "svelte/store";
 import { IPodNotes } from "./types/IPodNotes";
 import { EpisodeStatusController } from "./store_controllers/EpisodeStatusController";
 import { StoreController } from "./types/StoreController";
@@ -36,19 +31,16 @@ import { QueueController } from "./store_controllers/QueueController";
 import { FavoritesController } from "./store_controllers/FavoritesController";
 import { Episode } from "./types/Episode";
 import CurrentEpisodeController from "./store_controllers/CurrentEpisodeController";
-import { ViewState } from "./types/ViewState";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import createPodcastNote from "./createPodcastNote";
 import downloadEpisodeWithProgressNotice from "./downloadEpisode";
 import DownloadedEpisode from "./types/DownloadedEpisode";
 import DownloadedEpisodesController from "./store_controllers/DownloadedEpisodesController";
-import { TFile } from "obsidian";
-import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
 import { LocalFilesController } from "./store_controllers/LocalFilesController";
 import PartialAppExtension from "./global";
-import { LocalEpisode } from "./types/LocalEpisode";
-import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
 import podNotesURIHandler from "./URIHandler";
+import getContextMenuHandler from "./getContextMenuHandler";
+import getUniversalPodcastLink from "./getUniversalPodcastLink";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -251,65 +243,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					return !!this.api.podcast;
 				}
 
-				const api = this.api;
-				const { title, itunesTitle, podcastName, feedUrl } = api.podcast;
-
-				(async function () {
-					try {
-						const iTunesResponse = await queryiTunesPodcasts(
-							api.podcast.podcastName
-						);
-						const podcast = iTunesResponse.find(
-							(pod) =>
-								pod.title === podcastName && pod.url === feedUrl
-						);
-
-						if (!podcast || !podcast.collectionId) {
-							throw new Error(
-								"Failed to get podcast from iTunes."
-							);
-						}
-
-						const podLinkUrl = `https://pod.link/${podcast.collectionId}.json?limit=1000`;
-						const res = await requestUrl({
-							url: podLinkUrl,
-						});
-
-						if (res.status !== 200) {
-							throw new Error(
-								`Failed to get response from pod.link: ${podLinkUrl}`
-							);
-						}
-
-						const targetTitle = itunesTitle ?? title;
-
-						const ep = res.json.episodes.find(
-							(episode: {
-								episodeId: string;
-								title: string;
-								[key: string]: string;
-							}) => episode.title === targetTitle
-						);
-						if (!ep) {
-							throw new Error(
-								`Failed to find episode "${targetTitle}" on pod.link. URL: ${podLinkUrl}`
-							);
-						}
-
-						window.navigator.clipboard.writeText(
-							`https://pod.link/${podcast.collectionId}/episode/${ep.episodeId}`
-						);
-
-						new Notice(
-							"Universal episode link copied to clipboard."
-						);
-					} catch (error) {
-						new Notice("Could not get podcast link.");
-						console.error(error);
-
-						return;
-					}
-				})();
+				getUniversalPodcastLink(this.api);
 			},
 		});
 
@@ -323,67 +257,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
-		this.registerObsidianProtocolHandler(
-			"podnotes",
-			podNotesURIHandler
-		);
+		this.registerObsidianProtocolHandler("podnotes", podNotesURIHandler);
 
-		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, file: TAbstractFile) => {
-				if (!(file instanceof TFile)) return;
-				if (
-					!file.extension.match(
-						/mp3|mp4|wma|aac|wav|webm|aac|flac|m4a|/
-					)
-				)
-					return;
-
-				menu.addItem((item) =>
-					item
-						.setIcon("play")
-						.setTitle("Play with PodNotes")
-						.onClick(async () => {
-							const localEpisode: LocalEpisode = {
-								title: file.basename,
-								description: "",
-								content: "",
-								podcastName: "local file",
-								url: app.fileManager.generateMarkdownLink(
-									file,
-									""
-								),
-								streamUrl:
-									await createMediaUrlObjectFromFilePath(
-										file.path
-									),
-								episodeDate: new Date(file.stat.ctime),
-							};
-
-							if (
-								!downloadedEpisodes.isEpisodeDownloaded(
-									localEpisode
-								)
-							) {
-								downloadedEpisodes.addEpisode(
-									localEpisode,
-									file.path,
-									file.stat.size
-								);
-
-								localFiles.addEpisode(localEpisode);
-							}
-
-							// Fixes where the episode won't play if it has been played.
-							if (get(playedEpisodes)[file.basename]?.finished) {
-								playedEpisodes.markAsUnplayed(localEpisode);
-							}
-
-							currentEpisode.set(localEpisode);
-							viewState.set(ViewState.Player);
-						})
-				);
-			})
-		);
+		this.registerEvent(getContextMenuHandler());
 	}
 
 	onLayoutReady(): void {
