@@ -8,10 +8,7 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
-import {
-	Plugin,
-	WorkspaceLeaf,
-} from "obsidian";
+import { Plugin, WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
