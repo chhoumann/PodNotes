@@ -151,6 +151,9 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 
 		return legalName;
 	});
+	addTag('date', (format?: string) => episode.episodeDate ?
+			window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+			: "");
 
 	return replacer(templateWithoutExtension);
 }
