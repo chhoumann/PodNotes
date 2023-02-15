@@ -1,15 +1,15 @@
 import { Notice, ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
+import { IAPI } from "./API/IAPI";
 import FeedParser from "./parser/feedParser";
 import { currentEpisode, viewState, localFiles } from "./store";
 import { Episode } from "./types/Episode";
 import { ViewState } from "./types/ViewState";
 
-export default async function podNotesURIHandler({
-	url,
-	episodeName,
-	time,
-}: ObsidianProtocolData) {
+export default async function podNotesURIHandler(
+	{ url, episodeName, time }: ObsidianProtocolData,
+	api: IAPI
+) {
 	if (!url || !episodeName || !time) {
 		new Notice(
 			"URL, episode name, and timestamp are required to play an episode"
@@ -23,7 +23,7 @@ export default async function podNotesURIHandler({
 
 	if (episodeIsPlaying) {
 		viewState.set(ViewState.Player);
-		this.api.currentTime = parseFloat(time);
+		api.currentTime = parseFloat(time);
 
 		return;
 	}

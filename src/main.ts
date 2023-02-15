@@ -266,7 +266,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
-		this.registerObsidianProtocolHandler("podnotes", podNotesURIHandler);
+		this.registerObsidianProtocolHandler("podnotes", (action) => podNotesURIHandler(action, this.api));
 
 		this.registerEvent(getContextMenuHandler());
 	}
