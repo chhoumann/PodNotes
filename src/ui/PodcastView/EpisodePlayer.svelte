@@ -176,10 +176,10 @@
 			on:mouseleave={() => (isHoveringArtwork = false)}
 		>
 		 <Image 
-			class={"podcast-artwork" +
-				(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
+			class={"podcast-artwork"}
 			src={$currentEpisode.artworkUrl ?? ""}
 			alt={$currentEpisode.title}
+			opacity={(isHoveringArtwork || $isPaused) ? 0.5 : 1}
 		 >
 			<svelte:fragment slot="fallback">
 				<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
@@ -277,19 +277,19 @@
 </div>
 
 <style>
-	.episode-player {
+	:global(.episode-player) {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 	}
 
-	.episode-image-container {
+	:global(.episode-image-container) {
 		width:  100%;
 		height: auto;
 		padding: 5% 20%;
 	}
 
-	.hover-container {
+	:global(.hover-container) {
 		width:  15rem;
 		height: 15rem;
 		display: flex;
@@ -300,7 +300,7 @@
 		margin-right: auto;
 	}
 
-	.podcast-artwork {
+	:global(.podcast-artwork) {
 		width: 100%;
 		height: 100%;
 		background-size: cover;
@@ -309,7 +309,7 @@
 		position: absolute;
 	}
 
-	.podcast-artwork-placeholder {
+	:global(.podcast-artwork-placeholder) {
 		width: 100%;
 		height: 100%;
 		background-size: cover;
@@ -322,28 +322,28 @@
 	}
 
 	/* Some themes override this, so opting to force like so. */
-	.podcast-artwork:hover {
+	:global(.podcast-artwork:hover) {
 		cursor: pointer !important;
 	}
 
-	.podcast-artwork-overlay {
+	:global(.podcast-artwork-overlay) {
 		position: absolute;
 	}
 
-	.podcast-artwork-isloading-overlay {
+	:global(.podcast-artwork-isloading-overlay) {
 		position: absolute;
 		display: block;
 	}
 
-	.podcast-artwork-overlay:hover {
+	:global(.podcast-artwork-overlay:hover) {
 		cursor: pointer !important;
 	}
 
-	.opacity-50 {
+	:global(.opacity-50) {
 		opacity: 0.5;
 	}
 
-	.podcast-title {
+	:global(.podcast-title) {
 		font-size: 1.5rem;
 		font-weight: bold;
 		margin: 0%;
@@ -351,13 +351,13 @@
 		text-align: center;
 	}
 
-	.status-container {
+	:global(.status-container) {
 		display: flex;
 		align-items: center;
 		justify-content: space-around;
 	}
 
-	.controls-container {
+	:global(.controls-container) {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -366,7 +366,7 @@
 		margin-right: 25%;
 	}
 
-	.playbackrate-container {
+	:global(.playbackrate-container) {
 		display: flex;
 		align-items: center;
 		justify-content: space-around;
