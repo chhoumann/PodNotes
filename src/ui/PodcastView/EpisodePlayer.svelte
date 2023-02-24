@@ -286,12 +286,15 @@
 	:global(.episode-image-container) {
 		width:  100%;
 		height: auto;
-		padding: 5% 20%;
+		padding: 5% 0%;
 	}
 
 	:global(.hover-container) {
-		width:  15rem;
-		height: 15rem;
+		min-width:  10rem;
+		min-height: 10rem;
+		width: 100%;
+		height: 100%;
+		aspect-ratio: 1/1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
