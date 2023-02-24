@@ -40,10 +40,12 @@
 				class="podcast-episode-thumbnail"
 			/>
 		</div>
+	{:else if showEpisodeImage}
+		<div class="podcast-episode-thumbnail-container"></div>
 	{/if}
 	<div 
 		class="podcast-episode-information" 
-		style:flex-basis={showEpisodeImage ? "80%" : ""}
+		style:flex-basis={"80%"}
 	>
 		<span class="episode-item-date">{date.toUpperCase()}</span>
 		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
