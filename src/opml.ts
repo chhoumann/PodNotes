@@ -79,8 +79,9 @@ async function exportOPML(
 		);
 	} catch (error) {
 		new Notice(
-			"Unable to create podcast export file. See console for more details."
+			`Unable to create podcast export file:\n\n${error}`
 		);
+
 		console.error(error);
 	}
 }
