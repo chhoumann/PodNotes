@@ -23,6 +23,7 @@
 <div class="pn_image_container">
 	<img 
 		on:click={e => onClick(e)} 
+		draggable="false"
 		{src} 
 		{alt} 
 		class={_class}
