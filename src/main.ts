@@ -30,7 +30,7 @@ import { Episode } from "./types/Episode";
 import CurrentEpisodeController from "./store_controllers/CurrentEpisodeController";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import createPodcastNote from "./createPodcastNote";
-import downloadEpisodeWithProgressNotice from "./downloadEpisode";
+import downloadEpisodeWithNotice from "./downloadEpisode";
 import DownloadedEpisode from "./types/DownloadedEpisode";
 import DownloadedEpisodesController from "./store_controllers/DownloadedEpisodesController";
 import { LocalFilesController } from "./store_controllers/LocalFilesController";
@@ -177,10 +177,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				}
 
 				const episode = this.api.podcast;
-				downloadEpisodeWithProgressNotice(
-					episode,
-					this.settings.download.path
-				);
+				downloadEpisodeWithNotice(episode, this.settings.download.path);
 			},
 		});
 
@@ -245,16 +242,16 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		});
 
 		this.addCommand({
-			id: 'podnotes-toggle-playback',
-			name: 'Toggle playback',
+			id: "podnotes-toggle-playback",
+			name: "Toggle playback",
 			checkCallback: (checking) => {
 				if (checking) {
 					return !!this.api.podcast;
 				}
 
 				this.api.togglePlayback();
-			}
-		})
+			},
+		});
 
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
@@ -266,7 +263,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
-		this.registerObsidianProtocolHandler("podnotes", (action) => podNotesURIHandler(action, this.api));
+		this.registerObsidianProtocolHandler("podnotes", (action) =>
+			podNotesURIHandler(action, this.api)
+		);
 
 		this.registerEvent(getContextMenuHandler());
 	}
