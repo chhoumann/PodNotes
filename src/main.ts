@@ -38,6 +38,7 @@ import PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
 import getUniversalPodcastLink from "./getUniversalPodcastLink";
+import { IconType } from "./types/IconType";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -109,6 +110,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "podnotes-show-leaf",
 			name: "Show PodNotes",
+			icon: "podcast" as IconType,
 			checkCallback(checking: boolean) {
 				if (checking) {
 					return !app.workspace.getLeavesOfType(VIEW_TYPE).length;
@@ -123,6 +125,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "start-playing",
 			name: "Play Podcast",
+			icon: "play-circle" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return !this.api.isPlaying && !!this.api.podcast;
@@ -135,6 +138,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "stop-playing",
 			name: "Stop Podcast",
+			icon: "stop-circle" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return this.api.isPlaying && !!this.api.podcast;
@@ -147,6 +151,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "skip-backward",
 			name: "Skip Backward",
+			icon: "skip-back" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return this.api.isPlaying && !!this.api.podcast;
@@ -159,6 +164,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "skip-forward",
 			name: "Skip Forward",
+			icon: "skip-forward" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return this.api.isPlaying && !!this.api.podcast;
@@ -171,6 +177,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "download-playing-episode",
 			name: "Download Playing Episode",
+			icon: "download" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return !!this.api.podcast;
@@ -196,6 +203,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "capture-timestamp",
 			name: "Capture Timestamp",
+			icon: "clock" as IconType,
 			editorCheckCallback: (checking, editor, view) => {
 				if (checking) {
 					return (
@@ -216,6 +224,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "create-podcast-note",
 			name: "Create Podcast Note",
+			icon: "file-plus" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return (
@@ -232,6 +241,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "get-share-link-episode",
 			name: "Copy universal episode link to clipboard",
+			icon: "share" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return !!this.api.podcast;
@@ -244,6 +254,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "podnotes-toggle-playback",
 			name: "Toggle playback",
+			icon: "play" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
 					return !!this.api.podcast;
