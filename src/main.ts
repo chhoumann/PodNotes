@@ -8,7 +8,7 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
-import { Plugin, WorkspaceLeaf } from "obsidian";
+import { Plugin, requestUrl, TFile, WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
@@ -261,6 +261,83 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				}
 
 				this.api.togglePlayback();
+			},
+		});
+
+		this.addCommand({
+			id: "podnotes-transcribe",
+			name: "Transcribe episode",
+			callback: async () => {
+				const podcastFile = app.vault.getAbstractFileByPath(
+					`podcasts/The Daily Stoic - The Best New Ideas Come From Old Books..mp3`
+				);
+				if (!podcastFile || !(podcastFile instanceof TFile)) return;
+
+				const file = await app.vault.readBinary(podcastFile);
+
+				// https://stackoverflow.com/questions/74276173/how-to-send-multipart-form-data-payload-with-typescript-obsidian-library
+				const N = 16; // The length of our random boundry string
+				const randomBoundryString =
+					"podnotesboundary" +
+					Array(N + 1)
+						.join(
+							(
+								Math.random().toString(36) + "00000000000000000"
+							).slice(2, 18)
+						)
+						.slice(0, N);
+
+				// Construct the form data payload as a string
+				const pre_string = `------${randomBoundryString}\r\nContent-Disposition: form-data; name="audio_file"; filename="blob"\r\nContent-Type: "application/octet-stream"\r\n\r\n`;
+				const post_string = `\r\n------${randomBoundryString}--`;
+
+				const pre_string_encoded = new TextEncoder().encode(pre_string);
+				const post_string_encoded = new TextEncoder().encode(
+					post_string
+				);
+				const jsonWrapper = new TextEncoder().encode(`{"fileg: "`);
+				const jsonWrapperEnd = new TextEncoder().encode(`", "model": "whisper-1"}`);
+				const concatenated = await new Blob([
+					pre_string_encoded,
+					jsonWrapper,
+					file,
+					jsonWrapperEnd,
+					post_string_encoded,
+				]).arrayBuffer();
+
+				console.log("uploading")
+				const accountId = "FW25b6X";
+				const publicApiKey = "public_FW25b6XFQL3GddxZrqMriDPdBkN8";
+				const url = new URL(`https://api.upload.io/v2/accounts/${accountId}/uploads/binary`);
+				url.searchParams.append("fileName", podcastFile.name);
+				url.searchParams.append("folderPath", "/uploads");
+				const response = await requestUrl({
+					url: url.toString(),
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${publicApiKey}`,
+					},
+					contentType: `multipart/form-data; boundary=----${randomBoundryString}`,
+					body: concatenated,
+				});
+
+				const { fileUrl } = response.json;
+				console.log(`Uploaded to ${fileUrl}`)
+				console.log(`Transcribing...`)
+				const openAiResponse = await requestUrl({
+					url: "https://api.openai.com/v1/audio/transcriptions",
+					method: "POST",
+					headers: {
+						"Authorization": `Bearer ${"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"}`,
+						'Content-Type': `multipart/form-data; boundary=----${randomBoundryString}`
+					},
+					body: JSON.stringify({
+						file: concatenated,
+						model: "whisper-1"
+					})
+				});
+
+				console.log(openAiResponse.json);
 			},
 		});
 
