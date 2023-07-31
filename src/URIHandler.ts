@@ -29,7 +29,7 @@ export default async function podNotesURIHandler(
 	}
 	
 	const decodedUrl = url.replace(/\+/g, " ");
-  const localFile = app.vault.getAbstractFileByPath(decodedUrl);
+	const localFile = app.vault.getAbstractFileByPath(decodedUrl);
 
 	let episode: Episode | undefined;
 
