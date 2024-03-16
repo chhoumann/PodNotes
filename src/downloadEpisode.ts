@@ -71,8 +71,17 @@ export default async function downloadEpisodeWithNotice(
 	});
 
 	const fileExtension = await detectAudioFileExtension(blob);
+	if (!fileExtension) {
+		update((bodyEl) => {
+			bodyEl.createEl("p", {
+				text: `Could not determine file extension for downloaded file. Blob: ${blob.size} bytes.`,
+			});
+		});
 
-	if (!blob.type.contains("audio") || !fileExtension) {
+		throw new Error("Could not determine file extension");
+	}
+
+	if (!blob.type.contains("audio") && !fileExtension) {
 		update((bodyEl) => {
 			bodyEl.createEl("p", {
 				text: `Downloaded file is not an audio file. It is of type "${blob.type}". Blob: ${blob.size} bytes.`,
