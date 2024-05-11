@@ -106,7 +106,10 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
 			: ""
 	);
-	addTag("podcast", episode.podcastName);
+	addTag(
+		"podcast",
+		replaceIllegalFileNameCharactersInString(episode.podcastName)
+	);
 	addTag("artwork", episode.artworkUrl ?? "");
 
 	return replacer(template);
