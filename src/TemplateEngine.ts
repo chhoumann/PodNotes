@@ -77,7 +77,11 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 
 	addTag("title", episode.title);
 	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = reduceMultipleNewlines(htmlToMarkdown(episode.description));
+		// reduce multiple new lines
+		const sanitizeDescription = htmlToMarkdown(episode.description).replace(
+			/\n{3,}/g,
+			"\n\n"
+		);
 		if (prependToLines) {
 			return sanitizeDescription
 				.split("\n")
@@ -204,8 +208,4 @@ function replaceIllegalFileNameCharactersInString(string: string) {
 		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.]*/g, "") // Replace illegal file name characters with empty string
 		.replace(/\n/, " ") // replace newlines with spaces
 		.replace("  ", " "); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
-}
-
-function reduceMultipleNewlines(description: string) {
-	return description.replace(/\n{3,}/g, "\n\n");
 }
