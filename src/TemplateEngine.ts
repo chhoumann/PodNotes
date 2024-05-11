@@ -77,15 +77,15 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 
 	addTag("title", episode.title);
 	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = reduceMultipleNewlines(episode.description);
+		const sanitizeDescription = reduceMultipleNewlines(htmlToMarkdown(episode.description));
 		if (prependToLines) {
-			return htmlToMarkdown(sanitizeDescription)
+			return sanitizeDescription
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return htmlToMarkdown(sanitizeDescription);
+		return sanitizeDescription;
 	});
 	addTag("content", (prependToLines?: string) => {
 		if (prependToLines) {
