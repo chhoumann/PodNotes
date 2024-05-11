@@ -77,14 +77,15 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 
 	addTag("title", episode.title);
 	addTag("description", (prependToLines?: string) => {
+		const sanitizeDescription = reduceMultipleNewlines(episode.description);
 		if (prependToLines) {
-			return htmlToMarkdown(episode.description)
+			return htmlToMarkdown(sanitizeDescription)
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return htmlToMarkdown(episode.description);
+		return htmlToMarkdown(sanitizeDescription);
 	});
 	addTag("content", (prependToLines?: string) => {
 		if (prependToLines) {
@@ -203,4 +204,8 @@ function replaceIllegalFileNameCharactersInString(string: string) {
 		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.]*/g, "") // Replace illegal file name characters with empty string
 		.replace(/\n/, " ") // replace newlines with spaces
 		.replace("  ", " "); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
+}
+
+function reduceMultipleNewlines(description: string) {
+	return description.replace(/\n{3,}/g, "\n\n");
 }
