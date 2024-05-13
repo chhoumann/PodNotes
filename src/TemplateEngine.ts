@@ -77,14 +77,19 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 
 	addTag("title", episode.title);
 	addTag("description", (prependToLines?: string) => {
+		// reduce multiple new lines
+		const sanitizeDescription = htmlToMarkdown(episode.description).replace(
+			/\n{3,}/g,
+			"\n\n"
+		);
 		if (prependToLines) {
-			return htmlToMarkdown(episode.description)
+			return sanitizeDescription
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return htmlToMarkdown(episode.description);
+		return sanitizeDescription;
 	});
 	addTag("content", (prependToLines?: string) => {
 		if (prependToLines) {
@@ -106,7 +111,10 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
 			: ""
 	);
-	addTag("podcast", episode.podcastName);
+	addTag(
+		"podcast",
+		replaceIllegalFileNameCharactersInString(episode.podcastName)
+	);
 	addTag("artwork", episode.artworkUrl ?? "");
 
 	return replacer(template);
@@ -197,7 +205,7 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 
 function replaceIllegalFileNameCharactersInString(string: string) {
 	return string
-		.replace(/[\\,#%&{}/*<>$'":@\u2023|?]*/g, "") // Replace illegal file name characters with empty string
+		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.]*/g, "") // Replace illegal file name characters with empty string
 		.replace(/\n/, " ") // replace newlines with spaces
 		.replace("  ", " "); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
 }
