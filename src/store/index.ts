@@ -73,7 +73,7 @@ export const playedEpisodes = (function () {
 		},
 		markAsPlayed: (episode: Episode) => {
 			update((playedEpisodes) => {
-				const playedEpisode = playedEpisodes[episode.title];
+				const playedEpisode = playedEpisodes[episode.title] || episode;
 
 				if (playedEpisode) {
 					playedEpisode.time = playedEpisode.duration;
@@ -86,7 +86,7 @@ export const playedEpisodes = (function () {
 		},
 		markAsUnplayed: (episode: Episode) => {
 			update((playedEpisodes) => {
-				const playedEpisode = playedEpisodes[episode.title];
+				const playedEpisode = playedEpisodes[episode.title] || episode;
 
 				if (playedEpisode) {
 					playedEpisode.time = 0;
@@ -241,13 +241,13 @@ export const localFiles = function () {
 		set,
 		getLocalEpisode: (title: string): LocalEpisode | undefined => {
 			const ep =  get(store).episodes.find(ep => ep.title === title);
-			
+
 			return ep as LocalEpisode;
 		},
 		updateStreamUrl: (title: string, newUrl: string): void => {
 			store.update((playlist) => {
 				const idx = playlist.episodes.findIndex(ep => ep.title === title);
-				
+
 				if (idx !== -1) playlist.episodes[idx].streamUrl = newUrl;
 
 				return playlist;
