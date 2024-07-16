@@ -24,7 +24,10 @@ async function downloadFile(
 
 		return {
 			blob: new Blob([response.arrayBuffer], {
-				type: response.headers["content-type"] ?? response.headers["Content-Type"] ?? "",
+				type:
+					response.headers["content-type"] ??
+					response.headers["Content-Type"] ??
+					"",
 			}),
 			contentLength,
 			receivedLength: contentLength,
@@ -33,7 +36,7 @@ async function downloadFile(
 	} catch (error) {
 		const err = new Error(`Failed to download ${url}:\n\n${error.message}`);
 		options?.onError?.(err);
-		
+
 		throw err;
 	}
 }
@@ -52,7 +55,7 @@ export default async function downloadEpisodeWithNotice(
 		bodyEl.createEl("p", { text: "Downloading..." });
 	});
 
-	const { blob, responseUrl } = await downloadFile(episode.streamUrl, {
+	const { blob } = await downloadFile(episode.streamUrl, {
 		onFinished: () => {
 			update((bodyEl) =>
 				bodyEl.createEl("p", { text: "Download complete!" })
@@ -60,12 +63,25 @@ export default async function downloadEpisodeWithNotice(
 		},
 		onError: (error) => {
 			update((bodyEl) =>
-				bodyEl.createEl("p", { text: `Download failed: ${error.message}` })
+				bodyEl.createEl("p", {
+					text: `Download failed: ${error.message}`,
+				})
 			);
-		}
+		},
 	});
 
-	if (!blob.type.contains("audio")) {
+	const fileExtension = await detectAudioFileExtension(blob);
+	if (!fileExtension) {
+		update((bodyEl) => {
+			bodyEl.createEl("p", {
+				text: `Could not determine file extension for downloaded file. Blob: ${blob.size} bytes.`,
+			});
+		});
+
+		throw new Error("Could not determine file extension");
+	}
+
+	if (!blob.type.contains("audio") && !fileExtension) {
 		update((bodyEl) => {
 			bodyEl.createEl("p", {
 				text: `Downloaded file is not an audio file. It is of type "${blob.type}". Blob: ${blob.size} bytes.`,
@@ -76,13 +92,13 @@ export default async function downloadEpisodeWithNotice(
 	}
 
 	try {
-		update((bodyEl) => bodyEl.createEl("p", { text: `Creating file...` }));
+		update((bodyEl) => bodyEl.createEl("p", { text: "Creating file..." }));
 
 		await createEpisodeFile({
 			episode,
 			downloadPathTemplate,
 			blob,
-			responseUrl,
+			extension: fileExtension,
 		});
 
 		update((bodyEl) =>
@@ -134,15 +150,15 @@ async function createEpisodeFile({
 	episode,
 	downloadPathTemplate,
 	blob,
-	responseUrl,
+	extension,
 }: {
 	episode: Episode;
 	downloadPathTemplate: string;
 	blob: Blob;
-	responseUrl: string;
+	extension: string;
 }) {
 	const basename = DownloadPathTemplateEngine(downloadPathTemplate, episode);
-	const filePath = `${basename}.${getUrlExtension(responseUrl)}`;
+	const filePath = `${basename}.${extension}`;
 
 	const buffer = await blob.arrayBuffer();
 
@@ -162,7 +178,9 @@ export async function downloadEpisode(
 	try {
 		const { blob, responseUrl } = await downloadFile(episode.streamUrl);
 
-		if (!blob.type.contains("audio")) {
+		const fileExtension = getUrlExtension(responseUrl);
+
+		if (!blob.type.contains("audio") || !fileExtension) {
 			throw new Error("Not an audio file.");
 		}
 
@@ -170,11 +188,81 @@ export async function downloadEpisode(
 			episode,
 			downloadPathTemplate,
 			blob,
-			responseUrl,
+			extension: fileExtension,
 		});
 	} catch (error) {
 		throw new Error(
 			`Failed to download ${episode.title}: ${error.message}`
 		);
 	}
+}
+
+interface AudioSignature {
+	signature: number[];
+	mask?: number[];
+	fileExtension: string;
+}
+
+async function detectAudioFileExtension(blob: Blob): Promise<string | null> {
+	const audioSignatures: AudioSignature[] = [
+		{ signature: [0xff, 0xe0], mask: [0xff, 0xe0], fileExtension: "mp3" },
+		{ signature: [0x49, 0x44, 0x33], fileExtension: "mp3" },
+		{ signature: [0x52, 0x49, 0x46, 0x46], fileExtension: "wav" },
+		{ signature: [0x4f, 0x67, 0x67, 0x53], fileExtension: "ogg" },
+		{ signature: [0x66, 0x4c, 0x61, 0x43], fileExtension: "flac" },
+		{ signature: [0x4d, 0x34, 0x41, 0x20], fileExtension: "m4a" },
+		{
+			signature: [0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11],
+			fileExtension: "wma",
+		},
+		{
+			signature: [0x23, 0x21, 0x41, 0x4d, 0x52, 0x0a],
+			fileExtension: "amr",
+		},
+	];
+
+	return new Promise((resolve, reject) => {
+		const fileReader = new FileReader();
+		fileReader.onloadend = (e) => {
+			if (!e.target?.result) {
+				reject(new Error("No result from file reader"));
+				return;
+			}
+
+			const arr = new Uint8Array(e.target.result as ArrayBuffer);
+
+			for (const { signature, mask, fileExtension } of audioSignatures) {
+				let matches = true;
+				for (let i = 0; i < signature.length; i++) {
+					if (mask) {
+						if ((arr[i] & mask[i]) !== (signature[i] & mask[i])) {
+							matches = false;
+							break;
+						}
+					} else {
+						if (arr[i] !== signature[i]) {
+							matches = false;
+							break;
+						}
+					}
+				}
+				if (matches) {
+					resolve(fileExtension);
+					return;
+				}
+			}
+			resolve(null);
+		};
+
+		fileReader.onerror = () => {
+			reject(fileReader.error);
+		};
+
+		fileReader.readAsArrayBuffer(
+			blob.slice(
+				0,
+				Math.max(...audioSignatures.map((sig) => sig.signature.length))
+			)
+		);
+	});
 }
