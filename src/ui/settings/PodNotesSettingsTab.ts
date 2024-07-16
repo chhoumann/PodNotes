@@ -1,12 +1,12 @@
 import {
-	App,
+	type App,
 	MarkdownRenderer,
 	Notice,
 	PluginSettingTab,
 	Setting,
 	TFile,
 } from "obsidian";
-import PodNotes from "../../main";
+import type PodNotes from "../../main";
 import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
 import PlaylistManager from "./PlaylistManager.svelte";
 import {
@@ -16,7 +16,7 @@ import {
 } from "../../TemplateEngine";
 import { FilePathTemplateEngine } from "../../TemplateEngine";
 import { episodeCache, savedFeeds } from "src/store";
-import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 
@@ -58,7 +58,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		new Setting(settingsContainer)
 			.setName("Playlists")
 			.setHeading()
-			.setDesc(`Add playlists to gather podcast episodes.`);
+			.setDesc("Add playlists to gather podcast episodes.");
 
 		const playlistManagerContainer = settingsContainer.createDiv();
 		this.playlistManager = new PlaylistManager({
@@ -90,7 +90,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						this.plugin.settings.defaultPlaybackRate = value;
 						this.plugin.saveSettings();
 					})
-					.setDynamicTooltip()
+					.setDynamicTooltip(),
 			);
 	}
 
@@ -102,8 +102,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent
 					.setValue(`${this.plugin.settings.skipBackwardLength}`)
 					.onChange((value) => {
-						this.plugin.settings.skipBackwardLength =
-							parseInt(value);
+						this.plugin.settings.skipBackwardLength = Number.parseInt(value);
 						this.plugin.saveSettings();
 					})
 					.setPlaceholder("seconds");
@@ -116,8 +115,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent
 					.setValue(`${this.plugin.settings.skipForwardLength}`)
 					.onChange((value) => {
-						this.plugin.settings.skipForwardLength =
-							parseInt(value);
+						this.plugin.settings.skipForwardLength = Number.parseInt(value);
 						this.plugin.saveSettings();
 					})
 					.setPlaceholder("seconds");
@@ -159,7 +157,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				timestampFormatDemoEl,
 				"",
 				// @ts-ignore - documentation says component is optional, yet not providing one causes an error
-				null
+				null,
 			);
 		};
 
@@ -173,23 +171,20 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.addText((textComponent) => {
 				textComponent.setValue(this.plugin.settings.note.path);
 				textComponent.setPlaceholder(
-					"inputs/podcasts/{{podcast}} - {{title}}.md"
+					"inputs/podcasts/{{podcast}} - {{title}}.md",
 				);
 				textComponent.onChange((value) => {
 					this.plugin.settings.note.path = value;
 					this.plugin.saveSettings();
 
-					const demoVal = FilePathTemplateEngine(
-						value,
-						randomEpisode
-					);
+					const demoVal = FilePathTemplateEngine(value, randomEpisode);
 					noteCreationFilePathDemoEl.empty();
 					MarkdownRenderer.renderMarkdown(
 						demoVal,
 						noteCreationFilePathDemoEl,
 						"",
 						// @ts-ignore - documentation says component is optional, yet not providing one causes an error
-						null
+						null,
 					);
 				});
 				textComponent.inputEl.style.width = "100%";
@@ -221,7 +216,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						"\nEpisode:: {{title}}" +
 						"\nPublishDate:: {{date:YYYY-MM-DD}}" +
 						"\n### Description" +
-						"\n> {{description}}"
+						"\n> {{description}}",
 				);
 			});
 
@@ -238,29 +233,24 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const downloadPathSetting = new Setting(container)
 			.setName("Episode download path")
 			.setDesc(
-				"The path where the episode will be downloaded to. Avoid setting an extension, as it will be added automatically."
+				"The path where the episode will be downloaded to. Avoid setting an extension, as it will be added automatically.",
 			)
 			.setHeading()
 			.addText((textComponent) => {
 				textComponent.setValue(this.plugin.settings.download.path);
-				textComponent.setPlaceholder(
-					"inputs/podcasts/{{podcast}} - {{title}}"
-				);
+				textComponent.setPlaceholder("inputs/podcasts/{{podcast}} - {{title}}");
 				textComponent.onChange((value) => {
 					this.plugin.settings.download.path = value;
 					this.plugin.saveSettings();
 
-					const demoVal = DownloadPathTemplateEngine(
-						value,
-						randomEpisode
-					);
+					const demoVal = DownloadPathTemplateEngine(value, randomEpisode);
 					downloadFilePathDemoEl.empty();
 					MarkdownRenderer.renderMarkdown(
 						`${demoVal}.mp3`,
 						downloadFilePathDemoEl,
 						"",
 						// @ts-ignore - documentation says component is optional, yet not providing one causes an error
-						null
+						null,
 					);
 				});
 				textComponent.inputEl.style.width = "100%";
@@ -280,7 +270,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.filter(
 				(file) =>
 					file instanceof TFile &&
-					file.extension.toLowerCase().endsWith("opml")
+					file.extension.toLowerCase().endsWith("opml"),
 			);
 
 		const detectedOpmlFile = opmlFiles[0];
@@ -292,9 +282,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Import podcasts from other services with OPML files.");
 		setting.addText((text) => {
 			text.setPlaceholder(
-				detectedOpmlFile ? detectedOpmlFile.path : "path to opml file"
+				detectedOpmlFile ? detectedOpmlFile.path : "path to opml file",
 			);
-			text.onChange((v) => (value = v));
+			text.onChange((v) => {
+				value = v;
+			});
 			text.setValue(value);
 		});
 
@@ -304,14 +296,14 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 				if (!inputFile || !(inputFile instanceof TFile)) {
 					new Notice(
-						`Invalid file path, could not find opml file at location "${value}".`
+						`Invalid file path, could not find opml file at location "${value}".`,
 					);
 					return;
 				}
 
 				new Notice("Starting import...");
 				importOPML(inputFile);
-			})
+			}),
 		);
 	}
 
@@ -325,7 +317,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		setting.addText((text) => {
 			text.setPlaceholder("Target path");
-			text.onChange((v) => (value = v));
+			text.onChange((v) => {
+				value = v;
+			});
 			text.setValue(value);
 		});
 		setting.addButton((btn) =>
@@ -337,11 +331,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					return;
 				}
 
-				exportOPML(
-					feeds,
-					value.endsWith(".opml") ? value : `${value}.opml`
-				);
-			})
+				exportOPML(feeds, value.endsWith(".opml") ? value : `${value}.opml`);
+			}),
 		);
 	}
 
@@ -353,23 +344,25 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		new Setting(container)
 			.setName("OpenAI API Key")
 			.setDesc("Enter your OpenAI API key for transcription functionality.")
-			.addText(text => {
+			.addText((text) => {
 				text
 					.setPlaceholder("Enter your OpenAI API key")
 					.setValue(this.plugin.settings.openAIApiKey)
 					.onChange(async (value) => {
 						this.plugin.settings.openAIApiKey = value;
 						await this.plugin.saveSettings();
-					})
+					});
 				text.inputEl.type = "password";
-
 			});
 
 		const transcriptFilePathSetting = new Setting(container)
 			.setName("Transcript file path")
-			.setDesc("The path where transcripts will be saved. Use {{}} for dynamic values.")
+			.setDesc(
+				"The path where transcripts will be saved. Use {{}} for dynamic values.",
+			)
 			.addText((text) => {
-				text.setPlaceholder("transcripts/{{podcast}}/{{title}}.md")
+				text
+					.setPlaceholder("transcripts/{{podcast}}/{{title}}.md")
 					.setValue(this.plugin.settings.transcript.path)
 					.onChange(async (value) => {
 						this.plugin.settings.transcript.path = value;
@@ -393,7 +386,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("The template for the transcript file content.")
 			.setHeading()
 			.addTextArea((text) => {
-				text.setPlaceholder("# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\nURL: {{url}}\n\n## Description\n\n{{description}}\n\n## Transcript\n\n{{transcript}}")
+				text
+					.setPlaceholder(
+						"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\nURL: {{url}}\n\n## Description\n\n{{description}}\n\n## Transcript\n\n{{transcript}}",
+					)
 					.setValue(this.plugin.settings.transcript.template)
 					.onChange(async (value) => {
 						this.plugin.settings.transcript.template = value;
@@ -402,7 +398,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				text.inputEl.style.width = "100%";
 				text.inputEl.style.height = "25vh";
 			});
-
 
 		transcriptTemplateSetting.settingEl.style.flexDirection = "column";
 		transcriptTemplateSetting.settingEl.style.alignItems = "unset";

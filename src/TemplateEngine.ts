@@ -1,5 +1,5 @@
 import { htmlToMarkdown, Notice } from "obsidian";
-import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 import Fuse from "fuse.js";
 import { plugin } from "src/store";
 import { get } from "svelte/store";
@@ -11,7 +11,7 @@ interface Tags {
 
 type AddTagFn = (
 	tag: Lowercase<string>,
-	value: string | ((...args: unknown[]) => string)
+	value: string | ((...args: unknown[]) => string),
 ) => void;
 type ReplacerFn = (template: string) => string;
 
@@ -20,7 +20,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 
 	function addTag(
 		tag: Lowercase<string>,
-		value: string | ((...args: unknown[]) => string)
+		value: string | ((...args: unknown[]) => string),
 	): void {
 		tags[tag] = value;
 	}
@@ -45,7 +45,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 							similarTag.length > 0
 								? ` Did you mean ${similarTag[0].item}?`
 								: ""
-						}`
+						}`,
 					);
 					return match;
 				}
@@ -54,9 +54,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 					if (params) {
 						// Remove initial colon with splice.
 						const splitParams = params.slice(1).split(",");
-						const args = Array.isArray(splitParams)
-							? splitParams
-							: [params];
+						const args = Array.isArray(splitParams) ? splitParams : [params];
 
 						return tagValue(...args);
 					}
@@ -65,7 +63,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 				}
 
 				return tagValue;
-			}
+			},
 		);
 	}
 
@@ -96,15 +94,12 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 
 		return htmlToMarkdown(episode.content);
 	});
-	addTag(
-		"safetitle",
-		replaceIllegalFileNameCharactersInString(episode.title)
-	);
+	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
 	addTag("url", episode.url);
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
-			: ""
+			: "",
 	);
 	addTag("podcast", episode.podcastName);
 	addTag("artwork", episode.artworkUrl ?? "");
@@ -116,10 +111,10 @@ export function TimestampTemplateEngine(template: string) {
 	const [replacer, addTag] = useTemplateEngine();
 
 	addTag("time", (format?: string) =>
-		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss")
+		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss"),
 	);
 	addTag("linktime", (format?: string) =>
-		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true)
+		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true),
 	);
 
 	return replacer(template);
@@ -129,9 +124,7 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 	const [replacer, addTag] = useTemplateEngine();
 
 	addTag("title", (whitespaceReplacement?: string) => {
-		const legalTitle = replaceIllegalFileNameCharactersInString(
-			episode.title
-		);
+		const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
 		if (whitespaceReplacement) {
 			return legalTitle.replace(/\s+/g, whitespaceReplacement);
 		}
@@ -140,7 +133,7 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 	});
 	addTag("podcast", (whitespaceReplacement?: string) => {
 		const legalName = replaceIllegalFileNameCharactersInString(
-			episode.podcastName
+			episode.podcastName,
 		);
 		if (whitespaceReplacement) {
 			return legalName.replace(/\s+/g, whitespaceReplacement);
@@ -151,7 +144,7 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
-			: ""
+			: "",
 	);
 
 	return replacer(template);
@@ -167,9 +160,7 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	const [replacer, addTag] = useTemplateEngine();
 
 	addTag("title", (whitespaceReplacement?: string) => {
-		const legalTitle = replaceIllegalFileNameCharactersInString(
-			episode.title
-		);
+		const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
 		if (whitespaceReplacement) {
 			return legalTitle.replace(/\s+/g, whitespaceReplacement);
 		}
@@ -178,7 +169,7 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	});
 	addTag("podcast", (whitespaceReplacement?: string) => {
 		const legalName = replaceIllegalFileNameCharactersInString(
-			episode.podcastName
+			episode.podcastName,
 		);
 		if (whitespaceReplacement) {
 			return legalName.replace(/\s+/g, whitespaceReplacement);
@@ -189,35 +180,41 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
-			: ""
+			: "",
 	);
 
 	return replacer(templateWithoutExtension);
 }
 
-export function TranscriptTemplateEngine(template: string, episode: Episode, transcription: string) {
-    const [replacer, addTag] = useTemplateEngine();
+export function TranscriptTemplateEngine(
+	template: string,
+	episode: Episode,
+	transcription: string,
+) {
+	const [replacer, addTag] = useTemplateEngine();
 
-    addTag("title", (whitespaceReplacement?: string) => {
-        const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
-        if (whitespaceReplacement) {
-            return legalTitle.replace(/\s+/g, whitespaceReplacement);
-        }
-        return legalTitle;
-    });
-    addTag("podcast", (whitespaceReplacement?: string) => {
-        const legalName = replaceIllegalFileNameCharactersInString(episode.podcastName);
-        if (whitespaceReplacement) {
-            return legalName.replace(/\s+/g, whitespaceReplacement);
-        }
-        return legalName;
-    });
-    addTag("date", (format?: string) =>
-        episode.episodeDate
-            ? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
-            : ""
-    );
-    addTag("transcript", transcription);
+	addTag("title", (whitespaceReplacement?: string) => {
+		const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
+		if (whitespaceReplacement) {
+			return legalTitle.replace(/\s+/g, whitespaceReplacement);
+		}
+		return legalTitle;
+	});
+	addTag("podcast", (whitespaceReplacement?: string) => {
+		const legalName = replaceIllegalFileNameCharactersInString(
+			episode.podcastName,
+		);
+		if (whitespaceReplacement) {
+			return legalName.replace(/\s+/g, whitespaceReplacement);
+		}
+		return legalName;
+	});
+	addTag("date", (format?: string) =>
+		episode.episodeDate
+			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+			: "",
+	);
+	addTag("transcript", transcription);
 	addTag("description", (prependToLines?: string) => {
 		if (prependToLines) {
 			return htmlToMarkdown(episode.description)
@@ -228,10 +225,10 @@ export function TranscriptTemplateEngine(template: string, episode: Episode, tra
 
 		return htmlToMarkdown(episode.description);
 	});
-    addTag("url", episode.url);
-    addTag("artwork", episode.artworkUrl ?? "");
+	addTag("url", episode.url);
+	addTag("artwork", episode.artworkUrl ?? "");
 
-    return replacer(template);
+	return replacer(template);
 }
 
 function replaceIllegalFileNameCharactersInString(string: string) {
