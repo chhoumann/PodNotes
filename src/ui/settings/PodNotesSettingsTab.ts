@@ -12,6 +12,7 @@ import PlaylistManager from "./PlaylistManager.svelte";
 import {
 	DownloadPathTemplateEngine,
 	TimestampTemplateEngine,
+	TranscriptTemplateEngine,
 } from "../../TemplateEngine";
 import { FilePathTemplateEngine } from "../../TemplateEngine";
 import { episodeCache, savedFeeds } from "src/store";
@@ -70,6 +71,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addDownloadSettings(settingsContainer);
 		this.addImportSettings(settingsContainer);
 		this.addExportSettings(settingsContainer);
+		this.addTranscriptSettings(settingsContainer);
 	}
 
 	hide(): void {
@@ -341,6 +343,70 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				);
 			})
 		);
+	}
+
+	private addTranscriptSettings(container: HTMLDivElement) {
+		container.createEl("h4", { text: "Transcript settings" });
+
+		const randomEpisode = getRandomEpisode();
+
+		new Setting(container)
+			.setName("OpenAI API Key")
+			.setDesc("Enter your OpenAI API key for transcription functionality.")
+			.addText(text => {
+				text
+					.setPlaceholder("Enter your OpenAI API key")
+					.setValue(this.plugin.settings.openAIApiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.openAIApiKey = value;
+						await this.plugin.saveSettings();
+					})
+				text.inputEl.type = "password";
+
+			});
+
+		const transcriptFilePathSetting = new Setting(container)
+			.setName("Transcript file path")
+			.setDesc("The path where transcripts will be saved. Use {{}} for dynamic values.")
+			.addText((text) => {
+				text.setPlaceholder("transcripts/{{podcast}}/{{title}}.md")
+					.setValue(this.plugin.settings.transcript.path)
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.path = value;
+						await this.plugin.saveSettings();
+						updateTranscriptPathDemo(value);
+					});
+			});
+
+		const transcriptPathDemoEl = container.createDiv();
+
+		const updateTranscriptPathDemo = (value: string) => {
+			const demoVal = FilePathTemplateEngine(value, randomEpisode);
+			transcriptPathDemoEl.empty();
+			transcriptPathDemoEl.createEl("p", { text: `Example: ${demoVal}` });
+		};
+
+		updateTranscriptPathDemo(this.plugin.settings.transcript.path);
+
+		const transcriptTemplateSetting = new Setting(container)
+			.setName("Transcript template")
+			.setDesc("The template for the transcript file content.")
+			.setHeading()
+			.addTextArea((text) => {
+				text.setPlaceholder("# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\nURL: {{url}}\n\n## Description\n\n{{description}}\n\n## Transcript\n\n{{transcript}}")
+					.setValue(this.plugin.settings.transcript.template)
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.template = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.style.width = "100%";
+				text.inputEl.style.height = "25vh";
+			});
+
+
+		transcriptTemplateSetting.settingEl.style.flexDirection = "column";
+		transcriptTemplateSetting.settingEl.style.alignItems = "unset";
+		transcriptTemplateSetting.settingEl.style.gap = "10px";
 	}
 }
 

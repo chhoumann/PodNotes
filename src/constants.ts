@@ -1,30 +1,33 @@
-import { IPodNotesSettings } from "src/types/IPodNotesSettings";
-import { Playlist } from "./types/Playlist";
+import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
+import type { Playlist } from "./types/Playlist";
 
 export const VIEW_TYPE = "podcast_player_view";
 
-type PlaylistSettings = Pick<Playlist, "icon" | "name" | "shouldEpisodeRemoveAfterPlay" | "shouldRepeat">;
+type PlaylistSettings = Pick<
+	Playlist,
+	"icon" | "name" | "shouldEpisodeRemoveAfterPlay" | "shouldRepeat"
+>;
 
 export const FAVORITES_SETTINGS: PlaylistSettings = {
 	icon: "lucide-star",
 	name: "Favorites",
 	shouldEpisodeRemoveAfterPlay: false,
 	shouldRepeat: false,
-}
+};
 
 export const QUEUE_SETTINGS: PlaylistSettings = {
 	icon: "list-ordered",
 	name: "Queue",
 	shouldEpisodeRemoveAfterPlay: true,
 	shouldRepeat: false,
-}
+};
 
 export const LOCAL_FILES_SETTINGS: PlaylistSettings = {
 	icon: "folder",
 	name: "Local Files",
 	shouldEpisodeRemoveAfterPlay: false,
 	shouldRepeat: false,
-}
+};
 
 export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	savedFeeds: {},
@@ -60,6 +63,11 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	localFiles: {
 		...LOCAL_FILES_SETTINGS,
 		episodes: [],
-	}
-}
-
+	},
+	openAIApiKey: "",
+	transcript: {
+		path: "transcripts/{{podcast}}/{{title}}.md",
+		template:
+			"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
+	},
+};

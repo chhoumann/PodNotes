@@ -31,4 +31,9 @@ export interface IPodNotesSettings {
 		path: string,
 	}
 	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] },
+	openAIApiKey: string,
+	transcript: {
+		path: string;
+		template: string;
+	}
 }

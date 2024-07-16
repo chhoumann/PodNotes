@@ -1,4 +1,4 @@
-import { Notice, requestUrl } from "obsidian";
+import { Notice, TFile, requestUrl } from "obsidian";
 import { downloadedEpisodes } from "./store";
 import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import { Episode } from "./types/Episode";
@@ -174,27 +174,55 @@ async function createEpisodeFile({
 export async function downloadEpisode(
 	episode: Episode,
 	downloadPathTemplate: string
-) {
-	try {
-		const { blob, responseUrl } = await downloadFile(episode.streamUrl);
+): Promise<string> {
+    const basename = DownloadPathTemplateEngine(downloadPathTemplate, episode);
+    const fileExtension = await getFileExtension(episode.streamUrl);
+    const filePath = `${basename}.${fileExtension}`;
 
-		const fileExtension = getUrlExtension(responseUrl);
+    // Check if the file already exists
+    const existingFile = app.vault.getAbstractFileByPath(filePath);
+    if (existingFile instanceof TFile) {
+        return filePath; // Return the existing file path
+    }
 
-		if (!blob.type.contains("audio") || !fileExtension) {
-			throw new Error("Not an audio file.");
-		}
+    try {
+        const { blob, responseUrl } = await downloadFile(episode.streamUrl);
 
-		await createEpisodeFile({
-			episode,
-			downloadPathTemplate,
-			blob,
-			extension: fileExtension,
-		});
-	} catch (error) {
-		throw new Error(
-			`Failed to download ${episode.title}: ${error.message}`
-		);
-	}
+        if (!blob.type.includes("audio") && !fileExtension) {
+            throw new Error("Not an audio file.");
+        }
+
+        await createEpisodeFile({
+            episode,
+            downloadPathTemplate,
+            blob,
+            extension: fileExtension,
+        });
+
+        return filePath;
+    } catch (error) {
+        throw new Error(
+            `Failed to download ${episode.title}: ${error.message}`
+        );
+    }
+}
+
+async function getFileExtension(url: string): Promise<string> {
+    const urlExtension = getUrlExtension(url);
+    if (urlExtension) return urlExtension;
+
+    // If URL doesn't have an extension, fetch headers to determine content type
+    const response = await fetch(url, { method: 'HEAD' });
+    const contentType = response.headers.get('content-type');
+    
+    if (contentType?.includes('audio/mpeg')) return 'mp3';
+    if (contentType?.includes('audio/mp4')) return 'm4a';
+    if (contentType?.includes('audio/ogg')) return 'ogg';
+    if (contentType?.includes('audio/wav')) return 'wav';
+    if (contentType?.includes('audio/x-m4a')) return 'm4a';
+
+    // Default to mp3 if we can't determine the type
+    return 'mp3';
 }
 
 interface AudioSignature {
@@ -203,7 +231,7 @@ interface AudioSignature {
 	fileExtension: string;
 }
 
-async function detectAudioFileExtension(blob: Blob): Promise<string | null> {
+export async function detectAudioFileExtension(blob: Blob): Promise<string | null> {
 	const audioSignatures: AudioSignature[] = [
 		{ signature: [0xff, 0xe0], mask: [0xff, 0xe0], fileExtension: "mp3" },
 		{ signature: [0x49, 0x44, 0x33], fileExtension: "mp3" },

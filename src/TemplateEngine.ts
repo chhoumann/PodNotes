@@ -195,6 +195,45 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	return replacer(templateWithoutExtension);
 }
 
+export function TranscriptTemplateEngine(template: string, episode: Episode, transcription: string) {
+    const [replacer, addTag] = useTemplateEngine();
+
+    addTag("title", (whitespaceReplacement?: string) => {
+        const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
+        if (whitespaceReplacement) {
+            return legalTitle.replace(/\s+/g, whitespaceReplacement);
+        }
+        return legalTitle;
+    });
+    addTag("podcast", (whitespaceReplacement?: string) => {
+        const legalName = replaceIllegalFileNameCharactersInString(episode.podcastName);
+        if (whitespaceReplacement) {
+            return legalName.replace(/\s+/g, whitespaceReplacement);
+        }
+        return legalName;
+    });
+    addTag("date", (format?: string) =>
+        episode.episodeDate
+            ? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+            : ""
+    );
+    addTag("transcript", transcription);
+	addTag("description", (prependToLines?: string) => {
+		if (prependToLines) {
+			return htmlToMarkdown(episode.description)
+				.split("\n")
+				.map((str) => `${prependToLines}${str}`)
+				.join("\n");
+		}
+
+		return htmlToMarkdown(episode.description);
+	});
+    addTag("url", episode.url);
+    addTag("artwork", episode.artworkUrl ?? "");
+
+    return replacer(template);
+}
+
 function replaceIllegalFileNameCharactersInString(string: string) {
 	return string
 		.replace(/[\\,#%&{}/*<>$'":@\u2023|?]*/g, "") // Replace illegal file name characters with empty string

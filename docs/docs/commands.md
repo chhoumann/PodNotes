@@ -31,12 +31,12 @@ This will reload PodNotes.
 ## Capture Timestamp
 This will capture the current timestamp of the currently playing episode.
 
-See [timestamps](/timestamps) for more information on timestamp templates.
+See [timestamps](timestamps.md) for more information on timestamp templates.
 
 ## Create Podcast Note
 This will create a note for the currently playing episode.
 
-See [templates](/templates) for more information on note templates.
+See [templates](templates.md) for more information on note templates.
 
 ## Copy universal episode link to clipboard
 This will copy the universal episode link to the clipboard.
@@ -47,3 +47,10 @@ Then, it asks pod.link for an episode ID, after which it constructs the universa
 Episode links look like this: [https://pod.link/1138055739/episode/1732808e781cc64a30d7feba0467b63a](https://pod.link/1138055739/episode/1732808e781cc64a30d7feba0467b63a).
 
 They can be used to share the episode with others, no matter what podcast app they use.
+
+## Transcribe current episode
+This command will transcribe the currently playing episode using OpenAI's Whisper model.
+
+The transcription will be saved in the location specified in the transcript settings.
+
+Note: This feature requires an OpenAI API key to be set in the settings.
