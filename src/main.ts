@@ -8,37 +8,38 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
-import { Plugin, WorkspaceLeaf } from "obsidian";
+import { Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
-import { IAPI } from "src/API/IAPI";
+import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
-import { IPodNotesSettings } from "./types/IPodNotesSettings";
+import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { plugin } from "./store";
-import { IPodNotes } from "./types/IPodNotes";
+import type { IPodNotes } from "./types/IPodNotes";
 import { EpisodeStatusController } from "./store_controllers/EpisodeStatusController";
-import { StoreController } from "./types/StoreController";
-import { PlayedEpisode } from "./types/PlayedEpisode";
-import { PodcastFeed } from "./types/PodcastFeed";
+import type { StoreController } from "./types/StoreController";
+import type { PlayedEpisode } from "./types/PlayedEpisode";
+import type { PodcastFeed } from "./types/PodcastFeed";
 import { SavedFeedsController } from "./store_controllers/SavedFeedsController";
-import { Playlist } from "./types/Playlist";
+import type { Playlist } from "./types/Playlist";
 import { PlaylistController } from "./store_controllers/PlaylistController";
 import { QueueController } from "./store_controllers/QueueController";
 import { FavoritesController } from "./store_controllers/FavoritesController";
-import { Episode } from "./types/Episode";
+import type { Episode } from "./types/Episode";
 import CurrentEpisodeController from "./store_controllers/CurrentEpisodeController";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import createPodcastNote from "./createPodcastNote";
 import downloadEpisodeWithNotice from "./downloadEpisode";
-import DownloadedEpisode from "./types/DownloadedEpisode";
+import type DownloadedEpisode from "./types/DownloadedEpisode";
 import DownloadedEpisodesController from "./store_controllers/DownloadedEpisodesController";
 import { LocalFilesController } from "./store_controllers/LocalFilesController";
-import PartialAppExtension from "./global";
+import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
 import getUniversalPodcastLink from "./getUniversalPodcastLink";
-import { IconType } from "./types/IconType";
+import type { IconType } from "./types/IconType";
+import { TranscriptionService } from "./services/TranscriptionService";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api: IAPI;
@@ -63,6 +64,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private downloadedEpisodesController: StoreController<{
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
+	private transcriptionService: TranscriptionService;
 
 	async onload() {
 		plugin.set(this);
@@ -82,30 +84,23 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.playedEpisodeController = new EpisodeStatusController(
 			playedEpisodes,
-			this
+			this,
 		).on();
-		this.savedFeedsController = new SavedFeedsController(
-			savedFeeds,
-			this
-		).on();
+		this.savedFeedsController = new SavedFeedsController(savedFeeds, this).on();
 		this.playlistController = new PlaylistController(playlists, this).on();
 		this.queueController = new QueueController(queue, this).on();
-		this.favoritesController = new FavoritesController(
-			favorites,
-			this
-		).on();
-		this.localFilesController = new LocalFilesController(
-			localFiles,
-			this
-		).on();
+		this.favoritesController = new FavoritesController(favorites, this).on();
+		this.localFilesController = new LocalFilesController(localFiles, this).on();
 		this.downloadedEpisodesController = new DownloadedEpisodesController(
 			downloadedEpisodes,
-			this
+			this,
 		).on();
 		this.currentEpisodeController = new CurrentEpisodeController(
 			currentEpisode,
-			this
+			this,
 		).on();
+
+		this.transcriptionService = new TranscriptionService(this);
 
 		this.addCommand({
 			id: "podnotes-show-leaf",
@@ -206,14 +201,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			icon: "clock" as IconType,
 			editorCheckCallback: (checking, editor, view) => {
 				if (checking) {
-					return (
-						!!this.api.podcast && !!this.settings.timestamp.template
-					);
+					return !!this.api.podcast && !!this.settings.timestamp.template;
 				}
 
 				const cursorPos = editor.getCursor();
 				const capture = TimestampTemplateEngine(
-					this.settings.timestamp.template
+					this.settings.timestamp.template,
 				);
 
 				editor.replaceRange(capture, cursorPos);
@@ -264,6 +257,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			},
 		});
 
+		this.addCommand({
+			id: "podnotes-transcribe",
+			name: "Transcribe current episode",
+			callback: () => this.transcriptionService.transcribeCurrentEpisode(),
+		});
+
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
 		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {
@@ -275,7 +274,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
 		this.registerObsidianProtocolHandler("podnotes", (action) =>
-			podNotesURIHandler(action, this.api)
+			podNotesURIHandler(action, this.api),
 		);
 
 		this.registerEvent(getContextMenuHandler());
@@ -303,11 +302,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData()
-		);
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
 
 	async saveSettings() {

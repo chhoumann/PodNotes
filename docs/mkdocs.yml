@@ -7,6 +7,7 @@ nav:
     - Podcasts: podcasts.md
     - 'Local files': local_files.md
     - "Import & Export": import_export.md
+    - Transcripts: transcripts.md
     - 'Notes':
         - Timestamps: timestamps.md
         - Templates: templates.md
