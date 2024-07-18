@@ -1,68 +1,89 @@
-import { TFile, Notice } from "obsidian";
+import { type App, Notice } from "obsidian";
 import FeedParser from "./parser/feedParser";
 import { savedFeeds } from "./store";
-import { PodcastFeed } from "./types/PodcastFeed";
+import type { PodcastFeed } from "./types/PodcastFeed";
 
-async function importOPML(targetFile: TFile) {
-	const fileContent = await app.vault.cachedRead(targetFile);
-	const dp = new DOMParser();
-	const dom = dp.parseFromString(fileContent, "application/xml");
+async function importOPML(opml: string) {
+	try {
+		const dp = new DOMParser();
+		const dom = dp.parseFromString(opml, "application/xml");
 
-	const podcastEntryNodes = dom.querySelectorAll("outline[text][xmlUrl]");
-	const incompletePodcastsToAdd: Pick<PodcastFeed, "title" | "url">[] = [];
-	for (let i = 0; i < podcastEntryNodes.length; i++) {
-		const node = podcastEntryNodes.item(i);
-
-		const text = node.getAttribute("text");
-		const xmlUrl = node.getAttribute("xmlUrl");
-		if (!text || !xmlUrl) {
-			continue;
+		if (dom.documentElement.nodeName === "parsererror") {
+			throw new Error("Invalid XML format");
 		}
 
-		incompletePodcastsToAdd.push({
-			title: text,
-			url: xmlUrl,
-		});
-	}
+		const podcastEntryNodes = dom.querySelectorAll("outline[text][xmlUrl]");
+		const incompletePodcastsToAdd: Pick<PodcastFeed, "title" | "url">[] = [];
+		for (let i = 0; i < podcastEntryNodes.length; i++) {
+			const node = podcastEntryNodes.item(i);
 
-	const podcasts: PodcastFeed[] = await Promise.all(
-		incompletePodcastsToAdd.map(async (feed) => {
-			return new FeedParser().getFeed(feed.url);
-		})
-	);
+			const text = node.getAttribute("text");
+			const xmlUrl = node.getAttribute("xmlUrl");
+			if (!text || !xmlUrl) {
+				continue;
+			}
 
-	savedFeeds.update((feeds) => {
-		for (const pod of podcasts) {
-			if (feeds[pod.title]) continue;
-			feeds[pod.title] = structuredClone(pod);
+			incompletePodcastsToAdd.push({
+				title: text,
+				url: xmlUrl,
+			});
 		}
 
-		return feeds;
-	});
+		if (incompletePodcastsToAdd.length === 0) {
+			throw new Error("No valid podcast entries found in OPML");
+		}
 
-	new Notice(
-		`${targetFile.name} ingested. Saved ${podcasts.length} / ${incompletePodcastsToAdd.length} podcasts.`
-	);
-
-	if (podcasts.length !== incompletePodcastsToAdd.length) {
-		const missingPodcasts = incompletePodcastsToAdd.filter(
-			(pod) => !podcasts.find((v) => v.url === pod.url)
+		const podcasts: (PodcastFeed | null)[] = await Promise.all(
+			incompletePodcastsToAdd.map(async (feed) => {
+				try {
+					return await new FeedParser().getFeed(feed.url);
+				} catch (error) {
+					console.error(`Failed to fetch feed for ${feed.title}: ${error}`);
+					return null;
+				}
+			}),
 		);
 
-		for (const missingPod of missingPodcasts) {
-			new Notice(`Failed to save ${missingPod.title}...`, 60000);
+		const validPodcasts = podcasts.filter(
+			(pod): pod is PodcastFeed => pod !== null,
+		);
+
+		savedFeeds.update((feeds) => {
+			for (const pod of validPodcasts) {
+				if (feeds[pod.title]) continue;
+				feeds[pod.title] = structuredClone(pod);
+			}
+
+			return feeds;
+		});
+
+		new Notice(
+			`OPML ingested. Saved ${validPodcasts.length} / ${incompletePodcastsToAdd.length} podcasts.`,
+		);
+
+		if (validPodcasts.length !== incompletePodcastsToAdd.length) {
+			const missingPodcasts = incompletePodcastsToAdd.filter(
+				(pod) => !validPodcasts.find((v) => v.url === pod.url),
+			);
+
+			for (const missingPod of missingPodcasts) {
+				new Notice(`Failed to save ${missingPod.title}...`, 60000);
+			}
 		}
+	} catch (error) {
+		console.error("Error importing OPML:", error);
 	}
 }
 
 async function exportOPML(
+	app: App,
 	feeds: PodcastFeed[],
-	filePath = "PodNotes_Export.opml"
+	filePath = "PodNotes_Export.opml",
 ) {
 	const header = `<?xml version="1.0" encoding="utf=8" standalone="no"?>`;
 	const opml = (child: string) => `<opml version="1.0">${child}</opml>`;
 	const head = (child: string) => `<head>${child}</head>`;
-	const title = `<title>PodNotes Feeds</title>`;
+	const title = "<title>PodNotes Feeds</title>";
 	const body = (child: string) => `<body>${child}</body>`;
 	const feedOutline = (feed: PodcastFeed) =>
 		`<outline text="${feed.title}" type="rss" xmlUrl="${feed.url}" />`;
@@ -74,13 +95,9 @@ async function exportOPML(
 	try {
 		await app.vault.create(filePath, doc);
 
-		new Notice(
-			`Exported ${feeds.length} podcast feeds to file "${filePath}".`
-		);
+		new Notice(`Exported ${feeds.length} podcast feeds to file "${filePath}".`);
 	} catch (error) {
-		new Notice(
-			`Unable to create podcast export file:\n\n${error}`
-		);
+		new Notice(`Unable to create podcast export file:\n\n${error}`);
 
 		console.error(error);
 	}

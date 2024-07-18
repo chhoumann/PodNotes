@@ -265,7 +265,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	addImportSettings(settingsContainer: HTMLDivElement) {
 		const setting = new Setting(settingsContainer);
-		const opmlFiles = app.vault
+		const opmlFiles = this.app.vault
 			.getAllLoadedFiles()
 			.filter(
 				(file) =>
@@ -292,7 +292,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		setting.addButton((importBtn) =>
 			importBtn.setButtonText("Import").onClick(() => {
-				const inputFile = app.vault.getAbstractFileByPath(value);
+
+
+				const inputFile = this.app.vault.getAbstractFileByPath(value);
 
 				if (!inputFile || !(inputFile instanceof TFile)) {
 					new Notice(
@@ -302,7 +304,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				}
 
 				new Notice("Starting import...");
-				importOPML(inputFile);
+				const filecontents = await this.app.vault.cachedRead(inputFile);
+				importOPML(filecontents);
 			}),
 		);
 	}
@@ -331,7 +334,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					return;
 				}
 
-				exportOPML(feeds, value.endsWith(".opml") ? value : `${value}.opml`);
+				exportOPML(
+					this.app,
+					feeds,
+					value.endsWith(".opml") ? value : `${value}.opml`,
+				);
 			}),
 		);
 	}
