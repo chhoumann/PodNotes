@@ -5,6 +5,7 @@ Similarly, you can also export your podcasts from PodNotes to such apps.
 ## Importing
 
 To import podcasts, follow these steps:
+
 1. Go to the PodNotes settings in Obsidian.
 2. Find the "Import" section.
 3. Click the "Import OPML" button.
