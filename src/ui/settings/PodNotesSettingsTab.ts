@@ -15,7 +15,7 @@ import {
 	TranscriptTemplateEngine,
 } from "../../TemplateEngine";
 import { FilePathTemplateEngine } from "../../TemplateEngine";
-import { episodeCache, savedFeeds } from "src/store";
+import { episodeCache, savedFeeds } from "src/store/index";
 import type { Episode } from "src/types/Episode";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";

@@ -106,7 +106,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			id: "podnotes-show-leaf",
 			name: "Show PodNotes",
 			icon: "podcast" as IconType,
-			checkCallback(checking: boolean) {
+			checkCallback: function (checking: boolean) {
 				if (checking) {
 					return !this.app.workspace.getLeavesOfType(VIEW_TYPE).length;
 				}
@@ -114,7 +114,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				this.app.workspace.getRightLeaf(false).setViewState({
 					type: VIEW_TYPE,
 				});
-			},
+			}.bind(this),
 		});
 
 		this.addCommand({
