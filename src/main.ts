@@ -108,10 +108,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			icon: "podcast" as IconType,
 			checkCallback(checking: boolean) {
 				if (checking) {
-					return !app.workspace.getLeavesOfType(VIEW_TYPE).length;
+					return !this.app.workspace.getLeavesOfType(VIEW_TYPE).length;
 				}
 
-				app.workspace.getRightLeaf(false).setViewState({
+				this.app.workspace.getRightLeaf(false).setViewState({
 					type: VIEW_TYPE,
 				});
 			},
@@ -285,9 +285,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			return;
 		}
 
-		this.app.workspace.getRightLeaf(false).setViewState({
-			type: VIEW_TYPE,
-		});
+		const leaf = this.app.workspace.getRightLeaf(false);
+
+		if (leaf) {
+			leaf.setViewState({
+				type: VIEW_TYPE,
+			});
+		}
 	}
 
 	onunload() {
