@@ -1,68 +1,166 @@
-import { TFile, Notice } from "obsidian";
+import { type App, Notice, TFile } from "obsidian";
 import FeedParser from "./parser/feedParser";
 import { savedFeeds } from "./store";
-import { PodcastFeed } from "./types/PodcastFeed";
+import type { PodcastFeed } from "./types/PodcastFeed";
+import { get } from "svelte/store";
 
-async function importOPML(targetFile: TFile) {
-	const fileContent = await app.vault.cachedRead(targetFile);
-	const dp = new DOMParser();
-	const dom = dp.parseFromString(fileContent, "application/xml");
+function TimerNotice(heading: string, initialMessage: string) {
+	let currentMessage = initialMessage;
+	const startTime = Date.now();
+	let stopTime: number;
+	const notice = new Notice(initialMessage, 0);
 
-	const podcastEntryNodes = dom.querySelectorAll("outline[text][xmlUrl]");
-	const incompletePodcastsToAdd: Pick<PodcastFeed, "title" | "url">[] = [];
-	for (let i = 0; i < podcastEntryNodes.length; i++) {
-		const node = podcastEntryNodes.item(i);
-
-		const text = node.getAttribute("text");
-		const xmlUrl = node.getAttribute("xmlUrl");
-		if (!text || !xmlUrl) {
-			continue;
-		}
-
-		incompletePodcastsToAdd.push({
-			title: text,
-			url: xmlUrl,
-		});
+	function formatMsg(message: string): string {
+		return `${heading} (${getTime()}):\n\n${message}`;
 	}
 
-	const podcasts: PodcastFeed[] = await Promise.all(
-		incompletePodcastsToAdd.map(async (feed) => {
-			return new FeedParser().getFeed(feed.url);
-		})
-	);
+	function update(message: string) {
+		currentMessage = message;
+		notice.setMessage(formatMsg(currentMessage));
+	}
 
-	savedFeeds.update((feeds) => {
-		for (const pod of podcasts) {
-			if (feeds[pod.title]) continue;
-			feeds[pod.title] = structuredClone(pod);
+	const interval = setInterval(() => {
+		notice.setMessage(formatMsg(currentMessage));
+	}, 1000);
+
+	function getTime(): string {
+		return formatTime(stopTime ? stopTime - startTime : Date.now() - startTime);
+	}
+
+	return {
+		update,
+		hide: () => notice.hide(),
+		stop: () => {
+			stopTime = Date.now();
+			clearInterval(interval);
+		},
+	};
+}
+
+function formatTime(ms: number): string {
+	const seconds = Math.floor(ms / 1000);
+	const minutes = Math.floor(seconds / 60);
+	const hours = Math.floor(minutes / 60);
+	return `${hours.toString().padStart(2, "0")}:${(minutes % 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+}
+
+async function importOPML(opml: string): Promise<void> {
+	try {
+		const dp = new DOMParser();
+		const dom = dp.parseFromString(opml, "application/xml");
+
+		if (dom.documentElement.nodeName === "parsererror") {
+			throw new Error("Invalid XML format");
 		}
 
-		return feeds;
-	});
+		const podcastEntryNodes = dom.querySelectorAll("outline[text][xmlUrl]");
+		const incompletePodcastsToAdd: Pick<PodcastFeed, "title" | "url">[] = [];
+		for (let i = 0; i < podcastEntryNodes.length; i++) {
+			const node = podcastEntryNodes.item(i);
 
-	new Notice(
-		`${targetFile.name} ingested. Saved ${podcasts.length} / ${incompletePodcastsToAdd.length} podcasts.`
-	);
+			const text = node.getAttribute("text");
+			const xmlUrl = node.getAttribute("xmlUrl");
+			if (!text || !xmlUrl) {
+				continue;
+			}
 
-	if (podcasts.length !== incompletePodcastsToAdd.length) {
-		const missingPodcasts = incompletePodcastsToAdd.filter(
-			(pod) => !podcasts.find((v) => v.url === pod.url)
+			incompletePodcastsToAdd.push({
+				title: text,
+				url: xmlUrl,
+			});
+		}
+
+		if (incompletePodcastsToAdd.length === 0) {
+			throw new Error("No valid podcast entries found in OPML");
+		}
+
+		const existingSavedFeeds = get(savedFeeds);
+		const newPodcastsToAdd = incompletePodcastsToAdd.filter(
+			(pod) =>
+				!Object.values(existingSavedFeeds).some(
+					(savedPod) => savedPod.url === pod.url,
+				),
 		);
 
-		for (const missingPod of missingPodcasts) {
-			new Notice(`Failed to save ${missingPod.title}...`, 60000);
+		const notice = TimerNotice("Importing podcasts", "Preparing to import...");
+		let completedImports = 0;
+
+		const updateProgress = () => {
+			const progress = (
+				(completedImports / newPodcastsToAdd.length) *
+				100
+			).toFixed(1);
+			notice.update(
+				`Importing... ${completedImports}/${newPodcastsToAdd.length} podcasts completed (${progress}%)`,
+			);
+		};
+
+		updateProgress();
+
+		const podcasts: (PodcastFeed | null)[] = await Promise.all(
+			newPodcastsToAdd.map(async (feed) => {
+				try {
+					const result = await new FeedParser().getFeed(feed.url);
+					completedImports++;
+					updateProgress();
+					return result;
+				} catch (error) {
+					console.error(`Failed to fetch feed for ${feed.title}: ${error}`);
+					completedImports++;
+					updateProgress();
+					return null;
+				}
+			}),
+		);
+
+		notice.stop();
+
+		const validPodcasts = podcasts.filter(
+			(pod): pod is PodcastFeed => pod !== null,
+		);
+
+		savedFeeds.update((feeds) => {
+			for (const pod of validPodcasts) {
+				if (feeds[pod.title]) continue;
+				feeds[pod.title] = structuredClone(pod);
+			}
+			return feeds;
+		});
+
+		const skippedCount =
+			incompletePodcastsToAdd.length - newPodcastsToAdd.length;
+		notice.update(
+			`OPML import complete. Saved ${validPodcasts.length} new podcasts. Skipped ${skippedCount} existing podcasts.`,
+		);
+
+		if (validPodcasts.length !== newPodcastsToAdd.length) {
+			const failedImports = newPodcastsToAdd.length - validPodcasts.length;
+			console.error(`Failed to import ${failedImports} podcasts.`);
+			new Notice(
+				`Failed to import ${failedImports} podcasts. Check console for details.`,
+				10000,
+			);
 		}
+
+		setTimeout(() => notice.hide(), 5000);
+	} catch (error) {
+		console.error("Error importing OPML:", error);
+		new Notice(
+			`Error importing OPML: ${error instanceof Error ? error.message : "Unknown error"}`,
+			10000,
+		);
 	}
 }
 
 async function exportOPML(
+	app: App,
 	feeds: PodcastFeed[],
-	filePath = "PodNotes_Export.opml"
+	filePath = "PodNotes_Export.opml",
 ) {
 	const header = `<?xml version="1.0" encoding="utf=8" standalone="no"?>`;
 	const opml = (child: string) => `<opml version="1.0">${child}</opml>`;
 	const head = (child: string) => `<head>${child}</head>`;
-	const title = `<title>PodNotes Feeds</title>`;
+	const title = "<title>PodNotes Feeds</title>";
 	const body = (child: string) => `<body>${child}</body>`;
 	const feedOutline = (feed: PodcastFeed) =>
 		`<outline text="${feed.title}" type="rss" xmlUrl="${feed.url}" />`;
@@ -74,13 +172,17 @@ async function exportOPML(
 	try {
 		await app.vault.create(filePath, doc);
 
-		new Notice(
-			`Exported ${feeds.length} podcast feeds to file "${filePath}".`
-		);
+		new Notice(`Exported ${feeds.length} podcast feeds to file "${filePath}".`);
 	} catch (error) {
-		new Notice(
-			`Unable to create podcast export file:\n\n${error}`
-		);
+		if (error instanceof Error) {
+			if (error.message.includes("Folder does not exist")) {
+				new Notice("Unable to create export file: Folder does not exist.");
+			} else {
+				new Notice(`Unable to create podcast export file:\n\n${error.message}`);
+			}
+		} else {
+			new Notice("An unexpected error occurred during export.");
+		}
 
 		console.error(error);
 	}

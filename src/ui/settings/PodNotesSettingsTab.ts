@@ -15,7 +15,7 @@ import {
 	TranscriptTemplateEngine,
 } from "../../TemplateEngine";
 import { FilePathTemplateEngine } from "../../TemplateEngine";
-import { episodeCache, savedFeeds } from "src/store";
+import { episodeCache, savedFeeds } from "src/store/index";
 import type { Episode } from "src/types/Episode";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
@@ -69,8 +69,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addSkipLengthSettings(settingsContainer);
 		this.addNoteSettings(settingsContainer);
 		this.addDownloadSettings(settingsContainer);
-		this.addImportSettings(settingsContainer);
-		this.addExportSettings(settingsContainer);
+		this.addImportExportSettings(settingsContainer);
 		this.addTranscriptSettings(settingsContainer);
 	}
 
@@ -263,77 +262,78 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const downloadFilePathDemoEl = container.createDiv();
 	}
 
-	addImportSettings(settingsContainer: HTMLDivElement) {
-		const setting = new Setting(settingsContainer);
-		const opmlFiles = app.vault
-			.getAllLoadedFiles()
-			.filter(
-				(file) =>
-					file instanceof TFile &&
-					file.extension.toLowerCase().endsWith("opml"),
+	private addImportExportSettings(containerEl: HTMLElement): void {
+		containerEl.createEl("h3", { text: "Import/Export" });
+
+		new Setting(containerEl)
+			.setName("Import OPML")
+			.setDesc("Import podcasts from an OPML file.")
+			.addButton((button) =>
+				button.setButtonText("Import").onClick(() => {
+					const fileInput = document.createElement("input");
+					fileInput.type = "file";
+					fileInput.accept = ".opml";
+					fileInput.style.display = "none";
+					document.body.appendChild(fileInput);
+					fileInput.click();
+
+					fileInput.onchange = async (e: Event) => {
+						const target = e.target as HTMLInputElement;
+						const file = target.files?.[0];
+
+						if (file) {
+							const reader = new FileReader();
+							reader.onload = async (event) => {
+								const contents = event.target?.result as string;
+								if (contents) {
+									try {
+										await importOPML(contents);
+									} catch (e) {
+										console.error("Error importing OPML:", e);
+										new Notice(
+											`Error importing OPML: ${e instanceof Error ? e.message : "Unknown error"}`,
+											10000,
+										);
+									}
+								}
+							};
+							reader.readAsText(file);
+						} else {
+							new Notice("No file selected");
+						}
+					};
+				}),
 			);
 
-		const detectedOpmlFile = opmlFiles[0];
+		let exportFilePath = "PodNotes_Export.opml";
 
-		let value = detectedOpmlFile ? detectedOpmlFile.path : "";
-
-		setting
-			.setName("Import")
-			.setDesc("Import podcasts from other services with OPML files.");
-		setting.addText((text) => {
-			text.setPlaceholder(
-				detectedOpmlFile ? detectedOpmlFile.path : "path to opml file",
-			);
-			text.onChange((v) => {
-				value = v;
-			});
-			text.setValue(value);
-		});
-
-		setting.addButton((importBtn) =>
-			importBtn.setButtonText("Import").onClick(() => {
-				const inputFile = app.vault.getAbstractFileByPath(value);
-
-				if (!inputFile || !(inputFile instanceof TFile)) {
-					new Notice(
-						`Invalid file path, could not find opml file at location "${value}".`,
+		new Setting(containerEl)
+			.setName("Export OPML")
+			.setDesc("Export saved podcast feeds to an OPML file.")
+			.addText((text) =>
+				text
+					.setPlaceholder("Export file name")
+					.setValue(exportFilePath)
+					.onChange((value) => {
+						exportFilePath = value;
+					}),
+			)
+			.addButton((button) =>
+				button.setButtonText("Export").onClick(() => {
+					const feeds = Object.values(get(savedFeeds));
+					if (feeds.length === 0) {
+						new Notice("No podcasts to export.");
+						return;
+					}
+					exportOPML(
+						this.app,
+						feeds,
+						exportFilePath.endsWith(".opml")
+							? exportFilePath
+							: `${exportFilePath}.opml`,
 					);
-					return;
-				}
-
-				new Notice("Starting import...");
-				importOPML(inputFile);
-			}),
-		);
-	}
-
-	addExportSettings(settingsContainer: HTMLDivElement) {
-		const setting = new Setting(settingsContainer);
-		setting
-			.setName("Export")
-			.setDesc("Export saved podcast feeds to OPML file.");
-
-		let value = "PodNotes_Export.opml";
-
-		setting.addText((text) => {
-			text.setPlaceholder("Target path");
-			text.onChange((v) => {
-				value = v;
-			});
-			text.setValue(value);
-		});
-		setting.addButton((btn) =>
-			btn.setButtonText("Export").onClick(() => {
-				const feeds = Object.values(get(savedFeeds));
-
-				if (feeds.length === 0) {
-					new Notice("Nothing to export.");
-					return;
-				}
-
-				exportOPML(feeds, value.endsWith(".opml") ? value : `${value}.opml`);
-			}),
-		);
+				}),
+			);
 	}
 
 	private addTranscriptSettings(container: HTMLDivElement) {

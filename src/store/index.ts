@@ -1,19 +1,19 @@
 import { get, writable } from "svelte/store";
 import type PodNotes from "src/main";
-import { Episode } from "src/types/Episode";
-import { PlayedEpisode } from "src/types/PlayedEpisode";
-import { PodcastFeed } from "src/types/PodcastFeed";
-import { Playlist } from "src/types/Playlist";
+import type { Episode } from "src/types/Episode";
+import type { PlayedEpisode } from "src/types/PlayedEpisode";
+import type { PodcastFeed } from "src/types/PodcastFeed";
+import type { Playlist } from "src/types/Playlist";
 import { ViewState } from "src/types/ViewState";
-import DownloadedEpisode from "src/types/DownloadedEpisode";
+import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import { TFile } from "obsidian";
-import { LocalEpisode } from "src/types/LocalEpisode";
+import type { LocalEpisode } from "src/types/LocalEpisode";
 
 export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
 export const duration = writable<number>(0);
 
-export const currentEpisode = (function () {
+export const currentEpisode = (() => {
 	const store = writable<Episode>();
 	const { subscribe, update } = store;
 
@@ -30,12 +30,7 @@ export const currentEpisode = (function () {
 					const ct = get(currentTime);
 					const dur = get(duration);
 					const isFinished = ct === dur;
-					playedEpisodes.setEpisodeTime(
-						previousEpisode,
-						ct,
-						dur,
-						isFinished
-					);
+					playedEpisodes.setEpisodeTime(previousEpisode, ct, dur, isFinished);
 				}
 
 				return newEpisode;
@@ -45,7 +40,7 @@ export const currentEpisode = (function () {
 })();
 
 export const isPaused = writable<boolean>(true);
-export const playedEpisodes = (function () {
+export const playedEpisodes = (() => {
 	const store = writable<{ [key: string]: PlayedEpisode }>({});
 	const { subscribe, update, set } = store;
 
@@ -57,7 +52,7 @@ export const playedEpisodes = (function () {
 			episode: Episode,
 			time: number,
 			duration: number,
-			finished: boolean
+			finished: boolean,
 		) => {
 			update((playedEpisodes) => {
 				playedEpisodes[episode.title] = {
@@ -100,17 +95,19 @@ export const playedEpisodes = (function () {
 	};
 })();
 
+export const podcastsUpdated = writable(0);
+
 export const savedFeeds = writable<{ [podcastName: string]: PodcastFeed }>({});
 
 export const episodeCache = writable<{ [podcastName: string]: Episode[] }>({});
 
-export const downloadedEpisodes = (function () {
+export const downloadedEpisodes = (() => {
 	const store = writable<{ [podcastName: string]: DownloadedEpisode[] }>({});
 	const { subscribe, update, set } = store;
 
 	function isEpisodeDownloaded(episode: Episode): boolean {
 		return get(store)[episode.podcastName]?.some(
-			(e) => e.title === episode.title
+			(e) => e.title === episode.title,
 		);
 	}
 
@@ -120,31 +117,35 @@ export const downloadedEpisodes = (function () {
 		update,
 		isEpisodeDownloaded,
 		addEpisode: (episode: Episode, filePath: string, size: number) => {
-			update((downloadedEpisodes) => {
-				const podcastEpisodes =
-					downloadedEpisodes[episode.podcastName] || [];
+			update(
+				(downloadedEpisodes: {
+					[podcastName: string]: DownloadedEpisode[];
+				}) => {
+					const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
 
-				const idx = podcastEpisodes.findIndex(ep => ep.title === episode.title);
-				if (idx !== -1) {
-					podcastEpisodes[idx] = { ...episode, filePath, size };
-				} else {
-					podcastEpisodes.push({
-						...episode,
-						filePath,
-						size,
-					});
-				}
+					const idx = podcastEpisodes.findIndex(
+						(ep) => ep.title === episode.title,
+					);
+					if (idx !== -1) {
+						podcastEpisodes[idx] = { ...episode, filePath, size };
+					} else {
+						podcastEpisodes.push({
+							...episode,
+							filePath,
+							size,
+						});
+					}
 
-				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
-				return downloadedEpisodes;
-			});
+					downloadedEpisodes[episode.podcastName] = podcastEpisodes;
+					return downloadedEpisodes;
+				},
+			);
 		},
 		removeEpisode: (episode: Episode, removeFile: boolean) => {
 			update((downloadedEpisodes) => {
-				const podcastEpisodes =
-					downloadedEpisodes[episode.podcastName] || [];
+				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
 				const index = podcastEpisodes.findIndex(
-					(e) => e.title === episode.title
+					(e) => e.title === episode.title,
 				);
 				const filePath = podcastEpisodes[index].filePath;
 
@@ -152,9 +153,12 @@ export const downloadedEpisodes = (function () {
 
 				if (removeFile) {
 					try {
+						// @ts-ignore: app is not defined in the global scope anymore, but is still
+						// available. Need to fix this later
 						const file = app.vault.getAbstractFileByPath(filePath);
 
 						if (file instanceof TFile) {
+							// @ts-ignore
 							app.vault.delete(file);
 						}
 					} catch (error) {
@@ -168,13 +172,13 @@ export const downloadedEpisodes = (function () {
 		},
 		getEpisode: (episode: Episode) => {
 			return get(store)[episode.podcastName]?.find(
-				(e) => e.title === episode.title
+				(e) => e.title === episode.title,
 			);
 		},
 	};
 })();
 
-export const queue = (function () {
+export const queue = (() => {
 	const store = writable<Playlist>({
 		icon: "list-ordered",
 		name: "Queue",
@@ -197,7 +201,7 @@ export const queue = (function () {
 		remove: (episode: Episode) => {
 			update((queue) => {
 				queue.episodes = queue.episodes.filter(
-					(e) => e.title !== episode.title
+					(e) => e.title !== episode.title,
 				);
 				return queue;
 			});
@@ -224,7 +228,7 @@ export const favorites = writable<Playlist>({
 	shouldRepeat: false,
 });
 
-export const localFiles = function () {
+export const localFiles = (() => {
 	const store = writable<Playlist>({
 		icon: "folder",
 		name: "Local Files",
@@ -240,13 +244,13 @@ export const localFiles = function () {
 		update,
 		set,
 		getLocalEpisode: (title: string): LocalEpisode | undefined => {
-			const ep =  get(store).episodes.find(ep => ep.title === title);
+			const ep = get(store).episodes.find((ep) => ep.title === title);
 
 			return ep as LocalEpisode;
 		},
 		updateStreamUrl: (title: string, newUrl: string): void => {
 			store.update((playlist) => {
-				const idx = playlist.episodes.findIndex(ep => ep.title === title);
+				const idx = playlist.episodes.findIndex((ep) => ep.title === title);
 
 				if (idx !== -1) playlist.episodes[idx].streamUrl = newUrl;
 
@@ -255,7 +259,9 @@ export const localFiles = function () {
 		},
 		addEpisode: (episode: LocalEpisode): void => {
 			store.update((playlist) => {
-				const idx = playlist.episodes.findIndex(ep => ep.title === episode.title);
+				const idx = playlist.episodes.findIndex(
+					(ep) => ep.title === episode.title,
+				);
 
 				if (idx !== -1) {
 					playlist.episodes[idx] = episode;
@@ -265,14 +271,14 @@ export const localFiles = function () {
 
 				return playlist;
 			});
-		}
-	}
-}();
+		},
+	};
+})();
 
 export const playlists = writable<{ [name: string]: Playlist }>({});
 
 export const podcastView = writable<HTMLDivElement>();
-export const viewState = (function () {
+export const viewState = (() => {
 	const store = writable<ViewState>(ViewState.PodcastGrid);
 	const { subscribe, set } = store;
 

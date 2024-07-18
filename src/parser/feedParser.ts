@@ -1,6 +1,6 @@
-import { PodcastFeed } from "src/types/PodcastFeed";
+import type { PodcastFeed } from "src/types/PodcastFeed";
 import { requestUrl } from "obsidian";
-import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 
 export default class FeedParser {
 	private feed: PodcastFeed | undefined;
@@ -83,9 +83,7 @@ export default class FeedParser {
 			return !!ep;
 		}
 
-		return Array.from(items)
-			.map(this.parseItem.bind(this))
-			.filter(isEpisode);
+		return Array.from(items).map(this.parseItem.bind(this)).filter(isEpisode);
 	}
 
 	protected parseItem(item: Element): Episode | null {
@@ -96,7 +94,7 @@ export default class FeedParser {
 		const contentEl = item.querySelector("*|encoded");
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = item.querySelector("image");
-		const itunesTitleEl = item.getElementsByTagName('itunes:title')[0];
+		const itunesTitleEl = item.getElementsByTagName("itunes:title")[0];
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
 			return null;
@@ -122,7 +120,7 @@ export default class FeedParser {
 			artworkUrl,
 			episodeDate: pubDate,
 			feedUrl: this.feed?.url || "",
-			itunesTitle: itunesTitle || ""
+			itunesTitle: itunesTitle || "",
 		};
 	}
 
