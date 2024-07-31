@@ -5,8 +5,10 @@ import { downloadEpisode } from "../downloadEpisode";
 import {
 	FilePathTemplateEngine,
 	TranscriptTemplateEngine,
+	TimestampTemplateEngine,
 } from "../TemplateEngine";
 import type { Episode } from "src/types/Episode";
+import type { Transcription } from "openai/resources/audio";
 
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
@@ -119,8 +121,12 @@ export class TranscriptionService {
 			notice.update("Starting transcription...");
 			const transcription = await this.transcribeChunks(files, notice.update);
 
+			notice.update("Processing timestamps...");
+			const formattedTranscription =
+				this.formatTranscriptionWithTimestamps(transcription);
+
 			notice.update("Saving transcription...");
-			await this.saveTranscription(currentEpisode, transcription);
+			await this.saveTranscription(currentEpisode, formattedTranscription);
 
 			notice.stop();
 			notice.update("Transcription completed and saved.");
@@ -177,8 +183,8 @@ export class TranscriptionService {
 	private async transcribeChunks(
 		files: File[],
 		updateNotice: (message: string) => void,
-	): Promise<string> {
-		const transcriptions: string[] = new Array(files.length);
+	): Promise<Transcription> {
+		const transcriptions: Transcription[] = [];
 		let completedChunks = 0;
 
 		const updateProgress = () => {
@@ -190,40 +196,117 @@ export class TranscriptionService {
 
 		updateProgress();
 
-		await Promise.all(
-			files.map(async (file, index) => {
-				let retries = 0;
-				while (retries < this.MAX_RETRIES) {
-					try {
-						const result = await this.client.audio.transcriptions.create({
-							model: "whisper-1",
-							file,
-						});
-						transcriptions[index] = result.text;
-						completedChunks++;
-						updateProgress();
-						break;
-					} catch (error) {
-						retries++;
-						if (retries >= this.MAX_RETRIES) {
-							console.error(
-								`Failed to transcribe chunk ${index} after ${this.MAX_RETRIES} attempts:`,
-								error,
-							);
-							transcriptions[index] = `[Error transcribing chunk ${index}]`;
-							completedChunks++;
-							updateProgress();
-						} else {
-							await new Promise((resolve) =>
-								setTimeout(resolve, 1000 * retries),
-							); // Exponential backoff
-						}
+		for (const file of files) {
+			let retries = 0;
+			while (retries < this.MAX_RETRIES) {
+				try {
+					const result = await this.client.audio.transcriptions.create({
+						file: file,
+						model: "whisper-1",
+						response_format: "verbose_json",
+						timestamp_granularities: ["segment", "word"],
+					});
+					transcriptions.push(result);
+					completedChunks++;
+					updateProgress();
+					break;
+				} catch (error) {
+					retries++;
+					if (retries >= this.MAX_RETRIES) {
+						console.error(
+							`Failed to transcribe chunk after ${this.MAX_RETRIES} attempts:`,
+							error,
+						);
+						throw error;
 					}
+					await new Promise((resolve) => setTimeout(resolve, 1000 * retries)); // Exponential backoff
 				}
-			}),
-		);
+			}
+		}
 
-		return transcriptions.join(" ");
+		return this.mergeTranscriptions(transcriptions);
+	}
+
+	private mergeTranscriptions(transcriptions: Transcription[]): Transcription {
+		let mergedText = "";
+		const mergedSegments = [];
+		let timeOffset = 0;
+
+		transcriptions.forEach((transcription, index) => {
+			if (typeof transcription === "string") {
+				mergedText += (index > 0 ? " " : "") + transcription;
+			} else if (typeof transcription === "object" && transcription.text) {
+				mergedText += (index > 0 ? " " : "") + transcription.text;
+
+				// Assuming the transcription object has a 'segments' property
+				if (transcription.segments) {
+					for (const segment of transcription.segments) {
+						mergedSegments.push({
+							...segment,
+							start: segment.start + timeOffset,
+							end: segment.end + timeOffset,
+						});
+					}
+
+					timeOffset +=
+						transcription.segments[transcription.segments.length - 1].end;
+				}
+			}
+		});
+
+		return {
+			text: mergedText,
+			segments: mergedSegments,
+			// Add other properties as needed
+		};
+	}
+
+	private formatTranscriptionWithTimestamps(transcription: Transcription): string {
+		let formattedTranscription = "";
+		let currentSegment = "";
+		let segmentStart: number | null = null;
+		let segmentEnd: number | null = null;
+
+		transcription.segments.forEach((segment, index) => {
+			if (segmentStart === null) {
+				segmentStart = segment.start;
+			}
+			segmentEnd = segment.end;
+
+			if (index === 0 || segment.start - transcription.segments[index - 1].end > 2) {
+				// New segment
+				if (currentSegment) {
+					const timestampRange = {
+						start: segmentStart!,
+						end: segmentEnd!
+					};
+					const formattedTimestamp = TimestampTemplateEngine("**{{linktimerange}}**\n",
+						timestampRange
+					);
+					formattedTranscription += `${formattedTimestamp} ${currentSegment}\n\n`;
+				}
+				currentSegment = segment.text;
+				segmentStart = segment.start;
+			} else {
+				// Continuing segment
+				currentSegment += ` ${segment.text}`;
+			}
+
+			// Handle the last segment
+			if (index === transcription.segments.length - 1) {
+				const timestampRange = {
+					start: segmentStart!,
+					end: segmentEnd!
+				};
+				const formattedTimestamp = TimestampTemplateEngine(
+					this.plugin.settings.timestamp.template,
+					timestampRange
+				);
+				formattedTranscription += `${formattedTimestamp} ${currentSegment}`;
+			}
+		});
+
+		return formattedTranscription;
 	}
 
 	private async saveTranscription(
