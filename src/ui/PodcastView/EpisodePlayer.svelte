@@ -20,7 +20,7 @@
 	import EpisodeList from "./EpisodeList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-	import { Episode } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
@@ -38,8 +38,8 @@
 	const offBinding = new CircumentForcedTwoWayBinding();
 	//#endregion
 
-	let isHoveringArtwork: boolean = false;
-	let isLoading: boolean = true;
+	let isHoveringArtwork = false;
+	let isLoading = true;
 	let showQueue = false;
 
 	function togglePlayback() {
@@ -57,12 +57,11 @@
 
 	function removeEpisodeFromPlaylists() {
 		playlists.update((lists) => {
-			Object.values(lists).forEach((playlist) => {
+			for (const playlist of Object.values(lists)) {
 				playlist.episodes = playlist.episodes.filter(
-					(ep) => ep.title !== $currentEpisode.title,
+					(ep) => ep.title !== $currentEpisode.title
 				);
-			});
-
+			}
 			return lists;
 		});
 
