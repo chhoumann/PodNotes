@@ -15,7 +15,7 @@
 	import { onDestroy, onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
-	import Slider from "../obsidian/Slider.svelte";
+	import Dropdown from "../obsidian/Dropdown.svelte";
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
@@ -24,6 +24,7 @@
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
+	import { fade, slide } from "svelte/transition";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -39,12 +40,15 @@
 
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
+	let showQueue = false;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
 	}
 
-	function onClickProgressbar({ detail: { event } }: CustomEvent<{ event: MouseEvent }>) {
+	function onClickProgressbar({
+		detail: { event },
+	}: CustomEvent<{ event: MouseEvent }>) {
 		const progressbar = event.target as HTMLDivElement;
 		const percent = event.offsetX / progressbar.offsetWidth;
 
@@ -55,7 +59,7 @@
 		playlists.update((lists) => {
 			Object.values(lists).forEach((playlist) => {
 				playlist.episodes = playlist.episodes.filter(
-					(ep) => ep.title !== $currentEpisode.title
+					(ep) => ep.title !== $currentEpisode.title,
 				);
 			});
 
@@ -72,8 +76,8 @@
 		queue.playNext();
 	}
 
-	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
-		offBinding.playbackRate = event.detail.value;
+	function onPlaybackRateChange(event: CustomEvent<{ value: string }>) {
+		offBinding.playbackRate = Number.parseFloat(event.detail.value);
 	}
 
 	function onMetadataLoaded() {
@@ -109,11 +113,11 @@
 
 		// This only happens when the player is open and the user downloads the episode via the context menu.
 		// So we want to update the source of the audio element to local file / online stream.
-		const unsubDownloadedSource = downloadedEpisodes.subscribe(_ => {
+		const unsubDownloadedSource = downloadedEpisodes.subscribe((_) => {
 			srcPromise = getSrc($currentEpisode);
 		});
 
-		const unsubCurrentEpisode = currentEpisode.subscribe(_ => {
+		const unsubCurrentEpisode = currentEpisode.subscribe((_) => {
 			srcPromise = getSrc($currentEpisode);
 		});
 
@@ -130,7 +134,12 @@
 	// #endregion
 
 	onDestroy(() => {
-		playedEpisodes.setEpisodeTime($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
+		playedEpisodes.setEpisodeTime(
+			$currentEpisode,
+			$currentTime,
+			$duration,
+			$currentTime === $duration,
+		);
 		isPaused.set(true);
 	});
 
@@ -143,7 +152,7 @@
 	function handleContextMenuEpisodeImage(event: MouseEvent) {
 		spawnEpisodeContextMenu($currentEpisode, event, {
 			play: true,
-			markPlayed: true
+			markPlayed: true,
 		});
 	}
 
@@ -157,16 +166,32 @@
 	async function getSrc(episode: Episode): Promise<string> {
 		if (downloadedEpisodes.isEpisodeDownloaded(episode)) {
 			const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
-			if (!downloadedEpisode) return '';
+			if (!downloadedEpisode) return "";
 
 			return createMediaUrlObjectFromFilePath(downloadedEpisode.filePath);
 		}
-		
+
 		return episode.streamUrl;
 	}
+
+	function toggleQueue() {
+		showQueue = !showQueue;
+	}
+
+
+	const playbackRates = {
+		"0.50": "0.5x",
+		"0.75": "0.75x",
+		"1.00": "1x",
+		"1.25": "1.25x",
+		"1.50": "1.5x",
+		"1.75": "1.75x",
+		"2.00": "2x"
+	};
+
 </script>
 
-<div class="episode-player">
+<div class="episode-player" transition:fade={{ duration: 300 }}>
 	<div class="episode-image-container">
 		<div
 			class="hover-container"
@@ -175,18 +200,23 @@
 			on:mouseenter={() => (isHoveringArtwork = true)}
 			on:mouseleave={() => (isHoveringArtwork = false)}
 		>
-		 <Image 
-			class={"podcast-artwork"}
-			src={$currentEpisode.artworkUrl ?? ""}
-			alt={$currentEpisode.title}
-			opacity={(isHoveringArtwork || $isPaused) ? 0.5 : 1}
-		 >
-			<svelte:fragment slot="fallback">
-				<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
-					<Icon icon="image" size={150} />
-				</div>
-			</svelte:fragment>
-		 </Image>
+			<Image
+				class="podcast-artwork"
+				src={$currentEpisode.artworkUrl ?? ""}
+				alt={$currentEpisode.title}
+				opacity={isHoveringArtwork || $isPaused ? 0.5 : 1}
+			>
+				<svelte:fragment slot="fallback">
+					<div
+						class={"podcast-artwork-placeholder" +
+							(isHoveringArtwork || $isPaused
+								? " opacity-50"
+								: "")}
+					>
+						<Icon icon="image" size={150} />
+					</div>
+				</svelte:fragment>
+			</Image>
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />
@@ -194,21 +224,22 @@
 			{:else}
 				<div
 					class="podcast-artwork-overlay"
-					style={`display: ${
-						isHoveringArtwork || $isPaused ? "block" : "none"
-					}`}
+					style={`display: ${isHoveringArtwork || $isPaused ? "flex" : "none"}`}
 				>
-					<Icon icon={$isPaused ? "play" : "pause"} />
+					<Icon icon={$isPaused ? "play" : "pause"} size={64} />
 				</div>
 			{/if}
 		</div>
 	</div>
 
-	<h2 class="podcast-title">{$currentEpisode.title}</h2>
+	<div class="episode-info">
+		<h2 class="podcast-title">{$currentEpisode.title}</h2>
+		<p class="podcast-author">{$currentEpisode.podcastName}</p>
+	</div>
 
 	{#await srcPromise then src}
 		<audio
-			src={src}
+			{src}
 			bind:duration={$duration}
 			bind:currentTime={playerTime}
 			bind:paused={$isPaused}
@@ -220,17 +251,23 @@
 		/>
 	{/await}
 
-	<div class="status-container">
-		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
-		<Progressbar 
+	<div class="progress-container">
+		<div class="time-display">
+			{formatSeconds($currentTime, "HH:mm:ss")}
+		</div>
+		<Progressbar
 			on:click={onClickProgressbar}
 			value={$currentTime}
 			max={$duration}
 			style={{
-				"height": "2rem",
+				height: "0.5rem",
+				"flex-grow": "1",
+				margin: "0 1rem",
 			}}
 		/>
-		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
+		<div class="time-display">
+			{formatSeconds($duration - $currentTime, "HH:mm:ss")}
+		</div>
 	</div>
 
 	<div class="controls-container">
@@ -238,143 +275,139 @@
 			icon="skip-back"
 			tooltip="Skip backward"
 			on:click={$plugin.api.skipBackward.bind($plugin.api)}
-			style={{
-				margin: "0",
-				cursor: "pointer",
-			}}
+		/>
+		<Button
+			icon={$isPaused ? "play" : "pause"}
+			tooltip={$isPaused ? "Play" : "Pause"}
+			on:click={togglePlayback}
+			class="play-pause-button"
 		/>
 		<Button
 			icon="skip-forward"
 			tooltip="Skip forward"
 			on:click={$plugin.api.skipForward.bind($plugin.api)}
-			style={{
-				margin: "0",
-				cursor: "pointer",
-			}}
 		/>
+		<Button icon="list" tooltip="Toggle queue" on:click={toggleQueue} />
+		<div class="playback-rate-container">
+			<Dropdown
+				options={playbackRates}
+				value={offBinding.playbackRate.toFixed(2)}
+				on:change={onPlaybackRateChange}
+				style={{
+					minWidth: "70px",
+					textAlign: "center"
+				}}
+			/>
+		</div>
 	</div>
 
-	<div class="playbackrate-container">
-		<span>{offBinding.playbackRate}x</span>
-		<Slider
-			on:change={onPlaybackRateChange}
-			value={offBinding.playbackRate}
-			limits={[0.5, 3.5, 0.1]}
-		/>
-	</div>
-
-	<EpisodeList 
-		episodes={$queue.episodes} 
-		showListMenu={false}
-		showThumbnails={true}
-		on:contextMenuEpisode={handleContextMenuEpisode}
-		on:clickEpisode={handleClickEpisode}
-	>
-		<svelte:fragment slot="header">
-			<h3>Queue</h3>
-		</svelte:fragment>
-	</EpisodeList>
+	{#if showQueue}
+		<div class="queue-container" transition:slide>
+			<EpisodeList
+				episodes={$queue.episodes}
+				showListMenu={false}
+				showThumbnails={true}
+				on:contextMenuEpisode={handleContextMenuEpisode}
+				on:clickEpisode={handleClickEpisode}
+			>
+				<svelte:fragment slot="header">
+					<h3>Queue</h3>
+				</svelte:fragment>
+			</EpisodeList>
+		</div>
+	{/if}
 </div>
 
 <style>
-	:global(.episode-player) {
+	.episode-player {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+		padding: 1rem;
+		background-color: var(--background-secondary);
+		border-radius: 8px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 	}
 
-	:global(.episode-image-container) {
-		width:  100%;
-		height: auto;
-		padding: 5% 0%;
-	}
-
-	:global(.hover-container) {
-		min-width:  10rem;
-		min-height: 10rem;
+	.episode-image-container {
 		width: 100%;
-		height: 100%;
-		aspect-ratio: 1/1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		max-width: 300px;
+		margin: 0 auto 1rem;
+	}
+
+	.hover-container {
 		position: relative;
-		margin-left: auto;
-		margin-right: auto;
+		aspect-ratio: 1/1;
+		border-radius: 8px;
+		overflow: hidden;
 	}
 
-	:global(.podcast-artwork) {
+	.podcast-artwork,
+	.podcast-artwork-placeholder {
 		width: 100%;
 		height: 100%;
-		background-size: cover;
-		background-position: center;
-		background-repeat: no-repeat;
-		position: absolute;
+		object-fit: cover;
 	}
 
-	:global(.podcast-artwork-placeholder) {
+	.podcast-artwork-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
 		width: 100%;
 		height: 100%;
-		background-size: cover;
-		background-position: center;
-		background-repeat: no-repeat;
-		position: absolute;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		background-color: rgba(0, 0, 0, 0.5);
+		cursor: pointer;
 	}
 
-	/* Some themes override this, so opting to force like so. */
-	:global(.podcast-artwork:hover) {
-		cursor: pointer !important;
-	}
-
-	:global(.podcast-artwork-overlay) {
-		position: absolute;
-	}
-
-	:global(.podcast-artwork-isloading-overlay) {
-		position: absolute;
-		display: block;
-	}
-
-	:global(.podcast-artwork-overlay:hover) {
-		cursor: pointer !important;
-	}
-
-	:global(.opacity-50) {
-		opacity: 0.5;
-	}
-
-	:global(.podcast-title) {
-		font-size: 1.5rem;
-		font-weight: bold;
-		margin: 0%;
-		margin-bottom: 0.5rem;
+	.episode-info {
 		text-align: center;
+		margin-bottom: 1rem;
 	}
 
-	:global(.status-container) {
-		display: flex;
-		align-items: center;
-		justify-content: space-around;
+	.podcast-title {
+		font-size: 1.2rem;
+		font-weight: bold;
+		margin: 0;
+		margin-bottom: 0.5rem;
 	}
 
-	:global(.controls-container) {
+	.podcast-author {
+		font-size: 0.9rem;
+		color: var(--text-muted);
+		margin: 0;
+	}
+
+	.progress-container {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		margin-bottom: 1rem;
+	}
+
+	.time-display {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+
+	.controls-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.controls-container :global(button) {
+		margin: 0 0.5rem;
+	}
+
+	.play-pause-button {
+		width: 3rem;
+		height: 3rem;
+	}
+
+	.queue-container {
 		margin-top: 1rem;
-		margin-left: 25%;
-		margin-right: 25%;
-	}
-
-	:global(.playbackrate-container) {
-		display: flex;
-		align-items: center;
-		justify-content: space-around;
-		margin-bottom: 2.5rem;
-		flex-direction: column;
-		margin-top: auto;
 	}
 </style>
