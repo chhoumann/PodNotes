@@ -207,6 +207,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				const cursorPos = editor.getCursor();
 				const capture = TimestampTemplateEngine(
 					this.settings.timestamp.template,
+					{
+						start: this.api.currentTime,
+						end: this.api.currentTime,
+					},
 				);
 
 				editor.replaceRange(capture, cursorPos);
