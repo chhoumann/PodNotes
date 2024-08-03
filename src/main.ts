@@ -66,6 +66,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}>;
 	private transcriptionService: TranscriptionService;
 
+	private maxLayoutReadyAttempts = 10;
+	private layoutReadyAttempts = 0;
+
 	async onload() {
 		plugin.set(this);
 
@@ -281,6 +284,19 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	onLayoutReady(): void {
+		if (!this.app.workspace || !this.app.workspace.layoutReady) {
+			// Workspace is not ready, schedule a retry
+			this.layoutReadyAttempts++;
+			if (this.layoutReadyAttempts < this.maxLayoutReadyAttempts) {
+				setTimeout(() => this.onLayoutReady(), 100);
+			} else {
+				console.error(
+					"Failed to initialize PodNotes layout after maximum attempts",
+				);
+			}
+			return;
+		}
+
 		if (this.app.workspace.getLeavesOfType(VIEW_TYPE).length) {
 			return;
 		}
