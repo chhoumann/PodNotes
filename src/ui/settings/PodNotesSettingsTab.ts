@@ -19,6 +19,7 @@ import { episodeCache, savedFeeds } from "src/store/index";
 import type { Episode } from "src/types/Episode";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
+import { Component } from "obsidian";
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
@@ -155,8 +156,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				demoVal,
 				timestampFormatDemoEl,
 				"",
-				// @ts-ignore - documentation says component is optional, yet not providing one causes an error
-				null,
+				new Component(),
 			);
 		};
 
@@ -182,8 +182,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						demoVal,
 						noteCreationFilePathDemoEl,
 						"",
-						// @ts-ignore - documentation says component is optional, yet not providing one causes an error
-						null,
+						new Component(),
 					);
 				});
 				textComponent.inputEl.style.width = "100%";
@@ -248,8 +247,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						`${demoVal}.mp3`,
 						downloadFilePathDemoEl,
 						"",
-						// @ts-ignore - documentation says component is optional, yet not providing one causes an error
-						null,
+						new Component(),
 					);
 				});
 				textComponent.inputEl.style.width = "100%";
