@@ -1,6 +1,6 @@
-import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
-import { IAPI } from "./IAPI";
+import type { IAPI } from "./IAPI";
 import {
 	currentEpisode,
 	currentTime,
