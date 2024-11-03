@@ -105,6 +105,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.transcriptionService = new TranscriptionService(this);
 
+		this.api = new API();
+
 		this.addCommand({
 			id: "podnotes-show-leaf",
 			name: "Show PodNotes",
@@ -270,7 +272,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {
 			this.view = new MainView(leaf, this);
-			this.api = new API();
 			return this.view;
 		});
 
