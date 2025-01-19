@@ -78,7 +78,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 		// reduce multiple new lines
 		const sanitizeDescription = htmlToMarkdown(episode.description).replace(
 			/\n{3,}/g,
-			"\n\n"
+			"\n\n",
 		);
 		if (prependToLines) {
 			return sanitizeDescription
@@ -108,7 +108,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	);
 	addTag(
 		"podcast",
-		replaceIllegalFileNameCharactersInString(episode.podcastName)
+		replaceIllegalFileNameCharactersInString(episode.podcastName),
 	);
 	addTag("artwork", episode.artworkUrl ?? "");
 
@@ -241,7 +241,7 @@ export function TranscriptTemplateEngine(
 
 function replaceIllegalFileNameCharactersInString(string: string) {
 	return string
-		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.]/g, "") // Replace illegal file name characters with empty string
+		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.\?]/g, "") // Replace illegal file name characters with empty string
 		.replace(/\n/, " ") // replace newlines with spaces
 		.replace("  ", " "); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
 }
