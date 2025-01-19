@@ -1,7 +1,7 @@
 {
 	"id": "podnotes",
 	"name": "PodNotes",
-	"version": "2.13.3",
+	"version": "2.13.4",
 	"minAppVersion": "0.15.9",
 	"description": "Helps you write notes on podcasts.",
 	"author": "Christian B. B. Houmann",
