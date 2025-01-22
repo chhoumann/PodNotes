@@ -1,9 +1,11 @@
 import { htmlToMarkdown, Notice } from "obsidian";
 import type { Episode } from "src/types/Episode";
 import Fuse from "fuse.js";
-import { plugin } from "src/store";
+import { downloadedEpisodes, plugin } from "src/store";
 import { get } from "svelte/store";
 import getUrlExtension from "./utility/getUrlExtension";
+import encodePodnotesURI from "./utility/encodePodnotesURI";
+import { isLocalFile } from "./utility/isLocalFile";
 
 interface Tags {
 	[tag: string]: string | ((...args: unknown[]) => string);
@@ -115,17 +117,53 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	return replacer(template);
 }
 
-export function TimestampTemplateEngine(template: string) {
+export function TimestampTemplateEngine(template: string, range: TimestampRange) {
 	const [replacer, addTag] = useTemplateEngine();
 
 	addTag("time", (format?: string) =>
-		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss"),
+		formatTimestamp(range.start, format ?? "HH:mm:ss")
 	);
 	addTag("linktime", (format?: string) =>
-		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true),
+		formatTimestampWithLink(range.start, format ?? "HH:mm:ss")
+	);
+
+	addTag("timerange", (format?: string) =>
+		`${formatTimestamp(range.start, format ?? "HH:mm:ss")} - ${formatTimestamp(range.end, format ?? "HH:mm:ss")}`
+	);
+	addTag("linktimerange", (format?: string) =>
+		`${formatTimestampWithLink(range.start, format ?? "HH:mm:ss")} - ${formatTimestampWithLink(range.end, format ?? "HH:mm:ss")}`
 	);
 
 	return replacer(template);
+}
+
+
+function formatTimestamp(seconds: number, format: string): string {
+	const date = new Date(0);
+	date.setSeconds(seconds);
+	return date.toISOString().substr(11, 8); // This gives HH:mm:ss format
+	// If you need more flexible formatting, you might want to use a library like moment.js
+}
+
+function formatTimestampWithLink(seconds: number, format: string): string {
+	const time = formatTimestamp(seconds, format);
+	const api = get(plugin).api;
+	const episode = api.podcast;
+	
+	if (!episode) {
+		return time;
+	}
+
+	const feedUrl = isLocalFile(episode)
+		? downloadedEpisodes.getEpisode(episode)?.filePath
+		: episode.feedUrl;
+
+	if (!feedUrl) {
+		return time;
+	}
+
+	const url = encodePodnotesURI(episode.title, feedUrl, seconds);
+	return `[${time}](${url.href})`;
 }
 
 export function FilePathTemplateEngine(template: string, episode: Episode) {
