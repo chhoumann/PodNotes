@@ -1,5 +1,6 @@
 import { htmlToMarkdown, Notice } from "obsidian";
 import type { Episode } from "src/types/Episode";
+import type { TimestampRange } from "src/types/TimestampRange";
 import Fuse from "fuse.js";
 import { downloadedEpisodes, plugin } from "src/store";
 import { get } from "svelte/store";

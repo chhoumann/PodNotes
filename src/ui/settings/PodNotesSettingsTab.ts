@@ -17,6 +17,7 @@ import {
 import { FilePathTemplateEngine } from "../../TemplateEngine";
 import { episodeCache, savedFeeds } from "src/store/index";
 import type { Episode } from "src/types/Episode";
+import type { TimestampRange } from "src/types/TimestampRange"; 
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 
@@ -149,7 +150,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const updateTimestampDemo = (value: string) => {
 			if (!this.plugin.api.podcast) return;
 
-			const demoVal = TimestampTemplateEngine(value);
+			// Create a dummy timestamp range for the demo
+			const dummyRange = { start: 60, end: 90 }; // 1 minute to 1:30
+			const demoVal = TimestampTemplateEngine(value, dummyRange);
 			timestampFormatDemoEl.empty();
 			MarkdownRenderer.renderMarkdown(
 				demoVal,
