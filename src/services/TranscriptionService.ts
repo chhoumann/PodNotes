@@ -220,46 +220,50 @@ export class TranscriptionService {
 	 * @param resume Whether to attempt to resume a previously interrupted transcription
 	 */
 	async transcribeCurrentEpisode(resume: boolean = false): Promise<void> {
-		// Validate API key first
-		if (!this.initializeClient()) {
-			return;
-		}
-		
-		if (this.isTranscribing) {
-			new Notice("A transcription is already in progress.");
-			return;
-		}
-
-		// Reset cancellation flag
-		this.cancelRequested = false;
-		
-		// Reset progress indicators
-		this.progressPercent = 0;
-		this.progressSize = "0 KB";
-		this.timeRemaining = "Calculating...";
-		this.processingStatus = "Preparing...";
-
+		// Get current episode first
 		const currentEpisode = this.plugin.api.podcast;
 		if (!currentEpisode) {
 			new Notice("No episode is currently playing.");
 			return;
 		}
-
-		// Check if transcription file already exists
-		const transcriptPath = FilePathTemplateEngine(
-			this.plugin.settings.transcript.path,
-			currentEpisode,
-		);
-		const existingFile =
-			this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
-		if (existingFile instanceof TFile && !resume) {
-			new Notice(
-				`You've already transcribed this episode - found ${transcriptPath}.`,
-			);
+		
+		// Set isTranscribing to true first for immediate UI update
+		this.isTranscribing = true;
+		
+		// Reset progress indicators (these should be visible immediately)
+		this.progressPercent = 0;
+		this.progressSize = "0 KB";
+		this.timeRemaining = "Calculating...";
+		this.processingStatus = "Preparing...";
+		
+		// Force UI to update by triggering a microtask
+		await new Promise(resolve => setTimeout(resolve, 0));
+		
+		// Validate API key
+		if (!this.initializeClient()) {
+			// Reset state if validation fails
+			this.isTranscribing = false;
 			return;
 		}
+		
+		// Check if transcription file already exists (only if not resuming)
+		if (!resume) {
+			const transcriptPath = FilePathTemplateEngine(
+				this.plugin.settings.transcript.path,
+				currentEpisode,
+			);
+			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
+			if (existingFile instanceof TFile) {
+				new Notice(`You've already transcribed this episode - found ${transcriptPath}.`);
+				this.isTranscribing = false;
+				return;
+			}
+		}
 
-		this.isTranscribing = true;
+		// Reset cancellation flag
+		this.cancelRequested = false;
+		
+		// Create a notice for traditional display (we'll also show in the UI)
 		const notice = TimerNotice("Transcription", "Preparing to transcribe...");
 		this.activeNotice = notice;
 
@@ -478,7 +482,7 @@ export class TranscriptionService {
 		let totalProcessedBytes = 0;
 		let lastUpdateTime = Date.now();
 		let startTime = Date.now();
-		const UPDATE_INTERVAL_MS = 500; // Only update UI every 500ms to reduce performance impact
+		const UPDATE_INTERVAL_MS = 150; // Update UI more frequently for better responsiveness
 		
 		// If we have resume data, restore the progress
 		if (resumeData && resumeData.episodeId === episodeId) {
