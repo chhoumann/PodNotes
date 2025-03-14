@@ -238,18 +238,54 @@ export class TranscriptionService {
 			} else if (typeof transcription === "object" && transcription.text) {
 				mergedText += (index > 0 ? " " : "") + transcription.text;
 
-				// Assuming the transcription object has a 'segments' property
+				// Check if this transcription has segments
 				if (transcription.segments) {
-					for (const segment of transcription.segments) {
-						mergedSegments.push({
-							...segment,
-							start: segment.start + timeOffset,
-							end: segment.end + timeOffset,
-						});
+					// Check if we need to merge with previous segment
+					if (index > 0 && mergedSegments.length > 0 && transcription.segments.length > 0) {
+						const lastSegment = mergedSegments[mergedSegments.length - 1];
+						const firstSegment = transcription.segments[0];
+						
+						// If timestamps are close, potentially merge the segments
+						// This helps with continuity across chunk boundaries
+						if ((firstSegment.start + timeOffset) - lastSegment.end < 1.0) {
+							// Merge segment text and update end time
+							lastSegment.text += " " + firstSegment.text;
+							lastSegment.end = firstSegment.end + timeOffset;
+							
+							// Add remaining segments with offset
+							for (let i = 1; i < transcription.segments.length; i++) {
+								const segment = transcription.segments[i];
+								mergedSegments.push({
+									...segment,
+									start: segment.start + timeOffset,
+									end: segment.end + timeOffset,
+								});
+							}
+						} else {
+							// Add all segments with offset
+							for (const segment of transcription.segments) {
+								mergedSegments.push({
+									...segment,
+									start: segment.start + timeOffset,
+									end: segment.end + timeOffset,
+								});
+							}
+						}
+					} else {
+						// First chunk, just add all segments with offset
+						for (const segment of transcription.segments) {
+							mergedSegments.push({
+								...segment,
+								start: segment.start + timeOffset,
+								end: segment.end + timeOffset,
+							});
+						}
 					}
 
-					timeOffset +=
-						transcription.segments[transcription.segments.length - 1].end;
+					// Update time offset for next chunk
+					if (transcription.segments.length > 0) {
+						timeOffset += transcription.segments[transcription.segments.length - 1].end;
+					}
 				}
 			}
 		});
@@ -266,6 +302,10 @@ export class TranscriptionService {
 		let currentSegment = "";
 		let segmentStart: number | null = null;
 		let segmentEnd: number | null = null;
+		
+		// Use the configured timestamp range from settings
+		const timestampRange = this.plugin.settings.transcript.timestampRange;
+		const includeTimestamps = this.plugin.settings.transcript.includeTimestamps;
 
 		transcription.segments.forEach((segment, index) => {
 			if (segmentStart === null) {
@@ -273,17 +313,24 @@ export class TranscriptionService {
 			}
 			segmentEnd = segment.end;
 
-			if (index === 0 || segment.start - transcription.segments[index - 1].end > 2) {
+			// Use the configured timestamp range to determine new segments
+			if (index === 0 || segment.start - transcription.segments[index - 1].end > timestampRange) {
 				// New segment
 				if (currentSegment) {
 					const timestampRange = {
 						start: segmentStart!,
 						end: segmentEnd!
 					};
-					const formattedTimestamp = TimestampTemplateEngine("**{{linktimerange}}**\n",
-						timestampRange
-					);
-					formattedTranscription += `${formattedTimestamp} ${currentSegment}\n\n`;
+					
+					// Only include timestamps if enabled in settings
+					if (includeTimestamps) {
+						const formattedTimestamp = TimestampTemplateEngine("**{{linktimerange}}**\n",
+							timestampRange
+						);
+						formattedTranscription += `${formattedTimestamp} ${currentSegment}\n\n`;
+					} else {
+						formattedTranscription += `${currentSegment}\n\n`;
+					}
 				}
 				currentSegment = segment.text;
 				segmentStart = segment.start;
@@ -298,11 +345,17 @@ export class TranscriptionService {
 					start: segmentStart!,
 					end: segmentEnd!
 				};
-				const formattedTimestamp = TimestampTemplateEngine(
-					this.plugin.settings.timestamp.template,
-					timestampRange
-				);
-				formattedTranscription += `${formattedTimestamp} ${currentSegment}`;
+				
+				// Only include timestamps if enabled in settings
+				if (includeTimestamps) {
+					const formattedTimestamp = TimestampTemplateEngine(
+						this.plugin.settings.timestamp.template,
+						timestampRange
+					);
+					formattedTranscription += `${formattedTimestamp} ${currentSegment}`;
+				} else {
+					formattedTranscription += `${currentSegment}`;
+				}
 			}
 		});
 

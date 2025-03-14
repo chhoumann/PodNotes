@@ -69,5 +69,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		path: "transcripts/{{podcast}}/{{title}}.md",
 		template:
 			"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
+		includeTimestamps: true,
+		timestampRange: 2, // 2 seconds default gap for new timestamp
 	},
 };

@@ -402,6 +402,33 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		transcriptTemplateSetting.settingEl.style.flexDirection = "column";
 		transcriptTemplateSetting.settingEl.style.alignItems = "unset";
 		transcriptTemplateSetting.settingEl.style.gap = "10px";
+		
+		// Add timestamp settings
+		new Setting(container)
+			.setName("Include timestamps in transcripts")
+			.setDesc("When enabled, transcripts will include timestamps linking to specific points in the episode.")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.transcript.includeTimestamps)
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.includeTimestamps = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(container)
+			.setName("Timestamp range (seconds)")
+			.setDesc("The minimum time gap between timestamps in the transcript. Lower values create more timestamps.")
+			.addSlider((slider) => {
+				slider
+					.setLimits(1, 10, 1)
+					.setValue(this.plugin.settings.transcript.timestampRange)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.timestampRange = value;
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 }
 
