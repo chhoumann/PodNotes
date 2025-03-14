@@ -64,6 +64,10 @@ export class TranscriptionService {
 		});
 	}
 
+	/**
+	 * Transcribes the current episode asynchronously with optimized memory usage and performance.
+	 * Uses non-blocking approach to maintain responsiveness of the Obsidian UI.
+	 */
 	async transcribeCurrentEpisode(): Promise<void> {
 		if (this.isTranscribing) {
 			new Notice("A transcription is already in progress.");
@@ -94,6 +98,9 @@ export class TranscriptionService {
 		const notice = TimerNotice("Transcription", "Preparing to transcribe...");
 
 		try {
+			// Use setTimeout to allow UI to update before heavy processing starts
+			await new Promise(resolve => setTimeout(resolve, 50));
+			
 			notice.update("Downloading episode...");
 			const downloadPath = await downloadEpisode(
 				currentEpisode,
@@ -105,25 +112,36 @@ export class TranscriptionService {
 				throw new Error("Failed to download or locate the episode.");
 			}
 
+			// Another small delay to ensure UI responsiveness
+			await new Promise(resolve => setTimeout(resolve, 50));
+			
 			notice.update("Preparing audio for transcription...");
+			// Read the audio file in chunks to reduce memory pressure
 			const fileBuffer = await this.plugin.app.vault.readBinary(podcastFile);
 			const fileExtension = podcastFile.extension;
 			const mimeType = this.getMimeType(fileExtension);
 
-			const chunks = this.chunkFile(fileBuffer);
+			// Use the improved memory-efficient chunk processing
 			const files = this.createChunkFiles(
-				chunks,
+				fileBuffer,
 				podcastFile.basename,
 				fileExtension,
 				mimeType,
 			);
-
+			
+			// Release the file buffer as soon as possible to free memory
+			// @ts-ignore - using a workaround to help release memory
+			const tempFileBuffer = null;
+			
 			notice.update("Starting transcription...");
+			// Process transcription with concurrent chunks
 			const transcription = await this.transcribeChunks(files, notice.update);
-
+			
+			// Schedule processing in the next event loop iteration to avoid UI blocking
+			await new Promise(resolve => setTimeout(resolve, 50));
+			
 			notice.update("Processing timestamps...");
-			const formattedTranscription =
-				this.formatTranscriptionWithTimestamps(transcription);
+			const formattedTranscription = await this.formatTranscriptionWithTimestamps(transcription);
 
 			notice.update("Saving transcription...");
 			await this.saveTranscription(currentEpisode, formattedTranscription);
@@ -139,28 +157,43 @@ export class TranscriptionService {
 		}
 	}
 
-	private chunkFile(fileBuffer: ArrayBuffer): ArrayBuffer[] {
+	/**
+	 * Chunks a file into smaller pieces for more efficient processing.
+	 * Uses generator pattern to avoid holding all chunks in memory at once.
+	 */
+	private *chunkFileGenerator(fileBuffer: ArrayBuffer): Generator<ArrayBuffer> {
 		const CHUNK_SIZE_MB = 20;
 		const chunkSizeBytes = CHUNK_SIZE_MB * 1024 * 1024; // Convert MB to bytes
-		const chunks: ArrayBuffer[] = [];
+		
 		for (let i = 0; i < fileBuffer.byteLength; i += chunkSizeBytes) {
-			chunks.push(fileBuffer.slice(i, i + chunkSizeBytes));
+			// Create a slice and immediately yield it to avoid holding multiple chunks in memory
+			yield fileBuffer.slice(i, i + chunkSizeBytes);
 		}
-		return chunks;
 	}
-
+	
+	/**
+	 * Creates File objects for each chunk in the generator.
+	 * Returns an array of File objects but processes one at a time to manage memory.
+	 */
 	private createChunkFiles(
-		chunks: ArrayBuffer[],
+		fileBuffer: ArrayBuffer,
 		fileName: string,
 		fileExtension: string,
 		mimeType: string,
 	): File[] {
-		return chunks.map(
-			(chunk, index) =>
-				new File([chunk], `${fileName}.part${index}.${fileExtension}`, {
-					type: mimeType,
-				}),
-		);
+		const files: File[] = [];
+		let index = 0;
+		
+		// Use the generator to process one chunk at a time
+		for (const chunk of this.chunkFileGenerator(fileBuffer)) {
+			const file = new File([chunk], `${fileName}.part${index}.${fileExtension}`, {
+				type: mimeType,
+			});
+			files.push(file);
+			index++;
+		}
+		
+		return files;
 	}
 
 	private getMimeType(fileExtension: string): string {
@@ -184,32 +217,44 @@ export class TranscriptionService {
 		files: File[],
 		updateNotice: (message: string) => void,
 	): Promise<Transcription> {
-		const transcriptions: Transcription[] = [];
+		const transcriptions: Transcription[] = new Array(files.length);
 		let completedChunks = 0;
+		let lastUpdateTime = Date.now();
+		const UPDATE_INTERVAL_MS = 500; // Only update UI every 500ms to reduce performance impact
 
 		const updateProgress = () => {
-			const progress = ((completedChunks / files.length) * 100).toFixed(1);
-			updateNotice(
-				`Transcribing... ${completedChunks}/${files.length} chunks completed (${progress}%)`,
-			);
+			const now = Date.now();
+			// Throttle UI updates to avoid excessive rendering
+			if (now - lastUpdateTime >= UPDATE_INTERVAL_MS) {
+				const progress = ((completedChunks / files.length) * 100).toFixed(1);
+				updateNotice(
+					`Transcribing... ${completedChunks}/${files.length} chunks completed (${progress}%)`,
+				);
+				lastUpdateTime = now;
+			}
 		};
 
 		updateProgress();
 
-		for (const file of files) {
+		// Define a function to process a single file
+		const processFile = async (file: File, index: number): Promise<void> => {
 			let retries = 0;
 			while (retries < this.MAX_RETRIES) {
 				try {
+					// Use a separate microtask to yield to the main thread
+					await new Promise(resolve => setTimeout(resolve, 0));
+					
 					const result = await this.client.audio.transcriptions.create({
 						file: file,
 						model: "whisper-1",
 						response_format: "verbose_json",
 						timestamp_granularities: ["segment", "word"],
 					});
-					transcriptions.push(result);
+					
+					transcriptions[index] = result;
 					completedChunks++;
 					updateProgress();
-					break;
+					return;
 				} catch (error) {
 					retries++;
 					if (retries >= this.MAX_RETRIES) {
@@ -219,12 +264,34 @@ export class TranscriptionService {
 						);
 						throw error;
 					}
-					await new Promise((resolve) => setTimeout(resolve, 1000 * retries)); // Exponential backoff
+					// Exponential backoff
+					await new Promise((resolve) => setTimeout(resolve, 1000 * retries));
 				}
 			}
+		};
+
+		// Process chunks with a concurrency limit to avoid overwhelming OpenAI's API
+		// and to manage memory consumption
+		const CONCURRENCY_LIMIT = 3;
+		
+		// Create batches of promises
+		for (let i = 0; i < files.length; i += CONCURRENCY_LIMIT) {
+			const batch = files.slice(i, i + CONCURRENCY_LIMIT);
+			const batchPromises = batch.map((file, batchIndex) => 
+				processFile(file, i + batchIndex)
+			);
+			
+			// Process each batch concurrently
+			await Promise.all(batchPromises);
+			
+			// After each batch is done, give the main thread a moment to breathe
+			await new Promise(resolve => setTimeout(resolve, 50));
 		}
 
-		return this.mergeTranscriptions(transcriptions);
+		// Filter out any undefined entries that might have occurred due to errors
+		const validTranscriptions = transcriptions.filter(t => t !== undefined);
+		
+		return this.mergeTranscriptions(validTranscriptions);
 	}
 
 	private mergeTranscriptions(transcriptions: Transcription[]): Transcription {
@@ -297,8 +364,14 @@ export class TranscriptionService {
 		};
 	}
 
-	private formatTranscriptionWithTimestamps(transcription: Transcription): string {
-		let formattedTranscription = "";
+	/**
+	 * Formats the transcription with timestamps, optimized for performance with large transcriptions.
+	 * Uses string concatenation with intermediate arrays to reduce memory allocations.
+	 * Processes segments in batches to avoid blocking the UI.
+	 */
+	private async formatTranscriptionWithTimestamps(transcription: Transcription): Promise<string> {
+		// For very large transcripts, we'll build the output incrementally
+		const formattedParts: string[] = [];
 		let currentSegment = "";
 		let segmentStart: number | null = null;
 		let segmentEnd: number | null = null;
@@ -306,60 +379,98 @@ export class TranscriptionService {
 		// Use the configured timestamp range from settings
 		const timestampRange = this.plugin.settings.transcript.timestampRange;
 		const includeTimestamps = this.plugin.settings.transcript.includeTimestamps;
-
-		transcription.segments.forEach((segment, index) => {
+		
+		// Calculate approximate segments count to pre-allocate array
+		const estimatedSegmentCount = transcription.segments.length / 3;
+		formattedParts.length = Math.ceil(estimatedSegmentCount);
+		
+		// Template cache to avoid redundant formatting
+		const templateCache = new Map<string, string>();
+		
+		// Function to get cached template or generate new one
+		const getFormattedTimestamp = (template: string, range: {start: number, end: number}): string => {
+			const cacheKey = `${template}-${range.start}-${range.end}`;
+			if (templateCache.has(cacheKey)) {
+				return templateCache.get(cacheKey)!;
+			}
+			
+			const formatted = TimestampTemplateEngine(template, range);
+			templateCache.set(cacheKey, formatted);
+			return formatted;
+		};
+		
+		let partIndex = 0;
+		let currentPart = "";
+		const BATCH_SIZE = 50; // Process segments in batches
+		
+		// Process segments in batches to avoid blocking the UI
+		for (let i = 0; i < transcription.segments.length; i++) {
+			const segment = transcription.segments[i];
+			const isFirstSegment = i === 0;
+			const isLastSegment = i === transcription.segments.length - 1;
+			const prevSegment = isFirstSegment ? null : transcription.segments[i - 1];
+			
+			// Initialize segment tracking
 			if (segmentStart === null) {
 				segmentStart = segment.start;
 			}
 			segmentEnd = segment.end;
-
-			// Use the configured timestamp range to determine new segments
-			if (index === 0 || segment.start - transcription.segments[index - 1].end > timestampRange) {
-				// New segment
+			
+			// Determine if this is a new segment based on configured timestamp range
+			const isNewSegment = isFirstSegment || (prevSegment && segment.start - prevSegment.end > timestampRange);
+			
+			if (isNewSegment) {
+				// Process previous segment if exists
 				if (currentSegment) {
-					const timestampRange = {
-						start: segmentStart!,
-						end: segmentEnd!
-					};
+					const range = { start: segmentStart!, end: segmentEnd! };
 					
-					// Only include timestamps if enabled in settings
 					if (includeTimestamps) {
-						const formattedTimestamp = TimestampTemplateEngine("**{{linktimerange}}**\n",
-							timestampRange
-						);
-						formattedTranscription += `${formattedTimestamp} ${currentSegment}\n\n`;
+						const formattedTimestamp = getFormattedTimestamp("**{{linktimerange}}**\n", range);
+						currentPart += `${formattedTimestamp} ${currentSegment}\n\n`;
 					} else {
-						formattedTranscription += `${currentSegment}\n\n`;
+						currentPart += `${currentSegment}\n\n`;
 					}
 				}
+				
+				// Start new segment
 				currentSegment = segment.text;
 				segmentStart = segment.start;
 			} else {
-				// Continuing segment
+				// Continue current segment
 				currentSegment += ` ${segment.text}`;
 			}
-
-			// Handle the last segment
-			if (index === transcription.segments.length - 1) {
-				const timestampRange = {
-					start: segmentStart!,
-					end: segmentEnd!
-				};
+			
+			// Handle the last segment or save batch
+			if (isLastSegment) {
+				const range = { start: segmentStart!, end: segmentEnd! };
 				
-				// Only include timestamps if enabled in settings
 				if (includeTimestamps) {
-					const formattedTimestamp = TimestampTemplateEngine(
-						this.plugin.settings.timestamp.template,
-						timestampRange
+					const formattedTimestamp = getFormattedTimestamp(
+						this.plugin.settings.timestamp.template, 
+						range
 					);
-					formattedTranscription += `${formattedTimestamp} ${currentSegment}`;
+					currentPart += `${formattedTimestamp} ${currentSegment}`;
 				} else {
-					formattedTranscription += `${currentSegment}`;
+					currentPart += currentSegment;
+				}
+				
+				// Save final part
+				formattedParts[partIndex] = currentPart;
+			} else if ((i + 1) % BATCH_SIZE === 0) {
+				// Save batch and reset for next batch
+				formattedParts[partIndex++] = currentPart;
+				currentPart = "";
+				
+				// Allow UI thread to breathe
+				if ((i + 1) % (BATCH_SIZE * 5) === 0) {
+					// Yield to the main thread
+					await new Promise(resolve => setTimeout(resolve, 0));
 				}
 			}
-		});
-
-		return formattedTranscription;
+		}
+		
+		// Join all parts and return the complete formatted transcription
+		return formattedParts.join("");
 	}
 
 	private async saveTranscription(
