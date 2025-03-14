@@ -8,68 +8,39 @@ PodNotes currently supports basic transcription functionality using OpenAI's Whi
 
 ## Requirements
 
-### MVP (Must Have) - ✅ COMPLETED
-1. **Toggle for Transcript Timestamps** ✅
+### MVP (Must Have)
+1. **Toggle for Transcript Timestamps**
    - Allow users to enable/disable timestamp markers in transcripts
    - Preserve transcript content regardless of timestamp setting
 
-2. **Configurable Timestamp Ranges** ✅
+2. **Configurable Timestamp Ranges**
    - Allow users to define a time range for timestamps (how far back they should cover)
    - Apply this configuration when generating timestamps for transcripts
 
-3. **Enhanced Playback Rates** ✅
+3. **Enhanced Playback Rates**
    - Add more playback rate options (0.25x, 3x, etc.)
    - Connect playback rate options to user settings
 
-4. **Improved Segment Joining** ✅
+4. **Improved Segment Joining**
    - Fix the segment joining logic in transcript generation
    - Ensure proper parsing and presentation of chunked transcripts
-   
-## Implementation Status
 
-We have successfully implemented all MVP requirements:
+### Nice-to-Have
+1. **Interactive Transcript Viewer**
+   - Navigate to specific parts of audio by clicking on transcript segments
+   - Highlight current segment being played
 
-1. **Transcript Timestamps**:
-   - Added `includeTimestamps` boolean setting to control timestamp inclusion
-   - Updated UI with toggle in settings tab
-   - Modified TranscriptionService to conditionally format with/without timestamps
+2. **Transcript Search**
+   - Allow searching within transcripts
+   - Jump to timestamps based on search results
 
-2. **Timestamp Ranges**:
-   - Added `timestampRange` setting to control gap threshold for timestamps
-   - Added UI slider (1-10 seconds) for configuring the range
-   - Updated segmentation logic to use this setting when determining segments
+3. **Transcript Export Options**
+   - Export formats (plain text, markdown, SRT)
+   - Bulk export of transcripts
 
-3. **Playback Rates**:
-   - Extended playback rate options from 0.25x to 3.0x
-   - Updated EpisodePlayer.svelte component to include these options
-
-4. **Segment Joining**:
-   - Improved mergeTranscriptions method to better handle chunk boundaries
-   - Added logic to detect and merge adjacent segments for better readability
-   - Fixed edge cases in segment end time handling
-
-5. **Type Safety**:
-   - Fixed TimestampRange type export/import issues
-   - Added proper type annotations throughout the codebase
-
-### Features Considered but Declined
-After careful consideration, we've decided against implementing the following features:
-
-1. **Interactive Transcript Viewer** ❌
-   - Reason: The existing Obsidian note system provides adequate functionality for viewing and navigating transcripts. Adding a dedicated viewer would add unnecessary complexity.
-   - Timestamps already provide quick navigation via Obsidian links.
-
-2. **Transcript Search** ❌
-   - Reason: Obsidian's built-in search functionality is sufficient for finding content within transcripts.
-   - Adding a separate search system would duplicate existing functionality.
-
-3. **Transcript Export Options** ❌
-   - Reason: Transcripts are already saved as markdown files, which can be easily exported through Obsidian.
-   - Specialized export formats are not essential for the core user experience.
-
-4. **Language Support** ❌
-   - Reason: The current implementation using OpenAI's Whisper API already handles multiple languages adequately.
-   - Additional language-specific features would increase complexity without proportional benefit.
+4. **Language Support**
+   - Multi-language transcription options
+   - Translation capabilities
 
 ## System Design
 
@@ -228,15 +199,6 @@ The current segment joining logic has issues with properly connecting segments a
 2. Accounting for context between chunks
 3. Using confidence scores to determine proper segment boundaries
 
-#### Robust Error Handling
-
-To ensure transcription reliability, especially for long podcasts, we've implemented comprehensive error recovery:
-
-1. **Segment-Level Fallbacks**: If a specific segment fails transcription after multiple retries, we insert a placeholder and continue with the rest of the audio
-2. **Batch Processing Recovery**: Error handling at both individual segment and batch levels ensures the process can continue despite partial failures
-3. **Graceful Degradation**: Users get a complete transcript with clear indicators of any problematic sections
-4. **Transparent Feedback**: Notifications inform users of issues while allowing the process to continue
-
 **Pseudocode**:
 ```
 function mergeTranscriptions(transcriptions):
@@ -299,71 +261,30 @@ function mergeTranscriptions(transcriptions):
 
 ## Implementation Plan
 
-### Phase 1: Settings and Configuration ✅
-1. Update settings interface to include transcript timestamp options ✅
-2. Add UI components to settings tab ✅
-3. Implement settings persistence ✅
+### Phase 1: Settings and Configuration
+1. Update settings interface to include transcript timestamp options
+2. Add UI components to settings tab
+3. Implement settings persistence
 
-### Phase 2: Transcription Service Updates ✅
-1. Enhance TranscriptionService to handle optional timestamps ✅
-2. Implement configurable timestamp ranges ✅
-3. Improve segment joining logic ✅
+### Phase 2: Transcription Service Updates
+1. Enhance TranscriptionService to handle optional timestamps
+2. Implement configurable timestamp ranges
+3. Improve segment joining logic
 
-### Phase 3: Player Enhancements ✅
-1. Update playback rate options ✅
-2. Connect playback rates to settings ✅
+### Phase 3: Player Enhancements
+1. Update playback rate options
+2. Connect playback rates to settings
 
-### Phase 4: Testing and Refinement ✅
-1. Test all new features thoroughly ✅
-2. Polish UI elements for consistency ✅
-3. Document new features ✅
-
-### Next Steps (Phase 5): Final Touches
-1. **Documentation Updates**
-   - Update user documentation with new transcript features
-   - Add examples and screenshots for clarity
-   - Ensure clear instructions for configuring transcript settings
-
-2. **Quality Assurance**
-   - Test with various podcast episodes and audio files
-   - Verify compatibility with different Obsidian themes
-   - Check for edge cases in the timestamp generation
-
-3. **Finalize PR**
-   - Complete PR checklist
-   - Prepare for code review
-   - Address any feedback
+### Phase 4: Testing and Refinement
+1. Test all new features thoroughly
+2. Polish UI elements for consistency
+3. Document new features
 
 ## Considerations and Risks
 
-### Performance Optimizations
-We've implemented several critical performance improvements to ensure the transcription process remains efficient and non-blocking:
-
-1. **Parallel Processing**
-   - Concurrent audio chunk processing with configurable concurrency limits (default: 3)
-   - Batched processing with Promise.all while maintaining memory efficiency
-   - Inter-batch delays to prevent API rate limiting
-
-2. **Memory Management**
-   - Generator-based file chunking to avoid holding entire audio files in memory
-   - Explicit cleanup of large buffers after processing
-   - Pre-allocation of result arrays and template caching to reduce memory pressure
-
-3. **Non-Blocking Architecture**
-   - Strategic yields to the main thread using setTimeout and microtasks
-   - Throttled UI updates (max once per 500ms) to reduce rendering overhead
-   - Fully asynchronous processing pipeline with proper error handling
-
-4. **Efficient Text Processing**
-   - Batched segment processing to maintain UI responsiveness
-   - String building with intermediate arrays to avoid concatenation overhead
-   - Template caching to prevent redundant formatting operations
-
-These optimizations ensure that even with very large podcast episodes (3+ hours), the transcription process will:
-- Not freeze or significantly impact Obsidian's UI responsiveness
-- Manage memory efficiently to avoid out-of-memory errors
-- Provide reliable progress updates to the user
-- Handle errors gracefully with proper feedback
+### Performance
+- Large audio files may lead to memory issues when processing
+- Chunking strategy may need optimization for very long podcasts
 
 ### API Limitations
 - OpenAI API changes might impact timestamp functionality
