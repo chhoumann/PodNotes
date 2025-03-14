@@ -181,9 +181,18 @@
 		$plugin.api.transcribeCurrentEpisode();
 	}
 	
+	function cancelTranscription() {
+		if ($plugin.transcriptionService) {
+			$plugin.transcriptionService.cancelTranscription();
+		}
+	}
+	
 	function resumeTranscription() {
 		$plugin.api.resumeTranscription();
 	}
+	
+	// Track if transcription is currently in progress
+	$: isTranscribing = $plugin.transcriptionService && $plugin.transcriptionService.isTranscribing;
 	
 	// Check if there's a resumable transcription for the current episode
 	$: hasResumableTranscription = $currentEpisode && 
@@ -333,7 +342,16 @@
 	{/if}
 	
 	<div class="transcript-controls">
-		{#if hasResumableTranscription}
+		{#if isTranscribing}
+			<div class="transcript-notice">
+				<p>Transcription in progress</p>
+				<div class="transcript-buttons">
+					<Button icon="x" tooltip="Cancel transcription" on:click={cancelTranscription}>
+						Cancel Transcription
+					</Button>
+				</div>
+			</div>
+		{:else if hasResumableTranscription}
 			<div class="transcript-notice">
 				<p>There is an interrupted transcription for this episode</p>
 				<div class="transcript-buttons">

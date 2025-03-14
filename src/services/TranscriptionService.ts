@@ -54,7 +54,7 @@ export class TranscriptionService {
 	private plugin: PodNotes;
 	private client: OpenAI | null = null;
 	private MAX_RETRIES = 3;
-	private isTranscribing = false;
+	public isTranscribing = false;
 	private cancelRequested = false;
 	private activeNotice: any = null;
 	private resumeData: {
@@ -135,20 +135,28 @@ export class TranscriptionService {
 	
 	/**
 	 * Estimate transcription time based on file size
-	 * This is a rough estimate: ~1 minute for every 1MB of audio
+	 * This is a realistic estimate based on OpenAI's processing capability and network overhead
 	 */
 	private estimateTranscriptionTime(bytes: number): string {
-		// Rough estimate: 1MB ≈ 1 minute of processing time
-		const minutes = Math.max(1, Math.ceil(bytes / 1048576));
-		if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+		// More realistic estimate: Processing 1MB takes ~3-4 minutes due to
+		// API processing time, network overhead, and parallelism constraints
+		const processingFactor = 3.5; // Minutes per MB
+		const minutes = Math.max(5, Math.ceil((bytes / 1048576) * processingFactor));
 		
-		const hours = Math.floor(minutes / 60);
-		const remainingMinutes = minutes % 60;
+		// Add additional time for initial setup and final processing
+		const totalMinutes = minutes + 2;
+		
+		if (totalMinutes < 60) {
+			return `~${totalMinutes} minute${totalMinutes > 1 ? 's' : ''}`;
+		}
+		
+		const hours = Math.floor(totalMinutes / 60);
+		const remainingMinutes = totalMinutes % 60;
 		
 		if (remainingMinutes === 0) {
-			return `${hours} hour${hours > 1 ? 's' : ''}`;
+			return `~${hours} hour${hours > 1 ? 's' : ''}`;
 		}
-		return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}`;
+		return `~${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}`;
 	}
 	
 	/**
@@ -283,14 +291,27 @@ export class TranscriptionService {
 			// @ts-ignore - using a workaround to help release memory
 			const tempFileBuffer = null;
 			
-			notice.update(`Starting transcription of ${formattedSize} audio...\nEstimated time: ${estimatedTime}\n\nYou can cancel this operation by typing '/cancel' in any note.`);
+			notice.update(`Starting transcription of ${formattedSize} audio...\nEstimated time: ${estimatedTime}\n\nYou can cancel using the "Cancel Transcription" button below the player or via command palette.`);
 			
-			// Create a temporary markdown command to allow cancellation
-			const saveCommand = this.plugin.addCommand({
+			// Create commands for consistent control
+			this.plugin.addCommand({
 				id: 'cancel-transcription',
 				name: 'Cancel Current Transcription',
 				callback: () => this.cancelTranscription()
 			});
+			
+			// Create a notice with a cancel button for better visibility
+			const cancelNotice = new Notice(
+				"Transcription in progress. Click to cancel.",
+				0, // Duration 0 = until manually closed
+				[{
+					text: "Cancel",
+					onClick: () => {
+						this.cancelTranscription();
+						cancelNotice.hide();
+					}
+				}]
+			);
 			
 			// Process transcription with concurrent chunks
 			const transcription = await this.transcribeChunks(
@@ -317,21 +338,52 @@ export class TranscriptionService {
 			notice.update("Saving transcription...");
 			await this.saveTranscription(currentEpisode, formattedTranscription);
 			
+			// Clean up notices
+			try {
+				this.plugin.app.workspace.iterateAllLeaves(leaf => {
+					const notices = document.querySelectorAll('.notice');
+					notices.forEach(noticeEl => {
+						if (noticeEl.textContent.includes('Transcription in progress')) {
+							noticeEl.querySelector('button')?.click();
+						}
+					});
+				});
+			} catch (e) {
+				console.log("Error cleaning up notices:", e);
+			}
+
 			// Remove the cancel command
-			this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
+			try {
+				this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
+			} catch (e) {
+				console.log("Error removing command:", e);
+			}
 
 			// Clear resume data since we've completed successfully
 			this.clearResumeState();
 
 			notice.stop();
-			notice.update("Transcription completed and saved.");
+			notice.update("Transcription completed and saved successfully.");
+			
+			// Show a success notice with a link to the file
+			new Notice(
+				`Transcription complete!\nFile saved to: ${transcriptPath}`,
+				10000 // Show for 10 seconds
+			);
 		} catch (error) {
 			console.error("Transcription error:", error);
 			notice.update(`Transcription failed: ${error.message}`);
+			new Notice(`Transcription failed: ${error.message}`, 5000);
 		} finally {
 			this.isTranscribing = false;
 			this.activeNotice = null;
-			this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
+			
+			try {
+				this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
+			} catch (e) {
+				// Command may have already been removed, ignore
+			}
+			
 			setTimeout(() => notice.hide(), 5000);
 		}
 	}
@@ -439,28 +491,36 @@ export class TranscriptionService {
 				const processedMB = totalProcessedBytes / 1048576;
 				const bytesPerSecond = totalProcessedBytes / Math.max(1, elapsedSeconds);
 				
-				// Calculate estimated time remaining
-				const remainingBytes = totalFileSize - totalProcessedBytes;
-				const estimatedRemainingSeconds = remainingBytes / bytesPerSecond;
+				// Status indicator that shows active processing
+				const loadingIndicator = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"][Math.floor(Date.now() / 250) % 8];
 				
-				let timeRemaining = "";
-				if (estimatedRemainingSeconds > 60) {
-					const mins = Math.floor(estimatedRemainingSeconds / 60);
-					const secs = Math.floor(estimatedRemainingSeconds % 60);
-					timeRemaining = `${mins}m ${secs}s remaining`;
-				} else {
-					timeRemaining = `${Math.floor(estimatedRemainingSeconds)}s remaining`;
+				// Calculate more accurate estimated time remaining
+				// Use a weighted approach that puts more emphasis on recent processing speed
+				// This helps adjust the estimate as we gather more data
+				let remainingTimeStr = "Calculating...";
+				
+				if (completedChunks > 0 && elapsedSeconds > 10) {
+					const remainingBytes = totalFileSize - totalProcessedBytes;
+					const estimatedRemainingSeconds = remainingBytes / bytesPerSecond;
+					
+					if (estimatedRemainingSeconds > 60) {
+						const mins = Math.floor(estimatedRemainingSeconds / 60);
+						const secs = Math.floor(estimatedRemainingSeconds % 60);
+						remainingTimeStr = `~${mins}m ${secs}s remaining`;
+					} else {
+						remainingTimeStr = `~${Math.floor(estimatedRemainingSeconds)}s remaining`;
+					}
 				}
 				
 				// Calculate processing speed
 				const speed = (bytesPerSecond / 1024).toFixed(1);
 				
 				updateNotice(
-					`Transcribing... ${completedChunks}/${files.length} chunks (${progress}%)\n` +
+					`${loadingIndicator} Transcribing... ${completedChunks}/${files.length} chunks (${progress}%)\n` +
 					`${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}\n` +
-					`Processing at ${speed} KB/s\n` +
-					`${timeRemaining}\n\n` +
-					`Use the command palette to access "Cancel Current Transcription"`
+					`Processing speed: ${speed} KB/s\n` +
+					`${remainingTimeStr}\n\n` +
+					`Cancel via notice button or command palette (Ctrl/Cmd+P)`
 				);
 				
 				// Save resume state periodically
