@@ -228,6 +228,15 @@ The current segment joining logic has issues with properly connecting segments a
 2. Accounting for context between chunks
 3. Using confidence scores to determine proper segment boundaries
 
+#### Robust Error Handling
+
+To ensure transcription reliability, especially for long podcasts, we've implemented comprehensive error recovery:
+
+1. **Segment-Level Fallbacks**: If a specific segment fails transcription after multiple retries, we insert a placeholder and continue with the rest of the audio
+2. **Batch Processing Recovery**: Error handling at both individual segment and batch levels ensures the process can continue despite partial failures
+3. **Graceful Degradation**: Users get a complete transcript with clear indicators of any problematic sections
+4. **Transparent Feedback**: Notifications inform users of issues while allowing the process to continue
+
 **Pseudocode**:
 ```
 function mergeTranscriptions(transcriptions):
@@ -327,9 +336,34 @@ function mergeTranscriptions(transcriptions):
 
 ## Considerations and Risks
 
-### Performance
-- Large audio files may lead to memory issues when processing
-- Chunking strategy may need optimization for very long podcasts
+### Performance Optimizations
+We've implemented several critical performance improvements to ensure the transcription process remains efficient and non-blocking:
+
+1. **Parallel Processing**
+   - Concurrent audio chunk processing with configurable concurrency limits (default: 3)
+   - Batched processing with Promise.all while maintaining memory efficiency
+   - Inter-batch delays to prevent API rate limiting
+
+2. **Memory Management**
+   - Generator-based file chunking to avoid holding entire audio files in memory
+   - Explicit cleanup of large buffers after processing
+   - Pre-allocation of result arrays and template caching to reduce memory pressure
+
+3. **Non-Blocking Architecture**
+   - Strategic yields to the main thread using setTimeout and microtasks
+   - Throttled UI updates (max once per 500ms) to reduce rendering overhead
+   - Fully asynchronous processing pipeline with proper error handling
+
+4. **Efficient Text Processing**
+   - Batched segment processing to maintain UI responsiveness
+   - String building with intermediate arrays to avoid concatenation overhead
+   - Template caching to prevent redundant formatting operations
+
+These optimizations ensure that even with very large podcast episodes (3+ hours), the transcription process will:
+- Not freeze or significantly impact Obsidian's UI responsiveness
+- Manage memory efficiently to avoid out-of-memory errors
+- Provide reliable progress updates to the user
+- Handle errors gracefully with proper feedback
 
 ### API Limitations
 - OpenAI API changes might impact timestamp functionality

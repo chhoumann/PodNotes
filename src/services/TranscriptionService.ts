@@ -259,10 +259,28 @@ export class TranscriptionService {
 					retries++;
 					if (retries >= this.MAX_RETRIES) {
 						console.error(
-							`Failed to transcribe chunk after ${this.MAX_RETRIES} attempts:`,
+							`Failed to transcribe chunk ${index + 1}/${files.length} after ${this.MAX_RETRIES} attempts:`,
 							error,
 						);
-						throw error;
+						
+						// Create a minimal placeholder transcription for the failed segment
+						// This allows the process to continue with the rest of the chunks
+						transcriptions[index] = {
+							text: `[Transcription error in segment ${index + 1}]`,
+							segments: [{
+								start: 0,
+								end: 1,
+								text: `[Transcription error in segment ${index + 1}]`
+							}]
+						};
+						
+						// Still increment the counter to maintain accurate progress
+						completedChunks++;
+						updateProgress();
+						
+						// Log the error but don't throw - continue with other chunks
+						new Notice(`Warning: Failed to transcribe segment ${index + 1}. Continuing with remaining segments.`, 3000);
+						return;
 					}
 					// Exponential backoff
 					await new Promise((resolve) => setTimeout(resolve, 1000 * retries));
@@ -278,11 +296,35 @@ export class TranscriptionService {
 		for (let i = 0; i < files.length; i += CONCURRENCY_LIMIT) {
 			const batch = files.slice(i, i + CONCURRENCY_LIMIT);
 			const batchPromises = batch.map((file, batchIndex) => 
-				processFile(file, i + batchIndex)
+				processFile(file, i + batchIndex).catch(error => {
+					// Add additional error handling at the batch level
+					console.error(`Error in batch processing for index ${i + batchIndex}:`, error);
+					
+					// Create an empty placeholder for completely failed chunks
+					transcriptions[i + batchIndex] = {
+						text: `[Failed to process segment ${i + batchIndex + 1}]`,
+						segments: [{
+							start: 0,
+							end: 1,
+							text: `[Failed to process segment ${i + batchIndex + 1}]`
+						}]
+					};
+					
+					// Ensure we update progress even for failed chunks
+					completedChunks++;
+					updateProgress();
+				})
 			);
 			
-			// Process each batch concurrently
-			await Promise.all(batchPromises);
+			try {
+				// Process each batch concurrently
+				await Promise.all(batchPromises);
+			} catch (error) {
+				// This is a fallback in case something unexpected happens
+				console.error("Unexpected error in batch processing:", error);
+				new Notice("Warning: Some segments failed to transcribe. Continuing with available data.", 5000);
+				// Continue processing other batches - don't rethrow
+			}
 			
 			// After each batch is done, give the main thread a moment to breathe
 			await new Promise(resolve => setTimeout(resolve, 50));
