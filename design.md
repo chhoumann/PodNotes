@@ -116,6 +116,10 @@ The TranscriptionService will be enhanced to support:
 - Configurable timestamp inclusion
 - Ranged timestamp generation
 - Improved segment joining logic
+- Cancellation mechanism for in-progress transcriptions
+- Resume capability for failed or interrupted transcriptions
+- API key validation before starting transcription process
+- Progress indicators with size and time estimates for large files
 
 #### 2. Settings Tab
 The settings UI will be updated to include:
@@ -270,6 +274,10 @@ function mergeTranscriptions(transcriptions):
 1. Enhance TranscriptionService to handle optional timestamps
 2. Implement configurable timestamp ranges
 3. Improve segment joining logic
+4. Add cancellation mechanism for in-progress transcriptions
+5. Implement API key validation before starting transcription
+6. Add progress indicators with file size and time estimates
+7. Implement resume capability for failed transcriptions
 
 ### Phase 3: Player Enhancements
 1. Update playback rate options
@@ -285,16 +293,28 @@ function mergeTranscriptions(transcriptions):
 ### Performance
 - Large audio files may lead to memory issues when processing
 - Chunking strategy may need optimization for very long podcasts
+- Need size/time estimates for progress indicators during transcription
+- Need for memory-efficient file handling beyond chunking
 
 ### API Limitations
 - OpenAI API changes might impact timestamp functionality
 - Rate limits may affect user experience
+- Need for API key validation before starting transcription
 
 ### User Experience
 - Complex settings might confuse users
 - Need for clear documentation and UI guidance
+- Provide cancellation mechanism for in-progress transcriptions
+- Need visual feedback for transcription progress with time estimates
+- Add resume capability for failed or interrupted transcriptions
+
+### Documentation
+- Ensure comprehensive documentation with proper illustrations
+- Add example image for timestamped transcripts (timestamped_transcript.png)
 
 ## Success Metrics
 - User adoption of timestamped transcripts
 - Reduction in transcript formatting issues
 - Positive feedback on playback rate options
+- Low rate of transcription cancellations
+- Successful resumption of interrupted transcriptions

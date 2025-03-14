@@ -176,6 +176,19 @@
 	function toggleQueue() {
 		showQueue = !showQueue;
 	}
+	
+	function transcribeEpisode() {
+		$plugin.api.transcribeCurrentEpisode();
+	}
+	
+	function resumeTranscription() {
+		$plugin.api.resumeTranscription();
+	}
+	
+	// Check if there's a resumable transcription for the current episode
+	$: hasResumableTranscription = $currentEpisode && 
+		$plugin.api.hasResumableTranscription && 
+		$plugin.api.hasResumableTranscription($currentEpisode.id);
 
 
 	const playbackRates = {
@@ -318,6 +331,26 @@
 			</EpisodeList>
 		</div>
 	{/if}
+	
+	<div class="transcript-controls">
+		{#if hasResumableTranscription}
+			<div class="transcript-notice">
+				<p>There is an interrupted transcription for this episode</p>
+				<div class="transcript-buttons">
+					<Button icon="rotate-ccw" tooltip="Resume transcription" on:click={resumeTranscription}>
+						Resume
+					</Button>
+					<Button icon="mic" tooltip="Start new transcription" on:click={transcribeEpisode}>
+						New
+					</Button>
+				</div>
+			</div>
+		{:else}
+			<Button icon="mic" tooltip="Transcribe this episode" on:click={transcribeEpisode}>
+				Transcribe
+			</Button>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -411,5 +444,32 @@
 
 	.queue-container {
 		margin-top: 1rem;
+	}
+	
+	.transcript-controls {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--background-modifier-border);
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
+	
+	.transcript-notice {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+	}
+	
+	.transcript-notice p {
+		margin: 0 0 0.5rem 0;
+		color: var(--text-muted);
+		font-size: 0.9rem;
+	}
+	
+	.transcript-buttons {
+		display: flex;
+		gap: 0.5rem;
 	}
 </style>

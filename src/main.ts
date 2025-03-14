@@ -64,7 +64,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private downloadedEpisodesController: StoreController<{
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
-	private transcriptionService: TranscriptionService;
+	public transcriptionService: TranscriptionService;
 
 	async onload() {
 		plugin.set(this);

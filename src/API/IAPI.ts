@@ -14,4 +14,9 @@ export interface IAPI {
 
 	skipBackward(): void;
 	skipForward(): void;
+	
+	// Transcription functions
+	transcribeCurrentEpisode(): void;
+	resumeTranscription(): void;
+	hasResumableTranscription(episodeId: string): boolean;
 }

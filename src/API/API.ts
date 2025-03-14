@@ -33,6 +33,28 @@ export class API implements IAPI {
 	public get isPlaying(): boolean {
 		return !get(isPaused);
 	}
+	
+	public transcribeCurrentEpisode(): void {
+		const pluginInstance = get(plugin);
+		if (pluginInstance && pluginInstance.transcriptionService) {
+			pluginInstance.transcriptionService.transcribeCurrentEpisode(false);
+		}
+	}
+	
+	public resumeTranscription(): void {
+		const pluginInstance = get(plugin);
+		if (pluginInstance && pluginInstance.transcriptionService) {
+			pluginInstance.transcriptionService.transcribeCurrentEpisode(true);
+		}
+	}
+	
+	public hasResumableTranscription(episodeId: string): boolean {
+		const pluginInstance = get(plugin);
+		if (pluginInstance && pluginInstance.transcriptionService) {
+			return pluginInstance.transcriptionService.hasResumableTranscription(episodeId);
+		}
+		return false;
+	}
 
 	/**
 	 * Gets the current time in the given moment format.
