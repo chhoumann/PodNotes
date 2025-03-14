@@ -52,22 +52,24 @@ We have successfully implemented all MVP requirements:
    - Fixed TimestampRange type export/import issues
    - Added proper type annotations throughout the codebase
 
-### Nice-to-Have
-1. **Interactive Transcript Viewer**
-   - Navigate to specific parts of audio by clicking on transcript segments
-   - Highlight current segment being played
+### Features Considered but Declined
+After careful consideration, we've decided against implementing the following features:
 
-2. **Transcript Search**
-   - Allow searching within transcripts
-   - Jump to timestamps based on search results
+1. **Interactive Transcript Viewer** ❌
+   - Reason: The existing Obsidian note system provides adequate functionality for viewing and navigating transcripts. Adding a dedicated viewer would add unnecessary complexity.
+   - Timestamps already provide quick navigation via Obsidian links.
 
-3. **Transcript Export Options**
-   - Export formats (plain text, markdown, SRT)
-   - Bulk export of transcripts
+2. **Transcript Search** ❌
+   - Reason: Obsidian's built-in search functionality is sufficient for finding content within transcripts.
+   - Adding a separate search system would duplicate existing functionality.
 
-4. **Language Support**
-   - Multi-language transcription options
-   - Translation capabilities
+3. **Transcript Export Options** ❌
+   - Reason: Transcripts are already saved as markdown files, which can be easily exported through Obsidian.
+   - Specialized export formats are not essential for the core user experience.
+
+4. **Language Support** ❌
+   - Reason: The current implementation using OpenAI's Whisper API already handles multiple languages adequately.
+   - Additional language-specific features would increase complexity without proportional benefit.
 
 ## System Design
 
@@ -307,20 +309,21 @@ function mergeTranscriptions(transcriptions):
 2. Polish UI elements for consistency ✅
 3. Document new features ✅
 
-### Next Steps (Phase 5): Advanced Transcript Features
-1. **Interactive Transcript Component**
-   - Create a new Svelte component for interactive transcript viewing
-   - Implement synchronized highlighting of current segment during playback
-   - Add click-to-seek functionality for timestamp links
-
-2. **Transcript Search**
-   - Add search functionality within transcripts
-   - Implement highlighting for search matches
-   - Add navigation between search results
-
-3. **Documentation Updates**
+### Next Steps (Phase 5): Final Touches
+1. **Documentation Updates**
    - Update user documentation with new transcript features
    - Add examples and screenshots for clarity
+   - Ensure clear instructions for configuring transcript settings
+
+2. **Quality Assurance**
+   - Test with various podcast episodes and audio files
+   - Verify compatibility with different Obsidian themes
+   - Check for edge cases in the timestamp generation
+
+3. **Finalize PR**
+   - Complete PR checklist
+   - Prepare for code review
+   - Address any feedback
 
 ## Considerations and Risks
 
