@@ -1,6 +1,6 @@
 # Transcripts
 
-PodNotes allows you to create transcripts of podcast episodes using OpenAI's Whisper model.
+PodNotes allows you to create transcripts of podcast episodes using OpenAI's Whisper model, complete with configurable timestamps that link directly to specific points in the audio.
 
 ## Setting Up
 
@@ -10,7 +10,11 @@ Before you can use the transcription feature, you need to set up a few things:
 
 2. **Transcript File Path**: In the settings, you can specify where you want the transcript files to be saved. You can use placeholders like `{{podcast}}` and `{{title}}` in the path.
 
-3. **Transcript Template**: You can also customize how the transcript content is formatted using a template.
+3. **Transcript Template**: You can customize how the transcript content is formatted using a template.
+
+4. **Timestamp Settings**: Configure timestamp behavior with these options:
+   - **Include timestamps in transcripts**: Toggle whether timestamps should be included in the transcripts. When enabled, clickable timestamp links are added to the transcript that allow you to jump directly to that point in the episode.
+   - **Timestamp range (seconds)**: Control the density of timestamps by setting the minimum time gap between timestamps (1-10 seconds). Lower values create more frequent timestamps.
 
 ## Creating a Transcript
 
@@ -21,6 +25,26 @@ To create a transcript:
 3. PodNotes will download the episode (if it hasn't been downloaded already), split it into chunks, and send these chunks to OpenAI for transcription.
 4. Once the transcription is complete, a new file will be created at the specified location with the transcribed content.
 
+## Working with Timestamped Transcripts
+
+Transcripts can include clickable timestamp links that help you navigate your podcast content efficiently:
+
+![Example of a timestamped transcript](resources/timestamped_transcript.png)
+
+* **Timestamp Ranges**: Timestamps appear as ranges (e.g., **[00:01:15] - [00:01:45]**) to help you understand the duration of each segment.
+* **Navigation**: Click any timestamp to immediately jump to that position in the podcast when playing the episode.
+* **Note Taking**: Timestamps make it easy to reference specific parts of episodes in your notes.
+
 ## Transcript Template
 
-The transcript template works similarly to the [note template](./templates.md#note-template), but with the added `{{template}}` placeholder.
+The transcript template works similarly to the [note template](./templates.md#note-template), but with the added `{{transcript}}` placeholder which will be replaced with the transcribed content.
+
+## Customizing Timestamps
+
+You can control how timestamps appear in your transcripts using the settings:
+
+1. **Without Timestamps**: If you prefer clean text without timestamps, disable the "Include timestamps in transcripts" option.
+
+2. **Dense Timestamps**: For detailed navigation, set the timestamp range to a lower value (1-2 seconds).
+
+3. **Sparse Timestamps**: For a cleaner look with fewer timestamps, set the timestamp range to a higher value (5-10 seconds).
