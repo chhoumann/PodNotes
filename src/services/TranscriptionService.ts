@@ -58,11 +58,36 @@ export class TranscriptionService {
 	private cancelRequested = false;
 	private activeNotice: any = null;
 	
-	// Progress information for UI
-	public progressPercent: number = 0;
-	public progressSize: string = "0 KB";
-	public timeRemaining: string = "Calculating...";
-	public processingStatus: string = "Preparing...";
+	// Progress information for UI - using getters/setters for reactivity
+	private _progressPercent: number = 0;
+	private _progressSize: string = "0 KB";
+	private _timeRemaining: string = "Calculating...";
+	private _processingStatus: string = "Preparing...";
+	
+	// Add getters and setters to ensure reactivity
+	public get progressPercent(): number { return this._progressPercent; }
+	public set progressPercent(value: number) { 
+		this._progressPercent = value;
+		console.log(`Progress update: ${value}%`);
+	}
+	
+	public get progressSize(): string { return this._progressSize; }
+	public set progressSize(value: string) { 
+		this._progressSize = value;
+		console.log(`Size update: ${value}`);
+	}
+	
+	public get timeRemaining(): string { return this._timeRemaining; }
+	public set timeRemaining(value: string) { 
+		this._timeRemaining = value;
+		console.log(`Time update: ${value}`);
+	}
+	
+	public get processingStatus(): string { return this._processingStatus; }
+	public set processingStatus(value: string) { 
+		this._processingStatus = value;
+		console.log(`Status update: ${value}`);
+	}
 	
 	private resumeData: {
 		episodeId: string;

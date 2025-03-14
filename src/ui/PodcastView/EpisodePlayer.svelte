@@ -206,6 +206,38 @@
 	// Create a reactive variable to track transcription status
 	let _isTranscribing = false;
 	
+	// Track transcription progress reactively with a tick interval
+	let progressInterval: number;
+	let progressPercent = 0;
+	let progressSize = "0 KB";
+	let timeRemaining = "Calculating...";
+	let processingStatus = "Preparing...";
+	
+	// Create a reactive tracking system that polls for updates
+	function startProgressTracking() {
+		if (progressInterval) clearInterval(progressInterval);
+		
+		// Poll for updates every 100ms to ensure UI is responsive
+		progressInterval = setInterval(() => {
+			if ($plugin.transcriptionService) {
+				// Update local state from service
+				_isTranscribing = $plugin.transcriptionService.isTranscribing;
+				progressPercent = $plugin.transcriptionService.progressPercent;
+				progressSize = $plugin.transcriptionService.progressSize;
+				timeRemaining = $plugin.transcriptionService.timeRemaining;
+				processingStatus = $plugin.transcriptionService.processingStatus;
+				console.log(`UI update: ${processingStatus}, ${progressPercent}%`);
+			}
+		}, 100);
+	}
+	
+	onMount(() => {
+		startProgressTracking();
+		return () => {
+			if (progressInterval) clearInterval(progressInterval);
+		};
+	});
+	
 	// Track if transcription is currently in progress
 	$: {
 		// Force immediate UI update when transcription service changes
@@ -374,22 +406,22 @@
 				
 				<div class="transcription-progress">
 					<div class="progress-bar">
-						<div class="progress-bar-inner" style="width: {$plugin.transcriptionService?.progressPercent || 0}%"></div>
+						<div class="progress-bar-inner" style="width: {progressPercent}%"></div>
 					</div>
 					<div class="progress-stats">
-						<span>{$plugin.transcriptionService?.progressPercent || 0}%</span>
-						<span>{$plugin.transcriptionService?.processingStatus || "Preparing..."}</span>
+						<span>{progressPercent}%</span>
+						<span>{processingStatus}</span>
 					</div>
 				</div>
 				
 				<div class="transcription-details">
 					<div>
 						<span class="detail-label">Time remaining:</span>
-						<span class="detail-value">{$plugin.transcriptionService?.timeRemaining || "Calculating..."}</span>
+						<span class="detail-value">{timeRemaining}</span>
 					</div>
 					<div>
 						<span class="detail-label">Processed:</span>
-						<span class="detail-value">{$plugin.transcriptionService?.progressSize || "0 KB"}</span>
+						<span class="detail-value">{progressSize}</span>
 					</div>
 				</div>
 			</div>
@@ -522,24 +554,6 @@
 	
 	.transcript-notice {
 		display: flex;
-		flex-direction: column;
-		align-items: center;
-		text-align: center;
-	}
-	
-	.transcript-notice p {
-		margin: 0 0 0.5rem 0;
-		color: var(--text-muted);
-		font-size: 0.9rem;
-	}
-	
-	.transcript-buttons {
-		display: flex;
-		gap: 0.5rem;
-	}
-	
-	.transcript-notice {
-		display: flex;
 		align-items: flex-start;
 		gap: 1rem;
 		padding: 0.75rem;
@@ -560,6 +574,11 @@
 	.transcript-notice-content p {
 		margin: 0 0 0.75rem 0;
 		font-weight: 500;
+	}
+	
+	.transcript-buttons {
+		display: flex;
+		gap: 0.5rem;
 	}
 	
 	.transcription-progress-container {
