@@ -178,7 +178,13 @@
 	}
 	
 	function transcribeEpisode() {
-		$plugin.api.transcribeCurrentEpisode();
+		// Set local state immediately for UI update
+		_isTranscribing = true;
+		
+		// Then call the API
+		setTimeout(() => {
+			$plugin.api.transcribeCurrentEpisode();
+		}, 0);
 	}
 	
 	function cancelTranscription() {
@@ -188,11 +194,28 @@
 	}
 	
 	function resumeTranscription() {
-		$plugin.api.resumeTranscription();
+		// Set local state immediately for UI update
+		_isTranscribing = true;
+		
+		// Then call the API
+		setTimeout(() => {
+			$plugin.api.resumeTranscription();
+		}, 0);
 	}
 	
+	// Create a reactive variable to track transcription status
+	let _isTranscribing = false;
+	
 	// Track if transcription is currently in progress
-	$: isTranscribing = $plugin.transcriptionService && $plugin.transcriptionService.isTranscribing;
+	$: {
+		// Force immediate UI update when transcription service changes
+		if ($plugin.transcriptionService) {
+			_isTranscribing = $plugin.transcriptionService.isTranscribing;
+		}
+	}
+	
+	// Make isTranscribing reactive, but set it locally first for immediate UI updates
+	$: isTranscribing = _isTranscribing;
 	
 	// Check if there's a resumable transcription for the current episode
 	$: hasResumableTranscription = $currentEpisode && 

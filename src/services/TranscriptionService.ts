@@ -116,19 +116,14 @@ export class TranscriptionService {
 	 */
 	cancelTranscription(): void {
 		if (!this.isTranscribing) {
-			new Notice("No transcription is currently in progress.");
 			return;
 		}
 		
 		this.cancelRequested = true;
 		this.processingStatus = "Cancelling...";
 		
-		if (this.activeNotice) {
-			this.activeNotice.update("Cancelling transcription. Please wait...");
-		}
-		
 		// The cancellation will be handled in the transcription process
-		new Notice("Transcription cancellation requested. This may take a moment...");
+		// No notifications, everything will be shown in the UI
 	}
 	
 	/**
@@ -223,7 +218,10 @@ export class TranscriptionService {
 		// Get current episode first
 		const currentEpisode = this.plugin.api.podcast;
 		if (!currentEpisode) {
-			new Notice("No episode is currently playing.");
+			this.processingStatus = "Error: No episode is playing";
+			setTimeout(() => {
+				this.isTranscribing = false;
+			}, 2000);
 			return;
 		}
 		
@@ -242,7 +240,10 @@ export class TranscriptionService {
 		// Validate API key
 		if (!this.initializeClient()) {
 			// Reset state if validation fails
-			this.isTranscribing = false;
+			this.processingStatus = "Error: Invalid API key";
+			setTimeout(() => {
+				this.isTranscribing = false;
+			}, 2000);
 			return;
 		}
 		
@@ -254,24 +255,24 @@ export class TranscriptionService {
 			);
 			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 			if (existingFile instanceof TFile) {
-				new Notice(`You've already transcribed this episode - found ${transcriptPath}.`);
-				this.isTranscribing = false;
+				this.processingStatus = `Already transcribed: ${transcriptPath}`;
+				setTimeout(() => {
+					this.isTranscribing = false;
+				}, 2000);
 				return;
 			}
 		}
 
 		// Reset cancellation flag
 		this.cancelRequested = false;
-		
-		// Create a notice for traditional display (we'll also show in the UI)
-		const notice = TimerNotice("Transcription", "Preparing to transcribe...");
-		this.activeNotice = notice;
 
 		try {
 			// Use setTimeout to allow UI to update before heavy processing starts
 			await new Promise(resolve => setTimeout(resolve, 50));
 			
-			notice.update("Downloading episode...");
+			// Update UI status
+			this.processingStatus = "Downloading episode...";
+			
 			const downloadPath = await downloadEpisode(
 				currentEpisode,
 				this.plugin.settings.download.path,
@@ -290,7 +291,9 @@ export class TranscriptionService {
 			const formattedSize = this.formatFileSize(fileSize);
 			const estimatedTime = this.estimateTranscriptionTime(fileSize);
 			
-			notice.update(`Preparing audio (${formattedSize}) for transcription...\nEstimated time: ${estimatedTime}`);
+			// Update UI status
+			this.processingStatus = `Preparing audio (${formattedSize})...`;
+			this.timeRemaining = `Estimated time: ${estimatedTime}`;
 			this.progressSize = formattedSize;
 			
 			// Read the audio file in chunks to reduce memory pressure
@@ -310,32 +313,25 @@ export class TranscriptionService {
 			// @ts-ignore - using a workaround to help release memory
 			const tempFileBuffer = null;
 			
-			notice.update(`Starting transcription of ${formattedSize} audio...\nEstimated time: ${estimatedTime}\n\nYou can cancel using the "Cancel Transcription" button below the player or via command palette.`);
+			// Update UI status
+			this.processingStatus = `Starting transcription (${formattedSize})...`;
 			
-			// Create commands for consistent control
+			// Create command for cancellation via command palette
 			this.plugin.addCommand({
 				id: 'cancel-transcription',
 				name: 'Cancel Current Transcription',
 				callback: () => this.cancelTranscription()
 			});
 			
-			// Create a notice with a cancel button for better visibility
-			const cancelNotice = new Notice(
-				"Transcription in progress. Click to cancel.",
-				0, // Duration 0 = until manually closed
-				[{
-					text: "Cancel",
-					onClick: () => {
-						this.cancelTranscription();
-						cancelNotice.hide();
-					}
-				}]
-			);
+			// Create a no-op update function since we're not using notices anymore
+			const updateStatus = (message: string) => {
+				// We're not doing anything with this message since we update UI directly
+			};
 			
 			// Process transcription with concurrent chunks
 			const transcription = await this.transcribeChunks(
 				files, 
-				notice.update,
+				updateStatus,
 				currentEpisode.id,
 				fileSize,
 				resume ? this.resumeData : null
@@ -343,37 +339,27 @@ export class TranscriptionService {
 			
 			// If cancelled, stop here
 			if (this.cancelRequested) {
-				notice.update("Transcription cancelled by user.");
-				notice.stop();
+				this.processingStatus = "Transcription cancelled";
+				
+				// Keep the UI visible for a moment before removing
+				setTimeout(() => {
+					this.isTranscribing = false;
+				}, 2000);
 				return;
 			}
 			
 			// Schedule processing in the next event loop iteration to avoid UI blocking
 			await new Promise(resolve => setTimeout(resolve, 50));
 			
-			notice.update("Processing timestamps...");
+			// Update UI status
 			this.processingStatus = "Formatting timestamps...";
 			const formattedTranscription = await this.formatTranscriptionWithTimestamps(transcription);
 
-			notice.update("Saving transcription...");
+			// Update UI status
 			this.processingStatus = "Saving...";
-			await this.saveTranscription(currentEpisode, formattedTranscription);
-			
-			// Clean up notices
-			try {
-				this.plugin.app.workspace.iterateAllLeaves(leaf => {
-					const notices = document.querySelectorAll('.notice');
-					notices.forEach(noticeEl => {
-						if (noticeEl.textContent.includes('Transcription in progress')) {
-							noticeEl.querySelector('button')?.click();
-						}
-					});
-				});
-			} catch (e) {
-				console.log("Error cleaning up notices:", e);
-			}
+			const transcriptPath = await this.saveTranscription(currentEpisode, formattedTranscription);
 
-			// Remove the cancel command
+			// Remove command for cancellation
 			try {
 				this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
 			} catch (e) {
@@ -383,29 +369,32 @@ export class TranscriptionService {
 			// Clear resume data since we've completed successfully
 			this.clearResumeState();
 
-			notice.stop();
-			notice.update("Transcription completed and saved successfully.");
+			// Show completion status in the UI
+			this.processingStatus = `Saved: ${transcriptPath}`;
+			this.progressPercent = 100;
 			
-			// Show a success notice with a link to the file
-			new Notice(
-				`Transcription complete!\nFile saved to: ${transcriptPath}`,
-				10000 // Show for 10 seconds
-			);
+			// Keep the UI visible for a moment before removing
+			setTimeout(() => {
+				this.isTranscribing = false;
+			}, 2000);
+			
 		} catch (error) {
 			console.error("Transcription error:", error);
-			notice.update(`Transcription failed: ${error.message}`);
-			new Notice(`Transcription failed: ${error.message}`, 5000);
-		} finally {
-			this.isTranscribing = false;
-			this.activeNotice = null;
 			
+			// Show error in UI
+			this.processingStatus = `Error: ${error.message}`;
+			
+			// Keep the error visible for a moment before removing
+			setTimeout(() => {
+				this.isTranscribing = false;
+			}, 3000);
+		} finally {
+			// Remove the command in case it wasn't removed earlier
 			try {
 				this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
 			} catch (e) {
 				// Command may have already been removed, ignore
 			}
-			
-			setTimeout(() => notice.hide(), 5000);
 		}
 	}
 
@@ -917,7 +906,7 @@ export class TranscriptionService {
 	private async saveTranscription(
 		episode: Episode,
 		transcription: string,
-	): Promise<void> {
+	): Promise<string> {
 		const transcriptPath = FilePathTemplateEngine(
 			this.plugin.settings.transcript.path,
 			episode,
@@ -945,6 +934,7 @@ export class TranscriptionService {
 		if (!file) {
 			const newFile = await vault.create(transcriptPath, transcriptContent);
 			await this.plugin.app.workspace.getLeaf().openFile(newFile);
+			return transcriptPath;
 		} else {
 			throw new Error("Expected a file but got a folder");
 		}
