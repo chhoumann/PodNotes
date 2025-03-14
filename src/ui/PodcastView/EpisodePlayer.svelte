@@ -343,24 +343,48 @@
 	
 	<div class="transcript-controls">
 		{#if isTranscribing}
-			<div class="transcript-notice">
-				<p>Transcription in progress</p>
-				<div class="transcript-buttons">
-					<Button icon="x" tooltip="Cancel transcription" on:click={cancelTranscription}>
-						Cancel Transcription
-					</Button>
+			<div class="transcription-progress-container">
+				<div class="transcription-header">
+					<h3>Transcribing episode...</h3>
+					<Button icon="x" tooltip="Cancel transcription" on:click={cancelTranscription} />
+				</div>
+				
+				<div class="transcription-progress">
+					<div class="progress-bar">
+						<div class="progress-bar-inner" style="width: {$plugin.transcriptionService?.progressPercent || 0}%"></div>
+					</div>
+					<div class="progress-stats">
+						<span>{$plugin.transcriptionService?.progressPercent || 0}%</span>
+						<span>{$plugin.transcriptionService?.processingStatus || "Preparing..."}</span>
+					</div>
+				</div>
+				
+				<div class="transcription-details">
+					<div>
+						<span class="detail-label">Time remaining:</span>
+						<span class="detail-value">{$plugin.transcriptionService?.timeRemaining || "Calculating..."}</span>
+					</div>
+					<div>
+						<span class="detail-label">Processed:</span>
+						<span class="detail-value">{$plugin.transcriptionService?.progressSize || "0 KB"}</span>
+					</div>
 				</div>
 			</div>
 		{:else if hasResumableTranscription}
 			<div class="transcript-notice">
-				<p>There is an interrupted transcription for this episode</p>
-				<div class="transcript-buttons">
-					<Button icon="rotate-ccw" tooltip="Resume transcription" on:click={resumeTranscription}>
-						Resume
-					</Button>
-					<Button icon="mic" tooltip="Start new transcription" on:click={transcribeEpisode}>
-						New
-					</Button>
+				<div class="transcript-notice-icon">
+					<Icon icon="alert-triangle" size={24} />
+				</div>
+				<div class="transcript-notice-content">
+					<p>Transcription was interrupted</p>
+					<div class="transcript-buttons">
+						<Button icon="rotate-ccw" tooltip="Resume transcription" on:click={resumeTranscription}>
+							Resume
+						</Button>
+						<Button icon="mic" tooltip="Start new transcription" on:click={transcribeEpisode}>
+							New
+						</Button>
+					</div>
 				</div>
 			</div>
 		{:else}
@@ -489,5 +513,92 @@
 	.transcript-buttons {
 		display: flex;
 		gap: 0.5rem;
+	}
+	
+	.transcript-notice {
+		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+		padding: 0.75rem;
+		background-color: var(--background-modifier-border);
+		border-radius: 6px;
+		width: 100%;
+	}
+	
+	.transcript-notice-icon {
+		color: var(--text-warning);
+		flex-shrink: 0;
+	}
+	
+	.transcript-notice-content {
+		flex: 1;
+	}
+	
+	.transcript-notice-content p {
+		margin: 0 0 0.75rem 0;
+		font-weight: 500;
+	}
+	
+	.transcription-progress-container {
+		width: 100%;
+		background-color: var(--background-primary);
+		border-radius: 8px;
+		padding: 1rem;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		border: 1px solid var(--background-modifier-border);
+	}
+	
+	.transcription-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+	
+	.transcription-header h3 {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 600;
+	}
+	
+	.transcription-progress {
+		margin-bottom: 1rem;
+	}
+	
+	.progress-bar {
+		height: 0.75rem;
+		background-color: var(--background-modifier-border);
+		border-radius: 4px;
+		margin-bottom: 0.5rem;
+		overflow: hidden;
+	}
+	
+	.progress-bar-inner {
+		height: 100%;
+		background-color: var(--interactive-accent);
+		border-radius: 4px;
+		transition: width 0.3s ease;
+	}
+	
+	.progress-stats {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+	
+	.transcription-details {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.85rem;
+	}
+	
+	.detail-label {
+		color: var(--text-muted);
+		margin-right: 0.5rem;
+	}
+	
+	.detail-value {
+		font-weight: 500;
 	}
 </style>

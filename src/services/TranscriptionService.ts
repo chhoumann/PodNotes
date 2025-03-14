@@ -57,6 +57,13 @@ export class TranscriptionService {
 	public isTranscribing = false;
 	private cancelRequested = false;
 	private activeNotice: any = null;
+	
+	// Progress information for UI
+	public progressPercent: number = 0;
+	public progressSize: string = "0 KB";
+	public timeRemaining: string = "Calculating...";
+	public processingStatus: string = "Preparing...";
+	
 	private resumeData: {
 		episodeId: string;
 		chunks: {processed: boolean; index: number}[];
@@ -114,6 +121,7 @@ export class TranscriptionService {
 		}
 		
 		this.cancelRequested = true;
+		this.processingStatus = "Cancelling...";
 		
 		if (this.activeNotice) {
 			this.activeNotice.update("Cancelling transcription. Please wait...");
@@ -224,6 +232,12 @@ export class TranscriptionService {
 
 		// Reset cancellation flag
 		this.cancelRequested = false;
+		
+		// Reset progress indicators
+		this.progressPercent = 0;
+		this.progressSize = "0 KB";
+		this.timeRemaining = "Calculating...";
+		this.processingStatus = "Preparing...";
 
 		const currentEpisode = this.plugin.api.podcast;
 		if (!currentEpisode) {
@@ -273,6 +287,7 @@ export class TranscriptionService {
 			const estimatedTime = this.estimateTranscriptionTime(fileSize);
 			
 			notice.update(`Preparing audio (${formattedSize}) for transcription...\nEstimated time: ${estimatedTime}`);
+			this.progressSize = formattedSize;
 			
 			// Read the audio file in chunks to reduce memory pressure
 			const fileBuffer = await this.plugin.app.vault.readBinary(podcastFile);
@@ -333,9 +348,11 @@ export class TranscriptionService {
 			await new Promise(resolve => setTimeout(resolve, 50));
 			
 			notice.update("Processing timestamps...");
+			this.processingStatus = "Formatting timestamps...";
 			const formattedTranscription = await this.formatTranscriptionWithTimestamps(transcription);
 
 			notice.update("Saving transcription...");
+			this.processingStatus = "Saving...";
 			await this.saveTranscription(currentEpisode, formattedTranscription);
 			
 			// Clean up notices
@@ -480,6 +497,7 @@ export class TranscriptionService {
 		const updateProgress = () => {
 			if (this.cancelRequested) {
 				updateNotice("Cancelling transcription. Please wait...");
+				this.processingStatus = "Cancelling...";
 				return;
 			}
 			
@@ -515,12 +533,18 @@ export class TranscriptionService {
 				// Calculate processing speed
 				const speed = (bytesPerSecond / 1024).toFixed(1);
 				
+				// Update public properties for UI
+				this.progressPercent = parseFloat(progress);
+				this.progressSize = `${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}`;
+				this.timeRemaining = remainingTimeStr;
+				this.processingStatus = `Processing at ${speed} KB/s`;
+				
+				// Still update notice for backward compatibility
 				updateNotice(
 					`${loadingIndicator} Transcribing... ${completedChunks}/${files.length} chunks (${progress}%)\n` +
 					`${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}\n` +
 					`Processing speed: ${speed} KB/s\n` +
-					`${remainingTimeStr}\n\n` +
-					`Cancel via notice button or command palette (Ctrl/Cmd+P)`
+					`${remainingTimeStr}`
 				);
 				
 				// Save resume state periodically
