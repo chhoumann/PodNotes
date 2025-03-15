@@ -473,12 +473,6 @@
 			<Button icon="mic" tooltip="Transcribe this episode" on:click={transcribeEpisode}>
 				Transcribe
 			</Button>
-		{:else}
-			<!-- Transcript already exists - show a static indicator -->
-			<span class="transcript-exists">
-				<Icon icon="check" size={14} />
-				Transcript exists
-			</span>
 		{/if}
 	</div>
 </div>
@@ -692,17 +686,5 @@
 	
 	.detail-value {
 		font-weight: 500;
-	}
-	
-	.transcript-exists {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--text-success);
-		font-size: 0.9rem;
-		padding: 0.35rem 0.75rem;
-		background-color: var(--background-modifier-success);
-		border-radius: 4px;
-		border: 1px solid var(--background-modifier-border);
 	}
 </style>
