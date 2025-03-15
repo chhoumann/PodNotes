@@ -439,18 +439,16 @@ export class TranscriptionService {
 	}
 	
 	/**
-	 * Calculate optimal chunk size based on file size and OpenAI API limits
+	 * Calculate optimal chunk size based on file size and available memory
 	 */
 	private calculateOptimalChunkSize(fileSize: number): number {
-		// OpenAI has a 25MB payload limit, but actually errors at lower sizes
-		// Use a much smaller chunk size to ensure API acceptance
-		const MAX_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB max to be safe
+		// Base chunk size on file characteristics
+		const baseChunkSize = 20 * 1024 * 1024; // 20MB base (original size)
 		
 		if (fileSize > 100 * 1024 * 1024) { // Large files > 100MB
-			return 512 * 1024; // Use even smaller chunks (512KB) for very large files
+			return Math.min(baseChunkSize, Math.floor(4 * 1024 * 1024)); // Adjust for very large files
 		}
-		
-		return MAX_CHUNK_SIZE;
+		return baseChunkSize;
 	}
 	
 	/**
@@ -669,7 +667,6 @@ export class TranscriptionService {
 		}
 		
 		let retries = 0;
-		let currentChunkSize = endByte - startByte;
 		
 		while (retries < this.MAX_RETRIES) {
 			try {
@@ -677,7 +674,7 @@ export class TranscriptionService {
 				const chunkBuffer = await this.plugin.app.vault.adapter.readBinary(
 					file.path, 
 					startByte, 
-					currentChunkSize
+					endByte - startByte
 				);
 				
 				// Create a file object for this chunk
@@ -716,23 +713,7 @@ export class TranscriptionService {
 				}
 				
 				// Handle specific error types
-				if (error.status === 413) {
-					console.warn(`Payload too large (413) for chunk ${index}, reducing size and retrying...`);
-					
-					// Reduce chunk size by half for each 413 error
-					currentChunkSize = Math.floor(currentChunkSize / 2);
-					console.log(`Trying with smaller chunk size: ${this.formatFileSize(currentChunkSize)}`);
-					
-					// If chunk became too small, give up
-					if (currentChunkSize < 50000) { // 50KB minimum
-						console.error("Chunk size became too small, giving up");
-						throw new Error("OpenAI API cannot process even small audio chunks. File may be corrupted.");
-					}
-					
-					// Don't count 413 errors toward retry limit
-					retries--;
-					
-				} else if (error.status === 429) {
+				if (error.status === 429) {
 					console.warn("Rate limit exceeded, retrying after delay...");
 					await new Promise(resolve => setTimeout(resolve, 2000 * retries));
 				} else if (error.status >= 500) {
@@ -746,19 +727,16 @@ export class TranscriptionService {
 					const startTime = this.estimateTimePosition(index, totalChunks, 0);
 					const endTime = this.estimateTimePosition(index + 1, totalChunks, 0);
 					
-					// Include error details in placeholder
-					const errorMessage = error.message || "Unknown error";
 					return {
-						text: `[Transcription error in segment ${index + 1}: ${errorMessage}]`,
+						text: `[Transcription error in segment ${index + 1}]`,
 						segments: [{
 							start: startTime,
 							end: endTime,
-							text: `[Transcription error in segment ${index + 1}: ${errorMessage}]`
+							text: `[Transcription error in segment ${index + 1}]`
 						}]
 					};
 				} else {
-					// Generic error handling with better logging
-					console.warn(`Retrying chunk ${index} after error: ${error.message || "Unknown error"}`);
+					// Generic error handling
 					await new Promise(resolve => setTimeout(resolve, 1000 * retries));
 				}
 			}
