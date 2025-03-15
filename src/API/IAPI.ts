@@ -19,4 +19,5 @@ export interface IAPI {
 	transcribeCurrentEpisode(): void;
 	resumeTranscription(): void;
 	hasResumableTranscription(episodeId: string): boolean;
+	hasExistingTranscript(episodeId: string): boolean;
 }

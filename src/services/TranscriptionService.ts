@@ -229,6 +229,32 @@ export class TranscriptionService {
 	}
 	
 	/**
+	 * Check if a transcript already exists for the given episode
+	 */
+	hasExistingTranscript(episodeId: string): boolean {
+		try {
+			// Find the episode from the ID
+			// This requires getting the current episode
+			const currentEpisode = this.plugin.api.podcast;
+			if (!currentEpisode || currentEpisode.id !== episodeId) {
+				return false;
+			}
+			
+			// Check if transcript file exists
+			const transcriptPath = FilePathTemplateEngine(
+				this.plugin.settings.transcript.path,
+				currentEpisode,
+			);
+			
+			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
+			return existingFile !== null;
+		} catch (error) {
+			console.error("Error checking for existing transcript:", error);
+			return false;
+		}
+	}
+	
+	/**
 	 * Clear resume state
 	 */
 	private clearResumeState(): void {
@@ -280,16 +306,9 @@ export class TranscriptionService {
 		
 		// Check if transcription file already exists (only if not resuming)
 		if (!resume) {
-			const transcriptPath = FilePathTemplateEngine(
-				this.plugin.settings.transcript.path,
-				currentEpisode,
-			);
-			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
-			if (existingFile instanceof TFile) {
-				this.processingStatus = `Already transcribed: ${transcriptPath}`;
-				setTimeout(() => {
-					this.isTranscribing = false;
-				}, 2000);
+			if (this.hasExistingTranscript(currentEpisode.id)) {
+				// Just reset state silently without error messages
+				this.isTranscribing = false;
 				return;
 			}
 		}

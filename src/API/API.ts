@@ -55,6 +55,14 @@ export class API implements IAPI {
 		}
 		return false;
 	}
+	
+	public hasExistingTranscript(episodeId: string): boolean {
+		const pluginInstance = get(plugin);
+		if (pluginInstance && pluginInstance.transcriptionService) {
+			return pluginInstance.transcriptionService.hasExistingTranscript(episodeId);
+		}
+		return false;
+	}
 
 	/**
 	 * Gets the current time in the given moment format.
