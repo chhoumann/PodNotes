@@ -110,92 +110,6 @@ export class TranscriptionService {
 	}
 	
 	/**
-	 * Initialize the OpenAI client with API key validation
-	 * @returns true if API key is valid, false otherwise
-	 */
-	private initializeClient(): boolean {
-		const apiKey = this.plugin.settings.openAIApiKey;
-		
-		if (!apiKey || apiKey.trim() === "") {
-			new Notice("OpenAI API key is required for transcription. Please set it in the settings tab.");
-			return false;
-		}
-		
-		if (!apiKey.startsWith("sk-")) {
-			new Notice("Invalid OpenAI API key format. Keys should start with 'sk-'");
-			return false;
-		}
-		
-		if (apiKey.length < 20) {
-			new Notice("OpenAI API key appears to be too short. Please check your API key.");
-			return false;
-		}
-		
-		try {
-			this.client = new OpenAI({
-				apiKey: apiKey,
-				dangerouslyAllowBrowser: true,
-			});
-			return true;
-		} catch (error) {
-			console.error("Error initializing OpenAI client:", error);
-			new Notice(`Failed to initialize OpenAI client: ${error.message}`);
-			return false;
-		}
-	}
-
-	/**
-	 * Cancels the current transcription process
-	 */
-	cancelTranscription(): void {
-		if (!this.isTranscribing) {
-			return;
-		}
-		
-		this.cancelRequested = true;
-		this.processingStatus = "Cancelling...";
-		
-		// The cancellation will be handled in the transcription process
-		// No notifications, everything will be shown in the UI
-	}
-	
-	/**
-	 * Calculate file size in a human-readable format
-	 */
-	private formatFileSize(bytes: number): string {
-		if (bytes < 1024) return bytes + " bytes";
-		if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
-		if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + " MB";
-		return (bytes / 1073741824).toFixed(1) + " GB";
-	}
-	
-	/**
-	 * Estimate transcription time based on file size
-	 * This is a realistic estimate based on OpenAI's processing capability and network overhead
-	 */
-	private estimateTranscriptionTime(bytes: number): string {
-		// More realistic estimate: Processing 1MB takes ~3-4 minutes due to
-		// API processing time, network overhead, and parallelism constraints
-		const processingFactor = 3.5; // Minutes per MB
-		const minutes = Math.max(5, Math.ceil((bytes / 1048576) * processingFactor));
-		
-		// Add additional time for initial setup and final processing
-		const totalMinutes = minutes + 2;
-		
-		if (totalMinutes < 60) {
-			return `~${totalMinutes}m`;
-		}
-		
-		const hours = Math.floor(totalMinutes / 60);
-		const remainingMinutes = totalMinutes % 60;
-		
-		if (remainingMinutes === 0) {
-			return `~${hours}h`;
-		}
-		return `~${hours}h ${remainingMinutes}m`;
-	}
-	
-	/**
 	 * Save resumable state with fallback options for better reliability
 	 */
 	private saveResumeState(
@@ -525,16 +439,18 @@ export class TranscriptionService {
 	}
 	
 	/**
-	 * Calculate optimal chunk size based on file size and available memory
+	 * Calculate optimal chunk size based on file size and OpenAI API limits
 	 */
 	private calculateOptimalChunkSize(fileSize: number): number {
-		// Base chunk size on file characteristics
-		const baseChunkSize = 5 * 1024 * 1024; // 5MB base
+		// OpenAI has a 25MB payload limit, but actually errors at lower sizes
+		// Use a much smaller chunk size to ensure API acceptance
+		const MAX_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB max to be safe
 		
 		if (fileSize > 100 * 1024 * 1024) { // Large files > 100MB
-			return Math.min(baseChunkSize, Math.floor(4 * 1024 * 1024 / 10)); // Assume 4GB memory
+			return 512 * 1024; // Use even smaller chunks (512KB) for very large files
 		}
-		return baseChunkSize;
+		
+		return MAX_CHUNK_SIZE;
 	}
 	
 	/**
@@ -753,13 +669,15 @@ export class TranscriptionService {
 		}
 		
 		let retries = 0;
+		let currentChunkSize = endByte - startByte;
+		
 		while (retries < this.MAX_RETRIES) {
 			try {
 				// Read just the chunk we need
 				const chunkBuffer = await this.plugin.app.vault.adapter.readBinary(
 					file.path, 
 					startByte, 
-					endByte - startByte
+					currentChunkSize
 				);
 				
 				// Create a file object for this chunk
@@ -798,7 +716,23 @@ export class TranscriptionService {
 				}
 				
 				// Handle specific error types
-				if (error.status === 429) {
+				if (error.status === 413) {
+					console.warn(`Payload too large (413) for chunk ${index}, reducing size and retrying...`);
+					
+					// Reduce chunk size by half for each 413 error
+					currentChunkSize = Math.floor(currentChunkSize / 2);
+					console.log(`Trying with smaller chunk size: ${this.formatFileSize(currentChunkSize)}`);
+					
+					// If chunk became too small, give up
+					if (currentChunkSize < 50000) { // 50KB minimum
+						console.error("Chunk size became too small, giving up");
+						throw new Error("OpenAI API cannot process even small audio chunks. File may be corrupted.");
+					}
+					
+					// Don't count 413 errors toward retry limit
+					retries--;
+					
+				} else if (error.status === 429) {
 					console.warn("Rate limit exceeded, retrying after delay...");
 					await new Promise(resolve => setTimeout(resolve, 2000 * retries));
 				} else if (error.status >= 500) {
@@ -812,16 +746,19 @@ export class TranscriptionService {
 					const startTime = this.estimateTimePosition(index, totalChunks, 0);
 					const endTime = this.estimateTimePosition(index + 1, totalChunks, 0);
 					
+					// Include error details in placeholder
+					const errorMessage = error.message || "Unknown error";
 					return {
-						text: `[Transcription error in segment ${index + 1}]`,
+						text: `[Transcription error in segment ${index + 1}: ${errorMessage}]`,
 						segments: [{
 							start: startTime,
 							end: endTime,
-							text: `[Transcription error in segment ${index + 1}]`
+							text: `[Transcription error in segment ${index + 1}: ${errorMessage}]`
 						}]
 					};
 				} else {
-					// Generic error handling
+					// Generic error handling with better logging
+					console.warn(`Retrying chunk ${index} after error: ${error.message || "Unknown error"}`);
 					await new Promise(resolve => setTimeout(resolve, 1000 * retries));
 				}
 			}
@@ -845,7 +782,6 @@ export class TranscriptionService {
 	/**
 	 * Helper method to get the MIME type based on file extension
 	 */
-
 	private getMimeType(fileExtension: string): string {
 		switch (fileExtension.toLowerCase()) {
 			case "mp3":
@@ -863,277 +799,55 @@ export class TranscriptionService {
 		}
 	}
 
-	private async transcribeChunks(
-		files: File[],
-		updateNotice: (message: string) => void,
-		episodeId: string = '',
-		totalFileSize: number = 0,
-		resumeData: any = null
-	): Promise<Transcription> {
-		if (!this.client) {
-			throw new Error("OpenAI client not initialized. Please check your API key.");
+	/**
+	 * Cancels the current transcription process
+	 */
+	cancelTranscription(): void {
+		if (!this.isTranscribing) {
+			return;
 		}
 		
-		const transcriptions: Transcription[] = new Array(files.length);
-		let completedChunks = 0;
-		let processedSize = 0;
-		let totalProcessedBytes = 0;
-		let lastUpdateTime = Date.now();
-		let startTime = Date.now();
-		const UPDATE_INTERVAL_MS = 150; // Update UI more frequently for better responsiveness
+		this.cancelRequested = true;
+		this.processingStatus = "Cancelling...";
 		
-		// If we have resume data, restore the progress
-		if (resumeData && resumeData.episodeId === episodeId) {
-			resumeData.results.forEach((result, i) => {
-				if (i < transcriptions.length) {
-					transcriptions[i] = result;
-					completedChunks++;
-					
-					// Estimate size of the processed chunk
-					const estimatedChunkSize = totalFileSize / files.length;
-					totalProcessedBytes += estimatedChunkSize;
-				}
-			});
-		}
-
-		const updateProgress = () => {
-			if (this.cancelRequested) {
-				updateNotice("Cancelling transcription. Please wait...");
-				this.processingStatus = "Cancelling...";
-				return;
-			}
-			
-			const now = Date.now();
-			// Throttle UI updates to avoid excessive rendering
-			if (now - lastUpdateTime >= UPDATE_INTERVAL_MS) {
-				const progress = ((completedChunks / files.length) * 100).toFixed(1);
-				const elapsedSeconds = (now - startTime) / 1000;
-				const processedMB = totalProcessedBytes / 1048576;
-				const bytesPerSecond = totalProcessedBytes / Math.max(1, elapsedSeconds);
-				
-				// Status indicator that shows active processing
-				const loadingIndicator = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"][Math.floor(Date.now() / 250) % 8];
-				
-				// Calculate more accurate estimated time remaining
-				// Use a weighted approach that puts more emphasis on recent processing speed
-				// This helps adjust the estimate as we gather more data
-				let remainingTimeStr = "Calculating...";
-				
-				if (completedChunks > 0 && elapsedSeconds > 10) {
-					const remainingBytes = totalFileSize - totalProcessedBytes;
-					const estimatedRemainingSeconds = remainingBytes / bytesPerSecond;
-					
-					if (estimatedRemainingSeconds > 3600) {
-						const hours = Math.floor(estimatedRemainingSeconds / 3600);
-						const mins = Math.floor((estimatedRemainingSeconds % 3600) / 60);
-						remainingTimeStr = `~${hours}h ${mins}m`;
-					} else if (estimatedRemainingSeconds > 60) {
-						const mins = Math.floor(estimatedRemainingSeconds / 60);
-						const secs = Math.floor(estimatedRemainingSeconds % 60);
-						remainingTimeStr = `~${mins}m ${secs}s`;
-					} else {
-						remainingTimeStr = `~${Math.floor(estimatedRemainingSeconds)}s`;
-					}
-				}
-				
-				// Calculate processing speed
-				const speed = (bytesPerSecond / 1024).toFixed(1);
-				
-				// Update public properties for UI
-				this.progressPercent = parseFloat(progress);
-				this.progressSize = `${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}`;
-				this.timeRemaining = remainingTimeStr;
-				this.processingStatus = `Processing at ${speed} KB/s`;
-				
-				// Simplified notice for backward compatibility
-				updateNotice(
-					`${loadingIndicator} Transcribing... ${progress}% complete\n` +
-					`${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}\n` +
-					`${remainingTimeStr}`
-				);
-				
-				// Save resume state periodically
-				this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
-				
-				lastUpdateTime = now;
-			}
-		};
-
-		updateProgress();
-
-		// Define a function to process a single file
-		const processFile = async (file: File, index: number): Promise<void> => {
-			// Skip already processed chunks if resuming
-			if (resumeData && resumeData.chunks) {
-				const chunk = resumeData.chunks.find(c => c.index === index);
-				if (chunk && chunk.processed) {
-					// This chunk was already processed
-					return;
-				}
-			}
-			
-			// Check for cancellation before processing
-			if (this.cancelRequested) {
-				return;
-			}
-			
-			let retries = 0;
-			while (retries < this.MAX_RETRIES) {
-				try {
-					// Use a separate microtask to yield to the main thread
-					await new Promise(resolve => setTimeout(resolve, 0));
-					
-					// Check cancellation before API call
-					if (this.cancelRequested) {
-						return;
-					}
-					
-					// Update size tracking before processing
-					const estimatedChunkSize = totalFileSize / files.length;
-					
-					const result = await this.client.audio.transcriptions.create({
-						file: file,
-						model: "whisper-1",
-						response_format: "verbose_json",
-						timestamp_granularities: ["segment", "word"],
-					});
-					
-					// Check cancellation after API call
-					if (this.cancelRequested) {
-						// Save progress before cancelling
-						this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
-						return;
-					}
-					
-					transcriptions[index] = result;
-					completedChunks++;
-					totalProcessedBytes += estimatedChunkSize;
-					updateProgress();
-					return;
-				} catch (error) {
-					// Check for cancellation during error handling
-					if (this.cancelRequested) {
-						return;
-					}
-					
-					retries++;
-					if (retries >= this.MAX_RETRIES) {
-						console.error(
-							`Failed to transcribe chunk ${index + 1}/${files.length} after ${this.MAX_RETRIES} attempts:`,
-							error,
-						);
-						
-						// Create a minimal placeholder transcription for the failed segment
-						// This allows the process to continue with the rest of the chunks
-						transcriptions[index] = {
-							text: `[Transcription error in segment ${index + 1}]`,
-							segments: [{
-								start: 0,
-								end: 1,
-								text: `[Transcription error in segment ${index + 1}]`
-							}]
-						};
-						
-						// Still increment the counter to maintain accurate progress
-						completedChunks++;
-						const estimatedChunkSize = totalFileSize / files.length;
-						totalProcessedBytes += estimatedChunkSize;
-						updateProgress();
-						
-						// Log the error but don't throw - continue with other chunks
-						new Notice(`Warning: Failed to transcribe segment ${index + 1}. Continuing with remaining segments.`, 3000);
-						return;
-					}
-					// Exponential backoff
-					await new Promise((resolve) => setTimeout(resolve, 1000 * retries));
-				}
-			}
-		};
-
-		// Process chunks with a concurrency limit to avoid overwhelming OpenAI's API
-		// and to manage memory consumption
-		const CONCURRENCY_LIMIT = 3;
+		// The cancellation will be handled in the transcription process
+		// No notifications, everything will be shown in the UI
+	}
+	
+	/**
+	 * Calculate file size in a human-readable format
+	 */
+	private formatFileSize(bytes: number): string {
+		if (bytes < 1024) return bytes + " bytes";
+		if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+		if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + " MB";
+		return (bytes / 1073741824).toFixed(1) + " GB";
+	}
+	
+	/**
+	 * Estimate transcription time based on file size
+	 * This is a realistic estimate based on OpenAI's processing capability and network overhead
+	 */
+	private estimateTranscriptionTime(bytes: number): string {
+		// More realistic estimate: Processing 1MB takes ~3-4 minutes due to
+		// API processing time, network overhead, and parallelism constraints
+		const processingFactor = 3.5; // Minutes per MB
+		const minutes = Math.max(5, Math.ceil((bytes / 1048576) * processingFactor));
 		
-		// Create batches of promises
-		for (let i = 0; i < files.length; i += CONCURRENCY_LIMIT) {
-			// Check for cancellation before starting a new batch
-			if (this.cancelRequested) {
-				break;
-			}
-			
-			const batch = files.slice(i, i + CONCURRENCY_LIMIT);
-			const batchPromises = batch.map((file, batchIndex) => 
-				processFile(file, i + batchIndex).catch(error => {
-					// Check for cancellation during batch error handling
-					if (this.cancelRequested) {
-						return;
-					}
-					
-					// Add additional error handling at the batch level
-					console.error(`Error in batch processing for index ${i + batchIndex}:`, error);
-					
-					// Create an empty placeholder for completely failed chunks
-					transcriptions[i + batchIndex] = {
-						text: `[Failed to process segment ${i + batchIndex + 1}]`,
-						segments: [{
-							start: 0,
-							end: 1,
-							text: `[Failed to process segment ${i + batchIndex + 1}]`
-						}]
-					};
-					
-					// Ensure we update progress even for failed chunks
-					completedChunks++;
-					const estimatedChunkSize = totalFileSize / files.length;
-					totalProcessedBytes += estimatedChunkSize;
-					updateProgress();
-				})
-			);
-			
-			try {
-				// Process each batch concurrently
-				await Promise.all(batchPromises);
-			} catch (error) {
-				// Check for cancellation during batch error handling
-				if (this.cancelRequested) {
-					break;
-				}
-				
-				// This is a fallback in case something unexpected happens
-				console.error("Unexpected error in batch processing:", error);
-				new Notice("Warning: Some segments failed to transcribe. Continuing with available data.", 5000);
-				// Continue processing other batches - don't rethrow
-			}
-			
-			// Check for cancellation after batch completion
-			if (this.cancelRequested) {
-				// Save progress before cancelling
-				this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
-				break;
-			}
-			
-			// After each batch is done, give the main thread a moment to breathe
-			await new Promise(resolve => setTimeout(resolve, 50));
+		// Add additional time for initial setup and final processing
+		const totalMinutes = minutes + 2;
+		
+		if (totalMinutes < 60) {
+			return `~${totalMinutes}m`;
 		}
 		
-		// If cancelled, save state and stop processing
-		if (this.cancelRequested) {
-			// Save progress before returning
-			this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
-			
-			// Return partial results to avoid crashes
-			const validTranscriptions = transcriptions.filter(t => t !== undefined);
-			if (validTranscriptions.length === 0) {
-				throw new Error("Transcription cancelled by user.");
-			}
-			
-			return this.mergeTranscriptions(validTranscriptions);
-		}
-
-		// Filter out any undefined entries that might have occurred due to errors
-		const validTranscriptions = transcriptions.filter(t => t !== undefined);
+		const hours = Math.floor(totalMinutes / 60);
+		const remainingMinutes = totalMinutes % 60;
 		
-		return this.mergeTranscriptions(validTranscriptions);
+		if (remainingMinutes === 0) {
+			return `~${hours}h`;
+		}
+		return `~${hours}h ${remainingMinutes}m`;
 	}
 
 	private mergeTranscriptions(transcriptions: Transcription[]): Transcription {
