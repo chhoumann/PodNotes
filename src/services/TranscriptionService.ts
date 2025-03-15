@@ -9,6 +9,8 @@ import {
 } from "../TemplateEngine";
 import type { Episode } from "src/types/Episode";
 import type { Transcription } from "openai/resources/audio";
+import { get } from "svelte/store";
+import { transcriptionProgress } from "../store";
 
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
@@ -194,38 +196,87 @@ export class TranscriptionService {
 	}
 	
 	/**
-	 * Save resumable state to localStorage for potential recovery
+	 * Save resumable state with fallback options for better reliability
 	 */
-	private saveResumeState(episodeId: string, chunks: any[], results: any[], completedSize: number, totalSize: number): void {
+	private saveResumeState(
+		episodeId: string, 
+		totalChunks: number, 
+		results: any[], 
+		completedSize: number, 
+		totalSize: number
+	): void {
+		// Create chunks list from total and processed results
+		const chunks = Array.from({ length: totalChunks }, (_, index) => ({ 
+			processed: results[index] !== undefined, 
+			index 
+		}));
+		
+		// Store filtered results (only completed ones)
+		const validResults = results.filter(r => r !== undefined);
+		
+		// Create resume data object
 		this.resumeData = {
 			episodeId,
-			chunks: chunks.map((_, index) => ({ processed: results[index] !== undefined, index })),
-			results: results.filter(r => r !== undefined),
+			timestamp: Date.now(),
+			chunks,
+			results: validResults,
 			completedSize,
 			totalSize
 		};
 		
-		// Save to localStorage for persistence across sessions
+		// Try localStorage first
 		try {
-			localStorage.setItem('podnotes-resume-transcription', JSON.stringify(this.resumeData));
+			localStorage.setItem(`podnotes-resume-${episodeId}`, JSON.stringify(this.resumeData));
 		} catch (error) {
-			console.error("Failed to save resume state:", error);
+			console.warn("Failed to save resume state to localStorage:", error);
+			
+			// Fall back to plugin data storage
+			try {
+				this.plugin.saveData(`transcription-resume-${episodeId}`, this.resumeData);
+			} catch (fallbackError) {
+				console.error("Failed to save resume state to plugin data:", fallbackError);
+				
+				// Log but don't interrupt transcription
+				new Notice("Warning: Failed to save resume state", 3000);
+			}
 		}
+		
+		// Update UI with resume availability
+		this.updateProgressStore({
+			hasResumableTranscription: true
+		});
 	}
 	
 	/**
 	 * Check if there's a resumable transcription for the given episode
+	 * Checks both localStorage and plugin data storage
 	 */
 	hasResumableTranscription(episodeId: string): boolean {
+		// Check localStorage first
 		try {
-			const savedData = localStorage.getItem('podnotes-resume-transcription');
-			if (!savedData) return false;
-			
-			const resumeData = JSON.parse(savedData);
-			return resumeData.episodeId === episodeId;
+			const savedData = localStorage.getItem(`podnotes-resume-${episodeId}`);
+			if (savedData) {
+				const resumeData = JSON.parse(savedData);
+				// Verify data is valid and for this episode
+				if (resumeData && resumeData.episodeId === episodeId) {
+					return true;
+				}
+			}
 		} catch {
-			return false;
+			// Ignore localStorage errors and try plugin data
 		}
+		
+		// Fallback to plugin data
+		try {
+			const pluginData = this.plugin.loadData(`transcription-resume-${episodeId}`);
+			if (pluginData && pluginData.episodeId === episodeId) {
+				return true;
+			}
+		} catch {
+			// Ignore errors
+		}
+		
+		return false;
 	}
 	
 	/**
@@ -255,19 +306,41 @@ export class TranscriptionService {
 	}
 	
 	/**
-	 * Clear resume state
+	 * Clear resume state from all storage locations
 	 */
 	private clearResumeState(): void {
+		// Reset local state
 		this.resumeData = null;
+		
+		// Get current episode ID for targeted clear
+		const currentEpisodeId = this.plugin.api.podcast?.id;
+		if (!currentEpisodeId) return;
+		
+		// Clear from localStorage
 		try {
+			localStorage.removeItem(`podnotes-resume-${currentEpisodeId}`);
+			
+			// Also try to clean up legacy format for compatibility
 			localStorage.removeItem('podnotes-resume-transcription');
 		} catch (error) {
-			console.error("Failed to clear resume state:", error);
+			console.warn("Failed to clear resume state from localStorage:", error);
 		}
+		
+		// Clear from plugin data
+		try {
+			this.plugin.saveData(`transcription-resume-${currentEpisodeId}`, null);
+		} catch (error) {
+			console.warn("Failed to clear resume state from plugin data:", error);
+		}
+		
+		// Update UI state
+		this.updateProgressStore({
+			hasResumableTranscription: false
+		});
 	}
 
 	/**
-	 * Transcribes the current episode asynchronously with optimized memory usage and performance.
+	 * Transcribes the current episode asynchronously with true streaming to optimize memory usage.
 	 * Uses non-blocking approach to maintain responsiveness of the Obsidian UI.
 	 * @param resume Whether to attempt to resume a previously interrupted transcription
 	 */
@@ -275,54 +348,56 @@ export class TranscriptionService {
 		// Get current episode first
 		const currentEpisode = this.plugin.api.podcast;
 		if (!currentEpisode) {
-			this.processingStatus = "Error: No episode is playing";
-			setTimeout(() => {
-				this.isTranscribing = false;
-			}, 2000);
+			this.updateProgressStore({
+				processingStatus: "Error: No episode is playing",
+				isTranscribing: false
+			});
 			return;
 		}
 		
-		// Set isTranscribing to true first for immediate UI update
-		this.isTranscribing = true;
+		// Set initial state
+		this.updateProgressStore({
+			isTranscribing: true,
+			progressPercent: 0.1,
+			progressSize: "0 KB",
+			timeRemaining: "Calculating...",
+			processingStatus: "Preparing...",
+			currentEpisodeId: currentEpisode.id,
+			hasResumableTranscription: resume || this.hasResumableTranscription(currentEpisode.id),
+			hasExistingTranscript: this.hasExistingTranscript(currentEpisode.id)
+		});
 		
-		// Reset progress indicators (these should be visible immediately)
-		this.progressPercent = 0.1; // Start with minimal percentage to show activity
-		this.progressSize = "0 KB";
-		this.timeRemaining = "Calculating...";
-		this.processingStatus = "Preparing...";
-		
-		// Force UI to update by triggering a microtask
-		await new Promise(resolve => setTimeout(resolve, 0));
-		
-		// Validate API key
-		if (!this.initializeClient()) {
-			// Reset state if validation fails
-			this.processingStatus = "Error: Invalid API key";
-			setTimeout(() => {
-				this.isTranscribing = false;
-			}, 2000);
-			return;
-		}
-		
-		// Check if transcription file already exists (only if not resuming)
-		if (!resume) {
-			if (this.hasExistingTranscript(currentEpisode.id)) {
-				// Just reset state silently without error messages
-				this.isTranscribing = false;
+		// Validate API key with a proper validation method
+		try {
+			const validationResult = await this.validateApiKey();
+			if (!validationResult.valid) {
+				this.updateProgressStore({
+					processingStatus: `Error: ${validationResult.reason || "Invalid API key"}`,
+					isTranscribing: false
+				});
 				return;
 			}
+		} catch (error) {
+			this.updateProgressStore({
+				processingStatus: `Error validating API key: ${error.message}`,
+				isTranscribing: false
+			});
+			return;
+		}
+		
+		// Check if transcript already exists (only if not resuming)
+		if (!resume && this.hasExistingTranscript(currentEpisode.id)) {
+			this.updateProgressStore({ isTranscribing: false });
+			return;
 		}
 
 		// Reset cancellation flag
 		this.cancelRequested = false;
 
 		try {
-			// Use setTimeout to allow UI to update before heavy processing starts
-			await new Promise(resolve => setTimeout(resolve, 50));
+			this.updateProgressStore({ processingStatus: "Downloading episode..." });
 			
-			// Update UI status
-			this.processingStatus = "Downloading episode...";
-			
+			// Get the episode file
 			const downloadPath = await downloadEpisode(
 				currentEpisode,
 				this.plugin.settings.download.path,
@@ -332,40 +407,18 @@ export class TranscriptionService {
 			if (!podcastFile || !(podcastFile instanceof TFile)) {
 				throw new Error("Failed to download or locate the episode.");
 			}
-
-			// Another small delay to ensure UI responsiveness
-			await new Promise(resolve => setTimeout(resolve, 50));
 			
 			// Get file size for estimation
 			const fileSize = podcastFile.stat.size;
 			const formattedSize = this.formatFileSize(fileSize);
 			const estimatedTime = this.estimateTranscriptionTime(fileSize);
 			
-			// Update UI status
-			this.processingStatus = `Preparing audio (${formattedSize})...`;
-			this.timeRemaining = estimatedTime;
-			this.progressPercent = 5; // Show a small amount of progress
-			this.progressSize = formattedSize;
-			
-			// Read the audio file in chunks to reduce memory pressure
-			const fileBuffer = await this.plugin.app.vault.readBinary(podcastFile);
-			const fileExtension = podcastFile.extension;
-			const mimeType = this.getMimeType(fileExtension);
-
-			// Use the improved memory-efficient chunk processing
-			const files = this.createChunkFiles(
-				fileBuffer,
-				podcastFile.basename,
-				fileExtension,
-				mimeType,
-			);
-			
-			// Release the file buffer as soon as possible to free memory
-			// @ts-ignore - using a workaround to help release memory
-			const tempFileBuffer = null;
-			
-			// Update UI status
-			this.processingStatus = `Starting transcription (${formattedSize})...`;
+			this.updateProgressStore({
+				processingStatus: `Preparing audio (${formattedSize})...`,
+				timeRemaining: estimatedTime,
+				progressPercent: 5,
+				progressSize: formattedSize
+			});
 			
 			// Create command for cancellation via command palette
 			this.plugin.addCommand({
@@ -374,40 +427,49 @@ export class TranscriptionService {
 				callback: () => this.cancelTranscription()
 			});
 			
-			// Create a no-op update function since we're not using notices anymore
-			const updateStatus = (message: string) => {
-				// We're not doing anything with this message since we update UI directly
-			};
+			// Process the audio file in a true streaming manner
+			const chunkSize = this.calculateOptimalChunkSize(fileSize);
+			const fileExtension = podcastFile.extension;
+			const mimeType = this.getMimeType(fileExtension);
 			
-			// Process transcription with concurrent chunks
-			const transcription = await this.transcribeChunks(
-				files, 
-				updateStatus,
-				currentEpisode.id,
+			this.updateProgressStore({
+				processingStatus: `Starting transcription (${formattedSize})...`
+			});
+			
+			// Process transcription with streamed chunks
+			const transcription = await this.processAudioFileStreaming(
+				podcastFile,
+				chunkSize,
 				fileSize,
+				mimeType,
+				currentEpisode.id,
 				resume ? this.resumeData : null
 			);
 			
 			// If cancelled, stop here
 			if (this.cancelRequested) {
-				this.processingStatus = "Transcription cancelled";
-				
-				// Keep the UI visible for a moment before removing
-				setTimeout(() => {
-					this.isTranscribing = false;
-				}, 2000);
+				this.updateProgressStore({
+					processingStatus: "Transcription cancelled",
+					isTranscribing: false
+				});
 				return;
 			}
 			
-			// Schedule processing in the next event loop iteration to avoid UI blocking
-			await new Promise(resolve => setTimeout(resolve, 50));
+			// Use requestAnimationFrame for natural async boundaries
+			await new Promise(resolve => requestAnimationFrame(resolve));
 			
-			// Update UI status
-			this.processingStatus = "Formatting timestamps...";
+			this.updateProgressStore({ 
+				processingStatus: "Formatting timestamps...",
+				progressPercent: 90
+			});
+			
 			const formattedTranscription = await this.formatTranscriptionWithTimestamps(transcription);
 
-			// Update UI status
-			this.processingStatus = "Saving...";
+			this.updateProgressStore({ 
+				processingStatus: "Saving...",
+				progressPercent: 95 
+			});
+			
 			const transcriptPath = await this.saveTranscription(currentEpisode, formattedTranscription);
 
 			// Remove command for cancellation
@@ -420,25 +482,23 @@ export class TranscriptionService {
 			// Clear resume data since we've completed successfully
 			this.clearResumeState();
 
-			// Show completion status in the UI
-			this.processingStatus = `Saved: ${transcriptPath}`;
-			this.progressPercent = 100;
+			// Show completion and auto-hide after delay
+			this.updateProgressStore({
+				processingStatus: `Saved: ${transcriptPath}`,
+				progressPercent: 100
+			});
 			
-			// Keep the UI visible for a moment before removing
 			setTimeout(() => {
-				this.isTranscribing = false;
+				this.updateProgressStore({ isTranscribing: false });
 			}, 2000);
 			
 		} catch (error) {
 			console.error("Transcription error:", error);
 			
-			// Show error in UI
-			this.processingStatus = `Error: ${error.message}`;
-			
-			// Keep the error visible for a moment before removing
-			setTimeout(() => {
-				this.isTranscribing = false;
-			}, 3000);
+			this.updateProgressStore({
+				processingStatus: `Error: ${error.message}`,
+				isTranscribing: false
+			});
 		} finally {
 			// Remove the command in case it wasn't removed earlier
 			try {
@@ -448,45 +508,343 @@ export class TranscriptionService {
 			}
 		}
 	}
-
+	
 	/**
-	 * Chunks a file into smaller pieces for more efficient processing.
-	 * Uses generator pattern to avoid holding all chunks in memory at once.
+	 * Updates the central progress store to maintain a single source of truth
 	 */
-	private *chunkFileGenerator(fileBuffer: ArrayBuffer): Generator<ArrayBuffer> {
-		const CHUNK_SIZE_MB = 20;
-		const chunkSizeBytes = CHUNK_SIZE_MB * 1024 * 1024; // Convert MB to bytes
+	private updateProgressStore(update: Partial<import('../store').TranscriptionProgress>): void {
+		// Also update local properties for backward compatibility
+		if (update.isTranscribing !== undefined) this.isTranscribing = update.isTranscribing;
+		if (update.progressPercent !== undefined) this.progressPercent = update.progressPercent;
+		if (update.progressSize !== undefined) this.progressSize = update.progressSize;
+		if (update.timeRemaining !== undefined) this.timeRemaining = update.timeRemaining;
+		if (update.processingStatus !== undefined) this.processingStatus = update.processingStatus;
 		
-		for (let i = 0; i < fileBuffer.byteLength; i += chunkSizeBytes) {
-			// Create a slice and immediately yield it to avoid holding multiple chunks in memory
-			yield fileBuffer.slice(i, i + chunkSizeBytes);
+		// Update the central store
+		transcriptionProgress.update(state => ({...state, ...update}));
+	}
+	
+	/**
+	 * Calculate optimal chunk size based on file size and available memory
+	 */
+	private calculateOptimalChunkSize(fileSize: number): number {
+		// Base chunk size on file characteristics
+		const baseChunkSize = 5 * 1024 * 1024; // 5MB base
+		
+		if (fileSize > 100 * 1024 * 1024) { // Large files > 100MB
+			return Math.min(baseChunkSize, Math.floor(4 * 1024 * 1024 / 10)); // Assume 4GB memory
+		}
+		return baseChunkSize;
+	}
+	
+	/**
+	 * Thoroughly validates the OpenAI API key by making a test API call
+	 */
+	private async validateApiKey(): Promise<{valid: boolean, reason?: string}> {
+		const apiKey = this.plugin.settings.openAIApiKey;
+		
+		if (!apiKey || apiKey.trim() === "") {
+			return {valid: false, reason: "OpenAI API key is required for transcription"};
+		}
+		
+		if (!apiKey.startsWith("sk-")) {
+			return {valid: false, reason: "Invalid OpenAI API key format"};
+		}
+		
+		try {
+			this.client = new OpenAI({
+				apiKey: apiKey,
+				dangerouslyAllowBrowser: true,
+			});
+			
+			// Make a minimal API call to test key validity
+			await this.client.models.list();
+			return {valid: true};
+		} catch (error) {
+			console.error("Error validating OpenAI client:", error);
+			
+			if (error.status === 401) {
+				return {valid: false, reason: "Invalid API key or insufficient permissions"};
+			}
+			if (error.status === 429) {
+				return {valid: false, reason: "API rate limit exceeded. Please try again later"};
+			}
+			
+			return {valid: false, reason: error.message};
 		}
 	}
 	
 	/**
-	 * Creates File objects for each chunk in the generator.
-	 * Returns an array of File objects but processes one at a time to manage memory.
+	 * Process an audio file in true streaming fashion to minimize memory usage
 	 */
-	private createChunkFiles(
-		fileBuffer: ArrayBuffer,
-		fileName: string,
-		fileExtension: string,
+	private async processAudioFileStreaming(
+		file: TFile,
+		chunkSize: number,
+		totalSize: number,
 		mimeType: string,
-	): File[] {
-		const files: File[] = [];
-		let index = 0;
-		
-		// Use the generator to process one chunk at a time
-		for (const chunk of this.chunkFileGenerator(fileBuffer)) {
-			const file = new File([chunk], `${fileName}.part${index}.${fileExtension}`, {
-				type: mimeType,
-			});
-			files.push(file);
-			index++;
+		episodeId: string,
+		resumeData: any = null
+	): Promise<Transcription> {
+		if (!this.client) {
+			throw new Error("OpenAI client not initialized");
 		}
 		
-		return files;
+		const totalChunks = Math.ceil(totalSize / chunkSize);
+		const transcriptions: Transcription[] = new Array(totalChunks);
+		let completedChunks = 0;
+		let totalProcessedBytes = 0;
+		let startTime = Date.now();
+		
+		// Track missing segments for better error reporting
+		const missingSegments: {index: number, startTime: number, endTime: number}[] = [];
+		
+		// If resuming, restore progress
+		if (resumeData && resumeData.episodeId === episodeId) {
+			resumeData.results.forEach((result, i) => {
+				if (i < transcriptions.length) {
+					transcriptions[i] = result;
+					completedChunks++;
+					const estimatedChunkSize = Math.min(chunkSize, totalSize - (i * chunkSize));
+					totalProcessedBytes += estimatedChunkSize;
+				}
+			});
+		}
+
+		const updateProgress = () => {
+			if (this.cancelRequested) {
+				this.updateProgressStore({ processingStatus: "Cancelling..." });
+				return;
+			}
+			
+			const progress = ((completedChunks / totalChunks) * 100);
+			const elapsedSeconds = (Date.now() - startTime) / 1000;
+			const bytesPerSecond = totalProcessedBytes / Math.max(1, elapsedSeconds);
+			
+			let remainingTimeStr = "Calculating...";
+			
+			if (completedChunks > 0 && elapsedSeconds > 10) {
+				const remainingBytes = totalSize - totalProcessedBytes;
+				const estimatedRemainingSeconds = remainingBytes / bytesPerSecond;
+				
+				if (estimatedRemainingSeconds > 3600) {
+					const hours = Math.floor(estimatedRemainingSeconds / 3600);
+					const mins = Math.floor((estimatedRemainingSeconds % 3600) / 60);
+					remainingTimeStr = `~${hours}h ${mins}m`;
+				} else if (estimatedRemainingSeconds > 60) {
+					const mins = Math.floor(estimatedRemainingSeconds / 60);
+					const secs = Math.floor(estimatedRemainingSeconds % 60);
+					remainingTimeStr = `~${mins}m ${secs}s`;
+				} else {
+					remainingTimeStr = `~${Math.floor(estimatedRemainingSeconds)}s`;
+				}
+			}
+			
+			const speed = (bytesPerSecond / 1024).toFixed(1);
+			
+			this.updateProgressStore({
+				progressPercent: progress,
+				progressSize: `${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalSize)}`,
+				timeRemaining: remainingTimeStr,
+				processingStatus: `Processing at ${speed} KB/s`
+			});
+			
+			// Save resume state
+			this.saveResumeState(episodeId, totalChunks, transcriptions, totalProcessedBytes, totalSize);
+		};
+
+		updateProgress();
+		
+		// Process chunks with a concurrency limit
+		const CONCURRENCY_LIMIT = 3;
+		
+		for (let startChunk = 0; startChunk < totalChunks; startChunk += CONCURRENCY_LIMIT) {
+			if (this.cancelRequested) break;
+			
+			const endChunk = Math.min(startChunk + CONCURRENCY_LIMIT, totalChunks);
+			const chunkPromises = [];
+			
+			for (let i = startChunk; i < endChunk; i++) {
+				// Skip already processed chunks if resuming
+				if (resumeData && resumeData.chunks) {
+					const chunk = resumeData.chunks.find(c => c.index === i);
+					if (chunk && chunk.processed) continue;
+				}
+				
+				// If cancelled, don't process more chunks
+				if (this.cancelRequested) break;
+				
+				const startByte = i * chunkSize;
+				const endByte = Math.min(startByte + chunkSize, totalSize);
+				const chunkPromise = this.processChunk(file, mimeType, startByte, endByte, i, totalChunks)
+					.then(result => {
+						transcriptions[i] = result;
+						completedChunks++;
+						totalProcessedBytes += (endByte - startByte);
+						updateProgress();
+					})
+					.catch(error => {
+						// Handle errors for individual chunks
+						console.error(`Error processing chunk ${i}:`, error);
+						
+						// Estimate time position for error reporting
+						const startTime = this.estimateTimePosition(i, totalChunks, totalSize);
+						const endTime = this.estimateTimePosition(i + 1, totalChunks, totalSize);
+						
+						missingSegments.push({index: i, startTime, endTime});
+						
+						// Create meaningful placeholder for the error
+						transcriptions[i] = {
+							text: `[Content missing from ${formatTime(startTime)} to ${formatTime(endTime)} due to transcription error]`,
+							segments: [{
+								start: startTime,
+								end: endTime,
+								text: `[Transcription error. You can try again later to fill this gap.]`
+							}]
+						};
+						
+						completedChunks++;
+						totalProcessedBytes += (endByte - startByte);
+						updateProgress();
+					});
+				
+				chunkPromises.push(chunkPromise);
+			}
+			
+			// Wait for current batch to complete
+			await Promise.all(chunkPromises);
+			
+			// Check for cancellation
+			if (this.cancelRequested) {
+				this.saveResumeState(episodeId, totalChunks, transcriptions, totalProcessedBytes, totalSize);
+				break;
+			}
+			
+			// Yield to main thread after each batch
+			await new Promise(resolve => requestAnimationFrame(resolve));
+		}
+		
+		// If cancelled, return partial results
+		if (this.cancelRequested) {
+			const validTranscriptions = transcriptions.filter(t => t !== undefined);
+			if (validTranscriptions.length === 0) {
+				throw new Error("Transcription cancelled");
+			}
+			return this.mergeTranscriptions(validTranscriptions);
+		}
+		
+		// Filter out undefined entries
+		const validTranscriptions = transcriptions.filter(t => t !== undefined);
+		return this.mergeTranscriptions(validTranscriptions);
 	}
+	
+	/**
+	 * Process a single chunk of the audio file
+	 */
+	private async processChunk(
+		file: TFile,
+		mimeType: string,
+		startByte: number,
+		endByte: number,
+		index: number,
+		totalChunks: number
+	): Promise<Transcription> {
+		if (!this.client) {
+			throw new Error("OpenAI client not initialized");
+		}
+		
+		let retries = 0;
+		while (retries < this.MAX_RETRIES) {
+			try {
+				// Read just the chunk we need
+				const chunkBuffer = await this.plugin.app.vault.adapter.readBinary(
+					file.path, 
+					startByte, 
+					endByte - startByte
+				);
+				
+				// Create a file object for this chunk
+				const chunkFile = new File(
+					[chunkBuffer], 
+					`chunk-${index}.${file.extension}`, 
+					{ type: mimeType }
+				);
+				
+				// Send to OpenAI for transcription
+				const result = await this.client.audio.transcriptions.create({
+					file: chunkFile,
+					model: "whisper-1",
+					response_format: "verbose_json",
+					timestamp_granularities: ["segment", "word"],
+				});
+				
+				// Check for cancellation
+				if (this.cancelRequested) {
+					return {
+						text: "",
+						segments: []
+					};
+				}
+				
+				return result;
+			} catch (error) {
+				retries++;
+				
+				// Check for cancellation
+				if (this.cancelRequested) {
+					return {
+						text: "",
+						segments: []
+					};
+				}
+				
+				// Handle specific error types
+				if (error.status === 429) {
+					console.warn("Rate limit exceeded, retrying after delay...");
+					await new Promise(resolve => setTimeout(resolve, 2000 * retries));
+				} else if (error.status >= 500) {
+					console.warn("Server error, retrying after delay...");
+					await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+				} else if (retries >= this.MAX_RETRIES) {
+					// Give up after max retries
+					console.error(`Failed to transcribe chunk ${index} after ${this.MAX_RETRIES} attempts:`, error);
+					
+					// Create a more informative placeholder
+					const startTime = this.estimateTimePosition(index, totalChunks, 0);
+					const endTime = this.estimateTimePosition(index + 1, totalChunks, 0);
+					
+					return {
+						text: `[Transcription error in segment ${index + 1}]`,
+						segments: [{
+							start: startTime,
+							end: endTime,
+							text: `[Transcription error in segment ${index + 1}]`
+						}]
+					};
+				} else {
+					// Generic error handling
+					await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+				}
+			}
+		}
+		
+		// This shouldn't be reached, but TypeScript needs it
+		throw new Error(`Failed to process chunk ${index}`);
+	}
+	
+	/**
+	 * Estimate the time position within audio based on chunk index
+	 */
+	private estimateTimePosition(chunkIndex: number, totalChunks: number, totalDuration: number): number {
+		if (totalDuration === 0) {
+			// Just use chunk index as seconds if we don't know duration
+			return chunkIndex * 60;
+		}
+		return (chunkIndex / totalChunks) * totalDuration;
+	}
+
+	/**
+	 * Helper method to get the MIME type based on file extension
+	 */
 
 	private getMimeType(fileExtension: string): string {
 		switch (fileExtension.toLowerCase()) {

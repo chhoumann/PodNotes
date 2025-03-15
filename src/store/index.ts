@@ -292,6 +292,29 @@ export const viewState = (() => {
 	};
 })();
 
+// Transcription progress store
+export interface TranscriptionProgress {
+	isTranscribing: boolean;
+	progressPercent: number;
+	progressSize: string;
+	timeRemaining: string;
+	processingStatus: string;
+	currentEpisodeId: string | null;
+	hasResumableTranscription: boolean;
+	hasExistingTranscript: boolean;
+}
+
+export const transcriptionProgress = writable<TranscriptionProgress>({
+	isTranscribing: false,
+	progressPercent: 0,
+	progressSize: "0 KB",
+	timeRemaining: "Calculating...",
+	processingStatus: "Preparing...",
+	currentEpisodeId: null,
+	hasResumableTranscription: false,
+	hasExistingTranscript: false,
+});
+
 function addEpisodeToQueue(episode: Episode) {
 	queue.update((playlist) => {
 		const newEpisodes = [episode, ...playlist.episodes];

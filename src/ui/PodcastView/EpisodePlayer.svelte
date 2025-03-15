@@ -10,6 +10,7 @@
 		playlists,
 		viewState,
 		downloadedEpisodes,
+		transcriptionProgress,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { onDestroy, onMount } from "svelte";
@@ -178,13 +179,8 @@
 	}
 	
 	function transcribeEpisode() {
-		// Set local state immediately for UI update
-		_isTranscribing = true;
-		
-		// Then call the API
-		setTimeout(() => {
-			$plugin.api.transcribeCurrentEpisode();
-		}, 0);
+		// Call the API (the service will update store state)
+		$plugin.api.transcribeCurrentEpisode();
 	}
 	
 	function cancelTranscription() {
@@ -194,94 +190,48 @@
 	}
 	
 	function resumeTranscription() {
-		// Set local state immediately for UI update
-		_isTranscribing = true;
-		
-		// Then call the API
-		setTimeout(() => {
-			$plugin.api.resumeTranscription();
-		}, 0);
+		// Call the API (the service will update store state)
+		$plugin.api.resumeTranscription();
 	}
 	
-	// Create a reactive variable to track transcription status
-	let _isTranscribing = false;
+	// Get state directly from centralized store
+	$: isTranscribing = $transcriptionProgress.isTranscribing;
+	$: progressPercent = $transcriptionProgress.progressPercent;
+	$: progressSize = $transcriptionProgress.progressSize;
+	$: timeRemaining = $transcriptionProgress.timeRemaining;
+	$: processingStatus = $transcriptionProgress.processingStatus;
 	
-	// Track transcription progress reactively with a tick interval
-	let progressInterval: number;
-	let progressPercent = 0;
-	let progressSize = "0 KB";
-	let timeRemaining = "Calculating...";
-	let processingStatus = "Preparing...";
-	
-	// Create a reactive tracking system that polls for updates
-	function startProgressTracking() {
-		if (progressInterval) clearInterval(progressInterval);
-		
-		// Force immediate update of the progress value if service exists
-		if ($plugin && $plugin.transcriptionService) {
-			// Get initial values
-			_isTranscribing = $plugin.transcriptionService.isTranscribing;
-			progressPercent = $plugin.transcriptionService.progressPercent;
-			progressSize = $plugin.transcriptionService.progressSize;
-			timeRemaining = $plugin.transcriptionService.timeRemaining;
-			processingStatus = $plugin.transcriptionService.processingStatus;
-			
-			// Log initial state
-			console.log(`Initial progress: ${progressPercent.toFixed(1)}%`);
-		}
-		
-		// Poll for updates every 100ms for smoother progress bar updates
-		progressInterval = setInterval(() => {
-			if ($plugin.transcriptionService) {
-				// Create fresh local variables for each check to ensure reactivity
-				const newIsTranscribing = $plugin.transcriptionService.isTranscribing;
-				const newProgressPercent = $plugin.transcriptionService.progressPercent;
-				const newProgressSize = $plugin.transcriptionService.progressSize;
-				const newTimeRemaining = $plugin.transcriptionService.timeRemaining;
-				const newProcessingStatus = $plugin.transcriptionService.processingStatus;
-				
-				// Apply the state changes to reactive variables
-				_isTranscribing = newIsTranscribing;
-				progressPercent = newProgressPercent;
-				progressSize = newProgressSize;
-				timeRemaining = newTimeRemaining;
-				processingStatus = newProcessingStatus;
-				
-				// Only log occasional updates to reduce console noise
-				if (Math.random() < 0.05) { // Log 5% of updates
-					console.log(`Progress update: ${processingStatus}, ${progressPercent.toFixed(1)}%`);
-				}
-			}
-		}, 100);
-	}
-	
-	onMount(() => {
-		startProgressTracking();
-		return () => {
-			if (progressInterval) clearInterval(progressInterval);
-		};
-	});
-	
-	// Track if transcription is currently in progress
-	$: {
-		// Force immediate UI update when transcription service changes
-		if ($plugin.transcriptionService) {
-			_isTranscribing = $plugin.transcriptionService.isTranscribing;
-		}
-	}
-	
-	// Make isTranscribing reactive, but set it locally first for immediate UI updates
-	$: isTranscribing = _isTranscribing;
-	
-	// Check if there's a resumable transcription for the current episode
+	// Computed values from the store
 	$: hasResumableTranscription = $currentEpisode && 
-		$plugin.api.hasResumableTranscription && 
-		$plugin.api.hasResumableTranscription($currentEpisode.id);
+		$transcriptionProgress.hasResumableTranscription && 
+		$transcriptionProgress.currentEpisodeId === $currentEpisode.id;
 		
-	// Check if transcript already exists for the current episode
 	$: hasExistingTranscript = $currentEpisode && 
-		$plugin.api.hasExistingTranscript && 
-		$plugin.api.hasExistingTranscript($currentEpisode.id);
+		$transcriptionProgress.hasExistingTranscript && 
+		$transcriptionProgress.currentEpisodeId === $currentEpisode.id;
+	
+	// When component initializes, check transcription status if needed
+	onMount(() => {
+		// Initial check for resumable transcription or existing transcript for current episode
+		if ($currentEpisode && $plugin.transcriptionService) {
+			// Update the store with current episode status
+			// This ensures UI stays in sync with actual state
+			const hasResumable = $plugin.transcriptionService.hasResumableTranscription($currentEpisode.id);
+			const hasTranscript = $plugin.transcriptionService.hasExistingTranscript($currentEpisode.id);
+			
+			// Only update if needed to avoid unnecessary renders
+			if (hasResumable !== $transcriptionProgress.hasResumableTranscription ||
+				hasTranscript !== $transcriptionProgress.hasExistingTranscript) {
+				
+				transcriptionProgress.update(s => ({
+					...s,
+					currentEpisodeId: $currentEpisode.id,
+					hasResumableTranscription: hasResumable,
+					hasExistingTranscript: hasTranscript
+				}));
+			}
+		}
+	});
 
 
 	const playbackRates = {
