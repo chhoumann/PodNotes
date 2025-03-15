@@ -64,29 +64,35 @@ export class TranscriptionService {
 	private _timeRemaining: string = "Calculating...";
 	private _processingStatus: string = "Preparing...";
 	
-	// Add getters and setters to ensure reactivity
+	// Add getters and setters for reactivity with minimal logging
 	public get progressPercent(): number { return this._progressPercent; }
 	public set progressPercent(value: number) { 
 		this._progressPercent = value;
-		console.log(`Progress update: ${value}%`);
+		// Only log significant progress changes to reduce noise
+		if (value % 10 === 0 || value === 100) {
+			console.log(`Progress update: ${value}%`);
+		}
 	}
 	
 	public get progressSize(): string { return this._progressSize; }
 	public set progressSize(value: string) { 
 		this._progressSize = value;
-		console.log(`Size update: ${value}`);
 	}
 	
 	public get timeRemaining(): string { return this._timeRemaining; }
 	public set timeRemaining(value: string) { 
 		this._timeRemaining = value;
-		console.log(`Time update: ${value}`);
 	}
 	
 	public get processingStatus(): string { return this._processingStatus; }
 	public set processingStatus(value: string) { 
-		this._processingStatus = value;
-		console.log(`Status update: ${value}`);
+		// Only log when status changes
+		if (this._processingStatus !== value) {
+			console.log(`Status update: ${value}`);
+			this._processingStatus = value;
+		} else {
+			this._processingStatus = value;
+		}
 	}
 	
 	private resumeData: {
@@ -175,16 +181,16 @@ export class TranscriptionService {
 		const totalMinutes = minutes + 2;
 		
 		if (totalMinutes < 60) {
-			return `~${totalMinutes} minute${totalMinutes > 1 ? 's' : ''}`;
+			return `~${totalMinutes}m`;
 		}
 		
 		const hours = Math.floor(totalMinutes / 60);
 		const remainingMinutes = totalMinutes % 60;
 		
 		if (remainingMinutes === 0) {
-			return `~${hours} hour${hours > 1 ? 's' : ''}`;
+			return `~${hours}h`;
 		}
-		return `~${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}`;
+		return `~${hours}h ${remainingMinutes}m`;
 	}
 	
 	/**
@@ -254,7 +260,7 @@ export class TranscriptionService {
 		this.isTranscribing = true;
 		
 		// Reset progress indicators (these should be visible immediately)
-		this.progressPercent = 0;
+		this.progressPercent = 0.1; // Start with minimal percentage to show activity
 		this.progressSize = "0 KB";
 		this.timeRemaining = "Calculating...";
 		this.processingStatus = "Preparing...";
@@ -318,7 +324,8 @@ export class TranscriptionService {
 			
 			// Update UI status
 			this.processingStatus = `Preparing audio (${formattedSize})...`;
-			this.timeRemaining = `Estimated time: ${estimatedTime}`;
+			this.timeRemaining = estimatedTime;
+			this.progressPercent = 5; // Show a small amount of progress
 			this.progressSize = formattedSize;
 			
 			// Read the audio file in chunks to reduce memory pressure
@@ -539,12 +546,16 @@ export class TranscriptionService {
 					const remainingBytes = totalFileSize - totalProcessedBytes;
 					const estimatedRemainingSeconds = remainingBytes / bytesPerSecond;
 					
-					if (estimatedRemainingSeconds > 60) {
+					if (estimatedRemainingSeconds > 3600) {
+						const hours = Math.floor(estimatedRemainingSeconds / 3600);
+						const mins = Math.floor((estimatedRemainingSeconds % 3600) / 60);
+						remainingTimeStr = `~${hours}h ${mins}m`;
+					} else if (estimatedRemainingSeconds > 60) {
 						const mins = Math.floor(estimatedRemainingSeconds / 60);
 						const secs = Math.floor(estimatedRemainingSeconds % 60);
-						remainingTimeStr = `~${mins}m ${secs}s remaining`;
+						remainingTimeStr = `~${mins}m ${secs}s`;
 					} else {
-						remainingTimeStr = `~${Math.floor(estimatedRemainingSeconds)}s remaining`;
+						remainingTimeStr = `~${Math.floor(estimatedRemainingSeconds)}s`;
 					}
 				}
 				
@@ -557,11 +568,10 @@ export class TranscriptionService {
 				this.timeRemaining = remainingTimeStr;
 				this.processingStatus = `Processing at ${speed} KB/s`;
 				
-				// Still update notice for backward compatibility
+				// Simplified notice for backward compatibility
 				updateNotice(
-					`${loadingIndicator} Transcribing... ${completedChunks}/${files.length} chunks (${progress}%)\n` +
+					`${loadingIndicator} Transcribing... ${progress}% complete\n` +
 					`${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}\n` +
-					`Processing speed: ${speed} KB/s\n` +
 					`${remainingTimeStr}`
 				);
 				

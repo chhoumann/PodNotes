@@ -217,16 +217,40 @@
 	function startProgressTracking() {
 		if (progressInterval) clearInterval(progressInterval);
 		
-		// Poll for updates every 100ms to ensure UI is responsive
+		// Force immediate update of the progress value if service exists
+		if ($plugin && $plugin.transcriptionService) {
+			// Get initial values
+			_isTranscribing = $plugin.transcriptionService.isTranscribing;
+			progressPercent = $plugin.transcriptionService.progressPercent;
+			progressSize = $plugin.transcriptionService.progressSize;
+			timeRemaining = $plugin.transcriptionService.timeRemaining;
+			processingStatus = $plugin.transcriptionService.processingStatus;
+			
+			// Log initial state
+			console.log(`Initial progress: ${progressPercent.toFixed(1)}%`);
+		}
+		
+		// Poll for updates every 100ms for smoother progress bar updates
 		progressInterval = setInterval(() => {
 			if ($plugin.transcriptionService) {
-				// Update local state from service
-				_isTranscribing = $plugin.transcriptionService.isTranscribing;
-				progressPercent = $plugin.transcriptionService.progressPercent;
-				progressSize = $plugin.transcriptionService.progressSize;
-				timeRemaining = $plugin.transcriptionService.timeRemaining;
-				processingStatus = $plugin.transcriptionService.processingStatus;
-				console.log(`UI update: ${processingStatus}, ${progressPercent}%`);
+				// Create fresh local variables for each check to ensure reactivity
+				const newIsTranscribing = $plugin.transcriptionService.isTranscribing;
+				const newProgressPercent = $plugin.transcriptionService.progressPercent;
+				const newProgressSize = $plugin.transcriptionService.progressSize;
+				const newTimeRemaining = $plugin.transcriptionService.timeRemaining;
+				const newProcessingStatus = $plugin.transcriptionService.processingStatus;
+				
+				// Apply the state changes to reactive variables
+				_isTranscribing = newIsTranscribing;
+				progressPercent = newProgressPercent;
+				progressSize = newProgressSize;
+				timeRemaining = newTimeRemaining;
+				processingStatus = newProcessingStatus;
+				
+				// Only log occasional updates to reduce console noise
+				if (Math.random() < 0.05) { // Log 5% of updates
+					console.log(`Progress update: ${processingStatus}, ${progressPercent.toFixed(1)}%`);
+				}
 			}
 		}, 100);
 	}
@@ -405,18 +429,16 @@
 				</div>
 				
 				<div class="transcription-progress">
-					<div class="progress-bar">
-						<div class="progress-bar-inner" style="width: {progressPercent}%"></div>
-					</div>
+					<!-- Use Svelte's built-in progress element which is more reliable -->
+					<progress class="progress-native" value={Math.max(0.1, progressPercent)} max="100"></progress>
 					<div class="progress-stats">
-						<span>{progressPercent}%</span>
+						<span>{progressPercent.toFixed(1)}%</span>
 						<span>{processingStatus}</span>
 					</div>
 				</div>
 				
 				<div class="transcription-details">
 					<div>
-						<span class="detail-label">Time remaining:</span>
 						<span class="detail-value">{timeRemaining}</span>
 					</div>
 					<div>
@@ -607,16 +629,33 @@
 		margin-bottom: 1rem;
 	}
 	
-	.progress-bar {
+	/* Native progress element styling */
+	.progress-native {
+		width: 100%;
 		height: 0.75rem;
-		background-color: var(--background-modifier-border);
-		border-radius: 4px;
 		margin-bottom: 0.5rem;
+		appearance: none;
+		-webkit-appearance: none;
+		border: none;
+		border-radius: 4px;
 		overflow: hidden;
 	}
 	
-	.progress-bar-inner {
-		height: 100%;
+	/* Styling the background */
+	.progress-native::-webkit-progress-bar {
+		background-color: var(--background-modifier-border);
+		border-radius: 4px;
+	}
+	
+	/* Styling the value part */
+	.progress-native::-webkit-progress-value {
+		background-color: var(--interactive-accent);
+		border-radius: 4px;
+		transition: width 0.3s ease;
+	}
+	
+	/* Firefox support */
+	.progress-native::-moz-progress-bar {
 		background-color: var(--interactive-accent);
 		border-radius: 4px;
 		transition: width 0.3s ease;
