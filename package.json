@@ -4,6 +4,7 @@
   "description": "Helps you write notes on podcasts.",
   "main": "main.js",
   "scripts": {
+    "lint": "biome check --write .",
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
@@ -20,8 +21,6 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/svelte": "^5.2.7",
     "@types/node": "^22.13.13",
-    "@typescript-eslint/eslint-plugin": "8.28.0",
-    "@typescript-eslint/parser": "8.28.0",
     "builtin-modules": "5.0.0",
     "cz-conventional-changelog": "^3.3.0",
     "esbuild": "0.25.1",
@@ -96,6 +95,7 @@
     ]
   },
   "dependencies": {
+    "biome": "^0.3.3",
     "fuse.js": "^7.1.0",
     "openai": "^4.89.0"
   }
