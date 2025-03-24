@@ -8,7 +8,7 @@ import {
 	TimestampTemplateEngine,
 } from "../TemplateEngine";
 import type { Episode } from "src/types/Episode";
-import type { Transcription } from "openai/resources/audio";
+import type { Transcription, TranscriptionVerbose, TranscriptionSegment } from "openai/resources/audio";
 
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
@@ -305,7 +305,7 @@ export class TranscriptionService {
 		}
 		
 		// Check if transcription file already exists (only if not resuming)
-		if (!resume) {
+		if (!resume && currentEpisode.id) {
 			if (this.hasExistingTranscript(currentEpisode.id)) {
 				// Just reset state silently without error messages
 				this.isTranscribing = false;
@@ -404,7 +404,7 @@ export class TranscriptionService {
 			
 			// Update UI status
 			this.processingStatus = "Formatting timestamps...";
-			const formattedTranscription = await this.formatTranscriptionWithTimestamps(transcription);
+			const formattedTranscription = await this.formatTranscriptionWithTimestamps(transcription as TranscriptionVerbose);
 
 			// Update UI status
 			this.processingStatus = "Saving...";
@@ -511,12 +511,12 @@ export class TranscriptionService {
 		episodeId: string = '',
 		totalFileSize: number = 0,
 		resumeData: any = null
-	): Promise<Transcription> {
+	): Promise<TranscriptionVerbose> {
 		if (!this.client) {
 			throw new Error("OpenAI client not initialized. Please check your API key.");
 		}
 		
-		const transcriptions: Transcription[] = new Array(files.length);
+		const transcriptions: TranscriptionVerbose[] = new Array(files.length);
 		let completedChunks = 0;
 		let processedSize = 0;
 		let totalProcessedBytes = 0;
@@ -526,7 +526,7 @@ export class TranscriptionService {
 		
 		// If we have resume data, restore the progress
 		if (resumeData && resumeData.episodeId === episodeId) {
-			resumeData.results.forEach((result, i) => {
+			resumeData.results.forEach((result: any, i: number) => {
 				if (i < transcriptions.length) {
 					transcriptions[i] = result;
 					completedChunks++;
@@ -607,7 +607,7 @@ export class TranscriptionService {
 		const processFile = async (file: File, index: number): Promise<void> => {
 			// Skip already processed chunks if resuming
 			if (resumeData && resumeData.chunks) {
-				const chunk = resumeData.chunks.find(c => c.index === index);
+				const chunk = resumeData.chunks.find((c: any) => c.index === index);
 				if (chunk && chunk.processed) {
 					// This chunk was already processed
 					return;
@@ -633,7 +633,7 @@ export class TranscriptionService {
 					// Update size tracking before processing
 					const estimatedChunkSize = totalFileSize / files.length;
 					
-					const result = await this.client.audio.transcriptions.create({
+					const result = await this.client!.audio.transcriptions.create({
 						file: file,
 						model: "whisper-1",
 						response_format: "verbose_json",
@@ -670,10 +670,19 @@ export class TranscriptionService {
 						transcriptions[index] = {
 							text: `[Transcription error in segment ${index + 1}]`,
 							segments: [{
+								id: index,
+								avg_logprob: 0,
+								compression_ratio: 0,
+								no_speech_prob: 0,
+								seek: 0,
+								temperature: 0,
+								tokens: [],
 								start: 0,
 								end: 1,
 								text: `[Transcription error in segment ${index + 1}]`
-							}]
+							}],
+							duration: 1,
+							language: "en"
 						};
 						
 						// Still increment the counter to maintain accurate progress
@@ -718,10 +727,19 @@ export class TranscriptionService {
 					transcriptions[i + batchIndex] = {
 						text: `[Failed to process segment ${i + batchIndex + 1}]`,
 						segments: [{
+							id: i + batchIndex,
+							avg_logprob: 0,
+							compression_ratio: 0,
+							no_speech_prob: 0,
+							seek: 0,
+							temperature: 0,
+							tokens: [],
 							start: 0,
 							end: 1,
 							text: `[Failed to process segment ${i + batchIndex + 1}]`
-						}]
+						}],
+						duration: 1,
+						language: "en"
 					};
 					
 					// Ensure we update progress even for failed chunks
@@ -764,7 +782,7 @@ export class TranscriptionService {
 			this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
 			
 			// Return partial results to avoid crashes
-			const validTranscriptions = transcriptions.filter(t => t !== undefined);
+			const validTranscriptions = transcriptions.filter(t => t !== undefined) as TranscriptionVerbose[];
 			if (validTranscriptions.length === 0) {
 				throw new Error("Transcription cancelled by user.");
 			}
@@ -773,14 +791,14 @@ export class TranscriptionService {
 		}
 
 		// Filter out any undefined entries that might have occurred due to errors
-		const validTranscriptions = transcriptions.filter(t => t !== undefined);
+		const validTranscriptions = transcriptions.filter(t => t !== undefined) as TranscriptionVerbose[];
 		
 		return this.mergeTranscriptions(validTranscriptions);
 	}
 
-	private mergeTranscriptions(transcriptions: Transcription[]): Transcription {
+	private mergeTranscriptions(transcriptions: TranscriptionVerbose[]): TranscriptionVerbose {
 		let mergedText = "";
-		const mergedSegments = [];
+		const mergedSegments: TranscriptionSegment[] = [];
 		let timeOffset = 0;
 
 		transcriptions.forEach((transcription, index) => {
@@ -790,11 +808,11 @@ export class TranscriptionService {
 				mergedText += (index > 0 ? " " : "") + transcription.text;
 
 				// Check if this transcription has segments
-				if (transcription.segments) {
+				if ((transcription as TranscriptionVerbose).segments) {
 					// Check if we need to merge with previous segment
-					if (index > 0 && mergedSegments.length > 0 && transcription.segments.length > 0) {
+					if (index > 0 && mergedSegments.length > 0 && (transcription as TranscriptionVerbose).segments!.length > 0) {
 						const lastSegment = mergedSegments[mergedSegments.length - 1];
-						const firstSegment = transcription.segments[0];
+						const firstSegment = (transcription as TranscriptionVerbose).segments![0];
 						
 						// If timestamps are close, potentially merge the segments
 						// This helps with continuity across chunk boundaries
@@ -804,8 +822,8 @@ export class TranscriptionService {
 							lastSegment.end = firstSegment.end + timeOffset;
 							
 							// Add remaining segments with offset
-							for (let i = 1; i < transcription.segments.length; i++) {
-								const segment = transcription.segments[i];
+							for (let i = 1; i < (transcription as TranscriptionVerbose).segments!.length; i++) {
+								const segment = (transcription as TranscriptionVerbose).segments![i];
 								mergedSegments.push({
 									...segment,
 									start: segment.start + timeOffset,
@@ -814,7 +832,7 @@ export class TranscriptionService {
 							}
 						} else {
 							// Add all segments with offset
-							for (const segment of transcription.segments) {
+							for (const segment of (transcription as TranscriptionVerbose).segments!) {
 								mergedSegments.push({
 									...segment,
 									start: segment.start + timeOffset,
@@ -824,7 +842,7 @@ export class TranscriptionService {
 						}
 					} else {
 						// First chunk, just add all segments with offset
-						for (const segment of transcription.segments) {
+						for (const segment of (transcription as TranscriptionVerbose).segments!) {
 							mergedSegments.push({
 								...segment,
 								start: segment.start + timeOffset,
@@ -834,8 +852,8 @@ export class TranscriptionService {
 					}
 
 					// Update time offset for next chunk
-					if (transcription.segments.length > 0) {
-						timeOffset += transcription.segments[transcription.segments.length - 1].end;
+					if ((transcription as TranscriptionVerbose).segments!.length > 0) {
+						timeOffset += (transcription as TranscriptionVerbose).segments![(transcription as TranscriptionVerbose).segments!.length - 1].end;
 					}
 				}
 			}
@@ -844,7 +862,8 @@ export class TranscriptionService {
 		return {
 			text: mergedText,
 			segments: mergedSegments,
-			// Add other properties as needed
+			duration: timeOffset,
+			language: "en" // Default language
 		};
 	}
 
@@ -853,7 +872,7 @@ export class TranscriptionService {
 	 * Uses string concatenation with intermediate arrays to reduce memory allocations.
 	 * Processes segments in batches to avoid blocking the UI.
 	 */
-	private async formatTranscriptionWithTimestamps(transcription: Transcription): Promise<string> {
+	private async formatTranscriptionWithTimestamps(transcription: TranscriptionVerbose): Promise<string> {
 		// For very large transcripts, we'll build the output incrementally
 		const formattedParts: string[] = [];
 		let currentSegment = "";
@@ -863,6 +882,11 @@ export class TranscriptionService {
 		// Use the configured timestamp range from settings
 		const timestampRange = this.plugin.settings.transcript.timestampRange;
 		const includeTimestamps = this.plugin.settings.transcript.includeTimestamps;
+		
+		// Check if segments exist
+		if (!transcription.segments || transcription.segments.length === 0) {
+			return transcription.text;
+		}
 		
 		// Calculate approximate segments count to pre-allocate array
 		const estimatedSegmentCount = transcription.segments.length / 3;

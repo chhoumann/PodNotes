@@ -28,6 +28,9 @@ interface App2 extends App {
         enablePlugin: (id: string) => Promise<void>;
         disablePlugin: (id: string) => Promise<void>;
 	};
+	commands: {
+		removeCommand: (id: string) => void;
+	};
 }
 
 export default App2;

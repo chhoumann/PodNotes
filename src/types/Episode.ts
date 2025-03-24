@@ -9,4 +9,5 @@ export interface Episode {
 	artworkUrl?: string;
 	episodeDate?: Date;
 	itunesTitle?: string;
+	id?: string;
 }
