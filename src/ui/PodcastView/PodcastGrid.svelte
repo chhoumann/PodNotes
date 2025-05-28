@@ -58,8 +58,10 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
 		gap: 0.5rem;
-		/* Contain layout calculations */
-		contain: layout style;
+		/* Contain layout calculations and optimize for performance */
+		contain: layout style paint;
+		/* Use subgrid optimizations */
+		content-visibility: auto;
 	}
 
 	.empty-state {

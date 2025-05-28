@@ -37,22 +37,18 @@
 		cursor: pointer;
 		position: relative;
 		overflow: hidden;
-		/* Optimize animations with transform instead of box-shadow */
-		transition: transform 0.15s ease, border-color 0.15s ease;
-		will-change: transform;
-		/* Force hardware acceleration */
-		transform: translateZ(0);
+		/* Remove all transitions for maximum performance */
+		/* transition: opacity 0.1s ease, border-color 0.1s ease; */
 	}
 
 	.podcast-grid-item:hover {
-		/* Use transform for better performance */
-		transform: translateZ(0) scale(1.05);
+		/* Lighter hover effect for better performance */
 		border-color: var(--interactive-hover);
-		z-index: 1;
+		opacity: 0.9;
 	}
 
 	.podcast-grid-item:active {
-		transform: translateZ(0) scale(0.98);
+		opacity: 0.7;
 	}
 
 	:global(.podcast-image) {

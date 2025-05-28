@@ -45,24 +45,30 @@ $: displayedPlaylists = [
 
 $: feeds = Object.values($savedFeeds);
 
-// Optimize episode sorting with memoization
-$: if ($episodeCache && isInitialized) {
-	const allEpisodes = Object.entries($episodeCache)
-		.flatMap(([_, episodes]) => episodes.slice(0, 10));
-	
-	// Only sort if we have episodes
-	if (allEpisodes.length > 0) {
-		latestEpisodes = allEpisodes.sort((a, b) => {
-			if (a.episodeDate && b.episodeDate)
-				return Number(b.episodeDate) - Number(a.episodeDate);
-			return 0;
-		});
+// Optimize episode sorting with memoization - only recalculate when cache actually changes
+let lastCacheKeys = '';
+$: {
+	const cacheKeys = Object.keys($episodeCache).sort().join(',');
+	if (cacheKeys !== lastCacheKeys && isInitialized) {
+		lastCacheKeys = cacheKeys;
 		
-		// Update displayed episodes only if needed
-		if (!selectedFeed && !selectedPlaylist && $viewState === ViewState.EpisodeList) {
-			displayedEpisodes = latestEpisodes;
+		const allEpisodes = Object.entries($episodeCache)
+			.flatMap(([_, episodes]) => episodes.slice(0, 10));
+		
+		// Only sort if we have episodes
+		if (allEpisodes.length > 0) {
+			latestEpisodes = allEpisodes.sort((a, b) => {
+				if (a.episodeDate && b.episodeDate)
+					return Number(b.episodeDate) - Number(a.episodeDate);
+				return 0;
+			});
 		}
 	}
+}
+
+// Separate reactive statement for updating displayed episodes
+$: if (!selectedFeed && !selectedPlaylist && $viewState === ViewState.EpisodeList) {
+	displayedEpisodes = latestEpisodes;
 }
 
 // Initialize on mount
