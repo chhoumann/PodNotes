@@ -2,7 +2,7 @@ import { Menu, Notice } from "obsidian";
 import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPodcastNote";
 import downloadEpisodeWithProgessNotice from "src/downloadEpisode";
 import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, viewState } from "src/store";
-import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 

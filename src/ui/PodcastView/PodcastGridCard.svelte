@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PodcastFeed } from "src/types/PodcastFeed";
+	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import { createEventDispatcher } from "svelte";
 	import Image from "../common/Image.svelte";
 

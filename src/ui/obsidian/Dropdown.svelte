@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropdownComponent } from "obsidian";
-	import { CSSObject } from "src/types/CSSObject";
+	import type { CSSObject } from "src/types/CSSObject";
 	import extractStylesFromObj from "src/utility/extractStylesFromObj";
 	import { createEventDispatcher, onMount } from "svelte";
 

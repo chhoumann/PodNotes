@@ -38,7 +38,7 @@ class CircumentForcedTwoWayBinding {
 const offBinding = new CircumentForcedTwoWayBinding();
 //#endregion
 
-const isHoveringArtwork = false;
+let isHoveringArtwork = false;
 let isLoading = true;
 let showQueue = false;
 

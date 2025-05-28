@@ -1,7 +1,7 @@
 <script lang="ts">
     import { ButtonComponent } from "obsidian";
-    import { CSSObject } from "src/types/CSSObject";
-    import { IconType } from "src/types/IconType";
+    import type { CSSObject } from "src/types/CSSObject";
+    import type { IconType } from "src/types/IconType";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
     import { afterUpdate, createEventDispatcher, onMount } from "svelte";
 

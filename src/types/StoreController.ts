@@ -1,4 +1,4 @@
-import { Unsubscriber, Writable } from "svelte/store";
+import type { Unsubscriber, Writable } from "svelte/store";
 
 export abstract class StoreController<T> {
     protected unsubscribe: Unsubscriber;

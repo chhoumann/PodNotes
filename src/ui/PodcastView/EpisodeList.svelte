@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Episode } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import { createEventDispatcher, onMount } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
 	import { playedEpisodes } from "src/store";

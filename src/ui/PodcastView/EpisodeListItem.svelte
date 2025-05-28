@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Episode } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import { createEventDispatcher } from "svelte";
 	import ImageLoader from "../common/ImageLoader.svelte";
 

@@ -1,8 +1,9 @@
-import { get, Unsubscriber, Writable } from "svelte/store";
+import { get } from "svelte/store";
+import type { Unsubscriber, Writable } from "svelte/store";
 import { QUEUE_SETTINGS } from "../constants";
 import { currentEpisode } from "../store";
-import { IPodNotes } from "../types/IPodNotes";
-import { Playlist } from "../types/Playlist";
+import type { IPodNotes } from "../types/IPodNotes";
+import type { Playlist } from "../types/Playlist";
 import { StoreController } from "../types/StoreController";
 
 export class QueueController extends StoreController<Playlist> {

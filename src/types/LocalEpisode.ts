@@ -1,4 +1,4 @@
-import { Episode } from "./Episode";
+import type { Episode } from "./Episode";
 
 export interface LocalEpisode extends Episode {
     podcastName: "local file",

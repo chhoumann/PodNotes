@@ -1,4 +1,4 @@
-import { Episode } from 'src/types/Episode';
+import type { Episode } from 'src/types/Episode';
 
 export interface IAPI {
 	readonly podcast: Episode;
