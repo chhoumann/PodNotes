@@ -33,33 +33,37 @@ export class API implements IAPI {
 	public get isPlaying(): boolean {
 		return !get(isPaused);
 	}
-	
+
 	public transcribeCurrentEpisode(): void {
 		const pluginInstance = get(plugin);
-		if (pluginInstance && pluginInstance.transcriptionService) {
+		if (pluginInstance?.transcriptionService) {
 			pluginInstance.transcriptionService.transcribeCurrentEpisode(false);
 		}
 	}
-	
+
 	public resumeTranscription(): void {
 		const pluginInstance = get(plugin);
-		if (pluginInstance && pluginInstance.transcriptionService) {
+		if (pluginInstance?.transcriptionService) {
 			pluginInstance.transcriptionService.transcribeCurrentEpisode(true);
 		}
 	}
-	
+
 	public hasResumableTranscription(episodeId: string): boolean {
 		const pluginInstance = get(plugin);
-		if (pluginInstance && pluginInstance.transcriptionService) {
-			return pluginInstance.transcriptionService.hasResumableTranscription(episodeId);
+		if (pluginInstance?.transcriptionService) {
+			return pluginInstance.transcriptionService.hasResumableTranscription(
+				episodeId,
+			);
 		}
 		return false;
 	}
-	
+
 	public hasExistingTranscript(episodeId: string): boolean {
 		const pluginInstance = get(plugin);
-		if (pluginInstance && pluginInstance.transcriptionService) {
-			return pluginInstance.transcriptionService.hasExistingTranscript(episodeId);
+		if (pluginInstance?.transcriptionService) {
+			return pluginInstance.transcriptionService.hasExistingTranscript(
+				episodeId,
+			);
 		}
 		return false;
 	}
@@ -93,7 +97,7 @@ export class API implements IAPI {
 		const url = encodePodnotesURI(
 			this.podcast.title,
 			feedUrl,
-			this.currentTime
+			this.currentTime,
 		);
 
 		return `[${time}](${url.href})`;
@@ -107,7 +111,7 @@ export class API implements IAPI {
 		isPaused.update((_) => true);
 	}
 
-	togglePlayback(): void { 
+	togglePlayback(): void {
 		isPaused.update((isPaused) => !isPaused);
 	}
 

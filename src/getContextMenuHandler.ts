@@ -1,4 +1,5 @@
-import { Menu, TAbstractFile, TFile } from "obsidian";
+import type { Menu, TAbstractFile } from "obsidian";
+import { TFile } from "obsidian";
 import type { EventRef } from "obsidian";
 import { get } from "svelte/store";
 import {
@@ -31,21 +32,15 @@ export default function getContextMenuHandler(): EventRef {
 							content: "",
 							podcastName: "local file",
 							url: app.fileManager.generateMarkdownLink(file, ""),
-							streamUrl: await createMediaUrlObjectFromFilePath(
-								file.path
-							),
+							streamUrl: await createMediaUrlObjectFromFilePath(file.path),
 							episodeDate: new Date(file.stat.ctime),
 						};
 
-						if (
-							!downloadedEpisodes.isEpisodeDownloaded(
-								localEpisode
-							)
-						) {
+						if (!downloadedEpisodes.isEpisodeDownloaded(localEpisode)) {
 							downloadedEpisodes.addEpisode(
 								localEpisode,
 								file.path,
-								file.stat.size
+								file.stat.size,
 							);
 
 							localFiles.addEpisode(localEpisode);
@@ -58,8 +53,8 @@ export default function getContextMenuHandler(): EventRef {
 
 						currentEpisode.set(localEpisode);
 						viewState.set(ViewState.Player);
-					})
+					}),
 			);
-		}
+		},
 	);
 }
