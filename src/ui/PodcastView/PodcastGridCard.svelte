@@ -22,7 +22,6 @@
 	<Image 
 		src={feed.artworkUrl} 
 		alt={feed.title}
-		loading="lazy"
 		class="podcast-image"
 	/>
 </button>

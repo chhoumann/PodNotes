@@ -1,51 +1,17 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
-	import { onMount } from "svelte";
 
 	export let src: string;
 	export let alt: string;
-	export let loading: 'lazy' | 'eager' = 'eager';
 	export let fadeIn: boolean = false;
 	export let opacity: number = 1;
 	export {_class as class};
 	let _class = "";
 
-	let imageElement: HTMLImageElement;
 	let loaded = false;
 	let failed = false;
-	let isIntersecting = false;
 
 	const dispatcher = createEventDispatcher();
-
-	// Intersection Observer for truly lazy loading
-	onMount(() => {
-		if (loading === 'lazy' && 'IntersectionObserver' in window) {
-			const observer = new IntersectionObserver(
-				(entries) => {
-					entries.forEach(entry => {
-						if (entry.isIntersecting) {
-							isIntersecting = true;
-							observer.unobserve(entry.target);
-						}
-					});
-				},
-				{
-					rootMargin: '50px' // Start loading 50px before visible
-				}
-			);
-
-			if (imageElement) {
-				observer.observe(imageElement);
-			}
-
-			return () => {
-				observer.disconnect();
-			};
-		} else {
-			// If no IntersectionObserver or eager loading, load immediately
-			isIntersecting = true;
-		}
-	});
 
 	function handleClick(event: MouseEvent) {
 		dispatcher("click", { event });
@@ -59,20 +25,15 @@
 		failed = true;
 		dispatcher("error");
 	}
-
-	// Compute final src based on intersection
-	$: finalSrc = (loading === 'lazy' && !isIntersecting) ? '' : src;
 </script>
 
 {#if !failed}
 	<img
-		bind:this={imageElement}
 		on:click={handleClick}
 		on:load={handleLoad}
 		on:error={handleError}
-		src={finalSrc}
+		{src}
 		{alt}
-		{loading}
 		class={_class}
 		draggable="false"
 		style:opacity={fadeIn && !loaded ? 0 : opacity}
