@@ -2,7 +2,9 @@ import esbuild from "esbuild";
 import process from "process";
 import builtins from 'builtin-modules';
 import esbuildSvelte from "esbuild-svelte";
-import sveltePreprocess from "svelte-preprocess"
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const svelteConfig = require('./svelte.config.js');
 
 const banner =
 `/*
@@ -50,8 +52,8 @@ const buildOptions = {
     mainFields: ["svelte", "browser", "module", "main"],
 	plugins: [
 		esbuildSvelte({
-			compilerOptions: { css: 'injected' },
-			preprocess: sveltePreprocess(),
+			compilerOptions: svelteConfig.compilerOptions,
+			preprocess: svelteConfig.preprocess,
 		})
 	],
 	format: 'cjs',

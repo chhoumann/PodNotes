@@ -1,178 +1,176 @@
 <script lang="ts">
-	import { PodcastFeed } from "src/types/PodcastFeed";
-	import PodcastGrid from "./PodcastGrid.svelte";
-	import {
-		currentEpisode,
-		savedFeeds,
-		episodeCache,
-		playlists,
-		queue,
-		favorites,
-		localFiles,
-		podcastView,
-		viewState,
-		downloadedEpisodes,
-	} from "src/store";
-	import EpisodePlayer from "./EpisodePlayer.svelte";
-	import EpisodeList from "./EpisodeList.svelte";
-	import { Episode } from "src/types/Episode";
-	import FeedParser from "src/parser/feedParser";
-	import TopBar from "./TopBar.svelte";
-	import { ViewState } from "src/types/ViewState";
-	import { onMount } from "svelte";
-	import { get } from "svelte/store";
-	import EpisodeListHeader from "./EpisodeListHeader.svelte";
-	import Icon from "../obsidian/Icon.svelte";
-	import { debounce } from "obsidian";
-	import searchEpisodes from "src/utility/searchEpisodes";
-	import { Playlist } from "src/types/Playlist";
-	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+import { debounce } from "obsidian";
+import FeedParser from "src/parser/feedParser";
+import {
+	currentEpisode,
+	downloadedEpisodes,
+	episodeCache,
+	favorites,
+	localFiles,
+	playlists,
+	podcastView,
+	queue,
+	savedFeeds,
+	viewState,
+} from "src/store";
+import type { Episode } from "src/types/Episode";
+import type { Playlist } from "src/types/Playlist";
+import type { PodcastFeed } from "src/types/PodcastFeed";
+import { ViewState } from "src/types/ViewState";
+import searchEpisodes from "src/utility/searchEpisodes";
+import { onMount } from "svelte";
+import { get } from "svelte/store";
+import Icon from "../obsidian/Icon.svelte";
+import EpisodeList from "./EpisodeList.svelte";
+import EpisodeListHeader from "./EpisodeListHeader.svelte";
+import EpisodePlayer from "./EpisodePlayer.svelte";
+import PodcastGrid from "./PodcastGrid.svelte";
+import TopBar from "./TopBar.svelte";
+import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 
-	let feeds: PodcastFeed[] = [];
-	let selectedFeed: PodcastFeed | null = null;
-	let selectedPlaylist: Playlist | null = null;
-	let displayedEpisodes: Episode[] = [];
-	let displayedPlaylists: Playlist[] = [];
-	let latestEpisodes: Episode[] = [];
+let feeds: PodcastFeed[] = [];
+let selectedFeed: PodcastFeed | null = null;
+let selectedPlaylist: Playlist | null = null;
+let displayedEpisodes: Episode[] = [];
+let displayedPlaylists: Playlist[] = [];
+let latestEpisodes: Episode[] = [];
 
-	onMount(async () => {
-		const unsubscribePlaylists = playlists.subscribe((pl) => {
-			const queueValue = get(queue);
-			const favoritesValue = get(favorites);
-			const localFilesValue = get(localFiles);
-			displayedPlaylists = [queueValue, favoritesValue, localFilesValue, ...Object.values(pl)];
-		});
-
-		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
-			feeds = Object.values(storeValue);
-		});
-
-		await fetchEpisodesInAllFeeds(feeds);
-
-		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
-			latestEpisodes = Object.entries(cache)
-				.map(([_, episodes]) => episodes.slice(0, 10))
-				.flat()
-				.sort((a, b) => {
-					if (a.episodeDate && b.episodeDate)
-						return Number(b.episodeDate) - Number(a.episodeDate);
-
-					return 0;
-				});
-		});
-
-		if (!selectedFeed) {
-			displayedEpisodes = latestEpisodes;
-		}
-
-		return () => {
-			unsubscribeEpisodeCache();
-			unsubscribeSavedFeeds();
-			unsubscribePlaylists();
-		};
+onMount(async () => {
+	const unsubscribePlaylists = playlists.subscribe((pl) => {
+		const queueValue = get(queue);
+		const favoritesValue = get(favorites);
+		const localFilesValue = get(localFiles);
+		displayedPlaylists = [
+			queueValue,
+			favoritesValue,
+			localFilesValue,
+			...Object.values(pl),
+		];
 	});
 
-	async function fetchEpisodes(
-		feed: PodcastFeed,
-		useCache: boolean = true
-	): Promise<Episode[]> {
-		const cachedEpisodesInFeed = $episodeCache[feed.title];
-		
-		if (
-			useCache &&
-			cachedEpisodesInFeed &&
-			cachedEpisodesInFeed.length > 0
-		) {
-			return cachedEpisodesInFeed;
-		}
+	const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
+		feeds = Object.values(storeValue);
+	});
 
-		try {
-			const episodes = await new FeedParser(feed).getEpisodes(feed.url);
+	await fetchEpisodesInAllFeeds(feeds);
 
-			episodeCache.update((cache) => ({
-				...cache,
-				[feed.title]: episodes,
-			}));
+	const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
+		latestEpisodes = Object.entries(cache)
+			.flatMap(([_, episodes]) => episodes.slice(0, 10))
+			.sort((a, b) => {
+				if (a.episodeDate && b.episodeDate)
+					return Number(b.episodeDate) - Number(a.episodeDate);
 
-			return episodes;
-		} catch (error) {
-			const downloaded = get(downloadedEpisodes);
-			return downloaded[feed.title];
-		}
+				return 0;
+			});
+	});
+
+	if (!selectedFeed) {
+		displayedEpisodes = latestEpisodes;
 	}
 
-	function fetchEpisodesInAllFeeds(
-		feedsToSearch: PodcastFeed[]
-	): Promise<Episode[]> {
-		return Promise.all(
-			feedsToSearch.map((feed) => fetchEpisodes(feed))
-		).then((episodes) => {
+	return () => {
+		unsubscribeEpisodeCache();
+		unsubscribeSavedFeeds();
+		unsubscribePlaylists();
+	};
+});
+
+async function fetchEpisodes(
+	feed: PodcastFeed,
+	useCache = true,
+): Promise<Episode[]> {
+	const cachedEpisodesInFeed = $episodeCache[feed.title];
+
+	if (useCache && cachedEpisodesInFeed && cachedEpisodesInFeed.length > 0) {
+		return cachedEpisodesInFeed;
+	}
+
+	try {
+		const episodes = await new FeedParser(feed).getEpisodes(feed.url);
+
+		episodeCache.update((cache) => ({
+			...cache,
+			[feed.title]: episodes,
+		}));
+
+		return episodes;
+	} catch (error) {
+		const downloaded = get(downloadedEpisodes);
+		return downloaded[feed.title];
+	}
+}
+
+function fetchEpisodesInAllFeeds(
+	feedsToSearch: PodcastFeed[],
+): Promise<Episode[]> {
+	return Promise.all(feedsToSearch.map((feed) => fetchEpisodes(feed))).then(
+		(episodes) => {
 			return episodes.flat();
-		});
+		},
+	);
+}
+
+async function handleClickPodcast(event: CustomEvent<{ feed: PodcastFeed }>) {
+	const { feed } = event.detail;
+	displayedEpisodes = [];
+
+	selectedFeed = feed;
+	displayedEpisodes = await fetchEpisodes(feed);
+	viewState.set(ViewState.EpisodeList);
+}
+
+function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
+	const { episode } = event.detail;
+	currentEpisode.set(episode);
+
+	viewState.set(ViewState.Player);
+}
+
+function handleContextMenuEpisode({
+	detail: { event, episode },
+}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
+	spawnEpisodeContextMenu(episode, event);
+}
+
+async function handleClickRefresh() {
+	if (!selectedFeed) return;
+
+	displayedEpisodes = await fetchEpisodes(selectedFeed, false);
+}
+
+const handleSearch = debounce((event: CustomEvent<{ query: string }>) => {
+	const { query } = event.detail;
+
+	if (selectedFeed) {
+		const episodesInFeed = $episodeCache[selectedFeed.title];
+		displayedEpisodes = searchEpisodes(query, episodesInFeed);
+		return;
 	}
 
-	async function handleClickPodcast(
-		event: CustomEvent<{ feed: PodcastFeed }>
-	) {
-		const { feed } = event.detail;
-		displayedEpisodes = [];
+	displayedEpisodes = searchEpisodes(query, latestEpisodes);
+}, 250);
 
-		selectedFeed = feed;
-		displayedEpisodes = await fetchEpisodes(feed);
-		viewState.set(ViewState.EpisodeList);
-	}
+function handleClickPlaylist(
+	event: CustomEvent<{ event: MouseEvent; playlist: Playlist }>,
+) {
+	const { event: clickEvent, playlist } = event.detail;
 
-	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
-		const { episode } = event.detail;
-		currentEpisode.set(episode);
+	if (playlist.name === $queue.name && $queue.episodes.length > 0) {
+		// Only need to set the current episode if there isn't any.
+		// The current episode _is_ the front of the queue.
+		if (!$currentEpisode) {
+			currentEpisode.set($queue.episodes[0]);
+		}
 
 		viewState.set(ViewState.Player);
+	} else {
+		selectedPlaylist = playlist;
+		displayedEpisodes = playlist.episodes;
+
+		viewState.set(ViewState.EpisodeList);
 	}
-
-	function handleContextMenuEpisode({
-		detail: { event, episode },
-	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(episode, event);
-	}
-
-	async function handleClickRefresh() {
-		if (!selectedFeed) return;
-
-		displayedEpisodes = await fetchEpisodes(selectedFeed, false);
-	}
-
-	const handleSearch = debounce((event: CustomEvent<{ query: string }>) => {
-		const { query } = event.detail;
-
-		if (selectedFeed) {
-			const episodesInFeed = $episodeCache[selectedFeed.title];
-			displayedEpisodes = searchEpisodes(query, episodesInFeed);
-			return;
-		}
-
-		displayedEpisodes = searchEpisodes(query, latestEpisodes);
-	}, 250);
-
-	function handleClickPlaylist(
-		event: CustomEvent<{ event: MouseEvent; playlist: Playlist }>
-	) {
-		const { event: clickEvent, playlist } = event.detail;
-
-		if (playlist.name === $queue.name && $queue.episodes.length > 0) {
-			// Only need to set the current episode if there isn't any.
-			// The current episode _is_ the front of the queue.
-			if (!$currentEpisode) {
-				currentEpisode.set($queue.episodes[0]);
-			}
-
-			viewState.set(ViewState.Player);
-		} else {
-			selectedPlaylist = playlist;
-			displayedEpisodes = playlist.episodes;
-
-			viewState.set(ViewState.EpisodeList);
-		}
-	}
+}
 </script>
 
 <div class="podcast-view">

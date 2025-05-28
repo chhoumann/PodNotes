@@ -1,302 +1,305 @@
 <script lang="ts">
-	import {
-		duration,
-		currentTime,
-		currentEpisode,
-		isPaused,
-		plugin,
-		playedEpisodes,
-		queue,
-		playlists,
-		viewState,
-		downloadedEpisodes,
-	} from "src/store";
-	import { formatSeconds } from "src/utility/formatSeconds";
-	import { onDestroy, onMount } from "svelte";
-	import Icon from "../obsidian/Icon.svelte";
-	import Button from "../obsidian/Button.svelte";
-	import Dropdown from "../obsidian/Dropdown.svelte";
-	import Loading from "./Loading.svelte";
-	import EpisodeList from "./EpisodeList.svelte";
-	import Progressbar from "../common/Progressbar.svelte";
-	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-	import type { Episode } from "src/types/Episode";
-	import { ViewState } from "src/types/ViewState";
-	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
-	import Image from "../common/Image.svelte";
-	import { fade, slide } from "svelte/transition";
+import {
+	currentEpisode,
+	currentTime,
+	downloadedEpisodes,
+	duration,
+	isPaused,
+	playedEpisodes,
+	playlists,
+	plugin,
+	queue,
+	viewState,
+} from "src/store";
+import type { Episode } from "src/types/Episode";
+import { ViewState } from "src/types/ViewState";
+import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
+import { formatSeconds } from "src/utility/formatSeconds";
+import { onDestroy, onMount } from "svelte";
+import { fade, slide } from "svelte/transition";
+import Image from "../common/Image.svelte";
+import Progressbar from "../common/Progressbar.svelte";
+import Button from "../obsidian/Button.svelte";
+import Dropdown from "../obsidian/Dropdown.svelte";
+import Icon from "../obsidian/Icon.svelte";
+import EpisodeList from "./EpisodeList.svelte";
+import Loading from "./Loading.svelte";
+import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 
-	// #region Circumventing the forced two-way binding of the playback rate.
-	class CircumentForcedTwoWayBinding {
-		public playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
+// #region Circumventing the forced two-way binding of the playback rate.
+class CircumentForcedTwoWayBinding {
+	public playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
 
-		public get _playbackRate() {
-			return this.playbackRate;
+	public get _playbackRate() {
+		return this.playbackRate;
+	}
+}
+
+const offBinding = new CircumentForcedTwoWayBinding();
+//#endregion
+
+const isHoveringArtwork = false;
+let isLoading = true;
+let showQueue = false;
+
+function togglePlayback() {
+	isPaused.update((value) => !value);
+}
+
+function onClickProgressbar({
+	detail: { event },
+}: CustomEvent<{ event: MouseEvent }>) {
+	const progressbar = event.target as HTMLDivElement;
+	const percent = event.offsetX / progressbar.offsetWidth;
+
+	currentTime.set(percent * $duration);
+}
+
+function removeEpisodeFromPlaylists() {
+	playlists.update((lists) => {
+		for (const playlist of Object.values(lists)) {
+			playlist.episodes = playlist.episodes.filter(
+				(ep) => ep.title !== $currentEpisode.title,
+			);
 		}
+		return lists;
+	});
+
+	queue.remove($currentEpisode);
+}
+
+function onEpisodeEnded() {
+	playedEpisodes.markAsPlayed($currentEpisode);
+	removeEpisodeFromPlaylists();
+
+	queue.playNext();
+}
+
+function onPlaybackRateChange(event: CustomEvent<{ value: string }>) {
+	offBinding.playbackRate = Number.parseFloat(event.detail.value);
+}
+
+function onMetadataLoaded() {
+	isLoading = false;
+
+	restorePlaybackTime();
+}
+
+function restorePlaybackTime() {
+	const playedEps = $playedEpisodes;
+	const currentEp = $currentEpisode;
+
+	if (playedEps[currentEp.title]) {
+		currentTime.set(playedEps[currentEp.title].time);
+	} else {
+		currentTime.set(0);
 	}
 
-	const offBinding = new CircumentForcedTwoWayBinding();
-	//#endregion
+	isPaused.set(false);
+}
 
-	let isHoveringArtwork = false;
-	let isLoading = true;
-	let showQueue = false;
+let srcPromise: Promise<string> = getSrc($currentEpisode);
 
-	function togglePlayback() {
-		isPaused.update((value) => !value);
+// #region Keep player time and currentTime in sync
+// Simply binding currentTime to the audio element will result in resets.
+// Hence the following solution.
+let playerTime = 0;
+
+onMount(() => {
+	const unsub = currentTime.subscribe((ct) => {
+		playerTime = ct;
+	});
+
+	// This only happens when the player is open and the user downloads the episode via the context menu.
+	// So we want to update the source of the audio element to local file / online stream.
+	const unsubDownloadedSource = downloadedEpisodes.subscribe((_) => {
+		srcPromise = getSrc($currentEpisode);
+	});
+
+	const unsubCurrentEpisode = currentEpisode.subscribe((_) => {
+		srcPromise = getSrc($currentEpisode);
+	});
+
+	return () => {
+		unsub();
+		unsubDownloadedSource();
+		unsubCurrentEpisode();
+	};
+});
+
+$: {
+	currentTime.set(playerTime);
+}
+// #endregion
+
+onDestroy(() => {
+	playedEpisodes.setEpisodeTime(
+		$currentEpisode,
+		$currentTime,
+		$duration,
+		$currentTime === $duration,
+	);
+	isPaused.set(true);
+});
+
+function handleContextMenuEpisode({
+	detail: { event, episode },
+}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
+	spawnEpisodeContextMenu(episode, event);
+}
+
+function handleContextMenuEpisodeImage(event: MouseEvent) {
+	spawnEpisodeContextMenu($currentEpisode, event, {
+		play: true,
+		markPlayed: true,
+	});
+}
+
+function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
+	const { episode } = event.detail;
+	currentEpisode.set(episode);
+
+	viewState.set(ViewState.Player);
+}
+
+async function getSrc(episode: Episode): Promise<string> {
+	if (downloadedEpisodes.isEpisodeDownloaded(episode)) {
+		const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
+		if (!downloadedEpisode) return "";
+
+		return createMediaUrlObjectFromFilePath(downloadedEpisode.filePath);
 	}
 
-	function onClickProgressbar({
-		detail: { event },
-	}: CustomEvent<{ event: MouseEvent }>) {
-		const progressbar = event.target as HTMLDivElement;
-		const percent = event.offsetX / progressbar.offsetWidth;
+	return episode.streamUrl;
+}
 
-		currentTime.set(percent * $duration);
+function toggleQueue() {
+	showQueue = !showQueue;
+}
+
+function transcribeEpisode() {
+	// Set local state immediately for UI update
+	_isTranscribing = true;
+
+	// Then call the API
+	setTimeout(() => {
+		$plugin.api.transcribeCurrentEpisode();
+	}, 0);
+}
+
+function cancelTranscription() {
+	if ($plugin.transcriptionService) {
+		$plugin.transcriptionService.cancelTranscription();
+	}
+}
+
+function resumeTranscription() {
+	// Set local state immediately for UI update
+	_isTranscribing = true;
+
+	// Then call the API
+	setTimeout(() => {
+		$plugin.api.resumeTranscription();
+	}, 0);
+}
+
+// Create a reactive variable to track transcription status
+let _isTranscribing = false;
+
+// Track transcription progress reactively with a tick interval
+let progressInterval: number;
+let progressPercent = 0;
+let progressSize = "0 KB";
+let timeRemaining = "Calculating...";
+let processingStatus = "Preparing...";
+
+// Create a reactive tracking system that polls for updates
+function startProgressTracking() {
+	if (progressInterval) clearInterval(progressInterval);
+
+	// Force immediate update of the progress value if service exists
+	if ($plugin?.transcriptionService) {
+		// Get initial values
+		_isTranscribing = $plugin.transcriptionService.isTranscribing;
+		progressPercent = $plugin.transcriptionService.progressPercent;
+		progressSize = $plugin.transcriptionService.progressSize;
+		timeRemaining = $plugin.transcriptionService.timeRemaining;
+		processingStatus = $plugin.transcriptionService.processingStatus;
+
+		// Log initial state
+		console.log(`Initial progress: ${progressPercent.toFixed(1)}%`);
 	}
 
-	function removeEpisodeFromPlaylists() {
-		playlists.update((lists) => {
-			for (const playlist of Object.values(lists)) {
-				playlist.episodes = playlist.episodes.filter(
-					(ep) => ep.title !== $currentEpisode.title
+	// Poll for updates every 100ms for smoother progress bar updates
+	progressInterval = setInterval(() => {
+		if ($plugin.transcriptionService) {
+			// Create fresh local variables for each check to ensure reactivity
+			const newIsTranscribing = $plugin.transcriptionService.isTranscribing;
+			const newProgressPercent = $plugin.transcriptionService.progressPercent;
+			const newProgressSize = $plugin.transcriptionService.progressSize;
+			const newTimeRemaining = $plugin.transcriptionService.timeRemaining;
+			const newProcessingStatus = $plugin.transcriptionService.processingStatus;
+
+			// Apply the state changes to reactive variables
+			_isTranscribing = newIsTranscribing;
+			progressPercent = newProgressPercent;
+			progressSize = newProgressSize;
+			timeRemaining = newTimeRemaining;
+			processingStatus = newProcessingStatus;
+
+			// Only log occasional updates to reduce console noise
+			if (Math.random() < 0.05) {
+				// Log 5% of updates
+				console.log(
+					`Progress update: ${processingStatus}, ${progressPercent.toFixed(1)}%`,
 				);
 			}
-			return lists;
-		});
-
-		queue.remove($currentEpisode);
-	}
-
-	function onEpisodeEnded() {
-		playedEpisodes.markAsPlayed($currentEpisode);
-		removeEpisodeFromPlaylists();
-
-		queue.playNext();
-	}
-
-	function onPlaybackRateChange(event: CustomEvent<{ value: string }>) {
-		offBinding.playbackRate = Number.parseFloat(event.detail.value);
-	}
-
-	function onMetadataLoaded() {
-		isLoading = false;
-
-		restorePlaybackTime();
-	}
-
-	function restorePlaybackTime() {
-		const playedEps = $playedEpisodes;
-		const currentEp = $currentEpisode;
-
-		if (playedEps[currentEp.title]) {
-			currentTime.set(playedEps[currentEp.title].time);
-		} else {
-			currentTime.set(0);
 		}
+	}, 100);
+}
 
-		isPaused.set(false);
-	}
-
-	let srcPromise: Promise<string> = getSrc($currentEpisode);
-
-	// #region Keep player time and currentTime in sync
-	// Simply binding currentTime to the audio element will result in resets.
-	// Hence the following solution.
-	let playerTime: number = 0;
-
-	onMount(() => {
-		const unsub = currentTime.subscribe((ct) => {
-			playerTime = ct;
-		});
-
-		// This only happens when the player is open and the user downloads the episode via the context menu.
-		// So we want to update the source of the audio element to local file / online stream.
-		const unsubDownloadedSource = downloadedEpisodes.subscribe((_) => {
-			srcPromise = getSrc($currentEpisode);
-		});
-
-		const unsubCurrentEpisode = currentEpisode.subscribe((_) => {
-			srcPromise = getSrc($currentEpisode);
-		});
-
-		return () => {
-			unsub();
-			unsubDownloadedSource();
-			unsubCurrentEpisode();
-		};
-	});
-
-	$: {
-		currentTime.set(playerTime);
-	}
-	// #endregion
-
-	onDestroy(() => {
-		playedEpisodes.setEpisodeTime(
-			$currentEpisode,
-			$currentTime,
-			$duration,
-			$currentTime === $duration,
-		);
-		isPaused.set(true);
-	});
-
-	function handleContextMenuEpisode({
-		detail: { event, episode },
-	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(episode, event);
-	}
-
-	function handleContextMenuEpisodeImage(event: MouseEvent) {
-		spawnEpisodeContextMenu($currentEpisode, event, {
-			play: true,
-			markPlayed: true,
-		});
-	}
-
-	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
-		const { episode } = event.detail;
-		currentEpisode.set(episode);
-
-		viewState.set(ViewState.Player);
-	}
-
-	async function getSrc(episode: Episode): Promise<string> {
-		if (downloadedEpisodes.isEpisodeDownloaded(episode)) {
-			const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
-			if (!downloadedEpisode) return "";
-
-			return createMediaUrlObjectFromFilePath(downloadedEpisode.filePath);
-		}
-
-		return episode.streamUrl;
-	}
-
-	function toggleQueue() {
-		showQueue = !showQueue;
-	}
-	
-	function transcribeEpisode() {
-		// Set local state immediately for UI update
-		_isTranscribing = true;
-		
-		// Then call the API
-		setTimeout(() => {
-			$plugin.api.transcribeCurrentEpisode();
-		}, 0);
-	}
-	
-	function cancelTranscription() {
-		if ($plugin.transcriptionService) {
-			$plugin.transcriptionService.cancelTranscription();
-		}
-	}
-	
-	function resumeTranscription() {
-		// Set local state immediately for UI update
-		_isTranscribing = true;
-		
-		// Then call the API
-		setTimeout(() => {
-			$plugin.api.resumeTranscription();
-		}, 0);
-	}
-	
-	// Create a reactive variable to track transcription status
-	let _isTranscribing = false;
-	
-	// Track transcription progress reactively with a tick interval
-	let progressInterval: number;
-	let progressPercent = 0;
-	let progressSize = "0 KB";
-	let timeRemaining = "Calculating...";
-	let processingStatus = "Preparing...";
-	
-	// Create a reactive tracking system that polls for updates
-	function startProgressTracking() {
+onMount(() => {
+	startProgressTracking();
+	return () => {
 		if (progressInterval) clearInterval(progressInterval);
-		
-		// Force immediate update of the progress value if service exists
-		if ($plugin && $plugin.transcriptionService) {
-			// Get initial values
-			_isTranscribing = $plugin.transcriptionService.isTranscribing;
-			progressPercent = $plugin.transcriptionService.progressPercent;
-			progressSize = $plugin.transcriptionService.progressSize;
-			timeRemaining = $plugin.transcriptionService.timeRemaining;
-			processingStatus = $plugin.transcriptionService.processingStatus;
-			
-			// Log initial state
-			console.log(`Initial progress: ${progressPercent.toFixed(1)}%`);
-		}
-		
-		// Poll for updates every 100ms for smoother progress bar updates
-		progressInterval = setInterval(() => {
-			if ($plugin.transcriptionService) {
-				// Create fresh local variables for each check to ensure reactivity
-				const newIsTranscribing = $plugin.transcriptionService.isTranscribing;
-				const newProgressPercent = $plugin.transcriptionService.progressPercent;
-				const newProgressSize = $plugin.transcriptionService.progressSize;
-				const newTimeRemaining = $plugin.transcriptionService.timeRemaining;
-				const newProcessingStatus = $plugin.transcriptionService.processingStatus;
-				
-				// Apply the state changes to reactive variables
-				_isTranscribing = newIsTranscribing;
-				progressPercent = newProgressPercent;
-				progressSize = newProgressSize;
-				timeRemaining = newTimeRemaining;
-				processingStatus = newProcessingStatus;
-				
-				// Only log occasional updates to reduce console noise
-				if (Math.random() < 0.05) { // Log 5% of updates
-					console.log(`Progress update: ${processingStatus}, ${progressPercent.toFixed(1)}%`);
-				}
-			}
-		}, 100);
-	}
-	
-	onMount(() => {
-		startProgressTracking();
-		return () => {
-			if (progressInterval) clearInterval(progressInterval);
-		};
-	});
-	
-	// Track if transcription is currently in progress
-	$: {
-		// Force immediate UI update when transcription service changes
-		if ($plugin.transcriptionService) {
-			_isTranscribing = $plugin.transcriptionService.isTranscribing;
-		}
-	}
-	
-	// Make isTranscribing reactive, but set it locally first for immediate UI updates
-	$: isTranscribing = _isTranscribing;
-	
-	// Check if there's a resumable transcription for the current episode
-	$: hasResumableTranscription = $currentEpisode && 
-		$plugin.api.hasResumableTranscription && 
-		$plugin.api.hasResumableTranscription($currentEpisode.id);
-		
-	// Check if transcript already exists for the current episode
-	$: hasExistingTranscript = $currentEpisode && 
-		$plugin.api.hasExistingTranscript && 
-		$plugin.api.hasExistingTranscript($currentEpisode.id);
-
-
-	const playbackRates = {
-		"0.25": "0.25x",
-		"0.50": "0.5x",
-		"0.75": "0.75x",
-		"1.00": "1x",
-		"1.25": "1.25x",
-		"1.50": "1.5x",
-		"1.75": "1.75x",
-		"2.00": "2x",
-		"2.50": "2.5x",
-		"3.00": "3x"
 	};
+});
 
+// Track if transcription is currently in progress
+$: {
+	// Force immediate UI update when transcription service changes
+	if ($plugin.transcriptionService) {
+		_isTranscribing = $plugin.transcriptionService.isTranscribing;
+	}
+}
+
+// Make isTranscribing reactive, but set it locally first for immediate UI updates
+$: isTranscribing = _isTranscribing;
+
+// Check if there's a resumable transcription for the current episode
+$: hasResumableTranscription =
+	$currentEpisode &&
+	$plugin.api.hasResumableTranscription &&
+	$plugin.api.hasResumableTranscription($currentEpisode.id);
+
+// Check if transcript already exists for the current episode
+$: hasExistingTranscript =
+	$currentEpisode &&
+	$plugin.api.hasExistingTranscript &&
+	$plugin.api.hasExistingTranscript($currentEpisode.id);
+
+const playbackRates = {
+	"0.25": "0.25x",
+	"0.50": "0.5x",
+	"0.75": "0.75x",
+	"1.00": "1x",
+	"1.25": "1.25x",
+	"1.50": "1.5x",
+	"1.75": "1.75x",
+	"2.00": "2x",
+	"2.50": "2.5x",
+	"3.00": "3x",
+};
 </script>
 
 <div class="episode-player" transition:fade={{ duration: 300 }}>
