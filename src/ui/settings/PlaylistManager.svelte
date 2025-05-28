@@ -57,8 +57,8 @@ function onAddPlaylist() {
 	icon = ICON_LIST[0];
 }
 
-function onChangeIcon(event: CustomEvent<{ value: IconType }>) {
-	icon = event.detail.value;
+function onChangeIcon(value: string) {
+	icon = value as IconType;
 }
 
 function onDeletePlaylist(event: CustomEvent<{ value: Playlist }>) {
@@ -97,9 +97,9 @@ function onToggleRepeat(event: CustomEvent<{ value: Playlist }>) {
 	</div>
 
 	<div class="add-playlist-container">
-		<Dropdown {options} bind:value={icon} on:change={onChangeIcon} />
+		<Dropdown {options} bind:value={icon} onchange={onChangeIcon} />
 		<Text placeholder="Playlist name" bind:value={playlistInput} />
-		<Button icon="plus" cta={true} on:click={onAddPlaylist} />
+		<Button icon="plus" cta={true} onclick={onAddPlaylist} />
 	</div>
 </div>
 

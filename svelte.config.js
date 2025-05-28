@@ -12,6 +12,8 @@ const config = {
 		css: 'injected',
 		// Enable all warnings in development
 		dev: process.env.NODE_ENV !== 'production',
+		// Disable runes mode for gradual migration
+		runes: false
 	}
 };
 

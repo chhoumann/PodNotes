@@ -26,13 +26,13 @@
 			<Button
 				icon="trash"
 				aria-label={`Remove ${podcast.title} podcast`}
-				on:click={() => dispatch("removePodcast", { podcast })}
+				onclick={() => dispatch("removePodcast", { podcast })}
 			/>
 		{:else}
 			<Button
 				icon="plus"
 				aria-label={`Add ${podcast.title} podcast`}
-				on:click={() => dispatch("addPodcast", { podcast })}
+				onclick={() => dispatch("addPodcast", { podcast })}
 			/>
 		{/if}
 	</div>

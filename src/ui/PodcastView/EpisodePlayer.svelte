@@ -75,8 +75,8 @@ function onEpisodeEnded() {
 	queue.playNext();
 }
 
-function onPlaybackRateChange(event: CustomEvent<{ value: string }>) {
-	offBinding.playbackRate = Number.parseFloat(event.detail.value);
+function onPlaybackRateChange(value: string) {
+	offBinding.playbackRate = Number.parseFloat(value);
 }
 
 function onMetadataLoaded() {
@@ -385,25 +385,25 @@ const playbackRates = {
 		<Button
 			icon="skip-back"
 			tooltip="Skip backward"
-			on:click={$plugin.api.skipBackward.bind($plugin.api)}
+			onclick={$plugin.api.skipBackward.bind($plugin.api)}
 		/>
 		<Button
 			icon={$isPaused ? "play" : "pause"}
 			tooltip={$isPaused ? "Play" : "Pause"}
-			on:click={togglePlayback}
+			onclick={togglePlayback}
 			class="play-pause-button"
 		/>
 		<Button
 			icon="skip-forward"
 			tooltip="Skip forward"
-			on:click={$plugin.api.skipForward.bind($plugin.api)}
+			onclick={$plugin.api.skipForward.bind($plugin.api)}
 		/>
-		<Button icon="list" tooltip="Toggle queue" on:click={toggleQueue} />
+		<Button icon="list" tooltip="Toggle queue" onclick={toggleQueue} />
 		<div class="playback-rate-container">
 			<Dropdown
 				options={playbackRates}
 				value={offBinding.playbackRate.toFixed(2)}
-				on:change={onPlaybackRateChange}
+				onchange={onPlaybackRateChange}
 				style={{
 					minWidth: "70px",
 					textAlign: "center"
@@ -433,7 +433,7 @@ const playbackRates = {
 			<div class="transcription-progress-container">
 				<div class="transcription-header">
 					<h3>Transcribing episode...</h3>
-					<Button icon="x" tooltip="Cancel transcription" on:click={cancelTranscription} />
+					<Button icon="x" tooltip="Cancel transcription" onclick={cancelTranscription} />
 				</div>
 				
 				<div class="transcription-progress">
@@ -463,17 +463,17 @@ const playbackRates = {
 				<div class="transcript-notice-content">
 					<p>Transcription was interrupted</p>
 					<div class="transcript-buttons">
-						<Button icon="rotate-ccw" tooltip="Resume transcription" on:click={resumeTranscription}>
+						<Button icon="rotate-ccw" tooltip="Resume transcription" onclick={resumeTranscription}>
 							Resume
 						</Button>
-						<Button icon="mic" tooltip="Start new transcription" on:click={transcribeEpisode}>
+						<Button icon="mic" tooltip="Start new transcription" onclick={transcribeEpisode}>
 							New
 						</Button>
 					</div>
 				</div>
 			</div>
 		{:else if !hasExistingTranscript}
-			<Button icon="mic" tooltip="Transcribe this episode" on:click={transcribeEpisode}>
+			<Button icon="mic" tooltip="Transcribe this episode" onclick={transcribeEpisode}>
 				Transcribe
 			</Button>
 		{/if}
