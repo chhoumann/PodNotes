@@ -13,7 +13,11 @@ const config = {
 		// Enable all warnings in development
 		dev: process.env.NODE_ENV !== 'production',
 		// Disable runes mode for gradual migration
-		runes: false
+		runes: false,
+		// Enable compatibility mode for Svelte 5
+		compatibility: {
+			componentApi: 4
+		}
 	}
 };
 
