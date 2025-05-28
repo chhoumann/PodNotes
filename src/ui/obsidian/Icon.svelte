@@ -3,7 +3,7 @@
     import type { CSSObject } from "src/types/CSSObject";
     import type { IconType } from "src/types/IconType";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
-    import { afterUpdate, createEventDispatcher, onMount } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
 
     export let size: number = 16;
     export let icon: IconType;
@@ -14,6 +14,8 @@
     let ref: HTMLSpanElement;
     let styles: CSSObject = {};
     let stylesStr: string;
+    let currentIcon: IconType;
+    let currentSize: number;
 
     $: stylesStr = extractStylesFromObj(styles);
 
@@ -22,12 +24,20 @@
     onMount(() => {
         setIcon(ref, icon, size);
         ref.style.cssText = stylesStr;
+        currentIcon = icon;
+        currentSize = size;
     });
 
-    afterUpdate(() => {
+    // Only update DOM when props actually change
+    $: if (ref && (icon !== currentIcon || size !== currentSize)) {
         setIcon(ref, icon, size);
+        currentIcon = icon;
+        currentSize = size;
+    }
+
+    $: if (ref && ref.style.cssText !== stylesStr) {
         ref.style.cssText = stylesStr;
-    });
+    }
 
     function forwardClick(event: MouseEvent) {
         dispatch("click", { event });

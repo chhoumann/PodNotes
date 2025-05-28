@@ -45,25 +45,41 @@ $: displayedPlaylists = [
 
 $: feeds = Object.values($savedFeeds);
 
-// Optimize episode sorting with memoization - only recalculate when cache actually changes
-let lastCacheKeys = '';
-$: {
-	const cacheKeys = Object.keys($episodeCache).sort().join(',');
-	if (cacheKeys !== lastCacheKeys && isInitialized) {
-		lastCacheKeys = cacheKeys;
-		
-		const allEpisodes = Object.entries($episodeCache)
-			.flatMap(([_, episodes]) => episodes.slice(0, 10));
-		
-		// Only sort if we have episodes
-		if (allEpisodes.length > 0) {
-			latestEpisodes = allEpisodes.sort((a, b) => {
-				if (a.episodeDate && b.episodeDate)
-					return Number(b.episodeDate) - Number(a.episodeDate);
-				return 0;
-			});
-		}
+// Optimize episode sorting with proper memoization
+let episodeCacheVersion = 0;
+let sortedEpisodesCache: Episode[] = [];
+let lastSortedVersion = -1;
+
+// Update version when cache changes
+$: episodeCacheVersion = Object.keys($episodeCache).length;
+
+// Only sort when cache actually changes content
+function getSortedEpisodes(): Episode[] {
+	if (lastSortedVersion === episodeCacheVersion) {
+		return sortedEpisodesCache;
 	}
+	
+	lastSortedVersion = episodeCacheVersion;
+	const allEpisodes = Object.entries($episodeCache)
+		.flatMap(([_, episodes]) => episodes.slice(0, 10));
+	
+	// Only sort if we have episodes
+	if (allEpisodes.length > 0) {
+		sortedEpisodesCache = allEpisodes.sort((a, b) => {
+			if (a.episodeDate && b.episodeDate)
+				return Number(b.episodeDate) - Number(a.episodeDate);
+			return 0;
+		});
+	} else {
+		sortedEpisodesCache = [];
+	}
+	
+	return sortedEpisodesCache;
+}
+
+// Update latestEpisodes only when needed
+$: if (isInitialized && episodeCacheVersion > 0) {
+	latestEpisodes = getSortedEpisodes();
 }
 
 // Separate reactive statement for updating displayed episodes
@@ -90,7 +106,8 @@ async function fetchEpisodes(
 	
 	// Return existing promise if fetch is in progress
 	if (episodeFetchCache.has(cacheKey)) {
-		return episodeFetchCache.get(cacheKey)!;
+		const cachedPromise = episodeFetchCache.get(cacheKey);
+		if (cachedPromise) return cachedPromise;
 	}
 
 	const cachedEpisodesInFeed = get(episodeCache)[feed.title];

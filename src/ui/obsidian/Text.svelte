@@ -2,7 +2,7 @@
     import { TextComponent } from "obsidian";
     import type { CSSObject } from "src/types/CSSObject";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
-    import { afterUpdate, onMount } from "svelte";
+    import { onMount, onDestroy } from "svelte";
 
     export let value: string = "";
     export let disabled: boolean = false;
@@ -14,33 +14,54 @@
     export let onchange: ((value: string) => void) | undefined = undefined;
 
     let textRef: HTMLSpanElement;
-
     let text: TextComponent;
     let styles: CSSObject = {};
+    let isChanging = false;
 
     onMount(() => {
         text = new TextComponent(textRef);
 
-        updateTextComponentAttributes(text);
-    });
-
-    afterUpdate(() => {
-        updateTextComponentAttributes(text);
-    });
-
-    function updateTextComponentAttributes(component: TextComponent) {
-        if (value !== undefined) component.setValue(value);
-        if (disabled) component.setDisabled(disabled);
-        if (placeholder) component.setPlaceholder(placeholder);
-        if (type) component.inputEl.type = type;
+        // Set initial values
+        if (value !== undefined) text.setValue(value);
+        if (disabled) text.setDisabled(disabled);
+        if (placeholder) text.setPlaceholder(placeholder);
+        if (type) text.inputEl.type = type;
         if (styles) {
             text.inputEl.setAttr("style", extractStylesFromObj(styles));
         }
 
-        component.onChange((newValue: string) => {
+        // Set up change handler once
+        text.onChange((newValue: string) => {
+            isChanging = true;
             value = newValue;
             onchange?.(newValue);
+            isChanging = false;
         });
+    });
+
+    onDestroy(() => {
+        // Clean up if needed
+        text = null;
+    });
+
+    // Only update when props change and not during user input
+    $: if (text && !isChanging && text.getValue() !== value) {
+        text.setValue(value);
+    }
+
+    $: if (text && text.disabled !== disabled) {
+        text.setDisabled(disabled);
+    }
+
+    $: if (text && text.inputEl.placeholder !== placeholder) {
+        text.setPlaceholder(placeholder);
+    }
+
+    $: if (text && styles) {
+        const newStyles = extractStylesFromObj(styles);
+        if (text.inputEl.getAttribute("style") !== newStyles) {
+            text.inputEl.setAttr("style", newStyles);
+        }
     }
 </script>
 

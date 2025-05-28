@@ -16,12 +16,55 @@ interface DisabledMenuItems {
 	playlists: boolean;
 }
 
+// Cache episode lookups to avoid repeated searches
+const episodeLookupCache = new Map<string, {
+	isPlayed: boolean;
+	isFavorite: boolean;
+	isInQueue: boolean;
+	playlists: Set<string>;
+}>();
+
+function getCacheKey(episode: Episode): string {
+	return `${episode.title}-${episode.podcastName}`;
+}
+
+function getEpisodeCachedState(episode: Episode) {
+	const cacheKey = getCacheKey(episode);
+	let cached = episodeLookupCache.get(cacheKey);
+	
+	if (!cached) {
+		const playedEps = get(playedEpisodes);
+		const favs = get(favorites);
+		const q = get(queue);
+		const pls = get(playlists);
+		
+		cached = {
+			isPlayed: Object.values(playedEps).some(e => e.title === episode.title && e.finished),
+			isFavorite: favs.episodes.some(e => e.title === episode.title),
+			isInQueue: q.episodes.some(e => e.title === episode.title),
+			playlists: new Set(
+				Object.entries(pls)
+					.filter(([_, playlist]) => playlist.episodes.some(e => e.title === episode.title))
+					.map(([name]) => name)
+			)
+		};
+		
+		episodeLookupCache.set(cacheKey, cached);
+		
+		// Clear cache after a short delay to handle rapid updates
+		setTimeout(() => episodeLookupCache.delete(cacheKey), 5000);
+	}
+	
+	return cached;
+}
+
 export default function spawnEpisodeContextMenu(
 	episode: Episode,
 	event: MouseEvent,
 	disabledMenuItems?: Partial<DisabledMenuItems>
 ) {
 	const menu = new Menu();
+	const cachedState = getEpisodeCachedState(episode);
 
 	if (!disabledMenuItems?.play) {
 		menu.addItem(item => item
@@ -34,12 +77,12 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.markPlayed) {
-		const episodeIsPlayed = Object.values(get(playedEpisodes)).find(e => (e.title === episode.title && e.finished));
 		menu.addItem(item => item
-			.setIcon(episodeIsPlayed ? "cross" : "check")
-			.setTitle(`Mark as ${episodeIsPlayed ? "Unplayed" : "Played"}`)
+			.setIcon(cachedState.isPlayed ? "cross" : "check")
+			.setTitle(`Mark as ${cachedState.isPlayed ? "Unplayed" : "Played"}`)
 			.onClick(() => {
-				if (episodeIsPlayed) {
+				episodeLookupCache.delete(getCacheKey(episode)); // Invalidate cache
+				if (cachedState.isPlayed) {
 					playedEpisodes.markAsUnplayed(episode);
 				} else {
 					playedEpisodes.markAsPlayed(episode);
@@ -93,12 +136,12 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.favorite) {
-		const episodeIsFavorite = get(favorites).episodes.find(e => e.title === episode.title);
 		menu.addItem(item => item
 			.setIcon("lucide-star")
-			.setTitle(`${episodeIsFavorite ? "Remove from" : "Add to"} Favorites`)
+			.setTitle(`${cachedState.isFavorite ? "Remove from" : "Add to"} Favorites`)
 			.onClick(() => {
-				if (episodeIsFavorite) {
+				episodeLookupCache.delete(getCacheKey(episode)); // Invalidate cache
+				if (cachedState.isFavorite) {
 					favorites.update(playlist => {
 						playlist.episodes = playlist.episodes.filter(e => e.title !== episode.title);
 						return playlist;
@@ -115,12 +158,12 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.queue) {
-		const episodeIsInQueue = get(queue).episodes.find(e => e.title === episode.title);
 		menu.addItem(item => item
 			.setIcon("list-ordered")
-			.setTitle(`${episodeIsInQueue ? "Remove from" : "Add to"} Queue`)
+			.setTitle(`${cachedState.isInQueue ? "Remove from" : "Add to"} Queue`)
 			.onClick(() => {
-				if (episodeIsInQueue) {
+				episodeLookupCache.delete(getCacheKey(episode)); // Invalidate cache
+				if (cachedState.isInQueue) {
 					queue.update(playlist => {
 						playlist.episodes = playlist.episodes.filter(e => e.title !== episode.title);
 
@@ -142,12 +185,13 @@ export default function spawnEpisodeContextMenu(
 
 		const playlistsInStore = get(playlists);
 		for (const playlist of Object.values(playlistsInStore)) {
-			const episodeIsInPlaylist = playlist.episodes.find(e => e.title === episode.title);
+			const episodeIsInPlaylist = cachedState.playlists.has(playlist.name);
 
 			menu.addItem(item => item
 				.setIcon(playlist.icon)
 				.setTitle(`${episodeIsInPlaylist ? "Remove from" : "Add to"} ${playlist.name}`)
 				.onClick(() => {
+					episodeLookupCache.delete(getCacheKey(episode)); // Invalidate cache
 					if (episodeIsInPlaylist) {
 						playlists.update(playlists => {
 							playlists[playlist.name].episodes = playlists[playlist.name].episodes.filter(e => e.title !== episode.title);
