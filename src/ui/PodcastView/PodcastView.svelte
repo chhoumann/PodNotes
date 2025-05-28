@@ -20,6 +20,7 @@
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
 	import { onMount } from "svelte";
+	import { get } from "svelte/store";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import { debounce } from "obsidian";
@@ -36,7 +37,10 @@
 
 	onMount(async () => {
 		const unsubscribePlaylists = playlists.subscribe((pl) => {
-			displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
+			const queueValue = get(queue);
+			const favoritesValue = get(favorites);
+			const localFilesValue = get(localFiles);
+			displayedPlaylists = [queueValue, favoritesValue, localFilesValue, ...Object.values(pl)];
 		});
 
 		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
@@ -92,7 +96,8 @@
 
 			return episodes;
 		} catch (error) {
-			return $downloadedEpisodes[feed.title];
+			const downloaded = get(downloadedEpisodes);
+			return downloaded[feed.title];
 		}
 	}
 
@@ -170,7 +175,7 @@
 	}
 </script>
 
-<div class="podcast-view" bind:this={$podcastView}>
+<div class="podcast-view">
 	<TopBar
 		bind:viewState={$viewState}
 		canShowEpisodeList={true}

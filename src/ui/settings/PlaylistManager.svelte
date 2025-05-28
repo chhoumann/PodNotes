@@ -17,14 +17,26 @@
 		return acc;
 	}, {});
 	let icon: IconType = ICON_LIST[0];
+	let queuePlaylist: Playlist;
+	let favoritesPlaylist: Playlist;
 
 	onMount(() => {
-		const unsubscribe = playlists.subscribe((playlists) => {
+		const unsubscribePlaylists = playlists.subscribe((playlists) => {
 			playlistArr = Object.values(playlists);
 		});
 
+		const unsubscribeQueue = queue.subscribe((q) => {
+			queuePlaylist = q;
+		});
+
+		const unsubscribeFavorites = favorites.subscribe((f) => {
+			favoritesPlaylist = f;
+		});
+
 		return () => {
-			unsubscribe();
+			unsubscribePlaylists();
+			unsubscribeQueue();
+			unsubscribeFavorites();
 		};
 	});
 
@@ -68,11 +80,11 @@
 <div class="playlist-manager-container">
 	<div class="playlist-list">
 		<PlaylistItem
-			playlist={$queue}
+			playlist={queuePlaylist}
 			showDeleteButton={false}
 		/>
 		<PlaylistItem
-			playlist={$favorites}
+			playlist={favoritesPlaylist}
 			showDeleteButton={false}
 		/>
 		{#each playlistArr as playlist}

@@ -22,6 +22,14 @@
 		if (searchInput) {
 			searchInput.focus();
 		}
+
+		const unsubscribe = podcastsUpdated.subscribe((value) => {
+			podcastsUpdatedValue = value;
+		});
+
+		return () => {
+			unsubscribe();
+		};
 	});
 
 	$: {
@@ -34,12 +42,14 @@
 		}
 	}
 
+	let podcastsUpdatedValue: number = 0;
+
 	$: {
 		// This will run whenever savedFeeds or podcastsUpdated changes
 		if (searchQuery.trim() === "") {
 			searchResults = Object.values($savedFeeds);
 		}
-		$podcastsUpdated; // This ensures the block runs when podcastsUpdated changes
+		podcastsUpdatedValue; // This ensures the block runs when podcastsUpdated changes
 	}
 
 	function updateSearchResults() {

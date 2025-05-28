@@ -1,14 +1,18 @@
 import { Notice, TFile } from "obsidian";
 import { OpenAI } from "openai";
-import type PodNotes from "../main";
-import { downloadEpisode } from "../downloadEpisode";
+import type {
+	Transcription,
+	TranscriptionSegment,
+	TranscriptionVerbose,
+} from "openai/resources/audio";
+import type { Episode } from "src/types/Episode";
 import {
 	FilePathTemplateEngine,
-	TranscriptTemplateEngine,
 	TimestampTemplateEngine,
+	TranscriptTemplateEngine,
 } from "../TemplateEngine";
-import type { Episode } from "src/types/Episode";
-import type { Transcription, TranscriptionVerbose, TranscriptionSegment } from "openai/resources/audio";
+import { downloadEpisode } from "../downloadEpisode";
+import type PodNotes from "../main";
 
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
@@ -56,36 +60,44 @@ export class TranscriptionService {
 	private MAX_RETRIES = 3;
 	public isTranscribing = false;
 	private cancelRequested = false;
-	private activeNotice: any = null;
-	
+	private activeNotice: Notice | null = null;
+
 	// Progress information for UI - using getters/setters for reactivity
-	private _progressPercent: number = 0;
-	private _progressSize: string = "0 KB";
-	private _timeRemaining: string = "Calculating...";
-	private _processingStatus: string = "Preparing...";
-	
+	private _progressPercent = 0;
+	private _progressSize = "0 KB";
+	private _timeRemaining = "Calculating...";
+	private _processingStatus = "Preparing...";
+
 	// Add getters and setters for reactivity with minimal logging
-	public get progressPercent(): number { return this._progressPercent; }
-	public set progressPercent(value: number) { 
+	public get progressPercent(): number {
+		return this._progressPercent;
+	}
+	public set progressPercent(value: number) {
 		this._progressPercent = value;
 		// Only log significant progress changes to reduce noise
 		if (value % 10 === 0 || value === 100) {
 			console.log(`Progress update: ${value}%`);
 		}
 	}
-	
-	public get progressSize(): string { return this._progressSize; }
-	public set progressSize(value: string) { 
+
+	public get progressSize(): string {
+		return this._progressSize;
+	}
+	public set progressSize(value: string) {
 		this._progressSize = value;
 	}
-	
-	public get timeRemaining(): string { return this._timeRemaining; }
-	public set timeRemaining(value: string) { 
+
+	public get timeRemaining(): string {
+		return this._timeRemaining;
+	}
+	public set timeRemaining(value: string) {
 		this._timeRemaining = value;
 	}
-	
-	public get processingStatus(): string { return this._processingStatus; }
-	public set processingStatus(value: string) { 
+
+	public get processingStatus(): string {
+		return this._processingStatus;
+	}
+	public set processingStatus(value: string) {
 		// Only log when status changes
 		if (this._processingStatus !== value) {
 			console.log(`Status update: ${value}`);
@@ -94,11 +106,11 @@ export class TranscriptionService {
 			this._processingStatus = value;
 		}
 	}
-	
+
 	private resumeData: {
 		episodeId: string;
-		chunks: {processed: boolean; index: number}[];
-		results: any[];
+		chunks: { processed: boolean; index: number }[];
+		results: TranscriptionVerbose[];
 		completedSize: number;
 		totalSize: number;
 	} | null = null;
@@ -106,29 +118,33 @@ export class TranscriptionService {
 	constructor(plugin: PodNotes) {
 		this.plugin = plugin;
 	}
-	
+
 	/**
 	 * Initialize the OpenAI client with API key validation
 	 * @returns true if API key is valid, false otherwise
 	 */
 	private initializeClient(): boolean {
 		const apiKey = this.plugin.settings.openAIApiKey;
-		
+
 		if (!apiKey || apiKey.trim() === "") {
-			new Notice("OpenAI API key is required for transcription. Please set it in the settings tab.");
+			new Notice(
+				"OpenAI API key is required for transcription. Please set it in the settings tab.",
+			);
 			return false;
 		}
-		
+
 		if (!apiKey.startsWith("sk-")) {
 			new Notice("Invalid OpenAI API key format. Keys should start with 'sk-'");
 			return false;
 		}
-		
+
 		if (apiKey.length < 20) {
-			new Notice("OpenAI API key appears to be too short. Please check your API key.");
+			new Notice(
+				"OpenAI API key appears to be too short. Please check your API key.",
+			);
 			return false;
 		}
-		
+
 		try {
 			this.client = new OpenAI({
 				apiKey: apiKey,
@@ -149,24 +165,24 @@ export class TranscriptionService {
 		if (!this.isTranscribing) {
 			return;
 		}
-		
+
 		this.cancelRequested = true;
 		this.processingStatus = "Cancelling...";
-		
+
 		// The cancellation will be handled in the transcription process
 		// No notifications, everything will be shown in the UI
 	}
-	
+
 	/**
 	 * Calculate file size in a human-readable format
 	 */
 	private formatFileSize(bytes: number): string {
-		if (bytes < 1024) return bytes + " bytes";
-		if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
-		if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + " MB";
-		return (bytes / 1073741824).toFixed(1) + " GB";
+		if (bytes < 1024) return `${bytes} bytes`;
+		if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+		if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+		return `${(bytes / 1073741824).toFixed(1)} GB`;
 	}
-	
+
 	/**
 	 * Estimate transcription time based on file size
 	 * This is a realistic estimate based on OpenAI's processing capability and network overhead
@@ -175,59 +191,74 @@ export class TranscriptionService {
 		// More realistic estimate: Processing 1MB takes ~3-4 minutes due to
 		// API processing time, network overhead, and parallelism constraints
 		const processingFactor = 3.5; // Minutes per MB
-		const minutes = Math.max(5, Math.ceil((bytes / 1048576) * processingFactor));
-		
+		const minutes = Math.max(
+			5,
+			Math.ceil((bytes / 1048576) * processingFactor),
+		);
+
 		// Add additional time for initial setup and final processing
 		const totalMinutes = minutes + 2;
-		
+
 		if (totalMinutes < 60) {
 			return `~${totalMinutes}m`;
 		}
-		
+
 		const hours = Math.floor(totalMinutes / 60);
 		const remainingMinutes = totalMinutes % 60;
-		
+
 		if (remainingMinutes === 0) {
 			return `~${hours}h`;
 		}
 		return `~${hours}h ${remainingMinutes}m`;
 	}
-	
+
 	/**
 	 * Save resumable state to localStorage for potential recovery
 	 */
-	private saveResumeState(episodeId: string, chunks: any[], results: any[], completedSize: number, totalSize: number): void {
+	private saveResumeState(
+		episodeId: string,
+		chunks: any[],
+		results: any[],
+		completedSize: number,
+		totalSize: number,
+	): void {
 		this.resumeData = {
 			episodeId,
-			chunks: chunks.map((_, index) => ({ processed: results[index] !== undefined, index })),
-			results: results.filter(r => r !== undefined),
+			chunks: chunks.map((_, index) => ({
+				processed: results[index] !== undefined,
+				index,
+			})),
+			results: results.filter((r) => r !== undefined),
 			completedSize,
-			totalSize
+			totalSize,
 		};
-		
+
 		// Save to localStorage for persistence across sessions
 		try {
-			localStorage.setItem('podnotes-resume-transcription', JSON.stringify(this.resumeData));
+			localStorage.setItem(
+				"podnotes-resume-transcription",
+				JSON.stringify(this.resumeData),
+			);
 		} catch (error) {
 			console.error("Failed to save resume state:", error);
 		}
 	}
-	
+
 	/**
 	 * Check if there's a resumable transcription for the given episode
 	 */
 	hasResumableTranscription(episodeId: string): boolean {
 		try {
-			const savedData = localStorage.getItem('podnotes-resume-transcription');
+			const savedData = localStorage.getItem("podnotes-resume-transcription");
 			if (!savedData) return false;
-			
+
 			const resumeData = JSON.parse(savedData);
 			return resumeData.episodeId === episodeId;
 		} catch {
 			return false;
 		}
 	}
-	
+
 	/**
 	 * Check if a transcript already exists for the given episode
 	 */
@@ -239,28 +270,29 @@ export class TranscriptionService {
 			if (!currentEpisode || currentEpisode.id !== episodeId) {
 				return false;
 			}
-			
+
 			// Check if transcript file exists
 			const transcriptPath = FilePathTemplateEngine(
 				this.plugin.settings.transcript.path,
 				currentEpisode,
 			);
-			
-			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
+
+			const existingFile =
+				this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 			return existingFile !== null;
 		} catch (error) {
 			console.error("Error checking for existing transcript:", error);
 			return false;
 		}
 	}
-	
+
 	/**
 	 * Clear resume state
 	 */
 	private clearResumeState(): void {
 		this.resumeData = null;
 		try {
-			localStorage.removeItem('podnotes-resume-transcription');
+			localStorage.removeItem("podnotes-resume-transcription");
 		} catch (error) {
 			console.error("Failed to clear resume state:", error);
 		}
@@ -271,7 +303,7 @@ export class TranscriptionService {
 	 * Uses non-blocking approach to maintain responsiveness of the Obsidian UI.
 	 * @param resume Whether to attempt to resume a previously interrupted transcription
 	 */
-	async transcribeCurrentEpisode(resume: boolean = false): Promise<void> {
+	async transcribeCurrentEpisode(resume = false): Promise<void> {
 		// Get current episode first
 		const currentEpisode = this.plugin.api.podcast;
 		if (!currentEpisode) {
@@ -281,19 +313,19 @@ export class TranscriptionService {
 			}, 2000);
 			return;
 		}
-		
+
 		// Set isTranscribing to true first for immediate UI update
 		this.isTranscribing = true;
-		
+
 		// Reset progress indicators (these should be visible immediately)
 		this.progressPercent = 0.1; // Start with minimal percentage to show activity
 		this.progressSize = "0 KB";
 		this.timeRemaining = "Calculating...";
 		this.processingStatus = "Preparing...";
-		
+
 		// Force UI to update by triggering a microtask
-		await new Promise(resolve => setTimeout(resolve, 0));
-		
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
 		// Validate API key
 		if (!this.initializeClient()) {
 			// Reset state if validation fails
@@ -303,7 +335,7 @@ export class TranscriptionService {
 			}, 2000);
 			return;
 		}
-		
+
 		// Check if transcription file already exists (only if not resuming)
 		if (!resume && currentEpisode.id) {
 			if (this.hasExistingTranscript(currentEpisode.id)) {
@@ -318,11 +350,11 @@ export class TranscriptionService {
 
 		try {
 			// Use setTimeout to allow UI to update before heavy processing starts
-			await new Promise(resolve => setTimeout(resolve, 50));
-			
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
 			// Update UI status
 			this.processingStatus = "Downloading episode...";
-			
+
 			const downloadPath = await downloadEpisode(
 				currentEpisode,
 				this.plugin.settings.download.path,
@@ -334,19 +366,19 @@ export class TranscriptionService {
 			}
 
 			// Another small delay to ensure UI responsiveness
-			await new Promise(resolve => setTimeout(resolve, 50));
-			
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
 			// Get file size for estimation
 			const fileSize = podcastFile.stat.size;
 			const formattedSize = this.formatFileSize(fileSize);
 			const estimatedTime = this.estimateTranscriptionTime(fileSize);
-			
+
 			// Update UI status
 			this.processingStatus = `Preparing audio (${formattedSize})...`;
 			this.timeRemaining = estimatedTime;
 			this.progressPercent = 5; // Show a small amount of progress
 			this.progressSize = formattedSize;
-			
+
 			// Read the audio file in chunks to reduce memory pressure
 			const fileBuffer = await this.plugin.app.vault.readBinary(podcastFile);
 			const fileExtension = podcastFile.extension;
@@ -359,60 +391,68 @@ export class TranscriptionService {
 				fileExtension,
 				mimeType,
 			);
-			
+
 			// Release the file buffer as soon as possible to free memory
 			// @ts-ignore - using a workaround to help release memory
 			const tempFileBuffer = null;
-			
+
 			// Update UI status
 			this.processingStatus = `Starting transcription (${formattedSize})...`;
-			
+
 			// Create command for cancellation via command palette
 			this.plugin.addCommand({
-				id: 'cancel-transcription',
-				name: 'Cancel Current Transcription',
-				callback: () => this.cancelTranscription()
+				id: "cancel-transcription",
+				name: "Cancel Current Transcription",
+				callback: () => this.cancelTranscription(),
 			});
-			
+
 			// Create a no-op update function since we're not using notices anymore
 			const updateStatus = (message: string) => {
 				// We're not doing anything with this message since we update UI directly
 			};
-			
+
 			// Process transcription with concurrent chunks
 			const transcription = await this.transcribeChunks(
-				files, 
+				files,
 				updateStatus,
 				currentEpisode.id,
 				fileSize,
-				resume ? this.resumeData : null
+				resume ? this.resumeData : null,
 			);
-			
+
 			// If cancelled, stop here
 			if (this.cancelRequested) {
 				this.processingStatus = "Transcription cancelled";
-				
+
 				// Keep the UI visible for a moment before removing
 				setTimeout(() => {
 					this.isTranscribing = false;
 				}, 2000);
 				return;
 			}
-			
+
 			// Schedule processing in the next event loop iteration to avoid UI blocking
-			await new Promise(resolve => setTimeout(resolve, 50));
-			
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
 			// Update UI status
 			this.processingStatus = "Formatting timestamps...";
-			const formattedTranscription = await this.formatTranscriptionWithTimestamps(transcription as TranscriptionVerbose);
+			const formattedTranscription =
+				await this.formatTranscriptionWithTimestamps(
+					transcription as TranscriptionVerbose,
+				);
 
 			// Update UI status
 			this.processingStatus = "Saving...";
-			const transcriptPath = await this.saveTranscription(currentEpisode, formattedTranscription);
+			const transcriptPath = await this.saveTranscription(
+				currentEpisode,
+				formattedTranscription,
+			);
 
 			// Remove command for cancellation
 			try {
-				this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
+				this.plugin.app.commands.removeCommand(
+					`${this.plugin.manifest.id}:cancel-transcription`,
+				);
 			} catch (e) {
 				console.log("Error removing command:", e);
 			}
@@ -423,18 +463,17 @@ export class TranscriptionService {
 			// Show completion status in the UI
 			this.processingStatus = `Saved: ${transcriptPath}`;
 			this.progressPercent = 100;
-			
+
 			// Keep the UI visible for a moment before removing
 			setTimeout(() => {
 				this.isTranscribing = false;
 			}, 2000);
-			
 		} catch (error) {
 			console.error("Transcription error:", error);
-			
+
 			// Show error in UI
 			this.processingStatus = `Error: ${error.message}`;
-			
+
 			// Keep the error visible for a moment before removing
 			setTimeout(() => {
 				this.isTranscribing = false;
@@ -442,7 +481,9 @@ export class TranscriptionService {
 		} finally {
 			// Remove the command in case it wasn't removed earlier
 			try {
-				this.plugin.app.commands.removeCommand(`${this.plugin.manifest.id}:cancel-transcription`);
+				this.plugin.app.commands.removeCommand(
+					`${this.plugin.manifest.id}:cancel-transcription`,
+				);
 			} catch (e) {
 				// Command may have already been removed, ignore
 			}
@@ -456,13 +497,13 @@ export class TranscriptionService {
 	private *chunkFileGenerator(fileBuffer: ArrayBuffer): Generator<ArrayBuffer> {
 		const CHUNK_SIZE_MB = 20;
 		const chunkSizeBytes = CHUNK_SIZE_MB * 1024 * 1024; // Convert MB to bytes
-		
+
 		for (let i = 0; i < fileBuffer.byteLength; i += chunkSizeBytes) {
 			// Create a slice and immediately yield it to avoid holding multiple chunks in memory
 			yield fileBuffer.slice(i, i + chunkSizeBytes);
 		}
 	}
-	
+
 	/**
 	 * Creates File objects for each chunk in the generator.
 	 * Returns an array of File objects but processes one at a time to manage memory.
@@ -475,16 +516,20 @@ export class TranscriptionService {
 	): File[] {
 		const files: File[] = [];
 		let index = 0;
-		
+
 		// Use the generator to process one chunk at a time
 		for (const chunk of this.chunkFileGenerator(fileBuffer)) {
-			const file = new File([chunk], `${fileName}.part${index}.${fileExtension}`, {
-				type: mimeType,
-			});
+			const file = new File(
+				[chunk],
+				`${fileName}.part${index}.${fileExtension}`,
+				{
+					type: mimeType,
+				},
+			);
 			files.push(file);
 			index++;
 		}
-		
+
 		return files;
 	}
 
@@ -508,29 +553,37 @@ export class TranscriptionService {
 	private async transcribeChunks(
 		files: File[],
 		updateNotice: (message: string) => void,
-		episodeId: string = '',
-		totalFileSize: number = 0,
-		resumeData: any = null
+		episodeId = "",
+		totalFileSize = 0,
+		resumeData: {
+			episodeId: string;
+			chunks: { processed: boolean; index: number }[];
+			results: TranscriptionVerbose[];
+			completedSize: number;
+			totalSize: number;
+		} | null = null,
 	): Promise<TranscriptionVerbose> {
 		if (!this.client) {
-			throw new Error("OpenAI client not initialized. Please check your API key.");
+			throw new Error(
+				"OpenAI client not initialized. Please check your API key.",
+			);
 		}
-		
+
 		const transcriptions: TranscriptionVerbose[] = new Array(files.length);
 		let completedChunks = 0;
-		let processedSize = 0;
+		const processedSize = 0;
 		let totalProcessedBytes = 0;
 		let lastUpdateTime = Date.now();
-		let startTime = Date.now();
+		const startTime = Date.now();
 		const UPDATE_INTERVAL_MS = 150; // Update UI more frequently for better responsiveness
-		
+
 		// If we have resume data, restore the progress
 		if (resumeData && resumeData.episodeId === episodeId) {
-			resumeData.results.forEach((result: any, i: number) => {
+			resumeData.results.forEach((result: TranscriptionVerbose, i: number) => {
 				if (i < transcriptions.length) {
 					transcriptions[i] = result;
 					completedChunks++;
-					
+
 					// Estimate size of the processed chunk
 					const estimatedChunkSize = totalFileSize / files.length;
 					totalProcessedBytes += estimatedChunkSize;
@@ -544,27 +597,30 @@ export class TranscriptionService {
 				this.processingStatus = "Cancelling...";
 				return;
 			}
-			
+
 			const now = Date.now();
 			// Throttle UI updates to avoid excessive rendering
 			if (now - lastUpdateTime >= UPDATE_INTERVAL_MS) {
 				const progress = ((completedChunks / files.length) * 100).toFixed(1);
 				const elapsedSeconds = (now - startTime) / 1000;
 				const processedMB = totalProcessedBytes / 1048576;
-				const bytesPerSecond = totalProcessedBytes / Math.max(1, elapsedSeconds);
-				
+				const bytesPerSecond =
+					totalProcessedBytes / Math.max(1, elapsedSeconds);
+
 				// Status indicator that shows active processing
-				const loadingIndicator = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"][Math.floor(Date.now() / 250) % 8];
-				
+				const loadingIndicator = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"][
+					Math.floor(Date.now() / 250) % 8
+				];
+
 				// Calculate more accurate estimated time remaining
 				// Use a weighted approach that puts more emphasis on recent processing speed
 				// This helps adjust the estimate as we gather more data
 				let remainingTimeStr = "Calculating...";
-				
+
 				if (completedChunks > 0 && elapsedSeconds > 10) {
 					const remainingBytes = totalFileSize - totalProcessedBytes;
 					const estimatedRemainingSeconds = remainingBytes / bytesPerSecond;
-					
+
 					if (estimatedRemainingSeconds > 3600) {
 						const hours = Math.floor(estimatedRemainingSeconds / 3600);
 						const mins = Math.floor((estimatedRemainingSeconds % 3600) / 60);
@@ -577,26 +633,32 @@ export class TranscriptionService {
 						remainingTimeStr = `~${Math.floor(estimatedRemainingSeconds)}s`;
 					}
 				}
-				
+
 				// Calculate processing speed
 				const speed = (bytesPerSecond / 1024).toFixed(1);
-				
+
 				// Update public properties for UI
-				this.progressPercent = parseFloat(progress);
+				this.progressPercent = Number.parseFloat(progress);
 				this.progressSize = `${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}`;
 				this.timeRemaining = remainingTimeStr;
 				this.processingStatus = `Processing at ${speed} KB/s`;
-				
+
 				// Simplified notice for backward compatibility
 				updateNotice(
 					`${loadingIndicator} Transcribing... ${progress}% complete\n` +
-					`${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}\n` +
-					`${remainingTimeStr}`
+						`${this.formatFileSize(totalProcessedBytes)} of ${this.formatFileSize(totalFileSize)}\n` +
+						`${remainingTimeStr}`,
 				);
-				
+
 				// Save resume state periodically
-				this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
-				
+				this.saveResumeState(
+					episodeId,
+					files,
+					transcriptions,
+					totalProcessedBytes,
+					totalFileSize,
+				);
+
 				lastUpdateTime = now;
 			}
 		};
@@ -606,47 +668,57 @@ export class TranscriptionService {
 		// Define a function to process a single file
 		const processFile = async (file: File, index: number): Promise<void> => {
 			// Skip already processed chunks if resuming
-			if (resumeData && resumeData.chunks) {
-				const chunk = resumeData.chunks.find((c: any) => c.index === index);
-				if (chunk && chunk.processed) {
+			if (resumeData?.chunks) {
+				const chunk = resumeData.chunks.find((c: { processed: boolean; index: number }) => c.index === index);
+				if (chunk?.processed) {
 					// This chunk was already processed
 					return;
 				}
 			}
-			
+
 			// Check for cancellation before processing
 			if (this.cancelRequested) {
 				return;
 			}
-			
+
 			let retries = 0;
 			while (retries < this.MAX_RETRIES) {
 				try {
 					// Use a separate microtask to yield to the main thread
-					await new Promise(resolve => setTimeout(resolve, 0));
-					
+					await new Promise((resolve) => setTimeout(resolve, 0));
+
 					// Check cancellation before API call
 					if (this.cancelRequested) {
 						return;
 					}
-					
+
 					// Update size tracking before processing
 					const estimatedChunkSize = totalFileSize / files.length;
+
+					if (!this.client) {
+						throw new Error("OpenAI client not initialized");
+					}
 					
-					const result = await this.client!.audio.transcriptions.create({
+					const result = await this.client.audio.transcriptions.create({
 						file: file,
 						model: "whisper-1",
 						response_format: "verbose_json",
 						timestamp_granularities: ["segment", "word"],
 					});
-					
+
 					// Check cancellation after API call
 					if (this.cancelRequested) {
 						// Save progress before cancelling
-						this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
+						this.saveResumeState(
+							episodeId,
+							files,
+							transcriptions,
+							totalProcessedBytes,
+							totalFileSize,
+						);
 						return;
 					}
-					
+
 					transcriptions[index] = result;
 					completedChunks++;
 					totalProcessedBytes += estimatedChunkSize;
@@ -657,42 +729,47 @@ export class TranscriptionService {
 					if (this.cancelRequested) {
 						return;
 					}
-					
+
 					retries++;
 					if (retries >= this.MAX_RETRIES) {
 						console.error(
 							`Failed to transcribe chunk ${index + 1}/${files.length} after ${this.MAX_RETRIES} attempts:`,
 							error,
 						);
-						
+
 						// Create a minimal placeholder transcription for the failed segment
 						// This allows the process to continue with the rest of the chunks
 						transcriptions[index] = {
 							text: `[Transcription error in segment ${index + 1}]`,
-							segments: [{
-								id: index,
-								avg_logprob: 0,
-								compression_ratio: 0,
-								no_speech_prob: 0,
-								seek: 0,
-								temperature: 0,
-								tokens: [],
-								start: 0,
-								end: 1,
-								text: `[Transcription error in segment ${index + 1}]`
-							}],
+							segments: [
+								{
+									id: index,
+									avg_logprob: 0,
+									compression_ratio: 0,
+									no_speech_prob: 0,
+									seek: 0,
+									temperature: 0,
+									tokens: [],
+									start: 0,
+									end: 1,
+									text: `[Transcription error in segment ${index + 1}]`,
+								},
+							],
 							duration: 1,
-							language: "en"
+							language: "en",
 						};
-						
+
 						// Still increment the counter to maintain accurate progress
 						completedChunks++;
 						const estimatedChunkSize = totalFileSize / files.length;
 						totalProcessedBytes += estimatedChunkSize;
 						updateProgress();
-						
+
 						// Log the error but don't throw - continue with other chunks
-						new Notice(`Warning: Failed to transcribe segment ${index + 1}. Continuing with remaining segments.`, 3000);
+						new Notice(
+							`Warning: Failed to transcribe segment ${index + 1}. Continuing with remaining segments.`,
+							3000,
+						);
 						return;
 					}
 					// Exponential backoff
@@ -704,52 +781,57 @@ export class TranscriptionService {
 		// Process chunks with a concurrency limit to avoid overwhelming OpenAI's API
 		// and to manage memory consumption
 		const CONCURRENCY_LIMIT = 3;
-		
+
 		// Create batches of promises
 		for (let i = 0; i < files.length; i += CONCURRENCY_LIMIT) {
 			// Check for cancellation before starting a new batch
 			if (this.cancelRequested) {
 				break;
 			}
-			
+
 			const batch = files.slice(i, i + CONCURRENCY_LIMIT);
-			const batchPromises = batch.map((file, batchIndex) => 
-				processFile(file, i + batchIndex).catch(error => {
+			const batchPromises = batch.map((file, batchIndex) =>
+				processFile(file, i + batchIndex).catch((error) => {
 					// Check for cancellation during batch error handling
 					if (this.cancelRequested) {
 						return;
 					}
-					
+
 					// Add additional error handling at the batch level
-					console.error(`Error in batch processing for index ${i + batchIndex}:`, error);
-					
+					console.error(
+						`Error in batch processing for index ${i + batchIndex}:`,
+						error,
+					);
+
 					// Create an empty placeholder for completely failed chunks
 					transcriptions[i + batchIndex] = {
 						text: `[Failed to process segment ${i + batchIndex + 1}]`,
-						segments: [{
-							id: i + batchIndex,
-							avg_logprob: 0,
-							compression_ratio: 0,
-							no_speech_prob: 0,
-							seek: 0,
-							temperature: 0,
-							tokens: [],
-							start: 0,
-							end: 1,
-							text: `[Failed to process segment ${i + batchIndex + 1}]`
-						}],
+						segments: [
+							{
+								id: i + batchIndex,
+								avg_logprob: 0,
+								compression_ratio: 0,
+								no_speech_prob: 0,
+								seek: 0,
+								temperature: 0,
+								tokens: [],
+								start: 0,
+								end: 1,
+								text: `[Failed to process segment ${i + batchIndex + 1}]`,
+							},
+						],
 						duration: 1,
-						language: "en"
+						language: "en",
 					};
-					
+
 					// Ensure we update progress even for failed chunks
 					completedChunks++;
 					const estimatedChunkSize = totalFileSize / files.length;
 					totalProcessedBytes += estimatedChunkSize;
 					updateProgress();
-				})
+				}),
 			);
-			
+
 			try {
 				// Process each batch concurrently
 				await Promise.all(batchPromises);
@@ -758,45 +840,66 @@ export class TranscriptionService {
 				if (this.cancelRequested) {
 					break;
 				}
-				
+
 				// This is a fallback in case something unexpected happens
 				console.error("Unexpected error in batch processing:", error);
-				new Notice("Warning: Some segments failed to transcribe. Continuing with available data.", 5000);
+				new Notice(
+					"Warning: Some segments failed to transcribe. Continuing with available data.",
+					5000,
+				);
 				// Continue processing other batches - don't rethrow
 			}
-			
+
 			// Check for cancellation after batch completion
 			if (this.cancelRequested) {
 				// Save progress before cancelling
-				this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
+				this.saveResumeState(
+					episodeId,
+					files,
+					transcriptions,
+					totalProcessedBytes,
+					totalFileSize,
+				);
 				break;
 			}
-			
+
 			// After each batch is done, give the main thread a moment to breathe
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise((resolve) => setTimeout(resolve, 50));
 		}
-		
+
 		// If cancelled, save state and stop processing
 		if (this.cancelRequested) {
 			// Save progress before returning
-			this.saveResumeState(episodeId, files, transcriptions, totalProcessedBytes, totalFileSize);
-			
+			this.saveResumeState(
+				episodeId,
+				files,
+				transcriptions,
+				totalProcessedBytes,
+				totalFileSize,
+			);
+
 			// Return partial results to avoid crashes
-			const validTranscriptions = transcriptions.filter(t => t !== undefined) as TranscriptionVerbose[];
+			const validTranscriptions = transcriptions.filter(
+				(t) => t !== undefined,
+			) as TranscriptionVerbose[];
 			if (validTranscriptions.length === 0) {
 				throw new Error("Transcription cancelled by user.");
 			}
-			
+
 			return this.mergeTranscriptions(validTranscriptions);
 		}
 
 		// Filter out any undefined entries that might have occurred due to errors
-		const validTranscriptions = transcriptions.filter(t => t !== undefined) as TranscriptionVerbose[];
-		
+		const validTranscriptions = transcriptions.filter(
+			(t) => t !== undefined,
+		) as TranscriptionVerbose[];
+
 		return this.mergeTranscriptions(validTranscriptions);
 	}
 
-	private mergeTranscriptions(transcriptions: TranscriptionVerbose[]): TranscriptionVerbose {
+	private mergeTranscriptions(
+		transcriptions: TranscriptionVerbose[],
+	): TranscriptionVerbose {
 		let mergedText = "";
 		const mergedSegments: TranscriptionSegment[] = [];
 		let timeOffset = 0;
@@ -808,31 +911,43 @@ export class TranscriptionService {
 				mergedText += (index > 0 ? " " : "") + transcription.text;
 
 				// Check if this transcription has segments
-				if ((transcription as TranscriptionVerbose).segments) {
+				const transcriptionSegments = (transcription as TranscriptionVerbose).segments;
+				if (transcriptionSegments) {
 					// Check if we need to merge with previous segment
-					if (index > 0 && mergedSegments.length > 0 && (transcription as TranscriptionVerbose).segments!.length > 0) {
+					if (
+						index > 0 &&
+						mergedSegments.length > 0 &&
+						transcriptionSegments.length > 0
+					) {
 						const lastSegment = mergedSegments[mergedSegments.length - 1];
-						const firstSegment = (transcription as TranscriptionVerbose).segments![0];
-						
+						const firstSegment = transcriptionSegments[0];
+
 						// If timestamps are close, potentially merge the segments
 						// This helps with continuity across chunk boundaries
-						if ((firstSegment.start + timeOffset) - lastSegment.end < 1.0) {
+						if (firstSegment && firstSegment.start + timeOffset - lastSegment.end < 1.0) {
 							// Merge segment text and update end time
-							lastSegment.text += " " + firstSegment.text;
+							lastSegment.text += ` ${firstSegment.text}`;
 							lastSegment.end = firstSegment.end + timeOffset;
-							
+
 							// Add remaining segments with offset
-							for (let i = 1; i < (transcription as TranscriptionVerbose).segments!.length; i++) {
-								const segment = (transcription as TranscriptionVerbose).segments![i];
-								mergedSegments.push({
-									...segment,
-									start: segment.start + timeOffset,
-									end: segment.end + timeOffset,
-								});
+							for (
+								let i = 1;
+								i < transcriptionSegments.length;
+								i++
+							) {
+								const segment = transcriptionSegments[i];
+								if (segment) {
+									mergedSegments.push({
+										...segment,
+										start: segment.start + timeOffset,
+										end: segment.end + timeOffset,
+									});
+								}
 							}
 						} else {
 							// Add all segments with offset
-							for (const segment of (transcription as TranscriptionVerbose).segments!) {
+							const segments = (transcription as TranscriptionVerbose).segments || [];
+							for (const segment of segments) {
 								mergedSegments.push({
 									...segment,
 									start: segment.start + timeOffset,
@@ -842,7 +957,8 @@ export class TranscriptionService {
 						}
 					} else {
 						// First chunk, just add all segments with offset
-						for (const segment of (transcription as TranscriptionVerbose).segments!) {
+						const segments = (transcription as TranscriptionVerbose).segments || [];
+						for (const segment of segments) {
 							mergedSegments.push({
 								...segment,
 								start: segment.start + timeOffset,
@@ -852,8 +968,11 @@ export class TranscriptionService {
 					}
 
 					// Update time offset for next chunk
-					if ((transcription as TranscriptionVerbose).segments!.length > 0) {
-						timeOffset += (transcription as TranscriptionVerbose).segments![(transcription as TranscriptionVerbose).segments!.length - 1].end;
+					if (transcriptionSegments && transcriptionSegments.length > 0) {
+						const lastSegment = transcriptionSegments[transcriptionSegments.length - 1];
+						if (lastSegment) {
+							timeOffset += lastSegment.end;
+						}
 					}
 				}
 			}
@@ -863,7 +982,7 @@ export class TranscriptionService {
 			text: mergedText,
 			segments: mergedSegments,
 			duration: timeOffset,
-			language: "en" // Default language
+			language: "en", // Default language
 		};
 	}
 
@@ -872,74 +991,84 @@ export class TranscriptionService {
 	 * Uses string concatenation with intermediate arrays to reduce memory allocations.
 	 * Processes segments in batches to avoid blocking the UI.
 	 */
-	private async formatTranscriptionWithTimestamps(transcription: TranscriptionVerbose): Promise<string> {
+	private async formatTranscriptionWithTimestamps(
+		transcription: TranscriptionVerbose,
+	): Promise<string> {
 		// For very large transcripts, we'll build the output incrementally
 		const formattedParts: string[] = [];
 		let currentSegment = "";
 		let segmentStart: number | null = null;
 		let segmentEnd: number | null = null;
-		
+
 		// Use the configured timestamp range from settings
 		const timestampRange = this.plugin.settings.transcript.timestampRange;
 		const includeTimestamps = this.plugin.settings.transcript.includeTimestamps;
-		
+
 		// Check if segments exist
 		if (!transcription.segments || transcription.segments.length === 0) {
 			return transcription.text;
 		}
-		
+
 		// Calculate approximate segments count to pre-allocate array
 		const estimatedSegmentCount = transcription.segments.length / 3;
 		formattedParts.length = Math.ceil(estimatedSegmentCount);
-		
+
 		// Template cache to avoid redundant formatting
 		const templateCache = new Map<string, string>();
-		
+
 		// Function to get cached template or generate new one
-		const getFormattedTimestamp = (template: string, range: {start: number, end: number}): string => {
+		const getFormattedTimestamp = (
+			template: string,
+			range: { start: number; end: number },
+		): string => {
 			const cacheKey = `${template}-${range.start}-${range.end}`;
 			if (templateCache.has(cacheKey)) {
-				return templateCache.get(cacheKey)!;
+				return templateCache.get(cacheKey) || "";
 			}
-			
+
 			const formatted = TimestampTemplateEngine(template, range);
 			templateCache.set(cacheKey, formatted);
 			return formatted;
 		};
-		
+
 		let partIndex = 0;
 		let currentPart = "";
 		const BATCH_SIZE = 50; // Process segments in batches
-		
+
 		// Process segments in batches to avoid blocking the UI
 		for (let i = 0; i < transcription.segments.length; i++) {
 			const segment = transcription.segments[i];
 			const isFirstSegment = i === 0;
 			const isLastSegment = i === transcription.segments.length - 1;
 			const prevSegment = isFirstSegment ? null : transcription.segments[i - 1];
-			
+
 			// Initialize segment tracking
 			if (segmentStart === null) {
 				segmentStart = segment.start;
 			}
 			segmentEnd = segment.end;
-			
+
 			// Determine if this is a new segment based on configured timestamp range
-			const isNewSegment = isFirstSegment || (prevSegment && segment.start - prevSegment.end > timestampRange);
-			
+			const isNewSegment =
+				isFirstSegment ||
+				(prevSegment && segment.start - prevSegment.end > timestampRange);
+
 			if (isNewSegment) {
 				// Process previous segment if exists
 				if (currentSegment) {
-					const range = { start: segmentStart!, end: segmentEnd! };
-					
+					const range = { start: segmentStart ?? 0, end: segmentEnd ?? 0 };
+
 					if (includeTimestamps) {
-						const formattedTimestamp = getFormattedTimestamp("**{{linktimerange}}**\n", range);
+						const formattedTimestamp = getFormattedTimestamp(
+							"**{{linktimerange}}**\n",
+							range,
+						);
 						currentPart += `${formattedTimestamp} ${currentSegment}\n\n`;
 					} else {
 						currentPart += `${currentSegment}\n\n`;
 					}
 				}
-				
+
 				// Start new segment
 				currentSegment = segment.text;
 				segmentStart = segment.start;
@@ -947,36 +1076,36 @@ export class TranscriptionService {
 				// Continue current segment
 				currentSegment += ` ${segment.text}`;
 			}
-			
+
 			// Handle the last segment or save batch
 			if (isLastSegment) {
-				const range = { start: segmentStart!, end: segmentEnd! };
-				
+				const range = { start: segmentStart ?? 0, end: segmentEnd ?? 0 };
+
 				if (includeTimestamps) {
 					const formattedTimestamp = getFormattedTimestamp(
-						this.plugin.settings.timestamp.template, 
-						range
+						this.plugin.settings.timestamp.template,
+						range,
 					);
 					currentPart += `${formattedTimestamp} ${currentSegment}`;
 				} else {
 					currentPart += currentSegment;
 				}
-				
+
 				// Save final part
 				formattedParts[partIndex] = currentPart;
 			} else if ((i + 1) % BATCH_SIZE === 0) {
 				// Save batch and reset for next batch
 				formattedParts[partIndex++] = currentPart;
 				currentPart = "";
-				
+
 				// Allow UI thread to breathe
 				if ((i + 1) % (BATCH_SIZE * 5) === 0) {
 					// Yield to the main thread
-					await new Promise(resolve => setTimeout(resolve, 0));
+					await new Promise((resolve) => setTimeout(resolve, 0));
 				}
 			}
 		}
-		
+
 		// Join all parts and return the complete formatted transcription
 		return formattedParts.join("");
 	}
@@ -1013,8 +1142,7 @@ export class TranscriptionService {
 			const newFile = await vault.create(transcriptPath, transcriptContent);
 			await this.plugin.app.workspace.getLeaf().openFile(newFile);
 			return transcriptPath;
-		} else {
-			throw new Error("Expected a file but got a folder");
 		}
+		throw new Error("Expected a file but got a folder");
 	}
 }

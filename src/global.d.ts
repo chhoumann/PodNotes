@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import type { App } from "obsidian";
 
 interface Manifest {
 	author: string;
@@ -19,14 +19,17 @@ interface App2 extends App {
 		enabledPlugins: Set<string>;
 		loadingPluginId: string;
 		manifests: Record<string, Manifest>;
-        plugins: Record<string, {
-            manifest: Manifest;
-            app: App,
-        }>;
+		plugins: Record<
+			string,
+			{
+				manifest: Manifest;
+				app: App;
+			}
+		>;
 		requestSaveConfig: () => void;
-        updates: Record<string, any>;
-        enablePlugin: (id: string) => Promise<void>;
-        disablePlugin: (id: string) => Promise<void>;
+		updates: Record<string, any>;
+		enablePlugin: (id: string) => Promise<void>;
+		disablePlugin: (id: string) => Promise<void>;
 	};
 	commands: {
 		removeCommand: (id: string) => void;
