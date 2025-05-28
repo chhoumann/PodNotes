@@ -463,19 +463,13 @@ const playbackRates = {
 				<div class="transcript-notice-content">
 					<p>Transcription was interrupted</p>
 					<div class="transcript-buttons">
-						<Button icon="rotate-ccw" tooltip="Resume transcription" onclick={resumeTranscription}>
-							Resume
-						</Button>
-						<Button icon="mic" tooltip="Start new transcription" onclick={transcribeEpisode}>
-							New
-						</Button>
+						<Button icon="rotate-ccw" tooltip="Resume transcription" onclick={resumeTranscription} text="Resume" />
+						<Button icon="mic" tooltip="Start new transcription" onclick={transcribeEpisode} text="New" />
 					</div>
 				</div>
 			</div>
 		{:else if !hasExistingTranscript}
-			<Button icon="mic" tooltip="Transcribe this episode" onclick={transcribeEpisode}>
-				Transcribe
-			</Button>
+			<Button icon="mic" tooltip="Transcribe this episode" onclick={transcribeEpisode} text="Transcribe" />
 		{/if}
 	</div>
 </div>

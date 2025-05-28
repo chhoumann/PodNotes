@@ -16,7 +16,7 @@ const options: Record<string, string> = ICON_LIST.reduce<{
 	acc[curr] = curr;
 	return acc;
 }, {});
-let icon: IconType = ICON_LIST[0];
+let icon: IconType = ICON_LIST[0] as IconType;
 let queuePlaylist: Playlist;
 let favoritesPlaylist: Playlist;
 
@@ -54,7 +54,7 @@ function onAddPlaylist() {
 	});
 
 	playlistInput = "";
-	icon = ICON_LIST[0];
+	icon = ICON_LIST[0] as IconType;
 }
 
 function onChangeIcon(value: string) {
