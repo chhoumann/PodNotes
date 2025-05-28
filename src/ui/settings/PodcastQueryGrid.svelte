@@ -60,7 +60,7 @@ function updateSearchResults() {
 }
 
 const debouncedUpdate = debounce(
-	async ({ detail: { value } }: CustomEvent<{ value: string }>) => {
+	async (value: string) => {
 		searchQuery = value;
 		const customFeedUrl = checkStringIsUrl(value);
 
@@ -77,14 +77,12 @@ const debouncedUpdate = debounce(
 	true,
 );
 
-function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
-	const { podcast } = event.detail;
+function addPodcast(podcast: PodcastFeed) {
 	savedFeeds.update((feeds) => ({ ...feeds, [podcast.title]: podcast }));
 	updateSearchResults();
 }
 
-function removePodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
-	const { podcast } = event.detail;
+function removePodcast(podcast: PodcastFeed) {
 	savedFeeds.update((feeds) => {
 		const newFeeds = { ...feeds };
 		delete newFeeds[podcast.title];
@@ -97,7 +95,7 @@ function removePodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
 <div class="podcast-query-container" transition:fade={{ duration: 300 }}>
 	<Text
 		placeholder="Search or enter feed URL..."
-		on:change={debouncedUpdate}
+		onchange={debouncedUpdate}
 		style={{
 			width: "100%",
 			"margin-bottom": "1rem",
@@ -111,8 +109,8 @@ function removePodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
 				<PodcastResultCard
 					{podcast}
 					isSaved={typeof podcast.url === "string" && $savedFeeds[podcast.title]?.url === podcast.url}
-					on:addPodcast={addPodcast}
-					on:removePodcast={removePodcast}
+					onaddPodcast={addPodcast}
+					onremovePodcast={removePodcast}
 				/>
 			</div>
 		{/each}

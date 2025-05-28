@@ -27,8 +27,8 @@
 		});
 	}
 
-	function forwardSearchInput(event: CustomEvent<{ value: string }>) {
-		dispatch("search", { query: event.detail.value });
+	function forwardSearchInput(value: string) {
+		dispatch("search", { query: value });
 	}
 </script>
 
@@ -40,7 +40,7 @@
 			<div class="episode-list-search">
 				<Text
 					bind:value={searchInputQuery}
-					on:change={forwardSearchInput}
+					onchange={forwardSearchInput}
 					placeholder="Search episodes"
 					style={{
 						width: "100%",

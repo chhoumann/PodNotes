@@ -2,17 +2,18 @@
     import { TextComponent } from "obsidian";
     import type { CSSObject } from "src/types/CSSObject";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
-    import { afterUpdate, createEventDispatcher, onMount } from "svelte";
+    import { afterUpdate, onMount } from "svelte";
 
     export let value: string = "";
     export let disabled: boolean = false;
     export let placeholder: string = "";
     export let type: "text" | "password" | "email" | "number" | "tel" | "url" = "text";
     export { styles as style };
+    
+    // Event callback prop
+    export let onchange: ((value: string) => void) | undefined = undefined;
 
     let textRef: HTMLSpanElement;
-
-    const dispatch = createEventDispatcher();
 
     let text: TextComponent;
     let styles: CSSObject = {};
@@ -38,7 +39,7 @@
 
         component.onChange((newValue: string) => {
             value = newValue;
-            dispatch("change", { value: newValue });
+            onchange?.(newValue);
         });
     }
 </script>

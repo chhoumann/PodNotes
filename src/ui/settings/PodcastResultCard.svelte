@@ -1,13 +1,14 @@
 <script lang="ts">
 	import type { PodcastFeed } from "src/types/PodcastFeed";
-	import { createEventDispatcher } from "svelte";
 	import Button from "../obsidian/Button.svelte";
 	import { fade } from "svelte/transition";
 
 	export let podcast: PodcastFeed;
 	export let isSaved = false;
-
-	const dispatch = createEventDispatcher();
+	
+	// Event callback props
+	export let onremovePodcast: ((podcast: PodcastFeed) => void) | undefined = undefined;
+	export let onaddPodcast: ((podcast: PodcastFeed) => void) | undefined = undefined;
 </script>
 
 <div class="podcast-result-card" transition:fade={{ duration: 300 }}>
@@ -26,13 +27,13 @@
 			<Button
 				icon="trash"
 				tooltip={`Remove ${podcast.title} podcast`}
-				onclick={() => dispatch("removePodcast", { podcast })}
+				onclick={() => onremovePodcast?.(podcast)}
 			/>
 		{:else}
 			<Button
 				icon="plus"
 				tooltip={`Add ${podcast.title} podcast`}
-				onclick={() => dispatch("addPodcast", { podcast })}
+				onclick={() => onaddPodcast?.(podcast)}
 			/>
 		{/if}
 	</div>
