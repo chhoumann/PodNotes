@@ -48,8 +48,11 @@
 		border-radius: 8px;
 		background-color: var(--background-secondary);
 		max-width: 100%;
-		transition: all 0.3s ease;
+		/* Optimize transitions - only transition what changes */
+		transition: border-color 0.15s ease, background-color 0.15s ease;
 		position: relative;
+		/* Force hardware acceleration */
+		transform: translateZ(0);
 	}
 
 	.podcast-artwork-container {
@@ -72,8 +75,8 @@
 	}
 
 	.podcast-result-card:hover {
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-		transform: translateY(-2px);
+		border-color: var(--interactive-hover);
+		background-color: var(--background-secondary-alt);
 	}
 
 	.podcast-info {
