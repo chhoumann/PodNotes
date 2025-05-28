@@ -8,7 +8,6 @@ import {
 	favorites,
 	localFiles,
 	playlists,
-	podcastView,
 	queue,
 	savedFeeds,
 	viewState,
@@ -154,7 +153,7 @@ const handleSearch = debounce((event: CustomEvent<{ query: string }>) => {
 function handleClickPlaylist(
 	event: CustomEvent<{ event: MouseEvent; playlist: Playlist }>,
 ) {
-	const { event: clickEvent, playlist } = event.detail;
+	const { playlist } = event.detail;
 
 	if (playlist.name === $queue.name && $queue.episodes.length > 0) {
 		// Only need to set the current episode if there isn't any.
@@ -193,7 +192,8 @@ function handleClickPlaylist(
 		>
 			<svelte:fragment slot="header">
 				{#if selectedFeed}
-					<span
+					<button
+						type="button"
 						class="go-back"
 						on:click={() => {
 							selectedFeed = null;
@@ -209,13 +209,14 @@ function handleClickPlaylist(
 							}}
 							size={20}
 						/> Latest Episodes
-					</span>
+					</button>
 					<EpisodeListHeader
 						text={selectedFeed.title}
 						artworkUrl={selectedFeed.artworkUrl}
 					/>
 				{:else if selectedPlaylist}
-					<span
+					<button
+						type="button"
 						class="go-back"
 						on:click={() => {
 							selectedPlaylist = null;
@@ -231,7 +232,7 @@ function handleClickPlaylist(
 							}}
 							size={20}
 						/> Latest Episodes
-					</span>
+					</button>
 					<div
 						style="display: flex; align-items: center; justify-content: center;"
 					>
@@ -273,6 +274,12 @@ function handleClickPlaylist(
 		cursor: pointer;
 		margin-right: auto;
 		opacity: 0.75;
+		/* Remove default button styles */
+		background: none;
+		border: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
 	}
 
 	.go-back:hover {
