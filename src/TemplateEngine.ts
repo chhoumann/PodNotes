@@ -100,6 +100,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 		return htmlToMarkdown(episode.content);
 	});
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
+	addTag("stream", episode.streamUrl);
 	addTag("url", episode.url);
 	addTag("date", (format?: string) =>
 		episode.episodeDate
