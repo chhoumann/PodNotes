@@ -1,13 +1,14 @@
 <script lang="ts">
 	import type { PodcastFeed } from "src/types/PodcastFeed";
-	import { createEventDispatcher } from "svelte";
 	import Button from "../obsidian/Button.svelte";
 	import { fade } from "svelte/transition";
 
 	export let podcast: PodcastFeed;
 	export let isSaved = false;
-
-	const dispatch = createEventDispatcher();
+	
+	// Event callback props
+	export let onremovePodcast: ((podcast: PodcastFeed) => void) | undefined = undefined;
+	export let onaddPodcast: ((podcast: PodcastFeed) => void) | undefined = undefined;
 </script>
 
 <div class="podcast-result-card" transition:fade={{ duration: 300 }}>
@@ -25,14 +26,14 @@
 		{#if isSaved}
 			<Button
 				icon="trash"
-				aria-label={`Remove ${podcast.title} podcast`}
-				on:click={() => dispatch("removePodcast", { podcast })}
+				tooltip={`Remove ${podcast.title} podcast`}
+				onclick={() => onremovePodcast?.(podcast)}
 			/>
 		{:else}
 			<Button
 				icon="plus"
-				aria-label={`Add ${podcast.title} podcast`}
-				on:click={() => dispatch("addPodcast", { podcast })}
+				tooltip={`Add ${podcast.title} podcast`}
+				onclick={() => onaddPodcast?.(podcast)}
 			/>
 		{/if}
 	</div>
@@ -47,8 +48,11 @@
 		border-radius: 8px;
 		background-color: var(--background-secondary);
 		max-width: 100%;
-		transition: all 0.3s ease;
+		/* Optimize transitions - only transition what changes */
+		transition: border-color 0.15s ease, background-color 0.15s ease;
 		position: relative;
+		/* Force hardware acceleration */
+		transform: translateZ(0);
 	}
 
 	.podcast-artwork-container {
@@ -71,8 +75,8 @@
 	}
 
 	.podcast-result-card:hover {
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-		transform: translateY(-2px);
+		border-color: var(--interactive-hover);
+		background-color: var(--background-secondary-alt);
 	}
 
 	.podcast-info {

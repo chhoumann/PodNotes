@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PodcastFeed } from "src/types/PodcastFeed";
+	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import { createEventDispatcher } from "svelte";
 	import Image from "../common/Image.svelte";
 
@@ -7,27 +7,54 @@
 
 	const dispatch = createEventDispatcher();
 
-	function onclickPodcast(feed: PodcastFeed) {
+	// Create handler once, not on every render
+	function handleClick() {
 		dispatch("clickPodcast", { feed });
 	}
 </script>
 
-<Image 
-	src={feed.artworkUrl} 
-	alt={feed.title} 
-    on:click={onclickPodcast.bind(null, feed)}
-    class="podcast-image"
-/>
+<button 
+	type="button"
+	class="podcast-grid-item"
+	on:click={handleClick}
+	aria-label={`Open ${feed.title} podcast`}
+>
+	<Image 
+		src={feed.artworkUrl} 
+		alt={feed.title}
+		class="podcast-image"
+	/>
+</button>
 
 <style>
+	.podcast-grid-item {
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		margin: 0;
+		border: 1px solid var(--background-modifier-border);
+		background: none;
+		cursor: pointer;
+		position: relative;
+		overflow: hidden;
+		/* Remove all transitions for maximum performance */
+		/* transition: opacity 0.1s ease, border-color 0.1s ease; */
+	}
+
+	.podcast-grid-item:hover {
+		/* Lighter hover effect for better performance */
+		border-color: var(--interactive-hover);
+		opacity: 0.9;
+	}
+
+	.podcast-grid-item:active {
+		opacity: 0.7;
+	}
+
 	:global(.podcast-image) {
 		width: 100%;
 		height: 100%;
-		cursor: pointer !important;
 		object-fit: cover;
-		background-size: cover;
-		background-position: center;
-		background-repeat: no-repeat;
-		border: 1px solid var(--background-modifier-border);
+		display: block;
 	}
 </style>

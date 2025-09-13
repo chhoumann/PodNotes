@@ -1,4 +1,4 @@
-import { Episode } from 'src/types/Episode';
+import type { Episode } from 'src/types/Episode';
 
 export interface IAPI {
 	readonly podcast: Episode;
@@ -14,4 +14,10 @@ export interface IAPI {
 
 	skipBackward(): void;
 	skipForward(): void;
+	
+	// Transcription functions
+	transcribeCurrentEpisode(): void;
+	resumeTranscription(): void;
+	hasResumableTranscription(episodeId: string): boolean;
+	hasExistingTranscript(episodeId: string): boolean;
 }

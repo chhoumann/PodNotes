@@ -1,4 +1,4 @@
-import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 import { Parser } from "./parser";
 
 export class PocketCastsParser extends Parser {

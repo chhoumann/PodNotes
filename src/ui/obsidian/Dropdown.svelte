@@ -1,41 +1,49 @@
 <script lang="ts">
 	import { DropdownComponent } from "obsidian";
-	import { CSSObject } from "src/types/CSSObject";
+	import type { CSSObject } from "src/types/CSSObject";
 	import extractStylesFromObj from "src/utility/extractStylesFromObj";
-	import { createEventDispatcher, onMount } from "svelte";
+	import { afterUpdate, onMount } from "svelte";
 
+	// Props
 	export let value: string = "";
 	export let options: Record<string, string> = {};
     export let disabled: boolean = false;
     export { styles as style };
+    
+    // Event callback prop
+    export let onchange: ((value: string) => void) | undefined = undefined;
 	
 	let dropdownRef: HTMLSpanElement;
 	let dropdown: DropdownComponent;
 	let styles: CSSObject;
 
-    const dispatch = createEventDispatcher();
-
 	onMount(() => {
-		dropdown = new DropdownComponent(dropdownRef);
-
-		updateDropdownAttributes(dropdown);
+		if (dropdownRef) {
+			dropdown = new DropdownComponent(dropdownRef);
+			updateDropdownAttributes(dropdown);
+		}
 	});
 
-	function updateDropdownAttributes(dropdown: DropdownComponent) {
-		if (options) dropdown.addOptions(options);
-		if (value) dropdown.setValue(value);
-		if (disabled) dropdown.setDisabled(disabled);
+	afterUpdate(() => {
+		if (dropdown) {
+			updateDropdownAttributes(dropdown);
+		}
+	});
+
+	function updateDropdownAttributes(dd: DropdownComponent) {
+		if (options) dd.addOptions(options);
+		if (value) dd.setValue(value);
+		if (disabled) dd.setDisabled(disabled);
 		
-		
-		dropdown.onChange((value: string) => {
-			dispatch("change", { value });
+		dd.onChange((value: string) => {
+			onchange?.(value);
 		});
 
         if (styles) {
-            dropdown.selectEl.setAttr('style', extractStylesFromObj(styles));
+            dd.selectEl.setAttr('style', extractStylesFromObj(styles));
         }
 	}
 
 </script>
 
-<span bind:this={dropdownRef} />
+<span bind:this={dropdownRef}></span>

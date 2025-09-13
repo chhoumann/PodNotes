@@ -1,8 +1,8 @@
 import { StoreController } from 'src/types/StoreController';
-import { Playlist } from 'src/types/Playlist';
+import type { Playlist } from 'src/types/Playlist';
 import { LOCAL_FILES_SETTINGS } from 'src/constants';
-import { IPodNotes } from 'src/types/IPodNotes';
-import { Writable } from 'svelte/store';
+import type { IPodNotes } from 'src/types/IPodNotes';
+import type { Writable } from 'svelte/store';
 
 export class LocalFilesController extends StoreController<Playlist> {
 	private plugin: IPodNotes;

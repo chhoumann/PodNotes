@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Playlist } from "src/types/Playlist";
-	import { PodcastFeed } from "src/types/PodcastFeed";
+	import type { Playlist } from "src/types/Playlist";
+	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import PlaylistCard from "./PlaylistCard.svelte";
 	import PodcastGridCard from "./PodcastGridCard.svelte";
 	import { createEventDispatcher } from "svelte";
@@ -10,27 +10,32 @@
 
 	const dispatch = createEventDispatcher();
 
-	function forwardClickPlaylist({detail: {playlist, event}}: CustomEvent<{event: MouseEvent, playlist: Playlist}>) {
-		dispatch("clickPlaylist", { playlist, event });
+	// Create handler once
+	function handleClickPlaylist(event: CustomEvent<{event: MouseEvent, playlist: Playlist}>) {
+		dispatch("clickPlaylist", event.detail);
 	}
 </script>
 
 <div class="podcast-grid">
 	{#if playlists.length > 0}
-		{#each playlists as playlist}
-			<PlaylistCard playlist={playlist} on:clickPlaylist={forwardClickPlaylist} />
-		{/each}
+		<div class="playlist-section">
+			{#each playlists as playlist (playlist.name)}
+				<PlaylistCard {playlist} on:clickPlaylist={handleClickPlaylist} />
+			{/each}
+		</div>
 	{/if}
 
 	{#if feeds.length > 0}
-		{#each feeds as feed}
-			<PodcastGridCard
-				feed={feed}
-				on:clickPodcast
-			/>
-		{/each}
+		<div class="feeds-section">
+			{#each feeds as feed (feed.url)}
+				<PodcastGridCard
+					{feed}
+					on:clickPodcast
+				/>
+			{/each}
+		</div>
 	{:else}
-		<div>
+		<div class="empty-state">
 			<p>No saved podcasts.</p>
 		</div>
 	{/if}
@@ -38,10 +43,40 @@
 
 <style>
 	.podcast-grid {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		padding: 1rem;
+		overflow-y: auto;
+		/* Enable smooth scrolling with GPU acceleration */
+		-webkit-overflow-scrolling: touch;
+		transform: translateZ(0);
+	}
+
+	.playlist-section,
+	.feeds-section {
 		display: grid;
- 		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-		grid-auto-flow: row;
-		grid-auto-rows: 1fr;
-		grid-gap: 0rem;
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		gap: 0.5rem;
+		/* Contain layout calculations and optimize for performance */
+		contain: layout style paint;
+		/* Use subgrid optimizations */
+		content-visibility: auto;
+	}
+
+	.empty-state {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 200px;
+		color: var(--text-muted);
+	}
+
+	/* Optimize grid performance on mobile */
+	@media (max-width: 768px) {
+		.playlist-section,
+		.feeds-section {
+			grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+		}
 	}
 </style>

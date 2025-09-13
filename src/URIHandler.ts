@@ -1,18 +1,19 @@
-import { Notice, ObsidianProtocolData } from "obsidian";
+import { Notice } from "obsidian";
+import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
-import { IAPI } from "./API/IAPI";
+import type { IAPI } from "./API/IAPI";
 import FeedParser from "./parser/feedParser";
 import { currentEpisode, viewState, localFiles } from "./store";
-import { Episode } from "./types/Episode";
+import type { Episode } from "./types/Episode";
 import { ViewState } from "./types/ViewState";
 
 export default async function podNotesURIHandler(
 	{ url, episodeName, time }: ObsidianProtocolData,
-	api: IAPI
+	api: IAPI,
 ) {
 	if (!url || !episodeName || !time) {
 		new Notice(
-			"URL, episode name, and timestamp are required to play an episode"
+			"URL, episode name, and timestamp are required to play an episode",
 		);
 		return;
 	}
@@ -27,7 +28,7 @@ export default async function podNotesURIHandler(
 
 		return;
 	}
-	
+
 	const decodedUrl = url.replace(/\+/g, " ");
 	const localFile = app.vault.getAbstractFileByPath(decodedUrl);
 
@@ -50,6 +51,6 @@ export default async function podNotesURIHandler(
 	viewState.set(ViewState.Player);
 
 	new Notice(
-		"Episode found, playing now. Please click timestamp again to play at specific time."
+		"Episode found, playing now. Please click timestamp again to play at specific time.",
 	);
 }

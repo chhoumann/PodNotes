@@ -17,6 +17,7 @@ import {
 import { FilePathTemplateEngine } from "../../TemplateEngine";
 import { episodeCache, savedFeeds } from "src/store/index";
 import type { Episode } from "src/types/Episode";
+import type { TimestampRange } from "src/types/TimestampRange"; 
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 import { Component } from "obsidian";
@@ -150,7 +151,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const updateTimestampDemo = (value: string) => {
 			if (!this.plugin.api.podcast) return;
 
-			const demoVal = TimestampTemplateEngine(value);
+			// Create a dummy timestamp range for the demo
+			const dummyRange = { start: 60, end: 90 }; // 1 minute to 1:30
+			const demoVal = TimestampTemplateEngine(value, dummyRange);
 			timestampFormatDemoEl.empty();
 			MarkdownRenderer.renderMarkdown(
 				demoVal,
@@ -400,6 +403,33 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		transcriptTemplateSetting.settingEl.style.flexDirection = "column";
 		transcriptTemplateSetting.settingEl.style.alignItems = "unset";
 		transcriptTemplateSetting.settingEl.style.gap = "10px";
+		
+		// Add timestamp settings
+		new Setting(container)
+			.setName("Include timestamps in transcripts")
+			.setDesc("When enabled, transcripts will include timestamps linking to specific points in the episode.")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.transcript.includeTimestamps)
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.includeTimestamps = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(container)
+			.setName("Timestamp range (seconds)")
+			.setDesc("The minimum time gap between timestamps in the transcript. Lower values create more timestamps.")
+			.addSlider((slider) => {
+				slider
+					.setLimits(1, 10, 1)
+					.setValue(this.plugin.settings.transcript.timestampRange)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.timestampRange = value;
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 }
 

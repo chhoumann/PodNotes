@@ -1,7 +1,7 @@
-import DownloadedEpisode from "src/types/DownloadedEpisode";
-import { IPodNotes } from "src/types/IPodNotes";
+import type DownloadedEpisode from "src/types/DownloadedEpisode";
+import type { IPodNotes } from "src/types/IPodNotes";
 import { StoreController } from "src/types/StoreController";
-import { Writable } from "svelte/store";
+import type { Writable } from "svelte/store";
 
 export default class DownloadedEpisodesController extends StoreController<{[podcastName: string]: DownloadedEpisode[]}> {
 	private plugin: IPodNotes;

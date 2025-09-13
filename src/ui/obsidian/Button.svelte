@@ -1,10 +1,11 @@
 <script lang="ts">
     import { ButtonComponent } from "obsidian";
-    import { CSSObject } from "src/types/CSSObject";
-    import { IconType } from "src/types/IconType";
+    import type { CSSObject } from "src/types/CSSObject";
+    import type { IconType } from "src/types/IconType";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
-    import { afterUpdate, createEventDispatcher, onMount } from "svelte";
+    import { afterUpdate, onMount } from "svelte";
 
+    // Props
     export let text: string = "";
     export let tooltip: string = "";
     export let icon: IconType | undefined = undefined;
@@ -13,6 +14,9 @@
     export let cta: boolean = false;
     export { className as class };
     export { styles as style };
+    
+    // Event callback prop
+    export let onclick: ((event: MouseEvent) => void) | undefined = undefined;
 
     let buttonRef: HTMLSpanElement;
     let className: string;
@@ -20,16 +24,18 @@
 
     let button: ButtonComponent;
 
-    const dispatch = createEventDispatcher();
+    onMount(() => {
+        if (buttonRef) {
+            button = new ButtonComponent(buttonRef);
+            updateButtonAttributes(button);
+        }
+    });
 
-    onMount(() => createButton(buttonRef));
-    afterUpdate(() => updateButtonAttributes(button));
-
-    function createButton(container: HTMLElement) {
-        button = new ButtonComponent(container);
-        
-        updateButtonAttributes(button);
-    }
+    afterUpdate(() => {
+        if (button) {
+            updateButtonAttributes(button);
+        }
+    });
 
     function updateButtonAttributes(btn: ButtonComponent) {
         if (text) btn.setButtonText(text);
@@ -41,7 +47,7 @@
         if (cta) btn.setCta(); else btn.removeCta();
 
         btn.onClick((event: MouseEvent) => {
-            dispatch("click", { event });
+            onclick?.(event);
         });
 
         if (styles) {
@@ -51,6 +57,4 @@
 
 </script>
 
-<span 
-    bind:this={buttonRef} 
-/>
+<span bind:this={buttonRef}></span>

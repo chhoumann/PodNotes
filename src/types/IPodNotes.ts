@@ -1,5 +1,5 @@
-import { IAPI } from 'src/API/IAPI';
-import { IPodNotesSettings } from './IPodNotesSettings';
+import type { IAPI } from 'src/API/IAPI';
+import type { IPodNotesSettings } from './IPodNotesSettings';
 
 
 export interface IPodNotes {

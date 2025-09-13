@@ -1,16 +1,14 @@
 import { requestUrl, Notice } from "obsidian";
-import { IAPI } from "./API/IAPI";
+import type { IAPI } from "./API/IAPI";
 import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
 
 export default async function getUniversalPodcastLink(api: IAPI) {
 	const { title, itunesTitle, podcastName, feedUrl } = api.podcast;
-    
+
 	try {
-		const iTunesResponse = await queryiTunesPodcasts(
-			api.podcast.podcastName
-		);
+		const iTunesResponse = await queryiTunesPodcasts(api.podcast.podcastName);
 		const podcast = iTunesResponse.find(
-			(pod) => pod.title === podcastName && pod.url === feedUrl
+			(pod) => pod.title === podcastName && pod.url === feedUrl,
 		);
 
 		if (!podcast || !podcast.collectionId) {
@@ -23,9 +21,7 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 		});
 
 		if (res.status !== 200) {
-			throw new Error(
-				`Failed to get response from pod.link: ${podLinkUrl}`
-			);
+			throw new Error(`Failed to get response from pod.link: ${podLinkUrl}`);
 		}
 
 		const targetTitle = itunesTitle ?? title;
@@ -35,16 +31,16 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 				episodeId: string;
 				title: string;
 				[key: string]: string;
-			}) => episode.title === targetTitle
+			}) => episode.title === targetTitle,
 		);
 		if (!ep) {
 			throw new Error(
-				`Failed to find episode "${targetTitle}" on pod.link. URL: ${podLinkUrl}`
+				`Failed to find episode "${targetTitle}" on pod.link. URL: ${podLinkUrl}`,
 			);
 		}
 
 		window.navigator.clipboard.writeText(
-			`https://pod.link/${podcast.collectionId}/episode/${ep.episodeId}`
+			`https://pod.link/${podcast.collectionId}/episode/${ep.episodeId}`,
 		);
 
 		new Notice("Universal episode link copied to clipboard.");

@@ -64,7 +64,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private downloadedEpisodesController: StoreController<{
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
-	private transcriptionService: TranscriptionService;
+	public transcriptionService: TranscriptionService;
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
@@ -212,6 +212,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				const cursorPos = editor.getCursor();
 				const capture = TimestampTemplateEngine(
 					this.settings.timestamp.template,
+					{
+						start: this.api.currentTime,
+						end: this.api.currentTime,
+					},
 				);
 
 				editor.replaceRange(capture, cursorPos);

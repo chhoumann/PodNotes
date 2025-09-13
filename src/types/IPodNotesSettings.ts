@@ -35,5 +35,7 @@ export interface IPodNotesSettings {
 	transcript: {
 		path: string;
 		template: string;
+		includeTimestamps: boolean;
+		timestampRange: number; // seconds
 	};
 }

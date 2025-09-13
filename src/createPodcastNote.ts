@@ -1,6 +1,6 @@
 import { Notice, TFile } from "obsidian";
 import { FilePathTemplateEngine, NoteTemplateEngine } from "./TemplateEngine";
-import { Episode } from "./types/Episode";
+import type { Episode } from "./types/Episode";
 import { get } from "svelte/store";
 import { plugin } from "./store";
 import addExtension from "./utility/addExtension";
