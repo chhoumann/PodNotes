@@ -5,6 +5,7 @@
 	export let alt: string;
 	export let fadeIn: boolean = false;
 	export let opacity: number = 0; // Falsey value so condition isn't triggered if not set.
+	export let interactive: boolean = false;
 	export {_class as class};
 	let _class = "";
 
@@ -20,31 +21,42 @@
 </script>
 
 {#if loading || loaded}
-<button
-	type="button"
-	class="pn_image_container"
-	on:click={onClick}
->
-	<img 
-		draggable="false"
-		{src} 
-		{alt} 
-		class={_class}
-		style:opacity={opacity ? opacity : !fadeIn ? 1 : loaded ? 1 : 0}
-		style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
-		on:load={() => {loaded = true; loading = false;}}
-		on:error={() => {failed = true; loading = false;}}
-	/>
-</button>
+	{#if interactive}
+		<button
+			type="button"
+			class="pn_image_container"
+			on:click={onClick}
+		>
+			<img 
+				draggable="false"
+				{src} 
+				{alt} 
+				class={_class}
+				style:opacity={opacity ? opacity : !fadeIn ? 1 : loaded ? 1 : 0}
+				style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
+				on:load={() => {loaded = true; loading = false;}}
+				on:error={() => {failed = true; loading = false;}}
+			/>
+		</button>
+	{:else}
+		<div class="pn_image_container pn_image_container--static">
+			<img 
+				draggable="false"
+				{src} 
+				{alt} 
+				class={_class}
+				style:opacity={opacity ? opacity : !fadeIn ? 1 : loaded ? 1 : 0}
+				style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
+				on:load={() => {loaded = true; loading = false;}}
+				on:error={() => {failed = true; loading = false;}}
+			/>
+		</div>
+	{/if}
 {:else if failed}
 	<slot name="fallback" />
 {/if}
 
 <style>
-	img:hover {
-		cursor: pointer !important;
-	}
-
 	.pn_image_container {
 		width: 100%;
 		height: 100%;
@@ -54,5 +66,14 @@
 		border: none;
 		padding: 0;
 		background: transparent;
+	}
+
+	.pn_image_container--static {
+		border: none;
+		padding: 0;
+	}
+
+	.pn_image_container:not(.pn_image_container--static) img:hover {
+		cursor: pointer !important;
 	}
 </style>

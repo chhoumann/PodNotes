@@ -110,6 +110,10 @@ describe("PodcastView integration flow", () => {
 					path: "Podcasts/{{podcast}}/{{date}}/{{title}}",
 					template: "# {{title}}\n{{description}}\nStream: {{stream}}",
 				},
+				feedCache: {
+					enabled: false,
+					ttlHours: 6,
+				},
 			},
 		};
 		plugin.set(pluginSettings as never);

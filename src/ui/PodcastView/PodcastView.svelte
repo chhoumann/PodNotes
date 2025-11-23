@@ -1,31 +1,37 @@
 <script lang="ts">
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import PodcastGrid from "./PodcastGrid.svelte";
-	import {
-		currentEpisode,
-		savedFeeds,
-		episodeCache,
-		playlists,
-		queue,
-		favorites,
-		localFiles,
-		podcastView,
-		viewState,
-		downloadedEpisodes,
-	} from "src/store";
+import {
+	currentEpisode,
+	savedFeeds,
+	episodeCache,
+	playlists,
+	queue,
+	favorites,
+	localFiles,
+	podcastView,
+	viewState,
+	downloadedEpisodes,
+	plugin,
+} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import type { Episode } from "src/types/Episode";
 	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
-	import { onMount } from "svelte";
+import { onMount } from "svelte";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import { debounce } from "obsidian";
 	import searchEpisodes from "src/utility/searchEpisodes";
 	import type { Playlist } from "src/types/Playlist";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+import {
+	getCachedEpisodes,
+	setCachedEpisodes,
+} from "src/services/FeedCacheService";
+import { get } from "svelte/store";
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
@@ -72,16 +78,34 @@ onMount(() => {
 
 	async function fetchEpisodes(
 		feed: PodcastFeed,
-		useCache: boolean = true
+		useCache: boolean = true,
 	): Promise<Episode[]> {
+
+		const pluginInstance = get(plugin);
+		const feedCacheSettings = pluginInstance?.settings?.feedCache;
+		const cacheEnabled = feedCacheSettings?.enabled !== false;
+		const cacheTtlMs =
+			Math.max(1, feedCacheSettings?.ttlHours ?? 6) * 60 * 60 * 1000;
+
 		const cachedEpisodesInFeed = $episodeCache[feed.title];
-		
+
 		if (
 			useCache &&
 			cachedEpisodesInFeed &&
 			cachedEpisodesInFeed.length > 0
 		) {
 			return cachedEpisodesInFeed;
+		}
+
+		if (useCache && cacheEnabled) {
+			const persistedEpisodes = getCachedEpisodes(feed, cacheTtlMs);
+			if (persistedEpisodes?.length) {
+				episodeCache.update((cache) => ({
+					...cache,
+					[feed.title]: persistedEpisodes,
+				}));
+				return persistedEpisodes;
+			}
 		}
 
 		try {
@@ -91,10 +115,17 @@ onMount(() => {
 				...cache,
 				[feed.title]: episodes,
 			}));
+			if (cacheEnabled) {
+				setCachedEpisodes(feed, episodes);
+			}
 
 			return episodes;
 		} catch (error) {
-			return $downloadedEpisodes[feed.title];
+			console.error(
+				`Failed to fetch episodes for ${feed.title}:`,
+				error,
+			);
+			return $downloadedEpisodes[feed.title] || [];
 		}
 	}
 
@@ -208,6 +239,7 @@ onMount(() => {
 								"align-items": "center",
 							}}
 							size={20}
+							clickable={false}
 						/> Latest Episodes
 					</button>
 					<EpisodeListHeader
@@ -231,6 +263,7 @@ onMount(() => {
 								"align-items": "center",
 							}}
 							size={20}
+							clickable={false}
 						/> Latest Episodes
 					</button>
 					<div

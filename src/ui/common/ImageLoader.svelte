@@ -3,6 +3,7 @@
 	export let src: string;
 	export let alt: string;
 	export let fadeIn: boolean = false;
+	export let interactive: boolean = false;
 	export { _class as class };
 
 	let _class: string = "";
@@ -10,7 +11,6 @@
 	import IntersectionObserver from "./IntersectionObserver.svelte";
 	import Image from "./Image.svelte";
 	import { createEventDispatcher } from "svelte";
-	import Loading from "../PodcastView/Loading.svelte";
 
 	const dispatcher = createEventDispatcher();
 </script>
@@ -21,6 +21,7 @@
 			{alt} 
 			{src} 
 			{fadeIn}
+			{interactive}
 			on:click={event => dispatcher('click', { event })} 
 			class={_class}
 		/>

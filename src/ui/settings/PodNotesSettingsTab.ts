@@ -20,6 +20,7 @@ import type { Episode } from "src/types/Episode";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 import { Component } from "obsidian";
+import { clearFeedCache } from "src/services/FeedCacheService";
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
@@ -70,6 +71,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addSkipLengthSettings(settingsContainer);
 		this.addNoteSettings(settingsContainer);
 		this.addDownloadSettings(settingsContainer);
+		this.addPerformanceSettings(settingsContainer);
 		this.addImportExportSettings(settingsContainer);
 		this.addTranscriptSettings(settingsContainer);
 	}
@@ -258,6 +260,49 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		downloadPathSetting.settingEl.style.gap = "10px";
 
 		const downloadFilePathDemoEl = container.createDiv();
+	}
+
+	private addPerformanceSettings(container: HTMLDivElement) {
+		container.createEl("h4", { text: "Performance" });
+
+		new Setting(container)
+			.setName("Cache podcast feeds")
+			.setDesc("Store recently downloaded feeds locally for faster startup.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.feedCache.enabled)
+					.onChange(async (value) => {
+						this.plugin.settings.feedCache.enabled = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(container)
+			.setName("Cache duration (hours)")
+			.setDesc("Choose how long to reuse cached feeds before fetching again.")
+			.addSlider((slider) =>
+				slider
+					.setLimits(1, 24, 1)
+					.setValue(this.plugin.settings.feedCache.ttlHours)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.feedCache.ttlHours = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(container)
+			.setName("Clear cached feeds")
+			.setDesc("Remove stored feed data. PodNotes will refetch feeds as needed.")
+			.addButton((button) =>
+				button
+					.setButtonText("Clear cache")
+					.onClick(() => {
+						clearFeedCache();
+						episodeCache.set({});
+						new Notice("Cleared cached podcast feeds.");
+					}),
+			);
 	}
 
 	private addImportExportSettings(containerEl: HTMLElement): void {
