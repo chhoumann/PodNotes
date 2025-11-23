@@ -68,23 +68,29 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
         run: |
-          EXTRA_ARGS=""
+          node - <<'NODE'
+          import fs from 'node:fs';
 
-          if [ "$DRY_RUN" = "true" ]; then
-            echo "Running in dry-run mode"
-            EXTRA_ARGS="--dry-run"
-          fi
+          (async () => {
+            try {
+              const { default: semanticRelease } = await import('semantic-release');
+              const result = await semanticRelease({
+                dryRun: process.env.DRY_RUN === 'true',
+              });
 
-          npx semantic-release $EXTRA_ARGS
-          EXIT_CODE=$?
+              if (!result || process.env.DRY_RUN === 'true') {
+                fs.appendFileSync(process.env.GITHUB_OUTPUT, 'released=false\n');
+                process.exit(0);
+              }
 
-          if [ "$DRY_RUN" != "true" ] && [ $EXIT_CODE -eq 0 ]; then
-            echo "released=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "released=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          exit $EXIT_CODE
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'released=true\n');
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${result.nextRelease.version}\n`);
+            } catch (error) {
+              console.error(error);
+              process.exit(1);
+            }
+          })();
+          NODE
 
       - name: Extract version
         id: extract-version
