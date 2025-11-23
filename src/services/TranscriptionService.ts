@@ -8,6 +8,10 @@ import {
 } from "../TemplateEngine";
 import type { Episode } from "src/types/Episode";
 
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
 	const startTime = Date.now();
@@ -124,9 +128,9 @@ export class TranscriptionService {
 
 			notice.stop();
 			notice.update("Transcription completed and saved.");
-		} catch (error) {
+		} catch (error: unknown) {
 			console.error("Transcription error:", error);
-			notice.update(`Transcription failed: ${error.message}`);
+			notice.update(`Transcription failed: ${getErrorMessage(error)}`);
 		} finally {
 			this.isTranscribing = false;
 			setTimeout(() => notice.hide(), 5000);
@@ -203,7 +207,7 @@ export class TranscriptionService {
 						completedChunks++;
 						updateProgress();
 						break;
-					} catch (error) {
+					} catch (error: unknown) {
 						retries++;
 						if (retries >= this.MAX_RETRIES) {
 							console.error(

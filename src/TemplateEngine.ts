@@ -1,18 +1,17 @@
-import { htmlToMarkdown, Notice } from "obsidian";
-import type { Episode } from "src/types/Episode";
 import Fuse from "fuse.js";
+import { htmlToMarkdown, Notice } from "obsidian";
 import { plugin } from "src/store";
 import { get } from "svelte/store";
+import type { Episode } from "src/types/Episode";
 import getUrlExtension from "./utility/getUrlExtension";
 
+type TagValue = string | ((...args: string[]) => string);
+
 interface Tags {
-	[tag: string]: string | ((...args: unknown[]) => string);
+	[tag: string]: TagValue;
 }
 
-type AddTagFn = (
-	tag: Lowercase<string>,
-	value: string | ((...args: unknown[]) => string),
-) => void;
+type AddTagFn = (tag: Lowercase<string>, value: TagValue) => void;
 type ReplacerFn = (template: string) => string;
 
 function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
@@ -20,7 +19,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 
 	function addTag(
 		tag: Lowercase<string>,
-		value: string | ((...args: unknown[]) => string),
+		value: TagValue,
 	): void {
 		tags[tag] = value;
 	}
@@ -242,7 +241,7 @@ export function TranscriptTemplateEngine(
 
 function replaceIllegalFileNameCharactersInString(string: string) {
 	return string
-		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.\?]/g, "") // Replace illegal file name characters with empty string
+		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.?]/g, "") // Replace illegal file name characters with empty string
 		.replace(/\n/, " ") // replace newlines with spaces
 		.replace("  ", " "); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
 }

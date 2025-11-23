@@ -4,6 +4,10 @@ import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import getUrlExtension from "./utility/getUrlExtension";
 
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 async function downloadFile(
 	url: string,
 	options?: Partial<{
@@ -33,8 +37,10 @@ async function downloadFile(
 			receivedLength: contentLength,
 			responseUrl: url,
 		};
-	} catch (error) {
-		const err = new Error(`Failed to download ${url}:\n\n${error.message}`);
+	} catch (error: unknown) {
+		const err = new Error(
+			`Failed to download ${url}:\n\n${getErrorMessage(error)}`,
+		);
 		options?.onError?.(err);
 
 		throw err;
@@ -104,13 +110,15 @@ export default async function downloadEpisodeWithNotice(
 				text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
 			}),
 		);
-	} catch (error) {
+	} catch (error: unknown) {
 		update((bodyEl) => {
 			bodyEl.createEl("p", {
 				text: `Failed to create file for downloaded episode "${episode.title}" from ${episode.podcastName}.`,
 			});
 
-			const errorMsgEl = bodyEl.createEl("p", { text: error.message });
+			const errorMsgEl = bodyEl.createEl("p", {
+				text: getErrorMessage(error),
+			});
 			errorMsgEl.style.fontStyle = "italic";
 		});
 	}
@@ -162,8 +170,10 @@ async function createEpisodeFile({
 
 	try {
 		await app.vault.createBinary(filePath, buffer);
-	} catch (error) {
-		throw new Error(`Failed to write file "${filePath}": ${error.message}`);
+	} catch (error: unknown) {
+		throw new Error(
+			`Failed to write file "${filePath}": ${getErrorMessage(error)}`,
+		);
 	}
 
 	downloadedEpisodes.addEpisode(episode, filePath, blob.size);
@@ -184,7 +194,7 @@ export async function downloadEpisode(
 	}
 
 	try {
-		const { blob, responseUrl } = await downloadFile(episode.streamUrl);
+		const { blob } = await downloadFile(episode.streamUrl);
 
 		if (!blob.type.includes("audio") && !fileExtension) {
 			throw new Error("Not an audio file.");
@@ -198,8 +208,10 @@ export async function downloadEpisode(
 		});
 
 		return filePath;
-	} catch (error) {
-		throw new Error(`Failed to download ${episode.title}: ${error.message}`);
+	} catch (error: unknown) {
+		throw new Error(
+			`Failed to download ${episode.title}: ${getErrorMessage(error)}`,
+		);
 	}
 }
 

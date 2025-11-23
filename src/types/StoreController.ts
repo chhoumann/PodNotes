@@ -1,22 +1,22 @@
 import type { Unsubscriber, Writable } from "svelte/store";
 
 export abstract class StoreController<T> {
-    protected unsubscribe: Unsubscriber;
-    protected store: Writable<T>;
+	protected unsubscribe: Unsubscriber | null = null;
+	protected store: Writable<T>;
 
-    constructor(store: Writable<T>) {
-        this.store = store;
-    }
+	constructor(store: Writable<T>) {
+		this.store = store;
+	}
 
-    public on(): StoreController<T> {
-        this.unsubscribe = this.store.subscribe(this.onChange.bind(this));
-        return this;
-    }
+	public on(): StoreController<T> {
+		this.unsubscribe = this.store.subscribe(this.onChange.bind(this));
+		return this;
+	}
 
-    public off(): StoreController<T> {
-        this.unsubscribe();
-        return this;
-    }
+	public off(): StoreController<T> {
+		this.unsubscribe?.();
+		return this;
+	}
 
-    protected abstract onChange(value: T): void;
+	protected abstract onChange(value: T): void;
 }

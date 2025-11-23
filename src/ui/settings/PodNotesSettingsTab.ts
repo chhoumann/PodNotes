@@ -1,41 +1,36 @@
 import {
 	type App,
+	Component,
 	MarkdownRenderer,
 	Notice,
 	PluginSettingTab,
 	Setting,
-	TFile,
 } from "obsidian";
 import type PodNotes from "../../main";
-import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
-import PlaylistManager from "./PlaylistManager.svelte";
 import {
 	DownloadPathTemplateEngine,
+	FilePathTemplateEngine,
 	TimestampTemplateEngine,
-	TranscriptTemplateEngine,
 } from "../../TemplateEngine";
-import { FilePathTemplateEngine } from "../../TemplateEngine";
+import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
+import PlaylistManager from "./PlaylistManager.svelte";
 import { episodeCache, savedFeeds } from "src/store/index";
-import type { Episode } from "src/types/Episode";
 import { get } from "svelte/store";
+import type { Episode } from "src/types/Episode";
 import { exportOPML, importOPML } from "src/opml";
-import { Component } from "obsidian";
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
-	private podcastQueryGrid: PodcastQueryGrid;
-	private playlistManager: PlaylistManager;
-
-	private settingsTab: PodNotesSettingsTab;
+	private podcastQueryGrid: PodcastQueryGrid | null = null;
+	private playlistManager: PlaylistManager | null = null;
 
 	constructor(app: App, plugin: PodNotes) {
 		super(app, plugin);
 		this.plugin = plugin;
-		this.settingsTab = this;
 	}
 
-	display(): void {
+	override display(): void {
 		const { containerEl } = this;
 
 		containerEl.empty();
@@ -74,7 +69,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addTranscriptSettings(settingsContainer);
 	}
 
-	hide(): void {
+	override hide(): void {
 		this.podcastQueryGrid?.$destroy();
 		this.playlistManager?.$destroy();
 	}
@@ -353,7 +348,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				text.inputEl.type = "password";
 			});
 
-		const transcriptFilePathSetting = new Setting(container)
+		new Setting(container)
 			.setName("Transcript file path")
 			.setDesc(
 				"The path where transcripts will be saved. Use {{}} for dynamic values.",

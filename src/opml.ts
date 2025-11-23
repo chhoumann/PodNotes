@@ -1,4 +1,4 @@
-import { type App, Notice, TFile } from "obsidian";
+import { type App, Notice } from "obsidian";
 import FeedParser from "./parser/feedParser";
 import { savedFeeds } from "./store";
 import type { PodcastFeed } from "./types/PodcastFeed";

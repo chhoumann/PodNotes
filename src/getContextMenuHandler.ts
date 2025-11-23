@@ -1,5 +1,5 @@
-import type { EventRef } from "obsidian";
-import { Menu, TAbstractFile, TFile } from "obsidian";
+import type { App, EventRef, Menu, TAbstractFile } from "obsidian";
+import { TFile } from "obsidian";
 import { get } from "svelte/store";
 import {
 	downloadedEpisodes,
@@ -12,8 +12,8 @@ import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
 import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
 
-export default function getContextMenuHandler(): EventRef {
-	return this.app.workspace.on(
+export default function getContextMenuHandler(app: App): EventRef {
+	return app.workspace.on(
 		"file-menu",
 		(menu: Menu, file: TAbstractFile) => {
 			if (!(file instanceof TFile)) return;
