@@ -38,14 +38,20 @@ export class API implements IAPI {
 	 * Gets the current time in the given moment format.
 	 * @param format Moment format.
 	 * @param linkify Linking to the podcast so PodNotes can open it at this time later.
+	 * @param offsetSeconds Optional offset to subtract from the current playback time.
 	 * @returns
 	 */
-	getPodcastTimeFormatted(format: string, linkify = false): string {
+	getPodcastTimeFormatted(
+		format: string,
+		linkify = false,
+		offsetSeconds = 0,
+	): string {
 		if (!this.podcast) {
 			throw new Error("No podcast loaded");
 		}
 
-		const time = formatSeconds(this.currentTime, format);
+		const adjustedTime = Math.max(0, this.currentTime - offsetSeconds);
+		const time = formatSeconds(adjustedTime, format);
 
 		if (!linkify) return time;
 
@@ -63,7 +69,7 @@ export class API implements IAPI {
 		const url = encodePodnotesURI(
 			this.podcast.title,
 			feedUrl,
-			this.currentTime
+			adjustedTime,
 		);
 
 		return `[${time}](${url.href})`;

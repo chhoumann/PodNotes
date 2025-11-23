@@ -117,12 +117,14 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 
 export function TimestampTemplateEngine(template: string) {
 	const [replacer, addTag] = useTemplateEngine();
+	const { api, settings } = get(plugin);
+	const timestampOffset = settings.timestamp.offset ?? 0;
 
 	addTag("time", (format?: string) =>
-		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss"),
+		api.getPodcastTimeFormatted(format ?? "HH:mm:ss", false, timestampOffset),
 	);
 	addTag("linktime", (format?: string) =>
-		get(plugin).api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true),
+		api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true, timestampOffset),
 	);
 
 	return replacer(template);

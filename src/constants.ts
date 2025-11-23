@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 
 	timestamp: {
 		template: "- {{time}} ",
+		offset: 0,
 	},
 
 	note: {

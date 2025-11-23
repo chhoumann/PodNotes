@@ -160,6 +160,26 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			);
 		};
 
+		new Setting(container)
+			.setName("Timestamp offset (s)")
+			.setDesc(
+				"Subtract this many seconds when capturing a timestamp to compensate for reaction time.",
+			)
+			.addText((textComponent) => {
+				textComponent.inputEl.type = "number";
+				textComponent
+					.setValue(`${this.plugin.settings.timestamp.offset}`)
+					.onChange((value) => {
+						const parsedValue = Number.parseInt(value, 10);
+						this.plugin.settings.timestamp.offset = Number.isNaN(parsedValue)
+							? 0
+							: Math.max(0, parsedValue);
+						this.plugin.saveSettings();
+						updateTimestampDemo(this.plugin.settings.timestamp.template);
+					})
+					.setPlaceholder("e.g. 5");
+			});
+
 		updateTimestampDemo(this.plugin.settings.timestamp.template);
 
 		const randomEpisode = getRandomEpisode();
