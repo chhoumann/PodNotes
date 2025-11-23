@@ -13,16 +13,22 @@ export function encodeUrlForRequest(rawUrl: string): string {
 	const trimmed = rawUrl.trim();
 	if (!trimmed) return trimmed;
 
-	let normalized = trimmed;
+	let normalized: string;
 	try {
-		normalized = decodeURI(trimmed);
+		normalized = new URL(trimmed).toString();
 	} catch {
-		// If decoding fails we fall back to the trimmed value, which we will encode below.
+		normalized = encodeWhitespace(trimmed);
 	}
 
-	const encoded = encodeURI(normalized);
+	const encoded = normalized;
 	return encoded.replace(
 		PARENTHESIS_REGEXP,
 		(char) => PARENTHESIS_LOOKUP[char] ?? char,
+	);
+}
+
+function encodeWhitespace(value: string): string {
+	return value.replace(/\s/g, (char) =>
+		`%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
 	);
 }

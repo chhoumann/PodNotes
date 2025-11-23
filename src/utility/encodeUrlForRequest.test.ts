@@ -16,6 +16,12 @@ describe("encodeUrlForRequest", () => {
 		expect(encodeUrlForRequest(alreadyEncoded)).toBe(alreadyEncoded);
 	});
 
+	it("keeps intentionally encoded delimiters intact", () => {
+		const signedUrl =
+			"https://example.com/path%2Fsegment%3Fsignature%3Dabc123%23hash";
+		expect(encodeUrlForRequest(signedUrl)).toBe(signedUrl);
+	});
+
 	it("handles empty strings safely", () => {
 		expect(encodeUrlForRequest("")).toBe("");
 		expect(encodeUrlForRequest("   ")).toBe("");
