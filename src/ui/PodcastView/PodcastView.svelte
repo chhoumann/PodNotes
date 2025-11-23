@@ -17,6 +17,7 @@ import {
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import type { Episode } from "src/types/Episode";
+	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
 import { onMount } from "svelte";
@@ -108,7 +109,6 @@ onMount(() => {
 		}
 
 		try {
-			const { default: FeedParser } = await import("src/parser/feedParser");
 			const episodes = await new FeedParser(feed).getEpisodes(feed.url);
 
 			episodeCache.update((cache) => ({
