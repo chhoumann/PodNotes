@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Episode } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import { createEventDispatcher } from "svelte";
 	import ImageLoader from "../common/ImageLoader.svelte";
 
@@ -17,6 +17,13 @@
 		dispatch("contextMenu", { episode, event });
 	}
 
+	function onKeyActivate(event: KeyboardEvent) {
+		if (event.key === "Enter" || event.key === " ") {
+			event.preventDefault();
+			onClickEpisode();
+		}
+	}
+
 	let _date: Date;
 	let date: string;
 
@@ -30,6 +37,9 @@
 	class="podcast-episode-item" 
 	on:click={onClickEpisode} 
 	on:contextmenu={onContextMenu}
+	role="button"
+	tabindex="0"
+	on:keydown={onKeyActivate}
 >
 	{#if showEpisodeImage && episode?.artworkUrl} 
 		<div class="podcast-episode-thumbnail-container">

@@ -20,9 +20,12 @@
 </script>
 
 {#if loading || loaded}
-<div class="pn_image_container">
+<button
+	type="button"
+	class="pn_image_container"
+	on:click={onClick}
+>
 	<img 
-		on:click={e => onClick(e)} 
 		draggable="false"
 		{src} 
 		{alt} 
@@ -32,7 +35,7 @@
 		on:load={() => {loaded = true; loading = false;}}
 		on:error={() => {failed = true; loading = false;}}
 	/>
-</div>
+</button>
 {:else if failed}
 	<slot name="fallback" />
 {/if}
@@ -48,5 +51,8 @@
 		display: block;
 		position: relative;
 		overflow: hidden;
+		border: none;
+		padding: 0;
+		background: transparent;
 	}
 </style>

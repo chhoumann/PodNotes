@@ -1,7 +1,7 @@
-import { Writable } from "svelte/store";
+import type { Writable } from "svelte/store";
 import { StoreController } from "../types/StoreController";
-import { IPodNotes } from "../types/IPodNotes";
-import { PlayedEpisode } from "../types/PlayedEpisode";
+import type { IPodNotes } from "../types/IPodNotes";
+import type { PlayedEpisode } from "../types/PlayedEpisode";
 
 type TPlayedStoreValue = { [episodeName: string]: PlayedEpisode };
 

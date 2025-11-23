@@ -1,4 +1,4 @@
-import { IPodNotes } from "../../types/IPodNotes";
+import type { IPodNotes } from "../../types/IPodNotes";
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../../constants";
 import PodcastView from './PodcastView.svelte';
@@ -34,4 +34,3 @@ export class MainView extends ItemView {
         this.contentEl.empty();
     }
 }
-

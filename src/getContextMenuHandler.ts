@@ -1,4 +1,5 @@
-import { EventRef, Menu, TAbstractFile, TFile } from "obsidian";
+import type { EventRef } from "obsidian";
+import { Menu, TAbstractFile, TFile } from "obsidian";
 import { get } from "svelte/store";
 import {
 	downloadedEpisodes,
@@ -7,7 +8,7 @@ import {
 	currentEpisode,
 	viewState,
 } from "./store";
-import { LocalEpisode } from "./types/LocalEpisode";
+import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
 import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
 

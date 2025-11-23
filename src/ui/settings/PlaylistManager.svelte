@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { favorites, playlists, queue } from "src/store";
-	import { Playlist } from "src/types/Playlist";
+	import type { Playlist } from "src/types/Playlist";
 	import { onMount } from "svelte";
 	import Button from "../obsidian/Button.svelte";
 	import Text from "../obsidian/Text.svelte";
 	import PlaylistItem from "./PlaylistItem.svelte";
 	import Dropdown from "../obsidian/Dropdown.svelte";
-	import { IconType, ICON_LIST } from "src/types/IconType";
+	import type { IconType } from "src/types/IconType";
+	import { ICON_LIST } from "src/types/IconType";
 
 	let playlistArr: Playlist[] = [];
 	let playlistInput: string = "";

@@ -1,9 +1,10 @@
-import { Notice, ObsidianProtocolData } from "obsidian";
+import { Notice } from "obsidian";
+import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
-import { IAPI } from "./API/IAPI";
+import type { IAPI } from "./API/IAPI";
 import FeedParser from "./parser/feedParser";
 import { currentEpisode, viewState, localFiles } from "./store";
-import { Episode } from "./types/Episode";
+import type { Episode } from "./types/Episode";
 import { ViewState } from "./types/ViewState";
 
 export default async function podNotesURIHandler(

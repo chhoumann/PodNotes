@@ -3,7 +3,7 @@
 	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
 	import FeedParser from "src/parser/feedParser";
 	import { savedFeeds, podcastsUpdated } from "src/store";
-	import { PodcastFeed } from "src/types/PodcastFeed";
+	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
 	import Text from "../obsidian/Text.svelte";
 	import PodcastResultCard from "./PodcastResultCard.svelte";

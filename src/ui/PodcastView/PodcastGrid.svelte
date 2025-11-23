@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Playlist } from "src/types/Playlist";
-	import { PodcastFeed } from "src/types/PodcastFeed";
+	import type { Playlist } from "src/types/Playlist";
+	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import PlaylistCard from "./PlaylistCard.svelte";
 	import PodcastGridCard from "./PodcastGridCard.svelte";
 	import { createEventDispatcher } from "svelte";

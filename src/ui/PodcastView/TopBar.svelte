@@ -15,38 +15,53 @@
 
 		viewState = newState;
 	}
+
+	function handleKeyMenuItem(event: KeyboardEvent, newState: ViewState) {
+		if (event.key !== "Enter" && event.key !== " ") return;
+		event.preventDefault();
+		handleClickMenuItem(newState);
+	}
 </script>
 
 <div class="topbar-container">
 	<div
 		on:click={handleClickMenuItem.bind(null, ViewState.PodcastGrid)}
+		on:keydown={(event) => handleKeyMenuItem(event, ViewState.PodcastGrid)}
 		class={`
             topbar-menu-button
             topbar-selectable
             ${viewState === ViewState.PodcastGrid ? "topbar-selected" : ""}
         `}
+		role="button"
+		tabindex="0"
 		aria-label="Podcast grid"
 	>
 		<Icon icon="grid" size={20} />
 	</div>
 	<div
 		on:click={handleClickMenuItem.bind(null, ViewState.EpisodeList)}
+		on:keydown={(event) => handleKeyMenuItem(event, ViewState.EpisodeList)}
 		class={`
             topbar-menu-button 
             ${viewState === ViewState.EpisodeList ? "topbar-selected" : ""}
             ${canShowEpisodeList ? "topbar-selectable" : ""}
         `}
+		role="button"
+		tabindex={canShowEpisodeList ? "0" : "-1"}
 		aria-label="Episode list"
 	>
 		<Icon icon="list-minus" size={20} />
 	</div>
 	<div
 		on:click={handleClickMenuItem.bind(null, ViewState.Player)}
+		on:keydown={(event) => handleKeyMenuItem(event, ViewState.Player)}
 		class={`
             topbar-menu-button 
             ${viewState === ViewState.Player ? "topbar-selected" : ""}
             ${canShowPlayer ? "topbar-selectable" : ""}
         `}
+		role="button"
+		tabindex={canShowPlayer ? "0" : "-1"}
 		aria-label="Player"
 	>
 		<Icon icon="play" size={20} />

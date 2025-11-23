@@ -1,6 +1,6 @@
 <script lang="ts">
     import { SliderComponent } from "obsidian";
-    import { CSSObject } from "src/types/CSSObject";
+    import type { CSSObject } from "src/types/CSSObject";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
     import { afterUpdate, createEventDispatcher, onMount } from "svelte";
 
@@ -40,4 +40,4 @@
     }
 </script>
 
-<span bind:this={sliderRef} />
+<span bind:this={sliderRef}></span>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Playlist } from "src/types/Playlist";
+	import type { Playlist } from "src/types/Playlist";
 	import { createEventDispatcher } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 
