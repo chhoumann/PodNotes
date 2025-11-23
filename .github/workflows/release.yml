@@ -1,35 +1,100 @@
 name: Release
+
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Dry run (no actual release)'
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [release-trigger]
+
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22]
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.extract-version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'npm'
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
       - name: Setup Deno
         uses: denolib/setup-deno@v2
         with:
-            deno-version: v1.x
+          deno-version: v1.x
+
+      - name: Validate trigger
+        id: validate
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
-        run: |
-          npm install
-          npm run build --if-present
+        if: steps.validate.outputs.valid == 'true'
+        run: npm install
+
+      - name: Build
+        if: steps.validate.outputs.valid == 'true'
+        run: npm run build --if-present
+
       - name: Run tests
-        run: |
-          npm run test
+        if: steps.validate.outputs.valid == 'true'
+        run: npm run test
+
       - name: Release
+        id: release
+        if: steps.validate.outputs.valid == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release
+          DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
+        run: |
+          node - <<'NODE'
+          import fs from 'node:fs';
+
+          (async () => {
+            try {
+              const { default: semanticRelease } = await import('semantic-release');
+              const result = await semanticRelease({
+                dryRun: process.env.DRY_RUN === 'true',
+              });
+
+              if (!result || process.env.DRY_RUN === 'true') {
+                fs.appendFileSync(process.env.GITHUB_OUTPUT, 'released=false\n');
+                process.exit(0);
+              }
+
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'released=true\n');
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${result.nextRelease.version}\n`);
+            } catch (error) {
+              console.error(error);
+              process.exit(1);
+            }
+          })();
+          NODE
+
+      - name: Extract version
+        id: extract-version
+        if: steps.release.outputs.released == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
