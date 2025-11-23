@@ -340,7 +340,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const loadedData = await this.loadData();
+
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+		this.settings.timestamp = {
+			...DEFAULT_SETTINGS.timestamp,
+			...(loadedData?.timestamp ?? {}),
+		};
 	}
 
 	async saveSettings() {

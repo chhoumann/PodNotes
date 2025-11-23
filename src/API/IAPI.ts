@@ -6,7 +6,11 @@ export interface IAPI {
 	readonly length: number;
 	currentTime: number;
 
-	getPodcastTimeFormatted(format: string, linkify?: boolean): string;
+	getPodcastTimeFormatted(
+		format: string,
+		linkify?: boolean,
+		offsetSeconds?: number,
+	): string;
 	
 	start(): void;
 	stop(): void;

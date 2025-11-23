@@ -20,6 +20,7 @@ export interface IPodNotesSettings {
 
 	timestamp: {
 		template: string;
+		offset: number;
 	};
 
 	note: {
