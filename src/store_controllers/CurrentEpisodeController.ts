@@ -11,7 +11,7 @@ export default class CurrentEpisodeController extends StoreController<Episode> {
 		this.plugin = plugin;
 	}
 
-	protected onChange(value: Episode) {
+	protected override onChange(value: Episode) {
 		this.plugin.settings.currentEpisode = value;
 
 		this.plugin.saveSettings();

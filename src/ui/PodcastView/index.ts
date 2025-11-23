@@ -1,36 +1,37 @@
+import { ItemView } from "obsidian";
+import type { WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
-import { ItemView, WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE } from "../../constants";
-import PodcastView from './PodcastView.svelte';
+import PodcastView from "./PodcastView.svelte";
 
 export class MainView extends ItemView {
-    constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
-        super(leaf);
-    }
+	constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
+		super(leaf);
+	}
 
-    private PodcastView: PodcastView;
+	private podcastView: PodcastView | null = null;
 
-    getViewType(): string {
-        return VIEW_TYPE;
-    }
+	override getViewType(): string {
+		return VIEW_TYPE;
+	}
 
-    getDisplayText(): string {
-        return "Podcast Player";
-    }
+	override getDisplayText(): string {
+		return "Podcast Player";
+	}
 
-    getIcon(): string {
-        return "play-circle";
-    }
+	override getIcon(): string {
+		return "play-circle";
+	}
 
-    protected async onOpen(): Promise<void> {
-        this.PodcastView = new PodcastView({
-            target: this.contentEl,
-        })
-    }
+	protected override async onOpen(): Promise<void> {
+		this.podcastView = new PodcastView({
+			target: this.contentEl,
+		});
+	}
 
-    protected async onClose(): Promise<void> {
-        this.PodcastView?.$destroy();
+	protected override async onClose(): Promise<void> {
+		this.podcastView?.$destroy();
 
-        this.contentEl.empty();
-    }
+		this.contentEl.empty();
+	}
 }

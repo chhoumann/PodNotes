@@ -42,26 +42,26 @@ import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
 
 export default class PodNotes extends Plugin implements IPodNotes {
-	public api: IAPI;
-	public settings: IPodNotesSettings;
-	public app: PartialAppExtension;
+	public api!: IAPI;
+	public settings!: IPodNotesSettings;
+	public override app!: PartialAppExtension;
 
-	private view: MainView;
+	private view: MainView | null = null;
 
-	private playedEpisodeController: StoreController<{
+	private playedEpisodeController?: StoreController<{
 		[episodeName: string]: PlayedEpisode;
 	}>;
-	private savedFeedsController: StoreController<{
+	private savedFeedsController?: StoreController<{
 		[podcastName: string]: PodcastFeed;
 	}>;
-	private playlistController: StoreController<{
+	private playlistController?: StoreController<{
 		[playlistName: string]: Playlist;
 	}>;
-	private queueController: StoreController<Playlist>;
-	private favoritesController: StoreController<Playlist>;
-	private localFilesController: StoreController<Playlist>;
-	private currentEpisodeController: StoreController<Episode>;
-	private downloadedEpisodesController: StoreController<{
+	private queueController?: StoreController<Playlist>;
+	private favoritesController?: StoreController<Playlist>;
+	private localFilesController?: StoreController<Playlist>;
+	private currentEpisodeController?: StoreController<Episode>;
+	private downloadedEpisodesController?: StoreController<{
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
 	private transcriptionService?: TranscriptionService;
@@ -69,7 +69,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
 
-	async onload() {
+	override async onload() {
 		plugin.set(this);
 
 		await this.loadSettings();
@@ -109,15 +109,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			id: "podnotes-show-leaf",
 			name: "Show PodNotes",
 			icon: "podcast" as IconType,
-			checkCallback: function (checking: boolean) {
+			checkCallback: (checking: boolean) => {
 				if (checking) {
 					return !this.app.workspace.getLeavesOfType(VIEW_TYPE).length;
 				}
 
-				this.app.workspace.getRightLeaf(false).setViewState({
+				this.app.workspace.getRightLeaf(false)?.setViewState({
 					type: VIEW_TYPE,
 				});
-			}.bind(this),
+			},
 		});
 
 		this.addCommand({
@@ -290,7 +290,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			podNotesURIHandler(action, this.api),
 		);
 
-		this.registerEvent(getContextMenuHandler());
+		this.registerEvent(getContextMenuHandler(this.app));
 	}
 
 	onLayoutReady(): void {
@@ -328,15 +328,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.transcriptionService;
 	}
 
-	onunload() {
-		this?.playedEpisodeController.off();
-		this?.savedFeedsController.off();
-		this?.playlistController.off();
-		this?.queueController.off();
-		this?.favoritesController.off();
-		this?.localFilesController.off();
-		this?.downloadedEpisodesController.off();
-		this?.currentEpisodeController.off();
+	override onunload() {
+		this.playedEpisodeController?.off();
+		this.savedFeedsController?.off();
+		this.playlistController?.off();
+		this.queueController?.off();
+		this.favoritesController?.off();
+		this.localFilesController?.off();
+		this.downloadedEpisodesController?.off();
+		this.currentEpisodeController?.off();
 	}
 
 	async loadSettings() {

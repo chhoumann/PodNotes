@@ -6,16 +6,16 @@ import { StoreController } from "../types/StoreController";
 type TSavedFeedsStoreValue = { [podcastName: string]: PodcastFeed };
 
 export class SavedFeedsController extends StoreController<TSavedFeedsStoreValue> {
-    private plugin: IPodNotes;
+	private plugin: IPodNotes;
 
-    constructor(store: Writable<TSavedFeedsStoreValue>, plugin: IPodNotes) {
-        super(store)
-        this.plugin = plugin;
-    }
+	constructor(store: Writable<TSavedFeedsStoreValue>, plugin: IPodNotes) {
+		super(store);
+		this.plugin = plugin;
+	}
 
-    protected onChange(value: TSavedFeedsStoreValue) {
-        this.plugin.settings.savedFeeds = value;
+	protected override onChange(value: TSavedFeedsStoreValue) {
+		this.plugin.settings.savedFeeds = value;
 
-        this.plugin.saveSettings();
-    }
+		this.plugin.saveSettings();
+	}
 }

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	// https://css-tricks.com/lazy-loading-images-in-svelte/
   import { onMount } from 'svelte';
 
@@ -9,7 +9,7 @@
   export let right = 0;
 
   let intersecting = false;
-  let container;
+  let container: HTMLDivElement;
 
   onMount(() => {
     if (typeof IntersectionObserver !== 'undefined') {

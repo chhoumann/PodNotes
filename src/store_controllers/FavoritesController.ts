@@ -8,15 +8,15 @@ export class FavoritesController extends StoreController<Playlist> {
 	private plugin: IPodNotes;
 
 	constructor(store: Writable<Playlist>, plugin: IPodNotes) {
-		super(store)
+		super(store);
 		this.plugin = plugin;
 	}
 
-	protected onChange(value: Playlist) {
+	protected override onChange(value: Playlist) {
 		this.plugin.settings.favorites = {
 			...value,
 			// To ensure we always keep the correct playlist name
-			...FAVORITES_SETTINGS
+			...FAVORITES_SETTINGS,
 		};
 
 		this.plugin.saveSettings();
