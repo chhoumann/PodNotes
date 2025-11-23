@@ -13,6 +13,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			src: path.resolve("./src"),
+			obsidian: path.resolve("./tests/mocks/obsidian.ts"),
 		},
 		conditions: ["browser"],
 	},
@@ -20,5 +21,6 @@ export default defineConfig({
 		include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
 		globals: true,
 		environment: "jsdom",
+		setupFiles: ["./vitest.setup.ts"],
 	},
 });
