@@ -11,7 +11,13 @@
 		"importHelpers": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
-		"types": ["svelte", "node", "obsidian", "vitest/globals", "@testing-library/jest-dom"],
+		"types": [
+			"svelte",
+			"node",
+			"obsidian",
+			"vitest/globals",
+			"@testing-library/jest-dom"
+		],
 		"skipLibCheck": true,
 		"lib": ["DOM", "ES2020"]
 	},
