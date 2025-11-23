@@ -3,6 +3,7 @@ import { downloadedEpisodes } from "./store";
 import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import getUrlExtension from "./utility/getUrlExtension";
+import getExtensionFromContentType from "./utility/getExtensionFromContentType";
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -74,18 +75,11 @@ export default async function downloadEpisodeWithNotice(
 		},
 	});
 
-	const fileExtension = await detectAudioFileExtension(blob);
-	if (!fileExtension) {
-		update((bodyEl) => {
-			bodyEl.createEl("p", {
-				text: `Could not determine file extension for downloaded file. Blob: ${blob.size} bytes.`,
-			});
-		});
+	const inferredExtension = await inferFileExtensionFromDownload(episode, blob);
+	const normalizedType = (blob.type ?? "").toLowerCase();
+	const typeAppearsAudio = normalizedType === "" || normalizedType.includes("audio");
 
-		throw new Error("Could not determine file extension");
-	}
-
-	if (!blob.type.contains("audio") && !fileExtension) {
+	if (!typeAppearsAudio && !inferredExtension) {
 		update((bodyEl) => {
 			bodyEl.createEl("p", {
 				text: `Downloaded file is not an audio file. It is of type "${blob.type}". Blob: ${blob.size} bytes.`,
@@ -94,6 +88,8 @@ export default async function downloadEpisodeWithNotice(
 
 		throw new Error("Not an audio file");
 	}
+
+	const fileExtension = inferredExtension ?? "mp3";
 
 	try {
 		update((bodyEl) => bodyEl.createEl("p", { text: "Creating file..." }));
@@ -179,6 +175,23 @@ async function createEpisodeFile({
 	downloadedEpisodes.addEpisode(episode, filePath, blob.size);
 }
 
+async function inferFileExtensionFromDownload(
+	episode: Episode,
+	blob: Blob,
+): Promise<string | null> {
+	const signatureExtension = await detectAudioFileExtension(blob);
+	if (signatureExtension) {
+		return signatureExtension;
+	}
+
+	const urlExtension = getUrlExtension(episode.streamUrl);
+	if (urlExtension) {
+		return urlExtension;
+	}
+
+	return getExtensionFromContentType(blob.type);
+}
+
 export async function downloadEpisode(
 	episode: Episode,
 	downloadPathTemplate: string,
@@ -223,11 +236,10 @@ async function getFileExtension(url: string): Promise<string> {
 	const response = await fetch(url, { method: "HEAD" });
 	const contentType = response.headers.get("content-type");
 
-	if (contentType?.includes("audio/mpeg")) return "mp3";
-	if (contentType?.includes("audio/mp4")) return "m4a";
-	if (contentType?.includes("audio/ogg")) return "ogg";
-	if (contentType?.includes("audio/wav")) return "wav";
-	if (contentType?.includes("audio/x-m4a")) return "m4a";
+	const extensionFromContentType = getExtensionFromContentType(contentType);
+	if (extensionFromContentType) {
+		return extensionFromContentType;
+	}
 
 	// Default to mp3 if we can't determine the type
 	return "mp3";
