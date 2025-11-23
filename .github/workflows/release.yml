@@ -1,35 +1,122 @@
 name: Release
+
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
+    inputs:
+      releaseType:
+        description: 'Release type (patch, minor, major)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+      dryRun:
+        description: 'Dry run (no actual release)'
+        required: false
+        default: false
+        type: boolean
+      preRelease:
+        description: 'Pre-release identifier (beta, alpha, rc, etc.)'
+        required: false
+        default: ''
+        type: string
+  repository_dispatch:
+    types: [release-trigger]
+
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22]
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.extract-version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'npm'
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
       - name: Setup Deno
         uses: denolib/setup-deno@v2
         with:
-            deno-version: v1.x
+          deno-version: v1.x
+
+      - name: Validate trigger
+        id: validate
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
-        run: |
-          npm install
-          npm run build --if-present
+        if: steps.validate.outputs.valid == 'true'
+        run: npm install
+
+      - name: Build
+        if: steps.validate.outputs.valid == 'true'
+        run: npm run build --if-present
+
       - name: Run tests
-        run: |
-          npm run test
+        if: steps.validate.outputs.valid == 'true'
+        run: npm run test
+
       - name: Release
+        id: release
+        if: steps.validate.outputs.valid == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release
+          RELEASE_TYPE: ${{ github.event.inputs.releaseType || 'auto' }}
+          DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
+          PRE_RELEASE: ${{ github.event.inputs.preRelease || '' }}
+        run: |
+          EXTRA_ARGS=""
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Running in dry-run mode"
+            EXTRA_ARGS="--dry-run"
+          fi
+
+          if [ -n "$PRE_RELEASE" ]; then
+            echo "Running pre-release: $PRE_RELEASE"
+            npx semantic-release --prerelease "$PRE_RELEASE" $EXTRA_ARGS
+            EXIT_CODE=$?
+          elif [ "$RELEASE_TYPE" = "auto" ]; then
+            echo "Running auto release"
+            npx semantic-release $EXTRA_ARGS
+            EXIT_CODE=$?
+          else
+            echo "Running release with type: $RELEASE_TYPE"
+            npx semantic-release --release-as "$RELEASE_TYPE" $EXTRA_ARGS
+            EXIT_CODE=$?
+          fi
+
+          if [ "$DRY_RUN" != "true" ] && [ $EXIT_CODE -eq 0 ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          exit $EXIT_CODE
+
+      - name: Extract version
+        id: extract-version
+        if: steps.release.outputs.released == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
