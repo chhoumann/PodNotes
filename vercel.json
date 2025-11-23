@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "nodeVersion": "20.x",
   "installCommand": "npm install",
   "buildCommand": "npm run build && mkdir -p dist && cp main.js dist/",
   "ignoreCommand": "echo \"Skipping Vercel build for plugin\"",
