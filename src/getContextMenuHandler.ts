@@ -34,6 +34,7 @@ export default function getContextMenuHandler(app: App): EventRef {
 							streamUrl: await createMediaUrlObjectFromFilePath(
 								file.path
 							),
+							filePath: file.path,
 							episodeDate: new Date(file.stat.ctime),
 						};
 
