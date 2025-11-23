@@ -25,13 +25,13 @@
 		{#if isSaved}
 			<Button
 				icon="trash"
-				aria-label={`Remove ${podcast.title} podcast`}
+				ariaLabel={`Remove ${podcast.title} podcast`}
 				on:click={() => dispatch("removePodcast", { podcast })}
 			/>
 		{:else}
 			<Button
 				icon="plus"
-				aria-label={`Add ${podcast.title} podcast`}
+				ariaLabel={`Add ${podcast.title} podcast`}
 				on:click={() => dispatch("addPodcast", { podcast })}
 			/>
 		{/if}

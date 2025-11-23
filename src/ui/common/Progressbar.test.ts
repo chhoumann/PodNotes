@@ -1,10 +1,58 @@
-import '@testing-library/jest-dom';
-import { render } from '@testing-library/svelte';
+import { fireEvent, render } from "@testing-library/svelte";
+import { describe, expect, test, vi } from "vitest";
 
-import Progressbar from './Progressbar.svelte';
+import Progressbar from "./Progressbar.svelte";
 
-test('should render', () => {
-    const { container } = render(Progressbar, { props: { value: 0, max: 100}});
+describe("Progressbar", () => {
+	test("renders an accessible slider snapshot", () => {
+		const { container, getByRole } = render(Progressbar, {
+			props: { value: 25, max: 200 },
+		});
 
-    expect(container).toBeVisible();
+		const slider = getByRole("slider");
+
+		expect(slider).toHaveAttribute("aria-valuenow", "25");
+		expect(slider).toHaveAttribute("aria-valuemax", "200");
+		expect(container.firstChild).toMatchSnapshot();
+	});
+
+	test("announces percent changes from keyboard interactions", async () => {
+		const handler = vi.fn();
+		const { getByRole } = render(Progressbar, {
+			props: { value: 40, max: 200 },
+			events: {
+				click: handler,
+			},
+		});
+		const slider = getByRole("slider");
+
+		await fireEvent.keyDown(slider, { key: "ArrowRight" });
+		await fireEvent.keyDown(slider, { key: "Home" });
+
+		const [incrementEvent, homeEvent] = handler.mock.calls.map(
+			(call) => call[0].detail,
+		);
+
+		expect(incrementEvent.percent).toBeCloseTo(0.25, 5);
+		expect(homeEvent.percent).toBe(0);
+	});
+
+	test("fires drag events while mouse is down", async () => {
+		const handler = vi.fn();
+		const { getByRole } = render(Progressbar, {
+			props: { value: 30, max: 100 },
+			events: {
+				click: handler,
+			},
+		});
+		const slider = getByRole("slider");
+
+		await fireEvent.mouseDown(slider);
+		await fireEvent.mouseMove(slider);
+		await fireEvent.mouseUp(slider);
+
+		expect(handler).toHaveBeenCalled();
+		expect(handler.mock.calls[0][0].detail.percent).toBeUndefined();
+		expect(handler.mock.calls[0][0].detail.event).toBeInstanceOf(MouseEvent);
+	});
 });

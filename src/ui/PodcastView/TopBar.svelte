@@ -47,7 +47,7 @@
             ${canShowEpisodeList ? "topbar-selectable" : ""}
         `}
 		role="button"
-		tabindex={canShowEpisodeList ? "0" : "-1"}
+		tabindex={canShowEpisodeList ? 0 : -1}
 		aria-label="Episode list"
 	>
 		<Icon icon="list-minus" size={20} />
@@ -61,7 +61,7 @@
             ${canShowPlayer ? "topbar-selectable" : ""}
         `}
 		role="button"
-		tabindex={canShowPlayer ? "0" : "-1"}
+		tabindex={canShowPlayer ? 0 : -1}
 		aria-label="Player"
 	>
 		<Icon icon="play" size={20} />

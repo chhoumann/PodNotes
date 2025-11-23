@@ -34,39 +34,41 @@
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
 
-	onMount(async () => {
-		const unsubscribePlaylists = playlists.subscribe((pl) => {
-			displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
-		});
+onMount(() => {
+	const unsubscribePlaylists = playlists.subscribe((pl) => {
+		displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
+	});
 
-		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
-			feeds = Object.values(storeValue);
-		});
+	const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
+		feeds = Object.values(storeValue);
+	});
 
+	const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
+		latestEpisodes = Object.entries(cache)
+			.map(([_, episodes]) => episodes.slice(0, 10))
+			.flat()
+			.sort((a, b) => {
+				if (a.episodeDate && b.episodeDate)
+					return Number(b.episodeDate) - Number(a.episodeDate);
+
+				return 0;
+			});
+	});
+
+	(async () => {
 		await fetchEpisodesInAllFeeds(feeds);
-
-		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
-			latestEpisodes = Object.entries(cache)
-				.map(([_, episodes]) => episodes.slice(0, 10))
-				.flat()
-				.sort((a, b) => {
-					if (a.episodeDate && b.episodeDate)
-						return Number(b.episodeDate) - Number(a.episodeDate);
-
-					return 0;
-				});
-		});
 
 		if (!selectedFeed) {
 			displayedEpisodes = latestEpisodes;
 		}
+	})();
 
-		return () => {
-			unsubscribeEpisodeCache();
-			unsubscribeSavedFeeds();
-			unsubscribePlaylists();
-		};
-	});
+	return () => {
+		unsubscribeEpisodeCache();
+		unsubscribeSavedFeeds();
+		unsubscribePlaylists();
+	};
+});
 
 	async function fetchEpisodes(
 		feed: PodcastFeed,
