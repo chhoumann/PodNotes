@@ -8,6 +8,7 @@
     export let disabled: boolean = false;
     export let placeholder: string = "";
     export let type: "text" | "password" | "email" | "number" | "tel" | "url" = "text";
+    export let el: HTMLInputElement | null = null;
     export { styles as style };
 
     let textRef: HTMLSpanElement;
@@ -34,6 +35,9 @@
         if (type) component.inputEl.type = type;
         if (styles) {
             text.inputEl.setAttr("style", extractStylesFromObj(styles));
+        }
+        if (component?.inputEl) {
+            el = component.inputEl;
         }
 
         component.onChange((newValue: string) => {

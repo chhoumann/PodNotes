@@ -11,6 +11,7 @@
     "importHelpers": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
     "types": [
       "svelte",
       "node",
