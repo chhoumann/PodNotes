@@ -7,6 +7,7 @@ import {
 	playlists,
 	queue,
 	savedFeeds,
+	volume,
 } from "src/store";
 import { Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
@@ -40,6 +41,7 @@ import getContextMenuHandler from "./getContextMenuHandler";
 import getUniversalPodcastLink from "./getUniversalPodcastLink";
 import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
+import type { Unsubscriber } from "svelte/store";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api!: IAPI;
@@ -65,6 +67,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
 	private transcriptionService?: TranscriptionService;
+	private volumeUnsubscribe?: Unsubscriber;
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
@@ -84,6 +87,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		if (this.settings.currentEpisode) {
 			currentEpisode.set(this.settings.currentEpisode);
 		}
+		volume.set(
+			Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)),
+		);
 
 		this.playedEpisodeController = new EpisodeStatusController(
 			playedEpisodes,
@@ -104,6 +110,21 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		).on();
 
 		this.api = new API();
+		this.volumeUnsubscribe = volume.subscribe((value) => {
+			const clamped = Math.min(1, Math.max(0, value));
+
+			if (clamped !== value) {
+				volume.set(clamped);
+				return;
+			}
+
+			if (clamped === this.settings.defaultVolume) {
+				return;
+			}
+
+			this.settings.defaultVolume = clamped;
+			void this.saveSettings();
+		});
 
 		this.addCommand({
 			id: "podnotes-show-leaf",
@@ -337,6 +358,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.localFilesController?.off();
 		this.downloadedEpisodesController?.off();
 		this.currentEpisodeController?.off();
+		this.volumeUnsubscribe?.();
 	}
 
 	async loadSettings() {

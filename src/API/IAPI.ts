@@ -5,6 +5,7 @@ export interface IAPI {
 	readonly isPlaying: boolean;
 	readonly length: number;
 	currentTime: number;
+	volume: number;
 
 	getPodcastTimeFormatted(format: string, linkify?: boolean): string;
 	
