@@ -2,7 +2,9 @@ import { Notice, TFile, requestUrl } from "obsidian";
 import { downloadedEpisodes } from "./store";
 import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
+import type { LocalEpisode } from "./types/LocalEpisode";
 import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
+import { isLocalFile } from "./utility/isLocalFile";
 import getUrlExtension from "./utility/getUrlExtension";
 import getExtensionFromContentType from "./utility/getExtensionFromContentType";
 
@@ -177,6 +179,56 @@ async function createEpisodeFile({
 	downloadedEpisodes.addEpisode(episode, filePath, blob.size);
 }
 
+function resolveLocalEpisodeFilePath(episode: LocalEpisode): string | null {
+	const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
+	const candidatePaths = [
+		episode.filePath,
+		downloadedEpisode?.filePath,
+		getLocalFilePathFromLink(episode.url),
+	];
+
+	for (const possiblePath of candidatePaths) {
+		if (!possiblePath) continue;
+
+		const file = app.vault.getAbstractFileByPath(possiblePath);
+		if (file instanceof TFile) {
+			return file.path;
+		}
+	}
+
+	return null;
+}
+
+function getLocalFilePathFromLink(link: string): string | null {
+	if (!link) return null;
+
+	const trimmedLink = link.trim();
+	if (!trimmedLink) return null;
+
+	const innerLink = trimmedLink.match(/^\[\[(.*)\]\]$/)?.[1] ?? trimmedLink;
+	const [target] = innerLink.split("|");
+	const normalizedTarget = target?.trim();
+
+	if (!normalizedTarget) {
+		return null;
+	}
+
+	const directFile = app.vault.getAbstractFileByPath(normalizedTarget);
+	if (directFile instanceof TFile) {
+		return directFile.path;
+	}
+
+	const linkedFile = app.metadataCache?.getFirstLinkpathDest(
+		normalizedTarget,
+		"",
+	);
+	if (linkedFile instanceof TFile) {
+		return linkedFile.path;
+	}
+
+	return null;
+}
+
 async function inferFileExtensionFromDownload(
 	episode: Episode,
 	blob: Blob,
@@ -198,6 +250,17 @@ export async function downloadEpisode(
 	episode: Episode,
 	downloadPathTemplate: string,
 ): Promise<string> {
+	if (isLocalFile(episode)) {
+		const localFilePath = resolveLocalEpisodeFilePath(episode);
+		if (!localFilePath) {
+			throw new Error(
+				`Unable to locate the local audio file for "${episode.title}". Try playing the file again.`,
+			);
+		}
+
+		return localFilePath;
+	}
+
 	const basename = DownloadPathTemplateEngine(downloadPathTemplate, episode);
 	const fileExtension = await getFileExtension(episode.streamUrl);
 	const filePath = `${basename}.${fileExtension}`;
