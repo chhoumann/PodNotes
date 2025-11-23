@@ -3,13 +3,14 @@ import type { WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
 import { VIEW_TYPE } from "../../constants";
 import PodcastView from "./PodcastView.svelte";
+import { mount, unmount } from "svelte";
 
 export class MainView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
 		super(leaf);
 	}
 
-	private podcastView: PodcastView | null = null;
+	private podcastView: Record<string, unknown> | null = null;
 
 	override getViewType(): string {
 		return VIEW_TYPE;
@@ -24,13 +25,16 @@ export class MainView extends ItemView {
 	}
 
 	protected override async onOpen(): Promise<void> {
-		this.podcastView = new PodcastView({
+		this.podcastView = mount(PodcastView, {
 			target: this.contentEl,
 		});
 	}
 
 	protected override async onClose(): Promise<void> {
-		this.podcastView?.$destroy();
+		if (this.podcastView) {
+			await unmount(this.podcastView);
+			this.podcastView = null;
+		}
 
 		this.contentEl.empty();
 	}

@@ -9,6 +9,7 @@ import {
 import type PodNotes from "../../main";
 import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
 import PlaylistManager from "./PlaylistManager.svelte";
+import { mount, unmount } from "svelte";
 import {
 	DownloadPathTemplateEngine,
 	FilePathTemplateEngine,
@@ -23,8 +24,8 @@ import { clearFeedCache } from "src/services/FeedCacheService";
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
-	private podcastQueryGrid!: PodcastQueryGrid;
-	private playlistManager!: PlaylistManager;
+	private podcastQueryGrid: Record<string, unknown> | null = null;
+	private playlistManager: Record<string, unknown> | null = null;
 
 	private settingsTab: PodNotesSettingsTab;
 
@@ -51,7 +52,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Search for podcasts by name or custom feed URL.");
 
 		const queryGridContainer = settingsContainer.createDiv();
-		this.podcastQueryGrid = new PodcastQueryGrid({
+		this.podcastQueryGrid = mount(PodcastQueryGrid, {
 			target: queryGridContainer,
 		});
 
@@ -61,7 +62,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Add playlists to gather podcast episodes.");
 
 		const playlistManagerContainer = settingsContainer.createDiv();
-		this.playlistManager = new PlaylistManager({
+		this.playlistManager = mount(PlaylistManager, {
 			target: playlistManagerContainer,
 		});
 
@@ -76,8 +77,15 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	override hide(): void {
-		this.podcastQueryGrid?.$destroy();
-		this.playlistManager?.$destroy();
+		if (this.podcastQueryGrid) {
+			void unmount(this.podcastQueryGrid);
+			this.podcastQueryGrid = null;
+		}
+
+		if (this.playlistManager) {
+			void unmount(this.playlistManager);
+			this.playlistManager = null;
+		}
 	}
 
 	private addDefaultPlaybackRateSetting(container: HTMLElement): void {
