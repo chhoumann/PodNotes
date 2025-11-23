@@ -5,8 +5,8 @@ import { ViewState } from "src/types/ViewState";
 import TopBar from "./TopBar.svelte";
 
 describe("TopBar", () => {
-	test("matches snapshot for default state", () => {
-		const { container } = render(TopBar, {
+	test("renders default controls with correct accessibility state", () => {
+		const { getByLabelText } = render(TopBar, {
 			props: {
 				viewState: ViewState.PodcastGrid,
 				canShowEpisodeList: true,
@@ -14,7 +14,15 @@ describe("TopBar", () => {
 			},
 		});
 
-		expect(container.firstChild).toMatchSnapshot();
+		const grid = getByLabelText("Podcast grid");
+		const episode = getByLabelText("Episode list");
+		const player = getByLabelText("Player");
+
+		expect(grid.className).toContain("topbar-selected");
+		expect(episode.className).toContain("topbar-selectable");
+		expect(episode.getAttribute("tabindex")).toBe("0");
+		expect(player.getAttribute("tabindex")).toBe("-1");
+		expect(player.className).not.toContain("topbar-selectable");
 	});
 
 	test("activates episode list when clicked", async () => {

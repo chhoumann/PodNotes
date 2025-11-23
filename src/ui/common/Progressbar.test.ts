@@ -4,16 +4,17 @@ import { describe, expect, test, vi } from "vitest";
 import Progressbar from "./Progressbar.svelte";
 
 describe("Progressbar", () => {
-	test("renders an accessible slider snapshot", () => {
-		const { container, getByRole } = render(Progressbar, {
+	test("renders slider with expected attributes and width", () => {
+		const { getByRole } = render(Progressbar, {
 			props: { value: 25, max: 200 },
 		});
 
 		const slider = getByRole("slider");
-
 		expect(slider).toHaveAttribute("aria-valuenow", "25");
 		expect(slider).toHaveAttribute("aria-valuemax", "200");
-		expect(container.firstChild).toMatchSnapshot();
+		const bar = slider.querySelector(".progress__bar") as HTMLDivElement | null;
+		expect(bar).not.toBeNull();
+		expect(bar?.style.width).toBe("12.5%");
 	});
 
 	test("announces percent changes from keyboard interactions", async () => {

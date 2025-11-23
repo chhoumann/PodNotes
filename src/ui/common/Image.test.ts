@@ -12,10 +12,15 @@ const baseProps = {
 };
 
 describe("Image component", () => {
-	test("renders snapshot of the image button", () => {
-		const { container } = render(Image, { props: baseProps });
+	test("renders interactive button with image attributes", () => {
+		const { getByRole } = render(Image, { props: baseProps });
 
-		expect(container.firstChild).toMatchSnapshot();
+		const button = getByRole("button");
+		const img = getByRole("img") as HTMLImageElement;
+
+		expect(button).toHaveClass("pn_image_container");
+		expect(img.alt).toBe(baseProps.alt);
+		expect(img.getAttribute("src")).toBe(baseProps.src);
 	});
 
 	test("bubbles click events through the dispatcher", async () => {
