@@ -53,6 +53,9 @@ export class TranscriptionService {
 	private client: OpenAI | null = null;
 	private cachedApiKey: string | null = null;
 	private MAX_RETRIES = 3;
+	private readonly CHUNK_SIZE_BYTES = 20 * 1024 * 1024;
+	private readonly WAV_HEADER_SIZE = 44;
+	private readonly PCM_BYTES_PER_SAMPLE = 2;
 	private isTranscribing = false;
 
 	constructor(plugin: PodNotes) {
@@ -112,13 +115,13 @@ export class TranscriptionService {
 			const fileExtension = podcastFile.extension;
 			const mimeType = this.getMimeType(fileExtension);
 
-			const chunks = this.chunkFile(fileBuffer);
-			const files = this.createChunkFiles(
-				chunks,
-				podcastFile.basename,
-				fileExtension,
+			notice.update("Creating audio chunks...");
+			const files = await this.createChunkFiles({
+				buffer: fileBuffer,
+				basename: podcastFile.basename,
+				extension: fileExtension,
 				mimeType,
-			);
+			});
 
 			notice.update("Starting transcription...");
 			const transcription = await this.transcribeChunks(files, notice.update);
@@ -138,28 +141,201 @@ export class TranscriptionService {
 		}
 	}
 
-	private chunkFile(fileBuffer: ArrayBuffer): ArrayBuffer[] {
-		const CHUNK_SIZE_MB = 20;
-		const chunkSizeBytes = CHUNK_SIZE_MB * 1024 * 1024; // Convert MB to bytes
-		const chunks: ArrayBuffer[] = [];
-		for (let i = 0; i < fileBuffer.byteLength; i += chunkSizeBytes) {
-			chunks.push(fileBuffer.slice(i, i + chunkSizeBytes));
+	private async createChunkFiles({
+		buffer,
+		basename,
+		extension,
+		mimeType,
+	}: {
+		buffer: ArrayBuffer;
+		basename: string;
+		extension: string;
+		mimeType: string;
+	}): Promise<File[]> {
+		if (this.shouldConvertToWav(extension, mimeType)) {
+			const wavChunks = await this.convertToWavChunks(buffer, basename);
+			if (wavChunks.length > 0) {
+				return wavChunks;
+			}
 		}
-		return chunks;
+
+		return this.createBinaryChunkFiles(buffer, basename, extension, mimeType);
 	}
 
-	private createChunkFiles(
-		chunks: ArrayBuffer[],
-		fileName: string,
-		fileExtension: string,
+	private shouldConvertToWav(extension: string, mimeType: string): boolean {
+		const normalizedExtension = extension.toLowerCase();
+		return normalizedExtension === "m4a" || mimeType === "audio/mp4";
+	}
+
+	private createBinaryChunkFiles(
+		buffer: ArrayBuffer,
+		basename: string,
+		extension: string,
 		mimeType: string,
 	): File[] {
-		return chunks.map(
-			(chunk, index) =>
-				new File([chunk], `${fileName}.part${index}.${fileExtension}`, {
+		if (buffer.byteLength <= this.CHUNK_SIZE_BYTES) {
+			return [
+				new File([buffer], `${basename}.${extension}`, {
 					type: mimeType,
 				}),
+			];
+		}
+
+		const files: File[] = [];
+		for (
+			let offset = 0, index = 0;
+			offset < buffer.byteLength;
+			offset += this.CHUNK_SIZE_BYTES, index++
+		) {
+			const chunk = buffer.slice(offset, offset + this.CHUNK_SIZE_BYTES);
+			files.push(
+				new File([chunk], `${basename}.part${index}.${extension}`, {
+					type: mimeType,
+				}),
+			);
+		}
+
+		return files;
+	}
+
+	private async convertToWavChunks(
+		buffer: ArrayBuffer,
+		basename: string,
+	): Promise<File[]> {
+		const audioContext = this.createAudioContext();
+		if (!audioContext) return [];
+
+		try {
+			const audioBuffer = await audioContext.decodeAudioData(buffer.slice(0));
+			return this.renderWavChunks(audioBuffer, basename);
+		} catch (error) {
+			console.warn("Failed to convert audio buffer for transcription", error);
+			return [];
+		} finally {
+			try {
+				await audioContext.close();
+			} catch (error) {
+				console.warn("Failed to close audio context", error);
+			}
+		}
+	}
+
+	private createAudioContext(): AudioContext | null {
+		if (typeof window === "undefined") {
+			return null;
+		}
+
+		const contextCtor =
+			window.AudioContext ||
+			(window as typeof window & { webkitAudioContext?: typeof AudioContext })
+				.webkitAudioContext;
+		if (!contextCtor) {
+			return null;
+		}
+
+		return new contextCtor();
+	}
+
+	private renderWavChunks(audioBuffer: AudioBuffer, basename: string): File[] {
+		const numChannels = audioBuffer.numberOfChannels;
+		const bytesPerFrame = numChannels * this.PCM_BYTES_PER_SAMPLE;
+		const availableBytesPerChunk = this.CHUNK_SIZE_BYTES - this.WAV_HEADER_SIZE;
+		const maxSamplesPerChunk = Math.max(
+			1,
+			Math.floor(availableBytesPerChunk / bytesPerFrame),
 		);
+		const channelData = Array.from({ length: numChannels }, (_, channelIndex) =>
+			audioBuffer.getChannelData(channelIndex),
+		);
+		const files: File[] = [];
+		let chunkIndex = 0;
+
+		for (
+			let startSample = 0;
+			startSample < audioBuffer.length;
+			startSample += maxSamplesPerChunk
+		) {
+			const endSample = Math.min(
+				audioBuffer.length,
+				startSample + maxSamplesPerChunk,
+			);
+			const wavBuffer = this.renderWavBuffer(
+				channelData,
+				audioBuffer.sampleRate,
+				startSample,
+				endSample,
+			);
+			files.push(
+				new File([wavBuffer], `${basename}.part${chunkIndex}.wav`, {
+					type: "audio/wav",
+				}),
+			);
+			chunkIndex++;
+		}
+
+		return files;
+	}
+
+	private renderWavBuffer(
+		channelData: Float32Array[],
+		sampleRate: number,
+		startSample: number,
+		endSample: number,
+	): ArrayBuffer {
+		const numChannels = channelData.length;
+		const sampleCount = Math.max(0, endSample - startSample);
+		const blockAlign = numChannels * this.PCM_BYTES_PER_SAMPLE;
+		const buffer = new ArrayBuffer(
+			this.WAV_HEADER_SIZE + sampleCount * blockAlign,
+		);
+		const view = new DataView(buffer);
+		this.writeWavHeader(view, sampleRate, numChannels, sampleCount);
+		let offset = this.WAV_HEADER_SIZE;
+
+		for (let i = 0; i < sampleCount; i++) {
+			for (let channel = 0; channel < numChannels; channel++) {
+				const sample = channelData[channel][startSample + i] ?? 0;
+				const clamped = Math.max(-1, Math.min(1, sample));
+				const intSample =
+					clamped < 0
+						? clamped * 0x8000
+						: clamped * 0x7fff;
+				view.setInt16(offset, Math.round(intSample), true);
+				offset += this.PCM_BYTES_PER_SAMPLE;
+			}
+		}
+
+		return buffer;
+	}
+
+	private writeWavHeader(
+		view: DataView,
+		sampleRate: number,
+		numChannels: number,
+		sampleCount: number,
+	): void {
+		const blockAlign = numChannels * this.PCM_BYTES_PER_SAMPLE;
+		const byteRate = sampleRate * blockAlign;
+		const dataSize = sampleCount * blockAlign;
+		this.writeString(view, 0, "RIFF");
+		view.setUint32(4, 36 + dataSize, true);
+		this.writeString(view, 8, "WAVE");
+		this.writeString(view, 12, "fmt ");
+		view.setUint32(16, 16, true);
+		view.setUint16(20, 1, true);
+		view.setUint16(22, numChannels, true);
+		view.setUint32(24, sampleRate, true);
+		view.setUint32(28, byteRate, true);
+		view.setUint16(32, blockAlign, true);
+		view.setUint16(34, this.PCM_BYTES_PER_SAMPLE * 8, true);
+		this.writeString(view, 36, "data");
+		view.setUint32(40, dataSize, true);
+	}
+
+	private writeString(view: DataView, offset: number, str: string): void {
+		for (let i = 0; i < str.length; i++) {
+			view.setUint8(offset + i, str.charCodeAt(i));
+		}
 	}
 
 	private getMimeType(fileExtension: string): string {
