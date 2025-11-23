@@ -3,26 +3,11 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      releaseType:
-        description: 'Release type (patch, minor, major)'
-        required: false
-        default: 'auto'
-        type: choice
-        options:
-          - auto
-          - patch
-          - minor
-          - major
       dryRun:
         description: 'Dry run (no actual release)'
         required: false
         default: false
         type: boolean
-      preRelease:
-        description: 'Pre-release identifier (beta, alpha, rc, etc.)'
-        required: false
-        default: ''
-        type: string
   repository_dispatch:
     types: [release-trigger]
 
@@ -81,9 +66,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          RELEASE_TYPE: ${{ github.event.inputs.releaseType || 'auto' }}
           DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
-          PRE_RELEASE: ${{ github.event.inputs.preRelease || '' }}
         run: |
           EXTRA_ARGS=""
 
@@ -92,19 +75,8 @@ jobs:
             EXTRA_ARGS="--dry-run"
           fi
 
-          if [ -n "$PRE_RELEASE" ]; then
-            echo "Running pre-release: $PRE_RELEASE"
-            npx semantic-release --prerelease "$PRE_RELEASE" $EXTRA_ARGS
-            EXIT_CODE=$?
-          elif [ "$RELEASE_TYPE" = "auto" ]; then
-            echo "Running auto release"
-            npx semantic-release $EXTRA_ARGS
-            EXIT_CODE=$?
-          else
-            echo "Running release with type: $RELEASE_TYPE"
-            npx semantic-release --release-as "$RELEASE_TYPE" $EXTRA_ARGS
-            EXIT_CODE=$?
-          fi
+          npx semantic-release $EXTRA_ARGS
+          EXIT_CODE=$?
 
           if [ "$DRY_RUN" != "true" ] && [ $EXIT_CODE -eq 0 ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
