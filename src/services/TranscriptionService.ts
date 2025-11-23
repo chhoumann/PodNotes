@@ -1,5 +1,5 @@
 import { Notice, TFile } from "obsidian";
-import { OpenAI } from "openai";
+import type { OpenAI } from "openai";
 import type PodNotes from "../main";
 import { downloadEpisode } from "../downloadEpisode";
 import {
@@ -7,10 +7,6 @@ import {
 	TranscriptTemplateEngine,
 } from "../TemplateEngine";
 import type { Episode } from "src/types/Episode";
-
-function getErrorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
 
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
@@ -54,21 +50,25 @@ function formatTime(ms: number): string {
 
 export class TranscriptionService {
 	private plugin: PodNotes;
-	private client: OpenAI;
+	private client: OpenAI | null = null;
+	private cachedApiKey: string | null = null;
 	private MAX_RETRIES = 3;
 	private isTranscribing = false;
 
 	constructor(plugin: PodNotes) {
 		this.plugin = plugin;
-		this.client = new OpenAI({
-			apiKey: this.plugin.settings.openAIApiKey,
-			dangerouslyAllowBrowser: true,
-		});
 	}
 
 	async transcribeCurrentEpisode(): Promise<void> {
 		if (this.isTranscribing) {
 			new Notice("A transcription is already in progress.");
+			return;
+		}
+
+		if (!this.plugin.settings.openAIApiKey?.trim()) {
+			new Notice(
+				"Please add your OpenAI API key in the transcript settings first.",
+			);
 			return;
 		}
 
@@ -128,9 +128,10 @@ export class TranscriptionService {
 
 			notice.stop();
 			notice.update("Transcription completed and saved.");
-		} catch (error: unknown) {
+		} catch (error) {
 			console.error("Transcription error:", error);
-			notice.update(`Transcription failed: ${getErrorMessage(error)}`);
+			const message = error instanceof Error ? error.message : String(error);
+			notice.update(`Transcription failed: ${message}`);
 		} finally {
 			this.isTranscribing = false;
 			setTimeout(() => notice.hide(), 5000);
@@ -182,6 +183,7 @@ export class TranscriptionService {
 		files: File[],
 		updateNotice: (message: string) => void,
 	): Promise<string> {
+		const client = await this.getClient();
 		const transcriptions: string[] = new Array(files.length);
 		let completedChunks = 0;
 
@@ -199,7 +201,7 @@ export class TranscriptionService {
 				let retries = 0;
 				while (retries < this.MAX_RETRIES) {
 					try {
-						const result = await this.client.audio.transcriptions.create({
+						const result = await client.audio.transcriptions.create({
 							model: "whisper-1",
 							file,
 						});
@@ -207,7 +209,7 @@ export class TranscriptionService {
 						completedChunks++;
 						updateProgress();
 						break;
-					} catch (error: unknown) {
+					} catch (error) {
 						retries++;
 						if (retries >= this.MAX_RETRIES) {
 							console.error(
@@ -264,5 +266,25 @@ export class TranscriptionService {
 		} else {
 			throw new Error("Expected a file but got a folder");
 		}
+	}
+
+	private async getClient(): Promise<OpenAI> {
+		const apiKey = this.plugin.settings.openAIApiKey?.trim();
+		if (!apiKey) {
+			throw new Error("Missing OpenAI API key");
+		}
+
+		if (this.client && this.cachedApiKey === apiKey) {
+			return this.client;
+		}
+
+		const { OpenAI } = await import("openai");
+		this.client = new OpenAI({
+			apiKey,
+			dangerouslyAllowBrowser: true,
+		});
+		this.cachedApiKey = apiKey;
+
+		return this.client;
 	}
 }

@@ -11,26 +11,19 @@
 		dispatch("clickPlaylist", { playlist, event });
 	}
 
-	function onKeyActivate(event: KeyboardEvent) {
-		if (event.key !== "Enter" && event.key !== " ") return;
-		event.preventDefault();
-		onClickPlaylist(event as unknown as MouseEvent);
-	}
 </script>
 
-<div
+<button
+	type="button"
 	class="playlist-card"
 	aria-label={playlist.name}
-	role="button"
-	tabindex="0"
 	on:click={onClickPlaylist}
-	on:keydown={onKeyActivate}
 >
-	<Icon icon={playlist.icon} size={40} clickable={true}/>
+	<Icon icon={playlist.icon} size={40} clickable={false}/>
 	<span>
 		({playlist.episodes.length})
 	</span>
-</div>
+</button>
 
 <style>
 	.playlist-card {
@@ -40,10 +33,11 @@
 		justify-content: center;
 		width: 100%;
 		height: 100%;
-		cursor: pointer;
 		border: 1px solid var(--background-modifier-border);
 		text-align: center;
 		overflow: hidden;
+		background: transparent;
+		padding: 0;
 	}
 
 	.playlist-card:hover {

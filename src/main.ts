@@ -64,7 +64,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private downloadedEpisodesController?: StoreController<{
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
-	private transcriptionService!: TranscriptionService;
+	private transcriptionService?: TranscriptionService;
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
@@ -103,27 +103,22 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			this,
 		).on();
 
-		this.transcriptionService = new TranscriptionService(this);
-
 		this.api = new API();
 
 		this.addCommand({
 			id: "podnotes-show-leaf",
 			name: "Show PodNotes",
 			icon: "podcast" as IconType,
-				checkCallback: function (this: PodNotes, checking: boolean) {
-					if (checking) {
-						return !this.app.workspace.getLeavesOfType(VIEW_TYPE).length;
-					}
+			checkCallback: (checking: boolean) => {
+				if (checking) {
+					return !this.app.workspace.getLeavesOfType(VIEW_TYPE).length;
+				}
 
-					const leaf = this.app.workspace.getRightLeaf(false);
-					if (leaf) {
-						leaf.setViewState({
-							type: VIEW_TYPE,
-						});
-					}
-				}.bind(this),
-			});
+				this.app.workspace.getRightLeaf(false)?.setViewState({
+					type: VIEW_TYPE,
+				});
+			},
+		});
 
 		this.addCommand({
 			id: "start-playing",
@@ -268,7 +263,18 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "podnotes-transcribe",
 			name: "Transcribe current episode",
-			callback: () => this.transcriptionService.transcribeCurrentEpisode(),
+			checkCallback: (checking) => {
+				const canTranscribe =
+					!!this.api.podcast && !!this.settings.openAIApiKey?.trim();
+
+				if (checking) {
+					return canTranscribe;
+				}
+
+				if (canTranscribe) {
+					void this.getTranscriptionService().transcribeCurrentEpisode();
+				}
+			},
 		});
 
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
@@ -312,6 +318,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				type: VIEW_TYPE,
 			});
 		}
+	}
+
+	private getTranscriptionService(): TranscriptionService {
+		if (!this.transcriptionService) {
+			this.transcriptionService = new TranscriptionService(this);
+		}
+
+		return this.transcriptionService;
 	}
 
 	override onunload() {

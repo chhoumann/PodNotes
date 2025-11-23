@@ -176,20 +176,14 @@
 
 	<div class="episode-player">
 		<div class="episode-image-container">
-			<div
+			<button
+				type="button"
 				class="hover-container"
 				on:click={togglePlayback}
 				on:contextmenu={handleContextMenuEpisodeImage}
 				on:mouseenter={() => (isHoveringArtwork = true)}
 				on:mouseleave={() => (isHoveringArtwork = false)}
-				role="button"
-				tabindex="0"
-				on:keydown={(event) => {
-					if (event.key === "Enter" || event.key === " ") {
-						event.preventDefault();
-						togglePlayback();
-					}
-				}}
+				aria-label="Toggle playback"
 			>
 		 <Image 
 			class={"podcast-artwork"}
@@ -199,7 +193,7 @@
 		 >
 			<svelte:fragment slot="fallback">
 				<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
-					<Icon icon="image" size={150} />
+					<Icon icon="image" size={150} clickable={false} />
 				</div>
 			</svelte:fragment>
 		 </Image>
@@ -214,10 +208,10 @@
 						isHoveringArtwork || $isPaused ? "block" : "none"
 					}`}
 				>
-					<Icon icon={$isPaused ? "play" : "pause"} />
+					<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
 				</div>
 			{/if}
-		</div>
+		</button>
 	</div>
 
 	<h2 class="podcast-title">{$currentEpisode.title}</h2>
@@ -317,6 +311,10 @@
 		position: relative;
 		margin-left: auto;
 		margin-right: auto;
+		border: none;
+		background: transparent;
+		padding: 0;
+		cursor: pointer;
 	}
 
 	:global(.podcast-artwork) {

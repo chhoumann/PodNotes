@@ -20,8 +20,8 @@ describe("TopBar", () => {
 
 		expect(grid.className).toContain("topbar-selected");
 		expect(episode.className).toContain("topbar-selectable");
-		expect(episode.getAttribute("tabindex")).toBe("0");
-		expect(player.getAttribute("tabindex")).toBe("-1");
+		expect(episode).not.toBeDisabled();
+		expect(player).toBeDisabled();
 		expect(player.className).not.toContain("topbar-selectable");
 	});
 
@@ -43,7 +43,7 @@ describe("TopBar", () => {
 		expect(playerButton.className).not.toContain("topbar-selected");
 	});
 
-	test("keeps controls unfocusable when view is unavailable", () => {
+	test("keeps controls disabled when view is unavailable", () => {
 		const { getByLabelText } = render(TopBar, {
 			props: {
 				viewState: ViewState.PodcastGrid,
@@ -55,12 +55,12 @@ describe("TopBar", () => {
 		const episodeButton = getByLabelText("Episode list");
 		const playerButton = getByLabelText("Player");
 
-		expect(episodeButton).toHaveAttribute("tabindex", "-1");
-		expect(playerButton).toHaveAttribute("tabindex", "-1");
+		expect(episodeButton).toBeDisabled();
+		expect(playerButton).toBeDisabled();
 		expect(episodeButton.className).not.toContain("topbar-selectable");
 	});
 
-	test("responds to keyboard activation for player control", async () => {
+	test("activates player control when clicked", async () => {
 		const { getByLabelText } = render(TopBar, {
 			props: {
 				viewState: ViewState.EpisodeList,
@@ -71,7 +71,7 @@ describe("TopBar", () => {
 
 		const playerButton = getByLabelText("Player");
 
-		await fireEvent.keyDown(playerButton, { key: "Enter" });
+		await fireEvent.click(playerButton);
 
 		expect(playerButton.className).toContain("topbar-selected");
 	});

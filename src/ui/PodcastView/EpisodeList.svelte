@@ -50,11 +50,14 @@
 			<Icon
 				icon={hidePlayedEpisodes ? "eye-off" : "eye"}
 				size={25}
+				label={hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
+				pressed={hidePlayedEpisodes}
 				on:click={() => (hidePlayedEpisodes = !hidePlayedEpisodes)}
 			/>
 			<Icon
 				icon="refresh-cw"
 				size={25}
+				label="Refresh episodes"
 				on:click={() => dispatch("clickRefresh")}
 			/>
 		</div>
