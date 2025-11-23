@@ -36,7 +36,7 @@
 		type="button"
 		on:click={handleClickMenuItem.bind(null, ViewState.EpisodeList)}
 		class={`
-            topbar-menu-button 
+            topbar-menu-button
             ${viewState === ViewState.EpisodeList ? "topbar-selected" : ""}
             ${canShowEpisodeList ? "topbar-selectable" : ""}
         `}
@@ -50,7 +50,7 @@
 		type="button"
 		on:click={handleClickMenuItem.bind(null, ViewState.Player)}
 		class={`
-            topbar-menu-button 
+            topbar-menu-button
             ${viewState === ViewState.Player ? "topbar-selected" : ""}
             ${canShowPlayer ? "topbar-selectable" : ""}
         `}

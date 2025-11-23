@@ -7,6 +7,7 @@
 
     export let text: string = "";
     export let tooltip: string = "";
+    export let ariaLabel: string = "";
     export let icon: IconType | undefined = undefined;
     export let disabled: boolean = false;
     export let warning: boolean = false;
@@ -46,6 +47,12 @@
 
         if (styles) {
             btn.buttonEl.setAttr('style', extractStylesFromObj(styles));
+        }
+
+        if (ariaLabel) {
+            btn.buttonEl.setAttr("aria-label", ariaLabel);
+        } else {
+            btn.buttonEl.removeAttribute("aria-label");
         }
     }
 

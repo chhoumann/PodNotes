@@ -25,14 +25,24 @@
     const dispatch = createEventDispatcher();
 
     onMount(() => {
-        setIcon(ref, icon, size);
-        ref.style.cssText = stylesStr;
+        setIcon(ref, icon);
+        applyIconStyles();
     });
 
     afterUpdate(() => {
-        setIcon(ref, icon, size);
-        ref.style.cssText = stylesStr;
+        setIcon(ref, icon);
+        applyIconStyles();
     });
+
+	function applyIconStyles() {
+		if (!ref) return;
+		ref.style.cssText = stylesStr;
+
+		if (size) {
+			ref.style.width = `${size}px`;
+			ref.style.height = `${size}px`;
+		}
+	}
 
     function forwardClick(event: MouseEvent) {
         if (!clickable || disabled) return;
