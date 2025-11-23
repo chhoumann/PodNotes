@@ -64,7 +64,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private downloadedEpisodesController: StoreController<{
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
-	private transcriptionService: TranscriptionService;
+	private transcriptionService?: TranscriptionService;
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
@@ -102,8 +102,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			currentEpisode,
 			this,
 		).on();
-
-		this.transcriptionService = new TranscriptionService(this);
 
 		this.api = new API();
 
@@ -265,7 +263,18 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addCommand({
 			id: "podnotes-transcribe",
 			name: "Transcribe current episode",
-			callback: () => this.transcriptionService.transcribeCurrentEpisode(),
+			checkCallback: (checking) => {
+				const canTranscribe =
+					!!this.api.podcast && !!this.settings.openAIApiKey?.trim();
+
+				if (checking) {
+					return canTranscribe;
+				}
+
+				if (canTranscribe) {
+					void this.getTranscriptionService().transcribeCurrentEpisode();
+				}
+			},
 		});
 
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
@@ -309,6 +318,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				type: VIEW_TYPE,
 			});
 		}
+	}
+
+	private getTranscriptionService(): TranscriptionService {
+		if (!this.transcriptionService) {
+			this.transcriptionService = new TranscriptionService(this);
+		}
+
+		return this.transcriptionService;
 	}
 
 	onunload() {

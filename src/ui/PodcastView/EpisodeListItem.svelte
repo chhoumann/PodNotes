@@ -17,13 +17,6 @@
 		dispatch("contextMenu", { episode, event });
 	}
 
-	function onKeyActivate(event: KeyboardEvent) {
-		if (event.key === "Enter" || event.key === " ") {
-			event.preventDefault();
-			onClickEpisode();
-		}
-	}
-
 	let _date: Date;
 	let date: string;
 
@@ -33,13 +26,11 @@
 	}
 </script>
 
-<div
+<button
+	type="button"
 	class="podcast-episode-item" 
 	on:click={onClickEpisode} 
 	on:contextmenu={onContextMenu}
-	role="button"
-	tabindex="0"
-	on:keydown={onKeyActivate}
 >
 	{#if showEpisodeImage && episode?.artworkUrl} 
 		<div class="podcast-episode-thumbnail-container">
@@ -60,7 +51,7 @@
 		<span class="episode-item-date">{date.toUpperCase()}</span>
 		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
 	</div>
-</div>
+</button>
 
 <style>
 	.podcast-episode-item {
@@ -72,14 +63,17 @@
 		width: 100%;
 		border: solid 1px var(--background-divider);
 		gap: 0.25rem;
+		background: transparent;
+		text-align: left;
+	}
+
+	.podcast-episode-item:focus-visible {
+		outline: 2px solid var(--interactive-accent);
+		outline-offset: 2px;
 	}
 
 	.podcast-episode-item:hover {
 		background-color: var(--background-divider);
-	}
-
-	.podcast-episode-item:hover {
-		cursor: pointer;
 	}
 
 	.strikeout {

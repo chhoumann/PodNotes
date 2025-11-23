@@ -15,6 +15,7 @@
 <Image 
 	src={feed.artworkUrl} 
 	alt={feed.title} 
+	interactive={true}
     on:click={onclickPodcast.bind(null, feed)}
     class="podcast-image"
 />

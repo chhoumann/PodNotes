@@ -16,56 +16,50 @@
 		viewState = newState;
 	}
 
-	function handleKeyMenuItem(event: KeyboardEvent, newState: ViewState) {
-		if (event.key !== "Enter" && event.key !== " ") return;
-		event.preventDefault();
-		handleClickMenuItem(newState);
-	}
 </script>
 
 <div class="topbar-container">
-	<div
+	<button
+		type="button"
 		on:click={handleClickMenuItem.bind(null, ViewState.PodcastGrid)}
-		on:keydown={(event) => handleKeyMenuItem(event, ViewState.PodcastGrid)}
 		class={`
             topbar-menu-button
             topbar-selectable
             ${viewState === ViewState.PodcastGrid ? "topbar-selected" : ""}
         `}
-		role="button"
-		tabindex="0"
 		aria-label="Podcast grid"
+		aria-pressed={viewState === ViewState.PodcastGrid}
 	>
-		<Icon icon="grid" size={20} />
-	</div>
-	<div
+		<Icon icon="grid" size={20} clickable={false} />
+	</button>
+	<button
+		type="button"
 		on:click={handleClickMenuItem.bind(null, ViewState.EpisodeList)}
-		on:keydown={(event) => handleKeyMenuItem(event, ViewState.EpisodeList)}
 		class={`
             topbar-menu-button 
             ${viewState === ViewState.EpisodeList ? "topbar-selected" : ""}
             ${canShowEpisodeList ? "topbar-selectable" : ""}
         `}
-		role="button"
-		tabindex={canShowEpisodeList ? "0" : "-1"}
 		aria-label="Episode list"
+		aria-pressed={viewState === ViewState.EpisodeList}
+		disabled={!canShowEpisodeList}
 	>
-		<Icon icon="list-minus" size={20} />
-	</div>
-	<div
+		<Icon icon="list-minus" size={20} clickable={false} />
+	</button>
+	<button
+		type="button"
 		on:click={handleClickMenuItem.bind(null, ViewState.Player)}
-		on:keydown={(event) => handleKeyMenuItem(event, ViewState.Player)}
 		class={`
             topbar-menu-button 
             ${viewState === ViewState.Player ? "topbar-selected" : ""}
             ${canShowPlayer ? "topbar-selectable" : ""}
         `}
-		role="button"
-		tabindex={canShowPlayer ? "0" : "-1"}
 		aria-label="Player"
+		aria-pressed={viewState === ViewState.Player}
+		disabled={!canShowPlayer}
 	>
-		<Icon icon="play" size={20} />
-	</div>
+		<Icon icon="play" size={20} clickable={false} />
+	</button>
 </div>
 
 <style>
@@ -86,6 +80,9 @@
 		width: 100%;
 		height: 100%;
 		opacity: 0.1;
+		border: none;
+		background: none;
+		padding: 0;
 	}
 
 	.topbar-selected {

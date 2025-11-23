@@ -36,4 +36,8 @@ export interface IPodNotesSettings {
 		path: string;
 		template: string;
 	};
+	feedCache: {
+		enabled: boolean;
+		ttlHours: number;
+	};
 }

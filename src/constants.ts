@@ -70,4 +70,8 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		template:
 			"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
 	},
+	feedCache: {
+		enabled: true,
+		ttlHours: 6,
+	},
 };

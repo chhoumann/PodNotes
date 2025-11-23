@@ -9,13 +9,18 @@
     export let icon: IconType;
 	export let clickable: boolean = true;
 	export let label: string = "";
+	export let pressed: boolean | undefined = undefined;
+	export let disabled: boolean = false;
     export {styles as style};
 
     let ref: HTMLSpanElement;
     let styles: CSSObject = {};
     let stylesStr: string;
+    let pressedAttr: string | undefined;
 
     $: stylesStr = extractStylesFromObj(styles);
+    $: pressedAttr =
+        pressed === undefined ? undefined : (pressed ? "true" : "false");
 
     const dispatch = createEventDispatcher();
 
@@ -30,29 +35,50 @@
     });
 
     function forwardClick(event: MouseEvent) {
-        if (!clickable) return;
+        if (!clickable || disabled) return;
         dispatch("click", { event });
     }
 </script>
 
-<div 
-    on:click={forwardClick} 
-    class={clickable ? "icon-clickable" : ""}
-	aria-label={label}
-	role="button"
-	tabindex={clickable ? "0" : "-1"}
-	on:keydown={(event) => {
-		if (event.key === "Enter" || event.key === " ") {
-			event.preventDefault();
-			forwardClick(event as unknown as MouseEvent);
-		}
-	}}
->
-    <span bind:this={ref}></span>
-</div>
+{#if clickable}
+    <button
+        type="button"
+        class="icon-button"
+        on:click={forwardClick}
+        aria-label={label}
+        aria-pressed={pressedAttr}
+        disabled={disabled}
+    >
+        <span bind:this={ref}></span>
+    </button>
+{:else}
+    <span
+        class="icon-static"
+        aria-label={label || undefined}
+        aria-hidden={label ? undefined : "true"}
+        bind:this={ref}
+    ></span>
+{/if}
 
 <style>
-    .icon-clickable {
+    .icon-button {
+        border: none;
+        background: none;
+        padding: 0;
         cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .icon-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+    }
+
+    .icon-static {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 </style>
