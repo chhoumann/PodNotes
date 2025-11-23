@@ -29,3 +29,4 @@ This template will be used to create the note text. You can use the following sy
 - `{{date}}`: The publish date of the podcast episode.
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
 - `{{artwork}}`: The URL of the podcast artwork. If no artwork is found, an empty string will be used.
+- `{{stream}}`: The URL of the podcast audio file for the episode.

@@ -215,6 +215,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						"\nPublishDate:: {{date:YYYY-MM-DD}}" +
 						"\n### Description" +
 						"\n> {{description}}",
+					    "\n### Audio File URL" +
+						"\n> {{stream}}",
 				);
 			});
 
