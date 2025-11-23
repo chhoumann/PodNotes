@@ -2,6 +2,7 @@ import { Notice, TFile, requestUrl } from "obsidian";
 import { downloadedEpisodes } from "./store";
 import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
+import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
 import getUrlExtension from "./utility/getUrlExtension";
 
 function getErrorMessage(error: unknown): string {
@@ -15,8 +16,9 @@ async function downloadFile(
 		onError: (error: Error) => void;
 	}>,
 ) {
+	const encodedUrl = encodeUrlForRequest(url);
 	try {
-		const response = await requestUrl({ url, method: "GET" });
+		const response = await requestUrl({ url: encodedUrl, method: "GET" });
 
 		if (response.status !== 200) {
 			throw new Error("Could not download episode.");
@@ -35,7 +37,7 @@ async function downloadFile(
 			}),
 			contentLength,
 			receivedLength: contentLength,
-			responseUrl: url,
+			responseUrl: encodedUrl,
 		};
 	} catch (error: unknown) {
 		const err = new Error(
@@ -216,18 +218,23 @@ export async function downloadEpisode(
 }
 
 async function getFileExtension(url: string): Promise<string> {
-	const urlExtension = getUrlExtension(url);
+	const encodedUrl = encodeUrlForRequest(url);
+	const urlExtension = getUrlExtension(encodedUrl);
 	if (urlExtension) return urlExtension;
 
 	// If URL doesn't have an extension, fetch headers to determine content type
-	const response = await fetch(url, { method: "HEAD" });
-	const contentType = response.headers.get("content-type");
+	try {
+		const response = await fetch(encodedUrl, { method: "HEAD" });
+		const contentType = response.headers.get("content-type");
 
-	if (contentType?.includes("audio/mpeg")) return "mp3";
-	if (contentType?.includes("audio/mp4")) return "m4a";
-	if (contentType?.includes("audio/ogg")) return "ogg";
-	if (contentType?.includes("audio/wav")) return "wav";
-	if (contentType?.includes("audio/x-m4a")) return "m4a";
+		if (contentType?.includes("audio/mpeg")) return "mp3";
+		if (contentType?.includes("audio/mp4")) return "m4a";
+		if (contentType?.includes("audio/ogg")) return "ogg";
+		if (contentType?.includes("audio/wav")) return "wav";
+		if (contentType?.includes("audio/x-m4a")) return "m4a";
+	} catch (error) {
+		console.error(`HEAD request failed for ${encodedUrl}`, error);
+	}
 
 	// Default to mp3 if we can't determine the type
 	return "mp3";
