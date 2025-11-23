@@ -56,18 +56,15 @@ export class TranscriptionService {
 	private readonly CHUNK_SIZE_BYTES = 20 * 1024 * 1024;
 	private readonly WAV_HEADER_SIZE = 44;
 	private readonly PCM_BYTES_PER_SAMPLE = 2;
-	private isTranscribing = false;
+	private readonly MAX_CONCURRENT_TRANSCRIPTIONS = 2;
+	private pendingEpisodes: Episode[] = [];
+	private activeTranscriptions = new Set<string>();
 
 	constructor(plugin: PodNotes) {
 		this.plugin = plugin;
 	}
 
 	async transcribeCurrentEpisode(): Promise<void> {
-		if (this.isTranscribing) {
-			new Notice("A transcription is already in progress.");
-			return;
-		}
-
 		if (!this.plugin.settings.openAIApiKey?.trim()) {
 			new Notice(
 				"Please add your OpenAI API key in the transcript settings first.",
@@ -81,7 +78,6 @@ export class TranscriptionService {
 			return;
 		}
 
-		// Check if transcription file already exists
 		const transcriptPath = FilePathTemplateEngine(
 			this.plugin.settings.transcript.path,
 			currentEpisode,
@@ -95,13 +91,72 @@ export class TranscriptionService {
 			return;
 		}
 
-		this.isTranscribing = true;
-		const notice = TimerNotice("Transcription", "Preparing to transcribe...");
+		const episodeKey = this.getEpisodeKey(currentEpisode);
+		const isAlreadyQueued =
+			this.pendingEpisodes.some(
+				(episode) => this.getEpisodeKey(episode) === episodeKey,
+			) || this.activeTranscriptions.has(episodeKey);
+
+		if (isAlreadyQueued) {
+			new Notice("This episode is already queued or transcribing.");
+			return;
+		}
+
+		this.pendingEpisodes.push(currentEpisode);
+		new Notice(
+			`Queued "${currentEpisode.title}" for transcription. It will start automatically.`,
+		);
+		this.drainQueue();
+	}
+
+	private drainQueue(): void {
+		while (
+			this.activeTranscriptions.size < this.MAX_CONCURRENT_TRANSCRIPTIONS &&
+			this.pendingEpisodes.length > 0
+		) {
+			const nextEpisode = this.pendingEpisodes.shift();
+			if (!nextEpisode) {
+				return;
+			}
+
+			const episodeKey = this.getEpisodeKey(nextEpisode);
+			this.activeTranscriptions.add(episodeKey);
+
+			void this.transcribeEpisode(nextEpisode).finally(() => {
+				this.activeTranscriptions.delete(episodeKey);
+				this.drainQueue();
+			});
+		}
+	}
+
+	private getEpisodeKey(episode: Episode): string {
+		return `${episode.podcastName}:${episode.title}`;
+	}
+
+	private async transcribeEpisode(episode: Episode): Promise<void> {
+		const notice = TimerNotice(
+			`Transcription: ${episode.title}`,
+			"Preparing to transcribe...",
+		);
 
 		try {
+			const transcriptPath = FilePathTemplateEngine(
+				this.plugin.settings.transcript.path,
+				episode,
+			);
+			const existingFile =
+				this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
+			if (existingFile instanceof TFile) {
+				notice.stop();
+				notice.update(
+					`Transcript already exists - skipped (${transcriptPath}).`,
+				);
+				return;
+			}
+
 			notice.update("Downloading episode...");
 			const downloadPath = await downloadEpisode(
-				currentEpisode,
+				episode,
 				this.plugin.settings.download.path,
 			);
 			const podcastFile =
@@ -127,16 +182,17 @@ export class TranscriptionService {
 			const transcription = await this.transcribeChunks(files, notice.update);
 
 			notice.update("Saving transcription...");
-			await this.saveTranscription(currentEpisode, transcription);
+			await this.saveTranscription(episode, transcription);
 
 			notice.stop();
 			notice.update("Transcription completed and saved.");
 		} catch (error) {
 			console.error("Transcription error:", error);
 			const message = error instanceof Error ? error.message : String(error);
+			notice.stop();
 			notice.update(`Transcription failed: ${message}`);
 		} finally {
-			this.isTranscribing = false;
+			notice.stop();
 			setTimeout(() => notice.hide(), 5000);
 		}
 	}
