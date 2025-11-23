@@ -1,5 +1,5 @@
-import { Episode } from "./Episode";
-import { IconType } from "./IconType";
+import type { Episode } from "./Episode";
+import type { IconType } from "./IconType";
 
 export type Playlist = {
 	icon: IconType,

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PodcastFeed } from "src/types/PodcastFeed";
+	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import PodcastGrid from "./PodcastGrid.svelte";
 	import {
 		currentEpisode,
@@ -15,7 +15,7 @@
 	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
-	import { Episode } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
@@ -24,7 +24,7 @@
 	import Icon from "../obsidian/Icon.svelte";
 	import { debounce } from "obsidian";
 	import searchEpisodes from "src/utility/searchEpisodes";
-	import { Playlist } from "src/types/Playlist";
+	import type { Playlist } from "src/types/Playlist";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 
 	let feeds: PodcastFeed[] = [];
@@ -190,7 +190,8 @@
 		>
 			<svelte:fragment slot="header">
 				{#if selectedFeed}
-					<span
+					<button
+						type="button"
 						class="go-back"
 						on:click={() => {
 							selectedFeed = null;
@@ -206,13 +207,14 @@
 							}}
 							size={20}
 						/> Latest Episodes
-					</span>
+					</button>
 					<EpisodeListHeader
 						text={selectedFeed.title}
 						artworkUrl={selectedFeed.artworkUrl}
 					/>
 				{:else if selectedPlaylist}
-					<span
+					<button
+						type="button"
 						class="go-back"
 						on:click={() => {
 							selectedPlaylist = null;
@@ -228,7 +230,7 @@
 							}}
 							size={20}
 						/> Latest Episodes
-					</span>
+					</button>
 					<div
 						style="display: flex; align-items: center; justify-content: center;"
 					>
@@ -267,9 +269,11 @@
 		justify-content: center;
 		padding: 0.5rem;
 		gap: 0.5rem;
-		cursor: pointer;
 		margin-right: auto;
 		opacity: 0.75;
+		cursor: pointer;
+		background: none;
+		border: none;
 	}
 
 	.go-back:hover {

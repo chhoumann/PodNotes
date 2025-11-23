@@ -10,7 +10,13 @@
     "moduleResolution": "node",
     "importHelpers": true,
     "isolatedModules": true,
-    "types": ["svelte", "node"],
+    "verbatimModuleSyntax": true,
+    "types": [
+      "svelte",
+      "node",
+      "obsidian",
+      "vitest/globals"
+    ],
     "strictNullChecks": true,
       "lib": [
         "DOM",

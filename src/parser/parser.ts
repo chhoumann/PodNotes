@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 
 export abstract class Parser {
     url: string;

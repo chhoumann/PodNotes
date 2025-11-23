@@ -1,5 +1,5 @@
 import { requestUrl, Notice } from "obsidian";
-import { IAPI } from "./API/IAPI";
+import type { IAPI } from "./API/IAPI";
 import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
 
 export default async function getUniversalPodcastLink(api: IAPI) {

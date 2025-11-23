@@ -4,16 +4,17 @@ import sveltePreprocess from "svelte-preprocess";
 import * as path from "path";
 
 export default defineConfig({
-	plugins: [
-		svelte({
-			hot: !process.env.VITEST,
-			preprocess: sveltePreprocess(),
-		}),
-	],
+  plugins: [
+    svelte({
+      hot: !process.env.VITEST,
+      preprocess: sveltePreprocess(),
+    }),
+  ],
   resolve: {
     alias: {
       "src": path.resolve('./src'),
-    }
+    },
+    conditions: ["browser"],
   },
 	test: {
 		include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],

@@ -20,7 +20,7 @@
 	import EpisodeList from "./EpisodeList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-	import { Episode } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
@@ -44,11 +44,19 @@
 		isPaused.update((value) => !value);
 	}
 
-	function onClickProgressbar({ detail: { event } }: CustomEvent<{ event: MouseEvent }>) {
-		const progressbar = event.target as HTMLDivElement;
-		const percent = event.offsetX / progressbar.offsetWidth;
+	function onClickProgressbar(
+		{ detail: { event, percent } }: CustomEvent<{ event: MouseEvent | KeyboardEvent; percent?: number }>
+	) {
+		if (typeof percent === "number") {
+			currentTime.set(percent * $duration);
+			return;
+		}
 
-		currentTime.set(percent * $duration);
+		if (event instanceof MouseEvent) {
+			const progressbar = event.currentTarget as HTMLDivElement;
+			const ratio = progressbar.offsetWidth ? event.offsetX / progressbar.offsetWidth : 0;
+			currentTime.set(ratio * $duration);
+		}
 	}
 
 	function removeEpisodeFromPlaylists() {
@@ -166,15 +174,23 @@
 	}
 </script>
 
-<div class="episode-player">
-	<div class="episode-image-container">
-		<div
-			class="hover-container"
-			on:click={togglePlayback}
-			on:contextmenu={handleContextMenuEpisodeImage}
-			on:mouseenter={() => (isHoveringArtwork = true)}
-			on:mouseleave={() => (isHoveringArtwork = false)}
-		>
+	<div class="episode-player">
+		<div class="episode-image-container">
+			<div
+				class="hover-container"
+				on:click={togglePlayback}
+				on:contextmenu={handleContextMenuEpisodeImage}
+				on:mouseenter={() => (isHoveringArtwork = true)}
+				on:mouseleave={() => (isHoveringArtwork = false)}
+				role="button"
+				tabindex="0"
+				on:keydown={(event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						togglePlayback();
+					}
+				}}
+			>
 		 <Image 
 			class={"podcast-artwork"}
 			src={$currentEpisode.artworkUrl ?? ""}
@@ -217,7 +233,7 @@
 			on:loadedmetadata={onMetadataLoaded}
 			on:play|preventDefault
 			autoplay={true}
-		/>
+		></audio>
 	{/await}
 
 	<div class="status-container">

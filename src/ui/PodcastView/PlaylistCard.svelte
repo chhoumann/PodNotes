@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Playlist } from "src/types/Playlist";
+	import type { Playlist } from "src/types/Playlist";
 	import { createEventDispatcher } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 
@@ -10,9 +10,22 @@
 	function onClickPlaylist(event: MouseEvent) {
 		dispatch("clickPlaylist", { playlist, event });
 	}
+
+	function onKeyActivate(event: KeyboardEvent) {
+		if (event.key !== "Enter" && event.key !== " ") return;
+		event.preventDefault();
+		onClickPlaylist(event as unknown as MouseEvent);
+	}
 </script>
 
-<div class="playlist-card" aria-label={playlist.name} on:click={onClickPlaylist}>
+<div
+	class="playlist-card"
+	aria-label={playlist.name}
+	role="button"
+	tabindex="0"
+	on:click={onClickPlaylist}
+	on:keydown={onKeyActivate}
+>
 	<Icon icon={playlist.icon} size={40} clickable={true}/>
 	<span>
 		({playlist.episodes.length})

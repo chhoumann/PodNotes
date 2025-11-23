@@ -1,6 +1,6 @@
 <script lang="ts">
     import { TextComponent } from "obsidian";
-    import { CSSObject } from "src/types/CSSObject";
+    import type { CSSObject } from "src/types/CSSObject";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
     import { afterUpdate, createEventDispatcher, onMount } from "svelte";
 
@@ -43,4 +43,4 @@
     }
 </script>
 
-<span bind:this={textRef} />
+<span bind:this={textRef}></span>

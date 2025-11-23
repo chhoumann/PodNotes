@@ -1,7 +1,7 @@
-import { Episode } from "src/types/Episode";
-import { IPodNotes } from "src/types/IPodNotes";
+import type { Episode } from "src/types/Episode";
+import type { IPodNotes } from "src/types/IPodNotes";
 import { StoreController } from "src/types/StoreController";
-import { Writable } from "svelte/store";
+import type { Writable } from "svelte/store";
 
 export default class CurrentEpisodeController extends StoreController<Episode> {
 	private plugin: IPodNotes;

@@ -31,3 +31,7 @@ interface App2 extends App {
 }
 
 export default App2;
+
+declare global {
+	const app: App2;
+}

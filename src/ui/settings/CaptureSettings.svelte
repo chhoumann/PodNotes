@@ -5,7 +5,7 @@
 
 	import { episodeCache } from "src/store";
 
-	import { Episode } from "src/types/Episode";
+import type { Episode } from "src/types/Episode";
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import { NoteTemplateEngine } from "../../TemplateEngine";

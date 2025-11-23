@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import { PodcastFeed } from "./types/PodcastFeed";
+import type { PodcastFeed } from "./types/PodcastFeed";
 
 export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]> {
 	const url = new URL("https://itunes.apple.com/search?");

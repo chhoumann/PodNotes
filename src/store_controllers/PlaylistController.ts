@@ -1,6 +1,6 @@
-import { Writable } from "svelte/store";
-import { IPodNotes } from "../types/IPodNotes";
-import { Playlist } from "../types/Playlist";
+import type { Writable } from "svelte/store";
+import type { IPodNotes } from "../types/IPodNotes";
+import type { Playlist } from "../types/Playlist";
 import { StoreController } from "../types/StoreController";
 
 export class PlaylistController extends StoreController<{[playlistName: string]: Playlist}> {
@@ -18,4 +18,3 @@ export class PlaylistController extends StoreController<{[playlistName: string]:
 	}
 
 }
-

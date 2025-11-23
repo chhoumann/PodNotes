@@ -1,7 +1,7 @@
 <script lang="ts">
     import { setIcon } from "obsidian";
-    import { CSSObject } from "src/types/CSSObject";
-    import { IconType } from "src/types/IconType";
+    import type { CSSObject } from "src/types/CSSObject";
+    import type { IconType } from "src/types/IconType";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
     import { afterUpdate, createEventDispatcher, onMount } from "svelte";
 
@@ -30,6 +30,7 @@
     });
 
     function forwardClick(event: MouseEvent) {
+        if (!clickable) return;
         dispatch("click", { event });
     }
 </script>
@@ -38,8 +39,16 @@
     on:click={forwardClick} 
     class={clickable ? "icon-clickable" : ""}
 	aria-label={label}
+	role="button"
+	tabindex={clickable ? "0" : "-1"}
+	on:keydown={(event) => {
+		if (event.key === "Enter" || event.key === " ") {
+			event.preventDefault();
+			forwardClick(event as unknown as MouseEvent);
+		}
+	}}
 >
-    <span bind:this={ref} />
+    <span bind:this={ref}></span>
 </div>
 
 <style>

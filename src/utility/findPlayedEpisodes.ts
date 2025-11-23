@@ -1,7 +1,7 @@
 import FeedParser from "src/parser/feedParser";
-import { Episode } from "src/types/Episode";
-import { PlayedEpisode } from "src/types/PlayedEpisode"
-import { PodcastFeed } from "src/types/PodcastFeed";
+import type { Episode } from "src/types/Episode";
+import type { PlayedEpisode } from "src/types/PlayedEpisode"
+import type { PodcastFeed } from "src/types/PodcastFeed";
 
 export default async function findPlayedEpisodesInFeeds(
     playedEpisodes: PlayedEpisode[],
