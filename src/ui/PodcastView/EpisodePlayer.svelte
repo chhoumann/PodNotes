@@ -5,6 +5,7 @@
 		currentEpisode,
 		isPaused,
 		plugin,
+		volume,
 		playedEpisodes,
 		queue,
 		playlists,
@@ -36,9 +37,11 @@
 
 	const offBinding = new CircumentForcedTwoWayBinding();
 	//#endregion
+	const clampVolume = (value: number): number => Math.min(1, Math.max(0, value));
 
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
+	let playerVolume: number = 1;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
@@ -84,6 +87,12 @@
 		offBinding.playbackRate = event.detail.value;
 	}
 
+	function onVolumeChange(event: CustomEvent<{ value: number }>) {
+		const newVolume = clampVolume(event.detail.value);
+
+		volume.set(newVolume);
+	}
+
 	function onMetadataLoaded() {
 		isLoading = false;
 
@@ -125,10 +134,15 @@
 			srcPromise = getSrc($currentEpisode);
 		});
 
+		const unsubVolume = volume.subscribe((value) => {
+			playerVolume = clampVolume(value);
+		});
+
 		return () => {
 			unsub();
 			unsubDownloadedSource();
 			unsubCurrentEpisode();
+			unsubVolume();
 		};
 	});
 
@@ -223,6 +237,7 @@
 			bind:currentTime={playerTime}
 			bind:paused={$isPaused}
 			bind:playbackRate={offBinding._playbackRate}
+			bind:volume={playerVolume}
 			on:ended={onEpisodeEnded}
 			on:loadedmetadata={onMetadataLoaded}
 			on:play|preventDefault
@@ -259,18 +274,29 @@
 			on:click={$plugin.api.skipForward.bind($plugin.api)}
 			style={{
 				margin: "0",
-				cursor: "pointer",
-			}}
-		/>
-	</div>
+			cursor: "pointer",
+		}}
+	/>
+</div>
 
-	<div class="playbackrate-container">
-		<span>{offBinding.playbackRate}x</span>
-		<Slider
-			on:change={onPlaybackRateChange}
-			value={offBinding.playbackRate}
-			limits={[0.5, 3.5, 0.1]}
-		/>
+	<div class="slider-stack">
+		<div class="volume-container">
+			<span>Volume: {Math.round(playerVolume * 100)}%</span>
+			<Slider
+				on:change={onVolumeChange}
+				value={playerVolume}
+				limits={[0, 1, 0.05]}
+			/>
+		</div>
+
+		<div class="playbackrate-container">
+			<span>{offBinding.playbackRate}x</span>
+			<Slider
+				on:change={onPlaybackRateChange}
+				value={offBinding.playbackRate}
+				limits={[0.5, 3.5, 0.1]}
+			/>
+		</div>
 	</div>
 
 	<EpisodeList 
@@ -383,12 +409,19 @@
 		margin-right: 25%;
 	}
 
-	:global(.playbackrate-container) {
+	:global(.slider-stack) {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-top: auto;
+		margin-bottom: 2.5rem;
+	}
+
+	:global(.playbackrate-container),
+	:global(.volume-container) {
 		display: flex;
 		align-items: center;
 		justify-content: space-around;
-		margin-bottom: 2.5rem;
 		flex-direction: column;
-		margin-top: auto;
 	}
 </style>

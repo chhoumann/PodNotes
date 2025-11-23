@@ -66,6 +66,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		});
 
 		this.addDefaultPlaybackRateSetting(settingsContainer);
+		this.addDefaultVolumeSetting(settingsContainer);
 		this.addSkipLengthSettings(settingsContainer);
 		this.addNoteSettings(settingsContainer);
 		this.addDownloadSettings(settingsContainer);
@@ -88,6 +89,22 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.defaultPlaybackRate)
 					.onChange((value) => {
 						this.plugin.settings.defaultPlaybackRate = value;
+						this.plugin.saveSettings();
+					})
+					.setDynamicTooltip(),
+			);
+	}
+
+	private addDefaultVolumeSetting(container: HTMLElement): void {
+		new Setting(container)
+			.setName("Default Volume")
+			.setDesc("Set the default playback volume.")
+			.addSlider((slider) =>
+				slider
+					.setLimits(0, 1, 0.05)
+					.setValue(this.plugin.settings.defaultVolume)
+					.onChange((value) => {
+						this.plugin.settings.defaultVolume = value;
 						this.plugin.saveSettings();
 					})
 					.setDynamicTooltip(),

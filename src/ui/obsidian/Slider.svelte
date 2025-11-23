@@ -28,7 +28,7 @@
     });
 
     function updateSliderAttributes(sldr: SliderComponent) {
-        if (value) sldr.setValue(value);
+        if (value !== undefined) sldr.setValue(value);
         if (limits) {
             if (limits.length === 2) {
                 sldr.setLimits(limits[0], limits[1], 1);
