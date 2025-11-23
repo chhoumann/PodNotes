@@ -9,6 +9,7 @@ const baseProps = {
 	src: "https://example.com/art.jpg",
 	alt: "Example artwork",
 	fadeIn: true,
+	interactive: true,
 };
 
 describe("Image component", () => {
