@@ -16,7 +16,7 @@
     let ref: HTMLSpanElement;
     let styles: CSSObject = {};
     let stylesStr: string;
-    let pressedAttr: string | undefined;
+    let pressedAttr: "true" | "false" | undefined;
 
     $: stylesStr = extractStylesFromObj(styles);
     $: pressedAttr =
