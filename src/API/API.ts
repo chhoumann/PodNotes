@@ -8,10 +8,14 @@ import {
 	duration,
 	isPaused,
 	plugin,
+	volume as volumeStore,
 } from "src/store";
 import { get } from "svelte/store";
 import encodePodnotesURI from "src/utility/encodePodnotesURI";
 import { isLocalFile } from "src/utility/isLocalFile";
+
+const clampVolume = (value: number): number =>
+	Math.min(1, Math.max(0, value));
 
 export class API implements IAPI {
 	public get podcast(): Episode {
@@ -32,6 +36,14 @@ export class API implements IAPI {
 
 	public get isPlaying(): boolean {
 		return !get(isPaused);
+	}
+
+	public get volume(): number {
+		return get(volumeStore);
+	}
+
+	public set volume(value: number) {
+		volumeStore.set(clampVolume(value));
 	}
 
 	/**
