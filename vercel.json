@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "nodeVersion": "22.x",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build && mkdir -p dist && cp main.js dist/",
+  "outputDirectory": "dist"
+}
