@@ -1,3 +1,6 @@
+<script lang="ts">
+</script>
+
 <div class="la-line-scale">
 	<div></div>
 	<div></div>

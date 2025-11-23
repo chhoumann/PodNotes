@@ -38,3 +38,9 @@ export default App2;
 declare global {
 	const app: App2;
 }
+
+declare module "*.svelte" {
+	import type { ComponentType } from "svelte";
+	const component: ComponentType;
+	export default component;
+}

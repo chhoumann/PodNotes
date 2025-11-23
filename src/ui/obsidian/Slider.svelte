@@ -29,7 +29,13 @@
 
     function updateSliderAttributes(sldr: SliderComponent) {
         if (value) sldr.setValue(value);
-        if (limits) sldr.setLimits.apply(sldr, limits);
+        if (limits) {
+            if (limits.length === 2) {
+                sldr.setLimits(limits[0], limits[1], 1);
+            } else {
+                sldr.setLimits(limits[0], limits[1], limits[2]);
+            }
+        }
         if (styles) {
             sldr.sliderEl.setAttr("style", extractStylesFromObj(styles));
         }
