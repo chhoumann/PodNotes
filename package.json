@@ -13,9 +13,6 @@
   "keywords": [],
   "author": "Christian Bager Bach Houmann",
   "license": "MIT",
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "devDependencies": {
     "@biomejs/biome": "^2.3.7",
     "@semantic-release/git": "^10.0.1",
@@ -32,7 +29,7 @@
     "eslint": "^9.39.1",
     "jsdom": "^27.2.0",
     "obsidian": "1.10.3",
-    "semantic-release": "^25.0.2",
+    "semantic-release": "^21.0.7",
     "svelte": "^5.43.14",
     "svelte-preprocess": "^6.0.3",
     "tslib": "2.8.1",
