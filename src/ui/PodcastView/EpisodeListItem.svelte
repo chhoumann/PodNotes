@@ -8,6 +8,12 @@
 	export let showEpisodeImage: boolean = false;
 
 	const dispatch = createEventDispatcher();
+	const dateFormatter = new Intl.DateTimeFormat("en-GB", {
+		day: "2-digit",
+		month: "long",
+		year: "numeric"
+	});
+	const formattedDateCache = new Map<string, string>();
 
 	function onClickEpisode() {
 		dispatch("clickEpisode", { episode });
@@ -17,13 +23,33 @@
 		dispatch("contextMenu", { episode, event });
 	}
 
-	let _date: Date;
-	let date: string;
-
-	$: {
-		_date = new Date(episode.episodeDate || "");
-		date = window.moment(_date).format("DD MMMM YYYY");
+	function parseEpisodeDate(rawDate?: Date): Date | null {
+		if (!rawDate) return null;
+		const parsedDate = new Date(rawDate);
+		return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 	}
+
+	function getCacheKey(ep: Episode, parsedDate: Date): string {
+		const identifier = ep.url ?? ep.streamUrl ?? ep.title ?? "episode";
+		return `${identifier}|${parsedDate.getTime()}`;
+	}
+
+	function formatEpisodeDate(ep: Episode): string {
+		const parsedDate = parseEpisodeDate(ep?.episodeDate);
+		if (!parsedDate) return "";
+
+		const cacheKey = getCacheKey(ep, parsedDate);
+		const cachedDate = formattedDateCache.get(cacheKey);
+		if (cachedDate) return cachedDate;
+
+		const formattedDate = dateFormatter.format(parsedDate);
+		formattedDateCache.set(cacheKey, formattedDate);
+		return formattedDate;
+	}
+
+	let date: string = "";
+
+	$: date = formatEpisodeDate(episode);
 </script>
 
 <button
