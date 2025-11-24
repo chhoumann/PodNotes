@@ -1,26 +1,27 @@
 <script lang="ts">
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import PodcastGrid from "./PodcastGrid.svelte";
-import {
-	currentEpisode,
-	savedFeeds,
-	episodeCache,
-	playlists,
-	queue,
-	favorites,
-	localFiles,
-	podcastView,
-	viewState,
-	downloadedEpisodes,
-	plugin,
-} from "src/store";
+	import {
+		currentEpisode,
+		savedFeeds,
+		episodeCache,
+		latestEpisodes as latestEpisodesStore,
+		playlists,
+		queue,
+		favorites,
+		localFiles,
+		podcastView,
+		viewState,
+		downloadedEpisodes,
+		plugin,
+	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import type { Episode } from "src/types/Episode";
 	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
-import { onMount } from "svelte";
+	import { onMount } from "svelte";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import { debounce } from "obsidian";
@@ -52,20 +53,18 @@ import { onMount } from "svelte";
 			void hydrateAndRefreshFeeds();
 		});
 
-		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
-			latestEpisodes = Object.entries(cache)
-				.map(([_, episodes]) => episodes.slice(0, 10))
-				.flat()
-				.sort((a, b) => {
-					if (a.episodeDate && b.episodeDate)
-						return Number(b.episodeDate) - Number(a.episodeDate);
+		const unsubscribeLatestEpisodes = latestEpisodesStore.subscribe(
+			(episodes) => {
+				latestEpisodes = episodes;
 
-					return 0;
-				});
-		});
+				if (!selectedFeed && !selectedPlaylist) {
+					displayedEpisodes = episodes;
+				}
+			},
+		);
 
 		return () => {
-			unsubscribeEpisodeCache();
+			unsubscribeLatestEpisodes();
 			unsubscribeSavedFeeds();
 			unsubscribePlaylists();
 		};
@@ -186,12 +185,12 @@ import { onMount } from "svelte";
 			  })
 			: feeds;
 
-			if (!feedsToRefresh.length) {
-				if (!selectedFeed && !selectedPlaylist) {
-					displayedEpisodes = latestEpisodes;
-				}
-				return;
+		if (!feedsToRefresh.length) {
+			if (!selectedFeed && !selectedPlaylist) {
+				displayedEpisodes = latestEpisodes;
 			}
+			return;
+		}
 
 		void refreshFeedsWithLimit(feedsToRefresh);
 	}
@@ -316,10 +315,6 @@ import { onMount } from "svelte";
 					>
 						<Icon
 							icon={"arrow-left"}
-							style={{
-								display: "flex",
-								"align-items": "center",
-							}}
 							size={20}
 							clickable={false}
 						/> Latest Episodes
@@ -340,17 +335,11 @@ import { onMount } from "svelte";
 					>
 						<Icon
 							icon={"arrow-left"}
-							style={{
-								display: "flex",
-								"align-items": "center",
-							}}
 							size={20}
 							clickable={false}
 						/> Latest Episodes
 					</button>
-					<div
-						style="display: flex; align-items: center; justify-content: center;"
-					>
+					<div class="playlist-header-icon">
 						<Icon
 							icon={selectedPlaylist.icon}
 							size={40}
@@ -395,5 +384,11 @@ import { onMount } from "svelte";
 
 	.go-back:hover {
 		opacity: 1;
+	}
+
+	.playlist-header-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 </style>
