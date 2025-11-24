@@ -44,10 +44,7 @@
 	{:else if showEpisodeImage}
 		<div class="podcast-episode-thumbnail-container"></div>
 	{/if}
-	<div 
-		class="podcast-episode-information" 
-		style:flex-basis={"80%"}
-	>
+	<div class="podcast-episode-information">
 		<span class="episode-item-date">{date.toUpperCase()}</span>
 		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
 	</div>
@@ -57,12 +54,13 @@
 	.podcast-episode-item {
 		display: flex;
 		flex-direction: row;
-		justify-content: space-between;
-		align-items: center;
+		justify-content: flex-start;
+		align-items: flex-start;
 		padding: 0.5rem;
+		min-height: 5rem;
 		width: 100%;
 		border: solid 1px var(--background-divider);
-		gap: 0.25rem;
+		gap: 0.75rem;
 		background: transparent;
 		text-align: left;
 	}
@@ -84,8 +82,9 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: space-between;
-		align-items: left;
-		width: 100%;
+		align-items: flex-start;
+		flex: 1 1 auto;
+		min-width: 0;
 	}
 
 	.episode-item-date {
@@ -93,16 +92,22 @@
 	}
 
 	.podcast-episode-thumbnail-container {
-		flex-basis: 20%;
+		flex: 0 0 4rem;
+		width: 4rem;
+		height: 4rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		background: var(--background-secondary);
+		border-radius: 15%;
+		overflow: hidden;
 	}
 
 	:global(.podcast-episode-thumbnail) {
+		width: 100%;
+		height: 100%;
 		border-radius: 15%;
-		max-width: 5rem;
-		max-height: 5rem;
+		object-fit: cover;
 		cursor: pointer !important;
 	}
 </style>

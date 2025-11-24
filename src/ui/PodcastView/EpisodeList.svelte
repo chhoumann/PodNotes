@@ -86,17 +86,19 @@
 	.episode-list-view-container {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		align-items: stretch;
+		justify-content: flex-start;
+		width: 100%;
 	}
 
 	.podcast-episode-list {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		align-items: stretch;
+		justify-content: flex-start;
 		width: 100%;
 		height: 100%;
+		gap: 0.25rem;
 	}
 
 	.episode-list-menu {
