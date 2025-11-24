@@ -5,10 +5,12 @@
 	import { hidePlayedEpisodes, playedEpisodes } from "src/store";
 	import Icon from "../obsidian/Icon.svelte";
 	import Text from "../obsidian/Text.svelte";
+	import Loading from "./Loading.svelte";
 
 	export let episodes: Episode[] = [];
 	export let showThumbnails: boolean = false;
 	export let showListMenu: boolean = true;
+	export let isLoading: boolean = false;
 	let searchInputQuery: string = "";
 
 	const dispatch = createEventDispatcher();
@@ -63,7 +65,13 @@
 	{/if}
 
 	<div class="podcast-episode-list">
-		{#if episodes.length === 0}
+		{#if isLoading}
+			<div class="episode-list-loading" role="status" aria-live="polite">
+				<Loading />
+				<span>Fetching episodes...</span>
+			</div>
+		{/if}
+		{#if episodes.length === 0 && !isLoading}
 			<p>No episodes found.</p>
 		{/if}
 		{#each episodes as episode (episode.url || episode.streamUrl || `${episode.title}-${episode.episodeDate ?? ""}`)}
@@ -114,5 +122,14 @@
 	.episode-list-search {
 		width: 100%;
 		margin-bottom: 0.5rem;
+	}
+
+	.episode-list-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		padding: 1rem 0;
+		color: var(--text-muted);
 	}
 </style>

@@ -40,6 +40,7 @@
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
+	let isFetchingEpisodes: boolean = false;
 	let loadingFeeds: Set<string> = new Set();
 	let currentSearchQuery: string = "";
 	let loadingFeedNames: string[] = [];
@@ -50,6 +51,7 @@
 		loadingFeedNames.length > 3
 			? `${loadingFeedNames.slice(0, 3).join(", ")} +${loadingFeedNames.length - 3} more`
 			: loadingFeedNames.join(", ");
+	$: isFetchingEpisodes = loadingFeedNames.length > 0;
 
 	onMount(() => {
 		const unsubscribePlaylists = playlists.subscribe((pl) => {
@@ -177,9 +179,9 @@
 		event: CustomEvent<{ feed: PodcastFeed }>
 	) {
 		const { feed } = event.detail;
-		displayedEpisodes = [];
 
 		selectedFeed = feed;
+		displayedEpisodes = [];
 		viewState.set(ViewState.EpisodeList);
 		setFeedLoading(feed.title, true);
 
@@ -284,6 +286,7 @@
 		<EpisodeList
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed || !selectedPlaylist}
+			isLoading={isFetchingEpisodes}
 			on:clickEpisode={handleClickEpisode}
 			on:contextMenuEpisode={handleContextMenuEpisode}
 			on:clickRefresh={handleClickRefresh}
