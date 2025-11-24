@@ -51,15 +51,7 @@
 	let isLoading: boolean = true;
 	let playerVolume: number = 1;
 	let chapters: Chapter[] = [];
-
-	// Fetch chapters when episode changes
-	$: if ($currentEpisode?.chaptersUrl) {
-		fetchChapters($currentEpisode.chaptersUrl).then((c) => {
-			chapters = c;
-		});
-	} else {
-		chapters = [];
-	}
+	let lastChaptersUrl: string | undefined = undefined;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
@@ -154,8 +146,20 @@
 			srcPromise = getSrc($currentEpisode);
 		});
 
-		const unsubCurrentEpisode = currentEpisode.subscribe(_ => {
+		const unsubCurrentEpisode = currentEpisode.subscribe((episode) => {
 			srcPromise = getSrc($currentEpisode);
+
+			// Fetch chapters when episode changes
+			const chaptersUrl = episode?.chaptersUrl;
+			if (chaptersUrl && chaptersUrl !== lastChaptersUrl) {
+				lastChaptersUrl = chaptersUrl;
+				fetchChapters(chaptersUrl).then((c) => {
+					chapters = c;
+				});
+			} else if (!chaptersUrl) {
+				lastChaptersUrl = undefined;
+				chapters = [];
+			}
 		});
 
 		const unsubVolume = volume.subscribe((value) => {
