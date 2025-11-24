@@ -33,13 +33,12 @@
 		justify-content: center;
 		gap: 0.25rem;
 		width: 100%;
-		aspect-ratio: 1;
+		min-height: 5rem;
+		padding: 0.75rem 0.5rem;
 		border: 1px solid var(--background-modifier-border);
 		border-radius: 0.5rem;
 		text-align: center;
-		overflow: hidden;
 		background: var(--background-secondary);
-		padding: 0.5rem;
 		cursor: pointer;
 		transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
 	}
