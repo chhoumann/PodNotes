@@ -15,6 +15,7 @@
     let slider: SliderComponent;
     let styles: CSSObject = {};
     let changeHandler: ((event: Event) => void) | null = null;
+    let isProgrammaticUpdate = false;
 
     // This is not a complete implementation. I implemented what I needed.
 
@@ -22,6 +23,8 @@
         slider = new SliderComponent(sliderRef);
 
         changeHandler = (event: Event) => {
+            if (isProgrammaticUpdate) return;
+
             const newValue = Number((event.target as HTMLInputElement).value);
             dispatch("change", { value: newValue });
         };
@@ -45,7 +48,16 @@
         currentLimits: [min: number, max: number] | [min: number, max: number, step: number],
         currentStyles: CSSObject
     ) {
-        if (currentValue !== undefined) sldr.setValue(currentValue);
+        const sliderValue =
+            typeof sldr.getValue === "function"
+                ? sldr.getValue()
+                : Number(sldr.sliderEl?.value);
+
+        if (currentValue !== undefined && sliderValue !== currentValue) {
+            isProgrammaticUpdate = true;
+            sldr.setValue(currentValue);
+            isProgrammaticUpdate = false;
+        }
         if (currentLimits) {
             if (currentLimits.length === 2) {
                 sldr.setLimits(currentLimits[0], currentLimits[1], 1);
