@@ -1,4 +1,4 @@
-import { get, writable } from "svelte/store";
+import { get, readable, writable } from "svelte/store";
 import type PodNotes from "src/main";
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
@@ -13,6 +13,7 @@ export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
 export const duration = writable<number>(0);
 export const volume = writable<number>(1);
+export const hidePlayedEpisodes = writable<boolean>(false);
 
 export const currentEpisode = (() => {
 	const store = writable<Episode>();
@@ -101,6 +102,199 @@ export const podcastsUpdated = writable(0);
 export const savedFeeds = writable<{ [podcastName: string]: PodcastFeed }>({});
 
 export const episodeCache = writable<{ [podcastName: string]: Episode[] }>({});
+
+const LATEST_EPISODES_PER_FEED = 10;
+
+type LatestEpisodesByFeed = Map<string, Episode[]>;
+type FeedEpisodeSources = Map<string, Episode[]>;
+type LatestEpisodePointer = {
+	feedTitle: string;
+	index: number;
+	episode: Episode;
+};
+
+function getEpisodeTimestamp(episode?: Episode): number {
+	if (!episode?.episodeDate) return 0;
+
+	return Number(episode.episodeDate);
+}
+
+function getLatestEpisodesForFeed(episodes: Episode[]): Episode[] {
+	if (!episodes?.length) return [];
+
+	return episodes
+		.slice(0, LATEST_EPISODES_PER_FEED)
+		.sort((a, b) => getEpisodeTimestamp(b) - getEpisodeTimestamp(a));
+}
+
+function shallowEqualEpisodes(a?: Episode[], b?: Episode[]): boolean {
+	if (!a || !b || a.length !== b.length) return false;
+
+	for (let i = 0; i < a.length; i += 1) {
+		if (a[i] !== b[i]) return false;
+	}
+
+	return true;
+}
+
+function pushEpisodePointer(
+	heap: LatestEpisodePointer[],
+	pointer: LatestEpisodePointer,
+): void {
+	heap.push(pointer);
+	let idx = heap.length - 1;
+
+	while (idx > 0) {
+		const parent = Math.floor((idx - 1) / 2);
+		if (
+			getEpisodeTimestamp(heap[parent].episode) >=
+			getEpisodeTimestamp(heap[idx].episode)
+		) {
+			break;
+		}
+
+		heap[idx] = heap[parent];
+		heap[parent] = pointer;
+		idx = parent;
+	}
+}
+
+function popEpisodePointer(
+	heap: LatestEpisodePointer[],
+): LatestEpisodePointer | undefined {
+	if (heap.length === 0) return undefined;
+
+	const top = heap[0];
+	const last = heap.pop();
+
+	if (last && heap.length > 0) {
+		heap[0] = last;
+		let idx = 0;
+
+		while (true) {
+			const left = idx * 2 + 1;
+			const right = idx * 2 + 2;
+			let largest = idx;
+
+			if (
+				left < heap.length &&
+				getEpisodeTimestamp(heap[left].episode) >
+					getEpisodeTimestamp(heap[largest].episode)
+			) {
+				largest = left;
+			}
+
+			if (
+				right < heap.length &&
+				getEpisodeTimestamp(heap[right].episode) >
+					getEpisodeTimestamp(heap[largest].episode)
+			) {
+				largest = right;
+			}
+
+			if (largest === idx) break;
+
+			const temp = heap[idx];
+			heap[idx] = heap[largest];
+			heap[largest] = temp;
+			idx = largest;
+		}
+	}
+
+	return top;
+}
+
+// Use a max-heap to merge the latest episodes from each feed without
+// resorting the entire cache every time a single feed updates.
+function mergeLatestEpisodes(latestByFeed: LatestEpisodesByFeed): Episode[] {
+	const heap: LatestEpisodePointer[] = [];
+
+	for (const [feedTitle, episodes] of latestByFeed.entries()) {
+		if (!episodes.length) continue;
+
+		pushEpisodePointer(heap, {
+			feedTitle,
+			index: 0,
+			episode: episodes[0],
+		});
+	}
+
+	const merged: Episode[] = [];
+	while (heap.length > 0) {
+		const pointer = popEpisodePointer(heap);
+		if (!pointer) break;
+
+		merged.push(pointer.episode);
+
+		const feedEpisodes = latestByFeed.get(pointer.feedTitle);
+		const nextIndex = pointer.index + 1;
+		if (feedEpisodes && nextIndex < feedEpisodes.length) {
+			pushEpisodePointer(heap, {
+				feedTitle: pointer.feedTitle,
+				index: nextIndex,
+				episode: feedEpisodes[nextIndex],
+			});
+		}
+	}
+
+	return merged;
+}
+
+export const latestEpisodes = readable<Episode[]>([], (set) => {
+	let latestByFeed: LatestEpisodesByFeed = new Map();
+	let feedSources: FeedEpisodeSources = new Map();
+
+	const unsubscribe = episodeCache.subscribe((cache) => {
+		let changed = false;
+		const nextSources: FeedEpisodeSources = new Map();
+		const nextLatestByFeed: LatestEpisodesByFeed = new Map();
+
+		for (const [feedTitle, episodes] of Object.entries(cache)) {
+			nextSources.set(feedTitle, episodes);
+			const previousSource = feedSources.get(feedTitle);
+			const previousLatest = latestByFeed.get(feedTitle);
+
+			if (previousSource === episodes && previousLatest) {
+				nextLatestByFeed.set(feedTitle, previousLatest);
+				continue;
+			}
+
+			const latestForFeed = getLatestEpisodesForFeed(episodes);
+			nextLatestByFeed.set(feedTitle, latestForFeed);
+
+			if (!changed) {
+				changed =
+					!previousLatest ||
+					!shallowEqualEpisodes(previousLatest, latestForFeed);
+			}
+		}
+
+		if (!changed) {
+			for (const feedTitle of feedSources.keys()) {
+				if (!nextSources.has(feedTitle)) {
+					changed = true;
+					break;
+				}
+			}
+		}
+
+		feedSources = nextSources;
+
+		if (!changed && nextLatestByFeed.size === latestByFeed.size) {
+			latestByFeed = nextLatestByFeed;
+			return;
+		}
+
+		latestByFeed = nextLatestByFeed;
+		set(mergeLatestEpisodes(latestByFeed));
+	});
+
+	return () => {
+		latestByFeed.clear();
+		feedSources.clear();
+		unsubscribe();
+	};
+});
 
 export const downloadedEpisodes = (() => {
 	const store = writable<{ [podcastName: string]: DownloadedEpisode[] }>({});
