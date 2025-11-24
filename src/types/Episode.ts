@@ -9,4 +9,6 @@ export interface Episode {
 	artworkUrl?: string;
 	episodeDate?: Date;
 	itunesTitle?: string;
+	/** URL to the podcast:chapters JSON file */
+	chaptersUrl?: string;
 }

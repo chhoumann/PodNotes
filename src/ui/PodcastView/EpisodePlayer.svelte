@@ -13,15 +13,18 @@
 		downloadedEpisodes,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
+	import { fetchChapters } from "src/utility/fetchChapters";
 	import { onDestroy, onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
+	import ChapterList from "./ChapterList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import type { Episode } from "src/types/Episode";
+	import type { Chapter } from "src/types/Chapter";
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
@@ -47,6 +50,16 @@
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 	let playerVolume: number = 1;
+	let chapters: Chapter[] = [];
+
+	// Fetch chapters when episode changes
+	$: if ($currentEpisode?.chaptersUrl) {
+		fetchChapters($currentEpisode.chaptersUrl).then((c) => {
+			chapters = c;
+		});
+	} else {
+		chapters = [];
+	}
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
@@ -96,6 +109,10 @@
 		const newVolume = clampVolume(event.detail.value);
 
 		volume.set(newVolume);
+	}
+
+	function onChapterSeek(event: CustomEvent<{ time: number }>) {
+		currentTime.set(event.detail.time);
 	}
 
 	function onMetadataLoaded() {
@@ -288,6 +305,12 @@
 			/>
 		</div>
 	</div>
+
+	<ChapterList
+		{chapters}
+		currentTime={$currentTime}
+		on:seek={onChapterSeek}
+	/>
 
 	<EpisodeList 
 		episodes={$queue.episodes} 

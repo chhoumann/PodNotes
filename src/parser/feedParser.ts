@@ -95,6 +95,7 @@ export default class FeedParser {
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = item.querySelector("image");
 		const itunesTitleEl = item.getElementsByTagName("itunes:title")[0];
+		const chaptersEl = item.getElementsByTagName("podcast:chapters")[0];
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
 			return null;
@@ -109,6 +110,7 @@ export default class FeedParser {
 		const artworkUrl =
 			itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 		const itunesTitle = itunesTitleEl?.textContent;
+		const chaptersUrl = chaptersEl?.getAttribute("url") || undefined;
 
 		return {
 			title,
@@ -121,6 +123,7 @@ export default class FeedParser {
 			episodeDate: pubDate,
 			feedUrl: this.feed?.url || "",
 			itunesTitle: itunesTitle || "",
+			chaptersUrl,
 		};
 	}
 
