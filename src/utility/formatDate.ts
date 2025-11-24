@@ -9,6 +9,7 @@
  * - mm: minutes, m: minute
  * - ss: seconds, s: second
  * - A: AM/PM, a: am/pm
+ * - [text]: literal text (escaped, not parsed as tokens)
  */
 export function formatDate(date: Date, format: string): string {
     const year = date.getFullYear();
@@ -43,27 +44,55 @@ export function formatDate(date: Date, format: string): string {
     const hours12 = hours % 12 || 12;
     const isPM = hours >= 12;
 
-    // Order matters: longer tokens must be replaced before shorter ones
-    return format
-        .replace(/YYYY/g, year.toString())
-        .replace(/YY/g, year.toString().slice(-2))
-        .replace(/MMMM/g, monthNames[month])
-        .replace(/MMM/g, monthNamesShort[month])
-        .replace(/MM/g, pad(month + 1))
-        .replace(/M/g, (month + 1).toString())
-        .replace(/dddd/g, weekdayNames[weekday])
-        .replace(/ddd/g, weekdayNamesShort[weekday])
-        .replace(/Do/g, ordinal(day))
-        .replace(/DD/g, pad(day))
-        .replace(/D/g, day.toString())
-        .replace(/HH/g, pad(hours))
-        .replace(/H/g, hours.toString())
-        .replace(/hh/g, pad(hours12))
-        .replace(/h/g, hours12.toString())
-        .replace(/mm/g, pad(minutes))
-        .replace(/m/g, minutes.toString())
-        .replace(/ss/g, pad(seconds))
-        .replace(/s/g, seconds.toString())
-        .replace(/A/g, isPM ? 'PM' : 'AM')
-        .replace(/a/g, isPM ? 'pm' : 'am');
+    // Token definitions: order matters (longer tokens first to avoid partial matches)
+    const tokens: Record<string, string> = {
+        'YYYY': year.toString(),
+        'YY': year.toString().slice(-2),
+        'MMMM': monthNames[month],
+        'MMM': monthNamesShort[month],
+        'MM': pad(month + 1),
+        'Mo': ordinal(month + 1),
+        'M': (month + 1).toString(),
+        'dddd': weekdayNames[weekday],
+        'ddd': weekdayNamesShort[weekday],
+        'Do': ordinal(day),
+        'DD': pad(day),
+        'D': day.toString(),
+        'HH': pad(hours),
+        'H': hours.toString(),
+        'hh': pad(hours12),
+        'h': hours12.toString(),
+        'mm': pad(minutes),
+        'm': minutes.toString(),
+        'ss': pad(seconds),
+        's': seconds.toString(),
+        'A': isPM ? 'PM' : 'AM',
+        'a': isPM ? 'pm' : 'am',
+    };
+
+    // Build regex pattern: escaped literals [*], then tokens (longest first), then any char
+    const tokenPattern = Object.keys(tokens)
+        .sort((a, b) => b.length - a.length)
+        .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+
+    const regex = new RegExp(`\\[([^\\]]*)]|(${tokenPattern})|.`, 'g');
+
+    let result = '';
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(format)) !== null) {
+        if (match[1] !== undefined) {
+            // Escaped literal text inside [...]
+            result += match[1];
+        } else if (match[2] !== undefined) {
+            // Token match
+            result += tokens[match[2]];
+        } else {
+            // Any other character (literal)
+            result += match[0];
+        }
+    }
+
+    return result;
 }
