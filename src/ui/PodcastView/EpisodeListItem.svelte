@@ -38,6 +38,8 @@
 				src={episode.artworkUrl}
 				alt={episode.title}
 				fadeIn={true}
+				width="5rem"
+				height="5rem"
 				class="podcast-episode-thumbnail"
 			/>
 		</div>
