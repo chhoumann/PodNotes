@@ -27,11 +27,12 @@ import { onMount } from "svelte";
 	import searchEpisodes from "src/utility/searchEpisodes";
 	import type { Playlist } from "src/types/Playlist";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-import {
-	getCachedEpisodes,
-	setCachedEpisodes,
-} from "src/services/FeedCacheService";
-import { get } from "svelte/store";
+	import {
+		getCachedEpisodes,
+		getCachedEpisodesWithStatus,
+		setCachedEpisodes,
+	} from "src/services/FeedCacheService";
+	import { get } from "svelte/store";
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
@@ -39,53 +40,53 @@ import { get } from "svelte/store";
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
+	const FEED_REFRESH_CONCURRENCY = 3;
 
-onMount(() => {
-	const unsubscribePlaylists = playlists.subscribe((pl) => {
-		displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
+	onMount(() => {
+		const unsubscribePlaylists = playlists.subscribe((pl) => {
+			displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
+		});
+
+		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
+			feeds = Object.values(storeValue);
+			void hydrateAndRefreshFeeds();
+		});
+
+		const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
+			latestEpisodes = Object.entries(cache)
+				.map(([_, episodes]) => episodes.slice(0, 10))
+				.flat()
+				.sort((a, b) => {
+					if (a.episodeDate && b.episodeDate)
+						return Number(b.episodeDate) - Number(a.episodeDate);
+
+					return 0;
+				});
+		});
+
+		return () => {
+			unsubscribeEpisodeCache();
+			unsubscribeSavedFeeds();
+			unsubscribePlaylists();
+		};
 	});
 
-	const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
-		feeds = Object.values(storeValue);
-	});
+	function getFeedCacheSettings() {
+		const pluginInstance = get(plugin);
+		const feedCacheSettings = pluginInstance?.settings?.feedCache;
 
-	const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
-		latestEpisodes = Object.entries(cache)
-			.map(([_, episodes]) => episodes.slice(0, 10))
-			.flat()
-			.sort((a, b) => {
-				if (a.episodeDate && b.episodeDate)
-					return Number(b.episodeDate) - Number(a.episodeDate);
-
-				return 0;
-			});
-	});
-
-	(async () => {
-		await fetchEpisodesInAllFeeds(feeds);
-
-		if (!selectedFeed) {
-			displayedEpisodes = latestEpisodes;
-		}
-	})();
-
-	return () => {
-		unsubscribeEpisodeCache();
-		unsubscribeSavedFeeds();
-		unsubscribePlaylists();
-	};
-});
+		return {
+			cacheEnabled: feedCacheSettings?.enabled !== false,
+			cacheTtlMs:
+				Math.max(1, feedCacheSettings?.ttlHours ?? 6) * 60 * 60 * 1000,
+		};
+	}
 
 	async function fetchEpisodes(
 		feed: PodcastFeed,
 		useCache: boolean = true,
 	): Promise<Episode[]> {
-
-		const pluginInstance = get(plugin);
-		const feedCacheSettings = pluginInstance?.settings?.feedCache;
-		const cacheEnabled = feedCacheSettings?.enabled !== false;
-		const cacheTtlMs =
-			Math.max(1, feedCacheSettings?.ttlHours ?? 6) * 60 * 60 * 1000;
+		const { cacheEnabled, cacheTtlMs } = getFeedCacheSettings();
 
 		const cachedEpisodesInFeed = $episodeCache[feed.title];
 
@@ -129,14 +130,95 @@ onMount(() => {
 		}
 	}
 
-	function fetchEpisodesInAllFeeds(
-		feedsToSearch: PodcastFeed[]
-	): Promise<Episode[]> {
-		return Promise.all(
-			feedsToSearch.map((feed) => fetchEpisodes(feed))
-		).then((episodes) => {
-			return episodes.flat();
-		});
+	async function hydrateAndRefreshFeeds() {
+		if (!feeds.length) {
+			return;
+		}
+
+		const { cacheEnabled, cacheTtlMs } = getFeedCacheSettings();
+
+		const cachedFeeds = cacheEnabled
+			? feeds
+					.map((feed) => {
+						const cached = getCachedEpisodesWithStatus(feed, cacheTtlMs);
+						if (!cached?.episodes.length) {
+							return null;
+						}
+
+						return { feed, ...cached };
+					})
+					.filter(Boolean) as Array<{
+						feed: PodcastFeed;
+						episodes: Episode[];
+						isExpired: boolean;
+					}>
+			: [];
+
+		if (cachedFeeds.length) {
+			episodeCache.update((cache) => {
+				const updatedCache = { ...cache };
+
+				for (const { feed, episodes } of cachedFeeds) {
+					if (updatedCache[feed.title]?.length) {
+						continue;
+					}
+
+					updatedCache[feed.title] = episodes;
+				}
+
+				return updatedCache;
+			});
+
+			if (!selectedFeed && !selectedPlaylist) {
+				displayedEpisodes = latestEpisodes;
+			}
+		}
+
+		const feedsToRefresh = cacheEnabled
+			? feeds.filter((feed) => {
+					const feedKey = feed.url ?? feed.title;
+					const cached = cachedFeeds.find(
+						({ feed: cachedFeed }) =>
+							(cachedFeed.url ?? cachedFeed.title) === feedKey,
+					);
+
+					return !cached || cached.isExpired;
+			  })
+			: feeds;
+
+			if (!feedsToRefresh.length) {
+				if (!selectedFeed && !selectedPlaylist) {
+					displayedEpisodes = latestEpisodes;
+				}
+				return;
+			}
+
+		void refreshFeedsWithLimit(feedsToRefresh);
+	}
+
+	async function refreshFeedsWithLimit(feedsToRefresh: PodcastFeed[]) {
+		const queueToRefresh = [...feedsToRefresh];
+		const workers = Array.from(
+			{ length: FEED_REFRESH_CONCURRENCY },
+			async () => {
+				while (queueToRefresh.length) {
+					const feed = queueToRefresh.shift();
+					if (!feed) break;
+
+					await fetchEpisodes(feed, false);
+				}
+			},
+		);
+
+		try {
+			await Promise.all(workers);
+		} catch (error) {
+			console.error("Failed to refresh saved feeds:", error);
+		} finally {
+			if (!selectedFeed && !selectedPlaylist) {
+				displayedEpisodes = latestEpisodes;
+			}
+		}
 	}
 
 	async function handleClickPodcast(

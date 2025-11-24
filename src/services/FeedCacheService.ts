@@ -90,22 +90,24 @@ export function getCachedEpisodes(
 	feed: PodcastFeed,
 	maxAgeMs: number = DEFAULT_TTL_MS,
 ): Episode[] | null {
-	const store = loadCache();
-	const cacheKey = getFeedKey(feed);
-	const cachedValue = store[cacheKey];
+	const cachedEpisodesWithStatus = getCachedEpisodesWithStatus(
+		feed,
+		maxAgeMs,
+	);
 
-	if (!cachedValue) {
+	if (!cachedEpisodesWithStatus) {
 		return null;
 	}
 
-	const isExpired = Date.now() - cachedValue.updatedAt > maxAgeMs;
-	if (isExpired) {
+	if (cachedEpisodesWithStatus.isExpired) {
+		const store = loadCache();
+		const cacheKey = getFeedKey(feed);
 		delete store[cacheKey];
 		persistCache();
 		return null;
 	}
 
-	return cachedValue.episodes.map(deserializeEpisode);
+	return cachedEpisodesWithStatus.episodes;
 }
 
 export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void {
@@ -134,4 +136,27 @@ export function clearFeedCache(): void {
 	} catch (error) {
 		console.error("Failed to clear feed cache:", error);
 	}
+}
+
+export function getCachedEpisodesWithStatus(
+	feed: PodcastFeed,
+	maxAgeMs: number = DEFAULT_TTL_MS,
+):
+	| {
+			episodes: Episode[];
+			isExpired: boolean;
+	  }
+	| null {
+	const store = loadCache();
+	const cacheKey = getFeedKey(feed);
+	const cachedValue = store[cacheKey];
+
+	if (!cachedValue) {
+		return null;
+	}
+
+	return {
+		episodes: cachedValue.episodes.map(deserializeEpisode),
+		isExpired: Date.now() - cachedValue.updatedAt > maxAgeMs,
+	};
 }
