@@ -19,6 +19,7 @@
     let styles: CSSObject = {};
     let inputHandler: ((event: Event) => void) | null = null;
     let changeHandler: ((value: string) => void) | null = null;
+    let isProgrammaticUpdate = false;
 
     onMount(() => {
         text = new TextComponent(textRef);
@@ -36,6 +37,8 @@
     }
 
     function handleInput(event: Event) {
+        if (isProgrammaticUpdate) return;
+
         const input = event.target as HTMLInputElement | null;
         const newValue = input?.value ?? "";
 
@@ -44,6 +47,8 @@
     }
 
     function handleChange(newValue: string) {
+        if (isProgrammaticUpdate) return;
+
         value = newValue;
         dispatch("change", { value: newValue });
     }
@@ -66,14 +71,40 @@
         currentType: "text" | "password" | "email" | "number" | "tel" | "url",
         currentStyles: CSSObject
     ) {
-        if (currentValue !== undefined) component.setValue(currentValue);
-        if (isDisabled) component.setDisabled(isDisabled);
-        if (currentPlaceholder) component.setPlaceholder(currentPlaceholder);
-        if (currentType) component.inputEl.type = currentType;
-        if (currentStyles) {
-            component.inputEl.setAttr("style", extractStylesFromObj(currentStyles));
+        const componentValue =
+            typeof component.getValue === "function"
+                ? component.getValue()
+                : component.inputEl?.value;
+
+        if (currentValue !== undefined && componentValue !== currentValue) {
+            isProgrammaticUpdate = true;
+            component.setValue(currentValue);
+            isProgrammaticUpdate = false;
         }
+
         if (component?.inputEl) {
+            if (component.inputEl.disabled !== isDisabled) {
+                component.setDisabled(isDisabled);
+            }
+
+            if (
+                currentPlaceholder &&
+                component.inputEl.placeholder !== currentPlaceholder
+            ) {
+                component.setPlaceholder(currentPlaceholder);
+            }
+
+            if (component.inputEl.type !== currentType) {
+                component.inputEl.type = currentType;
+            }
+
+            if (currentStyles) {
+                component.inputEl.setAttr(
+                    "style",
+                    extractStylesFromObj(currentStyles),
+                );
+            }
+
             el = component.inputEl;
         }
     }
