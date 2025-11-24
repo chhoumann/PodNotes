@@ -6,6 +6,19 @@
 	export let canShowEpisodeList: boolean = false;
 	export let canShowPlayer: boolean = false;
 
+	const gridTooltip = "Browse podcast grid";
+	const disabledEpisodeTooltip =
+		"Select a podcast or playlist to view its episodes.";
+	const disabledPlayerTooltip =
+		"Start playing an episode to open the player.";
+
+	$: episodeTooltip = canShowEpisodeList
+		? "View episode list"
+		: disabledEpisodeTooltip;
+	$: playerTooltip = canShowPlayer
+		? "Open player"
+		: disabledPlayerTooltip;
+
 	function handleClickMenuItem(newState: ViewState) {
 		if (viewState === newState) return;
 
@@ -29,6 +42,7 @@
         `}
 		aria-label="Podcast grid"
 		aria-pressed={viewState === ViewState.PodcastGrid}
+		title={gridTooltip}
 	>
 		<Icon icon="grid" size={20} clickable={false} />
 	</button>
@@ -38,11 +52,16 @@
 		class={`
             topbar-menu-button
             ${viewState === ViewState.EpisodeList ? "topbar-selected" : ""}
-            ${canShowEpisodeList ? "topbar-selectable" : ""}
+            ${canShowEpisodeList ? "topbar-selectable" : "topbar-disabled"}
         `}
-		aria-label="Episode list"
+		aria-label={
+			canShowEpisodeList
+				? "Episode list"
+				: "Episode list (select a podcast or playlist first)"
+		}
 		aria-pressed={viewState === ViewState.EpisodeList}
 		disabled={!canShowEpisodeList}
+		title={episodeTooltip}
 	>
 		<Icon icon="list-minus" size={20} clickable={false} />
 	</button>
@@ -52,11 +71,16 @@
 		class={`
             topbar-menu-button
             ${viewState === ViewState.Player ? "topbar-selected" : ""}
-            ${canShowPlayer ? "topbar-selectable" : ""}
+            ${canShowPlayer ? "topbar-selectable" : "topbar-disabled"}
         `}
-		aria-label="Player"
+		aria-label={
+			canShowPlayer
+				? "Player"
+				: "Player (start playing an episode to open the player)"
+		}
 		aria-pressed={viewState === ViewState.Player}
 		disabled={!canShowPlayer}
+		title={playerTooltip}
 	>
 		<Icon icon="play" size={20} clickable={false} />
 	</button>
@@ -68,9 +92,12 @@
 		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
+		gap: 0.5rem;
+		padding: 0.25rem 0.5rem;
 		height: 50px;
 		min-height: 50px;
 		border-bottom: 1px solid var(--background-divider);
+		box-sizing: border-box;
 	}
 
 	.topbar-menu-button {
@@ -78,14 +105,18 @@
 		align-items: center;
 		justify-content: center;
 		width: 100%;
-		height: 100%;
-		color: var(--text-muted, #8a8f98);
-		opacity: 1;
-		border: none;
-		background: none;
-		padding: 0;
-		transition: color 120ms ease, background-color 120ms ease,
-			box-shadow 120ms ease, opacity 120ms ease;
+		padding: 0.4rem 0.25rem;
+		flex: 1 1 0;
+		border: 1px solid var(--background-modifier-border, #3a3a3a);
+		border-radius: 8px;
+		background: var(--background-secondary, transparent);
+		color: var(--text-muted, #8a8a8a);
+		transition:
+			background-color 120ms ease,
+			border-color 120ms ease,
+			color 120ms ease,
+			box-shadow 120ms ease,
+			opacity 120ms ease;
 	}
 
 	.topbar-menu-button:focus-visible {
@@ -93,24 +124,32 @@
 		outline-offset: 2px;
 	}
 
-	.topbar-menu-button:disabled {
-		color: var(--text-faint, #6b6b6b);
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-
 	.topbar-selectable {
 		cursor: pointer;
-		color: var(--text-normal, #dfe2e7);
+		color: var(--text-normal, #e6e6e6);
+		background: var(--background-secondary-alt, rgba(255, 255, 255, 0.02));
 	}
 
-	.topbar-selectable:hover {
-		background-color: var(--background-divider);
+	.topbar-menu-button:hover.topbar-selectable:not(.topbar-selected) {
+		background: var(--background-modifier-hover, rgba(255, 255, 255, 0.06));
+		border-color: var(--interactive-accent, #5c6bf7);
+		color: var(--text-normal, #e6e6e6);
 	}
 
-	.topbar-selected {
-		color: var(--interactive-accent, #5c6bf7);
-		background-color: var(--background-secondary, var(--background-divider));
-		box-shadow: inset 0 -2px var(--interactive-accent, #5c6bf7);
+	.topbar-selected,
+	.topbar-selected:hover {
+		color: var(--text-on-accent, #ffffff);
+		background: var(--interactive-accent, #5c6bf7);
+		border-color: var(--interactive-accent, #5c6bf7);
+		box-shadow: 0 0 0 1px var(--interactive-accent, #5c6bf7);
+	}
+
+	.topbar-disabled,
+	.topbar-menu-button:disabled {
+		cursor: not-allowed;
+		color: var(--text-faint, #a0a0a0);
+		background: var(--background-modifier-border, #3a3a3a);
+		border-style: dashed;
+		opacity: 1;
 	}
 </style>

@@ -1,5 +1,4 @@
 <script lang="ts">
-	// https://css-tricks.com/lazy-loading-images-in-svelte/
 	export let src: string;
 	export let alt: string;
 	export let fadeIn: boolean = false;
@@ -7,6 +6,7 @@
 	export let width: string | number | undefined;
 	export let height: string | number | undefined;
 	export let aspectRatio: string | undefined = "1 / 1";
+	export let loading: "lazy" | "eager" | null | undefined = "lazy";
 	export { _class as class };
 
 	let _class: string = "";
@@ -35,7 +35,7 @@
 		{src} 
 		{fadeIn}
 		{interactive}
-		loading="lazy"
+		{loading}
 		on:click={event => dispatcher('click', { event })} 
 		class={_class}
 	/>

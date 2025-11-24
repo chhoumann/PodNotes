@@ -6,7 +6,7 @@
 	export let fadeIn: boolean = false;
 	export let opacity: number = 0; // Falsey value so condition isn't triggered if not set.
 	export let interactive: boolean = false;
-	export let loading: "lazy" | "eager" | null | undefined = undefined;
+	export let loading: "lazy" | "eager" | null | undefined = "lazy";
 	export {_class as class};
 	let _class = "";
 
