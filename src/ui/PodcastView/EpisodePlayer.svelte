@@ -114,16 +114,7 @@
 
 	let srcPromise: Promise<string> = getSrc($currentEpisode);
 
-	// #region Keep player time and currentTime in sync
-	// Simply binding currentTime to the audio element will result in resets.
-	// Hence the following solution.
-	let playerTime: number = 0;
-
 	onMount(() => {
-		const unsub = currentTime.subscribe((ct) => {
-			playerTime = ct;
-		});
-
 		// This only happens when the player is open and the user downloads the episode via the context menu.
 		// So we want to update the source of the audio element to local file / online stream.
 		const unsubDownloadedSource = downloadedEpisodes.subscribe(_ => {
@@ -139,17 +130,11 @@
 		});
 
 		return () => {
-			unsub();
 			unsubDownloadedSource();
 			unsubCurrentEpisode();
 			unsubVolume();
 		};
 	});
-
-	$: {
-		currentTime.set(playerTime);
-	}
-	// #endregion
 
 	onDestroy(() => {
 		playedEpisodes.setEpisodeTime($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
@@ -234,7 +219,7 @@
 		<audio
 			src={src}
 			bind:duration={$duration}
-			bind:currentTime={playerTime}
+			bind:currentTime={$currentTime}
 			bind:paused={$isPaused}
 			bind:playbackRate={offBinding._playbackRate}
 			bind:volume={playerVolume}
