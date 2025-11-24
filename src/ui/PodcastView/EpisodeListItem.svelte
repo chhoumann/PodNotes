@@ -93,16 +93,21 @@
 	}
 
 	.podcast-episode-thumbnail-container {
-		flex-basis: 20%;
+		flex: 0 0 5rem;
+		width: 5rem;
+		height: 5rem;
+		max-width: 5rem;
+		max-height: 5rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 	}
 
 	:global(.podcast-episode-thumbnail) {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 		border-radius: 15%;
-		max-width: 5rem;
-		max-height: 5rem;
 		cursor: pointer !important;
 	}
 </style>

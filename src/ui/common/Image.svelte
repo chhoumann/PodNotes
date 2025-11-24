@@ -6,6 +6,7 @@
 	export let fadeIn: boolean = false;
 	export let opacity: number = 0; // Falsey value so condition isn't triggered if not set.
 	export let interactive: boolean = false;
+	export let loadingMode: "lazy" | "eager" | undefined = "lazy";
 	export {_class as class};
 	let _class = "";
 
@@ -31,6 +32,7 @@
 				draggable="false"
 				{src} 
 				{alt} 
+				loading={loadingMode}
 				class={_class}
 				style:opacity={opacity ? opacity : !fadeIn ? 1 : loaded ? 1 : 0}
 				style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
@@ -44,6 +46,7 @@
 				draggable="false"
 				{src} 
 				{alt} 
+				loading={loadingMode}
 				class={_class}
 				style:opacity={opacity ? opacity : !fadeIn ? 1 : loaded ? 1 : 0}
 				style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
