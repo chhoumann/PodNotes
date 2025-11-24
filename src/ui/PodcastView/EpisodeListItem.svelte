@@ -23,7 +23,7 @@
 		dispatch("contextMenu", { episode, event });
 	}
 
-	function parseEpisodeDate(rawDate?: Date): Date | null {
+	function parseEpisodeDate(rawDate?: Date | string): Date | null {
 		if (!rawDate) return null;
 		const parsedDate = new Date(rawDate);
 		return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
@@ -42,7 +42,7 @@
 		const cachedDate = formattedDateCache.get(cacheKey);
 		if (cachedDate) return cachedDate;
 
-		const formattedDate = dateFormatter.format(parsedDate);
+		const formattedDate = dateFormatter.format(parsedDate).toUpperCase();
 		formattedDateCache.set(cacheKey, formattedDate);
 		return formattedDate;
 	}
@@ -73,7 +73,7 @@
 		<div class="podcast-episode-thumbnail-container"></div>
 	{/if}
 	<div class="podcast-episode-information">
-		<span class="episode-item-date">{date.toUpperCase()}</span>
+		<span class="episode-item-date">{date}</span>
 		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
 	</div>
 </button>
