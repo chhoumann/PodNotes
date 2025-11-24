@@ -10,6 +10,7 @@ export interface IPodNotesSettings {
 	podNotes: { [episodeName: string]: PodNote };
 	defaultPlaybackRate: number;
 	defaultVolume: number;
+	hidePlayedEpisodes: boolean;
 	playedEpisodes: { [episodeName: string]: PlayedEpisode };
 	skipBackwardLength: number;
 	skipForwardLength: number;

@@ -2,7 +2,7 @@
 	import type { Episode } from "src/types/Episode";
 	import { createEventDispatcher } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
-	import { playedEpisodes } from "src/store";
+	import { hidePlayedEpisodes, playedEpisodes } from "src/store";
 	import Icon from "../obsidian/Icon.svelte";
 	import Text from "../obsidian/Text.svelte";
 	import Loading from "./Loading.svelte";
@@ -11,7 +11,6 @@
 	export let showThumbnails: boolean = false;
 	export let showListMenu: boolean = true;
 	export let isLoading: boolean = false;
-	let hidePlayedEpisodes: boolean = false;
 	let searchInputQuery: string = "";
 
 	const dispatch = createEventDispatcher();
@@ -42,7 +41,7 @@
 			<div class="episode-list-search">
 				<Text
 					bind:value={searchInputQuery}
-					on:change={forwardSearchInput}
+					on:input={forwardSearchInput}
 					placeholder="Search episodes"
 					style={{
 						width: "100%",
@@ -50,11 +49,11 @@
 				/>
 			</div>
 			<Icon
-				icon={hidePlayedEpisodes ? "eye-off" : "eye"}
+				icon={$hidePlayedEpisodes ? "eye-off" : "eye"}
 				size={25}
-				label={hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
-				pressed={hidePlayedEpisodes}
-				on:click={() => (hidePlayedEpisodes = !hidePlayedEpisodes)}
+				label={$hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
+				pressed={$hidePlayedEpisodes}
+				on:click={() => hidePlayedEpisodes.update((value) => !value)}
 			/>
 			<Icon
 				icon="refresh-cw"
@@ -75,9 +74,9 @@
 		{#if episodes.length === 0 && !isLoading}
 			<p>No episodes found.</p>
 		{/if}
-		{#each episodes as episode}
+		{#each episodes as episode (episode.url || episode.streamUrl || `${episode.title}-${episode.episodeDate ?? ""}`)}
 			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
-			{#if !hidePlayedEpisodes || !episodePlayed}
+			{#if !$hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
 					{episode}
 					episodeFinished={episodePlayed}
@@ -94,17 +93,19 @@
 	.episode-list-view-container {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		align-items: stretch;
+		justify-content: flex-start;
+		width: 100%;
 	}
 
 	.podcast-episode-list {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		align-items: stretch;
+		justify-content: flex-start;
 		width: 100%;
 		height: 100%;
+		gap: 0.25rem;
 	}
 
 	.episode-list-menu {
