@@ -21,7 +21,7 @@
 	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
-	import { onMount } from "svelte";
+	import { onMount, onDestroy } from "svelte";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import { debounce } from "obsidian";
@@ -45,6 +45,11 @@
 	let currentSearchQuery: string = "";
 	let loadingFeedNames: string[] = [];
 	let loadingFeedSummary: string = "";
+	let isMounted: boolean = true;
+
+	onDestroy(() => {
+		isMounted = false;
+	});
 
 	$: loadingFeedNames = Array.from(loadingFeeds);
 	$: loadingFeedSummary =
@@ -146,6 +151,9 @@
 	}
 
 	function setFeedLoading(feedTitle: string, isLoading: boolean) {
+		// Don't update state if component is unmounted
+		if (!isMounted) return;
+
 		const updatedLoadingFeeds = new Set(loadingFeeds);
 
 		if (isLoading) {

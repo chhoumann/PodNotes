@@ -7,7 +7,8 @@ import { get } from "svelte/store";
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
 	const startTime = Date.now();
-	let stopTime: number;
+	let stopTime: number | undefined;
+	let intervalId: ReturnType<typeof setInterval> | undefined;
 	const notice = new Notice(initialMessage, 0);
 
 	function formatMsg(message: string): string {
@@ -19,20 +20,30 @@ function TimerNotice(heading: string, initialMessage: string) {
 		notice.setMessage(formatMsg(currentMessage));
 	}
 
-	const interval = setInterval(() => {
-		notice.setMessage(formatMsg(currentMessage));
-	}, 1000);
-
 	function getTime(): string {
 		return formatTime(stopTime ? stopTime - startTime : Date.now() - startTime);
 	}
 
+	function clearTimer() {
+		if (intervalId !== undefined) {
+			clearInterval(intervalId);
+			intervalId = undefined;
+		}
+	}
+
+	intervalId = setInterval(() => {
+		notice.setMessage(formatMsg(currentMessage));
+	}, 1000);
+
 	return {
 		update,
-		hide: () => notice.hide(),
+		hide: () => {
+			clearTimer();
+			notice.hide();
+		},
 		stop: () => {
 			stopTime = Date.now();
-			clearInterval(interval);
+			clearTimer();
 		},
 	};
 }

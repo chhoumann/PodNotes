@@ -1,6 +1,6 @@
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { requestUrl } from "obsidian";
 import type { Episode } from "src/types/Episode";
+import { requestWithTimeout } from "src/utility/networkRequest";
 
 export default class FeedParser {
 	private feed: PodcastFeed | undefined;
@@ -125,7 +125,7 @@ export default class FeedParser {
 	}
 
 	private async parseFeed(feedUrl: string): Promise<Document> {
-		const req = await requestUrl({ url: feedUrl });
+		const req = await requestWithTimeout(feedUrl, { timeoutMs: 30000 });
 		const dp = new DOMParser();
 
 		const body = dp.parseFromString(req.text, "text/xml");

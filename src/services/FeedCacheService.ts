@@ -15,6 +15,7 @@ type FeedCache = Record<string, CachedFeedData>;
 const STORAGE_KEY = "podnotes:feed-cache:v1";
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
 const MAX_EPISODES_PER_FEED = 75;
+const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other localStorage usage
 
 let cache: FeedCache | null = null;
 
@@ -55,16 +56,67 @@ function loadCache(): FeedCache {
 	}
 }
 
+function evictOldestEntries(cacheData: FeedCache, targetSizeBytes: number): FeedCache {
+	const entries = Object.entries(cacheData);
+
+	// Sort by updatedAt ascending (oldest first)
+	entries.sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+
+	const result: FeedCache = {};
+	let currentSize = 0;
+
+	// Add entries from newest to oldest until we exceed target size
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const [key, value] = entries[i];
+		const entrySize = JSON.stringify({ [key]: value }).length;
+
+		if (currentSize + entrySize <= targetSizeBytes) {
+			result[key] = value;
+			currentSize += entrySize;
+		}
+	}
+
+	return result;
+}
+
 function persistCache(): void {
 	const storage = getStorage();
-	if (!storage) {
+	if (!storage || !cache) {
 		return;
 	}
 
 	try {
-		storage.setItem(STORAGE_KEY, JSON.stringify(cache ?? {}));
+		let serialized = JSON.stringify(cache);
+
+		// If cache is too large, evict oldest entries
+		if (serialized.length > MAX_CACHE_SIZE_BYTES) {
+			console.warn(
+				`Feed cache size (${serialized.length} bytes) exceeds limit, evicting old entries`,
+			);
+			cache = evictOldestEntries(cache, MAX_CACHE_SIZE_BYTES * 0.8); // Target 80% of max
+			serialized = JSON.stringify(cache);
+		}
+
+		storage.setItem(STORAGE_KEY, serialized);
 	} catch (error) {
-		console.error("Failed to persist feed cache:", error);
+		// Handle quota exceeded error specifically
+		if (
+			error instanceof DOMException &&
+			(error.name === "QuotaExceededError" ||
+				error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+		) {
+			console.warn("localStorage quota exceeded, clearing feed cache");
+			try {
+				// Clear cache and try again with empty cache
+				cache = {};
+				storage.setItem(STORAGE_KEY, "{}");
+			} catch {
+				// If we still can't write, just clear the item
+				storage.removeItem(STORAGE_KEY);
+			}
+		} else {
+			console.error("Failed to persist feed cache:", error);
+		}
 	}
 }
 

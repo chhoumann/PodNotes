@@ -6,12 +6,20 @@
 	import Icon from "../obsidian/Icon.svelte";
 	import Text from "../obsidian/Text.svelte";
 	import Loading from "./Loading.svelte";
+	import { getEpisodeKey } from "src/utility/episodeKey";
 
 	export let episodes: Episode[] = [];
 	export let showThumbnails: boolean = false;
 	export let showListMenu: boolean = true;
 	export let isLoading: boolean = false;
 	let searchInputQuery: string = "";
+
+	function isEpisodeFinished(episode: Episode | null | undefined, playedEps: typeof $playedEpisodes): boolean {
+		if (!episode) return false;
+		const key = getEpisodeKey(episode);
+		// Check composite key first, then fall back to title-only for backwards compat
+		return (key && playedEps[key]?.finished) || playedEps[episode.title]?.finished || false;
+	}
 
 	const dispatch = createEventDispatcher();
 
@@ -75,7 +83,7 @@
 			<p>No episodes found.</p>
 		{/if}
 		{#each episodes as episode (episode.url || episode.streamUrl || `${episode.title}-${episode.episodeDate ?? ""}`)}
-			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
+			{@const episodePlayed = isEpisodeFinished(episode, $playedEpisodes)}
 			{#if !$hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
 					{episode}

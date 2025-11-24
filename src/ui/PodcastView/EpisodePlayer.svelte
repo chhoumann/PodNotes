@@ -25,6 +25,7 @@
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
+	import { getEpisodeKey } from "src/utility/episodeKey";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -103,8 +104,19 @@
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
 
-		if (playedEps[currentEp.title]) {
-			currentTime.set(playedEps[currentEp.title].time);
+		if (!currentEp) {
+			currentTime.set(0);
+			isPaused.set(false);
+			return;
+		}
+
+		const key = getEpisodeKey(currentEp);
+
+		// Check composite key first, then fallback to title-only for backwards compat
+		const playedData = (key && playedEps[key]) || playedEps[currentEp.title];
+
+		if (playedData?.time) {
+			currentTime.set(playedData.time);
 		} else {
 			currentTime.set(0);
 		}

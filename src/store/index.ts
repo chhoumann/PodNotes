@@ -8,6 +8,7 @@ import { ViewState } from "src/types/ViewState";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import { TFile } from "obsidian";
 import type { LocalEpisode } from "src/types/LocalEpisode";
+import { getEpisodeKey } from "src/utility/episodeKey";
 
 export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
@@ -46,18 +47,51 @@ export const playedEpisodes = (() => {
 	const store = writable<{ [key: string]: PlayedEpisode }>({});
 	const { subscribe, update, set } = store;
 
+	/**
+	 * Gets played episode data, checking both composite key and legacy title-only key
+	 * for backwards compatibility.
+	 */
+	function getPlayedEpisode(
+		playedEps: { [key: string]: PlayedEpisode },
+		episode: Episode | null | undefined,
+	): PlayedEpisode | undefined {
+		if (!episode) return undefined;
+
+		const key = getEpisodeKey(episode);
+		// First try composite key
+		if (key && playedEps[key]) {
+			return playedEps[key];
+		}
+		// Fall back to title-only for backwards compatibility
+		if (episode.title && playedEps[episode.title]) {
+			return playedEps[episode.title];
+		}
+		return undefined;
+	}
+
 	return {
 		subscribe,
 		set,
 		update,
+		/**
+		 * Gets played episode data with backwards compatibility.
+		 */
+		get: (episode: Episode): PlayedEpisode | undefined => {
+			return getPlayedEpisode(get(store), episode);
+		},
 		setEpisodeTime: (
-			episode: Episode,
+			episode: Episode | null | undefined,
 			time: number,
 			duration: number,
 			finished: boolean,
 		) => {
+			if (!episode) return;
+
 			update((playedEpisodes) => {
-				playedEpisodes[episode.title] = {
+				const key = getEpisodeKey(episode);
+				if (!key) return playedEpisodes;
+
+				playedEpisodes[key] = {
 					title: episode.title,
 					podcastName: episode.podcastName,
 					time,
@@ -68,29 +102,47 @@ export const playedEpisodes = (() => {
 				return playedEpisodes;
 			});
 		},
-		markAsPlayed: (episode: Episode) => {
+		markAsPlayed: (episode: Episode | null | undefined) => {
+			if (!episode) return;
+
 			update((playedEpisodes) => {
-				const playedEpisode = playedEpisodes[episode.title] || episode;
+				const key = getEpisodeKey(episode);
+				if (!key) return playedEpisodes;
 
-				if (playedEpisode) {
-					playedEpisode.time = playedEpisode.duration;
-					playedEpisode.finished = true;
-				}
+				const playedEpisode = getPlayedEpisode(playedEpisodes, episode) || {
+					title: episode.title,
+					podcastName: episode.podcastName,
+					time: 0,
+					duration: 0,
+					finished: false,
+				};
 
-				playedEpisodes[episode.title] = playedEpisode;
+				playedEpisode.time = playedEpisode.duration;
+				playedEpisode.finished = true;
+
+				playedEpisodes[key] = playedEpisode;
 				return playedEpisodes;
 			});
 		},
-		markAsUnplayed: (episode: Episode) => {
+		markAsUnplayed: (episode: Episode | null | undefined) => {
+			if (!episode) return;
+
 			update((playedEpisodes) => {
-				const playedEpisode = playedEpisodes[episode.title] || episode;
+				const key = getEpisodeKey(episode);
+				if (!key) return playedEpisodes;
 
-				if (playedEpisode) {
-					playedEpisode.time = 0;
-					playedEpisode.finished = false;
-				}
+				const playedEpisode = getPlayedEpisode(playedEpisodes, episode) || {
+					title: episode.title,
+					podcastName: episode.podcastName,
+					time: 0,
+					duration: 0,
+					finished: false,
+				};
 
-				playedEpisodes[episode.title] = playedEpisode;
+				playedEpisode.time = 0;
+				playedEpisode.finished = false;
+
+				playedEpisodes[key] = playedEpisode;
 				return playedEpisodes;
 			});
 		},
@@ -313,11 +365,16 @@ export const downloadedEpisodes = (() => {
 				const index = podcastEpisodes.findIndex(
 					(e) => e.title === episode.title,
 				);
-				const filePath = podcastEpisodes[index].filePath;
 
+				// Guard against episode not found
+				if (index === -1) {
+					return downloadedEpisodes;
+				}
+
+				const filePath = podcastEpisodes[index].filePath;
 				podcastEpisodes.splice(index, 1);
 
-				if (removeFile) {
+				if (removeFile && filePath) {
 					try {
 						// @ts-ignore: app is not defined in the global scope anymore, but is still
 						// available. Need to fix this later
