@@ -108,7 +108,8 @@
 		const cacheTtlMs =
 			Math.max(1, feedCacheSettings?.ttlHours ?? 6) * 60 * 60 * 1000;
 
-		const cachedEpisodesInFeed = $episodeCache[feed.title];
+		const currentCache = get(episodeCache);
+		const cachedEpisodesInFeed = currentCache[feed.title];
 
 		if (
 			useCache &&
@@ -146,7 +147,8 @@
 				`Failed to fetch episodes for ${feed.title}:`,
 				error,
 			);
-			return $downloadedEpisodes[feed.title] || [];
+			const downloaded = get(downloadedEpisodes);
+			return downloaded[feed.title] || [];
 		}
 	}
 
@@ -236,7 +238,8 @@
 		currentSearchQuery = query;
 
 		if (selectedFeed) {
-			const episodesInFeed = $episodeCache[selectedFeed.title] ?? [];
+			const cache = get(episodeCache);
+			const episodesInFeed = cache[selectedFeed.title] ?? [];
 			displayedEpisodes = searchEpisodes(query, episodesInFeed);
 			return;
 		}
