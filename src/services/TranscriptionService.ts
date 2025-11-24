@@ -57,6 +57,7 @@ export class TranscriptionService {
 	private readonly WAV_HEADER_SIZE = 44;
 	private readonly PCM_BYTES_PER_SAMPLE = 2;
 	private readonly MAX_CONCURRENT_TRANSCRIPTIONS = 2;
+	private readonly MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
 	private pendingEpisodes: Episode[] = [];
 	private activeTranscriptions = new Set<string>();
 
@@ -418,6 +419,7 @@ export class TranscriptionService {
 		const client = await this.getClient();
 		const transcriptions: string[] = new Array(files.length);
 		let completedChunks = 0;
+		let nextIndex = 0;
 
 		const updateProgress = () => {
 			const progress = ((completedChunks / files.length) * 100).toFixed(1);
@@ -428,8 +430,12 @@ export class TranscriptionService {
 
 		updateProgress();
 
-		await Promise.all(
-			files.map(async (file, index) => {
+		const worker = async () => {
+			while (true) {
+				const index = nextIndex++;
+				if (index >= files.length) return;
+				const file = files[index];
+
 				let retries = 0;
 				while (retries < this.MAX_RETRIES) {
 					try {
@@ -454,12 +460,20 @@ export class TranscriptionService {
 						} else {
 							await new Promise((resolve) =>
 								setTimeout(resolve, 1000 * retries),
-							); // Exponential backoff
+							);
 						}
 					}
 				}
-			}),
+			}
+		};
+
+		const workerCount = Math.min(
+			this.MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS,
+			files.length,
 		);
+		const workers = Array.from({ length: workerCount }, () => worker());
+
+		await Promise.all(workers);
 
 		return transcriptions.join(" ");
 	}
@@ -481,13 +495,20 @@ export class TranscriptionService {
 
 		const vault = this.plugin.app.vault;
 
-		// Ensure the directory exists
+		// Ensure the directory exists (create nested folders recursively)
 		const directory = transcriptPath.substring(
 			0,
 			transcriptPath.lastIndexOf("/"),
 		);
-		if (directory && !vault.getAbstractFileByPath(directory)) {
-			await vault.createFolder(directory);
+		if (directory) {
+			const parts = directory.split("/");
+			let current = "";
+			for (const part of parts) {
+				current = current ? `${current}/${part}` : part;
+				if (!vault.getAbstractFileByPath(current)) {
+					await vault.createFolder(current);
+				}
+			}
 		}
 
 		const file = vault.getAbstractFileByPath(transcriptPath);
@@ -495,8 +516,11 @@ export class TranscriptionService {
 		if (!file) {
 			const newFile = await vault.create(transcriptPath, transcriptContent);
 			await this.plugin.app.workspace.getLeaf().openFile(newFile);
+		} else if (file instanceof TFile) {
+			// File already exists - open it without overwriting
+			await this.plugin.app.workspace.getLeaf().openFile(file);
 		} else {
-			throw new Error("Expected a file but got a folder");
+			throw new Error("Expected a file but found a folder at transcript path.");
 		}
 	}
 
