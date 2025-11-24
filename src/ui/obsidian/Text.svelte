@@ -17,28 +17,45 @@
 
     let text: TextComponent;
     let styles: CSSObject = {};
-    let textChangeHandler: ((event: Event) => void) | null = null;
+    let inputHandler: ((event: Event) => void) | null = null;
+    let changeHandler: ((value: string) => void) | null = null;
 
     onMount(() => {
         text = new TextComponent(textRef);
-
-        textChangeHandler = (event: Event) => {
-            const newValue = (event.target as HTMLInputElement).value;
-            value = newValue;
-            dispatch("change", { value: newValue });
-        };
-
-        text.inputEl.addEventListener("input", textChangeHandler);
     });
 
     onDestroy(() => {
-        if (text?.inputEl && textChangeHandler) {
-            text.inputEl.removeEventListener("input", textChangeHandler);
+        if (text?.inputEl && inputHandler) {
+            text.inputEl.removeEventListener("input", inputHandler);
         }
     });
 
     $: if (text) {
+        attachEventListeners(text);
         updateTextComponentAttributes(text, value, disabled, placeholder, type, styles);
+    }
+
+    function handleInput(event: Event) {
+        const input = event.target as HTMLInputElement | null;
+        const newValue = input?.value ?? "";
+
+        value = newValue;
+        dispatch("input", { value: newValue });
+    }
+
+    function handleChange(newValue: string) {
+        value = newValue;
+        dispatch("change", { value: newValue });
+    }
+
+    function attachEventListeners(component: TextComponent) {
+        if (!component?.inputEl || inputHandler) return;
+
+        changeHandler = handleChange;
+        component.onChange(changeHandler);
+
+        inputHandler = handleInput;
+        component.inputEl.addEventListener("input", inputHandler);
     }
 
     function updateTextComponentAttributes(
