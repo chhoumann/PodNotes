@@ -40,7 +40,7 @@
 			<div class="episode-list-search">
 				<Text
 					bind:value={searchInputQuery}
-					on:change={forwardSearchInput}
+					on:input={forwardSearchInput}
 					placeholder="Search episodes"
 					style={{
 						width: "100%",
