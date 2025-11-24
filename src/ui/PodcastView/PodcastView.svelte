@@ -40,6 +40,16 @@
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
+	let loadingFeeds: Set<string> = new Set();
+	let currentSearchQuery: string = "";
+	let loadingFeedNames: string[] = [];
+	let loadingFeedSummary: string = "";
+
+	$: loadingFeedNames = Array.from(loadingFeeds);
+	$: loadingFeedSummary =
+		loadingFeedNames.length > 3
+			? `${loadingFeedNames.slice(0, 3).join(", ")} +${loadingFeedNames.length - 3} more`
+			: loadingFeedNames.join(", ");
 
 	onMount(() => {
 		const unsubscribePlaylists = playlists.subscribe((pl) => {
@@ -47,7 +57,18 @@
 		});
 
 		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
-			feeds = Object.values(storeValue);
+			const updatedFeeds = Object.values(storeValue);
+			const previousFeedTitles = new Set(feeds.map((feed) => feed.title));
+
+			feeds = updatedFeeds;
+
+			const newFeeds = updatedFeeds.filter(
+				(feed) => !previousFeedTitles.has(feed.title),
+			);
+
+			if (newFeeds.length > 0) {
+				void fetchEpisodesInAllFeeds(newFeeds);
+			}
 		});
 
 		const unsubscribeLatestEpisodes = latestEpisodesStore.subscribe(
@@ -55,18 +76,12 @@
 				latestEpisodes = episodes;
 
 				if (!selectedFeed && !selectedPlaylist) {
-					displayedEpisodes = episodes;
+					displayedEpisodes = currentSearchQuery
+						? searchEpisodes(currentSearchQuery, episodes)
+						: episodes;
 				}
 			},
 		);
-
-		(async () => {
-			await fetchEpisodesInAllFeeds(feeds);
-
-			if (!selectedFeed) {
-				displayedEpisodes = latestEpisodes;
-			}
-		})();
 
 		return () => {
 			unsubscribeLatestEpisodes();
@@ -128,14 +143,34 @@
 		}
 	}
 
+	function setFeedLoading(feedTitle: string, isLoading: boolean) {
+		const updatedLoadingFeeds = new Set(loadingFeeds);
+
+		if (isLoading) {
+			updatedLoadingFeeds.add(feedTitle);
+		} else {
+			updatedLoadingFeeds.delete(feedTitle);
+		}
+
+		loadingFeeds = updatedLoadingFeeds;
+	}
+
 	function fetchEpisodesInAllFeeds(
 		feedsToSearch: PodcastFeed[]
-	): Promise<Episode[]> {
+	): Promise<void> {
+		if (!feedsToSearch.length) return Promise.resolve();
+
 		return Promise.all(
-			feedsToSearch.map((feed) => fetchEpisodes(feed))
-		).then((episodes) => {
-			return episodes.flat();
-		});
+			feedsToSearch.map(async (feed) => {
+				setFeedLoading(feed.title, true);
+
+				try {
+					await fetchEpisodes(feed);
+				} finally {
+					setFeedLoading(feed.title, false);
+				}
+			})
+		).then(() => undefined);
 	}
 
 	async function handleClickPodcast(
@@ -145,8 +180,17 @@
 		displayedEpisodes = [];
 
 		selectedFeed = feed;
-		displayedEpisodes = await fetchEpisodes(feed);
 		viewState.set(ViewState.EpisodeList);
+		setFeedLoading(feed.title, true);
+
+		try {
+			const episodes = await fetchEpisodes(feed);
+			displayedEpisodes = currentSearchQuery
+				? searchEpisodes(currentSearchQuery, episodes)
+				: episodes;
+		} finally {
+			setFeedLoading(feed.title, false);
+		}
 	}
 
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
@@ -165,14 +209,24 @@
 	async function handleClickRefresh() {
 		if (!selectedFeed) return;
 
-		displayedEpisodes = await fetchEpisodes(selectedFeed, false);
+		setFeedLoading(selectedFeed.title, true);
+
+		try {
+			const episodes = await fetchEpisodes(selectedFeed, false);
+			displayedEpisodes = currentSearchQuery
+				? searchEpisodes(currentSearchQuery, episodes)
+				: episodes;
+		} finally {
+			setFeedLoading(selectedFeed.title, false);
+		}
 	}
 
 	const handleSearch = debounce((event: CustomEvent<{ query: string }>) => {
 		const { query } = event.detail;
+		currentSearchQuery = query;
 
 		if (selectedFeed) {
-			const episodesInFeed = $episodeCache[selectedFeed.title];
+			const episodesInFeed = $episodeCache[selectedFeed.title] ?? [];
 			displayedEpisodes = searchEpisodes(query, episodesInFeed);
 			return;
 		}
@@ -212,6 +266,21 @@
 	{#if $viewState === ViewState.Player}
 		<EpisodePlayer />
 	{:else if $viewState === ViewState.EpisodeList}
+		{#if loadingFeedNames.length > 0}
+			<div class="feed-loading-banner">
+				<div class="feed-loading-spinner">
+					<Icon icon="loader-2" size={18} clickable={false} />
+				</div>
+				<div class="feed-loading-text">
+					<span>
+						Updating {loadingFeedNames.length} feed{loadingFeedNames.length === 1 ? "" : "s"}
+					</span>
+					{#if loadingFeedSummary}
+						<span class="feed-loading-names">{loadingFeedSummary}</span>
+					{/if}
+				</div>
+			</div>
+		{/if}
 		<EpisodeList
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed || !selectedPlaylist}
@@ -227,7 +296,9 @@
 						class="go-back"
 						on:click={() => {
 							selectedFeed = null;
-							displayedEpisodes = latestEpisodes;
+							displayedEpisodes = currentSearchQuery
+								? searchEpisodes(currentSearchQuery, latestEpisodes)
+								: latestEpisodes;
 							viewState.set(ViewState.EpisodeList);
 						}}
 					>
@@ -247,7 +318,9 @@
 						class="go-back"
 						on:click={() => {
 							selectedPlaylist = null;
-							displayedEpisodes = latestEpisodes;
+							displayedEpisodes = currentSearchQuery
+								? searchEpisodes(currentSearchQuery, latestEpisodes)
+								: latestEpisodes;
 							viewState.set(ViewState.EpisodeList);
 						}}
 					>
@@ -285,6 +358,42 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+	}
+
+	.feed-loading-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		box-sizing: border-box;
+	}
+
+	.feed-loading-spinner {
+		display: inline-flex;
+		animation: spin 1s linear infinite;
+	}
+
+	.feed-loading-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		font-size: 0.9rem;
+	}
+
+	.feed-loading-names {
+		opacity: 0.7;
+		font-size: 0.85rem;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.go-back {
