@@ -107,11 +107,6 @@ const LATEST_EPISODES_PER_FEED = 10;
 
 type LatestEpisodesByFeed = Map<string, Episode[]>;
 type FeedEpisodeSources = Map<string, Episode[]>;
-type LatestEpisodePointer = {
-	feedTitle: string;
-	index: number;
-	episode: Episode;
-};
 
 function getEpisodeTimestamp(episode?: Episode): number {
 	if (!episode?.episodeDate) return 0;
@@ -137,161 +132,137 @@ function shallowEqualEpisodes(a?: Episode[], b?: Episode[]): boolean {
 	return true;
 }
 
-function pushEpisodePointer(
-	heap: LatestEpisodePointer[],
-	pointer: LatestEpisodePointer,
-): void {
-	heap.push(pointer);
-	let idx = heap.length - 1;
+const latestEpisodeIdentifier = (episode: Episode): string =>
+	`${episode.podcastName}::${episode.title}`;
 
-	while (idx > 0) {
-		const parent = Math.floor((idx - 1) / 2);
-		if (
-			getEpisodeTimestamp(heap[parent].episode) >=
-			getEpisodeTimestamp(heap[idx].episode)
-		) {
-			break;
+function insertEpisodeSorted(
+	episodes: Episode[],
+	episodeToInsert: Episode,
+	limit: number,
+): Episode[] {
+	const nextEpisodes = [...episodes];
+	const value = getEpisodeTimestamp(episodeToInsert);
+	let low = 0;
+	let high = nextEpisodes.length;
+
+	while (low < high) {
+		const mid = (low + high) >> 1;
+		const midValue = getEpisodeTimestamp(nextEpisodes[mid]);
+
+		if (value > midValue) {
+			high = mid;
+		} else {
+			low = mid + 1;
 		}
-
-		heap[idx] = heap[parent];
-		heap[parent] = pointer;
-		idx = parent;
 	}
+
+	nextEpisodes.splice(low, 0, episodeToInsert);
+
+	if (nextEpisodes.length > limit) {
+		nextEpisodes.length = limit;
+	}
+
+	return nextEpisodes;
 }
 
-function popEpisodePointer(
-	heap: LatestEpisodePointer[],
-): LatestEpisodePointer | undefined {
-	if (heap.length === 0) return undefined;
-
-	const top = heap[0];
-	const last = heap.pop();
-
-	if (last && heap.length > 0) {
-		heap[0] = last;
-		let idx = 0;
-
-		while (true) {
-			const left = idx * 2 + 1;
-			const right = idx * 2 + 2;
-			let largest = idx;
-
-			if (
-				left < heap.length &&
-				getEpisodeTimestamp(heap[left].episode) >
-					getEpisodeTimestamp(heap[largest].episode)
-			) {
-				largest = left;
-			}
-
-			if (
-				right < heap.length &&
-				getEpisodeTimestamp(heap[right].episode) >
-					getEpisodeTimestamp(heap[largest].episode)
-			) {
-				largest = right;
-			}
-
-			if (largest === idx) break;
-
-			const temp = heap[idx];
-			heap[idx] = heap[largest];
-			heap[largest] = temp;
-			idx = largest;
-		}
+function removeFeedEntries(
+	currentLatest: Episode[],
+	feedEpisodes: Episode[] | undefined = [],
+): Episode[] {
+	if (!feedEpisodes?.length) {
+		return currentLatest;
 	}
 
-	return top;
+	const feedKeys = new Set(feedEpisodes.map(latestEpisodeIdentifier));
+
+	return currentLatest.filter(
+		(episode) => !feedKeys.has(latestEpisodeIdentifier(episode)),
+	);
 }
 
-// Use a max-heap to merge the latest episodes from each feed without
-// resorting the entire cache every time a single feed updates.
-function mergeLatestEpisodes(latestByFeed: LatestEpisodesByFeed): Episode[] {
-	const heap: LatestEpisodePointer[] = [];
+function updateLatestEpisodesForFeed(
+	currentLatest: Episode[],
+	previousFeedEpisodes: Episode[] | undefined,
+	nextFeedEpisodes: Episode[] | undefined,
+	limit: number,
+): Episode[] {
+	let nextLatest = removeFeedEntries(currentLatest, previousFeedEpisodes);
 
-	for (const [feedTitle, episodes] of latestByFeed.entries()) {
-		if (!episodes.length) continue;
-
-		pushEpisodePointer(heap, {
-			feedTitle,
-			index: 0,
-			episode: episodes[0],
-		});
+	if (!nextFeedEpisodes?.length) {
+		return nextLatest;
 	}
 
-	const merged: Episode[] = [];
-	while (heap.length > 0) {
-		const pointer = popEpisodePointer(heap);
-		if (!pointer) break;
-
-		merged.push(pointer.episode);
-
-		const feedEpisodes = latestByFeed.get(pointer.feedTitle);
-		const nextIndex = pointer.index + 1;
-		if (feedEpisodes && nextIndex < feedEpisodes.length) {
-			pushEpisodePointer(heap, {
-				feedTitle: pointer.feedTitle,
-				index: nextIndex,
-				episode: feedEpisodes[nextIndex],
-			});
-		}
+	for (const episode of nextFeedEpisodes) {
+		nextLatest = insertEpisodeSorted(nextLatest, episode, limit);
 	}
 
-	return merged;
+	return nextLatest;
 }
 
 export const latestEpisodes = readable<Episode[]>([], (set) => {
 	let latestByFeed: LatestEpisodesByFeed = new Map();
 	let feedSources: FeedEpisodeSources = new Map();
+	let mergedLatest: Episode[] = [];
 
 	const unsubscribe = episodeCache.subscribe((cache) => {
+		const cacheEntries = Object.entries(cache);
+		const feedCount = cacheEntries.length;
+		const latestLimit = Math.max(
+			1,
+			LATEST_EPISODES_PER_FEED * Math.max(feedCount, 1),
+		);
+
 		let changed = false;
+		let nextMerged = mergedLatest;
 		const nextSources: FeedEpisodeSources = new Map();
 		const nextLatestByFeed: LatestEpisodesByFeed = new Map();
 
-		for (const [feedTitle, episodes] of Object.entries(cache)) {
+		for (const [feedTitle, episodes] of cacheEntries) {
 			nextSources.set(feedTitle, episodes);
 			const previousSource = feedSources.get(feedTitle);
-			const previousLatest = latestByFeed.get(feedTitle);
+			const previousLatest = latestByFeed.get(feedTitle) || [];
 
-			if (previousSource === episodes && previousLatest) {
-				nextLatestByFeed.set(feedTitle, previousLatest);
-				continue;
-			}
+			const nextLatestForFeed =
+				previousSource === episodes && previousLatest
+					? previousLatest
+					: getLatestEpisodesForFeed(episodes);
 
-			const latestForFeed = getLatestEpisodesForFeed(episodes);
-			nextLatestByFeed.set(feedTitle, latestForFeed);
+			nextLatestByFeed.set(feedTitle, nextLatestForFeed);
 
-			if (!changed) {
-				changed =
-					!previousLatest ||
-					!shallowEqualEpisodes(previousLatest, latestForFeed);
+			if (!shallowEqualEpisodes(previousLatest, nextLatestForFeed)) {
+				changed = true;
+				nextMerged = updateLatestEpisodesForFeed(
+					nextMerged,
+					previousLatest,
+					nextLatestForFeed,
+					latestLimit,
+				);
 			}
 		}
 
-		if (!changed) {
-			for (const feedTitle of feedSources.keys()) {
-				if (!nextSources.has(feedTitle)) {
-					changed = true;
-					break;
-				}
+		for (const feedTitle of latestByFeed.keys()) {
+			if (!nextSources.has(feedTitle)) {
+				changed = true;
+				nextMerged = removeFeedEntries(
+					nextMerged,
+					latestByFeed.get(feedTitle),
+				);
 			}
 		}
 
 		feedSources = nextSources;
-
-		if (!changed && nextLatestByFeed.size === latestByFeed.size) {
-			latestByFeed = nextLatestByFeed;
-			return;
-		}
-
 		latestByFeed = nextLatestByFeed;
-		set(mergeLatestEpisodes(latestByFeed));
+
+		if (changed) {
+			mergedLatest = nextMerged;
+			set(mergedLatest);
+		}
 	});
 
 	return () => {
 		latestByFeed.clear();
 		feedSources.clear();
+		mergedLatest = [];
 		unsubscribe();
 	};
 });
