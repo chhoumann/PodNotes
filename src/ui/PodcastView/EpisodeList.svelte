@@ -67,7 +67,7 @@
 		{#if episodes.length === 0}
 			<p>No episodes found.</p>
 		{/if}
-		{#each episodes as episode}
+		{#each episodes as episode (episode.url || episode.streamUrl || `${episode.title}-${episode.episodeDate ?? ""}`)}
 			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
 			{#if !hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
@@ -86,17 +86,19 @@
 	.episode-list-view-container {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		align-items: stretch;
+		justify-content: flex-start;
+		width: 100%;
 	}
 
 	.podcast-episode-list {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		align-items: stretch;
+		justify-content: flex-start;
 		width: 100%;
 		height: 100%;
+		gap: 0.25rem;
 	}
 
 	.episode-list-menu {

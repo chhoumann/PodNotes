@@ -17,13 +17,13 @@
 
 <div class="podcast-grid">
 	{#if playlists.length > 0}
-		{#each playlists as playlist}
+		{#each playlists as playlist (playlist.name)}
 			<PlaylistCard playlist={playlist} on:clickPlaylist={forwardClickPlaylist} />
 		{/each}
 	{/if}
 
 	{#if feeds.length > 0}
-		{#each feeds as feed}
+		{#each feeds as feed (feed.url)}
 			<PodcastGridCard
 				feed={feed}
 				on:clickPodcast
