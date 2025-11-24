@@ -39,6 +39,18 @@ import { get } from "svelte/store";
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
+	let isFetchingEpisodes: boolean = false;
+	let pendingEpisodeFetches: number = 0;
+
+	function startEpisodeFetch() {
+		pendingEpisodeFetches += 1;
+		isFetchingEpisodes = true;
+	}
+
+	function finishEpisodeFetch() {
+		pendingEpisodeFetches = Math.max(0, pendingEpisodeFetches - 1);
+		isFetchingEpisodes = pendingEpisodeFetches > 0;
+	}
 
 onMount(() => {
 	const unsubscribePlaylists = playlists.subscribe((pl) => {
@@ -129,25 +141,51 @@ onMount(() => {
 		}
 	}
 
-	function fetchEpisodesInAllFeeds(
+	async function fetchEpisodesInAllFeeds(
 		feedsToSearch: PodcastFeed[]
 	): Promise<Episode[]> {
-		return Promise.all(
-			feedsToSearch.map((feed) => fetchEpisodes(feed))
-		).then((episodes) => {
-			return episodes.flat();
-		});
+		if (!feedsToSearch.length) {
+			return [];
+		}
+
+		startEpisodeFetch();
+
+		try {
+			const episodes = await Promise.allSettled(
+				feedsToSearch.map(async (feed) => {
+					const feedEpisodes = await fetchEpisodes(feed);
+
+					if (!selectedFeed && !selectedPlaylist) {
+						displayedEpisodes = latestEpisodes;
+					}
+
+					return feedEpisodes;
+				}),
+			);
+
+			return episodes
+				.map((result) => (result.status === "fulfilled" ? result.value : []))
+				.flat();
+		} finally {
+			finishEpisodeFetch();
+		}
 	}
 
 	async function handleClickPodcast(
 		event: CustomEvent<{ feed: PodcastFeed }>
 	) {
 		const { feed } = event.detail;
-		displayedEpisodes = [];
 
 		selectedFeed = feed;
-		displayedEpisodes = await fetchEpisodes(feed);
+		displayedEpisodes = [];
+		startEpisodeFetch();
 		viewState.set(ViewState.EpisodeList);
+
+		try {
+			displayedEpisodes = await fetchEpisodes(feed);
+		} finally {
+			finishEpisodeFetch();
+		}
 	}
 
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
@@ -166,7 +204,13 @@ onMount(() => {
 	async function handleClickRefresh() {
 		if (!selectedFeed) return;
 
-		displayedEpisodes = await fetchEpisodes(selectedFeed, false);
+		startEpisodeFetch();
+
+		try {
+			displayedEpisodes = await fetchEpisodes(selectedFeed, false);
+		} finally {
+			finishEpisodeFetch();
+		}
 	}
 
 	const handleSearch = debounce((event: CustomEvent<{ query: string }>) => {
@@ -216,6 +260,7 @@ onMount(() => {
 		<EpisodeList
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed || !selectedPlaylist}
+			isLoading={isFetchingEpisodes}
 			on:clickEpisode={handleClickEpisode}
 			on:contextMenuEpisode={handleContextMenuEpisode}
 			on:clickRefresh={handleClickRefresh}
