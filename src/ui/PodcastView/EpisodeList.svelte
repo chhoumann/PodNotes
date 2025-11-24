@@ -55,6 +55,13 @@
 				on:click={() => (hidePlayedEpisodes = !hidePlayedEpisodes)}
 			/>
 			<Icon
+				icon={showThumbnails ? "image" : "image-off"}
+				size={25}
+				label={showThumbnails ? "Hide thumbnails" : "Show thumbnails"}
+				pressed={showThumbnails}
+				on:click={() => (showThumbnails = !showThumbnails)}
+			/>
+			<Icon
 				icon="refresh-cw"
 				size={25}
 				label="Refresh episodes"

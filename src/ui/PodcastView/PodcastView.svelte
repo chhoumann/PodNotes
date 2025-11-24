@@ -39,6 +39,7 @@ import { get } from "svelte/store";
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
+	let showEpisodeThumbnails = false;
 
 onMount(() => {
 	const unsubscribePlaylists = playlists.subscribe((pl) => {
@@ -146,6 +147,7 @@ onMount(() => {
 		displayedEpisodes = [];
 
 		selectedFeed = feed;
+		showEpisodeThumbnails = false;
 		displayedEpisodes = await fetchEpisodes(feed);
 		viewState.set(ViewState.EpisodeList);
 	}
@@ -196,6 +198,7 @@ onMount(() => {
 			viewState.set(ViewState.Player);
 		} else {
 			selectedPlaylist = playlist;
+			showEpisodeThumbnails = false;
 			displayedEpisodes = playlist.episodes;
 
 			viewState.set(ViewState.EpisodeList);
@@ -215,7 +218,7 @@ onMount(() => {
 	{:else if $viewState === ViewState.EpisodeList}
 		<EpisodeList
 			episodes={displayedEpisodes}
-			showThumbnails={!selectedFeed || !selectedPlaylist}
+			bind:showThumbnails={showEpisodeThumbnails}
 			on:clickEpisode={handleClickEpisode}
 			on:contextMenuEpisode={handleContextMenuEpisode}
 			on:clickRefresh={handleClickRefresh}
@@ -229,6 +232,7 @@ onMount(() => {
 						on:click={() => {
 							selectedFeed = null;
 							displayedEpisodes = latestEpisodes;
+							showEpisodeThumbnails = false;
 							viewState.set(ViewState.EpisodeList);
 						}}
 					>
@@ -253,6 +257,7 @@ onMount(() => {
 						on:click={() => {
 							selectedPlaylist = null;
 							displayedEpisodes = latestEpisodes;
+							showEpisodeThumbnails = false;
 							viewState.set(ViewState.EpisodeList);
 						}}
 					>
