@@ -40,9 +40,12 @@
 	.podcast-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
-		grid-auto-rows: 1fr;
+		grid-auto-rows: min-content;
 		gap: 0.5rem;
 		padding: 0.5rem;
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
 	}
 
 	@media (min-width: 400px) {
