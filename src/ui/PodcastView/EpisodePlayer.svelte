@@ -287,135 +287,187 @@
 </div>
 
 <style>
-	:global(.episode-player) {
+	.episode-player {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+		padding: 0 1rem;
+		overflow-y: auto;
 	}
 
-	:global(.episode-image-container) {
-		width:  100%;
-		height: auto;
-		padding: 5% 0%;
-	}
-
-	:global(.hover-container) {
-		min-width:  10rem;
-		min-height: 10rem;
+	.episode-image-container {
 		width: 100%;
-		height: 100%;
-		aspect-ratio: 1/1;
+		max-width: 20rem;
+		margin: 0 auto;
+		padding: 1rem 0;
+	}
+
+	.hover-container {
+		width: 100%;
+		aspect-ratio: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		position: relative;
-		margin-left: auto;
-		margin-right: auto;
 		border: none;
 		background: transparent;
 		padding: 0;
 		cursor: pointer;
+		border-radius: 0.75rem;
+		overflow: hidden;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+		transition: box-shadow 200ms ease, transform 200ms ease;
+	}
+
+	.hover-container:hover {
+		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+	}
+
+	.hover-container:active {
+		transform: scale(0.98);
 	}
 
 	:global(.podcast-artwork) {
 		width: 100%;
 		height: 100%;
-		background-size: cover;
-		background-position: center;
-		background-repeat: no-repeat;
+		object-fit: cover;
 		position: absolute;
+		transition: opacity 200ms ease;
 	}
 
 	:global(.podcast-artwork-placeholder) {
 		width: 100%;
 		height: 100%;
-		background-size: cover;
-		background-position: center;
-		background-repeat: no-repeat;
 		position: absolute;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		background: var(--background-secondary);
+		transition: opacity 200ms ease;
 	}
 
-	/* Some themes override this, so opting to force like so. */
-	:global(.podcast-artwork:hover) {
-		cursor: pointer !important;
-	}
-
-	:global(.podcast-artwork-overlay) {
-		position: absolute;
-		inset: 0;
-		display: none;
-		align-items: center;
-		justify-content: center;
-	}
-
-	:global(.podcast-artwork-overlay.visible) {
-		display: flex;
-	}
-
-	:global(.podcast-artwork-isloading-overlay) {
+	.podcast-artwork-overlay {
 		position: absolute;
 		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		opacity: 0;
+		background: rgba(0, 0, 0, 0.1);
+		transition: opacity 200ms ease;
 	}
 
-	:global(.podcast-artwork-overlay:hover) {
-		cursor: pointer !important;
+	.podcast-artwork-overlay.visible {
+		opacity: 1;
+	}
+
+	.podcast-artwork-isloading-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0, 0, 0, 0.3);
 	}
 
 	:global(.opacity-50) {
 		opacity: 0.5;
 	}
 
-	:global(.podcast-title) {
-		font-size: 1.5rem;
-		font-weight: bold;
-		margin: 0%;
-		margin-bottom: 0.5rem;
+	.podcast-title {
+		font-size: 1.125rem;
+		font-weight: 600;
+		line-height: 1.4;
+		margin: 0 0 1rem;
+		text-align: center;
+		color: var(--text-normal);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+
+	.status-container {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0 0.25rem;
+	}
+
+	.status-container span {
+		font-size: 0.8rem;
+		font-variant-numeric: tabular-nums;
+		color: var(--text-muted);
+		min-width: 4rem;
 		text-align: center;
 	}
 
-	:global(.status-container) {
-		display: flex;
-		align-items: center;
-		justify-content: space-around;
+	.status-container span:first-child {
+		text-align: right;
+	}
+
+	.status-container span:last-child {
+		text-align: left;
 	}
 
 	:global(.episode-player .status-container .progress) {
-		height: var(--episode-player-progress-height, 2rem);
+		height: var(--episode-player-progress-height, 0.5rem);
+		flex: 1 1 auto;
 	}
 
-	:global(.controls-container) {
+	.controls-container {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		margin-top: 1rem;
-		margin-left: 25%;
-		margin-right: 25%;
+		justify-content: center;
+		gap: 2rem;
+		margin: 1.25rem 0;
 	}
 
 	:global(.player-control-button) {
 		margin: 0;
 		cursor: pointer;
+		padding: 0.5rem;
+		border-radius: 50%;
+		transition: background-color 120ms ease;
 	}
 
-	:global(.slider-stack) {
+	:global(.player-control-button:hover) {
+		background-color: var(--background-modifier-hover);
+	}
+
+	.slider-stack {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
 		margin-top: auto;
-		margin-bottom: 2.5rem;
+		padding: 1.5rem 0;
+		border-top: 1px solid var(--background-modifier-border);
 	}
 
-	:global(.playbackrate-container),
-	:global(.volume-container) {
+	.playbackrate-container,
+	.volume-container {
 		display: flex;
 		align-items: center;
-		justify-content: space-around;
-		flex-direction: column;
+		gap: 1rem;
+		padding: 0 0.5rem;
+	}
+
+	.playbackrate-container span,
+	.volume-container span {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		min-width: 5rem;
+	}
+
+	:global(.episode-player h3) {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin: 1rem 0 0.5rem;
+		padding: 0 0.5rem;
 	}
 </style>

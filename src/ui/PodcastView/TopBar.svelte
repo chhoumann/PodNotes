@@ -91,12 +91,12 @@
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		padding: 0.25rem 0.5rem;
-		height: 50px;
-		min-height: 50px;
-		border-bottom: 1px solid var(--background-divider);
+		justify-content: stretch;
+		gap: 0.375rem;
+		padding: 0.5rem;
+		min-height: 3rem;
+		border-bottom: 1px solid var(--background-modifier-border);
+		background: var(--background-secondary);
 		box-sizing: border-box;
 	}
 
@@ -104,52 +104,47 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 100%;
-		padding: 0.4rem 0.25rem;
+		height: 2rem;
+		padding: 0 0.75rem;
 		flex: 1 1 0;
-		border: 1px solid var(--background-modifier-border, #3a3a3a);
-		border-radius: 8px;
-		background: var(--background-secondary, transparent);
-		color: var(--text-muted, #8a8a8a);
+		border: 1px solid transparent;
+		border-radius: 0.375rem;
+		background: transparent;
+		color: var(--text-muted);
 		transition:
 			background-color 120ms ease,
 			border-color 120ms ease,
-			color 120ms ease,
-			box-shadow 120ms ease,
-			opacity 120ms ease;
+			color 120ms ease;
 	}
 
 	.topbar-menu-button:focus-visible {
-		outline: 2px solid var(--interactive-accent, #5c6bf7);
-		outline-offset: 2px;
+		outline: 2px solid var(--interactive-accent);
+		outline-offset: 1px;
 	}
 
 	.topbar-selectable {
 		cursor: pointer;
-		color: var(--text-normal, #e6e6e6);
-		background: var(--background-secondary-alt, rgba(255, 255, 255, 0.02));
+		color: var(--text-normal);
 	}
 
-	.topbar-menu-button:hover.topbar-selectable:not(.topbar-selected) {
-		background: var(--background-modifier-hover, rgba(255, 255, 255, 0.06));
-		border-color: var(--interactive-accent, #5c6bf7);
-		color: var(--text-normal, #e6e6e6);
+	.topbar-selectable:hover:not(.topbar-selected) {
+		background: var(--background-modifier-hover);
+	}
+
+	.topbar-selectable:active:not(.topbar-selected) {
+		background: var(--background-modifier-border);
 	}
 
 	.topbar-selected,
 	.topbar-selected:hover {
-		color: var(--text-on-accent, #ffffff);
-		background: var(--interactive-accent, #5c6bf7);
-		border-color: var(--interactive-accent, #5c6bf7);
-		box-shadow: 0 0 0 1px var(--interactive-accent, #5c6bf7);
+		color: var(--text-on-accent);
+		background: var(--interactive-accent);
 	}
 
 	.topbar-disabled,
 	.topbar-menu-button:disabled {
 		cursor: not-allowed;
-		color: var(--text-faint, #a0a0a0);
-		background: var(--background-modifier-border, #3a3a3a);
-		border-style: dashed;
-		opacity: 1;
+		color: var(--text-faint);
+		opacity: 0.5;
 	}
 </style>

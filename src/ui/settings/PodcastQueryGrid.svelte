@@ -111,18 +111,18 @@
 
 <style>
 	.podcast-query-container {
-		margin-bottom: 2rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.podcast-query-results {
 		display: grid;
-		grid-gap: 16px;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: 0.75rem;
+		grid-template-columns: 1fr;
 	}
 
-	@media (max-width: 600px) {
+	@media (min-width: 500px) {
 		.podcast-query-results {
-			grid-template-columns: 1fr;
+			grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
 		}
 	}
 </style>

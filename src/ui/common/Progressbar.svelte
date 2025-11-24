@@ -97,11 +97,22 @@ function handleKeyDown(event: KeyboardEvent) {
 	.progress {
 		position: relative;
 		width: 100%;
-		height: 1rem;
-		background: var(--background-modifier-border, #ccc);
+		height: 0.5rem;
+		background: var(--background-modifier-border);
 		border-radius: 9999px;
 		overflow: hidden;
 		cursor: pointer;
+		transition: height 120ms ease;
+	}
+
+	.progress:hover,
+	.progress:focus-visible {
+		height: 0.625rem;
+	}
+
+	.progress:focus-visible {
+		outline: 2px solid var(--interactive-accent);
+		outline-offset: 2px;
 	}
 
 	.progress__bar {
@@ -109,6 +120,8 @@ function handleKeyDown(event: KeyboardEvent) {
 		top: 0;
 		left: 0;
 		height: 100%;
-		background: var(--interactive-accent, #5c6bf7);
+		background: var(--interactive-accent);
+		border-radius: 9999px;
+		transition: width 50ms linear;
 	}
 </style>

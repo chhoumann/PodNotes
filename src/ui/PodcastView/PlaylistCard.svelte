@@ -31,16 +31,32 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
+		gap: 0.25rem;
 		width: 100%;
-		height: 100%;
+		aspect-ratio: 1;
 		border: 1px solid var(--background-modifier-border);
+		border-radius: 0.5rem;
 		text-align: center;
 		overflow: hidden;
-		background: transparent;
-		padding: 0;
+		background: var(--background-secondary);
+		padding: 0.5rem;
+		cursor: pointer;
+		transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
 	}
 
 	.playlist-card:hover {
-		background-color: var(--background-modifier-border);
+		transform: scale(1.02);
+		border-color: var(--interactive-accent);
+		background-color: var(--background-secondary-alt);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	}
+
+	.playlist-card:active {
+		transform: scale(0.98);
+	}
+
+	.playlist-card span {
+		font-size: 0.8rem;
+		color: var(--text-muted);
 	}
 </style>

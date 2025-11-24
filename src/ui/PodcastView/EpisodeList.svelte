@@ -96,6 +96,8 @@
 		align-items: stretch;
 		justify-content: flex-start;
 		width: 100%;
+		height: 100%;
+		overflow: hidden;
 	}
 
 	.podcast-episode-list {
@@ -104,24 +106,32 @@
 		align-items: stretch;
 		justify-content: flex-start;
 		width: 100%;
-		height: 100%;
-		gap: 0.25rem;
+		flex: 1 1 auto;
+		overflow-y: auto;
+		overflow-x: hidden;
+	}
+
+	.podcast-episode-list p {
+		padding: 1.5rem;
+		text-align: center;
+		color: var(--text-muted);
 	}
 
 	.episode-list-menu {
 		display: flex;
 		flex-direction: row;
-		justify-content: right;
+		justify-content: flex-end;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.5rem;
 		width: 100%;
-		padding-left: 0.5rem;
-		padding-right: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-bottom: 1px solid var(--background-modifier-border);
+		background: var(--background-secondary);
 	}
 
 	.episode-list-search {
-		width: 100%;
-		margin-bottom: 0.5rem;
+		flex: 1 1 auto;
+		min-width: 0;
 	}
 
 	.episode-list-loading {
@@ -129,7 +139,8 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.75rem;
-		padding: 1rem 0;
+		padding: 2rem 1rem;
 		color: var(--text-muted);
+		font-size: 0.9rem;
 	}
 </style>

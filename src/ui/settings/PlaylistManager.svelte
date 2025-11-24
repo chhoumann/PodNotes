@@ -96,24 +96,23 @@
 	.playlist-manager-container {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
 		width: 100%;
-		height: 100%;
-		margin-bottom: 2rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.playlist-list {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
 		width: 100%;
-		height: 100%;
-		overflow-y: auto;
+		border: 1px solid var(--background-modifier-border);
+		border-radius: 0.5rem;
+		overflow: hidden;
 	}
 
 	.add-playlist-container {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		margin-top: 1rem;
 	}
 </style>

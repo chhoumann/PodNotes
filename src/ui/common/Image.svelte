@@ -68,15 +68,21 @@
 		overflow: hidden;
 		border: none;
 		padding: 0;
-		background: transparent;
+		background: var(--background-secondary);
 	}
 
 	.pn_image_container--static {
-		border: none;
-		padding: 0;
+		cursor: default;
 	}
 
-	.pn_image_container:not(.pn_image_container--static) img:hover {
-		cursor: pointer !important;
+	.pn_image_container:not(.pn_image_container--static) {
+		cursor: pointer;
+	}
+
+	.pn_image_container img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 </style>
