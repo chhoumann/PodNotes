@@ -10,43 +10,50 @@ export default class FeedParser {
 	}
 
 	public async findItemByTitle(title: string, url: string): Promise<Episode> {
+		// Ensure feed metadata is loaded first
+		if (!this.feed || this.feed.url !== url) {
+			await this.getFeed(url);
+		}
+
 		const body = await this.parseFeed(url);
 		const items = body.querySelectorAll("item");
+		const target = title.trim().toLowerCase();
 
-		const item = Array.from(items).find((item) => {
-			const parsed = this.parseItem(item);
-			const isMatch = parsed && parsed.title === title;
+		// Parse all items once and find by case-insensitive match
+		const episodes = Array.from(items)
+			.map((item) => this.parseItem(item))
+			.filter((ep): ep is Episode => !!ep);
 
-			return isMatch;
-		});
+		const episode = episodes.find(
+			(ep) => ep.title.trim().toLowerCase() === target,
+		);
 
-		if (!item) {
+		if (!episode) {
 			throw new Error("Could not find episode");
 		}
 
-		const episode = this.parseItem(item);
-		const feed = await this.getFeed(url);
-
-		if (!episode) {
-			throw new Error("Episode is invalid.");
+		// Fill in any missing fields from feed metadata
+		if (!episode.artworkUrl && this.feed) {
+			episode.artworkUrl = this.feed.artworkUrl;
 		}
 
-		if (!episode.artworkUrl) {
-			episode.artworkUrl = feed.artworkUrl;
+		if (!episode.podcastName && this.feed) {
+			episode.podcastName = this.feed.title;
 		}
 
-		if (!episode.podcastName) {
-			episode.podcastName = feed.title;
-		}
-
-		if (!episode.feedUrl) {
-			episode.feedUrl = feed.url;
+		if (!episode.feedUrl && this.feed) {
+			episode.feedUrl = this.feed.url;
 		}
 
 		return episode;
 	}
 
 	public async getEpisodes(url: string): Promise<Episode[]> {
+		// Ensure feed metadata is loaded and cached
+		if (!this.feed || this.feed.url !== url) {
+			await this.getFeed(url);
+		}
+
 		const body = await this.parseFeed(url);
 
 		return this.parsePage(body);
@@ -57,7 +64,7 @@ export default class FeedParser {
 
 		const titleEl = body.querySelector("title");
 		const linkEl = body.querySelector("link");
-		const itunesImageEl = body.querySelector("image");
+		const itunesImageEl = this.findImageElement(body);
 
 		if (!titleEl || !linkEl) {
 			throw new Error("Invalid RSS feed");
@@ -69,11 +76,23 @@ export default class FeedParser {
 			itunesImageEl?.querySelector("url")?.textContent ||
 			"";
 
-		return {
+		const feed: PodcastFeed = {
 			title,
 			url,
 			artworkUrl,
 		};
+
+		this.feed = feed;
+		return feed;
+	}
+
+	private findImageElement(doc: Document | Element): Element | null {
+		// Try iTunes-specific first (handles <itunes:image href="..."/>)
+		const itunesImage = doc.getElementsByTagName("itunes:image")[0];
+		if (itunesImage) return itunesImage;
+
+		// Fallback to generic <image> element
+		return doc.querySelector("image");
 	}
 
 	protected parsePage(page: Document): Episode[] {
@@ -93,7 +112,7 @@ export default class FeedParser {
 		const descriptionEl = item.querySelector("description");
 		const contentEl = item.querySelector("*|encoded");
 		const pubDateEl = item.querySelector("pubDate");
-		const itunesImageEl = item.querySelector("image");
+		const itunesImageEl = this.findImageElement(item);
 		const itunesTitleEl = item.getElementsByTagName("itunes:title")[0];
 		const chaptersEl = item.getElementsByTagName("podcast:chapters")[0];
 
