@@ -8,6 +8,11 @@
 	export let showEpisodeImage: boolean = false;
 
 	const dispatch = createEventDispatcher();
+	const dateFormatter = new Intl.DateTimeFormat("en-GB", {
+		day: "2-digit",
+		month: "long",
+		year: "numeric",
+	});
 
 	function onClickEpisode() {
 		dispatch("clickEpisode", { episode });
@@ -17,12 +22,17 @@
 		dispatch("contextMenu", { episode, event });
 	}
 
-	let _date: Date;
-	let date: string;
+	let formattedDate: string = "";
 
 	$: {
-		_date = new Date(episode.episodeDate || "");
-		date = window.moment(_date).format("DD MMMM YYYY");
+		if (episode?.episodeDate) {
+			const parsedDate = new Date(episode.episodeDate);
+			formattedDate = Number.isNaN(parsedDate.valueOf())
+				? ""
+				: dateFormatter.format(parsedDate).toUpperCase();
+		} else {
+			formattedDate = "";
+		}
 	}
 </script>
 
@@ -48,7 +58,7 @@
 		class="podcast-episode-information" 
 		style:flex-basis={"80%"}
 	>
-		<span class="episode-item-date">{date.toUpperCase()}</span>
+		<span class="episode-item-date">{formattedDate}</span>
 		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
 	</div>
 </button>
