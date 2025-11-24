@@ -34,6 +34,10 @@
 		public get _playbackRate() {
 			return this.playbackRate;
 		}
+
+		public set _playbackRate(_: number) {
+			// No-op: prevent two-way binding from overwriting our value
+		}
 	}
 
 	const offBinding = new CircumentForcedTwoWayBinding();
