@@ -2,7 +2,7 @@
     import { SliderComponent } from "obsidian";
     import type { CSSObject } from "src/types/CSSObject";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
-    import { afterUpdate, createEventDispatcher, onMount } from "svelte";
+    import { createEventDispatcher, onDestroy, onMount } from "svelte";
 
     export let value: number;
     export let limits: [min: number, max: number] | [min: number, max: number, step: number];
@@ -13,36 +13,49 @@
     const dispatch = createEventDispatcher();
 
     let slider: SliderComponent;
-    let styles: CSSObject;
+    let styles: CSSObject = {};
+    let changeHandler: ((event: Event) => void) | null = null;
 
     // This is not a complete implementation. I implemented what I needed.
 
     onMount(() => {
         slider = new SliderComponent(sliderRef);
 
-        updateSliderAttributes(slider);
+        changeHandler = (event: Event) => {
+            const newValue = Number((event.target as HTMLInputElement).value);
+            dispatch("change", { value: newValue });
+        };
+
+        slider.sliderEl.addEventListener("input", changeHandler);
     });
 
-    afterUpdate(() => {
-        updateSliderAttributes(slider);
+    onDestroy(() => {
+        if (slider?.sliderEl && changeHandler) {
+            slider.sliderEl.removeEventListener("input", changeHandler);
+        }
     });
 
-    function updateSliderAttributes(sldr: SliderComponent) {
-        if (value !== undefined) sldr.setValue(value);
-        if (limits) {
-            if (limits.length === 2) {
-                sldr.setLimits(limits[0], limits[1], 1);
+    $: if (slider) {
+        updateSliderAttributes(slider, value, limits, styles);
+    }
+
+    function updateSliderAttributes(
+        sldr: SliderComponent,
+        currentValue: number,
+        currentLimits: [min: number, max: number] | [min: number, max: number, step: number],
+        currentStyles: CSSObject
+    ) {
+        if (currentValue !== undefined) sldr.setValue(currentValue);
+        if (currentLimits) {
+            if (currentLimits.length === 2) {
+                sldr.setLimits(currentLimits[0], currentLimits[1], 1);
             } else {
-                sldr.setLimits(limits[0], limits[1], limits[2]);
+                sldr.setLimits(currentLimits[0], currentLimits[1], currentLimits[2]);
             }
         }
-        if (styles) {
-            sldr.sliderEl.setAttr("style", extractStylesFromObj(styles));
+        if (currentStyles) {
+            sldr.sliderEl.setAttr("style", extractStylesFromObj(currentStyles));
         }
-
-        sldr.onChange((value: number) => {
-            dispatch("change", { value });
-        });
     }
 </script>
 
