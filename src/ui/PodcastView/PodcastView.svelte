@@ -1,37 +1,38 @@
 <script lang="ts">
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import PodcastGrid from "./PodcastGrid.svelte";
-import {
-	currentEpisode,
-	savedFeeds,
-	episodeCache,
-	playlists,
-	queue,
-	favorites,
-	localFiles,
-	podcastView,
-	viewState,
-	downloadedEpisodes,
-	plugin,
-} from "src/store";
+	import {
+		currentEpisode,
+		savedFeeds,
+		episodeCache,
+		latestEpisodes as latestEpisodesStore,
+		playlists,
+		queue,
+		favorites,
+		localFiles,
+		podcastView,
+		viewState,
+		downloadedEpisodes,
+		plugin,
+	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import type { Episode } from "src/types/Episode";
 	import FeedParser from "src/parser/feedParser";
 	import TopBar from "./TopBar.svelte";
 	import { ViewState } from "src/types/ViewState";
-import { onMount } from "svelte";
+	import { onMount } from "svelte";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import { debounce } from "obsidian";
 	import searchEpisodes from "src/utility/searchEpisodes";
 	import type { Playlist } from "src/types/Playlist";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-import {
-	getCachedEpisodes,
-	setCachedEpisodes,
-} from "src/services/FeedCacheService";
-import { get } from "svelte/store";
+	import {
+		getCachedEpisodes,
+		setCachedEpisodes,
+	} from "src/services/FeedCacheService";
+	import { get } from "svelte/store";
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
@@ -40,41 +41,39 @@ import { get } from "svelte/store";
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
 
-onMount(() => {
-	const unsubscribePlaylists = playlists.subscribe((pl) => {
-		displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
+	onMount(() => {
+		const unsubscribePlaylists = playlists.subscribe((pl) => {
+			displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
+		});
+
+		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
+			feeds = Object.values(storeValue);
+		});
+
+		const unsubscribeLatestEpisodes = latestEpisodesStore.subscribe(
+			(episodes) => {
+				latestEpisodes = episodes;
+
+				if (!selectedFeed && !selectedPlaylist) {
+					displayedEpisodes = episodes;
+				}
+			},
+		);
+
+		(async () => {
+			await fetchEpisodesInAllFeeds(feeds);
+
+			if (!selectedFeed) {
+				displayedEpisodes = latestEpisodes;
+			}
+		})();
+
+		return () => {
+			unsubscribeLatestEpisodes();
+			unsubscribeSavedFeeds();
+			unsubscribePlaylists();
+		};
 	});
-
-	const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
-		feeds = Object.values(storeValue);
-	});
-
-	const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
-		latestEpisodes = Object.entries(cache)
-			.map(([_, episodes]) => episodes.slice(0, 10))
-			.flat()
-			.sort((a, b) => {
-				if (a.episodeDate && b.episodeDate)
-					return Number(b.episodeDate) - Number(a.episodeDate);
-
-				return 0;
-			});
-	});
-
-	(async () => {
-		await fetchEpisodesInAllFeeds(feeds);
-
-		if (!selectedFeed) {
-			displayedEpisodes = latestEpisodes;
-		}
-	})();
-
-	return () => {
-		unsubscribeEpisodeCache();
-		unsubscribeSavedFeeds();
-		unsubscribePlaylists();
-	};
-});
 
 	async function fetchEpisodes(
 		feed: PodcastFeed,
