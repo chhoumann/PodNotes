@@ -234,10 +234,6 @@ onMount(() => {
 					>
 						<Icon
 							icon={"arrow-left"}
-							style={{
-								display: "flex",
-								"align-items": "center",
-							}}
 							size={20}
 							clickable={false}
 						/> Latest Episodes
@@ -258,17 +254,11 @@ onMount(() => {
 					>
 						<Icon
 							icon={"arrow-left"}
-							style={{
-								display: "flex",
-								"align-items": "center",
-							}}
 							size={20}
 							clickable={false}
 						/> Latest Episodes
 					</button>
-					<div
-						style="display: flex; align-items: center; justify-content: center;"
-					>
+					<div class="playlist-header-icon">
 						<Icon
 							icon={selectedPlaylist.icon}
 							size={40}
@@ -313,5 +303,11 @@ onMount(() => {
 
 	.go-back:hover {
 		opacity: 1;
+	}
+
+	.playlist-header-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 </style>
