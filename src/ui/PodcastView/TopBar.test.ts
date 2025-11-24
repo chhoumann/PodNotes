@@ -15,14 +15,19 @@ describe("TopBar", () => {
 		});
 
 		const grid = getByLabelText("Podcast grid");
-		const episode = getByLabelText("Episode list");
-		const player = getByLabelText("Player");
+		const episode = getByLabelText(/Episode list/);
+		const player = getByLabelText(/Player/);
 
 		expect(grid.className).toContain("topbar-selected");
 		expect(episode.className).toContain("topbar-selectable");
 		expect(episode).not.toBeDisabled();
 		expect(player).toBeDisabled();
 		expect(player.className).not.toContain("topbar-selectable");
+		expect(player.className).toContain("topbar-disabled");
+		expect(player.getAttribute("title")).toBe(
+			"Start playing an episode to open the player."
+		);
+		expect(episode.getAttribute("title")).toBe("View episode list");
 	});
 
 	test("activates episode list when clicked", async () => {
@@ -34,8 +39,8 @@ describe("TopBar", () => {
 			},
 		});
 
-		const episodeButton = getByLabelText("Episode list");
-		const playerButton = getByLabelText("Player");
+		const episodeButton = getByLabelText(/Episode list/);
+		const playerButton = getByLabelText(/Player/);
 
 		await fireEvent.click(episodeButton);
 
@@ -52,12 +57,20 @@ describe("TopBar", () => {
 			},
 		});
 
-		const episodeButton = getByLabelText("Episode list");
-		const playerButton = getByLabelText("Player");
+		const episodeButton = getByLabelText(/Episode list/);
+		const playerButton = getByLabelText(/Player/);
 
 		expect(episodeButton).toBeDisabled();
 		expect(playerButton).toBeDisabled();
 		expect(episodeButton.className).not.toContain("topbar-selectable");
+		expect(episodeButton.className).toContain("topbar-disabled");
+		expect(playerButton.className).toContain("topbar-disabled");
+		expect(episodeButton.getAttribute("title")).toBe(
+			"Select a podcast or playlist to view its episodes."
+		);
+		expect(playerButton.getAttribute("title")).toBe(
+			"Start playing an episode to open the player."
+		);
 	});
 
 	test("activates player control when clicked", async () => {
@@ -69,7 +82,7 @@ describe("TopBar", () => {
 			},
 		});
 
-		const playerButton = getByLabelText("Player");
+		const playerButton = getByLabelText(/Player/);
 
 		await fireEvent.click(playerButton);
 
