@@ -60,7 +60,7 @@
 
 	onMount(() => {
 		const unsubscribePlaylists = playlists.subscribe((pl) => {
-			displayedPlaylists = [$queue, $favorites, $localFiles, ...Object.values(pl)];
+			displayedPlaylists = [get(queue), get(favorites), get(localFiles), ...Object.values(pl)];
 		});
 
 		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
@@ -78,11 +78,20 @@
 			}
 		});
 
+		let currentViewState = get(viewState);
+		const unsubscribeViewState = viewState.subscribe((vs) => {
+			currentViewState = vs;
+		});
+
 		const unsubscribeLatestEpisodes = latestEpisodesStore.subscribe(
 			(episodes) => {
 				latestEpisodes = episodes;
 
-				if (!selectedFeed && !selectedPlaylist) {
+				if (
+					currentViewState === ViewState.EpisodeList &&
+					!selectedFeed &&
+					!selectedPlaylist
+				) {
 					displayedEpisodes = currentSearchQuery
 						? searchEpisodes(currentSearchQuery, episodes)
 						: episodes;
@@ -92,6 +101,7 @@
 
 		return () => {
 			unsubscribeLatestEpisodes();
+			unsubscribeViewState();
 			unsubscribeSavedFeeds();
 			unsubscribePlaylists();
 		};
@@ -297,7 +307,7 @@
 		<EpisodeList
 			episodes={displayedEpisodes}
 			showThumbnails={!selectedFeed || !selectedPlaylist}
-			isLoading={isFetchingEpisodes}
+			isLoading={selectedFeed ? loadingFeeds.has(selectedFeed.title) : isFetchingEpisodes}
 			on:clickEpisode={handleClickEpisode}
 			on:contextMenuEpisode={handleContextMenuEpisode}
 			on:clickRefresh={handleClickRefresh}

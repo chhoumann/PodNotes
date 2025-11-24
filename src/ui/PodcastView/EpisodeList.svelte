@@ -82,7 +82,7 @@
 		{#if episodes.length === 0 && !isLoading}
 			<p>No episodes found.</p>
 		{/if}
-		{#each episodes as episode (episode.url || episode.streamUrl || `${episode.title}-${episode.episodeDate ?? ""}`)}
+		{#each episodes as episode, index (getEpisodeKey(episode) ?? `${episode.title}-${episode.episodeDate ?? ""}-${index}`)}
 			{@const episodePlayed = isEpisodeFinished(episode, $playedEpisodes)}
 			{#if !$hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
