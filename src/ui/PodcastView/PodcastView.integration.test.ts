@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { get } from "svelte/store";
 import {
 	afterEach,
@@ -142,6 +142,91 @@ describe("PodcastView integration flow", () => {
 		);
 		expect(leaf.openFile).toHaveBeenCalledWith(
 			expect.objectContaining({ path: expectedPath }),
+		);
+	});
+
+	test("shows loading state while fetching and streams episodes per feed", async () => {
+		const secondFeed: PodcastFeed = {
+			title: "Second Podcast",
+			url: "https://pod.example.com/feed-two.xml",
+			artworkUrl: "https://pod.example.com/art-two.jpg",
+		};
+
+		const firstEpisode: Episode = {
+			title: "Episode A",
+			streamUrl: "https://pod.example.com/a.mp3",
+			url: "https://pod.example.com/a",
+			description: "Episode A description",
+			content: "<p>Episode A content</p>",
+			podcastName: testFeed.title,
+			artworkUrl: testFeed.artworkUrl,
+			episodeDate: new Date("2024-02-01T00:00:00.000Z"),
+		};
+
+		const secondEpisode: Episode = {
+			title: "Episode B",
+			streamUrl: "https://pod.example.com/b.mp3",
+			url: "https://pod.example.com/b",
+			description: "Episode B description",
+			content: "<p>Episode B content</p>",
+			podcastName: secondFeed.title,
+			artworkUrl: secondFeed.artworkUrl,
+			episodeDate: new Date("2024-01-15T00:00:00.000Z"),
+		};
+
+		let resolveFirstFeed!: (value: Episode[]) => void;
+		let resolveSecondFeed!: (value: Episode[]) => void;
+
+		mockGetEpisodes
+			.mockImplementationOnce(
+				() =>
+					new Promise<Episode[]>((resolve) => {
+						resolveFirstFeed = resolve;
+					}),
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise<Episode[]>((resolve) => {
+						resolveSecondFeed = resolve;
+					}),
+			);
+
+		plugin.set({
+			settings: {
+				feedCache: {
+					enabled: false,
+					ttlHours: 6,
+				},
+			},
+		} as never);
+
+		savedFeeds.set({
+			[testFeed.title]: testFeed,
+			[secondFeed.title]: secondFeed,
+		});
+		viewState.set(ViewState.EpisodeList);
+
+		render(PodcastView);
+
+		await screen.findByText("Fetching episodes...");
+
+		resolveFirstFeed([firstEpisode]);
+
+		expect(
+			await screen.findByText(firstEpisode.title),
+		).toBeInTheDocument();
+		expect(screen.getByText("Fetching episodes...")).toBeInTheDocument();
+		expect(screen.queryByText(secondEpisode.title)).toBeNull();
+
+		resolveSecondFeed([secondEpisode]);
+
+		expect(
+			await screen.findByText(secondEpisode.title),
+		).toBeInTheDocument();
+		await waitFor(() =>
+			expect(
+				screen.queryByText("Fetching episodes..."),
+			).not.toBeInTheDocument(),
 		);
 	});
 });
