@@ -39,6 +39,76 @@ import { get } from "svelte/store";
 	let displayedEpisodes: Episode[] = [];
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
+	const LATEST_EPISODES_PER_FEED = 10;
+	const LATEST_EPISODES_LIMIT = 100; // keep the merged "Latest" list bounded for quick updates
+	const latestEpisodesByFeed: Record<string, Episode[]> = {};
+	let feedCacheSnapshot: Record<string, Episode[]> = {};
+
+	const episodeIdentifier = (episode: Episode): string =>
+		`${episode.podcastName}::${episode.title}`;
+
+	const episodeTimestamp = (episode: Episode): number =>
+		episode.episodeDate ? Number(episode.episodeDate) : 0;
+
+	function insertEpisodeSorted(
+		episodes: Episode[],
+		episodeToInsert: Episode,
+		limit: number,
+	): Episode[] {
+		const nextEpisodes = [...episodes];
+		const value = episodeTimestamp(episodeToInsert);
+		let low = 0;
+		let high = nextEpisodes.length;
+
+		while (low < high) {
+			const mid = (low + high) >> 1;
+			const midValue = episodeTimestamp(nextEpisodes[mid]);
+
+			if (value > midValue) {
+				high = mid;
+			} else {
+				low = mid + 1;
+			}
+		}
+
+		nextEpisodes.splice(low, 0, episodeToInsert);
+
+		if (nextEpisodes.length > limit) {
+			nextEpisodes.length = limit;
+		}
+
+		return nextEpisodes;
+	}
+
+	function removeFeedEntries(
+		currentLatest: Episode[],
+		feedEpisodes: Episode[] = [],
+	): Episode[] {
+		if (!feedEpisodes.length) {
+			return currentLatest;
+		}
+
+		const feedKeys = new Set(feedEpisodes.map(episodeIdentifier));
+
+		return currentLatest.filter(
+			(episode) => !feedKeys.has(episodeIdentifier(episode)),
+		);
+	}
+
+	function updateLatestEpisodesForFeed(
+		currentLatest: Episode[],
+		previousFeedEpisodes: Episode[],
+		nextFeedEpisodes: Episode[],
+		limit: number,
+	): Episode[] {
+		let nextLatest = removeFeedEntries(currentLatest, previousFeedEpisodes);
+
+		for (const episode of nextFeedEpisodes) {
+			nextLatest = insertEpisodeSorted(nextLatest, episode, limit);
+		}
+
+		return nextLatest;
+	}
 
 onMount(() => {
 	const unsubscribePlaylists = playlists.subscribe((pl) => {
@@ -50,15 +120,58 @@ onMount(() => {
 	});
 
 	const unsubscribeEpisodeCache = episodeCache.subscribe((cache) => {
-		latestEpisodes = Object.entries(cache)
-			.map(([_, episodes]) => episodes.slice(0, 10))
-			.flat()
-			.sort((a, b) => {
-				if (a.episodeDate && b.episodeDate)
-					return Number(b.episodeDate) - Number(a.episodeDate);
+		const changedFeeds = new Set<string>();
 
-				return 0;
-			});
+		for (const [feedTitle, episodes] of Object.entries(cache)) {
+			if (feedCacheSnapshot[feedTitle] !== episodes) {
+				changedFeeds.add(feedTitle);
+			}
+		}
+
+		for (const feedTitle of Object.keys(feedCacheSnapshot)) {
+			if (!(feedTitle in cache)) {
+				changedFeeds.add(feedTitle);
+			}
+		}
+
+		if (!changedFeeds.size) {
+			return;
+		}
+
+		const queueLimit = Math.max(
+			LATEST_EPISODES_PER_FEED * Object.keys(cache).length,
+			LATEST_EPISODES_LIMIT,
+		);
+		let updatedLatest = latestEpisodes;
+
+		for (const feedTitle of changedFeeds) {
+			if (!(feedTitle in cache)) {
+				updatedLatest = removeFeedEntries(
+					updatedLatest,
+					latestEpisodesByFeed[feedTitle],
+				);
+				delete latestEpisodesByFeed[feedTitle];
+				continue;
+			}
+
+			const previousFeedLatest = latestEpisodesByFeed[feedTitle] || [];
+			const nextFeedLatest = cache[feedTitle].slice(
+				0,
+				LATEST_EPISODES_PER_FEED,
+			);
+
+			updatedLatest = updateLatestEpisodesForFeed(
+				updatedLatest,
+				previousFeedLatest,
+				nextFeedLatest,
+				queueLimit,
+			);
+
+			latestEpisodesByFeed[feedTitle] = nextFeedLatest;
+		}
+
+		latestEpisodes = updatedLatest;
+		feedCacheSnapshot = { ...cache };
 	});
 
 	(async () => {
