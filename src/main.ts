@@ -378,6 +378,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		// Clean up any active blob URLs to prevent memory leaks
 		blobUrlManager.revokeAll();
+
+		// Detach all leaves of this view type to prevent duplicates on reload
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE);
 	}
 
 	async loadSettings() {
