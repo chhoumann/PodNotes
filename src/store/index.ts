@@ -1,4 +1,4 @@
-import { get, writable } from "svelte/store";
+import { get, readable, writable } from "svelte/store";
 import type PodNotes from "src/main";
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
@@ -13,6 +13,7 @@ export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
 export const duration = writable<number>(0);
 export const volume = writable<number>(1);
+export const hidePlayedEpisodes = writable<boolean>(false);
 
 export const currentEpisode = (() => {
 	const store = writable<Episode>();
@@ -101,6 +102,170 @@ export const podcastsUpdated = writable(0);
 export const savedFeeds = writable<{ [podcastName: string]: PodcastFeed }>({});
 
 export const episodeCache = writable<{ [podcastName: string]: Episode[] }>({});
+
+const LATEST_EPISODES_PER_FEED = 10;
+
+type LatestEpisodesByFeed = Map<string, Episode[]>;
+type FeedEpisodeSources = Map<string, Episode[]>;
+
+function getEpisodeTimestamp(episode?: Episode): number {
+	if (!episode?.episodeDate) return 0;
+
+	return Number(episode.episodeDate);
+}
+
+function getLatestEpisodesForFeed(episodes: Episode[]): Episode[] {
+	if (!episodes?.length) return [];
+
+	return episodes
+		.slice(0, LATEST_EPISODES_PER_FEED)
+		.sort((a, b) => getEpisodeTimestamp(b) - getEpisodeTimestamp(a));
+}
+
+function shallowEqualEpisodes(a?: Episode[], b?: Episode[]): boolean {
+	if (!a || !b || a.length !== b.length) return false;
+
+	for (let i = 0; i < a.length; i += 1) {
+		if (a[i] !== b[i]) return false;
+	}
+
+	return true;
+}
+
+const latestEpisodeIdentifier = (episode: Episode): string =>
+	`${episode.podcastName}::${episode.title}`;
+
+function insertEpisodeSorted(
+	episodes: Episode[],
+	episodeToInsert: Episode,
+	limit: number,
+): Episode[] {
+	const nextEpisodes = [...episodes];
+	const value = getEpisodeTimestamp(episodeToInsert);
+	let low = 0;
+	let high = nextEpisodes.length;
+
+	while (low < high) {
+		const mid = (low + high) >> 1;
+		const midValue = getEpisodeTimestamp(nextEpisodes[mid]);
+
+		if (value > midValue) {
+			high = mid;
+		} else {
+			low = mid + 1;
+		}
+	}
+
+	nextEpisodes.splice(low, 0, episodeToInsert);
+
+	if (nextEpisodes.length > limit) {
+		nextEpisodes.length = limit;
+	}
+
+	return nextEpisodes;
+}
+
+function removeFeedEntries(
+	currentLatest: Episode[],
+	feedEpisodes: Episode[] | undefined = [],
+): Episode[] {
+	if (!feedEpisodes?.length) {
+		return currentLatest;
+	}
+
+	const feedKeys = new Set(feedEpisodes.map(latestEpisodeIdentifier));
+
+	return currentLatest.filter(
+		(episode) => !feedKeys.has(latestEpisodeIdentifier(episode)),
+	);
+}
+
+function updateLatestEpisodesForFeed(
+	currentLatest: Episode[],
+	previousFeedEpisodes: Episode[] | undefined,
+	nextFeedEpisodes: Episode[] | undefined,
+	limit: number,
+): Episode[] {
+	let nextLatest = removeFeedEntries(currentLatest, previousFeedEpisodes);
+
+	if (!nextFeedEpisodes?.length) {
+		return nextLatest;
+	}
+
+	for (const episode of nextFeedEpisodes) {
+		nextLatest = insertEpisodeSorted(nextLatest, episode, limit);
+	}
+
+	return nextLatest;
+}
+
+export const latestEpisodes = readable<Episode[]>([], (set) => {
+	let latestByFeed: LatestEpisodesByFeed = new Map();
+	let feedSources: FeedEpisodeSources = new Map();
+	let mergedLatest: Episode[] = [];
+
+	const unsubscribe = episodeCache.subscribe((cache) => {
+		const cacheEntries = Object.entries(cache);
+		const feedCount = cacheEntries.length;
+		const latestLimit = Math.max(
+			1,
+			LATEST_EPISODES_PER_FEED * Math.max(feedCount, 1),
+		);
+
+		let changed = false;
+		let nextMerged = mergedLatest;
+		const nextSources: FeedEpisodeSources = new Map();
+		const nextLatestByFeed: LatestEpisodesByFeed = new Map();
+
+		for (const [feedTitle, episodes] of cacheEntries) {
+			nextSources.set(feedTitle, episodes);
+			const previousSource = feedSources.get(feedTitle);
+			const previousLatest = latestByFeed.get(feedTitle) || [];
+
+			const nextLatestForFeed =
+				previousSource === episodes && previousLatest
+					? previousLatest
+					: getLatestEpisodesForFeed(episodes);
+
+			nextLatestByFeed.set(feedTitle, nextLatestForFeed);
+
+			if (!shallowEqualEpisodes(previousLatest, nextLatestForFeed)) {
+				changed = true;
+				nextMerged = updateLatestEpisodesForFeed(
+					nextMerged,
+					previousLatest,
+					nextLatestForFeed,
+					latestLimit,
+				);
+			}
+		}
+
+		for (const feedTitle of latestByFeed.keys()) {
+			if (!nextSources.has(feedTitle)) {
+				changed = true;
+				nextMerged = removeFeedEntries(
+					nextMerged,
+					latestByFeed.get(feedTitle),
+				);
+			}
+		}
+
+		feedSources = nextSources;
+		latestByFeed = nextLatestByFeed;
+
+		if (changed) {
+			mergedLatest = nextMerged;
+			set(mergedLatest);
+		}
+	});
+
+	return () => {
+		latestByFeed.clear();
+		feedSources.clear();
+		mergedLatest = [];
+		unsubscribe();
+	};
+});
 
 export const downloadedEpisodes = (() => {
 	const store = writable<{ [podcastName: string]: DownloadedEpisode[] }>({});

@@ -7,6 +7,7 @@ import {
 	playlists,
 	queue,
 	savedFeeds,
+	hidePlayedEpisodes,
 	volume,
 } from "src/store";
 import { Plugin, type WorkspaceLeaf } from "obsidian";
@@ -29,6 +30,7 @@ import { QueueController } from "./store_controllers/QueueController";
 import { FavoritesController } from "./store_controllers/FavoritesController";
 import type { Episode } from "./types/Episode";
 import CurrentEpisodeController from "./store_controllers/CurrentEpisodeController";
+import { HidePlayedEpisodesController } from "./store_controllers/HidePlayedEpisodesController";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import createPodcastNote from "./createPodcastNote";
 import downloadEpisodeWithNotice from "./downloadEpisode";
@@ -66,6 +68,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private downloadedEpisodesController?: StoreController<{
 		[podcastName: string]: DownloadedEpisode[];
 	}>;
+	private hidePlayedEpisodesController?: StoreController<boolean>;
 	private transcriptionService?: TranscriptionService;
 	private volumeUnsubscribe?: Unsubscriber;
 
@@ -87,6 +90,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		if (this.settings.currentEpisode) {
 			currentEpisode.set(this.settings.currentEpisode);
 		}
+		hidePlayedEpisodes.set(this.settings.hidePlayedEpisodes);
 		volume.set(
 			Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)),
 		);
@@ -106,6 +110,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		).on();
 		this.currentEpisodeController = new CurrentEpisodeController(
 			currentEpisode,
+			this,
+		).on();
+		this.hidePlayedEpisodesController = new HidePlayedEpisodesController(
+			hidePlayedEpisodes,
 			this,
 		).on();
 
@@ -358,6 +366,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.localFilesController?.off();
 		this.downloadedEpisodesController?.off();
 		this.currentEpisodeController?.off();
+		this.hidePlayedEpisodesController?.off();
 		this.volumeUnsubscribe?.();
 	}
 

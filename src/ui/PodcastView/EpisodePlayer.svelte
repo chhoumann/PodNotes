@@ -114,16 +114,7 @@
 
 	let srcPromise: Promise<string> = getSrc($currentEpisode);
 
-	// #region Keep player time and currentTime in sync
-	// Simply binding currentTime to the audio element will result in resets.
-	// Hence the following solution.
-	let playerTime: number = 0;
-
 	onMount(() => {
-		const unsub = currentTime.subscribe((ct) => {
-			playerTime = ct;
-		});
-
 		// This only happens when the player is open and the user downloads the episode via the context menu.
 		// So we want to update the source of the audio element to local file / online stream.
 		const unsubDownloadedSource = downloadedEpisodes.subscribe(_ => {
@@ -139,17 +130,11 @@
 		});
 
 		return () => {
-			unsub();
 			unsubDownloadedSource();
 			unsubCurrentEpisode();
 			unsubVolume();
 		};
 	});
-
-	$: {
-		currentTime.set(playerTime);
-	}
-	// #endregion
 
 	onDestroy(() => {
 		playedEpisodes.setEpisodeTime($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
@@ -218,9 +203,7 @@
 			{:else}
 				<div
 					class="podcast-artwork-overlay"
-					style={`display: ${
-						isHoveringArtwork || $isPaused ? "block" : "none"
-					}`}
+					class:visible={isHoveringArtwork || $isPaused}
 				>
 					<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
 				</div>
@@ -234,7 +217,7 @@
 		<audio
 			src={src}
 			bind:duration={$duration}
-			bind:currentTime={playerTime}
+			bind:currentTime={$currentTime}
 			bind:paused={$isPaused}
 			bind:playbackRate={offBinding._playbackRate}
 			bind:volume={playerVolume}
@@ -251,9 +234,6 @@
 			on:click={onClickProgressbar}
 			value={$currentTime}
 			max={$duration}
-			style={{
-				"height": "2rem",
-			}}
 		/>
 		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
 	</div>
@@ -263,21 +243,15 @@
 			icon="skip-back"
 			tooltip="Skip backward"
 			on:click={$plugin.api.skipBackward.bind($plugin.api)}
-			style={{
-				margin: "0",
-				cursor: "pointer",
-			}}
+			class="player-control-button"
 		/>
 		<Button
 			icon="skip-forward"
 			tooltip="Skip forward"
 			on:click={$plugin.api.skipForward.bind($plugin.api)}
-			style={{
-				margin: "0",
-			cursor: "pointer",
-		}}
-	/>
-</div>
+			class="player-control-button"
+		/>
+	</div>
 
 	<div class="slider-stack">
 		<div class="volume-container">
@@ -371,11 +345,22 @@
 
 	:global(.podcast-artwork-overlay) {
 		position: absolute;
+		inset: 0;
+		display: none;
+		align-items: center;
+		justify-content: center;
+	}
+
+	:global(.podcast-artwork-overlay.visible) {
+		display: flex;
 	}
 
 	:global(.podcast-artwork-isloading-overlay) {
 		position: absolute;
-		display: block;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	:global(.podcast-artwork-overlay:hover) {
@@ -400,6 +385,10 @@
 		justify-content: space-around;
 	}
 
+	:global(.episode-player .status-container .progress) {
+		height: var(--episode-player-progress-height, 2rem);
+	}
+
 	:global(.controls-container) {
 		display: flex;
 		align-items: center;
@@ -407,6 +396,11 @@
 		margin-top: 1rem;
 		margin-left: 25%;
 		margin-right: 25%;
+	}
+
+	:global(.player-control-button) {
+		margin: 0;
+		cursor: pointer;
 	}
 
 	:global(.slider-stack) {
