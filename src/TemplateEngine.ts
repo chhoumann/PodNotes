@@ -4,6 +4,7 @@ import { plugin } from "src/store";
 import { get } from "svelte/store";
 import type { Episode } from "src/types/Episode";
 import getUrlExtension from "./utility/getUrlExtension";
+import { formatDate } from "./utility/formatDate";
 
 type TagValue = string | ((...args: string[]) => string);
 
@@ -103,7 +104,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	addTag("url", episode.url);
 	addTag("date", (format?: string) =>
 		episode.episodeDate
-			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
 			: "",
 	);
 	addTag(
@@ -153,7 +154,7 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 	});
 	addTag("date", (format?: string) =>
 		episode.episodeDate
-			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
 			: "",
 	);
 
@@ -189,7 +190,7 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	});
 	addTag("date", (format?: string) =>
 		episode.episodeDate
-			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
 			: "",
 	);
 
@@ -221,7 +222,7 @@ export function TranscriptTemplateEngine(
 	});
 	addTag("date", (format?: string) =>
 		episode.episodeDate
-			? window.moment(episode.episodeDate).format(format ?? "YYYY-MM-DD")
+			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
 			: "",
 	);
 	addTag("transcript", transcription);
