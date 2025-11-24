@@ -320,14 +320,12 @@
 
 	.hover-container {
 		width: 100%;
-		aspect-ratio: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		height: 0;
+		padding-bottom: 100%;
+		display: block;
 		position: relative;
 		border: none;
 		background: transparent;
-		padding: 0;
 		cursor: pointer;
 		border-radius: 0.75rem;
 		overflow: hidden;
@@ -343,11 +341,15 @@
 		transform: scale(0.98);
 	}
 
+	.hover-container :global(.pn_image_container) {
+		position: absolute;
+		inset: 0;
+	}
+
 	:global(.podcast-artwork) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		position: absolute;
 		transition: opacity 200ms ease;
 	}
 
