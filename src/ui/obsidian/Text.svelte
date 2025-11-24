@@ -2,7 +2,7 @@
     import { TextComponent } from "obsidian";
     import type { CSSObject } from "src/types/CSSObject";
     import extractStylesFromObj from "src/utility/extractStylesFromObj";
-    import { afterUpdate, createEventDispatcher, onMount } from "svelte";
+    import { createEventDispatcher, onDestroy, onMount } from "svelte";
 
     export let value: string = "";
     export let disabled: boolean = false;
@@ -17,33 +17,48 @@
 
     let text: TextComponent;
     let styles: CSSObject = {};
+    let textChangeHandler: ((event: Event) => void) | null = null;
 
     onMount(() => {
         text = new TextComponent(textRef);
 
-        updateTextComponentAttributes(text);
+        textChangeHandler = (event: Event) => {
+            const newValue = (event.target as HTMLInputElement).value;
+            value = newValue;
+            dispatch("change", { value: newValue });
+        };
+
+        text.inputEl.addEventListener("input", textChangeHandler);
     });
 
-    afterUpdate(() => {
-        updateTextComponentAttributes(text);
+    onDestroy(() => {
+        if (text?.inputEl && textChangeHandler) {
+            text.inputEl.removeEventListener("input", textChangeHandler);
+        }
     });
 
-    function updateTextComponentAttributes(component: TextComponent) {
-        if (value !== undefined) component.setValue(value);
-        if (disabled) component.setDisabled(disabled);
-        if (placeholder) component.setPlaceholder(placeholder);
-        if (type) component.inputEl.type = type;
-        if (styles) {
-            text.inputEl.setAttr("style", extractStylesFromObj(styles));
+    $: if (text) {
+        updateTextComponentAttributes(text, value, disabled, placeholder, type, styles);
+    }
+
+    function updateTextComponentAttributes(
+        component: TextComponent,
+        currentValue: string,
+        isDisabled: boolean,
+        currentPlaceholder: string,
+        currentType: "text" | "password" | "email" | "number" | "tel" | "url",
+        currentStyles: CSSObject
+    ) {
+        if (currentValue !== undefined) component.setValue(currentValue);
+        if (isDisabled) component.setDisabled(isDisabled);
+        if (currentPlaceholder) component.setPlaceholder(currentPlaceholder);
+        if (currentType) component.inputEl.type = currentType;
+        if (currentStyles) {
+            component.inputEl.setAttr("style", extractStylesFromObj(currentStyles));
         }
         if (component?.inputEl) {
             el = component.inputEl;
         }
-
-        component.onChange((newValue: string) => {
-            value = newValue;
-            dispatch("change", { value: newValue });
-        });
     }
 </script>
 
