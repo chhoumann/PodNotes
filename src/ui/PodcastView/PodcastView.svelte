@@ -231,7 +231,7 @@ onMount(() => {
 		currentSearchQuery = query;
 
 		if (selectedFeed) {
-			const episodesInFeed = $episodeCache[selectedFeed.title];
+			const episodesInFeed = $episodeCache[selectedFeed.title] ?? [];
 			displayedEpisodes = searchEpisodes(query, episodesInFeed);
 			return;
 		}
