@@ -79,18 +79,38 @@
 		justify-content: center;
 		width: 100%;
 		height: 100%;
-		opacity: 0.1;
+		color: var(--text-muted, #8a8f98);
+		opacity: 1;
 		border: none;
 		background: none;
 		padding: 0;
+		transition: color 120ms ease, background-color 120ms ease,
+			box-shadow 120ms ease, opacity 120ms ease;
 	}
 
-	.topbar-selected {
-		opacity: 1 !important;
+	.topbar-menu-button:focus-visible {
+		outline: 2px solid var(--interactive-accent, #5c6bf7);
+		outline-offset: 2px;
+	}
+
+	.topbar-menu-button:disabled {
+		color: var(--text-faint, #6b6b6b);
+		opacity: 0.45;
+		cursor: not-allowed;
 	}
 
 	.topbar-selectable {
 		cursor: pointer;
-		opacity: 0.5;
+		color: var(--text-normal, #dfe2e7);
+	}
+
+	.topbar-selectable:hover {
+		background-color: var(--background-divider);
+	}
+
+	.topbar-selected {
+		color: var(--interactive-accent, #5c6bf7);
+		background-color: var(--background-secondary, var(--background-divider));
+		box-shadow: inset 0 -2px var(--interactive-accent, #5c6bf7);
 	}
 </style>
