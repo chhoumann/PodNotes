@@ -74,6 +74,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
+	private isReady = false;
+	private pendingSave: IPodNotesSettings | null = null;
+	private saveScheduled = false;
+	private saveChain: Promise<void> = Promise.resolve();
 
 	override async onload() {
 		plugin.set(this);
@@ -320,6 +324,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
+
+		this.isReady = true;
 	}
 
 	onLayoutReady(): void {
@@ -381,6 +387,45 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		if (!this.isReady) return;
+
+		this.pendingSave = this.cloneSettings();
+
+		if (this.saveScheduled) {
+			return this.saveChain;
+		}
+
+		this.saveScheduled = true;
+
+		this.saveChain = this.saveChain
+			.then(async () => {
+				while (this.pendingSave) {
+					const snapshot = this.pendingSave;
+					this.pendingSave = null;
+					await this.saveData(snapshot);
+				}
+			})
+			.catch((error) => {
+				console.error("PodNotes: failed to save settings", error);
+			})
+			.finally(() => {
+				this.saveScheduled = false;
+
+				// If a save was requested while we were saving, run again.
+				if (this.pendingSave) {
+					void this.saveSettings();
+				}
+			});
+
+		return this.saveChain;
+	}
+
+	private cloneSettings(): IPodNotesSettings {
+		// structuredClone is available in Obsidian's Electron runtime; fallback for safety.
+		if (typeof structuredClone === "function") {
+			return structuredClone(this.settings);
+		}
+
+		return JSON.parse(JSON.stringify(this.settings)) as IPodNotesSettings;
 	}
 }
