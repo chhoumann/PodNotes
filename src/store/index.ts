@@ -13,6 +13,7 @@ export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
 export const duration = writable<number>(0);
 export const volume = writable<number>(1);
+export const hidePlayedEpisodes = writable<boolean>(false);
 
 export const currentEpisode = (() => {
 	const store = writable<Episode>();

@@ -1,15 +1,14 @@
 <script lang="ts">
 	import type { Episode } from "src/types/Episode";
-	import { createEventDispatcher, onMount } from "svelte";
+	import { createEventDispatcher } from "svelte";
 	import EpisodeListItem from "./EpisodeListItem.svelte";
-	import { playedEpisodes } from "src/store";
+	import { hidePlayedEpisodes, playedEpisodes } from "src/store";
 	import Icon from "../obsidian/Icon.svelte";
 	import Text from "../obsidian/Text.svelte";
 
 	export let episodes: Episode[] = [];
 	export let showThumbnails: boolean = false;
 	export let showListMenu: boolean = true;
-	let hidePlayedEpisodes: boolean = false;
 	let searchInputQuery: string = "";
 
 	const dispatch = createEventDispatcher();
@@ -48,11 +47,11 @@
 				/>
 			</div>
 			<Icon
-				icon={hidePlayedEpisodes ? "eye-off" : "eye"}
+				icon={$hidePlayedEpisodes ? "eye-off" : "eye"}
 				size={25}
-				label={hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
-				pressed={hidePlayedEpisodes}
-				on:click={() => (hidePlayedEpisodes = !hidePlayedEpisodes)}
+				label={$hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
+				pressed={$hidePlayedEpisodes}
+				on:click={() => hidePlayedEpisodes.update((value) => !value)}
 			/>
 			<Icon
 				icon="refresh-cw"
@@ -69,7 +68,7 @@
 		{/if}
 		{#each episodes as episode (episode.url || episode.streamUrl || `${episode.title}-${episode.episodeDate ?? ""}`)}
 			{@const episodePlayed = $playedEpisodes[episode.title]?.finished}
-			{#if !hidePlayedEpisodes || !episodePlayed}
+			{#if !$hidePlayedEpisodes || !episodePlayed}
 				<EpisodeListItem
 					{episode}
 					episodeFinished={episodePlayed}
