@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
@@ -51,6 +52,35 @@ const external = [
 
 export default defineConfig(({ mode }) => {
 	const isProd = mode === "production";
+	const outDir = isProd ? "." : "build";
+
+	const devSymlinkPlugin = () => ({
+		name: "podnotes-dev-symlink",
+		writeBundle() {
+			if (isProd) return;
+
+			const ensureSymlink = (from: string, to: string) => {
+				try {
+					const stat = fs.lstatSync(to);
+					if (stat.isSymbolicLink() || stat.isFile()) {
+						fs.unlinkSync(to);
+					}
+				} catch {
+					// target does not exist – that's fine
+				}
+
+				fs.symlinkSync(from, to);
+			};
+
+			const builtMain = path.resolve(__dirname, outDir, "main.js");
+			const builtMap = path.resolve(__dirname, outDir, "main.js.map");
+			const rootMain = path.resolve(__dirname, "main.js");
+			const rootMap = path.resolve(__dirname, "main.js.map");
+
+			if (fs.existsSync(builtMain)) ensureSymlink(builtMain, rootMain);
+			if (fs.existsSync(builtMap)) ensureSymlink(builtMap, rootMap);
+		},
+	});
 
 	return {
 		plugins: [
@@ -58,6 +88,7 @@ export default defineConfig(({ mode }) => {
 				preprocess: sveltePreprocess(),
 				compilerOptions: { css: "injected" },
 			}),
+			devSymlinkPlugin(),
 		],
 		resolve: {
 			alias: {
@@ -72,7 +103,7 @@ export default defineConfig(({ mode }) => {
 				fileName: () => "main.js",
 			},
 			target: "es2020",
-			outDir: ".",
+			outDir,
 			emptyOutDir: false,
 			sourcemap: !isProd,
 			minify: isProd ? "esbuild" : false,

@@ -310,39 +310,43 @@
 		</div>
 	</div>
 
-	<ChapterList
-		{chapters}
-		currentTime={$currentTime}
-		on:seek={onChapterSeek}
-	/>
+	<div class="lists-container">
+		<ChapterList
+			{chapters}
+			currentTime={$currentTime}
+			on:seek={onChapterSeek}
+		/>
 
-	<EpisodeList 
-		episodes={$queue.episodes} 
-		showListMenu={false}
-		showThumbnails={true}
-		on:contextMenuEpisode={handleContextMenuEpisode}
-		on:clickEpisode={handleClickEpisode}
-	>
-		<svelte:fragment slot="header">
-			<h3>Queue</h3>
-		</svelte:fragment>
-	</EpisodeList>
+		<EpisodeList 
+			episodes={$queue.episodes} 
+			showListMenu={false}
+			showThumbnails={true}
+			on:contextMenuEpisode={handleContextMenuEpisode}
+			on:clickEpisode={handleClickEpisode}
+		>
+			<svelte:fragment slot="header">
+				<h3>Queue</h3>
+			</svelte:fragment>
+		</EpisodeList>
+	</div>
 </div>
 
 <style>
 	.episode-player {
 		display: flex;
 		flex-direction: column;
-		height: 100%;
+		flex: 1 1 auto;
+		min-height: 0;
 		padding: 0 1rem;
 		overflow-y: auto;
+		gap: 0.35rem;
 	}
 
 	.episode-image-container {
 		width: 100%;
 		max-width: 20rem;
-		margin: 0 auto;
-		padding: 1rem 0;
+		margin: 0 auto 0.5rem;
+		padding: 1rem 0 0.5rem;
 	}
 
 	.hover-container {
@@ -423,15 +427,11 @@
 		font-size: 1.125rem;
 		font-weight: 600;
 		line-height: 1.4;
-		margin: 0 0 1rem;
+		margin: 0 0 0.75rem;
 		text-align: center;
 		color: var(--text-normal);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
+		white-space: normal;
+		word-break: break-word;
 	}
 
 	.status-container {
@@ -486,8 +486,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		margin-top: auto;
-		padding: 1.5rem 0;
+		padding: 1rem 0 0.75rem;
 		border-top: 1px solid var(--background-modifier-border);
 	}
 
@@ -514,5 +513,26 @@
 		letter-spacing: 0.05em;
 		margin: 1rem 0 0.5rem;
 		padding: 0 0.5rem;
+	}
+
+	:global(.episode-player .episode-list-view-container) {
+		height: auto;
+		overflow: visible;
+	}
+
+	:global(.episode-player .podcast-episode-list) {
+		flex: 0 0 auto;
+		overflow: visible;
+	}
+
+	.lists-container {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding-bottom: 0.5rem;
+	}
+
+	:global(.lists-container .episode-list-view-container) {
+		height: auto;
 	}
 </style>
