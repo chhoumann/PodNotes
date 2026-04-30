@@ -22,3 +22,6 @@ data.json
 .DS_Store
 
 __snapshots__
+
+# Documentation build output
+docs/site

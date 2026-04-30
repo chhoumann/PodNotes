@@ -12,7 +12,9 @@
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"semantic-release": "semantic-release",
 		"test": "npm run check:a11y && vitest",
-		"check:a11y": "svelte-check --fail-on-warnings"
+		"check:a11y": "svelte-check --fail-on-warnings",
+		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
+		"docs:deploy": "npm run docs:build && npx wrangler pages deploy docs/site --project-name podnotes --branch master"
 	},
 	"keywords": [],
 	"author": "Christian Bager Bach Houmann",
