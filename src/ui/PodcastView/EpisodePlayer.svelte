@@ -11,6 +11,7 @@
 		playlists,
 		viewState,
 		downloadedEpisodes,
+		requestedPlaybackTime,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { fetchChapters } from "src/utility/fetchChapters";
@@ -28,7 +29,7 @@
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
-	import { getEpisodeKey } from "src/utility/episodeKey";
+	import { episodeMatchesKey, getEpisodeKey } from "src/utility/episodeKey";
 
 	// #region Circumventing the forced two-way binding of the playback rate.
 	class CircumentForcedTwoWayBinding {
@@ -116,6 +117,7 @@
 	function restorePlaybackTime() {
 		const playedEps = $playedEpisodes;
 		const currentEp = $currentEpisode;
+		const requestedPlayback = $requestedPlaybackTime;
 
 		if (!currentEp) {
 			currentTime.set(0);
@@ -123,6 +125,25 @@
 			return;
 		}
 
+		if (requestedPlayback !== null) {
+			requestedPlaybackTime.set(null);
+			if (!episodeMatchesKey(currentEp, requestedPlayback.episodeKey)) {
+				restoreSavedPlaybackTime(currentEp, playedEps);
+				return;
+			}
+
+			currentTime.set(requestedPlayback.time);
+			isPaused.set(false);
+			return;
+		}
+
+		restoreSavedPlaybackTime(currentEp, playedEps);
+	}
+
+	function restoreSavedPlaybackTime(
+		currentEp: Episode,
+		playedEps: typeof $playedEpisodes,
+	) {
 		const key = getEpisodeKey(currentEp);
 
 		// Check composite key first, then fallback to title-only for backwards compat

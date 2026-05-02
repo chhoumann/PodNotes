@@ -4,7 +4,7 @@ export default function encodePodnotesURI(title: string, feedUrl: string, time?:
 	url.searchParams.set('episodeName', title);
 	url.searchParams.set('url', feedUrl);
 
-	if (time) {
+	if (time !== undefined) {
 		url.searchParams.set('time', time.toString());
 	}
 
