@@ -12,6 +12,10 @@ import { getEpisodeKey } from "src/utility/episodeKey";
 
 export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
+export const requestedPlaybackTime = writable<{
+	episodeKey: string;
+	time: number;
+} | null>(null);
 export const duration = writable<number>(0);
 export const volume = writable<number>(1);
 export const hidePlayedEpisodes = writable<boolean>(false);
