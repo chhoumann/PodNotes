@@ -25,3 +25,6 @@ __snapshots__
 
 # Documentation build output
 docs/site
+
+# Obsidian E2E failure artifacts
+.obsidian-e2e-artifacts
