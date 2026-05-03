@@ -9,7 +9,10 @@ import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import { TFile } from "obsidian";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import { getEpisodeKey } from "src/utility/episodeKey";
-import { getPlayedEpisode } from "src/utility/episodeStatus";
+import {
+	getPlayedEpisode,
+	getPlayedEpisodeAliasKeys,
+} from "src/utility/episodeStatus";
 
 export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
@@ -114,18 +117,14 @@ export const playedEpisodes = (() => {
 				const key = getEpisodeKey(episode);
 				if (!key) return playedEpisodes;
 
-				const playedEpisode = getPlayedEpisode(playedEpisodes, episode) || {
-					title: episode.title,
-					podcastName: episode.podcastName,
-					time: 0,
-					duration: 0,
-					finished: false,
-				};
-
-				playedEpisode.time = 0;
-				playedEpisode.finished = false;
-
-				playedEpisodes[key] = playedEpisode;
+				markPlayedEpisodeAliasesAsUnplayed(
+					playedEpisodes,
+					{
+						title: episode.title,
+						podcastName: episode.podcastName,
+					},
+					key,
+				);
 				return playedEpisodes;
 			});
 		},
@@ -136,17 +135,41 @@ export const playedEpisodes = (() => {
 				const playedEpisode = playedEpisodes[key];
 				if (!playedEpisode) return playedEpisodes;
 
-				playedEpisodes[key] = {
-					...playedEpisode,
-					time: 0,
-					finished: false,
-				};
-
+				markPlayedEpisodeAliasesAsUnplayed(playedEpisodes, playedEpisode, key);
 				return playedEpisodes;
 			});
 		},
 	};
 })();
+
+function markPlayedEpisodeAliasesAsUnplayed(
+	playedEpisodeMap: { [key: string]: PlayedEpisode },
+	episode: Pick<PlayedEpisode, "title" | "podcastName">,
+	preferredKey: string,
+) {
+	const aliasKeys = getPlayedEpisodeAliasKeys(
+		playedEpisodeMap,
+		episode,
+		preferredKey,
+	);
+	const keysToUpdate = aliasKeys.length > 0 ? aliasKeys : [preferredKey];
+
+	for (const key of keysToUpdate) {
+		const playedEpisode = playedEpisodeMap[key] || {
+			title: episode.title,
+			podcastName: episode.podcastName,
+			time: 0,
+			duration: 0,
+			finished: false,
+		};
+
+		playedEpisodeMap[key] = {
+			...playedEpisode,
+			time: 0,
+			finished: false,
+		};
+	}
+}
 
 export const podcastsUpdated = writable(0);
 

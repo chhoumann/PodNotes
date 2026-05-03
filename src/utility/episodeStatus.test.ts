@@ -5,6 +5,7 @@ import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import {
 	getFinishedPlayedEpisodeRecords,
 	getPlayedEpisode,
+	getPlayedEpisodeAliasKeys,
 	isEpisodeFinished,
 } from "./episodeStatus";
 
@@ -70,5 +71,25 @@ describe("episodeStatus", () => {
 
 		expect(records).toHaveLength(1);
 		expect(records[0].key).toBe("Design Podcast::Shared title");
+	});
+
+	test("finds stored aliases for the same played episode", () => {
+		const aliases = getPlayedEpisodeAliasKeys(
+			{
+				[episode.title]: playedEpisode("Design Podcast", true),
+				"Design Podcast::Shared title": playedEpisode("Design Podcast", true),
+				"Other Podcast::Shared title": playedEpisode("Other Podcast", true),
+			},
+			{
+				title: episode.title,
+				podcastName: episode.podcastName,
+			},
+			"Design Podcast::Shared title",
+		);
+
+		expect(aliases).toEqual([
+			episode.title,
+			"Design Podcast::Shared title",
+		]);
 	});
 });

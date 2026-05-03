@@ -251,6 +251,20 @@
 		displayedEpisodes = displayedEpisodeEntries.map((entry) => entry.episode);
 	}
 
+	function isPlayedPlaylistSelected() {
+		return (
+			isShowingPlayedEpisodes &&
+			selectedPlaylist?.isVirtual &&
+			selectedPlaylist.name === PLAYED_SETTINGS.name
+		);
+	}
+
+	function updateDisplayedPlayedEpisodesIfSelected() {
+		if (!isPlayedPlaylistSelected()) return;
+
+		updateDisplayedPlayedEpisodes();
+	}
+
 	function showLatestEpisodes() {
 		selectedFeed = null;
 		selectedPlaylist = null;
@@ -364,7 +378,7 @@
 	async function handleClickRefresh() {
 		if (isShowingPlayedEpisodes) {
 			await fetchEpisodesInAllFeeds(feeds, false);
-			updateDisplayedPlayedEpisodes();
+			updateDisplayedPlayedEpisodesIfSelected();
 			return;
 		}
 
@@ -424,7 +438,7 @@
 			viewState.set(ViewState.EpisodeList);
 
 			void fetchEpisodesInAllFeeds(feeds).then(() => {
-				updateDisplayedPlayedEpisodes();
+				updateDisplayedPlayedEpisodesIfSelected();
 			});
 			return;
 		}

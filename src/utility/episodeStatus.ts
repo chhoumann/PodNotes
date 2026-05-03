@@ -34,12 +34,35 @@ export function isEpisodeFinished(
 	return getPlayedEpisode(playedEpisodes, episode)?.finished ?? false;
 }
 
-export function getPlayedEpisodeRecordKey(episode: PlayedEpisode): string {
+export function getPlayedEpisodeRecordKey(
+	episode: Pick<PlayedEpisode, "title" | "podcastName">,
+): string {
 	if (episode.podcastName) {
 		return `${episode.podcastName}::${episode.title}`;
 	}
 
 	return episode.title;
+}
+
+export function getPlayedEpisodeAliasKeys(
+	playedEpisodes: PlayedEpisodeMap,
+	episode: Pick<PlayedEpisode, "title" | "podcastName">,
+	sourceKey?: string,
+): string[] {
+	const keys = new Set<string>();
+	const targetKey = getPlayedEpisodeRecordKey(episode);
+
+	for (const [key, playedEpisode] of Object.entries(playedEpisodes)) {
+		if (
+			key === sourceKey ||
+			key === targetKey ||
+			isSamePlayedEpisode(playedEpisode, episode)
+		) {
+			keys.add(key);
+		}
+	}
+
+	return Array.from(keys);
 }
 
 export function getFinishedPlayedEpisodeRecords(
@@ -62,4 +85,14 @@ export function getFinishedPlayedEpisodeRecords(
 
 function isCompositePlayedKey(key: string): boolean {
 	return key.includes("::");
+}
+
+function isSamePlayedEpisode(
+	playedEpisode: PlayedEpisode,
+	episode: Pick<PlayedEpisode, "title" | "podcastName">,
+): boolean {
+	if (playedEpisode.title !== episode.title) return false;
+	if (!playedEpisode.podcastName || !episode.podcastName) return true;
+
+	return playedEpisode.podcastName === episode.podcastName;
 }
