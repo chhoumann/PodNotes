@@ -14,6 +14,7 @@
 		viewState,
 		downloadedEpisodes,
 		plugin,
+		playedEpisodes,
 	} from "src/store";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
@@ -24,7 +25,7 @@
 	import { onMount, onDestroy } from "svelte";
 	import EpisodeListHeader from "./EpisodeListHeader.svelte";
 	import Icon from "../obsidian/Icon.svelte";
-	import { debounce } from "obsidian";
+	import { debounce, Notice } from "obsidian";
 	import searchEpisodes from "src/utility/searchEpisodes";
 	import type { Playlist } from "src/types/Playlist";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
@@ -33,11 +34,21 @@
 		setCachedEpisodes,
 	} from "src/services/FeedCacheService";
 	import { get } from "svelte/store";
+	import { PLAYED_SETTINGS } from "src/constants";
+	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
+	import {
+		buildPlayedEpisodeListEntries,
+		createPlayedEpisodePlaceholder,
+		type EpisodeListEntry,
+		type PlayedEpisodeListEntry,
+	} from "src/utility/episodeListEntry";
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
 	let selectedPlaylist: Playlist | null = null;
+	let isShowingPlayedEpisodes: boolean = false;
 	let displayedEpisodes: Episode[] = [];
+	let displayedEpisodeEntries: EpisodeListEntry[] | null = null;
 	let displayedPlaylists: Playlist[] = [];
 	let latestEpisodes: Episode[] = [];
 	let isFetchingEpisodes: boolean = false;
@@ -59,9 +70,29 @@
 	$: isFetchingEpisodes = loadingFeedNames.length > 0;
 
 	onMount(() => {
-		const unsubscribePlaylists = playlists.subscribe((pl) => {
-			displayedPlaylists = [get(queue), get(favorites), get(localFiles), ...Object.values(pl)];
-		});
+		const updateDisplayedPlaylists = () => {
+			const customPlaylists = Object.values(get(playlists));
+			displayedPlaylists = [
+				get(queue),
+				get(favorites),
+				get(localFiles),
+				getPlayedPlaylist(),
+				...customPlaylists,
+			];
+		};
+
+		const playlistUnsubscribers = [
+			playlists.subscribe(updateDisplayedPlaylists),
+			queue.subscribe(updateDisplayedPlaylists),
+			favorites.subscribe(updateDisplayedPlaylists),
+			localFiles.subscribe(updateDisplayedPlaylists),
+			playedEpisodes.subscribe(() => {
+				updateDisplayedPlaylists();
+				if (isShowingPlayedEpisodes) {
+					updateDisplayedPlayedEpisodes();
+				}
+			}),
+		];
 
 		const unsubscribeSavedFeeds = savedFeeds.subscribe((storeValue) => {
 			const updatedFeeds = Object.values(storeValue);
@@ -90,7 +121,8 @@
 				if (
 					currentViewState === ViewState.EpisodeList &&
 					!selectedFeed &&
-					!selectedPlaylist
+					!selectedPlaylist &&
+					!isShowingPlayedEpisodes
 				) {
 					displayedEpisodes = currentSearchQuery
 						? searchEpisodes(currentSearchQuery, episodes)
@@ -103,7 +135,7 @@
 			unsubscribeLatestEpisodes();
 			unsubscribeViewState();
 			unsubscribeSavedFeeds();
-			unsubscribePlaylists();
+			playlistUnsubscribers.forEach((unsubscribe) => unsubscribe());
 		};
 	});
 
@@ -162,6 +194,96 @@
 		}
 	}
 
+	function getPlayedPlaylist(): Playlist {
+		return {
+			...PLAYED_SETTINGS,
+			episodes: getFinishedPlayedEpisodeRecords(get(playedEpisodes)).map(
+				({ episode }) => createPlayedEpisodePlaceholder(episode),
+			),
+			isVirtual: true,
+		};
+	}
+
+	function getEpisodeSources(): Episode[][] {
+		const cachedEpisodes = Object.values(get(episodeCache));
+		const downloaded = Object.values(get(downloadedEpisodes));
+		const userPlaylists = Object.values(get(playlists)).map(
+			(playlist) => playlist.episodes,
+		);
+
+		return [
+			...cachedEpisodes,
+			...downloaded,
+			get(queue).episodes,
+			get(favorites).episodes,
+			get(localFiles).episodes,
+			...userPlaylists,
+		];
+	}
+
+	function filterPlayedEntries(
+		entries: PlayedEpisodeListEntry[],
+		query: string,
+	): PlayedEpisodeListEntry[] {
+		if (!query) return entries;
+
+		const entriesByEpisode = new Map(
+			entries.map((entry) => [entry.episode, entry]),
+		);
+
+		return searchEpisodes(
+			query,
+			entries.map((entry) => entry.episode),
+		)
+			.map((episode) => entriesByEpisode.get(episode))
+			.filter((entry): entry is PlayedEpisodeListEntry => Boolean(entry));
+	}
+
+	function updateDisplayedPlayedEpisodes() {
+		const entries = buildPlayedEpisodeListEntries(
+			get(playedEpisodes),
+			getEpisodeSources(),
+		);
+		displayedEpisodeEntries = filterPlayedEntries(
+			entries,
+			currentSearchQuery,
+		);
+		displayedEpisodes = displayedEpisodeEntries.map((entry) => entry.episode);
+	}
+
+	function isPlayedPlaylistSelected() {
+		return (
+			isShowingPlayedEpisodes &&
+			selectedPlaylist?.isVirtual &&
+			selectedPlaylist.name === PLAYED_SETTINGS.name
+		);
+	}
+
+	function updateDisplayedPlayedEpisodesIfSelected() {
+		if (!isPlayedPlaylistSelected()) return;
+
+		updateDisplayedPlayedEpisodes();
+	}
+
+	function showLatestEpisodes() {
+		selectedFeed = null;
+		selectedPlaylist = null;
+		isShowingPlayedEpisodes = false;
+		displayedEpisodeEntries = null;
+		displayedEpisodes = currentSearchQuery
+			? searchEpisodes(currentSearchQuery, latestEpisodes)
+			: latestEpisodes;
+		viewState.set(ViewState.EpisodeList);
+	}
+
+	function getPlayedEpisodeKey(entry: EpisodeListEntry): string | undefined {
+		if (!("playedEpisodeKey" in entry)) return undefined;
+
+		return typeof entry.playedEpisodeKey === "string"
+			? entry.playedEpisodeKey
+			: undefined;
+	}
+
 	function setFeedLoading(feedTitle: string, isLoading: boolean) {
 		// Don't update state if component is unmounted
 		if (!isMounted) return;
@@ -178,7 +300,8 @@
 	}
 
 	function fetchEpisodesInAllFeeds(
-		feedsToSearch: PodcastFeed[]
+		feedsToSearch: PodcastFeed[],
+		useCache: boolean = true,
 	): Promise<void> {
 		if (!feedsToSearch.length) return Promise.resolve();
 
@@ -187,7 +310,7 @@
 				setFeedLoading(feed.title, true);
 
 				try {
-					await fetchEpisodes(feed);
+					await fetchEpisodes(feed, useCache);
 				} finally {
 					setFeedLoading(feed.title, false);
 				}
@@ -201,6 +324,9 @@
 		const { feed } = event.detail;
 
 		selectedFeed = feed;
+		selectedPlaylist = null;
+		isShowingPlayedEpisodes = false;
+		displayedEpisodeEntries = null;
 		displayedEpisodes = [];
 		viewState.set(ViewState.EpisodeList);
 		setFeedLoading(feed.title, true);
@@ -215,26 +341,54 @@
 		}
 	}
 
-	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
-		const { episode } = event.detail;
+	function handleClickEpisode(
+		event: CustomEvent<{ episode: Episode; entry: EpisodeListEntry }>,
+	) {
+		const { episode, entry } = event.detail;
+		if (!entry.isAvailable) {
+			new Notice("This played episode is no longer available in current feeds.");
+			return;
+		}
+
 		currentEpisode.set(episode);
 
 		viewState.set(ViewState.Player);
 	}
 
 	function handleContextMenuEpisode({
-		detail: { event, episode },
-	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(episode, event);
+		detail: { event, episode, entry },
+	}: CustomEvent<{ episode: Episode; entry: EpisodeListEntry; event: MouseEvent }>) {
+		spawnEpisodeContextMenu(
+			episode,
+			event,
+			entry.isAvailable
+				? undefined
+				: {
+						play: true,
+						download: true,
+						createNote: true,
+						favorite: true,
+						queue: true,
+						playlists: true,
+					},
+			getPlayedEpisodeKey(entry),
+		);
 	}
 
 	async function handleClickRefresh() {
+		if (isShowingPlayedEpisodes) {
+			await fetchEpisodesInAllFeeds(feeds, false);
+			updateDisplayedPlayedEpisodesIfSelected();
+			return;
+		}
+
 		if (!selectedFeed) return;
 
 		setFeedLoading(selectedFeed.title, true);
 
 		try {
 			const episodes = await fetchEpisodes(selectedFeed, false);
+			displayedEpisodeEntries = null;
 			displayedEpisodes = currentSearchQuery
 				? searchEpisodes(currentSearchQuery, episodes)
 				: episodes;
@@ -247,22 +401,53 @@
 		const { query } = event.detail;
 		currentSearchQuery = query;
 
+		if (isShowingPlayedEpisodes) {
+			updateDisplayedPlayedEpisodes();
+			return;
+		}
+
 		if (selectedFeed) {
 			const cache = get(episodeCache);
 			const episodesInFeed = cache[selectedFeed.title] ?? [];
+			displayedEpisodeEntries = null;
 			displayedEpisodes = searchEpisodes(query, episodesInFeed);
 			return;
 		}
 
+		if (selectedPlaylist) {
+			displayedEpisodeEntries = null;
+			displayedEpisodes = searchEpisodes(query, selectedPlaylist.episodes);
+			return;
+		}
+
+		displayedEpisodeEntries = null;
 		displayedEpisodes = searchEpisodes(query, latestEpisodes);
 	}, 250);
 
 	function handleClickPlaylist(
 		event: CustomEvent<{ event: MouseEvent; playlist: Playlist }>
 	) {
-		const { event: clickEvent, playlist } = event.detail;
+		const { playlist } = event.detail;
+
+		if (playlist.isVirtual && playlist.name === PLAYED_SETTINGS.name) {
+			selectedFeed = null;
+			selectedPlaylist = playlist;
+			isShowingPlayedEpisodes = true;
+			displayedEpisodes = [];
+			displayedEpisodeEntries = [];
+			viewState.set(ViewState.EpisodeList);
+
+			void fetchEpisodesInAllFeeds(feeds).then(() => {
+				updateDisplayedPlayedEpisodesIfSelected();
+			});
+			return;
+		}
 
 		if (playlist.name === $queue.name && $queue.episodes.length > 0) {
+			selectedFeed = null;
+			selectedPlaylist = null;
+			isShowingPlayedEpisodes = false;
+			displayedEpisodeEntries = null;
 			// Only need to set the current episode if there isn't any.
 			// The current episode _is_ the front of the queue.
 			if (!$currentEpisode) {
@@ -271,7 +456,10 @@
 
 			viewState.set(ViewState.Player);
 		} else {
+			selectedFeed = null;
 			selectedPlaylist = playlist;
+			isShowingPlayedEpisodes = false;
+			displayedEpisodeEntries = null;
 			displayedEpisodes = playlist.episodes;
 
 			viewState.set(ViewState.EpisodeList);
@@ -306,7 +494,10 @@
 		{/if}
 		<EpisodeList
 			episodes={displayedEpisodes}
-			showThumbnails={!selectedFeed || !selectedPlaylist}
+			episodeEntries={displayedEpisodeEntries}
+			showThumbnails={!selectedPlaylist || isShowingPlayedEpisodes}
+			showPlayedToggle={!isShowingPlayedEpisodes}
+			alwaysShowPlayedEpisodes={isShowingPlayedEpisodes}
 			isLoading={selectedFeed ? loadingFeeds.has(selectedFeed.title) : isFetchingEpisodes}
 			on:clickEpisode={handleClickEpisode}
 			on:contextMenuEpisode={handleContextMenuEpisode}
@@ -318,13 +509,7 @@
 					<button
 						type="button"
 						class="go-back"
-						on:click={() => {
-							selectedFeed = null;
-							displayedEpisodes = currentSearchQuery
-								? searchEpisodes(currentSearchQuery, latestEpisodes)
-								: latestEpisodes;
-							viewState.set(ViewState.EpisodeList);
-						}}
+						on:click={showLatestEpisodes}
 					>
 						<Icon
 							icon={"arrow-left"}
@@ -340,13 +525,7 @@
 					<button
 						type="button"
 						class="go-back"
-						on:click={() => {
-							selectedPlaylist = null;
-							displayedEpisodes = currentSearchQuery
-								? searchEpisodes(currentSearchQuery, latestEpisodes)
-								: latestEpisodes;
-							viewState.set(ViewState.EpisodeList);
-						}}
+						on:click={showLatestEpisodes}
 					>
 						<Icon
 							icon={"arrow-left"}

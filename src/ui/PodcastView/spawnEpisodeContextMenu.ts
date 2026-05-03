@@ -5,6 +5,7 @@ import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlist
 import type { Episode } from "src/types/Episode";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
+import { isEpisodeFinished } from "src/utility/episodeStatus";
 
 interface DisabledMenuItems {
 	play: boolean;
@@ -19,7 +20,8 @@ interface DisabledMenuItems {
 export default function spawnEpisodeContextMenu(
 	episode: Episode,
 	event: MouseEvent,
-	disabledMenuItems?: Partial<DisabledMenuItems>
+	disabledMenuItems?: Partial<DisabledMenuItems>,
+	playedEpisodeKey?: string,
 ) {
 	const menu = new Menu();
 
@@ -34,13 +36,20 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.markPlayed) {
-		const episodeIsPlayed = Object.values(get(playedEpisodes)).find(e => (e.title === episode.title && e.finished));
+		const playedEpisodeMap = get(playedEpisodes);
+		const episodeIsPlayed = playedEpisodeKey
+			? playedEpisodeMap[playedEpisodeKey]?.finished ?? isEpisodeFinished(episode, playedEpisodeMap)
+			: isEpisodeFinished(episode, playedEpisodeMap);
 		menu.addItem(item => item
-			.setIcon(episodeIsPlayed ? "cross" : "check")
+			.setIcon(episodeIsPlayed ? "x" : "check")
 			.setTitle(`Mark as ${episodeIsPlayed ? "Unplayed" : "Played"}`)
 			.onClick(() => {
 				if (episodeIsPlayed) {
-					playedEpisodes.markAsUnplayed(episode);
+					if (playedEpisodeKey) {
+						playedEpisodes.markKeyAsUnplayed(playedEpisodeKey);
+					} else {
+						playedEpisodes.markAsUnplayed(episode);
+					}
 				} else {
 					playedEpisodes.markAsPlayed(episode);
 				}

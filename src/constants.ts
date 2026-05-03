@@ -29,6 +29,13 @@ export const LOCAL_FILES_SETTINGS: PlaylistSettings = {
 	shouldRepeat: false,
 };
 
+export const PLAYED_SETTINGS: PlaylistSettings = {
+	icon: "check-square",
+	name: "Played",
+	shouldEpisodeRemoveAfterPlay: false,
+	shouldRepeat: false,
+};
+
 export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	savedFeeds: {},
 	podNotes: {},

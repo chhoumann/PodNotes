@@ -6,6 +6,7 @@
 	export let episode: Episode;
 	export let episodeFinished: boolean = false;
 	export let showEpisodeImage: boolean = false;
+	export let unavailableReason: string | undefined = undefined;
 
 	const dispatch = createEventDispatcher();
 	const dateFormatter = new Intl.DateTimeFormat("en-GB", {
@@ -57,6 +58,7 @@
 	class="podcast-episode-item" 
 	on:click={onClickEpisode} 
 	on:contextmenu={onContextMenu}
+	title={unavailableReason ?? episode.title}
 >
 	{#if showEpisodeImage && episode?.artworkUrl} 
 		<div class="podcast-episode-thumbnail-container">
@@ -75,6 +77,9 @@
 	<div class="podcast-episode-information">
 		<span class="episode-item-date">{date}</span>
 		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
+		{#if unavailableReason}
+			<span class="episode-item-status">{unavailableReason}</span>
+		{/if}
 	</div>
 </button>
 
@@ -117,6 +122,10 @@
 	.strikeout {
 		text-decoration: line-through;
 		opacity: 0.6;
+	}
+
+	.podcast-episode-item:has(.episode-item-status) {
+		opacity: 0.75;
 	}
 
 	.podcast-episode-information {
@@ -173,5 +182,10 @@
 		height: 100%;
 		object-fit: cover;
 		border-radius: 0.375rem;
+	}
+
+	.episode-item-status {
+		font-size: 0.75rem;
+		color: var(--text-muted);
 	}
 </style>

@@ -14,6 +14,8 @@ The playlists are shown in the episode grid, represented by their icons.
 
 By default, you will have a queue playlist and a favorites playlist.
 
+PodNotes also shows a Played playlist in the episode grid. It is a virtual playlist that lists episodes marked as played across all podcasts. Episodes still available in your feeds can be played or managed like normal episodes. Older played-history entries that can no longer be found in current feeds remain visible so you can mark them as unplayed.
+
 You can delete playlists by pressing the trash bin icon next to the playlist name.
 The icon will change to a checkmark, which should be pressed within a short duration to confirm the deletion.
 
