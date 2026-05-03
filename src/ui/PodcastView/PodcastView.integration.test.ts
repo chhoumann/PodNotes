@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { TFile } from "obsidian";
 import { get } from "svelte/store";
 import {
 	afterEach,
@@ -12,10 +13,13 @@ import {
 import createPodcastNote from "src/createPodcastNote";
 import {
 	currentEpisode,
+	downloadedEpisodes,
 	episodeCache,
+	favorites,
 	hidePlayedEpisodes,
 	playedEpisodes,
 	plugin,
+	queue,
 	savedFeeds,
 	viewState,
 } from "src/store";
@@ -64,6 +68,21 @@ function resetStores() {
 	episodeCache.set({});
 	hidePlayedEpisodes.set(false);
 	playedEpisodes.set({});
+	downloadedEpisodes.set({});
+	queue.set({
+		icon: "list-ordered",
+		name: "Queue",
+		episodes: [],
+		shouldEpisodeRemoveAfterPlay: true,
+		shouldRepeat: false,
+	});
+	favorites.set({
+		icon: "lucide-star",
+		name: "Favorites",
+		episodes: [],
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+	});
 	viewState.set(ViewState.PodcastGrid);
 	currentEpisode.update(() => undefined as unknown as Episode);
 	plugin.set(undefined as never);
@@ -234,6 +253,94 @@ describe("PodcastView integration flow", () => {
 		);
 	});
 
+	test("shows episode state badges and handles row quick actions", async () => {
+		const { appMock } = bootstrapAppMock();
+		const episodeWithDuration: Episode = {
+			...testEpisode,
+			duration: 120,
+		};
+
+		mockGetEpisodes.mockResolvedValue([episodeWithDuration]);
+		playedEpisodes.set({
+			[`${testFeed.title}::${testEpisode.title}`]: {
+				title: testEpisode.title,
+				podcastName: testFeed.title,
+				time: 30,
+				duration: 120,
+				finished: false,
+			},
+		});
+		downloadedEpisodes.set({
+			[testFeed.title]: [
+				{
+					...episodeWithDuration,
+					filePath: "Downloads/episode.mp3",
+					size: 1200,
+				},
+			],
+		});
+		queue.set({
+			icon: "list-ordered",
+			name: "Queue",
+			episodes: [episodeWithDuration],
+			shouldEpisodeRemoveAfterPlay: true,
+			shouldRepeat: false,
+		});
+		favorites.set({
+			icon: "lucide-star",
+			name: "Favorites",
+			episodes: [episodeWithDuration],
+			shouldEpisodeRemoveAfterPlay: false,
+			shouldRepeat: false,
+		});
+		const existingNote = Object.assign(Object.create(TFile.prototype), {
+			path: "Podcasts/Episode 1 Launch.md",
+		}) as TFile;
+		appMock.vault.getAbstractFileByPath.mockImplementationOnce(
+			() => existingNote as never,
+		);
+		plugin.set({
+			settings: {
+				note: {
+					path: "Podcasts/{{title}}",
+					template: "# {{title}}",
+				},
+				download: {
+					path: "Downloads/{{title}}",
+				},
+				feedCache: {
+					enabled: false,
+					ttlHours: 6,
+				},
+			},
+		} as never);
+
+		render(PodcastView);
+
+		await fireEvent.click(await screen.findByAltText(testFeed.title));
+		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
+
+		expect(screen.getByText("2:00")).toBeInTheDocument();
+		expect(screen.getByText("25%")).toBeInTheDocument();
+		expect(screen.getByLabelText("Downloaded")).toBeInTheDocument();
+		expect(screen.getByLabelText("Queued")).toBeInTheDocument();
+		expect(screen.getByLabelText("Favorited")).toBeInTheDocument();
+		expect(screen.getByLabelText("Podcast note exists")).toBeInTheDocument();
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Remove from favorites" }),
+		);
+		expect(get(favorites).episodes).toHaveLength(0);
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Remove from queue" }),
+		);
+		expect(get(queue).episodes).toHaveLength(0);
+
+		await fireEvent.click(screen.getByRole("button", { name: "Mark played" }));
+		expect(playedEpisodes.get(episodeWithDuration)?.finished).toBe(true);
+	});
+
 	test("opens a global played episodes view from the podcast grid", async () => {
 		const playedEpisode: Episode = {
 			title: "Already Finished",
@@ -264,7 +371,9 @@ describe("PodcastView integration flow", () => {
 		await fireEvent.click(playedCard);
 
 		expect(await screen.findByText("Already Finished")).toBeInTheDocument();
-		expect(screen.getByText("Played")).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", { name: "Played" }),
+		).toBeInTheDocument();
 	});
 
 	test("does not apply a delayed played feed refresh after leaving the played view", async () => {

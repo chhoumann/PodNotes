@@ -25,6 +25,7 @@ const sampleRssFeed = `<?xml version="1.0" encoding="UTF-8"?>
       <description>First episode description</description>
       <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
       <itunes:title>Episode 1 iTunes Title</itunes:title>
+      <itunes:duration>01:02:03</itunes:duration>
     </item>
     <item>
       <title>Episode 2</title>
@@ -202,6 +203,7 @@ describe("FeedParser", () => {
 			expect(episode.description).toBe("First episode description");
 			expect(episode.episodeDate).toEqual(new Date("Mon, 01 Jan 2024 00:00:00 GMT"));
 			expect(episode.itunesTitle).toBe("Episode 1 iTunes Title");
+			expect(episode.duration).toBe(3723);
 			// Feed metadata should now be populated
 			expect(episode.podcastName).toBe("Test Podcast");
 			expect(episode.feedUrl).toBe("https://example.com/feed.xml");

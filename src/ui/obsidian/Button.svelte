@@ -20,11 +20,15 @@
     let styles: CSSObject;
 
     let button: ButtonComponent;
+    let appliedClassTokens: string[] = [];
+    let clickHandlerRegistered: boolean = false;
 
     const dispatch = createEventDispatcher();
 
     onMount(() => createButton(buttonRef));
-    afterUpdate(() => updateButtonAttributes(button));
+    afterUpdate(() => {
+        if (button) updateButtonAttributes(button);
+    });
 
     function createButton(container: HTMLElement) {
         button = new ButtonComponent(container);
@@ -38,12 +42,10 @@
         if (icon) btn.setIcon(icon);
         if (disabled) btn.setDisabled(disabled);
         if (warning) btn.setWarning(); else btn.buttonEl.classList.remove('mod-warning');
-        if (className) btn.setClass(className);
+        updateButtonClasses(btn, className);
         if (cta) btn.setCta(); else btn.removeCta();
 
-        btn.onClick((event: MouseEvent) => {
-            dispatch("click", { event });
-        });
+        registerClickHandler(btn);
 
         if (styles) {
             btn.buttonEl.setAttr('style', extractStylesFromObj(styles));
@@ -54,6 +56,26 @@
         } else {
             btn.buttonEl.removeAttribute("aria-label");
         }
+    }
+
+    function updateButtonClasses(btn: ButtonComponent, currentClassName: string | undefined) {
+        const nextClassTokens = currentClassName?.split(/\s+/).filter(Boolean) ?? [];
+
+        if (appliedClassTokens.length) {
+            btn.buttonEl.classList.remove(...appliedClassTokens);
+        }
+
+        nextClassTokens.forEach((token) => btn.setClass(token));
+        appliedClassTokens = nextClassTokens;
+    }
+
+    function registerClickHandler(btn: ButtonComponent) {
+        if (clickHandlerRegistered) return;
+
+        btn.onClick((event: MouseEvent) => {
+            dispatch("click", { event });
+        });
+        clickHandlerRegistered = true;
     }
 
 </script>

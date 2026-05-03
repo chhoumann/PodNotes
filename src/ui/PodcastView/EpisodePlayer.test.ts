@@ -9,6 +9,7 @@ import {
 	isPaused,
 	playedEpisodes,
 	plugin,
+	queue,
 	requestedPlaybackTime,
 } from "src/store";
 import type { Episode } from "src/types/Episode";
@@ -30,6 +31,13 @@ beforeEach(() => {
 	duration.set(3600);
 	isPaused.set(true);
 	playedEpisodes.set({});
+	queue.set({
+		icon: "list-ordered",
+		name: "Queue",
+		episodes: [],
+		shouldEpisodeRemoveAfterPlay: true,
+		shouldRepeat: false,
+	});
 	requestedPlaybackTime.set(null);
 	HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
 	HTMLMediaElement.prototype.pause = vi.fn();
@@ -83,5 +91,21 @@ describe("EpisodePlayer", () => {
 		expect(get(currentTime)).toBe(1800);
 		expect(get(isPaused)).toBe(false);
 		expect(get(requestedPlaybackTime)).toBeNull();
+	});
+
+	test("clears loading overlay when audio fails to load", async () => {
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+
+		expect(container.querySelector(".podcast-artwork-isloading-overlay")).not.toBeNull();
+
+		await fireEvent.error(audio);
+
+		await waitFor(() => {
+			expect(container.querySelector(".podcast-artwork-isloading-overlay")).toBeNull();
+		});
 	});
 });

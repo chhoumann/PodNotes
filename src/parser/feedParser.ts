@@ -114,6 +114,7 @@ export default class FeedParser {
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = this.findImageElement(item);
 		const itunesTitleEl = item.getElementsByTagName("itunes:title")[0];
+		const durationEl = item.getElementsByTagName("itunes:duration")[0];
 		const chaptersEl = item.getElementsByTagName("podcast:chapters")[0];
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
@@ -140,6 +141,7 @@ export default class FeedParser {
 			podcastName: this.feed?.title || "",
 			artworkUrl,
 			episodeDate: pubDate,
+			duration: parseDuration(durationEl?.textContent),
 			feedUrl: this.feed?.url || "",
 			itunesTitle: itunesTitle || "",
 			chaptersUrl,
@@ -154,4 +156,29 @@ export default class FeedParser {
 
 		return body;
 	}
+}
+
+function parseDuration(rawDuration: string | null | undefined): number | undefined {
+	if (!rawDuration) return undefined;
+
+	const trimmedDuration = rawDuration.trim();
+	if (!trimmedDuration) return undefined;
+
+	if (/^\d+$/.test(trimmedDuration)) {
+		return Number.parseInt(trimmedDuration, 10);
+	}
+
+	const segments = trimmedDuration
+		.split(":")
+		.map((segment) => Number.parseInt(segment, 10));
+
+	if (
+		segments.length < 2 ||
+		segments.length > 3 ||
+		segments.some((segment) => Number.isNaN(segment))
+	) {
+		return undefined;
+	}
+
+	return segments.reduce((total, segment) => total * 60 + segment, 0);
 }

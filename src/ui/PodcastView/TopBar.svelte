@@ -44,7 +44,7 @@
 		aria-pressed={viewState === ViewState.PodcastGrid}
 		title={gridTooltip}
 	>
-		<Icon icon="grid" size={20} clickable={false} />
+		<Icon icon="grid" size={18} clickable={false} />
 	</button>
 	<button
 		type="button"
@@ -63,7 +63,7 @@
 		disabled={!canShowEpisodeList}
 		title={episodeTooltip}
 	>
-		<Icon icon="list-minus" size={20} clickable={false} />
+		<Icon icon="list-minus" size={18} clickable={false} />
 	</button>
 	<button
 		type="button"
@@ -82,7 +82,7 @@
 		disabled={!canShowPlayer}
 		title={playerTooltip}
 	>
-		<Icon icon="play" size={20} clickable={false} />
+		<Icon icon="play" size={18} clickable={false} />
 	</button>
 </div>
 
@@ -91,25 +91,28 @@
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		justify-content: stretch;
-		gap: 0.375rem;
-		padding: 0.5rem;
-		min-height: 3rem;
+		justify-content: center;
+		gap: 0.25rem;
+		padding: 0.375rem 0.75rem;
+		min-height: 2.5rem;
 		border-bottom: 1px solid var(--background-modifier-border);
-		background: var(--background-secondary);
+		background: var(--background-primary);
 		box-sizing: border-box;
 	}
 
 	.topbar-menu-button {
+		appearance: none;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		width: 2.25rem;
 		height: 2rem;
-		padding: 0 0.75rem;
-		flex: 1 1 0;
+		padding: 0;
+		flex: 0 0 auto;
 		border: 1px solid transparent;
 		border-radius: 0.375rem;
 		background: transparent;
+		box-shadow: none !important;
 		color: var(--text-muted);
 		transition:
 			background-color 120ms ease,
@@ -137,8 +140,9 @@
 
 	.topbar-selected,
 	.topbar-selected:hover {
-		color: var(--text-on-accent);
-		background: var(--interactive-accent);
+		color: var(--text-accent);
+		background: var(--background-modifier-hover);
+		border-color: var(--background-modifier-border);
 	}
 
 	.topbar-disabled,
