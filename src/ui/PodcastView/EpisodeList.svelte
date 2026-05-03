@@ -7,31 +7,47 @@
 	import Text from "../obsidian/Text.svelte";
 	import Loading from "./Loading.svelte";
 	import { getEpisodeKey } from "src/utility/episodeKey";
+	import { isEpisodeFinished } from "src/utility/episodeStatus";
+	import {
+		createEpisodeListEntries,
+		type EpisodeListEntry,
+	} from "src/utility/episodeListEntry";
 
 	export let episodes: Episode[] = [];
+	export let episodeEntries: EpisodeListEntry[] | null = null;
 	export let showThumbnails: boolean = false;
 	export let showListMenu: boolean = true;
+	export let showPlayedToggle: boolean = true;
+	export let alwaysShowPlayedEpisodes: boolean = false;
 	export let isLoading: boolean = false;
 	let searchInputQuery: string = "";
-
-	function isEpisodeFinished(episode: Episode | null | undefined, playedEps: typeof $playedEpisodes): boolean {
-		if (!episode) return false;
-		const key = getEpisodeKey(episode);
-		// Check composite key first, then fall back to title-only for backwards compat
-		return (key && playedEps[key]?.finished) || playedEps[episode.title]?.finished || false;
-	}
+	$: listEntries = episodeEntries ?? createEpisodeListEntries(episodes);
+	$: shouldHidePlayedEpisodes = $hidePlayedEpisodes && !alwaysShowPlayedEpisodes;
+	$: visibleEntries = listEntries.filter(
+		(entry) =>
+			!shouldHidePlayedEpisodes ||
+			!isEpisodeFinished(entry.episode, $playedEpisodes),
+	);
 
 	const dispatch = createEventDispatcher();
 
-	function forwardClickEpisode(event: CustomEvent<{ episode: Episode }>) {
-		dispatch("clickEpisode", { episode: event.detail.episode });
+	function forwardClickEpisode(
+		entry: EpisodeListEntry,
+		event: CustomEvent<{ episode: Episode }>,
+	) {
+		dispatch("clickEpisode", {
+			episode: event.detail.episode,
+			entry,
+		});
 	}
 
 	function forwardContextMenuEpisode(
+		entry: EpisodeListEntry,
 		event: CustomEvent<{ episode: Episode; event: MouseEvent }>
 	) {
 		dispatch("contextMenuEpisode", {
 			episode: event.detail.episode,
+			entry,
 			event: event.detail.event,
 		});
 	}
@@ -56,13 +72,15 @@
 					}}
 				/>
 			</div>
-			<Icon
-				icon={$hidePlayedEpisodes ? "eye-off" : "eye"}
-				size={25}
-				label={$hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
-				pressed={$hidePlayedEpisodes}
-				on:click={() => hidePlayedEpisodes.update((value) => !value)}
-			/>
+			{#if showPlayedToggle}
+				<Icon
+					icon={$hidePlayedEpisodes ? "eye-off" : "eye"}
+					size={25}
+					label={$hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
+					pressed={$hidePlayedEpisodes}
+					on:click={() => hidePlayedEpisodes.update((value) => !value)}
+				/>
+			{/if}
 			<Icon
 				icon="refresh-cw"
 				size={25}
@@ -79,20 +97,18 @@
 				<span>Fetching episodes...</span>
 			</div>
 		{/if}
-		{#if episodes.length === 0 && !isLoading}
+		{#if visibleEntries.length === 0 && !isLoading}
 			<p>No episodes found.</p>
 		{/if}
-		{#each episodes as episode, index (getEpisodeKey(episode) ?? `${episode.title}-${episode.episodeDate ?? ""}-${index}`)}
-			{@const episodePlayed = isEpisodeFinished(episode, $playedEpisodes)}
-			{#if !$hidePlayedEpisodes || !episodePlayed}
-				<EpisodeListItem
-					{episode}
-					episodeFinished={episodePlayed}
-					showEpisodeImage={showThumbnails}
-					on:clickEpisode={forwardClickEpisode}
-					on:contextMenu={forwardContextMenuEpisode}
-				/>
-			{/if}
+		{#each visibleEntries as entry, index (getEpisodeKey(entry.episode) ?? `${entry.episode.title}-${entry.episode.episodeDate ?? ""}-${index}`)}
+			<EpisodeListItem
+				episode={entry.episode}
+				episodeFinished={isEpisodeFinished(entry.episode, $playedEpisodes)}
+				showEpisodeImage={showThumbnails}
+				unavailableReason={entry.unavailableReason}
+				on:clickEpisode={forwardClickEpisode.bind(null, entry)}
+				on:contextMenu={forwardContextMenuEpisode.bind(null, entry)}
+			/>
 		{/each}
 	</div>
 </div>

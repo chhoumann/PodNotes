@@ -9,6 +9,7 @@ import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import { TFile } from "obsidian";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import { getEpisodeKey } from "src/utility/episodeKey";
+import { getPlayedEpisode } from "src/utility/episodeStatus";
 
 export const plugin = writable<PodNotes>();
 export const currentTime = writable<number>(0);
@@ -50,28 +51,6 @@ export const isPaused = writable<boolean>(true);
 export const playedEpisodes = (() => {
 	const store = writable<{ [key: string]: PlayedEpisode }>({});
 	const { subscribe, update, set } = store;
-
-	/**
-	 * Gets played episode data, checking both composite key and legacy title-only key
-	 * for backwards compatibility.
-	 */
-	function getPlayedEpisode(
-		playedEps: { [key: string]: PlayedEpisode },
-		episode: Episode | null | undefined,
-	): PlayedEpisode | undefined {
-		if (!episode) return undefined;
-
-		const key = getEpisodeKey(episode);
-		// First try composite key
-		if (key && playedEps[key]) {
-			return playedEps[key];
-		}
-		// Fall back to title-only for backwards compatibility
-		if (episode.title && playedEps[episode.title]) {
-			return playedEps[episode.title];
-		}
-		return undefined;
-	}
 
 	return {
 		subscribe,
@@ -147,6 +126,22 @@ export const playedEpisodes = (() => {
 				playedEpisode.finished = false;
 
 				playedEpisodes[key] = playedEpisode;
+				return playedEpisodes;
+			});
+		},
+		markKeyAsUnplayed: (key: string) => {
+			if (!key) return;
+
+			update((playedEpisodes) => {
+				const playedEpisode = playedEpisodes[key];
+				if (!playedEpisode) return playedEpisodes;
+
+				playedEpisodes[key] = {
+					...playedEpisode,
+					time: 0,
+					finished: false,
+				};
+
 				return playedEpisodes;
 			});
 		},

@@ -10,4 +10,5 @@ export type Playlist = {
 
 	shouldEpisodeRemoveAfterPlay: boolean;
 	shouldRepeat: boolean;
+	isVirtual?: boolean;
 }

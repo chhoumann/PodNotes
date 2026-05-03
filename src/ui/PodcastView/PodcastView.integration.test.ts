@@ -13,6 +13,8 @@ import createPodcastNote from "src/createPodcastNote";
 import {
 	currentEpisode,
 	episodeCache,
+	hidePlayedEpisodes,
+	playedEpisodes,
 	plugin,
 	savedFeeds,
 	viewState,
@@ -60,6 +62,8 @@ const testEpisode: Episode = {
 function resetStores() {
 	savedFeeds.set({});
 	episodeCache.set({});
+	hidePlayedEpisodes.set(false);
+	playedEpisodes.set({});
 	viewState.set(ViewState.PodcastGrid);
 	currentEpisode.update(() => undefined as unknown as Episode);
 	plugin.set(undefined as never);
@@ -228,5 +232,38 @@ describe("PodcastView integration flow", () => {
 				screen.queryByText("Fetching episodes..."),
 			).not.toBeInTheDocument(),
 		);
+	});
+
+	test("opens a global played episodes view from the podcast grid", async () => {
+		const playedEpisode: Episode = {
+			title: "Already Finished",
+			streamUrl: "https://pod.example.com/finished.mp3",
+			url: "https://pod.example.com/finished",
+			description: "Finished episode description",
+			content: "<p>Finished episode content</p>",
+			podcastName: testFeed.title,
+			artworkUrl: testFeed.artworkUrl,
+			episodeDate: new Date("2023-01-15T00:00:00.000Z"),
+		};
+
+		mockGetEpisodes.mockResolvedValue([testEpisode, playedEpisode]);
+		hidePlayedEpisodes.set(true);
+		playedEpisodes.set({
+			[`${testFeed.title}::${playedEpisode.title}`]: {
+				title: playedEpisode.title,
+				podcastName: testFeed.title,
+				time: 100,
+				duration: 100,
+				finished: true,
+			},
+		});
+
+		render(PodcastView);
+
+		const playedCard = await screen.findByLabelText("Played");
+		await fireEvent.click(playedCard);
+
+		expect(await screen.findByText("Already Finished")).toBeInTheDocument();
+		expect(screen.getByText("Played")).toBeInTheDocument();
 	});
 });
