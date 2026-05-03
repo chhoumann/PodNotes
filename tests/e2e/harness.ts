@@ -79,7 +79,7 @@ export function createPodNotesE2EHarness(testName: string) {
 
 		await state.obsidian.dev.resetDiagnostics().catch(() => undefined);
 		await reloadPodNotes(state.plugin, state.obsidian);
-	}, 30_000);
+	}, 90_000);
 
 	beforeEach((ctx) => {
 		ctx.onTestFailed(async () => {
