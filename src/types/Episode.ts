@@ -8,6 +8,7 @@ export interface Episode {
 	feedUrl?: string,
 	artworkUrl?: string;
 	episodeDate?: Date;
+	duration?: number;
 	itunesTitle?: string;
 	/** URL to the podcast:chapters JSON file */
 	chaptersUrl?: string;

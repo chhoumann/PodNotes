@@ -35,13 +35,30 @@
 	} from "src/services/FeedCacheService";
 	import { get } from "svelte/store";
 	import { PLAYED_SETTINGS } from "src/constants";
-	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
+	import {
+		getFinishedPlayedEpisodeRecords,
+		isEpisodeFinished,
+	} from "src/utility/episodeStatus";
 	import {
 		buildPlayedEpisodeListEntries,
 		createPlayedEpisodePlaceholder,
 		type EpisodeListEntry,
 		type PlayedEpisodeListEntry,
 	} from "src/utility/episodeListEntry";
+	import createPodcastNote, {
+		getPodcastNote,
+		openPodcastNote,
+	} from "src/createPodcastNote";
+	import downloadEpisodeWithProgressNotice from "src/downloadEpisode";
+	import { getEpisodeKey } from "src/utility/episodeKey";
+
+	type EpisodeQuickAction =
+		| "play"
+		| "togglePlayed"
+		| "download"
+		| "note"
+		| "favorite"
+		| "queue";
 
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
@@ -57,6 +74,7 @@
 	let loadingFeedNames: string[] = [];
 	let loadingFeedSummary: string = "";
 	let isMounted: boolean = true;
+	let noteRefreshToken: number = 0;
 
 	onDestroy(() => {
 		isMounted = false;
@@ -375,6 +393,130 @@
 		);
 	}
 
+	function hasEpisode(episodes: Episode[], episode: Episode): boolean {
+		return episodes.some((candidate) => episodeMatches(candidate, episode));
+	}
+
+	function episodeMatches(candidate: Episode, episode: Episode): boolean {
+		const episodeKey = getEpisodeKey(episode);
+		const candidateKey = getEpisodeKey(candidate);
+
+		return candidateKey && episodeKey
+			? candidateKey === episodeKey
+			: candidate.title === episode.title;
+	}
+
+	function toggleFavoriteEpisode(episode: Episode) {
+		favorites.update((playlist) => {
+			const episodeIsFavorite = hasEpisode(playlist.episodes, episode);
+			playlist.episodes = episodeIsFavorite
+				? playlist.episodes.filter(
+						(candidate) => !episodeMatches(candidate, episode),
+					)
+				: [...playlist.episodes, episode];
+
+			return playlist;
+		});
+	}
+
+	function toggleQueuedEpisode(episode: Episode) {
+		const episodeIsInQueue = hasEpisode(get(queue).episodes, episode);
+
+		if (episodeIsInQueue) {
+			queue.remove(episode);
+		} else {
+			queue.add(episode);
+		}
+	}
+
+	function togglePlayedEpisode(episode: Episode, entry: EpisodeListEntry) {
+		const playedEpisodeKey = getPlayedEpisodeKey(entry);
+		const playedEpisodeMap = get(playedEpisodes);
+		const episodeIsPlayed = playedEpisodeKey
+			? playedEpisodeMap[playedEpisodeKey]?.finished
+			: isEpisodeFinished(episode, playedEpisodeMap);
+
+		if (episodeIsPlayed) {
+			if (playedEpisodeKey) {
+				playedEpisodes.markKeyAsUnplayed(playedEpisodeKey);
+			} else {
+				playedEpisodes.markAsUnplayed(episode);
+			}
+		} else {
+			playedEpisodes.markAsPlayed(episode);
+		}
+	}
+
+	function toggleDownloadedEpisode(episode: Episode) {
+		if (downloadedEpisodes.isEpisodeDownloaded(episode)) {
+			downloadedEpisodes.removeEpisode(episode, true);
+			return;
+		}
+
+		const downloadPath = get(plugin)?.settings?.download?.path;
+		if (!downloadPath) {
+			new Notice("Please set a download path in the settings.");
+			return;
+		}
+
+		downloadEpisodeWithProgressNotice(episode, downloadPath);
+	}
+
+	async function openOrCreateNote(episode: Episode) {
+		const noteSettings = get(plugin)?.settings?.note;
+		if (!noteSettings?.path || !noteSettings.template) {
+			new Notice("Please set a note path and template in the settings.");
+			return;
+		}
+
+		const episodeNoteExists = Boolean(getPodcastNote(episode));
+
+		if (episodeNoteExists) {
+			openPodcastNote(episode);
+			return;
+		}
+
+		await createPodcastNote(episode);
+		noteRefreshToken += 1;
+	}
+
+	async function handleQuickActionEpisode(
+		event: CustomEvent<{
+			episode: Episode;
+			action: EpisodeQuickAction;
+			entry: EpisodeListEntry;
+		}>,
+	) {
+		const { episode, action, entry } = event.detail;
+
+		if (!entry.isAvailable && action !== "togglePlayed") {
+			new Notice("This played episode is no longer available in current feeds.");
+			return;
+		}
+
+		switch (action) {
+			case "play":
+				currentEpisode.set(episode);
+				viewState.set(ViewState.Player);
+				break;
+			case "togglePlayed":
+				togglePlayedEpisode(episode, entry);
+				break;
+			case "download":
+				toggleDownloadedEpisode(episode);
+				break;
+			case "note":
+				await openOrCreateNote(episode);
+				break;
+			case "favorite":
+				toggleFavoriteEpisode(episode);
+				break;
+			case "queue":
+				toggleQueuedEpisode(episode);
+				break;
+		}
+	}
+
 	async function handleClickRefresh() {
 		if (isShowingPlayedEpisodes) {
 			await fetchEpisodesInAllFeeds(feeds, false);
@@ -499,8 +641,10 @@
 			showPlayedToggle={!isShowingPlayedEpisodes}
 			alwaysShowPlayedEpisodes={isShowingPlayedEpisodes}
 			isLoading={selectedFeed ? loadingFeeds.has(selectedFeed.title) : isFetchingEpisodes}
+			{noteRefreshToken}
 			on:clickEpisode={handleClickEpisode}
 			on:contextMenuEpisode={handleContextMenuEpisode}
+			on:quickActionEpisode={handleQuickActionEpisode}
 			on:clickRefresh={handleClickRefresh}
 			on:search={handleSearch}
 		>
@@ -513,7 +657,7 @@
 					>
 						<Icon
 							icon={"arrow-left"}
-							size={20}
+							size={16}
 							clickable={false}
 						/> Latest Episodes
 					</button>
@@ -529,7 +673,7 @@
 					>
 						<Icon
 							icon={"arrow-left"}
-							size={20}
+							size={16}
 							clickable={false}
 						/> Latest Episodes
 					</button>
@@ -605,17 +749,22 @@
 	}
 
 	.go-back {
+		appearance: none;
 		display: inline-flex;
 		align-items: center;
 		gap: 0.375rem;
-		padding: 0.375rem 0.625rem;
-		margin: 0.5rem 0.5rem 0;
-		font-size: 0.85rem;
+		width: max-content;
+		min-height: 1.75rem;
+		padding: 0.25rem 0.5rem;
+		margin: 0.5rem 0.75rem 0;
+		font-size: 0.8125rem;
+		font-weight: 500;
 		color: var(--text-muted);
 		cursor: pointer;
-		background: none;
-		border: none;
-		border-radius: 0.25rem;
+		background: transparent;
+		border: none !important;
+		border-radius: 0.375rem;
+		box-shadow: none !important;
 		transition: color 120ms ease, background-color 120ms ease;
 	}
 
@@ -634,5 +783,166 @@
 		justify-content: center;
 		padding: 0.5rem;
 		color: var(--text-muted);
+	}
+
+	:global(.podcast-view .episode-list-view-container) {
+		display: flex !important;
+		flex-direction: column !important;
+		align-items: stretch !important;
+		width: 100% !important;
+		overflow: hidden;
+	}
+
+	:global(.podcast-view .podcast-episode-list) {
+		display: flex !important;
+		flex-direction: column !important;
+		align-items: stretch !important;
+		width: 100% !important;
+		overflow-x: hidden;
+	}
+
+	:global(.podcast-view .podcast-episode-item) {
+		display: flex !important;
+		flex-direction: row !important;
+		align-items: center !important;
+		justify-content: space-between !important;
+		gap: 0.625rem !important;
+		width: 100% !important;
+		min-height: 3.5rem !important;
+		padding: 0.375rem 0.5rem !important;
+		border: 0 !important;
+		border-bottom: 1px solid var(--background-modifier-border) !important;
+		background: transparent !important;
+		text-align: left !important;
+		box-sizing: border-box !important;
+	}
+
+	:global(.podcast-view .podcast-episode-item:hover),
+	:global(.podcast-view .podcast-episode-item:focus-within) {
+		background: var(--background-secondary-alt) !important;
+	}
+
+	:global(.podcast-view .podcast-episode-main) {
+		appearance: none !important;
+		display: flex !important;
+		flex: 1 1 auto !important;
+		align-items: center !important;
+		justify-content: flex-start !important;
+		gap: 0.625rem !important;
+		min-width: 0 !important;
+		width: 100% !important;
+		min-height: 0 !important;
+		height: auto !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		color: inherit !important;
+		font: inherit !important;
+		text-align: left !important;
+		overflow: hidden !important;
+	}
+
+	:global(.podcast-view .podcast-episode-thumbnail-container) {
+		flex: 0 0 2.625rem !important;
+		width: 2.625rem !important;
+		height: 2.625rem !important;
+		border-radius: 0.375rem !important;
+		overflow: hidden !important;
+		background: var(--background-secondary) !important;
+	}
+
+	:global(.podcast-view .podcast-episode-information) {
+		display: flex !important;
+		flex: 1 1 auto !important;
+		flex-direction: column !important;
+		align-items: flex-start !important;
+		justify-content: center !important;
+		gap: 0.1875rem !important;
+		min-width: 0 !important;
+	}
+
+	:global(.podcast-view .episode-item-date) {
+		font-size: 0.6875rem !important;
+		line-height: 1 !important;
+		letter-spacing: 0.04em !important;
+		color: var(--text-muted) !important;
+		white-space: nowrap !important;
+	}
+
+	:global(.podcast-view .episode-item-title) {
+		display: block !important;
+		max-width: 100% !important;
+		overflow: hidden !important;
+		text-overflow: ellipsis !important;
+		white-space: nowrap !important;
+		font-size: 0.875rem !important;
+		line-height: 1.25 !important;
+		color: var(--text-normal) !important;
+		text-align: left !important;
+	}
+
+	:global(.podcast-view .episode-item-meta) {
+		display: flex !important;
+		align-items: center !important;
+		flex-wrap: wrap !important;
+		gap: 0.4375rem !important;
+		min-height: 0.875rem !important;
+	}
+
+	:global(.podcast-view .episode-item-badge) {
+		display: inline-flex !important;
+		align-items: center !important;
+		gap: 0.1875rem !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: transparent !important;
+		color: var(--text-muted) !important;
+		font-size: 0.75rem !important;
+		line-height: 1 !important;
+	}
+
+	:global(.podcast-view .episode-item-badge-strong) {
+		color: var(--text-accent) !important;
+		font-weight: 500 !important;
+	}
+
+	:global(.podcast-view .episode-quick-actions) {
+		display: flex !important;
+		flex: 0 0 auto !important;
+		align-items: center !important;
+		gap: 0.125rem !important;
+		opacity: 0 !important;
+		pointer-events: none !important;
+	}
+
+	:global(.podcast-view .podcast-episode-item:hover .episode-quick-actions),
+	:global(.podcast-view .podcast-episode-item:focus-within .episode-quick-actions) {
+		opacity: 1 !important;
+		pointer-events: auto !important;
+	}
+
+	:global(.podcast-view .episode-quick-action) {
+		appearance: none !important;
+		display: inline-flex !important;
+		align-items: center !important;
+		justify-content: center !important;
+		width: 1.75rem !important;
+		height: 1.75rem !important;
+		min-height: 1.75rem !important;
+		padding: 0 !important;
+		border: 0 !important;
+		border-radius: 0.375rem !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		color: var(--text-muted) !important;
+	}
+
+	:global(.podcast-view .episode-quick-action:hover),
+	:global(.podcast-view .episode-quick-action:focus-visible) {
+		background: var(--background-modifier-hover) !important;
+		color: var(--text-normal) !important;
 	}
 </style>

@@ -63,7 +63,7 @@ export class ButtonComponent extends BaseInteractiveElement {
 	}
 
 	setClass(value: string) {
-		this.buttonEl.className = value;
+		this.buttonEl.classList.add(value);
 		return this;
 	}
 

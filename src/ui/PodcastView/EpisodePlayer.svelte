@@ -18,7 +18,6 @@
 	import { onDestroy, onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
-	import Slider from "../obsidian/Slider.svelte";
 	import Loading from "./Loading.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
 	import ChapterList from "./ChapterList.svelte";
@@ -50,9 +49,22 @@
 
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
+	let hasRestoredPlaybackTime: boolean = false;
 	let playerVolume: number = 1;
 	let chapters: Chapter[] = [];
 	let lastChaptersUrl: string | undefined = undefined;
+	let currentTimeText: string = "00:00:00";
+	let remainingTimeText: string = "--:--:--";
+	let progressDuration: number = 1;
+	let progressTime: number = 0;
+
+	$: progressDuration = Number.isFinite($duration) && $duration > 0 ? $duration : 1;
+	$: progressTime = Number.isFinite($currentTime) && $currentTime > 0 ? $currentTime : 0;
+	$: currentTimeText = formatSeconds(progressTime, "HH:mm:ss");
+	$: remainingTimeText =
+		Number.isFinite($duration) && $duration > 0
+			? formatSeconds(Math.max(0, $duration - progressTime), "HH:mm:ss")
+			: "--:--:--";
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
@@ -61,6 +73,8 @@
 	function onClickProgressbar(
 		{ detail: { event, percent } }: CustomEvent<{ event: MouseEvent | KeyboardEvent; percent?: number }>
 	) {
+		if (!Number.isFinite($duration) || $duration <= 0) return;
+
 		if (typeof percent === "number") {
 			currentTime.set(percent * $duration);
 			return;
@@ -94,13 +108,12 @@
 		queue.playNext();
 	}
 
-	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
-		offBinding.playbackRate = event.detail.value;
+	function onPlaybackRateInput(event: Event) {
+		offBinding.playbackRate = Number((event.currentTarget as HTMLInputElement).value);
 	}
 
-	function onVolumeChange(event: CustomEvent<{ value: number }>) {
-		const newVolume = clampVolume(event.detail.value);
-
+	function onVolumeInput(event: Event) {
+		const newVolume = clampVolume(Number((event.currentTarget as HTMLInputElement).value));
 		volume.set(newVolume);
 	}
 
@@ -109,8 +122,23 @@
 	}
 
 	function onMetadataLoaded() {
+		finishAudioLoading(true);
+	}
+
+	function onAudioCanPlay() {
+		finishAudioLoading();
+	}
+
+	function onAudioError() {
+		finishAudioLoading();
+	}
+
+	function finishAudioLoading(shouldRestorePlaybackTime: boolean = false) {
 		isLoading = false;
 
+		if (!shouldRestorePlaybackTime || hasRestoredPlaybackTime) return;
+
+		hasRestoredPlaybackTime = true;
 		restorePlaybackTime();
 	}
 
@@ -168,6 +196,8 @@
 		});
 
 		const unsubCurrentEpisode = currentEpisode.subscribe((episode) => {
+			isLoading = true;
+			hasRestoredPlaybackTime = false;
 			srcPromise = getSrc($currentEpisode);
 
 			// Fetch chapters when episode changes
@@ -195,7 +225,14 @@
 	});
 
 	onDestroy(() => {
-		playedEpisodes.setEpisodeTime($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
+		const safeDuration = Number.isFinite($duration) && $duration > 0 ? $duration : 0;
+		const safeCurrentTime = Number.isFinite($currentTime) && $currentTime > 0 ? $currentTime : 0;
+		playedEpisodes.setEpisodeTime(
+			$currentEpisode,
+			safeCurrentTime,
+			safeDuration,
+			safeDuration > 0 && safeCurrentTime === safeDuration,
+		);
 		isPaused.set(true);
 	});
 
@@ -231,7 +268,8 @@
 	}
 </script>
 
-	<div class="episode-player">
+<div class="episode-player">
+	<div class="now-playing-panel">
 		<div class="episode-image-container">
 			<button
 				type="button"
@@ -269,64 +307,85 @@
 		</button>
 	</div>
 
-	<h2 class="podcast-title">{$currentEpisode.title}</h2>
+		<div class="now-playing-details">
+			<h2 class="podcast-title">{$currentEpisode.title}</h2>
 
-	{#await srcPromise then src}
-		<audio
-			src={src}
-			bind:duration={$duration}
-			bind:currentTime={$currentTime}
-			bind:paused={$isPaused}
-			bind:playbackRate={offBinding._playbackRate}
-			bind:volume={playerVolume}
-			on:ended={onEpisodeEnded}
-			on:loadedmetadata={onMetadataLoaded}
-			on:play|preventDefault
-			autoplay={true}
-		></audio>
-	{/await}
+			{#await srcPromise then src}
+				<audio
+					src={src}
+					bind:duration={$duration}
+					bind:currentTime={$currentTime}
+					bind:paused={$isPaused}
+					bind:playbackRate={offBinding._playbackRate}
+					bind:volume={playerVolume}
+					on:ended={onEpisodeEnded}
+					on:canplay={onAudioCanPlay}
+					on:error={onAudioError}
+					on:loadedmetadata={onMetadataLoaded}
+					on:play|preventDefault
+					autoplay={true}
+				></audio>
+			{/await}
 
-	<div class="status-container">
-		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
-		<Progressbar 
-			on:click={onClickProgressbar}
-			value={$currentTime}
-			max={$duration}
-		/>
-		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
-	</div>
+			<div class="status-container">
+				<span>{currentTimeText}</span>
+				<Progressbar 
+					on:click={onClickProgressbar}
+					value={progressTime}
+					max={progressDuration}
+				/>
+				<span>{remainingTimeText}</span>
+			</div>
 
-	<div class="controls-container">
-		<Button
-			icon="skip-back"
-			tooltip="Skip backward"
-			on:click={$plugin.api.skipBackward.bind($plugin.api)}
-			class="player-control-button"
-		/>
-		<Button
-			icon="skip-forward"
-			tooltip="Skip forward"
-			on:click={$plugin.api.skipForward.bind($plugin.api)}
-			class="player-control-button"
-		/>
+			<div class="controls-container">
+				<Button
+					icon="skip-back"
+					tooltip="Skip backward"
+					on:click={$plugin.api.skipBackward.bind($plugin.api)}
+					class="player-control-button"
+				/>
+				<Button
+					icon={$isPaused ? "play" : "pause"}
+					tooltip={$isPaused ? "Play" : "Pause"}
+					on:click={togglePlayback}
+					class="player-control-button player-play-button"
+				/>
+				<Button
+					icon="skip-forward"
+					tooltip="Skip forward"
+					on:click={$plugin.api.skipForward.bind($plugin.api)}
+					class="player-control-button"
+				/>
+			</div>
+		</div>
 	</div>
 
 	<div class="slider-stack">
 		<div class="volume-container">
 			<span>Volume: {Math.round(playerVolume * 100)}%</span>
-			<Slider
-				on:change={onVolumeChange}
+			<input
+				class="native-slider"
+				type="range"
+				min="0"
+				max="1"
+				step="0.05"
 				value={playerVolume}
-				limits={[0, 1, 0.05]}
+				aria-label="Volume"
+				on:input={onVolumeInput}
 			/>
 		</div>
 
 		<div class="playbackrate-container">
 			<span>{offBinding.playbackRate}x</span>
-			<Slider
-				on:change={onPlaybackRateChange}
+			<input
+				class="native-slider"
+				type="range"
+				min="0.5"
+				max="3.5"
+				step="0.1"
 				value={offBinding.playbackRate}
-				limits={[0.5, 3.5, 0.1]}
+				aria-label="Playback rate"
+				on:input={onPlaybackRateInput}
 			/>
 		</div>
 	</div>
@@ -358,35 +417,52 @@
 		flex-direction: column;
 		flex: 1 1 auto;
 		min-height: 0;
-		padding: 0 1rem;
+		padding: 0.75rem 1rem 1rem;
 		overflow-y: auto;
-		gap: 0.35rem;
+		overflow-x: hidden;
+		gap: 0.75rem;
+	}
+
+	.now-playing-panel {
+		display: grid;
+		grid-template-columns: 7rem minmax(0, 1fr);
+		align-items: center;
+		gap: 1rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--background-modifier-border);
 	}
 
 	.episode-image-container {
-		width: 100%;
-		max-width: 20rem;
-		margin: 0 auto 0.5rem;
-		padding: 1rem 0 0.5rem;
+		width: 7rem;
+		max-width: 7rem;
+		margin: 0;
+		padding: 0;
+	}
+
+	.now-playing-details {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		min-width: 0;
 	}
 
 	.hover-container {
-		width: 100%;
-		height: 0;
-		padding-bottom: 100%;
+		width: 7rem;
+		height: 7rem;
+		padding: 0;
 		display: block;
 		position: relative;
 		border: none;
 		background: transparent;
 		cursor: pointer;
-		border-radius: 0.75rem;
+		border-radius: 0.625rem;
 		overflow: hidden;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 		transition: box-shadow 200ms ease, transform 200ms ease;
 	}
 
 	.hover-container:hover {
-		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
 	}
 
 	.hover-container:active {
@@ -447,27 +523,32 @@
 	.podcast-title {
 		font-size: 1.125rem;
 		font-weight: 600;
-		line-height: 1.4;
-		margin: 0 0 0.75rem;
-		text-align: center;
+		line-height: 1.3;
+		margin: 0;
+		text-align: left;
 		color: var(--text-normal);
 		white-space: normal;
 		word-break: break-word;
 	}
 
 	.status-container {
-		display: flex;
+		display: grid;
+		grid-template-columns: 4.25rem minmax(0, 1fr) 4.25rem;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0 0.25rem;
+		gap: 0.625rem;
+		padding: 0;
+		min-width: 0;
+		overflow: hidden;
 	}
 
 	.status-container span {
 		font-size: 0.8rem;
 		font-variant-numeric: tabular-nums;
 		color: var(--text-muted);
-		min-width: 4rem;
+		min-width: 0;
 		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
 	}
 
 	.status-container span:first-child {
@@ -480,23 +561,33 @@
 
 	:global(.episode-player .status-container .progress) {
 		height: var(--episode-player-progress-height, 0.5rem);
-		flex: 1 1 auto;
+		width: 100%;
+		min-width: 0;
 	}
 
 	.controls-container {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		gap: 2rem;
-		margin: 1.25rem 0;
+		justify-content: flex-start;
+		gap: 0.375rem;
+		margin: 0;
 	}
 
 	:global(.player-control-button) {
 		margin: 0;
 		cursor: pointer;
-		padding: 0.5rem;
-		border-radius: 50%;
+		width: 2rem;
+		height: 2rem;
+		min-height: 2rem;
+		padding: 0;
+		border-radius: 0.375rem;
+		box-shadow: none !important;
 		transition: background-color 120ms ease;
+	}
+
+	:global(.player-play-button) {
+		color: var(--text-accent);
+		background-color: var(--background-modifier-hover);
 	}
 
 	:global(.player-control-button:hover) {
@@ -504,26 +595,34 @@
 	}
 
 	.slider-stack {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		padding: 1rem 0 0.75rem;
-		border-top: 1px solid var(--background-modifier-border);
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem 1rem;
+		padding: 0;
 	}
 
 	.playbackrate-container,
 	.volume-container {
-		display: flex;
+		display: grid;
+		grid-template-columns: 5.75rem minmax(0, 1fr);
 		align-items: center;
-		gap: 1rem;
-		padding: 0 0.5rem;
+		gap: 0.75rem;
+		padding: 0;
+		min-width: 0;
 	}
 
 	.playbackrate-container span,
 	.volume-container span {
 		font-size: 0.8rem;
 		color: var(--text-muted);
-		min-width: 5rem;
+		min-width: 0;
+		white-space: nowrap;
+	}
+
+	.native-slider {
+		width: 100%;
+		min-width: 0;
+		accent-color: var(--interactive-accent);
 	}
 
 	:global(.episode-player h3) {
@@ -555,5 +654,38 @@
 
 	:global(.lists-container .episode-list-view-container) {
 		height: auto;
+	}
+
+	@media (max-width: 520px) {
+		.now-playing-panel {
+			grid-template-columns: 1fr;
+			justify-items: center;
+		}
+
+		.episode-image-container {
+			width: 10rem;
+			max-width: 10rem;
+		}
+
+		.hover-container {
+			width: 10rem;
+			height: 10rem;
+		}
+
+		.now-playing-details {
+			width: 100%;
+		}
+
+		.podcast-title {
+			text-align: center;
+		}
+
+		.controls-container {
+			justify-content: center;
+		}
+
+		.slider-stack {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>
