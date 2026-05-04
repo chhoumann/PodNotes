@@ -31,6 +31,23 @@ Here are the features that will help you do that 👇.
 
 Other installation options can be found in the [documentation](https://chhoumann.github.io/PodNotes).
 
+## Development
+
+- `npm run test` runs the jsdom/unit test suite.
+- `npm run build` type-checks and bundles the plugin.
+- `npm run test:e2e` builds the plugin, then runs the local Obsidian-backed E2E suite.
+
+The E2E suite is local-only. It depends on Obsidian being installed, the
+`obsidian` CLI being available on `PATH`, and the target vault being open and
+reachable. The default target vault is `dev`; override it with
+`PODNOTES_E2E_VAULT` when needed. Failed E2E runs may write artifacts to
+`.obsidian-e2e-artifacts/`.
+
+Before running E2E, make sure the target vault's
+`.obsidian/plugins/podnotes/main.js` and `manifest.json` symlinks point at this
+checkout. The tests intentionally fail during preflight instead of relinking the
+vault automatically.
+
 ## Screenshots
 
 ### Demo
