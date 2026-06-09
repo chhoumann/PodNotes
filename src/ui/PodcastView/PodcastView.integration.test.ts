@@ -453,4 +453,60 @@ describe("issue #174 feed cache cap regression", () => {
 			await screen.findByText(createNumberedEpisode(622).title),
 		).toBeInTheDocument();
 	});
+
+	test("reopening a show reuses full in-memory cache without refetching", async () => {
+		render(PodcastView);
+
+		const feedImage = await screen.findByAltText(testFeed.title);
+		await fireEvent.click(feedImage);
+
+		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		expect(
+			await screen.findByText(oldEpisode.title),
+		).toBeInTheDocument();
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: /podcast grid/i }),
+		);
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+
+		await fireEvent.click(feedImage);
+		expect(
+			await screen.findByText(oldEpisode.title),
+		).toBeInTheDocument();
+		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
+	});
+
+	test("reopening played view reuses full in-memory cache without refetching", async () => {
+		hidePlayedEpisodes.set(true);
+		playedEpisodes.set({
+			[`${testFeed.title}::${oldEpisode.title}`]: {
+				title: oldEpisode.title,
+				podcastName: testFeed.title,
+				time: 3600,
+				duration: 3600,
+				finished: true,
+			},
+		});
+
+		render(PodcastView);
+
+		const playedCard = await screen.findByLabelText("Played");
+		await fireEvent.click(playedCard);
+
+		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		expect(
+			await screen.findByText(oldEpisode.title),
+		).toBeInTheDocument();
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: /latest episodes/i }),
+		);
+		await fireEvent.click(playedCard);
+
+		expect(
+			await screen.findByText(oldEpisode.title),
+		).toBeInTheDocument();
+		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
+	});
 });

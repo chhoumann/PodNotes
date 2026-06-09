@@ -139,16 +139,38 @@
 		};
 	});
 
+	type EpisodeFetchStrategy = "cached" | "full" | "network";
+
+	function getFeedCacheTtlMs(): number {
+		const feedCacheSettings = get(plugin)?.settings?.feedCache;
+		return Math.max(1, feedCacheSettings?.ttlHours ?? 6) * 60 * 60 * 1000;
+	}
+
+	function isFeedCacheEnabled(): boolean {
+		return get(plugin)?.settings?.feedCache?.enabled !== false;
+	}
+
+	function hasFullInMemoryFeed(
+		inMemoryEpisodes: Episode[] | undefined,
+		persistedEpisodes: Episode[] | null,
+	): boolean {
+		if (!inMemoryEpisodes?.length) {
+			return false;
+		}
+
+		if (!persistedEpisodes?.length) {
+			return true;
+		}
+
+		return inMemoryEpisodes.length > persistedEpisodes.length;
+	}
+
 	async function fetchEpisodes(
 		feed: PodcastFeed,
 		useCache: boolean = true,
 	): Promise<Episode[]> {
-
-		const pluginInstance = get(plugin);
-		const feedCacheSettings = pluginInstance?.settings?.feedCache;
-		const cacheEnabled = feedCacheSettings?.enabled !== false;
-		const cacheTtlMs =
-			Math.max(1, feedCacheSettings?.ttlHours ?? 6) * 60 * 60 * 1000;
+		const cacheEnabled = isFeedCacheEnabled();
+		const cacheTtlMs = getFeedCacheTtlMs();
 
 		const currentCache = get(episodeCache);
 		const cachedEpisodesInFeed = currentCache[feed.title];
@@ -192,6 +214,35 @@
 			const downloaded = get(downloadedEpisodes);
 			return downloaded[feed.title] || [];
 		}
+	}
+
+	async function fetchFullEpisodes(feed: PodcastFeed): Promise<Episode[]> {
+		const cacheEnabled = isFeedCacheEnabled();
+		const persistedEpisodes = cacheEnabled
+			? getCachedEpisodes(feed, getFeedCacheTtlMs())
+			: null;
+		const inMemoryEpisodes = get(episodeCache)[feed.title];
+
+		if (hasFullInMemoryFeed(inMemoryEpisodes, persistedEpisodes)) {
+			return inMemoryEpisodes;
+		}
+
+		return fetchEpisodes(feed, false);
+	}
+
+	async function fetchEpisodesByStrategy(
+		feed: PodcastFeed,
+		strategy: EpisodeFetchStrategy = "cached",
+	): Promise<Episode[]> {
+		if (strategy === "network") {
+			return fetchEpisodes(feed, false);
+		}
+
+		if (strategy === "full") {
+			return fetchFullEpisodes(feed);
+		}
+
+		return fetchEpisodes(feed, true);
 	}
 
 	function getPlayedPlaylist(): Playlist {
@@ -301,7 +352,7 @@
 
 	function fetchEpisodesInAllFeeds(
 		feedsToSearch: PodcastFeed[],
-		useCache: boolean = true,
+		strategy: EpisodeFetchStrategy = "cached",
 	): Promise<void> {
 		if (!feedsToSearch.length) return Promise.resolve();
 
@@ -310,7 +361,7 @@
 				setFeedLoading(feed.title, true);
 
 				try {
-					await fetchEpisodes(feed, useCache);
+					await fetchEpisodesByStrategy(feed, strategy);
 				} finally {
 					setFeedLoading(feed.title, false);
 				}
@@ -332,7 +383,7 @@
 		setFeedLoading(feed.title, true);
 
 		try {
-			const episodes = await fetchEpisodes(feed, false);
+			const episodes = await fetchFullEpisodes(feed);
 			displayedEpisodes = currentSearchQuery
 				? searchEpisodes(currentSearchQuery, episodes)
 				: episodes;
@@ -377,7 +428,7 @@
 
 	async function handleClickRefresh() {
 		if (isShowingPlayedEpisodes) {
-			await fetchEpisodesInAllFeeds(feeds, false);
+			await fetchEpisodesInAllFeeds(feeds, "network");
 			updateDisplayedPlayedEpisodesIfSelected();
 			return;
 		}
@@ -387,7 +438,10 @@
 		setFeedLoading(selectedFeed.title, true);
 
 		try {
-			const episodes = await fetchEpisodes(selectedFeed, false);
+			const episodes = await fetchEpisodesByStrategy(
+				selectedFeed,
+				"network",
+			);
 			displayedEpisodeEntries = null;
 			displayedEpisodes = currentSearchQuery
 				? searchEpisodes(currentSearchQuery, episodes)
@@ -437,7 +491,7 @@
 			displayedEpisodeEntries = [];
 			viewState.set(ViewState.EpisodeList);
 
-			void fetchEpisodesInAllFeeds(feeds, false).then(() => {
+			void fetchEpisodesInAllFeeds(feeds, "full").then(() => {
 				updateDisplayedPlayedEpisodesIfSelected();
 			});
 			return;
