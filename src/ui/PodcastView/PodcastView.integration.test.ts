@@ -11,6 +11,10 @@ import {
 
 import createPodcastNote from "src/createPodcastNote";
 import {
+	clearFeedCache,
+	setCachedEpisodes,
+} from "src/services/FeedCacheService";
+import {
 	currentEpisode,
 	episodeCache,
 	hidePlayedEpisodes,
@@ -67,6 +71,43 @@ function resetStores() {
 	viewState.set(ViewState.PodcastGrid);
 	currentEpisode.update(() => undefined as unknown as Episode);
 	plugin.set(undefined as never);
+	clearFeedCache();
+}
+
+function createNumberedEpisode(number: number): Episode {
+	return {
+		title: `Episode ${number}`,
+		streamUrl: `https://pod.example.com/ep-${number}.mp3`,
+		url: `https://pod.example.com/ep-${number}`,
+		description: `Description for episode ${number}`,
+		content: `<p>Episode ${number}</p>`,
+		podcastName: testFeed.title,
+		artworkUrl: testFeed.artworkUrl,
+		episodeDate: new Date(
+			`2024-${String((number % 12) + 1).padStart(2, "0")}-15T00:00:00.000Z`,
+		),
+	};
+}
+
+function createTruncatedFeedCache(): Episode[] {
+	return Array.from({ length: 75 }, (_, index) =>
+		createNumberedEpisode(622 + index),
+	);
+}
+
+function createFullFeed(): Episode[] {
+	return [createNumberedEpisode(100), ...createTruncatedFeedCache()];
+}
+
+function enableFeedCache() {
+	plugin.set({
+		settings: {
+			feedCache: {
+				enabled: true,
+				ttlHours: 6,
+			},
+		},
+	} as never);
 }
 
 beforeEach(() => {
@@ -324,5 +365,92 @@ describe("PodcastView integration flow", () => {
 
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
 		expect(screen.queryByText("Already Finished")).not.toBeInTheDocument();
+	});
+});
+
+describe("issue #174 feed cache cap regression", () => {
+	const oldEpisode = createNumberedEpisode(100);
+	const truncatedCache = createTruncatedFeedCache();
+	const fullFeed = createFullFeed();
+
+	beforeEach(() => {
+		enableFeedCache();
+		episodeCache.set({ [testFeed.title]: truncatedCache });
+		setCachedEpisodes(testFeed, truncatedCache);
+		mockGetEpisodes.mockResolvedValue(fullFeed);
+	});
+
+	test("opening a show bypasses the truncated cache and loads older episodes", async () => {
+		render(PodcastView);
+
+		await waitFor(() =>
+			expect(get(episodeCache)[testFeed.title]).toHaveLength(75),
+		);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+
+		const feedImage = await screen.findByAltText(testFeed.title);
+		await fireEvent.click(feedImage);
+
+		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		expect(
+			await screen.findByText(oldEpisode.title),
+		).toBeInTheDocument();
+		expect(get(episodeCache)[testFeed.title]).toHaveLength(76);
+		expect(
+			screen.queryByText(createNumberedEpisode(621).title),
+		).not.toBeInTheDocument();
+	});
+
+	test("played view bypasses the truncated cache for older finished episodes", async () => {
+		hidePlayedEpisodes.set(true);
+		playedEpisodes.set({
+			[`${testFeed.title}::${oldEpisode.title}`]: {
+				title: oldEpisode.title,
+				podcastName: testFeed.title,
+				time: 3600,
+				duration: 3600,
+				finished: true,
+			},
+		});
+
+		render(PodcastView);
+
+		await waitFor(() =>
+			expect(get(episodeCache)[testFeed.title]).toHaveLength(75),
+		);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+
+		const playedCard = await screen.findByLabelText("Played");
+		await fireEvent.click(playedCard);
+
+		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		expect(await screen.findByText("Played")).toBeInTheDocument();
+		expect(
+			await screen.findByText(oldEpisode.title),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText("Unavailable in current feeds"),
+		).not.toBeInTheDocument();
+
+		await fireEvent.click(screen.getByText(oldEpisode.title));
+		expect(get(currentEpisode)).toMatchObject({ title: oldEpisode.title });
+		expect(get(viewState)).toBe(ViewState.Player);
+	});
+
+	test("latest episodes background fetch still uses the truncated cache", async () => {
+		viewState.set(ViewState.EpisodeList);
+
+		render(PodcastView);
+
+		await waitFor(() =>
+			expect(get(episodeCache)[testFeed.title]).toHaveLength(75),
+		);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(
+			screen.queryByText(oldEpisode.title),
+		).not.toBeInTheDocument();
+		expect(
+			await screen.findByText(createNumberedEpisode(622).title),
+		).toBeInTheDocument();
 	});
 });

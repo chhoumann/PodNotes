@@ -332,7 +332,7 @@
 		setFeedLoading(feed.title, true);
 
 		try {
-			const episodes = await fetchEpisodes(feed);
+			const episodes = await fetchEpisodes(feed, false);
 			displayedEpisodes = currentSearchQuery
 				? searchEpisodes(currentSearchQuery, episodes)
 				: episodes;
@@ -437,7 +437,7 @@
 			displayedEpisodeEntries = [];
 			viewState.set(ViewState.EpisodeList);
 
-			void fetchEpisodesInAllFeeds(feeds).then(() => {
+			void fetchEpisodesInAllFeeds(feeds, false).then(() => {
 				updateDisplayedPlayedEpisodesIfSelected();
 			});
 			return;
