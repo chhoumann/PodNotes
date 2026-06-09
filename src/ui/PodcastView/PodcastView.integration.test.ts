@@ -477,6 +477,59 @@ describe("issue #174 feed cache cap regression", () => {
 		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
 	});
 
+	test("falls back to truncated cache when a full feed fetch fails", async () => {
+		mockGetEpisodes.mockRejectedValue(new Error("network unavailable"));
+
+		render(PodcastView);
+
+		const feedImage = await screen.findByAltText(testFeed.title);
+		await fireEvent.click(feedImage);
+
+		expect(
+			await screen.findByText(createNumberedEpisode(622).title),
+		).toBeInTheDocument();
+		expect(screen.queryByText(oldEpisode.title)).not.toBeInTheDocument();
+		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
+	});
+
+	test("played view only fetches feeds with finished played episodes", async () => {
+		const secondFeed: PodcastFeed = {
+			title: "Second Podcast",
+			url: "https://pod.example.com/feed-two.xml",
+			artworkUrl: "https://pod.example.com/art-two.jpg",
+		};
+
+		hidePlayedEpisodes.set(true);
+		savedFeeds.set({
+			[testFeed.title]: testFeed,
+			[secondFeed.title]: secondFeed,
+		});
+		episodeCache.set({
+			[testFeed.title]: truncatedCache,
+			[secondFeed.title]: [createNumberedEpisode(900)],
+		});
+		setCachedEpisodes(secondFeed, [createNumberedEpisode(900)]);
+		playedEpisodes.set({
+			[`${testFeed.title}::${oldEpisode.title}`]: {
+				title: oldEpisode.title,
+				podcastName: testFeed.title,
+				time: 3600,
+				duration: 3600,
+				finished: true,
+			},
+		});
+
+		render(PodcastView);
+
+		const playedCard = await screen.findByLabelText("Played");
+		await fireEvent.click(playedCard);
+
+		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		expect(
+			await screen.findByText(oldEpisode.title),
+		).toBeInTheDocument();
+	});
+
 	test("reopening played view reuses full in-memory cache without refetching", async () => {
 		hidePlayedEpisodes.set(true);
 		playedEpisodes.set({

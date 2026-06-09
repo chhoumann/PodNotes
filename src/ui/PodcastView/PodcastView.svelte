@@ -212,8 +212,42 @@
 				error,
 			);
 			const downloaded = get(downloadedEpisodes);
-			return downloaded[feed.title] || [];
+			if (downloaded[feed.title]?.length) {
+				return downloaded[feed.title];
+			}
+
+			if (!useCache) {
+				if (cachedEpisodesInFeed?.length) {
+					return cachedEpisodesInFeed;
+				}
+
+				if (cacheEnabled) {
+					const persistedEpisodes = getCachedEpisodes(
+						feed,
+						cacheTtlMs,
+					);
+					if (persistedEpisodes?.length) {
+						episodeCache.update((cache) => ({
+							...cache,
+							[feed.title]: persistedEpisodes,
+						}));
+						return persistedEpisodes;
+					}
+				}
+			}
+
+			return [];
 		}
+	}
+
+	function getFeedsWithPlayedEpisodes(): PodcastFeed[] {
+		const playedPodcastNames = new Set(
+			getFinishedPlayedEpisodeRecords(get(playedEpisodes)).map(
+				({ episode }) => episode.podcastName,
+			),
+		);
+
+		return feeds.filter((feed) => playedPodcastNames.has(feed.title));
 	}
 
 	async function fetchFullEpisodes(feed: PodcastFeed): Promise<Episode[]> {
@@ -428,7 +462,10 @@
 
 	async function handleClickRefresh() {
 		if (isShowingPlayedEpisodes) {
-			await fetchEpisodesInAllFeeds(feeds, "network");
+			await fetchEpisodesInAllFeeds(
+				getFeedsWithPlayedEpisodes(),
+				"network",
+			);
 			updateDisplayedPlayedEpisodesIfSelected();
 			return;
 		}
@@ -491,7 +528,10 @@
 			displayedEpisodeEntries = [];
 			viewState.set(ViewState.EpisodeList);
 
-			void fetchEpisodesInAllFeeds(feeds, "full").then(() => {
+			void fetchEpisodesInAllFeeds(
+				getFeedsWithPlayedEpisodes(),
+				"full",
+			).then(() => {
 				updateDisplayedPlayedEpisodesIfSelected();
 			});
 			return;
