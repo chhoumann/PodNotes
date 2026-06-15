@@ -4,6 +4,7 @@ import { DownloadPathTemplateEngine } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
+import { ensureFolderExists } from "./utility/ensureFolderExists";
 import { isLocalFile } from "./utility/isLocalFile";
 import getUrlExtension from "./utility/getUrlExtension";
 import getExtensionFromContentType from "./utility/getExtensionFromContentType";
@@ -12,13 +13,25 @@ function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+interface DownloadedFile {
+	/**
+	 * The raw episode bytes, held exactly once. On memory-constrained mobile
+	 * (Android) WebViews this single buffer is threaded straight to
+	 * `vault.createBinary`; wrapping it in a Blob and round-tripping back to an
+	 * ArrayBuffer used to triple the peak heap and OOM-crash the app (issue #113).
+	 */
+	data: ArrayBuffer;
+	contentType: string;
+	byteLength: number;
+}
+
 async function downloadFile(
 	url: string,
 	options?: Partial<{
 		onFinished: () => void;
 		onError: (error: Error) => void;
 	}>,
-) {
+): Promise<DownloadedFile> {
 	const encodedUrl = encodeUrlForRequest(url);
 	try {
 		const response = await requestUrl({ url: encodedUrl, method: "GET" });
@@ -27,21 +40,18 @@ async function downloadFile(
 			throw new Error("Could not download episode.");
 		}
 
-		const contentLength = response.arrayBuffer.byteLength;
+		// Read the decoded buffer once and keep that single reference. `requestUrl`
+		// has no streaming API, so this 1x copy is unavoidable; everything
+		// downstream reuses it instead of allocating further copies.
+		const data = response.arrayBuffer;
+		const contentType =
+			response.headers["content-type"] ??
+			response.headers["Content-Type"] ??
+			"";
 
 		options?.onFinished?.();
 
-		return {
-			blob: new Blob([response.arrayBuffer], {
-				type:
-					response.headers["content-type"] ??
-					response.headers["Content-Type"] ??
-					"",
-			}),
-			contentLength,
-			receivedLength: contentLength,
-			responseUrl: encodedUrl,
-		};
+		return { data, contentType, byteLength: data.byteLength };
 	} catch (error: unknown) {
 		const err = new Error(
 			`Failed to download ${url}:\n\n${getErrorMessage(error)}`,
@@ -66,7 +76,7 @@ export default async function downloadEpisodeWithNotice(
 		bodyEl.createEl("p", { text: "Downloading..." });
 	});
 
-	const { blob } = await downloadFile(episode.streamUrl, {
+	const { data, contentType } = await downloadFile(episode.streamUrl, {
 		onFinished: () => {
 			update((bodyEl) => bodyEl.createEl("p", { text: "Download complete!" }));
 		},
@@ -79,14 +89,18 @@ export default async function downloadEpisodeWithNotice(
 		},
 	});
 
-	const inferredExtension = await inferFileExtensionFromDownload(episode, blob);
-	const normalizedType = (blob.type ?? "").toLowerCase();
+	const inferredExtension = inferFileExtensionFromDownload(
+		episode,
+		data,
+		contentType,
+	);
+	const normalizedType = contentType.toLowerCase();
 	const typeAppearsAudio = normalizedType === "" || normalizedType.includes("audio");
 
 	if (!typeAppearsAudio && !inferredExtension) {
 		update((bodyEl) => {
 			bodyEl.createEl("p", {
-				text: `Downloaded file is not an audio file. It is of type "${blob.type}". Blob: ${blob.size} bytes.`,
+				text: `Downloaded file is not an audio file. It is of type "${contentType}". File: ${data.byteLength} bytes.`,
 			});
 		});
 
@@ -101,7 +115,7 @@ export default async function downloadEpisodeWithNotice(
 		await createEpisodeFile({
 			episode,
 			downloadPathTemplate,
-			blob,
+			data,
 			extension: fileExtension,
 		});
 
@@ -155,28 +169,32 @@ function createNoticeDoc(title: string) {
 async function createEpisodeFile({
 	episode,
 	downloadPathTemplate,
-	blob,
+	data,
 	extension,
 }: {
 	episode: Episode;
 	downloadPathTemplate: string;
-	blob: Blob;
+	data: ArrayBuffer;
 	extension: string;
 }) {
 	const basename = DownloadPathTemplateEngine(downloadPathTemplate, episode);
 	const filePath = `${basename}.${extension}`;
 
-	const buffer = await blob.arrayBuffer();
+	// `createBinary` throws if a parent folder is missing, which previously left
+	// users with a templated path like `podcast/{{podcast}}/{{title}}` unable to
+	// download anything (issue #86). Create the folders first.
+	const folderPath = filePath.split("/").slice(0, -1).join("/");
+	await ensureFolderExists(folderPath);
 
 	try {
-		await app.vault.createBinary(filePath, buffer);
+		await app.vault.createBinary(filePath, data);
 	} catch (error: unknown) {
 		throw new Error(
 			`Failed to write file "${filePath}": ${getErrorMessage(error)}`,
 		);
 	}
 
-	downloadedEpisodes.addEpisode(episode, filePath, blob.size);
+	downloadedEpisodes.addEpisode(episode, filePath, data.byteLength);
 }
 
 function resolveLocalEpisodeFilePath(episode: LocalEpisode): string | null {
@@ -229,11 +247,12 @@ function getLocalFilePathFromLink(link: string): string | null {
 	return null;
 }
 
-async function inferFileExtensionFromDownload(
+function inferFileExtensionFromDownload(
 	episode: Episode,
-	blob: Blob,
-): Promise<string | null> {
-	const signatureExtension = await detectAudioFileExtension(blob);
+	data: ArrayBuffer,
+	contentType: string,
+): string | null {
+	const signatureExtension = detectAudioFileExtension(data);
 	if (signatureExtension) {
 		return signatureExtension;
 	}
@@ -243,7 +262,7 @@ async function inferFileExtensionFromDownload(
 		return urlExtension;
 	}
 
-	return getExtensionFromContentType(blob.type);
+	return getExtensionFromContentType(contentType);
 }
 
 export async function downloadEpisode(
@@ -272,16 +291,16 @@ export async function downloadEpisode(
 	}
 
 	try {
-		const { blob } = await downloadFile(episode.streamUrl);
+		const { data, contentType } = await downloadFile(episode.streamUrl);
 
-		if (!blob.type.includes("audio") && !fileExtension) {
+		if (!contentType.includes("audio") && !fileExtension) {
 			throw new Error("Not an audio file.");
 		}
 
 		await createEpisodeFile({
 			episode,
 			downloadPathTemplate,
-			blob,
+			data,
 			extension: fileExtension,
 		});
 
@@ -321,9 +340,7 @@ interface AudioSignature {
 	fileExtension: string;
 }
 
-export async function detectAudioFileExtension(
-	blob: Blob,
-): Promise<string | null> {
+export function detectAudioFileExtension(data: ArrayBuffer): string | null {
 	const audioSignatures: AudioSignature[] = [
 		{ signature: [0xff, 0xe0], mask: [0xff, 0xe0], fileExtension: "mp3" },
 		{ signature: [0x49, 0x44, 0x33], fileExtension: "mp3" },
@@ -341,48 +358,40 @@ export async function detectAudioFileExtension(
 		},
 	];
 
-	return new Promise((resolve, reject) => {
-		const fileReader = new FileReader();
-		fileReader.onloadend = (e) => {
-			if (!e.target?.result) {
-				reject(new Error("No result from file reader"));
-				return;
-			}
+	const maxSignatureLength = Math.max(
+		...audioSignatures.map((sig) => sig.signature.length),
+	);
+	// Zero-copy view over just the header bytes — no Blob slice, no FileReader,
+	// no extra full-file allocation.
+	const arr = new Uint8Array(
+		data,
+		0,
+		Math.min(maxSignatureLength, data.byteLength),
+	);
 
-			const arr = new Uint8Array(e.target.result as ArrayBuffer);
+	for (const { signature, mask, fileExtension } of audioSignatures) {
+		if (signature.length > arr.length) {
+			continue;
+		}
 
-			for (const { signature, mask, fileExtension } of audioSignatures) {
-				let matches = true;
-				for (let i = 0; i < signature.length; i++) {
-					if (mask) {
-						if ((arr[i] & mask[i]) !== (signature[i] & mask[i])) {
-							matches = false;
-							break;
-						}
-					} else {
-						if (arr[i] !== signature[i]) {
-							matches = false;
-							break;
-						}
-					}
+		let matches = true;
+		for (let i = 0; i < signature.length; i++) {
+			if (mask) {
+				if ((arr[i] & mask[i]) !== (signature[i] & mask[i])) {
+					matches = false;
+					break;
 				}
-				if (matches) {
-					resolve(fileExtension);
-					return;
+			} else {
+				if (arr[i] !== signature[i]) {
+					matches = false;
+					break;
 				}
 			}
-			resolve(null);
-		};
+		}
+		if (matches) {
+			return fileExtension;
+		}
+	}
 
-		fileReader.onerror = () => {
-			reject(fileReader.error);
-		};
-
-		fileReader.readAsArrayBuffer(
-			blob.slice(
-				0,
-				Math.max(...audioSignatures.map((sig) => sig.signature.length)),
-			),
-		);
-	});
+	return null;
 }
