@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	DownloadPathTemplateEngine,
 	FeedFilePathTemplateEngine,
 	FeedNoteTemplateEngine,
+	FilePathTemplateEngine,
 	NoteTemplateEngine,
 	getFeedNoteWikilink,
 } from "./TemplateEngine";
@@ -220,5 +221,88 @@ describe("getFeedNoteWikilink (#163)", () => {
 	it("falls back to a plain sanitized link when no path is configured", () => {
 		plugin.set({ settings: { feedNote: { path: "" } } } as never);
 		expect(getFeedNoteWikilink("My Show: A Podcast")).toBe("[[My Show A Podcast]]");
+	});
+});
+
+describe("{{currentDate}} tag (#75)", () => {
+	beforeEach(() => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+		vi.useFakeTimers();
+		// A creation date deliberately different from the episode publish date.
+		vi.setSystemTime(new Date("2026-06-15T08:30:00"));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("renders today's date, defaulting to YYYY-MM-DD", () => {
+		expect(NoteTemplateEngine("{{currentDate}}", demoEpisode)).toBe("2026-06-15");
+	});
+
+	it("supports a Moment.js format and is distinct from the episode {{date}}", () => {
+		expect(
+			NoteTemplateEngine("{{currentDate:YYYY}} vs {{date:YYYY}}", demoEpisode),
+		).toBe("2026 vs 2024");
+	});
+
+	it("is available in file-path templates", () => {
+		expect(FilePathTemplateEngine("{{currentDate}}", demoEpisode)).toBe(
+			"2026-06-15",
+		);
+	});
+});
+
+describe("{{episodeNumber}} tag (#34)", () => {
+	const numbered: Episode = { ...demoEpisode, episodeNumber: 42 };
+
+	beforeEach(() => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+	});
+
+	it("renders the episode number", () => {
+		expect(NoteTemplateEngine("{{episodeNumber}}", numbered)).toBe("42");
+	});
+
+	it("zero-pads when given an all-zeros width", () => {
+		expect(NoteTemplateEngine("{{episodeNumber:000}}", numbered)).toBe("042");
+	});
+
+	it("renders empty when the episode has no number", () => {
+		expect(NoteTemplateEngine("{{episodeNumber}}", demoEpisode)).toBe("");
+	});
+
+	it("is available (and file-safe) in file-path templates", () => {
+		expect(
+			FilePathTemplateEngine("{{episodeNumber:000}} {{title}}", numbered),
+		).toBe("042 Episode 1");
+	});
+});
+
+describe("{{duration}} tag (#88)", () => {
+	// 1h 02m 03s.
+	const withDuration: Episode = { ...demoEpisode, duration: 3723 };
+
+	beforeEach(() => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+	});
+
+	it("renders a human clock by default", () => {
+		expect(NoteTemplateEngine("{{duration}}", withDuration)).toBe("1:02:03");
+	});
+
+	it("supports the minutes and seconds keywords", () => {
+		expect(NoteTemplateEngine("{{duration:minutes}}", withDuration)).toBe("62");
+		expect(NoteTemplateEngine("{{duration:seconds}}", withDuration)).toBe("3723");
+	});
+
+	it("supports a Moment.js clock format", () => {
+		expect(NoteTemplateEngine("{{duration:HH:mm:ss}}", withDuration)).toBe(
+			"01:02:03",
+		);
+	});
+
+	it("renders empty when the episode has no duration", () => {
+		expect(NoteTemplateEngine("{{duration}}", demoEpisode)).toBe("");
 	});
 });

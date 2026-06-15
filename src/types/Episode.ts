@@ -9,6 +9,13 @@ export interface Episode {
 	artworkUrl?: string;
 	episodeDate?: Date;
 	itunesTitle?: string;
+	/**
+	 * Episode number. Sourced from `<itunes:episode>` where present, otherwise a
+	 * best-effort parse of the title. Undefined when neither yields a number.
+	 */
+	episodeNumber?: number;
+	/** Episode duration in whole seconds, from `<itunes:duration>` where present. */
+	duration?: number;
 	/** URL to the podcast:chapters JSON file */
 	chaptersUrl?: string;
 }

@@ -6,6 +6,7 @@ import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import getUrlExtension from "./utility/getUrlExtension";
 import { formatDate } from "./utility/formatDate";
+import { formatDuration } from "./utility/formatDuration";
 
 type TagValue = string | ((...args: string[]) => string);
 
@@ -71,6 +72,24 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	return [replacer, addTag] as const;
 }
 
+/**
+ * Render an episode number for templates. Empty string when the number is
+ * unknown. An all-zeros format (e.g. {{episodeNumber:000}}) zero-pads the value
+ * to that width so episode-numbered file names sort correctly.
+ */
+function formatEpisodeNumber(
+	episodeNumber: number | undefined,
+	pad?: string,
+): string {
+	if (episodeNumber === undefined) return "";
+	const value = String(episodeNumber);
+	const width = pad?.trim();
+	if (width && /^0+$/.test(width)) {
+		return value.padStart(width.length, "0");
+	}
+	return value;
+}
+
 export function NoteTemplateEngine(template: string, episode: Episode) {
 	const [replacer, addTag] = useTemplateEngine();
 
@@ -106,6 +125,21 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
+			: "",
+	);
+	// The current date the note is created on, distinct from {{date}} (the episode
+	// publish date). Supports the same Moment.js format arg. See issue #75.
+	addTag("currentdate", (format?: string) =>
+		formatDate(new Date(), format ?? "YYYY-MM-DD"),
+	);
+	// Episode number from <itunes:episode>, else best-effort from the title. See #34.
+	addTag("episodenumber", (pad?: string) =>
+		formatEpisodeNumber(episode.episodeNumber, pad),
+	);
+	// Episode duration from <itunes:duration>. See issue #88.
+	addTag("duration", (format?: string) =>
+		episode.duration !== undefined
+			? formatDuration(episode.duration, format)
 			: "",
 	);
 	addTag(
@@ -171,6 +205,12 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
 			: "",
 	);
+	addTag("currentdate", (format?: string) =>
+		formatDate(new Date(), format ?? "YYYY-MM-DD"),
+	);
+	addTag("episodenumber", (pad?: string) =>
+		formatEpisodeNumber(episode.episodeNumber, pad),
+	);
 
 	return replacer(template);
 }
@@ -207,6 +247,12 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
 			: "",
 	);
+	addTag("currentdate", (format?: string) =>
+		formatDate(new Date(), format ?? "YYYY-MM-DD"),
+	);
+	addTag("episodenumber", (pad?: string) =>
+		formatEpisodeNumber(episode.episodeNumber, pad),
+	);
 
 	return replacer(templateWithoutExtension);
 }
@@ -237,6 +283,17 @@ export function TranscriptTemplateEngine(
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
+			: "",
+	);
+	addTag("currentdate", (format?: string) =>
+		formatDate(new Date(), format ?? "YYYY-MM-DD"),
+	);
+	addTag("episodenumber", (pad?: string) =>
+		formatEpisodeNumber(episode.episodeNumber, pad),
+	);
+	addTag("duration", (format?: string) =>
+		episode.duration !== undefined
+			? formatDuration(episode.duration, format)
 			: "",
 	);
 	addTag("transcript", transcription);

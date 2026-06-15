@@ -12,6 +12,8 @@ This template will be used to create the file path for the note. You can use the
 - `{{podcast}}`: The name of the podcast. You can add a format, e.g. `{{podcast:_}}` to replace spaces with underscores.
 - `{{date}}`: The publish date of the podcast episode. Please note that this is not always available, and will be empty if it is not.
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
+- `{{currentDate}}`: The current date (when the note is created), as opposed to `{{date}}` (the episode publish date). Supports the same format argument, e.g. `{{currentDate:YYYY-MM-DD}}`.
+- `{{episodeNumber}}`: The episode number (see the [note template](#note-template) section for how it is sourced). Use an all-zeros width to zero-pad for sortable file names, e.g. `{{episodeNumber:000}}` → `042`. Empty when the number is unknown.
 
 Both syntax items will be formatted such that it is safe to use in a file path.
 This means the following characters will be removed: `\ , # % & / { } * < > $ ' " : @ ‣ | ?`.
@@ -30,6 +32,14 @@ This template will be used to create the note text. You can use the following sy
 - `{{url}}`: The URL of the podcast episode.
 - `{{date}}`: The publish date of the podcast episode.
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
+- `{{currentDate}}`: The current date — i.e. when the note is created — as opposed to `{{date}}`, which is the episode's publish date. Useful for a "captured on" metadata field.
+	- Supports the same format argument, e.g. `{{currentDate:YYYY-MM-DD}}`.
+- `{{episodeNumber}}`: The episode number. PodNotes uses the feed's `<itunes:episode>` tag when present. If it is missing, PodNotes makes a **best-effort** guess from the start of the episode title — e.g. `12: ...`, `#12 ...`, `Ep 12 ...`, `Episode 12 ...`, `E12 ...`. This guess can be wrong for titles that simply begin with an unrelated number (e.g. `2024: A Year in Review`), so for feeds without `<itunes:episode>` treat it as approximate. The tag is empty when no number can be determined.
+	- You can zero-pad with an all-zeros width, e.g. `{{episodeNumber:000}}` → `042` (handy for sortable file names).
+- `{{duration}}`: The episode's duration, from the feed's `<itunes:duration>` tag. Empty when the feed doesn't provide one.
+	- With no argument it renders a human clock: `4:05` (under an hour) or `1:02:03` (an hour or more).
+	- `{{duration:minutes}}` → total whole minutes (e.g. `62`); `{{duration:seconds}}` → total seconds (e.g. `3723`).
+	- Any other argument is treated as a [Moment.js](https://momentjs.com)-style time format, e.g. `{{duration:HH:mm:ss}}` → `01:02:03`.
 - `{{artwork}}`: The URL of the podcast artwork. If no artwork is found, an empty string will be used.
 
 ### Linking an episode to its podcast (feed) note
