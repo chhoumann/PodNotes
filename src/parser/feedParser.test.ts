@@ -58,6 +58,77 @@ const invalidRssFeed = `<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>`;
 
+const sampleRssFeedWithAtomAndMetadata = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <atom:link href="https://example.com/feed.xml" rel="self" type="application/rss+xml"/>
+    <title>Meta Podcast</title>
+    <link>https://example.com/show</link>
+    <description>Channel description here</description>
+    <itunes:author>Jane Author</itunes:author>
+    <image>
+      <url>https://example.com/artwork.jpg</url>
+    </image>
+    <item>
+      <title>Episode 1</title>
+      <enclosure url="https://example.com/episode1.mp3" type="audio/mpeg"/>
+      <description>Episode-level description (must not become the feed description)</description>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
+const rssFeedWithoutChannelLink = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <atom:link href="https://example.com/feed.xml" rel="self"/>
+    <title>No Link Podcast</title>
+    <image>
+      <url>https://example.com/artwork.jpg</url>
+    </image>
+    <item>
+      <title>Episode 1</title>
+      <enclosure url="https://example.com/episode1.mp3" type="audio/mpeg"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
+const rssFeedWithMetadataPriority = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Priority Podcast</title>
+    <link>https://example.com</link>
+    <managingEditor>editor@example.com (The Editor)</managingEditor>
+    <itunes:author>The Real Author</itunes:author>
+    <description></description>
+    <itunes:summary>Summary used because description is empty</itunes:summary>
+    <item>
+      <title>Episode 1</title>
+      <enclosure url="https://example.com/episode1.mp3" type="audio/mpeg"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
+const rssFeedWithAtomHubAndAlternate = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <atom:link href="https://example.com/feed.xml" rel="self"/>
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
+    <atom:link href="https://example.com/site" rel="alternate"/>
+    <title>Hub Podcast</title>
+    <image>
+      <url>https://example.com/artwork.jpg</url>
+    </image>
+    <item>
+      <title>Episode 1</title>
+      <enclosure url="https://example.com/episode1.mp3" type="audio/mpeg"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
 const rssFeedWithInvalidItem = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
@@ -145,6 +216,71 @@ describe("FeedParser", () => {
 			await expect(parser.getFeed("https://example.com/feed.xml")).rejects.toThrow(
 				"Invalid RSS feed",
 			);
+		});
+
+		test("captures channel link, description and author, skipping atom:link self-refs", async () => {
+			mockRequestWithTimeout.mockResolvedValueOnce({
+				text: sampleRssFeedWithAtomAndMetadata,
+				status: 200,
+				headers: {},
+				arrayBuffer: new ArrayBuffer(0),
+				json: {},
+			});
+
+			const parser = new FeedParser();
+			const feed = await parser.getFeed("https://example.com/feed.xml");
+
+			expect(feed.title).toBe("Meta Podcast");
+			expect(feed.link).toBe("https://example.com/show");
+			expect(feed.description).toBe("Channel description here");
+			expect(feed.author).toBe("Jane Author");
+		});
+
+		test("does not throw when the channel has no website link", async () => {
+			mockRequestWithTimeout.mockResolvedValueOnce({
+				text: rssFeedWithoutChannelLink,
+				status: 200,
+				headers: {},
+				arrayBuffer: new ArrayBuffer(0),
+				json: {},
+			});
+
+			const parser = new FeedParser();
+			const feed = await parser.getFeed("https://example.com/feed.xml");
+
+			expect(feed.title).toBe("No Link Podcast");
+			expect(feed.link).toBeUndefined();
+		});
+
+		test("uses the atom alternate link, never a hub/self link, for the website", async () => {
+			mockRequestWithTimeout.mockResolvedValueOnce({
+				text: rssFeedWithAtomHubAndAlternate,
+				status: 200,
+				headers: {},
+				arrayBuffer: new ArrayBuffer(0),
+				json: {},
+			});
+
+			const parser = new FeedParser();
+			const feed = await parser.getFeed("https://example.com/feed.xml");
+
+			expect(feed.link).toBe("https://example.com/site");
+		});
+
+		test("honours tag priority: itunes:author over managingEditor, itunes:summary when description is empty", async () => {
+			mockRequestWithTimeout.mockResolvedValueOnce({
+				text: rssFeedWithMetadataPriority,
+				status: 200,
+				headers: {},
+				arrayBuffer: new ArrayBuffer(0),
+				json: {},
+			});
+
+			const parser = new FeedParser();
+			const feed = await parser.getFeed("https://example.com/feed.xml");
+
+			expect(feed.author).toBe("The Real Author");
+			expect(feed.description).toBe("Summary used because description is empty");
 		});
 	});
 

@@ -34,6 +34,8 @@ import CurrentEpisodeController from "./store_controllers/CurrentEpisodeControll
 import { HidePlayedEpisodesController } from "./store_controllers/HidePlayedEpisodesController";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import createPodcastNote from "./createPodcastNote";
+import createFeedNote from "./createFeedNote";
+import { FeedSuggestModal, orderFeedsByCurrent } from "./ui/FeedSuggestModal";
 import downloadEpisodeWithNotice from "./downloadEpisode";
 import type DownloadedEpisode from "./types/DownloadedEpisode";
 import DownloadedEpisodesController from "./store_controllers/DownloadedEpisodesController";
@@ -275,7 +277,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.addCommand({
 			id: "create-podcast-note",
-			name: "Create Podcast Note",
+			// Despite the id, this creates a note for the CURRENT EPISODE. The
+			// visible name was corrected to disambiguate it from the feed-level
+			// "Create podcast feed note" command below (issue #163). The id is kept
+			// for backward compatibility (hotkeys/API).
+			name: "Create episode note",
 			icon: "file-plus" as IconType,
 			checkCallback: (checking) => {
 				if (checking) {
@@ -287,6 +293,36 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				}
 
 				createPodcastNote(this.api.podcast);
+			},
+		});
+
+		this.addCommand({
+			id: "create-podcast-feed-note",
+			name: "Create podcast feed note",
+			icon: "file-plus" as IconType,
+			checkCallback: (checking) => {
+				const feeds = Object.values(get(savedFeeds));
+				const canCreate =
+					feeds.length > 0 &&
+					!!this.settings.feedNote.path &&
+					!!this.settings.feedNote.template;
+
+				if (checking) {
+					return canCreate;
+				}
+
+				if (!canCreate) return;
+
+				// Pre-select the playing episode's feed when there is one, so the
+				// picker opens on the most likely choice without requiring playback.
+				const orderedFeeds = orderFeedsByCurrent(
+					feeds,
+					this.api.podcast?.podcastName,
+				);
+
+				new FeedSuggestModal(this.app, orderedFeeds, (feed) => {
+					void createFeedNote(feed);
+				}).open();
 			},
 		});
 

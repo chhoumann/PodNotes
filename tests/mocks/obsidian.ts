@@ -47,6 +47,22 @@ export class Modal {
 	onClose(): void {}
 }
 
+export class SuggestModal<T> extends Modal {
+	setPlaceholder(_placeholder: string): void {}
+}
+
+export class FuzzySuggestModal<T> extends SuggestModal<T> {
+	getItems(): T[] {
+		return [];
+	}
+
+	getItemText(_item: T): string {
+		return "";
+	}
+
+	onChooseItem(_item: T, _evt?: MouseEvent | KeyboardEvent): void {}
+}
+
 class BaseInteractiveElement {
 	protected element: HTMLElement;
 

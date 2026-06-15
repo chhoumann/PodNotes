@@ -276,4 +276,15 @@ describe("mergeImportedSettings", () => {
 
 		expect(merged.note).toEqual({ path: "custom/{{title}}.md", template: "custom" });
 	});
+
+	it("backfills a partial feedNote import (path-only) from defaults", () => {
+		const current = makeSettings();
+
+		const merged = mergeImportedSettings(current, {
+			feedNote: { path: "MyPods/{{podcast}}.md" } as never,
+		});
+
+		expect(merged.feedNote.path).toBe("MyPods/{{podcast}}.md");
+		expect(merged.feedNote.template).toBe(DEFAULT_SETTINGS.feedNote.template);
+	});
 });

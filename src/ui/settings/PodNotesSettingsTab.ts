@@ -13,6 +13,7 @@ import PlaylistManager from "./PlaylistManager.svelte";
 import { mount, unmount } from "svelte";
 import {
 	DownloadPathTemplateEngine,
+	FeedFilePathTemplateEngine,
 	FilePathTemplateEngine,
 	TimestampTemplateEngine,
 } from "../../TemplateEngine";
@@ -27,6 +28,7 @@ import {
 	volume,
 } from "src/store/index";
 import type { Episode } from "src/types/Episode";
+import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
@@ -86,6 +88,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addDefaultVolumeSetting(settingsContainer);
 		this.addSkipLengthSettings(settingsContainer);
 		this.addNoteSettings(settingsContainer);
+		this.addFeedNoteSettings(settingsContainer);
 		this.addDownloadSettings(settingsContainer);
 		this.addPerformanceSettings(settingsContainer);
 		this.addImportExportSettings(settingsContainer);
@@ -282,6 +285,74 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		noteCreationSetting.settingEl.style.flexDirection = "column";
 		noteCreationSetting.settingEl.style.alignItems = "unset";
 		noteCreationSetting.settingEl.style.gap = "10px";
+	}
+
+	private addFeedNoteSettings(settingsContainer: HTMLDivElement) {
+		const container = settingsContainer.createDiv();
+
+		container.createEl("h4", { text: "Podcast feed note settings" });
+
+		const desc = container.createEl("p", {
+			text:
+				'Create a note for a whole podcast (the feed), not a single episode. ' +
+				'Run the "Create podcast feed note" command to pick a saved podcast. ' +
+				"Available tags: {{title}}, {{podcast}}, {{url}} (website), " +
+				"{{feedurl}} (RSS), {{artwork}}, {{author}}, {{description}}, {{date}}.",
+		});
+		desc.style.fontSize = "var(--font-ui-smaller)";
+		desc.style.color = "var(--text-muted)";
+
+		const randomFeed = getRandomFeed();
+
+		const feedNotePathSetting = new Setting(container)
+			.setName("Feed note file path")
+			.setHeading()
+			.addText((textComponent) => {
+				textComponent.setValue(this.plugin.settings.feedNote.path);
+				textComponent.setPlaceholder("PodNotes/Podcasts/{{podcast}}.md");
+				textComponent.onChange((value) => {
+					this.plugin.settings.feedNote.path = value;
+					this.plugin.saveSettings();
+					renderFeedPathDemo(value);
+				});
+				textComponent.inputEl.style.width = "100%";
+			});
+
+		feedNotePathSetting.settingEl.style.flexDirection = "column";
+		feedNotePathSetting.settingEl.style.alignItems = "unset";
+		feedNotePathSetting.settingEl.style.gap = "10px";
+
+		const feedNotePathDemoEl = container.createDiv();
+
+		const renderFeedPathDemo = (value: string) => {
+			const demoVal = FeedFilePathTemplateEngine(value, randomFeed);
+			feedNotePathDemoEl.empty();
+			MarkdownRenderer.renderMarkdown(
+				demoVal,
+				feedNotePathDemoEl,
+				"",
+				new Component(),
+			);
+		};
+
+		renderFeedPathDemo(this.plugin.settings.feedNote.path);
+
+		const feedNoteTemplateSetting = new Setting(container)
+			.setName("Feed note template")
+			.setHeading()
+			.addTextArea((textArea) => {
+				textArea.setValue(this.plugin.settings.feedNote.template);
+				textArea.onChange((value) => {
+					this.plugin.settings.feedNote.template = value;
+					this.plugin.saveSettings();
+				});
+				textArea.inputEl.style.width = "100%";
+				textArea.inputEl.style.height = "25vh";
+			});
+
+		feedNoteTemplateSetting.settingEl.style.flexDirection = "column";
+		feedNoteTemplateSetting.settingEl.style.alignItems = "unset";
+		feedNoteTemplateSetting.settingEl.style.gap = "10px";
 	}
 
 	private addDownloadSettings(container: HTMLDivElement) {
@@ -724,6 +795,22 @@ function getRandomEpisode(): Episode {
 		randomFeed[Math.floor(Math.random() * randomFeed.length)];
 
 	return randomEpisode;
+}
+
+function getRandomFeed(): PodcastFeed {
+	const fallbackDemoFeed: PodcastFeed = {
+		title: "Demo Podcast",
+		url: "https://example.com/feed.xml",
+		artworkUrl: "https://example.com/artwork.jpg",
+		description: "A demo podcast feed.",
+		link: "https://example.com",
+		author: "Demo Author",
+	};
+
+	const feeds = Object.values(get(savedFeeds));
+	if (!feeds.length) return fallbackDemoFeed;
+
+	return feeds[Math.floor(Math.random() * feeds.length)];
 }
 
 class ConfirmModal extends Modal {
