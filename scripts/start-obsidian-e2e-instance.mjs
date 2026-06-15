@@ -352,6 +352,16 @@ export async function trustVaultAndVerifyPodNotes(options) {
 	);
 }
 
+export async function reloadPodNotes(options) {
+	// Reload the plugin so a reused instance picks up a rebuilt main.js (the
+	// symlink target) instead of running the bundle it loaded earlier.
+	await execObsidian(options, [
+		`vault=${options.vaultName}`,
+		"plugin:reload",
+		"id=podnotes",
+	]);
+}
+
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
