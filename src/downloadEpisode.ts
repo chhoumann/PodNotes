@@ -370,8 +370,13 @@ export async function getEpisodeAudioBuffer(
 		return readVaultAudio(localFilePath);
 	}
 
+	// Reuse a previously downloaded file only when the registry entry is the SAME
+	// episode. The registry is keyed by podcastName+title, which two distinct
+	// episodes can share (re-releases, placeholder titles), so also require the
+	// stream URL to match before trusting the cached bytes. If it differs (or the
+	// URL rotated), fall through to a fresh fetch — correct, just not cached.
 	const registered = downloadedEpisodes.getEpisode(episode);
-	if (registered?.filePath) {
+	if (registered?.filePath && registered.streamUrl === episode.streamUrl) {
 		const existingFile = app.vault.getAbstractFileByPath(registered.filePath);
 		if (existingFile instanceof TFile) {
 			return readVaultAudio(registered.filePath);

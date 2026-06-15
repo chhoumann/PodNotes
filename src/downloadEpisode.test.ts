@@ -233,6 +233,29 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
+	it("does not reuse a same-title sibling's download; fetches this episode's own audio", async () => {
+		// Same podcast + same title, different episode (different stream URL). The
+		// registry is keyed by podcastName+title, so getEpisode() returns the
+		// sibling's entry — reusing its file would transcribe the wrong audio.
+		const downloaded = episode({
+			title: "Episode",
+			streamUrl: "https://example.com/spanish.mp3",
+		});
+		seedFile("Podcasts/sibling.mp3", "SPANISH-AUDIO");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/sibling.mp3", 13);
+
+		const current = episode({
+			title: "Episode",
+			streamUrl: "https://example.com/english.mp3",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
+		expect(requestUrlMock).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "https://example.com/english.mp3" }),
+		);
+	});
+
 	it("ignores a stale registry entry whose file no longer exists and fetches fresh", async () => {
 		const ep = episode({
 			title: "Stale Episode",
