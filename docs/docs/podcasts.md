@@ -54,6 +54,16 @@ The new order is saved automatically and restored the next time you open Obsidia
 
 Episodes in the queue are kept unique by title, so adding an episode that is already queued will not create a duplicate.
 
+## Turning off the queue
+By default the queue fills itself: when you switch to a new episode, the one you were listening to is kept at the top of the queue, and playback continues with the next queued episode when the current one ends.
+
+If you would rather manage the queue yourself, turn off **Keep a queue of episodes you switch away from** in PodNotes settings. With it off:
+
+- episodes are no longer added to the queue automatically when you switch, and
+- playback no longer advances to the next queued episode on its own.
+
+You can still add, remove, and reorder episodes in the queue manually from the episode context menu. While the queue is empty in this mode, its tile in the podcast grid and its list in the player are hidden.
+
 ## Player
 The player will automatically load and play the current episode.
 

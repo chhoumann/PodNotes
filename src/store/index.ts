@@ -525,6 +525,11 @@ export const queue = (() => {
 			});
 		},
 		playNext: () => {
+			// Auto-advance is part of queue automation (issue #108): when the user
+			// has turned the queue off, finishing an episode must not pull the next
+			// one in. The manual queue is left intact for when they re-enable it.
+			if (!autoQueueEnabled()) return;
+
 			update((queue) => {
 				const nextEp = queue.episodes.shift();
 
@@ -663,7 +668,21 @@ export const viewState = (() => {
 	};
 })();
 
+/**
+ * Whether the queue's automatic behavior is enabled (issue #108). Gates both
+ * auto-population (enqueuing the episode you switch away from) and auto-advance
+ * (queue.playNext on episode end). Reads the live plugin setting on each call so
+ * toggling takes effect without a reload. Defaults to enabled so a missing
+ * setting or an uninitialised plugin store preserves the historical behavior.
+ */
+function autoQueueEnabled(): boolean {
+	return get(plugin)?.settings?.autoQueue !== false;
+}
+
 function addEpisodeToQueue(episode: Episode) {
+	// Gate at the operation, not the call site, so no future caller can bypass it.
+	if (!autoQueueEnabled()) return;
+
 	queue.update((playlist) => {
 		// Keep the queue title-unique: a previously-played episode that is already
 		// queued stays in place rather than being re-prepended.

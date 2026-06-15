@@ -1,5 +1,5 @@
 import { get } from "svelte/store";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { Episode } from "src/types/Episode";
 import type { IPodNotes } from "src/types/IPodNotes";
@@ -13,6 +13,7 @@ import {
 	downloadedEpisodes,
 	localFiles,
 	playedEpisodes,
+	plugin,
 	queue,
 	reorderEpisodes,
 } from "./index";
@@ -442,5 +443,65 @@ describe("queue store", () => {
 		} finally {
 			controller.off();
 		}
+	});
+});
+
+describe("queue automation toggle (issue #108)", () => {
+	beforeEach(() => {
+		queue.set({ ...QUEUE_SETTINGS, episodes: [] });
+		currentEpisode.set(undefined as unknown as Episode, false);
+	});
+
+	afterEach(() => {
+		// Reset the shared module singletons so other suites keep the default
+		// (enabled) behavior that an unset plugin store implies.
+		plugin.set(undefined as never);
+		currentEpisode.set(undefined as unknown as Episode, false);
+	});
+
+	function setAutoQueue(value: boolean) {
+		plugin.set({ settings: { autoQueue: value } } as never);
+	}
+
+	test("enqueues the episode you switch away from when enabled", () => {
+		setAutoQueue(true);
+		currentEpisode.set(ep("A"));
+		currentEpisode.set(ep("B"));
+
+		expect(queueTitles()).toEqual(["A"]);
+	});
+
+	test("does not enqueue the previous episode when disabled", () => {
+		setAutoQueue(false);
+		currentEpisode.set(ep("A"));
+		currentEpisode.set(ep("B"));
+
+		expect(queueTitles()).toEqual([]);
+	});
+
+	test("treats an unset plugin store as enabled (historical default)", () => {
+		currentEpisode.set(ep("A"));
+		currentEpisode.set(ep("B"));
+
+		expect(queueTitles()).toEqual(["A"]);
+	});
+
+	test("playNext advances to the front of the queue when enabled", () => {
+		setAutoQueue(true);
+		setQueue("A", "B");
+
+		queue.playNext();
+
+		expect(get(currentEpisode)?.title).toBe("A");
+		expect(queueTitles()).toEqual(["B"]);
+	});
+
+	test("playNext is a no-op when disabled", () => {
+		setAutoQueue(false);
+		setQueue("A", "B");
+
+		queue.playNext();
+
+		expect(queueTitles()).toEqual(["A", "B"]);
 	});
 });

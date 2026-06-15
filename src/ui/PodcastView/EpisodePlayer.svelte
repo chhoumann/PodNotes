@@ -48,6 +48,12 @@
 	//#endregion
 	const clampVolume = (value: number): number => Math.min(1, Math.max(0, value));
 
+	// Hide the player's Queue list only when queue automation is off AND the queue
+	// is empty (issue #108) — otherwise show it (default-on state or a non-empty
+	// manual queue).
+	$: showQueue =
+		$plugin?.settings?.autoQueue !== false || $queue.episodes.length > 0;
+
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 	let playerVolume: number = 1;
@@ -338,17 +344,19 @@
 			on:seek={onChapterSeek}
 		/>
 
-		<EpisodeList 
-			episodes={$queue.episodes} 
-			showListMenu={false}
-			showThumbnails={true}
-			on:contextMenuEpisode={handleContextMenuEpisode}
-			on:clickEpisode={handleClickEpisode}
-		>
-			<svelte:fragment slot="header">
-				<h3>Queue</h3>
-			</svelte:fragment>
-		</EpisodeList>
+		{#if showQueue}
+			<EpisodeList
+				episodes={$queue.episodes}
+				showListMenu={false}
+				showThumbnails={true}
+				on:contextMenuEpisode={handleContextMenuEpisode}
+				on:clickEpisode={handleClickEpisode}
+			>
+				<svelte:fragment slot="header">
+					<h3>Queue</h3>
+				</svelte:fragment>
+			</EpisodeList>
+		{/if}
 	</div>
 </div>
 

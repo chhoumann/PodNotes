@@ -51,6 +51,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		...QUEUE_SETTINGS,
 		episodes: [],
 	},
+	autoQueue: true,
 	playlists: {},
 	skipBackwardLength: 15,
 	skipForwardLength: 15,

@@ -16,6 +16,13 @@ export interface IPodNotesSettings {
 	skipForwardLength: number;
 	playlists: { [playlistName: string]: Playlist };
 	queue: Playlist;
+	/**
+	 * Queue automation (issue #108). When `true` (default) switching episodes
+	 * keeps the one you left at the top of the queue and playback auto-advances to
+	 * the next queued episode. When `false` the queue stops filling and advancing
+	 * on its own; it remains usable as a manual playlist.
+	 */
+	autoQueue: boolean;
 	favorites: Playlist;
 	localFiles: Playlist;
 	currentEpisode?: Episode;
