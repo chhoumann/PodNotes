@@ -55,4 +55,18 @@ describe("FeedCacheService", () => {
 
 		expect(getCachedEpisodes(testFeed)).toEqual(episodes);
 	});
+
+	test("round-trips episodeNumber and duration (#34, #88)", () => {
+		const episode: Episode = {
+			...createEpisode(1),
+			episodeNumber: 42,
+			duration: 3723,
+		};
+
+		setCachedEpisodes(testFeed, [episode]);
+
+		const cached = getCachedEpisodes(testFeed);
+		expect(cached?.[0]?.episodeNumber).toBe(42);
+		expect(cached?.[0]?.duration).toBe(3723);
+	});
 });

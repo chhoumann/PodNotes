@@ -7,6 +7,7 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import getUrlExtension from "./utility/getUrlExtension";
 import { formatDate } from "./utility/formatDate";
 import { formatDuration } from "./utility/formatDuration";
+import { formatEpisodeNumber } from "./utility/formatEpisodeNumber";
 
 type TagValue = string | ((...args: string[]) => string);
 
@@ -54,11 +55,11 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 
 				if (typeof tagValue === "function") {
 					if (params) {
-						// Remove initial colon with splice.
-						const splitParams = params.slice(1).split(",");
-						const args = Array.isArray(splitParams) ? splitParams : [params];
-
-						return tagValue(...args);
+						// Pass everything after the leading colon as a single argument.
+						// No tag takes more than one argument, and splitting on "," would
+						// corrupt format strings that legitimately contain commas
+						// (e.g. {{currentDate:MMMM D, YYYY}}).
+						return tagValue(params.slice(1));
 					}
 
 					return tagValue();
@@ -70,24 +71,6 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	}
 
 	return [replacer, addTag] as const;
-}
-
-/**
- * Render an episode number for templates. Empty string when the number is
- * unknown. An all-zeros format (e.g. {{episodeNumber:000}}) zero-pads the value
- * to that width so episode-numbered file names sort correctly.
- */
-function formatEpisodeNumber(
-	episodeNumber: number | undefined,
-	pad?: string,
-): string {
-	if (episodeNumber === undefined) return "";
-	const value = String(episodeNumber);
-	const width = pad?.trim();
-	if (width && /^0+$/.test(width)) {
-		return value.padStart(width.length, "0");
-	}
-	return value;
 }
 
 export function NoteTemplateEngine(template: string, episode: Episode) {

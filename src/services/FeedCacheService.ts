@@ -12,7 +12,10 @@ interface CachedFeedData {
 
 type FeedCache = Record<string, CachedFeedData>;
 
-const STORAGE_KEY = "podnotes:feed-cache:v1";
+// v2: Episode gained episodeNumber/duration (#34, #88). Bumping the key discards
+// v1 entries, which lack those fields, so the new template tags populate from a
+// fresh parse instead of rendering empty until the TTL expires after an upgrade.
+const STORAGE_KEY = "podnotes:feed-cache:v2";
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
 const MAX_EPISODES_PER_FEED = 75;
 const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other localStorage usage

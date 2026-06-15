@@ -22,6 +22,18 @@ describe("parseDurationToSeconds", () => {
 		expect(parseDurationToSeconds("01:02:03")).toBe(3723);
 	});
 
+	it("sums non-normalized colon segments as-is (documented behavior)", () => {
+		expect(parseDurationToSeconds("1:90")).toBe(150);
+	});
+
+	it("rejects non-finite / implausibly large values", () => {
+		// A huge digit string would become Infinity via Number(); must be rejected
+		// so it never renders as "Infinity:NaN:NaN".
+		expect(parseDurationToSeconds("9".repeat(400))).toBeUndefined();
+		// Larger than a leap year of seconds.
+		expect(parseDurationToSeconds("999999999")).toBeUndefined();
+	});
+
 	it("returns undefined for empty or malformed input", () => {
 		expect(parseDurationToSeconds(undefined)).toBeUndefined();
 		expect(parseDurationToSeconds(null)).toBeUndefined();

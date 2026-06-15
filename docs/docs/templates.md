@@ -15,8 +15,7 @@ This template will be used to create the file path for the note. You can use the
 - `{{currentDate}}`: The current date (when the note is created), as opposed to `{{date}}` (the episode publish date). Supports the same format argument, e.g. `{{currentDate:YYYY-MM-DD}}`.
 - `{{episodeNumber}}`: The episode number (see the [note template](#note-template) section for how it is sourced). Use an all-zeros width to zero-pad for sortable file names, e.g. `{{episodeNumber:000}}` → `042`. Empty when the number is unknown.
 
-Both syntax items will be formatted such that it is safe to use in a file path.
-This means the following characters will be removed: `\ , # % & / { } * < > $ ' " : @ ‣ | ?`.
+`{{title}}` and `{{podcast}}` are sanitized so they are safe to use in a file path: the following characters are removed: `\ , # % & / { } * < > $ ' " : @ ‣ | ?`. `{{episodeNumber}}` is always file-safe. `{{date}}` and `{{currentDate}}` are inserted as-is, so when using them in a path, avoid format strings that contain path-illegal characters (e.g. `{{currentDate:HH:mm}}`).
 
 ## Note template
 This template will be used to create the note text. You can use the following syntax:
@@ -34,12 +33,12 @@ This template will be used to create the note text. You can use the following sy
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
 - `{{currentDate}}`: The current date — i.e. when the note is created — as opposed to `{{date}}`, which is the episode's publish date. Useful for a "captured on" metadata field.
 	- Supports the same format argument, e.g. `{{currentDate:YYYY-MM-DD}}`.
-- `{{episodeNumber}}`: The episode number. PodNotes uses the feed's `<itunes:episode>` tag when present. If it is missing, PodNotes makes a **best-effort** guess from the start of the episode title — e.g. `12: ...`, `#12 ...`, `Ep 12 ...`, `Episode 12 ...`, `E12 ...`. This guess can be wrong for titles that simply begin with an unrelated number (e.g. `2024: A Year in Review`), so for feeds without `<itunes:episode>` treat it as approximate. The tag is empty when no number can be determined.
-	- You can zero-pad with an all-zeros width, e.g. `{{episodeNumber:000}}` → `042` (handy for sortable file names).
-- `{{duration}}`: The episode's duration, from the feed's `<itunes:duration>` tag. Empty when the feed doesn't provide one.
+- `{{episodeNumber}}`: The episode number. PodNotes uses the feed's `<itunes:episode>` tag when present. If it is missing or not a number, PodNotes makes a **best-effort** guess from the start of the episode title — e.g. `12: ...`, `#12 ...`, `Ep 12 ...`, `Episode 12 ...`, `E12 ...`. This guess can be wrong for titles that simply begin with an unrelated number (e.g. `2024: A Year in Review`), so for feeds without `<itunes:episode>` treat it as approximate. The tag is empty when no number can be determined.
+	- You can zero-pad with an all-zeros width, e.g. `{{episodeNumber:000}}` → `042` (handy for sortable file names). Any other argument is ignored and the bare number is returned.
+- `{{duration}}`: The episode's duration, from the feed's `<itunes:duration>` tag. Empty when the feed doesn't provide one. Not available in file-path/download-path templates (its clock format contains colons, which are illegal in file names).
 	- With no argument it renders a human clock: `4:05` (under an hour) or `1:02:03` (an hour or more).
 	- `{{duration:minutes}}` → total whole minutes (e.g. `62`); `{{duration:seconds}}` → total seconds (e.g. `3723`).
-	- Any other argument is treated as a [Moment.js](https://momentjs.com)-style time format, e.g. `{{duration:HH:mm:ss}}` → `01:02:03`.
+	- Any other argument is treated as a clock format using the tokens `H`/`HH`, `h`/`hh`, `m`/`mm`, `s`/`ss`, `A`/`a` — e.g. `{{duration:HH:mm:ss}}` → `01:02:03`. (Unlike `{{date}}`, `[literal]` bracket escaping is not supported here.)
 - `{{artwork}}`: The URL of the podcast artwork. If no artwork is found, an empty string will be used.
 
 ### Linking an episode to its podcast (feed) note

@@ -5,6 +5,7 @@ import {
 	FeedNoteTemplateEngine,
 	FilePathTemplateEngine,
 	NoteTemplateEngine,
+	TranscriptTemplateEngine,
 	getFeedNoteWikilink,
 } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
@@ -246,8 +247,17 @@ describe("{{currentDate}} tag (#75)", () => {
 		).toBe("2026 vs 2024");
 	});
 
-	it("is available in file-path templates", () => {
+	it("supports a format containing commas (not truncated by the engine)", () => {
+		expect(
+			NoteTemplateEngine("{{currentDate:MMMM D, YYYY}}", demoEpisode),
+		).toBe("June 15, 2026");
+	});
+
+	it("is available in file-path and download-path templates", () => {
 		expect(FilePathTemplateEngine("{{currentDate}}", demoEpisode)).toBe(
+			"2026-06-15",
+		);
+		expect(DownloadPathTemplateEngine("{{currentDate}}", demoEpisode)).toBe(
 			"2026-06-15",
 		);
 	});
@@ -272,9 +282,12 @@ describe("{{episodeNumber}} tag (#34)", () => {
 		expect(NoteTemplateEngine("{{episodeNumber}}", demoEpisode)).toBe("");
 	});
 
-	it("is available (and file-safe) in file-path templates", () => {
+	it("is available (and file-safe) in file-path and download-path templates", () => {
 		expect(
 			FilePathTemplateEngine("{{episodeNumber:000}} {{title}}", numbered),
+		).toBe("042 Episode 1");
+		expect(
+			DownloadPathTemplateEngine("{{episodeNumber:000}} {{title}}", numbered),
 		).toBe("042 Episode 1");
 	});
 });
@@ -302,7 +315,42 @@ describe("{{duration}} tag (#88)", () => {
 		);
 	});
 
+	it("renders a zero duration as 0:00 (not empty)", () => {
+		const zero: Episode = { ...demoEpisode, duration: 0 };
+		expect(NoteTemplateEngine("{{duration}}", zero)).toBe("0:00");
+	});
+
 	it("renders empty when the episode has no duration", () => {
 		expect(NoteTemplateEngine("{{duration}}", demoEpisode)).toBe("");
+	});
+});
+
+describe("TranscriptTemplateEngine new tags (#75/#34/#88)", () => {
+	const fixture: Episode = { ...demoEpisode, episodeNumber: 42, duration: 3723 };
+
+	beforeEach(() => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-06-15T08:30:00"));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("renders all three new tags in transcript notes", () => {
+		expect(
+			TranscriptTemplateEngine(
+				"{{currentDate}}|{{episodeNumber:000}}|{{duration:minutes}}",
+				fixture,
+				"the transcript",
+			),
+		).toBe("2026-06-15|042|62");
+	});
+
+	it("leaves number/duration empty when absent", () => {
+		expect(
+			TranscriptTemplateEngine("[{{episodeNumber}}][{{duration}}]", demoEpisode, "t"),
+		).toBe("[][]");
 	});
 });
