@@ -150,6 +150,32 @@ const rssFeedWithInvalidItem = `<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>`;
 
+const rssFeedWithEpisodeNumberAndDuration = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Numbered Podcast</title>
+    <link>https://example.com</link>
+    <item>
+      <title>Episode 1</title>
+      <enclosure url="https://example.com/episode1.mp3" type="audio/mpeg"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+      <itunes:episode>42</itunes:episode>
+      <itunes:duration>1:02:03</itunes:duration>
+    </item>
+    <item>
+      <title>#7 Lucky Seven</title>
+      <enclosure url="https://example.com/episode2.mp3" type="audio/mpeg"/>
+      <pubDate>Tue, 02 Jan 2024 00:00:00 GMT</pubDate>
+      <itunes:duration>3600</itunes:duration>
+    </item>
+    <item>
+      <title>No Number Here</title>
+      <enclosure url="https://example.com/episode3.mp3" type="audio/mpeg"/>
+      <pubDate>Wed, 03 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
 describe("FeedParser", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -410,6 +436,42 @@ describe("FeedParser", () => {
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
 
 			expect(episodes[0].artworkUrl).toBe("https://example.com/episode1-artwork.jpg");
+		});
+	});
+
+	describe("episode number and duration (#34, #88)", () => {
+		test("parses <itunes:episode>/<itunes:duration> with a title fallback", async () => {
+			mockRequestWithTimeout
+				.mockResolvedValueOnce({
+					text: rssFeedWithEpisodeNumberAndDuration,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				})
+				.mockResolvedValueOnce({
+					text: rssFeedWithEpisodeNumberAndDuration,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				});
+
+			const parser = new FeedParser();
+			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
+
+			// Explicit <itunes:episode> and an HH:MM:SS duration.
+			expect(episodes[0].episodeNumber).toBe(42);
+			expect(episodes[0].duration).toBe(3723);
+
+			// No <itunes:episode>: number recovered from the "#7" title prefix;
+			// duration given as a plain seconds count.
+			expect(episodes[1].episodeNumber).toBe(7);
+			expect(episodes[1].duration).toBe(3600);
+
+			// Neither tag nor a parseable title number.
+			expect(episodes[2].episodeNumber).toBeUndefined();
+			expect(episodes[2].duration).toBeUndefined();
 		});
 	});
 

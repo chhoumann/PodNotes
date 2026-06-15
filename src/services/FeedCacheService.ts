@@ -12,12 +12,33 @@ interface CachedFeedData {
 
 type FeedCache = Record<string, CachedFeedData>;
 
-const STORAGE_KEY = "podnotes:feed-cache:v1";
+// v2: Episode gained episodeNumber/duration (#34, #88). Bumping the key stops
+// reading v1 entries (which lack those fields), so the new template tags populate
+// from a fresh parse instead of rendering empty until the TTL expires after an
+// upgrade. Superseded keys are actively deleted on load (see LEGACY_STORAGE_KEYS)
+// so a stale v1 blob can't linger and eat the localStorage quota.
+const STORAGE_KEY = "podnotes:feed-cache:v2";
+// Storage keys from earlier cache schemas, removed on first load so they don't
+// orphan ~MBs of data (which could push v2 writes over the localStorage quota).
+const LEGACY_STORAGE_KEYS = ["podnotes:feed-cache:v1"];
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
 const MAX_EPISODES_PER_FEED = 75;
 const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other localStorage usage
 
 let cache: FeedCache | null = null;
+
+// Delete every superseded cache schema key. Per-key try/catch so one failure
+// can't block the others. Runs on first load and on explicit clear so the
+// legacy blob is removed regardless of which path the user hits first.
+function removeLegacyCaches(storage: Storage): void {
+	for (const legacyKey of LEGACY_STORAGE_KEYS) {
+		try {
+			storage.removeItem(legacyKey);
+		} catch (error) {
+			console.error("Failed to remove legacy feed cache key:", error);
+		}
+	}
+}
 
 function getStorage(): Storage | null {
 	try {
@@ -38,6 +59,10 @@ function loadCache(): FeedCache {
 		cache = {};
 		return cache;
 	}
+
+	// Cleanup of superseded cache schemas so they don't linger in localStorage
+	// (a stale ~4MB v1 blob could otherwise make v2 writes fail).
+	removeLegacyCaches(storage);
 
 	try {
 		const raw = storage.getItem(STORAGE_KEY);
@@ -181,9 +206,13 @@ export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void 
 export function clearFeedCache(): void {
 	cache = {};
 	const storage = getStorage();
+	if (!storage) return;
 	try {
-		storage?.removeItem(STORAGE_KEY);
+		storage.removeItem(STORAGE_KEY);
 	} catch (error) {
 		console.error("Failed to clear feed cache:", error);
 	}
+	// Also drop legacy keys here: a clear issued before any loadCache() would
+	// otherwise leave them (the in-memory memo then short-circuits loadCache).
+	removeLegacyCaches(storage);
 }

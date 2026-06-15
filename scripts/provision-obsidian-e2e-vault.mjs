@@ -42,6 +42,7 @@ export const DEFAULT_PODNOTES_DATA = {
 		shouldRepeat: false,
 		episodes: [],
 	},
+	autoQueue: true,
 	playlists: {},
 	skipBackwardLength: 15,
 	skipForwardLength: 15,
@@ -53,8 +54,25 @@ export const DEFAULT_PODNOTES_DATA = {
 		path: "",
 		template: "",
 	},
+	feedNote: {
+		path: "PodNotes/Podcasts/{{podcast}}.md",
+		template:
+			"---\n" +
+			"type: podcast\n" +
+			'podcast: "{{podcast}}"\n' +
+			'image: "{{artwork}}"\n' +
+			'url: "{{url}}"\n' +
+			'feedUrl: "{{feedurl}}"\n' +
+			"tags:\n" +
+			"  - podcast\n" +
+			"---\n" +
+			"# {{title}}\n" +
+			"{{author}}\n\n" +
+			"![]({{artwork}})\n\n" +
+			"{{description}}\n",
+	},
 	download: {
-		path: "",
+		path: "PodNotes/{{podcast}}/{{title}}",
 	},
 	downloadedEpisodes: {},
 	localFiles: {

@@ -1,6 +1,8 @@
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { Episode } from "src/types/Episode";
 import { requestWithTimeout } from "src/utility/networkRequest";
+import { parseEpisodeNumber } from "src/utility/parseEpisodeNumber";
+import { parseDurationToSeconds } from "src/utility/parseDuration";
 
 export default class FeedParser {
 	private feed: PodcastFeed | undefined;
@@ -151,6 +153,8 @@ export default class FeedParser {
 		const pubDateEl = item.querySelector("pubDate");
 		const itunesImageEl = this.findImageElement(item);
 		const itunesTitleEl = item.getElementsByTagName("itunes:title")[0];
+		const itunesEpisodeEl = item.getElementsByTagName("itunes:episode")[0];
+		const itunesDurationEl = item.getElementsByTagName("itunes:duration")[0];
 		const chaptersEl = item.getElementsByTagName("podcast:chapters")[0];
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
@@ -166,6 +170,11 @@ export default class FeedParser {
 		const artworkUrl =
 			itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 		const itunesTitle = itunesTitleEl?.textContent;
+		const episodeNumber = parseEpisodeNumber(
+			itunesEpisodeEl?.textContent,
+			title,
+		);
+		const duration = parseDurationToSeconds(itunesDurationEl?.textContent);
 		const chaptersUrl = chaptersEl?.getAttribute("url") || undefined;
 
 		return {
@@ -179,6 +188,8 @@ export default class FeedParser {
 			episodeDate: pubDate,
 			feedUrl: this.feed?.url || "",
 			itunesTitle: itunesTitle || "",
+			episodeNumber,
+			duration,
 			chaptersUrl,
 		};
 	}
