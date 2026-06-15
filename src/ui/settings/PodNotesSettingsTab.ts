@@ -2,6 +2,7 @@ import {
 	type App,
 	Component,
 	MarkdownRenderer,
+	Modal,
 	Notice,
 	PluginSettingTab,
 	Setting,
@@ -15,11 +16,26 @@ import {
 	FilePathTemplateEngine,
 	TimestampTemplateEngine,
 } from "../../TemplateEngine";
-import { episodeCache, savedFeeds } from "src/store/index";
+import {
+	episodeCache,
+	favorites,
+	hidePlayedEpisodes,
+	localFiles,
+	playlists,
+	queue,
+	savedFeeds,
+	volume,
+} from "src/store/index";
 import type { Episode } from "src/types/Episode";
+import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 import { clearFeedCache } from "src/services/FeedCacheService";
+import {
+	mergeImportedSettings,
+	parseImport,
+	serializeSettings,
+} from "src/settingsTransfer";
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
@@ -420,6 +436,199 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					);
 				}),
 			);
+
+		this.addSettingsTransferControls(containerEl);
+	}
+
+	private addSettingsTransferControls(containerEl: HTMLElement): void {
+		containerEl.createEl("h4", { text: "Settings & templates" });
+
+		new Setting(containerEl)
+			.setName("Import settings")
+			.setDesc(
+				"Import PodNotes preferences, templates, feeds, and playlists from a settings file. Playback progress and downloads are not affected.",
+			)
+			.addButton((button) =>
+				button.setButtonText("Import").onClick(() => {
+					this.pickFile(".json", (contents) =>
+						this.handleSettingsImport(contents),
+					);
+				}),
+			);
+
+		let exportFileName = "PodNotes_Settings.json";
+		let includeSecret = false;
+
+		new Setting(containerEl)
+			.setName("Include OpenAI API key")
+			.setDesc(
+				"When enabled, the export file contains your API key in plaintext. The file is stored in your vault, so it may sync to other devices and be read by other plugins.",
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(includeSecret).onChange((value) => {
+					includeSecret = value;
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Export settings")
+			.setDesc("Export PodNotes preferences, templates, feeds, and playlists.")
+			.addText((text) =>
+				text
+					.setPlaceholder("Export file name")
+					.setValue(exportFileName)
+					.onChange((value) => {
+						exportFileName = value;
+					}),
+			)
+			.addButton((button) =>
+				button.setButtonText("Export").onClick(() => {
+					const name = exportFileName.trim() || "PodNotes_Settings.json";
+					const fileName = name.endsWith(".json") ? name : `${name}.json`;
+					void this.handleSettingsExport(fileName, includeSecret);
+				}),
+			);
+	}
+
+	private pickFile(accept: string, onContents: (contents: string) => void): void {
+		const fileInput = document.createElement("input");
+		fileInput.type = "file";
+		fileInput.accept = accept;
+		fileInput.style.display = "none";
+		document.body.appendChild(fileInput);
+
+		// The native picker firing "cancel" (no selection) never triggers
+		// "change", so clean up the orphaned input then too.
+		fileInput.oncancel = () => fileInput.remove();
+
+		fileInput.onchange = (e: Event) => {
+			const target = e.target as HTMLInputElement;
+			const file = target.files?.[0];
+			fileInput.remove();
+
+			if (!file) {
+				new Notice("No file selected.");
+				return;
+			}
+
+			// A settings file is small JSON; reject anything implausibly large
+			// before reading it fully into memory.
+			const MAX_BYTES = 5 * 1024 * 1024;
+			if (file.size > MAX_BYTES) {
+				new Notice("That file is too large to be a PodNotes settings file.");
+				return;
+			}
+
+			const reader = new FileReader();
+			reader.onload = (event) => {
+				const contents = event.target?.result;
+				if (typeof contents === "string") {
+					onContents(contents);
+				} else {
+					new Notice("Could not read the selected file.");
+				}
+			};
+			reader.onerror = () => new Notice("Could not read the selected file.");
+			reader.readAsText(file);
+		};
+
+		fileInput.click();
+	}
+
+	private async handleSettingsExport(
+		fileName: string,
+		includeSecret: boolean,
+	): Promise<void> {
+		try {
+			const envelope = serializeSettings(
+				this.plugin.settings,
+				{ includeSecret },
+				this.plugin.manifest.version,
+				new Date().toISOString(),
+			);
+			const contents = JSON.stringify(envelope, null, 2);
+
+			// Create-only, mirroring the OPML export: never clobber an existing
+			// vault file (which could be an unrelated note) without the user
+			// choosing a fresh name.
+			if (this.app.vault.getAbstractFileByPath(fileName)) {
+				new Notice(
+					`A file named "${fileName}" already exists. Choose a different name.`,
+				);
+				return;
+			}
+			await this.app.vault.create(fileName, contents);
+
+			new Notice(
+				includeSecret
+					? `Exported PodNotes settings to "${fileName}" (includes your API key).`
+					: `Exported PodNotes settings to "${fileName}".`,
+			);
+		} catch (error) {
+			if (error instanceof Error && error.message.includes("Folder does not exist")) {
+				new Notice("Unable to create export file: folder does not exist.");
+			} else {
+				new Notice(
+					`Unable to export settings:\n\n${error instanceof Error ? error.message : "Unknown error"}`,
+				);
+			}
+			console.error("PodNotes: failed to export settings", error);
+		}
+	}
+
+	private handleSettingsImport(contents: string): void {
+		const result = parseImport(contents);
+		if (!result.ok) {
+			new Notice(`Could not import settings: ${result.error}`, 10000);
+			return;
+		}
+
+		const sections: string[] = [];
+		if (Object.keys(result.settings.savedFeeds ?? {}).length) {
+			sections.push("podcast feeds");
+		}
+		if (Object.keys(result.settings.playlists ?? {}).length) {
+			sections.push("playlists");
+		}
+		if (result.meta.includesSecret) sections.push("OpenAI API key");
+		const detail = sections.length
+			? ` This also replaces your ${sections.join(", ")}.`
+			: "";
+
+		new ConfirmModal(
+			this.app,
+			"Import PodNotes settings?",
+			`This overwrites your current PodNotes preferences and templates with the imported values.${detail} Your playback progress and downloads are kept.`,
+			"Import",
+			() => {
+				void this.applyImportedSettings(result.settings);
+			},
+		).open();
+	}
+
+	private async applyImportedSettings(
+		imported: Partial<IPodNotesSettings>,
+	): Promise<void> {
+		const merged = mergeImportedSettings(this.plugin.settings, imported);
+		this.plugin.settings = merged;
+
+		// Re-hydrate the live stores so the running UI and the persistence
+		// controllers reflect the import. Keys without a store (templates, paths,
+		// skip lengths, playback rate, feed cache) are applied via `merged` above.
+		savedFeeds.set(merged.savedFeeds);
+		playlists.set(merged.playlists);
+		favorites.set(merged.favorites);
+		queue.set(merged.queue);
+		localFiles.set(merged.localFiles);
+		hidePlayedEpisodes.set(merged.hidePlayedEpisodes);
+		const importedVolume = Number.isFinite(merged.defaultVolume)
+			? merged.defaultVolume
+			: 1;
+		volume.set(Math.min(1, Math.max(0, importedVolume)));
+
+		await this.plugin.saveSettings();
+		this.display();
+		new Notice("Imported PodNotes settings.");
 	}
 
 	private addTranscriptSettings(container: HTMLDivElement) {
@@ -515,4 +724,49 @@ function getRandomEpisode(): Episode {
 		randomFeed[Math.floor(Math.random() * randomFeed.length)];
 
 	return randomEpisode;
+}
+
+class ConfirmModal extends Modal {
+	private title: string;
+	private body: string;
+	private confirmText: string;
+	private onConfirm: () => void;
+
+	constructor(
+		app: App,
+		title: string,
+		body: string,
+		confirmText: string,
+		onConfirm: () => void,
+	) {
+		super(app);
+		this.title = title;
+		this.body = body;
+		this.confirmText = confirmText;
+		this.onConfirm = onConfirm;
+	}
+
+	override onOpen(): void {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: this.title });
+		contentEl.createEl("p", { text: this.body });
+
+		new Setting(contentEl)
+			.addButton((button) =>
+				button.setButtonText("Cancel").onClick(() => this.close()),
+			)
+			.addButton((button) =>
+				button
+					.setButtonText(this.confirmText)
+					.setWarning()
+					.onClick(() => {
+						this.close();
+						this.onConfirm();
+					}),
+			);
+	}
+
+	override onClose(): void {
+		this.contentEl.empty();
+	}
 }

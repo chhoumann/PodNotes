@@ -1,0 +1,279 @@
+import { describe, expect, it } from "vitest";
+import { DEFAULT_SETTINGS } from "./constants";
+import {
+	EXCLUDED_KEYS,
+	SETTINGS_EXPORT_TYPE,
+	SETTINGS_EXPORT_VERSION,
+	mergeImportedSettings,
+	parseImport,
+	serializeSettings,
+} from "./settingsTransfer";
+import type { IPodNotesSettings } from "./types/IPodNotesSettings";
+
+function makeSettings(
+	overrides: Partial<IPodNotesSettings> = {},
+): IPodNotesSettings {
+	return structuredClone({ ...DEFAULT_SETTINGS, ...overrides });
+}
+
+const NOW = "2026-06-14T00:00:00.000Z";
+
+describe("serializeSettings", () => {
+	it("wraps settings in a versioned envelope", () => {
+		const envelope = serializeSettings(
+			makeSettings(),
+			{ includeSecret: false },
+			"2.16.0",
+			NOW,
+		);
+
+		expect(envelope.type).toBe(SETTINGS_EXPORT_TYPE);
+		expect(envelope.version).toBe(SETTINGS_EXPORT_VERSION);
+		expect(envelope.pluginVersion).toBe("2.16.0");
+		expect(envelope.exportedAt).toBe(NOW);
+	});
+
+	it("excludes runtime/vault-specific state even when populated", () => {
+		const settings = makeSettings({
+			playedEpisodes: { ep: { title: "ep", podcastName: "p", time: 1, duration: 2, finished: false } },
+			podNotes: { ep: { title: "ep", podcastName: "p" } as never },
+			downloadedEpisodes: { p: [] },
+			currentEpisode: { title: "ep" } as never,
+		});
+
+		const { settings: exported } = serializeSettings(
+			settings,
+			{ includeSecret: false },
+			"2.16.0",
+			NOW,
+		);
+
+		for (const key of EXCLUDED_KEYS) {
+			expect(exported).not.toHaveProperty(key as string);
+		}
+	});
+
+	it("omits the API key unless includeSecret is set", () => {
+		const settings = makeSettings({ openAIApiKey: "sk-secret" });
+
+		const without = serializeSettings(settings, { includeSecret: false }, "2.16.0", NOW);
+		expect(without.settings).not.toHaveProperty("openAIApiKey");
+
+		const withKey = serializeSettings(settings, { includeSecret: true }, "2.16.0", NOW);
+		expect(withKey.settings.openAIApiKey).toBe("sk-secret");
+	});
+
+	it("includes preferences, templates, and library", () => {
+		const settings = makeSettings({
+			note: { path: "notes/{{title}}.md", template: "# {{title}}" },
+			savedFeeds: {
+				Show: { title: "Show", url: "https://example.com/feed", artworkUrl: "" },
+			},
+		});
+
+		const { settings: exported } = serializeSettings(
+			settings,
+			{ includeSecret: false },
+			"2.16.0",
+			NOW,
+		);
+
+		expect(exported.note).toEqual(settings.note);
+		expect(exported.savedFeeds).toEqual(settings.savedFeeds);
+		expect(exported.timestamp).toEqual(settings.timestamp);
+	});
+});
+
+describe("parseImport", () => {
+	it("rejects invalid JSON", () => {
+		const result = parseImport("not json {");
+		expect(result.ok).toBe(false);
+	});
+
+	it("rejects a non-object payload", () => {
+		expect(parseImport("[]").ok).toBe(false);
+		expect(parseImport("42").ok).toBe(false);
+		expect(parseImport("null").ok).toBe(false);
+	});
+
+	it("rejects an envelope from a newer format version", () => {
+		const result = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				version: SETTINGS_EXPORT_VERSION + 1,
+				settings: { defaultVolume: 0.5 },
+			}),
+		);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error).toContain("newer version");
+	});
+
+	it("rejects a non-integer or invalid version", () => {
+		for (const version of [0, -1, 1.5]) {
+			const result = parseImport(
+				JSON.stringify({
+					type: SETTINGS_EXPORT_TYPE,
+					version,
+					settings: { defaultVolume: 0.5 },
+				}),
+			);
+			expect(result.ok).toBe(false);
+		}
+	});
+
+	it("round-trips an exported envelope", () => {
+		const settings = makeSettings({
+			defaultPlaybackRate: 1.5,
+			note: { path: "p", template: "t" },
+		});
+		const envelope = serializeSettings(settings, { includeSecret: false }, "2.16.0", NOW);
+
+		const result = parseImport(JSON.stringify(envelope));
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.meta.fromEnvelope).toBe(true);
+			expect(result.settings.defaultPlaybackRate).toBe(1.5);
+			expect(result.settings.note).toEqual({ path: "p", template: "t" });
+		}
+	});
+
+	it("accepts a raw settings object and drops excluded runtime keys", () => {
+		const raw = makeSettings({
+			defaultVolume: 0.3,
+			playedEpisodes: { ep: { title: "ep", podcastName: "p", time: 1, duration: 2, finished: true } },
+			currentEpisode: { title: "ep" } as never,
+		});
+
+		const result = parseImport(JSON.stringify(raw));
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.meta.fromEnvelope).toBe(false);
+			expect(result.settings.defaultVolume).toBe(0.3);
+			for (const key of EXCLUDED_KEYS) {
+				expect(result.settings).not.toHaveProperty(key as string);
+			}
+		}
+	});
+
+	it("drops unknown keys", () => {
+		const result = parseImport(
+			JSON.stringify({ defaultVolume: 0.5, somethingElse: true }),
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.settings).not.toHaveProperty("somethingElse");
+	});
+
+	it("fails when no recognizable settings remain", () => {
+		const result = parseImport(JSON.stringify({ somethingElse: true }));
+		expect(result.ok).toBe(false);
+	});
+
+	it("drops a wrong-typed top-level value", () => {
+		const result = parseImport(
+			JSON.stringify({ defaultVolume: "evil", note: { path: "p", template: "t" } }),
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.settings).not.toHaveProperty("defaultVolume");
+			expect(result.settings.note).toEqual({ path: "p", template: "t" });
+		}
+	});
+
+	it("drops a wrong-typed nested field but keeps valid siblings", () => {
+		const result = parseImport(
+			JSON.stringify({ note: { path: 5, template: "keep" } }),
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.settings.note).toEqual({ template: "keep" });
+		}
+	});
+
+	it("rejects a typed envelope without a numeric version", () => {
+		const result = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				settings: { defaultVolume: 0.5 },
+			}),
+		);
+		expect(result.ok).toBe(false);
+	});
+
+	it("does not pollute Object.prototype via __proto__", () => {
+		const result = parseImport(
+			'{"defaultVolume": 0.5, "__proto__": {"polluted": true}}',
+		);
+		expect(result.ok).toBe(true);
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+	});
+
+	it("does not pollute via a malicious envelope payload", () => {
+		const result = parseImport(
+			`{"type":"${SETTINGS_EXPORT_TYPE}","version":1,"settings":{"constructor":{"x":1},"defaultVolume":0.5}}`,
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.settings).not.toHaveProperty("constructor");
+		expect(({} as Record<string, unknown>).x).toBeUndefined();
+	});
+
+	it("reports whether the import includes the API key", () => {
+		const withKey = parseImport(JSON.stringify({ openAIApiKey: "sk-x" }));
+		expect(withKey.ok).toBe(true);
+		if (withKey.ok) expect(withKey.meta.includesSecret).toBe(true);
+
+		const withoutKey = parseImport(JSON.stringify({ defaultVolume: 0.5 }));
+		expect(withoutKey.ok).toBe(true);
+		if (withoutKey.ok) expect(withoutKey.meta.includesSecret).toBe(false);
+	});
+});
+
+describe("mergeImportedSettings", () => {
+	it("overrides preferences while preserving excluded runtime state", () => {
+		const current = makeSettings({
+			defaultVolume: 1,
+			playedEpisodes: { ep: { title: "ep", podcastName: "p", time: 5, duration: 9, finished: false } },
+		});
+
+		const merged = mergeImportedSettings(current, { defaultVolume: 0.25 });
+
+		expect(merged.defaultVolume).toBe(0.25);
+		expect(merged.playedEpisodes).toEqual(current.playedEpisodes);
+	});
+
+	it("backfills partial nested objects from defaults so no field is blanked", () => {
+		const current = makeSettings();
+		// A hand-edited file that only sets timestamp.offset.
+		const merged = mergeImportedSettings(current, {
+			timestamp: { offset: 7 } as never,
+		});
+
+		expect(merged.timestamp.offset).toBe(7);
+		expect(merged.timestamp.template).toBe(DEFAULT_SETTINGS.timestamp.template);
+	});
+
+	it("replaces collection settings wholesale rather than merging them", () => {
+		const current = makeSettings({
+			savedFeeds: {
+				B: { title: "B", url: "https://b.example/feed", artworkUrl: "" },
+			},
+		});
+
+		const merged = mergeImportedSettings(current, {
+			savedFeeds: {
+				A: { title: "A", url: "https://a.example/feed", artworkUrl: "" },
+			},
+		});
+
+		expect(Object.keys(merged.savedFeeds)).toEqual(["A"]);
+	});
+
+	it("keeps the current nested value when the import omits the field", () => {
+		const current = makeSettings({
+			note: { path: "custom/{{title}}.md", template: "custom" },
+		});
+
+		const merged = mergeImportedSettings(current, { defaultVolume: 0.5 });
+
+		expect(merged.note).toEqual({ path: "custom/{{title}}.md", template: "custom" });
+	});
+});
