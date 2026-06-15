@@ -75,19 +75,66 @@ Use a dedicated development vault for manual or scripted Obsidian checks. Ensure
 the vault's PodNotes plugin folder points at this checkout's generated plugin
 artifacts before trusting runtime evidence.
 
-Typical local loop:
-
-```bash
-npm run dev
-# reload or re-enable PodNotes in the development vault
-# trigger the relevant command, UI flow, or obsidian://podnotes URI
-# inspect console/errors and plugin state
-```
-
 If using the `obsidian` CLI, pass the vault selector consistently and prefer
 scripted, repeatable checks for non-trivial flows. For bugs involving commands
 or URIs, test both the user-facing path and the direct command/URI path when
 possible.
+
+### Shared dev vault (main checkout)
+For work in the canonical `/Users/christian/Developer/PodNotes` checkout, use the
+shared `dev` vault and target it explicitly with the `obsidian` CLI:
+
+```bash
+npm run dev
+# reload or re-enable PodNotes in the dev vault, e.g.:
+obsidian vault=dev plugin:reload id=podnotes
+# trigger the relevant command, UI flow, or obsidian://podnotes URI
+obsidian vault=dev eval code='app.plugins.plugins.podnotes?.manifest?.version'
+# inspect console/errors and plugin state
+```
+
+- Dev vault root: `/Users/christian/Developer/dev_vault/dev`.
+- PodNotes plugin folder in the vault:
+  `/Users/christian/Developer/dev_vault/dev/.obsidian/plugins/podnotes`, whose
+  `main.js`/`manifest.json` symlinks point at the canonical checkout's artifacts.
+- Only one checkout can own those symlinks at a time, so the shared `dev` vault
+  is for the main checkout. Worktrees must use the isolated wrapper below.
+
+### Isolated worktree vault (parallel worktrees)
+In a worktree (e.g. `/Users/christian/orca/workspaces/PodNotes/<slug>`), do **not**
+race the shared `dev` vault — multiple worktree agents would clobber each other on
+the plugin symlink, `data.json`, and `plugin:reload`. Use the isolated worktree
+wrapper instead, which provisions a worktree-local vault under
+`.obsidian-e2e-vaults/podnotes-<worktree>` (git-ignored), starts or reuses a
+private-`HOME` Obsidian instance bound to that vault, disables Restricted Mode,
+waits until PodNotes is live, and then runs your command with the right
+`vault=<worktree vault>` and private `HOME` already applied:
+
+```bash
+npm run build                              # produce root main.js + manifest.json first
+npm run obsidian:e2e -- eval code=app.vault.getName()
+npm run obsidian:e2e -- eval code='Boolean(app.plugins.plugins.podnotes)'
+npm run obsidian:e2e -- dev:errors
+```
+
+- The wrapper links the worktree's own `main.js`/`manifest.json` (PodNotes injects
+  its CSS into the bundle, so there is no `styles.css` to link) and seeds a clean
+  `DEFAULT_SETTINGS`-shaped `data.json` on first provision; it never touches
+  `/Users/christian/Developer/dev_vault/dev`.
+- `npm run provision:e2e-vault` and `npm run start:e2e-obsidian` expose the
+  provision/launch steps individually; both accept `--help`.
+- Use `npm run start:e2e-obsidian -- --print-env` only when you need to export
+  `PODNOTES_E2E_VAULT` / `PODNOTES_E2E_VAULT_PATH` / `PODNOTES_E2E_OBSIDIAN_HOME`
+  for a separate process. The `obsidian` CLI routes by `$HOME` (it talks to
+  `$HOME/.obsidian-cli.sock`), so to point the Vitest `tests/e2e` suite at the
+  isolated instance you must remap `HOME` as well as the vault name — exporting
+  `PODNOTES_E2E_VAULT` alone leaves the suite talking to the shared `dev` vault:
+
+  ```bash
+  eval "$(npm run --silent start:e2e-obsidian -- --print-env)"
+  export HOME="$PODNOTES_E2E_OBSIDIAN_HOME"   # required: re-point the CLI socket
+  PODNOTES_E2E_VAULT="$PODNOTES_E2E_VAULT" npm run test:e2e
+  ```
 
 ## Documentation
 Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
