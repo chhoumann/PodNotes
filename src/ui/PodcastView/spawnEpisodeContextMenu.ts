@@ -6,6 +6,7 @@ import type { Episode } from "src/types/Episode";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
+import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 interface DisabledMenuItems {
 	play: boolean;
@@ -130,20 +131,54 @@ export default function spawnEpisodeContextMenu(
 			.setTitle(`${episodeIsInQueue ? "Remove from" : "Add to"} Queue`)
 			.onClick(() => {
 				if (episodeIsInQueue) {
-					queue.update(playlist => {
-						playlist.episodes = playlist.episodes.filter(e => e.title !== episode.title);
-
-						return playlist;
-					});
+					queue.remove(episode);
 				} else {
-					queue.update(playlist => {
-						const newEpisodes = [...playlist.episodes, episode];
-						playlist.episodes = newEpisodes;
-
-						return playlist;
-					});
+					queue.add(episode);
 				}
 			}));
+
+		// Reorder controls — only meaningful when viewing the queue as an ordered
+		// list in the Player. spawnEpisodeContextMenu is shared with the feed,
+		// playlist and Latest lists, so gate on the active view state.
+		const reorderItems = buildQueueReorderMenuItems(
+			get(viewState),
+			get(queue).episodes,
+			episode,
+		);
+
+		if (reorderItems.length > 0) {
+			menu.addSeparator();
+
+			for (const reorderItem of reorderItems) {
+				menu.addItem(item => item
+					.setIcon(reorderItem.icon)
+					.setTitle(reorderItem.title)
+					.onClick(() => {
+						// Resolve the index live: the queue can shift (e.g. the
+						// episode ends and playNext advances it) between opening
+						// the menu and clicking.
+						const index = get(queue).episodes.findIndex(
+							e => e.title === episode.title,
+						);
+						if (index === -1) return;
+
+						switch (reorderItem.kind) {
+							case "top":
+								queue.moveToTop(index);
+								break;
+							case "up":
+								queue.moveUp(index);
+								break;
+							case "down":
+								queue.moveDown(index);
+								break;
+							case "bottom":
+								queue.moveToBottom(index);
+								break;
+						}
+					}));
+			}
+		}
 	}
 
 	if (!disabledMenuItems?.playlists) {

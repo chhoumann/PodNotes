@@ -17,6 +17,7 @@ import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
+import { QueueReorderModal } from "src/ui/QueueReorderModal";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { plugin } from "./store";
 import type { IPodNotes } from "./types/IPodNotes";
@@ -44,7 +45,7 @@ import getContextMenuHandler from "./getContextMenuHandler";
 import getUniversalPodcastLink from "./getUniversalPodcastLink";
 import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
-import type { Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api!: IAPI;
@@ -217,6 +218,19 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 				const episode = this.api.podcast;
 				downloadEpisodeWithNotice(episode, this.settings.download.path);
+			},
+		});
+
+		this.addCommand({
+			id: "reorder-queue",
+			name: "Reorder Queue",
+			icon: "list-ordered" as IconType,
+			checkCallback: (checking) => {
+				if (checking) {
+					return get(queue).episodes.length > 1;
+				}
+
+				new QueueReorderModal(this.app).open();
 			},
 		});
 

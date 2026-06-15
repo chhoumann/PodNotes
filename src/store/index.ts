@@ -423,6 +423,51 @@ export const downloadedEpisodes = (() => {
 	};
 })();
 
+/**
+ * Returns a new array with the episode at `from` moved to position `to`.
+ *
+ * Any out-of-range, negative, or equal index pair is treated as a no-op and the
+ * original array reference is returned unchanged, so callers can cheaply detect
+ * "nothing moved" and skip a store write. Guarding `from < 0` is essential: a
+ * `findIndex` miss yields -1, and `splice(-1, 1)` would destructively remove the
+ * last element.
+ */
+export function reorderEpisodes(
+	episodes: Episode[],
+	from: number,
+	to: number,
+): Episode[] {
+	const length = episodes.length;
+	if (from < 0 || from >= length || to < 0 || to >= length || from === to) {
+		return episodes;
+	}
+
+	const next = [...episodes];
+	const [moved] = next.splice(from, 1);
+	next.splice(to, 0, moved);
+	return next;
+}
+
+/**
+ * Returns the episodes with later duplicate titles removed, preserving order and
+ * the first occurrence. The queue is title-identified everywhere, so this keeps
+ * it title-unique regardless of how it was populated — including queues
+ * persisted or synced before dedup-on-add existed.
+ */
+export function dedupeEpisodesByTitle(episodes: Episode[] = []): Episode[] {
+	const seen = new Set<string>();
+	const result: Episode[] = [];
+
+	for (const episode of episodes) {
+		if (seen.has(episode.title)) continue;
+
+		seen.add(episode.title);
+		result.push(episode);
+	}
+
+	return result;
+}
+
 export const queue = (() => {
 	const store = writable<Playlist>({
 		icon: "list-ordered",
@@ -431,14 +476,41 @@ export const queue = (() => {
 		shouldEpisodeRemoveAfterPlay: true,
 		shouldRepeat: false,
 	});
-	const { subscribe, update, set } = store;
+	const { subscribe, update, set: setStore } = store;
+
+	// The queue identifies episodes by title everywhere (remove, played-cleanup,
+	// context menu). Keeping it title-unique on add makes those lookups — and the
+	// reorder index lookups below — unambiguous.
+	const isAlreadyQueued = (episodes: Episode[], episode: Episode) =>
+		episodes.some((e) => e.title === episode.title);
+
+	function move(from: number, to: number) {
+		const { episodes } = get(store);
+		const reordered = reorderEpisodes(episodes, from, to);
+
+		// No-op move: skip the store write so we don't churn saveSettings.
+		if (reordered === episodes) return;
+
+		update((queue) => {
+			queue.episodes = reordered;
+			return queue;
+		});
+	}
 
 	return {
 		subscribe,
 		update,
-		set,
+		// Enforce the title-unique invariant on every set (load, import, sync),
+		// not just on incremental adds.
+		set: (playlist: Playlist) =>
+			setStore({
+				...playlist,
+				episodes: dedupeEpisodesByTitle(playlist.episodes),
+			}),
 		add: (episode: Episode) => {
 			update((queue) => {
+				if (isAlreadyQueued(queue.episodes, episode)) return queue;
+
 				queue.episodes.push(episode);
 				return queue;
 			});
@@ -462,6 +534,12 @@ export const queue = (() => {
 				return queue;
 			});
 		},
+		move,
+		moveUp: (index: number) => move(index, index - 1),
+		moveDown: (index: number) => move(index, index + 1),
+		moveToTop: (index: number) => move(index, 0),
+		moveToBottom: (index: number) =>
+			move(index, get(store).episodes.length - 1),
 	};
 })();
 
@@ -539,6 +617,12 @@ export const viewState = (() => {
 
 function addEpisodeToQueue(episode: Episode) {
 	queue.update((playlist) => {
+		// Keep the queue title-unique: a previously-played episode that is already
+		// queued stays in place rather than being re-prepended.
+		if (playlist.episodes.some((e) => e.title === episode.title)) {
+			return playlist;
+		}
+
 		const newEpisodes = [episode, ...playlist.episodes];
 		playlist.episodes = newEpisodes;
 

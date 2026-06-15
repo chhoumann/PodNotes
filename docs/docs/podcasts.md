@@ -14,6 +14,8 @@ The playlists are shown in the episode grid, represented by their icons.
 
 By default, you will have a queue playlist and a favorites playlist.
 
+The queue plays from top to bottom: the episode at the top is played next. See [Reordering the queue](#reordering-the-queue) to resequence it.
+
 PodNotes also shows a Played playlist in the episode grid. It is a virtual playlist that lists episodes marked as played across all podcasts. Episodes still available in your feeds can be played or managed like normal episodes. Older played-history entries that can no longer be found in current feeds remain visible so you can mark them as unplayed.
 
 You can delete playlists by pressing the trash bin icon next to the playlist name.
@@ -39,6 +41,18 @@ The context menu will let you
 - Add / remove the episode to favorites
 - Add / remove the episode to queue
 - Add / remove the episode to a playlist
+
+When you open the context menu on an episode in the queue list (shown in the player), it also offers **Move to top / up / down / bottom of queue** so you can resequence without leaving the player.
+
+## Reordering the queue
+The queue plays from the top down, so its order is its play order. There are two ways to change it:
+
+- **From the player's queue list:** right-click (desktop) or long-press (mobile) a queued episode and choose **Move to top**, **Move up**, **Move down**, or **Move to bottom of queue**.
+- **From the command palette:** run **PodNotes: Reorder Queue** to open a dedicated window listing the whole queue, where each episode has move-up / move-down / move-to-top / move-to-bottom buttons (and a remove button). This works the same on desktop and mobile and is the easiest way to resequence a long queue.
+
+The new order is saved automatically and restored the next time you open Obsidian.
+
+Episodes in the queue are kept unique by title, so adding an episode that is already queued will not create a duplicate.
 
 ## Player
 The player will automatically load and play the current episode.
