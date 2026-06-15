@@ -67,7 +67,11 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	},
 
 	download: {
-		path: "",
+		// Must include a per-episode token ({{title}}). An empty or token-less path
+		// resolves every episode to the same name — e.g. "" -> ".mp3", a hidden
+		// dotfile at the vault root that Obsidian never indexes — so the first
+		// download writes junk and the second throws "File already exists" (#183).
+		path: "PodNotes/{{podcast}}/{{title}}",
 	},
 	downloadedEpisodes: {},
 	localFiles: {

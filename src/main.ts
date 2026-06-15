@@ -14,6 +14,7 @@ import { Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
+import { migrateDownloadPath } from "src/settingsMigrations";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { QueueReorderModal } from "src/ui/QueueReorderModal";
@@ -411,6 +412,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			...DEFAULT_SETTINGS.timestamp,
 			...(loadedData?.timestamp ?? {}),
 		};
+		// Build a fresh download object so we never mutate the shared
+		// DEFAULT_SETTINGS.download, then migrate the legacy empty default (#183).
+		this.settings.download = {
+			...DEFAULT_SETTINGS.download,
+			...(loadedData?.download ?? {}),
+		};
+		this.settings.download.path = migrateDownloadPath(
+			this.settings.download.path,
+		);
 	}
 
 	async saveSettings() {
