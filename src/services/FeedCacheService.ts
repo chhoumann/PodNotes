@@ -12,10 +12,15 @@ interface CachedFeedData {
 
 type FeedCache = Record<string, CachedFeedData>;
 
-// v2: Episode gained episodeNumber/duration (#34, #88). Bumping the key discards
-// v1 entries, which lack those fields, so the new template tags populate from a
-// fresh parse instead of rendering empty until the TTL expires after an upgrade.
+// v2: Episode gained episodeNumber/duration (#34, #88). Bumping the key stops
+// reading v1 entries (which lack those fields), so the new template tags populate
+// from a fresh parse instead of rendering empty until the TTL expires after an
+// upgrade. Superseded keys are actively deleted on load (see LEGACY_STORAGE_KEYS)
+// so a stale v1 blob can't linger and eat the localStorage quota.
 const STORAGE_KEY = "podnotes:feed-cache:v2";
+// Storage keys from earlier cache schemas, removed on first load so they don't
+// orphan ~MBs of data (which could push v2 writes over the localStorage quota).
+const LEGACY_STORAGE_KEYS = ["podnotes:feed-cache:v1"];
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
 const MAX_EPISODES_PER_FEED = 75;
 const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other localStorage usage
@@ -40,6 +45,16 @@ function loadCache(): FeedCache {
 	if (!storage) {
 		cache = {};
 		return cache;
+	}
+
+	// One-time cleanup of superseded cache schemas so they don't linger in
+	// localStorage (a stale ~4MB v1 blob could otherwise make v2 writes fail).
+	for (const legacyKey of LEGACY_STORAGE_KEYS) {
+		try {
+			storage.removeItem(legacyKey);
+		} catch (error) {
+			console.error("Failed to remove legacy feed cache key:", error);
+		}
 	}
 
 	try {

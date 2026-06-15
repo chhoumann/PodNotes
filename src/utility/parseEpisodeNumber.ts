@@ -54,8 +54,9 @@ export function parseEpisodeNumberFromTitle(
 
 	// Leading marker: "#12", "Ep 12", "Ep. 12", "Episode 12", "Ep #12", "E12".
 	// Note the single \s* (no two adjacent whitespace quantifiers) so there is no
-	// ambiguous backtracking.
-	const labeled = head.match(/^(?:#\s*|ep(?:isode)?\.?\s*#?|e)(\d{1,6})\b/i);
+	// ambiguous backtracking. The trailing (?!\.\d) rejects a decimal like
+	// "Ep 10.5" so it is not misread as episode 10.
+	const labeled = head.match(/^(?:#\s*|ep(?:isode)?\.?\s*#?|e)(\d{1,6})\b(?!\.\d)/i);
 	if (labeled) return Number(labeled[1]);
 
 	// Leading number followed by a separator: "12:", "12 -", "12.", "12)".

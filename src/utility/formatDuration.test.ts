@@ -6,6 +6,7 @@ describe("formatDuration", () => {
 		expect(formatDuration(270)).toBe("4:30");
 		expect(formatDuration(65)).toBe("1:05");
 		expect(formatDuration(5)).toBe("0:05");
+		expect(formatDuration(0)).toBe("0:00");
 	});
 
 	it("includes the hours segment for episodes of an hour or more", () => {
@@ -19,8 +20,9 @@ describe("formatDuration", () => {
 		expect(formatDuration(3723, "MINUTES")).toBe("62");
 	});
 
-	it("supports the seconds keyword (total seconds)", () => {
+	it("supports the seconds keyword (total seconds), case-insensitively", () => {
 		expect(formatDuration(3723, "seconds")).toBe("3723");
+		expect(formatDuration(3723, "SECONDS")).toBe("3723");
 	});
 
 	it("passes other formats through to formatSeconds tokens", () => {

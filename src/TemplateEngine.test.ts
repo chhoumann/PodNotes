@@ -278,8 +278,14 @@ describe("{{episodeNumber}} tag (#34)", () => {
 		expect(NoteTemplateEngine("{{episodeNumber:000}}", numbered)).toBe("042");
 	});
 
-	it("renders empty when the episode has no number", () => {
-		expect(NoteTemplateEngine("{{episodeNumber}}", demoEpisode)).toBe("");
+	it("falls back to the title when no number is stored (e.g. persisted episodes)", () => {
+		const titleOnly: Episode = { ...demoEpisode, title: "#7 Lucky Seven" };
+		expect(NoteTemplateEngine("{{episodeNumber}}", titleOnly)).toBe("7");
+	});
+
+	it("renders empty when neither the field nor the title has a number", () => {
+		const noNumber: Episode = { ...demoEpisode, title: "A Show With No Number" };
+		expect(NoteTemplateEngine("{{episodeNumber}}", noNumber)).toBe("");
 	});
 
 	it("is available (and file-safe) in file-path and download-path templates", () => {
@@ -323,6 +329,13 @@ describe("{{duration}} tag (#88)", () => {
 	it("renders empty when the episode has no duration", () => {
 		expect(NoteTemplateEngine("{{duration}}", demoEpisode)).toBe("");
 	});
+
+	it("is not registered in download-path templates (left unreplaced)", () => {
+		// Intentionally absent there — the clock format's colons are path-illegal.
+		expect(DownloadPathTemplateEngine("{{duration}}", withDuration)).toBe(
+			"{{duration}}",
+		);
+	});
 });
 
 describe("TranscriptTemplateEngine new tags (#75/#34/#88)", () => {
@@ -349,8 +362,9 @@ describe("TranscriptTemplateEngine new tags (#75/#34/#88)", () => {
 	});
 
 	it("leaves number/duration empty when absent", () => {
+		const blank: Episode = { ...demoEpisode, title: "A Show With No Number" };
 		expect(
-			TranscriptTemplateEngine("[{{episodeNumber}}][{{duration}}]", demoEpisode, "t"),
+			TranscriptTemplateEngine("[{{episodeNumber}}][{{duration}}]", blank, "t"),
 		).toBe("[][]");
 	});
 });

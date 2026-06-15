@@ -34,6 +34,12 @@ describe("parseDurationToSeconds", () => {
 		expect(parseDurationToSeconds("999999999")).toBeUndefined();
 	});
 
+	it("accepts the plausible-range boundary and rejects one past it", () => {
+		// MAX_PLAUSIBLE_SECONDS = 86400 * 366 = 31622400 (strict > rejects).
+		expect(parseDurationToSeconds("31622400")).toBe(31622400);
+		expect(parseDurationToSeconds("31622401")).toBeUndefined();
+	});
+
 	it("returns undefined for empty or malformed input", () => {
 		expect(parseDurationToSeconds(undefined)).toBeUndefined();
 		expect(parseDurationToSeconds(null)).toBeUndefined();

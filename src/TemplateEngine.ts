@@ -8,8 +8,12 @@ import getUrlExtension from "./utility/getUrlExtension";
 import { formatDate } from "./utility/formatDate";
 import { formatDuration } from "./utility/formatDuration";
 import { formatEpisodeNumber } from "./utility/formatEpisodeNumber";
+import { parseEpisodeNumberFromTitle } from "./utility/parseEpisodeNumber";
 
-type TagValue = string | ((...args: string[]) => string);
+// Each tag is either a literal string or a function taking at most one argument
+// (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
+// engine never passes more than one argument; commas are part of that argument.
+type TagValue = string | ((arg?: string) => string);
 
 interface Tags {
 	[tag: string]: TagValue;
@@ -73,6 +77,16 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	return [replacer, addTag] as const;
 }
 
+/**
+ * Resolve the episode number for templates: prefer the value captured at parse
+ * time (from `<itunes:episode>` or the title), then fall back to a title parse so
+ * persisted/older episode snapshots that predate the stored field (e.g. a restored
+ * `currentEpisode`) still resolve `{{episodeNumber}}`.
+ */
+function resolveEpisodeNumber(episode: Episode): number | undefined {
+	return episode.episodeNumber ?? parseEpisodeNumberFromTitle(episode.title);
+}
+
 export function NoteTemplateEngine(template: string, episode: Episode) {
 	const [replacer, addTag] = useTemplateEngine();
 
@@ -117,7 +131,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	);
 	// Episode number from <itunes:episode>, else best-effort from the title. See #34.
 	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(episode.episodeNumber, pad),
+		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
 	// Episode duration from <itunes:duration>. See issue #88.
 	addTag("duration", (format?: string) =>
@@ -192,7 +206,7 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 		formatDate(new Date(), format ?? "YYYY-MM-DD"),
 	);
 	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(episode.episodeNumber, pad),
+		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
 
 	return replacer(template);
@@ -234,7 +248,7 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 		formatDate(new Date(), format ?? "YYYY-MM-DD"),
 	);
 	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(episode.episodeNumber, pad),
+		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
 
 	return replacer(templateWithoutExtension);
@@ -272,7 +286,7 @@ export function TranscriptTemplateEngine(
 		formatDate(new Date(), format ?? "YYYY-MM-DD"),
 	);
 	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(episode.episodeNumber, pad),
+		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
 	addTag("duration", (format?: string) =>
 		episode.duration !== undefined

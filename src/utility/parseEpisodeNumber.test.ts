@@ -68,6 +68,15 @@ describe("parseEpisodeNumberFromTitle", () => {
 		expect(parseEpisodeNumberFromTitle("7. Lucky")).toBe(7);
 	});
 
+	it("does not misread a decimal after a label marker", () => {
+		expect(parseEpisodeNumberFromTitle("Ep 10.5 The Bonus")).toBeUndefined();
+		expect(parseEpisodeNumberFromTitle("Episode 10.5: The Bonus")).toBeUndefined();
+		expect(parseEpisodeNumberFromTitle("#10.5 Bonus")).toBeUndefined();
+		expect(parseEpisodeNumberFromTitle("E10.5 Bonus")).toBeUndefined();
+		// A whole number after a marker still resolves.
+		expect(parseEpisodeNumberFromTitle("Ep 10 The Whole One")).toBe(10);
+	});
+
 	it("stays linear on hostile, very long whitespace titles (ReDoS regression)", () => {
 		// Before the fix this took ~20s; bounding the prefix + a single \s* keeps
 		// it instant. Asserting completion is enough; correctness is undefined.
