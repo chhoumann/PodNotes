@@ -3,7 +3,6 @@ import { TFile } from "obsidian";
 import { get } from "svelte/store";
 import {
 	downloadedEpisodes,
-	localFiles,
 	playedEpisodes,
 	currentEpisode,
 	viewState,
@@ -43,13 +42,14 @@ export default function getContextMenuHandler(app: App): EventRef {
 								localEpisode
 							)
 						) {
+							// The Local Files playlist is mirrored from downloadedEpisodes
+							// (see localFiles.syncWithDownloaded), so this single write
+							// surfaces the file there too.
 							downloadedEpisodes.addEpisode(
 								localEpisode,
 								file.path,
 								file.stat.size
 							);
-
-							localFiles.addEpisode(localEpisode);
 						}
 
 						// Fixes where the episode won't play if it has been played.

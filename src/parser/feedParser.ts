@@ -9,45 +9,6 @@ export default class FeedParser {
 		this.feed = feed;
 	}
 
-	public async findItemByTitle(title: string, url: string): Promise<Episode> {
-		// Ensure feed metadata is loaded first
-		if (!this.feed || this.feed.url !== url) {
-			await this.getFeed(url);
-		}
-
-		const body = await this.parseFeed(url);
-		const items = body.querySelectorAll("item");
-		const target = title.trim().toLowerCase();
-
-		// Parse all items once and find by case-insensitive match
-		const episodes = Array.from(items)
-			.map((item) => this.parseItem(item))
-			.filter((ep): ep is Episode => !!ep);
-
-		const episode = episodes.find(
-			(ep) => ep.title.trim().toLowerCase() === target,
-		);
-
-		if (!episode) {
-			throw new Error("Could not find episode");
-		}
-
-		// Fill in any missing fields from feed metadata
-		if (!episode.artworkUrl && this.feed) {
-			episode.artworkUrl = this.feed.artworkUrl;
-		}
-
-		if (!episode.podcastName && this.feed) {
-			episode.podcastName = this.feed.title;
-		}
-
-		if (!episode.feedUrl && this.feed) {
-			episode.feedUrl = this.feed.url;
-		}
-
-		return episode;
-	}
-
 	public async getEpisodes(url: string): Promise<Episode[]> {
 		// Ensure feed metadata is loaded and cached
 		if (!this.feed || this.feed.url !== url) {

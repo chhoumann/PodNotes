@@ -17,6 +17,7 @@ import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
+import { QueueReorderModal } from "src/ui/QueueReorderModal";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { plugin } from "./store";
 import type { IPodNotes } from "./types/IPodNotes";
@@ -44,7 +45,7 @@ import getContextMenuHandler from "./getContextMenuHandler";
 import getUniversalPodcastLink from "./getUniversalPodcastLink";
 import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
-import type { Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api!: IAPI;
@@ -72,6 +73,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private hidePlayedEpisodesController?: StoreController<boolean>;
 	private transcriptionService?: TranscriptionService;
 	private volumeUnsubscribe?: Unsubscriber;
+	private localFilesMirrorUnsubscribe?: Unsubscriber;
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
@@ -121,6 +123,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			hidePlayedEpisodes,
 			this,
 		).on();
+
+		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
+		// downloadedEpisodes is the authoritative offline set, so mirror it into the
+		// localFiles playlist that the Podcast grid renders. Svelte's immediate-fire
+		// backfills already-downloaded episodes on load; later changes keep it current.
+		this.localFilesMirrorUnsubscribe = downloadedEpisodes.subscribe(
+			(downloaded) => localFiles.syncWithDownloaded(downloaded),
+		);
 
 		this.api = new API();
 		this.volumeUnsubscribe = volume.subscribe((value) => {
@@ -217,6 +227,19 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 				const episode = this.api.podcast;
 				downloadEpisodeWithNotice(episode, this.settings.download.path);
+			},
+		});
+
+		this.addCommand({
+			id: "reorder-queue",
+			name: "Reorder Queue",
+			icon: "list-ordered" as IconType,
+			checkCallback: (checking) => {
+				if (checking) {
+					return get(queue).episodes.length > 1;
+				}
+
+				new QueueReorderModal(this.app).open();
 			},
 		});
 
@@ -375,6 +398,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.currentEpisodeController?.off();
 		this.hidePlayedEpisodesController?.off();
 		this.volumeUnsubscribe?.();
+		this.localFilesMirrorUnsubscribe?.();
 
 		// Clean up any active blob URLs to prevent memory leaks
 		blobUrlManager.revokeAll();

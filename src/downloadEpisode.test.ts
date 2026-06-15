@@ -1,99 +1,195 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { get } from "svelte/store";
+import { requestUrl, TFile } from "obsidian";
+import {
+	detectAudioFileExtension,
+	downloadEpisode,
+	getEpisodeAudioBuffer,
+} from "./downloadEpisode";
+import { downloadedEpisodes } from "./store";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 
-// vi.mock is hoisted; expose the spy via vi.hoisted so the factory can use it.
-const { mockRequestUrl } = vi.hoisted(() => ({ mockRequestUrl: vi.fn() }));
-
 vi.mock("obsidian", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("obsidian")>();
-	return { ...actual, requestUrl: (arg: unknown) => mockRequestUrl(arg) };
+	return { ...actual, requestUrl: vi.fn() };
 });
 
-import { TFile } from "obsidian";
-import { getEpisodeAudioBuffer } from "./downloadEpisode";
-import { downloadedEpisodes } from "./store";
+const requestUrlMock = vi.mocked(requestUrl);
 
-// jsdom's Blob lacks arrayBuffer(); provide one so downloadEpisode can read bytes.
-if (
-	!(Blob.prototype as unknown as { arrayBuffer?: unknown }).arrayBuffer
-) {
-	(Blob.prototype as unknown as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer =
-		function (this: Blob) {
-			return new Promise((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = () => resolve(reader.result as ArrayBuffer);
-				reader.onerror = () => reject(reader.error);
-				reader.readAsArrayBuffer(this);
-			});
-		};
+function bytes(...values: number[]): ArrayBuffer {
+	return new Uint8Array(values).buffer;
 }
 
-// Minimal in-memory vault keyed by path; getEpisodeAudioBuffer reads the global `app`.
-const files = new Map<string, ArrayBuffer>();
+function setupVault() {
+	const present = new Set<string>();
+	const createdFolders: string[] = [];
 
-// At runtime TFile is the obsidian mock (constructor takes a path); the real
-// obsidian type declares no constructor args, so cast to a 1-arg constructor.
-const TFileCtor = TFile as unknown as new (path: string) => TFile;
+	const createBinary = vi.fn(async (path: string, _data: ArrayBuffer) => {
+		present.add(path);
+		return new TFile();
+	});
+	const createFolder = vi.fn(async (path: string) => {
+		present.add(path);
+		createdFolders.push(path);
+	});
 
-function makeTFile(path: string): TFile {
-	const file = new TFileCtor(path) as TFile & {
-		basename: string;
-		extension: string;
+	(globalThis as { app?: unknown }).app = {
+		vault: {
+			getAbstractFileByPath: (path: string) =>
+				present.has(path) ? new TFile() : null,
+			createBinary,
+			createFolder,
+		},
 	};
-	const slash = path.lastIndexOf("/");
-	const dot = path.lastIndexOf(".");
-	file.extension = dot > slash ? path.slice(dot + 1) : "";
-	file.basename = path.slice(slash + 1, dot > slash ? dot : undefined);
-	return file;
+
+	return { present, createdFolders, createBinary, createFolder };
 }
 
-(globalThis as unknown as { app: unknown }).app = {
-	vault: {
-		getAbstractFileByPath: (path: string) =>
-			files.has(path) ? makeTFile(path) : null,
-		readBinary: async (file: TFile) => files.get(file.path),
-	},
-};
-
-function seedFile(path: string, text: string): void {
-	files.set(path, new TextEncoder().encode(text).buffer);
-}
-
-function decode(buffer: ArrayBuffer): string {
-	return new TextDecoder().decode(new Uint8Array(buffer));
-}
-
-function episode(overrides: Partial<Episode>): Episode {
+function makeEpisode(overrides: Partial<Episode> = {}): Episode {
 	return {
-		title: "Title",
-		streamUrl: "https://example.com/audio.mp3",
-		url: "https://example.com/audio",
+		title: "My Title",
+		streamUrl: "https://example.com/ep.mp3",
+		url: "https://example.com/ep",
 		description: "",
 		content: "",
 		podcastName: "Pod",
-		feedUrl: "https://example.com/feed.xml",
-		episodeDate: new Date("2024-01-01"),
+		episodeDate: undefined,
+		artworkUrl: "",
 		...overrides,
-	};
+	} as unknown as Episode;
 }
 
 beforeEach(() => {
-	files.clear();
+	requestUrlMock.mockReset();
 	downloadedEpisodes.set({});
-	mockRequestUrl.mockReset();
-	mockRequestUrl.mockImplementation(async ({ url }: { url: string }) => {
-		const text = url.includes("spanish") ? "SPANISH-AUDIO" : "ENGLISH-AUDIO";
-		return {
+});
+
+afterEach(() => {
+	(globalThis as { app?: unknown }).app = undefined;
+});
+
+describe("detectAudioFileExtension", () => {
+	it("matches exact signatures (ID3 -> mp3, RIFF -> wav, m4a)", () => {
+		expect(detectAudioFileExtension(bytes(0x49, 0x44, 0x33, 0x04))).toBe("mp3");
+		expect(detectAudioFileExtension(bytes(0x52, 0x49, 0x46, 0x46))).toBe("wav");
+		expect(detectAudioFileExtension(bytes(0x4d, 0x34, 0x41, 0x20))).toBe("m4a");
+	});
+
+	it("applies the masked MPEG frame-sync signature", () => {
+		expect(detectAudioFileExtension(bytes(0xff, 0xfb, 0x90, 0x00))).toBe("mp3");
+	});
+
+	it("returns null for unknown content", () => {
+		expect(detectAudioFileExtension(bytes(0x00, 0x01, 0x02, 0x03))).toBeNull();
+	});
+
+	it("does not crash on a buffer shorter than the longest signature", () => {
+		expect(detectAudioFileExtension(bytes(0xff))).toBeNull();
+		expect(detectAudioFileExtension(new ArrayBuffer(0))).toBeNull();
+	});
+});
+
+describe("downloadEpisode (API path)", () => {
+	it("threads a single ArrayBuffer straight to createBinary (no Blob copy) and creates folders", async () => {
+		const { createBinary, createdFolders } = setupVault();
+		const buffer = bytes(0x49, 0x44, 0x33, 0x01, 0x02, 0x03);
+		requestUrlMock.mockResolvedValue({
 			status: 200,
-			arrayBuffer: new TextEncoder().encode(text).buffer,
 			headers: { "content-type": "audio/mpeg" },
-		};
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+
+		const episode = makeEpisode();
+		const path = await downloadEpisode(episode, "podcast/{{podcast}}/{{title}}");
+
+		expect(path).toBe("podcast/Pod/My Title.mp3");
+		expect(createdFolders).toEqual(["podcast", "podcast/Pod"]);
+		expect(createBinary).toHaveBeenCalledTimes(1);
+
+		const [writtenPath, writtenData] = createBinary.mock.calls[0];
+		expect(writtenPath).toBe("podcast/Pod/My Title.mp3");
+		// The exact buffer returned by requestUrl must reach createBinary — proving
+		// no Blob round-trip / extra full-file copy is made (issue #113).
+		expect(writtenData).toBe(buffer);
+
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded?.filePath).toBe("podcast/Pod/My Title.mp3");
+		expect(recorded?.size).toBe(buffer.byteLength);
+	});
+
+	it("returns the existing path without downloading when the file already exists", async () => {
+		const { present, createBinary } = setupVault();
+		present.add("My Title.mp3");
+
+		const path = await downloadEpisode(makeEpisode(), "{{title}}");
+
+		expect(path).toBe("My Title.mp3");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+		expect(createBinary).not.toHaveBeenCalled();
 	});
 });
 
 describe("getEpisodeAudioBuffer (issue #107)", () => {
-	test("fetches each episode's own audio from its stream URL — never another episode's", async () => {
+	const files = new Map<string, ArrayBuffer>();
+
+	function makeTFile(path: string): TFile {
+		const file = new TFile();
+		const dot = path.lastIndexOf(".");
+		const slash = path.lastIndexOf("/");
+		(file as { path: string }).path = path;
+		(file as { extension: string }).extension =
+			dot > slash ? path.slice(dot + 1) : "";
+		(file as { basename: string }).basename = path.slice(
+			slash + 1,
+			dot > slash ? dot : undefined,
+		);
+		return file;
+	}
+
+	function seedFile(path: string, text: string): void {
+		files.set(path, new TextEncoder().encode(text).buffer);
+	}
+
+	function decode(buffer: ArrayBuffer): string {
+		return new TextDecoder().decode(new Uint8Array(buffer));
+	}
+
+	function episode(overrides: Partial<Episode>): Episode {
+		return {
+			title: "Title",
+			streamUrl: "https://example.com/audio.mp3",
+			url: "https://example.com/audio",
+			description: "",
+			content: "",
+			podcastName: "Pod",
+			feedUrl: "https://example.com/feed.xml",
+			episodeDate: undefined,
+			...overrides,
+		} as unknown as Episode;
+	}
+
+	beforeEach(() => {
+		files.clear();
+		(globalThis as { app?: unknown }).app = {
+			vault: {
+				getAbstractFileByPath: (path: string) =>
+					files.has(path) ? makeTFile(path) : null,
+				readBinary: async (file: TFile) => files.get(file.path),
+			},
+		};
+		requestUrlMock.mockImplementation((req: unknown) => {
+			const url = typeof req === "string" ? req : (req as { url: string }).url;
+			const text = url.includes("spanish") ? "SPANISH-AUDIO" : "ENGLISH-AUDIO";
+			return Promise.resolve({
+				status: 200,
+				headers: { "content-type": "audio/mpeg" },
+				arrayBuffer: new TextEncoder().encode(text).buffer,
+			}) as unknown as ReturnType<typeof requestUrl>;
+		});
+	});
+
+	it("fetches each episode's own audio from its stream URL — never another episode's", async () => {
 		const spanish = episode({
 			title: "Hola soy Sere",
 			streamUrl: "https://example.com/spanish.mp3",
@@ -113,15 +209,15 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(decode(b.buffer)).toBe("ENGLISH-AUDIO");
 		expect(a.extension).toBe("mp3");
 		expect(b.extension).toBe("mp3");
-		expect(mockRequestUrl).toHaveBeenCalledWith(
+		expect(requestUrlMock).toHaveBeenCalledWith(
 			expect.objectContaining({ url: "https://example.com/spanish.mp3" }),
 		);
-		expect(mockRequestUrl).toHaveBeenCalledWith(
+		expect(requestUrlMock).toHaveBeenCalledWith(
 			expect.objectContaining({ url: "https://example.com/english.mp3" }),
 		);
 	});
 
-	test("reuses a registry-confirmed downloaded copy without re-fetching", async () => {
+	it("reuses a registry-confirmed downloaded copy without re-fetching", async () => {
 		const ep = episode({
 			title: "Cached Episode",
 			streamUrl: "https://example.com/english.mp3",
@@ -134,10 +230,10 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(decode(result.buffer)).toBe("CACHED-CORRECT-AUDIO");
 		expect(result.extension).toBe("mp3");
 		expect(result.basename).toBe("cached");
-		expect(mockRequestUrl).not.toHaveBeenCalled();
+		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
-	test("ignores a stale registry entry whose file no longer exists and fetches fresh", async () => {
+	it("ignores a stale registry entry whose file no longer exists and fetches fresh", async () => {
 		const ep = episode({
 			title: "Stale Episode",
 			streamUrl: "https://example.com/english.mp3",
@@ -148,10 +244,10 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		const result = await getEpisodeAudioBuffer(ep);
 
 		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
-		expect(mockRequestUrl).toHaveBeenCalledTimes(1);
+		expect(requestUrlMock).toHaveBeenCalledTimes(1);
 	});
 
-	test("ignores a wrong-episode file sitting at a colliding path and fetches the right audio", async () => {
+	it("ignores a wrong-episode file at a colliding path and fetches the right audio", async () => {
 		// Direct reproduction of issue #107: a different episode's audio already
 		// lives at the old collidable download-path location, and this episode has
 		// no registry entry. The old code returned the colliding file's bytes; the
@@ -166,15 +262,19 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 
 		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
 		expect(decode(result.buffer)).not.toBe("WRONG-EPISODE-AUDIO");
-		expect(mockRequestUrl).toHaveBeenCalledTimes(1);
+		expect(requestUrlMock).toHaveBeenCalledTimes(1);
 	});
 
-	test("throws a clear error when the stream returns non-audio content", async () => {
-		mockRequestUrl.mockImplementation(async () => ({
-			status: 200,
-			arrayBuffer: new TextEncoder().encode("<html>login required</html>").buffer,
-			headers: { "content-type": "text/html" },
-		}));
+	it("throws a clear error when the stream returns non-audio content", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "text/html" },
+					arrayBuffer: new TextEncoder().encode("<html>login required</html>")
+						.buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
 		const ep = episode({
 			title: "Private Episode",
 			streamUrl: "https://example.com/private-feed-token",
@@ -183,7 +283,7 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
 	});
 
-	test("reads local-file episodes from disk by their resolved path", async () => {
+	it("reads local-file episodes from disk by their resolved path", async () => {
 		const local = episode({
 			title: "Local Recording",
 			podcastName: "local file",
@@ -200,6 +300,6 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(decode(result.buffer)).toBe("LOCAL-AUDIO");
 		expect(result.extension).toBe("m4a");
 		expect(result.basename).toBe("recording");
-		expect(mockRequestUrl).not.toHaveBeenCalled();
+		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 });

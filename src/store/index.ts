@@ -8,6 +8,7 @@ import { ViewState } from "src/types/ViewState";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import { TFile } from "obsidian";
 import type { LocalEpisode } from "src/types/LocalEpisode";
+import { LOCAL_FILES_SETTINGS } from "src/constants";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import {
 	getPlayedEpisode,
@@ -423,6 +424,51 @@ export const downloadedEpisodes = (() => {
 	};
 })();
 
+/**
+ * Returns a new array with the episode at `from` moved to position `to`.
+ *
+ * Any out-of-range, negative, or equal index pair is treated as a no-op and the
+ * original array reference is returned unchanged, so callers can cheaply detect
+ * "nothing moved" and skip a store write. Guarding `from < 0` is essential: a
+ * `findIndex` miss yields -1, and `splice(-1, 1)` would destructively remove the
+ * last element.
+ */
+export function reorderEpisodes(
+	episodes: Episode[],
+	from: number,
+	to: number,
+): Episode[] {
+	const length = episodes.length;
+	if (from < 0 || from >= length || to < 0 || to >= length || from === to) {
+		return episodes;
+	}
+
+	const next = [...episodes];
+	const [moved] = next.splice(from, 1);
+	next.splice(to, 0, moved);
+	return next;
+}
+
+/**
+ * Returns the episodes with later duplicate titles removed, preserving order and
+ * the first occurrence. The queue is title-identified everywhere, so this keeps
+ * it title-unique regardless of how it was populated — including queues
+ * persisted or synced before dedup-on-add existed.
+ */
+export function dedupeEpisodesByTitle(episodes: Episode[] = []): Episode[] {
+	const seen = new Set<string>();
+	const result: Episode[] = [];
+
+	for (const episode of episodes) {
+		if (seen.has(episode.title)) continue;
+
+		seen.add(episode.title);
+		result.push(episode);
+	}
+
+	return result;
+}
+
 export const queue = (() => {
 	const store = writable<Playlist>({
 		icon: "list-ordered",
@@ -431,14 +477,41 @@ export const queue = (() => {
 		shouldEpisodeRemoveAfterPlay: true,
 		shouldRepeat: false,
 	});
-	const { subscribe, update, set } = store;
+	const { subscribe, update, set: setStore } = store;
+
+	// The queue identifies episodes by title everywhere (remove, played-cleanup,
+	// context menu). Keeping it title-unique on add makes those lookups — and the
+	// reorder index lookups below — unambiguous.
+	const isAlreadyQueued = (episodes: Episode[], episode: Episode) =>
+		episodes.some((e) => e.title === episode.title);
+
+	function move(from: number, to: number) {
+		const { episodes } = get(store);
+		const reordered = reorderEpisodes(episodes, from, to);
+
+		// No-op move: skip the store write so we don't churn saveSettings.
+		if (reordered === episodes) return;
+
+		update((queue) => {
+			queue.episodes = reordered;
+			return queue;
+		});
+	}
 
 	return {
 		subscribe,
 		update,
-		set,
+		// Enforce the title-unique invariant on every set (load, import, sync),
+		// not just on incremental adds.
+		set: (playlist: Playlist) =>
+			setStore({
+				...playlist,
+				episodes: dedupeEpisodesByTitle(playlist.episodes),
+			}),
 		add: (episode: Episode) => {
 			update((queue) => {
+				if (isAlreadyQueued(queue.episodes, episode)) return queue;
+
 				queue.episodes.push(episode);
 				return queue;
 			});
@@ -462,6 +535,12 @@ export const queue = (() => {
 				return queue;
 			});
 		},
+		move,
+		moveUp: (index: number) => move(index, index - 1),
+		moveDown: (index: number) => move(index, index + 1),
+		moveToTop: (index: number) => move(index, 0),
+		moveToBottom: (index: number) =>
+			move(index, get(store).episodes.length - 1),
 	};
 })();
 
@@ -472,6 +551,17 @@ export const favorites = writable<Playlist>({
 	shouldEpisodeRemoveAfterPlay: false,
 	shouldRepeat: false,
 });
+
+function sameEpisodeKeySet(a: Episode[], b: Episode[]): boolean {
+	if (a.length !== b.length) return false;
+
+	const keysInA = new Set(a.map(getEpisodeKey));
+	for (const episode of b) {
+		if (!keysInA.has(getEpisodeKey(episode))) return false;
+	}
+
+	return true;
+}
 
 export const localFiles = (() => {
 	const store = writable<Playlist>({
@@ -488,10 +578,58 @@ export const localFiles = (() => {
 		subscribe,
 		update,
 		set,
-		getLocalEpisode: (title: string): LocalEpisode | undefined => {
-			const ep = get(store).episodes.find((ep) => ep.title === title);
+		/**
+		 * Mirrors downloadedEpisodes into the Local Files playlist (issue #176).
+		 *
+		 * downloadedEpisodes is the authoritative set of offline-available episodes:
+		 * downloads (createEpisodeFile) and manual local files (getContextMenuHandler)
+		 * both write there. Entries are copied verbatim so filePath/size and the real
+		 * podcastName survive — playback resolves the local file from downloadedEpisodes
+		 * keyed by podcastName::title, so coercing podcastName would break it.
+		 *
+		 * This is a pure projection: it intentionally drops any pre-existing localFiles
+		 * entry that is absent from downloadedEpisodes (stale/removed files). Playable
+		 * files are always present in downloadedEpisodes via the download flow and the
+		 * dual-write in getContextMenuHandler, so nothing reachable is lost — and a
+		 * removed download now correctly disappears from Local Files too.
+		 */
+		syncWithDownloaded: (downloaded: {
+			[podcastName: string]: DownloadedEpisode[];
+		}): void => {
+			const seen = new Set<string>();
+			const episodes: Episode[] = [];
 
-			return ep as LocalEpisode;
+			for (const episode of Object.values(downloaded).flat()) {
+				const key = getEpisodeKey(episode);
+				if (!key || seen.has(key)) continue;
+
+				seen.add(key);
+				episodes.push(episode);
+			}
+
+			// Skip the store write entirely when membership is unchanged. Returning the
+			// same object from update() would still notify subscribers (Svelte treats
+			// every object value as changed), re-running LocalFilesController.onChange and
+			// saveSettings on every unrelated downloadedEpisodes mutation and the
+			// load-time immediate-fire. Comparing before touching the store avoids that.
+			if (sameEpisodeKeySet(get(store).episodes, episodes)) {
+				return;
+			}
+
+			update((playlist) => ({ ...playlist, ...LOCAL_FILES_SETTINGS, episodes }));
+		},
+		getLocalEpisode: (title: string): LocalEpisode | undefined => {
+			const { episodes } = get(store);
+
+			// Prefer a genuine manual local file so a same-titled downloaded episode
+			// (now mirrored into this playlist) can't shadow it in deep-links.
+			const ep =
+				episodes.find(
+					(episode) =>
+						episode.title === title && episode.podcastName === "local file",
+				) ?? episodes.find((episode) => episode.title === title);
+
+			return ep as LocalEpisode | undefined;
 		},
 		updateStreamUrl: (title: string, newUrl: string): void => {
 			store.update((playlist) => {
@@ -502,21 +640,9 @@ export const localFiles = (() => {
 				return playlist;
 			});
 		},
-		addEpisode: (episode: LocalEpisode): void => {
-			store.update((playlist) => {
-				const idx = playlist.episodes.findIndex(
-					(ep) => ep.title === episode.title,
-				);
-
-				if (idx !== -1) {
-					playlist.episodes[idx] = episode;
-				} else {
-					playlist.episodes.push(episode);
-				}
-
-				return playlist;
-			});
-		},
+		// NOTE: the Local Files playlist is now a projection of downloadedEpisodes
+		// (see syncWithDownloaded). Add files by writing to downloadedEpisodes; a direct
+		// imperative add here would be overwritten by the next mirror pass.
 	};
 })();
 
@@ -539,6 +665,12 @@ export const viewState = (() => {
 
 function addEpisodeToQueue(episode: Episode) {
 	queue.update((playlist) => {
+		// Keep the queue title-unique: a previously-played episode that is already
+		// queued stays in place rather than being re-prepended.
+		if (playlist.episodes.some((e) => e.title === episode.title)) {
+			return playlist;
+		}
+
 		const newEpisodes = [episode, ...playlist.episodes];
 		playlist.episodes = newEpisodes;
 

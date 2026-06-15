@@ -243,8 +243,24 @@ export function TranscriptTemplateEngine(
 }
 
 export function replaceIllegalFileNameCharactersInString(string: string) {
-	return string
-		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.?]/g, "") // Replace illegal file name characters with empty string
-		.replace(/\n/, " ") // replace newlines with spaces
-		.replace("  ", " "); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
+	return (
+		string
+			// Strip characters that are illegal in file names on major platforms,
+			// plus a few the plugin removes for clean paths/wikilinks. Dots are
+			// intentionally preserved so titles like "Episode 1.5" are not mangled
+			// into "Episode 15".
+			.replace(/[\\,#%&{}/*<>$'":@\u2023|?]/g, "")
+			// Replace any control characters (newlines, tabs, carriage returns)
+			// with spaces so they can never end up in a file name.
+			// eslint-disable-next-line no-control-regex
+			.replace(/[\u0000-\u001f]/g, " ")
+			// Collapse every run of whitespace into a single space.
+			.replace(/\s+/g, " ")
+			.trim()
+			// Avoid leading/trailing dots, which create hidden files or "."/".."
+			// segments and are rejected on Windows/Android.
+			.replace(/^\.+/, "")
+			.replace(/\.+$/, "")
+			.trim()
+	);
 }

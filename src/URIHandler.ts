@@ -14,6 +14,36 @@ import type { Episode } from "./types/Episode";
 import { getEpisodeKey } from "./utility/episodeKey";
 import { ViewState } from "./types/ViewState";
 
+/**
+ * Obsidian decodes protocol query values with decodeURIComponent only, which does NOT turn '+'
+ * into a space. Current PodNotes links percent-encode spaces as '%20' (see encodePodnotesURI), so
+ * the decoded value is already correct and a literal '+' is a real '+'. Links written by older
+ * versions encoded spaces as '+', so for backwards compatibility we also try a variant with '+'
+ * collapsed to spaces.
+ *
+ * Candidates are ordered most-correct-first; callers MUST resolve them in order and stop at the
+ * first hit so a current-format title/path containing a literal '+' is never mis-collapsed.
+ */
+function candidateValues(raw: string): string[] {
+	const legacy = raw.replace(/\+/g, " ");
+	return raw === legacy ? [raw] : [raw, legacy];
+}
+
+function findEpisodeByCandidates(
+	episodes: Episode[],
+	nameCandidates: string[],
+): Episode | undefined {
+	for (const name of nameCandidates) {
+		const target = name.trim().toLowerCase();
+		const episode = episodes.find(
+			(ep) => ep.title.trim().toLowerCase() === target,
+		);
+		if (episode) return episode;
+	}
+
+	return undefined;
+}
+
 export default async function podNotesURIHandler(
 	{ url, episodeName, time }: ObsidianProtocolData,
 	api: IAPI
@@ -31,9 +61,15 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
-	const decodedName = episodeName.replace(/\+/g, " ");
+	const nameCandidates = candidateValues(episodeName);
 	const currentEp = get(currentEpisode);
-	const episodeIsPlaying = currentEp?.title === decodedName;
+	// Membership (not ordered selection) is correct here: there is only one loaded episode, and
+	// keeping the legacy candidate lets a legacy '+'-as-space link to the loaded episode resume
+	// without a feed round-trip (and without currentEpisode.set re-enqueueing it). The only cost is
+	// a rare false-positive — a current-format link to a "X+Y" episode while a distinct "X Y" twin
+	// is loaded resumes the loaded twin instead of switching — which we accept over regressing the
+	// far more common same-episode legacy-link case.
+	const episodeIsPlaying = !!currentEp && nameCandidates.includes(currentEp.title);
 	const playerIsVisible = get(viewState) === ViewState.Player;
 
 	if (episodeIsPlaying) {
@@ -50,18 +86,34 @@ export default async function podNotesURIHandler(
 
 		return;
 	}
-	
-	const decodedUrl = url.replace(/\+/g, " ");
-	const localFile = app.vault.getAbstractFileByPath(decodedUrl);
+
+	// The path probe only decides local-vs-feed routing; the episode itself is resolved by name.
+	const localFile = candidateValues(url)
+		.map((path) => app.vault.getAbstractFileByPath(path))
+		.find((file) => file !== null);
 
 	let episode: Episode | undefined;
 
 	if (localFile) {
-		episode = localFiles.getLocalEpisode(decodedName);
+		episode = nameCandidates
+			.map((name) => localFiles.getLocalEpisode(name))
+			.find((ep) => ep !== undefined);
 	} else {
-		const feedparser = new FeedParser();
-
-		episode = await feedparser.findItemByTitle(decodedName, url);
+		try {
+			// Fetch with the raw url (current-format links are correct as-is); only the title gets
+			// the legacy-candidate treatment. A '+' in a legacy feed URL is pre-existing and out of
+			// scope. getEpisodes returns fully-populated episodes, so we match in memory rather than
+			// re-fetching once per candidate.
+			const feedparser = new FeedParser();
+			const episodes = await feedparser.getEpisodes(url);
+			episode = findEpisodeByCandidates(episodes, nameCandidates);
+		} catch (error) {
+			// A fetch/parse failure is distinct from a genuine title miss; surface it instead of
+			// rejecting silently (the previous behaviour threw an unhandled rejection).
+			console.error(error);
+			new Notice("Could not load the podcast feed");
+			return;
+		}
 	}
 
 	if (!episode) {
