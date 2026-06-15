@@ -110,20 +110,19 @@ export async function ensureObsidianInstance(options) {
 	options.userDataPath = profileResult.userDataPath;
 
 	const reused = await isInstanceReady(options);
-	if (!reused) {
+	if (reused) {
+		// A reused instance still holds the bundle it loaded earlier — possibly a
+		// broken pre-rebuild one. Reload BEFORE verifying so the rebuilt main.js is
+		// loaded first; otherwise a failed old bundle would make the readiness
+		// check below time out before the reload ever runs.
+		await reloadPodNotes(options);
+	} else {
+		// A freshly launched instance loads the current bundle on its own.
 		await launchObsidianInstance(options);
 		await waitForInstanceReady(options);
 	}
 
 	await trustVaultAndVerifyPodNotes(options);
-
-	// A reused instance still holds the bundle it loaded earlier, so a rebuilt
-	// main.js would not take effect; reload it and re-verify before the caller's
-	// command runs. A freshly launched instance already loaded the current bundle.
-	if (reused) {
-		await reloadPodNotes(options);
-		await trustVaultAndVerifyPodNotes(options);
-	}
 
 	return {
 		...provisionResult,
