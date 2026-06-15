@@ -648,6 +648,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		volume.set(Math.min(1, Math.max(0, importedVolume)));
 
 		await this.plugin.saveSettings();
+		// Re-emit the plugin store so an open player/grid recomputes Queue tile/list
+		// visibility (and any other $plugin-derived UI) after an import, mirroring the
+		// autoQueue toggle. Today the queue.set above already triggers that recompute;
+		// this keeps the import path correct independent of that incidental emission
+		// (issue #108).
+		plugin.set(this.plugin);
 		this.display();
 		new Notice("Imported PodNotes settings.");
 	}
