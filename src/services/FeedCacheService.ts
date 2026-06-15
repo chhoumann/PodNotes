@@ -27,6 +27,19 @@ const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other loc
 
 let cache: FeedCache | null = null;
 
+// Delete every superseded cache schema key. Per-key try/catch so one failure
+// can't block the others. Runs on first load and on explicit clear so the
+// legacy blob is removed regardless of which path the user hits first.
+function removeLegacyCaches(storage: Storage): void {
+	for (const legacyKey of LEGACY_STORAGE_KEYS) {
+		try {
+			storage.removeItem(legacyKey);
+		} catch (error) {
+			console.error("Failed to remove legacy feed cache key:", error);
+		}
+	}
+}
+
 function getStorage(): Storage | null {
 	try {
 		return typeof localStorage === "undefined" ? null : localStorage;
@@ -47,15 +60,9 @@ function loadCache(): FeedCache {
 		return cache;
 	}
 
-	// One-time cleanup of superseded cache schemas so they don't linger in
-	// localStorage (a stale ~4MB v1 blob could otherwise make v2 writes fail).
-	for (const legacyKey of LEGACY_STORAGE_KEYS) {
-		try {
-			storage.removeItem(legacyKey);
-		} catch (error) {
-			console.error("Failed to remove legacy feed cache key:", error);
-		}
-	}
+	// Cleanup of superseded cache schemas so they don't linger in localStorage
+	// (a stale ~4MB v1 blob could otherwise make v2 writes fail).
+	removeLegacyCaches(storage);
 
 	try {
 		const raw = storage.getItem(STORAGE_KEY);
@@ -199,9 +206,13 @@ export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void 
 export function clearFeedCache(): void {
 	cache = {};
 	const storage = getStorage();
+	if (!storage) return;
 	try {
-		storage?.removeItem(STORAGE_KEY);
+		storage.removeItem(STORAGE_KEY);
 	} catch (error) {
 		console.error("Failed to clear feed cache:", error);
 	}
+	// Also drop legacy keys here: a clear issued before any loadCache() would
+	// otherwise leave them (the in-memory memo then short-circuits loadCache).
+	removeLegacyCaches(storage);
 }

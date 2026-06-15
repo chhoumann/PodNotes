@@ -33,9 +33,9 @@ This template will be used to create the note text. You can use the following sy
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
 - `{{currentDate}}`: The current date — i.e. when the note is created — as opposed to `{{date}}`, which is the episode's publish date. Useful for a "captured on" metadata field.
 	- Supports the same format argument, e.g. `{{currentDate:YYYY-MM-DD}}`.
-- `{{episodeNumber}}`: The episode number. PodNotes uses the feed's `<itunes:episode>` tag when present. If it is missing or not a number, PodNotes makes a **best-effort** guess from the start of the episode title — e.g. `12: ...`, `#12 ...`, `Ep 12 ...`, `Episode 12 ...`, `E12 ...`. This guess can be wrong for titles that simply begin with an unrelated number (e.g. `2024: A Year in Review`), so for feeds without `<itunes:episode>` treat it as approximate. The tag is empty when no number can be determined.
+- `{{episodeNumber}}`: The episode number. PodNotes uses the feed's `<itunes:episode>` tag when present. If it is missing or not a number, PodNotes makes a **best-effort** guess from the start of the episode title — a leading marker (`#12 ...`, `Ep 12 ...`, `Ep. 12 ...`, `Ep #12 ...`, `Episode 12 ...`, `E12 ...`) or a leading number followed by a separator (`12: ...`, `12 - ...`, `12. ...`, `12) ...`). This guess can be wrong for titles that simply begin with an unrelated number (e.g. `2024: A Year in Review`), so for feeds without `<itunes:episode>` treat it as approximate. The tag is empty when no number can be determined.
 	- You can zero-pad with an all-zeros width, e.g. `{{episodeNumber:000}}` → `042` (handy for sortable file names). Any other argument is ignored and the bare number is returned.
-- `{{duration}}`: The episode's duration, from the feed's `<itunes:duration>` tag. Empty when the feed doesn't provide one. Not available in file-path/download-path templates (its clock format contains colons, which are illegal in file names). Note: an episode that was already the *current* episode before you upgraded PodNotes may show an empty duration until you re-open it from its feed (older saved episodes predate this field).
+- `{{duration}}`: The episode's duration, from the feed's `<itunes:duration>` tag. Empty when the feed doesn't provide one. Not available in file-path/download-path templates — even though `{{duration:seconds}}`/`{{duration:minutes}}` would be file-safe, the tag is excluded from path templates entirely so the default colon-containing clock output can't accidentally end up in a file name. Note: an episode that was already the *current* episode before you upgraded PodNotes may show an empty duration until you re-open it from its feed (older saved episodes predate this field).
 	- With no argument it renders a human clock: `4:05` (under an hour) or `1:02:03` (an hour or more).
 	- `{{duration:minutes}}` → total whole minutes (e.g. `62`); `{{duration:seconds}}` → total seconds (e.g. `3723`).
 	- Any other argument is treated as a clock format using the tokens `H`/`HH`, `h`/`hh`, `m`/`mm`, `s`/`ss`, `A`/`a` — e.g. `{{duration:HH:mm:ss}}` → `01:02:03`. (Unlike `{{date}}`, `[literal]` bracket escaping is not supported here.)
@@ -79,7 +79,7 @@ In a feed note, `{{url}}` and `{{artwork}}` describe the **feed** (the note's su
 - `{{artwork}}` / `{{feedartwork}}`: The URL of the podcast artwork.
 - `{{author}}`: The podcast author (`<itunes:author>`), if present.
 - `{{description}}`: The podcast's description. Supports the `{{description:> }}` prepend syntax, like episode notes.
-- `{{date}}`: The current date (when the note is created). Supports `{{date:format}}`.
+- `{{date}}`: The current date (when the note is created). Supports `{{date:format}}`. (In feed notes, `{{date}}` already returns the current date, so `{{currentDate}}` is not registered here — use `{{date}}`.)
 
 The file path template supports `{{title}}`/`{{podcast}}` (with the optional `{{podcast:_}}` whitespace-replacement format) and `{{date}}`.
 

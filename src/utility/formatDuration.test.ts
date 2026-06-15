@@ -14,6 +14,10 @@ describe("formatDuration", () => {
 		expect(formatDuration(3600)).toBe("1:00:00");
 	});
 
+	it("omits hours right up to the one-hour boundary", () => {
+		expect(formatDuration(3599)).toBe("59:59");
+	});
+
 	it("supports the minutes keyword (total whole minutes, floored)", () => {
 		expect(formatDuration(3723, "minutes")).toBe("62");
 		expect(formatDuration(59, "minutes")).toBe("0");

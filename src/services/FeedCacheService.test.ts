@@ -84,4 +84,12 @@ describe("FeedCacheService", () => {
 
 		expect(localStorage.getItem("podnotes:feed-cache:v1")).toBeNull();
 	});
+
+	test("clearFeedCache also removes superseded legacy keys", () => {
+		// Covers a clear issued before any cache load, where loadCache's memo would
+		// otherwise short-circuit and leave the v1 blob behind.
+		localStorage.setItem("podnotes:feed-cache:v1", "{}");
+		clearFeedCache();
+		expect(localStorage.getItem("podnotes:feed-cache:v1")).toBeNull();
+	});
 });

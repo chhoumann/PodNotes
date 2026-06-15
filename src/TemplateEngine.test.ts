@@ -278,6 +278,11 @@ describe("{{episodeNumber}} tag (#34)", () => {
 		expect(NoteTemplateEngine("{{episodeNumber:000}}", numbered)).toBe("042");
 	});
 
+	it("renders a stored episode number of 0 (not treated as absent)", () => {
+		const ep0: Episode = { ...demoEpisode, episodeNumber: 0 };
+		expect(NoteTemplateEngine("{{episodeNumber}}", ep0)).toBe("0");
+	});
+
 	it("falls back to the title when no number is stored (e.g. persisted episodes)", () => {
 		const titleOnly: Episode = { ...demoEpisode, title: "#7 Lucky Seven" };
 		expect(NoteTemplateEngine("{{episodeNumber}}", titleOnly)).toBe("7");
@@ -330,8 +335,11 @@ describe("{{duration}} tag (#88)", () => {
 		expect(NoteTemplateEngine("{{duration}}", demoEpisode)).toBe("");
 	});
 
-	it("is not registered in download-path templates (left unreplaced)", () => {
+	it("is not registered in file-path/download-path templates (left unreplaced)", () => {
 		// Intentionally absent there — the clock format's colons are path-illegal.
+		expect(FilePathTemplateEngine("{{duration}}", withDuration)).toBe(
+			"{{duration}}",
+		);
 		expect(DownloadPathTemplateEngine("{{duration}}", withDuration)).toBe(
 			"{{duration}}",
 		);
