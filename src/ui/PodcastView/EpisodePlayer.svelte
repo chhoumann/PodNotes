@@ -164,6 +164,50 @@
 		isPaused.set(false);
 	}
 
+	// Persist playback position during playback (issue #33).
+	//
+	// Previously the position was written only on teardown — the player's
+	// onDestroy, an episode switch (currentEpisode.set), or the episode
+	// finishing. On mobile the OS kills the backgrounded process without firing
+	// onDestroy, so every second listened since the last teardown was lost and
+	// the episode restarted from 0 on reopen.
+	//
+	// Persist periodically while audio plays (throttled) and immediately when it
+	// pauses, so an abrupt kill loses at most SAVE_POSITION_THROTTLE_MS of
+	// progress. saveSettings already coalesces rapid writes, so this cadence
+	// stays cheap.
+	const SAVE_POSITION_THROTTLE_MS = 5000;
+	let lastPositionSaveMs = Number.NEGATIVE_INFINITY;
+
+	function persistPlaybackPosition() {
+		// Never persist before metadata has loaded and the saved position has been
+		// restored (onMetadataLoaded) — writing the pre-restore 0 would clobber the
+		// stored position we are about to resume from.
+		if (isLoading || !$currentEpisode) return;
+
+		playedEpisodes.setEpisodeTime(
+			$currentEpisode,
+			$currentTime,
+			$duration,
+			$currentTime === $duration,
+		);
+	}
+
+	function onTimeUpdate() {
+		const now = Date.now();
+		if (now - lastPositionSaveMs < SAVE_POSITION_THROTTLE_MS) return;
+
+		lastPositionSaveMs = now;
+		persistPlaybackPosition();
+	}
+
+	function onPause() {
+		// An explicit stop is the moment the user is most likely to leave the app,
+		// so capture the exact position immediately rather than waiting for the
+		// next throttled tick.
+		persistPlaybackPosition();
+	}
+
 	let srcPromise: Promise<string> = getSrc($currentEpisode);
 
 	onMount(() => {
@@ -174,6 +218,15 @@
 		});
 
 		const unsubCurrentEpisode = currentEpisode.subscribe((episode) => {
+			// Re-arm the load guard and throttle for the incoming episode. isLoading
+			// is cleared once on the first loadedmetadata and this component instance
+			// is reused across in-player switches (no {#key} around <EpisodePlayer/>),
+			// so without this it would stay false — letting a pause/timeupdate during
+			// the src swap persist the new episode under its key with the old/zero
+			// time and clobber its saved resume position (issue #33).
+			isLoading = true;
+			lastPositionSaveMs = Number.NEGATIVE_INFINITY;
+
 			srcPromise = getSrc($currentEpisode);
 
 			// Fetch chapters when episode changes
@@ -193,15 +246,28 @@
 			playerVolume = clampVolume(value);
 		});
 
+		// Backgrounding the app (mobile home button / app switch) or hiding the
+		// window is the last reliable moment before the OS may suspend or kill the
+		// process. It fires no pause event when audio keeps playing, and the next
+		// throttled tick may never arrive — so persist immediately on hide to make
+		// progress durable in exactly the scenario issue #33 reports.
+		const onVisibilityChange = () => {
+			if (document.visibilityState === "hidden") {
+				persistPlaybackPosition();
+			}
+		};
+		document.addEventListener("visibilitychange", onVisibilityChange);
+
 		return () => {
 			unsubDownloadedSource();
 			unsubCurrentEpisode();
 			unsubVolume();
+			document.removeEventListener("visibilitychange", onVisibilityChange);
 		};
 	});
 
 	onDestroy(() => {
-		playedEpisodes.setEpisodeTime($currentEpisode, $currentTime, $duration, ($currentTime === $duration));
+		persistPlaybackPosition();
 		isPaused.set(true);
 	});
 
@@ -287,6 +353,8 @@
 			bind:volume={playerVolume}
 			on:ended={onEpisodeEnded}
 			on:loadedmetadata={onMetadataLoaded}
+			on:timeupdate={onTimeUpdate}
+			on:pause={onPause}
 			on:play|preventDefault
 			autoplay={true}
 		></audio>
