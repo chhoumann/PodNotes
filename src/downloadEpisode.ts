@@ -268,6 +268,14 @@ function inferFileExtensionFromDownload(
 	return getExtensionFromContentType(contentType);
 }
 
+/**
+ * UNUSED IN PRODUCTION — kept only for the #178 tests. Do NOT use this for
+ * transcription: it derives the on-disk path from the download-path template and
+ * reuses any file already there without confirming episode identity, which is
+ * the exact collision behind issue #107. Use {@link getEpisodeAudioBuffer} (for
+ * transcription) or {@link downloadEpisodeWithNotice} (for the Download command)
+ * instead. Candidate for removal in a follow-up.
+ */
 export async function downloadEpisode(
 	episode: Episode,
 	downloadPathTemplate: string,
@@ -373,10 +381,15 @@ export async function getEpisodeAudioBuffer(
 	// Reuse a previously downloaded file only when the registry entry is the SAME
 	// episode. The registry is keyed by podcastName+title, which two distinct
 	// episodes can share (re-releases, placeholder titles), so also require the
-	// stream URL to match before trusting the cached bytes. If it differs (or the
-	// URL rotated), fall through to a fresh fetch — correct, just not cached.
+	// stream source to match before trusting the cached bytes. Comparison is by
+	// origin+path so a rotated signed-CDN query token (?token=...) still hits the
+	// cache; a genuinely different episode has a different path and falls through
+	// to a fresh fetch — correct, just not cached.
 	const registered = downloadedEpisodes.getEpisode(episode);
-	if (registered?.filePath && registered.streamUrl === episode.streamUrl) {
+	if (
+		registered?.filePath &&
+		isSameAudioSource(registered.streamUrl, episode.streamUrl)
+	) {
 		const existingFile = app.vault.getAbstractFileByPath(registered.filePath);
 		if (existingFile instanceof TFile) {
 			return readVaultAudio(registered.filePath);
@@ -409,6 +422,23 @@ export async function getEpisodeAudioBuffer(
 		throw new Error(
 			`Failed to fetch ${episode.title}: ${getErrorMessage(error)}`,
 		);
+	}
+}
+
+/**
+ * Whether two stream URLs point at the same audio file. Compares origin+path so
+ * rotating query strings (signed-CDN tokens, cache-busters) don't count as a
+ * different source. Falls back to exact equality for non-absolute/odd URLs.
+ */
+function isSameAudioSource(a: string, b: string): boolean {
+	if (a === b) return true;
+	if (!a || !b) return false;
+	try {
+		const ua = new URL(a);
+		const ub = new URL(b);
+		return ua.origin === ub.origin && ua.pathname === ub.pathname;
+	} catch {
+		return false;
 	}
 }
 

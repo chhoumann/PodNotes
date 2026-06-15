@@ -233,6 +233,26 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
+	it("reuses the cached file when only the signed-CDN query token changed", async () => {
+		// Same audio file, rotated token: origin+path match, so the cache should
+		// still be used rather than re-downloading the (large) episode.
+		const downloaded = episode({
+			title: "Token Episode",
+			streamUrl: "https://cdn.example.com/ep.mp3?token=OLD&exp=1",
+		});
+		seedFile("Podcasts/token.mp3", "CACHED-CORRECT-AUDIO");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/token.mp3", 20);
+
+		const current = episode({
+			title: "Token Episode",
+			streamUrl: "https://cdn.example.com/ep.mp3?token=NEW&exp=2",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("CACHED-CORRECT-AUDIO");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
 	it("does not reuse a same-title sibling's download; fetches this episode's own audio", async () => {
 		// Same podcast + same title, different episode (different stream URL). The
 		// registry is keyed by podcastName+title, so getEpisode() returns the
