@@ -11,13 +11,26 @@ import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
 import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
 
+// Audio/video extensions PodNotes can play. The previous inline regex
+// (/mp3|mp4|.../) had a trailing alternative that matched the empty string, so
+// "Play with PodNotes" surfaced on every file regardless of type.
+const PLAYABLE_EXTENSIONS = new Set([
+	"mp3",
+	"mp4",
+	"wma",
+	"aac",
+	"wav",
+	"webm",
+	"flac",
+	"m4a",
+]);
+
 export default function getContextMenuHandler(app: App): EventRef {
 	return app.workspace.on(
 		"file-menu",
 		(menu: Menu, file: TAbstractFile) => {
 			if (!(file instanceof TFile)) return;
-			if (!file.extension.match(/mp3|mp4|wma|aac|wav|webm|aac|flac|m4a|/))
-				return;
+			if (!PLAYABLE_EXTENSIONS.has(file.extension.toLowerCase())) return;
 
 			menu.addItem((item) =>
 				item
