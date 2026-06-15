@@ -179,19 +179,37 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 		expect(playlist.icon).toBe(LOCAL_FILES_SETTINGS.icon);
 	});
 
-	test("is a no-op when membership is unchanged", () => {
-		const map = {
+	test("is a no-op when membership is unchanged (no store notification)", () => {
+		localFiles.syncWithDownloaded({
 			"Podcast A": [downloadedEpisode("Podcast A", "Ep 1")],
-		};
-		localFiles.syncWithDownloaded(map);
+		});
 		const before = get(localFiles);
+
+		// Svelte notifies subscribers for every object value (safe_not_equal treats
+		// objects as always-changed), so a no-op must not touch the store at all --
+		// otherwise LocalFilesController.onChange + saveSettings would re-run.
+		let notifications = 0;
+		const unsubscribe = localFiles.subscribe(() => {
+			notifications += 1;
+		});
+		expect(notifications).toBe(1); // immediate fire on subscribe
 
 		localFiles.syncWithDownloaded({
 			"Podcast A": [downloadedEpisode("Podcast A", "Ep 1")],
 		});
+		expect(notifications).toBe(1); // unchanged membership -> no extra notification
+		expect(get(localFiles)).toBe(before); // store value object reused
 
-		// Same key-set -> the store value object is reused (no churn / no extra save).
-		expect(get(localFiles)).toBe(before);
+		// A real membership change does notify.
+		localFiles.syncWithDownloaded({
+			"Podcast A": [
+				downloadedEpisode("Podcast A", "Ep 1"),
+				downloadedEpisode("Podcast A", "Ep 2"),
+			],
+		});
+		expect(notifications).toBe(2);
+
+		unsubscribe();
 	});
 
 	test("getLocalEpisode prefers a manual local file over a same-titled download", () => {

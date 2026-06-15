@@ -518,27 +518,27 @@ export const localFiles = (() => {
 		syncWithDownloaded: (downloaded: {
 			[podcastName: string]: DownloadedEpisode[];
 		}): void => {
-			update((playlist) => {
-				const seen = new Set<string>();
-				const episodes: Episode[] = [];
+			const seen = new Set<string>();
+			const episodes: Episode[] = [];
 
-				for (const episode of Object.values(downloaded).flat()) {
-					const key = getEpisodeKey(episode);
-					if (!key || seen.has(key)) continue;
+			for (const episode of Object.values(downloaded).flat()) {
+				const key = getEpisodeKey(episode);
+				if (!key || seen.has(key)) continue;
 
-					seen.add(key);
-					episodes.push(episode);
-				}
+				seen.add(key);
+				episodes.push(episode);
+			}
 
-				// Skip the store write (and the resulting saveSettings) when the set of
-				// episodes is unchanged, so unrelated downloadedEpisodes mutations and the
-				// load-time immediate-fire don't churn persistence.
-				if (sameEpisodeKeySet(playlist.episodes, episodes)) {
-					return playlist;
-				}
+			// Skip the store write entirely when membership is unchanged. Returning the
+			// same object from update() would still notify subscribers (Svelte treats
+			// every object value as changed), re-running LocalFilesController.onChange and
+			// saveSettings on every unrelated downloadedEpisodes mutation and the
+			// load-time immediate-fire. Comparing before touching the store avoids that.
+			if (sameEpisodeKeySet(get(store).episodes, episodes)) {
+				return;
+			}
 
-				return { ...playlist, ...LOCAL_FILES_SETTINGS, episodes };
-			});
+			update((playlist) => ({ ...playlist, ...LOCAL_FILES_SETTINGS, episodes }));
 		},
 		getLocalEpisode: (title: string): LocalEpisode | undefined => {
 			const { episodes } = get(store);
