@@ -18,7 +18,7 @@ To create a transcript:
 
 1. Start playing the podcast episode you want to transcribe.
 2. Use the "Transcribe current episode" command in Obsidian.
-3. PodNotes will download the episode (if it hasn't been downloaded already), split it into chunks, and send these chunks to OpenAI for transcription.
+3. PodNotes will fetch the audio for the episode you are playing (reusing an already-downloaded copy when one exists), split it into chunks, and send these chunks to OpenAI for transcription. The transcription always uses the currently playing episode's own audio, regardless of your download path settings.
 4. Once the transcription is complete, a new file will be created at the specified location with the transcribed content.
 
 ## Transcript Template

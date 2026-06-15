@@ -242,7 +242,7 @@ export function TranscriptTemplateEngine(
 	return replacer(template);
 }
 
-function replaceIllegalFileNameCharactersInString(string: string) {
+export function replaceIllegalFileNameCharactersInString(string: string) {
 	return string
 		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.?]/g, "") // Replace illegal file name characters with empty string
 		.replace(/\n/, " ") // replace newlines with spaces
