@@ -18,7 +18,10 @@ export default defineConfig({
 		conditions: ["browser"],
 	},
 	test: {
-		include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+		include: [
+			"src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
+			"scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
+		],
 		globals: true,
 		environment: "jsdom",
 		setupFiles: ["./vitest.setup.ts"],

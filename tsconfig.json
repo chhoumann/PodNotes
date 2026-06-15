@@ -5,6 +5,7 @@
 		"target": "ES2020",
 		"moduleResolution": "bundler",
 		"strict": true,
+		"allowJs": true,
 		"noImplicitOverride": true,
 		"noEmit": true,
 		"forceConsistentCasingInFileNames": true,
@@ -27,6 +28,7 @@
 		"vite.config.ts",
 		"vitest.config.ts",
 		"vitest.e2e.config.ts",
-		"tests/e2e/**/*.ts"
+		"tests/e2e/**/*.ts",
+		"scripts/**/*.ts"
 	]
 }
