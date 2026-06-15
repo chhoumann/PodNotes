@@ -124,3 +124,19 @@ if (!(HTMLElement.prototype as unknown as { setAttr?: (name: string, value: stri
 			this.setAttribute(name, value);
 		};
 }
+
+if (!(HTMLElement.prototype as unknown as { setText?: (text: string) => void }).setText) {
+	(HTMLElement.prototype as unknown as { setText: (text: string) => void }).setText =
+		function (this: HTMLElement, text: string) {
+			this.textContent = text;
+		};
+}
+
+if (!(HTMLElement.prototype as unknown as { empty?: () => void }).empty) {
+	(HTMLElement.prototype as unknown as { empty: () => void }).empty =
+		function (this: HTMLElement) {
+			while (this.firstChild) {
+				this.removeChild(this.firstChild);
+			}
+		};
+}

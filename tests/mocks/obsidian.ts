@@ -19,6 +19,34 @@ export class Notice {
 export class WorkspaceLeaf {}
 export class ItemView {}
 
+export class Modal {
+	app: App;
+	containerEl: HTMLElement;
+	contentEl: HTMLElement;
+	titleEl: HTMLElement;
+
+	constructor(app: App) {
+		this.app = app;
+		this.containerEl = document.createElement("div");
+		this.titleEl = document.createElement("div");
+		this.contentEl = document.createElement("div");
+		this.containerEl.append(this.titleEl, this.contentEl);
+	}
+
+	open(): void {
+		document.body.appendChild(this.containerEl);
+		this.onOpen();
+	}
+
+	close(): void {
+		this.onClose();
+		this.containerEl.remove();
+	}
+
+	onOpen(): void {}
+	onClose(): void {}
+}
+
 class BaseInteractiveElement {
 	protected element: HTMLElement;
 
