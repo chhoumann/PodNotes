@@ -1,6 +1,9 @@
 import { Notice, TFile, requestUrl } from "obsidian";
 import { downloadedEpisodes } from "./store";
-import { DownloadPathTemplateEngine } from "./TemplateEngine";
+import {
+	DownloadPathTemplateEngine,
+	replaceIllegalFileNameCharactersInString,
+} from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
@@ -265,6 +268,14 @@ function inferFileExtensionFromDownload(
 	return getExtensionFromContentType(contentType);
 }
 
+/**
+ * UNUSED IN PRODUCTION — kept only for the #178 tests. Do NOT use this for
+ * transcription: it derives the on-disk path from the download-path template and
+ * reuses any file already there without confirming episode identity, which is
+ * the exact collision behind issue #107. Use {@link getEpisodeAudioBuffer} (for
+ * transcription) or {@link downloadEpisodeWithNotice} (for the Download command)
+ * instead. Candidate for removal in a follow-up.
+ */
 export async function downloadEpisode(
 	episode: Episode,
 	downloadPathTemplate: string,
@@ -332,6 +343,115 @@ async function getFileExtension(url: string): Promise<string> {
 
 	// Default to mp3 if we can't determine the type
 	return "mp3";
+}
+
+/**
+ * Resolves the audio bytes for an episode for transcription.
+ *
+ * The returned bytes always belong to the given episode, regardless of the
+ * user's download-path template. This is the fix for issue #107: transcription
+ * previously went through downloadEpisode(), which derived an on-disk path from
+ * the download-path template and reused whatever file already lived there, so
+ * episodes that mapped to the same (non-unique) path — e.g. the default empty
+ * path, or any path without `{{title}}` — were transcribed using a different
+ * episode's audio.
+ *
+ * Resolution order:
+ * 1. Local files already resolve to a unique, episode-specific path on disk.
+ * 2. An already-downloaded copy is reused only when the downloaded-episodes
+ *    registry (keyed by the episode, not a collidable path) confirms the file
+ *    belongs to THIS episode — preserving the cache without the collision risk.
+ * 3. Otherwise the episode's own stream URL is fetched into memory. Nothing is
+ *    written to the vault, so the audio can never collide with another episode.
+ */
+export async function getEpisodeAudioBuffer(
+	episode: Episode,
+): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
+	if (isLocalFile(episode)) {
+		const localFilePath = resolveLocalEpisodeFilePath(episode);
+		if (!localFilePath) {
+			throw new Error(
+				`Unable to locate the local audio file for "${episode.title}". Try playing the file again.`,
+			);
+		}
+
+		return readVaultAudio(localFilePath);
+	}
+
+	// Reuse a previously downloaded file only when the registry entry is the SAME
+	// episode. The registry is keyed by podcastName+title, which two distinct
+	// episodes can share (re-releases, placeholder titles), so also require the
+	// stream source to match before trusting the cached bytes. Comparison is by
+	// origin+path so a rotated signed-CDN query token (?token=...) still hits the
+	// cache; a genuinely different episode has a different path and falls through
+	// to a fresh fetch — correct, just not cached.
+	const registered = downloadedEpisodes.getEpisode(episode);
+	if (
+		registered?.filePath &&
+		isSameAudioSource(registered.streamUrl, episode.streamUrl)
+	) {
+		const existingFile = app.vault.getAbstractFileByPath(registered.filePath);
+		if (existingFile instanceof TFile) {
+			return readVaultAudio(registered.filePath);
+		}
+	}
+
+	try {
+		const { data, contentType } = await downloadFile(episode.streamUrl);
+		const inferredExtension = inferFileExtensionFromDownload(
+			episode,
+			data,
+			contentType,
+		);
+		const normalizedType = contentType.toLowerCase();
+		const typeAppearsAudio =
+			normalizedType === "" || normalizedType.includes("audio");
+		if (!typeAppearsAudio && !inferredExtension) {
+			throw new Error(
+				`The downloaded file is not audio (received "${contentType}"). The episode may be unavailable or require re-authentication.`,
+			);
+		}
+
+		return {
+			buffer: data,
+			extension: inferredExtension ?? "mp3",
+			basename:
+				replaceIllegalFileNameCharactersInString(episode.title) || "episode",
+		};
+	} catch (error: unknown) {
+		throw new Error(
+			`Failed to fetch ${episode.title}: ${getErrorMessage(error)}`,
+		);
+	}
+}
+
+/**
+ * Whether two stream URLs point at the same audio file. Compares origin+path so
+ * rotating query strings (signed-CDN tokens, cache-busters) don't count as a
+ * different source. Falls back to exact equality for non-absolute/odd URLs.
+ */
+function isSameAudioSource(a: string, b: string): boolean {
+	if (a === b) return true;
+	if (!a || !b) return false;
+	try {
+		const ua = new URL(a);
+		const ub = new URL(b);
+		return ua.origin === ub.origin && ua.pathname === ub.pathname;
+	} catch {
+		return false;
+	}
+}
+
+async function readVaultAudio(
+	filePath: string,
+): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
+	const file = app.vault.getAbstractFileByPath(filePath);
+	if (!(file instanceof TFile)) {
+		throw new Error(`Unable to read the audio file at "${filePath}".`);
+	}
+
+	const buffer = await app.vault.readBinary(file);
+	return { buffer, extension: file.extension, basename: file.basename };
 }
 
 interface AudioSignature {

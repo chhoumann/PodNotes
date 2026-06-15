@@ -242,7 +242,7 @@ export function TranscriptTemplateEngine(
 	return replacer(template);
 }
 
-function replaceIllegalFileNameCharactersInString(string: string) {
+export function replaceIllegalFileNameCharactersInString(string: string) {
 	return (
 		string
 			// Strip characters that are illegal in file names on major platforms,

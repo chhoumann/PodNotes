@@ -4,9 +4,11 @@ import { requestUrl, TFile } from "obsidian";
 import {
 	detectAudioFileExtension,
 	downloadEpisode,
+	getEpisodeAudioBuffer,
 } from "./downloadEpisode";
 import { downloadedEpisodes } from "./store";
 import type { Episode } from "./types/Episode";
+import type { LocalEpisode } from "./types/LocalEpisode";
 
 vi.mock("obsidian", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("obsidian")>();
@@ -125,5 +127,222 @@ describe("downloadEpisode (API path)", () => {
 		expect(path).toBe("My Title.mp3");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 		expect(createBinary).not.toHaveBeenCalled();
+	});
+});
+
+describe("getEpisodeAudioBuffer (issue #107)", () => {
+	const files = new Map<string, ArrayBuffer>();
+
+	function makeTFile(path: string): TFile {
+		const file = new TFile();
+		const dot = path.lastIndexOf(".");
+		const slash = path.lastIndexOf("/");
+		(file as { path: string }).path = path;
+		(file as { extension: string }).extension =
+			dot > slash ? path.slice(dot + 1) : "";
+		(file as { basename: string }).basename = path.slice(
+			slash + 1,
+			dot > slash ? dot : undefined,
+		);
+		return file;
+	}
+
+	function seedFile(path: string, text: string): void {
+		files.set(path, new TextEncoder().encode(text).buffer);
+	}
+
+	function decode(buffer: ArrayBuffer): string {
+		return new TextDecoder().decode(new Uint8Array(buffer));
+	}
+
+	function episode(overrides: Partial<Episode>): Episode {
+		return {
+			title: "Title",
+			streamUrl: "https://example.com/audio.mp3",
+			url: "https://example.com/audio",
+			description: "",
+			content: "",
+			podcastName: "Pod",
+			feedUrl: "https://example.com/feed.xml",
+			episodeDate: undefined,
+			...overrides,
+		} as unknown as Episode;
+	}
+
+	beforeEach(() => {
+		files.clear();
+		(globalThis as { app?: unknown }).app = {
+			vault: {
+				getAbstractFileByPath: (path: string) =>
+					files.has(path) ? makeTFile(path) : null,
+				readBinary: async (file: TFile) => files.get(file.path),
+			},
+		};
+		requestUrlMock.mockImplementation((req: unknown) => {
+			const url = typeof req === "string" ? req : (req as { url: string }).url;
+			const text = url.includes("spanish") ? "SPANISH-AUDIO" : "ENGLISH-AUDIO";
+			return Promise.resolve({
+				status: 200,
+				headers: { "content-type": "audio/mpeg" },
+				arrayBuffer: new TextEncoder().encode(text).buffer,
+			}) as unknown as ReturnType<typeof requestUrl>;
+		});
+	});
+
+	it("fetches each episode's own audio from its stream URL — never another episode's", async () => {
+		const spanish = episode({
+			title: "Hola soy Sere",
+			streamUrl: "https://example.com/spanish.mp3",
+			podcastName: "Otro Podcast",
+		});
+		const english = episode({
+			title: "107. How could a PBS of the Internet...",
+			streamUrl: "https://example.com/english.mp3",
+			podcastName: "Reimagining the Internet",
+		});
+
+		const a = await getEpisodeAudioBuffer(spanish);
+		const b = await getEpisodeAudioBuffer(english);
+
+		// Each episode gets ITS OWN bytes — the wrong-episode collision is gone.
+		expect(decode(a.buffer)).toBe("SPANISH-AUDIO");
+		expect(decode(b.buffer)).toBe("ENGLISH-AUDIO");
+		expect(a.extension).toBe("mp3");
+		expect(b.extension).toBe("mp3");
+		expect(requestUrlMock).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "https://example.com/spanish.mp3" }),
+		);
+		expect(requestUrlMock).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "https://example.com/english.mp3" }),
+		);
+	});
+
+	it("reuses a registry-confirmed downloaded copy without re-fetching", async () => {
+		const ep = episode({
+			title: "Cached Episode",
+			streamUrl: "https://example.com/english.mp3",
+		});
+		seedFile("Podcasts/cached.mp3", "CACHED-CORRECT-AUDIO");
+		downloadedEpisodes.addEpisode(ep, "Podcasts/cached.mp3", 20);
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("CACHED-CORRECT-AUDIO");
+		expect(result.extension).toBe("mp3");
+		expect(result.basename).toBe("cached");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("reuses the cached file when only the signed-CDN query token changed", async () => {
+		// Same audio file, rotated token: origin+path match, so the cache should
+		// still be used rather than re-downloading the (large) episode.
+		const downloaded = episode({
+			title: "Token Episode",
+			streamUrl: "https://cdn.example.com/ep.mp3?token=OLD&exp=1",
+		});
+		seedFile("Podcasts/token.mp3", "CACHED-CORRECT-AUDIO");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/token.mp3", 20);
+
+		const current = episode({
+			title: "Token Episode",
+			streamUrl: "https://cdn.example.com/ep.mp3?token=NEW&exp=2",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("CACHED-CORRECT-AUDIO");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("does not reuse a same-title sibling's download; fetches this episode's own audio", async () => {
+		// Same podcast + same title, different episode (different stream URL). The
+		// registry is keyed by podcastName+title, so getEpisode() returns the
+		// sibling's entry — reusing its file would transcribe the wrong audio.
+		const downloaded = episode({
+			title: "Episode",
+			streamUrl: "https://example.com/spanish.mp3",
+		});
+		seedFile("Podcasts/sibling.mp3", "SPANISH-AUDIO");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/sibling.mp3", 13);
+
+		const current = episode({
+			title: "Episode",
+			streamUrl: "https://example.com/english.mp3",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
+		expect(requestUrlMock).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "https://example.com/english.mp3" }),
+		);
+	});
+
+	it("ignores a stale registry entry whose file no longer exists and fetches fresh", async () => {
+		const ep = episode({
+			title: "Stale Episode",
+			streamUrl: "https://example.com/english.mp3",
+		});
+		// Registry points at a file that is not in the vault.
+		downloadedEpisodes.addEpisode(ep, "Podcasts/missing.mp3", 20);
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
+		expect(requestUrlMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores a wrong-episode file at a colliding path and fetches the right audio", async () => {
+		// Direct reproduction of issue #107: a different episode's audio already
+		// lives at the old collidable download-path location, and this episode has
+		// no registry entry. The old code returned the colliding file's bytes; the
+		// new code must fetch this episode's own audio instead.
+		seedFile("Downloads.mp3", "WRONG-EPISODE-AUDIO");
+		const ep = episode({
+			title: "Right Episode",
+			streamUrl: "https://example.com/english.mp3",
+		});
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
+		expect(decode(result.buffer)).not.toBe("WRONG-EPISODE-AUDIO");
+		expect(requestUrlMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("throws a clear error when the stream returns non-audio content", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "text/html" },
+					arrayBuffer: new TextEncoder().encode("<html>login required</html>")
+						.buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Private Episode",
+			streamUrl: "https://example.com/private-feed-token",
+		});
+
+		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
+	});
+
+	it("reads local-file episodes from disk by their resolved path", async () => {
+		const local = episode({
+			title: "Local Recording",
+			podcastName: "local file",
+			description: "",
+			content: "",
+			streamUrl: "",
+			url: "Local/recording.m4a",
+			filePath: "Local/recording.m4a",
+		} as Partial<LocalEpisode>) as LocalEpisode;
+		seedFile("Local/recording.m4a", "LOCAL-AUDIO");
+
+		const result = await getEpisodeAudioBuffer(local);
+
+		expect(decode(result.buffer)).toBe("LOCAL-AUDIO");
+		expect(result.extension).toBe("m4a");
+		expect(result.basename).toBe("recording");
+		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 });

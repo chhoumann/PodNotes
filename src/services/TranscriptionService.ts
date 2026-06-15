@@ -1,7 +1,7 @@
 import { Notice, TFile } from "obsidian";
 import type { OpenAI } from "openai";
 import type PodNotes from "../main";
-import { downloadEpisode } from "../downloadEpisode";
+import { getEpisodeAudioBuffer } from "../downloadEpisode";
 import {
 	FilePathTemplateEngine,
 	TranscriptTemplateEngine,
@@ -155,26 +155,18 @@ export class TranscriptionService {
 				return;
 			}
 
-			notice.update("Downloading episode...");
-			const downloadPath = await downloadEpisode(
-				episode,
-				this.plugin.settings.download.path,
-			);
-			const podcastFile =
-				this.plugin.app.vault.getAbstractFileByPath(downloadPath);
-			if (!podcastFile || !(podcastFile instanceof TFile)) {
-				throw new Error("Failed to download or locate the episode.");
-			}
-
-			notice.update("Preparing audio for transcription...");
-			const fileBuffer = await this.plugin.app.vault.readBinary(podcastFile);
-			const fileExtension = podcastFile.extension;
+			notice.update("Fetching episode audio...");
+			const {
+				buffer: fileBuffer,
+				extension: fileExtension,
+				basename,
+			} = await getEpisodeAudioBuffer(episode);
 			const mimeType = this.getMimeType(fileExtension);
 
 			notice.update("Creating audio chunks...");
 			const files = await this.createChunkFiles({
 				buffer: fileBuffer,
-				basename: podcastFile.basename,
+				basename,
 				extension: fileExtension,
 				mimeType,
 			});
