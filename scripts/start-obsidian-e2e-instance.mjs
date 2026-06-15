@@ -390,10 +390,16 @@ function sleep(ms) {
 }
 
 export function toInstanceShellExports(result) {
-	return [
+	const lines = [
 		toShellExports(result),
 		`export PODNOTES_E2E_OBSIDIAN_HOME=${shellQuote(result.obsidianHome)}`,
-	].join("\n");
+	];
+	// Propagate a non-default CLI binary so the Vitest harness (which reads
+	// OBSIDIAN_BIN ?? "obsidian") targets the same instance this script verified.
+	if (result.obsidianBin && result.obsidianBin !== DEFAULT_OBSIDIAN_BIN) {
+		lines.push(`export OBSIDIAN_BIN=${shellQuote(result.obsidianBin)}`);
+	}
+	return lines.join("\n");
 }
 
 function shellQuote(value) {
@@ -432,6 +438,7 @@ async function main() {
 		...provisionResult,
 		...profileResult,
 		...launchResult,
+		obsidianBin: options.obsidianBin,
 		obsidianHome: options.obsidianHome,
 		resolvedVaultPath,
 		verifiedPodNotes,

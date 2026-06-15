@@ -115,6 +115,22 @@ describe("start-obsidian-e2e-instance", () => {
 			}),
 		).toContain("PODNOTES_E2E_OBSIDIAN_HOME=");
 	});
+
+	it("exports OBSIDIAN_BIN only when a non-default binary is used", () => {
+		const base = {
+			obsidianHome: "/tmp/home",
+			vaultName: "podnotes-a",
+			vaultPath: "/tmp/vault",
+		};
+
+		expect(toInstanceShellExports(base)).not.toContain("OBSIDIAN_BIN=");
+		expect(
+			toInstanceShellExports({ ...base, obsidianBin: "obsidian" }),
+		).not.toContain("OBSIDIAN_BIN=");
+		expect(
+			toInstanceShellExports({ ...base, obsidianBin: "/opt/custom/obsidian" }),
+		).toContain("export OBSIDIAN_BIN='/opt/custom/obsidian'");
+	});
 });
 
 async function exists(filePath: string) {
