@@ -72,8 +72,16 @@
 	onMount(() => {
 		const updateDisplayedPlaylists = () => {
 			const customPlaylists = Object.values(get(playlists));
+			const queueValue = get(queue);
+			// Hide the Queue tile only when queue automation is off AND the queue is
+			// empty (issue #108), so turning the queue off doesn't leave a permanent
+			// empty "Queue" tile. The default-on state and a non-empty manual queue
+			// both keep it visible.
+			const showQueue =
+				get(plugin)?.settings?.autoQueue !== false ||
+				queueValue.episodes.length > 0;
 			displayedPlaylists = [
-				get(queue),
+				...(showQueue ? [queueValue] : []),
 				get(favorites),
 				get(localFiles),
 				getPlayedPlaylist(),
@@ -86,6 +94,9 @@
 			queue.subscribe(updateDisplayedPlaylists),
 			favorites.subscribe(updateDisplayedPlaylists),
 			localFiles.subscribe(updateDisplayedPlaylists),
+			// Recompute when the plugin store re-emits so toggling the autoQueue
+			// setting hides/shows the empty Queue tile immediately (issue #108).
+			plugin.subscribe(updateDisplayedPlaylists),
 			playedEpisodes.subscribe(() => {
 				updateDisplayedPlaylists();
 				if (isShowingPlayedEpisodes) {

@@ -22,6 +22,7 @@ import {
 	hidePlayedEpisodes,
 	localFiles,
 	playlists,
+	plugin,
 	queue,
 	savedFeeds,
 	volume,
@@ -82,6 +83,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			target: playlistManagerContainer,
 		});
 
+		this.addQueueSettings(settingsContainer);
 		this.addDefaultPlaybackRateSetting(settingsContainer);
 		this.addDefaultVolumeSetting(settingsContainer);
 		this.addSkipLengthSettings(settingsContainer);
@@ -102,6 +104,25 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			void unmount(this.playlistManager);
 			this.playlistManager = null;
 		}
+	}
+
+	private addQueueSettings(container: HTMLElement): void {
+		new Setting(container)
+			.setName("Keep a queue of episodes you switch away from")
+			.setDesc(
+				"When on, the episode you switch away from is kept at the top of the queue and playback automatically continues with the next queued episode when one ends. Turn this off to stop the queue from filling and advancing on its own — you can still add episodes to the queue manually.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoQueue)
+					.onChange(async (value) => {
+						this.plugin.settings.autoQueue = value;
+						await this.plugin.saveSettings();
+						// Re-emit the plugin store so an open player/grid recomputes
+						// the Queue tile/list visibility immediately (issue #108).
+						plugin.set(this.plugin);
+					}),
+			);
 	}
 
 	private addDefaultPlaybackRateSetting(container: HTMLElement): void {
