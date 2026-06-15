@@ -8,6 +8,7 @@ import { ViewState } from "src/types/ViewState";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import { TFile } from "obsidian";
 import type { LocalEpisode } from "src/types/LocalEpisode";
+import { LOCAL_FILES_SETTINGS } from "src/constants";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import {
 	getPlayedEpisode,
@@ -551,6 +552,17 @@ export const favorites = writable<Playlist>({
 	shouldRepeat: false,
 });
 
+function sameEpisodeKeySet(a: Episode[], b: Episode[]): boolean {
+	if (a.length !== b.length) return false;
+
+	const keysInA = new Set(a.map(getEpisodeKey));
+	for (const episode of b) {
+		if (!keysInA.has(getEpisodeKey(episode))) return false;
+	}
+
+	return true;
+}
+
 export const localFiles = (() => {
 	const store = writable<Playlist>({
 		icon: "folder",
@@ -566,10 +578,58 @@ export const localFiles = (() => {
 		subscribe,
 		update,
 		set,
-		getLocalEpisode: (title: string): LocalEpisode | undefined => {
-			const ep = get(store).episodes.find((ep) => ep.title === title);
+		/**
+		 * Mirrors downloadedEpisodes into the Local Files playlist (issue #176).
+		 *
+		 * downloadedEpisodes is the authoritative set of offline-available episodes:
+		 * downloads (createEpisodeFile) and manual local files (getContextMenuHandler)
+		 * both write there. Entries are copied verbatim so filePath/size and the real
+		 * podcastName survive — playback resolves the local file from downloadedEpisodes
+		 * keyed by podcastName::title, so coercing podcastName would break it.
+		 *
+		 * This is a pure projection: it intentionally drops any pre-existing localFiles
+		 * entry that is absent from downloadedEpisodes (stale/removed files). Playable
+		 * files are always present in downloadedEpisodes via the download flow and the
+		 * dual-write in getContextMenuHandler, so nothing reachable is lost — and a
+		 * removed download now correctly disappears from Local Files too.
+		 */
+		syncWithDownloaded: (downloaded: {
+			[podcastName: string]: DownloadedEpisode[];
+		}): void => {
+			const seen = new Set<string>();
+			const episodes: Episode[] = [];
 
-			return ep as LocalEpisode;
+			for (const episode of Object.values(downloaded).flat()) {
+				const key = getEpisodeKey(episode);
+				if (!key || seen.has(key)) continue;
+
+				seen.add(key);
+				episodes.push(episode);
+			}
+
+			// Skip the store write entirely when membership is unchanged. Returning the
+			// same object from update() would still notify subscribers (Svelte treats
+			// every object value as changed), re-running LocalFilesController.onChange and
+			// saveSettings on every unrelated downloadedEpisodes mutation and the
+			// load-time immediate-fire. Comparing before touching the store avoids that.
+			if (sameEpisodeKeySet(get(store).episodes, episodes)) {
+				return;
+			}
+
+			update((playlist) => ({ ...playlist, ...LOCAL_FILES_SETTINGS, episodes }));
+		},
+		getLocalEpisode: (title: string): LocalEpisode | undefined => {
+			const { episodes } = get(store);
+
+			// Prefer a genuine manual local file so a same-titled downloaded episode
+			// (now mirrored into this playlist) can't shadow it in deep-links.
+			const ep =
+				episodes.find(
+					(episode) =>
+						episode.title === title && episode.podcastName === "local file",
+				) ?? episodes.find((episode) => episode.title === title);
+
+			return ep as LocalEpisode | undefined;
 		},
 		updateStreamUrl: (title: string, newUrl: string): void => {
 			store.update((playlist) => {
@@ -580,21 +640,9 @@ export const localFiles = (() => {
 				return playlist;
 			});
 		},
-		addEpisode: (episode: LocalEpisode): void => {
-			store.update((playlist) => {
-				const idx = playlist.episodes.findIndex(
-					(ep) => ep.title === episode.title,
-				);
-
-				if (idx !== -1) {
-					playlist.episodes[idx] = episode;
-				} else {
-					playlist.episodes.push(episode);
-				}
-
-				return playlist;
-			});
-		},
+		// NOTE: the Local Files playlist is now a projection of downloadedEpisodes
+		// (see syncWithDownloaded). Add files by writing to downloadedEpisodes; a direct
+		// imperative add here would be overwritten by the next mirror pass.
 	};
 })();
 

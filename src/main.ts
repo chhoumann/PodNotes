@@ -73,6 +73,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private hidePlayedEpisodesController?: StoreController<boolean>;
 	private transcriptionService?: TranscriptionService;
 	private volumeUnsubscribe?: Unsubscriber;
+	private localFilesMirrorUnsubscribe?: Unsubscriber;
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
@@ -122,6 +123,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			hidePlayedEpisodes,
 			this,
 		).on();
+
+		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
+		// downloadedEpisodes is the authoritative offline set, so mirror it into the
+		// localFiles playlist that the Podcast grid renders. Svelte's immediate-fire
+		// backfills already-downloaded episodes on load; later changes keep it current.
+		this.localFilesMirrorUnsubscribe = downloadedEpisodes.subscribe(
+			(downloaded) => localFiles.syncWithDownloaded(downloaded),
+		);
 
 		this.api = new API();
 		this.volumeUnsubscribe = volume.subscribe((value) => {
@@ -389,6 +398,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.currentEpisodeController?.off();
 		this.hidePlayedEpisodesController?.off();
 		this.volumeUnsubscribe?.();
+		this.localFilesMirrorUnsubscribe?.();
 
 		// Clean up any active blob URLs to prevent memory leaks
 		blobUrlManager.revokeAll();
