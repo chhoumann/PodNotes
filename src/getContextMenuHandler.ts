@@ -43,9 +43,7 @@ export default function getContextMenuHandler(app: App): EventRef {
 							content: "",
 							podcastName: "local file",
 							url: app.fileManager.generateMarkdownLink(file, ""),
-							streamUrl: await createMediaUrlObjectFromFilePath(
-								file.path
-							),
+							streamUrl: createMediaUrlObjectFromFilePath(file.path),
 							filePath: file.path,
 							episodeDate: new Date(file.stat.ctime),
 						};

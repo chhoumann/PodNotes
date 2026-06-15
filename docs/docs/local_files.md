@@ -4,4 +4,4 @@ In the podcast grid, you will see a playlist with a folder icon. This is a playl
 
 PodNotes will attempt to treat all local files as podcast episodes. This means all standard features are available, such as timestamps, note creation, and persisting playback time. Any exceptions will be added here.
 
-Local files and downloaded episodes play on all platforms, including iOS and Android.
+Local files and downloaded episodes are played through Obsidian's native media resource path (the same mechanism Obsidian uses for embedded media), so they work on mobile (iOS and Android) as well as desktop.

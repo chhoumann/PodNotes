@@ -12,9 +12,7 @@ import { TFile } from "obsidian";
  * Returns an empty string when the path does not resolve to a vault file, matching
  * the prior behavior (binding `src=""` is a benign no-op on the audio element).
  */
-export async function createMediaUrlObjectFromFilePath(
-	filePath: string,
-): Promise<string> {
+export function createMediaUrlObjectFromFilePath(filePath: string): string {
 	const file = app.vault.getAbstractFileByPath(filePath);
 	if (!file || !(file instanceof TFile)) return "";
 
