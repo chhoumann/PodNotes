@@ -68,13 +68,13 @@ export default function spawnEpisodeContextMenu(
 				if (isDownloaded) {
 					downloadedEpisodes.removeEpisode(episode, true);
 				} else {
-					const downloadPath = get(plugin).settings.download.path;
-					if (!downloadPath) {
-						new Notice(`Please set a download path in the settings.`);
-						return;
-					}
-
-					downloadEpisodeWithProgessNotice(episode, downloadPath);
+					// The path template always yields a per-episode file via
+					// safeDownloadBasename (#183), so no empty-path guard is needed —
+					// this matches the Download command in main.ts.
+					downloadEpisodeWithProgessNotice(
+						episode,
+						get(plugin).settings.download.path,
+					);
 				}
 			}));
 	}

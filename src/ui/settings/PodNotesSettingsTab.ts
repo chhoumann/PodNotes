@@ -322,15 +322,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent.onChange((value) => {
 					this.plugin.settings.download.path = value;
 					this.plugin.saveSettings();
-
-					const demoVal = DownloadPathTemplateEngine(value, randomEpisode);
-					downloadFilePathDemoEl.empty();
-					MarkdownRenderer.renderMarkdown(
-						`${demoVal}.mp3`,
-						downloadFilePathDemoEl,
-						"",
-						new Component(),
-					);
+					refreshDownloadPathHints(value);
 				});
 				textComponent.inputEl.style.width = "100%";
 			});
@@ -340,6 +332,33 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		downloadPathSetting.settingEl.style.gap = "10px";
 
 		const downloadFilePathDemoEl = container.createDiv();
+		const downloadFilePathWarningEl = container.createDiv();
+		downloadFilePathWarningEl.style.color = "var(--text-error)";
+
+		// A download path without a per-episode token ({{title}}) resolves every
+		// episode to the same file, so downloads overwrite each other or fail; an
+		// empty path resolves to ".mp3" at the vault root (#183). Warn inline.
+		const refreshDownloadPathHints = (value: string) => {
+			const demoVal = DownloadPathTemplateEngine(value, randomEpisode);
+			downloadFilePathDemoEl.empty();
+			MarkdownRenderer.renderMarkdown(
+				`${demoVal}.mp3`,
+				downloadFilePathDemoEl,
+				"",
+				new Component(),
+			);
+
+			// Match only the forms DownloadPathTemplateEngine actually resolves —
+			// {{title}} or {{title:...}}. A looser test (e.g. \s* after {{, or \b)
+			// would wrongly stay silent for "{{ title }}" / "{{title-ish}}", which the
+			// engine leaves literal so every episode still collides.
+			downloadFilePathWarningEl.toggle(!/\{\{title(:[^}]*)?\}\}/i.test(value));
+			downloadFilePathWarningEl.setText(
+				"⚠ This path has no {{title}}, so multiple episodes can resolve to the same file — downloads will overwrite each other or fail. Add {{title}}, e.g. PodNotes/{{podcast}}/{{title}}.",
+			);
+		};
+
+		refreshDownloadPathHints(this.plugin.settings.download.path);
 	}
 
 	private addPerformanceSettings(container: HTMLDivElement) {

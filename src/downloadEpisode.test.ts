@@ -5,6 +5,7 @@ import {
 	detectAudioFileExtension,
 	downloadEpisode,
 	getEpisodeAudioBuffer,
+	safeDownloadBasename,
 } from "./downloadEpisode";
 import { downloadedEpisodes } from "./store";
 import type { Episode } from "./types/Episode";
@@ -127,6 +128,52 @@ describe("downloadEpisode (API path)", () => {
 		expect(path).toBe("My Title.mp3");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 		expect(createBinary).not.toHaveBeenCalled();
+	});
+
+	it("never writes a '.<ext>' dotfile when the path template is empty (#183)", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x49, 0x44, 0x33, 0x01);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mpeg" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+
+		const path = await downloadEpisode(makeEpisode(), "");
+
+		// Falls back to a per-episode name instead of the un-indexable ".mp3".
+		expect(path).toBe("My Title.mp3");
+		expect(createBinary).toHaveBeenCalledWith("My Title.mp3", buffer);
+		const [writtenPath] = createBinary.mock.calls[0];
+		expect(writtenPath).not.toBe(".mp3");
+	});
+});
+
+describe("safeDownloadBasename (#183)", () => {
+	it("falls back to the title when the template resolves to an empty name", () => {
+		expect(safeDownloadBasename("", makeEpisode())).toBe("My Title");
+	});
+
+	it("replaces an empty trailing segment but keeps the folder", () => {
+		expect(safeDownloadBasename("Downloads/", makeEpisode())).toBe(
+			"Downloads/My Title",
+		);
+	});
+
+	it("drops a stray leading slash instead of writing an absolute path", () => {
+		expect(safeDownloadBasename("/{{title}}", makeEpisode())).toBe("My Title");
+	});
+
+	it("falls back to 'episode' when the title is empty/all-illegal", () => {
+		expect(safeDownloadBasename("", makeEpisode({ title: "??" }))).toBe(
+			"episode",
+		);
+	});
+
+	it("leaves a valid per-episode template untouched", () => {
+		expect(
+			safeDownloadBasename("podcast/{{podcast}}/{{title}}", makeEpisode()),
+		).toBe("podcast/Pod/My Title");
 	});
 });
 

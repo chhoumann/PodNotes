@@ -169,6 +169,36 @@ function createNoticeDoc(title: string) {
 	};
 }
 
+/**
+ * Resolves the on-disk basename for a downloaded episode, guaranteeing a
+ * per-episode file name even when the template is misconfigured.
+ *
+ * A template that resolves to an empty final segment — the legacy empty default
+ * `""`, or any path ending in `/` — would otherwise produce a hidden `".<ext>"`
+ * dotfile at the vault root that Obsidian never indexes, so the first download
+ * silently writes junk and the second throws "File already exists" (#183). In
+ * that case we fall back to the episode title (then a literal "episode" when the
+ * title is empty or all-illegal). Leading/interior empty segments are dropped so
+ * a stray slash can never yield an absolute-looking or double-slashed path.
+ */
+export function safeDownloadBasename(
+	downloadPathTemplate: string,
+	episode: Episode,
+): string {
+	const resolved = DownloadPathTemplateEngine(downloadPathTemplate, episode);
+	const segments = resolved.split("/");
+	const lastIndex = segments.length - 1;
+
+	if (segments[lastIndex].trim() === "") {
+		segments[lastIndex] =
+			replaceIllegalFileNameCharactersInString(episode.title) || "episode";
+	}
+
+	return segments
+		.filter((segment, index) => index === lastIndex || segment.trim() !== "")
+		.join("/");
+}
+
 async function createEpisodeFile({
 	episode,
 	downloadPathTemplate,
@@ -180,7 +210,7 @@ async function createEpisodeFile({
 	data: ArrayBuffer;
 	extension: string;
 }) {
-	const basename = DownloadPathTemplateEngine(downloadPathTemplate, episode);
+	const basename = safeDownloadBasename(downloadPathTemplate, episode);
 	const filePath = `${basename}.${extension}`;
 
 	// `createBinary` throws if a parent folder is missing, which previously left
@@ -291,7 +321,7 @@ export async function downloadEpisode(
 		return localFilePath;
 	}
 
-	const basename = DownloadPathTemplateEngine(downloadPathTemplate, episode);
+	const basename = safeDownloadBasename(downloadPathTemplate, episode);
 	const fileExtension = await getFileExtension(episode.streamUrl);
 	const filePath = `${basename}.${fileExtension}`;
 

@@ -23,7 +23,7 @@ This will skip the current episode forward by the amount of seconds specified in
 ## Download Playing Episode
 This will download the currently playing episode.
 
-Downloads are stored in the location specified in settings.
+Downloads are stored in the location specified by the **Episode download path** setting. This path is a template and **must include a per-episode token** such as `{{title}}` (the default is `PodNotes/{{podcast}}/{{title}}`). A path without `{{title}}` makes every episode resolve to the same file, so downloads overwrite each other or fail. The file extension is added automatically — do not include one.
 
 ## Reload Podnotes
 This will reload PodNotes.
