@@ -265,17 +265,27 @@ async function execObsidian(options, args, execOptions = {}) {
 	});
 }
 
-export async function isInstanceReady(options) {
-	// Non-launching readiness probe: the obsidian CLI auto-launches Obsidian on
-	// the first command when nothing is running, so probing a cold HOME would
-	// spawn a competing instance. The CLI talks to $HOME/.obsidian-cli.sock, so a
-	// missing socket means "not running" — report not-ready without probing.
-	const socketPath = path.join(options.obsidianHome, ".obsidian-cli.sock");
+function cliSocketPath(options) {
+	// The obsidian CLI talks to this unix socket; its presence means an instance
+	// for this private HOME is up (or starting to listen).
+	return path.join(options.obsidianHome, ".obsidian-cli.sock");
+}
+
+async function cliSocketExists(options) {
 	try {
-		await fs.lstat(socketPath);
+		await fs.lstat(cliSocketPath(options));
+		return true;
 	} catch {
 		return false;
 	}
+}
+
+export async function isInstanceReady(options) {
+	// Non-launching readiness probe: the obsidian CLI auto-launches Obsidian on
+	// the first command when nothing is running, so probing a cold HOME would
+	// spawn a competing instance. A missing socket means "not running" — report
+	// not-ready without probing.
+	if (!(await cliSocketExists(options))) return false;
 
 	try {
 		const { stdout } = await execObsidian(
@@ -295,6 +305,14 @@ export async function waitForInstanceReady(options) {
 	let lastError = "";
 
 	while (Date.now() < deadline) {
+		// Don't issue a CLI command before the just-launched instance is listening
+		// on its socket: a probe sent first would make the CLI auto-launch a second
+		// Obsidian on the same profile/vault, racing the one open -n started.
+		if (!(await cliSocketExists(options))) {
+			lastError = "waiting for the obsidian-cli socket to appear";
+			await sleep(READY_INTERVAL_MS);
+			continue;
+		}
 		try {
 			const { stdout } = await execObsidian(options, [
 				`vault=${options.vaultName}`,
