@@ -406,18 +406,23 @@ async function main() {
 	const provisionResult = await provisionVault(options);
 	const profileResult = await prepareObsidianProfile(options);
 	options.userDataPath = profileResult.userDataPath;
-	// Reuse a running private instance instead of starting a second app on the
-	// same HOME/vault (open -n would race the existing one over the profile).
-	const launchResult =
-		options.launch && !(await isInstanceReady(options))
-			? await launchObsidianInstance(options)
-			: { pid: null, pidPath: null };
-	const resolvedVaultPath = options.launch
-		? await waitForInstanceReady(options)
-		: null;
-	const verifiedPodNotes = options.launch
-		? await trustVaultAndVerifyPodNotes(options)
-		: false;
+
+	let launchResult = { pid: null, pidPath: null };
+	let resolvedVaultPath = null;
+	let verifiedPodNotes = false;
+	if (options.launch) {
+		if (await isInstanceReady(options)) {
+			// Reuse the running private instance instead of starting a second app
+			// on the same HOME/vault, but reload first so a rebuilt main.js takes
+			// effect — otherwise `--print-env` would hand the E2E suite a stale
+			// bundle. Mirrors the obsidian:e2e wrapper.
+			await reloadPodNotes(options);
+		} else {
+			launchResult = await launchObsidianInstance(options);
+		}
+		resolvedVaultPath = await waitForInstanceReady(options);
+		verifiedPodNotes = await trustVaultAndVerifyPodNotes(options);
+	}
 	const result = {
 		...provisionResult,
 		...profileResult,

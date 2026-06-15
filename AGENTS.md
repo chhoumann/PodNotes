@@ -131,10 +131,15 @@ npm run obsidian:e2e -- dev:errors
   `PODNOTES_E2E_VAULT` alone leaves the suite talking to the shared `dev` vault:
 
   ```bash
+  npm run build                               # required: provisioning links main.js
   eval "$(npm run --silent start:e2e-obsidian -- --print-env)"
   export HOME="$PODNOTES_E2E_OBSIDIAN_HOME"   # required: re-point the CLI socket
   PODNOTES_E2E_VAULT="$PODNOTES_E2E_VAULT" npm run test:e2e
   ```
+
+  Build first so the instance loads the current bundle (provisioning also needs
+  `main.js` to exist). `start:e2e-obsidian` reloads PodNotes when it reuses a
+  running instance, so the exported instance is never stale.
 
 ## Documentation
 Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
