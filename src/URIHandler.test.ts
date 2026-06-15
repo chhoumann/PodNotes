@@ -13,19 +13,22 @@ import {
 	currentEpisode,
 	currentTime,
 	isPaused,
+	localFiles,
 	playedEpisodes,
 	requestedPlaybackTime,
 	viewState,
 } from "./store";
 import type { Episode } from "./types/Episode";
+import type { LocalEpisode } from "./types/LocalEpisode";
+import type { Playlist } from "./types/Playlist";
 import { ViewState } from "./types/ViewState";
 
-const mockFindItemByTitle = vi.fn();
+const mockGetEpisodes = vi.fn();
 const testFeedUrl = "https://pod.example.com/feed.xml";
 
 vi.mock("./parser/feedParser", () => ({
 	default: class {
-		findItemByTitle = mockFindItemByTitle;
+		getEpisodes = mockGetEpisodes;
 	},
 }));
 
@@ -39,6 +42,25 @@ const testEpisode: Episode = {
 	feedUrl: testFeedUrl,
 };
 
+// Title with a literal '+': current-format links carry it as a real '+' after Obsidian's decode.
+const plusEpisode: Episode = {
+	title: "Episode 50: C++ Tips",
+	streamUrl: "https://pod.example.com/cpp.mp3",
+	url: "https://pod.example.com/cpp",
+	description: "",
+	content: "",
+	podcastName: "Test Podcast",
+	feedUrl: testFeedUrl,
+};
+
+const emptyLocalFiles: Playlist = {
+	icon: "folder",
+	name: "Local Files",
+	episodes: [],
+	shouldEpisodeRemoveAfterPlay: false,
+	shouldRepeat: false,
+};
+
 function resetStores() {
 	currentEpisode.update(() => undefined as unknown as Episode);
 	currentTime.set(0);
@@ -46,6 +68,7 @@ function resetStores() {
 	playedEpisodes.set({});
 	requestedPlaybackTime.set(null);
 	viewState.set(ViewState.PodcastGrid);
+	localFiles.set({ ...emptyLocalFiles, episodes: [] });
 }
 
 const api = {
@@ -54,20 +77,21 @@ const api = {
 	},
 };
 
+function setApp(getAbstractFileByPath: (path: string) => unknown) {
+	(globalThis as { app?: unknown }).app = {
+		vault: { getAbstractFileByPath: vi.fn(getAbstractFileByPath) },
+	};
+}
+
 beforeEach(() => {
 	resetStores();
-	mockFindItemByTitle.mockResolvedValue(testEpisode);
-
-	(globalThis as { app?: unknown }).app = {
-		vault: {
-			getAbstractFileByPath: vi.fn(() => null),
-		},
-	};
+	mockGetEpisodes.mockResolvedValue([testEpisode]);
+	setApp(() => null);
 });
 
 afterEach(() => {
 	resetStores();
-	mockFindItemByTitle.mockReset();
+	mockGetEpisodes.mockReset();
 	delete (globalThis as { app?: unknown }).app;
 });
 
@@ -92,7 +116,7 @@ describe("podNotesURIHandler", () => {
 		expect(get(currentTime)).toBe(120);
 		expect(get(isPaused)).toBe(false);
 		expect(get(requestedPlaybackTime)).toBeNull();
-		expect(mockFindItemByTitle).not.toHaveBeenCalled();
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 
 	test("keeps the requested time for the player to apply after loading metadata", async () => {
@@ -108,20 +132,235 @@ describe("podNotesURIHandler", () => {
 			api as never,
 		);
 
-		expect(mockFindItemByTitle).toHaveBeenCalledWith(
-			testEpisode.title,
-			testFeedUrl,
-		);
-		expect(get(currentEpisode)).toMatchObject({
-			title: testEpisode.title,
-		});
+		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 		expect(get(requestedPlaybackTime)).toEqual({
 			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
 			time: 240,
 		});
-		expect(get(playedEpisodes)[`${testEpisode.podcastName}::${testEpisode.title}`]?.finished).toBe(
-			true,
+		expect(
+			get(playedEpisodes)[`${testEpisode.podcastName}::${testEpisode.title}`]?.finished,
+		).toBe(true);
+	});
+
+	test("switches to a non-loaded episode whose title contains a literal '+'", async () => {
+		mockGetEpisodes.mockResolvedValue([plusEpisode]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				// Current-format link: Obsidian decodes %2B back to a literal '+'.
+				episodeName: "Episode 50: C++ Tips",
+				time: "300",
+			},
+			api as never,
 		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: "Episode 50: C++ Tips" });
+		expect(get(viewState)).toBe(ViewState.Player);
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${plusEpisode.podcastName}::${plusEpisode.title}`,
+			time: 300,
+		});
+	});
+
+	test("resumes a paused, already-loaded episode whose title contains a literal '+'", async () => {
+		currentEpisode.set(plusEpisode);
+		viewState.set(ViewState.Player);
+		isPaused.set(true);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: "Episode 50: C++ Tips",
+				time: "90",
+			},
+			api as never,
+		);
+
+		expect(get(currentTime)).toBe(90);
+		expect(get(isPaused)).toBe(false);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("resolves a legacy '+'-as-space link to a non-loaded episode", async () => {
+		mockGetEpisodes.mockResolvedValue([testEpisode]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				// Legacy link: spaces were encoded as '+'.
+				episodeName: "Finished+Episode",
+				time: "60",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: "Finished Episode" });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 60,
+		});
+	});
+
+	test("resumes the loaded episode for a legacy '+'-as-space link without re-resolving", async () => {
+		currentEpisode.set(testEpisode);
+		viewState.set(ViewState.Player);
+		isPaused.set(true);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: "Finished+Episode",
+				time: "45",
+			},
+			api as never,
+		);
+
+		expect(get(currentTime)).toBe(45);
+		expect(get(isPaused)).toBe(false);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("resolves a local-file episode whose path and title both contain '+'", async () => {
+		const localEpisode: LocalEpisode = {
+			title: "C++ Tips",
+			streamUrl: "Notes+/C++ Tips.mp3",
+			url: "Notes+/C++ Tips.mp3",
+			description: "",
+			content: "",
+			podcastName: "local file",
+			filePath: "Notes+/C++ Tips.mp3",
+		};
+		localFiles.set({ ...emptyLocalFiles, episodes: [localEpisode] });
+		// Only the raw (current-format) path resolves to a file.
+		setApp((path) => (path === "Notes+/C++ Tips.mp3" ? {} : null));
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: "Notes+/C++ Tips.mp3",
+				episodeName: "C++ Tips",
+				time: "30",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: "C++ Tips" });
+		expect(get(viewState)).toBe(ViewState.Player);
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: "local file::C++ Tips",
+			time: 30,
+		});
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("shows a notice and changes nothing when the episode cannot be found", async () => {
+		mockGetEpisodes.mockResolvedValue([]);
+
+		await expect(
+			podNotesURIHandler(
+				{
+					action: "podnotes",
+					url: testFeedUrl,
+					episodeName: "Nonexistent Episode",
+					time: "10",
+				},
+				api as never,
+			),
+		).resolves.toBeUndefined();
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
+	test("does not reject when feed parsing throws (no silent unhandled rejection)", async () => {
+		mockGetEpisodes.mockRejectedValue(new Error("network down"));
+
+		await expect(
+			podNotesURIHandler(
+				{
+					action: "podnotes",
+					url: testFeedUrl,
+					episodeName: "Anything",
+					time: "10",
+				},
+				api as never,
+			),
+		).resolves.toBeUndefined();
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
+	test("picks the '+'-variant feed episode (raw-first) even when its space-twin precedes it", async () => {
+		const spaceVariant: Episode = {
+			...testEpisode,
+			title: "A B",
+			url: "https://pod.example.com/space",
+			streamUrl: "https://pod.example.com/space.mp3",
+		};
+		const plusVariant: Episode = {
+			...testEpisode,
+			title: "A+B",
+			url: "https://pod.example.com/plus",
+			streamUrl: "https://pod.example.com/plus.mp3",
+		};
+		// Space-twin first: an order-insensitive (membership) match would wrongly pick it.
+		mockGetEpisodes.mockResolvedValue([spaceVariant, plusVariant]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: "A+B",
+				time: "75",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: "A+B" });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${plusVariant.podcastName}::A+B`,
+			time: 75,
+		});
+	});
+
+	test("picks the '+'-variant local file (raw-first) even when its space-twin precedes it", async () => {
+		const makeLocal = (title: string): LocalEpisode => ({
+			title,
+			streamUrl: `${title}.mp3`,
+			url: `${title}.mp3`,
+			description: "",
+			content: "",
+			podcastName: "local file",
+			filePath: `${title}.mp3`,
+		});
+		localFiles.set({
+			...emptyLocalFiles,
+			episodes: [makeLocal("A B"), makeLocal("A+B")],
+		});
+		setApp((path) => (path === "A+B.mp3" ? {} : null));
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: "A+B.mp3",
+				episodeName: "A+B",
+				time: "20",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: "A+B" });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: "local file::A+B",
+			time: 20,
+		});
 	});
 });

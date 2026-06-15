@@ -4,6 +4,7 @@ import type DownloadedEpisode from "../../src/types/DownloadedEpisode";
 import type { Episode } from "../../src/types/Episode";
 import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
+import encodePodnotesURI from "../../src/utility/encodePodnotesURI";
 import {
 	createPodNotesE2EHarness,
 	evalJsonAsync,
@@ -186,7 +187,7 @@ describe("PodNotes runtime", () => {
 
 		expect(content).toContain(expectedLink);
 		expect(content).toContain("obsidian://podnotes");
-		expect(content).toContain("episodeName=E2E+Capture+Episode");
+		expect(content).toContain("episodeName=E2E%20Capture%20Episode");
 		expect(content).toContain("time=125");
 	});
 
@@ -480,10 +481,12 @@ function expectedTimestampLink(
 	episode: LocalEpisode,
 	time: number,
 ): string {
-	const uri = new URL("obsidian://podnotes");
-	uri.searchParams.set("episodeName", episode.title);
-	uri.searchParams.set("url", episode.filePath ?? episode.streamUrl);
-	uri.searchParams.set("time", String(time));
+	// Use the production encoder so this helper can never drift from the real wire format.
+	const uri = encodePodnotesURI(
+		episode.title,
+		episode.filePath ?? episode.streamUrl,
+		time,
+	);
 
 	return `[${label}](${uri.href})`;
 }
