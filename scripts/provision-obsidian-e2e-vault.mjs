@@ -154,7 +154,14 @@ export function resolveProvisionOptions(rawOptions, cwd = process.cwd()) {
 	const vaultName =
 		rawOptions.vault ??
 		`${DEFAULT_VAULT_PREFIX}-${slugify(path.basename(worktreePath))}`;
-	const rootPath = path.resolve(cwd, rawOptions.root ?? DEFAULT_ROOT);
+	// Default the vault root to the *worktree* (not cwd) so the provisioned vault
+	// always lives inside the checkout whose plugin it links. Anchoring to cwd
+	// would put `--worktree /other/checkout` vaults under the caller's directory,
+	// where parallel worktrees would share a root — breaking isolation. An
+	// explicit --root still resolves against cwd.
+	const rootPath = rawOptions.root
+		? path.resolve(cwd, rawOptions.root)
+		: path.join(worktreePath, DEFAULT_ROOT);
 	const vaultPath = path.resolve(rootPath, vaultName);
 	const dataPath = rawOptions.data
 		? path.resolve(cwd, rawOptions.data)

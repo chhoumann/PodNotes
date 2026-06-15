@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { execFile, spawn } from "node:child_process";
-import fs from "node:fs/promises";
-import path from "node:path";
+import { spawn } from "node:child_process";
 import process from "node:process";
-import { promisify } from "node:util";
 import { provisionVault } from "./provision-obsidian-e2e-vault.mjs";
 import {
+	isInstanceReady,
 	launchObsidianInstance,
 	parseArgs as parseInstanceArgs,
 	prepareObsidianProfile,
@@ -14,7 +12,6 @@ import {
 	waitForInstanceReady,
 } from "./start-obsidian-e2e-instance.mjs";
 
-const execFileAsync = promisify(execFile);
 const VALUE_OPTIONS = new Set([
 	"--vault",
 	"--root",
@@ -104,34 +101,6 @@ export function obsidianEnv(options) {
 
 export function obsidianCommandArgs(options, commandArgs) {
 	return [`vault=${options.vaultName}`, ...commandArgs];
-}
-
-async function isInstanceReady(options) {
-	// Don't let the readiness probe itself launch Obsidian: the CLI auto-launches
-	// on the first command when no instance is running, which would race the
-	// `open -n` in ensureObsidianInstance and leave two processes on one private
-	// profile/vault. The CLI talks to $HOME/.obsidian-cli.sock, so a missing
-	// socket means "not running" — return false without probing (and launching).
-	const socketPath = path.join(options.obsidianHome, ".obsidian-cli.sock");
-	try {
-		await fs.lstat(socketPath);
-	} catch {
-		return false;
-	}
-
-	try {
-		const { stdout } = await execFileAsync(
-			options.obsidianBin,
-			obsidianCommandArgs(options, ["vault", "info=path"]),
-			{
-				env: obsidianEnv(options),
-				timeout: 5_000,
-			},
-		);
-		return path.resolve(stdout.trim()) === path.resolve(options.vaultPath);
-	} catch {
-		return false;
-	}
 }
 
 export async function ensureObsidianInstance(options) {

@@ -265,6 +265,30 @@ async function execObsidian(options, args, execOptions = {}) {
 	});
 }
 
+export async function isInstanceReady(options) {
+	// Non-launching readiness probe: the obsidian CLI auto-launches Obsidian on
+	// the first command when nothing is running, so probing a cold HOME would
+	// spawn a competing instance. The CLI talks to $HOME/.obsidian-cli.sock, so a
+	// missing socket means "not running" — report not-ready without probing.
+	const socketPath = path.join(options.obsidianHome, ".obsidian-cli.sock");
+	try {
+		await fs.lstat(socketPath);
+	} catch {
+		return false;
+	}
+
+	try {
+		const { stdout } = await execObsidian(
+			options,
+			[`vault=${options.vaultName}`, "vault", "info=path"],
+			{ timeout: 5_000 },
+		);
+		return path.resolve(stdout.trim()) === path.resolve(options.vaultPath);
+	} catch {
+		return false;
+	}
+}
+
 export async function waitForInstanceReady(options) {
 	const expectedPath = path.resolve(options.vaultPath);
 	const deadline = Date.now() + READY_TIMEOUT_MS;
@@ -354,9 +378,12 @@ async function main() {
 	const provisionResult = await provisionVault(options);
 	const profileResult = await prepareObsidianProfile(options);
 	options.userDataPath = profileResult.userDataPath;
-	const launchResult = options.launch
-		? await launchObsidianInstance(options)
-		: { pid: null, pidPath: null };
+	// Reuse a running private instance instead of starting a second app on the
+	// same HOME/vault (open -n would race the existing one over the profile).
+	const launchResult =
+		options.launch && !(await isInstanceReady(options))
+			? await launchObsidianInstance(options)
+			: { pid: null, pidPath: null };
 	const resolvedVaultPath = options.launch
 		? await waitForInstanceReady(options)
 		: null;

@@ -76,6 +76,20 @@ describe("provision-obsidian-e2e-vault", () => {
 		expect(options.vaultName).toBe("podnotes-devx-worktree-vault-isolation");
 	});
 
+	it("anchors the default vault root to the worktree, not cwd", () => {
+		// --worktree elsewhere without --root must keep the vault inside that
+		// checkout (worktree-local isolation), not the caller's cwd.
+		const options = resolveProvisionOptions(
+			parseArgs(["--worktree", "/tmp/other/checkout"]),
+			"/tmp/caller-cwd",
+		);
+
+		expect(options.rootPath).toBe("/tmp/other/checkout/.obsidian-e2e-vaults");
+		expect(options.vaultPath).toBe(
+			"/tmp/other/checkout/.obsidian-e2e-vaults/podnotes-checkout",
+		);
+	});
+
 	it("creates an Obsidian vault with PodNotes symlinked from a worktree", async () => {
 		const root = await makeTempDir("podnotes-e2e-root");
 		const worktree = await makeTempDir("podnotes-worktree-a");
