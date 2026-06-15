@@ -44,6 +44,7 @@ const IMPORTABLE_KEYS = new Set(
 const NESTED_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"timestamp",
 	"note",
+	"feedNote",
 	"download",
 	"transcript",
 	"feedCache",

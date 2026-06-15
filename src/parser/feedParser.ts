@@ -24,12 +24,16 @@ export default class FeedParser {
 		const body = await this.parseFeed(url);
 
 		const titleEl = body.querySelector("title");
-		const linkEl = body.querySelector("link");
 		const itunesImageEl = this.findImageElement(body);
 
-		if (!titleEl || !linkEl) {
+		// A feed must have a title. <link> is intentionally NOT required: it is the
+		// human website (now surfaced as {{url}} in feed notes), but many valid
+		// feeds omit a channel <link> or only carry an <atom:link rel="self">.
+		if (!titleEl) {
 			throw new Error("Invalid RSS feed");
 		}
+
+		const channel = body.querySelector("channel") ?? body;
 
 		const title = titleEl.textContent || "";
 		const artworkUrl =
@@ -43,6 +47,22 @@ export default class FeedParser {
 			artworkUrl,
 		};
 
+		const link = this.findFeedLink(channel);
+		if (link) feed.link = link;
+
+		const description = this.findDirectChildText(channel, [
+			"description",
+			"itunes:summary",
+		]);
+		if (description) feed.description = description;
+
+		const author = this.findDirectChildText(channel, [
+			"itunes:author",
+			"author",
+			"managingEditor",
+		]);
+		if (author) feed.author = author;
+
 		this.feed = feed;
 		return feed;
 	}
@@ -54,6 +74,62 @@ export default class FeedParser {
 
 		// Fallback to generic <image> element
 		return doc.querySelector("image");
+	}
+
+	/**
+	 * Resolve the feed's website URL from the channel's direct <link> children.
+	 * Prefers a <link> whose text content is an http(s) URL; RSS feeds commonly
+	 * place an <atom:link rel="self" href="..."/> (URL in the attribute, empty
+	 * text) before the website <link>, so those are skipped, with an atom
+	 * alternate href used only as a last resort. Returns "" when none is present.
+	 */
+	private findFeedLink(scope: Document | Element): string {
+		const directLinks = Array.from(scope.children).filter((el) => {
+			const tag = el.tagName.toLowerCase();
+			return tag === "link" || tag === "atom:link";
+		});
+
+		for (const link of directLinks) {
+			const text = link.textContent?.trim();
+			if (text && /^https?:\/\//i.test(text)) return text;
+		}
+
+		for (const link of directLinks) {
+			// Only an "alternate" (or rel-less) atom link is the human website.
+			// Skip self/hub/next/prev/first/last/payment/edit and similar relations
+			// so a PubSubHubbub hub or pagination URL never becomes the feed link.
+			const rel = link.getAttribute("rel");
+			if (rel && rel !== "alternate") continue;
+			const href = link.getAttribute("href")?.trim();
+			if (href && /^https?:\/\//i.test(href)) return href;
+		}
+
+		return "";
+	}
+
+	/**
+	 * Read a feed-level value from the first DIRECT child of `scope` matching
+	 * `tagNames`, honouring the PRIORITY of `tagNames` (not document order): the
+	 * first tag name with a non-empty value wins. This keeps a preferred tag
+	 * (e.g. <itunes:author>) ahead of a fallback (<managingEditor>) regardless of
+	 * their order in the XML, and lets an empty <description> fall through to
+	 * <itunes:summary>. Direct-child scoping keeps it from matching the same tags
+	 * nested inside an <item>.
+	 */
+	private findDirectChildText(
+		scope: Document | Element,
+		tagNames: string[],
+	): string {
+		const children = Array.from(scope.children);
+		for (const tag of tagNames) {
+			const wanted = tag.toLowerCase();
+			for (const child of children) {
+				if (child.tagName.toLowerCase() !== wanted) continue;
+				const text = child.textContent?.trim() ?? "";
+				if (text) return text;
+			}
+		}
+		return "";
 	}
 
 	protected parsePage(page: Document): Episode[] {

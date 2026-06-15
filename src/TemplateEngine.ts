@@ -3,6 +3,7 @@ import { htmlToMarkdown, Notice } from "obsidian";
 import { plugin } from "src/store";
 import { get } from "svelte/store";
 import type { Episode } from "src/types/Episode";
+import type { PodcastFeed } from "src/types/PodcastFeed";
 import getUrlExtension from "./utility/getUrlExtension";
 import { formatDate } from "./utility/formatDate";
 
@@ -112,6 +113,19 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 		replaceIllegalFileNameCharactersInString(episode.podcastName),
 	);
 	addTag("artwork", episode.artworkUrl ?? "");
+
+	// Feed-scoped tags so an episode note can reference its parent podcast feed
+	// without changing the meaning of the existing {{url}}/{{artwork}} tags
+	// (which always describe the episode itself). See issue #163.
+	addTag("episodeurl", episode.url);
+	addTag("episodeartwork", episode.artworkUrl ?? "");
+	addTag("feedurl", episode.feedUrl ?? "");
+	const parentFeed =
+		get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
+	addTag("feedartwork", parentFeed?.artworkUrl ?? episode.artworkUrl ?? "");
+	// A ready-made wikilink to the parent feed's note, pointing at the same file
+	// createFeedNote writes (derived from the feed-note path setting).
+	addTag("podcastlink", getFeedNoteWikilink(episode.podcastName));
 
 	return replacer(template);
 }
@@ -240,6 +254,101 @@ export function TranscriptTemplateEngine(
 	addTag("artwork", episode.artworkUrl ?? "");
 
 	return replacer(template);
+}
+
+export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
+	const [replacer, addTag] = useTemplateEngine();
+
+	const safeTitle = replaceIllegalFileNameCharactersInString(feed.title);
+
+	// In a feed note the subject is the feed, so {{url}}/{{artwork}} describe the
+	// feed (mirroring how they describe the episode in NoteTemplateEngine).
+	addTag("title", feed.title);
+	addTag("safetitle", safeTitle);
+	addTag("podcast", safeTitle);
+	// URL tags are sanitized so they stay valid inside quoted YAML frontmatter
+	// scalars (the default feed template quotes them). A well-formed URL never
+	// contains a raw double-quote, backslash, or control character.
+	addTag("url", sanitizeUrlForTemplate(feed.link ?? ""));
+	addTag("feedurl", sanitizeUrlForTemplate(feed.url));
+	addTag("artwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
+	addTag("feedartwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
+	addTag("author", feed.author ?? "");
+	addTag("description", (prependToLines?: string) => {
+		const sanitizeDescription = htmlToMarkdown(feed.description ?? "").replace(
+			/\n{3,}/g,
+			"\n\n",
+		);
+		if (prependToLines) {
+			return sanitizeDescription
+				.split("\n")
+				.map((str) => `${prependToLines}${str}`)
+				.join("\n");
+		}
+
+		return sanitizeDescription;
+	});
+	addTag("date", (format?: string) =>
+		formatDate(new Date(), format ?? "YYYY-MM-DD"),
+	);
+
+	return replacer(template);
+}
+
+export function FeedFilePathTemplateEngine(template: string, feed: PodcastFeed) {
+	const [replacer, addTag] = useTemplateEngine();
+
+	const safeName = replaceIllegalFileNameCharactersInString(feed.title);
+	const nameTag = (whitespaceReplacement?: string) =>
+		whitespaceReplacement
+			? safeName.replace(/\s+/g, whitespaceReplacement)
+			: safeName;
+
+	addTag("title", nameTag);
+	addTag("podcast", nameTag);
+	addTag("date", (format?: string) =>
+		formatDate(new Date(), format ?? "YYYY-MM-DD"),
+	);
+
+	return replacer(template);
+}
+
+/**
+ * Build the wikilink an episode's {{podcastlink}} emits to its feed note,
+ * derived from the configured feed-note path so it points at the exact file
+ * `createFeedNote` writes. When that path has a folder the link is
+ * path-qualified (`[[folder/Name|Name]]`) so it can never resolve to an
+ * unrelated note that happens to share the basename; otherwise a plain
+ * `[[Name]]` is used. Falls back to the sanitized feed name when no feed-note
+ * path is configured (or the plugin store is not yet ready, e.g. in unit tests).
+ */
+export function getFeedNoteWikilink(feedTitle: string): string {
+	const fallback = replaceIllegalFileNameCharactersInString(feedTitle);
+	const path = get(plugin)?.settings?.feedNote?.path?.trim();
+
+	if (!path) return `[[${fallback}]]`;
+
+	const rendered = FeedFilePathTemplateEngine(path, {
+		title: feedTitle,
+		url: "",
+		artworkUrl: "",
+	});
+	const linkPath = rendered.replace(/\.md$/i, "").trim();
+	const basename = linkPath.split("/").pop()?.trim() || fallback;
+
+	return linkPath.includes("/")
+		? `[[${linkPath}|${basename}]]`
+		: `[[${basename}]]`;
+}
+
+/**
+ * Strip the two characters that would break a double-quoted YAML scalar
+ * (and never appear in a well-formed URL): the double-quote that ends the
+ * scalar and the backslash that YAML reads as an escape. Lossless for valid
+ * URLs; only sanitizes malformed feeds so quoted frontmatter stays valid.
+ */
+function sanitizeUrlForTemplate(url: string): string {
+	return url.replace(/["\\]/g, "");
 }
 
 export function replaceIllegalFileNameCharactersInString(string: string) {

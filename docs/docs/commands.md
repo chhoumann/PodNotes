@@ -33,10 +33,23 @@ This will capture the current timestamp of the currently playing episode.
 
 See [timestamps](timestamps.md) for more information on timestamp templates.
 
-## Create Podcast Note
+## Create episode note
 This will create a note for the currently playing episode.
 
+(This command was previously named "Create Podcast Note". The name was changed to
+distinguish it from the feed-level command below; existing hotkeys are unaffected.)
+
 See [templates](templates.md) for more information on note templates.
+
+## Create podcast feed note
+This creates a note for a whole podcast (the feed as a whole), not a single
+episode. It does **not** require playing anything: running the command opens a
+picker of your saved podcasts, and choosing one creates (or opens) that podcast's
+note. You can also create a feed note from an episode's right-click menu
+("Create feed note").
+
+See [templates](templates.md#podcast-feed-notes) for the feed note template and
+its available tags.
 
 ## Copy universal episode link to clipboard
 This will copy the universal episode link to the clipboard.

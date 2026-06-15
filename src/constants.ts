@@ -67,6 +67,31 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		template: "",
 	},
 
+	feedNote: {
+		path: "PodNotes/Podcasts/{{podcast}}.md",
+		// Bases-friendly frontmatter. Only YAML-safe values go in the frontmatter:
+		// {{podcast}} is sanitized (quotes/colons stripped) and the quoted URL
+		// scalars ({{artwork}}/{{url}}/{{feedurl}}) have their quote/backslash
+		// stripped by the feed engine, so an arbitrary or empty value always
+		// produces valid YAML. The raw {{title}}/{{author}} (which may contain
+		// quotes/colons) live in the note body instead, where YAML rules don't
+		// apply. See issue #163 / #160.
+		template:
+			"---\n" +
+			"type: podcast\n" +
+			'podcast: "{{podcast}}"\n' +
+			'image: "{{artwork}}"\n' +
+			'url: "{{url}}"\n' +
+			'feedUrl: "{{feedurl}}"\n' +
+			"tags:\n" +
+			"  - podcast\n" +
+			"---\n" +
+			"# {{title}}\n" +
+			"{{author}}\n\n" +
+			"![]({{artwork}})\n\n" +
+			"{{description}}\n",
+	},
+
 	download: {
 		// Must include a per-episode token ({{title}}). An empty or token-less path
 		// resolves every episode to the same name — e.g. "" -> ".mp3", a hidden

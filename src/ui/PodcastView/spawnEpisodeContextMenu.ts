@@ -1,8 +1,10 @@
 import { Menu, Notice } from "obsidian";
 import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPodcastNote";
+import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
 import downloadEpisodeWithProgessNotice from "src/downloadEpisode";
-import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, viewState } from "src/store";
+import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, savedFeeds, viewState } from "src/store";
 import type { Episode } from "src/types/Episode";
+import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
@@ -98,6 +100,27 @@ export default function spawnEpisodeContextMenu(
 					}
 
 					await createPodcastNote(episode);
+				}
+			}));
+
+		// Feed-level note for the episode's parent podcast (issue #163).
+		const feed = resolveFeedForEpisode(episode);
+		const feedNoteExists = Boolean(getFeedNote(feed));
+
+		menu.addItem(item => item
+			.setIcon("rss")
+			.setTitle(`${feedNoteExists ? "Open" : "Create"} feed note`)
+			.onClick(async () => {
+				if (feedNoteExists) {
+					openFeedNote(feed);
+				} else {
+					const { path, template } = get(plugin).settings.feedNote;
+					if (!path || !template) {
+						new Notice(`Please set a podcast feed note path and template in the settings.`);
+						return;
+					}
+
+					await createFeedNote(feed);
 				}
 			}));
 	}
@@ -212,4 +235,21 @@ export default function spawnEpisodeContextMenu(
 
 	menu.showAtMouseEvent(event);
 
+}
+
+/**
+ * Resolve the parent feed for an episode. Prefers the saved feed (keyed by the
+ * raw podcast name, matching episode.podcastName) so its artwork/url/metadata are
+ * used; otherwise synthesizes a minimal feed from the episode (e.g. local files
+ * or history). createFeedNote enriches missing metadata via the feed URL.
+ */
+function resolveFeedForEpisode(episode: Episode): PodcastFeed {
+	const saved = get(savedFeeds)[episode.podcastName];
+	if (saved) return saved;
+
+	return {
+		title: episode.podcastName,
+		url: episode.feedUrl ?? "",
+		artworkUrl: episode.artworkUrl ?? "",
+	};
 }

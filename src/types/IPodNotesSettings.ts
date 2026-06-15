@@ -37,6 +37,11 @@ export interface IPodNotesSettings {
 		template: string;
 	};
 
+	feedNote: {
+		path: string;
+		template: string;
+	};
+
 	download: {
 		path: string;
 	};
