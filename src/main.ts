@@ -10,7 +10,6 @@ import {
 	hidePlayedEpisodes,
 	volume,
 } from "src/store";
-import { blobUrlManager } from "src/utility/createMediaUrlObjectFromFilePath";
 import { Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
@@ -399,9 +398,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.hidePlayedEpisodesController?.off();
 		this.volumeUnsubscribe?.();
 		this.localFilesMirrorUnsubscribe?.();
-
-		// Clean up any active blob URLs to prevent memory leaks
-		blobUrlManager.revokeAll();
 
 		// Detach all leaves of this view type to prevent duplicates on reload
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE);

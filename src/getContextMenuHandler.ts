@@ -11,13 +11,30 @@ import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
 import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
 
+// Extensions for which "Play with PodNotes" is offered. Kept in sync with the
+// formats PodNotes already recognizes as audio elsewhere (detectAudioFileExtension
+// in downloadEpisode.ts and getExtensionFromContentType), plus the mp4/webm
+// containers, so right-clicking any such file offers playback. The previous inline
+// regex had a trailing empty alternative that matched every file regardless of type.
+const PLAYABLE_EXTENSIONS = new Set([
+	"mp3",
+	"mp4",
+	"m4a",
+	"aac",
+	"ogg",
+	"wav",
+	"webm",
+	"flac",
+	"wma",
+	"amr",
+]);
+
 export default function getContextMenuHandler(app: App): EventRef {
 	return app.workspace.on(
 		"file-menu",
 		(menu: Menu, file: TAbstractFile) => {
 			if (!(file instanceof TFile)) return;
-			if (!file.extension.match(/mp3|mp4|wma|aac|wav|webm|aac|flac|m4a|/))
-				return;
+			if (!PLAYABLE_EXTENSIONS.has(file.extension.toLowerCase())) return;
 
 			menu.addItem((item) =>
 				item
@@ -30,9 +47,7 @@ export default function getContextMenuHandler(app: App): EventRef {
 							content: "",
 							podcastName: "local file",
 							url: app.fileManager.generateMarkdownLink(file, ""),
-							streamUrl: await createMediaUrlObjectFromFilePath(
-								file.path
-							),
+							streamUrl: createMediaUrlObjectFromFilePath(file.path),
 							filePath: file.path,
 							episodeDate: new Date(file.stat.ctime),
 						};
