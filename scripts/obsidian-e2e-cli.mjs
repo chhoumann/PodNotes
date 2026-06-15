@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFile, spawn } from "node:child_process";
+import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -106,6 +107,18 @@ export function obsidianCommandArgs(options, commandArgs) {
 }
 
 async function isInstanceReady(options) {
+	// Don't let the readiness probe itself launch Obsidian: the CLI auto-launches
+	// on the first command when no instance is running, which would race the
+	// `open -n` in ensureObsidianInstance and leave two processes on one private
+	// profile/vault. The CLI talks to $HOME/.obsidian-cli.sock, so a missing
+	// socket means "not running" — return false without probing (and launching).
+	const socketPath = path.join(options.obsidianHome, ".obsidian-cli.sock");
+	try {
+		await fs.lstat(socketPath);
+	} catch {
+		return false;
+	}
+
 	try {
 		const { stdout } = await execFileAsync(
 			options.obsidianBin,

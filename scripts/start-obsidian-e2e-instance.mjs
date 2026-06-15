@@ -375,11 +375,14 @@ async function main() {
 	if (rawOptions.json) {
 		console.log(JSON.stringify(result, null, 2));
 	} else {
-		console.log(`Prepared Obsidian E2E instance ${result.vaultName}`);
-		console.log(`Vault path: ${result.vaultPath}`);
-		console.log(`Obsidian HOME: ${result.obsidianHome}`);
-		if (result.pid) console.log(`Obsidian PID: ${result.pid}`);
-		if (result.verifiedPodNotes) console.log("PodNotes plugin check: ok");
+		// With --print-env, stdout must contain only the `export ...` lines so
+		// `eval "$(... --print-env)"` works; route the human summary to stderr.
+		const status = rawOptions.printEnv ? console.error : console.log;
+		status(`Prepared Obsidian E2E instance ${result.vaultName}`);
+		status(`Vault path: ${result.vaultPath}`);
+		status(`Obsidian HOME: ${result.obsidianHome}`);
+		if (result.pid) status(`Obsidian PID: ${result.pid}`);
+		if (result.verifiedPodNotes) status("PodNotes plugin check: ok");
 	}
 
 	if (rawOptions.printEnv) {

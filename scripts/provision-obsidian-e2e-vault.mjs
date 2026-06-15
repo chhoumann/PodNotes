@@ -306,15 +306,16 @@ async function main() {
 	if (options.json) {
 		console.log(JSON.stringify(result, null, 2));
 	} else {
-		console.log(`Provisioned Obsidian E2E vault ${result.vaultName}`);
-		console.log(`Vault path: ${result.vaultPath}`);
-		console.log(`PodNotes plugin: ${result.pluginPath}`);
+		// With --print-env, stdout must contain only the `export ...` lines so
+		// `eval "$(... --print-env)"` works; route the human summary to stderr.
+		const status = options.printEnv ? console.error : console.log;
+		status(`Provisioned Obsidian E2E vault ${result.vaultName}`);
+		status(`Vault path: ${result.vaultPath}`);
+		status(`PodNotes plugin: ${result.pluginPath}`);
 		// Provisioning only lays down vault files; it does not launch Obsidian,
 		// disable Restricted Mode, or confirm the plugin loads. Use
 		// `npm run start:e2e-obsidian` / `npm run obsidian:e2e` for that.
-		console.log(
-			"Plugin not yet verified — start an instance to trust & load it.",
-		);
+		status("Plugin not yet verified — start an instance to trust & load it.");
 	}
 
 	if (options.printEnv) {
