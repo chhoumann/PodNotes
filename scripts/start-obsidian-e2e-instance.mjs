@@ -181,6 +181,11 @@ async function linkHostKeychains(options) {
 
 	const source = path.join(realHome, "Library", "Keychains");
 	const destination = path.join(options.obsidianHome, "Library", "Keychains");
+	// If HOME is already the private profile (e.g. after the documented
+	// `export HOME=$PODNOTES_E2E_OBSIDIAN_HOME`), source and destination are the
+	// same path. Re-linking would unlink the real host-keychain symlink a prior
+	// run created and replace it with a self-referential broken link — leave it.
+	if (path.resolve(source) === path.resolve(destination)) return;
 	try {
 		await fs.lstat(source);
 	} catch (error) {
