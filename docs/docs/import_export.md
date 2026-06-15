@@ -23,6 +23,8 @@ Under the **Settings & templates** heading you can move your PodNotes
 configuration between vaults or back it up. This covers your preferences,
 note/timestamp/transcript templates, file paths, saved feeds, and playlists.
 
+![Settings & templates import/export](resources/settings_import_export.png)
+
 Playback progress, downloaded-episode bookkeeping, the currently-playing
 episode, and the episode-to-note mapping are **not** included, because they are
 specific to a single vault.
