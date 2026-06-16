@@ -88,7 +88,12 @@
 	<div class="add-playlist-container">
 		<Dropdown {options} bind:value={icon} on:change={onChangeIcon} />
 		<Text placeholder="Playlist name" bind:value={playlistInput} />
-		<Button icon="plus" cta={true} on:click={onAddPlaylist} />
+		<Button
+			text="Add"
+			cta={true}
+			ariaLabel="Add playlist"
+			on:click={onAddPlaylist}
+		/>
 	</div>
 </div>
 

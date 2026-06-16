@@ -140,3 +140,47 @@ if (!(HTMLElement.prototype as unknown as { empty?: () => void }).empty) {
 			}
 		};
 }
+
+// jsdom does not implement the Web Animations API, which Svelte 5 transitions
+// (e.g. transition:fade) rely on. Provide a minimal mock so components that use
+// transitions can be rendered and asserted on in component tests.
+//
+// Known fidelity gaps (acceptable for the current suite, which only renders
+// CSS fade transitions): `onfinish` fires immediately on a microtask rather
+// than after the real duration, `playState` is always "finished", and
+// `finished` is pre-resolved and ignores `cancel()`. If a future test needs to
+// assert mid-transition or outro-timing behaviour, replace this with a fuller
+// fake (e.g. a timer-driven animation) instead of relying on these defaults.
+if (!Element.prototype.animate) {
+	(Element.prototype as unknown as { animate: () => Animation }).animate =
+		function () {
+			let onfinish: (() => void) | null = null;
+			const animation = {
+				cancel() {},
+				finish() {},
+				play() {},
+				pause() {},
+				reverse() {},
+				currentTime: 0,
+				startTime: 0,
+				playbackRate: 1,
+				playState: "finished",
+				finished: Promise.resolve(),
+				effect: null,
+				addEventListener() {},
+				removeEventListener() {},
+				get onfinish() {
+					return onfinish;
+				},
+				set onfinish(fn: (() => void) | null) {
+					onfinish = fn;
+					if (fn) {
+						queueMicrotask(() => fn());
+					}
+				},
+				oncancel: null,
+			};
+
+			return animation as unknown as Animation;
+		};
+}
