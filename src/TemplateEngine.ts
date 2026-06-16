@@ -13,6 +13,8 @@ import buildEpisodeResumeLink from "./utility/buildEpisodeResumeLink";
 import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import type { PodcastSegmentTimes } from "./utility/podcastSegment";
+import type { Chapter } from "./types/Chapter";
+import { normalizeChapters } from "./utility/normalizeChapters";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -26,6 +28,21 @@ interface Tags {
 type AddTagFn = (tag: Lowercase<string>, value: TagValue) => void;
 type ReplacerFn = (template: string) => string;
 
+const TEMPLATE_TAG_REGEX = /\{\{(.*?)(:\s*?.+?)?\}\}/g;
+
+export interface NoteTemplateContext {
+	chapters?: Chapter[];
+}
+
+export function templateHasTag(
+	template: string,
+	tag: Lowercase<string>,
+): boolean {
+	return Array.from(template.matchAll(TEMPLATE_TAG_REGEX)).some(
+		([, tagId]) => tagId.toLowerCase() === tag,
+	);
+}
+
 function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	const tags: Tags = {};
 
@@ -38,7 +55,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 
 	function replacer(template: string): string {
 		return template.replace(
-			/\{\{(.*?)(:\s*?.+?)?\}\}/g,
+			TEMPLATE_TAG_REGEX,
 			(match: string, tagId: string, params: string) => {
 				const tagValue = tags[tagId.toLowerCase()];
 				if (tagValue === null || tagValue === undefined) {
@@ -91,7 +108,40 @@ function resolveEpisodeNumber(episode: Episode): number | undefined {
 	return episode.episodeNumber ?? parseEpisodeNumberFromTitle(episode.title);
 }
 
-export function NoteTemplateEngine(template: string, episode: Episode) {
+function formatChapterTitle(title: string): string {
+	return title.replace(/\s+/g, " ").trim();
+}
+
+function escapeMarkdownText(text: string): string {
+	return text
+		.replace(/\\/g, "\\\\")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/([`*_{}[\]()#+.!|-])/g, "\\$1");
+}
+
+function formatTemplateChapters(
+	chapters: Chapter[] | undefined,
+	prependToLines?: string,
+): string {
+	const lines = normalizeChapters(chapters ?? [])
+		.map(
+			(chapter) =>
+				`- ${formatDuration(chapter.startTime)} ${escapeMarkdownText(formatChapterTitle(chapter.title))}`,
+		);
+
+	if (!prependToLines) {
+		return lines.join("\n");
+	}
+
+	return lines.map((line) => `${prependToLines}${line}`).join("\n");
+}
+
+export function NoteTemplateEngine(
+	template: string,
+	episode: Episode,
+	context: NoteTemplateContext = {},
+) {
 	const [replacer, addTag] = useTemplateEngine();
 
 	addTag("title", episode.title);
@@ -142,6 +192,11 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 		episode.duration !== undefined
 			? formatDuration(episode.duration, format)
 			: "",
+	);
+	// Podcasting 2.0 chapters, fetched before note creation when the template
+	// asks for them. Empty when the feed has no chapters URL or fetching fails.
+	addTag("chapters", (prependToLines?: string) =>
+		formatTemplateChapters(context.chapters, prependToLines),
 	);
 	addTag(
 		"podcast",

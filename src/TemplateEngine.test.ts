@@ -523,6 +523,49 @@ describe("{{duration}} tag (#88)", () => {
 	});
 });
 
+describe("{{chapters}} tag (#47)", () => {
+	const chapters = [
+		{ startTime: 65, title: "Deep Dive" },
+		{ startTime: 0, title: "  Intro\nSegment  " },
+		{ startTime: 90, title: "Sponsor", toc: false },
+	];
+
+	beforeEach(() => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+	});
+
+	it("renders visible chapters as a sorted Markdown list", () => {
+		expect(NoteTemplateEngine("{{chapters}}", demoEpisode, { chapters })).toBe(
+			"- 0:00 Intro Segment\n- 1:05 Deep Dive",
+		);
+	});
+
+	it("can prepend each rendered chapter line", () => {
+		expect(NoteTemplateEngine("{{chapters:> }}", demoEpisode, { chapters })).toBe(
+			"> - 0:00 Intro Segment\n> - 1:05 Deep Dive",
+		);
+	});
+
+	it("escapes chapter titles so feed-controlled text cannot inject Markdown", () => {
+		expect(
+			NoteTemplateEngine("{{chapters}}", demoEpisode, {
+				chapters: [
+					{
+						startTime: 0,
+						title: "[click](obsidian://podnotes) ![pixel](https://example.com/pixel)",
+					},
+				],
+			}),
+		).toBe(
+			"- 0:00 \\[click\\]\\(obsidian://podnotes\\) \\!\\[pixel\\]\\(https://example\\.com/pixel\\)",
+		);
+	});
+
+	it("renders empty when no chapters were fetched", () => {
+		expect(NoteTemplateEngine("[{{chapters}}]", demoEpisode)).toBe("[]");
+	});
+});
+
 describe("TranscriptTemplateEngine new tags (#75/#34/#88)", () => {
 	const fixture: Episode = { ...demoEpisode, episodeNumber: 42, duration: 3723 };
 

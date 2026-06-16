@@ -176,6 +176,25 @@ const rssFeedWithEpisodeNumberAndDuration = `<?xml version="1.0" encoding="UTF-8
   </channel>
 </rss>`;
 
+const rssFeedWithPodcastChapters = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Chaptered Podcast</title>
+    <link>https://example.com</link>
+    <item>
+      <title>Chaptered Episode</title>
+      <enclosure url="https://example.com/chaptered.mp3" type="audio/mpeg"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+      <podcast:chapters url="https://example.com/chapters.json" type="application/json"/>
+    </item>
+    <item>
+      <title>Episode Without Chapters</title>
+      <enclosure url="https://example.com/no-chapters.mp3" type="audio/mpeg"/>
+      <pubDate>Tue, 02 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
 describe("FeedParser", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -367,6 +386,32 @@ describe("FeedParser", () => {
 			// Feed metadata should now be populated
 			expect(episode.podcastName).toBe("Test Podcast");
 			expect(episode.feedUrl).toBe("https://example.com/feed.xml");
+		});
+
+		test("parses Podcasting 2.0 chapter URLs from episodes (#47)", async () => {
+			mockRequestWithTimeout
+				.mockResolvedValueOnce({
+					text: rssFeedWithPodcastChapters,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				})
+				.mockResolvedValueOnce({
+					text: rssFeedWithPodcastChapters,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				});
+
+			const parser = new FeedParser();
+			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
+
+			expect(episodes[0].chaptersUrl).toBe(
+				"https://example.com/chapters.json",
+			);
+			expect(episodes[1].chaptersUrl).toBeUndefined();
 		});
 
 		test("filters out invalid episodes missing required fields", async () => {

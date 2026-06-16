@@ -378,7 +378,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					);
 				}
 
-				createPodcastNote(this.api.podcast);
+				void createPodcastNote(this.api.podcast);
 			},
 		});
 
