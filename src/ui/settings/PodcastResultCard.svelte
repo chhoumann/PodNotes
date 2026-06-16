@@ -24,13 +24,15 @@
 	<div class="podcast-actions">
 		{#if isSaved}
 			<Button
-				icon="trash"
+				text="Remove"
+				warning
 				ariaLabel={`Remove ${podcast.title} podcast`}
 				on:click={() => dispatch("removePodcast", { podcast })}
 			/>
 		{:else}
 			<Button
-				icon="plus"
+				text="Add"
+				cta
 				ariaLabel={`Add ${podcast.title} podcast`}
 				on:click={() => dispatch("addPodcast", { podcast })}
 			/>
@@ -95,19 +97,16 @@
 		-webkit-box-orient: vertical;
 	}
 
+	/*
+	 * The Add/Remove control uses Obsidian's native call-to-action / warning
+	 * button styling with a text label. A label is always visible and is sized
+	 * correctly per platform (Obsidian renders larger buttons on mobile/iPad),
+	 * unlike the previous icon-only button whose glyph failed to render on iPad
+	 * and left an empty, unrecognisable tap target — the root cause of #109.
+	 */
 	.podcast-actions {
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
-	}
-
-	:global(.podcast-actions button) {
-		padding: 0.375rem;
-		border-radius: 0.25rem;
-		transition: background-color 120ms ease;
-	}
-
-	:global(.podcast-actions button:hover) {
-		background-color: var(--background-modifier-hover);
 	}
 </style>
