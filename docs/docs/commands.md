@@ -3,7 +3,7 @@ Opens the PodNotes pane and brings it into focus.
 
 If the pane already exists but is hidden — for example in a collapsed sidebar or out of view because the right sidebar has too many icons — this command reveals it. If it does not exist yet, the command creates it in the right sidebar. You can run it from the command palette or bind it to a hotkey.
 
-You can also open PodNotes from the **podcast icon in the left ribbon**, which is always visible and is the most reliable way to reopen the pane.
+PodNotes also adds a **podcast icon to the left ribbon** as a reliable way to reopen the pane. On mobile it appears in the ribbon menu, and you can hide it via Obsidian's *Manage ribbon actions* if you prefer to use the command instead.
 
 If you are having issues with PodNotes not being shown, feel free to create an [issue](https://github.com/chhoumann/PodNotes/issues/new).
 

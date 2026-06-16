@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PodNotes from "./main";
 import { VIEW_TYPE } from "./constants";
 
@@ -69,5 +69,98 @@ describe("PodNotes.activateView", () => {
 
 		await expect(plugin.activateView()).resolves.toBeUndefined();
 		expect(workspace.revealLeaf).not.toHaveBeenCalled();
+	});
+});
+
+// Locks the actual #55 wiring (not just activateView's internals): the
+// "Show PodNotes" command must stay always-available (a plain callback, never
+// a leaf-gated checkCallback) and the ribbon icon must route to activateView.
+// A refactor that reintroduced the old checkCallback gate or unwired the ribbon
+// would reproduce the bug while activateView's own unit tests stayed green.
+describe("PodNotes onload wiring (#55)", () => {
+	// onload() wires real module-level stores to controllers; unload them after
+	// each test so leaked subscriptions don't fire into a disposed plugin.
+	const loaded: PodNotes[] = [];
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => {
+		for (const p of loaded.splice(0)) {
+			p.onunload();
+		}
+		vi.restoreAllMocks();
+	});
+
+	async function loadPlugin() {
+		const activateSpy = vi
+			.spyOn(PodNotes.prototype, "activateView")
+			.mockResolvedValue(undefined);
+
+		const commands: Array<Record<string, unknown>> = [];
+		const ribbonCalls: Array<{
+			icon: string;
+			title: string;
+			handler: (evt: unknown) => unknown;
+		}> = [];
+
+		const plugin = Object.create(PodNotes.prototype) as PodNotes;
+		Object.assign(plugin, {
+			loadData: vi.fn().mockResolvedValue({}),
+			saveData: vi.fn().mockResolvedValue(undefined),
+			addCommand: vi.fn((cmd: Record<string, unknown>) => {
+				commands.push(cmd);
+				return cmd;
+			}),
+			addRibbonIcon: vi.fn(
+				(icon: string, title: string, handler: (evt: unknown) => unknown) => {
+					ribbonCalls.push({ icon, title, handler });
+					return document.createElement("div");
+				},
+			),
+			addSettingTab: vi.fn(),
+			registerView: vi.fn(),
+			registerObsidianProtocolHandler: vi.fn(),
+			registerEvent: vi.fn(),
+			app: {
+				workspace: {
+					onLayoutReady: vi.fn(),
+					on: vi.fn(() => ({})),
+					getLeavesOfType: vi.fn(() => []),
+					getRightLeaf: vi.fn(() => null),
+					revealLeaf: vi.fn(),
+					detachLeavesOfType: vi.fn(),
+				},
+			},
+		});
+
+		await plugin.onload();
+		loaded.push(plugin);
+
+		return { commands, ribbonCalls, activateSpy };
+	}
+
+	it("registers Show PodNotes as an always-available callback, not a leaf-gated checkCallback", async () => {
+		const { commands } = await loadPlugin();
+
+		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
+		expect(showCmd).toBeDefined();
+		expect(typeof showCmd?.callback).toBe("function");
+		expect(showCmd?.checkCallback).toBeUndefined();
+	});
+
+	it("Show PodNotes command and ribbon icon both route to activateView", async () => {
+		const { commands, ribbonCalls, activateSpy } = await loadPlugin();
+
+		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
+		(showCmd?.callback as () => void)();
+		expect(activateSpy).toHaveBeenCalledTimes(1);
+
+		const ribbon = ribbonCalls.find((r) => r.title === "Show PodNotes");
+		expect(ribbon).toBeDefined();
+		expect(ribbon?.icon).toBe("podcast");
+		ribbon?.handler(new MouseEvent("click"));
+		expect(activateSpy).toHaveBeenCalledTimes(2);
 	});
 });
