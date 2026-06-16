@@ -16,6 +16,7 @@
 		"obsidian:e2e": "node scripts/obsidian-e2e-cli.mjs",
 		"provision:e2e-vault": "node scripts/provision-obsidian-e2e-vault.mjs",
 		"start:e2e-obsidian": "node scripts/start-obsidian-e2e-instance.mjs",
+		"stop:e2e-obsidian": "node scripts/stop-obsidian-e2e-instance.mjs",
 		"check:a11y": "svelte-check --fail-on-warnings",
 		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
 		"docs:deploy": "npm run docs:build && npx wrangler pages deploy docs/site --project-name podnotes --branch master"

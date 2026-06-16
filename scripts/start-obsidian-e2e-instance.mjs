@@ -406,6 +406,29 @@ function shellQuote(value) {
 	return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
+// Self-healing safety net: before launching our own instance, reap any leaked
+// instances whose backing worktree is gone (e.g. removed on merge without the
+// orca archive hook running). Best-effort — a reap failure must never block a
+// start. The reaper is imported lazily so the static module graph stays acyclic
+// (the stop module imports our option resolver; we only need its reaper at
+// runtime). Logs go to stderr so `--print-env` keeps stdout to `export …` lines.
+export async function reapStaleInstances(options) {
+	try {
+		const { reapOrphanedInstances } = await import(
+			"./stop-obsidian-e2e-instance.mjs"
+		);
+		await reapOrphanedInstances({
+			profileRoot: options.profileRoot,
+			exceptInstancePath: options.instancePath,
+			log: console.error,
+		});
+	} catch (error) {
+		console.error(
+			`Skipping stale-instance reap: ${error instanceof Error ? error.message : error}`,
+		);
+	}
+}
+
 async function main() {
 	const rawOptions = parseArgs(process.argv.slice(2));
 	if (rawOptions.help) {
@@ -414,6 +437,7 @@ async function main() {
 	}
 
 	const options = resolveInstanceOptions(rawOptions);
+	await reapStaleInstances(options);
 	const provisionResult = await provisionVault(options);
 	const profileResult = await prepareObsidianProfile(options);
 	options.userDataPath = profileResult.userDataPath;
