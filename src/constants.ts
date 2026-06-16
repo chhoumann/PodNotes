@@ -86,23 +86,22 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		// path convention (PodNotes/{{podcast}}/{{title}}). See issue #160.
 		path: "PodNotes/{{podcast}}/{{title}}.md",
 		// Bases-friendly frontmatter so new installs get queryable episode metadata
-		// out of the box (issue #160). The values are chosen to render as valid YAML
-		// for the common case: {{podcastlink}} is a wikilink whose name is sanitized
-		// (no quotes) and is quoted so its leading "[[" can't be read as a flow
-		// sequence; {{url}} is a well-formed feed URL (or, for local files, a vault
-		// link) placed in a quoted scalar; and {{date:YYYY-MM-DD}} is either an ISO
-		// date or empty (null). Tag values are inserted verbatim (not escaped), so a
-		// URL/feed-note path containing a literal quote is the one case that would
-		// need adjusting. The raw {{title}} (which may contain quotes/colons) lives
-		// in the note body as the H1, where YAML rules don't apply. status/rating/
-		// favorite are left for the user to fill and give Bases columns to sort and
-		// filter on. {{podcastlink}} ties each episode to its feed note (#163). See
-		// issue #160.
+		// out of the box (issue #160). Every value here is guaranteed valid YAML
+		// because none of them can contain a YAML-hostile character: {{podcastlink}}
+		// is a wikilink whose name is sanitized (no quotes) and is quoted so its
+		// leading "[[" can't be read as a flow sequence, and {{date:YYYY-MM-DD}} is
+		// either an ISO date or empty (null). status/rating/favorite are left for the
+		// user to fill and give Bases columns to sort and filter on. The raw
+		// {{title}} (which may contain quotes/colons) and {{url}} (a feed URL, or for
+		// a local file a vault link whose name may contain a quote) live in the BODY,
+		// where YAML rules don't apply — keeping the verbatim, unescaped tag values
+		// out of quoted frontmatter scalars so the frontmatter never fails to parse
+		// (issue #160 review). {{podcastlink}} ties each episode to its feed note
+		// (#163). See issue #160.
 		template:
 			"---\n" +
 			"type: podcastEpisode\n" +
 			'podcast: "{{podcastlink}}"\n' +
-			'url: "{{url}}"\n' +
 			"date: {{date:YYYY-MM-DD}}\n" +
 			"tags:\n" +
 			"  - podcastEpisode\n" +
@@ -113,6 +112,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 			"# {{title}}\n\n" +
 			"![]({{artwork}})\n\n" +
 			"[Resume in PodNotes]({{episodelink}})\n\n" +
+			"{{url}}\n\n" +
 			"{{description}}\n",
 	},
 

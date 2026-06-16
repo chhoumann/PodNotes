@@ -190,14 +190,15 @@ describe("default note template renders valid frontmatter (#160)", () => {
 		return (match as RegExpMatchArray)[1];
 	}
 
-	it("keeps frontmatter valid for an awkward title (raw title stays in the body)", () => {
-		// The title carries quotes/colons that would break a frontmatter scalar; it
-		// must render only in the body H1. The url is a well-formed feed URL (the
-		// common case for the default template) and sits in the quoted scalar.
+	it("keeps frontmatter valid even when title/url carry YAML-hostile characters", () => {
+		// A local-file episode whose name contains a quote is the worst case: the
+		// title carries quotes/colons and {{url}} is a wikilink containing a quote.
+		// Both must stay in the BODY (never a quoted frontmatter scalar) so the
+		// frontmatter always parses. See issue #160 review.
 		const episode: Episode = {
 			...demoEpisode,
 			title: 'Why "AI": a deep dive: part 2',
-			url: "https://example.com/ep?x=q&y=2",
+			url: '[[Audio/Talk "A".mp3]]',
 			podcastName: "My Show",
 		};
 		const rendered = NoteTemplateEngine(
@@ -208,19 +209,23 @@ describe("default note template renders valid frontmatter (#160)", () => {
 		const line = (key: string) =>
 			frontmatter.split("\n").find((l) => l.startsWith(`${key}:`));
 
-		expect(line("url")).toBe('url: "https://example.com/ep?x=q&y=2"');
 		// The podcast link is quoted so its leading [[ isn't read as a flow sequence.
 		expect(line("podcast")).toBe(
 			'podcast: "[[PodNotes/Podcasts/My Show|My Show]]"',
 		);
+		// The url is NOT in the frontmatter (it could carry a quote for local files).
+		expect(line("url")).toBeUndefined();
 		// Every frontmatter line has balanced double-quotes.
 		for (const l of frontmatter.split("\n")) {
 			expect((l.match(/"/g) ?? []).length % 2).toBe(0);
 		}
-		// The raw title (with quotes/colons) lives only in the body H1.
+		// The raw title (quotes/colons) and the raw url (a quote-bearing wikilink)
+		// live only in the body, where YAML rules don't apply.
 		const body = rendered.slice(rendered.indexOf("\n---\n") + 5);
 		expect(body).toContain('# Why "AI": a deep dive: part 2');
+		expect(body).toContain('[[Audio/Talk "A".mp3]]');
 		expect(frontmatter).not.toContain("deep dive");
+		expect(frontmatter).not.toContain("Talk");
 	});
 
 	it("renders an ISO date when present and an empty (null) date otherwise", () => {

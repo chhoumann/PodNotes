@@ -60,7 +60,6 @@ PodNotes ships this default episode note template, which links each episode back
 ---
 type: podcastEpisode
 podcast: "{{podcastlink}}"
-url: "{{url}}"
 date: {{date:YYYY-MM-DD}}
 tags:
   - podcastEpisode
@@ -74,14 +73,16 @@ favorite: false
 
 [Resume in PodNotes]({{episodelink}})
 
+{{url}}
+
 {{description}}
 ```
 
-With the default feed-note path, the frontmatter stays **valid YAML** even for episodes with awkward titles or URLs:
+The frontmatter is built so it stays **valid YAML** for every episode, because only values that can never contain a YAML-hostile character go into it:
 
 - The full episode title goes in the body as the `# {{title}}` heading, where YAML rules don't apply (a raw title can contain `"` or `:`, which would break a frontmatter scalar).
 - `{{podcastlink}}` is quoted so its leading `[[` isn't read as a YAML flow sequence, and the linked name is sanitized. (If you customize *Feed note file path* to a folder containing a literal `"` or `\`, that character flows into the link verbatim — keep the feed-note path to ordinary path characters.)
-- `{{url}}` is a quoted frontmatter scalar (`url: "{{url}}"`). Well-formed feed URLs (and ordinary local-file links) contain no `"`, so the scalar stays valid; the tag value is inserted verbatim, so a URL/file name with a literal `"` is the one case you'd need to adjust. `{{artwork}}` sits in the body as a Markdown image (`![]({{artwork}})`), not in the frontmatter.
+- `{{url}}` and `{{artwork}}` are kept in the **body** (a bare link and a Markdown image), not in the frontmatter. Tag values are inserted verbatim, and for a local-file episode `{{url}}` is a vault link whose name can contain a `"`; keeping it out of a quoted scalar means an awkward URL or file name can never break the note's properties. If your episodes all come from feeds (so `{{url}}` is always a well-formed web URL), you can add `url: "{{url}}"` back to the frontmatter.
 - `date:` is a bare `YYYY-MM-DD` (or empty/null when the feed has no publish date).
 - `status`, `rating`, and `favorite` are left for you to fill in — they give Bases columns to sort and filter on (e.g. mark an episode `favorite: true`, or set `status` to `to-listen`/`listening`/`listened`).
 
