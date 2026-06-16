@@ -124,9 +124,11 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	// quoted YAML frontmatter scalar — the Bases-friendly default note template
 	// quotes {{url}}. The strip is lossless for well-formed URLs (a valid URL never
 	// contains a raw double-quote or backslash) and mirrors FeedNoteTemplateEngine.
-	// See issue #160.
-	addTag("stream", sanitizeUrlForTemplate(episode.streamUrl));
-	addTag("url", sanitizeUrlForTemplate(episode.url));
+	// The `?? ""` keeps a corrupted/hand-edited data.json (where a typed-string URL
+	// is actually null/undefined) from throwing in sanitizeUrlForTemplate and
+	// aborting note creation — same guard the other URL tags below use. See #160.
+	addTag("stream", sanitizeUrlForTemplate(episode.streamUrl ?? ""));
+	addTag("url", sanitizeUrlForTemplate(episode.url ?? ""));
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
@@ -157,7 +159,7 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	// without changing the meaning of the existing {{url}}/{{artwork}} tags
 	// (which always describe the episode itself). See issue #163. These are URL
 	// tags too, so they get the same quoted-YAML-safe sanitization (#160).
-	addTag("episodeurl", sanitizeUrlForTemplate(episode.url));
+	addTag("episodeurl", sanitizeUrlForTemplate(episode.url ?? ""));
 	addTag("episodeartwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
 	addTag("feedurl", sanitizeUrlForTemplate(episode.feedUrl ?? ""));
 	const parentFeed =

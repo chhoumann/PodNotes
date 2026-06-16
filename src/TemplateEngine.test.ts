@@ -190,6 +190,28 @@ describe("NoteTemplateEngine URL sanitization (#160)", () => {
 			"https://example.com/feed.xml",
 		);
 	});
+
+	it("renders empty (never throws) when URL fields are missing/corrupted", () => {
+		// Typed as non-optional strings, but a hand-edited/corrupted data.json could
+		// surface null/undefined. The `?? ""` guard must keep that from throwing in
+		// sanitizeUrlForTemplate and aborting note creation.
+		const corrupted = {
+			...demoEpisode,
+			url: undefined,
+			streamUrl: undefined,
+			artworkUrl: undefined,
+			feedUrl: undefined,
+		} as unknown as Episode;
+		expect(() =>
+			NoteTemplateEngine(DEFAULT_SETTINGS.note.template, corrupted),
+		).not.toThrow();
+		expect(
+			NoteTemplateEngine(
+				"{{url}}|{{stream}}|{{episodeurl}}|{{artwork}}|{{feedurl}}",
+				corrupted,
+			),
+		).toBe("||||");
+	});
 });
 
 describe("default note template renders valid frontmatter (#160)", () => {

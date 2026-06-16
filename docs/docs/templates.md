@@ -81,7 +81,7 @@ The frontmatter is built so it is **always valid YAML**, even for episodes with 
 
 - The full episode title goes in the body as the `# {{title}}` heading, where YAML rules don't apply (a raw title can contain `"` or `:`, which would break a frontmatter scalar).
 - `{{podcastlink}}` is quoted so its leading `[[` isn't read as a YAML flow sequence, and the linked name is sanitized.
-- `{{url}}` and `{{artwork}}` are quoted, and PodNotes strips `"`/`\` from URL tags (see above) so the scalars stay intact.
+- `{{url}}` is a quoted frontmatter scalar (`url: "{{url}}"`), and PodNotes strips `"`/`\` from all URL tags (see above) so it stays intact. `{{artwork}}` sits in the body as a Markdown image (`![]({{artwork}})`); the same stripping keeps that link well-formed.
 - `date:` is a bare `YYYY-MM-DD` (or empty/null when the feed has no publish date).
 - `status`, `rating`, and `favorite` are left for you to fill in — they give Bases columns to sort and filter on (e.g. mark an episode `favorite: true`, or set `status` to `to-listen`/`listening`/`listened`).
 
@@ -90,7 +90,7 @@ A starter Bases view (save as e.g. `Podcast Episodes.base`) that lists your epis
 ```yaml
 filters:
   and:
-    - type == "podcastEpisode"
+    - 'type == "podcastEpisode"'
 views:
   - type: table
     name: Episodes
