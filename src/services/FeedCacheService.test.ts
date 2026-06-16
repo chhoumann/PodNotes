@@ -32,20 +32,63 @@ describe("FeedCacheService", () => {
 		clearFeedCache();
 	});
 
-	test("persists at most 75 episodes per feed (#124 cap)", () => {
+	// `number` doubles as the day, so a higher number is a newer episode.
+	function datedEpisode(number: number): Episode {
+		return {
+			...createEpisode(number),
+			title: `Episode ${number}`,
+			episodeDate: new Date(2024, 0, number),
+		};
+	}
+
+	test("persists at most 75 newest episodes per feed (#124 cap)", () => {
+		// Newest-first feed (100 -> 1); the newest 75 are episodes 100..26.
 		const episodes = Array.from({ length: 100 }, (_, index) =>
-			createEpisode(index + 1),
+			datedEpisode(100 - index),
 		);
 
 		setCachedEpisodes(testFeed, episodes);
 
 		const cached = getCachedEpisodes(testFeed);
 		expect(cached).toHaveLength(75);
-		expect(cached?.[0]?.title).toBe("Episode 1");
-		expect(cached?.[74]?.title).toBe("Episode 75");
-		expect(cached?.some((episode) => episode.title === "Episode 100")).toBe(
+		// Original (newest-first) order is preserved among the retained episodes.
+		expect(cached?.[0]?.title).toBe("Episode 100");
+		expect(cached?.[74]?.title).toBe("Episode 26");
+		expect(cached?.some((episode) => episode.title === "Episode 25")).toBe(
 			false,
 		);
+		expect(cached?.some((episode) => episode.title === "Episode 1")).toBe(
+			false,
+		);
+	});
+
+	test("retains the newest episodes when the feed is oldest-first (#114)", () => {
+		// Oldest-first feed (1 -> 100): the cache must keep the NEWEST 75 (26..100),
+		// not the first 75 in feed order, or a warm-cache Latest Episodes rebuild
+		// would surface stale episodes.
+		const episodes = Array.from({ length: 100 }, (_, index) =>
+			datedEpisode(index + 1),
+		);
+
+		setCachedEpisodes(testFeed, episodes);
+
+		const cached = getCachedEpisodes(testFeed);
+		expect(cached).toHaveLength(75);
+		expect(cached?.some((episode) => episode.title === "Episode 100")).toBe(
+			true,
+		);
+		expect(cached?.some((episode) => episode.title === "Episode 26")).toBe(
+			true,
+		);
+		expect(cached?.some((episode) => episode.title === "Episode 25")).toBe(
+			false,
+		);
+		expect(cached?.some((episode) => episode.title === "Episode 1")).toBe(
+			false,
+		);
+		// Original (oldest-first) order is preserved among the retained episodes.
+		expect(cached?.[0]?.title).toBe("Episode 26");
+		expect(cached?.[74]?.title).toBe("Episode 100");
 	});
 
 	test("returns persisted episodes within TTL", () => {

@@ -155,6 +155,33 @@ function serializeEpisode(episode: Episode): SerializableEpisode {
 	};
 }
 
+function episodeTimestamp(episode: Episode): number {
+	if (!episode.episodeDate) return 0;
+	const time = new Date(episode.episodeDate).getTime();
+	return Number.isNaN(time) ? 0 : time;
+}
+
+/**
+ * Keep the newest `limit` episodes by date while preserving their original
+ * relative order. Selecting by date (not the first N in feed order) ensures an
+ * oldest-first feed still caches its NEWEST episodes, so a warm-cache rebuild of
+ * the Latest Episodes list isn't stuck on stale items (#114). Feeds at or under
+ * the limit are returned untouched, so ordering for the common case is unchanged.
+ */
+function selectNewestEpisodes(episodes: Episode[], limit: number): Episode[] {
+	if (episodes.length <= limit) return episodes;
+
+	const keptIndices = new Set(
+		episodes
+			.map((episode, index) => ({ index, time: episodeTimestamp(episode) }))
+			.sort((a, b) => b.time - a.time)
+			.slice(0, limit)
+			.map((entry) => entry.index),
+	);
+
+	return episodes.filter((_, index) => keptIndices.has(index));
+}
+
 function deserializeEpisode(episode: SerializableEpisode): Episode {
 	return {
 		...episode,
@@ -198,9 +225,9 @@ export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void 
 
 	store[cacheKey] = {
 		updatedAt: Date.now(),
-		episodes: episodes
-			.slice(0, MAX_EPISODES_PER_FEED)
-			.map(serializeEpisode),
+		episodes: selectNewestEpisodes(episodes, MAX_EPISODES_PER_FEED).map(
+			serializeEpisode,
+		),
 	};
 
 	persistCache();
