@@ -14,6 +14,10 @@ import {
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_PROFILE_ROOT = "/tmp/podnotes-obsidian-e2e";
+// Sidecar written at the instance root recording which worktree the instance
+// belongs to. The teardown reaper reads it to reap an instance only once its
+// worktree is gone (a removed/merged worktree) — the reliable leak signal.
+export const INSTANCE_MARKER_FILE = "podnotes-e2e-instance.json";
 const DEFAULT_OBSIDIAN_APP = "Obsidian";
 const DEFAULT_OBSIDIAN_BIN = "obsidian";
 const READY_TIMEOUT_MS = 30_000;
@@ -166,6 +170,14 @@ export async function prepareObsidianProfile(options) {
 				ts: Date.now(),
 			},
 		},
+	});
+
+	// Record which worktree this instance belongs to so the teardown reaper can
+	// reap it once that worktree is removed (see INSTANCE_MARKER_FILE).
+	await writeJson(path.join(options.instancePath, INSTANCE_MARKER_FILE), {
+		worktreePath: options.worktreePath,
+		vaultName: options.vaultName,
+		vaultPath: options.vaultPath,
 	});
 
 	return {

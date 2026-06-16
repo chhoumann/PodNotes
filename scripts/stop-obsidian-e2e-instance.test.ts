@@ -126,6 +126,14 @@ describe("commandMatchesInstance", () => {
 			),
 		).toBe(false);
 	});
+
+	it("does not match a process that mentions the path outside the --user-data-dir flag", () => {
+		// e.g. a log tail or editor referencing a file under the instance dir must
+		// never be pulled into the kill set.
+		expect(
+			commandMatchesInstance(`tail -f ${INSTANCE}/home/obsidian.log`, INSTANCE),
+		).toBe(false);
+	});
 });
 
 describe("parsePsOutput / collectInstancePids", () => {
@@ -244,6 +252,39 @@ describe("stopInstance", () => {
 		expect(calls).toEqual([]);
 		expect(removed).toEqual([INSTANCE]);
 	});
+
+	it("tolerates EPERM from kill (recycled foreign pid) and still removes the dir", async () => {
+		const removed: string[] = [];
+		const kill = (_pid: number, signal: string | number) => {
+			if (signal === 0) return; // liveness probe: report alive
+			throw Object.assign(new Error("operation not permitted"), {
+				code: "EPERM",
+			});
+		};
+		const result = await stopInstance(INSTANCE, {
+			runPs,
+			kill,
+			removeDir: async (dir: string) => {
+				removed.push(dir);
+			},
+			selfPid: 999999,
+			pollMs: 1,
+			graceMs: 5,
+		});
+		expect(removed).toEqual([INSTANCE]);
+		expect(result.removed).toBe(true);
+	});
+
+	it("refuses to remove a dir that is not a child of the given profile root", async () => {
+		await expect(
+			stopInstance(INSTANCE, {
+				runPs,
+				kill: () => {},
+				removeDir: async () => {},
+				profileRoot: "/some/other/root",
+			}),
+		).rejects.toThrow(/not a direct child of profile root/);
+	});
 });
 
 describe("orphan detection", () => {
@@ -294,6 +335,36 @@ describe("orphan detection", () => {
 
 		await expect(isInstanceOrphaned(live)).resolves.toBe(false);
 		await expect(isInstanceOrphaned(gone)).resolves.toBe(true);
+	});
+
+	it("prefers the worktree marker: worktree-gone reaps even with a live vault; worktree-alive spares even with a missing vault", async () => {
+		const root = await makeTempDir("podnotes-profiles");
+		const liveWorktree = await makeTempDir("live-worktree");
+
+		// marker worktree alive, but the vault leaf is gone -> NOT orphaned
+		const spared = await seedInstance(
+			root,
+			"podnotes-m1-aaaaaaaaaaaa",
+			"/vault/leaf/gone",
+		);
+		await fs.writeFile(
+			path.join(spared, "podnotes-e2e-instance.json"),
+			JSON.stringify({ worktreePath: liveWorktree }),
+		);
+
+		// marker worktree gone, but the vault still exists -> orphaned (leaked)
+		const leaked = await seedInstance(
+			root,
+			"podnotes-m2-bbbbbbbbbbbb",
+			liveWorktree,
+		);
+		await fs.writeFile(
+			path.join(leaked, "podnotes-e2e-instance.json"),
+			JSON.stringify({ worktreePath: "/worktree/removed/on/merge" }),
+		);
+
+		await expect(isInstanceOrphaned(spared)).resolves.toBe(false);
+		await expect(isInstanceOrphaned(leaked)).resolves.toBe(true);
 	});
 
 	it("stays conservative when the registration is unreadable", async () => {
@@ -361,6 +432,37 @@ describe("reapOrphanedInstances", () => {
 		expect(removed).toEqual([orphan]);
 		expect(removed).not.toContain(live);
 		expect(removed).not.toContain(current);
+	});
+
+	it("continues reaping the rest of the scan when one orphan's teardown fails", async () => {
+		const root = await makeTempDir("podnotes-profiles");
+		const bad = await seedInstance(
+			root,
+			"podnotes-bad-aaaaaaaaaaaa",
+			"/gone/1",
+		);
+		const good = await seedInstance(
+			root,
+			"podnotes-good-bbbbbbbbbbbb",
+			"/gone/2",
+		);
+		const removed: string[] = [];
+		const logs: string[] = [];
+
+		const result = await reapOrphanedInstances({
+			profileRoot: root,
+			runPs: async () => "",
+			kill: () => {},
+			removeDir: async (dir: string) => {
+				if (dir === bad) throw new Error("boom");
+				removed.push(dir);
+			},
+			log: (message: string) => logs.push(message),
+		});
+
+		expect(removed).toEqual([good]);
+		expect(result.reaped).toEqual([good]);
+		expect(logs.some((m) => m.includes("Failed to reap"))).toBe(true);
 	});
 
 	it("returns an empty result when the profile root does not exist", async () => {

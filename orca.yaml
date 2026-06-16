@@ -14,9 +14,15 @@
 #   also reaps orphaned instances on the next start as a safety net.
 # - A failed archive hook is logged by Orca but never blocks removal. `|| true`
 #   keeps the archive log clean when no instance was ever started.
-# - This assumes the default per-worktree vault name (podnotes-<worktree>). If
-#   you started an instance with a custom --vault, stop it with the matching
-#   `npm run stop:e2e-obsidian -- --vault <name>` before removing the worktree.
+# - This assumes the default per-worktree vault name (podnotes-<worktree>) and
+#   profile root. If you started an instance with a custom --vault or
+#   --profile-root, stop it with the matching
+#   `npm run stop:e2e-obsidian -- --vault <name> [--profile-root <path>]` before
+#   removing the worktree.
+# - The hook needs `node` on the GUI app's PATH (Orca runs it via non-login
+#   /bin/bash). It is guarded with `command -v node` so a missing node degrades
+#   to a no-op (the reap-on-next-start safety net then handles cleanup) instead
+#   of erroring.
 scripts:
   archive: |
-    node scripts/stop-obsidian-e2e-instance.mjs --worktree "$ORCA_WORKTREE_PATH" || true
+    command -v node >/dev/null 2>&1 && node scripts/stop-obsidian-e2e-instance.mjs --worktree "$ORCA_WORKTREE_PATH" || true

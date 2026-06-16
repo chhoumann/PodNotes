@@ -4,7 +4,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
-import { resolveInstanceOptions } from "./start-obsidian-e2e-instance.mjs";
+import {
+	INSTANCE_MARKER_FILE,
+	resolveInstanceOptions,
+} from "./start-obsidian-e2e-instance.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -108,10 +111,14 @@ export function commandMatchesInstance(command, instancePath) {
 		stripped,
 		stripped.replace(/^\//, "/private/"),
 	]);
-	// Every real reference is a directory prefix (e.g. --user-data-dir=<path>/home/…),
-	// so require a trailing separator: it avoids matching a sibling instance whose
-	// id merely shares this one as a leading string.
-	return [...variants].some((variant) => command.includes(`${variant}/`));
+	// Seed only on the Obsidian `--user-data-dir=` flag whose value is THIS
+	// instance's profile dir (with a trailing separator). Scoping to the flag, not
+	// a bare substring, means an unrelated process that merely mentions the path —
+	// a log tail, an editor, a grep — is never pulled into the kill set. The
+	// trailing slash stops a sibling whose id shares this one as a leading string.
+	return [...variants].some((variant) =>
+		command.includes(`--user-data-dir=${variant}/`),
+	);
 }
 
 export function parsePsOutput(stdout) {
@@ -161,7 +168,7 @@ export function collectInstancePids(processes, instancePath, options = {}) {
 	return [...collected].sort((a, b) => a - b);
 }
 
-function assertSafeInstancePath(instancePath) {
+function assertSafeInstancePath(instancePath, profileRoot) {
 	if (!instancePath || !path.isAbsolute(instancePath)) {
 		throw new Error(
 			`Refusing to remove non-absolute instance path: ${instancePath}`,
@@ -177,6 +184,17 @@ function assertSafeInstancePath(instancePath) {
 	// reject anything shallow enough to be a system root.
 	if (instancePath.split(path.sep).filter(Boolean).length < 2) {
 		throw new Error(`Refusing to remove shallow path: ${instancePath}`);
+	}
+	// Containment guard: when the caller knows the profile root, the dir we remove
+	// must be a direct child of it. Real callers always do, so a bad --profile-root
+	// can never make us rm a path outside the e2e profile tree.
+	if (
+		profileRoot &&
+		path.resolve(path.dirname(instancePath)) !== path.resolve(profileRoot)
+	) {
+		throw new Error(
+			`Refusing to remove ${instancePath}: not a direct child of profile root ${profileRoot}.`,
+		);
 	}
 }
 
@@ -204,6 +222,12 @@ function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// kill(2) errors we tolerate so one stubborn pid never aborts tearing down the
+// rest of the tree (and never blocks the subsequent dir removal): ESRCH (already
+// exited between discovery and signalling), EPERM (a pid we no longer own — e.g.
+// recycled by a foreign process; skip rather than touch it), ENOENT (defensive).
+const IGNORABLE_KILL_CODES = new Set(["ESRCH", "EPERM", "ENOENT"]);
+
 function signalPids(pids, signal, kill) {
 	const signalled = [];
 	for (const pid of pids) {
@@ -211,8 +235,7 @@ function signalPids(pids, signal, kill) {
 			kill(pid, signal);
 			signalled.push(pid);
 		} catch (error) {
-			// ESRCH: the process already exited between discovery and signalling.
-			if (error?.code !== "ESRCH") throw error;
+			if (!IGNORABLE_KILL_CODES.has(error?.code)) throw error;
 		}
 	}
 	return signalled;
@@ -231,9 +254,10 @@ export async function stopInstance(instancePath, options = {}) {
 		selfPid = process.pid,
 		graceMs = TERM_GRACE_MS,
 		pollMs = TERM_POLL_MS,
+		profileRoot,
 	} = options;
 
-	assertSafeInstancePath(instancePath);
+	assertSafeInstancePath(instancePath, profileRoot);
 
 	const processes = parsePsOutput(await runPs());
 	const pids = collectInstancePids(processes, instancePath, { selfPid });
@@ -291,12 +315,32 @@ async function pathExists(target) {
 	}
 }
 
-// An instance is "orphaned" once every vault it was created for is gone from
-// disk — the signature of a worktree that was removed on merge. We deliberately
-// do NOT treat "no process running" as orphaned: an idle-but-valid instance for
-// a live worktree must survive so a concurrent worker can reuse it.
+// Reads the instance marker that start writes (worktreePath/vaultName/vaultPath).
+// Returns null when it is missing/unreadable so callers can fall back.
+export async function readInstanceMarker(instancePath, deps = {}) {
+	const readFile = deps.readFile ?? ((file) => fs.readFile(file, "utf8"));
+	try {
+		return JSON.parse(
+			await readFile(path.join(instancePath, INSTANCE_MARKER_FILE)),
+		);
+	} catch {
+		return null;
+	}
+}
+
+// An instance is "orphaned" once the worktree it belongs to is gone from disk —
+// the signature of a worktree removed on merge. We reap it even if its Obsidian
+// process is still running: a leaked-but-running instance is exactly what must be
+// cleaned up. We do NOT use "no process running" or "a single vault leaf missing"
+// as the signal — an idle-but-valid instance for a live worktree, or a vault on a
+// momentarily-unmounted volume, must survive. The worktree path is read from the
+// marker; pre-marker instances fall back to "every registered vault path is gone".
 export async function isInstanceOrphaned(instancePath, deps = {}) {
 	const exists = deps.exists ?? pathExists;
+	const marker = await readInstanceMarker(instancePath, deps);
+	if (marker && typeof marker.worktreePath === "string") {
+		return !(await exists(marker.worktreePath));
+	}
 	const vaultPaths = await readInstanceVaultPaths(instancePath, deps);
 	if (vaultPaths === null || vaultPaths.length === 0) return false;
 	for (const vaultPath of vaultPaths) {
@@ -338,9 +382,21 @@ export async function reapOrphanedInstances(options = {}) {
 		if (except && path.resolve(instancePath) === except) continue;
 		scanned += 1;
 		if (!(await isInstanceOrphaned(instancePath, deps))) continue;
-		log(`Reaping orphaned E2E instance ${entry.name} (backing vault is gone).`);
-		if (!dryRun) await stopInstance(instancePath, { ...deps, dryRun: false });
-		reaped.push(instancePath);
+		log(`Reaping orphaned E2E instance ${entry.name} (worktree is gone).`);
+		if (dryRun) {
+			reaped.push(instancePath);
+			continue;
+		}
+		// Isolate each teardown so one stubborn orphan (e.g. a permission error)
+		// never aborts reaping the rest of the scan.
+		try {
+			await stopInstance(instancePath, { ...deps, profileRoot, dryRun: false });
+			reaped.push(instancePath);
+		} catch (error) {
+			log(
+				`Failed to reap ${entry.name}: ${error instanceof Error ? error.message : error}`,
+			);
+		}
 	}
 
 	return { scanned, reaped };
@@ -362,6 +418,7 @@ async function main() {
 	const options = resolveInstanceOptions(rawOptions);
 	const summary = await stopInstance(options.instancePath, {
 		dryRun: rawOptions.dryRun,
+		profileRoot: options.profileRoot,
 	});
 
 	let pruneResult = { scanned: 0, reaped: [] };

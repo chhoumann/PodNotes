@@ -167,9 +167,13 @@ Two layers keep instances from leaking, so you rarely need to run `stop` by hand
   `orca worktree rm --worktree <selector> --run-hooks` so the hook fires (Orca
   skips archive hooks without `--run-hooks`).
 - **Reap on next start** — `start:e2e-obsidian` and `obsidian:e2e` reap any
-  orphaned instance (one whose backing vault no longer exists, i.e. its worktree
-  was removed) before launching. An idle instance for a worktree that still
-  exists is left alone so concurrent workers can reuse it.
+  orphaned instance (one whose backing worktree no longer exists on disk, i.e.
+  it was removed) before launching, even if its Obsidian is still running. An
+  idle instance for a worktree that still exists is left alone so concurrent
+  workers can reuse it. Reaping scans the default profile root
+  (`/tmp/podnotes-obsidian-e2e`); instances started under a custom
+  `--profile-root` are only reaped by a start that uses that same root, so stop
+  those explicitly.
 
 ## Documentation
 Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
