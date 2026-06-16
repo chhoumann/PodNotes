@@ -238,6 +238,22 @@ describe("getFeedNoteWikilink (#163)", () => {
 		plugin.set({ settings: { feedNote: { path: "" } } } as never);
 		expect(getFeedNoteWikilink("My Show: A Podcast")).toBe("[[My Show A Podcast]]");
 	});
+
+	it("caps a long feed title so the link matches the capped feed-note path (#22)", () => {
+		plugin.set({
+			settings: { feedNote: { path: "PodNotes/Podcasts/{{podcast}}.md" } },
+		} as never);
+		const link = getFeedNoteWikilink("Z".repeat(400));
+		const linkPath = link
+			.replace(/^\[\[/, "")
+			.replace(/\]\]$/, "")
+			.split("|")[0];
+		const basename = linkPath.split("/").pop() ?? "";
+		// Without the cap the link would embed all 400 chars and never resolve.
+		expect(basename.length).toBeLessThanOrEqual(255);
+		expect(basename.length).toBeLessThan(400);
+		expect(linkPath.startsWith("PodNotes/Podcasts/")).toBe(true);
+	});
 });
 
 describe("{{currentDate}} tag (#75)", () => {

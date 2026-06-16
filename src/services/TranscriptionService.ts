@@ -6,7 +6,10 @@ import {
 	FilePathTemplateEngine,
 	TranscriptTemplateEngine,
 } from "../TemplateEngine";
-import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
+import {
+	enforceMaxPathLength,
+	lastSegmentExtension,
+} from "../utility/enforceMaxPathLength";
 import { ensureFolderExists } from "../utility/ensureFolderExists";
 import type { Episode } from "src/types/Episode";
 
@@ -469,13 +472,16 @@ export class TranscriptionService {
 	/**
 	 * The on-disk path of an episode's transcript note, capped so a long title
 	 * can't trip ENAMETOOLONG (#22). Used for the existence checks and the write
-	 * alike so they always agree on the same path.
+	 * alike so they always agree on the same path. The extension comes from the
+	 * configured template (not forced to ".md") so a custom transcript path keeps
+	 * the user's chosen suffix.
 	 */
 	private getTranscriptPath(episode: Episode): string {
-		return enforceMaxPathLength(
-			FilePathTemplateEngine(this.plugin.settings.transcript.path, episode),
-			".md",
+		const rendered = FilePathTemplateEngine(
+			this.plugin.settings.transcript.path,
+			episode,
 		);
+		return enforceMaxPathLength(rendered, lastSegmentExtension(rendered));
 	}
 
 	private async saveTranscription(
@@ -500,7 +506,7 @@ export class TranscriptionService {
 			0,
 			transcriptPath.lastIndexOf("/"),
 		);
-		await ensureFolderExists(directory);
+		await ensureFolderExists(directory, vault);
 
 		const file = vault.getAbstractFileByPath(transcriptPath);
 

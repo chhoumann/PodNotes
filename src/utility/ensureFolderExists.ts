@@ -1,3 +1,5 @@
+import type { Vault } from "obsidian";
+
 /**
  * Creates every missing folder along `folderPath`, one segment at a time.
  *
@@ -12,19 +14,26 @@
  *
  * `folderPath` is a directory path (no trailing file name). An empty path is a
  * no-op, so callers can pass the directory portion of a file path directly.
+ *
+ * `vault` defaults to the global `app.vault`; callers holding an injected vault
+ * (e.g. a service given `plugin.app`) pass it so folder creation and the
+ * subsequent file write target the same vault instance.
  */
-export async function ensureFolderExists(folderPath: string): Promise<void> {
+export async function ensureFolderExists(
+	folderPath: string,
+	vault: Vault = app.vault,
+): Promise<void> {
 	const segments = folderPath.split("/").filter(Boolean);
 
 	let current = "";
 	for (const segment of segments) {
 		current = current ? `${current}/${segment}` : segment;
-		if (app.vault.getAbstractFileByPath(current)) {
+		if (vault.getAbstractFileByPath(current)) {
 			continue;
 		}
 
 		try {
-			await app.vault.createFolder(current);
+			await vault.createFolder(current);
 		} catch (error) {
 			const alreadyExists =
 				error instanceof Error && /already exists/i.test(error.message);
@@ -32,7 +41,7 @@ export async function ensureFolderExists(folderPath: string): Promise<void> {
 			// concurrent create can leave the folder present even though the
 			// pre-check missed it. Only a genuine failure (still absent and not an
 			// "already exists" error) is propagated.
-			if (!alreadyExists && !app.vault.getAbstractFileByPath(current)) {
+			if (!alreadyExists && !vault.getAbstractFileByPath(current)) {
 				throw error;
 			}
 		}

@@ -89,14 +89,14 @@ function trimSegmentEdges(segment: string): string {
 }
 
 function capFolderName(segment: string, limit: FilenameLimit): string {
-	if (measure(segment, limit.mode) <= limit.max) {
-		return segment;
-	}
+	const capped =
+		measure(segment, limit.mode) <= limit.max
+			? segment
+			: truncateToLimit(segment, limit.max, limit.mode);
 
-	return (
-		trimSegmentEdges(truncateToLimit(segment, limit.max, limit.mode)) ||
-		FALLBACK_BASENAME
-	);
+	// Trim even when under the cap: a literal template folder like "Notes. " has
+	// a trailing space/dot that is illegal on Windows regardless of length.
+	return trimSegmentEdges(capped) || FALLBACK_BASENAME;
 }
 
 function capFileName(
@@ -119,6 +119,19 @@ function capFileName(
 		FALLBACK_BASENAME;
 
 	return `${cappedBase}${extension}`;
+}
+
+/**
+ * The extension of a path's final segment (".md", ".txt", …), or "" when it has
+ * none. Callers whose extension comes from a user template rather than
+ * addExtension (e.g. transcripts) pass this to {@link enforceMaxPathLength} so it
+ * preserves the configured extension instead of forcing a default one.
+ */
+export function lastSegmentExtension(path: string): string {
+	const last = path.split("/").pop() ?? "";
+	const dot = last.lastIndexOf(".");
+	// `dot > 0` so a dotfile (".env") is treated as a name, not an extension.
+	return dot > 0 ? last.slice(dot) : "";
 }
 
 /**

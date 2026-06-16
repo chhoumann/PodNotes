@@ -6,6 +6,7 @@ import {
 	MAX_FILENAME_UNITS,
 	enforceMaxPathLength,
 	getPlatformFilenameLimit,
+	lastSegmentExtension,
 } from "./enforceMaxPathLength";
 
 const lastSegment = (path: string) => path.split("/").pop() ?? "";
@@ -122,6 +123,22 @@ describe("enforceMaxPathLength", () => {
 		);
 	});
 
+	it("trims trailing dots/spaces from a short (un-truncated) folder segment", () => {
+		expect(enforceMaxPathLength("Notes. /Episode 1.md", ".md", BYTES)).toBe(
+			"Notes/Episode 1.md",
+		);
+	});
+
+	it("preserves a non-.md extension when asked to (transcripts/downloads)", () => {
+		// With an empty extension it does not force one (preserves a no-suffix path).
+		expect(enforceMaxPathLength("transcripts/Show/Ep", "", BYTES)).toBe(
+			"transcripts/Show/Ep",
+		);
+		expect(enforceMaxPathLength("transcripts/Show/Ep.txt", ".txt", BYTES)).toBe(
+			"transcripts/Show/Ep.txt",
+		);
+	});
+
 	it("caps a pathologically long folder segment too", () => {
 		const result = enforceMaxPathLength(`${"F".repeat(400)}/Episode 1.md`, ".md", BYTES);
 		expect(byteLength(result.split("/")[0])).toBeLessThanOrEqual(MAX_FILENAME_UNITS);
@@ -141,6 +158,23 @@ describe("enforceMaxPathLength", () => {
 		const a = enforceMaxPathLength(`Pod/${"Z".repeat(300)}-alpha.md`, ".md", BYTES);
 		const b = enforceMaxPathLength(`Pod/${"Z".repeat(300)}-beta.md`, ".md", BYTES);
 		expect(a).toBe(b);
+	});
+});
+
+describe("lastSegmentExtension", () => {
+	it("returns the final segment's extension", () => {
+		expect(lastSegmentExtension("transcripts/Show/Ep.md")).toBe(".md");
+		expect(lastSegmentExtension("a/b/Ep.txt")).toBe(".txt");
+	});
+
+	it("returns empty when the final segment has no extension", () => {
+		expect(lastSegmentExtension("transcripts/Show/Ep")).toBe("");
+		expect(lastSegmentExtension("Ep")).toBe("");
+	});
+
+	it("ignores dots in folder segments and leading-dot files", () => {
+		expect(lastSegmentExtension("a.b/Episode")).toBe("");
+		expect(lastSegmentExtension(".env")).toBe("");
 	});
 });
 

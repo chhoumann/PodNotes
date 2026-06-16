@@ -125,6 +125,19 @@ describe("createFeedNote", () => {
 		expect(opened).toContain(EXPECTED_PATH);
 	});
 
+	it("caps a very long feed title so creation can't trip ENAMETOOLONG (#22)", async () => {
+		const { created } = setupVault({});
+
+		await createFeedNote({ ...fullFeed, title: "Z".repeat(400) });
+
+		expect(created).toHaveLength(1);
+		const basename = created[0].path.split("/").pop() ?? "";
+		expect(created[0].path.startsWith("PodNotes/Podcasts/")).toBe(true);
+		expect(basename.endsWith(".md")).toBe(true);
+		expect(basename.length).toBeLessThanOrEqual(255);
+		expect(basename.length).toBeLessThan(400);
+	});
+
 	it("does nothing when no feed-note path/template is configured", async () => {
 		plugin.set({
 			settings: { feedNote: { path: "", template: "" } },

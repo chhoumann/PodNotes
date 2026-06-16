@@ -10,6 +10,8 @@ import { formatDuration } from "./utility/formatDuration";
 import { formatEpisodeNumber } from "./utility/formatEpisodeNumber";
 import { parseEpisodeNumberFromTitle } from "./utility/parseEpisodeNumber";
 import buildEpisodeResumeLink from "./utility/buildEpisodeResumeLink";
+import addExtension from "./utility/addExtension";
+import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -394,7 +396,11 @@ export function getFeedNoteWikilink(feedTitle: string): string {
 		url: "",
 		artworkUrl: "",
 	});
-	const linkPath = rendered.replace(/\.md$/i, "").trim();
+	// Apply the same length cap createFeedNote uses (#22) so the link targets the
+	// exact file written even when a long feed title is truncated. Mirror its
+	// `enforceMaxPathLength(addExtension(...))` derivation, then drop the .md.
+	const capped = enforceMaxPathLength(addExtension(rendered, "md"));
+	const linkPath = capped.replace(/\.md$/i, "").trim();
 	const basename = linkPath.split("/").pop()?.trim() || fallback;
 
 	return linkPath.includes("/")

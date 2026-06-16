@@ -90,6 +90,22 @@ describe("ensureFolderExists", () => {
 		expect(createFolder).toHaveBeenCalled();
 	});
 
+	it("uses a passed vault instead of the global app.vault", async () => {
+		// Global app.vault would record nothing; the injected vault must be used.
+		setupApp();
+		const created: string[] = [];
+		const injected = {
+			getAbstractFileByPath: () => null,
+			createFolder: vi.fn(async (path: string) => {
+				created.push(path);
+			}),
+		} as unknown as Parameters<typeof ensureFolderExists>[1];
+
+		await ensureFolderExists("Podcasts/My Show", injected);
+
+		expect(created).toEqual(["Podcasts", "Podcasts/My Show"]);
+	});
+
 	it("rethrows a genuine createFolder failure", async () => {
 		const createFolder = vi.fn(async () => {
 			throw new Error("EACCES: permission denied");
