@@ -14,6 +14,10 @@ import {
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_PROFILE_ROOT = "/tmp/podnotes-obsidian-e2e";
+// Sidecar written at the instance root recording which worktree the instance
+// belongs to. The teardown reaper reads it to reap an instance only once its
+// worktree is gone (a removed/merged worktree) — the reliable leak signal.
+export const INSTANCE_MARKER_FILE = "podnotes-e2e-instance.json";
 const DEFAULT_OBSIDIAN_APP = "Obsidian";
 const DEFAULT_OBSIDIAN_BIN = "obsidian";
 const READY_TIMEOUT_MS = 30_000;
@@ -166,6 +170,14 @@ export async function prepareObsidianProfile(options) {
 				ts: Date.now(),
 			},
 		},
+	});
+
+	// Record which worktree this instance belongs to so the teardown reaper can
+	// reap it once that worktree is removed (see INSTANCE_MARKER_FILE).
+	await writeJson(path.join(options.instancePath, INSTANCE_MARKER_FILE), {
+		worktreePath: options.worktreePath,
+		vaultName: options.vaultName,
+		vaultPath: options.vaultPath,
 	});
 
 	return {
@@ -406,6 +418,29 @@ function shellQuote(value) {
 	return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
+// Self-healing safety net: before launching our own instance, reap any leaked
+// instances whose backing worktree is gone (e.g. removed on merge without the
+// orca archive hook running). Best-effort — a reap failure must never block a
+// start. The reaper is imported lazily so the static module graph stays acyclic
+// (the stop module imports our option resolver; we only need its reaper at
+// runtime). Logs go to stderr so `--print-env` keeps stdout to `export …` lines.
+export async function reapStaleInstances(options) {
+	try {
+		const { reapOrphanedInstances } = await import(
+			"./stop-obsidian-e2e-instance.mjs"
+		);
+		await reapOrphanedInstances({
+			profileRoot: options.profileRoot,
+			exceptInstancePath: options.instancePath,
+			log: console.error,
+		});
+	} catch (error) {
+		console.error(
+			`Skipping stale-instance reap: ${error instanceof Error ? error.message : error}`,
+		);
+	}
+}
+
 async function main() {
 	const rawOptions = parseArgs(process.argv.slice(2));
 	if (rawOptions.help) {
@@ -414,6 +449,7 @@ async function main() {
 	}
 
 	const options = resolveInstanceOptions(rawOptions);
+	await reapStaleInstances(options);
 	const provisionResult = await provisionVault(options);
 	const profileResult = await prepareObsidianProfile(options);
 	options.userDataPath = profileResult.userDataPath;

@@ -141,6 +141,40 @@ npm run obsidian:e2e -- dev:errors
   `main.js` to exist). `start:e2e-obsidian` reloads PodNotes when it reuses a
   running instance, so the exported instance is never stale.
 
+### Stopping an isolated instance (avoid leaks)
+
+Each started instance is a real Obsidian process tree plus a private profile
+directory under `/private/tmp/podnotes-obsidian-e2e/<vault>-<hash>/`. Removing a
+worktree does **not** stop it, so a finished worktree would leak an Obsidian
+process tree and a `/private/tmp` directory. Stop it explicitly:
+
+```bash
+npm run stop:e2e-obsidian            # stop THIS worktree's instance + remove its tmp dir
+npm run stop:e2e-obsidian -- --dry-run   # show what would be stopped/removed
+npm run stop:e2e-obsidian -- --prune     # also reap orphaned instances (worktree gone)
+```
+
+The teardown identifies only this worktree's instance by its private
+`--user-data-dir` token (which contains a per-worktree hash), terminates that
+process tree (SIGTERM, then SIGKILL for stragglers), and removes its profile
+directory. It never touches the shared `dev` vault, other worktrees, or quickadd
+instances.
+
+Two layers keep instances from leaking, so you rarely need to run `stop` by hand:
+
+- **Orca archive hook** — `orca.yaml` defines a `scripts.archive` hook that runs
+  this teardown for the worktree being removed. Remove worktrees with
+  `orca worktree rm --worktree <selector> --run-hooks` so the hook fires (Orca
+  skips archive hooks without `--run-hooks`).
+- **Reap on next start** — `start:e2e-obsidian` and `obsidian:e2e` reap any
+  orphaned instance (one whose backing worktree no longer exists on disk, i.e.
+  it was removed) before launching, even if its Obsidian is still running. An
+  idle instance for a worktree that still exists is left alone so concurrent
+  workers can reuse it. Reaping scans the default profile root
+  (`/tmp/podnotes-obsidian-e2e`); instances started under a custom
+  `--profile-root` are only reaped by a start that uses that same root, so stop
+  those explicitly.
+
 ## Documentation
 Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
 with user-facing behavior changes, new commands, API changes, template syntax,
