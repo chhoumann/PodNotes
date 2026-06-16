@@ -54,6 +54,9 @@
 	$: showQueue =
 		$plugin?.settings?.autoQueue !== false || $queue.episodes.length > 0;
 
+	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
+	$: titleCharCount = $currentEpisode?.title?.length ?? 0;
+
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 	let playerVolume: number = 1;
@@ -364,7 +367,7 @@
 		</button>
 	</div>
 
-	<h2 class="podcast-title">{$currentEpisode.title}</h2>
+	<h2 class="podcast-title" style="--title-char-count: {titleCharCount}">{$currentEpisode.title}</h2>
 
 	{#await srcPromise then src}
 		<audio
@@ -544,7 +547,21 @@
 	}
 
 	.podcast-title {
-		font-size: 1.125rem;
+		/*
+		 * Scale the title down as it gets longer (issue #81) so a long episode
+		 * title no longer renders at one large fixed size. Titles up to ~40
+		 * characters render at the 1rem base; beyond that the size eases down
+		 * (0.0025rem per extra character) toward a readable 0.875rem floor,
+		 * reached around ~90 characters. --title-char-count is an approximate
+		 * length signal (UTF-16 code units, set from the title in the markup), so
+		 * it only loosely tracks rendered width for non-Latin scripts;
+		 * word-break: break-word below is what actually keeps any title contained.
+		 */
+		font-size: clamp(
+			0.875rem,
+			calc(1rem - (var(--title-char-count, 0) - 40) * 0.0025rem),
+			1rem
+		);
 		font-weight: 600;
 		line-height: 1.4;
 		margin: 0 0 0.75rem;
