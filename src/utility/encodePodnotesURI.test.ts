@@ -51,4 +51,16 @@ describe("encodePodnotesURI", () => {
 		const url = encodePodnotesURI("Title", "https://x/feed");
 		expect(url.href).not.toContain("time=");
 	});
+
+	test("encodes segment end time when a start time is present", () => {
+		const url = encodePodnotesURI("Title", "https://x/feed", 115, 125);
+		expect(param(url.href, "time")).toBe("115");
+		expect(param(url.href, "endTime")).toBe("125");
+	});
+
+	test("omits segment end time when no start time is present", () => {
+		const url = encodePodnotesURI("Title", "https://x/feed", undefined, 125);
+		expect(url.href).not.toContain("time=");
+		expect(url.href).not.toContain("endTime=");
+	});
 });

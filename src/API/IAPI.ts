@@ -12,6 +12,13 @@ export interface IAPI {
 		linkify?: boolean,
 		offsetSeconds?: number,
 	): string;
+
+	getPodcastSegmentFormatted(
+		format: string,
+		startTime: number,
+		endTime: number,
+		linkify?: boolean,
+	): string;
 	
 	start(): void;
 	stop(): void;

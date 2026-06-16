@@ -35,6 +35,12 @@ This will capture the current timestamp of the currently playing episode.
 
 See [timestamps](timestamps.md) for more information on timestamp templates.
 
+## Capture Last 10 Seconds / Capture Last 20 Seconds
+These commands capture a linked start-end segment ending at the current playback time.
+When opened, the link seeks to the segment start and pauses playback at the segment end.
+
+See [timestamps](timestamps.md#capturing-segments) for more information on segment templates and behavior.
+
 ## Create episode note
 This will create a note for the currently playing episode.
 

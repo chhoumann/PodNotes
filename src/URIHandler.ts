@@ -8,6 +8,7 @@ import {
 	currentTime,
 	duration,
 	isPaused,
+	activePlaybackSegment,
 	localFiles,
 	playedEpisodes,
 	requestedPlaybackTime,
@@ -16,6 +17,12 @@ import {
 import type { Episode } from "./types/Episode";
 import { getEpisodeKey } from "./utility/episodeKey";
 import { ViewState } from "./types/ViewState";
+
+type PodNotesProtocolData = ObsidianProtocolData & {
+	end?: string;
+	endTime?: string;
+	to?: string;
+};
 
 /**
  * Obsidian decodes protocol query values with decodeURIComponent only, which does NOT turn '+'
@@ -64,7 +71,7 @@ function resolveResumeTime(episode: Episode): number {
 }
 
 export default async function podNotesURIHandler(
-	{ url, episodeName, time }: ObsidianProtocolData,
+	{ url, episodeName, time, endTime, end, to }: PodNotesProtocolData,
 	api: IAPI
 ) {
 	if (!url || !episodeName) {
@@ -86,6 +93,13 @@ export default async function podNotesURIHandler(
 		}
 	}
 
+	const requestedEndTime = parseSegmentEndTime(
+		endTime ?? end ?? to,
+		hasExplicitTime,
+		requestedTime,
+	);
+	if (requestedEndTime === null) return;
+
 	const nameCandidates = candidateValues(episodeName);
 	const currentEp = get(currentEpisode);
 	// Membership (not ordered selection) is correct here: there is only one loaded episode, and
@@ -99,12 +113,15 @@ export default async function podNotesURIHandler(
 
 	if (episodeIsPlaying) {
 		if (hasExplicitTime) {
+			const episodeKey = getEpisodeKey(currentEp);
 			requestedPlaybackTime.set({
-				episodeKey: getEpisodeKey(currentEp),
+				episodeKey,
 				time: requestedTime,
+				endTime: requestedEndTime,
 			});
 			viewState.set(ViewState.Player);
 			api.currentTime = requestedTime;
+			setActivePlaybackSegment(episodeKey, requestedTime, requestedEndTime);
 			isPaused.set(false);
 			if (playerIsVisible) {
 				requestedPlaybackTime.set(null);
@@ -117,6 +134,7 @@ export default async function podNotesURIHandler(
 		// surface the player and resume playback without seeking — unless the
 		// episode already finished (live position at its end), in which case
 		// replaying would instantly fire `ended` and auto-advance, so restart it.
+		activePlaybackSegment.set(null);
 		viewState.set(ViewState.Player);
 		const liveTime = get(currentTime);
 		const liveDuration = get(duration);
@@ -170,7 +188,60 @@ export default async function podNotesURIHandler(
 	requestedPlaybackTime.set({
 		episodeKey: getEpisodeKey(episode),
 		time: hasExplicitTime ? requestedTime : resolveResumeTime(episode),
+		endTime: hasExplicitTime ? requestedEndTime : undefined,
 	});
+	setActivePlaybackSegment(
+		getEpisodeKey(episode),
+		hasExplicitTime ? requestedTime : resolveResumeTime(episode),
+		hasExplicitTime ? requestedEndTime : undefined,
+	);
 	currentEpisode.set(episode);
 	viewState.set(ViewState.Player);
+}
+
+function parseSegmentEndTime(
+	rawEndTime: string | undefined,
+	hasExplicitTime: boolean,
+	requestedTime: number,
+): number | undefined | null {
+	if (rawEndTime === undefined || rawEndTime === "") return undefined;
+
+	if (!hasExplicitTime) {
+		new Notice("Segment links require a start timestamp");
+		return null;
+	}
+
+	if (requestedTime < 0) {
+		new Notice("Segment start time must be zero or greater");
+		return null;
+	}
+
+	const parsed = parseFloat(rawEndTime);
+	if (!Number.isFinite(parsed)) {
+		new Notice("Segment end time must be a valid number");
+		return null;
+	}
+
+	if (parsed <= requestedTime) {
+		new Notice("Segment end time must be after the start time");
+		return null;
+	}
+
+	return parsed;
+}
+
+function setActivePlaybackSegment(
+	episodeKey: string,
+	startTime: number,
+	endTime: number | undefined,
+): void {
+	activePlaybackSegment.set(
+		endTime === undefined
+			? null
+			: {
+					episodeKey,
+					startTime,
+					endTime,
+				},
+	);
 }

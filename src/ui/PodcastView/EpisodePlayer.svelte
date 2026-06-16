@@ -12,6 +12,7 @@
 		viewState,
 		downloadedEpisodes,
 		requestedPlaybackTime,
+		activePlaybackSegment,
 	} from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { fetchChapters } from "src/utility/fetchChapters";
@@ -66,6 +67,7 @@
 	let hasSeenFirstEpisodeFire: boolean = false;
 	let chapters: Chapter[] = [];
 	let lastChaptersUrl: string | undefined = undefined;
+	let segmentStopTimeWithoutProgressSave: number | null = null;
 
 	function togglePlayback() {
 		isPaused.update((value) => !value);
@@ -75,14 +77,14 @@
 		{ detail: { event, percent } }: CustomEvent<{ event: MouseEvent | KeyboardEvent; percent?: number }>
 	) {
 		if (typeof percent === "number") {
-			currentTime.set(percent * $duration);
+			seekPlaybackTo(percent * $duration);
 			return;
 		}
 
 		if (event instanceof MouseEvent) {
 			const progressbar = event.currentTarget as HTMLDivElement;
 			const ratio = progressbar.offsetWidth ? event.offsetX / progressbar.offsetWidth : 0;
-			currentTime.set(ratio * $duration);
+			seekPlaybackTo(ratio * $duration);
 		}
 	}
 
@@ -101,6 +103,19 @@
 	}
 
 	function onEpisodeEnded() {
+		const activeSegment = $activePlaybackSegment;
+		if (activeSegment && episodeMatchesKey($currentEpisode, activeSegment.episodeKey)) {
+			const stopTime =
+				Number.isFinite($duration) && $duration > 0
+					? Math.min(activeSegment.endTime, $duration)
+					: $currentTime;
+			currentTime.set(stopTime);
+			segmentStopTimeWithoutProgressSave = stopTime;
+			activePlaybackSegment.set(null);
+			isPaused.set(true);
+			return;
+		}
+
 		playedEpisodes.markAsPlayed($currentEpisode);
 		removeEpisodeFromPlaylists();
 
@@ -118,7 +133,13 @@
 	}
 
 	function onChapterSeek(event: CustomEvent<{ time: number }>) {
-		currentTime.set(event.detail.time);
+		seekPlaybackTo(event.detail.time);
+	}
+
+	function seekPlaybackTo(time: number) {
+		activePlaybackSegment.set(null);
+		segmentStopTimeWithoutProgressSave = null;
+		currentTime.set(time);
 	}
 
 	function onMetadataLoaded() {
@@ -140,16 +161,29 @@
 
 		if (requestedPlayback !== null) {
 			requestedPlaybackTime.set(null);
+			activePlaybackSegment.set(null);
+			segmentStopTimeWithoutProgressSave = null;
 			if (!episodeMatchesKey(currentEp, requestedPlayback.episodeKey)) {
 				restoreSavedPlaybackTime(currentEp, playedEps);
 				return;
 			}
 
 			currentTime.set(requestedPlayback.time);
+			activePlaybackSegment.set(
+				requestedPlayback.endTime === undefined
+					? null
+					: {
+							episodeKey: requestedPlayback.episodeKey,
+							startTime: requestedPlayback.time,
+							endTime: requestedPlayback.endTime,
+						},
+			);
 			isPaused.set(false);
 			return;
 		}
 
+		activePlaybackSegment.set(null);
+		segmentStopTimeWithoutProgressSave = null;
 		restoreSavedPlaybackTime(currentEp, playedEps);
 	}
 
@@ -191,6 +225,7 @@
 		// restored (onMetadataLoaded) — writing the pre-restore 0 would clobber the
 		// stored position we are about to resume from.
 		if (isLoading || !$currentEpisode) return;
+		if (shouldSuppressSegmentProgressPersistence()) return;
 
 		playedEpisodes.setEpisodeTime(
 			$currentEpisode,
@@ -202,12 +237,49 @@
 		);
 	}
 
-	function onTimeUpdate() {
+	function onTimeUpdate(event: Event) {
+		if (stopActivePlaybackSegmentIfEnded(event)) return;
+
 		const now = Date.now();
 		if (now - lastPositionSaveMs < SAVE_POSITION_THROTTLE_MS) return;
 
 		lastPositionSaveMs = now;
 		persistPlaybackPosition();
+	}
+
+	function shouldSuppressSegmentProgressPersistence(): boolean {
+		const activeSegment = $activePlaybackSegment;
+		if (activeSegment && episodeMatchesKey($currentEpisode, activeSegment.episodeKey)) {
+			return true;
+		}
+
+		if (segmentStopTimeWithoutProgressSave === null) return false;
+		if ($currentTime === segmentStopTimeWithoutProgressSave) return true;
+
+		segmentStopTimeWithoutProgressSave = null;
+		return false;
+	}
+
+	function stopActivePlaybackSegmentIfEnded(event: Event): boolean {
+		const activeSegment = $activePlaybackSegment;
+		if (!activeSegment) return false;
+
+		if (!episodeMatchesKey($currentEpisode, activeSegment.episodeKey)) {
+			activePlaybackSegment.set(null);
+			return false;
+		}
+
+		if ($currentTime < activeSegment.endTime) return false;
+
+		const audio = event.currentTarget as HTMLAudioElement | null;
+		if (audio) {
+			audio.currentTime = activeSegment.endTime;
+		}
+		currentTime.set(activeSegment.endTime);
+		segmentStopTimeWithoutProgressSave = activeSegment.endTime;
+		activePlaybackSegment.set(null);
+		isPaused.set(true);
+		return true;
 	}
 
 	function onPause() {
@@ -235,6 +307,7 @@
 			// time and clobber its saved resume position (issue #33).
 			isLoading = true;
 			lastPositionSaveMs = Number.NEGATIVE_INFINITY;
+			segmentStopTimeWithoutProgressSave = null;
 
 			// Clear the outgoing episode's progress the instant the episode changes
 			// so the player never renders its full/last position against the

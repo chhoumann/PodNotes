@@ -12,6 +12,7 @@ import { parseEpisodeNumberFromTitle } from "./utility/parseEpisodeNumber";
 import buildEpisodeResumeLink from "./utility/buildEpisodeResumeLink";
 import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
+import type { PodcastSegmentTimes } from "./utility/podcastSegment";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -170,7 +171,10 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	return replacer(template);
 }
 
-export function TimestampTemplateEngine(template: string) {
+export function TimestampTemplateEngine(
+	template: string,
+	options: { segment?: PodcastSegmentTimes } = {},
+) {
 	const [replacer, addTag] = useTemplateEngine();
 	const { api, settings } = get(plugin);
 	const timestampOffset = settings.timestamp.offset ?? 0;
@@ -181,6 +185,38 @@ export function TimestampTemplateEngine(template: string) {
 	addTag("linktime", (format?: string) =>
 		api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true, timestampOffset),
 	);
+	addTag("segment", (format?: string) => {
+		if (!options.segment) {
+			return api.getPodcastTimeFormatted(
+				format ?? "HH:mm:ss",
+				false,
+				timestampOffset,
+			);
+		}
+
+		return api.getPodcastSegmentFormatted(
+			format ?? "HH:mm:ss",
+			options.segment.startTime,
+			options.segment.endTime,
+			false,
+		);
+	});
+	addTag("linksegment", (format?: string) => {
+		if (!options.segment) {
+			return api.getPodcastTimeFormatted(
+				format ?? "HH:mm:ss",
+				true,
+				timestampOffset,
+			);
+		}
+
+		return api.getPodcastSegmentFormatted(
+			format ?? "HH:mm:ss",
+			options.segment.startTime,
+			options.segment.endTime,
+			true,
+		);
+	});
 
 	return replacer(template);
 }

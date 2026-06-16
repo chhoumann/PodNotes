@@ -1,4 +1,9 @@
-export default function encodePodnotesURI(title: string, feedUrl: string, time?: number): URL {
+export default function encodePodnotesURI(
+	title: string,
+	feedUrl: string,
+	time?: number,
+	endTime?: number,
+): URL {
 	const url = new URL(`obsidian://podnotes`);
 
 	const params = new URLSearchParams();
@@ -7,6 +12,9 @@ export default function encodePodnotesURI(title: string, feedUrl: string, time?:
 
 	if (time !== undefined) {
 		params.set('time', time.toString());
+		if (endTime !== undefined) {
+			params.set('endTime', endTime.toString());
+		}
 	}
 
 	// Obsidian decodes protocol query values with decodeURIComponent only, which does NOT turn
