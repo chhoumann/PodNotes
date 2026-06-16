@@ -4,18 +4,32 @@ import type { Episode } from "./types/Episode";
 import { get } from "svelte/store";
 import { plugin } from "./store";
 import addExtension from "./utility/addExtension";
+import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
+import { ensureFolderExists } from "./utility/ensureFolderExists";
+
+/**
+ * Resolve the on-disk path of an episode's note from the configured template.
+ * Centralized so the existence check, the open action, and creation all agree on
+ * the exact same (length-capped) path — otherwise a truncated note would be
+ * re-created on every invocation. See issue #22.
+ */
+function getPodcastNotePath(episode: Episode): string {
+	const pluginInstance = get(plugin);
+
+	const filePath = FilePathTemplateEngine(
+		pluginInstance.settings.note.path,
+		episode,
+	);
+
+	return enforceMaxPathLength(addExtension(filePath, "md"));
+}
 
 export default async function createPodcastNote(
 	episode: Episode
 ): Promise<void> {
 	const pluginInstance = get(plugin);
 
-	const filePath = FilePathTemplateEngine(
-		pluginInstance.settings.note.path,
-		episode
-	);
-
-	const filePathDotMd = addExtension(filePath, "md");
+	const filePathDotMd = getPodcastNotePath(episode);
 
 	const content = NoteTemplateEngine(
 		pluginInstance.settings.note.template,
@@ -37,14 +51,7 @@ export default async function createPodcastNote(
 }
 
 export function getPodcastNote(episode: Episode): TFile | null {
-	const pluginInstance = get(plugin);
-
-	const filePath = FilePathTemplateEngine(
-		pluginInstance.settings.note.path,
-		episode
-	);
-
-	const filePathDotMd = addExtension(filePath, "md");
+	const filePathDotMd = getPodcastNotePath(episode);
 	const file = app.vault.getAbstractFileByPath(filePathDotMd);
 
 	if (!file || !(file instanceof TFile)) {
@@ -69,7 +76,6 @@ async function createFileIfNotExists(
 	path: string,
 	content: string,
 	episode: Episode,
-	createFolder = true
 ): Promise<TFile> {
 	const file = getPodcastNote(episode);
 
@@ -79,15 +85,18 @@ async function createFileIfNotExists(
 		return file;
 	}
 
-	const foldersInPath = path.split("/").slice(0, -1);
-	for (let i = 0; i < foldersInPath.length; i++) {
-		const folderPath = foldersInPath.slice(0, i + 1).join("/");
-		const folder = app.vault.getAbstractFileByPath(folderPath);
+	const folderPath = path.split("/").slice(0, -1).join("/");
+	await ensureFolderExists(folderPath);
 
-		if (!folder && createFolder) {
-			await app.vault.createFolder(folderPath);
+	try {
+		return await app.vault.create(path, content);
+	} catch (error) {
+		// A racing create may have won between the check and here; treat an
+		// already-existing file as success rather than surfacing an error.
+		const raced = app.vault.getAbstractFileByPath(path);
+		if (raced instanceof TFile) {
+			return raced;
 		}
+		throw error;
 	}
-
-	return await app.vault.create(path, content);
 }

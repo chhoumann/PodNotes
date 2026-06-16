@@ -6,6 +6,7 @@ import {
 	downloadEpisode,
 	getEpisodeAudioBuffer,
 	safeDownloadBasename,
+	safeDownloadFilePath,
 } from "./downloadEpisode";
 import { downloadedEpisodes } from "./store";
 import type { Episode } from "./types/Episode";
@@ -174,6 +175,26 @@ describe("safeDownloadBasename (#183)", () => {
 		expect(
 			safeDownloadBasename("podcast/{{podcast}}/{{title}}", makeEpisode()),
 		).toBe("podcast/Pod/My Title");
+	});
+});
+
+describe("safeDownloadFilePath (#22)", () => {
+	it("caps a long title's file name while keeping the audio extension", () => {
+		const result = safeDownloadFilePath(
+			"podcast/{{podcast}}/{{title}}",
+			makeEpisode({ title: "X".repeat(400) }),
+			"mp3",
+		);
+		const name = result.split("/").pop() ?? "";
+		expect(result.startsWith("podcast/Pod/")).toBe(true);
+		expect(name.endsWith(".mp3")).toBe(true);
+		expect(name.length).toBeLessThanOrEqual(255);
+	});
+
+	it("leaves a short path unchanged", () => {
+		expect(
+			safeDownloadFilePath("podcast/{{podcast}}/{{title}}", makeEpisode(), "mp3"),
+		).toBe("podcast/Pod/My Title.mp3");
 	});
 });
 
