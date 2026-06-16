@@ -131,7 +131,16 @@ export function lastSegmentExtension(path: string): string {
 	const last = path.split("/").pop() ?? "";
 	const dot = last.lastIndexOf(".");
 	// `dot > 0` so a dotfile (".env") is treated as a name, not an extension.
-	return dot > 0 ? last.slice(dot) : "";
+	if (dot <= 0) {
+		return "";
+	}
+
+	const ext = last.slice(dot);
+	// A real extension is a short alphanumeric suffix. Anything else — a dotted
+	// title ("Episode.Part.<very long>"), or a leftover template token — is part
+	// of the name, not an extension; treating it as one would reattach an
+	// arbitrarily long "extension" past the cap and still trip ENAMETOOLONG.
+	return /^\.[A-Za-z0-9]{1,16}$/.test(ext) ? ext : "";
 }
 
 /**

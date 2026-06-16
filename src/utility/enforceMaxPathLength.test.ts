@@ -176,6 +176,44 @@ describe("lastSegmentExtension", () => {
 		expect(lastSegmentExtension("a.b/Episode")).toBe("");
 		expect(lastSegmentExtension(".env")).toBe("");
 	});
+
+	it("rejects a non-extension-like suffix (dotted title, leftover token)", () => {
+		// A dotted title's trailing chunk is part of the name, not an extension.
+		expect(lastSegmentExtension(`Episode.Part.${"X".repeat(400)}`)).toBe("");
+		expect(lastSegmentExtension("Episode.{{episodeNumber}}")).toBe("");
+		// A short alphanumeric suffix is still treated as an extension.
+		expect(lastSegmentExtension("Episode 1.5")).toBe(".5");
+	});
+});
+
+describe("enforceMaxPathLength with template-derived extension (transcripts)", () => {
+	it("caps a no-extension path whose title contains dots (no pseudo-extension)", () => {
+		// Mirrors getTranscriptPath: extension comes from lastSegmentExtension of the
+		// rendered path. A dotted, very long title must NOT be mistaken for a huge
+		// extension that escapes the cap (round-3 regression guard).
+		const rendered = `transcripts/Show/Episode.Part.${"X".repeat(400)}`;
+		const result = enforceMaxPathLength(
+			rendered,
+			lastSegmentExtension(rendered),
+			BYTES,
+		);
+		const name = result.split("/").pop() ?? "";
+		expect(byteLength(name)).toBeLessThanOrEqual(MAX_FILENAME_UNITS);
+	});
+
+	it("preserves a real .md/.txt extension on a long title", () => {
+		for (const ext of [".md", ".txt"]) {
+			const rendered = `transcripts/Show/${"Y".repeat(400)}${ext}`;
+			const result = enforceMaxPathLength(
+				rendered,
+				lastSegmentExtension(rendered),
+				BYTES,
+			);
+			const name = result.split("/").pop() ?? "";
+			expect(name.endsWith(ext)).toBe(true);
+			expect(byteLength(name)).toBeLessThanOrEqual(MAX_FILENAME_UNITS);
+		}
+	});
 });
 
 describe("getPlatformFilenameLimit", () => {
