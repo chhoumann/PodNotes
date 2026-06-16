@@ -540,15 +540,27 @@ describe("sanitizeEpisodeListLimit (issue #114)", () => {
 	});
 
 	test("clamps to the maximum", () => {
+		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT)).toBe(
+			MAX_EPISODE_LIST_LIMIT,
+		);
+		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT + 1)).toBe(
+			MAX_EPISODE_LIST_LIMIT,
+		);
 		expect(sanitizeEpisodeListLimit(10 ** 9)).toBe(MAX_EPISODE_LIST_LIMIT);
 	});
 });
 
 describe("latestEpisodes respects episodeListLimit (issue #114)", () => {
-	// Newest-first like a real RSS feed; the store re-sorts by date anyway.
-	function feedEpisodes(podcastName: string, count: number): Episode[] {
-		return Array.from({ length: count }, (_, i) => {
-			const ordinal = count - i;
+	// `ordinal` doubles as the day-of-month, so a higher ordinal is a newer
+	// episode. `order: "newest-first"` mimics a typical RSS feed; "oldest-first"
+	// stresses that the per-feed limit ranks by date before truncating.
+	function feedEpisodes(
+		podcastName: string,
+		count: number,
+		order: "newest-first" | "oldest-first" = "newest-first",
+	): Episode[] {
+		const episodes = Array.from({ length: count }, (_, i) => {
+			const ordinal = i + 1;
 			return {
 				title: `${podcastName} #${ordinal}`,
 				streamUrl: `https://example.com/${podcastName}/${ordinal}.mp3`,
@@ -559,6 +571,7 @@ describe("latestEpisodes respects episodeListLimit (issue #114)", () => {
 				episodeDate: new Date(2020, 0, ordinal),
 			} satisfies Episode;
 		});
+		return order === "newest-first" ? episodes.reverse() : episodes;
 	}
 
 	function trackLatest(): { value: () => Episode[]; stop: () => void } {
@@ -634,6 +647,25 @@ describe("latestEpisodes respects episodeListLimit (issue #114)", () => {
 
 		// 5 per feed * 2 feeds = 10.
 		expect(tracker.value()).toHaveLength(10);
+		tracker.stop();
+	});
+
+	test("selects the newest episodes even when the feed is oldest-first", () => {
+		const tracker = trackLatest();
+		episodeListLimit.set(3);
+
+		// Episodes 1..25 in ascending (oldest-first) order. A naive slice-before-sort
+		// would keep #1..#3 (the oldest); the limit must rank by date and keep the
+		// newest three.
+		episodeCache.set({
+			"Show A": feedEpisodes("Show A", 25, "oldest-first"),
+		});
+
+		expect(tracker.value().map((episode) => episode.title)).toEqual([
+			"Show A #25",
+			"Show A #24",
+			"Show A #23",
+		]);
 		tracker.stop();
 	});
 });

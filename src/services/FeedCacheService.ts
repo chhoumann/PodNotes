@@ -22,6 +22,9 @@ const STORAGE_KEY = "podnotes:feed-cache:v2";
 // orphan ~MBs of data (which could push v2 writes over the localStorage quota).
 const LEGACY_STORAGE_KEYS = ["podnotes:feed-cache:v1"];
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
+// Keep this >= MAX_EPISODE_LIST_LIMIT (src/constants.ts): the Latest Episodes
+// list is rebuilt from this persisted cache on a warm start, so a per-feed list
+// limit larger than what we retain here could never be served (issue #114).
 const MAX_EPISODES_PER_FEED = 75;
 const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other localStorage usage
 

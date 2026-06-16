@@ -223,9 +223,13 @@ function getLatestEpisodesForFeed(
 ): Episode[] {
 	if (!episodes?.length) return [];
 
-	return episodes
-		.slice(0, perFeedLimit)
-		.sort((a, b) => getEpisodeTimestamp(b) - getEpisodeTimestamp(a));
+	// Sort by date first, THEN take the newest N. Slicing before sorting would
+	// only keep the newest episodes when the feed is already newest-first; for a
+	// feed (or cache) in any other order it would surface the wrong episodes, so
+	// the per-feed limit must rank the whole feed before truncating (issue #114).
+	return [...episodes]
+		.sort((a, b) => getEpisodeTimestamp(b) - getEpisodeTimestamp(a))
+		.slice(0, perFeedLimit);
 }
 
 function shallowEqualEpisodes(a?: Episode[], b?: Episode[]): boolean {
@@ -376,7 +380,7 @@ export const latestEpisodes = readable<Episode[]>([], (set) => {
 
 		const nextSources: FeedEpisodeSources = new Map();
 		const nextLatestByFeed: LatestEpisodesByFeed = new Map();
-		let nextMerged: Episode[] = [];
+		const collected: Episode[] = [];
 
 		for (const [feedTitle, episodes] of cacheEntries) {
 			const nextLatestForFeed = getLatestEpisodesForFeed(
@@ -385,11 +389,15 @@ export const latestEpisodes = readable<Episode[]>([], (set) => {
 			);
 			nextSources.set(feedTitle, episodes);
 			nextLatestByFeed.set(feedTitle, nextLatestForFeed);
-
-			for (const episode of nextLatestForFeed) {
-				nextMerged = insertEpisodeSorted(nextMerged, episode, latestLimit);
-			}
+			collected.push(...nextLatestForFeed);
 		}
+
+		// Merge once: sort the gathered per-feed slices by date and cap. A single
+		// sort avoids the repeated full-array copies insertEpisodeSorted would do
+		// per episode, keeping this user-triggered rebuild off the slow path.
+		const nextMerged = collected
+			.sort((a, b) => getEpisodeTimestamp(b) - getEpisodeTimestamp(a))
+			.slice(0, latestLimit);
 
 		feedSources = nextSources;
 		latestByFeed = nextLatestByFeed;

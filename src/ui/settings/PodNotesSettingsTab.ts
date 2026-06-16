@@ -151,7 +151,14 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					)
 					.setPlaceholder(`${DEFAULT_EPISODE_LIST_LIMIT}`)
 					.onChange(async (value) => {
-						const sanitized = sanitizeEpisodeListLimit(value);
+						// Don't commit while the field is empty or mid-edit (e.g. cleared,
+						// or a lone "-"): sanitizing "" would silently overwrite the saved
+						// limit with the default. Wait for a parseable number, and skip
+						// redundant saves so typing doesn't churn data.json each keystroke.
+						const trimmed = value.trim();
+						if (trimmed === "" || !Number.isFinite(Number(trimmed))) return;
+						const sanitized = sanitizeEpisodeListLimit(trimmed);
+						if (sanitized === this.plugin.settings.episodeListLimit) return;
 						this.plugin.settings.episodeListLimit = sanitized;
 						episodeListLimit.set(sanitized);
 						await this.plugin.saveSettings();
@@ -770,6 +777,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		queue.set(merged.queue);
 		localFiles.set(merged.localFiles);
 		hidePlayedEpisodes.set(merged.hidePlayedEpisodes);
+		const sanitizedLimit = sanitizeEpisodeListLimit(merged.episodeListLimit);
+		merged.episodeListLimit = sanitizedLimit;
+		episodeListLimit.set(sanitizedLimit);
 		const importedVolume = Number.isFinite(merged.defaultVolume)
 			? merged.defaultVolume
 			: 1;
