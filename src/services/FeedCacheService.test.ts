@@ -128,6 +128,22 @@ describe("FeedCacheService", () => {
 		expect(localStorage.getItem("podnotes:feed-cache:v1")).toBeNull();
 	});
 
+	test("removes the superseded v2 cache key on first load (#114 retention change)", async () => {
+		// The v2 schema kept the first N episodes in feed order; v3 keeps the newest
+		// N by date. An unexpired v2 blob must be dropped on upgrade so an
+		// oldest-first feed doesn't keep serving stale episodes until the TTL.
+		localStorage.setItem(
+			"podnotes:feed-cache:v2",
+			JSON.stringify({ stale: { episodes: [], updatedAt: 0 } }),
+		);
+
+		vi.resetModules();
+		const fresh = await import("./FeedCacheService");
+		fresh.getCachedEpisodes(testFeed);
+
+		expect(localStorage.getItem("podnotes:feed-cache:v2")).toBeNull();
+	});
+
 	test("clearFeedCache also removes superseded legacy keys", () => {
 		// Covers a clear issued before any cache load, where loadCache's memo would
 		// otherwise short-circuit and leave the v1 blob behind.

@@ -12,15 +12,21 @@ interface CachedFeedData {
 
 type FeedCache = Record<string, CachedFeedData>;
 
-// v2: Episode gained episodeNumber/duration (#34, #88). Bumping the key stops
-// reading v1 entries (which lack those fields), so the new template tags populate
-// from a fresh parse instead of rendering empty until the TTL expires after an
-// upgrade. Superseded keys are actively deleted on load (see LEGACY_STORAGE_KEYS)
-// so a stale v1 blob can't linger and eat the localStorage quota.
-const STORAGE_KEY = "podnotes:feed-cache:v2";
+// v2: Episode gained episodeNumber/duration (#34, #88).
+// v3: retention changed from "first N in feed order" to "newest N by date"
+// (#114). An unexpired v2 entry written by the old code holds the first 75 feed
+// items, which for an oldest-first feed are the OLDEST episodes; reading it after
+// an upgrade would keep Latest Episodes/search stuck on stale items until the TTL
+// expired. Bumping the key forces a fresh parse so the new retention applies
+// immediately. Superseded keys are actively deleted on load (see
+// LEGACY_STORAGE_KEYS) so a stale blob can't linger and eat the localStorage quota.
+const STORAGE_KEY = "podnotes:feed-cache:v3";
 // Storage keys from earlier cache schemas, removed on first load so they don't
-// orphan ~MBs of data (which could push v2 writes over the localStorage quota).
-const LEGACY_STORAGE_KEYS = ["podnotes:feed-cache:v1"];
+// orphan ~MBs of data (which could push v3 writes over the localStorage quota).
+const LEGACY_STORAGE_KEYS = [
+	"podnotes:feed-cache:v1",
+	"podnotes:feed-cache:v2",
+];
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
 // Keep this >= MAX_EPISODE_LIST_LIMIT (src/constants.ts): the Latest Episodes
 // list is rebuilt from this persisted cache on a warm start, so a per-feed list
