@@ -8,6 +8,15 @@
  * - A: AM/PM, a: am/pm
  */
 export function formatSeconds(totalSeconds: number, format: string): string {
+    // Clamp non-finite (NaN/Infinity) and negative inputs to 0 so the player never
+    // renders garbled times like "NaN:NaN:NaN" or "-1:-1:-10". These arise during
+    // an episode switch, when duration is briefly unknown (NaN) before the new
+    // audio's metadata loads, or when currentTime momentarily exceeds a shorter
+    // next episode's duration (issue #94).
+    if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+        totalSeconds = 0;
+    }
+
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const secs = Math.floor(totalSeconds % 60);
