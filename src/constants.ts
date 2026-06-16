@@ -3,6 +3,21 @@ import type { Playlist } from "./types/Playlist";
 
 export const VIEW_TYPE = "podcast_player_view";
 
+/**
+ * How many of each feed's most recent episodes are surfaced in the aggregated
+ * "Latest Episodes" list (and therefore searchable from it). The default of 10
+ * preserves the historical behaviour; users who want to search further back
+ * through each feed can raise it (issue #114).
+ */
+export const DEFAULT_EPISODE_LIST_LIMIT = 10;
+
+/**
+ * Upper bound for {@link DEFAULT_EPISODE_LIST_LIMIT}. Keeps an accidental huge
+ * value (e.g. a fat-fingered settings entry) from materialising an unbounded
+ * latest-episodes list.
+ */
+export const MAX_EPISODE_LIST_LIMIT = 1000;
+
 type PlaylistSettings = Pick<
 	Playlist,
 	"icon" | "name" | "shouldEpisodeRemoveAfterPlay" | "shouldRepeat"
@@ -42,6 +57,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	defaultPlaybackRate: 1,
 	defaultVolume: 1,
 	hidePlayedEpisodes: false,
+	episodeListLimit: DEFAULT_EPISODE_LIST_LIMIT,
 	playedEpisodes: {},
 	favorites: {
 		...FAVORITES_SETTINGS,
