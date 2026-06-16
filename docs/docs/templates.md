@@ -3,6 +3,8 @@ PodNotes can create notes from templates. These templates can contain certain sy
 To use templates, you can use the `Create episode note` Obsidian command (previously named `Create podcast note`).
 This requires you to have defined a template for both the file path and note text.
 
+PodNotes ships a sensible default for both, so the command works out of the box on a fresh install. The default note template uses structured frontmatter properties that [Obsidian Bases](https://help.obsidian.md/bases) can sort, filter, and group on (see [Using the default template with Bases](#using-the-default-template-with-bases) below). You can customize either template under PodNotes settings at any time, and your customizations are always preserved across updates.
+
 PodNotes can also create a note for a whole podcast (the feed). See [Podcast feed notes](#podcast-feed-notes) below.
 
 ## File path
@@ -28,7 +30,7 @@ This template will be used to create the note text. You can use the following sy
 	-  You can use `{{content:> }}` to prepend each new line with a `>` (to put the entire content in a blockquote).
 
 - `{{podcast}}`: The name of the podcast.
-- `{{url}}`: The URL of the podcast episode.
+- `{{url}}`: The URL of the podcast episode. For a local-file episode this is a link to the file rather than a web URL. Tag values are inserted verbatim, so when you place one in a quoted YAML property (e.g. `url: "{{url}}"`) it stays valid for well-formed feed URLs and ordinary file names (a URL or file name containing a literal `"` would need escaping).
 - `{{stream}}`: The direct URL of the episode's audio file — the RSS `<enclosure>` URL for podcast feeds, or the underlying audio source for Pocket Casts and local-file episodes. Handy for embedding the raw audio or linking to the source. An empty string is used in the rare case no audio URL is available. Available in episode note templates only.
 - `{{date}}`: The publish date of the podcast episode.
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
@@ -51,21 +53,61 @@ In an episode note, `{{url}}` and `{{artwork}}` always describe the **episode**.
 - `{{feedartwork}}`: The podcast's (feed) artwork. Falls back to the episode artwork if the feed isn't saved.
 - `{{podcastlink}}`: A ready-made wikilink to the podcast's [feed note](#podcast-feed-notes). It points at the same file the feed note is created at, so episodes and the feed note link up automatically. When the feed-note path has a folder it is path-qualified (e.g. `[[PodNotes/Podcasts/My Show|My Show]]`) so it can't resolve to an unrelated note that shares the basename; otherwise it's a plain `[[My Show]]`. (Avoid putting a `{{date}}` in the feed-note path, since the episode side can't reproduce the feed note's creation date.)
 
-A Bases-friendly episode template that links back to the feed note:
+### Using the default template with Bases
+PodNotes ships this default episode note template, which links each episode back to its feed note and exposes structured frontmatter properties for [Obsidian Bases](https://help.obsidian.md/bases):
 
 ```
 ---
 type: podcastEpisode
 podcast: "{{podcastlink}}"
-title: "{{title}}"
-image: "{{artwork}}"
-url: "{{url}}"
 date: {{date:YYYY-MM-DD}}
 tags:
   - podcastEpisode
+status:
+rating:
+favorite: false
 ---
+# {{title}}
+
+![]({{artwork}})
+
+[Resume in PodNotes]({{episodelink}})
+
+{{url}}
+
 {{description}}
 ```
+
+The frontmatter is built so it stays **valid YAML** for every episode, because only values that can never contain a YAML-hostile character go into it:
+
+- The full episode title goes in the body as the `# {{title}}` heading, where YAML rules don't apply (a raw title can contain `"` or `:`, which would break a frontmatter scalar).
+- `{{podcastlink}}` is quoted so its leading `[[` isn't read as a YAML flow sequence, and the linked name is sanitized. (If you customize *Feed note file path* to a folder containing a literal `"` or `\`, that character flows into the link verbatim — keep the feed-note path to ordinary path characters.)
+- `{{url}}` and `{{artwork}}` are kept in the **body** (a bare link and a Markdown image), not in the frontmatter. Tag values are inserted verbatim, and for a local-file episode `{{url}}` is a vault link whose name can contain a `"`; keeping it out of a quoted scalar means an awkward URL or file name can never break the note's properties. If your episodes all come from feeds (so `{{url}}` is always a well-formed web URL), you can add `url: "{{url}}"` back to the frontmatter.
+- `date:` is a bare `YYYY-MM-DD` (or empty/null when the feed has no publish date).
+- `status`, `rating`, and `favorite` are left for you to fill in — they give Bases columns to sort and filter on (e.g. mark an episode `favorite: true`, or set `status` to `to-listen`/`listening`/`listened`).
+
+A starter Bases view (save as e.g. `Podcast Episodes.base`) that lists every episode note, grouped by listening status, with a column for each property:
+
+```yaml
+filters:
+  and:
+    - 'type == "podcastEpisode"'
+views:
+  - type: table
+    name: Episodes
+    order:
+      - file.name
+      - note.podcast
+      - note.date
+      - note.status
+      - note.rating
+      - note.favorite
+    groupBy:
+      property: note.status
+      direction: ASC
+```
+
+Open the base in Obsidian to sort, filter, or add views from the view options. Because `note.podcast` resolves to the linked [feed note](#podcast-feed-notes), you can also group by show or pivot from a feed note to all of its episodes.
 
 ## Podcast feed notes
 A *feed note* is a single parent note for an entire podcast (the feed), which episode notes can link to (great for [Obsidian Bases](https://help.obsidian.md/bases) / Dataview rollups).

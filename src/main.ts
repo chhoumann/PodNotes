@@ -16,7 +16,10 @@ import { Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
-import { migrateDownloadPath } from "src/settingsMigrations";
+import {
+	migrateDownloadPath,
+	migrateNoteSettings,
+} from "src/settingsMigrations";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { QueueReorderModal } from "src/ui/QueueReorderModal";
@@ -495,6 +498,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.settings.episodeListLimit = sanitizeEpisodeListLimit(
 			this.settings.episodeListLimit,
 		);
+		// Upgrade the legacy empty episode-note default to the Bases-friendly
+		// default, preserving any path/template the user configured (#160). Returns
+		// a fresh object, so DEFAULT_SETTINGS.note is never mutated.
+		this.settings.note = migrateNoteSettings(loadedData?.note);
 	}
 
 	async saveSettings() {

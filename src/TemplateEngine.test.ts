@@ -11,6 +11,7 @@ import {
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { downloadedEpisodes, plugin } from "./store";
+import { DEFAULT_SETTINGS } from "./constants";
 
 // The illegal-character sanitizer is private; exercise it through
 // DownloadPathTemplateEngine, which applies it to {{title}} and {{podcast}}.
@@ -141,6 +142,108 @@ describe("NoteTemplateEngine feed-scoped tags (#163)", () => {
 		expect(NoteTemplateEngine("{{podcastlink}}", demoEpisode)).toBe(
 			"[[PodNotes/Podcasts/My Show|My Show]]",
 		);
+	});
+});
+
+describe("NoteTemplateEngine renders URL tags verbatim (#160 review)", () => {
+	beforeEach(() => {
+		plugin.set({
+			settings: { feedNote: { path: "" }, savedFeeds: {} },
+		} as never);
+	});
+
+	it("does not mutate {{url}}/{{episodeurl}} — local-file wikilinks pass through", () => {
+		// For local-file episodes episode.url is a wikilink, not a URL
+		// (getContextMenuHandler stores generateMarkdownLink). The engine must not
+		// strip characters from it, or the link would point at a different file.
+		const localFile = {
+			...demoEpisode,
+			url: '[[Talk "A".mp3]]',
+		} as Episode;
+		expect(NoteTemplateEngine("{{url}}", localFile)).toBe('[[Talk "A".mp3]]');
+		expect(NoteTemplateEngine("{{episodeurl}}", localFile)).toBe(
+			'[[Talk "A".mp3]]',
+		);
+	});
+
+	it("renders a normal episode URL and artwork verbatim", () => {
+		expect(NoteTemplateEngine("{{url}}|{{artwork}}", demoEpisode)).toBe(
+			"https://example.com/ep1|https://example.com/ep1.png",
+		);
+	});
+});
+
+describe("default note template renders valid frontmatter (#160)", () => {
+	beforeEach(() => {
+		plugin.set({
+			settings: {
+				feedNote: { path: "PodNotes/Podcasts/{{podcast}}.md" },
+				savedFeeds: {},
+			},
+		} as never);
+		downloadedEpisodes.set({});
+	});
+
+	function frontmatterOf(rendered: string): string {
+		const match = rendered.match(/^---\n([\s\S]*?)\n---\n/);
+		expect(match).not.toBeNull();
+		return (match as RegExpMatchArray)[1];
+	}
+
+	it("keeps frontmatter valid even when title/url carry YAML-hostile characters", () => {
+		// A local-file episode whose name contains a quote is the worst case: the
+		// title carries quotes/colons and {{url}} is a wikilink containing a quote.
+		// Both must stay in the BODY (never a quoted frontmatter scalar) so the
+		// frontmatter always parses. See issue #160 review.
+		const episode: Episode = {
+			...demoEpisode,
+			title: 'Why "AI": a deep dive: part 2',
+			url: '[[Audio/Talk "A".mp3]]',
+			podcastName: "My Show",
+		};
+		const rendered = NoteTemplateEngine(
+			DEFAULT_SETTINGS.note.template,
+			episode,
+		);
+		const frontmatter = frontmatterOf(rendered);
+		const line = (key: string) =>
+			frontmatter.split("\n").find((l) => l.startsWith(`${key}:`));
+
+		// The podcast link is quoted so its leading [[ isn't read as a flow sequence.
+		expect(line("podcast")).toBe(
+			'podcast: "[[PodNotes/Podcasts/My Show|My Show]]"',
+		);
+		// The url is NOT in the frontmatter (it could carry a quote for local files).
+		expect(line("url")).toBeUndefined();
+		// Every frontmatter line has balanced double-quotes.
+		for (const l of frontmatter.split("\n")) {
+			expect((l.match(/"/g) ?? []).length % 2).toBe(0);
+		}
+		// The raw title (quotes/colons) and the raw url (a quote-bearing wikilink)
+		// live only in the body, where YAML rules don't apply.
+		const body = rendered.slice(rendered.indexOf("\n---\n") + 5);
+		expect(body).toContain('# Why "AI": a deep dive: part 2');
+		expect(body).toContain('[[Audio/Talk "A".mp3]]');
+		expect(frontmatter).not.toContain("deep dive");
+		expect(frontmatter).not.toContain("Talk");
+	});
+
+	it("renders an ISO date when present and an empty (null) date otherwise", () => {
+		const withDate = NoteTemplateEngine(
+			DEFAULT_SETTINGS.note.template,
+			demoEpisode,
+		);
+		expect(
+			withDate.split("\n").find((l) => l.startsWith("date:")),
+		).toBe("date: 2024-01-01");
+
+		const noDate = NoteTemplateEngine(DEFAULT_SETTINGS.note.template, {
+			...demoEpisode,
+			episodeDate: undefined,
+		});
+		const dateLine = noDate.split("\n").find((l) => l.startsWith("date:"));
+		// Empty publish date renders as a null property, never a broken value.
+		expect(dateLine?.replace(/\s+$/, "")).toBe("date:");
 	});
 });
 

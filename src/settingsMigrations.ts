@@ -49,3 +49,48 @@ export function migrateDownloadPath(
 
 	return storedPath;
 }
+
+/**
+ * The episode note path and template both used to default to "" (empty). With an
+ * empty path OR an empty template the "Create episode note" command is disabled
+ * (`src/main.ts` gates it on both being non-empty), so a fresh install could not
+ * create episode notes at all until the user hand-wrote a template. Issue #160
+ * gives both a Bases-friendly default. Users who never touched note settings have
+ * the legacy empty note `{ path: "", template: "" }` persisted in `data.json`,
+ * which overrides the new default on load, so it is migrated to the new default.
+ */
+type StoredNote = { path?: string | null; template?: string | null };
+
+/**
+ * Upgrades the legacy empty episode-note settings to the current Bases-friendly
+ * default, preserving any configuration the user made.
+ *
+ * The migration fires ONLY when the WHOLE note is the legacy default — both path
+ * and template empty/absent — i.e. the exact value a never-configured install has
+ * persisted. The moment the user has set EITHER field, the note feature has been
+ * engaged, so both fields are preserved verbatim — including a deliberately empty
+ * field a user relies on to keep "Create episode note" disabled (the command
+ * gates on emptiness). This is the conservative reading of "migrate only when the
+ * stored value is still the old default": a partially-configured note is not the
+ * old default and is never silently overwritten.
+ *
+ * `null`/`undefined` fields (a missing key or hand-edited `data.json`) are
+ * coalesced to "" both so a fully-empty/absent note still upgrades and so a `null`
+ * never reaches FilePathTemplateEngine, where `null.replace(...)` would throw.
+ */
+export function migrateNoteSettings(storedNote: StoredNote | null | undefined): {
+	path: string;
+	template: string;
+} {
+	const path = storedNote?.path ?? "";
+	const template = storedNote?.template ?? "";
+
+	if (path === "" && template === "") {
+		return {
+			path: DEFAULT_SETTINGS.note.path,
+			template: DEFAULT_SETTINGS.note.template,
+		};
+	}
+
+	return { path, template };
+}
