@@ -1,3 +1,5 @@
+export type EpisodeMediaType = "audio" | "video";
+
 export interface Episode {
     title: string,
 	streamUrl: string
@@ -18,4 +20,6 @@ export interface Episode {
 	duration?: number;
 	/** URL to the podcast:chapters JSON file */
 	chaptersUrl?: string;
+	/** Media element type used to play the enclosure/local file. */
+	mediaType?: EpisodeMediaType;
 }

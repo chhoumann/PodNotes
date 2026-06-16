@@ -10,7 +10,12 @@ describe("getExtensionFromContentType", () => {
 		expect(getExtensionFromContentType("Audio/X-M4A")).toBe("m4a");
 	});
 
-	test("returns null when mime type is not audio", () => {
+	test("detects video mime types", () => {
+		expect(getExtensionFromContentType("video/mp4")).toBe("mp4");
+		expect(getExtensionFromContentType("Video/WebM")).toBe("webm");
+	});
+
+	test("returns null when mime type is not playable media", () => {
 		expect(getExtensionFromContentType("text/html")).toBeNull();
 	});
 });

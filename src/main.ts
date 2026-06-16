@@ -71,6 +71,7 @@ import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
 import { get, type Unsubscriber } from "svelte/store";
 import { normalizePlaybackRate } from "./utility/playbackRate";
+import { getEpisodeMediaType } from "./utility/mediaType";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -496,7 +497,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			checkCallback: (checking) => {
 				const canTranscribe =
 					!!this.api.podcast &&
-					requiredTranscriptionKeyPresent(this.settings);
+					requiredTranscriptionKeyPresent(this.settings) &&
+					getEpisodeMediaType(this.api.podcast) === "audio";
 
 				if (checking) {
 					return canTranscribe;

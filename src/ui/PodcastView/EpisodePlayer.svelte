@@ -26,7 +26,7 @@
 	import ChapterList from "./ChapterList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-	import type { Episode } from "src/types/Episode";
+	import type { Episode, EpisodeMediaType } from "src/types/Episode";
 	import type { Chapter } from "src/types/Chapter";
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
@@ -38,6 +38,11 @@
 		PLAYBACK_RATE_MIN,
 		PLAYBACK_RATE_STEP,
 	} from "src/utility/playbackRate";
+	import {
+		getEpisodeMediaType,
+		isSameMediaSource,
+	} from "src/utility/mediaType";
+	import type DownloadedEpisode from "src/types/DownloadedEpisode";
 
 	const clampVolume = (value: number): number => Math.min(1, Math.max(0, value));
 
@@ -49,11 +54,16 @@
 
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
 	$: titleCharCount = $currentEpisode?.title?.length ?? 0;
+	type MediaSource = { mediaType: EpisodeMediaType; src: string };
+	let mediaSource: MediaSource = getMediaSource($currentEpisode);
+	$: mediaSource = getMediaSource($currentEpisode, $downloadedEpisodes);
+	$: playerMediaType = mediaSource.mediaType;
+	$: isVideoEpisode = playerMediaType === "video";
 
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 	let playerVolume: number = 1;
-	let audioElement: HTMLAudioElement | null = null;
+	let mediaElement: HTMLMediaElement | null = null;
 	// The currentEpisode subscription fires synchronously on subscribe with the
 	// already-loaded episode; that first fire must not wipe a restored position
 	// (or flash 0) on the initial mount. Only genuine in-player switches reset.
@@ -264,9 +274,9 @@
 
 		if ($currentTime < activeSegment.endTime) return false;
 
-		const audio = event.currentTarget as HTMLAudioElement | null;
-		if (audio) {
-			audio.currentTime = activeSegment.endTime;
+		const media = event.currentTarget as HTMLMediaElement | null;
+		if (media) {
+			media.currentTime = activeSegment.endTime;
 		}
 		currentTime.set(activeSegment.endTime);
 		segmentStopTimeWithoutProgressSave = activeSegment.endTime;
@@ -282,15 +292,7 @@
 		persistPlaybackPosition();
 	}
 
-	let srcPromise: Promise<string> = getSrc($currentEpisode);
-
 	onMount(() => {
-		// This only happens when the player is open and the user downloads the episode via the context menu.
-		// So we want to update the source of the audio element to local file / online stream.
-		const unsubDownloadedSource = downloadedEpisodes.subscribe(_ => {
-			srcPromise = getSrc($currentEpisode);
-		});
-
 		const unsubCurrentEpisode = currentEpisode.subscribe((episode) => {
 			// Re-arm the load guard and throttle for the incoming episode. isLoading
 			// is cleared once on the first loadedmetadata and this component instance
@@ -304,7 +306,7 @@
 
 			// Clear the outgoing episode's progress the instant the episode changes
 			// so the player never renders its full/last position against the
-			// incoming episode while the new audio's metadata loads (issue #94).
+			// incoming episode while the new media's metadata loads (issue #94).
 			// Finishing an episode auto-advances by calling currentEpisode.set (see
 			// queue.playNext), which swaps the title/artwork immediately — but
 			// $currentTime/$duration keep the finished episode's end values until
@@ -318,8 +320,6 @@
 				duration.set(0);
 			}
 			hasSeenFirstEpisodeFire = true;
-
-			srcPromise = getSrc($currentEpisode);
 
 			// Fetch chapters when episode changes
 			const chaptersUrl = episode?.chaptersUrl;
@@ -351,7 +351,6 @@
 		document.addEventListener("visibilitychange", onVisibilityChange);
 
 		return () => {
-			unsubDownloadedSource();
 			unsubCurrentEpisode();
 			unsubVolume();
 			document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -383,23 +382,99 @@
 		viewState.set(ViewState.Player);
 	}
 
-	async function getSrc(episode: Episode): Promise<string> {
-		if (downloadedEpisodes.isEpisodeDownloaded(episode)) {
-			const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
-			if (!downloadedEpisode) return '';
+	function getMediaSource(
+		episode: Episode | undefined,
+		downloaded: typeof $downloadedEpisodes = {},
+	): MediaSource {
+		if (!episode) return { src: "", mediaType: "audio" };
 
-			return createMediaUrlObjectFromFilePath(downloadedEpisode.filePath);
+		const downloadedEpisode = findDownloadedEpisode(episode, downloaded);
+		if (shouldUseDownloadedEpisode(episode, downloadedEpisode)) {
+			return {
+				src: createMediaUrlObjectFromFilePath(downloadedEpisode.filePath),
+				mediaType: getEpisodeMediaType(downloadedEpisode),
+			};
 		}
-		
-		return episode.streamUrl;
+
+		return {
+			src: episode.streamUrl,
+			mediaType: getEpisodeMediaType(episode),
+		};
 	}
 
-	$: if (audioElement && audioElement.playbackRate !== $playbackRate) {
-		audioElement.playbackRate = $playbackRate;
+	function findDownloadedEpisode(
+		episode: Episode,
+		downloaded: typeof $downloadedEpisodes,
+	): DownloadedEpisode | undefined {
+		return downloaded[episode.podcastName]?.find(
+			(downloadedEpisode) => downloadedEpisode.title === episode.title,
+		);
+	}
+
+	function shouldUseDownloadedEpisode(
+		episode: Episode,
+		downloadedEpisode: DownloadedEpisode | undefined,
+	): downloadedEpisode is DownloadedEpisode {
+		if (!downloadedEpisode?.filePath) return false;
+
+		const downloadedMediaType = getEpisodeMediaType(downloadedEpisode);
+		if (episode.mediaType && downloadedMediaType !== episode.mediaType) {
+			return false;
+		}
+
+		if (episode.podcastName === "local file") {
+			const filePath = (episode as Partial<DownloadedEpisode>).filePath;
+			return !filePath || downloadedEpisode.filePath === filePath;
+		}
+
+		return isSameMediaSource(downloadedEpisode.streamUrl, episode.streamUrl);
+	}
+
+	$: if (mediaElement && mediaElement.playbackRate !== $playbackRate) {
+		mediaElement.playbackRate = $playbackRate;
 	}
 </script>
 
-	<div class="episode-player">
+<div class="episode-player">
+	{#if isVideoEpisode}
+		<div class="episode-video-container">
+			<!-- svelte-ignore a11y_media_has_caption -->
+			<video
+				class="podcast-video"
+				bind:this={mediaElement}
+				src={mediaSource.src}
+				bind:duration={$duration}
+				bind:currentTime={$currentTime}
+				bind:paused={$isPaused}
+				bind:volume={playerVolume}
+				on:ended={onEpisodeEnded}
+				on:loadedmetadata={onMetadataLoaded}
+				on:timeupdate={onTimeUpdate}
+				on:pause={onPause}
+				on:play|preventDefault
+				aria-label={$currentEpisode.title}
+				playsinline
+				autoplay={true}
+			></video>
+
+			{#if isLoading}
+				<div class="podcast-artwork-isloading-overlay">
+					<Loading />
+				</div>
+			{:else}
+				<button
+					type="button"
+					class="podcast-video-overlay"
+					class:visible={$isPaused}
+					on:click={togglePlayback}
+					on:contextmenu={handleContextMenuEpisodeImage}
+					aria-label="Toggle playback"
+				>
+					<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
+				</button>
+			{/if}
+		</div>
+	{:else}
 		<div class="episode-image-container">
 			<button
 				type="button"
@@ -410,39 +485,41 @@
 				on:mouseleave={() => (isHoveringArtwork = false)}
 				aria-label="Toggle playback"
 			>
-		 <Image 
-			class={"podcast-artwork"}
-			src={$currentEpisode.artworkUrl ?? ""}
-			alt={$currentEpisode.title}
-			opacity={(isHoveringArtwork || $isPaused) ? 0.5 : 1}
-		 >
-			<svelte:fragment slot="fallback">
-				<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
-					<Icon icon="image" size={150} clickable={false} />
-				</div>
-			</svelte:fragment>
-		 </Image>
-			{#if isLoading}
-				<div class="podcast-artwork-isloading-overlay">
-					<Loading />
-				</div>
-			{:else}
-				<div
-					class="podcast-artwork-overlay"
-					class:visible={isHoveringArtwork || $isPaused}
+				<Image
+					class="podcast-artwork"
+					src={$currentEpisode.artworkUrl ?? ""}
+					alt={$currentEpisode.title}
+					opacity={isHoveringArtwork || $isPaused ? 0.5 : 1}
 				>
-					<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
-				</div>
-			{/if}
-		</button>
-	</div>
+					<svelte:fragment slot="fallback">
+						<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
+							<Icon icon="image" size={150} clickable={false} />
+						</div>
+					</svelte:fragment>
+				</Image>
+
+				{#if isLoading}
+					<div class="podcast-artwork-isloading-overlay">
+						<Loading />
+					</div>
+				{:else}
+					<div
+						class="podcast-artwork-overlay"
+						class:visible={isHoveringArtwork || $isPaused}
+					>
+						<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
+					</div>
+				{/if}
+			</button>
+		</div>
+	{/if}
 
 	<h2 class="podcast-title" style="--title-char-count: {titleCharCount}">{$currentEpisode.title}</h2>
 
-	{#await srcPromise then src}
+	{#if !isVideoEpisode}
 		<audio
-			bind:this={audioElement}
-			src={src}
+			bind:this={mediaElement}
+			src={mediaSource.src}
 			bind:duration={$duration}
 			bind:currentTime={$currentTime}
 			bind:paused={$isPaused}
@@ -454,7 +531,7 @@
 			on:play|preventDefault
 			autoplay={true}
 		></audio>
-	{/await}
+	{/if}
 
 	<div class="status-container">
 		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
@@ -542,6 +619,26 @@
 		padding: 1rem 0 0.5rem;
 	}
 
+	.episode-video-container {
+		width: 100%;
+		max-width: 32rem;
+		aspect-ratio: 16 / 9;
+		position: relative;
+		margin: 0 auto 0.5rem;
+		background: #000;
+		border-radius: 0.75rem;
+		overflow: hidden;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+	}
+
+	.podcast-video {
+		width: 100%;
+		height: 100%;
+		display: block;
+		object-fit: contain;
+		background: #000;
+	}
+
 	.hover-container {
 		width: 100%;
 		height: 0;
@@ -599,8 +696,30 @@
 		transition: opacity 200ms ease;
 	}
 
-	.podcast-artwork-overlay.visible {
+	.podcast-video-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		border: none;
+		background: rgba(0, 0, 0, 0.1);
+		color: var(--text-on-accent);
+		cursor: pointer;
+		transition: opacity 200ms ease;
+	}
+
+	.episode-video-container:hover .podcast-video-overlay,
+	.podcast-video-overlay:focus-visible,
+	.podcast-artwork-overlay.visible,
+	.podcast-video-overlay.visible {
 		opacity: 1;
+	}
+
+	.podcast-video-overlay:focus-visible {
+		outline: 2px solid var(--background-modifier-border-focus);
+		outline-offset: -4px;
 	}
 
 	.podcast-artwork-isloading-overlay {

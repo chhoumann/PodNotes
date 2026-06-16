@@ -234,6 +234,32 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 		unsubscribe();
 	});
 
+	test("updates metadata when a same-key local media entry changes", () => {
+		localFiles.syncWithDownloaded({
+			"local file": [
+				downloadedEpisode("local file", "Lecture", {
+					filePath: "Audio/Lecture.mp3",
+					mediaType: "audio",
+				}),
+			],
+		});
+
+		localFiles.syncWithDownloaded({
+			"local file": [
+				downloadedEpisode("local file", "Lecture", {
+					streamUrl: "app://resource/Videos/Lecture.mp4?1",
+					filePath: "Videos/Lecture.mp4",
+					mediaType: "video",
+				}),
+			],
+		});
+
+		const [ep] = get(localFiles).episodes;
+		expect((ep as DownloadedEpisode).filePath).toBe("Videos/Lecture.mp4");
+		expect(ep.mediaType).toBe("video");
+		expect(ep.streamUrl).toBe("app://resource/Videos/Lecture.mp4?1");
+	});
+
 	test("getLocalEpisode prefers a manual local file over a same-titled download", () => {
 		localFiles.syncWithDownloaded({
 			"Real Podcast": [downloadedEpisode("Real Podcast", "Collision")],

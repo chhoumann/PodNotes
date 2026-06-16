@@ -15,6 +15,11 @@ const CONTENT_TYPE_EXTENSION_MAP: Array<{
 	{ pattern: /audio\/x-ms-wma/i, extension: "wma" },
 	{ pattern: /audio\/wma/i, extension: "wma" },
 	{ pattern: /audio\/amr/i, extension: "amr" },
+	{ pattern: /video\/mp4/i, extension: "mp4" },
+	{ pattern: /video\/x-m4v/i, extension: "m4v" },
+	{ pattern: /video\/quicktime/i, extension: "mov" },
+	{ pattern: /video\/webm/i, extension: "webm" },
+	{ pattern: /video\/ogg/i, extension: "ogv" },
 ];
 
 export default function getExtensionFromContentType(

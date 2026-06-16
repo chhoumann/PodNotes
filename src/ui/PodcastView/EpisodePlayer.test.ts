@@ -1,10 +1,12 @@
 import { fireEvent, render, waitFor } from "@testing-library/svelte";
+import { TFile } from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
 	currentEpisode,
 	currentTime,
+	downloadedEpisodes,
 	duration,
 	isPaused,
 	activePlaybackSegment,
@@ -35,6 +37,7 @@ beforeEach(() => {
 	playbackRate.set(1);
 	playedEpisodes.set({});
 	requestedPlaybackTime.set(null);
+	downloadedEpisodes.set({});
 	HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
 	HTMLMediaElement.prototype.pause = vi.fn();
 	plugin.set({
@@ -47,6 +50,34 @@ beforeEach(() => {
 		},
 	} as never);
 });
+
+afterEach(() => {
+	(globalThis as { app?: unknown }).app = undefined;
+});
+
+function makeTFile(path: string): TFile {
+	const file = new TFile();
+	const dot = path.lastIndexOf(".");
+	const slash = path.lastIndexOf("/");
+	Object.assign(file as unknown as Record<string, unknown>, {
+		path,
+		extension: dot > slash ? path.slice(dot + 1) : "",
+		basename: path.slice(slash + 1, dot > slash ? dot : undefined),
+	});
+	return file;
+}
+
+function mockVaultFile(path: string): void {
+	const file = makeTFile(path);
+	(globalThis as { app?: unknown }).app = {
+		vault: {
+			getAbstractFileByPath: vi.fn((candidate: string) =>
+				candidate === path ? file : null,
+			),
+			getResourcePath: vi.fn(() => `app://resource/${path}?token`),
+		},
+	};
+}
 
 describe("EpisodePlayer", () => {
 	test("uses requested timestamp before restored played progress", async () => {
@@ -241,6 +272,96 @@ describe("EpisodePlayer", () => {
 		await fireEvent.input(rateSlider);
 
 		expect(get(playbackRate)).toBe(2.2);
+	});
+
+	test("renders video episodes with a video media element and shared playback bindings", async () => {
+		const videoEpisode: Episode = {
+			...testEpisode,
+			title: "Video Episode",
+			streamUrl: "https://pod.example.com/video.mp4",
+			mediaType: "video",
+		};
+		const episodeKey = `${videoEpisode.podcastName}::${videoEpisode.title}`;
+		currentEpisode.set(videoEpisode);
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("video")).not.toBeNull();
+		});
+		const video = container.querySelector("video") as HTMLVideoElement;
+
+		expect(container.querySelector("audio")).toBeNull();
+		expect(video.getAttribute("src")).toBe(videoEpisode.streamUrl);
+
+		await fireEvent.loadedMetadata(video);
+		expect(get(isPaused)).toBe(false);
+
+		playbackRate.set(1.5);
+		await waitFor(() => {
+			expect(video.playbackRate).toBe(1.5);
+		});
+
+		currentTime.set(42);
+		await fireEvent.timeUpdate(video);
+		expect(get(playedEpisodes)[episodeKey]?.time).toBe(42);
+	});
+
+	test("does not reuse a same-title downloaded audio file for a video episode", async () => {
+		downloadedEpisodes.set({
+			[testEpisode.podcastName]: [
+				{
+					...testEpisode,
+					title: "Video Episode",
+					streamUrl: "https://pod.example.com/audio.mp3",
+					filePath: "Downloads/audio.mp3",
+					size: 10,
+				},
+			],
+		});
+		const videoEpisode: Episode = {
+			...testEpisode,
+			title: "Video Episode",
+			streamUrl: "https://pod.example.com/video.mp4",
+			mediaType: "video",
+		};
+		currentEpisode.set(videoEpisode);
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("video")).not.toBeNull();
+		});
+		const video = container.querySelector("video") as HTMLVideoElement;
+
+		expect(container.querySelector("audio")).toBeNull();
+		expect(video.getAttribute("src")).toBe(videoEpisode.streamUrl);
+	});
+
+	test("uses a matching downloaded video file to classify old extensionless records", async () => {
+		mockVaultFile("Downloads/video.mp4");
+		const extensionlessEpisode: Episode = {
+			...testEpisode,
+			title: "Extensionless Video",
+			streamUrl: "https://cdn.example.com/watch?id=42",
+		};
+		downloadedEpisodes.set({
+			[testEpisode.podcastName]: [
+				{
+					...extensionlessEpisode,
+					filePath: "Downloads/video.mp4",
+					size: 10,
+				},
+			],
+		});
+		currentEpisode.set(extensionlessEpisode);
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("video")).not.toBeNull();
+		});
+		const video = container.querySelector("video") as HTMLVideoElement;
+
+		expect(container.querySelector("audio")).toBeNull();
+		expect(video.getAttribute("src")).toBe("app://resource/Downloads/video.mp4?token");
 	});
 });
 

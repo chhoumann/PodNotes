@@ -12,6 +12,14 @@ import { ensureFolderExists } from "./utility/ensureFolderExists";
 import { isLocalFile } from "./utility/isLocalFile";
 import getUrlExtension from "./utility/getUrlExtension";
 import getExtensionFromContentType from "./utility/getExtensionFromContentType";
+import {
+	getEpisodeMediaType,
+	getMediaTypeFromContentType,
+	getMediaTypeFromExtension,
+	getMediaTypeFromPath,
+	isPlayableMediaExtension,
+	isSameMediaSource,
+} from "./utility/mediaType";
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -98,17 +106,15 @@ export default async function downloadEpisodeWithNotice(
 		data,
 		contentType,
 	);
-	const normalizedType = contentType.toLowerCase();
-	const typeAppearsAudio = normalizedType === "" || normalizedType.includes("audio");
 
-	if (!typeAppearsAudio && !inferredExtension) {
+	if (!downloadAppearsPlayable(contentType, inferredExtension)) {
 		update((bodyEl) => {
 			bodyEl.createEl("p", {
-				text: `Downloaded file is not an audio file. It is of type "${contentType}". File: ${data.byteLength} bytes.`,
+				text: `Downloaded file is not an audio or video file. It is of type "${contentType}". File: ${data.byteLength} bytes.`,
 			});
 		});
 
-		throw new Error("Not an audio file");
+		throw new Error("Not a playable media file");
 	}
 
 	const fileExtension = inferredExtension ?? "mp3";
@@ -312,6 +318,31 @@ function inferFileExtensionFromDownload(
 	return getExtensionFromContentType(contentType);
 }
 
+function downloadAppearsPlayable(
+	contentType: string,
+	extension: string | null,
+): boolean {
+	const normalizedType = contentType.toLowerCase();
+	return (
+		normalizedType === "" ||
+		getMediaTypeFromContentType(normalizedType) !== null ||
+		isPlayableMediaExtension(extension)
+	);
+}
+
+function downloadAppearsAudio(
+	contentType: string,
+	extension: string | null,
+): boolean {
+	const contentMediaType = getMediaTypeFromContentType(contentType);
+	if (contentMediaType) {
+		return contentMediaType === "audio";
+	}
+
+	const normalizedType = contentType.toLowerCase();
+	return normalizedType === "" || getMediaTypeFromExtension(extension) === "audio";
+}
+
 /**
  * UNUSED IN PRODUCTION — kept only for the #178 tests. Do NOT use this for
  * transcription: it derives the on-disk path from the download-path template and
@@ -351,8 +382,8 @@ export async function downloadEpisode(
 	try {
 		const { data, contentType } = await downloadFile(episode.streamUrl);
 
-		if (!contentType.includes("audio") && !fileExtension) {
-			throw new Error("Not an audio file.");
+		if (!downloadAppearsPlayable(contentType, fileExtension)) {
+			throw new Error("Not a playable media file.");
 		}
 
 		await createEpisodeFile({
@@ -414,6 +445,10 @@ async function getFileExtension(url: string): Promise<string> {
 export async function getEpisodeAudioBuffer(
 	episode: Episode,
 ): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
+	if (getEpisodeMediaType(episode) !== "audio") {
+		throw new Error("Transcription supports audio episodes only.");
+	}
+
 	if (isLocalFile(episode)) {
 		const localFilePath = resolveLocalEpisodeFilePath(episode);
 		if (!localFilePath) {
@@ -435,8 +470,12 @@ export async function getEpisodeAudioBuffer(
 	const registered = downloadedEpisodes.getEpisode(episode);
 	if (
 		registered?.filePath &&
-		isSameAudioSource(registered.streamUrl, episode.streamUrl)
+		isSameMediaSource(registered.streamUrl, episode.streamUrl)
 	) {
+		if (getEpisodeMediaType(registered) !== "audio") {
+			throw new Error("Transcription supports audio episodes only.");
+		}
+
 		const existingFile = app.vault.getAbstractFileByPath(registered.filePath);
 		if (existingFile instanceof TFile) {
 			return readVaultAudio(registered.filePath);
@@ -450,10 +489,7 @@ export async function getEpisodeAudioBuffer(
 			data,
 			contentType,
 		);
-		const normalizedType = contentType.toLowerCase();
-		const typeAppearsAudio =
-			normalizedType === "" || normalizedType.includes("audio");
-		if (!typeAppearsAudio && !inferredExtension) {
+		if (!downloadAppearsAudio(contentType, inferredExtension)) {
 			throw new Error(
 				`The downloaded file is not audio (received "${contentType}"). The episode may be unavailable or require re-authentication.`,
 			);
@@ -472,29 +508,19 @@ export async function getEpisodeAudioBuffer(
 	}
 }
 
-/**
- * Whether two stream URLs point at the same audio file. Compares origin+path so
- * rotating query strings (signed-CDN tokens, cache-busters) don't count as a
- * different source. Falls back to exact equality for non-absolute/odd URLs.
- */
-function isSameAudioSource(a: string, b: string): boolean {
-	if (a === b) return true;
-	if (!a || !b) return false;
-	try {
-		const ua = new URL(a);
-		const ub = new URL(b);
-		return ua.origin === ub.origin && ua.pathname === ub.pathname;
-	} catch {
-		return false;
-	}
-}
-
 async function readVaultAudio(
 	filePath: string,
 ): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
 	const file = app.vault.getAbstractFileByPath(filePath);
 	if (!(file instanceof TFile)) {
 		throw new Error(`Unable to read the audio file at "${filePath}".`);
+	}
+
+	const mediaType =
+		getMediaTypeFromExtension(file.extension) ??
+		getMediaTypeFromPath(file.path);
+	if (mediaType !== "audio") {
+		throw new Error(`Unable to read the non-audio file at "${filePath}".`);
 	}
 
 	const buffer = await app.vault.readBinary(file);

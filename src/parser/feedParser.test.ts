@@ -414,6 +414,45 @@ describe("FeedParser", () => {
 			expect(episodes[1].chaptersUrl).toBeUndefined();
 		});
 
+		test("marks video enclosures so the player can render video", async () => {
+			const videoFeed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Video Podcast</title>
+    <link>https://example.com</link>
+    <item>
+      <title>Lecture Video</title>
+      <enclosure url="https://example.com/lecture.mp4" type="video/mp4"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout
+				.mockResolvedValueOnce({
+					text: videoFeed,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				})
+				.mockResolvedValueOnce({
+					text: videoFeed,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				});
+
+			const parser = new FeedParser();
+			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
+
+			expect(episodes[0]).toMatchObject({
+				title: "Lecture Video",
+				streamUrl: "https://example.com/lecture.mp4",
+				mediaType: "video",
+			});
+		});
+
 		test("filters out invalid episodes missing required fields", async () => {
 			mockRequestWithTimeout
 				.mockResolvedValueOnce({

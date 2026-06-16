@@ -99,11 +99,12 @@ describe("FeedCacheService", () => {
 		expect(getCachedEpisodes(testFeed)).toEqual(episodes);
 	});
 
-	test("round-trips episodeNumber and duration (#34, #88)", () => {
+	test("round-trips episodeNumber, duration, and mediaType (#34, #88, #78)", () => {
 		const episode: Episode = {
 			...createEpisode(1),
 			episodeNumber: 42,
 			duration: 3723,
+			mediaType: "video",
 		};
 
 		setCachedEpisodes(testFeed, [episode]);
@@ -111,6 +112,7 @@ describe("FeedCacheService", () => {
 		const cached = getCachedEpisodes(testFeed);
 		expect(cached?.[0]?.episodeNumber).toBe(42);
 		expect(cached?.[0]?.duration).toBe(3723);
+		expect(cached?.[0]?.mediaType).toBe("video");
 	});
 
 	test("removes the superseded v1 cache key on first load", async () => {
@@ -144,11 +146,28 @@ describe("FeedCacheService", () => {
 		expect(localStorage.getItem("podnotes:feed-cache:v2")).toBeNull();
 	});
 
+	test("removes the superseded v3 cache key on first load (#78 media type change)", async () => {
+		// v3 entries can contain extensionless video enclosures parsed before
+		// Episode.mediaType existed, so they must be dropped on upgrade.
+		localStorage.setItem(
+			"podnotes:feed-cache:v3",
+			JSON.stringify({ stale: { episodes: [], updatedAt: 0 } }),
+		);
+
+		vi.resetModules();
+		const fresh = await import("./FeedCacheService");
+		fresh.getCachedEpisodes(testFeed);
+
+		expect(localStorage.getItem("podnotes:feed-cache:v3")).toBeNull();
+	});
+
 	test("clearFeedCache also removes superseded legacy keys", () => {
 		// Covers a clear issued before any cache load, where loadCache's memo would
 		// otherwise short-circuit and leave the v1 blob behind.
 		localStorage.setItem("podnotes:feed-cache:v1", "{}");
+		localStorage.setItem("podnotes:feed-cache:v3", "{}");
 		clearFeedCache();
 		expect(localStorage.getItem("podnotes:feed-cache:v1")).toBeNull();
+		expect(localStorage.getItem("podnotes:feed-cache:v3")).toBeNull();
 	});
 });

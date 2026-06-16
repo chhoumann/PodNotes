@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import { requestUrl, TFile } from "obsidian";
-import {
+import downloadEpisodeWithNotice, {
 	detectAudioFileExtension,
 	downloadEpisode,
 	getEpisodeAudioBuffer,
@@ -89,6 +89,41 @@ describe("detectAudioFileExtension", () => {
 	it("does not crash on a buffer shorter than the longest signature", () => {
 		expect(detectAudioFileExtension(bytes(0xff))).toBeNull();
 		expect(detectAudioFileExtension(new ArrayBuffer(0))).toBeNull();
+	});
+});
+
+describe("downloadEpisodeWithNotice (download command path)", () => {
+	it("saves extensionless video downloads using the response content type", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "video/mp4" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Video Title",
+			streamUrl: "https://example.com/watch?id=42",
+			mediaType: "video",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith("Podcasts/Video Title.mp4", buffer);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded).toMatchObject({
+			title: "Video Title",
+			filePath: "Podcasts/Video Title.mp4",
+			mediaType: "video",
+			size: buffer.byteLength,
+		});
 	});
 });
 
@@ -392,6 +427,82 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		});
 
 		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
+	});
+
+	it("rejects extensionless video streams instead of treating their mp4 content type as audio", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "video/mp4" },
+					arrayBuffer: bytes(0x00, 0x00, 0x00, 0x18),
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Video Episode",
+			streamUrl: "https://example.com/watch?id=42",
+		});
+
+		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
+	});
+
+	it("does not reuse a known video download for transcription", async () => {
+		const downloaded = episode({
+			title: "Known Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+			mediaType: "video",
+		});
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/video.mp4", 20);
+
+		const current = episode({
+			title: "Known Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+		});
+
+		await expect(getEpisodeAudioBuffer(current)).rejects.toThrow(
+			/audio episodes only/i,
+		);
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("does not transcribe a downloaded video file with stale audio metadata", async () => {
+		const downloaded = episode({
+			title: "Stale Metadata Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+			mediaType: "audio",
+		});
+		seedFile("Podcasts/stale-video.mp4", "VIDEO-BYTES");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/stale-video.mp4", 20);
+
+		const current = episode({
+			title: "Stale Metadata Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+			mediaType: "audio",
+		});
+
+		await expect(getEpisodeAudioBuffer(current)).rejects.toThrow(
+			/audio episodes only/i,
+		);
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("does not transcribe a local video file with stale audio metadata", async () => {
+		const local = episode({
+			title: "Local Video",
+			podcastName: "local file",
+			description: "",
+			content: "",
+			streamUrl: "",
+			url: "Local/video.mp4",
+			filePath: "Local/video.mp4",
+			mediaType: "audio",
+		} as Partial<LocalEpisode>) as LocalEpisode;
+		seedFile("Local/video.mp4", "VIDEO-BYTES");
+
+		await expect(getEpisodeAudioBuffer(local)).rejects.toThrow(
+			/audio episodes only/i,
+		);
+		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
 	it("reads local-file episodes from disk by their resolved path", async () => {
