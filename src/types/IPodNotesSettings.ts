@@ -4,6 +4,7 @@ import type { PlayedEpisode } from "./PlayedEpisode";
 import type { Playlist } from "./Playlist";
 import type { Episode } from "./Episode";
 import type DownloadedEpisode from "./DownloadedEpisode";
+import type { DiarizationProviderId } from "src/services/diarization/types";
 
 export interface IPodNotesSettings {
 	savedFeeds: { [podcastName: string]: PodcastFeed };
@@ -53,9 +54,26 @@ export interface IPodNotesSettings {
 	};
 	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] };
 	openAIApiKey: string;
+	/**
+	 * API key for the dedicated diarization provider (Deepgram). Kept separate
+	 * from `openAIApiKey` and top-level so the settings export can redact it as a
+	 * secret; OpenAI diarization reuses `openAIApiKey` instead. See issue #168.
+	 */
+	diarizationApiKey: string;
 	transcript: {
 		path: string;
 		template: string;
+		/**
+		 * Opt-in speaker diarization for transcripts (issue #168). When `enabled`
+		 * the audio is routed to a diarization-capable `provider` instead of plain
+		 * Whisper, and the transcript is rendered as speaker-labeled turns using
+		 * `speakerTemplate` (where `{{speaker}}` is the per-turn speaker label).
+		 */
+		diarization: {
+			enabled: boolean;
+			provider: DiarizationProviderId;
+			speakerTemplate: string;
+		};
 	};
 	feedCache: {
 		enabled: boolean;

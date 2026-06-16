@@ -1,4 +1,9 @@
 import { DEFAULT_SETTINGS } from "./constants";
+import {
+	DIARIZATION_PROVIDERS,
+	type DiarizationProviderId,
+} from "./services/diarization/types";
+import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
  * Settings migrations applied when settings are loaded from disk.
@@ -93,4 +98,59 @@ export function migrateNoteSettings(storedNote: StoredNote | null | undefined): 
 	}
 
 	return { path, template };
+}
+
+type StoredTranscript = {
+	path?: string | null;
+	template?: string | null;
+	diarization?: {
+		enabled?: unknown;
+		provider?: unknown;
+		speakerTemplate?: unknown;
+	} | null;
+};
+
+/**
+ * Backfill the transcript settings with the diarization defaults (issue #168).
+ *
+ * `loadSettings` replaces the whole persisted `transcript` object, so an existing
+ * user who has `{ path, template }` saved would otherwise get an `undefined`
+ * `transcript.diarization` and crash where the service reads it. This deep-merges
+ * the new nested default while preserving any path/template the user configured,
+ * and clamps a malformed/unknown provider back to the default so a hand-edited or
+ * corrupted `data.json` can't select a provider that does not exist.
+ *
+ * Pure (no Obsidian/UI deps) so the merge is unit-testable.
+ */
+export function migrateTranscriptSettings(
+	storedTranscript: StoredTranscript | null | undefined,
+): IPodNotesSettings["transcript"] {
+	const defaults = DEFAULT_SETTINGS.transcript;
+	const stored = storedTranscript ?? {};
+	const storedDiarization = stored.diarization ?? {};
+
+	return {
+		path: typeof stored.path === "string" ? stored.path : defaults.path,
+		template:
+			typeof stored.template === "string"
+				? stored.template
+				: defaults.template,
+		diarization: {
+			enabled:
+				typeof storedDiarization.enabled === "boolean"
+					? storedDiarization.enabled
+					: defaults.diarization.enabled,
+			provider: sanitizeDiarizationProvider(storedDiarization.provider),
+			speakerTemplate:
+				typeof storedDiarization.speakerTemplate === "string"
+					? storedDiarization.speakerTemplate
+					: defaults.diarization.speakerTemplate,
+		},
+	};
+}
+
+function sanitizeDiarizationProvider(value: unknown): DiarizationProviderId {
+	return DIARIZATION_PROVIDERS.includes(value as DiarizationProviderId)
+		? (value as DiarizationProviderId)
+		: DEFAULT_SETTINGS.transcript.diarization.provider;
 }

@@ -4,6 +4,7 @@ import {
 	LEGACY_EMPTY_DOWNLOAD_PATH,
 	migrateDownloadPath,
 	migrateNoteSettings,
+	migrateTranscriptSettings,
 } from "./settingsMigrations";
 
 describe("download path default (#183)", () => {
@@ -121,5 +122,71 @@ describe("migrateNoteSettings (#160)", () => {
 	it("is idempotent on the current default", () => {
 		const once = migrateNoteSettings(DEFAULT_NOTE);
 		expect(migrateNoteSettings(once)).toEqual(DEFAULT_NOTE);
+	});
+});
+
+describe("migrateTranscriptSettings (#168)", () => {
+	const DEFAULT_DIARIZATION = DEFAULT_SETTINGS.transcript.diarization;
+
+	it("backfills diarization defaults onto a legacy { path, template } transcript", () => {
+		const legacy = {
+			path: "transcripts/{{title}}.md",
+			template: "# {{title}}\n\n{{transcript}}",
+		};
+
+		expect(migrateTranscriptSettings(legacy)).toEqual({
+			path: legacy.path,
+			template: legacy.template,
+			diarization: DEFAULT_DIARIZATION,
+		});
+	});
+
+	it("treats an absent transcript (undefined/null) as all defaults", () => {
+		expect(migrateTranscriptSettings(undefined)).toEqual(
+			DEFAULT_SETTINGS.transcript,
+		);
+		expect(migrateTranscriptSettings(null)).toEqual(DEFAULT_SETTINGS.transcript);
+	});
+
+	it("preserves a fully-configured diarization block verbatim", () => {
+		const stored = {
+			path: "t/{{title}}.md",
+			template: "{{transcript}}",
+			diarization: {
+				enabled: true,
+				provider: "deepgram" as const,
+				speakerTemplate: "Speaker {{speaker}}: ",
+			},
+		};
+
+		expect(migrateTranscriptSettings(stored)).toEqual(stored);
+	});
+
+	it("clamps a malformed/unknown provider back to the default", () => {
+		const result = migrateTranscriptSettings({
+			path: "t.md",
+			template: "{{transcript}}",
+			diarization: { enabled: true, provider: "macwhisper", speakerTemplate: "x" },
+		});
+
+		expect(result.diarization.provider).toBe(DEFAULT_DIARIZATION.provider);
+		expect(result.diarization.enabled).toBe(true);
+	});
+
+	it("coalesces non-boolean enabled / non-string fields to defaults", () => {
+		const result = migrateTranscriptSettings({
+			path: null,
+			template: undefined,
+			diarization: { enabled: "yes", provider: 5, speakerTemplate: 42 },
+		} as never);
+
+		expect(result.path).toBe(DEFAULT_SETTINGS.transcript.path);
+		expect(result.template).toBe(DEFAULT_SETTINGS.transcript.template);
+		expect(result.diarization).toEqual(DEFAULT_DIARIZATION);
+	});
+
+	it("is idempotent on the current default", () => {
+		const once = migrateTranscriptSettings(DEFAULT_SETTINGS.transcript);
+		expect(migrateTranscriptSettings(once)).toEqual(DEFAULT_SETTINGS.transcript);
 	});
 });

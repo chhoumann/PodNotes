@@ -63,6 +63,33 @@ describe("serializeSettings", () => {
 		expect(withKey.settings.openAIApiKey).toBe("sk-secret");
 	});
 
+	it("redacts the diarization (Deepgram) key alongside the OpenAI key (#168)", () => {
+		const settings = makeSettings({
+			openAIApiKey: "sk-secret",
+			diarizationApiKey: "dg-secret",
+		});
+
+		const without = serializeSettings(settings, { includeSecret: false }, "2.16.0", NOW);
+		expect(without.settings).not.toHaveProperty("openAIApiKey");
+		expect(without.settings).not.toHaveProperty("diarizationApiKey");
+
+		const withKey = serializeSettings(settings, { includeSecret: true }, "2.16.0", NOW);
+		expect(withKey.settings.diarizationApiKey).toBe("dg-secret");
+	});
+
+	it("never lets the Deepgram key ride along inside the transcript object (#168)", () => {
+		// The key lives top-level precisely so it can be redacted; the nested
+		// transcript object (copied wholesale) must never carry a secret.
+		const settings = makeSettings({ diarizationApiKey: "dg-secret" });
+		const { settings: exported } = serializeSettings(
+			settings,
+			{ includeSecret: false },
+			"2.16.0",
+			NOW,
+		);
+		expect(JSON.stringify(exported.transcript ?? {})).not.toContain("dg-secret");
+	});
+
 	it("includes preferences, templates, and library", () => {
 		const settings = makeSettings({
 			note: { path: "notes/{{title}}.md", template: "# {{title}}" },

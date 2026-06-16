@@ -47,6 +47,10 @@ import {
 	serializeSettings,
 } from "src/settingsTransfer";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
+import {
+	DEFAULT_SPEAKER_TEMPLATE,
+	type DiarizationProviderId,
+} from "src/services/diarization";
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
@@ -871,6 +875,92 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		transcriptTemplateSetting.settingEl.style.flexDirection = "column";
 		transcriptTemplateSetting.settingEl.style.alignItems = "unset";
 		transcriptTemplateSetting.settingEl.style.gap = "10px";
+
+		this.addDiarizationSettings(container);
+	}
+
+	/**
+	 * Opt-in speaker diarization controls (issue #168). Rendered into its own
+	 * container so the provider-dependent fields (Deepgram key) can be shown or
+	 * hidden in place when the toggle/provider changes, without re-rendering the
+	 * whole settings tab.
+	 */
+	private addDiarizationSettings(container: HTMLElement): void {
+		const diarizationContainer = container.createDiv();
+
+		const renderDiarizationSettings = () => {
+			diarizationContainer.empty();
+			const diarization = this.plugin.settings.transcript.diarization;
+
+			new Setting(diarizationContainer)
+				.setName("Speaker diarization")
+				.setDesc(
+					"Label transcript segments by speaker. Routes the episode audio to a diarization-capable provider instead of plain Whisper.",
+				)
+				.addToggle((toggle) =>
+					toggle.setValue(diarization.enabled).onChange(async (value) => {
+						this.plugin.settings.transcript.diarization.enabled = value;
+						await this.plugin.saveSettings();
+						renderDiarizationSettings();
+					}),
+				);
+
+			if (!diarization.enabled) return;
+
+			new Setting(diarizationContainer)
+				.setName("Diarization provider")
+				.setDesc(
+					"OpenAI reuses your OpenAI API key above (long episodes are chunked, so speaker labels can reset across chunks). Deepgram needs its own key and keeps speaker labels consistent across the whole episode.",
+				)
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("openai", "OpenAI (gpt-4o-transcribe-diarize)")
+						.addOption("deepgram", "Deepgram")
+						.setValue(diarization.provider)
+						.onChange(async (value) => {
+							this.plugin.settings.transcript.diarization.provider =
+								value as DiarizationProviderId;
+							await this.plugin.saveSettings();
+							renderDiarizationSettings();
+						}),
+				);
+
+			if (diarization.provider === "deepgram") {
+				new Setting(diarizationContainer)
+					.setName("Deepgram API key")
+					.setDesc(
+						"Used only for Deepgram diarization. Create one at deepgram.com.",
+					)
+					.addText((text) => {
+						text
+							.setPlaceholder("Enter your Deepgram API key")
+							.setValue(this.plugin.settings.diarizationApiKey)
+							.onChange(async (value) => {
+								this.plugin.settings.diarizationApiKey = value;
+								await this.plugin.saveSettings();
+							});
+						text.inputEl.type = "password";
+					});
+			}
+
+			new Setting(diarizationContainer)
+				.setName("Speaker label format")
+				.setDesc(
+					"Prefix added before each speaker's turn. Use {{speaker}} for the speaker label (OpenAI labels speakers A, B, …; Deepgram labels them 1, 2, …).",
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder(DEFAULT_SPEAKER_TEMPLATE)
+						.setValue(diarization.speakerTemplate)
+						.onChange(async (value) => {
+							this.plugin.settings.transcript.diarization.speakerTemplate =
+								value;
+							await this.plugin.saveSettings();
+						}),
+				);
+		};
+
+		renderDiarizationSettings();
 	}
 }
 

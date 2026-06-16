@@ -27,8 +27,16 @@ export const EXCLUDED_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"currentEpisode",
 ];
 
-/** The OpenAI API key is only exported when the user explicitly opts in. */
-export const SECRET_KEY: keyof IPodNotesSettings = "openAIApiKey";
+/**
+ * API keys are only exported when the user explicitly opts in. Both the OpenAI
+ * key and the dedicated diarization (Deepgram) key are top-level so they can be
+ * redacted by name here; the diarization key is deliberately NOT nested inside
+ * `transcript` (a wholesale-copied nested key) so it can never leak (#168).
+ */
+export const SECRET_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
+	"openAIApiKey",
+	"diarizationApiKey",
+]);
 
 /** Keys that, if copied into the settings object, could pollute Object.prototype. */
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -92,7 +100,8 @@ export function serializeSettings(
 	for (const key of Object.keys(settings)) {
 		if (DANGEROUS_KEYS.has(key)) continue;
 		if (!IMPORTABLE_KEYS.has(key)) continue;
-		if (key === SECRET_KEY && !opts.includeSecret) continue;
+		if (SECRET_KEYS.has(key as keyof IPodNotesSettings) && !opts.includeSecret)
+			continue;
 		out[key] = settings[key as keyof IPodNotesSettings];
 	}
 
@@ -175,7 +184,7 @@ export function parseImport(jsonText: string): ParseResult {
 			fromEnvelope,
 			version,
 			pluginVersion,
-			includesSecret: SECRET_KEY in settings,
+			includesSecret: [...SECRET_KEYS].some((key) => key in settings),
 		},
 	};
 }

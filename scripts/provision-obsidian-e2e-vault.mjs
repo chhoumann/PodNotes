@@ -99,10 +99,16 @@ export const DEFAULT_PODNOTES_DATA = {
 		episodes: [],
 	},
 	openAIApiKey: "",
+	diarizationApiKey: "",
 	transcript: {
 		path: "transcripts/{{podcast}}/{{title}}.md",
 		template:
 			"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
+		diarization: {
+			enabled: false,
+			provider: "openai",
+			speakerTemplate: "**{{speaker}}:** ",
+		},
 	},
 	feedCache: {
 		enabled: true,
