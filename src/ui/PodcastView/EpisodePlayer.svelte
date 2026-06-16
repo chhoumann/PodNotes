@@ -57,6 +57,10 @@
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 	let playerVolume: number = 1;
+	// The currentEpisode subscription fires synchronously on subscribe with the
+	// already-loaded episode; that first fire must not wipe a restored position
+	// (or flash 0) on the initial mount. Only genuine in-player switches reset.
+	let hasSeenFirstEpisodeFire: boolean = false;
 	let chapters: Chapter[] = [];
 	let lastChaptersUrl: string | undefined = undefined;
 
@@ -189,7 +193,9 @@
 			$currentEpisode,
 			$currentTime,
 			$duration,
-			$currentTime === $duration,
+			// A zero/unknown duration is never "finished" — guard against the brief
+			// 0/0 window after an episode switch (issue #94) marking it played at 0:00.
+			$duration > 0 && $currentTime === $duration,
 		);
 	}
 
@@ -226,6 +232,23 @@
 			// time and clobber its saved resume position (issue #33).
 			isLoading = true;
 			lastPositionSaveMs = Number.NEGATIVE_INFINITY;
+
+			// Clear the outgoing episode's progress the instant the episode changes
+			// so the player never renders its full/last position against the
+			// incoming episode while the new audio's metadata loads (issue #94).
+			// Finishing an episode auto-advances by calling currentEpisode.set (see
+			// queue.playNext), which swaps the title/artwork immediately — but
+			// $currentTime/$duration keep the finished episode's end values until
+			// the next episode's loadedmetadata fires. Without this reset the
+			// progress bar stays pinned at 100% and the timestamps show the
+			// previous episode's end for the whole (network-bound) metadata fetch.
+			// onMetadataLoaded → restorePlaybackTime sets the real position, and
+			// the isLoading guard above keeps this reset from being persisted.
+			if (hasSeenFirstEpisodeFire) {
+				currentTime.set(0);
+				duration.set(0);
+			}
+			hasSeenFirstEpisodeFire = true;
 
 			srcPromise = getSrc($currentEpisode);
 

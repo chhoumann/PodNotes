@@ -9,8 +9,10 @@ import { LOCAL_FILES_SETTINGS, QUEUE_SETTINGS } from "src/constants";
 import { QueueController } from "src/store_controllers/QueueController";
 import {
 	currentEpisode,
+	currentTime,
 	dedupeEpisodesByTitle,
 	downloadedEpisodes,
+	duration,
 	localFiles,
 	playedEpisodes,
 	plugin,
@@ -503,5 +505,44 @@ describe("queue automation toggle (issue #108)", () => {
 		queue.playNext();
 
 		expect(queueTitles()).toEqual(["A", "B"]);
+	});
+});
+
+describe("currentEpisode.set finished guard (issue #94)", () => {
+	beforeEach(() => {
+		playedEpisodes.set({});
+		currentTime.set(0);
+		duration.set(0);
+		currentEpisode.set(undefined as unknown as Episode, false);
+	});
+
+	afterEach(() => {
+		currentTime.set(0);
+		duration.set(0);
+		currentEpisode.set(undefined as unknown as Episode, false);
+	});
+
+	test("does not persist a never-played episode as finished when switched away at unknown (0) duration", () => {
+		// The player resets currentTime/duration to 0 the instant the episode
+		// changes (#94). Rapidly switching A -> B -> C before B's metadata loads
+		// reads ct === dur === 0; that must not mark the skipped episode finished.
+		currentEpisode.set(ep("A"), false);
+		currentTime.set(0);
+		duration.set(0);
+		currentEpisode.set(ep("B"), false);
+
+		const stored = get(playedEpisodes)["Pod::A"];
+		expect(stored?.finished).toBe(false);
+	});
+
+	test("still persists a genuinely finished episode as finished", () => {
+		currentEpisode.set(ep("A"), false);
+		currentTime.set(3600);
+		duration.set(3600);
+		currentEpisode.set(ep("B"), false);
+
+		const stored = get(playedEpisodes)["Pod::A"];
+		expect(stored?.finished).toBe(true);
+		expect(stored?.time).toBe(3600);
 	});
 });

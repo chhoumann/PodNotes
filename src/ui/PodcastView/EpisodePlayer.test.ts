@@ -215,6 +215,52 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 		expect(get(playedEpisodes)[keyB]?.time).toBe(1800);
 	});
 
+	test("resets progress immediately on episode switch so the finished episode's bar is not shown against the next (issue #94)", async () => {
+		const episodeB: Episode = {
+			title: "Episode B",
+			streamUrl: "https://pod.example.com/b.mp3",
+			url: "https://pod.example.com/b",
+			description: "",
+			content: "",
+			podcastName: "Test Podcast",
+		};
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+
+		// Simulate episode A finishing: progress pinned at the very end.
+		currentTime.set(3600);
+		duration.set(3600);
+		await fireEvent.timeUpdate(audio);
+
+		// Auto-advance (queue.playNext) swaps the episode via currentEpisode.set.
+		currentEpisode.set(episodeB);
+		await waitFor(() => {
+			const next = container.querySelector("audio");
+			expect(next?.getAttribute("src")).toBe(episodeB.streamUrl);
+		});
+
+		// Before B's loadedmetadata fires, the finished episode's playback position
+		// must be cleared so the UI renders a zeroed loading state — not A's full
+		// bar — for the duration of B's (network-bound) metadata fetch.
+		expect(get(currentTime)).toBe(0);
+
+		// The user-visible outcome: the progress bar collapses to 0% and neither
+		// timestamp shows A's end or a garbled "NaN" (the bar/text must not lag the
+		// title/artwork switch).
+		const bar = container.querySelector(".progress__bar") as HTMLElement;
+		expect(bar.style.width).toBe("0%");
+		const [elapsed, remaining] = Array.from(
+			container.querySelectorAll(".status-container span"),
+		).map((s) => s.textContent);
+		expect(elapsed).toBe("00:00:00");
+		expect(remaining).toBe("00:00:00");
+	});
+
 	test("persists immediately when the app is backgrounded (visibilitychange → hidden)", async () => {
 		await renderLoadedPlayer();
 		currentTime.set(222);
