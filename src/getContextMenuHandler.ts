@@ -7,6 +7,7 @@ import {
 	playedEpisodes,
 	currentEpisode,
 	viewState,
+	plugin,
 } from "./store";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
@@ -75,6 +76,7 @@ export default function getContextMenuHandler(app: App): EventRef {
 
 						currentEpisode.set(localEpisode);
 						viewState.set(ViewState.Player);
+						get(plugin)?.enablePodcastViewMount();
 
 						// Setting the stores above only updates an already-mounted
 						// PodNotes view. When the view is closed (or hidden in a

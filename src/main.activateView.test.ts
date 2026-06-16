@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PodNotes from "./main";
 import { VIEW_TYPE } from "./constants";
+import { Platform } from "obsidian";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
 // surface the view. The bug was that the command was gated on the leaf NOT
@@ -13,6 +14,13 @@ function makeLeaf() {
 		setViewState: vi.fn().mockResolvedValue(undefined),
 	};
 }
+
+const originalPlatform = { ...Platform };
+
+afterEach(() => {
+	Object.assign(Platform, originalPlatform);
+	vi.useRealTimers();
+});
 
 function setupPlugin({
 	existingLeaves = [] as ReturnType<typeof makeLeaf>[],
@@ -27,6 +35,10 @@ function setupPlugin({
 	// Build a bare instance so we exercise activateView without running the full
 	// onload() side effects (store wiring, command registration, etc.).
 	const plugin = Object.create(PodNotes.prototype) as PodNotes;
+	Object.assign(plugin as unknown as Record<string, unknown>, {
+		podcastViewMountEnabled: true,
+		views: new Set(),
+	});
 	(plugin as unknown as { app: { workspace: typeof workspace } }).app = {
 		workspace,
 	};
@@ -69,6 +81,100 @@ describe("PodNotes.activateView", () => {
 
 		await expect(plugin.activateView()).resolves.toBeUndefined();
 		expect(workspace.revealLeaf).not.toHaveBeenCalled();
+	});
+
+	it("enables and mounts a dormant restored view before revealing it", async () => {
+		const existing = makeLeaf();
+		const firstRestoredView = { mountPodcastView: vi.fn() };
+		const secondRestoredView = { mountPodcastView: vi.fn() };
+		const { plugin } = setupPlugin({ existingLeaves: [existing] });
+		Object.assign(plugin as unknown as Record<string, unknown>, {
+			podcastViewMountEnabled: false,
+			views: new Set([firstRestoredView, secondRestoredView]),
+		});
+
+		expect(plugin.shouldMountPodcastView()).toBe(false);
+
+		await plugin.activateView();
+
+		expect(plugin.shouldMountPodcastView()).toBe(true);
+		expect(firstRestoredView.mountPodcastView).toHaveBeenCalledTimes(1);
+		expect(secondRestoredView.mountPodcastView).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("PodNotes.onLayoutReady", () => {
+	function setupLayoutPlugin({
+		existingLeaves = [] as ReturnType<typeof makeLeaf>[],
+		layoutReady = true,
+		rightLeaf = makeLeaf() as ReturnType<typeof makeLeaf> | null,
+	} = {}) {
+		const workspace = {
+			layoutReady,
+			getLeavesOfType: vi.fn().mockReturnValue(existingLeaves),
+			getRightLeaf: vi.fn().mockReturnValue(rightLeaf),
+			detachLeavesOfType: vi.fn(),
+		};
+
+		const plugin = Object.create(PodNotes.prototype) as PodNotes;
+		Object.assign(plugin as unknown as Record<string, unknown>, {
+			isUnloaded: false,
+			layoutReadyAttempts: 0,
+			layoutReadyRetry: null,
+			maxLayoutReadyAttempts: 10,
+			views: new Set(),
+		});
+		(plugin as unknown as { app: { workspace: typeof workspace } }).app = {
+			workspace,
+		};
+
+		return { plugin, workspace, rightLeaf };
+	}
+
+	it("creates the startup view on desktop when no leaf exists", () => {
+		const { plugin, workspace, rightLeaf } = setupLayoutPlugin();
+
+		plugin.onLayoutReady();
+
+		expect(workspace.getRightLeaf).toHaveBeenCalledWith(false);
+		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({
+			type: VIEW_TYPE,
+		});
+	});
+
+	it("does not auto-create the startup view in the mobile app", () => {
+		Object.assign(Platform, {
+			isDesktop: false,
+			isDesktopApp: false,
+			isIosApp: true,
+			isMobile: true,
+			isMobileApp: true,
+			isPhone: true,
+		});
+		const { plugin, workspace, rightLeaf } = setupLayoutPlugin();
+
+		plugin.onLayoutReady();
+
+		expect(workspace.getLeavesOfType).not.toHaveBeenCalled();
+		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
+		expect(rightLeaf?.setViewState).not.toHaveBeenCalled();
+		expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
+	});
+
+	it("cancels a pending startup retry on unload", () => {
+		vi.useFakeTimers();
+		const { plugin, workspace } = setupLayoutPlugin({ layoutReady: false });
+
+		plugin.onLayoutReady();
+		expect(vi.getTimerCount()).toBe(1);
+
+		plugin.onunload();
+		expect(vi.getTimerCount()).toBe(0);
+
+		vi.advanceTimersByTime(100);
+
+		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
+		expect(workspace.detachLeavesOfType).toHaveBeenCalledWith(VIEW_TYPE);
 	});
 });
 
@@ -124,6 +230,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerObsidianProtocolHandler: vi.fn(),
 			registerEvent: vi.fn(),
 			mediaSessionActions: [],
+			views: new Set(),
 			app: {
 				workspace: {
 					onLayoutReady: vi.fn(),
