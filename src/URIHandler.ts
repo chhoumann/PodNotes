@@ -5,8 +5,11 @@ import type { IAPI } from "./API/IAPI";
 import FeedParser from "./parser/feedParser";
 import {
 	currentEpisode,
+	currentTime,
+	duration,
 	isPaused,
 	localFiles,
+	playedEpisodes,
 	requestedPlaybackTime,
 	viewState,
 } from "./store";
@@ -44,21 +47,43 @@ function findEpisodeByCandidates(
 	return undefined;
 }
 
+/**
+ * The time a no-timestamp link ({{episodelink}}, issue #35) should resume an
+ * episode at: the last played location, or the start. A FINISHED episode is
+ * stored at its end (time === duration); resuming there would immediately fire
+ * the player's `ended` handler and auto-advance the queue, so we restart it from
+ * the beginning instead — matching the issue's "the beginning if not played".
+ */
+function resolveResumeTime(episode: Episode): number {
+	const played = playedEpisodes.get(episode);
+	if (!played) return 0;
+
+	const isFinished =
+		played.finished || (played.duration > 0 && played.time >= played.duration);
+	return isFinished ? 0 : played.time;
+}
+
 export default async function podNotesURIHandler(
 	{ url, episodeName, time }: ObsidianProtocolData,
 	api: IAPI
 ) {
-	if (!url || !episodeName || time === undefined) {
-		new Notice(
-			"URL, episode name, and timestamp are required to play an episode"
-		);
+	if (!url || !episodeName) {
+		new Notice("URL and episode name are required to play an episode");
 		return;
 	}
 
-	const requestedTime = parseFloat(time);
-	if (!Number.isFinite(requestedTime)) {
-		new Notice("Timestamp must be a valid number");
-		return;
+	// A link may omit the timestamp ({{episodelink}}, issue #35). When it does we
+	// reopen the episode and resume from the last played location (resolved from
+	// saved progress below), or the start if it was never played or already
+	// finished — rather than seeking to a baked-in time.
+	const hasExplicitTime = time !== undefined && time !== "";
+	let requestedTime = 0;
+	if (hasExplicitTime) {
+		requestedTime = parseFloat(time);
+		if (!Number.isFinite(requestedTime)) {
+			new Notice("Timestamp must be a valid number");
+			return;
+		}
 	}
 
 	const nameCandidates = candidateValues(episodeName);
@@ -73,16 +98,32 @@ export default async function podNotesURIHandler(
 	const playerIsVisible = get(viewState) === ViewState.Player;
 
 	if (episodeIsPlaying) {
-		requestedPlaybackTime.set({
-			episodeKey: getEpisodeKey(currentEp),
-			time: requestedTime,
-		});
-		viewState.set(ViewState.Player);
-		api.currentTime = requestedTime;
-		isPaused.set(false);
-		if (playerIsVisible) {
-			requestedPlaybackTime.set(null);
+		if (hasExplicitTime) {
+			requestedPlaybackTime.set({
+				episodeKey: getEpisodeKey(currentEp),
+				time: requestedTime,
+			});
+			viewState.set(ViewState.Player);
+			api.currentTime = requestedTime;
+			isPaused.set(false);
+			if (playerIsVisible) {
+				requestedPlaybackTime.set(null);
+			}
+
+			return;
 		}
+
+		// No timestamp: the live position already is the last played location, so
+		// surface the player and resume playback without seeking — unless the
+		// episode already finished (live position at its end), in which case
+		// replaying would instantly fire `ended` and auto-advance, so restart it.
+		viewState.set(ViewState.Player);
+		const liveTime = get(currentTime);
+		const liveDuration = get(duration);
+		if (liveDuration > 0 && liveTime >= liveDuration) {
+			api.currentTime = 0;
+		}
+		isPaused.set(false);
 
 		return;
 	}
@@ -121,9 +162,14 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
+	// Always arm requestedPlaybackTime so the resume point is explicit. For a
+	// no-timestamp link (issue #35) we resolve it from saved progress here rather
+	// than relying on the player's restore-on-absence: that makes the seek
+	// deterministic and overrides any stale pending request from an earlier link
+	// to this same episode (which would otherwise win on metadata load).
 	requestedPlaybackTime.set({
 		episodeKey: getEpisodeKey(episode),
-		time: requestedTime,
+		time: hasExplicitTime ? requestedTime : resolveResumeTime(episode),
 	});
 	currentEpisode.set(episode);
 	viewState.set(ViewState.Player);

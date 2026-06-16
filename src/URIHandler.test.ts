@@ -12,6 +12,7 @@ import podNotesURIHandler from "./URIHandler";
 import {
 	currentEpisode,
 	currentTime,
+	duration,
 	isPaused,
 	localFiles,
 	playedEpisodes,
@@ -64,6 +65,7 @@ const emptyLocalFiles: Playlist = {
 function resetStores() {
 	currentEpisode.update(() => undefined as unknown as Episode);
 	currentTime.set(0);
+	duration.set(0);
 	isPaused.set(true);
 	playedEpisodes.set({});
 	requestedPlaybackTime.set(null);
@@ -329,6 +331,144 @@ describe("podNotesURIHandler", () => {
 			episodeKey: `${plusVariant.podcastName}::A+B`,
 			time: 75,
 		});
+	});
+
+	test("reopens a non-loaded episode without a timestamp and resumes from the saved location (#35)", async () => {
+		playedEpisodes.setEpisodeTime(testEpisode, 321, 3600, false);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				// No `time`: the {{episodelink}} template tag omits it.
+			},
+			api as never,
+		);
+
+		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(get(viewState)).toBe(ViewState.Player);
+		// The resume point is resolved from saved progress and armed explicitly, so
+		// the player seeks to 321s — and any stale pending request can't override it.
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 321,
+		});
+	});
+
+	test("a no-timestamp link overrides a stale pending seek for the same episode (#35)", async () => {
+		playedEpisodes.setEpisodeTime(testEpisode, 321, 3600, false);
+		// A previous timestamp link left a pending seek that has not been applied
+		// (metadata still loading). The resume link must win, not the stale 999.
+		requestedPlaybackTime.set({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 999,
+		});
+
+		await podNotesURIHandler(
+			{ action: "podnotes", url: testFeedUrl, episodeName: testEpisode.title },
+			api as never,
+		);
+
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 321,
+		});
+	});
+
+	test("restarts a finished episode from the beginning for a no-timestamp link (#35)", async () => {
+		// A finished episode is stored at its end; resuming there would auto-advance.
+		playedEpisodes.markAsPlayed(testEpisode);
+		playedEpisodes.setEpisodeTime(testEpisode, 3600, 3600, true);
+
+		await podNotesURIHandler(
+			{ action: "podnotes", url: testFeedUrl, episodeName: testEpisode.title },
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 0,
+		});
+	});
+
+	test("restarts an already-loaded finished episode from the beginning for a no-timestamp link (#35)", async () => {
+		currentEpisode.set(testEpisode);
+		viewState.set(ViewState.PodcastGrid);
+		duration.set(180);
+		currentTime.set(180); // sitting at the very end
+		isPaused.set(true);
+
+		await podNotesURIHandler(
+			{ action: "podnotes", url: testFeedUrl, episodeName: testEpisode.title },
+			api as never,
+		);
+
+		expect(get(viewState)).toBe(ViewState.Player);
+		expect(get(currentTime)).toBe(0);
+		expect(get(isPaused)).toBe(false);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("surfaces the player and resumes the already-loaded episode without seeking when no timestamp is given (#35)", async () => {
+		currentEpisode.set(testEpisode);
+		viewState.set(ViewState.PodcastGrid);
+		currentTime.set(1234);
+		isPaused.set(true);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+			},
+			api as never,
+		);
+
+		expect(get(viewState)).toBe(ViewState.Player);
+		// The live position is already the last played location — left untouched.
+		expect(get(currentTime)).toBe(1234);
+		expect(get(isPaused)).toBe(false);
+		expect(get(requestedPlaybackTime)).toBeNull();
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("treats an empty timestamp the same as an omitted one (resume, not error) (#35)", async () => {
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(get(viewState)).toBe(ViewState.Player);
+		// No saved progress for this episode → resume from the start.
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 0,
+		});
+	});
+
+	test("still rejects a present-but-non-numeric timestamp", async () => {
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "not-a-number",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 
 	test("picks the '+'-variant local file (raw-first) even when its space-twin precedes it", async () => {
