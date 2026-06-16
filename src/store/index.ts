@@ -14,6 +14,7 @@ import {
 	LOCAL_FILES_SETTINGS,
 	MAX_EPISODE_LIST_LIMIT,
 } from "src/constants";
+import { DEFAULT_PLAYBACK_RATE } from "src/utility/playbackRate";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import {
 	getPlayedEpisode,
@@ -29,6 +30,7 @@ export const requestedPlaybackTime = writable<{
 } | null>(null);
 export const activePlaybackSegment = writable<PlaybackSegment | null>(null);
 export const duration = writable<number>(0);
+export const playbackRate = writable<number>(DEFAULT_PLAYBACK_RATE);
 export const volume = writable<number>(1);
 export const hidePlayedEpisodes = writable<boolean>(false);
 

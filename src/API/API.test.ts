@@ -1,11 +1,14 @@
-import { beforeEach, describe, expect, test } from "vitest";
 import { get } from "svelte/store";
+import { beforeEach, describe, expect, test } from "vitest";
+
 import { API } from "./API";
 import {
+	activePlaybackSegment,
 	currentEpisode,
 	currentTime,
-	activePlaybackSegment,
 	downloadedEpisodes,
+	playbackRate,
+	plugin,
 } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
@@ -35,6 +38,12 @@ beforeEach(() => {
 	currentTime.set(0);
 	activePlaybackSegment.set(null);
 	downloadedEpisodes.set({});
+	playbackRate.set(1);
+	plugin.set({
+		settings: {
+			defaultPlaybackRate: 1.8,
+		},
+	} as never);
 });
 
 describe("API.getPodcastSegmentFormatted", () => {
@@ -112,5 +121,39 @@ describe("API.getPodcastSegmentFormatted", () => {
 
 		expect(api.currentTime).toBe(500);
 		expect(get(activePlaybackSegment)).toBeNull();
+	});
+});
+
+describe("API playback rate controls", () => {
+	test("increases and decreases the runtime playback rate in tenth steps", () => {
+		const api = new API();
+
+		api.increasePlaybackRate();
+		expect(get(playbackRate)).toBe(1.1);
+
+		api.decreasePlaybackRate();
+		api.decreasePlaybackRate();
+		expect(get(playbackRate)).toBe(0.9);
+	});
+
+	test("clamps playback rate changes to the player-supported range", () => {
+		const api = new API();
+
+		api.playbackRate = 3.95;
+		api.increasePlaybackRate();
+		expect(api.playbackRate).toBe(4);
+
+		api.playbackRate = 0.55;
+		api.decreasePlaybackRate();
+		expect(api.playbackRate).toBe(0.5);
+	});
+
+	test("resets playback rate to the configured default", () => {
+		const api = new API();
+
+		api.playbackRate = 2.5;
+		api.resetPlaybackRate();
+
+		expect(api.playbackRate).toBe(1.8);
 	});
 });

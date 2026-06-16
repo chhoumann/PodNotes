@@ -41,6 +41,24 @@ When opened, the link seeks to the segment start and pauses playback at the segm
 
 See [timestamps](timestamps.md#capturing-segments) for more information on segment templates and behavior.
 
+On mobile, this command can be added to Obsidian's editor toolbar. PodNotes also
+registers the Media Session `previous track` action for headphone controls: when
+your headphones send that action, PodNotes captures the current timestamp. If a
+markdown editor is active, the timestamp is inserted at the cursor; otherwise it
+is appended to the current episode note. PodNotes does not capture timestamps on
+ordinary pause/play events, because that would create unwanted timestamps every
+time playback is paused.
+
+## Increase playback rate
+This increases the current episode's playback speed by `0.1x`.
+
+## Decrease playback rate
+This decreases the current episode's playback speed by `0.1x`.
+
+## Reset playback rate
+This resets the current episode's playback speed to the default playback rate
+from PodNotes settings.
+
 ## Create episode note
 This will create a note for the currently playing episode.
 

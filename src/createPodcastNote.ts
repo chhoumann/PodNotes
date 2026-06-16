@@ -13,7 +13,7 @@ import { ensureFolderExists } from "./utility/ensureFolderExists";
  * the exact same (length-capped) path — otherwise a truncated note would be
  * re-created on every invocation. See issue #22.
  */
-function getPodcastNotePath(episode: Episode): string {
+export function getPodcastNotePath(episode: Episode): string {
 	const pluginInstance = get(plugin);
 
 	const filePath = FilePathTemplateEngine(
@@ -27,27 +27,27 @@ function getPodcastNotePath(episode: Episode): string {
 export default async function createPodcastNote(
 	episode: Episode
 ): Promise<void> {
-	const pluginInstance = get(plugin);
-
-	const filePathDotMd = getPodcastNotePath(episode);
-
-	const content = NoteTemplateEngine(
-		pluginInstance.settings.note.template,
-		episode
-	);
-
 	try {
-		const file = await createFileIfNotExists(
-			filePathDotMd,
-			content,
-			episode
-		);
+		const file = await createPodcastNoteFileIfNotExists(episode);
 
 		app.workspace.getLeaf().openFile(file);
 	} catch (error) {
 		console.error(error);
-		new Notice(`Failed to create note: "${filePathDotMd}"`);
+		new Notice(`Failed to create note: "${getPodcastNotePath(episode)}"`);
 	}
+}
+
+export async function createPodcastNoteFileIfNotExists(
+	episode: Episode,
+): Promise<TFile> {
+	const pluginInstance = get(plugin);
+	const filePathDotMd = getPodcastNotePath(episode);
+	const content = NoteTemplateEngine(
+		pluginInstance.settings.note.template,
+		episode,
+	);
+
+	return await createFileIfNotExists(filePathDotMd, content, episode);
 }
 
 export function getPodcastNote(episode: Episode): TFile | null {

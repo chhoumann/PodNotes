@@ -5,6 +5,7 @@ export interface IAPI {
 	readonly isPlaying: boolean;
 	readonly length: number;
 	currentTime: number;
+	playbackRate: number;
 	volume: number;
 
 	getPodcastTimeFormatted(
@@ -23,6 +24,9 @@ export interface IAPI {
 	togglePlayback(): void;
 	skipBackward(): void;
 	skipForward(): void;
+	increasePlaybackRate(): void;
+	decreasePlaybackRate(): void;
+	resetPlaybackRate(): void;
 }
 ```
 
@@ -52,3 +56,16 @@ If `linkify` is true, the time will be linked to the current episode at the give
 ## `getPodcastSegmentFormatted(format: string, startTime: number, endTime: number, linkify?: boolean)`
 This function returns a formatted `start-end` playback range.
 If `linkify` is true, the range links to the current episode with both `time` and `endTime` parameters so PodNotes starts at `startTime` and pauses at `endTime`.
+
+## `playbackRate`
+Gets or sets the current player playback speed. Values are clamped to the player
+range.
+
+## Playback controls
+`start()`, `stop()`, and `togglePlayback()` control the current episode.
+`skipBackward()` and `skipForward()` use the skip lengths configured in PodNotes
+settings.
+
+`increasePlaybackRate()` and `decreasePlaybackRate()` adjust the current playback
+speed in `0.1x` steps. `resetPlaybackRate()` returns playback to the default
+playback rate configured in settings.

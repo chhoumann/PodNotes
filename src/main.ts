@@ -10,6 +10,7 @@ import {
 	savedFeeds,
 	hidePlayedEpisodes,
 	sanitizeEpisodeListLimit,
+	playbackRate,
 	volume,
 } from "src/store";
 import { Notice, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
@@ -44,7 +45,10 @@ import {
 	createRecentPodcastSegment,
 	getSegmentCaptureTemplate,
 } from "./utility/podcastSegment";
-import createPodcastNote from "./createPodcastNote";
+import createPodcastNote, {
+	createPodcastNoteFileIfNotExists,
+	getPodcastNote,
+} from "./createPodcastNote";
 import createFeedNote from "./createFeedNote";
 import { FeedSuggestModal, orderFeedsByCurrent } from "./ui/FeedSuggestModal";
 import downloadEpisodeWithNotice from "./downloadEpisode";
@@ -58,6 +62,18 @@ import getUniversalPodcastLink from "./getUniversalPodcastLink";
 import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
 import { get, type Unsubscriber } from "svelte/store";
+import { normalizePlaybackRate } from "./utility/playbackRate";
+
+type MediaSessionActionName =
+	| "previoustrack"
+	| "play"
+	| "pause"
+	| "stop"
+	| "nexttrack"
+	| "seekbackward"
+	| "seekforward"
+	| "seekto"
+	| "skipad";
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api!: IAPI;
@@ -93,6 +109,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private pendingSave: IPodNotesSettings | null = null;
 	private saveScheduled = false;
 	private saveChain: Promise<void> = Promise.resolve();
+	private mediaSessionActions: MediaSessionActionName[] = [];
 
 	override async onload() {
 		plugin.set(this);
@@ -115,6 +132,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		episodeListLimit.set(this.settings.episodeListLimit);
 		volume.set(
 			Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)),
+		);
+		playbackRate.set(
+			normalizePlaybackRate(this.settings.defaultPlaybackRate),
 		);
 
 		this.playedEpisodeController = new EpisodeStatusController(
@@ -310,16 +330,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			id: "capture-timestamp",
 			name: "Capture Timestamp",
 			icon: "clock" as IconType,
-			editorCheckCallback: (checking, editor, view) => {
-				if (checking) {
-					return canCaptureTimestamp();
-				}
-
-				const capture = TimestampTemplateEngine(
-					this.settings.timestamp.template,
-				);
-
-				insertCapture(editor, capture);
+			editorCallback: (editor) => {
+				this.captureTimestamp(editor);
 			},
 		});
 
@@ -427,6 +439,45 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		});
 
 		this.addCommand({
+			id: "increase-playback-rate",
+			name: "Increase playback rate",
+			icon: "gauge" as IconType,
+			checkCallback: (checking) => {
+				if (checking) {
+					return !!this.api.podcast;
+				}
+
+				this.api.increasePlaybackRate();
+			},
+		});
+
+		this.addCommand({
+			id: "decrease-playback-rate",
+			name: "Decrease playback rate",
+			icon: "gauge" as IconType,
+			checkCallback: (checking) => {
+				if (checking) {
+					return !!this.api.podcast;
+				}
+
+				this.api.decreasePlaybackRate();
+			},
+		});
+
+		this.addCommand({
+			id: "reset-playback-rate",
+			name: "Reset playback rate",
+			icon: "rotate-ccw" as IconType,
+			checkCallback: (checking) => {
+				if (checking) {
+					return !!this.api.podcast;
+				}
+
+				this.api.resetPlaybackRate();
+			},
+		});
+
+		this.addCommand({
 			id: "podnotes-transcribe",
 			name: "Transcribe current episode",
 			checkCallback: (checking) => {
@@ -465,6 +516,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
+		this.registerMediaSessionHandlers();
 
 		this.isReady = true;
 	}
@@ -524,7 +576,108 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.transcriptionService;
 	}
 
+	private captureTimestamp(editor: Editor | null | undefined): boolean {
+		if (!editor || !this.api.podcast || !this.settings.timestamp.template) {
+			return false;
+		}
+
+		const capture = TimestampTemplateEngine(this.settings.timestamp.template);
+
+		// Insert with replaceSelection (not getCursor + replaceRange + setCursor):
+		// it drops the text at the live cursor and lets the editor place the caret
+		// after it, which is reliable inside Live Preview table cells where
+		// hand-computed positions land in the wrong cell. Inside a table the capture
+		// is escaped so pipes and newlines don't break the row. See issue #165.
+		const cursor = editor.getCursor("from");
+		const textToInsert = prepareTimestampForInsertion(capture, {
+			getLine: (line) => editor.getLine(line),
+			lineCount: editor.lineCount(),
+			cursorLine: cursor.line,
+		});
+
+		editor.replaceSelection(textToInsert);
+		return true;
+	}
+
+	private captureTimestampInActiveEditor(): boolean {
+		return this.captureTimestamp(this.app.workspace.activeEditor?.editor);
+	}
+
+	private async appendTimestampToEpisodeNote(): Promise<boolean> {
+		if (
+			!this.api.podcast ||
+			!this.settings.timestamp.template ||
+			!this.settings.note.path ||
+			!this.settings.note.template
+		) {
+			return false;
+		}
+
+		const capture = TimestampTemplateEngine(this.settings.timestamp.template);
+		const textToAppend = capture.endsWith("\n") ? capture : `${capture}\n`;
+		const file =
+			getPodcastNote(this.api.podcast) ??
+			(await createPodcastNoteFileIfNotExists(this.api.podcast));
+		const content = await this.app.vault.read(file);
+		const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+
+		await this.app.vault.modify(file, `${content}${separator}${textToAppend}`);
+		return true;
+	}
+
+	private async captureTimestampFromMediaSession(): Promise<boolean> {
+		if (this.captureTimestampInActiveEditor()) {
+			return true;
+		}
+
+		return await this.appendTimestampToEpisodeNote();
+	}
+
+	private registerMediaSessionHandlers(): void {
+		this.registerMediaSessionAction("previoustrack", () => {
+			void this.captureTimestampFromMediaSession();
+		});
+	}
+
+	private registerMediaSessionAction(
+		action: MediaSessionActionName,
+		handler: () => void,
+	): void {
+		const mediaSession = globalThis.navigator?.mediaSession;
+		if (!mediaSession?.setActionHandler) {
+			return;
+		}
+
+		try {
+			mediaSession.setActionHandler(action, handler);
+			this.mediaSessionActions.push(action);
+		} catch (error) {
+			console.warn(
+				`PodNotes: Media Session action "${action}" is not supported`,
+				error,
+			);
+		}
+	}
+
+	private clearMediaSessionHandlers(): void {
+		const mediaSession = globalThis.navigator?.mediaSession;
+		if (!mediaSession?.setActionHandler) {
+			return;
+		}
+
+		for (const action of this.mediaSessionActions) {
+			try {
+				mediaSession.setActionHandler(action, null);
+			} catch {
+				// Ignore unsupported cleanup paths; registration already guarded them.
+			}
+		}
+
+		this.mediaSessionActions = [];
+	}
+
 	override onunload() {
+		this.clearMediaSessionHandlers();
 		this.playedEpisodeController?.off();
 		this.savedFeedsController?.off();
 		this.playlistController?.off();

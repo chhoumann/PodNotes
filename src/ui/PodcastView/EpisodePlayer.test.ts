@@ -8,6 +8,7 @@ import {
 	duration,
 	isPaused,
 	activePlaybackSegment,
+	playbackRate,
 	playedEpisodes,
 	plugin,
 	requestedPlaybackTime,
@@ -31,6 +32,7 @@ beforeEach(() => {
 	duration.set(3600);
 	isPaused.set(true);
 	activePlaybackSegment.set(null);
+	playbackRate.set(1);
 	playedEpisodes.set({});
 	requestedPlaybackTime.set(null);
 	HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
@@ -208,6 +210,37 @@ describe("EpisodePlayer", () => {
 		expect(get(currentTime)).toBe(1800);
 		expect(get(isPaused)).toBe(false);
 		expect(get(requestedPlaybackTime)).toBeNull();
+	});
+
+	test("keeps the audio element and slider label in sync with playbackRate store", async () => {
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+
+		playbackRate.set(1.7);
+
+		await waitFor(() => {
+			expect(audio.playbackRate).toBe(1.7);
+		});
+		expect(container.querySelector(".playbackrate-container span")?.textContent).toBe(
+			"1.7x",
+		);
+	});
+
+	test("updates playbackRate store from the playback-rate slider", async () => {
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+
+		const sliders = Array.from(container.querySelectorAll("input[type='range']"));
+		const rateSlider = sliders[sliders.length - 1] as HTMLInputElement;
+		rateSlider.value = "2.2";
+		await fireEvent.input(rateSlider);
+
+		expect(get(playbackRate)).toBe(2.2);
 	});
 });
 

@@ -154,10 +154,50 @@ export async function restorePodNotesData(
 	plugin: PluginHandle,
 	obsidian: ObsidianClient,
 ): Promise<void> {
+	await detachPodNotesViews(obsidian);
+	await flushPodNotesSaves(obsidian);
 	await plugin.disable();
 	await plugin.restoreData();
 	await plugin.enable();
 	await waitForPodNotesReady(obsidian);
+}
+
+async function detachPodNotesViews(obsidian: ObsidianClient): Promise<void> {
+	await evalJsonAsync<boolean>(
+		obsidian,
+		`
+		(async () => {
+			await app.workspace.detachLeavesOfType(${JSON.stringify(VIEW_TYPE)});
+			return true;
+		})()
+	`,
+	);
+}
+
+async function flushPodNotesSaves(obsidian: ObsidianClient): Promise<void> {
+	await evalJsonAsync<boolean>(
+		obsidian,
+		`
+		(async () => {
+			const podnotes = app.plugins.plugins.${PLUGIN_ID};
+			if (!podnotes) return true;
+
+			if (podnotes.saveChain) {
+				await podnotes.saveChain;
+			}
+
+			if (podnotes.pendingSave) {
+				await podnotes.saveSettings();
+			}
+
+			if (podnotes.saveChain) {
+				await podnotes.saveChain;
+			}
+
+			return true;
+		})()
+	`,
+	);
 }
 
 export async function waitForPodNotesReady(

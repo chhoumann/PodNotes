@@ -5,6 +5,7 @@ export interface IAPI {
 	readonly isPlaying: boolean;
 	readonly length: number;
 	currentTime: number;
+	playbackRate: number;
 	volume: number;
 
 	getPodcastTimeFormatted(
@@ -26,4 +27,8 @@ export interface IAPI {
 
 	skipBackward(): void;
 	skipForward(): void;
+
+	increasePlaybackRate(): void;
+	decreasePlaybackRate(): void;
+	resetPlaybackRate(): void;
 }

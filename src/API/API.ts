@@ -8,6 +8,7 @@ import {
 	duration,
 	isPaused,
 	activePlaybackSegment,
+	playbackRate as playbackRateStore,
 	plugin,
 	volume as volumeStore,
 } from "src/store";
@@ -18,6 +19,11 @@ import {
 	formatPodcastSegment,
 	normalizePodcastSegmentTimes,
 } from "src/utility/podcastSegment";
+import {
+	adjustPlaybackRate,
+	normalizePlaybackRate,
+	PLAYBACK_RATE_STEP,
+} from "src/utility/playbackRate";
 
 const clampVolume = (value: number): number =>
 	Math.min(1, Math.max(0, value));
@@ -50,6 +56,14 @@ export class API implements IAPI {
 
 	public set volume(value: number) {
 		volumeStore.set(clampVolume(value));
+	}
+
+	public get playbackRate(): number {
+		return get(playbackRateStore);
+	}
+
+	public set playbackRate(value: number) {
+		playbackRateStore.set(normalizePlaybackRate(value, this.defaultPlaybackRate));
 	}
 
 	/**
@@ -142,7 +156,7 @@ export class API implements IAPI {
 		isPaused.update((_) => true);
 	}
 
-	togglePlayback(): void { 
+	togglePlayback(): void {
 		isPaused.update((isPaused) => !isPaused);
 	}
 
@@ -154,5 +168,25 @@ export class API implements IAPI {
 	skipForward(): void {
 		const skipForwardLen = get(plugin).settings.skipForwardLength;
 		this.currentTime += skipForwardLen;
+	}
+
+	increasePlaybackRate(): void {
+		playbackRateStore.update((rate) =>
+			adjustPlaybackRate(rate, PLAYBACK_RATE_STEP),
+		);
+	}
+
+	decreasePlaybackRate(): void {
+		playbackRateStore.update((rate) =>
+			adjustPlaybackRate(rate, -PLAYBACK_RATE_STEP),
+		);
+	}
+
+	resetPlaybackRate(): void {
+		this.playbackRate = this.defaultPlaybackRate;
+	}
+
+	private get defaultPlaybackRate(): number {
+		return normalizePlaybackRate(get(plugin).settings.defaultPlaybackRate);
 	}
 }
