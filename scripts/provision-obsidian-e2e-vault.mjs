@@ -52,8 +52,23 @@ export const DEFAULT_PODNOTES_DATA = {
 		offset: 0,
 	},
 	note: {
-		path: "",
-		template: "",
+		path: "PodNotes/{{podcast}}/{{title}}.md",
+		template:
+			"---\n" +
+			"type: podcastEpisode\n" +
+			'podcast: "{{podcastlink}}"\n' +
+			'url: "{{url}}"\n' +
+			"date: {{date:YYYY-MM-DD}}\n" +
+			"tags:\n" +
+			"  - podcastEpisode\n" +
+			"status:\n" +
+			"rating:\n" +
+			"favorite: false\n" +
+			"---\n" +
+			"# {{title}}\n\n" +
+			"![]({{artwork}})\n\n" +
+			"[Resume in PodNotes]({{episodelink}})\n\n" +
+			"{{description}}\n",
 	},
 	feedNote: {
 		path: "PodNotes/Podcasts/{{podcast}}.md",

@@ -82,8 +82,36 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	},
 
 	note: {
-		path: "",
-		template: "",
+		// Group episode notes under a per-podcast folder, matching the download
+		// path convention (PodNotes/{{podcast}}/{{title}}). See issue #160.
+		path: "PodNotes/{{podcast}}/{{title}}.md",
+		// Bases-friendly frontmatter so new installs get queryable episode metadata
+		// out of the box (issue #160). Every value placed in the YAML frontmatter is
+		// guaranteed valid YAML: {{podcastlink}} is a sanitized wikilink (and is
+		// quoted so its leading "[[" can't be read as a flow sequence), {{url}} is
+		// sanitized by NoteTemplateEngine (quote/backslash stripped) so it stays
+		// valid inside a quoted scalar, and {{date:YYYY-MM-DD}} is either an ISO date
+		// or empty (null). The raw {{title}} (which may contain quotes/colons) lives
+		// in the note body as the H1, where YAML rules don't apply. status/rating/
+		// favorite are left for the user to fill and give Bases columns to sort and
+		// filter on. {{podcastlink}} ties each episode to its feed note (#163). See
+		// issue #160.
+		template:
+			"---\n" +
+			"type: podcastEpisode\n" +
+			'podcast: "{{podcastlink}}"\n' +
+			'url: "{{url}}"\n' +
+			"date: {{date:YYYY-MM-DD}}\n" +
+			"tags:\n" +
+			"  - podcastEpisode\n" +
+			"status:\n" +
+			"rating:\n" +
+			"favorite: false\n" +
+			"---\n" +
+			"# {{title}}\n\n" +
+			"![]({{artwork}})\n\n" +
+			"[Resume in PodNotes]({{episodelink}})\n\n" +
+			"{{description}}\n",
 	},
 
 	feedNote: {

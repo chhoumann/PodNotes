@@ -16,7 +16,11 @@ import { Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
-import { migrateDownloadPath } from "src/settingsMigrations";
+import {
+	migrateDownloadPath,
+	migrateNotePath,
+	migrateNoteTemplate,
+} from "src/settingsMigrations";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { QueueReorderModal } from "src/ui/QueueReorderModal";
@@ -494,6 +498,16 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// runtime behaviour, and so a later saveSettings() can't re-persist it (#114).
 		this.settings.episodeListLimit = sanitizeEpisodeListLimit(
 			this.settings.episodeListLimit,
+		);
+		// Build a fresh note object so we never mutate the shared
+		// DEFAULT_SETTINGS.note, then migrate the legacy empty defaults (#160).
+		this.settings.note = {
+			...DEFAULT_SETTINGS.note,
+			...(loadedData?.note ?? {}),
+		};
+		this.settings.note.path = migrateNotePath(this.settings.note.path);
+		this.settings.note.template = migrateNoteTemplate(
+			this.settings.note.template,
 		);
 	}
 

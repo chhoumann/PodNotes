@@ -336,15 +336,21 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 				textArea.inputEl.style.width = "100%";
 				textArea.inputEl.style.height = "25vh";
+				// A Bases-friendly hint mirroring the shipped default: structured
+				// frontmatter properties Bases can query, with the raw title in the
+				// body where YAML rules don't apply.
 				textArea.setPlaceholder(
-					"## {{title}}" +
-						"\n![]({{artwork}})" +
-						"\n### Metadata" +
-						"\nPodcast:: {{podcast}}" +
-						"\nEpisode:: {{title}}" +
-						"\nPublishDate:: {{date:YYYY-MM-DD}}" +
-						"\n### Description" +
-						"\n> {{description}}",
+					"---" +
+						"\ntype: podcastEpisode" +
+						'\npodcast: "{{podcastlink}}"' +
+						'\nurl: "{{url}}"' +
+						"\ndate: {{date:YYYY-MM-DD}}" +
+						"\ntags:" +
+						"\n  - podcastEpisode" +
+						"\n---" +
+						"\n# {{title}}" +
+						"\n\n![]({{artwork}})" +
+						"\n\n{{description}}",
 				);
 			});
 
