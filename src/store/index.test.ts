@@ -5,7 +5,12 @@ import type { Episode } from "src/types/Episode";
 import type { IPodNotes } from "src/types/IPodNotes";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
-import { LOCAL_FILES_SETTINGS, QUEUE_SETTINGS } from "src/constants";
+import {
+	DEFAULT_EPISODE_LIST_LIMIT,
+	LOCAL_FILES_SETTINGS,
+	MAX_EPISODE_LIST_LIMIT,
+	QUEUE_SETTINGS,
+} from "src/constants";
 import { QueueController } from "src/store_controllers/QueueController";
 import {
 	currentEpisode,
@@ -13,11 +18,15 @@ import {
 	dedupeEpisodesByTitle,
 	downloadedEpisodes,
 	duration,
+	episodeCache,
+	episodeListLimit,
+	latestEpisodes,
 	localFiles,
 	playedEpisodes,
 	plugin,
 	queue,
 	reorderEpisodes,
+	sanitizeEpisodeListLimit,
 } from "./index";
 
 const episode: Episode = {
@@ -505,6 +514,159 @@ describe("queue automation toggle (issue #108)", () => {
 		queue.playNext();
 
 		expect(queueTitles()).toEqual(["A", "B"]);
+	});
+});
+
+describe("sanitizeEpisodeListLimit (issue #114)", () => {
+	test("keeps valid positive integers", () => {
+		expect(sanitizeEpisodeListLimit(15)).toBe(15);
+		expect(sanitizeEpisodeListLimit("25")).toBe(25);
+	});
+
+	test("floors fractional values", () => {
+		expect(sanitizeEpisodeListLimit(7.9)).toBe(7);
+	});
+
+	test("falls back to the default for missing/invalid/non-positive values", () => {
+		expect(sanitizeEpisodeListLimit(0)).toBe(DEFAULT_EPISODE_LIST_LIMIT);
+		expect(sanitizeEpisodeListLimit(-5)).toBe(DEFAULT_EPISODE_LIST_LIMIT);
+		expect(sanitizeEpisodeListLimit(Number.NaN)).toBe(
+			DEFAULT_EPISODE_LIST_LIMIT,
+		);
+		expect(sanitizeEpisodeListLimit(undefined)).toBe(
+			DEFAULT_EPISODE_LIST_LIMIT,
+		);
+		expect(sanitizeEpisodeListLimit("nope")).toBe(DEFAULT_EPISODE_LIST_LIMIT);
+	});
+
+	test("clamps to the maximum", () => {
+		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT)).toBe(
+			MAX_EPISODE_LIST_LIMIT,
+		);
+		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT + 1)).toBe(
+			MAX_EPISODE_LIST_LIMIT,
+		);
+		expect(sanitizeEpisodeListLimit(10 ** 9)).toBe(MAX_EPISODE_LIST_LIMIT);
+	});
+});
+
+describe("latestEpisodes respects episodeListLimit (issue #114)", () => {
+	// `ordinal` doubles as the day-of-month, so a higher ordinal is a newer
+	// episode. `order: "newest-first"` mimics a typical RSS feed; "oldest-first"
+	// stresses that the per-feed limit ranks by date before truncating.
+	function feedEpisodes(
+		podcastName: string,
+		count: number,
+		order: "newest-first" | "oldest-first" = "newest-first",
+	): Episode[] {
+		const episodes = Array.from({ length: count }, (_, i) => {
+			const ordinal = i + 1;
+			return {
+				title: `${podcastName} #${ordinal}`,
+				streamUrl: `https://example.com/${podcastName}/${ordinal}.mp3`,
+				url: `https://example.com/${podcastName}/${ordinal}`,
+				description: "",
+				content: "",
+				podcastName,
+				episodeDate: new Date(2020, 0, ordinal),
+			} satisfies Episode;
+		});
+		return order === "newest-first" ? episodes.reverse() : episodes;
+	}
+
+	function trackLatest(): { value: () => Episode[]; stop: () => void } {
+		let current: Episode[] = [];
+		const unsubscribe = latestEpisodes.subscribe((value) => {
+			current = value;
+		});
+		return { value: () => current, stop: unsubscribe };
+	}
+
+	beforeEach(() => {
+		episodeCache.set({});
+		episodeListLimit.set(DEFAULT_EPISODE_LIST_LIMIT);
+	});
+
+	afterEach(() => {
+		episodeCache.set({});
+		episodeListLimit.set(DEFAULT_EPISODE_LIST_LIMIT);
+	});
+
+	test("defaults to the latest 10 episodes per feed", () => {
+		const tracker = trackLatest();
+
+		episodeCache.set({ "Show A": feedEpisodes("Show A", 25) });
+
+		expect(tracker.value()).toHaveLength(DEFAULT_EPISODE_LIST_LIMIT);
+		tracker.stop();
+	});
+
+	test("raising the limit surfaces more episodes per feed", () => {
+		const tracker = trackLatest();
+		episodeCache.set({ "Show A": feedEpisodes("Show A", 25) });
+		expect(tracker.value()).toHaveLength(10);
+
+		episodeListLimit.set(20);
+
+		expect(tracker.value()).toHaveLength(20);
+		expect(tracker.value()[0]?.title).toBe("Show A #25");
+		tracker.stop();
+	});
+
+	test("lowering the limit shrinks the list", () => {
+		const tracker = trackLatest();
+		episodeCache.set({ "Show A": feedEpisodes("Show A", 25) });
+
+		episodeListLimit.set(3);
+
+		expect(tracker.value()).toHaveLength(3);
+		tracker.stop();
+	});
+
+	test("invalid limits fall back to the default", () => {
+		const tracker = trackLatest();
+		episodeCache.set({ "Show A": feedEpisodes("Show A", 25) });
+
+		episodeListLimit.set(20);
+		expect(tracker.value()).toHaveLength(20);
+
+		episodeListLimit.set(0);
+
+		expect(tracker.value()).toHaveLength(DEFAULT_EPISODE_LIST_LIMIT);
+		tracker.stop();
+	});
+
+	test("the merged latest list scales the per-feed limit by feed count", () => {
+		const tracker = trackLatest();
+		episodeListLimit.set(5);
+
+		episodeCache.set({
+			"Show A": feedEpisodes("Show A", 25),
+			"Show B": feedEpisodes("Show B", 25),
+		});
+
+		// 5 per feed * 2 feeds = 10.
+		expect(tracker.value()).toHaveLength(10);
+		tracker.stop();
+	});
+
+	test("selects the newest episodes even when the feed is oldest-first", () => {
+		const tracker = trackLatest();
+		episodeListLimit.set(3);
+
+		// Episodes 1..25 in ascending (oldest-first) order. A naive slice-before-sort
+		// would keep #1..#3 (the oldest); the limit must rank by date and keep the
+		// newest three.
+		episodeCache.set({
+			"Show A": feedEpisodes("Show A", 25, "oldest-first"),
+		});
+
+		expect(tracker.value().map((episode) => episode.title)).toEqual([
+			"Show A #25",
+			"Show A #24",
+			"Show A #23",
+		]);
+		tracker.stop();
 	});
 });
 

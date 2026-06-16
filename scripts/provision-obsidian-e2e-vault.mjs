@@ -27,6 +27,7 @@ export const DEFAULT_PODNOTES_DATA = {
 	defaultPlaybackRate: 1,
 	defaultVolume: 1,
 	hidePlayedEpisodes: false,
+	episodeListLimit: 10,
 	playedEpisodes: {},
 	favorites: {
 		icon: "lucide-star",

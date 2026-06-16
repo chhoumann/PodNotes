@@ -1,6 +1,7 @@
 import {
 	currentEpisode,
 	downloadedEpisodes,
+	episodeListLimit,
 	favorites,
 	localFiles,
 	playedEpisodes,
@@ -8,6 +9,7 @@ import {
 	queue,
 	savedFeeds,
 	hidePlayedEpisodes,
+	sanitizeEpisodeListLimit,
 	volume,
 } from "src/store";
 import { Plugin, type WorkspaceLeaf } from "obsidian";
@@ -100,6 +102,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			currentEpisode.set(this.settings.currentEpisode);
 		}
 		hidePlayedEpisodes.set(this.settings.hidePlayedEpisodes);
+		// loadSettings() already sanitized this, so the store stays in sync with
+		// the (repaired) persisted value.
+		episodeListLimit.set(this.settings.episodeListLimit);
 		volume.set(
 			Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)),
 		);
@@ -483,6 +488,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		};
 		this.settings.download.path = migrateDownloadPath(
 			this.settings.download.path,
+		);
+		// Normalise the persisted limit so a malformed value (e.g. 0 from an older
+		// data.json) is repaired in the settings object too, not just clamped for
+		// runtime behaviour, and so a later saveSettings() can't re-persist it (#114).
+		this.settings.episodeListLimit = sanitizeEpisodeListLimit(
+			this.settings.episodeListLimit,
 		);
 	}
 

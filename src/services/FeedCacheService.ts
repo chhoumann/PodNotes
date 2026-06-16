@@ -12,16 +12,25 @@ interface CachedFeedData {
 
 type FeedCache = Record<string, CachedFeedData>;
 
-// v2: Episode gained episodeNumber/duration (#34, #88). Bumping the key stops
-// reading v1 entries (which lack those fields), so the new template tags populate
-// from a fresh parse instead of rendering empty until the TTL expires after an
-// upgrade. Superseded keys are actively deleted on load (see LEGACY_STORAGE_KEYS)
-// so a stale v1 blob can't linger and eat the localStorage quota.
-const STORAGE_KEY = "podnotes:feed-cache:v2";
+// v2: Episode gained episodeNumber/duration (#34, #88).
+// v3: retention changed from "first N in feed order" to "newest N by date"
+// (#114). An unexpired v2 entry written by the old code holds the first 75 feed
+// items, which for an oldest-first feed are the OLDEST episodes; reading it after
+// an upgrade would keep Latest Episodes/search stuck on stale items until the TTL
+// expired. Bumping the key forces a fresh parse so the new retention applies
+// immediately. Superseded keys are actively deleted on load (see
+// LEGACY_STORAGE_KEYS) so a stale blob can't linger and eat the localStorage quota.
+const STORAGE_KEY = "podnotes:feed-cache:v3";
 // Storage keys from earlier cache schemas, removed on first load so they don't
-// orphan ~MBs of data (which could push v2 writes over the localStorage quota).
-const LEGACY_STORAGE_KEYS = ["podnotes:feed-cache:v1"];
+// orphan ~MBs of data (which could push v3 writes over the localStorage quota).
+const LEGACY_STORAGE_KEYS = [
+	"podnotes:feed-cache:v1",
+	"podnotes:feed-cache:v2",
+];
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
+// Keep this >= MAX_EPISODE_LIST_LIMIT (src/constants.ts): the Latest Episodes
+// list is rebuilt from this persisted cache on a warm start, so a per-feed list
+// limit larger than what we retain here could never be served (issue #114).
 const MAX_EPISODES_PER_FEED = 75;
 const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other localStorage usage
 
@@ -152,6 +161,33 @@ function serializeEpisode(episode: Episode): SerializableEpisode {
 	};
 }
 
+function episodeTimestamp(episode: Episode): number {
+	if (!episode.episodeDate) return 0;
+	const time = new Date(episode.episodeDate).getTime();
+	return Number.isNaN(time) ? 0 : time;
+}
+
+/**
+ * Keep the newest `limit` episodes by date while preserving their original
+ * relative order. Selecting by date (not the first N in feed order) ensures an
+ * oldest-first feed still caches its NEWEST episodes, so a warm-cache rebuild of
+ * the Latest Episodes list isn't stuck on stale items (#114). Feeds at or under
+ * the limit are returned untouched, so ordering for the common case is unchanged.
+ */
+function selectNewestEpisodes(episodes: Episode[], limit: number): Episode[] {
+	if (episodes.length <= limit) return episodes;
+
+	const keptIndices = new Set(
+		episodes
+			.map((episode, index) => ({ index, time: episodeTimestamp(episode) }))
+			.sort((a, b) => b.time - a.time)
+			.slice(0, limit)
+			.map((entry) => entry.index),
+	);
+
+	return episodes.filter((_, index) => keptIndices.has(index));
+}
+
 function deserializeEpisode(episode: SerializableEpisode): Episode {
 	return {
 		...episode,
@@ -195,9 +231,9 @@ export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void 
 
 	store[cacheKey] = {
 		updatedAt: Date.now(),
-		episodes: episodes
-			.slice(0, MAX_EPISODES_PER_FEED)
-			.map(serializeEpisode),
+		episodes: selectNewestEpisodes(episodes, MAX_EPISODES_PER_FEED).map(
+			serializeEpisode,
+		),
 	};
 
 	persistCache();

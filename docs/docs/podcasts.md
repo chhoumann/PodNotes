@@ -30,6 +30,20 @@ If you have a podcast selected, the episode list will show all episodes of that 
 
 And lastly, if you select a playlist, the episode list shows all episodes in that playlist.
 
+### How many latest episodes are shown
+
+The "Latest Episodes" list keeps a limited number of the most recent episodes
+from each saved podcast. This same set is what the search box filters when no
+podcast is selected, so episodes older than the limit will not appear in those
+search results.
+
+You can change this with the **Latest episodes per podcast** setting in the
+PodNotes settings tab. It defaults to 10 and can be raised up to 75. Raise it to
+surface more of each feed's history in the Latest Episodes list and to search
+further back; lower it for a shorter list. Selecting an individual podcast still
+shows all of that podcast's episodes regardless of this setting, so the full
+back catalogue of any one show always remains searchable from its own view.
+
 ## Context menu
 You can right-click (desktop) or long-press (mobile) on an episode in the episode list to open the context menu.
 

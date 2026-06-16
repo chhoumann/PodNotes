@@ -11,6 +11,12 @@ export interface IPodNotesSettings {
 	defaultPlaybackRate: number;
 	defaultVolume: number;
 	hidePlayedEpisodes: boolean;
+	/**
+	 * How many of each saved feed's most recent episodes are surfaced in the
+	 * aggregated "Latest Episodes" list (and searchable from it). Defaults to 10;
+	 * raise it to look further back through each feed's history (issue #114).
+	 */
+	episodeListLimit: number;
 	playedEpisodes: { [episodeName: string]: PlayedEpisode };
 	skipBackwardLength: number;
 	skipForwardLength: number;

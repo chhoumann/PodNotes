@@ -19,15 +19,21 @@ import {
 } from "../../TemplateEngine";
 import {
 	episodeCache,
+	episodeListLimit,
 	favorites,
 	hidePlayedEpisodes,
 	localFiles,
 	playlists,
 	plugin,
 	queue,
+	sanitizeEpisodeListLimit,
 	savedFeeds,
 	volume,
 } from "src/store/index";
+import {
+	DEFAULT_EPISODE_LIST_LIMIT,
+	MAX_EPISODE_LIST_LIMIT,
+} from "src/constants";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
@@ -86,6 +92,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		});
 
 		this.addQueueSettings(settingsContainer);
+		this.addEpisodeListSettings(settingsContainer);
 		this.addDefaultPlaybackRateSetting(settingsContainer);
 		this.addDefaultVolumeSetting(settingsContainer);
 		this.addSkipLengthSettings(settingsContainer);
@@ -126,6 +133,44 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						plugin.set(this.plugin);
 					}),
 			);
+	}
+
+	private addEpisodeListSettings(container: HTMLElement): void {
+		new Setting(container)
+			.setName("Latest episodes per podcast")
+			.setDesc(
+				`How many of each podcast's most recent episodes appear in the Latest Episodes list, and how far back its search reaches. Raise this to find older episodes (1-${MAX_EPISODE_LIST_LIMIT}; default ${DEFAULT_EPISODE_LIST_LIMIT}).`,
+			)
+			.addText((textComponent) => {
+				textComponent.inputEl.type = "number";
+				textComponent.inputEl.min = "1";
+				textComponent.inputEl.max = `${MAX_EPISODE_LIST_LIMIT}`;
+				textComponent
+					.setValue(
+						`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`,
+					)
+					.setPlaceholder(`${DEFAULT_EPISODE_LIST_LIMIT}`)
+					.onChange(async (value) => {
+						// Don't commit while the field is empty or mid-edit (e.g. cleared,
+						// or a lone "-"): sanitizing "" would silently overwrite the saved
+						// limit with the default. Wait for a parseable number, and skip
+						// redundant saves so typing doesn't churn data.json each keystroke.
+						const trimmed = value.trim();
+						if (trimmed === "" || !Number.isFinite(Number(trimmed))) return;
+						const sanitized = sanitizeEpisodeListLimit(trimmed);
+						if (sanitized === this.plugin.settings.episodeListLimit) return;
+						this.plugin.settings.episodeListLimit = sanitized;
+						episodeListLimit.set(sanitized);
+						await this.plugin.saveSettings();
+					});
+				// Reflect the clamped/sanitized value back once the user finishes
+				// editing, so an out-of-range or empty entry doesn't linger in the box.
+				textComponent.inputEl.addEventListener("blur", () => {
+					textComponent.setValue(
+						`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`,
+					);
+				});
+			});
 	}
 
 	private addDefaultPlaybackRateSetting(container: HTMLElement): void {
@@ -732,6 +777,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		queue.set(merged.queue);
 		localFiles.set(merged.localFiles);
 		hidePlayedEpisodes.set(merged.hidePlayedEpisodes);
+		const sanitizedLimit = sanitizeEpisodeListLimit(merged.episodeListLimit);
+		merged.episodeListLimit = sanitizedLimit;
+		episodeListLimit.set(sanitizedLimit);
 		const importedVolume = Number.isFinite(merged.defaultVolume)
 			? merged.defaultVolume
 			: 1;
