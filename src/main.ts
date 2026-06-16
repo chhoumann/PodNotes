@@ -155,14 +155,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			id: "podnotes-show-leaf",
 			name: "Show PodNotes",
 			icon: "podcast" as IconType,
-			checkCallback: (checking: boolean) => {
-				if (checking) {
-					return !this.app.workspace.getLeavesOfType(VIEW_TYPE).length;
-				}
-
-				this.app.workspace.getRightLeaf(false)?.setViewState({
-					type: VIEW_TYPE,
-				});
+			// Always available, and always reveals the view. The previous
+			// checkCallback hid this command whenever a leaf already existed, so
+			// once the view was open-but-hidden (collapsed sidebar, sidebar
+			// overflow, dragged out of sight) there was no way to bring it back
+			// (#55). activateView reuses the existing leaf and reveals it.
+			callback: () => {
+				void this.activateView();
 			},
 		});
 
@@ -377,6 +376,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			return this.view;
 		});
 
+		// Persistent, discoverable entry point in the left ribbon. The right
+		// sidebar header can overflow and hide the view's tab icon (the original
+		// report in #55), but the ribbon is always reachable, so users can always
+		// reopen PodNotes.
+		this.addRibbonIcon("podcast" as IconType, "Show PodNotes", () => {
+			void this.activateView();
+		});
+
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
 		this.registerObsidianProtocolHandler("podnotes", (action) =>
@@ -412,6 +419,26 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			leaf.setViewState({
 				type: VIEW_TYPE,
 			});
+		}
+	}
+
+	// Reveal the PodNotes view, creating its leaf when needed. Reusing an
+	// existing leaf (instead of gating on its absence) plus revealLeaf is what
+	// makes "Show PodNotes" and the ribbon icon reliably surface the view even
+	// when it is already open but hidden in a collapsed/overflowing sidebar (#55).
+	async activateView(): Promise<void> {
+		const { workspace } = this.app;
+
+		const existing = workspace.getLeavesOfType(VIEW_TYPE);
+		let leaf: WorkspaceLeaf | null = existing[0] ?? null;
+
+		if (!leaf) {
+			leaf = workspace.getRightLeaf(false);
+			await leaf?.setViewState({ type: VIEW_TYPE, active: true });
+		}
+
+		if (leaf) {
+			await workspace.revealLeaf(leaf);
 		}
 	}
 
