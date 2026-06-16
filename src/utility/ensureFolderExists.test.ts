@@ -70,4 +70,39 @@ describe("ensureFolderExists", () => {
 
 		expect(created).toEqual(["a", "a/b"]);
 	});
+
+	it("swallows 'already exists' when the case-sensitive lookup misses an existing folder", async () => {
+		// Mimic a case-insensitive filesystem: the folder is present on disk but
+		// the case-sensitive getAbstractFileByPath never finds it, so createFolder
+		// throws "Folder already exists". The helper must treat that as success
+		// (regression guard for #87's spurious "Failed to create note").
+		const createFolder = vi.fn(async () => {
+			throw new Error("Folder already exists.");
+		});
+		(globalThis as { app?: unknown }).app = {
+			vault: {
+				getAbstractFileByPath: () => null,
+				createFolder,
+			},
+		};
+
+		await expect(ensureFolderExists("Podcasts/My Show")).resolves.toBeUndefined();
+		expect(createFolder).toHaveBeenCalled();
+	});
+
+	it("rethrows a genuine createFolder failure", async () => {
+		const createFolder = vi.fn(async () => {
+			throw new Error("EACCES: permission denied");
+		});
+		(globalThis as { app?: unknown }).app = {
+			vault: {
+				getAbstractFileByPath: () => null,
+				createFolder,
+			},
+		};
+
+		await expect(ensureFolderExists("Podcasts/My Show")).rejects.toThrow(
+			"EACCES",
+		);
+	});
 });
