@@ -120,15 +120,8 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 		return htmlToMarkdown(episode.content);
 	});
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
-	// URL tags are sanitized (quote/backslash stripped) so they stay valid inside a
-	// quoted YAML frontmatter scalar — the Bases-friendly default note template
-	// quotes {{url}}. The strip is lossless for well-formed URLs (a valid URL never
-	// contains a raw double-quote or backslash) and mirrors FeedNoteTemplateEngine.
-	// The `?? ""` keeps a corrupted/hand-edited data.json (where a typed-string URL
-	// is actually null/undefined) from throwing in sanitizeUrlForTemplate and
-	// aborting note creation — same guard the other URL tags below use. See #160.
-	addTag("stream", sanitizeUrlForTemplate(episode.streamUrl ?? ""));
-	addTag("url", sanitizeUrlForTemplate(episode.url ?? ""));
+	addTag("stream", episode.streamUrl);
+	addTag("url", episode.url);
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
@@ -153,21 +146,17 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 		"podcast",
 		replaceIllegalFileNameCharactersInString(episode.podcastName),
 	);
-	addTag("artwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
+	addTag("artwork", episode.artworkUrl ?? "");
 
 	// Feed-scoped tags so an episode note can reference its parent podcast feed
 	// without changing the meaning of the existing {{url}}/{{artwork}} tags
-	// (which always describe the episode itself). See issue #163. These are URL
-	// tags too, so they get the same quoted-YAML-safe sanitization (#160).
-	addTag("episodeurl", sanitizeUrlForTemplate(episode.url ?? ""));
-	addTag("episodeartwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
-	addTag("feedurl", sanitizeUrlForTemplate(episode.feedUrl ?? ""));
+	// (which always describe the episode itself). See issue #163.
+	addTag("episodeurl", episode.url);
+	addTag("episodeartwork", episode.artworkUrl ?? "");
+	addTag("feedurl", episode.feedUrl ?? "");
 	const parentFeed =
 		get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
-	addTag(
-		"feedartwork",
-		sanitizeUrlForTemplate(parentFeed?.artworkUrl ?? episode.artworkUrl ?? ""),
-	);
+	addTag("feedartwork", parentFeed?.artworkUrl ?? episode.artworkUrl ?? "");
 	// A ready-made wikilink to the parent feed's note, pointing at the same file
 	// createFeedNote writes (derived from the feed-note path setting).
 	addTag("podcastlink", getFeedNoteWikilink(episode.podcastName));

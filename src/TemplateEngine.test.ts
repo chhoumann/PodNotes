@@ -145,72 +145,31 @@ describe("NoteTemplateEngine feed-scoped tags (#163)", () => {
 	});
 });
 
-describe("NoteTemplateEngine URL sanitization (#160)", () => {
+describe("NoteTemplateEngine renders URL tags verbatim (#160 review)", () => {
 	beforeEach(() => {
 		plugin.set({
 			settings: { feedNote: { path: "" }, savedFeeds: {} },
 		} as never);
 	});
 
-	it("leaves well-formed URLs untouched (lossless for valid URLs)", () => {
-		expect(
-			NoteTemplateEngine(
-				"{{url}}|{{artwork}}|{{stream}}|{{feedurl}}",
-				demoEpisode,
-			),
-		).toBe(
-			"https://example.com/ep1|https://example.com/ep1.png|https://example.com/ep1.mp3|https://example.com/feed.xml",
+	it("does not mutate {{url}}/{{episodeurl}} — local-file wikilinks pass through", () => {
+		// For local-file episodes episode.url is a wikilink, not a URL
+		// (getContextMenuHandler stores generateMarkdownLink). The engine must not
+		// strip characters from it, or the link would point at a different file.
+		const localFile = {
+			...demoEpisode,
+			url: '[[Talk "A".mp3]]',
+		} as Episode;
+		expect(NoteTemplateEngine("{{url}}", localFile)).toBe('[[Talk "A".mp3]]');
+		expect(NoteTemplateEngine("{{episodeurl}}", localFile)).toBe(
+			'[[Talk "A".mp3]]',
 		);
 	});
 
-	it("strips quote/backslash from every URL tag so quoted YAML stays valid", () => {
-		const malformed: Episode = {
-			...demoEpisode,
-			url: 'https://example.com/a?x="b"\\c',
-			streamUrl: 'https://example.com/a".mp3',
-			artworkUrl: 'https://example.com/art".png',
-			feedUrl: 'https://example.com/feed".xml',
-		};
-		expect(NoteTemplateEngine("{{url}}", malformed)).toBe(
-			"https://example.com/a?x=bc",
+	it("renders a normal episode URL and artwork verbatim", () => {
+		expect(NoteTemplateEngine("{{url}}|{{artwork}}", demoEpisode)).toBe(
+			"https://example.com/ep1|https://example.com/ep1.png",
 		);
-		expect(NoteTemplateEngine("{{episodeurl}}", malformed)).toBe(
-			"https://example.com/a?x=bc",
-		);
-		expect(NoteTemplateEngine("{{stream}}", malformed)).toBe(
-			"https://example.com/a.mp3",
-		);
-		expect(NoteTemplateEngine("{{artwork}}", malformed)).toBe(
-			"https://example.com/art.png",
-		);
-		expect(NoteTemplateEngine("{{episodeartwork}}", malformed)).toBe(
-			"https://example.com/art.png",
-		);
-		expect(NoteTemplateEngine("{{feedurl}}", malformed)).toBe(
-			"https://example.com/feed.xml",
-		);
-	});
-
-	it("renders empty (never throws) when URL fields are missing/corrupted", () => {
-		// Typed as non-optional strings, but a hand-edited/corrupted data.json could
-		// surface null/undefined. The `?? ""` guard must keep that from throwing in
-		// sanitizeUrlForTemplate and aborting note creation.
-		const corrupted = {
-			...demoEpisode,
-			url: undefined,
-			streamUrl: undefined,
-			artworkUrl: undefined,
-			feedUrl: undefined,
-		} as unknown as Episode;
-		expect(() =>
-			NoteTemplateEngine(DEFAULT_SETTINGS.note.template, corrupted),
-		).not.toThrow();
-		expect(
-			NoteTemplateEngine(
-				"{{url}}|{{stream}}|{{episodeurl}}|{{artwork}}|{{feedurl}}",
-				corrupted,
-			),
-		).toBe("||||");
 	});
 });
 
@@ -231,22 +190,25 @@ describe("default note template renders valid frontmatter (#160)", () => {
 		return (match as RegExpMatchArray)[1];
 	}
 
-	it("keeps frontmatter valid even for hostile titles/URLs", () => {
-		const hostile: Episode = {
+	it("keeps frontmatter valid for an awkward title (raw title stays in the body)", () => {
+		// The title carries quotes/colons that would break a frontmatter scalar; it
+		// must render only in the body H1. The url is a well-formed feed URL (the
+		// common case for the default template) and sits in the quoted scalar.
+		const episode: Episode = {
 			...demoEpisode,
 			title: 'Why "AI": a deep dive: part 2',
-			url: 'https://example.com/ep?x="q"\\c',
-			artworkUrl: 'https://example.com/art".png',
+			url: "https://example.com/ep?x=q&y=2",
 			podcastName: "My Show",
 		};
-		const rendered = NoteTemplateEngine(DEFAULT_SETTINGS.note.template, hostile);
+		const rendered = NoteTemplateEngine(
+			DEFAULT_SETTINGS.note.template,
+			episode,
+		);
 		const frontmatter = frontmatterOf(rendered);
 		const line = (key: string) =>
 			frontmatter.split("\n").find((l) => l.startsWith(`${key}:`));
 
-		// The quoted url scalar must not carry an internal quote/backslash that
-		// would terminate or escape the scalar and break the YAML.
-		expect(line("url")).toBe('url: "https://example.com/ep?x=qc"');
+		expect(line("url")).toBe('url: "https://example.com/ep?x=q&y=2"');
 		// The podcast link is quoted so its leading [[ isn't read as a flow sequence.
 		expect(line("podcast")).toBe(
 			'podcast: "[[PodNotes/Podcasts/My Show|My Show]]"',

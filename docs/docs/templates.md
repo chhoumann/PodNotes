@@ -30,7 +30,7 @@ This template will be used to create the note text. You can use the following sy
 	-  You can use `{{content:> }}` to prepend each new line with a `>` (to put the entire content in a blockquote).
 
 - `{{podcast}}`: The name of the podcast.
-- `{{url}}`: The URL of the podcast episode. The URL tags (`{{url}}`, `{{stream}}`, `{{artwork}}`, `{{episodeurl}}`, `{{episodeartwork}}`, `{{feedurl}}`, `{{feedartwork}}`) have any `"` or `\` stripped so they are always safe inside a double-quoted YAML frontmatter scalar like `url: "{{url}}"`. This is lossless for well-formed URLs (which never contain those characters).
+- `{{url}}`: The URL of the podcast episode. For a local-file episode this is a link to the file rather than a web URL. Tag values are inserted verbatim, so when you place one in a quoted YAML property (e.g. `url: "{{url}}"`) it stays valid for well-formed feed URLs and ordinary file names (a URL or file name containing a literal `"` would need escaping).
 - `{{stream}}`: The direct URL of the episode's audio file — the RSS `<enclosure>` URL for podcast feeds, or the underlying audio source for Pocket Casts and local-file episodes. Handy for embedding the raw audio or linking to the source. An empty string is used in the rare case no audio URL is available. Available in episode note templates only.
 - `{{date}}`: The publish date of the podcast episode.
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
@@ -81,7 +81,7 @@ With the default feed-note path, the frontmatter stays **valid YAML** even for e
 
 - The full episode title goes in the body as the `# {{title}}` heading, where YAML rules don't apply (a raw title can contain `"` or `:`, which would break a frontmatter scalar).
 - `{{podcastlink}}` is quoted so its leading `[[` isn't read as a YAML flow sequence, and the linked name is sanitized. (If you customize *Feed note file path* to a folder containing a literal `"` or `\`, that character flows into the link verbatim — keep the feed-note path to ordinary path characters.)
-- `{{url}}` is a quoted frontmatter scalar (`url: "{{url}}"`), and PodNotes strips `"`/`\` from all URL tags (see above) so it stays intact. `{{artwork}}` sits in the body as a Markdown image (`![]({{artwork}})`); the same stripping keeps that link well-formed.
+- `{{url}}` is a quoted frontmatter scalar (`url: "{{url}}"`). Well-formed feed URLs (and ordinary local-file links) contain no `"`, so the scalar stays valid; the tag value is inserted verbatim, so a URL/file name with a literal `"` is the one case you'd need to adjust. `{{artwork}}` sits in the body as a Markdown image (`![]({{artwork}})`), not in the frontmatter.
 - `date:` is a bare `YYYY-MM-DD` (or empty/null when the feed has no publish date).
 - `status`, `rating`, and `favorite` are left for you to fill in — they give Bases columns to sort and filter on (e.g. mark an episode `favorite: true`, or set `status` to `to-listen`/`listening`/`listened`).
 
