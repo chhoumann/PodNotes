@@ -13,8 +13,11 @@ import { parseOpenAIDiarizedSegments } from "./segments";
  * single-chunk episode (the common case) is fully consistent.
  *
  * Chunks are processed in order and their segments concatenated, so the
- * transcript reads start-to-finish. A chunk that keeps failing contributes an
- * error marker segment rather than aborting the whole transcript.
+ * transcript reads start-to-finish. A single failed chunk contributes an error
+ * marker segment rather than discarding an otherwise-good transcript — but if
+ * EVERY chunk fails (e.g. an invalid key or unsupported model) the function
+ * throws so the caller writes no file and the run stays retryable, instead of
+ * saving a transcript made only of error markers.
  */
 export async function diarizeWithOpenAI(opts: {
 	getClient: () => Promise<OpenAI>;
@@ -25,6 +28,8 @@ export async function diarizeWithOpenAI(opts: {
 	const { getClient, chunkFiles, maxRetries, onProgress } = opts;
 	const client = await getClient();
 	const segments: DiarizedSegment[] = [];
+	let failedChunks = 0;
+	let lastError: unknown;
 
 	for (let index = 0; index < chunkFiles.length; index++) {
 		onProgress(
@@ -44,6 +49,10 @@ export async function diarizeWithOpenAI(opts: {
 					response_format: "diarized_json",
 					chunking_strategy: "auto",
 				});
+				// Each chunk's start/end are relative to that chunk, so the
+				// concatenated segments' timestamps are not episode-absolute. The
+				// rendered transcript does not surface timestamps today; if it ever
+				// does, offset each chunk by the cumulative prior-chunk duration here.
 				segments.push(...parseOpenAIDiarizedSegments(result));
 				break;
 			} catch (error) {
@@ -53,6 +62,8 @@ export async function diarizeWithOpenAI(opts: {
 						`OpenAI diarization failed for chunk ${index} after ${maxRetries} attempts:`,
 						error,
 					);
+					failedChunks++;
+					lastError = error;
 					segments.push({
 						speaker: "?",
 						text: `[Error diarizing chunk ${index + 1}]`,
@@ -62,6 +73,11 @@ export async function diarizeWithOpenAI(opts: {
 				await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
 			}
 		}
+	}
+
+	if (chunkFiles.length > 0 && failedChunks === chunkFiles.length) {
+		const detail = lastError instanceof Error ? lastError.message : String(lastError);
+		throw new Error(`OpenAI diarization failed for every chunk: ${detail}`);
 	}
 
 	return segments;

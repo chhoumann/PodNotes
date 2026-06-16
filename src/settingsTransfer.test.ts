@@ -4,6 +4,7 @@ import {
 	EXCLUDED_KEYS,
 	SETTINGS_EXPORT_TYPE,
 	SETTINGS_EXPORT_VERSION,
+	describeSecrets,
 	mergeImportedSettings,
 	parseImport,
 	serializeSettings,
@@ -313,5 +314,48 @@ describe("mergeImportedSettings", () => {
 
 		expect(merged.feedNote.path).toBe("MyPods/{{podcast}}.md");
 		expect(merged.feedNote.template).toBe(DEFAULT_SETTINGS.feedNote.template);
+	});
+
+	it("clamps an imported invalid diarization provider and backfills its fields (#168)", () => {
+		const current = makeSettings();
+
+		const merged = mergeImportedSettings(current, {
+			transcript: {
+				path: "t/{{title}}.md",
+				template: "{{transcript}}",
+				diarization: { enabled: true, provider: "macwhisper" },
+			} as never,
+		});
+
+		// Unknown provider falls back to the default; the missing speakerTemplate is
+		// backfilled — the import path converges with the load path (#168).
+		expect(merged.transcript.diarization.provider).toBe(
+			DEFAULT_SETTINGS.transcript.diarization.provider,
+		);
+		expect(merged.transcript.diarization.enabled).toBe(true);
+		expect(merged.transcript.diarization.speakerTemplate).toBe(
+			DEFAULT_SETTINGS.transcript.diarization.speakerTemplate,
+		);
+	});
+});
+
+describe("describeSecrets (#168)", () => {
+	it("names only the secrets that actually hold a value", () => {
+		expect(describeSecrets(makeSettings())).toEqual([]);
+		expect(describeSecrets(makeSettings({ openAIApiKey: "sk" }))).toEqual([
+			"OpenAI API key",
+		]);
+		expect(
+			describeSecrets(makeSettings({ diarizationApiKey: "dg" })),
+		).toEqual(["Deepgram API key"]);
+		expect(
+			describeSecrets(
+				makeSettings({ openAIApiKey: "sk", diarizationApiKey: "dg" }),
+			),
+		).toEqual(["OpenAI API key", "Deepgram API key"]);
+	});
+
+	it("ignores whitespace-only secrets", () => {
+		expect(describeSecrets(makeSettings({ openAIApiKey: "   " }))).toEqual([]);
 	});
 });

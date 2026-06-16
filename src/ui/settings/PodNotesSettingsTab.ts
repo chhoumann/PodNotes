@@ -42,6 +42,7 @@ import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 import { clearFeedCache } from "src/services/FeedCacheService";
 import {
+	describeSecrets,
 	mergeImportedSettings,
 	parseImport,
 	serializeSettings,
@@ -628,9 +629,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		let includeSecret = false;
 
 		new Setting(containerEl)
-			.setName("Include OpenAI API key")
+			.setName("Include API keys")
 			.setDesc(
-				"When enabled, the export file contains your API key in plaintext. The file is stored in your vault, so it may sync to other devices and be read by other plugins.",
+				"When enabled, the export file contains your OpenAI and Deepgram API keys in plaintext (whichever you have set). The file is stored in your vault, so it may sync to other devices and be read by other plugins.",
 			)
 			.addToggle((toggle) =>
 				toggle.setValue(includeSecret).onChange((value) => {
@@ -727,9 +728,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			}
 			await this.app.vault.create(fileName, contents);
 
+			const exportedSecrets = includeSecret
+				? describeSecrets(this.plugin.settings)
+				: [];
 			new Notice(
-				includeSecret
-					? `Exported PodNotes settings to "${fileName}" (includes your API key).`
+				exportedSecrets.length
+					? `Exported PodNotes settings to "${fileName}" (includes your ${exportedSecrets.join(" and ")}).`
 					: `Exported PodNotes settings to "${fileName}".`,
 			);
 		} catch (error) {
@@ -758,7 +762,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		if (Object.keys(result.settings.playlists ?? {}).length) {
 			sections.push("playlists");
 		}
-		if (result.meta.includesSecret) sections.push("OpenAI API key");
+		sections.push(...describeSecrets(result.settings));
 		const detail = sections.length
 			? ` This also replaces your ${sections.join(", ")}.`
 			: "";

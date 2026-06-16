@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS } from "./constants";
+import { migrateTranscriptSettings } from "./settingsMigrations";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
@@ -37,6 +38,27 @@ export const SECRET_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
 	"openAIApiKey",
 	"diarizationApiKey",
 ]);
+
+/** Human-facing names for each secret, so export/import copy can name exactly
+ * which keys leave or enter the vault instead of hard-coding "OpenAI". */
+const SECRET_KEY_LABELS: Record<string, string> = {
+	openAIApiKey: "OpenAI API key",
+	diarizationApiKey: "Deepgram API key",
+};
+
+/**
+ * The human-facing labels for the secrets actually present (non-empty) in a
+ * settings object. Used to keep the export toggle, the export notice, and the
+ * import confirmation honest about which keys are involved — so a Deepgram-only
+ * user is never told only "OpenAI API key" (and vice versa). See issue #168.
+ */
+export function describeSecrets(
+	settings: Partial<IPodNotesSettings>,
+): string[] {
+	return [...SECRET_KEYS]
+		.filter((key) => Boolean((settings[key] as string | undefined)?.trim()))
+		.map((key) => SECRET_KEY_LABELS[key as string]);
+}
 
 /** Keys that, if copied into the settings object, could pollute Object.prototype. */
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -208,6 +230,13 @@ export function mergeImportedSettings(
 			...(imported[key] as object | undefined),
 		} as never;
 	}
+
+	// The per-key spread above is only one level deep, so an imported
+	// `transcript.diarization` overrides the whole nested object — which could
+	// carry an unknown provider or drop `speakerTemplate`. Run the same migration
+	// the load path uses so the import path converges on a clamped, fully-formed
+	// transcript instead of relying on the next reload to repair it (#168).
+	merged.transcript = migrateTranscriptSettings(merged.transcript);
 
 	return merged;
 }

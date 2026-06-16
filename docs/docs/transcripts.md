@@ -30,9 +30,9 @@ The transcript template works similarly to the [note template](./templates.md#no
 By default the transcription uses OpenAI's Whisper model, which produces plain text with **no speaker labels**. Speaker diarization is an opt-in setting that instead labels each segment of the transcript by speaker, e.g.:
 
 ```
-**Speaker A:** Welcome to the show.
+**A:** Welcome to the show.
 
-**Speaker B:** Thanks for having me.
+**B:** Thanks for having me.
 ```
 
 ### Enabling it
@@ -51,7 +51,7 @@ The **Speaker label format** setting controls the prefix added before each speak
 - OpenAI labels speakers `A`, `B`, `C`, …
 - Deepgram labels speakers `1`, `2`, `3`, …
 
-The default is `**{{speaker}}:** `, which renders as `**Speaker A:**`-style bold prefixes. For example, `> {{speaker}}: ` would put each turn in a blockquote.
+The default is `**{{speaker}}:** `, which renders as `**A:**`-style bold prefixes. To spell out the word "Speaker", set it to `**Speaker {{speaker}}:** ` (rendering `**Speaker A:**`); `> {{speaker}}: ` would instead put each turn in a blockquote.
 
 The labelled transcript replaces the usual `{{transcript}}` value in your [transcript template](#transcript-template), so you don't need to change your template to use diarization.
 
