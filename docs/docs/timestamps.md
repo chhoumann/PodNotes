@@ -16,6 +16,8 @@ For example, you might use `{{time:H\h mm\m ss\s}}` to get the time in the forma
 ## Capturing timestamps
 You can use the `Capture Timestamp` command by using the `PodNotes: Capture Timestamp` command in the command palette.
 
+The timestamp is inserted at your cursor. When the cursor is inside a markdown table cell, the captured text stays on that row: any pipes are escaped and newlines are collapsed to spaces so the table is not broken.
+
 **On desktop**, it is possible to bind this command to a hotkey, which makes it faster to use while writing.
 You can bind hotkeys in the `Hotkeys` tab of the Obsidian settings.
 

@@ -39,6 +39,7 @@ import type { Episode } from "./types/Episode";
 import CurrentEpisodeController from "./store_controllers/CurrentEpisodeController";
 import { HidePlayedEpisodesController } from "./store_controllers/HidePlayedEpisodesController";
 import { TimestampTemplateEngine } from "./TemplateEngine";
+import { prepareTimestampForInsertion } from "./utility/prepareTimestampInsertion";
 import createPodcastNote from "./createPodcastNote";
 import createFeedNote from "./createFeedNote";
 import { FeedSuggestModal, orderFeedsByCurrent } from "./ui/FeedSuggestModal";
@@ -273,13 +274,24 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					return !!this.api.podcast && !!this.settings.timestamp.template;
 				}
 
-				const cursorPos = editor.getCursor();
 				const capture = TimestampTemplateEngine(
 					this.settings.timestamp.template,
 				);
 
-				editor.replaceRange(capture, cursorPos);
-				editor.setCursor(cursorPos.line, cursorPos.ch + capture.length);
+				// Insert with replaceSelection (not getCursor + replaceRange +
+				// setCursor): it drops the text at the live cursor and lets the
+				// editor place the caret after it, which is reliable inside Live
+				// Preview table cells where hand-computed positions land in the
+				// wrong cell. Inside a table the capture is escaped so pipes and
+				// newlines don't break the row. See issue #165.
+				const cursor = editor.getCursor("from");
+				const textToInsert = prepareTimestampForInsertion(capture, {
+					getLine: (line) => editor.getLine(line),
+					lineCount: editor.lineCount(),
+					cursorLine: cursor.line,
+				});
+
+				editor.replaceSelection(textToInsert);
 			},
 		});
 
