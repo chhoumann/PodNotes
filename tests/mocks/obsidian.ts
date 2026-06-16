@@ -355,3 +355,20 @@ export const requestUrl = async () => ({
 });
 
 export const htmlToMarkdown = (value: string) => value;
+
+// Mutable so tests can simulate a specific OS (e.g. set isMacOS=false, isLinux=true).
+// Defaults to a desktop macOS profile, matching the typical dev environment.
+export const Platform = {
+	isDesktop: true,
+	isMobile: false,
+	isDesktopApp: true,
+	isMobileApp: false,
+	isPhone: false,
+	isTablet: false,
+	isWin: false,
+	isMacOS: true,
+	isLinux: false,
+	isIosApp: false,
+	isAndroidApp: false,
+	isSafari: false,
+};

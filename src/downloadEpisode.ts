@@ -7,6 +7,7 @@ import {
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
+import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
 import { isLocalFile } from "./utility/isLocalFile";
 import getUrlExtension from "./utility/getUrlExtension";
@@ -199,6 +200,20 @@ export function safeDownloadBasename(
 		.join("/");
 }
 
+/**
+ * The on-disk path for a downloaded episode, with a long title capped so it can't
+ * trip ENAMETOOLONG (#22). Both the pre-download existence check and the write go
+ * through this, so they always agree on the same (capped) path.
+ */
+export function safeDownloadFilePath(
+	downloadPathTemplate: string,
+	episode: Episode,
+	extension: string,
+): string {
+	const basename = safeDownloadBasename(downloadPathTemplate, episode);
+	return enforceMaxPathLength(`${basename}.${extension}`, `.${extension}`);
+}
+
 async function createEpisodeFile({
 	episode,
 	downloadPathTemplate,
@@ -210,8 +225,7 @@ async function createEpisodeFile({
 	data: ArrayBuffer;
 	extension: string;
 }) {
-	const basename = safeDownloadBasename(downloadPathTemplate, episode);
-	const filePath = `${basename}.${extension}`;
+	const filePath = safeDownloadFilePath(downloadPathTemplate, episode, extension);
 
 	// `createBinary` throws if a parent folder is missing, which previously left
 	// users with a templated path like `podcast/{{podcast}}/{{title}}` unable to
@@ -321,9 +335,12 @@ export async function downloadEpisode(
 		return localFilePath;
 	}
 
-	const basename = safeDownloadBasename(downloadPathTemplate, episode);
 	const fileExtension = await getFileExtension(episode.streamUrl);
-	const filePath = `${basename}.${fileExtension}`;
+	const filePath = safeDownloadFilePath(
+		downloadPathTemplate,
+		episode,
+		fileExtension,
+	);
 
 	// Check if the file already exists
 	const existingFile = app.vault.getAbstractFileByPath(filePath);

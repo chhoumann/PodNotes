@@ -7,6 +7,7 @@ import type { PodcastFeed } from "./types/PodcastFeed";
 import { get } from "svelte/store";
 import { plugin } from "./store";
 import addExtension from "./utility/addExtension";
+import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
 import FeedParser from "./parser/feedParser";
 
@@ -23,7 +24,10 @@ function getFeedNotePath(feed: PodcastFeed): string {
 		feed,
 	);
 
-	return addExtension(filePath, "md");
+	// Cap the path so a very long feed title can't trip ENAMETOOLONG (#22). Both
+	// getFeedNote (existence/open) and createFeedNote derive the path here, so they
+	// always agree on the capped result.
+	return enforceMaxPathLength(addExtension(filePath, "md"));
 }
 
 export function getFeedNote(feed: PodcastFeed): TFile | null {

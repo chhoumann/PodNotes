@@ -6,6 +6,8 @@ import {
 	FilePathTemplateEngine,
 	TranscriptTemplateEngine,
 } from "../TemplateEngine";
+import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
+import { ensureFolderExists } from "../utility/ensureFolderExists";
 import type { Episode } from "src/types/Episode";
 
 function TimerNotice(heading: string, initialMessage: string) {
@@ -79,10 +81,7 @@ export class TranscriptionService {
 			return;
 		}
 
-		const transcriptPath = FilePathTemplateEngine(
-			this.plugin.settings.transcript.path,
-			currentEpisode,
-		);
+		const transcriptPath = this.getTranscriptPath(currentEpisode);
 		const existingFile =
 			this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 		if (existingFile instanceof TFile) {
@@ -141,10 +140,7 @@ export class TranscriptionService {
 		);
 
 		try {
-			const transcriptPath = FilePathTemplateEngine(
-				this.plugin.settings.transcript.path,
-				episode,
-			);
+			const transcriptPath = this.getTranscriptPath(episode);
 			const existingFile =
 				this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 			if (existingFile instanceof TFile) {
@@ -470,14 +466,23 @@ export class TranscriptionService {
 		return transcriptions.join(" ");
 	}
 
+	/**
+	 * The on-disk path of an episode's transcript note, capped so a long title
+	 * can't trip ENAMETOOLONG (#22). Used for the existence checks and the write
+	 * alike so they always agree on the same path.
+	 */
+	private getTranscriptPath(episode: Episode): string {
+		return enforceMaxPathLength(
+			FilePathTemplateEngine(this.plugin.settings.transcript.path, episode),
+			".md",
+		);
+	}
+
 	private async saveTranscription(
 		episode: Episode,
 		transcription: string,
 	): Promise<void> {
-		const transcriptPath = FilePathTemplateEngine(
-			this.plugin.settings.transcript.path,
-			episode,
-		);
+		const transcriptPath = this.getTranscriptPath(episode);
 		const formattedTranscription = transcription.replace(/\.\s+/g, ".\n\n");
 		const transcriptContent = TranscriptTemplateEngine(
 			this.plugin.settings.transcript.template,
@@ -487,21 +492,15 @@ export class TranscriptionService {
 
 		const vault = this.plugin.app.vault;
 
-		// Ensure the directory exists (create nested folders recursively)
+		// Create nested folders recursively. ensureFolderExists tolerates a
+		// "Folder already exists" thrown when a case-insensitive lookup misses an
+		// existing folder, which the old hand-rolled loop surfaced as a spurious
+		// failure (the #87 class of bug).
 		const directory = transcriptPath.substring(
 			0,
 			transcriptPath.lastIndexOf("/"),
 		);
-		if (directory) {
-			const parts = directory.split("/");
-			let current = "";
-			for (const part of parts) {
-				current = current ? `${current}/${part}` : part;
-				if (!vault.getAbstractFileByPath(current)) {
-					await vault.createFolder(current);
-				}
-			}
-		}
+		await ensureFolderExists(directory);
 
 		const file = vault.getAbstractFileByPath(transcriptPath);
 
