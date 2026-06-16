@@ -41,7 +41,12 @@ export const currentEpisode = (() => {
 
 					const ct = get(currentTime);
 					const dur = get(duration);
-					const isFinished = ct === dur;
+					// A zero/unknown duration is never a finished episode. The player
+					// resets currentTime/duration to 0 the instant the episode changes
+					// (issue #94); if the user switches away again before the next
+					// episode's metadata loads, ct === dur === 0 would otherwise persist
+					// a never-played episode as finished at 0:00 and surface it as played.
+					const isFinished = dur > 0 && ct === dur;
 					playedEpisodes.setEpisodeTime(previousEpisode, ct, dur, isFinished);
 				}
 

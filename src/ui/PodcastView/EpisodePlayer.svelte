@@ -193,7 +193,9 @@
 			$currentEpisode,
 			$currentTime,
 			$duration,
-			$currentTime === $duration,
+			// A zero/unknown duration is never "finished" — guard against the brief
+			// 0/0 window after an episode switch (issue #94) marking it played at 0:00.
+			$duration > 0 && $currentTime === $duration,
 		);
 	}
 
