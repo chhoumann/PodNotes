@@ -1,5 +1,4 @@
 import type { Episode } from "src/types/Episode";
-import type { LocalEpisode } from "src/types/LocalEpisode";
 import { downloadedEpisodes } from "src/store";
 import encodePodnotesURI from "./encodePodnotesURI";
 import { isLocalFile } from "./isLocalFile";
@@ -12,15 +11,17 @@ import { isLocalFile } from "./isLocalFile";
  *
  * The link's `url` is how the player rediscovers the episode, mirroring
  * API.getPodcastTimeFormatted: a streamed episode is addressed by its feed URL
- * (the player refetches the feed and matches by title); a local/downloaded
- * episode is addressed by its on-disk vault path. Returns "" when neither is
- * known, so a template degrades to an empty value rather than a broken link.
+ * (the player refetches the feed and matches by title); a local file is
+ * addressed by its on-disk vault path. As a last resort either kind falls back
+ * to a downloaded copy's path, so an episode whose snapshot predates `feedUrl`
+ * still gets a working link instead of none. Returns "" only when nothing can
+ * address it, so a template degrades to an empty value rather than a broken link.
  */
 export default function buildEpisodeResumeLink(episode: Episode): string {
+	const downloadedPath = () => downloadedEpisodes.getEpisode(episode)?.filePath;
 	const target = isLocalFile(episode)
-		? (episode as LocalEpisode).filePath ??
-			downloadedEpisodes.getEpisode(episode)?.filePath
-		: episode.feedUrl;
+		? episode.filePath ?? downloadedPath()
+		: episode.feedUrl ?? downloadedPath();
 
 	if (!target) return "";
 

@@ -81,6 +81,18 @@ describe("buildEpisodeResumeLink (#35)", () => {
 		);
 	});
 
+	test("falls back to a downloaded copy's path for a non-local episode with no feed URL", () => {
+		// An older/imported snapshot can lack feedUrl; a downloaded copy still has a
+		// usable vault path, so the link should work rather than degrade to "".
+		const noFeed: Episode = { ...remoteEpisode, feedUrl: undefined };
+		downloadedEpisodes.addEpisode(noFeed, "Downloads/ep1.mp3", 1);
+
+		const parsed = new URL(buildEpisodeResumeLink(noFeed));
+
+		expect(parsed.searchParams.get("url")).toBe("Downloads/ep1.mp3");
+		expect(parsed.searchParams.has("time")).toBe(false);
+	});
+
 	test("returns an empty string when there is no feed URL or file path to address", () => {
 		const orphan: Episode = { ...remoteEpisode, feedUrl: undefined };
 
