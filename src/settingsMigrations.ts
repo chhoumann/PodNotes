@@ -55,54 +55,42 @@ export function migrateDownloadPath(
  * empty path OR an empty template the "Create episode note" command is disabled
  * (`src/main.ts` gates it on both being non-empty), so a fresh install could not
  * create episode notes at all until the user hand-wrote a template. Issue #160
- * gives both a Bases-friendly default. Users who never customized these have the
- * exact empty value persisted in `data.json`, which overrides the new default on
- * load, so each is migrated independently from the legacy empty value.
+ * gives both a Bases-friendly default. Users who never touched note settings have
+ * the legacy empty note `{ path: "", template: "" }` persisted in `data.json`,
+ * which overrides the new default on load, so it is migrated to the new default.
  */
-export const LEGACY_EMPTY_NOTE_PATH = "";
-export const LEGACY_EMPTY_NOTE_TEMPLATE = "";
+type StoredNote = { path?: string | null; template?: string | null };
 
 /**
- * Upgrades the legacy empty episode-note path to the current Bases-friendly
- * default, preserving any non-empty path the user configured.
+ * Upgrades the legacy empty episode-note settings to the current Bases-friendly
+ * default, preserving any configuration the user made.
  *
- * ONLY the exact legacy empty value (or an absent value) is migrated. An empty
- * path leaves the note command disabled, so replacing it is strictly an
- * improvement — the command stays manual, so an existing user is never forced to
- * create notes, they simply gain the option with a sensible default.
- * `null`/`undefined` (a missing key or hand-edited `data.json`) map to the default
- * both to apply the intended value and to keep a `null` from reaching
- * FilePathTemplateEngine, where `null.replace(...)` would throw.
+ * The migration fires ONLY when the WHOLE note is the legacy default — both path
+ * and template empty/absent — i.e. the exact value a never-configured install has
+ * persisted. The moment the user has set EITHER field, the note feature has been
+ * engaged, so both fields are preserved verbatim — including a deliberately empty
+ * field a user relies on to keep "Create episode note" disabled (the command
+ * gates on emptiness). This is the conservative reading of "migrate only when the
+ * stored value is still the old default": a partially-configured note is not the
+ * old default and is never silently overwritten.
+ *
+ * `null`/`undefined` fields (a missing key or hand-edited `data.json`) are
+ * coalesced to "" both so a fully-empty/absent note still upgrades and so a `null`
+ * never reaches FilePathTemplateEngine, where `null.replace(...)` would throw.
  */
-export function migrateNotePath(
-	storedPath: string | null | undefined,
-): string {
-	if (
-		storedPath === undefined ||
-		storedPath === null ||
-		storedPath === LEGACY_EMPTY_NOTE_PATH
-	) {
-		return DEFAULT_SETTINGS.note.path;
+export function migrateNoteSettings(storedNote: StoredNote | null | undefined): {
+	path: string;
+	template: string;
+} {
+	const path = storedNote?.path ?? "";
+	const template = storedNote?.template ?? "";
+
+	if (path === "" && template === "") {
+		return {
+			path: DEFAULT_SETTINGS.note.path,
+			template: DEFAULT_SETTINGS.note.template,
+		};
 	}
 
-	return storedPath;
-}
-
-/**
- * Upgrades the legacy empty episode-note template to the current Bases-friendly
- * default, preserving any non-empty template the user configured. Migrated
- * independently of the path so customizing one field never resets the other.
- */
-export function migrateNoteTemplate(
-	storedTemplate: string | null | undefined,
-): string {
-	if (
-		storedTemplate === undefined ||
-		storedTemplate === null ||
-		storedTemplate === LEGACY_EMPTY_NOTE_TEMPLATE
-	) {
-		return DEFAULT_SETTINGS.note.template;
-	}
-
-	return storedTemplate;
+	return { path, template };
 }

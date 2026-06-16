@@ -77,15 +77,15 @@ favorite: false
 {{description}}
 ```
 
-The frontmatter is built so it is **always valid YAML**, even for episodes with awkward titles or URLs:
+With the default feed-note path, the frontmatter stays **valid YAML** even for episodes with awkward titles or URLs:
 
 - The full episode title goes in the body as the `# {{title}}` heading, where YAML rules don't apply (a raw title can contain `"` or `:`, which would break a frontmatter scalar).
-- `{{podcastlink}}` is quoted so its leading `[[` isn't read as a YAML flow sequence, and the linked name is sanitized.
+- `{{podcastlink}}` is quoted so its leading `[[` isn't read as a YAML flow sequence, and the linked name is sanitized. (If you customize *Feed note file path* to a folder containing a literal `"` or `\`, that character flows into the link verbatim — keep the feed-note path to ordinary path characters.)
 - `{{url}}` is a quoted frontmatter scalar (`url: "{{url}}"`), and PodNotes strips `"`/`\` from all URL tags (see above) so it stays intact. `{{artwork}}` sits in the body as a Markdown image (`![]({{artwork}})`); the same stripping keeps that link well-formed.
 - `date:` is a bare `YYYY-MM-DD` (or empty/null when the feed has no publish date).
 - `status`, `rating`, and `favorite` are left for you to fill in — they give Bases columns to sort and filter on (e.g. mark an episode `favorite: true`, or set `status` to `to-listen`/`listening`/`listened`).
 
-A starter Bases view (save as e.g. `Podcast Episodes.base`) that lists your episodes and lets you sort/filter on those properties:
+A starter Bases view (save as e.g. `Podcast Episodes.base`) that lists every episode note, grouped by listening status, with a column for each property:
 
 ```yaml
 filters:
@@ -96,17 +96,17 @@ views:
     name: Episodes
     order:
       - file.name
-      - podcast
-      - date
-      - status
-      - rating
-      - favorite
-    sort:
-      - property: date
-        direction: DESC
+      - note.podcast
+      - note.date
+      - note.status
+      - note.rating
+      - note.favorite
+    groupBy:
+      property: note.status
+      direction: ASC
 ```
 
-`podcast` resolves to the linked [feed note](#podcast-feed-notes), so you can group episodes by show or pivot from a feed note to all of its episodes.
+Open the base in Obsidian to sort, filter, or add views from the view options. Because `note.podcast` resolves to the linked [feed note](#podcast-feed-notes), you can also group by show or pivot from a feed note to all of its episodes.
 
 ## Podcast feed notes
 A *feed note* is a single parent note for an entire podcast (the feed), which episode notes can link to (great for [Obsidian Bases](https://help.obsidian.md/bases) / Dataview rollups).

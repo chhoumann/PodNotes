@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./constants";
 import {
 	LEGACY_EMPTY_DOWNLOAD_PATH,
-	LEGACY_EMPTY_NOTE_PATH,
-	LEGACY_EMPTY_NOTE_TEMPLATE,
 	migrateDownloadPath,
-	migrateNotePath,
-	migrateNoteTemplate,
+	migrateNoteSettings,
 } from "./settingsMigrations";
 
 describe("download path default (#183)", () => {
@@ -74,63 +71,55 @@ describe("episode note defaults (#160)", () => {
 	});
 });
 
-describe("migrateNotePath (#160)", () => {
-	it("upgrades the legacy empty path to the current default", () => {
-		expect(migrateNotePath(LEGACY_EMPTY_NOTE_PATH)).toBe(
-			DEFAULT_SETTINGS.note.path,
+describe("migrateNoteSettings (#160)", () => {
+	const DEFAULT_NOTE = {
+		path: DEFAULT_SETTINGS.note.path,
+		template: DEFAULT_SETTINGS.note.template,
+	};
+
+	it("upgrades the legacy empty note (both fields empty) to the default", () => {
+		expect(migrateNoteSettings({ path: "", template: "" })).toEqual(
+			DEFAULT_NOTE,
 		);
-		expect(migrateNotePath("")).toBe(DEFAULT_SETTINGS.note.path);
 	});
 
-	it("treats an absent value (undefined/null) as the legacy default", () => {
-		expect(migrateNotePath(undefined)).toBe(DEFAULT_SETTINGS.note.path);
-		// null is reachable via a corrupted/hand-edited data.json; mapping it to the
-		// default also keeps null out of FilePathTemplateEngine (would crash).
-		expect(migrateNotePath(null)).toBe(DEFAULT_SETTINGS.note.path);
+	it("treats an absent note (undefined/null/empty object) as the legacy default", () => {
+		expect(migrateNoteSettings(undefined)).toEqual(DEFAULT_NOTE);
+		expect(migrateNoteSettings(null)).toEqual(DEFAULT_NOTE);
+		expect(migrateNoteSettings({})).toEqual(DEFAULT_NOTE);
 	});
 
-	it("preserves any non-empty custom path verbatim", () => {
-		expect(migrateNotePath("inputs/podcasts/{{podcast}} - {{title}}.md")).toBe(
-			"inputs/podcasts/{{podcast}} - {{title}}.md",
+	it("coalesces null/undefined fields and still upgrades a fully-absent note", () => {
+		// A corrupted/hand-edited data.json could carry nulls; they must not reach
+		// the path/template engines (null.replace would throw) and a wholly-empty
+		// note still upgrades.
+		expect(migrateNoteSettings({ path: null, template: null })).toEqual(
+			DEFAULT_NOTE,
 		);
-		expect(migrateNotePath("Notes")).toBe("Notes");
+	});
+
+	it("preserves a fully-configured note verbatim", () => {
+		const custom = {
+			path: "inputs/podcasts/{{podcast}} - {{title}}.md",
+			template: "## {{title}}\n{{description}}",
+		};
+		expect(migrateNoteSettings(custom)).toEqual(custom);
+	});
+
+	it("never overwrites a deliberately-empty field once the user configured the other", () => {
+		// Custom path + empty template = note creation deliberately disabled; the
+		// empty template must NOT be filled with the new default (would re-enable
+		// the command). Symmetric for a custom template + empty path.
+		expect(
+			migrateNoteSettings({ path: "Custom/{{title}}.md", template: "" }),
+		).toEqual({ path: "Custom/{{title}}.md", template: "" });
+		expect(
+			migrateNoteSettings({ path: "", template: "## {{title}}" }),
+		).toEqual({ path: "", template: "## {{title}}" });
 	});
 
 	it("is idempotent on the current default", () => {
-		const once = migrateNotePath(DEFAULT_SETTINGS.note.path);
-		expect(migrateNotePath(once)).toBe(DEFAULT_SETTINGS.note.path);
-	});
-});
-
-describe("migrateNoteTemplate (#160)", () => {
-	it("upgrades the legacy empty template to the current default", () => {
-		expect(migrateNoteTemplate(LEGACY_EMPTY_NOTE_TEMPLATE)).toBe(
-			DEFAULT_SETTINGS.note.template,
-		);
-		expect(migrateNoteTemplate("")).toBe(DEFAULT_SETTINGS.note.template);
-	});
-
-	it("treats an absent value (undefined/null) as the legacy default", () => {
-		expect(migrateNoteTemplate(undefined)).toBe(
-			DEFAULT_SETTINGS.note.template,
-		);
-		expect(migrateNoteTemplate(null)).toBe(DEFAULT_SETTINGS.note.template);
-	});
-
-	it("preserves any non-empty custom template verbatim", () => {
-		const custom = "## {{title}}\n{{description}}";
-		expect(migrateNoteTemplate(custom)).toBe(custom);
-	});
-
-	it("migrates path and template independently", () => {
-		// A user who customized only the path keeps it while still gaining the new
-		// template default (and vice versa) — neither field resets the other.
-		expect(migrateNotePath("Custom/{{title}}.md")).toBe("Custom/{{title}}.md");
-		expect(migrateNoteTemplate("")).toBe(DEFAULT_SETTINGS.note.template);
-	});
-
-	it("is idempotent on the current default", () => {
-		const once = migrateNoteTemplate(DEFAULT_SETTINGS.note.template);
-		expect(migrateNoteTemplate(once)).toBe(DEFAULT_SETTINGS.note.template);
+		const once = migrateNoteSettings(DEFAULT_NOTE);
+		expect(migrateNoteSettings(once)).toEqual(DEFAULT_NOTE);
 	});
 });
