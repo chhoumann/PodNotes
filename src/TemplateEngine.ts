@@ -9,6 +9,7 @@ import { formatDate } from "./utility/formatDate";
 import { formatDuration } from "./utility/formatDuration";
 import { formatEpisodeNumber } from "./utility/formatEpisodeNumber";
 import { parseEpisodeNumberFromTitle } from "./utility/parseEpisodeNumber";
+import buildEpisodeResumeLink from "./utility/buildEpisodeResumeLink";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -157,6 +158,12 @@ export function NoteTemplateEngine(template: string, episode: Episode) {
 	// A ready-made wikilink to the parent feed's note, pointing at the same file
 	// createFeedNote writes (derived from the feed-note path setting).
 	addTag("podcastlink", getFeedNoteWikilink(episode.podcastName));
+	// A clickable obsidian://podnotes deep link that reopens this episode in the
+	// player and resumes from the last played location (or the start if it has
+	// never been played). The resume point is resolved at click time, not baked
+	// in here, so a single templated link always jumps to where you left off.
+	// Empty when the episode has no feed/file URL to address it by. See issue #35.
+	addTag("episodelink", buildEpisodeResumeLink(episode));
 
 	return replacer(template);
 }

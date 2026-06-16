@@ -40,6 +40,7 @@ This template will be used to create the note text. You can use the following sy
 	- `{{duration:minutes}}` → total whole minutes (e.g. `62`); `{{duration:seconds}}` → total seconds (e.g. `3723`).
 	- Any other argument is treated as a clock format using the tokens `H`/`HH`, `h`/`hh`, `m`/`mm`, `s`/`ss`, `A`/`a` — e.g. `{{duration:HH:mm:ss}}` → `01:02:03`. (Unlike `{{date}}`, `[literal]` bracket escaping is not supported here.)
 - `{{artwork}}`: The URL of the podcast artwork. If no artwork is found, an empty string will be used.
+- `{{episodelink}}`: A clickable `obsidian://podnotes` link that reopens this episode in the PodNotes player and **resumes from where you left off** (or starts at the beginning if you have never played it). The resume position is resolved when you click the link — not baked in when the note is created — so the link always jumps to your latest position. Put it in your template to get a "back to the episode" link on every note, e.g. `[▶️ Resume in PodNotes]({{episodelink}})`. The value is the bare URL, so wrap it in your own Markdown link text. It is empty when the episode has no feed URL or local file path to address it by. See [issue #35](https://github.com/chhoumann/PodNotes/issues/35).
 
 ### Linking an episode to its podcast (feed) note
 In an episode note, `{{url}}` and `{{artwork}}` always describe the **episode**. To reference the parent podcast (feed), use these additional tags:

@@ -10,7 +10,7 @@ import {
 } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
-import { plugin } from "./store";
+import { downloadedEpisodes, plugin } from "./store";
 
 // The illegal-character sanitizer is private; exercise it through
 // DownloadPathTemplateEngine, which applies it to {{title}} and {{podcast}}.
@@ -114,6 +114,21 @@ describe("NoteTemplateEngine feed-scoped tags (#163)", () => {
 		expect(NoteTemplateEngine("{{feedartwork}}", demoEpisode)).toBe(
 			"https://example.com/ep1.png",
 		);
+	});
+
+	it("emits {{episodelink}} as a no-timestamp obsidian://podnotes link to the episode (#35)", () => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+		downloadedEpisodes.set({});
+
+		const rendered = NoteTemplateEngine("{{episodelink}}", demoEpisode);
+		const parsed = new URL(rendered);
+
+		expect(parsed.protocol).toBe("obsidian:");
+		expect(parsed.host).toBe("podnotes");
+		expect(parsed.searchParams.get("episodeName")).toBe("Episode 1");
+		expect(parsed.searchParams.get("url")).toBe("https://example.com/feed.xml");
+		// No baked-in time: the resume point is resolved when the link is clicked.
+		expect(parsed.searchParams.has("time")).toBe(false);
 	});
 
 	it("emits {{podcastlink}} as a path-qualified wikilink to the feed note", () => {

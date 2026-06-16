@@ -48,17 +48,23 @@ export default async function podNotesURIHandler(
 	{ url, episodeName, time }: ObsidianProtocolData,
 	api: IAPI
 ) {
-	if (!url || !episodeName || time === undefined) {
-		new Notice(
-			"URL, episode name, and timestamp are required to play an episode"
-		);
+	if (!url || !episodeName) {
+		new Notice("URL and episode name are required to play an episode");
 		return;
 	}
 
-	const requestedTime = parseFloat(time);
-	if (!Number.isFinite(requestedTime)) {
-		new Notice("Timestamp must be a valid number");
-		return;
+	// A link may omit the timestamp ({{episodelink}}, issue #35). When it does we
+	// reopen the episode and let the player's saved-progress restore resume from
+	// the last played location (or the start if it has never been played), rather
+	// than seeking to a baked-in time.
+	const hasExplicitTime = time !== undefined && time !== "";
+	let requestedTime = 0;
+	if (hasExplicitTime) {
+		requestedTime = parseFloat(time);
+		if (!Number.isFinite(requestedTime)) {
+			new Notice("Timestamp must be a valid number");
+			return;
+		}
 	}
 
 	const nameCandidates = candidateValues(episodeName);
@@ -73,16 +79,25 @@ export default async function podNotesURIHandler(
 	const playerIsVisible = get(viewState) === ViewState.Player;
 
 	if (episodeIsPlaying) {
-		requestedPlaybackTime.set({
-			episodeKey: getEpisodeKey(currentEp),
-			time: requestedTime,
-		});
-		viewState.set(ViewState.Player);
-		api.currentTime = requestedTime;
-		isPaused.set(false);
-		if (playerIsVisible) {
-			requestedPlaybackTime.set(null);
+		if (hasExplicitTime) {
+			requestedPlaybackTime.set({
+				episodeKey: getEpisodeKey(currentEp),
+				time: requestedTime,
+			});
+			viewState.set(ViewState.Player);
+			api.currentTime = requestedTime;
+			isPaused.set(false);
+			if (playerIsVisible) {
+				requestedPlaybackTime.set(null);
+			}
+
+			return;
 		}
+
+		// No timestamp: the live position already is the last played location, so
+		// just surface the player and resume playback without seeking.
+		viewState.set(ViewState.Player);
+		isPaused.set(false);
 
 		return;
 	}
@@ -121,10 +136,15 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
-	requestedPlaybackTime.set({
-		episodeKey: getEpisodeKey(episode),
-		time: requestedTime,
-	});
+	if (hasExplicitTime) {
+		requestedPlaybackTime.set({
+			episodeKey: getEpisodeKey(episode),
+			time: requestedTime,
+		});
+	}
+	// Without an explicit timestamp we deliberately leave requestedPlaybackTime
+	// unset: loading the episode triggers the player's saved-progress restore,
+	// which resumes from the last played location (issue #35).
 	currentEpisode.set(episode);
 	viewState.set(ViewState.Player);
 }
