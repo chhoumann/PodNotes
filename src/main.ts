@@ -12,7 +12,7 @@ import {
 	sanitizeEpisodeListLimit,
 	volume,
 } from "src/store";
-import { Plugin, type WorkspaceLeaf } from "obsidian";
+import { Notice, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
@@ -40,6 +40,10 @@ import CurrentEpisodeController from "./store_controllers/CurrentEpisodeControll
 import { HidePlayedEpisodesController } from "./store_controllers/HidePlayedEpisodesController";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import { prepareTimestampForInsertion } from "./utility/prepareTimestampInsertion";
+import {
+	createRecentPodcastSegment,
+	getSegmentCaptureTemplate,
+} from "./utility/podcastSegment";
 import createPodcastNote from "./createPodcastNote";
 import createFeedNote from "./createFeedNote";
 import { FeedSuggestModal, orderFeedsByCurrent } from "./ui/FeedSuggestModal";
@@ -265,33 +269,83 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			},
 		});
 
+		const canCaptureTimestamp = () =>
+			!!this.api.podcast && !!this.settings.timestamp.template;
+		const insertCapture = (editor: Editor, capture: string) => {
+			// Insert with replaceSelection (not getCursor + replaceRange +
+			// setCursor): it drops the text at the live cursor and lets the
+			// editor place the caret after it, which is reliable inside Live
+			// Preview table cells where hand-computed positions land in the
+			// wrong cell. Inside a table the capture is escaped so pipes and
+			// newlines don't break the row. See issue #165.
+			const cursor = editor.getCursor("from");
+			const textToInsert = prepareTimestampForInsertion(capture, {
+				getLine: (line) => editor.getLine(line),
+				lineCount: editor.lineCount(),
+				cursorLine: cursor.line,
+			});
+
+			editor.replaceSelection(textToInsert);
+		};
+		const captureRecentSegment = (editor: Editor, lengthSeconds: number) => {
+			const segment = createRecentPodcastSegment(
+				this.api.currentTime,
+				lengthSeconds,
+				this.settings.timestamp.offset ?? 0,
+			);
+
+			if (!segment) {
+				new Notice("Play more of the episode before capturing a segment");
+				return;
+			}
+
+			const capture = TimestampTemplateEngine(
+				getSegmentCaptureTemplate(this.settings.timestamp.template),
+				{ segment },
+			);
+			insertCapture(editor, capture);
+		};
+
 		this.addCommand({
 			id: "capture-timestamp",
 			name: "Capture Timestamp",
 			icon: "clock" as IconType,
 			editorCheckCallback: (checking, editor, view) => {
 				if (checking) {
-					return !!this.api.podcast && !!this.settings.timestamp.template;
+					return canCaptureTimestamp();
 				}
 
 				const capture = TimestampTemplateEngine(
 					this.settings.timestamp.template,
 				);
 
-				// Insert with replaceSelection (not getCursor + replaceRange +
-				// setCursor): it drops the text at the live cursor and lets the
-				// editor place the caret after it, which is reliable inside Live
-				// Preview table cells where hand-computed positions land in the
-				// wrong cell. Inside a table the capture is escaped so pipes and
-				// newlines don't break the row. See issue #165.
-				const cursor = editor.getCursor("from");
-				const textToInsert = prepareTimestampForInsertion(capture, {
-					getLine: (line) => editor.getLine(line),
-					lineCount: editor.lineCount(),
-					cursorLine: cursor.line,
-				});
+				insertCapture(editor, capture);
+			},
+		});
 
-				editor.replaceSelection(textToInsert);
+		this.addCommand({
+			id: "capture-segment-10s",
+			name: "Capture Last 10 Seconds",
+			icon: "scissors" as IconType,
+			editorCheckCallback: (checking, editor) => {
+				if (checking) {
+					return canCaptureTimestamp();
+				}
+
+				captureRecentSegment(editor, 10);
+			},
+		});
+
+		this.addCommand({
+			id: "capture-segment-20s",
+			name: "Capture Last 20 Seconds",
+			icon: "scissors" as IconType,
+			editorCheckCallback: (checking, editor) => {
+				if (checking) {
+					return canCaptureTimestamp();
+				}
+
+				captureRecentSegment(editor, 20);
 			},
 		});
 

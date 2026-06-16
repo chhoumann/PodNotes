@@ -5,12 +5,13 @@ import {
 	FeedNoteTemplateEngine,
 	FilePathTemplateEngine,
 	NoteTemplateEngine,
+	TimestampTemplateEngine,
 	TranscriptTemplateEngine,
 	getFeedNoteWikilink,
 } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
-import { downloadedEpisodes, plugin } from "./store";
+import { currentEpisode, currentTime, downloadedEpisodes, plugin } from "./store";
 import { DEFAULT_SETTINGS } from "./constants";
 
 // The illegal-character sanitizer is private; exercise it through
@@ -72,6 +73,48 @@ const demoEpisode: Episode = {
 	artworkUrl: "https://example.com/ep1.png",
 	episodeDate: new Date("2024-01-01"),
 };
+
+describe("TimestampTemplateEngine segment tags", () => {
+	beforeEach(() => {
+		currentEpisode.set(demoEpisode);
+		currentTime.set(125);
+		downloadedEpisodes.set({});
+		plugin.set({
+			settings: {
+				timestamp: { offset: 0 },
+			},
+			api: {
+				getPodcastTimeFormatted: (
+					format: string,
+					linkify: boolean,
+					offsetSeconds: number,
+				) =>
+					`time:${format}:${linkify ? "link" : "plain"}:${offsetSeconds}`,
+				getPodcastSegmentFormatted: (
+					format: string,
+					startTime: number,
+					endTime: number,
+					linkify: boolean,
+				) =>
+					`segment:${format}:${startTime}-${endTime}:${linkify ? "link" : "plain"}`,
+			},
+		} as never);
+	});
+
+	it("renders plain and linked segment ranges when segment context is provided", () => {
+		expect(
+			TimestampTemplateEngine("{{segment}} {{linksegment:mm:ss}}", {
+				segment: { startTime: 115, endTime: 125 },
+			}),
+		).toBe("segment:HH:mm:ss:115-125:plain segment:mm:ss:115-125:link");
+	});
+
+	it("falls back to current time behavior when segment tags are used without segment context", () => {
+		expect(TimestampTemplateEngine("{{segment}} {{linksegment}}")).toBe(
+			"time:HH:mm:ss:plain:0 time:HH:mm:ss:link:0",
+		);
+	});
+});
 
 describe("NoteTemplateEngine feed-scoped tags (#163)", () => {
 	it("keeps {{url}} and {{artwork}} pointing at the episode itself", () => {

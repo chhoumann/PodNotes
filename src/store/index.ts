@@ -8,6 +8,7 @@ import { ViewState } from "src/types/ViewState";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import { TFile } from "obsidian";
 import type { LocalEpisode } from "src/types/LocalEpisode";
+import type { PlaybackSegment } from "src/types/PlaybackSegment";
 import {
 	DEFAULT_EPISODE_LIST_LIMIT,
 	LOCAL_FILES_SETTINGS,
@@ -24,7 +25,9 @@ export const currentTime = writable<number>(0);
 export const requestedPlaybackTime = writable<{
 	episodeKey: string;
 	time: number;
+	endTime?: number;
 } | null>(null);
+export const activePlaybackSegment = writable<PlaybackSegment | null>(null);
 export const duration = writable<number>(0);
 export const volume = writable<number>(1);
 export const hidePlayedEpisodes = writable<boolean>(false);

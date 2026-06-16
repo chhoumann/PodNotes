@@ -7,6 +7,7 @@ import {
 	currentTime,
 	duration,
 	isPaused,
+	activePlaybackSegment,
 	playedEpisodes,
 	plugin,
 	requestedPlaybackTime,
@@ -29,6 +30,7 @@ beforeEach(() => {
 	currentTime.set(0);
 	duration.set(3600);
 	isPaused.set(true);
+	activePlaybackSegment.set(null);
 	playedEpisodes.set({});
 	requestedPlaybackTime.set(null);
 	HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
@@ -63,6 +65,129 @@ describe("EpisodePlayer", () => {
 		expect(get(currentTime)).toBe(240);
 		expect(get(isPaused)).toBe(false);
 		expect(get(requestedPlaybackTime)).toBeNull();
+	});
+
+	test("arms a requested segment after metadata loads", async () => {
+		requestedPlaybackTime.set({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 240,
+			endTime: 260,
+		});
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+
+		await fireEvent.loadedMetadata(audio);
+
+		expect(get(currentTime)).toBe(240);
+		expect(get(isPaused)).toBe(false);
+		expect(get(requestedPlaybackTime)).toBeNull();
+		expect(get(activePlaybackSegment)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			startTime: 240,
+			endTime: 260,
+		});
+	});
+
+	test("stops playback at the active segment end", async () => {
+		requestedPlaybackTime.set({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 115,
+			endTime: 125,
+		});
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+
+		currentTime.set(126);
+		isPaused.set(false);
+		await fireEvent.timeUpdate(audio);
+
+		expect(get(currentTime)).toBe(125);
+		expect(get(isPaused)).toBe(true);
+		expect(get(activePlaybackSegment)).toBeNull();
+	});
+
+	test("does not persist preview segment progress over saved listening progress", async () => {
+		const episodeKey = `${testEpisode.podcastName}::${testEpisode.title}`;
+		playedEpisodes.setEpisodeTime(testEpisode, 1000, 3600, false);
+		requestedPlaybackTime.set({
+			episodeKey,
+			time: 115,
+			endTime: 125,
+		});
+
+		const { container, unmount } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+
+		currentTime.set(120);
+		await fireEvent.timeUpdate(audio);
+		expect(get(playedEpisodes)[episodeKey]?.time).toBe(1000);
+
+		currentTime.set(126);
+		await fireEvent.timeUpdate(audio);
+		await fireEvent.pause(audio);
+		unmount();
+
+		expect(get(currentTime)).toBe(125);
+		expect(get(playedEpisodes)[episodeKey]?.time).toBe(1000);
+	});
+
+	test("manual seeks clear the active segment", async () => {
+		requestedPlaybackTime.set({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 115,
+			endTime: 125,
+		});
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+		duration.set(3600);
+
+		const progress = container.querySelector(".progress") as HTMLElement;
+		await fireEvent.keyDown(progress, { key: "End" });
+
+		expect(get(currentTime)).toBe(3600);
+		expect(get(activePlaybackSegment)).toBeNull();
+	});
+
+	test("a segment ending at media end pauses instead of marking the episode played", async () => {
+		const episodeKey = `${testEpisode.podcastName}::${testEpisode.title}`;
+		requestedPlaybackTime.set({
+			episodeKey,
+			time: 3590,
+			endTime: 3600,
+		});
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+
+		currentTime.set(3600);
+		await fireEvent.ended(audio);
+
+		expect(get(currentTime)).toBe(3600);
+		expect(get(isPaused)).toBe(true);
+		expect(get(activePlaybackSegment)).toBeNull();
+		expect(get(playedEpisodes)[episodeKey]).toBeUndefined();
 	});
 
 	test("ignores stale requested timestamp for a different episode", async () => {

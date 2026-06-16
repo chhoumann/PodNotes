@@ -7,12 +7,17 @@ import {
 	downloadedEpisodes,
 	duration,
 	isPaused,
+	activePlaybackSegment,
 	plugin,
 	volume as volumeStore,
 } from "src/store";
 import { get } from "svelte/store";
 import encodePodnotesURI from "src/utility/encodePodnotesURI";
 import { isLocalFile } from "src/utility/isLocalFile";
+import {
+	formatPodcastSegment,
+	normalizePodcastSegmentTimes,
+} from "src/utility/podcastSegment";
 
 const clampVolume = (value: number): number =>
 	Math.min(1, Math.max(0, value));
@@ -31,6 +36,7 @@ export class API implements IAPI {
 	}
 
 	public set currentTime(value: number) {
+		activePlaybackSegment.set(null);
 		currentTime.update((_) => value);
 	}
 
@@ -67,10 +73,7 @@ export class API implements IAPI {
 
 		if (!linkify) return time;
 
-		const epIsLocal = isLocalFile(this.podcast);
-		const feedUrl = !epIsLocal
-			? this.podcast.feedUrl
-			: downloadedEpisodes.getEpisode(this.podcast)?.filePath;
+		const feedUrl = this.getEpisodeLinkTarget();
 
 		if (!feedUrl || feedUrl === "") {
 			// Considered handling this as an error case, but I think
@@ -85,6 +88,50 @@ export class API implements IAPI {
 		);
 
 		return `[${time}](${url.href})`;
+	}
+
+	getPodcastSegmentFormatted(
+		format: string,
+		startTime: number,
+		endTime: number,
+		linkify = false,
+	): string {
+		if (!this.podcast) {
+			throw new Error("No podcast loaded");
+		}
+
+		const segmentTimes = normalizePodcastSegmentTimes(startTime, endTime);
+		const segment = segmentTimes
+			? formatPodcastSegment(
+					segmentTimes.startTime,
+					segmentTimes.endTime,
+					format,
+				)
+			: formatPodcastSegment(startTime, endTime, format);
+
+		if (!linkify || !segmentTimes) return segment;
+
+		const feedUrl = this.getEpisodeLinkTarget();
+
+		if (!feedUrl || feedUrl === "") {
+			return segment;
+		}
+
+		const url = encodePodnotesURI(
+			this.podcast.title,
+			feedUrl,
+			segmentTimes.startTime,
+			segmentTimes.endTime,
+		);
+
+		return `[${segment}](${url.href})`;
+	}
+
+	private getEpisodeLinkTarget(): string | undefined {
+		const epIsLocal = isLocalFile(this.podcast);
+		return !epIsLocal
+			? this.podcast.feedUrl
+			: downloadedEpisodes.getEpisode(this.podcast)?.filePath;
 	}
 
 	start(): void {

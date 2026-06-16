@@ -14,6 +14,7 @@ import {
 	currentTime,
 	duration,
 	isPaused,
+	activePlaybackSegment,
 	localFiles,
 	playedEpisodes,
 	requestedPlaybackTime,
@@ -67,6 +68,7 @@ function resetStores() {
 	currentTime.set(0);
 	duration.set(0);
 	isPaused.set(true);
+	activePlaybackSegment.set(null);
 	playedEpisodes.set({});
 	requestedPlaybackTime.set(null);
 	viewState.set(ViewState.PodcastGrid);
@@ -141,9 +143,85 @@ describe("podNotesURIHandler", () => {
 			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
 			time: 240,
 		});
+		expect(get(activePlaybackSegment)).toBeNull();
 		expect(
 			get(playedEpisodes)[`${testEpisode.podcastName}::${testEpisode.title}`]?.finished,
 		).toBe(true);
+	});
+
+	test("keeps the requested segment end for the player to apply after loading metadata", async () => {
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "240",
+				endTime: "260",
+			},
+			api as never,
+		);
+
+		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(get(viewState)).toBe(ViewState.Player);
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			time: 240,
+			endTime: 260,
+		});
+		expect(get(activePlaybackSegment)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			startTime: 240,
+			endTime: 260,
+		});
+	});
+
+	test("seeks and arms a segment when the linked episode is already visible", async () => {
+		currentEpisode.set(testEpisode);
+		viewState.set(ViewState.Player);
+		currentTime.set(3600);
+		isPaused.set(true);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "120",
+				endTime: "135",
+			},
+			api as never,
+		);
+
+		expect(get(currentTime)).toBe(120);
+		expect(get(isPaused)).toBe(false);
+		expect(get(activePlaybackSegment)).toEqual({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			startTime: 120,
+			endTime: 135,
+		});
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("normal timestamp links clear a stale active segment", async () => {
+		currentEpisode.set(testEpisode);
+		activePlaybackSegment.set({
+			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
+			startTime: 10,
+			endTime: 20,
+		});
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "120",
+			},
+			api as never,
+		);
+
+		expect(get(activePlaybackSegment)).toBeNull();
 	});
 
 	test("switches to a non-loaded episode whose title contains a literal '+'", async () => {
@@ -468,6 +546,59 @@ describe("podNotesURIHandler", () => {
 
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("rejects a segment end without a start timestamp", async () => {
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				endTime: "20",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+		expect(get(activePlaybackSegment)).toBeNull();
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("rejects a segment end before the start timestamp", async () => {
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "20",
+				endTime: "20",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+		expect(get(activePlaybackSegment)).toBeNull();
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("rejects a negative segment start timestamp", async () => {
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "-10",
+				endTime: "5",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+		expect(get(activePlaybackSegment)).toBeNull();
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 

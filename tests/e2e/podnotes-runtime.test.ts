@@ -34,18 +34,24 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		const state = await obsidian.dev.evalJson<{
+			hasCaptureSegment10Command: boolean;
+			hasCaptureSegment20Command: boolean;
 			hasProtocolHandler: boolean;
 			hasShowCommand: boolean;
 			viewCount: number;
 		}>(`
-			(() => ({
-				hasProtocolHandler: app.workspace.protocolHandlers?.has(${JSON.stringify(PLUGIN_ID)}) ?? false,
-				hasShowCommand: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
-				viewCount: app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length,
+				(() => ({
+					hasCaptureSegment10Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-10s`)}]),
+					hasCaptureSegment20Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-20s`)}]),
+					hasProtocolHandler: app.workspace.protocolHandlers?.has(${JSON.stringify(PLUGIN_ID)}) ?? false,
+					hasShowCommand: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
+					viewCount: app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length,
 			}))()
 		`);
 
 		expect(state).toMatchObject({
+			hasCaptureSegment10Command: true,
+			hasCaptureSegment20Command: true,
 			hasProtocolHandler: true,
 			hasShowCommand: true,
 		});
@@ -171,9 +177,7 @@ describe("PodNotes runtime", () => {
 			timestampTemplate: "- {{linktime}}",
 		});
 		await waitForPodNotesReady(obsidian);
-		await sandbox.write("capture-target.md", "", { waitForContent: true });
-		await obsidian.open({ path: notePath });
-		await obsidian.waitForActiveFile(notePath, WAIT_OPTS);
+		await openMarkdownFile(obsidian, notePath);
 		await setPlayback(obsidian, { currentTime: 125, paused: false });
 
 		await obsidian.command(`${PLUGIN_ID}:capture-timestamp`).run();
@@ -189,6 +193,97 @@ describe("PodNotes runtime", () => {
 		expect(content).toContain("obsidian://podnotes");
 		expect(content).toContain("episodeName=E2E%20Capture%20Episode");
 		expect(content).toContain("time=125");
+	});
+
+	test("captures a linked segment into the active editor", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(sandbox, "capture-segment-episode.mp3");
+		const episode = createLocalEpisode(
+			"E2E Capture Segment Episode",
+			audioPath,
+		);
+		const notePath = sandbox.path("capture-segment-target.md");
+
+		await seedRuntimeData(plugin, sandbox, episode, {
+			currentEpisode: episode,
+			timestampTemplate: "- {{linktime}}",
+		});
+		await waitForPodNotesReady(obsidian);
+		await openMarkdownFile(obsidian, notePath);
+		await setPlayback(obsidian, { currentTime: 125, paused: false });
+
+		await obsidian.command(`${PLUGIN_ID}:capture-segment-10s`).run();
+
+		const expectedLink = `- ${expectedTimestampLink(
+			"00:01:55-00:02:05",
+			episode,
+			115,
+			125,
+		)}`;
+		const content = await sandbox.waitForContent(
+			"capture-segment-target.md",
+			(value) => value.includes(expectedLink),
+			WAIT_OPTS,
+		);
+
+		expect(content).toContain(expectedLink);
+		expect(content).toContain("time=115");
+		expect(content).toContain("endTime=125");
+
+		await obsidian.command(`${PLUGIN_ID}:capture-segment-20s`).run();
+		const expected20SecondLink = expectedTimestampLink(
+			"00:01:45-00:02:05",
+			episode,
+			105,
+			125,
+		);
+		const contentWithBothSegments = await sandbox.waitForContent(
+			"capture-segment-target.md",
+			(value) => value.includes(expected20SecondLink),
+			WAIT_OPTS,
+		);
+
+		expect(contentWithBothSegments).toContain(expected20SecondLink);
+	});
+
+	test("stops playback when a segment URI reaches its end", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(sandbox, "segment-uri-episode.mp3");
+		const episode = createLocalEpisode("E2E Segment URI Episode", audioPath);
+
+		await seedRuntimeData(plugin, sandbox, episode, {
+			timestampTemplate: "- {{linktime}}",
+		});
+		await waitForPodNotesReady(obsidian);
+		await openPodNotesView(obsidian);
+
+		await invokePodNotesUri(obsidian, episode, 115, 125);
+		await dispatchLoadedMetadata(obsidian);
+
+		await waitForPlaybackState(
+			obsidian,
+			(value) =>
+				value.hasPlayer &&
+				value.title === episode.title &&
+				value.isPlaying &&
+				value.currentTime === 115,
+		);
+
+		await dispatchAudioTimeUpdate(obsidian, 126);
+
+		const state = await waitForPlaybackState(
+			obsidian,
+			(value) =>
+				value.title === episode.title &&
+				!value.isPlaying &&
+				value.currentTime === 125,
+		);
+
+		expect(state).toMatchObject({
+			currentTime: 125,
+			isPlaying: false,
+			title: episode.title,
+		});
 	});
 
 	test("persists API volume changes and clamps out-of-range values", async () => {
@@ -227,6 +322,61 @@ async function seedAudio(
 	});
 
 	return sandbox.path(fileName);
+}
+
+async function openMarkdownFile(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+	path: string,
+): Promise<void> {
+	const result = await evalJsonAsync<{
+		activePath: string | null;
+		error?: string;
+		ok: boolean;
+	}>(
+		obsidian,
+		`
+		(async () => {
+			const targetPath = ${JSON.stringify(path)};
+			let file = app.vault.getAbstractFileByPath(targetPath);
+			if (!file) {
+				const parentParts = targetPath.split("/").slice(0, -1);
+				let current = "";
+				for (const part of parentParts) {
+					current = current ? current + "/" + part : part;
+					if (!app.vault.getAbstractFileByPath(current)) {
+						await app.vault.createFolder(current).catch(() => undefined);
+					}
+				}
+
+				if (await app.vault.adapter.exists(targetPath)) {
+					await app.vault.adapter.remove(targetPath);
+				}
+
+				file = await app.vault.create(targetPath, "");
+			}
+
+			if (!file) {
+				return { ok: false, activePath: app.workspace.getActiveFile()?.path ?? null, error: "File not found." };
+			}
+
+			const leaf = app.workspace.getLeaf(true);
+			await leaf.openFile(file);
+			await app.workspace.revealLeaf(leaf);
+			app.workspace.setActiveLeaf(leaf, { focus: true });
+
+			return {
+				ok: app.workspace.getActiveFile()?.path === targetPath,
+				activePath: app.workspace.getActiveFile()?.path ?? null,
+			};
+		})()
+	`,
+	);
+
+	if (!result.ok) {
+		throw new Error(
+			`Failed to open ${path}. Active file: ${result.activePath}. ${result.error ?? ""}`,
+		);
+	}
 }
 
 function createLocalEpisode(title: string, audioPath: string): LocalEpisode {
@@ -319,6 +469,7 @@ async function invokePodNotesUri(
 	obsidian: Parameters<typeof evalJsonAsync>[0],
 	episode: LocalEpisode,
 	time: number,
+	endTime?: number,
 ): Promise<void> {
 	const result = await evalJsonAsync<{ error?: string; ok: boolean }>(
 		obsidian,
@@ -334,6 +485,7 @@ async function invokePodNotesUri(
 				url: ${JSON.stringify(episode.filePath ?? episode.streamUrl)},
 				episodeName: ${JSON.stringify(episode.title)},
 				time: ${JSON.stringify(String(time))},
+				endTime: ${JSON.stringify(endTime === undefined ? undefined : String(endTime))},
 			});
 
 			return { ok: true };
@@ -398,6 +550,42 @@ async function dispatchAudioPlay(obsidian: {
 
 	if (!result.ok) {
 		throw new Error(result.error ?? "Failed to dispatch audio play.");
+	}
+}
+
+async function dispatchAudioTimeUpdate(
+	obsidian: {
+		dev: { evalJson: <T>(code: string) => Promise<T> };
+	},
+	currentTime?: number,
+): Promise<void> {
+	const result = await obsidian.dev.evalJson<{ error?: string; ok: boolean }>(`
+		(() => {
+			const audio = document.querySelector(".podcast-view audio");
+			if (!audio) {
+				return { ok: false, error: "No PodNotes audio element found." };
+			}
+
+			if (${JSON.stringify(currentTime)} !== undefined) {
+				Object.defineProperty(audio, "currentTime", {
+					configurable: true,
+					writable: true,
+					value: ${JSON.stringify(currentTime)},
+				});
+			}
+
+			Object.defineProperty(audio, "paused", {
+				configurable: true,
+				value: false,
+			});
+			audio.dispatchEvent(new Event("timeupdate"));
+
+			return { ok: true };
+		})()
+	`);
+
+	if (!result.ok) {
+		throw new Error(result.error ?? "Failed to dispatch audio timeupdate.");
 	}
 }
 
@@ -480,12 +668,14 @@ function expectedTimestampLink(
 	label: string,
 	episode: LocalEpisode,
 	time: number,
+	endTime?: number,
 ): string {
 	// Use the production encoder so this helper can never drift from the real wire format.
 	const uri = encodePodnotesURI(
 		episode.title,
 		episode.filePath ?? episode.streamUrl,
 		time,
+		endTime,
 	);
 
 	return `[${label}](${uri.href})`;
