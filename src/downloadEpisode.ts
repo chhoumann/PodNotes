@@ -338,6 +338,7 @@ function downloadAppearsPlayable(
 function downloadAppearsAudio(
 	contentType: string,
 	extension: string | null,
+	mediaTypeHint?: EpisodeMediaType,
 ): boolean {
 	const contentMediaType = getMediaTypeFromContentType(contentType);
 	if (contentMediaType) {
@@ -345,7 +346,35 @@ function downloadAppearsAudio(
 	}
 
 	const normalizedType = contentType.toLowerCase();
-	return normalizedType === "" || getMediaTypeFromExtension(extension) === "audio";
+	return (
+		normalizedType === "" ||
+		getMediaTypeFromExtension(extension) === "audio" ||
+		isExplicitAudioContainer(extension, mediaTypeHint)
+	);
+}
+
+function isExplicitAudioContainer(
+	extension: string | null | undefined,
+	mediaTypeHint?: EpisodeMediaType,
+): boolean {
+	if (mediaTypeHint !== "audio" || !extension) return false;
+
+	const normalizedExtension = extension.toLowerCase();
+	return normalizedExtension === "mp4" || normalizedExtension === "webm";
+}
+
+function normalizeAudioExtension(
+	extension: string | null,
+	mediaTypeHint?: EpisodeMediaType,
+): string | null {
+	if (
+		mediaTypeHint === "audio" &&
+		extension?.toLowerCase() === "mp4"
+	) {
+		return "m4a";
+	}
+
+	return extension;
 }
 
 /**
@@ -450,7 +479,8 @@ async function getFileExtension(url: string): Promise<string> {
 export async function getEpisodeAudioBuffer(
 	episode: Episode,
 ): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
-	if (getEpisodeMediaType(episode) !== "audio") {
+	const episodeMediaType = getEpisodeMediaType(episode);
+	if (episodeMediaType !== "audio") {
 		throw new Error("Transcription supports audio episodes only.");
 	}
 
@@ -462,7 +492,7 @@ export async function getEpisodeAudioBuffer(
 			);
 		}
 
-		return readVaultAudio(localFilePath, getEpisodeMediaType(episode));
+		return readVaultAudio(localFilePath, episodeMediaType);
 	}
 
 	// Reuse a previously downloaded file only when the registry entry is the SAME
@@ -497,7 +527,13 @@ export async function getEpisodeAudioBuffer(
 			data,
 			contentType,
 		);
-		if (!downloadAppearsAudio(contentType, inferredExtension)) {
+		if (
+			!downloadAppearsAudio(
+				contentType,
+				inferredExtension,
+				episodeMediaType,
+			)
+		) {
 			throw new Error(
 				`The downloaded file is not audio (received "${contentType}"). The episode may be unavailable or require re-authentication.`,
 			);
@@ -505,7 +541,8 @@ export async function getEpisodeAudioBuffer(
 
 		return {
 			buffer: data,
-			extension: inferredExtension ?? "mp3",
+			extension:
+				normalizeAudioExtension(inferredExtension, episodeMediaType) ?? "mp3",
 			basename:
 				replaceIllegalFileNameCharactersInString(episode.title) || "episode",
 		};
