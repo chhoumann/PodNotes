@@ -369,7 +369,40 @@ describe("EpisodePlayer", () => {
 		);
 	});
 
-	test("uses a matching downloaded video file to classify old extensionless records", async () => {
+	test("uses a legacy downloaded video mp4 file for an explicitly video feed episode", async () => {
+		mockVaultFile("Downloads/legacy-video.mp4");
+		const videoEpisode: Episode = {
+			...testEpisode,
+			title: "Legacy Video MP4",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "video",
+		};
+		downloadedEpisodes.set({
+			[testEpisode.podcastName]: [
+				{
+					...testEpisode,
+					title: "Legacy Video MP4",
+					streamUrl: "https://cdn.example.com/episode.mp4",
+					filePath: "Downloads/legacy-video.mp4",
+					size: 10,
+				},
+			],
+		});
+		currentEpisode.set(videoEpisode);
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("video")).not.toBeNull();
+		});
+		const video = container.querySelector("video") as HTMLVideoElement;
+
+		expect(container.querySelector("audio")).toBeNull();
+		expect(video.getAttribute("src")).toBe(
+			"app://resource/Downloads/legacy-video.mp4?token",
+		);
+	});
+
+	test("uses matching downloaded video metadata to classify extensionless records", async () => {
 		mockVaultFile("Downloads/video.mp4");
 		const extensionlessEpisode: Episode = {
 			...testEpisode,
@@ -381,6 +414,7 @@ describe("EpisodePlayer", () => {
 				{
 					...extensionlessEpisode,
 					filePath: "Downloads/video.mp4",
+					mediaType: "video",
 					size: 10,
 				},
 			],

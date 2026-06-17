@@ -40,7 +40,7 @@
 	} from "src/utility/playbackRate";
 	import {
 		getEpisodeMediaType,
-		getEpisodeMediaTypeWithAudioContainerHint,
+		getEpisodeMediaTypeWithContainerHint,
 		isSameMediaSource,
 	} from "src/utility/mediaType";
 	import type DownloadedEpisode from "src/types/DownloadedEpisode";
@@ -438,9 +438,9 @@
 		episode: Episode,
 		downloadedEpisode: DownloadedEpisode,
 	): EpisodeMediaType {
-		return getEpisodeMediaTypeWithAudioContainerHint(
+		return getEpisodeMediaTypeWithContainerHint(
 			downloadedEpisode,
-			episode.mediaType === "audio" ? "audio" : undefined,
+			episode.mediaType,
 		);
 	}
 

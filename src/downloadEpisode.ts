@@ -14,7 +14,7 @@ import getUrlExtension from "./utility/getUrlExtension";
 import getExtensionFromContentType from "./utility/getExtensionFromContentType";
 import {
 	getEpisodeMediaType,
-	getEpisodeMediaTypeWithAudioContainerHint,
+	getEpisodeMediaTypeWithContainerHint,
 	getMediaTypeFromContentType,
 	getMediaTypeFromExtension,
 	getMediaTypeFromPath,
@@ -307,17 +307,31 @@ function inferFileExtensionFromDownload(
 	data: ArrayBuffer,
 	contentType: string,
 ): string | null {
+	const contentTypeExtension = getExtensionFromContentType(contentType);
+	if (
+		getMediaTypeFromContentType(contentType) === "video" &&
+		contentTypeExtension
+	) {
+		return contentTypeExtension;
+	}
+
+	const urlExtension = getUrlExtension(episode.streamUrl);
+	if (
+		getMediaTypeFromExtension(urlExtension) === "video" &&
+		!isAudioContainerExtension(urlExtension)
+	) {
+		return urlExtension;
+	}
+
 	const signatureExtension = detectAudioFileExtension(data);
 	if (signatureExtension) {
 		return signatureExtension;
 	}
 
-	const contentTypeExtension = getExtensionFromContentType(contentType);
 	if (contentTypeExtension) {
 		return contentTypeExtension;
 	}
 
-	const urlExtension = getUrlExtension(episode.streamUrl);
 	if (urlExtension) {
 		return urlExtension;
 	}
@@ -402,31 +416,44 @@ export async function downloadEpisode(
 		return localFilePath;
 	}
 
-	const fileExtension = await getFileExtension(episode.streamUrl);
-	const filePath = safeDownloadFilePath(
+	const provisionalExtension = await getFileExtension(episode.streamUrl);
+	const provisionalFilePath = safeDownloadFilePath(
 		downloadPathTemplate,
 		episode,
-		fileExtension,
+		provisionalExtension,
 	);
 
 	// Check if the file already exists
-	const existingFile = app.vault.getAbstractFileByPath(filePath);
+	const existingFile = app.vault.getAbstractFileByPath(provisionalFilePath);
 	if (existingFile instanceof TFile) {
-		return filePath; // Return the existing file path
+		return provisionalFilePath; // Return the existing file path
 	}
 
 	try {
 		const { data, contentType } = await downloadFile(episode.streamUrl);
+		const inferredExtension =
+			inferFileExtensionFromDownload(episode, data, contentType) ??
+			provisionalExtension;
 
-		if (!downloadAppearsPlayable(contentType, fileExtension)) {
+		if (!downloadAppearsPlayable(contentType, inferredExtension)) {
 			throw new Error("Not a playable media file.");
+		}
+
+		const filePath = safeDownloadFilePath(
+			downloadPathTemplate,
+			episode,
+			inferredExtension,
+		);
+		const finalExistingFile = app.vault.getAbstractFileByPath(filePath);
+		if (finalExistingFile instanceof TFile) {
+			return filePath;
 		}
 
 		await createEpisodeFile({
 			episode,
 			downloadPathTemplate,
 			data,
-			extension: fileExtension,
+			extension: inferredExtension,
 		});
 
 		return filePath;
@@ -509,7 +536,7 @@ export async function getEpisodeAudioBuffer(
 		registered?.filePath &&
 		isSameMediaSource(registered.streamUrl, episode.streamUrl)
 	) {
-		const registeredMediaType = getEpisodeMediaTypeWithAudioContainerHint(
+		const registeredMediaType = getEpisodeMediaTypeWithContainerHint(
 			registered,
 			episode.mediaType === "audio" ? episodeMediaType : undefined,
 		);

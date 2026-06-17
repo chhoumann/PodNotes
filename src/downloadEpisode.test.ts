@@ -126,6 +126,74 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		});
 	});
 
+	it("saves video/ogg downloads with a video extension even when bytes have an Ogg signature", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "video/ogg" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Ogg Video Title",
+			streamUrl: "https://example.com/video.ogv",
+			mediaType: "video",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Ogg Video Title.ogv",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded).toMatchObject({
+			title: "Ogg Video Title",
+			filePath: "Podcasts/Ogg Video Title.ogv",
+			mediaType: "video",
+			size: buffer.byteLength,
+		});
+	});
+
+	it("uses an unambiguous video URL extension before the Ogg audio signature", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "application/octet-stream" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Generic Ogg Video",
+			streamUrl: "https://example.com/video.ogv",
+			mediaType: "video",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Generic Ogg Video.ogv",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded?.filePath).toBe("Podcasts/Generic Ogg Video.ogv");
+		expect(recorded?.mediaType).toBe("video");
+	});
+
 	it("saves audio/mp4 downloads with an audio extension even when the URL ends in mp4", async () => {
 		const { createBinary } = setupVault();
 		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
@@ -254,6 +322,32 @@ describe("downloadEpisode (API path)", () => {
 		expect(createBinary).toHaveBeenCalledWith("My Title.mp3", buffer);
 		const [writtenPath] = createBinary.mock.calls[0];
 		expect(writtenPath).not.toBe(".mp3");
+	});
+
+	it("uses GET response metadata for the final extension on new writes", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "video/ogg" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+
+		const episode = makeEpisode({
+			title: "API Ogg Video",
+			streamUrl: "https://example.com/video.ogg",
+			mediaType: "video",
+		});
+		const path = await downloadEpisode(episode, "Podcasts/{{title}}");
+
+		expect(path).toBe("Podcasts/API Ogg Video.ogv");
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/API Ogg Video.ogv",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded?.filePath).toBe("Podcasts/API Ogg Video.ogv");
+		expect(recorded?.mediaType).toBe("video");
 	});
 });
 
@@ -628,8 +722,8 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 			title: "Unmarked Video",
 			streamUrl: "https://cdn.example.com/watch?id=old",
 		});
-		seedFile("Podcasts/unmarked-video.webm", "VIDEO-BYTES");
-		downloadedEpisodes.addEpisode(downloaded, "Podcasts/unmarked-video.webm", 20);
+		seedFile("Podcasts/unmarked-video.ogv", "VIDEO-BYTES");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/unmarked-video.ogv", 20);
 
 		const current = episode({
 			title: "Unmarked Video",

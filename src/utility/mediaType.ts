@@ -66,10 +66,10 @@ export function getEpisodeMediaType(episode: Episode): EpisodeMediaType {
 	if (episode.mediaType) return episode.mediaType;
 
 	const filePath = (episode as Partial<LocalEpisode>).filePath;
-	const filePathMediaType = getMediaTypeFromPath(filePath);
+	const filePathMediaType = getLegacyEpisodeMediaTypeFromPath(filePath);
 	if (filePathMediaType) return filePathMediaType;
 
-	return getMediaTypeFromPath(episode.streamUrl) ?? "audio";
+	return getLegacyEpisodeMediaTypeFromPath(episode.streamUrl) ?? "audio";
 }
 
 export function isAudioContainerExtension(
@@ -81,7 +81,18 @@ export function isAudioContainerExtension(
 	return normalizedExtension === "mp4" || normalizedExtension === "webm";
 }
 
-export function getEpisodeMediaTypeWithAudioContainerHint(
+function getLegacyEpisodeMediaTypeFromPath(
+	pathOrUrl?: string | null,
+): EpisodeMediaType | null {
+	if (!pathOrUrl) return null;
+
+	const extension = getUrlExtension(pathOrUrl);
+	if (isAudioContainerExtension(extension)) return null;
+
+	return getMediaTypeFromExtension(extension);
+}
+
+export function getEpisodeMediaTypeWithContainerHint(
 	episode: Episode,
 	mediaTypeHint?: EpisodeMediaType,
 ): EpisodeMediaType {
@@ -89,11 +100,8 @@ export function getEpisodeMediaTypeWithAudioContainerHint(
 
 	const filePath = (episode as Partial<LocalEpisode>).filePath;
 	const fileExtension = filePath ? getUrlExtension(filePath) : null;
-	if (
-		mediaTypeHint === "audio" &&
-		isAudioContainerExtension(fileExtension)
-	) {
-		return "audio";
+	if (mediaTypeHint && isAudioContainerExtension(fileExtension)) {
+		return mediaTypeHint;
 	}
 
 	return getEpisodeMediaType(episode);
