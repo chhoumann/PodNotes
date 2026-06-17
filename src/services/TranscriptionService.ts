@@ -278,6 +278,19 @@ export class TranscriptionService {
 		extension: string;
 		mimeType: string;
 	}): Promise<File[]> {
+		// A file that already fits in a single request needs neither conversion nor
+		// splitting: send the original (compressed) bytes. OpenAI accepts m4a/mp3/etc.
+		// directly under the upload limit, so this skips the m4a->WAV path below for
+		// small m4a episodes — that path only exists to SAFELY SPLIT an m4a (which
+		// can't be byte-split) and would otherwise balloon a small m4a into many
+		// uncompressed WAV chunks, multiplying requests and, for diarization,
+		// resetting speaker labels at artificial chunk boundaries (#168 / PR #204 review).
+		if (buffer.byteLength <= this.CHUNK_SIZE_BYTES) {
+			return [
+				new File([buffer], `${basename}.${extension}`, { type: mimeType }),
+			];
+		}
+
 		if (this.shouldConvertToWav(extension, mimeType)) {
 			const wavChunks = await this.convertToWavChunks(buffer, basename);
 			if (wavChunks.length > 0) {
