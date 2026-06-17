@@ -700,6 +700,42 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
 	});
 
+	it.each([
+		{
+			contentType: "video/mp4",
+			expectedExtension: "m4a",
+			streamUrl: "https://cdn.example.com/legacy-audio.mp4",
+			text: "LEGACY-VIDEO-TYPED-AUDIO-MP4",
+		},
+		{
+			contentType: "application/octet-stream",
+			expectedExtension: "webm",
+			streamUrl: "https://cdn.example.com/legacy-audio.webm",
+			text: "LEGACY-GENERIC-AUDIO-WEBM",
+		},
+	])(
+		"uses an inferred audio hint for legacy container streams served as $contentType",
+		async ({ contentType, expectedExtension, streamUrl, text }) => {
+			requestUrlMock.mockImplementation(
+				() =>
+					Promise.resolve({
+						status: 200,
+						headers: { "content-type": contentType },
+						arrayBuffer: new TextEncoder().encode(text).buffer,
+					}) as unknown as ReturnType<typeof requestUrl>,
+			);
+			const ep = episode({
+				title: "Legacy Container Audio",
+				streamUrl,
+			});
+
+			const result = await getEpisodeAudioBuffer(ep);
+
+			expect(decode(result.buffer)).toBe(text);
+			expect(result.extension).toBe(expectedExtension);
+		},
+	);
+
 	it("uses explicit audio metadata for mp4 streams served with a video content type", async () => {
 		requestUrlMock.mockImplementation(
 			() =>

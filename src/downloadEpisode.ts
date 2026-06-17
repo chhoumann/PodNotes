@@ -531,6 +531,7 @@ export async function getEpisodeAudioBuffer(
 	if (episodeMediaType !== "audio") {
 		throw new Error("Transcription supports audio episodes only.");
 	}
+	const audioContainerHint = getAudioContainerHint(episode, episodeMediaType);
 
 	if (isLocalFile(episode)) {
 		const localFilePath = resolveLocalEpisodeFilePath(episode);
@@ -557,7 +558,7 @@ export async function getEpisodeAudioBuffer(
 	) {
 		const registeredMediaType = getEpisodeMediaTypeWithContainerHint(
 			registered,
-			episode.mediaType === "audio" ? episodeMediaType : undefined,
+			audioContainerHint,
 		);
 		if (registeredMediaType !== "audio") {
 			throw new Error("Transcription supports audio episodes only.");
@@ -580,7 +581,7 @@ export async function getEpisodeAudioBuffer(
 			!downloadAppearsAudio(
 				contentType,
 				inferredExtension,
-				episode.mediaType === "audio" ? episodeMediaType : undefined,
+				audioContainerHint,
 			)
 		) {
 			throw new Error(
@@ -591,10 +592,7 @@ export async function getEpisodeAudioBuffer(
 		return {
 			buffer: data,
 			extension:
-				normalizeAudioExtension(
-					inferredExtension,
-					episode.mediaType === "audio" ? episodeMediaType : undefined,
-				) ?? "mp3",
+				normalizeAudioExtension(inferredExtension, audioContainerHint) ?? "mp3",
 			basename:
 				replaceIllegalFileNameCharactersInString(episode.title) || "episode",
 		};
@@ -603,6 +601,18 @@ export async function getEpisodeAudioBuffer(
 			`Failed to fetch ${episode.title}: ${getErrorMessage(error)}`,
 		);
 	}
+}
+
+function getAudioContainerHint(
+	episode: Episode,
+	episodeMediaType: EpisodeMediaType,
+): EpisodeMediaType | undefined {
+	if (episodeMediaType !== "audio") return undefined;
+	if (episode.mediaType === "audio") return "audio";
+
+	return isAudioContainerExtension(getUrlExtension(episode.streamUrl))
+		? "audio"
+		: undefined;
 }
 
 async function readVaultAudio(
