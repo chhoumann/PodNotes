@@ -492,6 +492,55 @@ describe("FeedParser", () => {
 			});
 		});
 
+		test("keeps untyped ambiguous container enclosures as audio", async () => {
+			const untypedAmbiguousFeed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Audio Podcast</title>
+    <link>https://example.com</link>
+    <item>
+      <title>Untyped MP4 Episode</title>
+      <enclosure url="https://example.com/episode.mp4"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Opaque WebM Episode</title>
+      <enclosure url="https://example.com/episode.webm" type="application/octet-stream"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Untyped MOV Episode</title>
+      <enclosure url="https://example.com/lecture.mov"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout
+				.mockResolvedValueOnce({
+					text: untypedAmbiguousFeed,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				})
+				.mockResolvedValueOnce({
+					text: untypedAmbiguousFeed,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				});
+
+			const parser = new FeedParser();
+			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
+
+			expect(episodes.map((episode) => episode.mediaType)).toEqual([
+				"audio",
+				"audio",
+				"video",
+			]);
+		});
+
 		test("filters out invalid episodes missing required fields", async () => {
 			mockRequestWithTimeout
 				.mockResolvedValueOnce({

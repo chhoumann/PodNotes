@@ -62,14 +62,25 @@ export function getMediaTypeFromPath(
 	return getMediaTypeFromExtension(getUrlExtension(pathOrUrl));
 }
 
+export function getUnambiguousMediaTypeFromPath(
+	pathOrUrl?: string | null,
+): EpisodeMediaType | null {
+	if (!pathOrUrl) return null;
+
+	const extension = getUrlExtension(pathOrUrl);
+	if (isAudioContainerExtension(extension)) return null;
+
+	return getMediaTypeFromExtension(extension);
+}
+
 export function getEpisodeMediaType(episode: Episode): EpisodeMediaType {
 	if (episode.mediaType) return episode.mediaType;
 
 	const filePath = (episode as Partial<LocalEpisode>).filePath;
-	const filePathMediaType = getLegacyEpisodeMediaTypeFromPath(filePath);
+	const filePathMediaType = getUnambiguousMediaTypeFromPath(filePath);
 	if (filePathMediaType) return filePathMediaType;
 
-	return getLegacyEpisodeMediaTypeFromPath(episode.streamUrl) ?? "audio";
+	return getUnambiguousMediaTypeFromPath(episode.streamUrl) ?? "audio";
 }
 
 export function isAudioContainerExtension(
@@ -79,17 +90,6 @@ export function isAudioContainerExtension(
 
 	const normalizedExtension = extension.toLowerCase();
 	return normalizedExtension === "mp4" || normalizedExtension === "webm";
-}
-
-function getLegacyEpisodeMediaTypeFromPath(
-	pathOrUrl?: string | null,
-): EpisodeMediaType | null {
-	if (!pathOrUrl) return null;
-
-	const extension = getUrlExtension(pathOrUrl);
-	if (isAudioContainerExtension(extension)) return null;
-
-	return getMediaTypeFromExtension(extension);
 }
 
 export function getEpisodeMediaTypeWithContainerHint(

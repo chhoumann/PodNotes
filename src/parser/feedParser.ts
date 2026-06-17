@@ -5,7 +5,7 @@ import { parseEpisodeNumber } from "src/utility/parseEpisodeNumber";
 import { parseDurationToSeconds } from "src/utility/parseDuration";
 import {
 	getMediaTypeFromContentType,
-	getMediaTypeFromPath,
+	getUnambiguousMediaTypeFromPath,
 } from "src/utility/mediaType";
 
 export default class FeedParser {
@@ -198,7 +198,7 @@ export default class FeedParser {
 			chaptersUrl,
 			mediaType:
 				getMediaTypeFromContentType(enclosureType) ??
-				getMediaTypeFromPath(streamUrl) ??
+				getUnambiguousMediaTypeFromPath(streamUrl) ??
 				"audio",
 		};
 	}
