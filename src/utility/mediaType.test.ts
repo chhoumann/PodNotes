@@ -3,6 +3,7 @@ import type { Episode } from "src/types/Episode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import {
 	getEpisodeMediaType,
+	getEpisodeMediaTypeWithAudioContainerHint,
 	getMediaTypeFromContentType,
 	isSameMediaSource,
 } from "./mediaType";
@@ -85,6 +86,40 @@ describe("mediaType", () => {
 		} satisfies Episode & { filePath: string };
 
 		expect(getEpisodeMediaType(episode)).toBe("audio");
+	});
+
+	test("uses an audio hint for legacy ambiguous container file paths", () => {
+		const episode = {
+			title: "Legacy Downloaded Audio MP4",
+			streamUrl: "https://example.com/episode.mp4",
+			url: "https://example.com/episode",
+			description: "",
+			content: "",
+			podcastName: "Feed",
+			filePath: "Podcasts/downloaded-audio.mp4",
+		} satisfies Episode & { filePath: string };
+
+		expect(getEpisodeMediaType(episode)).toBe("video");
+		expect(getEpisodeMediaTypeWithAudioContainerHint(episode, "audio")).toBe(
+			"audio",
+		);
+	});
+
+	test("does not let an audio hint override explicit video metadata", () => {
+		const episode = {
+			title: "Downloaded Video MP4",
+			streamUrl: "https://example.com/episode.mp4",
+			url: "https://example.com/episode",
+			description: "",
+			content: "",
+			podcastName: "Feed",
+			mediaType: "video",
+			filePath: "Podcasts/downloaded-video.mp4",
+		} satisfies Episode & { filePath: string };
+
+		expect(getEpisodeMediaTypeWithAudioContainerHint(episode, "audio")).toBe(
+			"video",
+		);
 	});
 
 	test("trusts remote episode media metadata before URL extension fallback", () => {

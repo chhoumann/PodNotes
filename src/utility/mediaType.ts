@@ -72,6 +72,33 @@ export function getEpisodeMediaType(episode: Episode): EpisodeMediaType {
 	return getMediaTypeFromPath(episode.streamUrl) ?? "audio";
 }
 
+export function isAudioContainerExtension(
+	extension?: string | null,
+): boolean {
+	if (!extension) return false;
+
+	const normalizedExtension = extension.toLowerCase();
+	return normalizedExtension === "mp4" || normalizedExtension === "webm";
+}
+
+export function getEpisodeMediaTypeWithAudioContainerHint(
+	episode: Episode,
+	mediaTypeHint?: EpisodeMediaType,
+): EpisodeMediaType {
+	if (episode.mediaType) return episode.mediaType;
+
+	const filePath = (episode as Partial<LocalEpisode>).filePath;
+	const fileExtension = filePath ? getUrlExtension(filePath) : null;
+	if (
+		mediaTypeHint === "audio" &&
+		isAudioContainerExtension(fileExtension)
+	) {
+		return "audio";
+	}
+
+	return getEpisodeMediaType(episode);
+}
+
 export function isSameMediaSource(a: string, b: string): boolean {
 	if (a === b) return true;
 	if (!a || !b) return false;

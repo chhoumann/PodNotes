@@ -336,6 +336,39 @@ describe("EpisodePlayer", () => {
 		expect(video.getAttribute("src")).toBe(videoEpisode.streamUrl);
 	});
 
+	test("uses a legacy downloaded audio mp4 file for an explicitly audio feed episode", async () => {
+		mockVaultFile("Downloads/legacy-audio.mp4");
+		const audioEpisode: Episode = {
+			...testEpisode,
+			title: "Legacy Audio MP4",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		};
+		downloadedEpisodes.set({
+			[testEpisode.podcastName]: [
+				{
+					...testEpisode,
+					title: "Legacy Audio MP4",
+					streamUrl: "https://cdn.example.com/episode.mp4",
+					filePath: "Downloads/legacy-audio.mp4",
+					size: 10,
+				},
+			],
+		});
+		currentEpisode.set(audioEpisode);
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+
+		expect(container.querySelector("video")).toBeNull();
+		expect(audio.getAttribute("src")).toBe(
+			"app://resource/Downloads/legacy-audio.mp4?token",
+		);
+	});
+
 	test("uses a matching downloaded video file to classify old extensionless records", async () => {
 		mockVaultFile("Downloads/video.mp4");
 		const extensionlessEpisode: Episode = {

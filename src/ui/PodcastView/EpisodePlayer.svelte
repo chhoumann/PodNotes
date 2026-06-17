@@ -40,6 +40,7 @@
 	} from "src/utility/playbackRate";
 	import {
 		getEpisodeMediaType,
+		getEpisodeMediaTypeWithAudioContainerHint,
 		isSameMediaSource,
 	} from "src/utility/mediaType";
 	import type DownloadedEpisode from "src/types/DownloadedEpisode";
@@ -392,7 +393,7 @@
 		if (shouldUseDownloadedEpisode(episode, downloadedEpisode)) {
 			return {
 				src: createMediaUrlObjectFromFilePath(downloadedEpisode.filePath),
-				mediaType: getEpisodeMediaType(downloadedEpisode),
+				mediaType: getDownloadedEpisodeMediaType(episode, downloadedEpisode),
 			};
 		}
 
@@ -417,7 +418,10 @@
 	): downloadedEpisode is DownloadedEpisode {
 		if (!downloadedEpisode?.filePath) return false;
 
-		const downloadedMediaType = getEpisodeMediaType(downloadedEpisode);
+		const downloadedMediaType = getDownloadedEpisodeMediaType(
+			episode,
+			downloadedEpisode,
+		);
 		if (episode.mediaType && downloadedMediaType !== episode.mediaType) {
 			return false;
 		}
@@ -428,6 +432,16 @@
 		}
 
 		return isSameMediaSource(downloadedEpisode.streamUrl, episode.streamUrl);
+	}
+
+	function getDownloadedEpisodeMediaType(
+		episode: Episode,
+		downloadedEpisode: DownloadedEpisode,
+	): EpisodeMediaType {
+		return getEpisodeMediaTypeWithAudioContainerHint(
+			downloadedEpisode,
+			episode.mediaType === "audio" ? "audio" : undefined,
+		);
 	}
 
 	$: if (mediaElement && mediaElement.playbackRate !== $playbackRate) {

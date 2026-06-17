@@ -14,9 +14,11 @@ import getUrlExtension from "./utility/getUrlExtension";
 import getExtensionFromContentType from "./utility/getExtensionFromContentType";
 import {
 	getEpisodeMediaType,
+	getEpisodeMediaTypeWithAudioContainerHint,
 	getMediaTypeFromContentType,
 	getMediaTypeFromExtension,
 	getMediaTypeFromPath,
+	isAudioContainerExtension,
 	isPlayableMediaExtension,
 	isSameMediaSource,
 } from "./utility/mediaType";
@@ -357,10 +359,7 @@ function isExplicitAudioContainer(
 	extension: string | null | undefined,
 	mediaTypeHint?: EpisodeMediaType,
 ): boolean {
-	if (mediaTypeHint !== "audio" || !extension) return false;
-
-	const normalizedExtension = extension.toLowerCase();
-	return normalizedExtension === "mp4" || normalizedExtension === "webm";
+	return mediaTypeHint === "audio" && isAudioContainerExtension(extension);
 }
 
 function normalizeAudioExtension(
@@ -375,26 +374,6 @@ function normalizeAudioExtension(
 	}
 
 	return extension;
-}
-
-function getRegisteredEpisodeMediaType(
-	episode: Episode & { filePath?: string },
-	currentEpisodeMediaTypeHint?: EpisodeMediaType,
-): EpisodeMediaType {
-	if (episode.mediaType) return episode.mediaType;
-	const fileExtension = episode.filePath
-		? getUrlExtension(episode.filePath)
-		: null;
-	if (
-		isExplicitAudioContainer(
-			fileExtension,
-			currentEpisodeMediaTypeHint,
-		)
-	) {
-		return "audio";
-	}
-
-	return getEpisodeMediaType(episode);
 }
 
 /**
@@ -527,7 +506,7 @@ export async function getEpisodeAudioBuffer(
 		registered?.filePath &&
 		isSameMediaSource(registered.streamUrl, episode.streamUrl)
 	) {
-		const registeredMediaType = getRegisteredEpisodeMediaType(
+		const registeredMediaType = getEpisodeMediaTypeWithAudioContainerHint(
 			registered,
 			episode.mediaType === "audio" ? episodeMediaType : undefined,
 		);
