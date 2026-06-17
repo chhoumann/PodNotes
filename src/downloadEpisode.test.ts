@@ -566,6 +566,28 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
+	it("does not reuse a media-path download when the stable query id changed", async () => {
+		const downloaded = episode({
+			title: "Fixed Path Episode",
+			streamUrl: "https://cdn.example.com/episode.mp3?id=1&token=OLD",
+		});
+		seedFile("Podcasts/fixed-path.mp3", "WRONG-CACHED-AUDIO");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/fixed-path.mp3", 20);
+
+		const current = episode({
+			title: "Fixed Path Episode",
+			streamUrl: "https://cdn.example.com/episode.mp3?id=2&token=NEW",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
+		expect(requestUrlMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				url: "https://cdn.example.com/episode.mp3?id=2&token=NEW",
+			}),
+		);
+	});
+
 	it("reuses an extensionless cached file when only signed token params changed", async () => {
 		const downloaded = episode({
 			title: "Extensionless Token Episode",

@@ -117,22 +117,25 @@ export function isSameMediaSource(a: string, b: string): boolean {
 			return false;
 		}
 
+		if (ua.search === ub.search) return true;
+
+		const stableA = stableSearchParamEntries(ua.searchParams);
+		const stableB = stableSearchParamEntries(ub.searchParams);
+		if (stableSearchParamEntriesMatch(stableA, stableB)) return true;
+
 		const pathIdentifiesMedia =
 			getMediaTypeFromPath(ua.pathname) !== null ||
 			getMediaTypeFromPath(ub.pathname) !== null;
-		return (
-			pathIdentifiesMedia ||
-			ua.search === ub.search ||
-			stableSearchParamsMatch(ua.searchParams, ub.searchParams)
-		);
+		return pathIdentifiesMedia && stableA.length === 0 && stableB.length === 0;
 	} catch {
 		return false;
 	}
 }
 
-function stableSearchParamsMatch(a: URLSearchParams, b: URLSearchParams): boolean {
-	const stableA = stableSearchParamEntries(a);
-	const stableB = stableSearchParamEntries(b);
+function stableSearchParamEntriesMatch(
+	stableA: string[],
+	stableB: string[],
+): boolean {
 	if (stableA.length === 0 || stableB.length === 0) return false;
 	if (stableA.length !== stableB.length) return false;
 

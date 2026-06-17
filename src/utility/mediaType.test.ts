@@ -189,6 +189,18 @@ describe("mediaType", () => {
 		).toBe(true);
 		expect(
 			isSameMediaSource(
+				"https://cdn.example.com/episode.mp4?id=1&token=old",
+				"https://cdn.example.com/episode.mp4?id=1&token=new",
+			),
+		).toBe(true);
+		expect(
+			isSameMediaSource(
+				"https://cdn.example.com/episode.mp4?id=1",
+				"https://cdn.example.com/episode.mp4?id=2",
+			),
+		).toBe(false);
+		expect(
+			isSameMediaSource(
 				"https://cdn.example.com/video.mp4",
 				"https://cdn.example.com/audio.mp3",
 			),
