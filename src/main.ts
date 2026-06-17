@@ -115,7 +115,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private layoutReadyAttempts = 0;
 	private layoutReadyRetry: ReturnType<typeof setTimeout> | null = null;
 	private isUnloaded = false;
-	private podcastViewMountEnabled = !Platform.isMobileApp;
+	private podcastViewMountEnabled = true;
 	private isReady = false;
 	private pendingSave: IPodNotesSettings | null = null;
 	private saveScheduled = false;
@@ -124,7 +124,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	override async onload() {
 		this.isUnloaded = false;
-		this.podcastViewMountEnabled = !Platform.isMobileApp;
+		this.podcastViewMountEnabled = !this.isMobileRuntime();
 		plugin.set(this);
 
 		await this.loadSettings();
@@ -526,10 +526,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
-		this.registerObsidianProtocolHandler("podnotes", (action) => {
-			this.enablePodcastViewMount();
-			return podNotesURIHandler(action, this.api);
-		});
+		this.registerObsidianProtocolHandler("podnotes", (action) =>
+			podNotesURIHandler(action, this.api, () => this.activateView()),
+		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
 		this.registerMediaSessionHandlers();
@@ -542,7 +541,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			return;
 		}
 
-		if (Platform.isMobileApp) {
+		if (this.isMobileRuntime()) {
 			// Mobile startup is sensitive to creating plugin-owned side panes; keep
 			// PodNotes dormant until the user opens it with the command or ribbon.
 			this.clearLayoutReadyRetry();
@@ -621,6 +620,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	unregisterPodcastView(view: MainView): void {
 		this.views.delete(view);
+	}
+
+	private isMobileRuntime(): boolean {
+		return Platform.isMobileApp || this.app.isMobile === true;
 	}
 
 	private getTranscriptionService(): TranscriptionService {

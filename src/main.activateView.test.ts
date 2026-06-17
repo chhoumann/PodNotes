@@ -106,6 +106,7 @@ describe("PodNotes.activateView", () => {
 describe("PodNotes.onLayoutReady", () => {
 	function setupLayoutPlugin({
 		existingLeaves = [] as ReturnType<typeof makeLeaf>[],
+		isMobile = false,
 		layoutReady = true,
 		rightLeaf = makeLeaf() as ReturnType<typeof makeLeaf> | null,
 	} = {}) {
@@ -124,7 +125,8 @@ describe("PodNotes.onLayoutReady", () => {
 			maxLayoutReadyAttempts: 10,
 			views: new Set(),
 		});
-		(plugin as unknown as { app: { workspace: typeof workspace } }).app = {
+		(plugin as unknown as { app: { isMobile: boolean; workspace: typeof workspace } }).app = {
+			isMobile,
 			workspace,
 		};
 
@@ -152,6 +154,19 @@ describe("PodNotes.onLayoutReady", () => {
 			isPhone: true,
 		});
 		const { plugin, workspace, rightLeaf } = setupLayoutPlugin();
+
+		plugin.onLayoutReady();
+
+		expect(workspace.getLeavesOfType).not.toHaveBeenCalled();
+		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
+		expect(rightLeaf?.setViewState).not.toHaveBeenCalled();
+		expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
+	});
+
+	it("does not auto-create the startup view when desktop Obsidian emulates mobile", () => {
+		const { plugin, workspace, rightLeaf } = setupLayoutPlugin({
+			isMobile: true,
+		});
 
 		plugin.onLayoutReady();
 
