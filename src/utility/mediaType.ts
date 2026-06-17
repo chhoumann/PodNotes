@@ -67,16 +67,9 @@ export function getEpisodeMediaType(episode: Episode): EpisodeMediaType {
 	const filePathMediaType = getMediaTypeFromPath(filePath);
 	if (filePathMediaType) return filePathMediaType;
 
-	const streamMediaType = getMediaTypeFromPath(episode.streamUrl);
-	if (episode.mediaType === "video" || streamMediaType === "video") {
-		return "video";
-	}
+	if (episode.mediaType) return episode.mediaType;
 
-	return (
-		episode.mediaType ??
-		streamMediaType ??
-		"audio"
-	);
+	return getMediaTypeFromPath(episode.streamUrl) ?? "audio";
 }
 
 export function isSameMediaSource(a: string, b: string): boolean {

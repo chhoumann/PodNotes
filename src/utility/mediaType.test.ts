@@ -72,10 +72,10 @@ describe("mediaType", () => {
 		expect(getEpisodeMediaType(episode)).toBe("video");
 	});
 
-	test("keeps a remote episode video when either metadata or URL says video", () => {
+	test("trusts remote episode media metadata before URL extension fallback", () => {
 		expect(
 			getEpisodeMediaType({
-				title: "Conflicting URL",
+				title: "Audio MP4",
 				streamUrl: "https://example.com/video.mp4",
 				url: "https://example.com/video",
 				description: "",
@@ -83,10 +83,10 @@ describe("mediaType", () => {
 				podcastName: "Feed",
 				mediaType: "audio",
 			} satisfies Episode),
-		).toBe("video");
+		).toBe("audio");
 		expect(
 			getEpisodeMediaType({
-				title: "Conflicting Metadata",
+				title: "Video Metadata",
 				streamUrl: "https://example.com/audio.mp3",
 				url: "https://example.com/audio",
 				description: "",

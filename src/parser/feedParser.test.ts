@@ -453,6 +453,45 @@ describe("FeedParser", () => {
 			});
 		});
 
+		test("trusts audio enclosure type when URL uses an mp4 extension", async () => {
+			const audioMp4Feed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Audio Podcast</title>
+    <link>https://example.com</link>
+    <item>
+      <title>Audio MP4 Episode</title>
+      <enclosure url="https://example.com/episode.mp4" type="audio/mp4"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout
+				.mockResolvedValueOnce({
+					text: audioMp4Feed,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				})
+				.mockResolvedValueOnce({
+					text: audioMp4Feed,
+					status: 200,
+					headers: {},
+					arrayBuffer: new ArrayBuffer(0),
+					json: {},
+				});
+
+			const parser = new FeedParser();
+			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
+
+			expect(episodes[0]).toMatchObject({
+				title: "Audio MP4 Episode",
+				streamUrl: "https://example.com/episode.mp4",
+				mediaType: "audio",
+			});
+		});
+
 		test("filters out invalid episodes missing required fields", async () => {
 			mockRequestWithTimeout
 				.mockResolvedValueOnce({
