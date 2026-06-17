@@ -23,6 +23,7 @@ type PodNotesProtocolData = ObsidianProtocolData & {
 	endTime?: string;
 	to?: string;
 };
+type RevealPodNotesPlayer = () => Promise<void> | void;
 
 /**
  * Obsidian decodes protocol query values with decodeURIComponent only, which does NOT turn '+'
@@ -72,7 +73,8 @@ function resolveResumeTime(episode: Episode): number {
 
 export default async function podNotesURIHandler(
 	{ url, episodeName, time, endTime, end, to }: PodNotesProtocolData,
-	api: IAPI
+	api: IAPI,
+	revealPlayer?: RevealPodNotesPlayer,
 ) {
 	if (!url || !episodeName) {
 		new Notice("URL and episode name are required to play an episode");
@@ -127,6 +129,7 @@ export default async function podNotesURIHandler(
 				requestedPlaybackTime.set(null);
 			}
 
+			await revealPlayer?.();
 			return;
 		}
 
@@ -143,6 +146,7 @@ export default async function podNotesURIHandler(
 		}
 		isPaused.set(false);
 
+		await revealPlayer?.();
 		return;
 	}
 
@@ -197,6 +201,7 @@ export default async function podNotesURIHandler(
 	);
 	currentEpisode.set(episode);
 	viewState.set(ViewState.Player);
+	await revealPlayer?.();
 }
 
 function parseSegmentEndTime(

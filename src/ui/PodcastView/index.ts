@@ -25,6 +25,18 @@ export class MainView extends ItemView {
 	}
 
 	protected override async onOpen(): Promise<void> {
+		if (!this.plugin.shouldMountPodcastView()) {
+			return;
+		}
+
+		this.mountPodcastView();
+	}
+
+	mountPodcastView(): void {
+		if (this.podcastView) {
+			return;
+		}
+
 		this.podcastView = mount(PodcastView, {
 			target: this.contentEl,
 		});
@@ -37,5 +49,6 @@ export class MainView extends ItemView {
 		}
 
 		this.contentEl.empty();
+		this.plugin.unregisterPodcastView(this);
 	}
 }

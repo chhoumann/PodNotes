@@ -14,6 +14,7 @@ interface Manifest {
 
 // Not everything is implemented.
 interface App2 extends App {
+	isMobile?: boolean;
 	plugins: {
 		app: App;
 		enabledPlugins: Set<string>;

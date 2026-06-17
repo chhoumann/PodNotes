@@ -13,7 +13,13 @@ import {
 	playbackRate,
 	volume,
 } from "src/store";
-import { Notice, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
+import {
+	Notice,
+	Platform,
+	Plugin,
+	type Editor,
+	type WorkspaceLeaf,
+} from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
@@ -82,7 +88,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public settings!: IPodNotesSettings;
 	public override app!: PartialAppExtension;
 
-	private view: MainView | null = null;
+	private views = new Set<MainView>();
 
 	private playedEpisodeController?: StoreController<{
 		[episodeName: string]: PlayedEpisode;
@@ -107,6 +113,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
+	private layoutReadyRetry: ReturnType<typeof setTimeout> | null = null;
+	private isUnloaded = false;
+	private podcastViewMountEnabled = true;
 	private isReady = false;
 	private pendingSave: IPodNotesSettings | null = null;
 	private saveScheduled = false;
@@ -114,6 +123,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private mediaSessionActions: MediaSessionActionName[] = [];
 
 	override async onload() {
+		this.isUnloaded = false;
+		this.podcastViewMountEnabled = !this.isMobileRuntime();
 		plugin.set(this);
 
 		await this.loadSettings();
@@ -500,8 +511,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
 		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {
-			this.view = new MainView(leaf, this);
-			return this.view;
+			const view = new MainView(leaf, this);
+			this.views.add(view);
+			return view;
 		});
 
 		// Persistent, discoverable entry point in the left ribbon. The right
@@ -515,7 +527,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
 		this.registerObsidianProtocolHandler("podnotes", (action) =>
-			podNotesURIHandler(action, this.api),
+			podNotesURIHandler(action, this.api, () => this.activateView()),
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
@@ -525,18 +537,36 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	onLayoutReady(): void {
+		if (this.isUnloaded) {
+			return;
+		}
+
+		if (this.isMobileRuntime()) {
+			// Mobile startup is sensitive to creating plugin-owned side panes; keep
+			// PodNotes dormant until the user opens it with the command or ribbon.
+			this.clearLayoutReadyRetry();
+			this.layoutReadyAttempts = 0;
+			return;
+		}
+
 		if (!this.app.workspace || !this.app.workspace.layoutReady) {
 			// Workspace is not ready, schedule a retry
 			this.layoutReadyAttempts++;
-			if (this.layoutReadyAttempts < this.maxLayoutReadyAttempts) {
-				setTimeout(() => this.onLayoutReady(), 100);
-			} else {
+			if (this.layoutReadyAttempts >= this.maxLayoutReadyAttempts) {
 				console.error(
 					"Failed to initialize PodNotes layout after maximum attempts",
 				);
+			} else if (!this.layoutReadyRetry) {
+				this.layoutReadyRetry = setTimeout(() => {
+					this.layoutReadyRetry = null;
+					this.onLayoutReady();
+				}, 100);
 			}
 			return;
 		}
+
+		this.clearLayoutReadyRetry();
+		this.layoutReadyAttempts = 0;
 
 		if (this.app.workspace.getLeavesOfType(VIEW_TYPE).length) {
 			return;
@@ -545,9 +575,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		const leaf = this.app.workspace.getRightLeaf(false);
 
 		if (leaf) {
-			leaf.setViewState({
-				type: VIEW_TYPE,
-			});
+			void leaf
+				.setViewState({
+					type: VIEW_TYPE,
+				})
+				.catch((error) => {
+					console.error("PodNotes: failed to initialize startup view", error);
+				});
 		}
 	}
 
@@ -556,6 +590,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	// makes "Show PodNotes" and the ribbon icon reliably surface the view even
 	// when it is already open but hidden in a collapsed/overflowing sidebar (#55).
 	async activateView(): Promise<void> {
+		this.enablePodcastViewMount();
+
 		const { workspace } = this.app;
 
 		const existing = workspace.getLeavesOfType(VIEW_TYPE);
@@ -569,6 +605,25 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		if (leaf) {
 			await workspace.revealLeaf(leaf);
 		}
+	}
+
+	shouldMountPodcastView(): boolean {
+		return this.podcastViewMountEnabled;
+	}
+
+	enablePodcastViewMount(): void {
+		this.podcastViewMountEnabled = true;
+		for (const view of this.views) {
+			view.mountPodcastView();
+		}
+	}
+
+	unregisterPodcastView(view: MainView): void {
+		this.views.delete(view);
+	}
+
+	private isMobileRuntime(): boolean {
+		return Platform.isMobileApp || this.app.isMobile === true;
 	}
 
 	private getTranscriptionService(): TranscriptionService {
@@ -680,6 +735,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	override onunload() {
+		this.isUnloaded = true;
+		this.clearLayoutReadyRetry();
 		this.clearMediaSessionHandlers();
 		this.playedEpisodeController?.off();
 		this.savedFeedsController?.off();
@@ -692,9 +749,17 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.hidePlayedEpisodesController?.off();
 		this.volumeUnsubscribe?.();
 		this.localFilesMirrorUnsubscribe?.();
+		this.views.clear();
 
 		// Detach all leaves of this view type to prevent duplicates on reload
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE);
+	}
+
+	private clearLayoutReadyRetry(): void {
+		if (!this.layoutReadyRetry) return;
+
+		clearTimeout(this.layoutReadyRetry);
+		this.layoutReadyRetry = null;
 	}
 
 	async loadSettings() {

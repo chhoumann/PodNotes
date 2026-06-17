@@ -125,6 +125,7 @@ describe("podNotesURIHandler", () => {
 
 	test("keeps the requested time for the player to apply after loading metadata", async () => {
 		playedEpisodes.markAsPlayed(testEpisode);
+		const revealPlayer = vi.fn();
 
 		await podNotesURIHandler(
 			{
@@ -134,6 +135,7 @@ describe("podNotesURIHandler", () => {
 				time: "240",
 			},
 			api as never,
+			revealPlayer,
 		);
 
 		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
@@ -147,6 +149,25 @@ describe("podNotesURIHandler", () => {
 		expect(
 			get(playedEpisodes)[`${testEpisode.podcastName}::${testEpisode.title}`]?.finished,
 		).toBe(true);
+		expect(revealPlayer).toHaveBeenCalledTimes(1);
+	});
+
+	test("does not reveal the player when URI validation fails", async () => {
+		const revealPlayer = vi.fn();
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "not-a-number",
+			},
+			api as never,
+			revealPlayer,
+		);
+
+		expect(revealPlayer).not.toHaveBeenCalled();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 	});
 
 	test("keeps the requested segment end for the player to apply after loading metadata", async () => {
