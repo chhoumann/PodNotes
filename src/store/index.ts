@@ -648,12 +648,25 @@ export const favorites = writable<Playlist>({
 	shouldRepeat: false,
 });
 
-function sameEpisodeKeySet(a: Episode[], b: Episode[]): boolean {
+function getEpisodeFilePath(episode: Episode): string | undefined {
+	return (episode as Partial<DownloadedEpisode>).filePath;
+}
+
+function sameEpisodeProjection(a: Episode[], b: Episode[]): boolean {
 	if (a.length !== b.length) return false;
 
-	const keysInA = new Set(a.map(getEpisodeKey));
+	const episodesInA = new Map(
+		a.map((episode) => [getEpisodeKey(episode), episode]),
+	);
 	for (const episode of b) {
-		if (!keysInA.has(getEpisodeKey(episode))) return false;
+		const key = getEpisodeKey(episode);
+		const existing = key ? episodesInA.get(key) : undefined;
+		if (!existing) return false;
+		if (existing.streamUrl !== episode.streamUrl) return false;
+		if (existing.mediaType !== episode.mediaType) return false;
+		if (getEpisodeFilePath(existing) !== getEpisodeFilePath(episode)) {
+			return false;
+		}
 	}
 
 	return true;
@@ -708,7 +721,7 @@ export const localFiles = (() => {
 			// every object value as changed), re-running LocalFilesController.onChange and
 			// saveSettings on every unrelated downloadedEpisodes mutation and the
 			// load-time immediate-fire. Comparing before touching the store avoids that.
-			if (sameEpisodeKeySet(get(store).episodes, episodes)) {
+			if (sameEpisodeProjection(get(store).episodes, episodes)) {
 				return;
 			}
 

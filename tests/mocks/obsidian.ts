@@ -14,6 +14,8 @@ export class TFile {
 
 export class Notice {
 	constructor(public message?: string) {}
+
+	hide(): void {}
 }
 
 export class WorkspaceLeaf {}

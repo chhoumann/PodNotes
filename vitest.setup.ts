@@ -179,6 +179,53 @@ if (!(HTMLElement.prototype as unknown as { setText?: (text: string) => void }).
 		};
 }
 
+type ObsidianDomContainer = HTMLElement | DocumentFragment;
+type CreateElOptions = { text?: string; cls?: string };
+
+function installCreateEl(proto: object): void {
+	const helpers = proto as {
+		createEl?: (
+			tag: keyof HTMLElementTagNameMap,
+			options?: CreateElOptions,
+		) => HTMLElement;
+		createDiv?: (options?: CreateElOptions) => HTMLDivElement;
+	};
+
+	if (!helpers.createEl) {
+		helpers.createEl = function (
+			this: ObsidianDomContainer,
+			tag: keyof HTMLElementTagNameMap,
+			options: CreateElOptions = {},
+		) {
+			const el = document.createElement(tag);
+			if (options.text !== undefined) el.textContent = options.text;
+			if (options.cls) el.className = options.cls;
+			this.appendChild(el);
+			return el;
+		};
+	}
+
+	if (!helpers.createDiv) {
+		helpers.createDiv = function (
+			this: ObsidianDomContainer,
+			options: CreateElOptions = {},
+		) {
+			const createEl = (
+				this as ObsidianDomContainer & {
+					createEl: (
+						tag: keyof HTMLElementTagNameMap,
+						options?: CreateElOptions,
+					) => HTMLElement;
+				}
+			).createEl;
+			return createEl.call(this, "div", options) as HTMLDivElement;
+		};
+	}
+}
+
+installCreateEl(HTMLElement.prototype);
+installCreateEl(DocumentFragment.prototype);
+
 if (!(HTMLElement.prototype as unknown as { empty?: () => void }).empty) {
 	(HTMLElement.prototype as unknown as { empty: () => void }).empty =
 		function (this: HTMLElement) {

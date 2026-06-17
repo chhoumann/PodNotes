@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import { requestUrl, TFile } from "obsidian";
-import {
+import downloadEpisodeWithNotice, {
 	detectAudioFileExtension,
 	downloadEpisode,
 	getEpisodeAudioBuffer,
@@ -92,6 +92,225 @@ describe("detectAudioFileExtension", () => {
 	});
 });
 
+describe("downloadEpisodeWithNotice (download command path)", () => {
+	it("saves extensionless video downloads using the response content type", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "video/mp4" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Video Title",
+			streamUrl: "https://example.com/watch?id=42",
+			mediaType: "video",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith("Podcasts/Video Title.mp4", buffer);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded).toMatchObject({
+			title: "Video Title",
+			filePath: "Podcasts/Video Title.mp4",
+			mediaType: "video",
+			size: buffer.byteLength,
+		});
+	});
+
+	it("rejects unsupported extensionless video downloads instead of saving them as mp3", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x01, 0x02, 0x03);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "video/x-msvideo" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Unsupported Video",
+			streamUrl: "https://example.com/watch?id=42",
+			mediaType: "video",
+		});
+
+		await expect(
+			downloadEpisodeWithNotice(episode, "Podcasts/{{title}}"),
+		).rejects.toThrow("Not a playable media file");
+
+		expect(createBinary).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
+	});
+
+	it("rejects blank-type extensionless video downloads instead of saving them as mp3", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x01, 0x02, 0x03);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: {},
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Blank Type Video",
+			streamUrl: "https://example.com/watch?id=42",
+			mediaType: "video",
+		});
+
+		await expect(
+			downloadEpisodeWithNotice(episode, "Podcasts/{{title}}"),
+		).rejects.toThrow("Not a playable media file");
+
+		expect(createBinary).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
+	});
+
+	it("saves video/ogg downloads with a video extension even when bytes have an Ogg signature", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "video/ogg" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Ogg Video Title",
+			streamUrl: "https://example.com/video.ogv",
+			mediaType: "video",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Ogg Video Title.ogv",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded).toMatchObject({
+			title: "Ogg Video Title",
+			filePath: "Podcasts/Ogg Video Title.ogv",
+			mediaType: "video",
+			size: buffer.byteLength,
+		});
+	});
+
+	it("uses an unambiguous video URL extension before the Ogg audio signature", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "application/octet-stream" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Generic Ogg Video",
+			streamUrl: "https://example.com/video.ogv",
+			mediaType: "video",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Generic Ogg Video.ogv",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded?.filePath).toBe("Podcasts/Generic Ogg Video.ogv");
+		expect(recorded?.mediaType).toBe("video");
+	});
+
+	it("saves audio/mp4 downloads with an audio extension even when the URL ends in mp4", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mp4" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Audio MP4 Title",
+			streamUrl: "https://example.com/episode.mp4",
+			mediaType: "audio",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Audio MP4 Title.m4a",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded).toMatchObject({
+			title: "Audio MP4 Title",
+			filePath: "Podcasts/Audio MP4 Title.m4a",
+			mediaType: "audio",
+			size: buffer.byteLength,
+		});
+	});
+
+	it("preserves audio/webm downloads as audio WebM files", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/webm" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Audio WebM Title",
+			streamUrl: "https://example.com/episode.webm",
+			mediaType: "audio",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Audio WebM Title.webm",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded).toMatchObject({
+			title: "Audio WebM Title",
+			filePath: "Podcasts/Audio WebM Title.webm",
+			mediaType: "audio",
+			size: buffer.byteLength,
+		});
+	});
+});
+
 describe("downloadEpisode (API path)", () => {
 	it("threads a single ArrayBuffer straight to createBinary (no Blob copy) and creates folders", async () => {
 		const { createBinary, createdFolders } = setupVault();
@@ -147,6 +366,32 @@ describe("downloadEpisode (API path)", () => {
 		expect(createBinary).toHaveBeenCalledWith("My Title.mp3", buffer);
 		const [writtenPath] = createBinary.mock.calls[0];
 		expect(writtenPath).not.toBe(".mp3");
+	});
+
+	it("uses GET response metadata for the final extension on new writes", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "video/ogg" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+
+		const episode = makeEpisode({
+			title: "API Ogg Video",
+			streamUrl: "https://example.com/video.ogg",
+			mediaType: "video",
+		});
+		const path = await downloadEpisode(episode, "Podcasts/{{title}}");
+
+		expect(path).toBe("Podcasts/API Ogg Video.ogv");
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/API Ogg Video.ogv",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded?.filePath).toBe("Podcasts/API Ogg Video.ogv");
+		expect(recorded?.mediaType).toBe("video");
 	});
 });
 
@@ -321,6 +566,50 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
+	it("does not reuse a media-path download when the stable query id changed", async () => {
+		const downloaded = episode({
+			title: "Fixed Path Episode",
+			streamUrl: "https://cdn.example.com/episode.mp3?id=1&token=OLD",
+		});
+		seedFile("Podcasts/fixed-path.mp3", "WRONG-CACHED-AUDIO");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/fixed-path.mp3", 20);
+
+		const current = episode({
+			title: "Fixed Path Episode",
+			streamUrl: "https://cdn.example.com/episode.mp3?id=2&token=NEW",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("ENGLISH-AUDIO");
+		expect(requestUrlMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				url: "https://cdn.example.com/episode.mp3?id=2&token=NEW",
+			}),
+		);
+	});
+
+	it("reuses an extensionless cached file when only signed token params changed", async () => {
+		const downloaded = episode({
+			title: "Extensionless Token Episode",
+			streamUrl: "https://cdn.example.com/download?id=123&token=OLD&exp=1",
+		});
+		seedFile("Podcasts/extensionless-token.m4a", "CACHED-EXTENSIONLESS-AUDIO");
+		downloadedEpisodes.addEpisode(
+			downloaded,
+			"Podcasts/extensionless-token.m4a",
+			20,
+		);
+
+		const current = episode({
+			title: "Extensionless Token Episode",
+			streamUrl: "https://cdn.example.com/download?id=123&token=NEW&exp=2",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("CACHED-EXTENSIONLESS-AUDIO");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
 	it("does not reuse a same-title sibling's download; fetches this episode's own audio", async () => {
 		// Same podcast + same title, different episode (different stream URL). The
 		// registry is keyed by podcastName+title, so getEpisode() returns the
@@ -392,6 +681,274 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		});
 
 		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
+	});
+
+	it("rejects extensionless video streams instead of treating their mp4 content type as audio", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "video/mp4" },
+					arrayBuffer: bytes(0x00, 0x00, 0x00, 0x18),
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Video Episode",
+			streamUrl: "https://example.com/watch?id=42",
+		});
+
+		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
+	});
+
+	it.each([
+		{
+			contentType: "video/mp4",
+			expectedExtension: "m4a",
+			streamUrl: "https://cdn.example.com/legacy-audio.mp4",
+			text: "LEGACY-VIDEO-TYPED-AUDIO-MP4",
+		},
+		{
+			contentType: "application/octet-stream",
+			expectedExtension: "webm",
+			streamUrl: "https://cdn.example.com/legacy-audio.webm",
+			text: "LEGACY-GENERIC-AUDIO-WEBM",
+		},
+	])(
+		"uses an inferred audio hint for legacy container streams served as $contentType",
+		async ({ contentType, expectedExtension, streamUrl, text }) => {
+			requestUrlMock.mockImplementation(
+				() =>
+					Promise.resolve({
+						status: 200,
+						headers: { "content-type": contentType },
+						arrayBuffer: new TextEncoder().encode(text).buffer,
+					}) as unknown as ReturnType<typeof requestUrl>,
+			);
+			const ep = episode({
+				title: "Legacy Container Audio",
+				streamUrl,
+			});
+
+			const result = await getEpisodeAudioBuffer(ep);
+
+			expect(decode(result.buffer)).toBe(text);
+			expect(result.extension).toBe(expectedExtension);
+		},
+	);
+
+	it("uses explicit audio metadata for mp4 streams served with a video content type", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "video/mp4" },
+					arrayBuffer: new TextEncoder().encode("VIDEO-TYPED-AUDIO-MP4")
+						.buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Video Typed Audio MP4",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("VIDEO-TYPED-AUDIO-MP4");
+		expect(result.extension).toBe("m4a");
+	});
+
+	it("uses explicit audio metadata for webm streams served with a video content type", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "video/webm" },
+					arrayBuffer: new TextEncoder().encode("VIDEO-TYPED-AUDIO-WEBM")
+						.buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Video Typed Audio WebM",
+			streamUrl: "https://cdn.example.com/episode.webm",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("VIDEO-TYPED-AUDIO-WEBM");
+		expect(result.extension).toBe("webm");
+	});
+
+	it("uses explicit audio metadata for mp4 streams served as octet-stream", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "application/octet-stream" },
+					arrayBuffer: new TextEncoder().encode("AUDIO-MP4-BYTES").buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Generic Audio MP4",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("AUDIO-MP4-BYTES");
+		expect(result.extension).toBe("m4a");
+	});
+
+	it("uses explicit audio metadata for webm streams served as octet-stream", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "application/octet-stream" },
+					arrayBuffer: new TextEncoder().encode("AUDIO-WEBM-BYTES").buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Generic Audio WebM",
+			streamUrl: "https://cdn.example.com/episode.webm",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("AUDIO-WEBM-BYTES");
+		expect(result.extension).toBe("webm");
+	});
+
+	it("does not reuse a known video download for transcription", async () => {
+		const downloaded = episode({
+			title: "Known Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+			mediaType: "video",
+		});
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/video.mp4", 20);
+
+		const current = episode({
+			title: "Known Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+		});
+
+		await expect(getEpisodeAudioBuffer(current)).rejects.toThrow(
+			/audio episodes only/i,
+		);
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("does not transcribe a downloaded video file without media metadata", async () => {
+		const downloaded = episode({
+			title: "Unmarked Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+		});
+		seedFile("Podcasts/unmarked-video.ogv", "VIDEO-BYTES");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/unmarked-video.ogv", 20);
+
+		const current = episode({
+			title: "Unmarked Video",
+			streamUrl: "https://cdn.example.com/watch?id=old",
+		});
+
+		await expect(getEpisodeAudioBuffer(current)).rejects.toThrow(
+			/audio episodes only/i,
+		);
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("reuses an audio/webm download whose file path is webm", async () => {
+		const downloaded = episode({
+			title: "Audio WebM Download",
+			streamUrl: "https://cdn.example.com/episode.webm",
+			mediaType: "audio",
+		});
+		seedFile("Podcasts/audio-webm.webm", "AUDIO-WEBM-BYTES");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/audio-webm.webm", 20);
+
+		const current = episode({
+			title: "Audio WebM Download",
+			streamUrl: "https://cdn.example.com/episode.webm",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("AUDIO-WEBM-BYTES");
+		expect(result.extension).toBe("webm");
+		expect(result.basename).toBe("audio-webm");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("reuses an audio/mp4 download whose legacy file path is mp4", async () => {
+		const downloaded = episode({
+			title: "Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		});
+		seedFile("Podcasts/audio-mp4.mp4", "AUDIO-MP4-BYTES");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/audio-mp4.mp4", 20);
+
+		const current = episode({
+			title: "Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("AUDIO-MP4-BYTES");
+		expect(result.extension).toBe("m4a");
+		expect(result.basename).toBe("audio-mp4");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("reuses a legacy audio/mp4 download whose registry entry lacks media metadata", async () => {
+		const downloaded = episode({
+			title: "Legacy Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/legacy-episode.mp4",
+		});
+		seedFile("Podcasts/legacy-audio-mp4.mp4", "LEGACY-AUDIO-MP4-BYTES");
+		downloadedEpisodes.addEpisode(
+			downloaded,
+			"Podcasts/legacy-audio-mp4.mp4",
+			20,
+		);
+
+		const current = episode({
+			title: "Legacy Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/legacy-episode.mp4",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("LEGACY-AUDIO-MP4-BYTES");
+		expect(result.extension).toBe("m4a");
+		expect(result.basename).toBe("legacy-audio-mp4");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("does not transcribe a local video file", async () => {
+		const local = episode({
+			title: "Local Video",
+			podcastName: "local file",
+			description: "",
+			content: "",
+			streamUrl: "",
+			url: "Local/video.webm",
+			filePath: "Local/video.webm",
+			mediaType: "video",
+		} as Partial<LocalEpisode>) as LocalEpisode;
+		seedFile("Local/video.webm", "VIDEO-BYTES");
+
+		await expect(getEpisodeAudioBuffer(local)).rejects.toThrow(
+			/audio episodes only/i,
+		);
+		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
 	it("reads local-file episodes from disk by their resolved path", async () => {

@@ -31,7 +31,7 @@ This template will be used to create the note text. You can use the following sy
 
 - `{{podcast}}`: The name of the podcast.
 - `{{url}}`: The URL of the podcast episode. For a local-file episode this is a link to the file rather than a web URL. Tag values are inserted verbatim, so when you place one in a quoted YAML property (e.g. `url: "{{url}}"`) it stays valid for well-formed feed URLs and ordinary file names (a URL or file name containing a literal `"` would need escaping).
-- `{{stream}}`: The direct URL of the episode's audio file — the RSS `<enclosure>` URL for podcast feeds, or the underlying audio source for Pocket Casts and local-file episodes. Handy for embedding the raw audio or linking to the source. An empty string is used in the rare case no audio URL is available. Available in episode note templates only.
+- `{{stream}}`: The direct URL of the episode's media file — the RSS `<enclosure>` URL for podcast feeds, or the underlying media source for Pocket Casts and local-file episodes. Handy for embedding the raw audio/video or linking to the source. An empty string is used in the rare case no media URL is available. Available in episode note templates only.
 - `{{date}}`: The publish date of the podcast episode.
 	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
 - `{{currentDate}}`: The current date — i.e. when the note is created — as opposed to `{{date}}`, which is the episode's publish date. Useful for a "captured on" metadata field.

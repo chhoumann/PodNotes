@@ -489,6 +489,8 @@ export class TranscriptionService {
 				return "audio/wav";
 			case "flac":
 				return "audio/flac";
+			case "webm":
+				return "audio/webm";
 			default:
 				return "audio/mpeg";
 		}

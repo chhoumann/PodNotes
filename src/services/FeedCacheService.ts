@@ -20,12 +20,16 @@ type FeedCache = Record<string, CachedFeedData>;
 // expired. Bumping the key forces a fresh parse so the new retention applies
 // immediately. Superseded keys are actively deleted on load (see
 // LEGACY_STORAGE_KEYS) so a stale blob can't linger and eat the localStorage quota.
-const STORAGE_KEY = "podnotes:feed-cache:v3";
+// v4: Episode gained mediaType (#78), sourced from enclosure MIME/path parsing.
+// Dropping v3 prevents cached extensionless video enclosures from continuing to
+// render as audio until the TTL expires.
+const STORAGE_KEY = "podnotes:feed-cache:v4";
 // Storage keys from earlier cache schemas, removed on first load so they don't
-// orphan ~MBs of data (which could push v3 writes over the localStorage quota).
+// orphan ~MBs of data (which could push current writes over the localStorage quota).
 const LEGACY_STORAGE_KEYS = [
 	"podnotes:feed-cache:v1",
 	"podnotes:feed-cache:v2",
+	"podnotes:feed-cache:v3",
 ];
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
 // Keep this >= MAX_EPISODE_LIST_LIMIT (src/constants.ts): the Latest Episodes

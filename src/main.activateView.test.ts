@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PodNotes from "./main";
 import { VIEW_TYPE } from "./constants";
 import { Platform } from "obsidian";
+import type { Episode } from "./types/Episode";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
 // surface the view. The bug was that the command was gated on the leaf NOT
@@ -214,7 +215,7 @@ describe("PodNotes onload wiring (#55)", () => {
 		vi.restoreAllMocks();
 	});
 
-	async function loadPlugin() {
+	async function loadPlugin(loadedData: Record<string, unknown> = {}) {
 		const activateSpy = vi
 			.spyOn(PodNotes.prototype, "activateView")
 			.mockResolvedValue(undefined);
@@ -228,7 +229,7 @@ describe("PodNotes onload wiring (#55)", () => {
 
 		const plugin = Object.create(PodNotes.prototype) as PodNotes;
 		Object.assign(plugin, {
-			loadData: vi.fn().mockResolvedValue({}),
+			loadData: vi.fn().mockResolvedValue(loadedData),
 			saveData: vi.fn().mockResolvedValue(undefined),
 			addCommand: vi.fn((cmd: Record<string, unknown>) => {
 				commands.push(cmd);
@@ -391,5 +392,27 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(ribbon?.icon).toBe("podcast");
 		ribbon?.handler(new MouseEvent("click"));
 		expect(activateSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not offer transcription for known video episodes", async () => {
+		const videoEpisode: Episode = {
+			title: "Video Episode",
+			streamUrl: "https://example.com/video.mp4",
+			url: "https://example.com/video",
+			description: "",
+			content: "",
+			podcastName: "Pod",
+			mediaType: "video",
+		};
+		const { commands } = await loadPlugin({
+			openAIApiKey: "sk-test",
+			currentEpisode: videoEpisode,
+		});
+
+		const transcribeCmd = commands.find((c) => c.id === "podnotes-transcribe");
+		expect(transcribeCmd).toBeDefined();
+		expect(
+			(transcribeCmd?.checkCallback as (checking: boolean) => boolean)(true),
+		).toBe(false);
 	});
 });

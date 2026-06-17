@@ -9,85 +9,87 @@ import {
 	viewState,
 	plugin,
 } from "./store";
+import type { EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
 import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
-
-// Extensions for which "Play with PodNotes" is offered. Kept in sync with the
-// formats PodNotes already recognizes as audio elsewhere (detectAudioFileExtension
-// in downloadEpisode.ts and getExtensionFromContentType), plus the mp4/webm
-// containers, so right-clicking any such file offers playback. The previous inline
-// regex had a trailing empty alternative that matched every file regardless of type.
-const PLAYABLE_EXTENSIONS = new Set([
-	"mp3",
-	"mp4",
-	"m4a",
-	"aac",
-	"ogg",
-	"wav",
-	"webm",
-	"flac",
-	"wma",
-	"amr",
-]);
+import {
+	getMediaTypeFromPath,
+	isAudioContainerExtension,
+} from "./utility/mediaType";
 
 export default function getContextMenuHandler(app: App): EventRef {
 	return app.workspace.on(
 		"file-menu",
 		(menu: Menu, file: TAbstractFile) => {
 			if (!(file instanceof TFile)) return;
-			if (!PLAYABLE_EXTENSIONS.has(file.extension.toLowerCase())) return;
+			const mediaType = getMediaTypeFromPath(file.path);
+			const isAmbiguousContainer = isAudioContainerExtension(file.extension);
+			if (!mediaType && !isAmbiguousContainer) return;
 
-			menu.addItem((item) =>
-				item
-					.setIcon("play")
-					.setTitle("Play with PodNotes")
-					.onClick(async () => {
-						const localEpisode: LocalEpisode = {
-							title: file.basename,
-							description: "",
-							content: "",
-							podcastName: "local file",
-							url: app.fileManager.generateMarkdownLink(file, ""),
-							streamUrl: createMediaUrlObjectFromFilePath(file.path),
-							filePath: file.path,
-							episodeDate: new Date(file.stat.ctime),
-						};
+			if (isAmbiguousContainer) {
+				addPlayLocalFileItem(menu, app, file, "audio");
+				addPlayLocalFileItem(menu, app, file, "video");
+				return;
+			}
 
-						if (
-							!downloadedEpisodes.isEpisodeDownloaded(
-								localEpisode
-							)
-						) {
-							// The Local Files playlist is mirrored from downloadedEpisodes
-							// (see localFiles.syncWithDownloaded), so this single write
-							// surfaces the file there too.
-							downloadedEpisodes.addEpisode(
-								localEpisode,
-								file.path,
-								file.stat.size
-							);
-						}
-
-						// Fixes where the episode won't play if it has been played.
-						if (get(playedEpisodes)[file.basename]?.finished) {
-							playedEpisodes.markAsUnplayed(localEpisode);
-						}
-
-						currentEpisode.set(localEpisode);
-						viewState.set(ViewState.Player);
-						get(plugin)?.enablePodcastViewMount();
-
-						// Setting the stores above only updates an already-mounted
-						// PodNotes view. When the view is closed (or hidden in a
-						// collapsed sidebar) nothing reacts, so "Play with PodNotes"
-						// silently did nothing — the file played to no visible player
-						// (issue #84). Open the view if needed and reveal it so the
-						// player surfaces with the just-selected episode.
-						await revealPodcastView(app);
-					})
-			);
+			if (!mediaType) return;
+			addPlayLocalFileItem(menu, app, file, mediaType);
 		}
+	);
+}
+
+function addPlayLocalFileItem(
+	menu: Menu,
+	app: App,
+	file: TFile,
+	mediaType: EpisodeMediaType,
+): void {
+	const isAmbiguousContainer = isAudioContainerExtension(file.extension);
+	const title = isAmbiguousContainer
+		? `Play as ${mediaType} with PodNotes`
+		: "Play with PodNotes";
+
+	menu.addItem((item) =>
+		item
+			.setIcon("play")
+			.setTitle(title)
+			.onClick(async () => {
+				const localEpisode: LocalEpisode = {
+					title: file.basename,
+					description: "",
+					content: "",
+					podcastName: "local file",
+					url: app.fileManager.generateMarkdownLink(file, ""),
+					streamUrl: createMediaUrlObjectFromFilePath(file.path),
+					filePath: file.path,
+					episodeDate: new Date(file.stat.ctime),
+					mediaType,
+				};
+
+				// The Local Files playlist is mirrored from downloadedEpisodes
+				// (see localFiles.syncWithDownloaded), so this single write
+				// surfaces the file there too. Always refresh the entry: two
+				// same-basename local files can differ by folder or media type.
+				downloadedEpisodes.addEpisode(localEpisode, file.path, file.stat.size);
+
+				// Fixes where the episode won't play if it has been played.
+				if (get(playedEpisodes)[file.basename]?.finished) {
+					playedEpisodes.markAsUnplayed(localEpisode);
+				}
+
+				currentEpisode.set(localEpisode);
+				viewState.set(ViewState.Player);
+				get(plugin)?.enablePodcastViewMount();
+
+				// Setting the stores above only updates an already-mounted
+				// PodNotes view. When the view is closed (or hidden in a
+				// collapsed sidebar) nothing reacts, so "Play with PodNotes"
+				// silently did nothing — the file played to no visible player
+				// (issue #84). Open the view if needed and reveal it so the
+				// player surfaces with the just-selected episode.
+				await revealPodcastView(app);
+			}),
 	);
 }
 

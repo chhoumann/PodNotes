@@ -13,7 +13,7 @@ Here are the features that will help you do that 👇.
 - Create podcast notes from templates with metadata about episodes
 - Capture timestamps & link directly to the time in the episode
 - Download episodes for offline playback
-- Support for non-podcast local audio files
+- Support for non-podcast local audio and video files
 - API that can be used by plugins like [QuickAdd](https://github.com/chhoumann/QuickAdd) or [Templater](https://github.com/silentvoid13/Templater) for custom workflows
 
 ## Installation

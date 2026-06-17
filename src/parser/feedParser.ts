@@ -3,6 +3,10 @@ import type { Episode } from "src/types/Episode";
 import { requestWithTimeout } from "src/utility/networkRequest";
 import { parseEpisodeNumber } from "src/utility/parseEpisodeNumber";
 import { parseDurationToSeconds } from "src/utility/parseDuration";
+import {
+	getMediaTypeFromContentType,
+	getUnambiguousMediaTypeFromPath,
+} from "src/utility/mediaType";
 
 export default class FeedParser {
 	private feed: PodcastFeed | undefined;
@@ -163,6 +167,7 @@ export default class FeedParser {
 
 		const title = titleEl.textContent || "";
 		const streamUrl = streamUrlEl.getAttribute("url") || "";
+		const enclosureType = streamUrlEl.getAttribute("type");
 		const url = linkEl?.textContent || "";
 		const description = descriptionEl?.textContent || "";
 		const content = contentEl?.textContent || "";
@@ -191,6 +196,10 @@ export default class FeedParser {
 			episodeNumber,
 			duration,
 			chaptersUrl,
+			mediaType:
+				getMediaTypeFromContentType(enclosureType) ??
+				getUnambiguousMediaTypeFromPath(streamUrl) ??
+				"audio",
 		};
 	}
 
