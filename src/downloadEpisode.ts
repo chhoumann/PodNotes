@@ -109,7 +109,9 @@ export default async function downloadEpisodeWithNotice(
 		contentType,
 	);
 
-	if (!downloadAppearsPlayable(contentType, inferredExtension)) {
+	if (
+		!downloadAppearsPlayable(contentType, inferredExtension, episode.mediaType)
+	) {
 		update((bodyEl) => {
 			bodyEl.createEl("p", {
 				text: `Downloaded file is not an audio or video file. It is of type "${contentType}". File: ${data.byteLength} bytes.`,
@@ -342,11 +344,16 @@ function inferFileExtensionFromDownload(
 function downloadAppearsPlayable(
 	contentType: string,
 	extension: string | null,
+	mediaTypeHint?: EpisodeMediaType,
 ): boolean {
 	const normalizedType = contentType.toLowerCase();
 	const contentMediaType = getMediaTypeFromContentType(normalizedType);
 
 	if (contentMediaType === "video") {
+		return getMediaTypeFromExtension(extension) === "video";
+	}
+
+	if (normalizedType === "" && mediaTypeHint === "video") {
 		return getMediaTypeFromExtension(extension) === "video";
 	}
 
@@ -441,7 +448,13 @@ export async function downloadEpisode(
 			inferFileExtensionFromDownload(episode, data, contentType) ??
 			provisionalExtension;
 
-		if (!downloadAppearsPlayable(contentType, inferredExtension)) {
+		if (
+			!downloadAppearsPlayable(
+				contentType,
+				inferredExtension,
+				episode.mediaType,
+			)
+		) {
 			throw new Error("Not a playable media file.");
 		}
 

@@ -148,6 +148,28 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
 	});
 
+	it("rejects blank-type extensionless video downloads instead of saving them as mp3", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x01, 0x02, 0x03);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: {},
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Blank Type Video",
+			streamUrl: "https://example.com/watch?id=42",
+			mediaType: "video",
+		});
+
+		await expect(
+			downloadEpisodeWithNotice(episode, "Podcasts/{{title}}"),
+		).rejects.toThrow("Not a playable media file");
+
+		expect(createBinary).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
+	});
+
 	it("saves video/ogg downloads with a video extension even when bytes have an Ogg signature", async () => {
 		const { createBinary } = setupVault();
 		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
