@@ -518,6 +518,50 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		await expect(getEpisodeAudioBuffer(ep)).rejects.toThrow(/not audio/i);
 	});
 
+	it("uses explicit audio metadata for mp4 streams served with a video content type", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "video/mp4" },
+					arrayBuffer: new TextEncoder().encode("VIDEO-TYPED-AUDIO-MP4")
+						.buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Video Typed Audio MP4",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("VIDEO-TYPED-AUDIO-MP4");
+		expect(result.extension).toBe("m4a");
+	});
+
+	it("uses explicit audio metadata for webm streams served with a video content type", async () => {
+		requestUrlMock.mockImplementation(
+			() =>
+				Promise.resolve({
+					status: 200,
+					headers: { "content-type": "video/webm" },
+					arrayBuffer: new TextEncoder().encode("VIDEO-TYPED-AUDIO-WEBM")
+						.buffer,
+				}) as unknown as ReturnType<typeof requestUrl>,
+		);
+		const ep = episode({
+			title: "Video Typed Audio WebM",
+			streamUrl: "https://cdn.example.com/episode.webm",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(ep);
+
+		expect(decode(result.buffer)).toBe("VIDEO-TYPED-AUDIO-WEBM");
+		expect(result.extension).toBe("webm");
+	});
+
 	it("uses explicit audio metadata for mp4 streams served as octet-stream", async () => {
 		requestUrlMock.mockImplementation(
 			() =>

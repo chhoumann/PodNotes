@@ -344,7 +344,10 @@ function downloadAppearsAudio(
 ): boolean {
 	const contentMediaType = getMediaTypeFromContentType(contentType);
 	if (contentMediaType) {
-		return contentMediaType === "audio";
+		return (
+			contentMediaType === "audio" ||
+			isExplicitAudioContainer(extension, mediaTypeHint)
+		);
 	}
 
 	const normalizedType = contentType.toLowerCase();
@@ -531,7 +534,7 @@ export async function getEpisodeAudioBuffer(
 			!downloadAppearsAudio(
 				contentType,
 				inferredExtension,
-				episodeMediaType,
+				episode.mediaType === "audio" ? episodeMediaType : undefined,
 			)
 		) {
 			throw new Error(
@@ -542,7 +545,10 @@ export async function getEpisodeAudioBuffer(
 		return {
 			buffer: data,
 			extension:
-				normalizeAudioExtension(inferredExtension, episodeMediaType) ?? "mp3",
+				normalizeAudioExtension(
+					inferredExtension,
+					episode.mediaType === "audio" ? episodeMediaType : undefined,
+				) ?? "mp3",
 			basename:
 				replaceIllegalFileNameCharactersInString(episode.title) || "episode",
 		};
