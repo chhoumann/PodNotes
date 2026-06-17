@@ -21,9 +21,13 @@ To create a transcript:
 3. PodNotes will fetch the audio for the episode you are playing (reusing an already-downloaded copy when one exists), split it into chunks, and send these chunks to OpenAI for transcription. The transcription always uses the currently playing episode's own audio, regardless of your download path settings.
 4. Once the transcription is complete, a new file will be created at the specified location with the transcribed content.
 
+Generated transcript notes are also available to workflow plugins through the
+[PodNotes API](./api.md#transcript), so tools such as QuickAdd or Templater can
+read the text and send it to the AI provider configured in your own macro.
+
 ## Transcript Template
 
-The transcript template works similarly to the [note template](./templates.md#note-template), but with the added `{{template}}` placeholder.
+The transcript template works similarly to the [note template](./templates.md#note-template), but with the added `{{transcript}}` placeholder.
 
 ## Speaker Diarization
 

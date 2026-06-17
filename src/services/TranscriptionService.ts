@@ -2,16 +2,10 @@ import { Notice, TFile } from "obsidian";
 import type { OpenAI } from "openai";
 import type PodNotes from "../main";
 import { getEpisodeAudioBuffer } from "../downloadEpisode";
-import {
-	FilePathTemplateEngine,
-	TranscriptTemplateEngine,
-} from "../TemplateEngine";
-import {
-	enforceMaxPathLength,
-	lastSegmentExtension,
-} from "../utility/enforceMaxPathLength";
+import { TranscriptTemplateEngine } from "../TemplateEngine";
 import { ensureFolderExists } from "../utility/ensureFolderExists";
 import type { Episode } from "src/types/Episode";
+import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 import {
 	type DiarizationAudio,
 	type DiarizationProviderId,
@@ -570,11 +564,10 @@ export class TranscriptionService {
 	 * the user's chosen suffix.
 	 */
 	private getTranscriptPath(episode: Episode): string {
-		const rendered = FilePathTemplateEngine(
-			this.plugin.settings.transcript.path,
+		return getEpisodeTranscriptPath(
 			episode,
+			this.plugin.settings.transcript.path,
 		);
-		return enforceMaxPathLength(rendered, lastSegmentExtension(rendered));
 	}
 
 	private async saveTranscription(

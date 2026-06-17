@@ -2,6 +2,7 @@ import type { Episode } from 'src/types/Episode';
 
 export interface IAPI {
 	readonly podcast: Episode;
+	readonly transcript: Promise<string | null>;
 	readonly isPlaying: boolean;
 	readonly length: number;
 	currentTime: number;
@@ -20,6 +21,8 @@ export interface IAPI {
 		endTime: number,
 		linkify?: boolean,
 	): string;
+
+	getTranscript(episode?: Episode): Promise<string | null>;
 	
 	start(): void;
 	stop(): void;

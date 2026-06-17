@@ -1,6 +1,7 @@
 import type { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
 import type { IAPI } from "./IAPI";
+import { TFile } from "obsidian";
 import {
 	currentEpisode,
 	currentTime,
@@ -24,6 +25,7 @@ import {
 	normalizePlaybackRate,
 	PLAYBACK_RATE_STEP,
 } from "src/utility/playbackRate";
+import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 
 const clampVolume = (value: number): number =>
 	Math.min(1, Math.max(0, value));
@@ -31,6 +33,10 @@ const clampVolume = (value: number): number =>
 export class API implements IAPI {
 	public get podcast(): Episode {
 		return get(currentEpisode);
+	}
+
+	public get transcript(): Promise<string | null> {
+		return this.getTranscript();
 	}
 
 	public get length(): number {
@@ -139,6 +145,26 @@ export class API implements IAPI {
 		);
 
 		return `[${segment}](${url.href})`;
+	}
+
+	async getTranscript(episode = this.podcast): Promise<string | null> {
+		if (!episode) {
+			return null;
+		}
+
+		const pluginInstance = get(plugin);
+		const transcriptPath = getEpisodeTranscriptPath(
+			episode,
+			pluginInstance.settings.transcript.path,
+		);
+		const transcriptFile =
+			pluginInstance.app.vault.getAbstractFileByPath(transcriptPath);
+
+		if (!(transcriptFile instanceof TFile)) {
+			return null;
+		}
+
+		return await pluginInstance.app.vault.read(transcriptFile);
 	}
 
 	private getEpisodeLinkTarget(): string | undefined {
