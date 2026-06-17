@@ -8,14 +8,18 @@ export function normalizeChapters(chapters: readonly unknown[]): Chapter[] {
 		.filter(isVisibleChapter)
 		.map((chapter) => ({
 			...chapter,
-			title: chapter.title.slice(0, MAX_CHAPTER_TITLE_CHARS),
+			title:
+				typeof chapter.title === "string"
+					? chapter.title.slice(0, MAX_CHAPTER_TITLE_CHARS)
+					: "",
 		}))
-		.filter((chapter) => chapter.title.trim().length > 0)
 		.sort((a, b) => a.startTime - b.startTime)
 		.slice(0, MAX_VISIBLE_CHAPTERS);
 }
 
-function isVisibleChapter(chapter: unknown): chapter is Chapter {
+function isVisibleChapter(
+	chapter: unknown,
+): chapter is Omit<Chapter, "title"> & { title?: string } {
 	if (!chapter || typeof chapter !== "object") {
 		return false;
 	}
@@ -23,7 +27,7 @@ function isVisibleChapter(chapter: unknown): chapter is Chapter {
 	const candidate = chapter as Partial<Chapter>;
 	return (
 		candidate.toc !== false &&
-		typeof candidate.title === "string" &&
+		(candidate.title === undefined || typeof candidate.title === "string") &&
 		Number.isFinite(candidate.startTime)
 	);
 }

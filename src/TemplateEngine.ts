@@ -124,11 +124,12 @@ function formatTemplateChapters(
 	chapters: Chapter[] | undefined,
 	prependToLines?: string,
 ): string {
-	const lines = normalizeChapters(chapters ?? [])
-		.map(
-			(chapter) =>
-				`- ${formatDuration(chapter.startTime)} ${escapeMarkdownText(formatChapterTitle(chapter.title))}`,
-		);
+	const lines = normalizeChapters(chapters ?? []).map((chapter) => {
+		const title = formatChapterTitle(chapter.title);
+		const escapedTitle = title ? ` ${escapeMarkdownText(title)}` : "";
+
+		return `- ${formatDuration(chapter.startTime)}${escapedTitle}`;
+	});
 
 	if (!prependToLines) {
 		return lines.join("\n");

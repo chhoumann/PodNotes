@@ -561,6 +561,17 @@ describe("{{chapters}} tag (#47)", () => {
 		);
 	});
 
+	it("renders visible untitled chapters as timestamp-only entries", () => {
+		expect(
+			NoteTemplateEngine("{{chapters}}", demoEpisode, {
+				chapters: [
+					{ startTime: 35, title: "" },
+					{ startTime: 65, title: "Deep Dive" },
+				],
+			}),
+		).toBe("- 0:35\n- 1:05 Deep Dive");
+	});
+
 	it("renders empty when no chapters were fetched", () => {
 		expect(NoteTemplateEngine("[{{chapters}}]", demoEpisode)).toBe("[]");
 	});

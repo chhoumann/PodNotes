@@ -18,7 +18,7 @@ describe("fetchChapters", () => {
 				version: "1.2.0",
 				chapters: [
 					{ startTime: 65, title: "Deep Dive" },
-					{ startTime: 0 },
+					{ startTime: 35 },
 					{ startTime: 30, title: null },
 					{ startTime: Number.NaN, title: "Bad time" },
 					{ startTime: 10, title: "Hidden", toc: false },
@@ -31,6 +31,7 @@ describe("fetchChapters", () => {
 			fetchChapters("https://example.com/chapters.json"),
 		).resolves.toEqual([
 			{ startTime: 0, title: "Intro" },
+			{ startTime: 35, title: "" },
 			{ startTime: 65, title: "Deep Dive" },
 		]);
 	});
