@@ -11,6 +11,7 @@
 		playlists,
 		viewState,
 		downloadedEpisodes,
+		playbackRate,
 		requestedPlaybackTime,
 		activePlaybackSegment,
 	} from "src/store";
@@ -31,22 +32,13 @@
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
 	import { episodeMatchesKey, getEpisodeKey } from "src/utility/episodeKey";
+	import {
+		normalizePlaybackRate,
+		PLAYBACK_RATE_MAX,
+		PLAYBACK_RATE_MIN,
+		PLAYBACK_RATE_STEP,
+	} from "src/utility/playbackRate";
 
-	// #region Circumventing the forced two-way binding of the playback rate.
-	class CircumentForcedTwoWayBinding {
-		public playbackRate: number = $plugin.settings.defaultPlaybackRate || 1;
-
-		public get _playbackRate() {
-			return this.playbackRate;
-		}
-
-		public set _playbackRate(_: number) {
-			// No-op: prevent two-way binding from overwriting our value
-		}
-	}
-
-	const offBinding = new CircumentForcedTwoWayBinding();
-	//#endregion
 	const clampVolume = (value: number): number => Math.min(1, Math.max(0, value));
 
 	// Hide the player's Queue list only when queue automation is off AND the queue
@@ -61,6 +53,7 @@
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 	let playerVolume: number = 1;
+	let audioElement: HTMLAudioElement | null = null;
 	// The currentEpisode subscription fires synchronously on subscribe with the
 	// already-loaded episode; that first fire must not wipe a restored position
 	// (or flash 0) on the initial mount. Only genuine in-player switches reset.
@@ -123,7 +116,7 @@
 	}
 
 	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
-		offBinding.playbackRate = event.detail.value;
+		playbackRate.set(normalizePlaybackRate(event.detail.value));
 	}
 
 	function onVolumeChange(event: CustomEvent<{ value: number }>) {
@@ -400,6 +393,10 @@
 		
 		return episode.streamUrl;
 	}
+
+	$: if (audioElement && audioElement.playbackRate !== $playbackRate) {
+		audioElement.playbackRate = $playbackRate;
+	}
 </script>
 
 	<div class="episode-player">
@@ -444,11 +441,11 @@
 
 	{#await srcPromise then src}
 		<audio
+			bind:this={audioElement}
 			src={src}
 			bind:duration={$duration}
 			bind:currentTime={$currentTime}
 			bind:paused={$isPaused}
-			bind:playbackRate={offBinding._playbackRate}
 			bind:volume={playerVolume}
 			on:ended={onEpisodeEnded}
 			on:loadedmetadata={onMetadataLoaded}
@@ -495,11 +492,11 @@
 		</div>
 
 		<div class="playbackrate-container">
-			<span>{offBinding.playbackRate}x</span>
+			<span>{$playbackRate}x</span>
 			<Slider
 				on:change={onPlaybackRateChange}
-				value={offBinding.playbackRate}
-				limits={[0.5, 3.5, 0.1]}
+				value={$playbackRate}
+				limits={[PLAYBACK_RATE_MIN, PLAYBACK_RATE_MAX, PLAYBACK_RATE_STEP]}
 			/>
 		</div>
 	</div>

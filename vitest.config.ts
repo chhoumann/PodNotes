@@ -24,6 +24,11 @@ export default defineConfig({
 		],
 		globals: true,
 		environment: "jsdom",
+		environmentOptions: {
+			jsdom: {
+				url: "https://podnotes.test/",
+			},
+		},
 		setupFiles: ["./vitest.setup.ts"],
 	},
 });

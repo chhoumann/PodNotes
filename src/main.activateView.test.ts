@@ -123,6 +123,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerView: vi.fn(),
 			registerObsidianProtocolHandler: vi.fn(),
 			registerEvent: vi.fn(),
+			mediaSessionActions: [],
 			app: {
 				workspace: {
 					onLayoutReady: vi.fn(),
@@ -138,7 +139,7 @@ describe("PodNotes onload wiring (#55)", () => {
 		await plugin.onload();
 		loaded.push(plugin);
 
-		return { commands, ribbonCalls, activateSpy };
+		return { commands, ribbonCalls, activateSpy, plugin };
 	}
 
 	it("registers Show PodNotes as an always-available callback, not a leaf-gated checkCallback", async () => {
@@ -148,6 +149,112 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(showCmd).toBeDefined();
 		expect(typeof showCmd?.callback).toBe("function");
 		expect(showCmd?.checkCallback).toBeUndefined();
+	});
+
+	it("registers Capture Timestamp as an editor callback so mobile toolbar can add it", async () => {
+		const { commands } = await loadPlugin();
+
+		const captureCmd = commands.find((c) => c.id === "capture-timestamp");
+		expect(captureCmd).toBeDefined();
+		expect(typeof captureCmd?.editorCallback).toBe("function");
+		expect(captureCmd?.editorCheckCallback).toBeUndefined();
+		expect(captureCmd?.checkCallback).toBeUndefined();
+	});
+
+	it("registers playback-rate commands for hotkeys", async () => {
+		const { commands } = await loadPlugin();
+		const commandIds = new Set(commands.map((c) => c.id));
+
+		expect(commandIds.has("increase-playback-rate")).toBe(true);
+		expect(commandIds.has("decrease-playback-rate")).toBe(true);
+		expect(commandIds.has("reset-playback-rate")).toBe(true);
+	});
+
+	it("registers a previous-track Media Session handler for headphone timestamp capture", async () => {
+		const originalMediaSession = Object.getOwnPropertyDescriptor(
+			navigator,
+			"mediaSession",
+		);
+		const calls: Array<{ action: string; hasHandler: boolean }> = [];
+
+		Object.defineProperty(navigator, "mediaSession", {
+			configurable: true,
+			value: {
+				setActionHandler: vi.fn(
+					(action: string, handler: (() => void) | null) => {
+						calls.push({
+							action,
+							hasHandler: typeof handler === "function",
+						});
+					},
+				),
+			},
+		});
+
+		try {
+			await loadPlugin();
+			expect(calls).toContainEqual({
+				action: "previoustrack",
+				hasHandler: true,
+			});
+		} finally {
+			if (originalMediaSession) {
+				Object.defineProperty(
+					navigator,
+					"mediaSession",
+					originalMediaSession,
+				);
+			} else {
+				Reflect.deleteProperty(navigator, "mediaSession");
+			}
+		}
+	});
+
+	it("clears the previous-track Media Session handler on unload", async () => {
+		const originalMediaSession = Object.getOwnPropertyDescriptor(
+			navigator,
+			"mediaSession",
+		);
+		const calls: Array<{ action: string; hasHandler: boolean }> = [];
+
+		Object.defineProperty(navigator, "mediaSession", {
+			configurable: true,
+			value: {
+				setActionHandler: vi.fn(
+					(action: string, handler: (() => void) | null) => {
+						calls.push({
+							action,
+							hasHandler: typeof handler === "function",
+						});
+					},
+				),
+			},
+		});
+
+		try {
+			const { plugin } = await loadPlugin();
+			plugin.onunload();
+			loaded.splice(loaded.indexOf(plugin), 1);
+
+			expect(calls).toContainEqual({
+				action: "previoustrack",
+				hasHandler: true,
+			});
+			expect(calls).toContainEqual({
+				action: "previoustrack",
+				hasHandler: false,
+			});
+		} finally {
+			if (originalMediaSession) {
+				Object.defineProperty(
+					navigator,
+					"mediaSession",
+					originalMediaSession,
+				);
+			} else {
+				Reflect.deleteProperty(navigator, "mediaSession");
+			}
+		}
 	});
 
 	it("Show PodNotes command and ribbon icon both route to activateView", async () => {

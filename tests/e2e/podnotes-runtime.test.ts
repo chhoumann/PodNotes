@@ -34,24 +34,39 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		const state = await obsidian.dev.evalJson<{
+			captureUsesEditorCallback: boolean;
+			captureUsesEditorCheckCallback: boolean;
 			hasCaptureSegment10Command: boolean;
 			hasCaptureSegment20Command: boolean;
 			hasProtocolHandler: boolean;
+			hasRateCommands: boolean;
 			hasShowCommand: boolean;
 			viewCount: number;
 		}>(`
-				(() => ({
-					hasCaptureSegment10Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-10s`)}]),
-					hasCaptureSegment20Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-20s`)}]),
-					hasProtocolHandler: app.workspace.protocolHandlers?.has(${JSON.stringify(PLUGIN_ID)}) ?? false,
-					hasShowCommand: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
-					viewCount: app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length,
+			(() => ({
+				captureUsesEditorCallback:
+					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCallback === "function",
+				captureUsesEditorCheckCallback:
+					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCheckCallback === "function",
+				hasCaptureSegment10Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-10s`)}]),
+				hasCaptureSegment20Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-20s`)}]),
+				hasProtocolHandler: app.workspace.protocolHandlers?.has(${JSON.stringify(PLUGIN_ID)}) ?? false,
+				hasRateCommands: [
+					${JSON.stringify(`${PLUGIN_ID}:increase-playback-rate`)},
+					${JSON.stringify(`${PLUGIN_ID}:decrease-playback-rate`)},
+					${JSON.stringify(`${PLUGIN_ID}:reset-playback-rate`)},
+				].every((id) => Boolean(app.commands?.commands?.[id])),
+				hasShowCommand: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
+				viewCount: app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length,
 			}))()
 		`);
 
 		expect(state).toMatchObject({
+			captureUsesEditorCallback: true,
+			captureUsesEditorCheckCallback: false,
 			hasCaptureSegment10Command: true,
 			hasCaptureSegment20Command: true,
+			hasRateCommands: true,
 			hasProtocolHandler: true,
 			hasShowCommand: true,
 		});
@@ -258,6 +273,7 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		await invokePodNotesUri(obsidian, episode, 115, 125);
+		await openPodNotesView(obsidian);
 		await dispatchLoadedMetadata(obsidian);
 
 		await waitForPlaybackState(
@@ -284,6 +300,132 @@ describe("PodNotes runtime", () => {
 			isPlaying: false,
 			title: episode.title,
 		});
+	});
+
+	test("playback-rate commands update the live player rate and reset to the configured default", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(sandbox, "rate-command-episode.mp3");
+		const episode = createLocalEpisode("E2E Rate Command Episode", audioPath);
+
+		await seedRuntimeData(plugin, sandbox, episode, {
+			currentEpisode: episode,
+			defaultPlaybackRate: 1.5,
+		});
+		await waitForPodNotesReady(obsidian);
+		await openPodNotesView(obsidian);
+		await invokePodNotesUri(obsidian, episode, 0);
+		await dispatchLoadedMetadata(obsidian);
+		await waitForPlaybackRate(obsidian, 1.5);
+
+		await obsidian.command(`${PLUGIN_ID}:increase-playback-rate`).run();
+		await waitForPlaybackRate(obsidian, 1.6);
+
+		await obsidian.command(`${PLUGIN_ID}:decrease-playback-rate`).run();
+		await obsidian.command(`${PLUGIN_ID}:decrease-playback-rate`).run();
+		await waitForPlaybackRate(obsidian, 1.4);
+
+		await obsidian.command(`${PLUGIN_ID}:reset-playback-rate`).run();
+		const rate = await waitForPlaybackRate(obsidian, 1.5);
+
+		expect(rate).toMatchObject({
+			api: 1.5,
+			audio: 1.5,
+		});
+	});
+
+	test("previous-track Media Session action captures a timestamp into the active editor", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(sandbox, "headphone-capture-episode.mp3");
+		const episode = createLocalEpisode(
+			"E2E Headphone Capture Episode",
+			audioPath,
+		);
+		const notePath = sandbox.path("headphone-capture-target.md");
+
+		await seedRuntimeData(plugin, sandbox, episode, {
+			currentEpisode: episode,
+			timestampTemplate: "- {{linktime}}",
+		});
+		await installMediaSessionRecorder(obsidian);
+		try {
+			await waitForPodNotesReady(obsidian);
+			await openMarkdownFile(obsidian, notePath);
+			await setPlayback(obsidian, { currentTime: 95, paused: false });
+
+			const action = await invokeRecordedMediaSessionAction(
+				obsidian,
+				"previoustrack",
+			);
+			expect(action).toMatchObject({
+				action: "previoustrack",
+				ok: true,
+			});
+
+			const expectedLink = `- ${expectedTimestampLink("00:01:35", episode, 95)}`;
+			const content = await sandbox.waitForContent(
+				"headphone-capture-target.md",
+				(value) => value.includes(expectedLink),
+				WAIT_OPTS,
+			);
+
+			expect(content).toContain(expectedLink);
+		} finally {
+			await restoreMediaSessionRecorder(obsidian);
+		}
+	});
+
+	test("previous-track Media Session action appends to the episode note without an active editor", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(
+			sandbox,
+			"headphone-background-episode.mp3",
+		);
+		const episode = createLocalEpisode(
+			"E2E Background Capture Episode",
+			audioPath,
+		);
+		const noteRelativePath = `${episode.title}.md`;
+
+		await seedRuntimeData(plugin, sandbox, episode, {
+			currentEpisode: episode,
+			note: {
+				path: sandbox.path("{{title}}.md"),
+				template: "# {{title}}\n",
+			},
+			timestampTemplate: "- {{linktime}}",
+		});
+		await installMediaSessionRecorder(obsidian);
+		try {
+			await waitForPodNotesReady(obsidian);
+			await openPodNotesView(obsidian);
+			await setPlayback(obsidian, { currentTime: 185, paused: false });
+
+			const noEditor = await obsidian.dev.evalJson<boolean>(`
+				!app.workspace.activeEditor?.editor
+			`);
+			expect(noEditor).toBe(true);
+
+			const action = await invokeRecordedMediaSessionAction(
+				obsidian,
+				"previoustrack",
+			);
+			expect(action).toMatchObject({
+				action: "previoustrack",
+				ok: true,
+			});
+
+			const expectedLink = `- ${expectedTimestampLink("00:03:05", episode, 185)}`;
+			const content = await sandbox.waitForContent(
+				noteRelativePath,
+				(value) => value.includes(expectedLink),
+				WAIT_OPTS,
+			);
+
+			expect(content).toContain("# E2E Background Capture Episode");
+			expect(content).toContain(expectedLink);
+		} finally {
+			await restoreMediaSessionRecorder(obsidian);
+		}
 	});
 
 	test("persists API volume changes and clamps out-of-range values", async () => {
@@ -397,6 +539,8 @@ async function seedRuntimeData(
 	episode: LocalEpisode,
 	options: {
 		currentEpisode?: Episode;
+		defaultPlaybackRate?: number;
+		note?: { path: string; template: string };
 		played?: { duration: number; time: number };
 		timestampTemplate?: string;
 	} = {},
@@ -413,6 +557,7 @@ async function seedRuntimeData(
 
 	await plugin.updateDataAndReload<PodNotesData>((data) => {
 		data.currentEpisode = options.currentEpisode ?? placeholderEpisode;
+		data.defaultPlaybackRate = options.defaultPlaybackRate ?? 1;
 		data.defaultVolume = 1;
 		data.downloadedEpisodes = {
 			[episode.podcastName]: [toDownloadedEpisode(episode)],
@@ -436,6 +581,9 @@ async function seedRuntimeData(
 			template: options.timestampTemplate ?? "- {{time}}",
 			offset: 0,
 		};
+		if (options.note) {
+			data.note = options.note;
+		}
 	}, RELOAD_OPTIONS);
 }
 
@@ -500,32 +648,44 @@ async function invokePodNotesUri(
 
 async function dispatchLoadedMetadata(obsidian: {
 	dev: { evalJson: <T>(code: string) => Promise<T> };
+	sleep: (ms: number) => Promise<void>;
 }): Promise<void> {
-	const result = await obsidian.dev.evalJson<{ error?: string; ok: boolean }>(`
-		(() => {
-			const audio = document.querySelector(".podcast-view audio");
-			if (!audio) {
-				return { ok: false, error: "No PodNotes audio element found." };
-			}
+	const startedAt = Date.now();
+	let lastError = "No PodNotes audio element found.";
 
-			Object.defineProperty(audio, "duration", {
-				configurable: true,
-				value: 3600,
-			});
-			audio.dispatchEvent(new Event("loadedmetadata"));
-			Object.defineProperty(audio, "paused", {
-				configurable: true,
-				value: false,
-			});
-			audio.dispatchEvent(new Event("play"));
+	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
+		const result = await obsidian.dev.evalJson<{
+			error?: string;
+			ok: boolean;
+		}>(`
+			(() => {
+				const audio = document.querySelector(".podcast-view audio");
+				if (!audio) {
+					return { ok: false, error: "No PodNotes audio element found." };
+				}
 
-			return { ok: true };
-		})()
-	`);
+				Object.defineProperty(audio, "duration", {
+					configurable: true,
+					value: 3600,
+				});
+				audio.dispatchEvent(new Event("loadedmetadata"));
+				Object.defineProperty(audio, "paused", {
+					configurable: true,
+					value: false,
+				});
+				audio.dispatchEvent(new Event("play"));
 
-	if (!result.ok) {
-		throw new Error(result.error ?? "Failed to dispatch loadedmetadata.");
+				return { ok: true };
+			})()
+		`);
+
+		if (result.ok) return;
+
+		lastError = result.error ?? "Failed to dispatch loadedmetadata.";
+		await obsidian.sleep(WAIT_OPTS.intervalMs);
 	}
+
+	throw new Error(lastError);
 }
 
 async function dispatchAudioPlay(obsidian: {
@@ -654,6 +814,141 @@ async function setVolume(
 			return true;
 		})()
 	`);
+}
+
+async function waitForPlaybackRate(
+	obsidian: {
+		dev: { evalJson: <T>(code: string) => Promise<T> };
+		sleep: (ms: number) => Promise<void>;
+	},
+	expected: number,
+): Promise<{ api: number | null; audio: number | null; label: string | null }> {
+	const startedAt = Date.now();
+	let lastRate: {
+		api: number | null;
+		audio: number | null;
+		label: string | null;
+	} = {
+		api: null,
+		audio: null,
+		label: null,
+	};
+
+	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
+		lastRate = await obsidian.dev.evalJson<{
+			api: number | null;
+			audio: number | null;
+			label: string | null;
+		}>(`
+			(() => {
+				const audio = document.querySelector(".podcast-view audio");
+				const label = document.querySelector(".playbackrate-container span");
+				return {
+					api: app.plugins.plugins.${PLUGIN_ID}?.api?.playbackRate ?? null,
+					audio: audio?.playbackRate ?? null,
+					label: label?.textContent ?? null,
+				};
+			})()
+		`);
+
+		if (
+			lastRate.api === expected &&
+			lastRate.audio === expected &&
+			lastRate.label === `${expected}x`
+		) {
+			return lastRate;
+		}
+
+		await obsidian.sleep(WAIT_OPTS.intervalMs);
+	}
+
+	throw new Error(
+		`Timed out waiting for playback rate ${expected}. Last rate: ${JSON.stringify(lastRate)}`,
+	);
+}
+
+async function installMediaSessionRecorder(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+): Promise<void> {
+	const result = await evalJsonAsync<{ error?: string; ok: boolean }>(
+		obsidian,
+		`
+		(async () => {
+			const mediaSession = navigator.mediaSession;
+			if (!mediaSession?.setActionHandler) {
+				return { ok: false, error: "Media Session API is unavailable." };
+			}
+
+			const original = mediaSession.setActionHandler.bind(mediaSession);
+			const handlers = {};
+
+			globalThis.__podnotesMediaSessionHandlers = handlers;
+			globalThis.__podnotesOriginalSetActionHandler = original;
+
+			mediaSession.setActionHandler = (action, handler) => {
+				const result = original(action, handler);
+				handlers[action] = handler;
+				return result;
+			};
+
+			await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
+			await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});
+
+			return { ok: true };
+		})()
+	`,
+	);
+
+	if (!result.ok) {
+		throw new Error(
+			result.error ?? "Failed to install Media Session recorder.",
+		);
+	}
+}
+
+async function restoreMediaSessionRecorder(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+): Promise<void> {
+	await evalJsonAsync<boolean>(
+		obsidian,
+		`
+		(() => {
+			const original = globalThis.__podnotesOriginalSetActionHandler;
+			if (navigator.mediaSession?.setActionHandler && original) {
+				navigator.mediaSession.setActionHandler = original;
+			}
+			delete globalThis.__podnotesMediaSessionHandlers;
+			delete globalThis.__podnotesOriginalSetActionHandler;
+			return true;
+		})()
+	`,
+	);
+}
+
+async function invokeRecordedMediaSessionAction(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+	action: string,
+): Promise<{ action: string; error?: string; ok: boolean }> {
+	return await evalJsonAsync(
+		obsidian,
+		`
+		(() => {
+			const handlers = globalThis.__podnotesMediaSessionHandlers ?? {};
+			const handler = handlers[${JSON.stringify(action)}];
+
+			if (typeof handler !== "function") {
+				return {
+					action: ${JSON.stringify(action)},
+					ok: false,
+					error: "Media Session action handler was not registered.",
+				};
+			}
+
+			handler({ action: ${JSON.stringify(action)} });
+			return { action: ${JSON.stringify(action)}, ok: true };
+		})()
+	`,
+	);
 }
 
 async function getVolume(obsidian: {

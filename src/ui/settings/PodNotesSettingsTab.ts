@@ -23,6 +23,7 @@ import {
 	favorites,
 	hidePlayedEpisodes,
 	localFiles,
+	playbackRate,
 	playlists,
 	plugin,
 	queue,
@@ -45,6 +46,7 @@ import {
 	parseImport,
 	serializeSettings,
 } from "src/settingsTransfer";
+import { normalizePlaybackRate } from "src/utility/playbackRate";
 
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
@@ -776,7 +778,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		// Re-hydrate the live stores so the running UI and the persistence
 		// controllers reflect the import. Keys without a store (templates, paths,
-		// skip lengths, playback rate, feed cache) are applied via `merged` above.
+		// skip lengths, feed cache) are applied via `merged` above.
 		savedFeeds.set(merged.savedFeeds);
 		playlists.set(merged.playlists);
 		favorites.set(merged.favorites);
@@ -790,6 +792,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			? merged.defaultVolume
 			: 1;
 		volume.set(Math.min(1, Math.max(0, importedVolume)));
+		playbackRate.set(normalizePlaybackRate(merged.defaultPlaybackRate));
 
 		await this.plugin.saveSettings();
 		// Re-emit the plugin store so an open player/grid recomputes Queue tile/list
