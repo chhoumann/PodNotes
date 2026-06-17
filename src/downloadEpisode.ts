@@ -527,9 +527,11 @@ async function readVaultAudio(
 
 	const fileExtension =
 		file.extension || getUrlExtension(file.path || filePath) || "";
-	const explicitAudioMp4 =
-		mediaTypeHint === "audio" && fileExtension.toLowerCase() === "mp4";
-	const mediaType = explicitAudioMp4
+	const explicitAudioContainer =
+		mediaTypeHint === "audio" &&
+		(fileExtension.toLowerCase() === "mp4" ||
+			fileExtension.toLowerCase() === "webm");
+	const mediaType = explicitAudioContainer
 		? "audio"
 		: getMediaTypeFromExtension(fileExtension) ??
 			getMediaTypeFromPath(file.path || filePath);
@@ -540,7 +542,10 @@ async function readVaultAudio(
 	const buffer = await app.vault.readBinary(file);
 	return {
 		buffer,
-		extension: explicitAudioMp4 ? "m4a" : fileExtension,
+		extension:
+			mediaTypeHint === "audio" && fileExtension.toLowerCase() === "mp4"
+				? "m4a"
+				: fileExtension,
 		basename: file.basename || getFileBasename(file.path || filePath),
 	};
 }

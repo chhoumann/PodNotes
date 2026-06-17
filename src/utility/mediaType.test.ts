@@ -57,22 +57,22 @@ describe("mediaType", () => {
 		expect(getEpisodeMediaType(episode)).toBe("video");
 	});
 
-	test("uses unambiguous downloaded file paths before stale persisted metadata", () => {
+	test("trusts explicit audio metadata before downloaded path fallback", () => {
 		const episode = {
-			title: "Downloaded Video",
-			streamUrl: "https://example.com/watch?id=42",
-			url: "https://example.com/watch?id=42",
+			title: "Downloaded Audio WebM",
+			streamUrl: "https://example.com/episode.webm",
+			url: "https://example.com/episode",
 			description: "",
 			content: "",
 			podcastName: "Feed",
 			mediaType: "audio",
-			filePath: "Podcasts/downloaded-video.webm",
+			filePath: "Podcasts/downloaded-audio.webm",
 		} satisfies Episode & { filePath: string };
 
-		expect(getEpisodeMediaType(episode)).toBe("video");
+		expect(getEpisodeMediaType(episode)).toBe("audio");
 	});
 
-	test("trusts explicit audio metadata for ambiguous mp4 file paths", () => {
+	test("trusts explicit audio metadata for mp4 file paths", () => {
 		const episode = {
 			title: "Downloaded Audio MP4",
 			streamUrl: "https://example.com/episode.mp4",

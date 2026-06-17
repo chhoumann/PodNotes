@@ -97,6 +97,8 @@ describe("TranscriptionService", () => {
 						return "audio/wav";
 					case "flac":
 						return "audio/flac";
+					case "webm":
+						return "audio/webm";
 					default:
 						return "audio/mpeg";
 				}
@@ -108,6 +110,7 @@ describe("TranscriptionService", () => {
 			expect(getMimeType("ogg")).toBe("audio/ogg");
 			expect(getMimeType("wav")).toBe("audio/wav");
 			expect(getMimeType("flac")).toBe("audio/flac");
+			expect(getMimeType("webm")).toBe("audio/webm");
 			expect(getMimeType("unknown")).toBe("audio/mpeg");
 		});
 	});

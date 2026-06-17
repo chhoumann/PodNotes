@@ -63,20 +63,11 @@ export function getMediaTypeFromPath(
 }
 
 export function getEpisodeMediaType(episode: Episode): EpisodeMediaType {
+	if (episode.mediaType) return episode.mediaType;
+
 	const filePath = (episode as Partial<LocalEpisode>).filePath;
 	const filePathMediaType = getMediaTypeFromPath(filePath);
-	if (
-		filePathMediaType &&
-		!(
-			episode.mediaType === "audio" &&
-			filePath &&
-			getUrlExtension(filePath).toLowerCase() === "mp4"
-		)
-	) {
-		return filePathMediaType;
-	}
-
-	if (episode.mediaType) return episode.mediaType;
+	if (filePathMediaType) return filePathMediaType;
 
 	return getMediaTypeFromPath(episode.streamUrl) ?? "audio";
 }

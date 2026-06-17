@@ -15,6 +15,10 @@ describe("getExtensionFromContentType", () => {
 		expect(getExtensionFromContentType("Video/WebM")).toBe("webm");
 	});
 
+	test("detects audio webm from mime type", () => {
+		expect(getExtensionFromContentType("audio/webm")).toBe("webm");
+	});
+
 	test("returns null when mime type is not playable media", () => {
 		expect(getExtensionFromContentType("text/html")).toBeNull();
 	});
