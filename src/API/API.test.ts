@@ -1,5 +1,6 @@
+import { TFile } from "obsidian";
 import { get } from "svelte/store";
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { API } from "./API";
 import {
@@ -155,5 +156,88 @@ describe("API playback rate controls", () => {
 		api.resetPlaybackRate();
 
 		expect(api.playbackRate).toBe(1.8);
+	});
+});
+
+describe("API transcript access", () => {
+	function setTranscriptVault(files: Record<string, string>) {
+		const createTFile = (path: string): TFile =>
+			Object.assign(new TFile(), { path });
+		const getAbstractFileByPath = vi.fn((path: string) =>
+			Object.prototype.hasOwnProperty.call(files, path)
+				? createTFile(path)
+				: null,
+		);
+		const read = vi.fn(async (file: TFile) => files[file.path] ?? "");
+
+		plugin.set({
+			settings: {
+				defaultPlaybackRate: 1.8,
+				transcript: {
+					path: "Transcripts/{{podcast}}/{{title}}.md",
+				},
+			},
+			app: {
+				vault: {
+					getAbstractFileByPath,
+					read,
+				},
+			},
+		} as never);
+
+		return { getAbstractFileByPath, read };
+	}
+
+	test("returns null when no episode is loaded", async () => {
+		setTranscriptVault({});
+		const api = new API();
+
+		await expect(api.getTranscript()).resolves.toBeNull();
+	});
+
+	test("returns null when the current episode has no generated transcript file", async () => {
+		currentEpisode.set(feedEpisode);
+		const { getAbstractFileByPath, read } = setTranscriptVault({});
+		const api = new API();
+
+		await expect(api.getTranscript()).resolves.toBeNull();
+
+		expect(getAbstractFileByPath).toHaveBeenCalledWith(
+			"Transcripts/Feed Podcast/Feed Episode.md",
+		);
+		expect(read).not.toHaveBeenCalled();
+	});
+
+	test("reads the generated transcript note for the current episode", async () => {
+		currentEpisode.set(feedEpisode);
+		const transcript = "# Feed Episode\n\nTranscript body for AI macros.";
+		const { read } = setTranscriptVault({
+			"Transcripts/Feed Podcast/Feed Episode.md": transcript,
+		});
+		const api = new API();
+
+		await expect(api.getTranscript()).resolves.toBe(transcript);
+		await expect(api.transcript).resolves.toBe(transcript);
+
+		expect(read).toHaveBeenCalledWith(
+			expect.objectContaining({
+				path: "Transcripts/Feed Podcast/Feed Episode.md",
+			}),
+		);
+	});
+
+	test("reads the generated transcript note for an explicit episode", async () => {
+		currentEpisode.set(feedEpisode);
+		const transcript = "Local episode transcript";
+		const { getAbstractFileByPath } = setTranscriptVault({
+			"Transcripts/local file/Local Episode.md": transcript,
+		});
+		const api = new API();
+
+		await expect(api.getTranscript(localEpisode)).resolves.toBe(transcript);
+
+		expect(getAbstractFileByPath).toHaveBeenCalledWith(
+			"Transcripts/local file/Local Episode.md",
+		);
 	});
 });
