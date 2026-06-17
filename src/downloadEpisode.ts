@@ -344,9 +344,15 @@ function downloadAppearsPlayable(
 	extension: string | null,
 ): boolean {
 	const normalizedType = contentType.toLowerCase();
+	const contentMediaType = getMediaTypeFromContentType(normalizedType);
+
+	if (contentMediaType === "video") {
+		return getMediaTypeFromExtension(extension) === "video";
+	}
+
 	return (
 		normalizedType === "" ||
-		getMediaTypeFromContentType(normalizedType) !== null ||
+		contentMediaType === "audio" ||
 		isPlayableMediaExtension(extension)
 	);
 }
