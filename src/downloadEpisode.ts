@@ -4,7 +4,7 @@ import {
 	DownloadPathTemplateEngine,
 	replaceIllegalFileNameCharactersInString,
 } from "./TemplateEngine";
-import type { Episode } from "./types/Episode";
+import type { Episode, EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
@@ -310,12 +310,17 @@ function inferFileExtensionFromDownload(
 		return signatureExtension;
 	}
 
+	const contentTypeExtension = getExtensionFromContentType(contentType);
+	if (contentTypeExtension) {
+		return contentTypeExtension;
+	}
+
 	const urlExtension = getUrlExtension(episode.streamUrl);
 	if (urlExtension) {
 		return urlExtension;
 	}
 
-	return getExtensionFromContentType(contentType);
+	return null;
 }
 
 function downloadAppearsPlayable(
@@ -457,7 +462,7 @@ export async function getEpisodeAudioBuffer(
 			);
 		}
 
-		return readVaultAudio(localFilePath);
+		return readVaultAudio(localFilePath, getEpisodeMediaType(episode));
 	}
 
 	// Reuse a previously downloaded file only when the registry entry is the SAME
@@ -478,7 +483,10 @@ export async function getEpisodeAudioBuffer(
 
 		const existingFile = app.vault.getAbstractFileByPath(registered.filePath);
 		if (existingFile instanceof TFile) {
-			return readVaultAudio(registered.filePath);
+			return readVaultAudio(
+				registered.filePath,
+				getEpisodeMediaType(registered),
+			);
 		}
 	}
 
@@ -510,21 +518,37 @@ export async function getEpisodeAudioBuffer(
 
 async function readVaultAudio(
 	filePath: string,
+	mediaTypeHint?: EpisodeMediaType,
 ): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
 	const file = app.vault.getAbstractFileByPath(filePath);
 	if (!(file instanceof TFile)) {
 		throw new Error(`Unable to read the audio file at "${filePath}".`);
 	}
 
-	const mediaType =
-		getMediaTypeFromExtension(file.extension) ??
-		getMediaTypeFromPath(file.path);
+	const fileExtension =
+		file.extension || getUrlExtension(file.path || filePath) || "";
+	const explicitAudioMp4 =
+		mediaTypeHint === "audio" && fileExtension.toLowerCase() === "mp4";
+	const mediaType = explicitAudioMp4
+		? "audio"
+		: getMediaTypeFromExtension(fileExtension) ??
+			getMediaTypeFromPath(file.path || filePath);
 	if (mediaType !== "audio") {
 		throw new Error(`Unable to read the non-audio file at "${filePath}".`);
 	}
 
 	const buffer = await app.vault.readBinary(file);
-	return { buffer, extension: file.extension, basename: file.basename };
+	return {
+		buffer,
+		extension: explicitAudioMp4 ? "m4a" : fileExtension,
+		basename: file.basename || getFileBasename(file.path || filePath),
+	};
+}
+
+function getFileBasename(filePath: string): string {
+	const fileName = filePath.split("/").pop() ?? filePath;
+	const dot = fileName.lastIndexOf(".");
+	return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
 interface AudioSignature {

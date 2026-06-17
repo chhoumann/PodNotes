@@ -125,6 +125,42 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			size: buffer.byteLength,
 		});
 	});
+
+	it("saves audio/mp4 downloads with an audio extension even when the URL ends in mp4", async () => {
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mp4" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Audio MP4 Title",
+			streamUrl: "https://example.com/episode.mp4",
+			mediaType: "audio",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Audio MP4 Title.m4a",
+			buffer,
+		);
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded).toMatchObject({
+			title: "Audio MP4 Title",
+			filePath: "Podcasts/Audio MP4 Title.m4a",
+			mediaType: "audio",
+			size: buffer.byteLength,
+		});
+	});
 });
 
 describe("downloadEpisode (API path)", () => {
@@ -471,8 +507,8 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 			streamUrl: "https://cdn.example.com/watch?id=old",
 			mediaType: "audio",
 		});
-		seedFile("Podcasts/stale-video.mp4", "VIDEO-BYTES");
-		downloadedEpisodes.addEpisode(downloaded, "Podcasts/stale-video.mp4", 20);
+		seedFile("Podcasts/stale-video.webm", "VIDEO-BYTES");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/stale-video.webm", 20);
 
 		const current = episode({
 			title: "Stale Metadata Video",
@@ -486,6 +522,29 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
+	it("reuses an audio/mp4 download whose legacy file path is mp4", async () => {
+		const downloaded = episode({
+			title: "Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		});
+		seedFile("Podcasts/audio-mp4.mp4", "AUDIO-MP4-BYTES");
+		downloadedEpisodes.addEpisode(downloaded, "Podcasts/audio-mp4.mp4", 20);
+
+		const current = episode({
+			title: "Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/episode.mp4",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("AUDIO-MP4-BYTES");
+		expect(result.extension).toBe("m4a");
+		expect(result.basename).toBe("audio-mp4");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
 	it("does not transcribe a local video file with stale audio metadata", async () => {
 		const local = episode({
 			title: "Local Video",
@@ -493,11 +552,11 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 			description: "",
 			content: "",
 			streamUrl: "",
-			url: "Local/video.mp4",
-			filePath: "Local/video.mp4",
+			url: "Local/video.webm",
+			filePath: "Local/video.webm",
 			mediaType: "audio",
 		} as Partial<LocalEpisode>) as LocalEpisode;
-		seedFile("Local/video.mp4", "VIDEO-BYTES");
+		seedFile("Local/video.webm", "VIDEO-BYTES");
 
 		await expect(getEpisodeAudioBuffer(local)).rejects.toThrow(
 			/audio episodes only/i,
