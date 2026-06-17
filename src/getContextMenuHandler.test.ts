@@ -94,7 +94,12 @@ function makeApp(workspace: unknown, file: TFile) {
 	};
 }
 
-async function playFile(app: unknown, workspace: { _fileMenuHandler: unknown }, file: TFile) {
+async function playFile(
+	app: unknown,
+	workspace: { _fileMenuHandler: unknown },
+	file: TFile,
+	title = "Play with PodNotes",
+) {
 	getContextMenuHandler(app as never);
 	const menu = fakeMenu();
 	(
@@ -104,7 +109,7 @@ async function playFile(app: unknown, workspace: { _fileMenuHandler: unknown }, 
 			source: string,
 		) => void
 	)(menu, file, "file-explorer-context-menu");
-	const play = menu.items.find((i) => i.title === "Play with PodNotes");
+	const play = menu.items.find((i) => i.title === title);
 	expect(play).toBeTruthy();
 	await play?.onClick?.();
 	return menu;
@@ -145,14 +150,45 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 		const { workspace } = setupWorkspace([{}]);
 		const app = makeApp(workspace, file);
 
-		await playFile(app, workspace, file);
+		const menu = await playFile(
+			app,
+			workspace,
+			file,
+			"Play as video with PodNotes",
+		);
 
+		expect(menu.items.map((item) => item.title)).toEqual([
+			"Play as audio with PodNotes",
+			"Play as video with PodNotes",
+		]);
 		expect(get(currentEpisode)).toMatchObject({
 			title: "lecture",
 			podcastName: "local file",
 			filePath: "Videos/lecture.mp4",
 			mediaType: "video",
 			streamUrl: "app://resource/Videos/lecture.mp4?1",
+		});
+		expect(get(viewState)).toBe(ViewState.Player);
+	});
+
+	it("can preserve local audio-only ambiguous container files as audio", async () => {
+		const file = audioFile("Audio/lecture.mp4");
+		const { workspace } = setupWorkspace([{}]);
+		const app = makeApp(workspace, file);
+
+		await playFile(app, workspace, file, "Play as audio with PodNotes");
+
+		const stored = get(downloadedEpisodes)["local file"]?.[0];
+		expect(stored).toMatchObject({
+			title: "lecture",
+			filePath: "Audio/lecture.mp4",
+			mediaType: "audio",
+			streamUrl: "app://resource/Audio/lecture.mp4?1",
+		});
+		expect(get(currentEpisode)).toMatchObject({
+			title: "lecture",
+			filePath: "Audio/lecture.mp4",
+			mediaType: "audio",
 		});
 		expect(get(viewState)).toBe(ViewState.Player);
 	});
@@ -164,7 +200,7 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 		const app = makeApp(workspace, audio);
 
 		await playFile(app, workspace, audio);
-		await playFile(app, workspace, video);
+		await playFile(app, workspace, video, "Play as video with PodNotes");
 
 		const stored = get(downloadedEpisodes)["local file"]?.[0];
 		expect(stored).toMatchObject({
