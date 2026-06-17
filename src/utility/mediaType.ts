@@ -120,8 +120,46 @@ export function isSameMediaSource(a: string, b: string): boolean {
 		const pathIdentifiesMedia =
 			getMediaTypeFromPath(ua.pathname) !== null ||
 			getMediaTypeFromPath(ub.pathname) !== null;
-		return pathIdentifiesMedia || ua.search === ub.search;
+		return (
+			pathIdentifiesMedia ||
+			ua.search === ub.search ||
+			stableSearchParamsMatch(ua.searchParams, ub.searchParams)
+		);
 	} catch {
 		return false;
 	}
+}
+
+function stableSearchParamsMatch(a: URLSearchParams, b: URLSearchParams): boolean {
+	const stableA = stableSearchParamEntries(a);
+	const stableB = stableSearchParamEntries(b);
+	if (stableA.length === 0 || stableB.length === 0) return false;
+	if (stableA.length !== stableB.length) return false;
+
+	return stableA.every((entry, index) => entry === stableB[index]);
+}
+
+function stableSearchParamEntries(searchParams: URLSearchParams): string[] {
+	return Array.from(searchParams.entries())
+		.filter(([key]) => !isVolatileMediaSearchParam(key))
+		.map(([key, value]) => `${key.toLowerCase()}=${value}`)
+		.sort();
+}
+
+function isVolatileMediaSearchParam(key: string): boolean {
+	const normalizedKey = key.toLowerCase();
+	return (
+		normalizedKey === "token" ||
+		normalizedKey === "access_token" ||
+		normalizedKey === "auth" ||
+		normalizedKey === "authorization" ||
+		normalizedKey === "signature" ||
+		normalizedKey === "sig" ||
+		normalizedKey === "expires" ||
+		normalizedKey === "expiry" ||
+		normalizedKey === "exp" ||
+		normalizedKey === "policy" ||
+		normalizedKey === "key-pair-id" ||
+		normalizedKey.startsWith("x-amz-")
+	);
 }

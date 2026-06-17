@@ -566,6 +566,28 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
+	it("reuses an extensionless cached file when only signed token params changed", async () => {
+		const downloaded = episode({
+			title: "Extensionless Token Episode",
+			streamUrl: "https://cdn.example.com/download?id=123&token=OLD&exp=1",
+		});
+		seedFile("Podcasts/extensionless-token.m4a", "CACHED-EXTENSIONLESS-AUDIO");
+		downloadedEpisodes.addEpisode(
+			downloaded,
+			"Podcasts/extensionless-token.m4a",
+			20,
+		);
+
+		const current = episode({
+			title: "Extensionless Token Episode",
+			streamUrl: "https://cdn.example.com/download?id=123&token=NEW&exp=2",
+		});
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("CACHED-EXTENSIONLESS-AUDIO");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
 	it("does not reuse a same-title sibling's download; fetches this episode's own audio", async () => {
 		// Same podcast + same title, different episode (different stream URL). The
 		// registry is keyed by podcastName+title, so getEpisode() returns the

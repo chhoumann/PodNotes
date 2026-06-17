@@ -195,7 +195,13 @@ describe("mediaType", () => {
 		).toBe(false);
 	});
 
-	test("requires exact query strings for extensionless remote sources", () => {
+	test("compares extensionless remote sources by stable query params", () => {
+		expect(
+			isSameMediaSource(
+				"https://cdn.example.com/download?id=123&token=old&exp=1",
+				"https://cdn.example.com/download?id=123&token=new&exp=2",
+			),
+		).toBe(true);
 		expect(
 			isSameMediaSource(
 				"https://cdn.example.com/watch?id=1",
@@ -208,5 +214,11 @@ describe("mediaType", () => {
 				"https://cdn.example.com/watch?id=1",
 			),
 		).toBe(true);
+		expect(
+			isSameMediaSource(
+				"https://cdn.example.com/download?token=old",
+				"https://cdn.example.com/download?token=new",
+			),
+		).toBe(false);
 	});
 });
