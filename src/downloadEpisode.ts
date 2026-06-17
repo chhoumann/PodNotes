@@ -377,6 +377,26 @@ function normalizeAudioExtension(
 	return extension;
 }
 
+function getRegisteredEpisodeMediaType(
+	episode: Episode & { filePath?: string },
+	currentEpisodeMediaTypeHint?: EpisodeMediaType,
+): EpisodeMediaType {
+	if (episode.mediaType) return episode.mediaType;
+	const fileExtension = episode.filePath
+		? getUrlExtension(episode.filePath)
+		: null;
+	if (
+		isExplicitAudioContainer(
+			fileExtension,
+			currentEpisodeMediaTypeHint,
+		)
+	) {
+		return "audio";
+	}
+
+	return getEpisodeMediaType(episode);
+}
+
 /**
  * UNUSED IN PRODUCTION — kept only for the #178 tests. Do NOT use this for
  * transcription: it derives the on-disk path from the download-path template and
@@ -507,16 +527,17 @@ export async function getEpisodeAudioBuffer(
 		registered?.filePath &&
 		isSameMediaSource(registered.streamUrl, episode.streamUrl)
 	) {
-		if (getEpisodeMediaType(registered) !== "audio") {
+		const registeredMediaType = getRegisteredEpisodeMediaType(
+			registered,
+			episode.mediaType === "audio" ? episodeMediaType : undefined,
+		);
+		if (registeredMediaType !== "audio") {
 			throw new Error("Transcription supports audio episodes only.");
 		}
 
 		const existingFile = app.vault.getAbstractFileByPath(registered.filePath);
 		if (existingFile instanceof TFile) {
-			return readVaultAudio(
-				registered.filePath,
-				getEpisodeMediaType(registered),
-			);
+			return readVaultAudio(registered.filePath, registeredMediaType);
 		}
 	}
 

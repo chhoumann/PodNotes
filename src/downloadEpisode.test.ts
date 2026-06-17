@@ -644,6 +644,32 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
+	it("reuses a legacy audio/mp4 download whose registry entry lacks media metadata", async () => {
+		const downloaded = episode({
+			title: "Legacy Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/legacy-episode.mp4",
+		});
+		seedFile("Podcasts/legacy-audio-mp4.mp4", "LEGACY-AUDIO-MP4-BYTES");
+		downloadedEpisodes.addEpisode(
+			downloaded,
+			"Podcasts/legacy-audio-mp4.mp4",
+			20,
+		);
+
+		const current = episode({
+			title: "Legacy Audio MP4 Download",
+			streamUrl: "https://cdn.example.com/legacy-episode.mp4",
+			mediaType: "audio",
+		});
+
+		const result = await getEpisodeAudioBuffer(current);
+
+		expect(decode(result.buffer)).toBe("LEGACY-AUDIO-MP4-BYTES");
+		expect(result.extension).toBe("m4a");
+		expect(result.basename).toBe("legacy-audio-mp4");
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
 	it("does not transcribe a local video file", async () => {
 		const local = episode({
 			title: "Local Video",
