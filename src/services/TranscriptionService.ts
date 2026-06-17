@@ -12,6 +12,15 @@ import {
 } from "../utility/enforceMaxPathLength";
 import { ensureFolderExists } from "../utility/ensureFolderExists";
 import type { Episode } from "src/types/Episode";
+import {
+	type DiarizationAudio,
+	type DiarizationProviderId,
+	type DiarizedSegment,
+	diarizeWithDeepgram,
+	diarizeWithOpenAI,
+	renderDiarizedTranscript,
+	requiredTranscriptionKeyPresent,
+} from "./diarization";
 
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
@@ -71,9 +80,14 @@ export class TranscriptionService {
 	}
 
 	async transcribeCurrentEpisode(): Promise<void> {
-		if (!this.plugin.settings.openAIApiKey?.trim()) {
+		if (!requiredTranscriptionKeyPresent(this.plugin.settings)) {
+			const diarization = this.plugin.settings.transcript.diarization;
+			const needsDeepgram =
+				diarization?.enabled && diarization.provider === "deepgram";
 			new Notice(
-				"Please add your OpenAI API key in the transcript settings first.",
+				needsDeepgram
+					? "Please add your Deepgram API key in the transcript settings to use Deepgram diarization."
+					: "Please add your OpenAI API key in the transcript settings first.",
 			);
 			return;
 		}
@@ -162,19 +176,18 @@ export class TranscriptionService {
 			} = await getEpisodeAudioBuffer(episode);
 			const mimeType = this.getMimeType(fileExtension);
 
-			notice.update("Creating audio chunks...");
-			const files = await this.createChunkFiles({
-				buffer: fileBuffer,
-				basename,
-				extension: fileExtension,
-				mimeType,
-			});
-
-			notice.update("Starting transcription...");
-			const transcription = await this.transcribeChunks(files, notice.update);
+			const transcriptBody = await this.buildTranscriptBody(
+				{
+					buffer: fileBuffer,
+					mimeType,
+					extension: fileExtension,
+					basename,
+				},
+				notice.update,
+			);
 
 			notice.update("Saving transcription...");
-			await this.saveTranscription(episode, transcription);
+			await this.saveTranscription(episode, transcriptBody);
 
 			notice.stop();
 			notice.update("Transcription completed and saved.");
@@ -189,6 +202,71 @@ export class TranscriptionService {
 		}
 	}
 
+	/**
+	 * Produce the transcript body that fills the template's `{{transcript}}` tag.
+	 * Plain Whisper returns one run-on block, so it is reflowed after sentence
+	 * periods for readability; diarization returns speaker-labeled turns already
+	 * separated into paragraphs, so it is rendered as-is. Diarization that yields
+	 * no speech is treated as a failure rather than writing an empty transcript.
+	 */
+	private async buildTranscriptBody(
+		audio: DiarizationAudio,
+		updateNotice: (message: string) => void,
+	): Promise<string> {
+		const diarization = this.plugin.settings.transcript.diarization;
+
+		if (diarization?.enabled) {
+			const segments = await this.diarize(
+				audio,
+				diarization.provider,
+				updateNotice,
+			);
+			if (segments.length === 0) {
+				throw new Error("Diarization returned no speech segments.");
+			}
+			return renderDiarizedTranscript(segments, diarization.speakerTemplate);
+		}
+
+		updateNotice("Creating audio chunks...");
+		const files = await this.createChunkFiles(audio);
+		updateNotice("Starting transcription...");
+		const transcription = await this.transcribeChunks(files, updateNotice);
+		return transcription.replace(/\.\s+/g, ".\n\n");
+	}
+
+	/** Route the episode audio to the configured diarization provider (#168). */
+	private async diarize(
+		audio: DiarizationAudio,
+		provider: DiarizationProviderId,
+		updateNotice: (message: string) => void,
+	): Promise<DiarizedSegment[]> {
+		if (provider === "deepgram") {
+			const apiKey = this.plugin.settings.diarizationApiKey?.trim();
+			if (!apiKey) {
+				throw new Error("Missing Deepgram API key for diarization.");
+			}
+			// Deepgram ingests the whole file in one request, so it needs no
+			// chunking — which is exactly why its speaker labels stay consistent
+			// across the entire episode.
+			return diarizeWithDeepgram({
+				audio,
+				apiKey,
+				onProgress: updateNotice,
+			});
+		}
+
+		// OpenAI diarization shares Whisper's 25 MB/request cap, so reuse the same
+		// chunking. Speaker labels can differ across chunks on a long episode.
+		updateNotice("Creating audio chunks...");
+		const chunkFiles = await this.createChunkFiles(audio);
+		return diarizeWithOpenAI({
+			getClient: () => this.getClient(),
+			chunkFiles,
+			maxRetries: this.MAX_RETRIES,
+			onProgress: updateNotice,
+		});
+	}
+
 	private async createChunkFiles({
 		buffer,
 		basename,
@@ -200,6 +278,19 @@ export class TranscriptionService {
 		extension: string;
 		mimeType: string;
 	}): Promise<File[]> {
+		// A file that already fits in a single request needs neither conversion nor
+		// splitting: send the original (compressed) bytes. OpenAI accepts m4a/mp3/etc.
+		// directly under the upload limit, so this skips the m4a->WAV path below for
+		// small m4a episodes — that path only exists to SAFELY SPLIT an m4a (which
+		// can't be byte-split) and would otherwise balloon a small m4a into many
+		// uncompressed WAV chunks, multiplying requests and, for diarization,
+		// resetting speaker labels at artificial chunk boundaries (#168 / PR #204 review).
+		if (buffer.byteLength <= this.CHUNK_SIZE_BYTES) {
+			return [
+				new File([buffer], `${basename}.${extension}`, { type: mimeType }),
+			];
+		}
+
 		if (this.shouldConvertToWav(extension, mimeType)) {
 			const wavChunks = await this.convertToWavChunks(buffer, basename);
 			if (wavChunks.length > 0) {
@@ -486,14 +577,16 @@ export class TranscriptionService {
 
 	private async saveTranscription(
 		episode: Episode,
-		transcription: string,
+		transcriptBody: string,
 	): Promise<void> {
 		const transcriptPath = this.getTranscriptPath(episode);
-		const formattedTranscription = transcription.replace(/\.\s+/g, ".\n\n");
+		// transcriptBody is already formatted by buildTranscriptBody (sentence
+		// reflow for Whisper, speaker turns for diarization), so it is templated
+		// verbatim here.
 		const transcriptContent = TranscriptTemplateEngine(
 			this.plugin.settings.transcript.template,
 			episode,
-			formattedTranscription,
+			transcriptBody,
 		);
 
 		const vault = this.plugin.app.vault;

@@ -24,3 +24,37 @@ To create a transcript:
 ## Transcript Template
 
 The transcript template works similarly to the [note template](./templates.md#note-template), but with the added `{{template}}` placeholder.
+
+## Speaker Diarization
+
+By default the transcription uses OpenAI's Whisper model, which produces plain text with **no speaker labels**. Speaker diarization is an opt-in setting that instead labels each segment of the transcript by speaker, e.g.:
+
+```
+**A:** Welcome to the show.
+
+**B:** Thanks for having me.
+```
+
+### Enabling it
+
+In the **Transcript settings** section, turn on **Speaker diarization** and choose a provider:
+
+- **OpenAI** (`gpt-4o-transcribe-diarize`): reuses the OpenAI API key you already entered above, so there is nothing else to configure. Because OpenAI caps each request at 25 MB, a long episode is split into chunks that are diarized independently — so on long episodes the speaker labels can change across chunk boundaries (the same person may be labelled `A` in one chunk and `B` in the next). A typical-length episode fits in a single request and is fully consistent.
+- **Deepgram**: sends the whole episode in one request, so speaker labels stay consistent across the entire episode. This requires a separate **Deepgram API key**, which you can create at [deepgram.com](https://deepgram.com) (new accounts include free credit). Your Deepgram key is stored separately from your OpenAI key and is only used for diarization.
+
+Diarization is off by default, so existing transcripts and the plain-Whisper workflow are unchanged unless you enable it.
+
+### Speaker label format
+
+The **Speaker label format** setting controls the prefix added before each speaker's turn. Use the `{{speaker}}` placeholder for the speaker's label:
+
+- OpenAI labels speakers `A`, `B`, `C`, …
+- Deepgram labels speakers `1`, `2`, `3`, …
+
+The default is `**{{speaker}}:** `, which renders as `**A:**`-style bold prefixes. To spell out the word "Speaker", set it to `**Speaker {{speaker}}:** ` (rendering `**Speaker A:**`); `> {{speaker}}: ` would instead put each turn in a blockquote.
+
+The labelled transcript replaces the usual `{{transcript}}` value in your [transcript template](#transcript-template), so you don't need to change your template to use diarization.
+
+### Cost
+
+Diarization providers bill per minute/hour of audio (separately from any plain-Whisper usage). As of mid-2026, OpenAI's diarize model is roughly $0.006 per minute, and Deepgram's diarized pre-recorded transcription is roughly $0.0068 per minute. Check each provider's current pricing before transcribing long back-catalogues.

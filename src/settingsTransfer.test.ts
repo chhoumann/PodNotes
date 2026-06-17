@@ -4,6 +4,7 @@ import {
 	EXCLUDED_KEYS,
 	SETTINGS_EXPORT_TYPE,
 	SETTINGS_EXPORT_VERSION,
+	describeSecrets,
 	mergeImportedSettings,
 	parseImport,
 	serializeSettings,
@@ -61,6 +62,33 @@ describe("serializeSettings", () => {
 
 		const withKey = serializeSettings(settings, { includeSecret: true }, "2.16.0", NOW);
 		expect(withKey.settings.openAIApiKey).toBe("sk-secret");
+	});
+
+	it("redacts the diarization (Deepgram) key alongside the OpenAI key (#168)", () => {
+		const settings = makeSettings({
+			openAIApiKey: "sk-secret",
+			diarizationApiKey: "dg-secret",
+		});
+
+		const without = serializeSettings(settings, { includeSecret: false }, "2.16.0", NOW);
+		expect(without.settings).not.toHaveProperty("openAIApiKey");
+		expect(without.settings).not.toHaveProperty("diarizationApiKey");
+
+		const withKey = serializeSettings(settings, { includeSecret: true }, "2.16.0", NOW);
+		expect(withKey.settings.diarizationApiKey).toBe("dg-secret");
+	});
+
+	it("never lets the Deepgram key ride along inside the transcript object (#168)", () => {
+		// The key lives top-level precisely so it can be redacted; the nested
+		// transcript object (copied wholesale) must never carry a secret.
+		const settings = makeSettings({ diarizationApiKey: "dg-secret" });
+		const { settings: exported } = serializeSettings(
+			settings,
+			{ includeSecret: false },
+			"2.16.0",
+			NOW,
+		);
+		expect(JSON.stringify(exported.transcript ?? {})).not.toContain("dg-secret");
 	});
 
 	it("includes preferences, templates, and library", () => {
@@ -286,5 +314,48 @@ describe("mergeImportedSettings", () => {
 
 		expect(merged.feedNote.path).toBe("MyPods/{{podcast}}.md");
 		expect(merged.feedNote.template).toBe(DEFAULT_SETTINGS.feedNote.template);
+	});
+
+	it("clamps an imported invalid diarization provider and backfills its fields (#168)", () => {
+		const current = makeSettings();
+
+		const merged = mergeImportedSettings(current, {
+			transcript: {
+				path: "t/{{title}}.md",
+				template: "{{transcript}}",
+				diarization: { enabled: true, provider: "macwhisper" },
+			} as never,
+		});
+
+		// Unknown provider falls back to the default; the missing speakerTemplate is
+		// backfilled — the import path converges with the load path (#168).
+		expect(merged.transcript.diarization.provider).toBe(
+			DEFAULT_SETTINGS.transcript.diarization.provider,
+		);
+		expect(merged.transcript.diarization.enabled).toBe(true);
+		expect(merged.transcript.diarization.speakerTemplate).toBe(
+			DEFAULT_SETTINGS.transcript.diarization.speakerTemplate,
+		);
+	});
+});
+
+describe("describeSecrets (#168)", () => {
+	it("names only the secrets that actually hold a value", () => {
+		expect(describeSecrets(makeSettings())).toEqual([]);
+		expect(describeSecrets(makeSettings({ openAIApiKey: "sk" }))).toEqual([
+			"OpenAI API key",
+		]);
+		expect(
+			describeSecrets(makeSettings({ diarizationApiKey: "dg" })),
+		).toEqual(["Deepgram API key"]);
+		expect(
+			describeSecrets(
+				makeSettings({ openAIApiKey: "sk", diarizationApiKey: "dg" }),
+			),
+		).toEqual(["OpenAI API key", "Deepgram API key"]);
+	});
+
+	it("ignores whitespace-only secrets", () => {
+		expect(describeSecrets(makeSettings({ openAIApiKey: "   " }))).toEqual([]);
 	});
 });

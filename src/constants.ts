@@ -1,5 +1,6 @@
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { Playlist } from "./types/Playlist";
+import { DEFAULT_SPEAKER_TEMPLATE } from "./services/diarization/segments";
 
 export const VIEW_TYPE = "podcast_player_view";
 
@@ -154,10 +155,18 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		episodes: [],
 	},
 	openAIApiKey: "",
+	diarizationApiKey: "",
 	transcript: {
 		path: "transcripts/{{podcast}}/{{title}}.md",
 		template:
 			"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
+		// Diarization is off by default so existing behaviour (plain Whisper) is
+		// unchanged; enabling it routes audio to the chosen provider (#168).
+		diarization: {
+			enabled: false,
+			provider: "openai",
+			speakerTemplate: DEFAULT_SPEAKER_TEMPLATE,
+		},
 	},
 	feedCache: {
 		enabled: true,

@@ -300,4 +300,49 @@ describe("TranscriptionService", () => {
 			await service.transcribeCurrentEpisode();
 		});
 	});
+
+	describe("createChunkFiles small-file fast path (#168 / PR #204 review)", () => {
+		type ChunkFn = (args: {
+			buffer: ArrayBuffer;
+			basename: string;
+			extension: string;
+			mimeType: string;
+		}) => Promise<File[]>;
+
+		function createChunkFiles(): ChunkFn {
+			const service = new TranscriptionService(createMockPlugin());
+			return (service as unknown as { createChunkFiles: ChunkFn })
+				.createChunkFiles.bind(service);
+		}
+
+		test("sends a small m4a as a single original file instead of WAV-splitting it", async () => {
+			// A 1 KB m4a is well under the 20 MB chunk size, so it must not be
+			// converted to WAV (which would balloon it into many chunks and reset
+			// diarization speaker labels). It should be one intact .m4a file.
+			const files = await createChunkFiles()({
+				buffer: new ArrayBuffer(1024),
+				basename: "episode",
+				extension: "m4a",
+				mimeType: "audio/mp4",
+			});
+
+			expect(files).toHaveLength(1);
+			expect(files[0].name).toBe("episode.m4a");
+			expect(files[0].type).toBe("audio/mp4");
+			expect(files[0].name).not.toContain(".wav");
+		});
+
+		test("still sends a small mp3 as a single original file (unchanged)", async () => {
+			const files = await createChunkFiles()({
+				buffer: new ArrayBuffer(2048),
+				basename: "episode",
+				extension: "mp3",
+				mimeType: "audio/mpeg",
+			});
+
+			expect(files).toHaveLength(1);
+			expect(files[0].name).toBe("episode.mp3");
+			expect(files[0].size).toBe(2048);
+		});
+	});
 });

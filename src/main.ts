@@ -20,7 +20,9 @@ import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
 import {
 	migrateDownloadPath,
 	migrateNoteSettings,
+	migrateTranscriptSettings,
 } from "src/settingsMigrations";
+import { requiredTranscriptionKeyPresent } from "src/services/diarization";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { QueueReorderModal } from "src/ui/QueueReorderModal";
@@ -482,7 +484,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			name: "Transcribe current episode",
 			checkCallback: (checking) => {
 				const canTranscribe =
-					!!this.api.podcast && !!this.settings.openAIApiKey?.trim();
+					!!this.api.podcast &&
+					requiredTranscriptionKeyPresent(this.settings);
 
 				if (checking) {
 					return canTranscribe;
@@ -721,6 +724,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// default, preserving any path/template the user configured (#160). Returns
 		// a fresh object, so DEFAULT_SETTINGS.note is never mutated.
 		this.settings.note = migrateNoteSettings(loadedData?.note);
+		// Backfill the diarization defaults onto the stored transcript object so an
+		// existing user (who has only { path, template } persisted) gets a valid
+		// transcript.diarization instead of undefined (#168).
+		this.settings.transcript = migrateTranscriptSettings(
+			loadedData?.transcript,
+		);
 	}
 
 	async saveSettings() {
