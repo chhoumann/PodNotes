@@ -467,6 +467,31 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
 	});
 
+	it("rejects an RSS/Atom feed served at a .mp3 URL (structured +xml types) (#213)", async () => {
+		const { createBinary } = setupVault();
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "application/rss+xml" },
+			arrayBuffer: new TextEncoder().encode("<rss><channel/></rss>").buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await expect(
+				downloadEpisodeWithNotice(
+					makeEpisode({ streamUrl: "https://example.com/expired.mp3" }),
+					"Podcasts/{{title}}",
+				),
+			).rejects.toThrow(/Not a playable media file/);
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).not.toHaveBeenCalled();
+	});
+
 	it("rejects a JSON error body served at a .mp3 URL (#DL-07)", async () => {
 		const { createBinary } = setupVault();
 		requestUrlMock.mockResolvedValue({

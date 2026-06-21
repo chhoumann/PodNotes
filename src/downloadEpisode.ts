@@ -406,7 +406,12 @@ function isKnownNonMediaContentType(contentType: string): boolean {
 		normalizedType.startsWith("text/") ||
 		normalizedType === "application/json" ||
 		normalizedType === "application/xml" ||
-		normalizedType === "application/xhtml+xml"
+		// Structured XML/JSON families: rss+xml, atom+xml, xhtml+xml, problem+json,
+		// ld+json, etc. An expired/private feed often answers a media URL with one
+		// of these, and no real audio/video type uses a +xml/+json suffix (#DL-07 /
+		// Codex review #213).
+		normalizedType.endsWith("+xml") ||
+		normalizedType.endsWith("+json")
 	);
 }
 

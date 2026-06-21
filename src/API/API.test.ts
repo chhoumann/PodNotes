@@ -220,6 +220,16 @@ describe("API skip controls (PB-02)", () => {
 		expect(api.currentTime).toBe(109.75);
 	});
 
+	test("does not rewind on a forward skip when already within the last 0.25s (#213)", () => {
+		currentTime.set(9.9);
+		duration.set(10);
+		const api = new API();
+
+		api.skipForward();
+		// The end-clamp (dur - 0.25 = 9.75) must never move a forward skip backward.
+		expect(api.currentTime).toBe(9.9);
+	});
+
 	test("leaves the forward target unclamped when duration is unknown", () => {
 		currentTime.set(100);
 		duration.set(0);
