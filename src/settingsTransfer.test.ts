@@ -253,6 +253,92 @@ describe("parseImport", () => {
 		expect(withoutKey.ok).toBe(true);
 		if (withoutKey.ok) expect(withoutKey.meta.includesSecret).toBe(false);
 	});
+
+	it("drops an empty/whitespace secret so it cannot clobber a saved key (IE-05)", () => {
+		const result = parseImport(
+			JSON.stringify({
+				defaultVolume: 0.5,
+				openAIApiKey: "",
+				diarizationApiKey: "   ",
+			}),
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			// An empty secret is treated as absent: not carried into the merge, and
+			// not counted as "includes a secret".
+			expect(result.settings).not.toHaveProperty("openAIApiKey");
+			expect(result.settings).not.toHaveProperty("diarizationApiKey");
+			expect(result.meta.includesSecret).toBe(false);
+		}
+	});
+
+	it("keeps a non-empty imported secret (IE-05)", () => {
+		const result = parseImport(JSON.stringify({ openAIApiKey: "sk-real" }));
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.settings.openAIApiKey).toBe("sk-real");
+			expect(result.meta.includesSecret).toBe(true);
+		}
+	});
+
+	it("drops a built-in playlist whose episodes is not an array (PL-10)", () => {
+		const result = parseImport(
+			JSON.stringify({
+				defaultVolume: 0.5,
+				favorites: { name: "Favorites", icon: "star", episodes: "boom" },
+				localFiles: { name: "Local Files", icon: "folder" },
+			}),
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			// Malformed built-ins are dropped so the merge falls back to the default
+			// (which carries episodes: []), instead of feeding the UI a bad shape.
+			expect(result.settings).not.toHaveProperty("favorites");
+			expect(result.settings).not.toHaveProperty("localFiles");
+		}
+	});
+
+	it("keeps a well-formed built-in playlist (PL-10)", () => {
+		const favorites = {
+			name: "Favorites",
+			icon: "star",
+			shouldEpisodeRemoveAfterPlay: false,
+			shouldRepeat: false,
+			episodes: [],
+		};
+		const result = parseImport(JSON.stringify({ favorites }));
+
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.settings.favorites).toEqual(favorites);
+	});
+
+	it("drops only the malformed entries from the playlists map (PL-10)", () => {
+		const good = {
+			name: "Good",
+			icon: "list",
+			shouldEpisodeRemoveAfterPlay: false,
+			shouldRepeat: false,
+			episodes: [],
+		};
+		const result = parseImport(
+			JSON.stringify({
+				playlists: {
+					Good: good,
+					NoEpisodes: { name: "NoEpisodes", icon: "list" },
+					BadEpisodes: { name: "BadEpisodes", episodes: 42 },
+					NotAnObject: "nope",
+				},
+			}),
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(Object.keys(result.settings.playlists ?? {})).toEqual(["Good"]);
+			expect(result.settings.playlists?.Good).toEqual(good);
+		}
+	});
 });
 
 describe("mergeImportedSettings", () => {
@@ -293,6 +379,20 @@ describe("mergeImportedSettings", () => {
 		});
 
 		expect(Object.keys(merged.savedFeeds)).toEqual(["A"]);
+	});
+
+	it("preserves a saved secret when the import omits it (IE-05)", () => {
+		const current = makeSettings({
+			openAIApiKey: "sk-saved",
+			diarizationApiKey: "dg-saved",
+		});
+
+		// parseImport strips empty secrets, so a raw data.json with blank keys
+		// arrives here without them; the merge must keep the configured keys.
+		const merged = mergeImportedSettings(current, { defaultVolume: 0.5 });
+
+		expect(merged.openAIApiKey).toBe("sk-saved");
+		expect(merged.diarizationApiKey).toBe("dg-saved");
 	});
 
 	it("keeps the current nested value when the import omits the field", () => {

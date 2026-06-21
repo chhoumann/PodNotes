@@ -5,9 +5,10 @@ import { parseOpenAIDiarizedSegments } from "./segments";
 /**
  * Diarize with OpenAI's `gpt-4o-transcribe-diarize` model (issue #168).
  *
- * Reuses the same chunked `File[]` the Whisper path builds because the
- * transcription endpoint caps a request at 25 MB. `chunking_strategy: "auto"` is
- * required for audio longer than 30s and lets the model segment within a chunk.
+ * Reuses the same chunked `File[]` the Whisper path builds because the chunker
+ * caps each request at ~20 MB (a conservative margin under OpenAI's 25 MB request
+ * cap). `chunking_strategy: "auto"` is required for audio longer than 30s and lets
+ * the model segment within a chunk.
  * Speaker labels are assigned per request, so on a multi-chunk (long) episode
  * the labels can differ across chunk boundaries — the caller documents this; a
  * single-chunk episode (the common case) is fully consistent.
@@ -59,7 +60,7 @@ export async function diarizeWithOpenAI(opts: {
 				attempt++;
 				if (attempt >= maxRetries) {
 					console.error(
-						`OpenAI diarization failed for chunk ${index} after ${maxRetries} attempts:`,
+						`OpenAI diarization failed for chunk ${index + 1} after ${maxRetries} attempts:`,
 						error,
 					);
 					failedChunks++;

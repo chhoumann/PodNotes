@@ -7,9 +7,10 @@
  *
  * - `openai`: the `gpt-4o-transcribe-diarize` model on the same
  *   `/v1/audio/transcriptions` endpoint the plugin already uses, reusing the
- *   user's existing OpenAI key. Convenient, but its 25 MB/request limit means a
- *   long episode is split into chunks whose speaker labels are not guaranteed to
- *   line up across chunk boundaries (the labels are assigned per request).
+ *   user's existing OpenAI key. Convenient, but the ~20 MB chunk limit (a
+ *   conservative margin under OpenAI's 25 MB request cap) means a long episode is
+ *   split into chunks whose speaker labels are not guaranteed to line up across
+ *   chunk boundaries (the labels are assigned per request).
  * - `deepgram`: a single whole-file request to Deepgram's pre-recorded API,
  *   which keeps speaker identity consistent across the entire episode but needs
  *   its own API key.
