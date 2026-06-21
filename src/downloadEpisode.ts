@@ -362,7 +362,20 @@ function inferFileExtensionFromDownload(
 
 	const signatureExtension = detectAudioFileExtension(data);
 	if (signatureExtension) {
-		return signatureExtension;
+		// A generic ISO-BMFF brand (mp42/isom/M4B...) resolves to "mp4"; for an
+		// audio download keep it as m4a so a podcast served as audio/mp4 isn't
+		// saved as *.mp4 and later treated as an ambiguous audio/video container
+		// (Codex review #213). The hint comes from the content type or, failing
+		// that, the episode's known media type.
+		const isAudioDownload =
+			getMediaTypeFromContentType(contentType) === "audio" ||
+			episode.mediaType === "audio";
+		return (
+			normalizeAudioExtension(
+				signatureExtension,
+				isAudioDownload ? "audio" : undefined,
+			) ?? signatureExtension
+		);
 	}
 
 	if (contentTypeExtension) {

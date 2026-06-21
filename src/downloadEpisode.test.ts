@@ -302,6 +302,40 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		});
 	});
 
+	it("saves an audio/mp4 download with a generic ISO-BMFF brand as m4a, not mp4 (Codex #213)", async () => {
+		const { createBinary } = setupVault();
+		// Real ISO-BMFF: 4-byte box size, 'ftyp', then a generic 'mp42' major brand.
+		// detectAudioFileExtension returns "mp4" for this; for an audio download it
+		// must still be saved as m4a so it isn't treated as an ambiguous container.
+		const buffer = bytes(
+			0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32,
+		);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mp4" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Brandy MP4 Title",
+			streamUrl: "https://example.com/episode.mp4",
+			mediaType: "audio",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith(
+			"Podcasts/Brandy MP4 Title.m4a",
+			buffer,
+		);
+	});
+
 	it("preserves audio/webm downloads as audio WebM files", async () => {
 		const { createBinary } = setupVault();
 		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
