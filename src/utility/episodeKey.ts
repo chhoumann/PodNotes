@@ -33,3 +33,28 @@ export function episodeMatchesKey(episode: Episode | null | undefined, key: stri
 	// Also check title-only for backwards compatibility
 	return episode.title === key;
 }
+
+/**
+ * Whether a STORED playlist/favorite entry refers to the same episode as
+ * `current`. Matches on the composite key (podcastName::title) and, for LEGACY
+ * entries saved before podcastName existed (the entry has no podcastName), by
+ * title alone — but never matches a same-titled episode from a DIFFERENT podcast
+ * (an entry that does carry a podcastName).
+ *
+ * episodeMatchesKey alone misses a legacy (title-only) entry when the current
+ * episode's key is composite, so a legacy favorite/playlist entry looked absent
+ * and got duplicated (or skipped on cleanup). This restores that legacy match
+ * without reintroducing the cross-podcast title collision.
+ */
+export function isSameStoredEpisode(
+	entry: Episode | null | undefined,
+	current: Episode | null | undefined,
+): boolean {
+	if (!entry || !current) {
+		return false;
+	}
+	if (episodeMatchesKey(entry, getEpisodeKey(current))) {
+		return true;
+	}
+	return !entry.podcastName && !!current.title && entry.title === current.title;
+}
