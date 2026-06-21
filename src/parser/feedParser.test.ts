@@ -247,6 +247,35 @@ describe("FeedParser", () => {
 			expect(feed.artworkUrl).toBe("https://example.com/itunes-artwork.jpg");
 		});
 
+		test("does not adopt an item image as feed artwork when the channel has none (FP-02)", async () => {
+			const feedWithOnlyItemImage = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>No Channel Image Podcast</title>
+    <link>https://example.com</link>
+    <item>
+      <title>Episode 1</title>
+      <enclosure url="https://example.com/episode1.mp3" type="audio/mpeg"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+      <itunes:image href="https://example.com/episode1-artwork.jpg"/>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout.mockResolvedValueOnce({
+				text: feedWithOnlyItemImage,
+				status: 200,
+				headers: {},
+				arrayBuffer: new ArrayBuffer(0),
+				json: {},
+			});
+
+			const parser = new FeedParser();
+			const feed = await parser.getFeed("https://example.com/feed.xml");
+
+			// The item's image must NOT leak up as the feed artwork.
+			expect(feed.artworkUrl).toBe("");
+		});
+
 		test("throws error for invalid RSS feed without title", async () => {
 			mockRequestWithTimeout.mockResolvedValueOnce({
 				text: invalidRssFeed,

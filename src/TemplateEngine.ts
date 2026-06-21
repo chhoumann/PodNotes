@@ -28,7 +28,11 @@ interface Tags {
 type AddTagFn = (tag: Lowercase<string>, value: TagValue) => void;
 type ReplacerFn = (template: string) => string;
 
-const TEMPLATE_TAG_REGEX = /\{\{(.*?)(:\s*?.+?)?\}\}/g;
+// The optional argument group uses `.*?` (zero-or-more), so a bare trailing
+// colon ({{date:}}) is captured AS the argument group (params === ":") rather
+// than being absorbed into the tag id — which previously yielded tagId "date:",
+// an unknown tag, and a spurious "invalid tag" Notice (NT-05/CH-09).
+const TEMPLATE_TAG_REGEX = /\{\{(.*?)(:\s*.*?)?\}\}/g;
 
 export interface NoteTemplateContext {
 	chapters?: Chapter[];
@@ -79,15 +83,20 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 				}
 
 				if (typeof tagValue === "function") {
-					if (params) {
-						// Pass everything after the leading colon as a single argument.
-						// No tag takes more than one argument, and splitting on "," would
-						// corrupt format strings that legitimately contain commas
-						// (e.g. {{currentDate:MMMM D, YYYY}}).
-						return tagValue(params.slice(1));
+					// Everything after the leading colon is a single argument. A bare
+					// trailing colon ({{date:}}) means "use the tag default", same as a
+					// bare {{date}} — not an empty format string (NT-05/CH-09). Only an
+					// EMPTY argument is collapsed; a whitespace argument ({{description: }})
+					// is preserved so the obscure space-prepend usage still works.
+					const arg = params ? params.slice(1) : "";
+					if (arg === "") {
+						return tagValue();
 					}
 
-					return tagValue();
+					// No tag takes more than one argument, and splitting on "," would
+					// corrupt format strings that legitimately contain commas
+					// (e.g. {{currentDate:MMMM D, YYYY}}).
+					return tagValue(arg);
 				}
 
 				return tagValue;
@@ -323,10 +332,20 @@ export function FilePathTemplateEngine(template: string, episode: Episode) {
 }
 
 export function DownloadPathTemplateEngine(template: string, episode: Episode) {
-	// Removing the template extension, as this is added automatically depending on file type.
+	// Removing the template extension, as this is added automatically depending on
+	// file type. Anchor the strip at end-of-string: getUrlExtension returns the
+	// FIRST '.ext' followed by '?'/'#'/end, which need not be the trailing one, so
+	// a positional `.replace(ext, "")` could corrupt a folder name that happens to
+	// contain the same string earlier in the path (#DL-04).
 	const templateExtension = getUrlExtension(template);
 	const templateWithoutExtension = templateExtension
-		? template.replace(templateExtension, "")
+		? template.replace(
+				new RegExp(
+					`\\.${templateExtension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+					"i",
+				),
+				"",
+			)
 		: template;
 
 	const [replacer, addTag] = useTemplateEngine();
