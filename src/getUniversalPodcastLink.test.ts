@@ -147,6 +147,32 @@ describe("getUniversalPodcastLink", () => {
 		);
 	});
 
+	test("prefers the feed-URL match over an earlier same-title iTunes result (#213)", async () => {
+		queryiTunesMock.mockResolvedValue([
+			{
+				// A duplicate/rehosted show with the SAME title but a different feed,
+				// returned first by iTunes.
+				title: "Example Show",
+				url: "https://other.example.com/rss",
+				artworkUrl: "",
+				collectionId: "111",
+			},
+			{
+				// The real one, matched by normalized feed URL (trailing slash/case).
+				title: "Example Show (mirror)",
+				url: "https://feeds.example.com/rss/",
+				artworkUrl: "",
+				collectionId: "222",
+			},
+		]);
+
+		await getUniversalPodcastLink(api);
+
+		expect(writeTextMock).toHaveBeenCalledWith(
+			"https://pod.link/222/episode/ep-123",
+		);
+	});
+
 	test("shows an actionable notice when the podcast cannot be matched", async () => {
 		queryiTunesMock.mockResolvedValue([]);
 

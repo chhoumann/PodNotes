@@ -20,23 +20,29 @@ async function resolveCollectionId(
 ): Promise<string | undefined> {
 	const feeds = get(savedFeeds);
 	const targetUrl = normalizeFeedUrl(feedUrl);
+	// Prefer a normalized feed-URL match over a title-only match: duplicate or
+	// rehosted podcast titles mean a same-title-but-different-feed entry can
+	// appear first, which would resolve the wrong collection. Only fall back to
+	// title matching when no feed-URL match exists (Codex review #213).
 	const savedFeed =
 		feeds[podcastName] ??
-		Object.values(feeds).find(
-			(feed) =>
-				normalizeFeedUrl(feed.url) === targetUrl ||
-				feed.title === podcastName,
-		);
+		(targetUrl
+			? Object.values(feeds).find(
+					(feed) => normalizeFeedUrl(feed.url) === targetUrl,
+				)
+			: undefined) ??
+		Object.values(feeds).find((feed) => feed.title === podcastName);
 
 	if (savedFeed?.collectionId) {
 		return savedFeed.collectionId;
 	}
 
 	const iTunesResponse = await queryiTunesPodcasts(podcastName);
-	const match = iTunesResponse.find(
-		(pod) =>
-			normalizeFeedUrl(pod.url) === targetUrl || pod.title === podcastName,
-	);
+	const match =
+		(targetUrl
+			? iTunesResponse.find((pod) => normalizeFeedUrl(pod.url) === targetUrl)
+			: undefined) ??
+		iTunesResponse.find((pod) => pod.title === podcastName);
 
 	return match?.collectionId;
 }
