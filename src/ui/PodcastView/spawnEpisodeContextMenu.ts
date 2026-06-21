@@ -10,6 +10,7 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
+import { episodeMatchesKey, getEpisodeKey } from "src/utility/episodeKey";
 import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 interface DisabledMenuItems {
@@ -22,13 +23,23 @@ interface DisabledMenuItems {
 	playlists: boolean;
 }
 
+/**
+ * A screen position to open the menu at. Used when there is no MouseEvent to
+ * anchor against (keyboard activation / mobile tap of the overflow button).
+ */
+export interface MenuPosition {
+	x: number;
+	y: number;
+}
+
 export default function spawnEpisodeContextMenu(
 	episode: Episode,
-	event: MouseEvent,
+	anchor: MouseEvent | MenuPosition,
 	disabledMenuItems?: Partial<DisabledMenuItems>,
 	playedEpisodeKey?: string,
 ) {
 	const menu = new Menu();
+	const episodeKey = getEpisodeKey(episode);
 
 	if (!disabledMenuItems?.play) {
 		menu.addItem(item => item
@@ -74,11 +85,14 @@ export default function spawnEpisodeContextMenu(
 				} else {
 					// The path template always yields a per-episode file via
 					// safeDownloadBasename (#183), so no empty-path guard is needed —
-					// this matches the Download command in main.ts.
-					downloadEpisodeWithProgessNotice(
+					// this matches the Download command in main.ts. Settle the
+					// promise so a failure can't surface as an unhandled rejection
+					// (the in-notice error is the user-facing message), matching the
+					// adjacent void removeDownloadedEpisode(...).
+					void downloadEpisodeWithProgessNotice(
 						episode,
 						get(plugin).settings.download.path,
-					);
+					).catch((e) => console.error("PodNotes: download failed", e));
 				}
 			}));
 	}
@@ -128,14 +142,14 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.favorite) {
-		const episodeIsFavorite = get(favorites).episodes.find(e => e.title === episode.title);
+		const episodeIsFavorite = get(favorites).episodes.find(e => episodeMatchesKey(e, episodeKey));
 		menu.addItem(item => item
 			.setIcon("lucide-star")
 			.setTitle(`${episodeIsFavorite ? "Remove from" : "Add to"} Favorites`)
 			.onClick(() => {
 				if (episodeIsFavorite) {
 					favorites.update(playlist => {
-						playlist.episodes = playlist.episodes.filter(e => e.title !== episode.title);
+						playlist.episodes = playlist.episodes.filter(e => !episodeMatchesKey(e, episodeKey));
 						return playlist;
 					});
 				} else {
@@ -150,7 +164,7 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.queue) {
-		const episodeIsInQueue = get(queue).episodes.find(e => e.title === episode.title);
+		const episodeIsInQueue = get(queue).episodes.find(e => episodeMatchesKey(e, episodeKey));
 		menu.addItem(item => item
 			.setIcon("list-ordered")
 			.setTitle(`${episodeIsInQueue ? "Remove from" : "Add to"} Queue`)
@@ -183,7 +197,7 @@ export default function spawnEpisodeContextMenu(
 						// episode ends and playNext advances it) between opening
 						// the menu and clicking.
 						const index = get(queue).episodes.findIndex(
-							e => e.title === episode.title,
+							e => episodeMatchesKey(e, episodeKey),
 						);
 						if (index === -1) return;
 
@@ -207,36 +221,46 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.playlists) {
-		menu.addSeparator();
-
 		const playlistsInStore = get(playlists);
-		for (const playlist of Object.values(playlistsInStore)) {
-			const episodeIsInPlaylist = playlist.episodes.find(e => e.title === episode.title);
+		const entries = Object.values(playlistsInStore);
 
-			menu.addItem(item => item
-				.setIcon(playlist.icon)
-				.setTitle(`${episodeIsInPlaylist ? "Remove from" : "Add to"} ${playlist.name}`)
-				.onClick(() => {
-					if (episodeIsInPlaylist) {
-						playlists.update(playlists => {
-							playlists[playlist.name].episodes = playlists[playlist.name].episodes.filter(e => e.title !== episode.title);
+		// Only emit the divider when there is at least one custom playlist to
+		// render, mirroring the reorder section's guard — otherwise a stray
+		// trailing separator is left at the bottom of the menu (CM-09).
+		if (entries.length > 0) {
+			menu.addSeparator();
 
-							return playlists;
-						});
-					} else {
-						playlists.update(playlists => {
-							const newEpisodes = [...playlists[playlist.name].episodes, episode];
-							playlists[playlist.name].episodes = newEpisodes;
+			for (const playlist of entries) {
+				const episodeIsInPlaylist = playlist.episodes.find(e => episodeMatchesKey(e, episodeKey));
 
-							return playlists;
-						});
-					}
-				}));
+				menu.addItem(item => item
+					.setIcon(playlist.icon)
+					.setTitle(`${episodeIsInPlaylist ? "Remove from" : "Add to"} ${playlist.name}`)
+					.onClick(() => {
+						if (episodeIsInPlaylist) {
+							playlists.update(playlists => {
+								playlists[playlist.name].episodes = playlists[playlist.name].episodes.filter(e => !episodeMatchesKey(e, episodeKey));
+
+								return playlists;
+							});
+						} else {
+							playlists.update(playlists => {
+								const newEpisodes = [...playlists[playlist.name].episodes, episode];
+								playlists[playlist.name].episodes = newEpisodes;
+
+								return playlists;
+							});
+						}
+					}));
+			}
 		}
 	}
 
-	menu.showAtMouseEvent(event);
-
+	if (anchor instanceof MouseEvent) {
+		menu.showAtMouseEvent(anchor);
+	} else {
+		menu.showAtPosition(anchor);
+	}
 }
 
 /**

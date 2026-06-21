@@ -2,6 +2,7 @@
 	import type { Episode } from "src/types/Episode";
 	import { createEventDispatcher } from "svelte";
 	import ImageLoader from "../common/ImageLoader.svelte";
+	import Icon from "../obsidian/Icon.svelte";
 
 	export let episode: Episode;
 	export let episodeFinished: boolean = false;
@@ -15,6 +16,7 @@
 		year: "numeric"
 	});
 	const formattedDateCache = new Map<string, string>();
+	let overflowEl: HTMLDivElement;
 
 	function onClickEpisode() {
 		dispatch("clickEpisode", { episode });
@@ -22,6 +24,20 @@
 
 	function onContextMenu(event: MouseEvent) {
 		dispatch("contextMenu", { episode, event });
+	}
+
+	// Open the same menu from the overflow button so it is reachable on mobile
+	// (tap) and via keyboard, where right-click is unavailable. Anchor the menu
+	// to the button's bounding box (the bound element, valid regardless of event
+	// timing) instead of a MouseEvent; spawnEpisodeContextMenu accepts an {x, y}
+	// position. Enter/Space activate the underlying <button> as a click.
+	function onOverflowClick() {
+		if (!overflowEl) return;
+		const rect = overflowEl.getBoundingClientRect();
+		dispatch("contextMenu", {
+			episode,
+			event: { x: rect.left, y: rect.bottom },
+		});
 	}
 
 	function parseEpisodeDate(rawDate?: Date | string): Date | null {
@@ -53,56 +69,73 @@
 	$: date = formatEpisodeDate(episode);
 </script>
 
-<button
-	type="button"
-	class="podcast-episode-item" 
-	on:click={onClickEpisode} 
-	on:contextmenu={onContextMenu}
-	title={unavailableReason ?? episode.title}
->
-	{#if showEpisodeImage && episode?.artworkUrl} 
-		<div class="podcast-episode-thumbnail-container">
-			<ImageLoader
-				src={episode.artworkUrl}
-				alt={episode.title}
-				fadeIn={true}
-				width="100%"
-				height="100%"
-				class="podcast-episode-thumbnail"
-			/>
-		</div>
-	{:else if showEpisodeImage}
-		<div class="podcast-episode-thumbnail-container"></div>
-	{/if}
-	<div class="podcast-episode-information">
-		<span class="episode-item-date">{date}</span>
-		<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
-		{#if unavailableReason}
-			<span class="episode-item-status">{unavailableReason}</span>
+<div class="podcast-episode-row">
+	<button
+		type="button"
+		class="podcast-episode-item"
+		on:click={onClickEpisode}
+		on:contextmenu={onContextMenu}
+		title={unavailableReason ?? episode.title}
+	>
+		{#if showEpisodeImage && episode?.artworkUrl}
+			<div class="podcast-episode-thumbnail-container">
+				<ImageLoader
+					src={episode.artworkUrl}
+					alt={episode.title}
+					fadeIn={true}
+					width="100%"
+					height="100%"
+					class="podcast-episode-thumbnail"
+				/>
+			</div>
+		{:else if showEpisodeImage}
+			<div class="podcast-episode-thumbnail-container"></div>
 		{/if}
+		<div class="podcast-episode-information">
+			<span class="episode-item-date">{date}</span>
+			<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
+			{#if unavailableReason}
+				<span class="episode-item-status">{unavailableReason}</span>
+			{/if}
+		</div>
+	</button>
+
+	<div class="podcast-episode-overflow" bind:this={overflowEl}>
+		<Icon
+			icon="more-vertical"
+			size={20}
+			label={`More options for ${episode.title}`}
+			on:click={onOverflowClick}
+		/>
 	</div>
-</button>
+</div>
 
 <style>
+	.podcast-episode-row {
+		position: relative;
+		display: flex;
+		align-items: stretch;
+		border-bottom: 1px solid var(--background-modifier-border);
+	}
+
+	.podcast-episode-row:last-child {
+		border-bottom: none;
+	}
+
 	.podcast-episode-item {
 		display: flex;
 		flex-direction: row;
 		justify-content: flex-start;
 		align-items: center;
-		padding: 0.625rem 0.75rem;
+		padding: 0.625rem 2.5rem 0.625rem 0.75rem;
 		min-height: 4.5rem;
 		width: 100%;
 		border: none;
-		border-bottom: 1px solid var(--background-modifier-border);
 		gap: 0.75rem;
 		background: transparent;
 		text-align: left;
 		cursor: pointer;
 		transition: background-color 120ms ease;
-	}
-
-	.podcast-episode-item:last-child {
-		border-bottom: none;
 	}
 
 	.podcast-episode-item:focus-visible {
@@ -117,6 +150,32 @@
 
 	.podcast-episode-item:active {
 		background-color: var(--background-modifier-border);
+	}
+
+	.podcast-episode-overflow {
+		position: absolute;
+		top: 50%;
+		right: 0.25rem;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+	}
+
+	.podcast-episode-overflow :global(.icon-button) {
+		padding: 0.35rem;
+		border-radius: 0.375rem;
+		color: var(--text-muted);
+		transition: background-color 120ms ease, color 120ms ease;
+	}
+
+	.podcast-episode-overflow :global(.icon-button:hover) {
+		background-color: var(--background-modifier-hover);
+		color: var(--text-normal);
+	}
+
+	.podcast-episode-overflow :global(.icon-button:focus-visible) {
+		outline: 2px solid var(--interactive-accent);
+		outline-offset: -2px;
 	}
 
 	.strikeout {
