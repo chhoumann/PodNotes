@@ -46,6 +46,21 @@ describe("PlaylistManager", () => {
 		expect(input.value).toBe("");
 	});
 
+	// #214: a built-in playlist name (Queue/Favorites/Local Files/Played) is
+	// reserved, so a custom playlist can't shadow a built-in and make an open
+	// playlist silently switch lists on refresh.
+	test("rejects a reserved built-in name with a Notice and adds nothing", async () => {
+		const noticeSpy = vi.spyOn(obsidian, "Notice");
+		const { getByRole, getByPlaceholderText } = render(PlaylistManager);
+		const input = getByPlaceholderText("Playlist name") as HTMLInputElement;
+
+		await typeName(input, "Favorites");
+		await fireEvent.click(getByRole("button", { name: "Add playlist" }));
+
+		expect(get(playlists)).toEqual({});
+		expect(noticeSpy).toHaveBeenCalledWith('"Favorites" is a reserved playlist name.');
+	});
+
 	// PL-01 + MX-03: an empty/whitespace-only name is rejected with a Notice,
 	// nothing is added, and the input is left intact so the user can correct it.
 	test("rejects an empty name with a Notice and adds nothing", async () => {

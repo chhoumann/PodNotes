@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Notice } from "obsidian";
 	import { get } from "svelte/store";
-	import { favorites, playlists, queue } from "src/store";
+	import { favorites, localFiles, playlists, queue } from "src/store";
+	import { PLAYED_SETTINGS } from "src/constants";
 	import type { Playlist } from "src/types/Playlist";
 	import { onMount } from "svelte";
 	import Button from "../obsidian/Button.svelte";
@@ -36,6 +37,21 @@
 
 		if (!name) {
 			new Notice("Playlist name cannot be empty.");
+			return;
+		}
+
+		// Reject the built-in playlist names (Queue/Favorites/Local Files/Played):
+		// those tiles come from separate stores, so a custom playlist sharing one of
+		// their names is ambiguous and makes an open playlist silently switch to the
+		// built-in list on refresh (Codex review #214).
+		const reservedNames = new Set([
+			get(queue).name,
+			get(favorites).name,
+			get(localFiles).name,
+			PLAYED_SETTINGS.name,
+		]);
+		if (reservedNames.has(name)) {
+			new Notice(`"${name}" is a reserved playlist name.`);
 			return;
 		}
 
