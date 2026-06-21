@@ -11,7 +11,7 @@ import {
 	MAX_EPISODE_LIST_LIMIT,
 	QUEUE_SETTINGS,
 } from "src/constants";
-import { QueueController } from "src/store_controllers/QueueController";
+import { bindStoresToSettings } from "src/store/persistence";
 import {
 	currentEpisode,
 	currentTime,
@@ -27,6 +27,7 @@ import {
 	queue,
 	reorderEpisodes,
 	sanitizeEpisodeListLimit,
+	subscribeQueueToCurrentEpisode,
 } from "./index";
 
 const episode: Episode = {
@@ -209,7 +210,7 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 
 		// Svelte notifies subscribers for every object value (safe_not_equal treats
 		// objects as always-changed), so a no-op must not touch the store at all --
-		// otherwise LocalFilesController.onChange + saveSettings would re-run.
+		// otherwise the localFiles persistence binding + saveSettings would re-run.
 		let notifications = 0;
 		const unsubscribe = localFiles.subscribe(() => {
 			notifications += 1;
@@ -459,7 +460,7 @@ describe("queue store", () => {
 		expect(queueTitles()).toEqual(["A", "B", "C"]);
 	});
 
-	test("a move persists the new order through QueueController", () => {
+	test("a move persists the new order through the settings binding", () => {
 		setQueue("A", "B", "C");
 		currentEpisode.set(undefined as unknown as Episode, false);
 
@@ -468,7 +469,7 @@ describe("queue store", () => {
 			saveSettings: vi.fn(),
 		} as unknown as IPodNotes;
 
-		const controller = new QueueController(queue, fakePlugin).on();
+		const unbind = bindStoresToSettings(fakePlugin);
 
 		try {
 			queue.moveToBottom(0);
@@ -478,7 +479,24 @@ describe("queue store", () => {
 			).toEqual(["B", "C", "A"]);
 			expect(fakePlugin.saveSettings).toHaveBeenCalled();
 		} finally {
-			controller.off();
+			unbind();
+		}
+	});
+
+	test("subscribeQueueToCurrentEpisode drops the now-playing episode", () => {
+		setQueue("A", "B", "C");
+		currentEpisode.set(undefined as unknown as Episode, false);
+
+		const unsubscribe = subscribeQueueToCurrentEpisode();
+
+		try {
+			// Switching to B (without auto-enqueuing the prior episode) removes B
+			// from the up-next queue while leaving the rest in place.
+			currentEpisode.set(ep("B"), false);
+
+			expect(queueTitles()).toEqual(["A", "C"]);
+		} finally {
+			unsubscribe();
 		}
 	});
 });
