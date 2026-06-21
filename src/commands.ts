@@ -189,15 +189,19 @@ export function registerCommands(plugin: PodNotes): void {
 		id: "capture-timestamp",
 		name: "Capture Timestamp",
 		icon: "clock" as IconType,
-		// Gate on the same condition as the segment-capture commands so it goes
-		// inert (greyed out / no-op hotkey) when there is no episode or no
-		// timestamp template, instead of silently doing nothing (TS-01).
-		editorCheckCallback: (checking, editor) => {
-			if (checking) {
-				return canCaptureTimestamp();
+		// Keep this an editorCallback (not editorCheckCallback): an unconditional
+		// editor command stays addable to the mobile editor toolbar / command
+		// picker even before an episode is loaded, whereas a checkCallback that
+		// returns false would filter it out (and an e2e test pins this). Surface a
+		// Notice when capture isn't possible instead of silently no-opping (TS-01).
+		editorCallback: (editor) => {
+			if (plugin.captureTimestamp(editor)) {
+				return;
 			}
 
-			plugin.captureTimestamp(editor);
+			new Notice(
+				"Play an episode and set a Capture timestamp format in settings to capture a timestamp.",
+			);
 		},
 	});
 
