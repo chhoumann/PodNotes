@@ -15,8 +15,8 @@ import {
 	subscribeQueueToCurrentEpisode,
 } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
+import { registerCommands } from "src/commands";
 import {
-	Notice,
 	Platform,
 	Plugin,
 	type Editor,
@@ -30,35 +30,24 @@ import {
 	migrateNoteSettings,
 	migrateTranscriptSettings,
 } from "src/settingsMigrations";
-import { requiredTranscriptionKeyPresent } from "src/services/diarization";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
-import { QueueReorderModal } from "src/ui/QueueReorderModal";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { plugin } from "./store";
 import type { IPodNotes } from "./types/IPodNotes";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import { prepareTimestampForInsertion } from "./utility/prepareTimestampInsertion";
 import {
-	createRecentPodcastSegment,
-	getSegmentCaptureTemplate,
-} from "./utility/podcastSegment";
-import createPodcastNote, {
 	createPodcastNoteFileIfNotExists,
 	getPodcastNote,
 } from "./createPodcastNote";
-import createFeedNote from "./createFeedNote";
-import { FeedSuggestModal, orderFeedsByCurrent } from "./ui/FeedSuggestModal";
-import downloadEpisodeWithNotice from "./downloadEpisode";
 import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
-import getUniversalPodcastLink from "./getUniversalPodcastLink";
 import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
-import { get, type Unsubscriber } from "svelte/store";
+import { type Unsubscriber } from "svelte/store";
 import { normalizePlaybackRate } from "./utility/playbackRate";
-import { getEpisodeMediaType } from "./utility/mediaType";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -157,317 +146,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			void this.saveSettings();
 		});
 
-		this.addCommand({
-			id: "podnotes-show-leaf",
-			name: "Show PodNotes",
-			icon: "podcast" as IconType,
-			// Always available, and always reveals the view. The previous
-			// checkCallback hid this command whenever a leaf already existed, so
-			// once the view was open-but-hidden (collapsed sidebar, sidebar
-			// overflow, dragged out of sight) there was no way to bring it back
-			// (#55). activateView reuses the existing leaf and reveals it.
-			callback: () => {
-				void this.activateView();
-			},
-		});
-
-		this.addCommand({
-			id: "start-playing",
-			name: "Play Podcast",
-			icon: "play-circle" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return !this.api.isPlaying && !!this.api.podcast;
-				}
-
-				this.api.start();
-			},
-		});
-
-		this.addCommand({
-			id: "stop-playing",
-			name: "Stop Podcast",
-			icon: "stop-circle" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return this.api.isPlaying && !!this.api.podcast;
-				}
-
-				this.api.stop();
-			},
-		});
-
-		this.addCommand({
-			id: "skip-backward",
-			name: "Skip Backward",
-			icon: "skip-back" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return this.api.isPlaying && !!this.api.podcast;
-				}
-
-				this.api.skipBackward();
-			},
-		});
-
-		this.addCommand({
-			id: "skip-forward",
-			name: "Skip Forward",
-			icon: "skip-forward" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return this.api.isPlaying && !!this.api.podcast;
-				}
-
-				this.api.skipForward();
-			},
-		});
-
-		this.addCommand({
-			id: "download-playing-episode",
-			name: "Download Playing Episode",
-			icon: "download" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return !!this.api.podcast;
-				}
-
-				const episode = this.api.podcast;
-				downloadEpisodeWithNotice(episode, this.settings.download.path);
-			},
-		});
-
-		this.addCommand({
-			id: "reorder-queue",
-			name: "Reorder Queue",
-			icon: "list-ordered" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return get(queue).episodes.length > 1;
-				}
-
-				new QueueReorderModal(this.app).open();
-			},
-		});
-
-		this.addCommand({
-			id: "hrpn",
-			name: "Reload PodNotes",
-			callback: () => {
-				const id = this.manifest.id;
-
-				this.app.plugins
-					.disablePlugin(id)
-					.then(() => this.app.plugins.enablePlugin(id));
-			},
-		});
-
-		const canCaptureTimestamp = () =>
-			!!this.api.podcast && !!this.settings.timestamp.template;
-		const insertCapture = (editor: Editor, capture: string) => {
-			// Insert with replaceSelection (not getCursor + replaceRange +
-			// setCursor): it drops the text at the live cursor and lets the
-			// editor place the caret after it, which is reliable inside Live
-			// Preview table cells where hand-computed positions land in the
-			// wrong cell. Inside a table the capture is escaped so pipes and
-			// newlines don't break the row. See issue #165.
-			const cursor = editor.getCursor("from");
-			const textToInsert = prepareTimestampForInsertion(capture, {
-				getLine: (line) => editor.getLine(line),
-				lineCount: editor.lineCount(),
-				cursorLine: cursor.line,
-			});
-
-			editor.replaceSelection(textToInsert);
-		};
-		const captureRecentSegment = (editor: Editor, lengthSeconds: number) => {
-			const segment = createRecentPodcastSegment(
-				this.api.currentTime,
-				lengthSeconds,
-				this.settings.timestamp.offset ?? 0,
-			);
-
-			if (!segment) {
-				new Notice("Play more of the episode before capturing a segment");
-				return;
-			}
-
-			const capture = TimestampTemplateEngine(
-				getSegmentCaptureTemplate(this.settings.timestamp.template),
-				{ segment },
-			);
-			insertCapture(editor, capture);
-		};
-
-		this.addCommand({
-			id: "capture-timestamp",
-			name: "Capture Timestamp",
-			icon: "clock" as IconType,
-			editorCallback: (editor) => {
-				this.captureTimestamp(editor);
-			},
-		});
-
-		this.addCommand({
-			id: "capture-segment-10s",
-			name: "Capture Last 10 Seconds",
-			icon: "scissors" as IconType,
-			editorCheckCallback: (checking, editor) => {
-				if (checking) {
-					return canCaptureTimestamp();
-				}
-
-				captureRecentSegment(editor, 10);
-			},
-		});
-
-		this.addCommand({
-			id: "capture-segment-20s",
-			name: "Capture Last 20 Seconds",
-			icon: "scissors" as IconType,
-			editorCheckCallback: (checking, editor) => {
-				if (checking) {
-					return canCaptureTimestamp();
-				}
-
-				captureRecentSegment(editor, 20);
-			},
-		});
-
-		this.addCommand({
-			id: "create-podcast-note",
-			// Despite the id, this creates a note for the CURRENT EPISODE. The
-			// visible name was corrected to disambiguate it from the feed-level
-			// "Create podcast feed note" command below (issue #163). The id is kept
-			// for backward compatibility (hotkeys/API).
-			name: "Create episode note",
-			icon: "file-plus" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return (
-						!!this.api.podcast &&
-						!!this.settings.note.path &&
-						!!this.settings.note.template
-					);
-				}
-
-				void createPodcastNote(this.api.podcast);
-			},
-		});
-
-		this.addCommand({
-			id: "create-podcast-feed-note",
-			name: "Create podcast feed note",
-			icon: "file-plus" as IconType,
-			checkCallback: (checking) => {
-				const feeds = Object.values(get(savedFeeds));
-				const canCreate =
-					feeds.length > 0 &&
-					!!this.settings.feedNote.path &&
-					!!this.settings.feedNote.template;
-
-				if (checking) {
-					return canCreate;
-				}
-
-				if (!canCreate) return;
-
-				// Pre-select the playing episode's feed when there is one, so the
-				// picker opens on the most likely choice without requiring playback.
-				const orderedFeeds = orderFeedsByCurrent(
-					feeds,
-					this.api.podcast?.podcastName,
-				);
-
-				new FeedSuggestModal(this.app, orderedFeeds, (feed) => {
-					void createFeedNote(feed);
-				}).open();
-			},
-		});
-
-		this.addCommand({
-			id: "get-share-link-episode",
-			name: "Copy universal episode link to clipboard",
-			icon: "share" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return !!this.api.podcast;
-				}
-
-				getUniversalPodcastLink(this.api);
-			},
-		});
-
-		this.addCommand({
-			id: "podnotes-toggle-playback",
-			name: "Toggle playback",
-			icon: "play" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return !!this.api.podcast;
-				}
-
-				this.api.togglePlayback();
-			},
-		});
-
-		this.addCommand({
-			id: "increase-playback-rate",
-			name: "Increase playback rate",
-			icon: "gauge" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return !!this.api.podcast;
-				}
-
-				this.api.increasePlaybackRate();
-			},
-		});
-
-		this.addCommand({
-			id: "decrease-playback-rate",
-			name: "Decrease playback rate",
-			icon: "gauge" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return !!this.api.podcast;
-				}
-
-				this.api.decreasePlaybackRate();
-			},
-		});
-
-		this.addCommand({
-			id: "reset-playback-rate",
-			name: "Reset playback rate",
-			icon: "rotate-ccw" as IconType,
-			checkCallback: (checking) => {
-				if (checking) {
-					return !!this.api.podcast;
-				}
-
-				this.api.resetPlaybackRate();
-			},
-		});
-
-		this.addCommand({
-			id: "podnotes-transcribe",
-			name: "Transcribe current episode",
-			checkCallback: (checking) => {
-				const canTranscribe =
-					!!this.api.podcast &&
-					requiredTranscriptionKeyPresent(this.settings) &&
-					getEpisodeMediaType(this.api.podcast) === "audio";
-
-				if (checking) {
-					return canTranscribe;
-				}
-
-				if (canTranscribe) {
-					void this.getTranscriptionService().transcribeCurrentEpisode();
-				}
-			},
-		});
+		// All user-facing commands live in src/commands.ts; this keeps onload
+		// focused on lifecycle wiring (stores, view, ribbon, protocol, media session).
+		registerCommands(this);
 
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
@@ -587,7 +268,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return Platform.isMobileApp || this.app.isMobile === true;
 	}
 
-	private getTranscriptionService(): TranscriptionService {
+	// Public so the command registrations in src/commands.ts can reach them; both
+	// are still only invoked from command callbacks (and, for captureTimestamp,
+	// the media-session handler below).
+	getTranscriptionService(): TranscriptionService {
 		if (!this.transcriptionService) {
 			this.transcriptionService = new TranscriptionService(this);
 		}
@@ -595,7 +279,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.transcriptionService;
 	}
 
-	private captureTimestamp(editor: Editor | null | undefined): boolean {
+	captureTimestamp(editor: Editor | null | undefined): boolean {
 		if (!editor || !this.api.podcast || !this.settings.timestamp.template) {
 			return false;
 		}
