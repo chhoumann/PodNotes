@@ -63,10 +63,15 @@
 	});
 
 	$: loadingFeedNames = Array.from(loadingFeeds);
+	// Exclude the selected feed from the banner: its loading state is already
+	// shown by the inline EpisodeList spinner, so the banner would duplicate it.
+	$: bannerFeedNames = loadingFeedNames.filter(
+		(name) => name !== selectedFeed?.title,
+	);
 	$: loadingFeedSummary =
-		loadingFeedNames.length > 3
-			? `${loadingFeedNames.slice(0, 3).join(", ")} +${loadingFeedNames.length - 3} more`
-			: loadingFeedNames.join(", ");
+		bannerFeedNames.length > 3
+			? `${bannerFeedNames.slice(0, 3).join(", ")} +${bannerFeedNames.length - 3} more`
+			: bannerFeedNames.join(", ");
 	$: isFetchingEpisodes = loadingFeedNames.length > 0;
 
 	onMount(() => {
@@ -89,11 +94,19 @@
 			];
 		};
 
+		// Refresh both the grid tiles AND an open playlist's episode list so a
+		// context-menu add/remove updates the currently-viewed list immediately
+		// (PL-04).
+		const refreshPlaylists = () => {
+			updateDisplayedPlaylists();
+			updateDisplayedPlaylistEpisodesIfSelected();
+		};
+
 		const playlistUnsubscribers = [
-			playlists.subscribe(updateDisplayedPlaylists),
+			playlists.subscribe(refreshPlaylists),
 			queue.subscribe(updateDisplayedPlaylists),
-			favorites.subscribe(updateDisplayedPlaylists),
-			localFiles.subscribe(updateDisplayedPlaylists),
+			favorites.subscribe(refreshPlaylists),
+			localFiles.subscribe(refreshPlaylists),
 			// Recompute when the plugin store re-emits so toggling the autoQueue
 			// setting hides/shows the empty Queue tile immediately (issue #108).
 			plugin.subscribe(updateDisplayedPlaylists),
@@ -179,6 +192,7 @@
 	async function fetchEpisodes(
 		feed: PodcastFeed,
 		useCache: boolean = true,
+		notifyOnError: boolean = false,
 	): Promise<Episode[]> {
 		const cacheEnabled = isFeedCacheEnabled();
 		const cacheTtlMs = getFeedCacheTtlMs();
@@ -247,6 +261,15 @@
 				}
 			}
 
+			// No cache/download fallback recovered episodes. Surface a Notice
+			// only for the interactive single-feed path; the bulk/background
+			// path stays quiet to avoid spamming on refresh or initial load.
+			if (notifyOnError) {
+				new Notice(
+					`Could not load episodes for ${feed.title}. Check your connection and try again.`,
+				);
+			}
+
 			return [];
 		}
 	}
@@ -261,7 +284,10 @@
 		return feeds.filter((feed) => playedPodcastNames.has(feed.title));
 	}
 
-	async function fetchFullEpisodes(feed: PodcastFeed): Promise<Episode[]> {
+	async function fetchFullEpisodes(
+		feed: PodcastFeed,
+		notifyOnError: boolean = false,
+	): Promise<Episode[]> {
 		const cacheEnabled = isFeedCacheEnabled();
 		const persistedEpisodes = cacheEnabled
 			? getCachedEpisodes(feed, getFeedCacheTtlMs())
@@ -272,22 +298,23 @@
 			return inMemoryEpisodes;
 		}
 
-		return fetchEpisodes(feed, false);
+		return fetchEpisodes(feed, false, notifyOnError);
 	}
 
 	async function fetchEpisodesByStrategy(
 		feed: PodcastFeed,
 		strategy: EpisodeFetchStrategy = "cached",
+		notifyOnError: boolean = false,
 	): Promise<Episode[]> {
 		if (strategy === "network") {
-			return fetchEpisodes(feed, false);
+			return fetchEpisodes(feed, false, notifyOnError);
 		}
 
 		if (strategy === "full") {
-			return fetchFullEpisodes(feed);
+			return fetchFullEpisodes(feed, notifyOnError);
 		}
 
-		return fetchEpisodes(feed, true);
+		return fetchEpisodes(feed, true, notifyOnError);
 	}
 
 	function getPlayedPlaylist(): Playlist {
@@ -361,6 +388,37 @@
 		updateDisplayedPlayedEpisodes();
 	}
 
+	// Keep an OPEN playlist's episode list in sync when its backing store changes
+	// (e.g. a context-menu add/remove). Without this the list view only reflected
+	// the snapshot taken at click time and went stale until the user navigated
+	// away and back (PL-04). The virtual Played list and the Queue (which routes
+	// to the player) are handled elsewhere, so they are skipped here.
+	function updateDisplayedPlaylistEpisodesIfSelected() {
+		if (!selectedPlaylist || selectedPlaylist.isVirtual) return;
+
+		const name = selectedPlaylist.name;
+		if (name === get(queue).name) return;
+
+		let live: Playlist | undefined;
+		if (name === get(favorites).name) live = get(favorites);
+		else if (name === get(localFiles).name) live = get(localFiles);
+		else {
+			live = get(playlists)[name];
+			if (!live) {
+				// A custom playlist deleted while open: fall back to Latest Episodes.
+				showLatestEpisodes();
+				return;
+			}
+		}
+
+		if (!live) return;
+
+		selectedPlaylist = live;
+		displayedEpisodes = currentSearchQuery
+			? searchEpisodes(currentSearchQuery, live.episodes)
+			: live.episodes;
+	}
+
 	function showLatestEpisodes() {
 		selectedFeed = null;
 		selectedPlaylist = null;
@@ -428,7 +486,7 @@
 		setFeedLoading(feed.title, true);
 
 		try {
-			const episodes = await fetchFullEpisodes(feed);
+			const episodes = await fetchFullEpisodes(feed, true);
 			displayedEpisodes = currentSearchQuery
 				? searchEpisodes(currentSearchQuery, episodes)
 				: episodes;
@@ -481,6 +539,15 @@
 			return;
 		}
 
+		// Latest Episodes view (no feed and no playlist selected): refresh all
+		// feeds over the network so the aggregated list actually updates. The
+		// latestEpisodes readable + its subscriber repopulate displayedEpisodes,
+		// and setFeedLoading inside fetchEpisodesInAllFeeds drives the banner.
+		if (!selectedFeed && !selectedPlaylist) {
+			await fetchEpisodesInAllFeeds(feeds, "network");
+			return;
+		}
+
 		if (!selectedFeed) return;
 
 		setFeedLoading(selectedFeed.title, true);
@@ -489,6 +556,7 @@
 			const episodes = await fetchEpisodesByStrategy(
 				selectedFeed,
 				"network",
+				true,
 			);
 			displayedEpisodeEntries = null;
 			displayedEpisodes = currentSearchQuery
@@ -582,14 +650,14 @@
 	{#if $viewState === ViewState.Player}
 		<EpisodePlayer />
 	{:else if $viewState === ViewState.EpisodeList}
-		{#if loadingFeedNames.length > 0}
+		{#if bannerFeedNames.length > 0}
 			<div class="feed-loading-banner">
 				<div class="feed-loading-spinner">
 					<Icon icon="loader-2" size={18} clickable={false} />
 				</div>
 				<div class="feed-loading-text">
 					<span>
-						Updating {loadingFeedNames.length} feed{loadingFeedNames.length === 1 ? "" : "s"}
+						Updating {bannerFeedNames.length} feed{bannerFeedNames.length === 1 ? "" : "s"}
 					</span>
 					{#if loadingFeedSummary}
 						<span class="feed-loading-names">{loadingFeedSummary}</span>

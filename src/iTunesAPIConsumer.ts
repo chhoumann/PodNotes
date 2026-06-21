@@ -1,5 +1,5 @@
 import type { PodcastFeed } from "./types/PodcastFeed";
-import { requestWithTimeout, NetworkError } from "./utility/networkRequest";
+import { requestWithTimeout } from "./utility/networkRequest";
 
 interface iTunesResult {
 	collectionName: string;
@@ -30,9 +30,13 @@ export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]>
 			collectionId: d.collectionId,
 		}));
 	} catch (error) {
-		if (error instanceof NetworkError) {
-			console.error(`iTunes search failed: ${error.message}`);
-		}
-		return [];
+		// Log every failure (including a malformed-JSON SyntaxError from
+		// response.json), not just NetworkError, so swallowed errors are
+		// diagnosable, then rethrow so the caller can distinguish a genuine
+		// failure from a legitimate empty result set (SA-01). Returning [] here
+		// collapsed both into the benign "No results." message.
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(`iTunes search failed: ${message}`);
+		throw error instanceof Error ? error : new Error(message);
 	}
 }
