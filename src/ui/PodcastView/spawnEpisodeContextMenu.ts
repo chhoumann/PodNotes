@@ -164,7 +164,14 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.queue) {
-		const episodeIsInQueue = get(queue).episodes.find(e => episodeMatchesKey(e, episodeKey));
+		// The queue identifies episodes by TITLE everywhere (queue.add dedupes and
+		// queue.remove filters by title; see src/store/index.ts), so this membership
+		// check and the reorder lookup below must match by title too. A composite-key
+		// check would offer "Add to Queue" for a same-titled episode from another
+		// podcast, but queue.add would then no-op (Codex review #214).
+		const episodeIsInQueue = get(queue).episodes.find(
+			(e) => e.title === episode.title,
+		);
 		menu.addItem(item => item
 			.setIcon("list-ordered")
 			.setTitle(`${episodeIsInQueue ? "Remove from" : "Add to"} Queue`)
@@ -197,7 +204,7 @@ export default function spawnEpisodeContextMenu(
 						// episode ends and playNext advances it) between opening
 						// the menu and clicking.
 						const index = get(queue).episodes.findIndex(
-							e => episodeMatchesKey(e, episodeKey),
+							(e) => e.title === episode.title,
 						);
 						if (index === -1) return;
 

@@ -107,17 +107,12 @@
 			return lists;
 		});
 
-		// Remove the finished episode from the queue by composite key too, so a
-		// same-titled episode from a DIFFERENT podcast that happens to be queued is
-		// not dropped as collateral (queue.remove matches title-only). The finished
-		// episode is usually already gone from the queue (subscribeQueueToCurrentEpisode
-		// drops it when it became current), so this is otherwise a no-op (PB-07).
-		queue.update((playlist) => {
-			playlist.episodes = playlist.episodes.filter(
-				(ep) => !episodeMatchesKey(ep, currentKey),
-			);
-			return playlist;
-		});
+		// The queue is title-identified everywhere (add/remove/dedupe by title; see
+		// src/store/index.ts), so remove the finished episode from it by title to
+		// stay consistent with that identity. The finished episode is usually already
+		// gone from the queue (subscribeQueueToCurrentEpisode drops it when it became
+		// current), so this is otherwise a no-op (PB-07 / Codex review #214).
+		queue.remove($currentEpisode);
 	}
 
 	function onEpisodeEnded() {
