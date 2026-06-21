@@ -108,6 +108,43 @@ function resolveEpisodeNumber(episode: Episode): number | undefined {
 	return episode.episodeNumber ?? parseEpisodeNumberFromTitle(episode.title);
 }
 
+/**
+ * Build a tag that strips file-name-illegal characters from `rawValue` and, when
+ * the tag is used with an argument (e.g. `{{title:_}}`), collapses whitespace to
+ * that replacement. Shared by the file-name {{title}}/{{podcast}} tags.
+ */
+function legalizedNameTag(rawValue: string): TagValue {
+	return (whitespaceReplacement?: string) => {
+		const legal = replaceIllegalFileNameCharactersInString(rawValue);
+		return whitespaceReplacement
+			? legal.replace(/\s+/g, whitespaceReplacement)
+			: legal;
+	};
+}
+
+/**
+ * Register the file-name-safe episode tags shared by every path/transcript
+ * template engine: {{title}} and {{podcast}} (illegal-character-stripped, with an
+ * optional whitespace-replacement arg), {{date}} (episode publish date),
+ * {{currentdate}}, and {{episodenumber}}. NoteTemplateEngine intentionally does
+ * NOT use this — there {{title}} is the raw episode title, not a file name.
+ */
+function addEpisodeFileNameTags(addTag: AddTagFn, episode: Episode): void {
+	addTag("title", legalizedNameTag(episode.title));
+	addTag("podcast", legalizedNameTag(episode.podcastName));
+	addTag("date", (format?: string) =>
+		episode.episodeDate
+			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
+			: "",
+	);
+	addTag("currentdate", (format?: string) =>
+		formatDate(new Date(), format ?? "YYYY-MM-DD"),
+	);
+	addTag("episodenumber", (pad?: string) =>
+		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
+	);
+}
+
 function formatChapterTitle(title: string): string {
 	return title.replace(/\s+/g, " ").trim();
 }
@@ -280,35 +317,7 @@ export function TimestampTemplateEngine(
 export function FilePathTemplateEngine(template: string, episode: Episode) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	addTag("title", (whitespaceReplacement?: string) => {
-		const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
-		if (whitespaceReplacement) {
-			return legalTitle.replace(/\s+/g, whitespaceReplacement);
-		}
-
-		return legalTitle;
-	});
-	addTag("podcast", (whitespaceReplacement?: string) => {
-		const legalName = replaceIllegalFileNameCharactersInString(
-			episode.podcastName,
-		);
-		if (whitespaceReplacement) {
-			return legalName.replace(/\s+/g, whitespaceReplacement);
-		}
-
-		return legalName;
-	});
-	addTag("date", (format?: string) =>
-		episode.episodeDate
-			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
-			: "",
-	);
-	addTag("currentdate", (format?: string) =>
-		formatDate(new Date(), format ?? "YYYY-MM-DD"),
-	);
-	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
-	);
+	addEpisodeFileNameTags(addTag, episode);
 
 	return replacer(template);
 }
@@ -322,35 +331,7 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 
 	const [replacer, addTag] = useTemplateEngine();
 
-	addTag("title", (whitespaceReplacement?: string) => {
-		const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
-		if (whitespaceReplacement) {
-			return legalTitle.replace(/\s+/g, whitespaceReplacement);
-		}
-
-		return legalTitle;
-	});
-	addTag("podcast", (whitespaceReplacement?: string) => {
-		const legalName = replaceIllegalFileNameCharactersInString(
-			episode.podcastName,
-		);
-		if (whitespaceReplacement) {
-			return legalName.replace(/\s+/g, whitespaceReplacement);
-		}
-
-		return legalName;
-	});
-	addTag("date", (format?: string) =>
-		episode.episodeDate
-			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
-			: "",
-	);
-	addTag("currentdate", (format?: string) =>
-		formatDate(new Date(), format ?? "YYYY-MM-DD"),
-	);
-	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
-	);
+	addEpisodeFileNameTags(addTag, episode);
 
 	return replacer(templateWithoutExtension);
 }
@@ -362,33 +343,7 @@ export function TranscriptTemplateEngine(
 ) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	addTag("title", (whitespaceReplacement?: string) => {
-		const legalTitle = replaceIllegalFileNameCharactersInString(episode.title);
-		if (whitespaceReplacement) {
-			return legalTitle.replace(/\s+/g, whitespaceReplacement);
-		}
-		return legalTitle;
-	});
-	addTag("podcast", (whitespaceReplacement?: string) => {
-		const legalName = replaceIllegalFileNameCharactersInString(
-			episode.podcastName,
-		);
-		if (whitespaceReplacement) {
-			return legalName.replace(/\s+/g, whitespaceReplacement);
-		}
-		return legalName;
-	});
-	addTag("date", (format?: string) =>
-		episode.episodeDate
-			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
-			: "",
-	);
-	addTag("currentdate", (format?: string) =>
-		formatDate(new Date(), format ?? "YYYY-MM-DD"),
-	);
-	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
-	);
+	addEpisodeFileNameTags(addTag, episode);
 	addTag("duration", (format?: string) =>
 		episode.duration !== undefined
 			? formatDuration(episode.duration, format)
@@ -453,12 +408,7 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 export function FeedFilePathTemplateEngine(template: string, feed: PodcastFeed) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	const safeName = replaceIllegalFileNameCharactersInString(feed.title);
-	const nameTag = (whitespaceReplacement?: string) =>
-		whitespaceReplacement
-			? safeName.replace(/\s+/g, whitespaceReplacement)
-			: safeName;
-
+	const nameTag = legalizedNameTag(feed.title);
 	addTag("title", nameTag);
 	addTag("podcast", nameTag);
 	addTag("date", (format?: string) =>

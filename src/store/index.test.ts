@@ -323,6 +323,36 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 	});
 });
 
+describe("downloadedEpisodes store — removeEpisode is pure (no vault I/O)", () => {
+	beforeEach(() => {
+		downloadedEpisodes.set({});
+	});
+
+	test("removes the entry and returns its backing file path", () => {
+		const downloaded = downloadedEpisode("Design Podcast", "Episode 1", {
+			filePath: "podcasts/design/ep1.mp3",
+		});
+		downloadedEpisodes.addEpisode(downloaded, downloaded.filePath, 2048);
+
+		const removedFilePath = downloadedEpisodes.removeEpisode(downloaded);
+
+		expect(removedFilePath).toBe("podcasts/design/ep1.mp3");
+		expect(downloadedEpisodes.isEpisodeDownloaded(downloaded)).toBe(false);
+		expect(get(downloadedEpisodes)["Design Podcast"]).toEqual([]);
+	});
+
+	test("returns undefined and leaves the store untouched when the episode is absent", () => {
+		const present = downloadedEpisode("Design Podcast", "Kept");
+		downloadedEpisodes.addEpisode(present, present.filePath, 1024);
+
+		const missing = downloadedEpisode("Design Podcast", "Never downloaded");
+		const removedFilePath = downloadedEpisodes.removeEpisode(missing);
+
+		expect(removedFilePath).toBeUndefined();
+		expect(downloadedEpisodes.isEpisodeDownloaded(present)).toBe(true);
+	});
+});
+
 function ep(title: string, podcastName = "Pod"): Episode {
 	return {
 		title,

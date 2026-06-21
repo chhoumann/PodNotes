@@ -53,6 +53,29 @@ import {
 	type DiarizationProviderId,
 } from "src/services/diarization";
 
+/**
+ * Stack a Setting's control beneath its name, full width — the layout the
+ * template/path text areas need. Obsidian's Setting has no built-in vertical
+ * variant and the plugin ships no stylesheet (styles are injected per Svelte
+ * component), so this sets the few inline styles in one place instead of the
+ * seven hand-rolled copies this replaced.
+ */
+function stackSettingVertically(setting: Setting): void {
+	setting.settingEl.style.flexDirection = "column";
+	setting.settingEl.style.alignItems = "unset";
+	setting.settingEl.style.gap = "10px";
+}
+
+/**
+ * Render `markdown` into `el` as a small live preview, replacing any prior
+ * content. Shared by the path/template demo fields that echo what the configured
+ * template resolves to.
+ */
+function renderMarkdownPreview(markdown: string, el: HTMLElement): void {
+	el.empty();
+	MarkdownRenderer.renderMarkdown(markdown, el, "", new Component());
+}
+
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
@@ -258,9 +281,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textArea.inputEl.style.width = "100%";
 			});
 
-		timestampSetting.settingEl.style.flexDirection = "column";
-		timestampSetting.settingEl.style.alignItems = "unset";
-		timestampSetting.settingEl.style.gap = "10px";
+		stackSettingVertically(timestampSetting);
 
 		const timestampFormatDemoEl = container.createDiv();
 
@@ -268,13 +289,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			if (!this.plugin.api.podcast) return;
 
 			const demoVal = TimestampTemplateEngine(value);
-			timestampFormatDemoEl.empty();
-			MarkdownRenderer.renderMarkdown(
-				demoVal,
-				timestampFormatDemoEl,
-				"",
-				new Component(),
-			);
+			renderMarkdownPreview(demoVal, timestampFormatDemoEl);
 		};
 
 		new Setting(container)
@@ -314,20 +329,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					this.plugin.saveSettings();
 
 					const demoVal = FilePathTemplateEngine(value, randomEpisode);
-					noteCreationFilePathDemoEl.empty();
-					MarkdownRenderer.renderMarkdown(
-						demoVal,
-						noteCreationFilePathDemoEl,
-						"",
-						new Component(),
-					);
+					renderMarkdownPreview(demoVal, noteCreationFilePathDemoEl);
 				});
 				textComponent.inputEl.style.width = "100%";
 			});
 
-		noteCreationFilePathSetting.settingEl.style.flexDirection = "column";
-		noteCreationFilePathSetting.settingEl.style.alignItems = "unset";
-		noteCreationFilePathSetting.settingEl.style.gap = "10px";
+		stackSettingVertically(noteCreationFilePathSetting);
 
 		const noteCreationFilePathDemoEl = container.createDiv();
 
@@ -361,9 +368,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				);
 			});
 
-		noteCreationSetting.settingEl.style.flexDirection = "column";
-		noteCreationSetting.settingEl.style.alignItems = "unset";
-		noteCreationSetting.settingEl.style.gap = "10px";
+		stackSettingVertically(noteCreationSetting);
 	}
 
 	private addFeedNoteSettings(settingsContainer: HTMLDivElement) {
@@ -397,21 +402,13 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent.inputEl.style.width = "100%";
 			});
 
-		feedNotePathSetting.settingEl.style.flexDirection = "column";
-		feedNotePathSetting.settingEl.style.alignItems = "unset";
-		feedNotePathSetting.settingEl.style.gap = "10px";
+		stackSettingVertically(feedNotePathSetting);
 
 		const feedNotePathDemoEl = container.createDiv();
 
 		const renderFeedPathDemo = (value: string) => {
 			const demoVal = FeedFilePathTemplateEngine(value, randomFeed);
-			feedNotePathDemoEl.empty();
-			MarkdownRenderer.renderMarkdown(
-				demoVal,
-				feedNotePathDemoEl,
-				"",
-				new Component(),
-			);
+			renderMarkdownPreview(demoVal, feedNotePathDemoEl);
 		};
 
 		renderFeedPathDemo(this.plugin.settings.feedNote.path);
@@ -429,9 +426,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textArea.inputEl.style.height = "25vh";
 			});
 
-		feedNoteTemplateSetting.settingEl.style.flexDirection = "column";
-		feedNoteTemplateSetting.settingEl.style.alignItems = "unset";
-		feedNoteTemplateSetting.settingEl.style.gap = "10px";
+		stackSettingVertically(feedNoteTemplateSetting);
 	}
 
 	private addDownloadSettings(container: HTMLDivElement) {
@@ -456,9 +451,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent.inputEl.style.width = "100%";
 			});
 
-		downloadPathSetting.settingEl.style.flexDirection = "column";
-		downloadPathSetting.settingEl.style.alignItems = "unset";
-		downloadPathSetting.settingEl.style.gap = "10px";
+		stackSettingVertically(downloadPathSetting);
 
 		const downloadFilePathDemoEl = container.createDiv();
 		const downloadFilePathWarningEl = container.createDiv();
@@ -469,13 +462,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		// empty path resolves to ".mp3" at the vault root (#183). Warn inline.
 		const refreshDownloadPathHints = (value: string) => {
 			const demoVal = DownloadPathTemplateEngine(value, randomEpisode);
-			downloadFilePathDemoEl.empty();
-			MarkdownRenderer.renderMarkdown(
-				`${demoVal}.mp3`,
-				downloadFilePathDemoEl,
-				"",
-				new Component(),
-			);
+			renderMarkdownPreview(`${demoVal}.mp3`, downloadFilePathDemoEl);
 
 			// Match only the forms DownloadPathTemplateEngine actually resolves —
 			// {{title}} or {{title:...}}. A looser test (e.g. \s* after {{, or \b)
@@ -541,38 +528,21 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Import podcasts from an OPML file.")
 			.addButton((button) =>
 				button.setButtonText("Import").onClick(() => {
-					const fileInput = document.createElement("input");
-					fileInput.type = "file";
-					fileInput.accept = ".opml";
-					fileInput.style.display = "none";
-					document.body.appendChild(fileInput);
-					fileInput.click();
-
-					fileInput.onchange = async (e: Event) => {
-						const target = e.target as HTMLInputElement;
-						const file = target.files?.[0];
-
-						if (file) {
-							const reader = new FileReader();
-							reader.onload = async (event) => {
-								const contents = event.target?.result as string;
-								if (contents) {
-									try {
-										await importOPML(contents);
-									} catch (e) {
-										console.error("Error importing OPML:", e);
-										new Notice(
-											`Error importing OPML: ${e instanceof Error ? e.message : "Unknown error"}`,
-											10000,
-										);
-									}
-								}
-							};
-							reader.readAsText(file);
-						} else {
-							new Notice("No file selected");
-						}
-					};
+					this.pickFile(
+						".opml",
+						async (contents) => {
+							try {
+								await importOPML(contents);
+							} catch (e) {
+								console.error("Error importing OPML:", e);
+								new Notice(
+									`Error importing OPML: ${e instanceof Error ? e.message : "Unknown error"}`,
+									10000,
+								);
+							}
+						},
+						{ tooLargeMessage: "That file is too large to be an OPML file." },
+					);
 				}),
 			);
 
@@ -659,7 +629,19 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			);
 	}
 
-	private pickFile(accept: string, onContents: (contents: string) => void): void {
+	private pickFile(
+		accept: string,
+		onContents: (contents: string) => void,
+		options: { maxBytes?: number; tooLargeMessage?: string } = {},
+	): void {
+		// Both pickers read small text files, so cap the size before reading the
+		// whole thing into memory. The cap and its message are per-caller so OPML
+		// import doesn't inherit the settings-file copy.
+		const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
+		const tooLargeMessage =
+			options.tooLargeMessage ??
+			"That file is too large to be a PodNotes settings file.";
+
 		const fileInput = document.createElement("input");
 		fileInput.type = "file";
 		fileInput.accept = accept;
@@ -680,11 +662,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				return;
 			}
 
-			// A settings file is small JSON; reject anything implausibly large
-			// before reading it fully into memory.
-			const MAX_BYTES = 5 * 1024 * 1024;
-			if (file.size > MAX_BYTES) {
-				new Notice("That file is too large to be a PodNotes settings file.");
+			if (file.size > maxBytes) {
+				new Notice(tooLargeMessage);
 				return;
 			}
 
@@ -876,9 +855,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				text.inputEl.style.height = "25vh";
 			});
 
-		transcriptTemplateSetting.settingEl.style.flexDirection = "column";
-		transcriptTemplateSetting.settingEl.style.alignItems = "unset";
-		transcriptTemplateSetting.settingEl.style.gap = "10px";
+		stackSettingVertically(transcriptTemplateSetting);
 
 		this.addDiarizationSettings(container);
 	}

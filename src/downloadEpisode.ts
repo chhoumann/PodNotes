@@ -254,6 +254,34 @@ async function createEpisodeFile({
 	downloadedEpisodes.addEpisode(episode, filePath, data.byteLength);
 }
 
+/**
+ * Remove a downloaded episode: drop it from the offline set and delete its
+ * backing vault file. This composes the pure store removal with the file I/O so
+ * callers can't do one without the other (and leak files); the download store
+ * stays free of vault side effects.
+ */
+export async function removeDownloadedEpisode(episode: Episode): Promise<void> {
+	const removedFilePath = downloadedEpisodes.removeEpisode(episode);
+	if (removedFilePath) {
+		await deleteEpisodeFile(removedFilePath);
+	}
+}
+
+// Best-effort: a missing/already-removed file is a no-op, and failures are logged
+// rather than thrown so removing a stale entry never breaks the calling UI flow.
+async function deleteEpisodeFile(filePath: string): Promise<void> {
+	if (!filePath) return;
+
+	try {
+		const file = app.vault.getAbstractFileByPath(filePath);
+		if (file instanceof TFile) {
+			await app.vault.delete(file);
+		}
+	} catch (error) {
+		console.error(`Failed to delete downloaded file "${filePath}":`, error);
+	}
+}
+
 function resolveLocalEpisodeFilePath(episode: LocalEpisode): string | null {
 	const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
 	const candidatePaths = [

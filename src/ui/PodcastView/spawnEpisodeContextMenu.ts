@@ -1,7 +1,9 @@
 import { Menu, Notice } from "obsidian";
 import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPodcastNote";
 import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
-import downloadEpisodeWithProgessNotice from "src/downloadEpisode";
+import downloadEpisodeWithProgessNotice, {
+	removeDownloadedEpisode,
+} from "src/downloadEpisode";
 import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, savedFeeds, viewState } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
@@ -68,7 +70,7 @@ export default function spawnEpisodeContextMenu(
 			.setTitle(isDownloaded ? "Remove file" : "Download")
 			.onClick(() => {
 				if (isDownloaded) {
-					downloadedEpisodes.removeEpisode(episode, true);
+					void removeDownloadedEpisode(episode);
 				} else {
 					// The path template always yields a per-episode file via
 					// safeDownloadBasename (#183), so no empty-path guard is needed —
