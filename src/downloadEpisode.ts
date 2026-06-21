@@ -255,13 +255,21 @@ async function createEpisodeFile({
 }
 
 /**
- * Delete a downloaded episode's backing file from the vault. The download store
- * owns the offline-set state and hands the path here for the actual file I/O,
- * keeping vault side effects out of the store layer. Best-effort: a missing or
- * already-removed file is a no-op, and failures are logged rather than thrown so
- * removing a stale entry never breaks the calling UI flow.
+ * Remove a downloaded episode: drop it from the offline set and delete its
+ * backing vault file. This composes the pure store removal with the file I/O so
+ * callers can't do one without the other (and leak files); the download store
+ * stays free of vault side effects.
  */
-export async function deleteEpisodeFile(filePath: string): Promise<void> {
+export async function removeDownloadedEpisode(episode: Episode): Promise<void> {
+	const removedFilePath = downloadedEpisodes.removeEpisode(episode);
+	if (removedFilePath) {
+		await deleteEpisodeFile(removedFilePath);
+	}
+}
+
+// Best-effort: a missing/already-removed file is a no-op, and failures are logged
+// rather than thrown so removing a stale entry never breaks the calling UI flow.
+async function deleteEpisodeFile(filePath: string): Promise<void> {
 	if (!filePath) return;
 
 	try {

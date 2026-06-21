@@ -528,17 +528,21 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Import podcasts from an OPML file.")
 			.addButton((button) =>
 				button.setButtonText("Import").onClick(() => {
-					this.pickFile(".opml", async (contents) => {
-						try {
-							await importOPML(contents);
-						} catch (e) {
-							console.error("Error importing OPML:", e);
-							new Notice(
-								`Error importing OPML: ${e instanceof Error ? e.message : "Unknown error"}`,
-								10000,
-							);
-						}
-					});
+					this.pickFile(
+						".opml",
+						async (contents) => {
+							try {
+								await importOPML(contents);
+							} catch (e) {
+								console.error("Error importing OPML:", e);
+								new Notice(
+									`Error importing OPML: ${e instanceof Error ? e.message : "Unknown error"}`,
+									10000,
+								);
+							}
+						},
+						{ tooLargeMessage: "That file is too large to be an OPML file." },
+					);
 				}),
 			);
 
@@ -625,7 +629,19 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			);
 	}
 
-	private pickFile(accept: string, onContents: (contents: string) => void): void {
+	private pickFile(
+		accept: string,
+		onContents: (contents: string) => void,
+		options: { maxBytes?: number; tooLargeMessage?: string } = {},
+	): void {
+		// Both pickers read small text files, so cap the size before reading the
+		// whole thing into memory. The cap and its message are per-caller so OPML
+		// import doesn't inherit the settings-file copy.
+		const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
+		const tooLargeMessage =
+			options.tooLargeMessage ??
+			"That file is too large to be a PodNotes settings file.";
+
 		const fileInput = document.createElement("input");
 		fileInput.type = "file";
 		fileInput.accept = accept;
@@ -646,11 +662,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				return;
 			}
 
-			// A settings file is small JSON; reject anything implausibly large
-			// before reading it fully into memory.
-			const MAX_BYTES = 5 * 1024 * 1024;
-			if (file.size > MAX_BYTES) {
-				new Notice("That file is too large to be a PodNotes settings file.");
+			if (file.size > maxBytes) {
+				new Notice(tooLargeMessage);
 				return;
 			}
 

@@ -49,10 +49,8 @@ export const downloadedEpisodes = (() => {
 		},
 		/**
 		 * Drops an episode from the offline set and returns the vault path of the
-		 * file it backed (or `undefined` if it wasn't tracked). This store is the
-		 * pure state core, so it never touches the vault itself — the caller deletes
-		 * the returned file via `deleteEpisodeFile` in the download module. Mirrors
-		 * how #211 split the queue's automation side effect out of persistence.
+		 * file it backed (or `undefined` if it wasn't tracked). Pure state only: the
+		 * caller deletes the returned file (see `removeDownloadedEpisode`).
 		 */
 		removeEpisode: (episode: Episode): string | undefined => {
 			let removedFilePath: string | undefined;
