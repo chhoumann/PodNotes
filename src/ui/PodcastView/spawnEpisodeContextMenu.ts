@@ -10,7 +10,7 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
-import { episodeMatchesKey, getEpisodeKey } from "src/utility/episodeKey";
+import { isSameStoredEpisode } from "src/utility/episodeKey";
 import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 interface DisabledMenuItems {
@@ -39,7 +39,6 @@ export default function spawnEpisodeContextMenu(
 	playedEpisodeKey?: string,
 ) {
 	const menu = new Menu();
-	const episodeKey = getEpisodeKey(episode);
 
 	if (!disabledMenuItems?.play) {
 		menu.addItem(item => item
@@ -142,14 +141,14 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.favorite) {
-		const episodeIsFavorite = get(favorites).episodes.find(e => episodeMatchesKey(e, episodeKey));
+		const episodeIsFavorite = get(favorites).episodes.find(e => isSameStoredEpisode(e, episode));
 		menu.addItem(item => item
 			.setIcon("lucide-star")
 			.setTitle(`${episodeIsFavorite ? "Remove from" : "Add to"} Favorites`)
 			.onClick(() => {
 				if (episodeIsFavorite) {
 					favorites.update(playlist => {
-						playlist.episodes = playlist.episodes.filter(e => !episodeMatchesKey(e, episodeKey));
+						playlist.episodes = playlist.episodes.filter(e => !isSameStoredEpisode(e, episode));
 						return playlist;
 					});
 				} else {
@@ -238,7 +237,7 @@ export default function spawnEpisodeContextMenu(
 			menu.addSeparator();
 
 			for (const playlist of entries) {
-				const episodeIsInPlaylist = playlist.episodes.find(e => episodeMatchesKey(e, episodeKey));
+				const episodeIsInPlaylist = playlist.episodes.find(e => isSameStoredEpisode(e, episode));
 
 				menu.addItem(item => item
 					.setIcon(playlist.icon)
@@ -246,7 +245,7 @@ export default function spawnEpisodeContextMenu(
 					.onClick(() => {
 						if (episodeIsInPlaylist) {
 							playlists.update(playlists => {
-								playlists[playlist.name].episodes = playlists[playlist.name].episodes.filter(e => !episodeMatchesKey(e, episodeKey));
+								playlists[playlist.name].episodes = playlists[playlist.name].episodes.filter(e => !isSameStoredEpisode(e, episode));
 
 								return playlists;
 							});

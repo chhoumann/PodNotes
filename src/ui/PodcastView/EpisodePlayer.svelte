@@ -31,7 +31,7 @@
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
-	import { episodeMatchesKey, getEpisodeKey } from "src/utility/episodeKey";
+	import { episodeMatchesKey, getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
 	import {
 		normalizePlaybackRate,
 		PLAYBACK_RATE_MAX,
@@ -93,14 +93,14 @@
 	}
 
 	function removeEpisodeFromPlaylists() {
-		// Match by composite key (podcastName::title) so a same-titled episode
-		// from another podcast is not removed, while legacy title-only entries
-		// still match (episodeMatchesKey handles both).
-		const currentKey = getEpisodeKey($currentEpisode);
+		// Match by composite identity so a same-titled episode from another podcast
+		// is not removed, while a LEGACY entry saved without podcastName still
+		// matches by title (isSameStoredEpisode handles both — plain composite-key
+		// matching would skip those legacy entries on finish).
 		playlists.update((lists) => {
 			Object.values(lists).forEach((playlist) => {
 				playlist.episodes = playlist.episodes.filter(
-					(ep) => !episodeMatchesKey(ep, currentKey)
+					(ep) => !isSameStoredEpisode(ep, $currentEpisode)
 				);
 			});
 
