@@ -129,6 +129,32 @@ describe("getUniversalPodcastLink", () => {
 		);
 	});
 
+	test("prefers a saved feed whose URL matches over the name-keyed entry (#213)", async () => {
+		savedFeeds.set({
+			// Name-keyed entry that points at a DIFFERENT feed.
+			"Example Show": {
+				title: "Example Show",
+				url: "https://other.example.com/rss",
+				artworkUrl: "",
+				collectionId: "111",
+			},
+			// A different key whose URL matches the playing episode's feedUrl.
+			Mirror: {
+				title: "Mirror",
+				url: "https://feeds.example.com/rss",
+				artworkUrl: "",
+				collectionId: "222",
+			},
+		});
+
+		await getUniversalPodcastLink(api);
+
+		expect(queryiTunesMock).not.toHaveBeenCalled();
+		expect(writeTextMock).toHaveBeenCalledWith(
+			"https://pod.link/222/episode/ep-123",
+		);
+	});
+
 	test("falls back to a tolerant iTunes match when no saved collectionId exists", async () => {
 		queryiTunesMock.mockResolvedValue([
 			{
