@@ -13,7 +13,6 @@ import createFeedNote from "src/createFeedNote";
 import { FeedSuggestModal, orderFeedsByCurrent } from "src/ui/FeedSuggestModal";
 import downloadEpisodeWithNotice from "src/downloadEpisode";
 import getUniversalPodcastLink from "src/getUniversalPodcastLink";
-import { requiredTranscriptionKeyPresent } from "src/services/diarization";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import type { IconType } from "src/types/IconType";
 import type PodNotes from "src/main";
@@ -106,8 +105,12 @@ export function registerCommands(plugin: PodNotes): void {
 		name: "Skip Backward",
 		icon: "skip-back" as IconType,
 		checkCallback: (checking) => {
+			// Skipping only seeks the position, so it is available whenever an
+			// episode is loaded — paused or playing — matching the always-active
+			// on-screen skip buttons (previously these commands required isPlaying,
+			// so a hotkey silently did nothing while paused). See PB-02.
 			if (checking) {
-				return plugin.api.isPlaying && !!plugin.api.podcast;
+				return !!plugin.api.podcast;
 			}
 
 			plugin.api.skipBackward();
@@ -120,7 +123,7 @@ export function registerCommands(plugin: PodNotes): void {
 		icon: "skip-forward" as IconType,
 		checkCallback: (checking) => {
 			if (checking) {
-				return plugin.api.isPlaying && !!plugin.api.podcast;
+				return !!plugin.api.podcast;
 			}
 
 			plugin.api.skipForward();
@@ -137,7 +140,13 @@ export function registerCommands(plugin: PodNotes): void {
 			}
 
 			const episode = plugin.api.podcast;
-			downloadEpisodeWithNotice(episode, plugin.settings.download.path);
+			// Settle the promise so a failed download surfaces in its own Notice
+			// without leaving an unhandled rejection (DL-01). The notice itself is
+			// the user-facing error; the log aids diagnosis.
+			void downloadEpisodeWithNotice(
+				episode,
+				plugin.settings.download.path,
+			).catch((error) => console.error("PodNotes: download failed", error));
 		},
 	});
 
@@ -160,9 +169,19 @@ export function registerCommands(plugin: PodNotes): void {
 		callback: () => {
 			const id = plugin.manifest.id;
 
+			// Confirm success and handle failure: without a catch a failed
+			// disable/enable left the plugin off with no feedback, looking like a
+			// crash (MX-01/MX-05).
 			plugin.app.plugins
 				.disablePlugin(id)
-				.then(() => plugin.app.plugins.enablePlugin(id));
+				.then(() => plugin.app.plugins.enablePlugin(id))
+				.then(() => new Notice("PodNotes reloaded"))
+				.catch((error) => {
+					console.error("PodNotes reload failed", error);
+					new Notice(
+						"Failed to reload PodNotes. Re-enable it from Settings > Community plugins.",
+					);
+				});
 		},
 	});
 
@@ -170,7 +189,14 @@ export function registerCommands(plugin: PodNotes): void {
 		id: "capture-timestamp",
 		name: "Capture Timestamp",
 		icon: "clock" as IconType,
-		editorCallback: (editor) => {
+		// Gate on the same condition as the segment-capture commands so it goes
+		// inert (greyed out / no-op hotkey) when there is no episode or no
+		// timestamp template, instead of silently doing nothing (TS-01).
+		editorCheckCallback: (checking, editor) => {
+			if (checking) {
+				return canCaptureTimestamp();
+			}
+
 			plugin.captureTimestamp(editor);
 		},
 	});
@@ -321,9 +347,12 @@ export function registerCommands(plugin: PodNotes): void {
 		id: "podnotes-transcribe",
 		name: "Transcribe current episode",
 		checkCallback: (checking) => {
+			// Don't gate availability on the API key: keep the command offered
+			// whenever an audio episode is loaded so running it without a key shows
+			// the service's context-aware "set your API key" Notice instead of the
+			// command silently vanishing with no explanation (TR-02).
 			const canTranscribe =
 				!!plugin.api.podcast &&
-				requiredTranscriptionKeyPresent(plugin.settings) &&
 				getEpisodeMediaType(plugin.api.podcast) === "audio";
 
 			if (checking) {

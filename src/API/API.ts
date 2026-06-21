@@ -27,8 +27,25 @@ import {
 } from "src/utility/playbackRate";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 
-const clampVolume = (value: number): number =>
-	Math.min(1, Math.max(0, value));
+// Default used when a persisted/configured skip length is missing or invalid
+// (e.g. a cleared settings field serialized to null/NaN). Mirrors
+// DEFAULT_SETTINGS.skip*Length.
+const DEFAULT_SKIP_LENGTH = 15;
+
+const normalizeSkipLength = (length: number): number =>
+	Number.isFinite(length) && length > 0 ? length : DEFAULT_SKIP_LENGTH;
+
+// A non-finite volume (e.g. api.volume = NaN) must never poison the player, which
+// two-way binds the store onto the media element. Fall back to the current value
+// (itself clamped) so a bad write is a no-op rather than corrupting playback.
+const clampVolume = (value: number, fallback = 1): number => {
+	const safeFallback = Number.isFinite(fallback)
+		? Math.min(1, Math.max(0, fallback))
+		: 1;
+	return Number.isFinite(value)
+		? Math.min(1, Math.max(0, value))
+		: safeFallback;
+};
 
 export class API implements IAPI {
 	public get podcast(): Episode {
@@ -61,7 +78,7 @@ export class API implements IAPI {
 	}
 
 	public set volume(value: number) {
-		volumeStore.set(clampVolume(value));
+		volumeStore.set(clampVolume(value, get(volumeStore)));
 	}
 
 	public get playbackRate(): number {
@@ -187,13 +204,25 @@ export class API implements IAPI {
 	}
 
 	skipBackward(): void {
-		const skipBackLen = get(plugin).settings.skipBackwardLength;
-		this.currentTime -= skipBackLen;
+		const skipBackLen = normalizeSkipLength(
+			get(plugin).settings.skipBackwardLength,
+		);
+		// Never seek before the start. A cleared settings field (NaN/null) falls
+		// back to the default rather than corrupting currentTime (PB-02).
+		this.currentTime = Math.max(0, this.currentTime - skipBackLen);
 	}
 
 	skipForward(): void {
-		const skipForwardLen = get(plugin).settings.skipForwardLength;
-		this.currentTime += skipForwardLen;
+		const skipForwardLen = normalizeSkipLength(
+			get(plugin).settings.skipForwardLength,
+		);
+		const target = this.currentTime + skipForwardLen;
+		const dur = this.length;
+		// Clamp just short of the end so an over-skip lands at the end instead of
+		// firing 'ended' and auto-advancing the queue. With an unknown/zero
+		// duration (metadata not loaded yet) leave the target unclamped (PB-02).
+		this.currentTime =
+			dur > 0 ? Math.min(target, Math.max(0, dur - 0.25)) : target;
 	}
 
 	increasePlaybackRate(): void {

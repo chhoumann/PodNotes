@@ -3,7 +3,9 @@ import { DEFAULT_SETTINGS } from "./constants";
 import {
 	LEGACY_EMPTY_DOWNLOAD_PATH,
 	migrateDownloadPath,
+	migrateFeedNoteSettings,
 	migrateNoteSettings,
+	migrateSkipLength,
 	migrateTranscriptSettings,
 } from "./settingsMigrations";
 
@@ -188,5 +190,59 @@ describe("migrateTranscriptSettings (#168)", () => {
 	it("is idempotent on the current default", () => {
 		const once = migrateTranscriptSettings(DEFAULT_SETTINGS.transcript);
 		expect(migrateTranscriptSettings(once)).toEqual(DEFAULT_SETTINGS.transcript);
+	});
+});
+
+describe("migrateFeedNoteSettings (ST-08)", () => {
+	const DEFAULT_FEED_NOTE = {
+		path: DEFAULT_SETTINGS.feedNote.path,
+		template: DEFAULT_SETTINGS.feedNote.template,
+	};
+
+	it("backfills a missing template on a partial feedNote", () => {
+		expect(migrateFeedNoteSettings({ path: "Podcasts/{{podcast}}.md" })).toEqual(
+			{
+				path: "Podcasts/{{podcast}}.md",
+				template: DEFAULT_SETTINGS.feedNote.template,
+			},
+		);
+	});
+
+	it("treats an absent/empty feedNote as all defaults", () => {
+		expect(migrateFeedNoteSettings(undefined)).toEqual(DEFAULT_FEED_NOTE);
+		expect(migrateFeedNoteSettings(null)).toEqual(DEFAULT_FEED_NOTE);
+		expect(migrateFeedNoteSettings({})).toEqual(DEFAULT_FEED_NOTE);
+	});
+
+	it("coalesces null/non-string fields so they never reach template.replace()", () => {
+		expect(
+			migrateFeedNoteSettings({ path: null, template: null }),
+		).toEqual(DEFAULT_FEED_NOTE);
+	});
+
+	it("preserves a fully-configured feedNote verbatim", () => {
+		const custom = { path: "Feeds/{{podcast}}.md", template: "# {{title}}" };
+		expect(migrateFeedNoteSettings(custom)).toEqual(custom);
+	});
+});
+
+describe("migrateSkipLength (PB-02)", () => {
+	it("preserves a valid positive length", () => {
+		expect(migrateSkipLength(30, 15)).toBe(30);
+		expect(migrateSkipLength("45", 15)).toBe(45);
+	});
+
+	it("falls back to the default for NaN/null/zero/negative", () => {
+		// A cleared field serializes NaN -> null in data.json.
+		expect(migrateSkipLength(Number.NaN, 15)).toBe(15);
+		expect(migrateSkipLength(null, 15)).toBe(15);
+		expect(migrateSkipLength(undefined, 15)).toBe(15);
+		expect(migrateSkipLength(0, 15)).toBe(15);
+		expect(migrateSkipLength(-5, 15)).toBe(15);
+		expect(migrateSkipLength("abc", 15)).toBe(15);
+	});
+
+	it("floors fractional values", () => {
+		expect(migrateSkipLength(12.9, 15)).toBe(12);
 	});
 });

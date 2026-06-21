@@ -8,8 +8,10 @@ import {
 	currentEpisode,
 	currentTime,
 	downloadedEpisodes,
+	duration,
 	playbackRate,
 	plugin,
+	volume,
 } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
@@ -156,6 +158,96 @@ describe("API playback rate controls", () => {
 		api.resetPlaybackRate();
 
 		expect(api.playbackRate).toBe(1.8);
+	});
+});
+
+describe("API skip controls (PB-02)", () => {
+	beforeEach(() => {
+		duration.set(0);
+		plugin.set({
+			settings: {
+				defaultPlaybackRate: 1,
+				skipBackwardLength: 15,
+				skipForwardLength: 30,
+			},
+		} as never);
+	});
+
+	test("skips backward and forward by the configured lengths", () => {
+		currentTime.set(100);
+		const api = new API();
+
+		api.skipBackward();
+		expect(api.currentTime).toBe(85);
+
+		api.skipForward();
+		expect(api.currentTime).toBe(115);
+	});
+
+	test("never seeks before 0 when skipping backward past the start", () => {
+		currentTime.set(5);
+		const api = new API();
+
+		api.skipBackward();
+		expect(api.currentTime).toBe(0);
+	});
+
+	test("falls back to a 15s default when a skip length is NaN/invalid", () => {
+		currentTime.set(100);
+		plugin.set({
+			settings: {
+				defaultPlaybackRate: 1,
+				skipBackwardLength: Number.NaN,
+				skipForwardLength: undefined,
+			},
+		} as never);
+		const api = new API();
+
+		api.skipBackward();
+		expect(api.currentTime).toBe(85);
+
+		api.skipForward();
+		expect(api.currentTime).toBe(100);
+	});
+
+	test("clamps a forward skip just short of the end so it doesn't auto-advance", () => {
+		currentTime.set(100);
+		duration.set(110);
+		const api = new API();
+
+		api.skipForward();
+		// 100 + 30 = 130, clamped to duration - 0.25.
+		expect(api.currentTime).toBe(109.75);
+	});
+
+	test("leaves the forward target unclamped when duration is unknown", () => {
+		currentTime.set(100);
+		duration.set(0);
+		const api = new API();
+
+		api.skipForward();
+		expect(api.currentTime).toBe(130);
+	});
+});
+
+describe("API volume (AP-07)", () => {
+	test("clamps volume into [0, 1]", () => {
+		volume.set(0.5);
+		const api = new API();
+
+		api.volume = 2;
+		expect(api.volume).toBe(1);
+
+		api.volume = -1;
+		expect(api.volume).toBe(0);
+	});
+
+	test("ignores a non-finite volume (keeps the current value) instead of poisoning it to NaN", () => {
+		volume.set(0.6);
+		const api = new API();
+
+		api.volume = Number.NaN;
+		expect(api.volume).toBe(0.6);
 	});
 });
 
