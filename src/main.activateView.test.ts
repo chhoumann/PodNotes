@@ -201,8 +201,9 @@ describe("PodNotes.onLayoutReady", () => {
 // A refactor that reintroduced the old checkCallback gate or unwired the ribbon
 // would reproduce the bug while activateView's own unit tests stayed green.
 describe("PodNotes onload wiring (#55)", () => {
-	// onload() wires real module-level stores to controllers; unload them after
-	// each test so leaked subscriptions don't fire into a disposed plugin.
+	// onload() subscribes real module-level stores (settings persistence + queue
+	// automation); unload them after each test so leaked subscriptions don't fire
+	// into a disposed plugin.
 	const loaded: PodNotes[] = [];
 
 	beforeEach(() => {

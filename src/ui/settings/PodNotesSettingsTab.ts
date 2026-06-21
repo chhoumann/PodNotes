@@ -785,7 +785,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.plugin.settings = merged;
 
 		// Re-hydrate the live stores so the running UI and the persistence
-		// controllers reflect the import. Keys without a store (templates, paths,
+		// bindings reflect the import. Keys without a store (templates, paths,
 		// skip lengths, feed cache) are applied via `merged` above.
 		savedFeeds.set(merged.savedFeeds);
 		playlists.set(merged.playlists);

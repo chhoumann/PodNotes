@@ -210,7 +210,7 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 
 		// Svelte notifies subscribers for every object value (safe_not_equal treats
 		// objects as always-changed), so a no-op must not touch the store at all --
-		// otherwise LocalFilesController.onChange + saveSettings would re-run.
+		// otherwise the localFiles persistence binding + saveSettings would re-run.
 		let notifications = 0;
 		const unsubscribe = localFiles.subscribe(() => {
 			notifications += 1;

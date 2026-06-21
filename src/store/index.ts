@@ -396,9 +396,9 @@ export const localFiles = (() => {
 
 			// Skip the store write entirely when membership is unchanged. Returning the
 			// same object from update() would still notify subscribers (Svelte treats
-			// every object value as changed), re-running LocalFilesController.onChange and
-			// saveSettings on every unrelated downloadedEpisodes mutation and the
-			// load-time immediate-fire. Comparing before touching the store avoids that.
+			// every object value as changed), re-running the localFiles persistence
+			// binding + saveSettings on every unrelated downloadedEpisodes mutation and
+			// the load-time immediate-fire. Comparing before touching the store avoids that.
 			if (sameEpisodeProjection(get(store).episodes, episodes)) {
 				return;
 			}
