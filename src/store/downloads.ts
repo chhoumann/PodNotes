@@ -1,5 +1,4 @@
 import { get, writable } from "svelte/store";
-import { TFile } from "obsidian";
 import type { Episode } from "src/types/Episode";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 
@@ -48,7 +47,16 @@ export const downloadedEpisodes = (() => {
 				},
 			);
 		},
-		removeEpisode: (episode: Episode, removeFile: boolean) => {
+		/**
+		 * Drops an episode from the offline set and returns the vault path of the
+		 * file it backed (or `undefined` if it wasn't tracked). This store is the
+		 * pure state core, so it never touches the vault itself — the caller deletes
+		 * the returned file via `deleteEpisodeFile` in the download module. Mirrors
+		 * how #211 split the queue's automation side effect out of persistence.
+		 */
+		removeEpisode: (episode: Episode): string | undefined => {
+			let removedFilePath: string | undefined;
+
 			update((downloadedEpisodes) => {
 				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
 				const index = podcastEpisodes.findIndex(
@@ -60,27 +68,14 @@ export const downloadedEpisodes = (() => {
 					return downloadedEpisodes;
 				}
 
-				const filePath = podcastEpisodes[index].filePath;
+				removedFilePath = podcastEpisodes[index].filePath;
 				podcastEpisodes.splice(index, 1);
-
-				if (removeFile && filePath) {
-					try {
-						// @ts-ignore: app is not defined in the global scope anymore, but is still
-						// available. Need to fix this later
-						const file = app.vault.getAbstractFileByPath(filePath);
-
-						if (file instanceof TFile) {
-							// @ts-ignore
-							app.vault.delete(file);
-						}
-					} catch (error) {
-						console.error(error);
-					}
-				}
 
 				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
 				return downloadedEpisodes;
 			});
+
+			return removedFilePath;
 		},
 		getEpisode: (episode: Episode) => {
 			return get(store)[episode.podcastName]?.find(
