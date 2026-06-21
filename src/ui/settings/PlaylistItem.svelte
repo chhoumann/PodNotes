@@ -9,6 +9,13 @@
 	let clickedDelete: boolean = false;
 	const dispatch = createEventDispatcher();
 
+	// Reset the delete-confirm state whenever the bound playlist changes so a
+	// store update can never leave an armed "Confirm deletion" pointing at a
+	// different playlist (defense in depth alongside the keyed {#each}).
+	$: if (playlist) {
+		clickedDelete = false;
+	}
+
 	function onClickedDelete() {
 		if (clickedDelete) {
 			dispatch("delete", { value: playlist });
@@ -20,10 +27,6 @@
 		setTimeout(() => {
 			clickedDelete = false;
 		}, 2000);
-	}
-
-	function onClickedRepeat() {
-		dispatch("toggleRepeat", { value: playlist });
 	}
 </script>
 

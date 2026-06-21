@@ -62,35 +62,35 @@
 						<Icon
 							icon="chevrons-up"
 							label="Move to top"
-							size={18}
+							size={20}
 							disabled={index === 0}
 							on:click={() => moveToTop(episode)}
 						/>
 						<Icon
 							icon="chevron-up"
 							label="Move up"
-							size={18}
+							size={20}
 							disabled={index === 0}
 							on:click={() => moveUp(episode)}
 						/>
 						<Icon
 							icon="chevron-down"
 							label="Move down"
-							size={18}
+							size={20}
 							disabled={index === episodes.length - 1}
 							on:click={() => moveDown(episode)}
 						/>
 						<Icon
 							icon="chevrons-down"
 							label="Move to bottom"
-							size={18}
+							size={20}
 							disabled={index === episodes.length - 1}
 							on:click={() => moveToBottom(episode)}
 						/>
 						<Icon
 							icon="x"
 							label="Remove from queue"
-							size={18}
+							size={20}
 							on:click={() => removeFromQueue(episode)}
 						/>
 					</div>
@@ -173,8 +173,19 @@
 	.queue-reorder-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.125rem;
+		gap: 0.375rem;
 		flex: 0 0 auto;
+	}
+
+	/*
+	 * This modal is the designated mobile reorder surface, so its move/remove
+	 * controls need a comfortable touch target. Scope the sizing to the modal's
+	 * own buttons so the shared Icon component stays untouched elsewhere.
+	 */
+	.queue-reorder-actions :global(.icon-button) {
+		min-width: 2.25rem;
+		min-height: 2.25rem;
+		padding: 0.25rem;
 	}
 
 	.queue-reorder-footer {

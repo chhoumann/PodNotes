@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Notice } from "obsidian";
+	import { get } from "svelte/store";
 	import { favorites, playlists, queue } from "src/store";
 	import type { Playlist } from "src/types/Playlist";
 	import { onMount } from "svelte";
@@ -30,9 +32,21 @@
 	});
 
 	function onAddPlaylist() {
+		const name = playlistInput.trim();
+
+		if (!name) {
+			new Notice("Playlist name cannot be empty.");
+			return;
+		}
+
+		if (Object.prototype.hasOwnProperty.call(get(playlists), name)) {
+			new Notice("A playlist with that name already exists.");
+			return;
+		}
+
 		playlists.update((value) => {
-			value[playlistInput] = {
-				name: playlistInput,
+			value[name] = {
+				name,
 				icon: icon,
 				episodes: [],
 				shouldEpisodeRemoveAfterPlay: false,
@@ -56,14 +70,6 @@
 			return value;
 		});
 	}
-
-	function onToggleRepeat(event: CustomEvent<{ value: Playlist }>) {
-		playlists.update((value) => {
-			value[event.detail.value.name].shouldRepeat =
-				!value[event.detail.value.name].shouldRepeat;
-			return value;
-		});
-	}
 </script>
 
 <div class="playlist-manager-container">
@@ -76,11 +82,10 @@
 			playlist={$favorites}
 			showDeleteButton={false}
 		/>
-		{#each playlistArr as playlist}
+		{#each playlistArr as playlist (playlist.name)}
 			<PlaylistItem
 				{playlist}
 				on:delete={onDeletePlaylist}
-				on:toggleRepeat={onToggleRepeat}
 			/>
 		{/each}
 	</div>

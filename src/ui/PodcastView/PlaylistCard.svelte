@@ -17,10 +17,12 @@
 	type="button"
 	class="playlist-card"
 	aria-label={playlist.name}
+	title={playlist.name}
 	on:click={onClickPlaylist}
 >
-	<Icon icon={playlist.icon} size={40} clickable={false}/>
-	<span>
+	<Icon icon={playlist.icon} size={32} clickable={false}/>
+	<span class="playlist-card-name">{playlist.name}</span>
+	<span class="playlist-card-count">
 		({playlist.episodes.length})
 	</span>
 </button>
@@ -35,6 +37,9 @@
 		width: 100%;
 		min-height: 5rem;
 		padding: 0.75rem 0.5rem;
+		/* `min-height` is a floor, not a cap: the card must grow to fit icon +
+		   name + count. The grid uses min-content rows, so the row grows with it. */
+		height: auto;
 		border: 1px solid var(--background-modifier-border);
 		border-radius: 0.5rem;
 		text-align: center;
@@ -54,8 +59,31 @@
 		transform: scale(0.98);
 	}
 
-	.playlist-card span {
+	/* Keep the icon, name, and count at their natural height so flexbox never
+	   compresses/clips a label to fit the min-height (the bug where the name
+	   overlapped the count). The card grows instead. */
+	.playlist-card-name,
+	.playlist-card-count {
+		flex-shrink: 0;
+	}
+
+	.playlist-card :global(.icon-static) {
+		flex-shrink: 0;
+	}
+
+	.playlist-card-name {
+		max-width: 100%;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		font-size: 0.85rem;
+		line-height: 1.3;
+		color: var(--text-normal);
+	}
+
+	.playlist-card-count {
 		font-size: 0.8rem;
+		line-height: 1.3;
 		color: var(--text-muted);
 	}
 </style>
