@@ -124,6 +124,7 @@ describe("PodNotes.onLayoutReady", () => {
 			layoutReadyAttempts: 0,
 			layoutReadyRetry: null,
 			maxLayoutReadyAttempts: 10,
+			storeUnsubscribers: [],
 			views: new Set(),
 		});
 		(plugin as unknown as { app: { isMobile: boolean; workspace: typeof workspace } }).app = {
@@ -246,6 +247,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerObsidianProtocolHandler: vi.fn(),
 			registerEvent: vi.fn(),
 			mediaSessionActions: [],
+			storeUnsubscribers: [],
 			views: new Set(),
 			app: {
 				workspace: {

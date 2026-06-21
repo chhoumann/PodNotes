@@ -1,4 +1,4 @@
-import { get, readable, writable } from "svelte/store";
+import { get, readable, writable, type Unsubscriber } from "svelte/store";
 import type PodNotes from "src/main";
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
@@ -781,6 +781,33 @@ export const viewState = (() => {
  */
 function autoQueueEnabled(): boolean {
 	return get(plugin)?.settings?.autoQueue !== false;
+}
+
+/**
+ * Drops the current episode from the queue whenever it changes — an episode you
+ * are now playing should not also sit in the up-next queue. Subscribes to
+ * currentEpisode and returns an unsubscriber for lifecycle cleanup.
+ *
+ * This is queue automation, not persistence: it formerly lived inside
+ * QueueController, which conflated the two. Unlike auto-population/advance it is
+ * intentionally NOT gated on autoQueueEnabled — a manually started episode is
+ * removed from the queue regardless of the automation toggle.
+ */
+export function subscribeQueueToCurrentEpisode(): Unsubscriber {
+	return currentEpisode.subscribe((episode) => {
+		if (!episode) return;
+
+		const { episodes } = get(queue);
+		const episodeIsInQueue = episodes.some((e) => e.title === episode.title);
+		if (!episodeIsInQueue) return;
+
+		queue.update((playlist) => {
+			playlist.episodes = playlist.episodes.filter(
+				(e) => e.title !== episode.title,
+			);
+			return playlist;
+		});
+	});
 }
 
 function addEpisodeToQueue(episode: Episode) {

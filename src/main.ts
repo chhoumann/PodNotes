@@ -12,7 +12,9 @@ import {
 	sanitizeEpisodeListLimit,
 	playbackRate,
 	volume,
+	subscribeQueueToCurrentEpisode,
 } from "src/store";
+import { bindStoresToSettings } from "src/store/persistence";
 import {
 	Notice,
 	Platform,
@@ -35,18 +37,6 @@ import { QueueReorderModal } from "src/ui/QueueReorderModal";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { plugin } from "./store";
 import type { IPodNotes } from "./types/IPodNotes";
-import { EpisodeStatusController } from "./store_controllers/EpisodeStatusController";
-import type { StoreController } from "./types/StoreController";
-import type { PlayedEpisode } from "./types/PlayedEpisode";
-import type { PodcastFeed } from "./types/PodcastFeed";
-import { SavedFeedsController } from "./store_controllers/SavedFeedsController";
-import type { Playlist } from "./types/Playlist";
-import { PlaylistController } from "./store_controllers/PlaylistController";
-import { QueueController } from "./store_controllers/QueueController";
-import { FavoritesController } from "./store_controllers/FavoritesController";
-import type { Episode } from "./types/Episode";
-import CurrentEpisodeController from "./store_controllers/CurrentEpisodeController";
-import { HidePlayedEpisodesController } from "./store_controllers/HidePlayedEpisodesController";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import { prepareTimestampForInsertion } from "./utility/prepareTimestampInsertion";
 import {
@@ -60,9 +50,6 @@ import createPodcastNote, {
 import createFeedNote from "./createFeedNote";
 import { FeedSuggestModal, orderFeedsByCurrent } from "./ui/FeedSuggestModal";
 import downloadEpisodeWithNotice from "./downloadEpisode";
-import type DownloadedEpisode from "./types/DownloadedEpisode";
-import DownloadedEpisodesController from "./store_controllers/DownloadedEpisodesController";
-import { LocalFilesController } from "./store_controllers/LocalFilesController";
 import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
@@ -91,23 +78,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private views = new Set<MainView>();
 
-	private playedEpisodeController?: StoreController<{
-		[episodeName: string]: PlayedEpisode;
-	}>;
-	private savedFeedsController?: StoreController<{
-		[podcastName: string]: PodcastFeed;
-	}>;
-	private playlistController?: StoreController<{
-		[playlistName: string]: Playlist;
-	}>;
-	private queueController?: StoreController<Playlist>;
-	private favoritesController?: StoreController<Playlist>;
-	private localFilesController?: StoreController<Playlist>;
-	private currentEpisodeController?: StoreController<Episode>;
-	private downloadedEpisodesController?: StoreController<{
-		[podcastName: string]: DownloadedEpisode[];
-	}>;
-	private hidePlayedEpisodesController?: StoreController<boolean>;
+	// Store subscriptions tied to the plugin lifetime: settings persistence and
+	// queue automation. Disposed together in onunload.
+	private storeUnsubscribers: Unsubscriber[] = [];
 	private transcriptionService?: TranscriptionService;
 	private volumeUnsubscribe?: Unsubscriber;
 	private localFilesMirrorUnsubscribe?: Unsubscriber;
@@ -151,27 +124,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			normalizePlaybackRate(this.settings.defaultPlaybackRate),
 		);
 
-		this.playedEpisodeController = new EpisodeStatusController(
-			playedEpisodes,
-			this,
-		).on();
-		this.savedFeedsController = new SavedFeedsController(savedFeeds, this).on();
-		this.playlistController = new PlaylistController(playlists, this).on();
-		this.queueController = new QueueController(queue, this).on();
-		this.favoritesController = new FavoritesController(favorites, this).on();
-		this.localFilesController = new LocalFilesController(localFiles, this).on();
-		this.downloadedEpisodesController = new DownloadedEpisodesController(
-			downloadedEpisodes,
-			this,
-		).on();
-		this.currentEpisodeController = new CurrentEpisodeController(
-			currentEpisode,
-			this,
-		).on();
-		this.hidePlayedEpisodesController = new HidePlayedEpisodesController(
-			hidePlayedEpisodes,
-			this,
-		).on();
+		// Mirror every store-backed slice of state into settings, and wire the queue
+		// automation that drops the now-playing episode from the up-next queue. Both
+		// are store subscriptions tied to the plugin lifetime; onunload disposes them.
+		this.storeUnsubscribers.push(
+			bindStoresToSettings(this),
+			subscribeQueueToCurrentEpisode(),
+		);
 
 		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
 		// downloadedEpisodes is the authoritative offline set, so mirror it into the
@@ -740,15 +699,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isUnloaded = true;
 		this.clearLayoutReadyRetry();
 		this.clearMediaSessionHandlers();
-		this.playedEpisodeController?.off();
-		this.savedFeedsController?.off();
-		this.playlistController?.off();
-		this.queueController?.off();
-		this.favoritesController?.off();
-		this.localFilesController?.off();
-		this.downloadedEpisodesController?.off();
-		this.currentEpisodeController?.off();
-		this.hidePlayedEpisodesController?.off();
+		for (const unsubscribe of this.storeUnsubscribers) unsubscribe();
+		this.storeUnsubscribers = [];
 		this.volumeUnsubscribe?.();
 		this.localFilesMirrorUnsubscribe?.();
 		this.views.clear();
