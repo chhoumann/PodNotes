@@ -5,6 +5,8 @@ import { createEventDispatcher } from "svelte";
 
 export let max: number;
 export let value: number;
+export let ariaLabel = "Seek";
+export let valueText: string | undefined = undefined;
 export { _styled as style };
 
 let isDragging: boolean = false;
@@ -76,9 +78,11 @@ function handleKeyDown(event: KeyboardEvent) {
 	class="progress"
 	role="slider"
 	tabindex="0"
+	aria-label={ariaLabel}
 	aria-valuemin="0"
 	aria-valuemax={max}
 	aria-valuenow={value}
+	aria-valuetext={valueText}
 	style={styles}
 	on:click={forwardClick}
 	on:mousedown={onDragStart}

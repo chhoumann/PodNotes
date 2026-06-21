@@ -12,7 +12,9 @@ import {
 	activePlaybackSegment,
 	playbackRate,
 	playedEpisodes,
+	playlists,
 	plugin,
+	queue,
 	requestedPlaybackTime,
 } from "src/store";
 import type { Episode } from "src/types/Episode";
@@ -38,6 +40,14 @@ beforeEach(() => {
 	playedEpisodes.set({});
 	requestedPlaybackTime.set(null);
 	downloadedEpisodes.set({});
+	playlists.set({});
+	queue.set({
+		icon: "list-ordered",
+		name: "Queue",
+		episodes: [],
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+	});
 	HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
 	HTMLMediaElement.prototype.pause = vi.fn();
 	plugin.set({
@@ -223,6 +233,37 @@ describe("EpisodePlayer", () => {
 		expect(get(playedEpisodes)[episodeKey]).toBeUndefined();
 	});
 
+	test("on episode end only removes the matching episode from playlists, keeping same-titled episodes from other podcasts (PB-07)", async () => {
+		const otherPodcastSameTitle: Episode = {
+			...testEpisode,
+			podcastName: "Other Podcast",
+			streamUrl: "https://other.example.com/audio.mp3",
+		};
+		playlists.set({
+			"My List": {
+				icon: "list-ordered",
+				name: "My List",
+				episodes: [testEpisode, otherPodcastSameTitle],
+				shouldEpisodeRemoveAfterPlay: false,
+				shouldRepeat: false,
+			},
+		});
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+
+		currentTime.set(3600);
+		await fireEvent.ended(audio);
+
+		const remaining = get(playlists)["My List"].episodes;
+		expect(remaining).toHaveLength(1);
+		expect(remaining[0].podcastName).toBe("Other Podcast");
+	});
+
 	test("ignores stale requested timestamp for a different episode", async () => {
 		playedEpisodes.setEpisodeTime(testEpisode, 1800, 3600, false);
 		requestedPlaybackTime.set({
@@ -241,6 +282,52 @@ describe("EpisodePlayer", () => {
 		expect(get(currentTime)).toBe(1800);
 		expect(get(isPaused)).toBe(false);
 		expect(get(requestedPlaybackTime)).toBeNull();
+	});
+
+	test("does not restore a title-only saved position from a different podcast's same-titled episode (PB-06)", async () => {
+		// Legacy title-only entry that actually belongs to another podcast.
+		playedEpisodes.set({
+			[testEpisode.title]: {
+				title: testEpisode.title,
+				podcastName: "A Different Podcast",
+				time: 1800,
+				duration: 3600,
+				finished: false,
+			},
+		});
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+
+		// The current episode is "Test Podcast" — the other podcast's saved
+		// position must be ignored, resuming from 0 instead of 1800.
+		expect(get(currentTime)).toBe(0);
+	});
+
+	test("restores a legacy title-only saved position for the same episode (PB-06)", async () => {
+		// Legacy entry with no podcastName recorded — must still resume.
+		playedEpisodes.set({
+			[testEpisode.title]: {
+				title: testEpisode.title,
+				podcastName: "",
+				time: 900,
+				duration: 3600,
+				finished: false,
+			},
+		});
+
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.loadedMetadata(audio);
+
+		expect(get(currentTime)).toBe(900);
 	});
 
 	test("keeps the audio element and slider label in sync with playbackRate store", async () => {
