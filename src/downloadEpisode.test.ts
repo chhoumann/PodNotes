@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
-import { requestUrl, TFile } from "obsidian";
+import { Notice, requestUrl, TFile } from "obsidian";
 import downloadEpisodeWithNotice, {
 	detectAudioFileExtension,
 	downloadEpisode,
@@ -71,11 +71,39 @@ afterEach(() => {
 	(globalThis as { app?: unknown }).app = undefined;
 });
 
+// Build a minimal ISO-BMFF header: a 4-byte box size, the 'ftyp' box type at
+// offset 4, and the 4-character major brand at offset 8 (#DL-06).
+function ftyp(brand: string): ArrayBuffer {
+	const head = bytes(0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70);
+	const brandBytes = new TextEncoder().encode(brand.padEnd(4, " ").slice(0, 4));
+	const out = new Uint8Array(head.byteLength + brandBytes.byteLength);
+	out.set(new Uint8Array(head), 0);
+	out.set(brandBytes, head.byteLength);
+	return out.buffer;
+}
+
 describe("detectAudioFileExtension", () => {
-	it("matches exact signatures (ID3 -> mp3, RIFF -> wav, m4a)", () => {
+	it("matches exact signatures (ID3 -> mp3, RIFF -> wav)", () => {
 		expect(detectAudioFileExtension(bytes(0x49, 0x44, 0x33, 0x04))).toBe("mp3");
 		expect(detectAudioFileExtension(bytes(0x52, 0x49, 0x46, 0x46))).toBe("wav");
-		expect(detectAudioFileExtension(bytes(0x4d, 0x34, 0x41, 0x20))).toBe("m4a");
+	});
+
+	it("detects real ISO-BMFF m4a/mp4 by the ftyp major brand at offset 8 (#DL-06)", () => {
+		// The major brand lives at offset 8, not offset 0 — the old offset-0 'M4A '
+		// signature never matched a genuine m4a/mp4 file.
+		expect(detectAudioFileExtension(ftyp("M4A "))).toBe("m4a");
+		expect(detectAudioFileExtension(ftyp("M4B "))).toBe("mp4");
+		expect(detectAudioFileExtension(ftyp("M4V "))).toBe("m4v");
+		expect(detectAudioFileExtension(ftyp("qt  "))).toBe("mov");
+		expect(detectAudioFileExtension(ftyp("mp42"))).toBe("mp4");
+		expect(detectAudioFileExtension(ftyp("isom"))).toBe("mp4");
+		// An unknown brand still resolves to a generic mp4 container.
+		expect(detectAudioFileExtension(ftyp("zzzz"))).toBe("mp4");
+	});
+
+	it("does not treat a bare 'M4A ' (no ftyp box) as ISO-BMFF", () => {
+		// Four bytes with no ftyp box type at offset 4 are not an MP4 file.
+		expect(detectAudioFileExtension(bytes(0x4d, 0x34, 0x41, 0x20))).toBeNull();
 	});
 
 	it("applies the masked MPEG frame-sync signature", () => {
@@ -308,6 +336,146 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			mediaType: "audio",
 			size: buffer.byteLength,
 		});
+	});
+
+	it("dismisses the notice on a successful download (#DL-03)", async () => {
+		setupVault();
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mpeg" },
+			arrayBuffer: bytes(0x49, 0x44, 0x33, 0x01),
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const hideSpy = vi.spyOn(Notice.prototype, "hide");
+		vi.useFakeTimers();
+
+		try {
+			await downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}");
+			expect(hideSpy).not.toHaveBeenCalled();
+			vi.runAllTimers();
+			expect(hideSpy).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+			hideSpy.mockRestore();
+		}
+	});
+
+	it("still dismisses the notice when the download fails (#DL-03)", async () => {
+		setupVault();
+		requestUrlMock.mockRejectedValue(new Error("network down"));
+		const hideSpy = vi.spyOn(Notice.prototype, "hide");
+		vi.useFakeTimers();
+
+		try {
+			await expect(
+				downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}"),
+			).rejects.toThrow(/network down/);
+			// The dismissal lives in a finally, so a rejected download still hides the
+			// notice exactly once instead of leaving it open forever.
+			vi.runAllTimers();
+			expect(hideSpy).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+			hideSpy.mockRestore();
+		}
+	});
+
+	it("still dismisses the notice on the non-playable rejection (#DL-03)", async () => {
+		setupVault();
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "text/html" },
+			arrayBuffer: new TextEncoder().encode("<html>nope</html>").buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const hideSpy = vi.spyOn(Notice.prototype, "hide");
+		vi.useFakeTimers();
+
+		try {
+			await expect(
+				downloadEpisodeWithNotice(
+					makeEpisode({ streamUrl: "https://example.com/ep.mp3" }),
+					"Podcasts/{{title}}",
+				),
+			).rejects.toThrow(/Not a playable media file/);
+			vi.runAllTimers();
+			expect(hideSpy).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+			hideSpy.mockRestore();
+		}
+	});
+
+	it("rejects an HTML error page served at a .mp3 URL instead of saving it (#DL-07)", async () => {
+		const { createBinary } = setupVault();
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "text/html; charset=utf-8" },
+			arrayBuffer: new TextEncoder().encode("<html>login required</html>")
+				.buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await expect(
+				downloadEpisodeWithNotice(
+					// URL ends in .mp3, so the extension heuristic would otherwise
+					// accept the HTML body as playable media.
+					makeEpisode({ streamUrl: "https://example.com/expired.mp3" }),
+					"Podcasts/{{title}}",
+				),
+			).rejects.toThrow(/Not a playable media file/);
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
+	});
+
+	it("rejects a JSON error body served at a .mp3 URL (#DL-07)", async () => {
+		const { createBinary } = setupVault();
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "application/json" },
+			arrayBuffer: new TextEncoder().encode('{"error":"forbidden"}').buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+
+		await expect(
+			downloadEpisodeWithNotice(
+				makeEpisode({ streamUrl: "https://example.com/ep.mp3" }),
+				"Podcasts/{{title}}",
+			),
+		).rejects.toThrow(/Not a playable media file/);
+
+		expect(createBinary).not.toHaveBeenCalled();
+	});
+
+	it("still saves a real audio download served as application/octet-stream (#DL-07)", async () => {
+		// octet-stream is genuinely ambiguous and is intentionally NOT rejected up
+		// front — real CDNs serve media this way, so it falls through to the
+		// extension/signature heuristic.
+		const { createBinary } = setupVault();
+		const buffer = bytes(0x49, 0x44, 0x33, 0x01);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "application/octet-stream" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(
+				makeEpisode({ streamUrl: "https://example.com/ep.mp3" }),
+				"Podcasts/{{title}}",
+			);
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith("Podcasts/My Title.mp3", buffer);
 	});
 });
 

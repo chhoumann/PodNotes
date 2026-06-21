@@ -93,6 +93,12 @@ export default async function podNotesURIHandler(
 			new Notice("Timestamp must be a valid number");
 			return;
 		}
+		// One guard ahead of both the segment and plain paths: a negative time is
+		// never valid (the segment path's own requestedTime < 0 check is now redundant).
+		if (requestedTime < 0) {
+			new Notice("Timestamp must be zero or greater");
+			return;
+		}
 	}
 
 	const requestedEndTime = parseSegmentEndTime(
@@ -158,6 +164,14 @@ export default async function podNotesURIHandler(
 	let episode: Episode | undefined;
 
 	if (localFile) {
+		episode = nameCandidates
+			.map((name) => localFiles.getLocalEpisode(name))
+			.find((ep) => ep !== undefined);
+	} else if (!candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
+		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
+		// a vault path whose file was moved/renamed. Resolve the episode by name from
+		// the local-files store rather than handing the bare path to FeedParser (which
+		// would fail and show a misleading "Could not load the podcast feed").
 		episode = nameCandidates
 			.map((name) => localFiles.getLocalEpisode(name))
 			.find((ep) => ep !== undefined);

@@ -361,6 +361,41 @@ describe("podNotesURIHandler", () => {
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 
+	test("resolves a moved/renamed local file by name instead of routing to the feed parser (LF-08)", async () => {
+		const localEpisode: LocalEpisode = {
+			title: "Local Note",
+			streamUrl: "Old/Local Note.mp3",
+			url: "Old/Local Note.mp3",
+			description: "",
+			content: "",
+			podcastName: "local file",
+			filePath: "Old/Local Note.mp3",
+		};
+		localFiles.set({ ...emptyLocalFiles, episodes: [localEpisode] });
+		// The file was moved: the recorded path no longer resolves to a file, and
+		// the url has no http(s) scheme, so it must be treated as a vault path.
+		setApp(() => null);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: "Old/Local Note.mp3",
+				episodeName: "Local Note",
+				time: "15",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: "Local Note" });
+		expect(get(viewState)).toBe(ViewState.Player);
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: "local file::Local Note",
+			time: 15,
+		});
+		// A schemeless path must never hit the feed parser.
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
 	test("shows a notice and changes nothing when the episode cannot be found", async () => {
 		mockGetEpisodes.mockResolvedValue([]);
 
@@ -602,6 +637,22 @@ describe("podNotesURIHandler", () => {
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 		expect(get(activePlaybackSegment)).toBeNull();
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("rejects a negative plain (non-segment) timestamp", async () => {
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: testEpisode.title,
+				time: "-10",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 

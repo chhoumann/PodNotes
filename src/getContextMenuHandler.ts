@@ -1,5 +1,5 @@
 import type { App, EventRef, Menu, TAbstractFile, WorkspaceLeaf } from "obsidian";
-import { TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import { get } from "svelte/store";
 import { VIEW_TYPE } from "./constants";
 import {
@@ -71,10 +71,27 @@ function addPlayLocalFileItem(
 				// (see localFiles.syncWithDownloaded), so this single write
 				// surfaces the file there too. Always refresh the entry: two
 				// same-basename local files can differ by folder or media type.
-				downloadedEpisodes.addEpisode(localEpisode, file.path, file.stat.size);
+				// addEpisode reports a basename collision (a different file already
+				// tracked under this name) so we can warn here — the store stays pure
+				// (#LF-06).
+				const replacedFilePath = downloadedEpisodes.addEpisode(
+					localEpisode,
+					file.path,
+					file.stat.size,
+				);
+				if (replacedFilePath) {
+					new Notice(
+						`A local file named "${file.basename}" was already tracked at "${replacedFilePath}". It has been replaced by "${file.path}".`,
+					);
+				}
 
-				// Fixes where the episode won't play if it has been played.
-				if (get(playedEpisodes)[file.basename]?.finished) {
+				// Re-enable replay for a finished local file. Look it up with
+				// playedEpisodes.get (which resolves the composite "local
+				// file::<basename>" key and falls back to legacy bare-title), not
+				// the raw bare-basename map — markAsPlayed/setEpisodeTime store under
+				// the composite key, so the old bare-basename lookup never matched
+				// and a finished local file refused to replay (CM-10/LF-09).
+				if (playedEpisodes.get(localEpisode)?.finished) {
 					playedEpisodes.markAsUnplayed(localEpisode);
 				}
 

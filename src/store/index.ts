@@ -408,13 +408,17 @@ export const localFiles = (() => {
 		getLocalEpisode: (title: string): LocalEpisode | undefined => {
 			const { episodes } = get(store);
 
-			// Prefer a genuine manual local file so a same-titled downloaded episode
-			// (now mirrored into this playlist) can't shadow it in deep-links.
+			// Match case- and whitespace-insensitively so a deep link resolves the
+			// same way the normalized feed path does (LF-08). Still prefer a genuine
+			// manual local file so a same-titled downloaded episode (now mirrored
+			// into this playlist) can't shadow it.
+			const target = title.trim().toLowerCase();
+			const matches = (episode: Episode) =>
+				episode.title.trim().toLowerCase() === target;
 			const ep =
 				episodes.find(
-					(episode) =>
-						episode.title === title && episode.podcastName === "local file",
-				) ?? episodes.find((episode) => episode.title === title);
+					(episode) => matches(episode) && episode.podcastName === "local file",
+				) ?? episodes.find(matches);
 
 			return ep as LocalEpisode | undefined;
 		},
