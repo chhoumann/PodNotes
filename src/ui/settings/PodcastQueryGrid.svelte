@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { debounce } from "obsidian";
+	import { debounce, Notice } from "obsidian";
 	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
 	import FeedParser from "src/parser/feedParser";
 	import { savedFeeds, podcastsUpdated } from "src/store";
@@ -13,6 +13,8 @@
 	let searchResults: PodcastFeed[] = [];
 	let gridSizeClass: string = "grid-3";
 	let searchQuery: string = "";
+	let isSearching: boolean = false;
+	let searchError: string = "";
 
 	let searchInput: HTMLInputElement;
 
@@ -50,17 +52,42 @@
 	}
 
 	const debouncedUpdate = debounce(
-		async ({detail: { value }}: CustomEvent<{ value: string }>) => {	
+		async ({detail: { value }}: CustomEvent<{ value: string }>) => {
 			searchQuery = value;
+			searchError = "";
 			const customFeedUrl = checkStringIsUrl(value);
-			
-			if (customFeedUrl) {
-				const feed = await (new FeedParser().getFeed(customFeedUrl.href));
-				searchResults = [feed];
+
+			// Only treat the input as a feed URL when it is an http(s) URL, so
+			// things like "podcast:name" don't get parsed as feeds.
+			const isFeedUrl =
+				customFeedUrl?.protocol === "http:" ||
+				customFeedUrl?.protocol === "https:";
+
+			if (isFeedUrl && customFeedUrl) {
+				isSearching = true;
+				try {
+					const feed = await new FeedParser().getFeed(customFeedUrl.href);
+					searchResults = [feed];
+				} catch (e) {
+					searchResults = [];
+					const msg = e instanceof Error ? e.message : String(e);
+					searchError = `Could not load feed: ${msg}`;
+					new Notice(searchError);
+				} finally {
+					isSearching = false;
+				}
 			} else if (value.trim() === "") {
 				updateSearchResults();
 			} else {
-				searchResults = await queryiTunesPodcasts(value);
+				isSearching = true;
+				try {
+					searchResults = await queryiTunesPodcasts(value);
+				} catch (e) {
+					searchResults = [];
+					searchError = "Could not search podcasts. Please try again.";
+				} finally {
+					isSearching = false;
+				}
 			}
 		},
 		300,
@@ -95,6 +122,20 @@
 		bind:el={searchInput}
 	/>
 
+	{#if isSearching}
+		<div class="podcast-query-status" role="status" aria-live="polite">
+			Searching...
+		</div>
+	{:else if searchError}
+		<div class="podcast-query-status podcast-query-error" role="alert">
+			{searchError}
+		</div>
+	{:else if searchQuery.trim() !== "" && searchResults.length === 0}
+		<div class="podcast-query-status" role="status" aria-live="polite">
+			No results.
+		</div>
+	{/if}
+
 	<div class="podcast-query-results" role="list" aria-label="Podcast search results">
 		{#each searchResults as podcast (podcast.url)}
 			<div role="listitem">
@@ -112,6 +153,16 @@
 <style>
 	.podcast-query-container {
 		margin-bottom: 1.5rem;
+	}
+
+	.podcast-query-status {
+		margin-bottom: 0.75rem;
+		font-size: 0.85rem;
+		color: var(--text-muted);
+	}
+
+	.podcast-query-error {
+		color: var(--text-error);
 	}
 
 	.podcast-query-results {

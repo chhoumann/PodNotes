@@ -31,7 +31,7 @@
 	import { ViewState } from "src/types/ViewState";
 	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
-	import { episodeMatchesKey, getEpisodeKey } from "src/utility/episodeKey";
+	import { episodeMatchesKey, getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
 	import {
 		normalizePlaybackRate,
 		PLAYBACK_RATE_MAX,
@@ -93,16 +93,25 @@
 	}
 
 	function removeEpisodeFromPlaylists() {
+		// Match by composite identity so a same-titled episode from another podcast
+		// is not removed, while a LEGACY entry saved without podcastName still
+		// matches by title (isSameStoredEpisode handles both — plain composite-key
+		// matching would skip those legacy entries on finish).
 		playlists.update((lists) => {
 			Object.values(lists).forEach((playlist) => {
 				playlist.episodes = playlist.episodes.filter(
-					(ep) => ep.title !== $currentEpisode.title
+					(ep) => !isSameStoredEpisode(ep, $currentEpisode)
 				);
 			});
 
 			return lists;
 		});
 
+		// The queue is title-identified everywhere (add/remove/dedupe by title; see
+		// src/store/index.ts), so remove the finished episode from it by title to
+		// stay consistent with that identity. The finished episode is usually already
+		// gone from the queue (subscribeQueueToCurrentEpisode drops it when it became
+		// current), so this is otherwise a no-op (PB-07 / Codex review #214).
 		queue.remove($currentEpisode);
 	}
 
@@ -138,6 +147,29 @@
 
 	function onChapterSeek(event: CustomEvent<{ time: number }>) {
 		seekPlaybackTo(event.detail.time);
+	}
+
+	function enterFullscreen() {
+		// Prefer fullscreening the container so the custom overlay/controls stay
+		// usable; fall back to the bare <video> element on iOS Safari/WKWebView,
+		// where requestFullscreen on a div is unsupported and only the media
+		// element itself can go fullscreen.
+		const container = mediaElement?.closest(
+			".episode-video-container",
+		) as HTMLElement | null;
+		if (container?.requestFullscreen) {
+			void container.requestFullscreen();
+			return;
+		}
+
+		const video = mediaElement as
+			| (HTMLMediaElement & { webkitEnterFullscreen?: () => void })
+			| null;
+		if (video?.requestFullscreen) {
+			void video.requestFullscreen();
+		} else if (video?.webkitEnterFullscreen) {
+			video.webkitEnterFullscreen();
+		}
 	}
 
 	function seekPlaybackTo(time: number) {
@@ -197,8 +229,19 @@
 	) {
 		const key = getEpisodeKey(currentEp);
 
-		// Check composite key first, then fallback to title-only for backwards compat
-		const playedData = (key && playedEps[key]) || playedEps[currentEp.title];
+		// Check composite key first, then fall back to the title-only key for
+		// backwards compat — but only accept the legacy title-only entry when its
+		// stored podcastName is absent or matches the current episode, so a
+		// same-titled episode from another podcast can't resume at the wrong
+		// position (mirrors isSamePlayedEpisode's alias logic).
+		const titleOnlyData = playedEps[currentEp.title];
+		const titleOnlyMatches =
+			!!titleOnlyData &&
+			(!titleOnlyData.podcastName ||
+				!currentEp.podcastName ||
+				titleOnlyData.podcastName === currentEp.podcastName);
+		const playedData =
+			(key && playedEps[key]) || (titleOnlyMatches ? titleOnlyData : undefined);
 
 		if (playedData?.time) {
 			currentTime.set(playedData.time);
@@ -322,12 +365,19 @@
 			}
 			hasSeenFirstEpisodeFire = true;
 
-			// Fetch chapters when episode changes
+			// Fetch chapters when episode changes. Clear the previous episode's
+			// chapters immediately so they never flash against the incoming
+			// episode while the new fetch is in flight, and drop superseded /
+			// out-of-order fetch results by checking the request is still latest.
 			const chaptersUrl = episode?.chaptersUrl;
 			if (chaptersUrl && chaptersUrl !== lastChaptersUrl) {
 				lastChaptersUrl = chaptersUrl;
-				fetchChapters(chaptersUrl).then((c) => {
-					chapters = c;
+				chapters = [];
+				const requestedUrl = chaptersUrl;
+				fetchChapters(requestedUrl).then((c) => {
+					if (requestedUrl === lastChaptersUrl) {
+						chapters = c;
+					}
 				});
 			} else if (!chaptersUrl) {
 				lastChaptersUrl = undefined;
@@ -487,6 +537,15 @@
 					<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
 				</button>
 			{/if}
+
+			<button
+				type="button"
+				class="podcast-video-fullscreen"
+				on:click={enterFullscreen}
+				aria-label="Enter fullscreen"
+			>
+				<Icon icon="maximize" clickable={false} />
+			</button>
 		</div>
 	{:else}
 		<div class="episode-image-container">
@@ -549,10 +608,12 @@
 
 	<div class="status-container">
 		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
-		<Progressbar 
+		<Progressbar
 			on:click={onClickProgressbar}
 			value={$currentTime}
 			max={$duration}
+			ariaLabel="Seek within episode"
+			valueText={`${formatSeconds($currentTime, "HH:mm:ss")} of ${formatSeconds($duration, "HH:mm:ss")}`}
 		/>
 		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
 	</div>
@@ -734,6 +795,37 @@
 	.podcast-video-overlay:focus-visible {
 		outline: 2px solid var(--background-modifier-border-focus);
 		outline-offset: -4px;
+	}
+
+	.podcast-video-fullscreen {
+		position: absolute;
+		right: 0.5rem;
+		bottom: 0.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.35rem;
+		border: none;
+		border-radius: 0.375rem;
+		background: rgba(0, 0, 0, 0.45);
+		color: var(--text-on-accent);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 200ms ease, background-color 120ms ease;
+	}
+
+	.episode-video-container:hover .podcast-video-fullscreen,
+	.podcast-video-fullscreen:focus-visible {
+		opacity: 1;
+	}
+
+	.podcast-video-fullscreen:hover {
+		background: rgba(0, 0, 0, 0.65);
+	}
+
+	.podcast-video-fullscreen:focus-visible {
+		outline: 2px solid var(--background-modifier-border-focus);
+		outline-offset: 2px;
 	}
 
 	.podcast-artwork-isloading-overlay {

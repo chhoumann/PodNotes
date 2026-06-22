@@ -11,9 +11,16 @@
 
 	let isExpanded = true;
 
-	function getCurrentChapterIndex(): number {
-		for (let i = chapters.length - 1; i >= 0; i--) {
-			if (currentTime >= chapters[i].startTime) {
+	// Component-unique id so aria-controls on the header points at this
+	// instance's list even if multiple ChapterLists ever render.
+	const listId = "chapter-list-" + Math.random().toString(36).slice(2);
+
+	// Take the list/time as params so Svelte's reactive statement below tracks
+	// both as dependencies and recomputes the highlight as currentTime advances
+	// or the chapters are async-replaced.
+	function getCurrentChapterIndex(list: Chapter[], time: number): number {
+		for (let i = list.length - 1; i >= 0; i--) {
+			if (time >= list[i].startTime) {
 				return i;
 			}
 		}
@@ -24,7 +31,7 @@
 		dispatch("seek", { time: chapter.startTime });
 	}
 
-	$: currentChapterIndex = getCurrentChapterIndex();
+	$: currentChapterIndex = getCurrentChapterIndex(chapters, currentTime);
 </script>
 
 {#if chapters.length > 0}
@@ -34,18 +41,20 @@
 			class="chapter-header"
 			on:click={() => (isExpanded = !isExpanded)}
 			aria-expanded={isExpanded}
+			aria-controls={isExpanded ? listId : undefined}
 		>
 			<Icon icon={isExpanded ? "chevron-down" : "chevron-right"} size={16} />
 			<h3>Chapters ({chapters.length})</h3>
 		</button>
 
 		{#if isExpanded}
-			<ul class="chapters">
+			<ul class="chapters" id={listId}>
 				{#each chapters as chapter, index}
 					<li class:active={index === currentChapterIndex}>
 						<button
 							type="button"
 							class="chapter-item"
+							aria-label={`Jump to ${chapter.title}`}
 							on:click={() => handleChapterClick(chapter)}
 						>
 							<span class="chapter-time">{formatSeconds(chapter.startTime, "H:mm:ss")}</span>

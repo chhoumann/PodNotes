@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { favorites, playlists, queue } from "src/store";
+	import { Notice } from "obsidian";
+	import { get } from "svelte/store";
+	import { favorites, localFiles, playlists, queue } from "src/store";
+	import { PLAYED_SETTINGS } from "src/constants";
 	import type { Playlist } from "src/types/Playlist";
 	import { onMount } from "svelte";
 	import Button from "../obsidian/Button.svelte";
@@ -30,9 +33,36 @@
 	});
 
 	function onAddPlaylist() {
+		const name = playlistInput.trim();
+
+		if (!name) {
+			new Notice("Playlist name cannot be empty.");
+			return;
+		}
+
+		// Reject the built-in playlist names (Queue/Favorites/Local Files/Played):
+		// those tiles come from separate stores, so a custom playlist sharing one of
+		// their names is ambiguous and makes an open playlist silently switch to the
+		// built-in list on refresh (Codex review #214).
+		const reservedNames = new Set([
+			get(queue).name,
+			get(favorites).name,
+			get(localFiles).name,
+			PLAYED_SETTINGS.name,
+		]);
+		if (reservedNames.has(name)) {
+			new Notice(`"${name}" is a reserved playlist name.`);
+			return;
+		}
+
+		if (Object.prototype.hasOwnProperty.call(get(playlists), name)) {
+			new Notice("A playlist with that name already exists.");
+			return;
+		}
+
 		playlists.update((value) => {
-			value[playlistInput] = {
-				name: playlistInput,
+			value[name] = {
+				name,
 				icon: icon,
 				episodes: [],
 				shouldEpisodeRemoveAfterPlay: false,
@@ -56,14 +86,6 @@
 			return value;
 		});
 	}
-
-	function onToggleRepeat(event: CustomEvent<{ value: Playlist }>) {
-		playlists.update((value) => {
-			value[event.detail.value.name].shouldRepeat =
-				!value[event.detail.value.name].shouldRepeat;
-			return value;
-		});
-	}
 </script>
 
 <div class="playlist-manager-container">
@@ -76,11 +98,10 @@
 			playlist={$favorites}
 			showDeleteButton={false}
 		/>
-		{#each playlistArr as playlist}
+		{#each playlistArr as playlist (playlist.name)}
 			<PlaylistItem
 				{playlist}
 				on:delete={onDeletePlaylist}
-				on:toggleRepeat={onToggleRepeat}
 			/>
 		{/each}
 	</div>
