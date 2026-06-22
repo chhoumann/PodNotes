@@ -27,7 +27,10 @@ function getFuse(episodes: Episode[]): Fuse<Episode> {
 export default function searchEpisodes(query: string, episodes: Episode[]): Episode[] {
     if (episodes.length === 0) return [];
 
-    if (query.length === 0) {
+    // Trim before the empty check so a whitespace-only query restores the full
+    // list rather than running a fuzzy search for spaces. This covers every call
+    // site (feed/playlist/latest/played searches) at once (PV-08).
+    if (query.trim().length === 0) {
         return episodes;
     }
 

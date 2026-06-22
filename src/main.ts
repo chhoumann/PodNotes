@@ -17,6 +17,7 @@ import {
 import { bindStoresToSettings } from "src/store/persistence";
 import { registerCommands } from "src/commands";
 import {
+	Notice,
 	Platform,
 	Plugin,
 	type Editor,
@@ -27,7 +28,9 @@ import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
 import {
 	migrateDownloadPath,
+	migrateFeedNoteSettings,
 	migrateNoteSettings,
+	migrateSkipLength,
 	migrateTranscriptSettings,
 } from "src/settingsMigrations";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
@@ -316,16 +319,32 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			return false;
 		}
 
-		const capture = TimestampTemplateEngine(this.settings.timestamp.template);
-		const textToAppend = capture.endsWith("\n") ? capture : `${capture}\n`;
-		const file =
-			getPodcastNote(this.api.podcast) ??
-			(await createPodcastNoteFileIfNotExists(this.api.podcast));
-		const content = await this.app.vault.read(file);
-		const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+		// This path runs from the media-session (headphone) handler, where there is
+		// no editor to surface a failure, so swallowing an error left a button
+		// press looking like it did nothing. Report it instead (NT-13).
+		try {
+			const capture = TimestampTemplateEngine(this.settings.timestamp.template);
+			const textToAppend = capture.endsWith("\n") ? capture : `${capture}\n`;
+			const file =
+				getPodcastNote(this.api.podcast) ??
+				(await createPodcastNoteFileIfNotExists(this.api.podcast));
+			const content = await this.app.vault.read(file);
+			const separator =
+				content.length > 0 && !content.endsWith("\n") ? "\n" : "";
 
-		await this.app.vault.modify(file, `${content}${separator}${textToAppend}`);
-		return true;
+			await this.app.vault.modify(
+				file,
+				`${content}${separator}${textToAppend}`,
+			);
+			return true;
+		} catch (error) {
+			console.error(
+				"PodNotes: failed to capture timestamp into episode note",
+				error,
+			);
+			new Notice("Failed to capture timestamp into episode note");
+			return false;
+		}
 	}
 
 	private async captureTimestampFromMediaSession(): Promise<boolean> {
@@ -423,6 +442,21 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.settings.episodeListLimit = sanitizeEpisodeListLimit(
 			this.settings.episodeListLimit,
 		);
+		// Repair persisted skip lengths so a cleared field (NaN -> null in JSON)
+		// can't feed the skip arithmetic and corrupt the playback position (PB-02).
+		this.settings.skipBackwardLength = migrateSkipLength(
+			this.settings.skipBackwardLength,
+			DEFAULT_SETTINGS.skipBackwardLength,
+		);
+		this.settings.skipForwardLength = migrateSkipLength(
+			this.settings.skipForwardLength,
+			DEFAULT_SETTINGS.skipForwardLength,
+		);
+		// Self-heal a corrupt persisted default playback rate so the loaded store
+		// and the settings slider both read a clamped value (ST-02).
+		this.settings.defaultPlaybackRate = normalizePlaybackRate(
+			this.settings.defaultPlaybackRate,
+		);
 		// Upgrade the legacy empty episode-note default to the Bases-friendly
 		// default, preserving any path/template the user configured (#160). Returns
 		// a fresh object, so DEFAULT_SETTINGS.note is never mutated.
@@ -433,6 +467,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.settings.transcript = migrateTranscriptSettings(
 			loadedData?.transcript,
 		);
+		// Backfill a partial/legacy feedNote so a missing template can't crash
+		// createFeedNote's `template.replace(...)` (ST-08).
+		this.settings.feedNote = migrateFeedNoteSettings(loadedData?.feedNote);
 	}
 
 	async saveSettings() {

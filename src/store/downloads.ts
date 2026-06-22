@@ -22,7 +22,19 @@ export const downloadedEpisodes = (() => {
 		set,
 		update,
 		isEpisodeDownloaded,
-		addEpisode: (episode: Episode, filePath: string, size: number) => {
+		/**
+		 * Adds or replaces a downloaded/local episode. Returns the file path that
+		 * was REPLACED when a different file collapsed onto the same key (a basename
+		 * collision), or `undefined` otherwise. The caller surfaces a Notice — this
+		 * store stays pure (no UI/side effects), per the PR #211/#212 layering (#LF-06).
+		 */
+		addEpisode: (
+			episode: Episode,
+			filePath: string,
+			size: number,
+		): string | undefined => {
+			let replacedFilePath: string | undefined;
+
 			update(
 				(downloadedEpisodes: {
 					[podcastName: string]: DownloadedEpisode[];
@@ -33,6 +45,16 @@ export const downloadedEpisodes = (() => {
 						(ep) => ep.title === episode.title,
 					);
 					if (idx !== -1) {
+						// Entries are keyed by podcastName+title, so two distinct local
+						// files that share a basename in different folders collapse onto
+						// the same key and the second replaces the first. The key must stay
+						// basename-only (URIHandler/{{episodelink}} resolve local files by
+						// basename), so report the collision to the caller instead of
+						// overwriting silently (#LF-06).
+						const existingFilePath = podcastEpisodes[idx].filePath;
+						if (existingFilePath && existingFilePath !== filePath) {
+							replacedFilePath = existingFilePath;
+						}
 						podcastEpisodes[idx] = { ...episode, filePath, size };
 					} else {
 						podcastEpisodes.push({
@@ -46,6 +68,8 @@ export const downloadedEpisodes = (() => {
 					return downloadedEpisodes;
 				},
 			);
+
+			return replacedFilePath;
 		},
 		/**
 		 * Drops an episode from the offline set and returns the vault path of the

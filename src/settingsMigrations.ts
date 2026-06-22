@@ -154,3 +154,39 @@ function sanitizeDiarizationProvider(value: unknown): DiarizationProviderId {
 		? (value as DiarizationProviderId)
 		: DEFAULT_SETTINGS.transcript.diarization.provider;
 }
+
+type StoredFeedNote = { path?: string | null; template?: string | null };
+
+/**
+ * Backfill the feed-note settings so a partially-persisted `feedNote` is repaired
+ * on load (issue ST-08). `loadSettings` shallow-merges the persisted object over
+ * the default, so an old `data.json` holding only `{ path }` (or a hand-edited one
+ * with a `null` field) would leave `template` undefined and crash where
+ * createFeedNote calls `template.replace(...)`. This coalesces any missing/null/
+ * non-string field back to the default while preserving a deliberately empty
+ * string (mirrors migrateTranscriptSettings). Pure, so it is unit-testable.
+ */
+export function migrateFeedNoteSettings(
+	stored: StoredFeedNote | null | undefined,
+): IPodNotesSettings["feedNote"] {
+	const s = stored ?? {};
+	return {
+		path:
+			typeof s.path === "string" ? s.path : DEFAULT_SETTINGS.feedNote.path,
+		template:
+			typeof s.template === "string"
+				? s.template
+				: DEFAULT_SETTINGS.feedNote.template,
+	};
+}
+
+/**
+ * Repair a persisted skip length. A cleared settings field used to store NaN
+ * (Number.parseInt("")), which JSON serializes to null; either value would feed
+ * the skip arithmetic and corrupt the playback position. Coalesce any
+ * non-finite/non-positive value back to the default (issue PB-02). Pure.
+ */
+export function migrateSkipLength(value: unknown, fallback: number): number {
+	const n = typeof value === "number" ? value : Number(value);
+	return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}

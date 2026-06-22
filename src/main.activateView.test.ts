@@ -277,7 +277,11 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(showCmd?.checkCallback).toBeUndefined();
 	});
 
-	it("registers Capture Timestamp as an editor callback so mobile toolbar can add it", async () => {
+	it("registers Capture Timestamp as an editor callback so the mobile toolbar can add it", async () => {
+		// Must stay an editorCallback (not editorCheckCallback): an unconditional
+		// editor command remains addable to the mobile editor toolbar / command
+		// picker before any episode is loaded; it surfaces a Notice when capture
+		// isn't possible rather than no-opping silently (TS-01 / Codex review #213).
 		const { commands } = await loadPlugin();
 
 		const captureCmd = commands.find((c) => c.id === "capture-timestamp");

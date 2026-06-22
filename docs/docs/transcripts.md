@@ -43,7 +43,7 @@ By default the transcription uses OpenAI's Whisper model, which produces plain t
 
 In the **Transcript settings** section, turn on **Speaker diarization** and choose a provider:
 
-- **OpenAI** (`gpt-4o-transcribe-diarize`): reuses the OpenAI API key you already entered above, so there is nothing else to configure. Because OpenAI caps each request at 25 MB, a long episode is split into chunks that are diarized independently — so on long episodes the speaker labels can change across chunk boundaries (the same person may be labelled `A` in one chunk and `B` in the next). A typical-length episode fits in a single request and is fully consistent.
+- **OpenAI** (`gpt-4o-transcribe-diarize`): reuses the OpenAI API key you already entered above, so there is nothing else to configure. Because each request is capped at ~20 MB (a conservative margin under OpenAI's 25 MB request cap), a long episode is split into chunks that are diarized independently — so on long episodes the speaker labels can change across chunk boundaries (the same person may be labelled `A` in one chunk and `B` in the next). A typical-length episode fits in a single request and is fully consistent.
 - **Deepgram**: sends the whole episode in one request, so speaker labels stay consistent across the entire episode. This requires a separate **Deepgram API key**, which you can create at [deepgram.com](https://deepgram.com) (new accounts include free credit). Your Deepgram key is stored separately from your OpenAI key and is only used for diarization.
 
 Diarization is off by default, so existing transcripts and the plain-Whisper workflow are unchanged unless you enable it.

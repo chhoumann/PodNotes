@@ -24,4 +24,19 @@ describe("formatSeconds", () => {
 			"00:00:00",
 		);
 	});
+
+	test("substitutes each token once, never re-matching inserted digits (TS-09)", () => {
+		// 12h, 34m, 56s -> with 12-hour token h=12; a single pass must not let the
+		// '1'/'2' it inserts get reconsidered by a later token.
+		expect(formatSeconds(45296, "h:mm:ss A")).toBe("12:34:56 PM");
+		// h -> "1", then \\h -> literal "h": proves the inserted "1" isn't re-scanned.
+		expect(formatSeconds(3661, "h\\h")).toBe("1h");
+	});
+
+	test("honors backslash escaping for literal letters (TS-09)", () => {
+		// Without escaping, the old chained replaces corrupted any literal letter
+		// that collided with a token. `\\h` must render a literal 'h'.
+		expect(formatSeconds(3661, "mm\\m ss\\s")).toBe("01m 01s");
+		expect(formatSeconds(3661, "\\H\\o\\u\\r")).toBe("Hour");
+	});
 });

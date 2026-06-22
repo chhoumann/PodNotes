@@ -198,8 +198,9 @@ export class TranscriptionService {
 	 * Produce the transcript body that fills the template's `{{transcript}}` tag.
 	 * Plain Whisper returns one run-on block, so it is reflowed after sentence
 	 * periods for readability; diarization returns speaker-labeled turns already
-	 * separated into paragraphs, so it is rendered as-is. Diarization that yields
-	 * no speech is treated as a failure rather than writing an empty transcript.
+	 * separated into paragraphs, so it is rendered as-is. Either path yielding no
+	 * speech is treated as a failure rather than writing an empty transcript (empty
+	 * Whisper chunks join to whitespace, so the body is trimmed before the check).
 	 */
 	private async buildTranscriptBody(
 		audio: DiarizationAudio,
@@ -223,7 +224,12 @@ export class TranscriptionService {
 		const files = await createChunkFiles(audio);
 		updateNotice("Starting transcription...");
 		const transcription = await this.transcribeChunks(files, updateNotice);
-		return transcription.replace(/\.\s+/g, ".\n\n");
+		// Empty chunks join to " " (not ""), so trim before deciding it is empty.
+		const body = transcription.trim().replace(/\.\s+/g, ".\n\n");
+		if (body.length === 0) {
+			throw new Error("Transcription returned no text.");
+		}
+		return body;
 	}
 
 	/** Route the episode audio to the configured diarization provider (#168). */
@@ -247,8 +253,9 @@ export class TranscriptionService {
 			});
 		}
 
-		// OpenAI diarization shares Whisper's 25 MB/request cap, so reuse the same
-		// chunking. Speaker labels can differ across chunks on a long episode.
+		// OpenAI diarization shares Whisper's ~20 MB chunk limit (a conservative
+		// margin under OpenAI's 25 MB request cap), so reuse the same chunking.
+		// Speaker labels can differ across chunks on a long episode.
 		updateNotice("Creating audio chunks...");
 		const chunkFiles = await createChunkFiles(audio);
 		return diarizeWithOpenAI({

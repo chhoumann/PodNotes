@@ -46,7 +46,11 @@ type FeedEpisodeSources = Map<string, Episode[]>;
 function getEpisodeTimestamp(episode?: Episode): number {
 	if (!episode?.episodeDate) return 0;
 
-	return Number(episode.episodeDate);
+	// An Invalid Date coerces to NaN, which makes every comparison false and
+	// produces an unstable/incorrect sort order. Collapse it to 0 (sorts as
+	// oldest), matching FeedCacheService.episodeTimestamp (FP-12).
+	const timestamp = Number(episode.episodeDate);
+	return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function getLatestEpisodesForFeed(

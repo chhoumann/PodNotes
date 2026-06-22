@@ -102,9 +102,10 @@ ${transcript}`;
 };
 ```
 
-## `getPodcastTimeFormatted(format: string, linkify?: boolean)`
+## `getPodcastTimeFormatted(format: string, linkify?: boolean, offsetSeconds?: number)`
 This function will return the current playback time formatted according to the given (moment) format.
 If `linkify` is true, the time will be linked to the current episode at the given time. This is used by PodNotes to play from the recorded time.
+`offsetSeconds` is optional (default 0), subtracted from the current playback time before formatting/linking, floored at 0, and also applies to the linkified timestamp.
 
 ## `getPodcastSegmentFormatted(format: string, startTime: number, endTime: number, linkify?: boolean)`
 This function returns a formatted `start-end` playback range.

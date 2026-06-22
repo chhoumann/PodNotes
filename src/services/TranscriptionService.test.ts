@@ -1,7 +1,25 @@
 import { describe, expect, test, vi, beforeEach } from "vitest";
+import { Notice } from "obsidian";
 import { TranscriptionService } from "./TranscriptionService";
 import type { Episode } from "src/types/Episode";
 import type PodNotes from "src/main";
+
+// The shared obsidian mock's Notice has no setMessage; TimerNotice needs one.
+(Notice.prototype as unknown as { setMessage: () => void }).setMessage = () => {};
+
+const getEpisodeAudioBufferMock = vi.fn();
+const transcriptionsCreateMock = vi.fn();
+
+vi.mock("../downloadEpisode", () => ({
+	getEpisodeAudioBuffer: (...args: unknown[]) =>
+		getEpisodeAudioBufferMock(...args),
+}));
+
+vi.mock("openai", () => ({
+	OpenAI: class {
+		audio = { transcriptions: { create: transcriptionsCreateMock } };
+	},
+}));
 
 const mockEpisode: Episode = {
 	title: "Test Episode",
@@ -64,6 +82,11 @@ function createMockPlugin(overrides: {
 describe("TranscriptionService", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		getEpisodeAudioBufferMock.mockResolvedValue({
+			buffer: new ArrayBuffer(1024),
+			extension: "mp3",
+			basename: "episode",
+		});
 	});
 
 	describe("formatTime", () => {
@@ -123,4 +146,94 @@ describe("TranscriptionService", () => {
 		});
 	});
 
+	describe("empty Whisper transcript (TR-01)", () => {
+		// transcribeEpisode is private; drive it directly so the empty-body throw is
+		// observed as "no file written" (the throw is caught and surfaced as a
+		// "Transcription failed" notice, never as a saved transcript).
+		const runTranscribeEpisode = async (plugin: PodNotes) => {
+			const service = new TranscriptionService(plugin);
+			await (
+				service as unknown as {
+					transcribeEpisode: (episode: Episode) => Promise<void>;
+				}
+			).transcribeEpisode(mockEpisode);
+			return service;
+		};
+
+		test("does not write a file when the transcript is empty", async () => {
+			transcriptionsCreateMock.mockResolvedValue({ text: "" });
+			const plugin = createMockPlugin();
+
+			await runTranscribeEpisode(plugin);
+
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test("does not write a file when the transcript is only whitespace", async () => {
+			// Multiple empty chunks join to " ", not "" — the trimmed-emptiness check
+			// must still treat this as failure.
+			transcriptionsCreateMock.mockResolvedValue({ text: "   \n\t  " });
+			const plugin = createMockPlugin();
+
+			await runTranscribeEpisode(plugin);
+
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test("writes a file when the transcript has content", async () => {
+			transcriptionsCreateMock.mockResolvedValue({
+				text: "Hello world. This is a transcript.",
+			});
+			const plugin = createMockPlugin();
+
+			await runTranscribeEpisode(plugin);
+
+			expect(plugin.app.vault.create).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("buildTranscriptBody (TR-01)", () => {
+		const buildBody = (plugin: PodNotes) => {
+			const service = new TranscriptionService(plugin);
+			return (
+				service as unknown as {
+					buildTranscriptBody: (
+						audio: {
+							buffer: ArrayBuffer;
+							mimeType: string;
+							extension: string;
+							basename: string;
+						},
+						update: (message: string) => void,
+					) => Promise<string>;
+				}
+			).buildTranscriptBody(
+				{
+					buffer: new ArrayBuffer(1024),
+					mimeType: "audio/mpeg",
+					extension: "mp3",
+					basename: "episode",
+				},
+				() => {},
+			);
+		};
+
+		test("throws when the trimmed Whisper body is empty", async () => {
+			transcriptionsCreateMock.mockResolvedValue({ text: "   \n  " });
+
+			await expect(buildBody(createMockPlugin())).rejects.toThrow(
+				"Transcription returned no text.",
+			);
+		});
+
+		test("returns the reflowed body when there is text", async () => {
+			transcriptionsCreateMock.mockResolvedValue({
+				text: "One. Two.",
+			});
+
+			await expect(buildBody(createMockPlugin())).resolves.toBe(
+				"One.\n\nTwo.",
+			);
+		});
+	});
 });

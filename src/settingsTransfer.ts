@@ -257,17 +257,56 @@ function sanitizeImportedSettings(
 		// creation. Drop anything whose type does not match the default.
 		if (!typeMatchesDefault(defaultValue, value)) continue;
 
+		// An empty/whitespace secret means "no key configured", so importing one
+		// must not clobber a key the user already has. Skipping it here keeps it
+		// absent from `imported`, so the merge `{ ...current, ...imported }`
+		// preserves the configured key and meta.includesSecret stays honest.
+		if (
+			SECRET_KEYS.has(key as keyof IPodNotesSettings) &&
+			(value as string).trim() === ""
+		) {
+			continue;
+		}
+
 		if ((NESTED_KEYS as readonly string[]).includes(key)) {
 			out[key] = sanitizeNestedObject(
 				defaultValue as Record<string, unknown>,
 				value as Record<string, unknown>,
 			);
+		} else if (key === "favorites" || key === "localFiles") {
+			// Built-in playlist objects must carry an `episodes` array; consumers
+			// (PlaylistCard, context menu, removeEpisodeFromPlaylists) iterate it
+			// without guarding. Drop the key when it's malformed so the merge falls
+			// back to the default rather than crashing the UI.
+			if (Array.isArray((value as { episodes?: unknown }).episodes)) {
+				out[key] = value;
+			}
+		} else if (key === "playlists") {
+			// Map of name -> Playlist; keep only entries whose episodes is an array
+			// so one malformed entry can't take down the whole import (or the grid).
+			out[key] = sanitizePlaylistMap(value as Record<string, unknown>);
 		} else {
 			out[key] = value;
 		}
 	}
 
 	return out as Partial<IPodNotesSettings>;
+}
+
+/** Drop any playlist entry that isn't a plain object with an `episodes` array. */
+function sanitizePlaylistMap(
+	value: Record<string, unknown>,
+): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+
+	for (const [name, playlist] of Object.entries(value)) {
+		if (DANGEROUS_KEYS.has(name)) continue;
+		if (!isPlainObject(playlist)) continue;
+		if (!Array.isArray(playlist.episodes)) continue;
+		out[name] = playlist;
+	}
+
+	return out;
 }
 
 /** Keep only nested fields whose type matches the default; merge backfills the rest. */

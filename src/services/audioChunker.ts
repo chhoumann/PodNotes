@@ -6,7 +6,8 @@
  * service just orchestrates it.
  */
 
-// OpenAI's audio upload limit. Buffers at or under this are sent as a single file.
+// OpenAI's per-request limit is 25 MB; we cap at 20 MB for a safety margin.
+// Buffers at or under this are sent as a single file.
 export const CHUNK_SIZE_BYTES = 20 * 1024 * 1024;
 const WAV_HEADER_SIZE = 44;
 const PCM_BYTES_PER_SAMPLE = 2;

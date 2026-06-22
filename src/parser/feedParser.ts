@@ -30,7 +30,6 @@ export default class FeedParser {
 		const body = await this.parseFeed(url);
 
 		const titleEl = body.querySelector("title");
-		const itunesImageEl = this.findImageElement(body);
 
 		// A feed must have a title. <link> is intentionally NOT required: it is the
 		// human website (now surfaced as {{url}} in feed notes), but many valid
@@ -40,6 +39,11 @@ export default class FeedParser {
 		}
 
 		const channel = body.querySelector("channel") ?? body;
+		// Resolve artwork from the channel's DIRECT children only. Searching the
+		// whole document (getElementsByTagName/querySelector) recurses into
+		// <item> descendants, so a feed with no channel image but item images
+		// would wrongly adopt an episode's image as its artwork (FP-02).
+		const itunesImageEl = this.findChannelImageElement(channel);
 
 		const title = titleEl.textContent || "";
 		const artworkUrl =
@@ -80,6 +84,24 @@ export default class FeedParser {
 
 		// Fallback to generic <image> element
 		return doc.querySelector("image");
+	}
+
+	/**
+	 * Resolve the feed's image from the channel's DIRECT children only, so a
+	 * nested <item> image never leaks up as the feed artwork (FP-02). Prefers
+	 * <itunes:image href="..."/> then a generic <image>. Unlike findImageElement
+	 * (used for items, which can't nest images), this never recurses.
+	 */
+	private findChannelImageElement(scope: Element | Document): Element | null {
+		const directChildren = Array.from(scope.children);
+		const itunesImage = directChildren.find(
+			(el) => el.tagName.toLowerCase() === "itunes:image",
+		);
+		if (itunesImage) return itunesImage;
+
+		return (
+			directChildren.find((el) => el.tagName.toLowerCase() === "image") ?? null
+		);
 	}
 
 	/**

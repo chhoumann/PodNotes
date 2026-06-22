@@ -74,6 +74,29 @@ const demoEpisode: Episode = {
 	episodeDate: new Date("2024-01-01"),
 };
 
+describe("DownloadPathTemplateEngine extension stripping (#DL-04)", () => {
+	it("strips only a trailing template extension", () => {
+		expect(
+			DownloadPathTemplateEngine("Podcasts/{{title}}.mp3", demoEpisode),
+		).toBe("Podcasts/Episode 1");
+	});
+
+	it("does not corrupt a folder that contains the extension string earlier in the path", () => {
+		// getUrlExtension returns the trailing 'mp3', but the old positional
+		// `.replace('mp3', '')` would strip the FIRST 'mp3' (in the folder name),
+		// mangling 'mp3folder' -> 'folder' and leaving the real '.mp3' behind.
+		expect(
+			DownloadPathTemplateEngine("mp3folder/{{title}}.mp3", demoEpisode),
+		).toBe("mp3folder/Episode 1");
+	});
+
+	it("leaves a template without a trailing extension untouched", () => {
+		expect(
+			DownloadPathTemplateEngine("Podcasts/{{title}}", demoEpisode),
+		).toBe("Podcasts/Episode 1");
+	});
+});
+
 describe("TimestampTemplateEngine segment tags", () => {
 	beforeEach(() => {
 		currentEpisode.set(demoEpisode);
@@ -113,6 +136,30 @@ describe("TimestampTemplateEngine segment tags", () => {
 		expect(TimestampTemplateEngine("{{segment}} {{linksegment}}")).toBe(
 			"time:HH:mm:ss:plain:0 time:HH:mm:ss:link:0",
 		);
+	});
+});
+
+describe("empty tag arguments (NT-05/CH-09)", () => {
+	it("treats {{date:}} as the default date, not an unknown tag", () => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+		// A bare trailing colon must use the tag default (same as {{date}}),
+		// not parse as tagId "date:" (invalid) and not pass "" as the format.
+		expect(NoteTemplateEngine("{{date:}}", demoEpisode)).toBe(
+			NoteTemplateEngine("{{date}}", demoEpisode),
+		);
+		expect(NoteTemplateEngine("{{date:}}", demoEpisode)).toBe("2024-01-01");
+	});
+
+	it("preserves a whitespace-only argument rather than collapsing it (no regression)", () => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+		// A lone-space argument is passed through to the tag (formatDate(date, " ")),
+		// keeping the obscure space-prepend usage working — only an empty arg defaults.
+		expect(NoteTemplateEngine("{{date: }}", demoEpisode)).toBe(" ");
+	});
+
+	it("still honors a real date format argument", () => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+		expect(NoteTemplateEngine("{{date:YYYY}}", demoEpisode)).toBe("2024");
 	});
 });
 

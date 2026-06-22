@@ -4,6 +4,27 @@ import { savedFeeds } from "./store";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { get } from "svelte/store";
 
+/**
+ * Read an attribute by name regardless of its casing. OPML in the wild is
+ * inconsistent about the `xmlUrl` attribute (xmlurl, XmlUrl, xmlURL, ...), so a
+ * fixed-case `getAttribute("xmlUrl")` silently drops otherwise-valid feeds.
+ * Returns the trimmed value, or null when absent/empty.
+ */
+function getAttributeCaseInsensitive(
+	node: Element,
+	name: string,
+): string | null {
+	const target = name.toLowerCase();
+	for (let i = 0; i < node.attributes.length; i++) {
+		const attr = node.attributes.item(i);
+		if (attr && attr.name.toLowerCase() === target) {
+			const value = attr.value?.trim();
+			return value ? value : null;
+		}
+	}
+	return null;
+}
+
 function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
 	const startTime = Date.now();
@@ -60,17 +81,24 @@ async function importOPML(opml: string): Promise<void> {
 		const dp = new DOMParser();
 		const dom = dp.parseFromString(opml, "application/xml");
 
-		if (dom.documentElement.nodeName === "parsererror") {
+		// DOMParser reports a malformed document by injecting a <parsererror>
+		// element rather than throwing. The previous root-nodeName check only
+		// worked in jsdom; Chromium (Obsidian's runtime) nests parsererror under
+		// the document body, so querySelector is the engine-agnostic detection.
+		if (dom.querySelector("parsererror")) {
 			throw new Error("Invalid XML format");
 		}
 
-		const podcastEntryNodes = dom.querySelectorAll("outline[text][xmlUrl]");
+		// Select on the always-lowercase tag and the camelCase-safe `text` attr;
+		// the xmlUrl attribute is read case-insensitively below so feeds written
+		// with a lowercase/variant casing (e.g. `xmlurl`) aren't silently dropped.
+		const podcastEntryNodes = dom.querySelectorAll("outline[text]");
 		const incompletePodcastsToAdd: Pick<PodcastFeed, "title" | "url">[] = [];
 		for (let i = 0; i < podcastEntryNodes.length; i++) {
 			const node = podcastEntryNodes.item(i);
 
 			const text = node.getAttribute("text");
-			const xmlUrl = node.getAttribute("xmlUrl");
+			const xmlUrl = getAttributeCaseInsensitive(node, "xmlUrl");
 			if (!text || !xmlUrl) {
 				continue;
 			}
@@ -168,13 +196,23 @@ async function exportOPML(
 	feeds: PodcastFeed[],
 	filePath = "PodNotes_Export.opml",
 ) {
-	const header = `<?xml version="1.0" encoding="utf=8" standalone="no"?>`;
+	const header = `<?xml version="1.0" encoding="utf-8" standalone="no"?>`;
 	const opml = (child: string) => `<opml version="1.0">${child}</opml>`;
 	const head = (child: string) => `<head>${child}</head>`;
 	const title = "<title>PodNotes Feeds</title>";
 	const body = (child: string) => `<body>${child}</body>`;
+	// Escape every interpolated attribute value so titles/URLs containing &, <,
+	// >, or " produce well-formed XML that round-trips back through importOPML.
+	// `&` must run first so the entities written by the later replaces are not
+	// themselves re-escaped.
+	const escAttr = (s: string) =>
+		s
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;");
 	const feedOutline = (feed: PodcastFeed) =>
-		`<outline text="${feed.title}" type="rss" xmlUrl="${feed.url}" />`;
+		`<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(feed.url)}" />`;
 	const feedsOutline = (_feeds: PodcastFeed[]) =>
 		`<outline text="feeds">${feeds.map(feedOutline).join("")}</outline>`;
 

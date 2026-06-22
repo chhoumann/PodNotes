@@ -242,7 +242,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent
 					.setValue(`${this.plugin.settings.skipBackwardLength}`)
 					.onChange((value) => {
-						this.plugin.settings.skipBackwardLength = Number.parseInt(value);
+						// Ignore empty/invalid input instead of persisting NaN, which
+						// would corrupt the playback position when skipping (PB-02/ST-01).
+						const parsed = Number.parseInt(value, 10);
+						if (!Number.isFinite(parsed) || parsed <= 0) return;
+						this.plugin.settings.skipBackwardLength = parsed;
 						this.plugin.saveSettings();
 					})
 					.setPlaceholder("seconds");
@@ -255,7 +259,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent
 					.setValue(`${this.plugin.settings.skipForwardLength}`)
 					.onChange((value) => {
-						this.plugin.settings.skipForwardLength = Number.parseInt(value);
+						const parsed = Number.parseInt(value, 10);
+						if (!Number.isFinite(parsed) || parsed <= 0) return;
+						this.plugin.settings.skipForwardLength = parsed;
 						this.plugin.saveSettings();
 					})
 					.setPlaceholder("seconds");
@@ -286,7 +292,15 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const timestampFormatDemoEl = container.createDiv();
 
 		const updateTimestampDemo = (value: string) => {
-			if (!this.plugin.api.podcast) return;
+			// Without a loaded episode there is no time to render; show a hint
+			// instead of leaving the preview blank so the control isn't mistaken
+			// for broken (TS-04).
+			if (!this.plugin.api.podcast) {
+				timestampFormatDemoEl.setText(
+					"Play an episode to preview the timestamp format.",
+				);
+				return;
+			}
 
 			const demoVal = TimestampTemplateEngine(value);
 			renderMarkdownPreview(demoVal, timestampFormatDemoEl);
@@ -734,11 +748,23 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			return;
 		}
 
+		// Warn about a collection only when the user CURRENTLY has data there AND
+		// the import carries that collection (so it will be replaced wholesale —
+		// including by an explicitly empty collection, which silently wiped feeds
+		// with no warning before). Keying off the imported data's contents alone
+		// missed exactly that data-loss case (SA-09).
+		const willReplace = (
+			key: keyof IPodNotesSettings,
+			current: Record<string, unknown> | undefined,
+		): boolean =>
+			Object.prototype.hasOwnProperty.call(result.settings, key) &&
+			Object.keys(current ?? {}).length > 0;
+
 		const sections: string[] = [];
-		if (Object.keys(result.settings.savedFeeds ?? {}).length) {
+		if (willReplace("savedFeeds", this.plugin.settings.savedFeeds)) {
 			sections.push("podcast feeds");
 		}
-		if (Object.keys(result.settings.playlists ?? {}).length) {
+		if (willReplace("playlists", this.plugin.settings.playlists)) {
 			sections.push("playlists");
 		}
 		sections.push(...describeSecrets(result.settings));
