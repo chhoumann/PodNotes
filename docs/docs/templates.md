@@ -111,10 +111,14 @@ views:
 
 Open the base in Obsidian to sort, filter, or add views from the view options. Because `note.podcast` resolves to the linked [feed note](#podcast-feed-notes), you can also group by show or pivot from a feed note to all of its episodes.
 
+![Bases view of episode notes, grouped by listening status](resources/bases_view.png)
+
 ## Podcast feed notes
 A *feed note* is a single parent note for an entire podcast (the feed), which episode notes can link to (great for [Obsidian Bases](https://help.obsidian.md/bases) / Dataview rollups).
 
 Create one with the `Create podcast feed note` command (pick a saved podcast — no playback needed) or from an episode's right-click menu. Configure the feed note **file path** and **template** under PodNotes settings → *Podcast feed note settings*. PodNotes ships sensible Bases-friendly defaults.
+
+![A podcast feed note](resources/feed_note.png)
 
 In a feed note, `{{url}}` and `{{artwork}}` describe the **feed** (the note's subject). Available tags:
 

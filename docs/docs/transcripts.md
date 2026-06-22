@@ -31,17 +31,15 @@ The transcript template works similarly to the [note template](./templates.md#no
 
 ## Speaker Diarization
 
-By default the transcription uses OpenAI's Whisper model, which produces plain text with **no speaker labels**. Speaker diarization is an opt-in setting that instead labels each segment of the transcript by speaker, e.g.:
+By default the transcription uses OpenAI's Whisper model, which produces plain text with **no speaker labels**. Speaker diarization is an opt-in setting that instead labels each segment of the transcript by speaker, turning a wall of text into a readable, speaker-by-speaker conversation:
 
-```
-**A:** Welcome to the show.
-
-**B:** Thanks for having me.
-```
+![Transcript with speaker labels](resources/transcript_diarization.png)
 
 ### Enabling it
 
 In the **Transcript settings** section, turn on **Speaker diarization** and choose a provider:
+
+![Speaker diarization settings](resources/diarization_settings.png)
 
 - **OpenAI** (`gpt-4o-transcribe-diarize`): reuses the OpenAI API key you already entered above, so there is nothing else to configure. Because each request is capped at ~20 MB (a conservative margin under OpenAI's 25 MB request cap), a long episode is split into chunks that are diarized independently — so on long episodes the speaker labels can change across chunk boundaries (the same person may be labelled `A` in one chunk and `B` in the next). A typical-length episode fits in a single request and is fully consistent.
 - **Deepgram**: sends the whole episode in one request, so speaker labels stay consistent across the entire episode. This requires a separate **Deepgram API key**, which you can create at [deepgram.com](https://deepgram.com) (new accounts include free credit). Your Deepgram key is stored separately from your OpenAI key and is only used for diarization.
