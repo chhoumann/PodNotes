@@ -3,6 +3,10 @@ Timestamps can be created with the `Capture Timestamp` Obsidian command.
 This will make PodNotes capture the current playback time to the active note, in the format given in the plugin settings.
 PodNotes can also capture recent playback segments with the `Capture Last 10 Seconds` and `Capture Last 20 Seconds` commands.
 
+With the default `{{linktime}}` format, each captured timestamp becomes a clickable link that reopens the episode at that exact moment:
+
+![Notes with clickable timestamp links](resources/timestamps.png)
+
 ## Settings
 For timestamps, you can use the following format strings:
 

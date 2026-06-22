@@ -15,14 +15,17 @@ Here are the features that will help you do that 👇.
 
 ## Features
 
-- Mobile friendly
-- Podcast player built into Obsidian
+- Mobile friendly — works on iOS and Android, including offline playback of local files and downloads
+- Podcast player built into Obsidian, for both audio and video episodes
 - Add any publicly available podcast through search, or custom feeds by URL
-- Track played episodes & playback progress
-- Create podcast notes from templates with metadata about episodes
+- Track played episodes & playback progress, with continuous resume
+- Create podcast notes from templates with rich metadata about episodes
+- Bases-friendly default notes you can sort, filter, and group with [Obsidian Bases](https://help.obsidian.md/bases)
+- Create a feed note for an entire podcast that every episode note links back to
 - Capture timestamps & link directly to the time in the episode
+- Transcribe episodes, with optional speaker labels (diarization)
 - Download episodes for offline playback
-- Support for non-podcast local audio files
+- Support for non-podcast local audio and video files
 - API that can be used by plugins like [QuickAdd](https://github.com/chhoumann/QuickAdd) or [Templater](https://github.com/silentvoid13/Templater) for custom workflows
 
 ## Installation
@@ -33,7 +36,7 @@ Other installation options can be found in the [documentation](https://chhoumann
 
 ## Development
 
-- `npm run test` runs the jsdom/unit test suite.
+- `npm run test` runs the accessibility checks and the jsdom/unit test suite.
 - `npm run build` type-checks and bundles the plugin.
 - `npm run test:e2e` builds the plugin, then runs the local Obsidian-backed E2E suite.
 
@@ -66,9 +69,21 @@ vault automatically.
 
 ![Player](docs/docs/resources/player.png)
 
-### Podcast Note Editing
+### Episode notes (Bases-friendly)
 
-![Podcast Note Editing](docs/docs/resources/podcast_note.png)
+![Episode note](docs/docs/resources/podcast_note.png)
+
+### Timestamps
+
+![Timestamps](docs/docs/resources/timestamps.png)
+
+### Transcripts with speaker labels
+
+![Transcript with speaker labels](docs/docs/resources/transcript_diarization.png)
+
+### Browse your library with Bases
+
+![Bases view of episode notes](docs/docs/resources/bases_view.png)
 
 ### Podcast search
 
