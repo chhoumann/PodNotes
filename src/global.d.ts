@@ -29,8 +29,6 @@ interface App2 extends App {
 		>;
 		requestSaveConfig: () => void;
 		updates: Record<string, unknown>;
-		enablePlugin: (id: string) => Promise<void>;
-		disablePlugin: (id: string) => Promise<void>;
 	};
 }
 
