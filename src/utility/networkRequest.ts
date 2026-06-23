@@ -36,10 +36,10 @@ export async function requestWithTimeout(
 ): Promise<RequestUrlResponse> {
 	const { timeoutMs = DEFAULT_TIMEOUT_MS, method, headers, body } = options;
 
-	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	let timeoutId: number | undefined;
 
 	const timeoutPromise = new Promise<never>((_, reject) => {
-		timeoutId = setTimeout(() => {
+		timeoutId = window.setTimeout(() => {
 			reject(new TimeoutError(url, timeoutMs));
 		}, timeoutMs);
 	});
@@ -76,7 +76,7 @@ export async function requestWithTimeout(
 		);
 	} finally {
 		if (timeoutId) {
-			clearTimeout(timeoutId);
+			window.clearTimeout(timeoutId);
 		}
 	}
 }

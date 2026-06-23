@@ -71,7 +71,7 @@ export async function diarizeWithOpenAI(opts: {
 					});
 					break;
 				}
-				await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+				await new Promise((resolve) => window.setTimeout(resolve, 1000 * attempt));
 			}
 		}
 	}

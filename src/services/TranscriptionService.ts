@@ -32,7 +32,7 @@ function TimerNotice(heading: string, initialMessage: string) {
 		notice.setMessage(formatMsg(currentMessage));
 	}
 
-	const interval = setInterval(() => {
+	const interval = window.setInterval(() => {
 		notice.setMessage(formatMsg(currentMessage));
 	}, 1000);
 
@@ -45,7 +45,7 @@ function TimerNotice(heading: string, initialMessage: string) {
 		hide: () => notice.hide(),
 		stop: () => {
 			stopTime = Date.now();
-			clearInterval(interval);
+			window.clearInterval(interval);
 		},
 	};
 }
@@ -190,7 +190,7 @@ export class TranscriptionService {
 			notice.update(`Transcription failed: ${message}`);
 		} finally {
 			notice.stop();
-			setTimeout(() => notice.hide(), 5000);
+			window.setTimeout(() => notice.hide(), 5000);
 		}
 	}
 
@@ -313,7 +313,7 @@ export class TranscriptionService {
 							updateProgress();
 						} else {
 							await new Promise((resolve) =>
-								setTimeout(resolve, 1000 * retries),
+								window.setTimeout(resolve, 1000 * retries),
 							);
 						}
 					}

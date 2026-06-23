@@ -29,7 +29,7 @@ function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
 	const startTime = Date.now();
 	let stopTime: number | undefined;
-	let intervalId: ReturnType<typeof setInterval> | undefined;
+	let intervalId: number | undefined;
 	const notice = new Notice(initialMessage, 0);
 
 	function formatMsg(message: string): string {
@@ -47,12 +47,12 @@ function TimerNotice(heading: string, initialMessage: string) {
 
 	function clearTimer() {
 		if (intervalId !== undefined) {
-			clearInterval(intervalId);
+			window.clearInterval(intervalId);
 			intervalId = undefined;
 		}
 	}
 
-	intervalId = setInterval(() => {
+	intervalId = window.setInterval(() => {
 		notice.setMessage(formatMsg(currentMessage));
 	}, 1000);
 
@@ -181,7 +181,7 @@ async function importOPML(opml: string): Promise<void> {
 			);
 		}
 
-		setTimeout(() => notice.hide(), 5000);
+		window.setTimeout(() => notice.hide(), 5000);
 	} catch (error) {
 		console.error("Error importing OPML:", error);
 		new Notice(
