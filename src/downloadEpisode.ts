@@ -379,6 +379,15 @@ async function deleteEpisodeFile(filePath: string): Promise<void> {
 		const file = app.vault.getAbstractFileByPath(filePath);
 		if (file instanceof TFile) {
 			await app.vault.delete(file);
+			return;
+		}
+		// Streamed downloads are written through the adapter, so the vault index
+		// may not have reconciled the file yet and getAbstractFileByPath can miss a
+		// freshly written partial. Remove it directly through the adapter so a
+		// failed streamed download never leaves bytes behind (#218).
+		const { adapter } = app.vault;
+		if (await adapter.exists(filePath)) {
+			await adapter.remove(filePath);
 		}
 	} catch (error) {
 		console.error(`Failed to delete downloaded file "${filePath}":`, error);

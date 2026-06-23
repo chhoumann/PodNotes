@@ -23,12 +23,14 @@ function bytes(...values: number[]): ArrayBuffer {
 }
 
 function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
-	const present = new Set<string>();
+	const present = new Set<string>(); // vault index (getAbstractFileByPath)
+	const disk = new Set<string>(); // raw filesystem (adapter.exists)
 	const createdFolders: string[] = [];
 	const written = new Map<string, number>();
 
 	const createBinary = vi.fn(async (path: string, _data: ArrayBuffer) => {
 		present.add(path);
+		disk.add(path);
 		return new TFile();
 	});
 	const createFolder = vi.fn(async (path: string) => {
@@ -36,17 +38,31 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 		createdFolders.push(path);
 	});
 	const deleteFile = vi.fn(async (_file: unknown) => {});
+	const removeFile = vi.fn(async (path: string) => {
+		disk.delete(path);
+	});
 
-	// The streaming download path needs adapter.writeBinary + appendBinary; the
-	// legacy path needs neither (and falls back to vault.createBinary). Toggle
-	// `streaming` to exercise each branch.
+	// Adapter writes land on "disk" but NOT in the vault index (present),
+	// mirroring how getAbstractFileByPath can miss a freshly adapter-written file
+	// until the watcher reconciles it. The streaming download path additionally
+	// needs writeBinary + appendBinary; the legacy path uses neither and falls
+	// back to vault.createBinary.
 	const writeBinary = vi.fn(async (path: string, data: ArrayBuffer) => {
-		present.add(path);
+		disk.add(path);
 		written.set(path, data.byteLength);
 	});
 	const appendBinary = vi.fn(async (path: string, data: ArrayBuffer) => {
 		written.set(path, (written.get(path) ?? 0) + data.byteLength);
 	});
+
+	const adapter: Record<string, unknown> = {
+		exists: async (path: string) => disk.has(path) || present.has(path),
+		remove: removeFile,
+	};
+	if (streaming) {
+		adapter.writeBinary = writeBinary;
+		adapter.appendBinary = appendBinary;
+	}
 
 	(globalThis as { app?: unknown }).app = {
 		vault: {
@@ -55,16 +71,18 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 			createBinary,
 			createFolder,
 			delete: deleteFile,
-			adapter: streaming ? { writeBinary, appendBinary } : {},
+			adapter,
 		},
 	};
 
 	return {
 		present,
+		disk,
 		createdFolders,
 		createBinary,
 		createFolder,
 		deleteFile,
+		removeFile,
 		writeBinary,
 		appendBinary,
 		written,
@@ -1229,7 +1247,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 		expect(get(downloadedEpisodes)["Pod"]?.[0]?.size).toBe(8);
 	});
 
-	it("deletes the partial file and rethrows on a mid-stream failure", async () => {
+	it("removes the partial file via the adapter (not yet vault-indexed) and rethrows on a mid-stream failure", async () => {
 		const v = setupVault({ streaming: true });
 		requestUrlMock
 			.mockResolvedValueOnce(
@@ -1244,7 +1262,10 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 			downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}"),
 		).rejects.toThrow(/Range request failed/);
 
-		expect(v.deleteFile).toHaveBeenCalledTimes(1);
+		// The partial was written through the adapter, so it isn't in the vault
+		// index — cleanup must fall back to adapter.remove (#218).
+		expect(v.deleteFile).not.toHaveBeenCalled();
+		expect(v.removeFile).toHaveBeenCalledTimes(1);
 		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
 	});
 });
