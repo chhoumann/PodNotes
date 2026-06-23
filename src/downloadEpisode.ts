@@ -1,5 +1,6 @@
 import { Notice, TFile, requestUrl } from "obsidian";
-import { downloadedEpisodes } from "./store";
+import { get } from "svelte/store";
+import { downloadedEpisodes, plugin } from "./store";
 import {
 	DownloadPathTemplateEngine,
 	replaceIllegalFileNameCharactersInString,
@@ -110,6 +111,7 @@ async function downloadEpisodeToDisk(
 	downloadPathTemplate: string,
 	onProgress?: (written: number, total: number | null) => void,
 ): Promise<string> {
+	const { app } = get(plugin);
 	// Fast path: if this episode is already on disk under the extension its URL
 	// implies, skip the (potentially multi-MB) Range probe entirely. The probe is
 	// only needed to discover the extension when the URL lacks one, or to confirm
@@ -249,30 +251,33 @@ export default async function downloadEpisodeWithNotice(
 			const errorEl = bodyEl.createEl("p", {
 				text: `Download failed: ${getErrorMessage(error)}`,
 			});
-			errorEl.style.fontStyle = "italic";
+			errorEl.setCssStyles({ fontStyle: "italic" });
 		});
 		throw error;
 	} finally {
-		setTimeout(() => notice.hide(), 10000);
+		window.setTimeout(() => notice.hide(), 10000);
 	}
 }
 
 function createNoticeDoc(title: string) {
 	const doc = new DocumentFragment();
 	const container = doc.createDiv();
-	container.style.width = "100%";
-	container.style.display = "flex";
+	container.setCssStyles({ width: "100%", display: "flex" });
 
 	const titleEl = container.createEl("span", { text: title });
-	titleEl.style.textAlign = "center";
-	titleEl.style.fontWeight = "bold";
-	titleEl.style.marginBottom = "0.5em";
+	titleEl.setCssStyles({
+		textAlign: "center",
+		fontWeight: "bold",
+		marginBottom: "0.5em",
+	});
 
 	const bodyEl = doc.createDiv();
-	bodyEl.style.display = "flex";
-	bodyEl.style.flexDirection = "column";
-	bodyEl.style.alignItems = "center";
-	bodyEl.style.justifyContent = "center";
+	bodyEl.setCssStyles({
+		display: "flex",
+		flexDirection: "column",
+		alignItems: "center",
+		justifyContent: "center",
+	});
 
 	return {
 		doc,
@@ -338,6 +343,7 @@ async function createEpisodeFile({
 	data: ArrayBuffer;
 	extension: string;
 }) {
+	const { app } = get(plugin);
 	const filePath = safeDownloadFilePath(downloadPathTemplate, episode, extension);
 
 	// `createBinary` throws if a parent folder is missing, which previously left
@@ -375,6 +381,7 @@ export async function removeDownloadedEpisode(episode: Episode): Promise<void> {
 async function deleteEpisodeFile(filePath: string): Promise<void> {
 	if (!filePath) return;
 
+	const { app } = get(plugin);
 	try {
 		const file = app.vault.getAbstractFileByPath(filePath);
 		if (file instanceof TFile) {
@@ -395,6 +402,7 @@ async function deleteEpisodeFile(filePath: string): Promise<void> {
 }
 
 function resolveLocalEpisodeFilePath(episode: LocalEpisode): string | null {
+	const { app } = get(plugin);
 	const downloadedEpisode = downloadedEpisodes.getEpisode(episode);
 	const candidatePaths = [
 		episode.filePath,
@@ -416,6 +424,8 @@ function resolveLocalEpisodeFilePath(episode: LocalEpisode): string | null {
 
 function getLocalFilePathFromLink(link: string): string | null {
 	if (!link) return null;
+
+	const { app } = get(plugin);
 
 	const trimmedLink = link.trim();
 	if (!trimmedLink) return null;
@@ -605,6 +615,7 @@ export async function downloadEpisode(
 	episode: Episode,
 	downloadPathTemplate: string,
 ): Promise<string> {
+	const { app } = get(plugin);
 	if (isLocalFile(episode)) {
 		const localFilePath = resolveLocalEpisodeFilePath(episode);
 		if (!localFilePath) {
@@ -677,8 +688,15 @@ async function getFileExtension(url: string): Promise<string> {
 
 	// If URL doesn't have an extension, fetch headers to determine content type
 	try {
-		const response = await fetch(encodedUrl, { method: "HEAD" });
-		const contentType = response.headers.get("content-type");
+		const response = await requestUrl({
+			url: encodedUrl,
+			method: "HEAD",
+			throw: false,
+		});
+		const contentType =
+			response.headers["content-type"] ??
+			response.headers["Content-Type"] ??
+			null;
 
 		const extensionFromContentType = getExtensionFromContentType(contentType);
 		if (extensionFromContentType) {
@@ -714,6 +732,7 @@ async function getFileExtension(url: string): Promise<string> {
 export async function getEpisodeAudioBuffer(
 	episode: Episode,
 ): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
+	const { app } = get(plugin);
 	const episodeMediaType = getEpisodeMediaType(episode);
 	if (episodeMediaType !== "audio") {
 		throw new Error("Transcription supports audio episodes only.");
@@ -806,6 +825,7 @@ async function readVaultAudio(
 	filePath: string,
 	mediaTypeHint?: EpisodeMediaType,
 ): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
+	const { app } = get(plugin);
 	const file = app.vault.getAbstractFileByPath(filePath);
 	if (!(file instanceof TFile)) {
 		throw new Error(`Unable to read the audio file at "${filePath}".`);

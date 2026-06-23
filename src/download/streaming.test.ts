@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requestUrl } from "obsidian";
+import { plugin } from "../store";
+import type PodNotes from "../main";
 import {
 	probeAndFetchFirstChunk,
 	writeStreamedFile,
@@ -29,9 +31,10 @@ function setupAdapter() {
 	const appendBinary = vi.fn(async (path: string, data: ArrayBuffer) => {
 		writes.set(path, [...(writes.get(path) ?? []), ...new Uint8Array(data)]);
 	});
-	(globalThis as { app?: unknown }).app = {
+	const app = {
 		vault: { adapter: { writeBinary, appendBinary } },
 	};
+	plugin.set({ app } as unknown as PodNotes);
 	return { writes, writeBinary, appendBinary };
 }
 
@@ -47,7 +50,7 @@ function probe(overrides: Partial<RangeProbe> = {}): RangeProbe {
 
 beforeEach(() => requestUrlMock.mockReset());
 afterEach(() => {
-	(globalThis as { app?: unknown }).app = undefined;
+	plugin.set(undefined as unknown as PodNotes);
 });
 
 describe("probeAndFetchFirstChunk", () => {

@@ -7,7 +7,8 @@ import downloadEpisodeWithNotice, {
 	safeDownloadBasename,
 	safeDownloadFilePath,
 } from "./downloadEpisode";
-import { downloadedEpisodes } from "./store";
+import { downloadedEpisodes, plugin } from "./store";
+import type PodNotes from "./main";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 
@@ -64,7 +65,7 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 		adapter.appendBinary = appendBinary;
 	}
 
-	(globalThis as { app?: unknown }).app = {
+	const app = {
 		vault: {
 			getAbstractFileByPath: (path: string) =>
 				present.has(path) ? new TFile() : null,
@@ -74,6 +75,11 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 			adapter,
 		},
 	};
+	// The download code (and ensureFolderExists's default) read app from the
+	// plugin store; the global `app` is set to the same mock too so any other
+	// shared-harness reader stays valid.
+	(globalThis as { app?: unknown }).app = app;
+	plugin.set({ app } as unknown as PodNotes);
 
 	return {
 		present,
@@ -110,6 +116,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	(globalThis as { app?: unknown }).app = undefined;
+	plugin.set(undefined as unknown as PodNotes);
 });
 
 describe("downloadEpisodeWithNotice (download command path)", () => {
@@ -703,13 +710,15 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 
 	beforeEach(() => {
 		files.clear();
-		(globalThis as { app?: unknown }).app = {
+		const app = {
 			vault: {
 				getAbstractFileByPath: (path: string) =>
 					files.has(path) ? makeTFile(path) : null,
 				readBinary: async (file: TFile) => files.get(file.path),
 			},
 		};
+		(globalThis as { app?: unknown }).app = app;
+		plugin.set({ app } as unknown as PodNotes);
 		requestUrlMock.mockImplementation((req: unknown) => {
 			const url = typeof req === "string" ? req : (req as { url: string }).url;
 			const text = url.includes("spanish") ? "SPANISH-AUDIO" : "ENGLISH-AUDIO";
