@@ -24,7 +24,10 @@ export const RELOAD_OPTIONS: PluginReloadOptions = {
 	waitUntilReady: true,
 	timeoutMs: 30_000,
 	readyOptions: {
-		commandId: `${PLUGIN_ID}:hrpn`,
+		// Plugin-ready sentinel: an always-registered command (plain unconditional
+		// callback). The old "hrpn"/Reload command was removed (it disabled and
+		// re-enabled the plugin, which Obsidian policy disallows).
+		commandId: `${PLUGIN_ID}:podnotes-show-leaf`,
 		...WAIT_OPTS,
 	},
 };
