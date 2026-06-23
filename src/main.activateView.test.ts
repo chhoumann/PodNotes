@@ -191,7 +191,10 @@ describe("PodNotes.onLayoutReady", () => {
 		vi.advanceTimersByTime(100);
 
 		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
-		expect(workspace.detachLeavesOfType).toHaveBeenCalledWith(VIEW_TYPE);
+		// onunload must NOT detach the view's leaves: doing so resets a leaf the
+		// user moved back to its default location on the next load. Obsidian cleans
+		// up an unloaded view's leaves itself (Obsidian plugin guideline).
+		expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
 	});
 });
 

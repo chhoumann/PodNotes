@@ -26,7 +26,7 @@ export class QueueReorderModal extends Modal {
 
 	override onClose(): void {
 		if (this.component) {
-			unmount(this.component);
+			void unmount(this.component);
 			this.component = null;
 		}
 
