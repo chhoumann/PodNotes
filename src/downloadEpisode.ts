@@ -39,13 +39,10 @@ interface DownloadedFile {
 	byteLength: number;
 }
 
-async function downloadFile(
-	url: string,
-	options?: Partial<{
-		onFinished: () => void;
-		onError: (error: Error) => void;
-	}>,
-): Promise<DownloadedFile> {
+// Whole-file download: only the legacy fallback (adapters without binary append)
+// and transcription's getEpisodeAudioBuffer still need the entire buffer at once.
+// The Download command streams instead — see downloadEpisodeToDisk.
+async function downloadFile(url: string): Promise<DownloadedFile> {
 	const encodedUrl = encodeUrlForRequest(url);
 	try {
 		const response = await requestUrl({ url: encodedUrl, method: "GET" });
@@ -54,25 +51,17 @@ async function downloadFile(
 			throw new Error("Could not download episode.");
 		}
 
-		// Read the decoded buffer once and keep that single reference. `requestUrl`
-		// has no streaming API, so this 1x copy is unavoidable; everything
-		// downstream reuses it instead of allocating further copies.
 		const data = response.arrayBuffer;
 		const contentType =
 			response.headers["content-type"] ??
 			response.headers["Content-Type"] ??
 			"";
 
-		options?.onFinished?.();
-
 		return { data, contentType, byteLength: data.byteLength };
 	} catch (error: unknown) {
-		const err = new Error(
+		throw new Error(
 			`Failed to download ${url}:\n\n${getErrorMessage(error)}`,
 		);
-		options?.onError?.(err);
-
-		throw err;
 	}
 }
 
@@ -97,7 +86,19 @@ interface RangeProbe {
 	totalSize: number | null;
 }
 
-// In-flight downloads keyed by stream URL: collapses duplicate/concurrent
+// `appendBinary` exists at runtime on the mobile CapacitorAdapter (and the
+// desktop adapter) but isn't in Obsidian's public DataAdapter typings. Keep the
+// single unsafe cast here so the "where we step outside the types" boundary is
+// greppable in one place.
+function appendableAdapter(): BinaryAppendAdapter {
+	return app.vault.adapter as unknown as BinaryAppendAdapter;
+}
+
+function parentFolderPath(filePath: string): string {
+	return filePath.split("/").slice(0, -1).join("/");
+}
+
+// In-flight downloads keyed by episode identity: collapses duplicate/concurrent
 // requests for the same episode (e.g. a double-tap, or several queued at once)
 // into a single transfer so they can't stack N full downloads in memory.
 const downloadsInFlight = new Map<string, Promise<string>>();
@@ -171,7 +172,7 @@ async function writeStreamedFile(
 	chunkSize: number,
 	onProgress?: (written: number, total: number | null) => void,
 ): Promise<number> {
-	const adapter = app.vault.adapter as unknown as BinaryAppendAdapter;
+	const adapter = appendableAdapter();
 
 	await adapter.writeBinary(filePath, probe.firstChunk);
 	let written = probe.firstChunk.byteLength;
@@ -220,52 +221,63 @@ async function writeStreamedFile(
 	return written;
 }
 
-// Download an episode to a vault file with bounded memory. Falls back to the
-// legacy whole-file path only when the adapter lacks binary append (so we never
-// truncate the output). Returns the on-disk path.
+// Single source of truth for "what extension and on-disk path does this download
+// get, and is it even playable". Shared by the streaming and legacy paths so the
+// playability rule (#DL-07 / #213) and path resolution live in exactly one place.
+// `headerBytes` only needs the first chunk — the signature sniff reads ~12 bytes.
+function resolveDownloadTarget(
+	episode: Episode,
+	downloadPathTemplate: string,
+	headerBytes: ArrayBuffer,
+	contentType: string,
+): { extension: string; filePath: string } {
+	const extension =
+		inferFileExtensionFromDownload(episode, headerBytes, contentType) ?? "mp3";
+	if (!downloadAppearsPlayable(contentType, extension, episode.mediaType)) {
+		throw new Error("Not a playable media file");
+	}
+	return {
+		extension,
+		filePath: safeDownloadFilePath(downloadPathTemplate, episode, extension),
+	};
+}
+
+// Download an episode to a vault file with bounded memory. Streams via Range
+// chunks when the adapter supports binary append; otherwise falls back to the
+// legacy whole-file buffer (so a non-appendable adapter is never truncated).
+// Returns the on-disk path.
 async function downloadEpisodeToDisk(
 	episode: Episode,
 	downloadPathTemplate: string,
 	onProgress?: (written: number, total: number | null) => void,
 ): Promise<string> {
-	const adapter = app.vault.adapter as unknown as BinaryAppendAdapter;
+	const adapter = appendableAdapter();
 	const canStream =
 		typeof adapter.writeBinary === "function" &&
 		typeof adapter.appendBinary === "function";
 
 	if (!canStream) {
-		// Legacy fallback (adapters without binary append): a single buffer.
 		const { data, contentType } = await downloadFile(episode.streamUrl);
-		const extension =
-			inferFileExtensionFromDownload(episode, data, contentType) ?? "mp3";
-		if (!downloadAppearsPlayable(contentType, extension, episode.mediaType)) {
-			throw new Error(
-				`Downloaded file is not an audio or video file (type "${contentType}").`,
-			);
-		}
+		const { extension, filePath } = resolveDownloadTarget(
+			episode,
+			downloadPathTemplate,
+			data,
+			contentType,
+		);
 		await createEpisodeFile({ episode, downloadPathTemplate, data, extension });
-		return safeDownloadFilePath(downloadPathTemplate, episode, extension);
+		return filePath;
 	}
 
 	const probe = await probeAndFetchFirstChunk(
 		episode.streamUrl,
 		DOWNLOAD_CHUNK_SIZE,
 	);
-	const extension =
-		inferFileExtensionFromDownload(
-			episode,
-			probe.firstChunk,
-			probe.contentType,
-		) ?? "mp3";
-	if (
-		!downloadAppearsPlayable(probe.contentType, extension, episode.mediaType)
-	) {
-		throw new Error(
-			`Downloaded file is not an audio or video file (type "${probe.contentType}").`,
-		);
-	}
-
-	const filePath = safeDownloadFilePath(downloadPathTemplate, episode, extension);
+	const { filePath } = resolveDownloadTarget(
+		episode,
+		downloadPathTemplate,
+		probe.firstChunk,
+		probe.contentType,
+	);
 
 	const existing = app.vault.getAbstractFileByPath(filePath);
 	if (existing instanceof TFile) {
@@ -273,16 +285,31 @@ async function downloadEpisodeToDisk(
 		return filePath;
 	}
 
-	const folderPath = filePath.split("/").slice(0, -1).join("/");
-	await ensureFolderExists(folderPath);
+	await ensureFolderExists(parentFolderPath(filePath));
 
-	const total = await writeStreamedFile(
-		episode.streamUrl,
-		filePath,
-		probe,
-		DOWNLOAD_CHUNK_SIZE,
-		onProgress,
-	);
+	// Clean up a half-written file on any mid-stream failure so a later attempt
+	// can't mistake a truncated partial for a complete download — the legacy
+	// createBinary path was atomic, but chunked appendBinary is not.
+	let total: number;
+	try {
+		total = await writeStreamedFile(
+			episode.streamUrl,
+			filePath,
+			probe,
+			DOWNLOAD_CHUNK_SIZE,
+			onProgress,
+		);
+	} catch (error) {
+		await deleteEpisodeFile(filePath);
+		throw error;
+	}
+	if (probe.totalSize !== null && total !== probe.totalSize) {
+		await deleteEpisodeFile(filePath);
+		throw new Error(
+			`Incomplete download: got ${total} of ${probe.totalSize} bytes.`,
+		);
+	}
+
 	downloadedEpisodes.addEpisode(episode, filePath, total);
 	return filePath;
 }
@@ -295,25 +322,29 @@ export default async function downloadEpisodeWithNotice(
 	const SOME_LARGE_INT_SO_THE_BOX_DOESNT_AUTO_CLOSE = 999999999;
 	const notice = new Notice(doc, SOME_LARGE_INT_SO_THE_BOX_DOESNT_AUTO_CLOSE);
 
-	// `finally` schedules the dismissal exactly once for every terminal state —
-	// success, write failure, download error, or the non-playable rejection below
-	// — so a failed download's notice can no longer linger forever (#DL-03).
-	try {
-		const key = episode.streamUrl || episode.title;
+	const showSuccess = () =>
+		update((bodyEl) =>
+			bodyEl.createEl("p", {
+				text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
+			}),
+		);
 
-		// Collapse a concurrent download of the same episode into the in-flight one
-		// instead of starting a second full transfer.
+	// This UX wrapper reports every failure as a Notice and always dismisses it
+	// exactly once (#DL-03), then rethrows so the (fire-and-forget) caller can log
+	// it. Callers that need the resulting path call downloadEpisodeToDisk directly.
+	try {
+		// Dedupe by episode identity (podcast + title — the same key the download
+		// registry uses), so a double-tap collapses onto one transfer while two
+		// genuinely different episodes never block each other.
+		const key = `${episode.podcastName} ${episode.title}`;
+
 		const inProgress = downloadsInFlight.get(key);
 		if (inProgress) {
 			update((bodyEl) =>
 				bodyEl.createEl("p", { text: "Already downloading this episode..." }),
 			);
 			await inProgress;
-			update((bodyEl) =>
-				bodyEl.createEl("p", {
-					text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
-				}),
-			);
+			showSuccess();
 			return;
 		}
 
@@ -339,11 +370,7 @@ export default async function downloadEpisodeWithNotice(
 			downloadsInFlight.delete(key);
 		}
 
-		update((bodyEl) =>
-			bodyEl.createEl("p", {
-				text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
-			}),
-		);
+		showSuccess();
 	} catch (error: unknown) {
 		update((bodyEl) => {
 			const errorEl = bodyEl.createEl("p", {
@@ -351,6 +378,7 @@ export default async function downloadEpisodeWithNotice(
 			});
 			errorEl.style.fontStyle = "italic";
 		});
+		throw error;
 	} finally {
 		setTimeout(() => notice.hide(), 10000);
 	}

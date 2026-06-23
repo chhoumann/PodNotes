@@ -23,9 +23,10 @@ function bytes(...values: number[]): ArrayBuffer {
 	return new Uint8Array(values).buffer;
 }
 
-function setupVault() {
+function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 	const present = new Set<string>();
 	const createdFolders: string[] = [];
+	const written = new Map<string, number>();
 
 	const createBinary = vi.fn(async (path: string, _data: ArrayBuffer) => {
 		present.add(path);
@@ -35,6 +36,18 @@ function setupVault() {
 		present.add(path);
 		createdFolders.push(path);
 	});
+	const deleteFile = vi.fn(async (_file: unknown) => {});
+
+	// The streaming download path needs adapter.writeBinary + appendBinary; the
+	// legacy path needs neither (and falls back to vault.createBinary). Toggle
+	// `streaming` to exercise each branch.
+	const writeBinary = vi.fn(async (path: string, data: ArrayBuffer) => {
+		present.add(path);
+		written.set(path, data.byteLength);
+	});
+	const appendBinary = vi.fn(async (path: string, data: ArrayBuffer) => {
+		written.set(path, (written.get(path) ?? 0) + data.byteLength);
+	});
 
 	(globalThis as { app?: unknown }).app = {
 		vault: {
@@ -42,10 +55,21 @@ function setupVault() {
 				present.has(path) ? new TFile() : null,
 			createBinary,
 			createFolder,
+			delete: deleteFile,
+			adapter: streaming ? { writeBinary, appendBinary } : {},
 		},
 	};
 
-	return { present, createdFolders, createBinary, createFolder };
+	return {
+		present,
+		createdFolders,
+		createBinary,
+		createFolder,
+		deleteFile,
+		writeBinary,
+		appendBinary,
+		written,
+	};
 }
 
 function makeEpisode(overrides: Partial<Episode> = {}): Episode {
@@ -1196,5 +1220,81 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(result.extension).toBe("m4a");
 		expect(result.basename).toBe("recording");
 		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+});
+
+describe("downloadEpisodeWithNotice (streaming range path)", () => {
+	// A server that returns short bodies regardless of the requested range size
+	// lets us exercise multi-chunk streaming without allocating real 4 MiB buffers
+	// (the loop advances by the ACTUAL bytes returned, not the requested span).
+	function rangeResponse(
+		status: number,
+		body: number[],
+		headers: Record<string, string> = {},
+	) {
+		return {
+			status,
+			headers,
+			arrayBuffer: new Uint8Array(body).buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>;
+	}
+
+	it("streams a ranged (206) download in chunks via writeBinary + appendBinary", async () => {
+		const v = setupVault({ streaming: true });
+		requestUrlMock
+			.mockResolvedValueOnce(
+				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {
+					"content-type": "audio/mpeg",
+					"content-range": "bytes 0-7/16",
+				}),
+			)
+			.mockResolvedValueOnce(
+				rangeResponse(206, [9, 10, 11, 12, 13, 14, 15, 16], {
+					"content-range": "bytes 8-15/16",
+				}),
+			);
+
+		await downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}");
+
+		expect(v.writeBinary).toHaveBeenCalledTimes(1);
+		expect(v.appendBinary).toHaveBeenCalledTimes(1);
+		expect(v.createBinary).not.toHaveBeenCalled();
+		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
+		expect(recorded?.filePath).toBe("Podcasts/My Title.mp3");
+		expect(recorded?.size).toBe(16);
+	});
+
+	it("writes the whole body in one shot when the server ignores Range (200)", async () => {
+		const v = setupVault({ streaming: true });
+		requestUrlMock.mockResolvedValue(
+			rangeResponse(200, [0xff, 0xfb, 0x90, 0x00, 1, 2, 3, 4], {
+				"content-type": "audio/mpeg",
+			}),
+		);
+
+		await downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}");
+
+		expect(v.writeBinary).toHaveBeenCalledTimes(1);
+		expect(v.appendBinary).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes)["Pod"]?.[0]?.size).toBe(8);
+	});
+
+	it("deletes the partial file and rethrows on a mid-stream failure", async () => {
+		const v = setupVault({ streaming: true });
+		requestUrlMock
+			.mockResolvedValueOnce(
+				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {
+					"content-type": "audio/mpeg",
+					"content-range": "bytes 0-7/16",
+				}),
+			)
+			.mockResolvedValueOnce(rangeResponse(500, []));
+
+		await expect(
+			downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}"),
+		).rejects.toThrow(/Range request failed/);
+
+		expect(v.deleteFile).toHaveBeenCalledTimes(1);
+		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
 	});
 });
