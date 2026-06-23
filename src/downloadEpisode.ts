@@ -22,6 +22,12 @@ import {
 	isPlayableMediaExtension,
 	isSameMediaSource,
 } from "./utility/mediaType";
+import {
+	appendableAdapter,
+	probeAndFetchFirstChunk,
+	writeStreamedFile,
+} from "./download/streaming";
+import { detectAudioFileExtension } from "./download/mediaSignatures";
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -65,35 +71,6 @@ async function downloadFile(url: string): Promise<DownloadedFile> {
 	}
 }
 
-// ---- Streaming download (issue #113) ---------------------------------------
-// Mobile WebViews have a tight per-process memory budget. Buffering a whole
-// episode (hundreds of MB) via requestUrl().arrayBuffer — plus the native->JS
-// bridge copy — used to OOM-kill Obsidian on iOS. Instead we pull the file in
-// bounded HTTP Range chunks and append each straight to disk, so peak heap
-// stays at roughly one chunk regardless of episode size.
-
-const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
-
-interface BinaryAppendAdapter {
-	writeBinary(path: string, data: ArrayBuffer): Promise<void>;
-	appendBinary?(path: string, data: ArrayBuffer): Promise<void>;
-}
-
-interface RangeProbe {
-	firstChunk: ArrayBuffer;
-	contentType: string;
-	supportsRange: boolean;
-	totalSize: number | null;
-}
-
-// `appendBinary` exists at runtime on the mobile CapacitorAdapter (and the
-// desktop adapter) but isn't in Obsidian's public DataAdapter typings. Keep the
-// single unsafe cast here so the "where we step outside the types" boundary is
-// greppable in one place.
-function appendableAdapter(): BinaryAppendAdapter {
-	return app.vault.adapter as unknown as BinaryAppendAdapter;
-}
-
 function parentFolderPath(filePath: string): string {
 	return filePath.split("/").slice(0, -1).join("/");
 }
@@ -102,124 +79,6 @@ function parentFolderPath(filePath: string): string {
 // requests for the same episode (e.g. a double-tap, or several queued at once)
 // into a single transfer so they can't stack N full downloads in memory.
 const downloadsInFlight = new Map<string, Promise<string>>();
-
-function readHeader(
-	headers: Record<string, string> | undefined,
-	name: string,
-): string | undefined {
-	if (!headers) return undefined;
-	const direct = headers[name] ?? headers[name.toLowerCase()];
-	if (direct !== undefined) return direct;
-	const lower = name.toLowerCase();
-	for (const key of Object.keys(headers)) {
-		if (key.toLowerCase() === lower) return headers[key];
-	}
-	return undefined;
-}
-
-// Fetch the first chunk with a Range header and learn whether the server
-// supports ranged requests (206 + Content-Range) and the total size. A server
-// that ignores Range answers 200 with the whole body — the legacy single-buffer
-// behaviour — which we detect and treat as already-complete.
-async function probeAndFetchFirstChunk(
-	url: string,
-	chunkSize: number,
-): Promise<RangeProbe> {
-	const encodedUrl = encodeUrlForRequest(url);
-	const response = await requestUrl({
-		url: encodedUrl,
-		method: "GET",
-		headers: { Range: `bytes=0-${chunkSize - 1}` },
-		throw: false,
-	});
-
-	if (response.status !== 200 && response.status !== 206) {
-		throw new Error(`Could not download episode (HTTP ${response.status}).`);
-	}
-
-	const contentType = readHeader(response.headers, "content-type") ?? "";
-	const supportsRange = response.status === 206;
-
-	let totalSize: number | null = null;
-	const contentRange = readHeader(response.headers, "content-range");
-	if (supportsRange && contentRange) {
-		const match = contentRange.match(/\/(\d+)\s*$/);
-		if (match) totalSize = Number.parseInt(match[1], 10);
-	}
-	if (totalSize === null) {
-		const contentLength = readHeader(response.headers, "content-length");
-		if (contentLength) {
-			const parsed = Number.parseInt(contentLength, 10);
-			if (Number.isFinite(parsed)) totalSize = parsed;
-		}
-	}
-
-	return {
-		firstChunk: response.arrayBuffer,
-		contentType,
-		supportsRange,
-		totalSize,
-	};
-}
-
-// Write the already-fetched first chunk, then pull the remaining bytes in
-// bounded Range requests, appending each straight to disk. Peak memory is one
-// chunk, not the whole file. Returns the total number of bytes written.
-async function writeStreamedFile(
-	url: string,
-	filePath: string,
-	probe: RangeProbe,
-	chunkSize: number,
-	onProgress?: (written: number, total: number | null) => void,
-): Promise<number> {
-	const adapter = appendableAdapter();
-
-	await adapter.writeBinary(filePath, probe.firstChunk);
-	let written = probe.firstChunk.byteLength;
-	onProgress?.(written, probe.totalSize);
-
-	// Server returned the whole body (ignored Range), or this adapter can't
-	// append: the first response already holds everything we can get.
-	if (!probe.supportsRange || typeof adapter.appendBinary !== "function") {
-		return written;
-	}
-
-	const encodedUrl = encodeUrlForRequest(url);
-	for (;;) {
-		if (probe.totalSize !== null && written >= probe.totalSize) break;
-
-		const rangeEnd =
-			probe.totalSize !== null
-				? Math.min(written + chunkSize, probe.totalSize) - 1
-				: written + chunkSize - 1;
-
-		const response = await requestUrl({
-			url: encodedUrl,
-			method: "GET",
-			headers: { Range: `bytes=${written}-${rangeEnd}` },
-			throw: false,
-		});
-
-		if (response.status === 416) break; // requested past end of file
-		if (response.status !== 206) {
-			throw new Error(
-				`Range request failed (HTTP ${response.status}) at byte ${written}.`,
-			);
-		}
-
-		const chunk = response.arrayBuffer;
-		if (chunk.byteLength === 0) break;
-
-		await adapter.appendBinary(filePath, chunk);
-		written += chunk.byteLength;
-		onProgress?.(written, probe.totalSize);
-
-		// Unknown total: a short chunk means we hit EOF.
-		if (probe.totalSize === null && chunk.byteLength < chunkSize) break;
-	}
-
-	return written;
-}
 
 // Single source of truth for "what extension and on-disk path does this download
 // get, and is it even playable". Shared by the streaming and legacy paths so the
@@ -251,6 +110,24 @@ async function downloadEpisodeToDisk(
 	downloadPathTemplate: string,
 	onProgress?: (written: number, total: number | null) => void,
 ): Promise<string> {
+	// Fast path: if this episode is already on disk under the extension its URL
+	// implies, skip the (potentially multi-MB) Range probe entirely. The probe is
+	// only needed to discover the extension when the URL lacks one, or to confirm
+	// the final path when the URL's extension is wrong — both still handled below.
+	const urlExtension = getUrlExtension(episode.streamUrl);
+	if (urlExtension) {
+		const provisionalPath = safeDownloadFilePath(
+			downloadPathTemplate,
+			episode,
+			urlExtension,
+		);
+		const cached = app.vault.getAbstractFileByPath(provisionalPath);
+		if (cached instanceof TFile) {
+			downloadedEpisodes.addEpisode(episode, provisionalPath, cached.stat.size);
+			return provisionalPath;
+		}
+	}
+
 	const adapter = appendableAdapter();
 	const canStream =
 		typeof adapter.writeBinary === "function" &&
@@ -268,10 +145,7 @@ async function downloadEpisodeToDisk(
 		return filePath;
 	}
 
-	const probe = await probeAndFetchFirstChunk(
-		episode.streamUrl,
-		DOWNLOAD_CHUNK_SIZE,
-	);
+	const probe = await probeAndFetchFirstChunk(episode.streamUrl);
 	const { filePath } = resolveDownloadTarget(
 		episode,
 		downloadPathTemplate,
@@ -296,7 +170,6 @@ async function downloadEpisodeToDisk(
 			episode.streamUrl,
 			filePath,
 			probe,
-			DOWNLOAD_CHUNK_SIZE,
 			onProgress,
 		);
 	} catch (error) {
@@ -336,7 +209,7 @@ export default async function downloadEpisodeWithNotice(
 		// Dedupe by episode identity (podcast + title — the same key the download
 		// registry uses), so a double-tap collapses onto one transfer while two
 		// genuinely different episodes never block each other.
-		const key = `${episode.podcastName} ${episode.title}`;
+		const key = `${episode.podcastName}\u0000${episode.title}`;
 
 		const inProgress = downloadsInFlight.get(key);
 		if (inProgress) {
@@ -960,111 +833,5 @@ function getFileBasename(filePath: string): string {
 	return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
-interface AudioSignature {
-	signature: number[];
-	mask?: number[];
-	fileExtension: string;
-}
-
-/**
- * Map an ISO-BMFF (MP4/QuickTime) major brand to its file extension. Real m4a/mp4
- * files carry `ftyp` at offset 4 and the 4-byte major brand at offset 8 (not at
- * offset 0), so the old offset-0 `M4A ` signature never matched (#DL-06). Known
- * audio brands resolve to `m4a`; video brands to their own extension; everything
- * else defaults to `mp4` (or `m4a` when the caller hints the media is audio).
- */
-function detectIsoBmffExtension(arr: Uint8Array): string | null {
-	// Need 4 bytes of box size + 'ftyp' + the 4-byte major brand.
-	if (arr.length < 12) return null;
-
-	const isFtyp =
-		arr[4] === 0x66 && arr[5] === 0x74 && arr[6] === 0x79 && arr[7] === 0x70;
-	if (!isFtyp) return null;
-
-	const brand = String.fromCharCode(arr[8], arr[9], arr[10], arr[11]);
-
-	if (brand.startsWith("M4A")) return "m4a";
-	if (brand.startsWith("M4V")) return "m4v";
-	if (brand === "qt  ") return "mov";
-
-	// `M4B `/`M4P ` are audiobook/protected-audio brands; the rest are generic
-	// MP4 brands. All map to mp4 here — `inferFileExtensionFromDownload` /
-	// `normalizeAudioExtension` re-map mp4 -> m4a when the media hint is audio.
-	switch (brand) {
-		case "mp42":
-		case "isom":
-		case "iso2":
-		case "mp41":
-		case "dash":
-		case "M4B ":
-		case "M4P ":
-			return "mp4";
-		default:
-			return "mp4";
-	}
-}
-
-export function detectAudioFileExtension(data: ArrayBuffer): string | null {
-	const audioSignatures: AudioSignature[] = [
-		{ signature: [0xff, 0xe0], mask: [0xff, 0xe0], fileExtension: "mp3" },
-		{ signature: [0x49, 0x44, 0x33], fileExtension: "mp3" },
-		{ signature: [0x52, 0x49, 0x46, 0x46], fileExtension: "wav" },
-		{ signature: [0x4f, 0x67, 0x67, 0x53], fileExtension: "ogg" },
-		{ signature: [0x66, 0x4c, 0x61, 0x43], fileExtension: "flac" },
-		{
-			signature: [0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11],
-			fileExtension: "wma",
-		},
-		{
-			signature: [0x23, 0x21, 0x41, 0x4d, 0x52, 0x0a],
-			fileExtension: "amr",
-		},
-	];
-
-	// The ftyp brand lives at offset 8, past every offset-0 signature, so read a
-	// header window long enough to cover both before zero-copy-viewing it.
-	const maxSignatureLength = Math.max(
-		12,
-		...audioSignatures.map((sig) => sig.signature.length),
-	);
-	// Zero-copy view over just the header bytes — no Blob slice, no FileReader,
-	// no extra full-file allocation.
-	const arr = new Uint8Array(
-		data,
-		0,
-		Math.min(maxSignatureLength, data.byteLength),
-	);
-
-	// ISO-BMFF is special-cased first: its brand sits at offset 8, so it can't be
-	// expressed as an offset-0 signature like the entries above.
-	const isoBmffExtension = detectIsoBmffExtension(arr);
-	if (isoBmffExtension) {
-		return isoBmffExtension;
-	}
-
-	for (const { signature, mask, fileExtension } of audioSignatures) {
-		if (signature.length > arr.length) {
-			continue;
-		}
-
-		let matches = true;
-		for (let i = 0; i < signature.length; i++) {
-			if (mask) {
-				if ((arr[i] & mask[i]) !== (signature[i] & mask[i])) {
-					matches = false;
-					break;
-				}
-			} else {
-				if (arr[i] !== signature[i]) {
-					matches = false;
-					break;
-				}
-			}
-		}
-		if (matches) {
-			return fileExtension;
-		}
-	}
-
-	return null;
-}
+// Binary signature detection lives in ./download/mediaSignatures
+// (detectAudioFileExtension), imported above.
