@@ -15,6 +15,12 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create releases/tags and push the version-bump commit
+      issues: write # semantic-release success/failure comments
+      pull-requests: write # semantic-release PR comments
+      id-token: write # mint the OIDC token used to sign artifact attestations
+      attestations: write # publish build provenance attestations for the assets
     strategy:
       matrix:
         node-version: [22]
@@ -91,6 +97,17 @@ jobs:
             }
           })();
           NODE
+
+      # Generate cryptographic build-provenance attestations for the released
+      # assets so users can verify they were built from this repository's source
+      # by this workflow (GitHub attestations API).
+      - name: Attest build provenance for release assets
+        if: steps.release.outputs.released == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
 
       - name: Extract version
         id: extract-version
