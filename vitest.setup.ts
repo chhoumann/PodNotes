@@ -120,6 +120,23 @@ function createMoment(dateInput?: Date | string | number) {
 
 (window as unknown as { moment: typeof createMoment }).moment = createMoment;
 
+// Obsidian exposes `activeWindow`/`activeDocument` globals that resolve to the
+// currently focused (possibly popped-out) window/document. In jsdom there is a
+// single window, so point them at the test globals for code that prefers them
+// over the bare `window`/`document` for popout-window compatibility.
+if (typeof (globalThis as { activeWindow?: unknown }).activeWindow === "undefined") {
+	Object.defineProperty(globalThis, "activeWindow", {
+		configurable: true,
+		get: () => window,
+	});
+}
+if (typeof (globalThis as { activeDocument?: unknown }).activeDocument === "undefined") {
+	Object.defineProperty(globalThis, "activeDocument", {
+		configurable: true,
+		get: () => document,
+	});
+}
+
 if (typeof IntersectionObserver === "undefined") {
 	class MockIntersectionObserver implements IntersectionObserver {
 		constructor(
@@ -233,6 +250,24 @@ if (!(HTMLElement.prototype as unknown as { empty?: () => void }).empty) {
 				this.removeChild(this.firstChild);
 			}
 		};
+}
+
+// Obsidian augments HTMLElement with setCssStyles (assigns a batch of inline
+// styles, the sanctioned alternative to direct `el.style.x = y` writes). jsdom
+// has no such method, so mirror Obsidian's behaviour for component/DOM tests.
+if (
+	!(HTMLElement.prototype as unknown as { setCssStyles?: unknown }).setCssStyles
+) {
+	(
+		HTMLElement.prototype as unknown as {
+			setCssStyles: (styles: Partial<CSSStyleDeclaration>) => void;
+		}
+	).setCssStyles = function (
+		this: HTMLElement,
+		styles: Partial<CSSStyleDeclaration>,
+	) {
+		Object.assign(this.style, styles);
+	};
 }
 
 // jsdom does not implement the Web Animations API, which Svelte 5 transitions

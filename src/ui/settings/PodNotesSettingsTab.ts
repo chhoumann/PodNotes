@@ -61,9 +61,11 @@ import {
  * seven hand-rolled copies this replaced.
  */
 function stackSettingVertically(setting: Setting): void {
-	setting.settingEl.style.flexDirection = "column";
-	setting.settingEl.style.alignItems = "unset";
-	setting.settingEl.style.gap = "10px";
+	setting.settingEl.setCssStyles({
+		flexDirection: "column",
+		alignItems: "unset",
+		gap: "10px",
+	});
 }
 
 /**
@@ -73,7 +75,7 @@ function stackSettingVertically(setting: Setting): void {
  */
 function renderMarkdownPreview(markdown: string, el: HTMLElement): void {
 	el.empty();
-	MarkdownRenderer.renderMarkdown(markdown, el, "", new Component());
+	void MarkdownRenderer.renderMarkdown(markdown, el, "", new Component());
 }
 
 export class PodNotesSettingsTab extends PluginSettingTab {
@@ -95,8 +97,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		const header = containerEl.createEl("h2", { text: "PodNotes" });
-		header.style.textAlign = "center";
+		new Setting(containerEl).setName("PodNotes").setHeading();
 
 		const settingsContainer = containerEl.createDiv();
 		settingsContainer.classList.add("settings-container");
@@ -212,7 +213,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.defaultPlaybackRate)
 					.onChange((value) => {
 						this.plugin.settings.defaultPlaybackRate = value;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					})
 					.setDynamicTooltip(),
 			);
@@ -228,7 +229,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.defaultVolume)
 					.onChange((value) => {
 						this.plugin.settings.defaultVolume = value;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					})
 					.setDynamicTooltip(),
 			);
@@ -247,7 +248,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						const parsed = Number.parseInt(value, 10);
 						if (!Number.isFinite(parsed) || parsed <= 0) return;
 						this.plugin.settings.skipBackwardLength = parsed;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					})
 					.setPlaceholder("seconds");
 			});
@@ -262,7 +263,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						const parsed = Number.parseInt(value, 10);
 						if (!Number.isFinite(parsed) || parsed <= 0) return;
 						this.plugin.settings.skipForwardLength = parsed;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					})
 					.setPlaceholder("seconds");
 			});
@@ -271,7 +272,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	private addNoteSettings(settingsContainer: HTMLDivElement) {
 		const container = settingsContainer.createDiv();
 
-		container.createEl("h4", { text: "Note settings" });
+		new Setting(container).setName("Note settings").setHeading();
 
 		const timestampSetting = new Setting(container)
 			.setName("Capture timestamp format")
@@ -281,10 +282,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textArea.setPlaceholder("- {{linktime}} ");
 				textArea.onChange((value) => {
 					this.plugin.settings.timestamp.template = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					updateTimestampDemo(value);
 				});
-				textArea.inputEl.style.width = "100%";
+				textArea.inputEl.setCssStyles({ width: "100%" });
 			});
 
 		stackSettingVertically(timestampSetting);
@@ -320,7 +321,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						this.plugin.settings.timestamp.offset = Number.isNaN(parsedValue)
 							? 0
 							: Math.max(0, parsedValue);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 						updateTimestampDemo(this.plugin.settings.timestamp.template);
 					})
 					.setPlaceholder("e.g. 5");
@@ -340,12 +341,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				);
 				textComponent.onChange((value) => {
 					this.plugin.settings.note.path = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 
 					const demoVal = FilePathTemplateEngine(value, randomEpisode);
 					renderMarkdownPreview(demoVal, noteCreationFilePathDemoEl);
 				});
-				textComponent.inputEl.style.width = "100%";
+				textComponent.inputEl.setCssStyles({ width: "100%" });
 			});
 
 		stackSettingVertically(noteCreationFilePathSetting);
@@ -359,11 +360,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textArea.setValue(this.plugin.settings.note.template);
 				textArea.onChange((value) => {
 					this.plugin.settings.note.template = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 
-				textArea.inputEl.style.width = "100%";
-				textArea.inputEl.style.height = "25vh";
+				textArea.inputEl.setCssStyles({ width: "100%", height: "25vh" });
 				// A Bases-friendly hint mirroring the shipped default: structured
 				// frontmatter properties Bases can query, with the raw title in the
 				// body where YAML rules don't apply.
@@ -388,7 +388,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	private addFeedNoteSettings(settingsContainer: HTMLDivElement) {
 		const container = settingsContainer.createDiv();
 
-		container.createEl("h4", { text: "Podcast feed note settings" });
+		new Setting(container).setName("Podcast feed note settings").setHeading();
 
 		const desc = container.createEl("p", {
 			text:
@@ -397,8 +397,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				"Available tags: {{title}}, {{podcast}}, {{url}} (website), " +
 				"{{feedurl}} (RSS), {{artwork}}, {{author}}, {{description}}, {{date}}.",
 		});
-		desc.style.fontSize = "var(--font-ui-smaller)";
-		desc.style.color = "var(--text-muted)";
+		desc.setCssStyles({
+			fontSize: "var(--font-ui-smaller)",
+			color: "var(--text-muted)",
+		});
 
 		const randomFeed = getRandomFeed();
 
@@ -410,10 +412,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent.setPlaceholder("PodNotes/Podcasts/{{podcast}}.md");
 				textComponent.onChange((value) => {
 					this.plugin.settings.feedNote.path = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					renderFeedPathDemo(value);
 				});
-				textComponent.inputEl.style.width = "100%";
+				textComponent.inputEl.setCssStyles({ width: "100%" });
 			});
 
 		stackSettingVertically(feedNotePathSetting);
@@ -434,17 +436,16 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textArea.setValue(this.plugin.settings.feedNote.template);
 				textArea.onChange((value) => {
 					this.plugin.settings.feedNote.template = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
-				textArea.inputEl.style.width = "100%";
-				textArea.inputEl.style.height = "25vh";
+				textArea.inputEl.setCssStyles({ width: "100%", height: "25vh" });
 			});
 
 		stackSettingVertically(feedNoteTemplateSetting);
 	}
 
 	private addDownloadSettings(container: HTMLDivElement) {
-		container.createEl("h4", { text: "Download settings" });
+		new Setting(container).setName("Download settings").setHeading();
 
 		const randomEpisode = getRandomEpisode();
 
@@ -459,17 +460,17 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent.setPlaceholder("inputs/podcasts/{{podcast}} - {{title}}");
 				textComponent.onChange((value) => {
 					this.plugin.settings.download.path = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					refreshDownloadPathHints(value);
 				});
-				textComponent.inputEl.style.width = "100%";
+				textComponent.inputEl.setCssStyles({ width: "100%" });
 			});
 
 		stackSettingVertically(downloadPathSetting);
 
 		const downloadFilePathDemoEl = container.createDiv();
 		const downloadFilePathWarningEl = container.createDiv();
-		downloadFilePathWarningEl.style.color = "var(--text-error)";
+		downloadFilePathWarningEl.setCssStyles({ color: "var(--text-error)" });
 
 		// A download path without a per-episode token ({{title}}) resolves every
 		// episode to the same file, so downloads overwrite each other or fail; an
@@ -492,7 +493,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addPerformanceSettings(container: HTMLDivElement) {
-		container.createEl("h4", { text: "Performance" });
+		new Setting(container).setName("Performance").setHeading();
 
 		new Setting(container)
 			.setName("Cache podcast feeds")
@@ -535,7 +536,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addImportExportSettings(containerEl: HTMLElement): void {
-		containerEl.createEl("h3", { text: "Import/Export" });
+		new Setting(containerEl).setName("Import/Export").setHeading();
 
 		new Setting(containerEl)
 			.setName("Import OPML")
@@ -580,7 +581,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						new Notice("No podcasts to export.");
 						return;
 					}
-					exportOPML(
+					void exportOPML(
 						this.app,
 						feeds,
 						exportFilePath.endsWith(".opml")
@@ -594,7 +595,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addSettingsTransferControls(containerEl: HTMLElement): void {
-		containerEl.createEl("h4", { text: "Settings & templates" });
+		new Setting(containerEl).setName("Settings & templates").setHeading();
 
 		new Setting(containerEl)
 			.setName("Import settings")
@@ -645,7 +646,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private pickFile(
 		accept: string,
-		onContents: (contents: string) => void,
+		onContents: (contents: string) => void | Promise<void>,
 		options: { maxBytes?: number; tooLargeMessage?: string } = {},
 	): void {
 		// Both pickers read small text files, so cap the size before reading the
@@ -656,11 +657,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			options.tooLargeMessage ??
 			"That file is too large to be a PodNotes settings file.";
 
-		const fileInput = document.createElement("input");
+		const fileInput = activeDocument.createElement("input");
 		fileInput.type = "file";
 		fileInput.accept = accept;
-		fileInput.style.display = "none";
-		document.body.appendChild(fileInput);
+		fileInput.setCssStyles({ display: "none" });
+		activeDocument.body.appendChild(fileInput);
 
 		// The native picker firing "cancel" (no selection) never triggers
 		// "change", so clean up the orphaned input then too.
@@ -685,7 +686,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			reader.onload = (event) => {
 				const contents = event.target?.result;
 				if (typeof contents === "string") {
-					onContents(contents);
+					void onContents(contents);
 				} else {
 					new Notice("Could not read the selected file.");
 				}
@@ -819,7 +820,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addTranscriptSettings(container: HTMLDivElement) {
-		container.createEl("h4", { text: "Transcript settings" });
+		new Setting(container).setName("Transcript settings").setHeading();
 
 		const randomEpisode = getRandomEpisode();
 
@@ -877,8 +878,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						this.plugin.settings.transcript.template = value;
 						await this.plugin.saveSettings();
 					});
-				text.inputEl.style.width = "100%";
-				text.inputEl.style.height = "25vh";
+				text.inputEl.setCssStyles({ width: "100%", height: "25vh" });
 			});
 
 		stackSettingVertically(transcriptTemplateSetting);
