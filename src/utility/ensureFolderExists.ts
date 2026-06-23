@@ -1,4 +1,6 @@
 import type { Vault } from "obsidian";
+import { get } from "svelte/store";
+import { plugin } from "../store";
 
 /**
  * Creates every missing folder along `folderPath`, one segment at a time.
@@ -15,13 +17,13 @@ import type { Vault } from "obsidian";
  * `folderPath` is a directory path (no trailing file name). An empty path is a
  * no-op, so callers can pass the directory portion of a file path directly.
  *
- * `vault` defaults to the global `app.vault`; callers holding an injected vault
+ * `vault` defaults to the plugin's app vault; callers holding an injected vault
  * (e.g. a service given `plugin.app`) pass it so folder creation and the
  * subsequent file write target the same vault instance.
  */
 export async function ensureFolderExists(
 	folderPath: string,
-	vault: Vault = app.vault,
+	vault: Vault = get(plugin).app.vault,
 ): Promise<void> {
 	const segments = folderPath.split("/").filter(Boolean);
 

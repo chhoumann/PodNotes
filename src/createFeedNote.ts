@@ -32,7 +32,7 @@ function getFeedNotePath(feed: PodcastFeed): string {
 
 export function getFeedNote(feed: PodcastFeed): TFile | null {
 	const filePathDotMd = getFeedNotePath(feed);
-	const file = app.vault.getAbstractFileByPath(filePathDotMd);
+	const file = get(plugin).app.vault.getAbstractFileByPath(filePathDotMd);
 
 	if (!file || !(file instanceof TFile)) {
 		return null;
@@ -49,7 +49,7 @@ export function openFeedNote(feed: PodcastFeed): void {
 		return;
 	}
 
-	app.workspace.getLeaf().openFile(file);
+	void get(plugin).app.workspace.getLeaf().openFile(file);
 }
 
 export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
@@ -66,7 +66,7 @@ export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
 	const existing = getFeedNote(feed);
 	if (existing) {
 		new Notice(`Note for "${feed.title}" already exists`);
-		app.workspace.getLeaf().openFile(existing);
+		void get(plugin).app.workspace.getLeaf().openFile(existing);
 		return;
 	}
 
@@ -80,7 +80,7 @@ export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
 
 	try {
 		const file = await createFileIfNotExists(filePathDotMd, content, feed);
-		app.workspace.getLeaf().openFile(file);
+		void get(plugin).app.workspace.getLeaf().openFile(file);
 	} catch (error) {
 		console.error(error);
 		new Notice(`Failed to create note: "${filePathDotMd}"`);
@@ -129,6 +129,7 @@ async function createFileIfNotExists(
 	const folderPath = path.split("/").slice(0, -1).join("/");
 	await ensureFolderExists(folderPath);
 
+	const { app } = get(plugin);
 	try {
 		return await app.vault.create(path, content);
 	} catch (error) {

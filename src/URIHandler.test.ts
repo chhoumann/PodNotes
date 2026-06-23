@@ -17,6 +17,7 @@ import {
 	activePlaybackSegment,
 	localFiles,
 	playedEpisodes,
+	plugin,
 	requestedPlaybackTime,
 	viewState,
 } from "./store";
@@ -82,9 +83,9 @@ const api = {
 };
 
 function setApp(getAbstractFileByPath: (path: string) => unknown) {
-	(globalThis as { app?: unknown }).app = {
-		vault: { getAbstractFileByPath: vi.fn(getAbstractFileByPath) },
-	};
+	plugin.set({
+		app: { vault: { getAbstractFileByPath: vi.fn(getAbstractFileByPath) } },
+	} as never);
 }
 
 beforeEach(() => {
@@ -96,7 +97,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetStores();
 	mockGetEpisodes.mockReset();
-	delete (globalThis as { app?: unknown }).app;
+	plugin.set(undefined as never);
 });
 
 describe("podNotesURIHandler", () => {

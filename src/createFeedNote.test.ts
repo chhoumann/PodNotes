@@ -42,7 +42,7 @@ function setupVault(options: {
 			return makeTFile(path);
 		});
 
-	(globalThis as { app?: unknown }).app = {
+	const app = {
 		vault: {
 			getAbstractFileByPath: (path: string) =>
 				files.has(path) ? makeTFile(path) : null,
@@ -57,6 +57,10 @@ function setupVault(options: {
 			}),
 		},
 	};
+
+	// Attach the app onto the plugin store the test already set up (preserving its
+	// settings); the source reads its app from `get(plugin).app`.
+	plugin.update((current) => ({ ...current, app }) as never);
 
 	return { files, created, opened };
 }
@@ -73,7 +77,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	(globalThis as { app?: unknown }).app = undefined;
+	plugin.set(undefined as never);
 	vi.restoreAllMocks();
 });
 
@@ -104,7 +108,7 @@ describe("createFeedNote", () => {
 		const racedFiles = new Set<string>();
 		const opened: string[] = [];
 
-		(globalThis as { app?: unknown }).app = {
+		const app = {
 			vault: {
 				getAbstractFileByPath: (path: string) =>
 					racedFiles.has(path) ? makeTFile(path) : null,
@@ -120,6 +124,7 @@ describe("createFeedNote", () => {
 				}),
 			},
 		};
+		plugin.update((current) => ({ ...current, app }) as never);
 
 		await expect(createFeedNote(fullFeed)).resolves.toBeUndefined();
 		expect(opened).toContain(EXPECTED_PATH);

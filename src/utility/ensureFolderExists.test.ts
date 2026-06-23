@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ensureFolderExists } from "./ensureFolderExists";
+import { plugin } from "../store";
 
 function setupApp(existing: string[] = []) {
 	const present = new Set(existing);
@@ -15,19 +16,21 @@ function setupApp(existing: string[] = []) {
 		created.push(path);
 	});
 
-	(globalThis as { app?: unknown }).app = {
-		vault: {
-			getAbstractFileByPath: (path: string) =>
-				present.has(path) ? { path } : null,
-			createFolder,
+	plugin.set({
+		app: {
+			vault: {
+				getAbstractFileByPath: (path: string) =>
+					present.has(path) ? { path } : null,
+				createFolder,
+			},
 		},
-	};
+	} as never);
 
 	return { created, createFolder };
 }
 
 afterEach(() => {
-	(globalThis as { app?: unknown }).app = undefined;
+	plugin.set(undefined as never);
 });
 
 describe("ensureFolderExists", () => {
@@ -79,19 +82,22 @@ describe("ensureFolderExists", () => {
 		const createFolder = vi.fn(async () => {
 			throw new Error("Folder already exists.");
 		});
-		(globalThis as { app?: unknown }).app = {
-			vault: {
-				getAbstractFileByPath: () => null,
-				createFolder,
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: () => null,
+					createFolder,
+				},
 			},
-		};
+		} as never);
 
 		await expect(ensureFolderExists("Podcasts/My Show")).resolves.toBeUndefined();
 		expect(createFolder).toHaveBeenCalled();
 	});
 
-	it("uses a passed vault instead of the global app.vault", async () => {
-		// Global app.vault would record nothing; the injected vault must be used.
+	it("uses a passed vault instead of the default app.vault", async () => {
+		// The default (plugin app) vault would record nothing; the injected vault
+		// must be used.
 		setupApp();
 		const created: string[] = [];
 		const injected = {
@@ -110,12 +116,14 @@ describe("ensureFolderExists", () => {
 		const createFolder = vi.fn(async () => {
 			throw new Error("EACCES: permission denied");
 		});
-		(globalThis as { app?: unknown }).app = {
-			vault: {
-				getAbstractFileByPath: () => null,
-				createFolder,
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: () => null,
+					createFolder,
+				},
 			},
-		};
+		} as never);
 
 		await expect(ensureFolderExists("Podcasts/My Show")).rejects.toThrow(
 			"EACCES",

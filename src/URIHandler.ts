@@ -11,6 +11,7 @@ import {
 	activePlaybackSegment,
 	localFiles,
 	playedEpisodes,
+	plugin,
 	requestedPlaybackTime,
 	viewState,
 } from "./store";
@@ -157,8 +158,9 @@ export default async function podNotesURIHandler(
 	}
 
 	// The path probe only decides local-vs-feed routing; the episode itself is resolved by name.
+	const { vault } = get(plugin).app;
 	const localFile = candidateValues(url)
-		.map((path) => app.vault.getAbstractFileByPath(path))
+		.map((path) => vault.getAbstractFileByPath(path))
 		.find((file) => file !== null);
 
 	let episode: Episode | undefined;

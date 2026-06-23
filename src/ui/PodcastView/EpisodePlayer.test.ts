@@ -79,14 +79,21 @@ function makeTFile(path: string): TFile {
 
 function mockVaultFile(path: string): void {
 	const file = makeTFile(path);
-	(globalThis as { app?: unknown }).app = {
-		vault: {
-			getAbstractFileByPath: vi.fn((candidate: string) =>
-				candidate === path ? file : null,
-			),
-			getResourcePath: vi.fn(() => `app://resource/${path}?token`),
-		},
+	const vault = {
+		getAbstractFileByPath: vi.fn((candidate: string) =>
+			candidate === path ? file : null,
+		),
+		getResourcePath: vi.fn(() => `app://resource/${path}?token`),
 	};
+	// The player reads the vault off the plugin's app reference ($plugin.app),
+	// so expose it there (merging onto the base mock set in beforeEach).
+	plugin.update(
+		(current) =>
+			({
+				...(current as unknown as Record<string, unknown>),
+				app: { vault },
+			}) as never,
+	);
 }
 
 describe("EpisodePlayer", () => {
