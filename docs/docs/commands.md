@@ -1,4 +1,4 @@
-## Show PodNotes
+## Show player
 Opens the PodNotes pane and brings it into focus.
 
 If the pane already exists but is hidden — for example in a collapsed sidebar or out of view because the right sidebar has too many icons — this command reveals it. If it does not exist yet, the command creates it in the right sidebar. You can run it from the command palette or bind it to a hotkey.
@@ -26,9 +26,6 @@ This will skip the current episode forward by the amount of seconds specified in
 This will download the currently playing episode.
 
 Downloads are stored in the location specified by the **Episode download path** setting. This path is a template and **must include a per-episode token** such as `{{title}}` (the default is `PodNotes/{{podcast}}/{{title}}`). A path without `{{title}}` makes every episode resolve to the same file, so downloads overwrite each other or fail. The file extension is added automatically — do not include one.
-
-## Reload Podnotes
-This will reload PodNotes.
 
 ## Capture Timestamp
 This will capture the current timestamp of the currently playing episode.

@@ -36,7 +36,7 @@ export default async function createPodcastNote(
 	try {
 		const file = await createPodcastNoteFileIfNotExists(episode);
 
-		app.workspace.getLeaf().openFile(file);
+		void get(plugin).app.workspace.getLeaf().openFile(file);
 	} catch (error) {
 		console.error(error);
 		new Notice(`Failed to create note: "${getPodcastNotePath(episode)}"`);
@@ -78,7 +78,7 @@ async function getTemplateChapters(
 
 export function getPodcastNote(episode: Episode): TFile | null {
 	const filePathDotMd = getPodcastNotePath(episode);
-	const file = app.vault.getAbstractFileByPath(filePathDotMd);
+	const file = get(plugin).app.vault.getAbstractFileByPath(filePathDotMd);
 
 	if (!file || !(file instanceof TFile)) {
 		return null;
@@ -95,7 +95,7 @@ export function openPodcastNote(epiosode: Episode): void {
 		return;
 	}
 
-	app.workspace.getLeaf().openFile(file);
+	void get(plugin).app.workspace.getLeaf().openFile(file);
 }
 
 async function createFileIfNotExists(
@@ -114,6 +114,7 @@ async function createFileIfNotExists(
 	const folderPath = path.split("/").slice(0, -1).join("/");
 	await ensureFolderExists(folderPath);
 
+	const { app } = get(plugin);
 	try {
 		return await app.vault.create(path, content);
 	} catch (error) {

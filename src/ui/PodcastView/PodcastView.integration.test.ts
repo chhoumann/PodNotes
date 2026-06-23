@@ -147,9 +147,12 @@ function bootstrapAppMock() {
 
 describe("PodcastView integration flow", () => {
 	test("select feed → play episode → create note with resolved template", async () => {
-		const { createdFiles, leaf } = bootstrapAppMock();
+		const { appMock, createdFiles, leaf } = bootstrapAppMock();
 
 		const pluginSettings = {
+			// createPodcastNote resolves the vault/workspace off the plugin's app
+			// reference (get(plugin).app), so expose the same mock there too.
+			app: appMock,
 			settings: {
 				note: {
 					path: "Podcasts/{{podcast}}/{{date}}/{{title}}",

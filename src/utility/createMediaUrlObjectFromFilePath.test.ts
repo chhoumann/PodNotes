@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { TFile } from "obsidian";
+import { describe, expect, it, vi } from "vitest";
+import { TFile, type Vault } from "obsidian";
 import { createMediaUrlObjectFromFilePath } from "./createMediaUrlObjectFromFilePath";
 
 // `tsc` resolves `obsidian` to the real typings (TFile has a no-arg constructor),
@@ -24,22 +24,16 @@ function setupVault(
 		opts.resolve ?? ((path: string) => tfile(path)),
 	);
 
-	(globalThis as { app?: unknown }).app = {
-		vault: { getAbstractFileByPath, getResourcePath },
-	};
+	const vault = { getAbstractFileByPath, getResourcePath } as unknown as Vault;
 
-	return { getResourcePath, getAbstractFileByPath };
+	return { vault, getResourcePath, getAbstractFileByPath };
 }
-
-afterEach(() => {
-	(globalThis as { app?: unknown }).app = undefined;
-});
 
 describe("createMediaUrlObjectFromFilePath", () => {
 	it("returns the Obsidian resource path for a vault file", () => {
-		const { getResourcePath, getAbstractFileByPath } = setupVault();
+		const { vault, getResourcePath, getAbstractFileByPath } = setupVault();
 
-		const url = createMediaUrlObjectFromFilePath("Audio/ep.mp3");
+		const url = createMediaUrlObjectFromFilePath(vault, "Audio/ep.mp3");
 
 		expect(getAbstractFileByPath).toHaveBeenCalledWith("Audio/ep.mp3");
 
@@ -50,11 +44,11 @@ describe("createMediaUrlObjectFromFilePath", () => {
 	});
 
 	it("does not produce a blob URL", () => {
-		const { getResourcePath } = setupVault({
+		const { vault, getResourcePath } = setupVault({
 			getResourcePath: () => "capacitor://localhost/_capacitor_file_/x.mp3?2",
 		});
 
-		const url = createMediaUrlObjectFromFilePath("x.mp3");
+		const url = createMediaUrlObjectFromFilePath(vault, "x.mp3");
 
 		expect(url).toBe("capacitor://localhost/_capacitor_file_/x.mp3?2");
 		expect(url.startsWith("blob:")).toBe(false);
@@ -62,24 +56,24 @@ describe("createMediaUrlObjectFromFilePath", () => {
 	});
 
 	it("returns '' when the path does not resolve to a file", () => {
-		const { getResourcePath } = setupVault({ resolve: () => null });
+		const { vault, getResourcePath } = setupVault({ resolve: () => null });
 
-		expect(createMediaUrlObjectFromFilePath("missing.mp3")).toBe("");
+		expect(createMediaUrlObjectFromFilePath(vault, "missing.mp3")).toBe("");
 		expect(getResourcePath).not.toHaveBeenCalled();
 	});
 
 	it("returns '' when the path is not a TFile (e.g. a folder)", () => {
-		const { getResourcePath } = setupVault({
+		const { vault, getResourcePath } = setupVault({
 			resolve: (path) => ({ path }), // not a TFile instance
 		});
 
-		expect(createMediaUrlObjectFromFilePath("Some/Folder")).toBe("");
+		expect(createMediaUrlObjectFromFilePath(vault, "Some/Folder")).toBe("");
 		expect(getResourcePath).not.toHaveBeenCalled();
 	});
 
 	it("resolves non-mp3 extensions too (MIME is the native server's concern)", () => {
 		const seen: string[] = [];
-		setupVault({
+		const { vault } = setupVault({
 			getResourcePath: (file) => {
 				seen.push(file.path);
 				return `app://resource/${file.path}`;
@@ -87,7 +81,7 @@ describe("createMediaUrlObjectFromFilePath", () => {
 		});
 
 		for (const path of ["a.wav", "b.flac", "c.m4a", "d.webm"]) {
-			expect(createMediaUrlObjectFromFilePath(path)).toBe(
+			expect(createMediaUrlObjectFromFilePath(vault, path)).toBe(
 				`app://resource/${path}`,
 			);
 		}

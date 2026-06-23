@@ -62,7 +62,7 @@ export function registerCommands(plugin: PodNotes): void {
 
 	plugin.addCommand({
 		id: "podnotes-show-leaf",
-		name: "Show PodNotes",
+		name: "Show player",
 		icon: "podcast" as IconType,
 		// Always available, and always reveals the view. The previous
 		// checkCallback hid this command whenever a leaf already existed, so
@@ -160,28 +160,6 @@ export function registerCommands(plugin: PodNotes): void {
 			}
 
 			new QueueReorderModal(plugin.app).open();
-		},
-	});
-
-	plugin.addCommand({
-		id: "hrpn",
-		name: "Reload PodNotes",
-		callback: () => {
-			const id = plugin.manifest.id;
-
-			// Confirm success and handle failure: without a catch a failed
-			// disable/enable left the plugin off with no feedback, looking like a
-			// crash (MX-01/MX-05).
-			plugin.app.plugins
-				.disablePlugin(id)
-				.then(() => plugin.app.plugins.enablePlugin(id))
-				.then(() => new Notice("PodNotes reloaded"))
-				.catch((error) => {
-					console.error("PodNotes reload failed", error);
-					new Notice(
-						"Failed to reload PodNotes. Re-enable it from Settings > Community plugins.",
-					);
-				});
 		},
 	});
 
@@ -291,7 +269,7 @@ export function registerCommands(plugin: PodNotes): void {
 				return !!plugin.api.podcast;
 			}
 
-			getUniversalPodcastLink(plugin.api);
+			void getUniversalPodcastLink(plugin.api);
 		},
 	});
 

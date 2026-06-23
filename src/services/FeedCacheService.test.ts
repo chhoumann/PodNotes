@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { plugin } from "../store";
+import type PodNotes from "../main";
 import {
 	clearFeedCache,
 	getCachedEpisodes,
@@ -169,5 +171,46 @@ describe("FeedCacheService", () => {
 		clearFeedCache();
 		expect(localStorage.getItem("podnotes:feed-cache:v1")).toBeNull();
 		expect(localStorage.getItem("podnotes:feed-cache:v3")).toBeNull();
+	});
+});
+
+// Exercises the production path: when the plugin instance is available, the cache
+// goes through the vault-scoped App#loadLocalStorage / App#saveLocalStorage rather
+// than the raw window.localStorage fallback used by the other tests.
+describe("App-backed (vault-scoped) storage", () => {
+	test("persists, reads, and clears via App#load/saveLocalStorage", async () => {
+		const backing = new Map<string, string>();
+		const app = {
+			loadLocalStorage: (key: string) => backing.get(key) ?? null,
+			saveLocalStorage: (key: string, value: string | null) => {
+				if (value == null) backing.delete(key);
+				else backing.set(key, value);
+			},
+		};
+		plugin.set({ app } as unknown as PodNotes);
+		clearFeedCache();
+
+		const episodes = [createEpisode(1), createEpisode(2)];
+		setCachedEpisodes(testFeed, episodes);
+
+		// Written to the App store (vault-scoped), not raw window.localStorage.
+		expect([...backing.keys()].some((key) => key.includes("feed-cache:v5"))).toBe(
+			true,
+		);
+
+		// Read back on a COLD module so the read goes through App#loadLocalStorage
+		// rather than the in-module memo.
+		vi.resetModules();
+		const freshStore = await import("../store");
+		const freshSvc = await import("./FeedCacheService");
+		(freshStore.plugin as typeof plugin).set({ app } as unknown as PodNotes);
+		expect(freshSvc.getCachedEpisodes(testFeed)).toEqual(episodes);
+
+		freshSvc.clearFeedCache();
+		expect([...backing.keys()].some((key) => key.includes("feed-cache:v5"))).toBe(
+			false,
+		);
+
+		plugin.set(undefined as unknown as PodNotes);
 	});
 });

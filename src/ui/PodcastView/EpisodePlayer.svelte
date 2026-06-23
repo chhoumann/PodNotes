@@ -442,7 +442,10 @@
 		const downloadedEpisode = findDownloadedEpisode(episode, downloaded);
 		if (shouldUseDownloadedEpisode(episode, downloadedEpisode)) {
 			return {
-				src: createMediaUrlObjectFromFilePath(downloadedEpisode.filePath),
+				src: createMediaUrlObjectFromFilePath(
+					$plugin.app.vault,
+					downloadedEpisode.filePath,
+				),
 				mediaType: getDownloadedEpisodeMediaType(episode, downloadedEpisode),
 			};
 		}

@@ -1,4 +1,6 @@
 import { requestUrl } from "obsidian";
+import { get } from "svelte/store";
+import { plugin } from "../store";
 import { encodeUrlForRequest } from "../utility/encodeUrlForRequest";
 
 // ---- Streaming download (issue #113) ---------------------------------------
@@ -27,7 +29,7 @@ export interface RangeProbe {
 // single unsafe cast here so the "where we step outside the types" boundary is
 // greppable in one place.
 export function appendableAdapter(): BinaryAppendAdapter {
-	return app.vault.adapter as unknown as BinaryAppendAdapter;
+	return get(plugin).app.vault.adapter as unknown as BinaryAppendAdapter;
 }
 
 function readHeader(

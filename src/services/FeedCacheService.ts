@@ -1,3 +1,5 @@
+import { get } from "svelte/store";
+import { plugin } from "../store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 
@@ -23,13 +25,20 @@ type FeedCache = Record<string, CachedFeedData>;
 // v4: Episode gained mediaType (#78), sourced from enclosure MIME/path parsing.
 // Dropping v3 prevents cached extensionless video enclosures from continuing to
 // render as audio until the TTL expires.
-const STORAGE_KEY = "podnotes:feed-cache:v4";
-// Storage keys from earlier cache schemas, removed on first load so they don't
-// orphan ~MBs of data (which could push current writes over the localStorage quota).
+// v5: storage moved from the raw (vault-agnostic) localStorage to the vault-scoped
+// App#saveLocalStorage / App#loadLocalStorage, so a feed cache can no longer leak
+// across vaults. The v1-v4 blobs were written to raw localStorage under
+// un-prefixed keys, so they are purged from there directly (see removeLegacyCaches).
+const STORAGE_KEY = "podnotes:feed-cache:v5";
+// Storage keys from earlier cache schemas. They were written to the raw
+// localStorage under these un-prefixed keys, so they are removed from there on
+// first load so they don't orphan ~MBs of data (which could push current writes
+// over the localStorage quota).
 const LEGACY_STORAGE_KEYS = [
 	"podnotes:feed-cache:v1",
 	"podnotes:feed-cache:v2",
 	"podnotes:feed-cache:v3",
+	"podnotes:feed-cache:v4",
 ];
 const DEFAULT_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours.
 // Keep this >= MAX_EPISODE_LIST_LIMIT (src/constants.ts): the Latest Episodes
@@ -40,22 +49,65 @@ const MAX_CACHE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to leave room for other loc
 
 let cache: FeedCache | null = null;
 
-// Delete every superseded cache schema key. Per-key try/catch so one failure
-// can't block the others. Runs on first load and on explicit clear so the
-// legacy blob is removed regardless of which path the user hits first.
-function removeLegacyCaches(storage: Storage): void {
+// The subset of the Storage API the cache needs. Lets getStorage return either
+// the vault-scoped App local-storage adapter or the raw window.localStorage
+// fallback behind one shape.
+interface FeedCacheStorage {
+	getItem(key: string): string | null;
+	setItem(key: string, value: string): void;
+	removeItem(key: string): void;
+}
+
+// Delete every superseded cache schema key. The v1-v4 blobs predate the move to
+// App#saveLocalStorage and live under un-prefixed keys in the raw localStorage,
+// so they are removed from there directly (the vault-scoped App store can't see
+// them). Per-key try/catch so one failure can't block the others, and so this is
+// safe even where localStorage is unavailable. Runs on first load and on explicit
+// clear so the legacy blob is removed regardless of which path the user hits first.
+function removeLegacyCaches(): void {
+	let raw: Storage | null;
+	try {
+		raw = typeof window !== "undefined" ? window.localStorage : null;
+	} catch {
+		raw = null;
+	}
+	if (!raw) return;
+
 	for (const legacyKey of LEGACY_STORAGE_KEYS) {
 		try {
-			storage.removeItem(legacyKey);
+			raw.removeItem(legacyKey);
 		} catch (error) {
 			console.error("Failed to remove legacy feed cache key:", error);
 		}
 	}
 }
 
-function getStorage(): Storage | null {
+// Prefer the vault-scoped App local storage (App#loadLocalStorage /
+// App#saveLocalStorage) so one vault's feed cache can never leak into another.
+// Obsidian namespaces the key per vault for us. Fall back to window.localStorage
+// only when the plugin instance isn't available (very early calls, or non-plugin
+// test contexts) so caching degrades gracefully instead of throwing.
+function getStorage(): FeedCacheStorage | null {
+	const app = get(plugin)?.app;
+	if (
+		app &&
+		typeof app.loadLocalStorage === "function" &&
+		typeof app.saveLocalStorage === "function"
+	) {
+		return {
+			getItem: (key) => {
+				const value = app.loadLocalStorage(key);
+				return typeof value === "string" ? value : null;
+			},
+			setItem: (key, value) => app.saveLocalStorage(key, value),
+			removeItem: (key) => app.saveLocalStorage(key, null),
+		};
+	}
+
 	try {
-		return typeof localStorage === "undefined" ? null : localStorage;
+		return typeof window !== "undefined" && window.localStorage
+			? window.localStorage
+			: null;
 	} catch (error) {
 		console.error("Unable to access localStorage for feed cache:", error);
 		return null;
@@ -67,15 +119,16 @@ function loadCache(): FeedCache {
 		return cache;
 	}
 
+	// Cleanup of superseded raw-localStorage cache schemas so they don't linger
+	// (a stale ~4MB v1 blob could otherwise eat the localStorage quota). Runs
+	// regardless of the active backend, since the legacy blobs are always raw.
+	removeLegacyCaches();
+
 	const storage = getStorage();
 	if (!storage) {
 		cache = {};
 		return cache;
 	}
-
-	// Cleanup of superseded cache schemas so they don't linger in localStorage
-	// (a stale ~4MB v1 blob could otherwise make v2 writes fail).
-	removeLegacyCaches(storage);
 
 	try {
 		const raw = storage.getItem(STORAGE_KEY);
@@ -246,13 +299,14 @@ export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void 
 export function clearFeedCache(): void {
 	cache = {};
 	const storage = getStorage();
-	if (!storage) return;
-	try {
-		storage.removeItem(STORAGE_KEY);
-	} catch (error) {
-		console.error("Failed to clear feed cache:", error);
+	if (storage) {
+		try {
+			storage.removeItem(STORAGE_KEY);
+		} catch (error) {
+			console.error("Failed to clear feed cache:", error);
+		}
 	}
 	// Also drop legacy keys here: a clear issued before any loadCache() would
 	// otherwise leave them (the in-memory memo then short-circuits loadCache).
-	removeLegacyCaches(storage);
+	removeLegacyCaches();
 }

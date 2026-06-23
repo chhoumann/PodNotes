@@ -61,7 +61,7 @@ function addPlayLocalFileItem(
 					content: "",
 					podcastName: "local file",
 					url: app.fileManager.generateMarkdownLink(file, ""),
-					streamUrl: createMediaUrlObjectFromFilePath(file.path),
+					streamUrl: createMediaUrlObjectFromFilePath(app.vault, file.path),
 					filePath: file.path,
 					episodeDate: new Date(file.stat.ctime),
 					mediaType,

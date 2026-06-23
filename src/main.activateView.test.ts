@@ -191,7 +191,10 @@ describe("PodNotes.onLayoutReady", () => {
 		vi.advanceTimersByTime(100);
 
 		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
-		expect(workspace.detachLeavesOfType).toHaveBeenCalledWith(VIEW_TYPE);
+		// onunload must NOT detach the view's leaves: doing so resets a leaf the
+		// user moved back to its default location on the next load. Obsidian cleans
+		// up an unloaded view's leaves itself (Obsidian plugin guideline).
+		expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
 	});
 });
 
@@ -421,5 +424,45 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(
 			(transcribeCmd?.checkCallback as (checking: boolean) => boolean)(true),
 		).toBe(false);
+	});
+});
+
+// The single-instance player view is kept across reloads (onunload no longer
+// detaches leaves), so a hot reload's duplicate is collapsed on layout-change.
+// This locks the convergence invariant: keep the first leaf, detach the rest,
+// and never act when there is at most one (so a cold-restart leaf is preserved
+// and the re-fired layout-change terminates).
+describe("PodNotes.dedupePlayerLeaves", () => {
+	function leaf() {
+		return { detach: vi.fn() };
+	}
+
+	function run(leaves: ReturnType<typeof leaf>[]) {
+		const workspace = { getLeavesOfType: vi.fn().mockReturnValue(leaves) };
+		const plugin = Object.create(PodNotes.prototype) as PodNotes;
+		(plugin as unknown as { app: { workspace: typeof workspace } }).app = {
+			workspace,
+		};
+		(
+			plugin as unknown as { dedupePlayerLeaves: () => void }
+		).dedupePlayerLeaves();
+	}
+
+	it("collapses multiple leaves to one, keeping the first", () => {
+		const leaves = [leaf(), leaf(), leaf()];
+		run(leaves);
+		expect(leaves[0].detach).not.toHaveBeenCalled();
+		expect(leaves[1].detach).toHaveBeenCalledTimes(1);
+		expect(leaves[2].detach).toHaveBeenCalledTimes(1);
+	});
+
+	it("is a no-op with a single leaf (preserves the restored leaf)", () => {
+		const leaves = [leaf()];
+		run(leaves);
+		expect(leaves[0].detach).not.toHaveBeenCalled();
+	});
+
+	it("is a no-op with no leaves", () => {
+		expect(() => run([])).not.toThrow();
 	});
 });

@@ -79,7 +79,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
-	private layoutReadyRetry: ReturnType<typeof setTimeout> | null = null;
+	// window.setTimeout returns a number in the browser/Electron renderer.
+	private layoutReadyRetry: number | null = null;
 	private isUnloaded = false;
 	private podcastViewMountEnabled = true;
 	private isReady = false;
@@ -161,6 +162,20 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			return view;
 		});
 
+		// PodNotes is a single-instance view, and onunload deliberately does NOT
+		// detach its leaves (detaching there would reset a leaf the user moved back
+		// to its default location on the next load). The trade-off is a hot reload
+		// (toggling the plugin) can briefly leave both the restored leaf and the
+		// freshly auto-opened one, so collapse any duplicates back to a single leaf
+		// whenever the layout changes. This converges (it only acts when >1 exists)
+		// and never fires on a cold start, where only the restored leaf exists, so
+		// its position is preserved.
+		this.registerEvent(
+			this.app.workspace.on("layout-change", () =>
+				this.dedupePlayerLeaves(),
+			),
+		);
+
 		// Persistent, discoverable entry point in the left ribbon. The right
 		// sidebar header can overflow and hide the view's tab icon (the original
 		// report in #55), but the ribbon is always reachable, so users can always
@@ -202,7 +217,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					"Failed to initialize PodNotes layout after maximum attempts",
 				);
 			} else if (!this.layoutReadyRetry) {
-				this.layoutReadyRetry = setTimeout(() => {
+				this.layoutReadyRetry = window.setTimeout(() => {
 					this.layoutReadyRetry = null;
 					this.onLayoutReady();
 				}, 100);
@@ -265,6 +280,17 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	unregisterPodcastView(view: MainView): void {
 		this.views.delete(view);
+	}
+
+	// Collapse the single-instance player view back to one leaf, keeping the
+	// first (earliest) so a cold-restart-restored leaf is preserved while a
+	// hot-reload's duplicate auto-open is dropped. Runs on layout-change; a no-op
+	// unless more than one leaf exists, so it converges and can't loop.
+	private dedupePlayerLeaves(): void {
+		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+		for (const extra of leaves.slice(1)) {
+			extra.detach();
+		}
 	}
 
 	private isMobileRuntime(): boolean {
@@ -365,7 +391,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		action: MediaSessionActionName,
 		handler: () => void,
 	): void {
-		const mediaSession = globalThis.navigator?.mediaSession;
+		const mediaSession = window.navigator?.mediaSession;
 		if (!mediaSession?.setActionHandler) {
 			return;
 		}
@@ -382,7 +408,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	private clearMediaSessionHandlers(): void {
-		const mediaSession = globalThis.navigator?.mediaSession;
+		const mediaSession = window.navigator?.mediaSession;
 		if (!mediaSession?.setActionHandler) {
 			return;
 		}
@@ -408,14 +434,16 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.localFilesMirrorUnsubscribe?.();
 		this.views.clear();
 
-		// Detach all leaves of this view type to prevent duplicates on reload
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE);
+		// Intentionally do NOT detach the view's leaves here. Obsidian persists and
+		// restores plugin leaves across reloads; detaching in onunload would reset a
+		// leaf the user moved (e.g. to the main area) back to its default location on
+		// the next load. Obsidian cleans up the leaves of an unloaded view itself.
 	}
 
 	private clearLayoutReadyRetry(): void {
 		if (!this.layoutReadyRetry) return;
 
-		clearTimeout(this.layoutReadyRetry);
+		window.clearTimeout(this.layoutReadyRetry);
 		this.layoutReadyRetry = null;
 	}
 

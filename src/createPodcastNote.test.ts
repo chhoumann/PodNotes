@@ -42,9 +42,7 @@ function bootstrapAppMock(existingFile?: TFile) {
 		},
 	};
 
-	(globalThis as { app?: typeof appMock }).app = appMock;
-
-	return { createdFiles, leaf };
+	return { createdFiles, leaf, appMock };
 }
 
 describe("createPodcastNote chapters template support (#47)", () => {
@@ -58,12 +56,12 @@ describe("createPodcastNote chapters template support (#47)", () => {
 	afterEach(() => {
 		mockFetchChapters.mockReset();
 		plugin.set(undefined as never);
-		delete (globalThis as Record<string, unknown>).app;
 	});
 
 	it("fetches and renders chapters only when the note template asks for them", async () => {
-		const { createdFiles, leaf } = bootstrapAppMock();
+		const { createdFiles, leaf, appMock } = bootstrapAppMock();
 		plugin.set({
+			app: appMock,
 			settings: {
 				note: {
 					path: "PodNotes/{{title}}",
@@ -92,8 +90,9 @@ describe("createPodcastNote chapters template support (#47)", () => {
 		const existingFile = Object.assign(Object.create(TFile.prototype), {
 			path: "PodNotes/Chaptered Episode.md",
 		}) as TFile;
-		const { createdFiles, leaf } = bootstrapAppMock(existingFile);
+		const { createdFiles, leaf, appMock } = bootstrapAppMock(existingFile);
 		plugin.set({
+			app: appMock,
 			settings: {
 				note: {
 					path: "PodNotes/{{title}}",
@@ -110,8 +109,9 @@ describe("createPodcastNote chapters template support (#47)", () => {
 	});
 
 	it("does not fetch chapters for templates that do not use the tag", async () => {
-		const { createdFiles } = bootstrapAppMock();
+		const { createdFiles, appMock } = bootstrapAppMock();
 		plugin.set({
+			app: appMock,
 			settings: {
 				note: {
 					path: "PodNotes/{{title}}",
