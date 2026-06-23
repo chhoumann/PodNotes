@@ -22,6 +22,12 @@ import {
 	isPlayableMediaExtension,
 	isSameMediaSource,
 } from "./utility/mediaType";
+import {
+	appendableAdapter,
+	probeAndFetchFirstChunk,
+	writeStreamedFile,
+} from "./download/streaming";
+import { detectAudioFileExtension } from "./download/mediaSignatures";
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -39,13 +45,10 @@ interface DownloadedFile {
 	byteLength: number;
 }
 
-async function downloadFile(
-	url: string,
-	options?: Partial<{
-		onFinished: () => void;
-		onError: (error: Error) => void;
-	}>,
-): Promise<DownloadedFile> {
+// Whole-file download: only the legacy fallback (adapters without binary append)
+// and transcription's getEpisodeAudioBuffer still need the entire buffer at once.
+// The Download command streams instead — see downloadEpisodeToDisk.
+async function downloadFile(url: string): Promise<DownloadedFile> {
 	const encodedUrl = encodeUrlForRequest(url);
 	try {
 		const response = await requestUrl({ url: encodedUrl, method: "GET" });
@@ -54,26 +57,134 @@ async function downloadFile(
 			throw new Error("Could not download episode.");
 		}
 
-		// Read the decoded buffer once and keep that single reference. `requestUrl`
-		// has no streaming API, so this 1x copy is unavoidable; everything
-		// downstream reuses it instead of allocating further copies.
 		const data = response.arrayBuffer;
 		const contentType =
 			response.headers["content-type"] ??
 			response.headers["Content-Type"] ??
 			"";
 
-		options?.onFinished?.();
-
 		return { data, contentType, byteLength: data.byteLength };
 	} catch (error: unknown) {
-		const err = new Error(
+		throw new Error(
 			`Failed to download ${url}:\n\n${getErrorMessage(error)}`,
 		);
-		options?.onError?.(err);
-
-		throw err;
 	}
+}
+
+function parentFolderPath(filePath: string): string {
+	return filePath.split("/").slice(0, -1).join("/");
+}
+
+// In-flight downloads keyed by episode identity: collapses duplicate/concurrent
+// requests for the same episode (e.g. a double-tap, or several queued at once)
+// into a single transfer so they can't stack N full downloads in memory.
+const downloadsInFlight = new Map<string, Promise<string>>();
+
+// Single source of truth for "what extension and on-disk path does this download
+// get, and is it even playable". Shared by the streaming and legacy paths so the
+// playability rule (#DL-07 / #213) and path resolution live in exactly one place.
+// `headerBytes` only needs the first chunk — the signature sniff reads ~12 bytes.
+function resolveDownloadTarget(
+	episode: Episode,
+	downloadPathTemplate: string,
+	headerBytes: ArrayBuffer,
+	contentType: string,
+): { extension: string; filePath: string } {
+	const extension =
+		inferFileExtensionFromDownload(episode, headerBytes, contentType) ?? "mp3";
+	if (!downloadAppearsPlayable(contentType, extension, episode.mediaType)) {
+		throw new Error("Not a playable media file");
+	}
+	return {
+		extension,
+		filePath: safeDownloadFilePath(downloadPathTemplate, episode, extension),
+	};
+}
+
+// Download an episode to a vault file with bounded memory. Streams via Range
+// chunks when the adapter supports binary append; otherwise falls back to the
+// legacy whole-file buffer (so a non-appendable adapter is never truncated).
+// Returns the on-disk path.
+async function downloadEpisodeToDisk(
+	episode: Episode,
+	downloadPathTemplate: string,
+	onProgress?: (written: number, total: number | null) => void,
+): Promise<string> {
+	// Fast path: if this episode is already on disk under the extension its URL
+	// implies, skip the (potentially multi-MB) Range probe entirely. The probe is
+	// only needed to discover the extension when the URL lacks one, or to confirm
+	// the final path when the URL's extension is wrong — both still handled below.
+	const urlExtension = getUrlExtension(episode.streamUrl);
+	if (urlExtension) {
+		const provisionalPath = safeDownloadFilePath(
+			downloadPathTemplate,
+			episode,
+			urlExtension,
+		);
+		const cached = app.vault.getAbstractFileByPath(provisionalPath);
+		if (cached instanceof TFile) {
+			downloadedEpisodes.addEpisode(episode, provisionalPath, cached.stat.size);
+			return provisionalPath;
+		}
+	}
+
+	const adapter = appendableAdapter();
+	const canStream =
+		typeof adapter.writeBinary === "function" &&
+		typeof adapter.appendBinary === "function";
+
+	if (!canStream) {
+		const { data, contentType } = await downloadFile(episode.streamUrl);
+		const { extension, filePath } = resolveDownloadTarget(
+			episode,
+			downloadPathTemplate,
+			data,
+			contentType,
+		);
+		await createEpisodeFile({ episode, downloadPathTemplate, data, extension });
+		return filePath;
+	}
+
+	const probe = await probeAndFetchFirstChunk(episode.streamUrl);
+	const { filePath } = resolveDownloadTarget(
+		episode,
+		downloadPathTemplate,
+		probe.firstChunk,
+		probe.contentType,
+	);
+
+	const existing = app.vault.getAbstractFileByPath(filePath);
+	if (existing instanceof TFile) {
+		downloadedEpisodes.addEpisode(episode, filePath, existing.stat.size);
+		return filePath;
+	}
+
+	await ensureFolderExists(parentFolderPath(filePath));
+
+	// Clean up a half-written file on any mid-stream failure so a later attempt
+	// can't mistake a truncated partial for a complete download — the legacy
+	// createBinary path was atomic, but chunked appendBinary is not.
+	let total: number;
+	try {
+		total = await writeStreamedFile(
+			episode.streamUrl,
+			filePath,
+			probe,
+			onProgress,
+		);
+	} catch (error) {
+		await deleteEpisodeFile(filePath);
+		throw error;
+	}
+	if (probe.totalSize !== null && total !== probe.totalSize) {
+		await deleteEpisodeFile(filePath);
+		throw new Error(
+			`Incomplete download: got ${total} of ${probe.totalSize} bytes.`,
+		);
+	}
+
+	downloadedEpisodes.addEpisode(episode, filePath, total);
+	return filePath;
 }
 
 export default async function downloadEpisodeWithNotice(
@@ -84,78 +195,63 @@ export default async function downloadEpisodeWithNotice(
 	const SOME_LARGE_INT_SO_THE_BOX_DOESNT_AUTO_CLOSE = 999999999;
 	const notice = new Notice(doc, SOME_LARGE_INT_SO_THE_BOX_DOESNT_AUTO_CLOSE);
 
-	// `finally` schedules the dismissal exactly once for every terminal state —
-	// success, write failure, download error, or the non-playable rejection below
-	// — so a failed download's notice can no longer linger forever (#DL-03).
-	try {
-		update((bodyEl) => bodyEl.createEl("p", { text: "Starting download..." }));
-
-		update((bodyEl) => {
-			bodyEl.createEl("p", { text: "Downloading..." });
-		});
-
-		const { data, contentType } = await downloadFile(episode.streamUrl, {
-			onFinished: () => {
-				update((bodyEl) =>
-					bodyEl.createEl("p", { text: "Download complete!" }),
-				);
-			},
-			onError: (error) => {
-				update((bodyEl) =>
-					bodyEl.createEl("p", {
-						text: `Download failed: ${error.message}`,
-					}),
-				);
-			},
-		});
-
-		const inferredExtension = inferFileExtensionFromDownload(
-			episode,
-			data,
-			contentType,
+	const showSuccess = () =>
+		update((bodyEl) =>
+			bodyEl.createEl("p", {
+				text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
+			}),
 		);
 
-		if (
-			!downloadAppearsPlayable(contentType, inferredExtension, episode.mediaType)
-		) {
-			update((bodyEl) => {
-				bodyEl.createEl("p", {
-					text: `Downloaded file is not an audio or video file. It is of type "${contentType}". File: ${data.byteLength} bytes.`,
-				});
-			});
+	// This UX wrapper reports every failure as a Notice and always dismisses it
+	// exactly once (#DL-03), then rethrows so the (fire-and-forget) caller can log
+	// it. Callers that need the resulting path call downloadEpisodeToDisk directly.
+	try {
+		// Dedupe by episode identity (podcast + title — the same key the download
+		// registry uses), so a double-tap collapses onto one transfer while two
+		// genuinely different episodes never block each other.
+		const key = `${episode.podcastName}\u0000${episode.title}`;
 
-			throw new Error("Not a playable media file");
+		const inProgress = downloadsInFlight.get(key);
+		if (inProgress) {
+			update((bodyEl) =>
+				bodyEl.createEl("p", { text: "Already downloading this episode..." }),
+			);
+			await inProgress;
+			showSuccess();
+			return;
 		}
 
-		const fileExtension = inferredExtension ?? "mp3";
+		update((bodyEl) => bodyEl.createEl("p", { text: "Starting download..." }));
+
+		const work = downloadEpisodeToDisk(
+			episode,
+			downloadPathTemplate,
+			(written, total) => {
+				const mb = (written / (1024 * 1024)).toFixed(1);
+				const pct =
+					total && total > 0 ? ` ${Math.round((written / total) * 100)}%` : "";
+				update((bodyEl) =>
+					bodyEl.createEl("p", { text: `Downloading...${pct} (${mb} MB)` }),
+				);
+			},
+		);
+		downloadsInFlight.set(key, work);
 
 		try {
-			update((bodyEl) => bodyEl.createEl("p", { text: "Creating file..." }));
-
-			await createEpisodeFile({
-				episode,
-				downloadPathTemplate,
-				data,
-				extension: fileExtension,
-			});
-
-			update((bodyEl) =>
-				bodyEl.createEl("p", {
-					text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
-				}),
-			);
-		} catch (error: unknown) {
-			update((bodyEl) => {
-				bodyEl.createEl("p", {
-					text: `Failed to create file for downloaded episode "${episode.title}" from ${episode.podcastName}.`,
-				});
-
-				const errorMsgEl = bodyEl.createEl("p", {
-					text: getErrorMessage(error),
-				});
-				errorMsgEl.style.fontStyle = "italic";
-			});
+			await work;
+		} finally {
+			downloadsInFlight.delete(key);
 		}
+
+		showSuccess();
+	} catch (error: unknown) {
+		update((bodyEl) => {
+			const errorEl = bodyEl.createEl("p", {
+				text: `Download failed: ${getErrorMessage(error)}`,
+			});
+			errorEl.style.fontStyle = "italic";
+		});
+		throw error;
 	} finally {
 		setTimeout(() => notice.hide(), 10000);
 	}
@@ -283,6 +379,15 @@ async function deleteEpisodeFile(filePath: string): Promise<void> {
 		const file = app.vault.getAbstractFileByPath(filePath);
 		if (file instanceof TFile) {
 			await app.vault.delete(file);
+			return;
+		}
+		// Streamed downloads are written through the adapter, so the vault index
+		// may not have reconciled the file yet and getAbstractFileByPath can miss a
+		// freshly written partial. Remove it directly through the adapter so a
+		// failed streamed download never leaves bytes behind (#218).
+		const { adapter } = app.vault;
+		if (await adapter.exists(filePath)) {
+			await adapter.remove(filePath);
 		}
 	} catch (error) {
 		console.error(`Failed to delete downloaded file "${filePath}":`, error);
@@ -737,111 +842,5 @@ function getFileBasename(filePath: string): string {
 	return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
-interface AudioSignature {
-	signature: number[];
-	mask?: number[];
-	fileExtension: string;
-}
-
-/**
- * Map an ISO-BMFF (MP4/QuickTime) major brand to its file extension. Real m4a/mp4
- * files carry `ftyp` at offset 4 and the 4-byte major brand at offset 8 (not at
- * offset 0), so the old offset-0 `M4A ` signature never matched (#DL-06). Known
- * audio brands resolve to `m4a`; video brands to their own extension; everything
- * else defaults to `mp4` (or `m4a` when the caller hints the media is audio).
- */
-function detectIsoBmffExtension(arr: Uint8Array): string | null {
-	// Need 4 bytes of box size + 'ftyp' + the 4-byte major brand.
-	if (arr.length < 12) return null;
-
-	const isFtyp =
-		arr[4] === 0x66 && arr[5] === 0x74 && arr[6] === 0x79 && arr[7] === 0x70;
-	if (!isFtyp) return null;
-
-	const brand = String.fromCharCode(arr[8], arr[9], arr[10], arr[11]);
-
-	if (brand.startsWith("M4A")) return "m4a";
-	if (brand.startsWith("M4V")) return "m4v";
-	if (brand === "qt  ") return "mov";
-
-	// `M4B `/`M4P ` are audiobook/protected-audio brands; the rest are generic
-	// MP4 brands. All map to mp4 here — `inferFileExtensionFromDownload` /
-	// `normalizeAudioExtension` re-map mp4 -> m4a when the media hint is audio.
-	switch (brand) {
-		case "mp42":
-		case "isom":
-		case "iso2":
-		case "mp41":
-		case "dash":
-		case "M4B ":
-		case "M4P ":
-			return "mp4";
-		default:
-			return "mp4";
-	}
-}
-
-export function detectAudioFileExtension(data: ArrayBuffer): string | null {
-	const audioSignatures: AudioSignature[] = [
-		{ signature: [0xff, 0xe0], mask: [0xff, 0xe0], fileExtension: "mp3" },
-		{ signature: [0x49, 0x44, 0x33], fileExtension: "mp3" },
-		{ signature: [0x52, 0x49, 0x46, 0x46], fileExtension: "wav" },
-		{ signature: [0x4f, 0x67, 0x67, 0x53], fileExtension: "ogg" },
-		{ signature: [0x66, 0x4c, 0x61, 0x43], fileExtension: "flac" },
-		{
-			signature: [0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11],
-			fileExtension: "wma",
-		},
-		{
-			signature: [0x23, 0x21, 0x41, 0x4d, 0x52, 0x0a],
-			fileExtension: "amr",
-		},
-	];
-
-	// The ftyp brand lives at offset 8, past every offset-0 signature, so read a
-	// header window long enough to cover both before zero-copy-viewing it.
-	const maxSignatureLength = Math.max(
-		12,
-		...audioSignatures.map((sig) => sig.signature.length),
-	);
-	// Zero-copy view over just the header bytes — no Blob slice, no FileReader,
-	// no extra full-file allocation.
-	const arr = new Uint8Array(
-		data,
-		0,
-		Math.min(maxSignatureLength, data.byteLength),
-	);
-
-	// ISO-BMFF is special-cased first: its brand sits at offset 8, so it can't be
-	// expressed as an offset-0 signature like the entries above.
-	const isoBmffExtension = detectIsoBmffExtension(arr);
-	if (isoBmffExtension) {
-		return isoBmffExtension;
-	}
-
-	for (const { signature, mask, fileExtension } of audioSignatures) {
-		if (signature.length > arr.length) {
-			continue;
-		}
-
-		let matches = true;
-		for (let i = 0; i < signature.length; i++) {
-			if (mask) {
-				if ((arr[i] & mask[i]) !== (signature[i] & mask[i])) {
-					matches = false;
-					break;
-				}
-			} else {
-				if (arr[i] !== signature[i]) {
-					matches = false;
-					break;
-				}
-			}
-		}
-		if (matches) {
-			return fileExtension;
-		}
-	}
-
-	return null;
-}
+// Binary signature detection lives in ./download/mediaSignatures
+// (detectAudioFileExtension), imported above.
