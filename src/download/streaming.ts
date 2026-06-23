@@ -68,12 +68,17 @@ export async function probeAndFetchFirstChunk(
 	const supportsRange = response.status === 206;
 
 	let totalSize: number | null = null;
-	const contentRange = readHeader(response.headers, "content-range");
-	if (supportsRange && contentRange) {
-		const match = contentRange.match(/\/(\d+)\s*$/);
+	if (supportsRange) {
+		// The total is the value after the slash in Content-Range
+		// ("bytes 0-N/TOTAL"). An unknown total ("bytes 0-N/*") leaves totalSize
+		// null on purpose — writeStreamedFile then terminates on the short-chunk
+		// EOF heuristic. Content-Length on a 206 is only the partial chunk size, so
+		// it must NOT be used as the total (it would truncate the download — #218).
+		const contentRange = readHeader(response.headers, "content-range");
+		const match = contentRange?.match(/\/(\d+)\s*$/);
 		if (match) totalSize = Number.parseInt(match[1], 10);
-	}
-	if (totalSize === null) {
+	} else {
+		// 200: Range ignored, so the whole file is in this single response.
 		const contentLength = readHeader(response.headers, "content-length");
 		if (contentLength) {
 			const parsed = Number.parseInt(contentLength, 10);

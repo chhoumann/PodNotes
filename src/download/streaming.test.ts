@@ -70,6 +70,23 @@ describe("probeAndFetchFirstChunk", () => {
 		});
 	});
 
+	it("leaves totalSize null for a 206 with an unknown total (/*), ignoring the partial Content-Length (#218)", async () => {
+		requestUrlMock.mockResolvedValue(
+			res(206, [1, 2, 3, 4], {
+				"content-type": "audio/mpeg",
+				"content-range": "bytes 0-3/*",
+				"content-length": "4",
+			}),
+		);
+
+		const p = await probeAndFetchFirstChunk("https://x/ep.mp3", 4);
+
+		expect(p.supportsRange).toBe(true);
+		// Must NOT adopt the 4-byte partial Content-Length as the total, or the
+		// writer would stop after one chunk and truncate the file.
+		expect(p.totalSize).toBeNull();
+	});
+
 	it("treats a 200 (ignored Range) as the whole body with supportsRange=false", async () => {
 		requestUrlMock.mockResolvedValue(
 			res(200, [1, 2, 3, 4, 5], {
