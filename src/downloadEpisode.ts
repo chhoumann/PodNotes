@@ -76,6 +76,217 @@ async function downloadFile(
 	}
 }
 
+// ---- Streaming download (issue #113) ---------------------------------------
+// Mobile WebViews have a tight per-process memory budget. Buffering a whole
+// episode (hundreds of MB) via requestUrl().arrayBuffer — plus the native->JS
+// bridge copy — used to OOM-kill Obsidian on iOS. Instead we pull the file in
+// bounded HTTP Range chunks and append each straight to disk, so peak heap
+// stays at roughly one chunk regardless of episode size.
+
+const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
+
+interface BinaryAppendAdapter {
+	writeBinary(path: string, data: ArrayBuffer): Promise<void>;
+	appendBinary?(path: string, data: ArrayBuffer): Promise<void>;
+}
+
+interface RangeProbe {
+	firstChunk: ArrayBuffer;
+	contentType: string;
+	supportsRange: boolean;
+	totalSize: number | null;
+}
+
+// In-flight downloads keyed by stream URL: collapses duplicate/concurrent
+// requests for the same episode (e.g. a double-tap, or several queued at once)
+// into a single transfer so they can't stack N full downloads in memory.
+const downloadsInFlight = new Map<string, Promise<string>>();
+
+function readHeader(
+	headers: Record<string, string> | undefined,
+	name: string,
+): string | undefined {
+	if (!headers) return undefined;
+	const direct = headers[name] ?? headers[name.toLowerCase()];
+	if (direct !== undefined) return direct;
+	const lower = name.toLowerCase();
+	for (const key of Object.keys(headers)) {
+		if (key.toLowerCase() === lower) return headers[key];
+	}
+	return undefined;
+}
+
+// Fetch the first chunk with a Range header and learn whether the server
+// supports ranged requests (206 + Content-Range) and the total size. A server
+// that ignores Range answers 200 with the whole body — the legacy single-buffer
+// behaviour — which we detect and treat as already-complete.
+async function probeAndFetchFirstChunk(
+	url: string,
+	chunkSize: number,
+): Promise<RangeProbe> {
+	const encodedUrl = encodeUrlForRequest(url);
+	const response = await requestUrl({
+		url: encodedUrl,
+		method: "GET",
+		headers: { Range: `bytes=0-${chunkSize - 1}` },
+		throw: false,
+	});
+
+	if (response.status !== 200 && response.status !== 206) {
+		throw new Error(`Could not download episode (HTTP ${response.status}).`);
+	}
+
+	const contentType = readHeader(response.headers, "content-type") ?? "";
+	const supportsRange = response.status === 206;
+
+	let totalSize: number | null = null;
+	const contentRange = readHeader(response.headers, "content-range");
+	if (supportsRange && contentRange) {
+		const match = contentRange.match(/\/(\d+)\s*$/);
+		if (match) totalSize = Number.parseInt(match[1], 10);
+	}
+	if (totalSize === null) {
+		const contentLength = readHeader(response.headers, "content-length");
+		if (contentLength) {
+			const parsed = Number.parseInt(contentLength, 10);
+			if (Number.isFinite(parsed)) totalSize = parsed;
+		}
+	}
+
+	return {
+		firstChunk: response.arrayBuffer,
+		contentType,
+		supportsRange,
+		totalSize,
+	};
+}
+
+// Write the already-fetched first chunk, then pull the remaining bytes in
+// bounded Range requests, appending each straight to disk. Peak memory is one
+// chunk, not the whole file. Returns the total number of bytes written.
+async function writeStreamedFile(
+	url: string,
+	filePath: string,
+	probe: RangeProbe,
+	chunkSize: number,
+	onProgress?: (written: number, total: number | null) => void,
+): Promise<number> {
+	const adapter = app.vault.adapter as unknown as BinaryAppendAdapter;
+
+	await adapter.writeBinary(filePath, probe.firstChunk);
+	let written = probe.firstChunk.byteLength;
+	onProgress?.(written, probe.totalSize);
+
+	// Server returned the whole body (ignored Range), or this adapter can't
+	// append: the first response already holds everything we can get.
+	if (!probe.supportsRange || typeof adapter.appendBinary !== "function") {
+		return written;
+	}
+
+	const encodedUrl = encodeUrlForRequest(url);
+	for (;;) {
+		if (probe.totalSize !== null && written >= probe.totalSize) break;
+
+		const rangeEnd =
+			probe.totalSize !== null
+				? Math.min(written + chunkSize, probe.totalSize) - 1
+				: written + chunkSize - 1;
+
+		const response = await requestUrl({
+			url: encodedUrl,
+			method: "GET",
+			headers: { Range: `bytes=${written}-${rangeEnd}` },
+			throw: false,
+		});
+
+		if (response.status === 416) break; // requested past end of file
+		if (response.status !== 206) {
+			throw new Error(
+				`Range request failed (HTTP ${response.status}) at byte ${written}.`,
+			);
+		}
+
+		const chunk = response.arrayBuffer;
+		if (chunk.byteLength === 0) break;
+
+		await adapter.appendBinary(filePath, chunk);
+		written += chunk.byteLength;
+		onProgress?.(written, probe.totalSize);
+
+		// Unknown total: a short chunk means we hit EOF.
+		if (probe.totalSize === null && chunk.byteLength < chunkSize) break;
+	}
+
+	return written;
+}
+
+// Download an episode to a vault file with bounded memory. Falls back to the
+// legacy whole-file path only when the adapter lacks binary append (so we never
+// truncate the output). Returns the on-disk path.
+async function downloadEpisodeToDisk(
+	episode: Episode,
+	downloadPathTemplate: string,
+	onProgress?: (written: number, total: number | null) => void,
+): Promise<string> {
+	const adapter = app.vault.adapter as unknown as BinaryAppendAdapter;
+	const canStream =
+		typeof adapter.writeBinary === "function" &&
+		typeof adapter.appendBinary === "function";
+
+	if (!canStream) {
+		// Legacy fallback (adapters without binary append): a single buffer.
+		const { data, contentType } = await downloadFile(episode.streamUrl);
+		const extension =
+			inferFileExtensionFromDownload(episode, data, contentType) ?? "mp3";
+		if (!downloadAppearsPlayable(contentType, extension, episode.mediaType)) {
+			throw new Error(
+				`Downloaded file is not an audio or video file (type "${contentType}").`,
+			);
+		}
+		await createEpisodeFile({ episode, downloadPathTemplate, data, extension });
+		return safeDownloadFilePath(downloadPathTemplate, episode, extension);
+	}
+
+	const probe = await probeAndFetchFirstChunk(
+		episode.streamUrl,
+		DOWNLOAD_CHUNK_SIZE,
+	);
+	const extension =
+		inferFileExtensionFromDownload(
+			episode,
+			probe.firstChunk,
+			probe.contentType,
+		) ?? "mp3";
+	if (
+		!downloadAppearsPlayable(probe.contentType, extension, episode.mediaType)
+	) {
+		throw new Error(
+			`Downloaded file is not an audio or video file (type "${probe.contentType}").`,
+		);
+	}
+
+	const filePath = safeDownloadFilePath(downloadPathTemplate, episode, extension);
+
+	const existing = app.vault.getAbstractFileByPath(filePath);
+	if (existing instanceof TFile) {
+		downloadedEpisodes.addEpisode(episode, filePath, existing.stat.size);
+		return filePath;
+	}
+
+	const folderPath = filePath.split("/").slice(0, -1).join("/");
+	await ensureFolderExists(folderPath);
+
+	const total = await writeStreamedFile(
+		episode.streamUrl,
+		filePath,
+		probe,
+		DOWNLOAD_CHUNK_SIZE,
+		onProgress,
+	);
+	downloadedEpisodes.addEpisode(episode, filePath, total);
+	return filePath;
+}
+
 export default async function downloadEpisodeWithNotice(
 	episode: Episode,
 	downloadPathTemplate: string,
@@ -88,74 +299,58 @@ export default async function downloadEpisodeWithNotice(
 	// success, write failure, download error, or the non-playable rejection below
 	// — so a failed download's notice can no longer linger forever (#DL-03).
 	try {
-		update((bodyEl) => bodyEl.createEl("p", { text: "Starting download..." }));
+		const key = episode.streamUrl || episode.title;
 
-		update((bodyEl) => {
-			bodyEl.createEl("p", { text: "Downloading..." });
-		});
-
-		const { data, contentType } = await downloadFile(episode.streamUrl, {
-			onFinished: () => {
-				update((bodyEl) =>
-					bodyEl.createEl("p", { text: "Download complete!" }),
-				);
-			},
-			onError: (error) => {
-				update((bodyEl) =>
-					bodyEl.createEl("p", {
-						text: `Download failed: ${error.message}`,
-					}),
-				);
-			},
-		});
-
-		const inferredExtension = inferFileExtensionFromDownload(
-			episode,
-			data,
-			contentType,
-		);
-
-		if (
-			!downloadAppearsPlayable(contentType, inferredExtension, episode.mediaType)
-		) {
-			update((bodyEl) => {
-				bodyEl.createEl("p", {
-					text: `Downloaded file is not an audio or video file. It is of type "${contentType}". File: ${data.byteLength} bytes.`,
-				});
-			});
-
-			throw new Error("Not a playable media file");
-		}
-
-		const fileExtension = inferredExtension ?? "mp3";
-
-		try {
-			update((bodyEl) => bodyEl.createEl("p", { text: "Creating file..." }));
-
-			await createEpisodeFile({
-				episode,
-				downloadPathTemplate,
-				data,
-				extension: fileExtension,
-			});
-
+		// Collapse a concurrent download of the same episode into the in-flight one
+		// instead of starting a second full transfer.
+		const inProgress = downloadsInFlight.get(key);
+		if (inProgress) {
+			update((bodyEl) =>
+				bodyEl.createEl("p", { text: "Already downloading this episode..." }),
+			);
+			await inProgress;
 			update((bodyEl) =>
 				bodyEl.createEl("p", {
 					text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
 				}),
 			);
-		} catch (error: unknown) {
-			update((bodyEl) => {
-				bodyEl.createEl("p", {
-					text: `Failed to create file for downloaded episode "${episode.title}" from ${episode.podcastName}.`,
-				});
-
-				const errorMsgEl = bodyEl.createEl("p", {
-					text: getErrorMessage(error),
-				});
-				errorMsgEl.style.fontStyle = "italic";
-			});
+			return;
 		}
+
+		update((bodyEl) => bodyEl.createEl("p", { text: "Starting download..." }));
+
+		const work = downloadEpisodeToDisk(
+			episode,
+			downloadPathTemplate,
+			(written, total) => {
+				const mb = (written / (1024 * 1024)).toFixed(1);
+				const pct =
+					total && total > 0 ? ` ${Math.round((written / total) * 100)}%` : "";
+				update((bodyEl) =>
+					bodyEl.createEl("p", { text: `Downloading...${pct} (${mb} MB)` }),
+				);
+			},
+		);
+		downloadsInFlight.set(key, work);
+
+		try {
+			await work;
+		} finally {
+			downloadsInFlight.delete(key);
+		}
+
+		update((bodyEl) =>
+			bodyEl.createEl("p", {
+				text: `Successfully downloaded "${episode.title}" from ${episode.podcastName}.`,
+			}),
+		);
+	} catch (error: unknown) {
+		update((bodyEl) => {
+			const errorEl = bodyEl.createEl("p", {
+				text: `Download failed: ${getErrorMessage(error)}`,
+			});
+			errorEl.style.fontStyle = "italic";
+		});
 	} finally {
 		setTimeout(() => notice.hide(), 10000);
 	}
