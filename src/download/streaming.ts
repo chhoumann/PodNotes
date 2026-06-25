@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import { type DataAdapter, requestUrl } from "obsidian";
 import { get } from "svelte/store";
 import { plugin } from "../store";
 import { encodeUrlForRequest } from "../utility/encodeUrlForRequest";
@@ -25,17 +25,12 @@ import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
 
 export const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
 
-export interface BinaryAppendAdapter {
-	writeBinary(path: string, data: ArrayBuffer): Promise<void>;
+// Obsidian's DataAdapter — writeBinary/rename/remove/list, all used below — is
+// fully typed and public. Only `appendBinary` exists at runtime on the desktop and
+// mobile Capacitor adapters without appearing in the public typings, so we extend
+// the real interface with that single bolt-on and keep one cast (appendableAdapter).
+export interface BinaryAppendAdapter extends DataAdapter {
 	appendBinary?(path: string, data: ArrayBuffer): Promise<void>;
-	// Used to move a completed download from its temp path into the final vault
-	// path and to sweep orphaned temps. Present on the desktop and mobile
-	// Capacitor adapters but — like appendBinary — absent from Obsidian's public
-	// DataAdapter typings, so they live behind the same single cast below.
-	rename?(from: string, to: string): Promise<void>;
-	copy?(from: string, to: string): Promise<void>;
-	remove?(path: string): Promise<void>;
-	list?(path: string): Promise<{ files: string[]; folders: string[] }>;
 }
 
 export interface RangeProbe {
@@ -207,34 +202,17 @@ export function isPartialPath(path: string): boolean {
 	return name.startsWith(".") && name.endsWith(PARTIAL_SUFFIX);
 }
 
-// Move the completed temp file to its final vault path as a single operation, so
-// watchers see one create of an already-complete file. Prefer rename: it is in-
-// place (buffers zero bytes, preserving #113's memory win) and is the path every
-// real adapter — desktop FileSystemAdapter, iOS/Android CapacitorAdapter — takes.
-// copy+remove is a non-mobile fallback. We deliberately do NOT fall back to
-// readBinary→writeBinary: re-buffering the whole 50-200 MB file would reintroduce
-// the #113 OOM (and can trip the Android writeBinary large-file hang) on the exact
-// devices this fix targets — so an adapter with neither rename nor copy fails loudly.
+// Move the completed temp file to its final vault path with a single rename, so
+// watchers see one create of an already-complete file. rename is a standard
+// DataAdapter op on every platform and, because the temp is a sibling of the final
+// file, an in-place metadata move that buffers zero bytes — preserving #113's
+// memory win. (We never finalize by reading the temp back into memory and
+// re-writing it: that whole-file buffer is exactly the #113 OOM this path avoids.)
 export async function moveIntoPlace(
 	tmpPath: string,
 	filePath: string,
 ): Promise<void> {
-	const adapter = appendableAdapter();
-	if (typeof adapter.rename === "function") {
-		await adapter.rename(tmpPath, filePath);
-		return;
-	}
-	if (
-		typeof adapter.copy === "function" &&
-		typeof adapter.remove === "function"
-	) {
-		await adapter.copy(tmpPath, filePath);
-		await adapter.remove(tmpPath);
-		return;
-	}
-	throw new Error(
-		"Adapter cannot move a completed download into place (no rename/copy).",
-	);
+	await appendableAdapter().rename(tmpPath, filePath);
 }
 
 // Remove temp partials orphaned in `folder` by a previous download that was hard-
@@ -248,12 +226,6 @@ export async function sweepStalePartials(
 	isActive: (path: string) => boolean,
 ): Promise<void> {
 	const adapter = appendableAdapter();
-	if (
-		typeof adapter.list !== "function" ||
-		typeof adapter.remove !== "function"
-	) {
-		return;
-	}
 	try {
 		const listing = await adapter.list(folder);
 		for (const entry of listing.files) {

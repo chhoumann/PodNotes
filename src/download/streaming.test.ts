@@ -229,51 +229,18 @@ describe("partialPathFor / isPartialPath", () => {
 });
 
 describe("moveIntoPlace", () => {
-	function setupMoveAdapter(methods: {
-		rename?: boolean;
-		copy?: boolean;
-		remove?: boolean;
-	}) {
-		const adapter: Record<string, unknown> = {
-			writeBinary: vi.fn(),
-		};
+	it("moves the temp into place with a single rename (buffers nothing)", async () => {
 		const rename = vi.fn(async () => {});
-		const copy = vi.fn(async () => {});
-		const remove = vi.fn(async () => {});
-		if (methods.rename) adapter.rename = rename;
-		if (methods.copy) adapter.copy = copy;
-		if (methods.remove) adapter.remove = remove;
-		plugin.set({ app: { vault: { adapter } } } as unknown as PodNotes);
-		return { rename, copy, remove };
-	}
+		plugin.set({
+			app: { vault: { adapter: { writeBinary: vi.fn(), rename } } },
+		} as unknown as PodNotes);
 
-	it("prefers rename (in-place, buffers nothing) when available", async () => {
-		const m = setupMoveAdapter({ rename: true, copy: true, remove: true });
-		await moveIntoPlace("dir/.ep.tok.podnotes-partial", "dir/ep.mp3");
-		expect(m.rename).toHaveBeenCalledWith(
-			"dir/.ep.tok.podnotes-partial",
+		await moveIntoPlace("dir/.tok.ep.mp3.podnotes-partial", "dir/ep.mp3");
+
+		expect(rename).toHaveBeenCalledWith(
+			"dir/.tok.ep.mp3.podnotes-partial",
 			"dir/ep.mp3",
 		);
-		expect(m.copy).not.toHaveBeenCalled();
-	});
-
-	it("falls back to copy + remove when rename is unavailable", async () => {
-		const m = setupMoveAdapter({ copy: true, remove: true });
-		await moveIntoPlace("dir/.ep.tok.podnotes-partial", "dir/ep.mp3");
-		expect(m.copy).toHaveBeenCalledWith(
-			"dir/.ep.tok.podnotes-partial",
-			"dir/ep.mp3",
-		);
-		expect(m.remove).toHaveBeenCalledWith("dir/.ep.tok.podnotes-partial");
-	});
-
-	it("throws (never re-buffers the whole file) when neither rename nor copy exists", async () => {
-		// Re-buffering via readBinary→writeBinary would reintroduce the #113 OOM, so
-		// an adapter that can do neither must fail loudly instead.
-		setupMoveAdapter({ remove: true });
-		await expect(
-			moveIntoPlace("dir/.ep.tok.podnotes-partial", "dir/ep.mp3"),
-		).rejects.toThrow(/cannot move a completed download/i);
 	});
 });
 
@@ -301,17 +268,6 @@ describe("sweepStalePartials", () => {
 
 		expect(s.remove).toHaveBeenCalledTimes(1);
 		expect(s.remove).toHaveBeenCalledWith("Podcasts/.Ep.dead.podnotes-partial");
-	});
-
-	it("is a no-op when the adapter cannot list", async () => {
-		const remove = vi.fn(async () => {});
-		plugin.set({
-			app: { vault: { adapter: { writeBinary: vi.fn(), remove } } },
-		} as unknown as PodNotes);
-
-		await sweepStalePartials("Podcasts", () => false);
-
-		expect(remove).not.toHaveBeenCalled();
 	});
 
 	it("never throws when listing fails (best-effort)", async () => {
