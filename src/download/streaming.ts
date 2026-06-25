@@ -1,7 +1,8 @@
-import { requestUrl } from "obsidian";
+import { type DataAdapter, requestUrl } from "obsidian";
 import { get } from "svelte/store";
 import { plugin } from "../store";
 import { encodeUrlForRequest } from "../utility/encodeUrlForRequest";
+import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
 
 // ---- Streaming download (issue #113) ---------------------------------------
 // Mobile WebViews have a tight per-process memory budget. Buffering a whole
@@ -9,11 +10,26 @@ import { encodeUrlForRequest } from "../utility/encodeUrlForRequest";
 // bridge copy — used to OOM-kill Obsidian on iOS. Instead we pull the file in
 // bounded HTTP Range chunks and append each straight to disk, so peak heap
 // stays at roughly one chunk regardless of episode size.
+//
+// ---- Temp-then-move (Waypoint et al. crash) --------------------------------
+// Appending chunks directly to the final vault path makes the growing, half-
+// written media file visible to the vault's file watcher: a single download
+// fires ~12 create/modify events. Watcher plugins (Waypoint, Dataview, Obsidian
+// Git, MOC/index generators) react to each one and re-scan the partial file,
+// and that synchronous re-scan storm — racing the chunked writer — OOM-crashes
+// the app on mobile. So we stream every chunk to a dot-prefixed sibling temp
+// (which Obsidian keeps out of the file index entirely, so it fires zero events
+// while it grows), then move the finished, size-verified file into place as a
+// single rename. Watchers then see exactly one create of an already-complete
+// file — the same shape the pre-#113 atomic createBinary path produced.
 
 export const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
 
-export interface BinaryAppendAdapter {
-	writeBinary(path: string, data: ArrayBuffer): Promise<void>;
+// Obsidian's DataAdapter — writeBinary/rename/remove/list, all used below — is
+// fully typed and public. Only `appendBinary` exists at runtime on the desktop and
+// mobile Capacitor adapters without appearing in the public typings, so we extend
+// the real interface with that single bolt-on and keep one cast (appendableAdapter).
+export interface BinaryAppendAdapter extends DataAdapter {
 	appendBinary?(path: string, data: ArrayBuffer): Promise<void>;
 }
 
@@ -97,18 +113,20 @@ export async function probeAndFetchFirstChunk(
 }
 
 // Write the already-fetched first chunk, then pull the remaining bytes in
-// bounded Range requests, appending each straight to disk. Peak memory is one
-// chunk, not the whole file. Returns the total number of bytes written.
+// bounded Range requests, appending each straight to `destPath`. Peak memory is
+// one chunk, not the whole file. Returns the total number of bytes written.
+// `destPath` is the temp path (see partialPathFor); the caller moves the result
+// into the final vault path once it is complete and size-verified.
 export async function writeStreamedFile(
 	url: string,
-	filePath: string,
+	destPath: string,
 	probe: RangeProbe,
 	onProgress?: (written: number, total: number | null) => void,
 	chunkSize: number = DOWNLOAD_CHUNK_SIZE,
 ): Promise<number> {
 	const adapter = appendableAdapter();
 
-	await adapter.writeBinary(filePath, probe.firstChunk);
+	await adapter.writeBinary(destPath, probe.firstChunk);
 	let written = probe.firstChunk.byteLength;
 	onProgress?.(written, probe.totalSize);
 
@@ -144,7 +162,7 @@ export async function writeStreamedFile(
 		const chunk = response.arrayBuffer;
 		if (chunk.byteLength === 0) break;
 
-		await adapter.appendBinary(filePath, chunk);
+		await adapter.appendBinary(destPath, chunk);
 		written += chunk.byteLength;
 		onProgress?.(written, probe.totalSize);
 
@@ -153,4 +171,72 @@ export async function writeStreamedFile(
 	}
 
 	return written;
+}
+
+const PARTIAL_SUFFIX = ".podnotes-partial";
+
+// A monotonic counter makes every temp name unique within a session even when two
+// downloads resolve to the same final path (distinct episodes can collide on one
+// path — #107/#183) and start in the same millisecond, so concurrent downloads
+// never share a temp file.
+let partialCounter = 0;
+
+// The sibling temp path a download streams to before being moved into place. It is
+// dot-prefixed so Obsidian keeps it out of the file index (no watcher events while
+// it grows), lives in the same folder as the final file so the move is a cheap
+// in-place rename, and carries a unique token so concurrent downloads can't clash.
+// The token comes first so it survives the length cap (#22), which trims the tail:
+// the final name's own segment is already at the byte limit, and prepending a dot +
+// appending the suffix would otherwise push the temp past ENAMETOOLONG. The embedded
+// final name is only there to make the temp recognisable while debugging.
+export function partialPathFor(filePath: string): string {
+	const slash = filePath.lastIndexOf("/");
+	const dir = slash === -1 ? "" : filePath.slice(0, slash + 1);
+	const name = slash === -1 ? filePath : filePath.slice(slash + 1);
+	const token = `${Date.now().toString(36)}-${(partialCounter++).toString(36)}`;
+	return enforceMaxPathLength(`${dir}.${token}.${name}${PARTIAL_SUFFIX}`, PARTIAL_SUFFIX);
+}
+
+export function isPartialPath(path: string): boolean {
+	const name = path.slice(path.lastIndexOf("/") + 1);
+	return name.startsWith(".") && name.endsWith(PARTIAL_SUFFIX);
+}
+
+// Move the completed temp file to its final vault path with a single rename, so
+// watchers see one create of an already-complete file. rename is a standard
+// DataAdapter op on every platform and, because the temp is a sibling of the final
+// file, an in-place metadata move that buffers zero bytes — preserving #113's
+// memory win. (We never finalize by reading the temp back into memory and
+// re-writing it: that whole-file buffer is exactly the #113 OOM this path avoids.)
+export async function moveIntoPlace(
+	tmpPath: string,
+	filePath: string,
+): Promise<void> {
+	await appendableAdapter().rename(tmpPath, filePath);
+}
+
+// Remove temp partials orphaned in `folder` by a previous download that was hard-
+// killed (OOM, force-quit) before it could move its file into place or clean up —
+// otherwise hidden partials accumulate and can replicate via sync. `isActive`
+// guards this and any concurrent download's live temp from being swept (temp names
+// are unique per attempt, so a live temp would otherwise look like an orphan).
+// Best-effort: a listing failure must never block a download.
+export async function sweepStalePartials(
+	folder: string,
+	isActive: (path: string) => boolean,
+): Promise<void> {
+	const adapter = appendableAdapter();
+	try {
+		const listing = await adapter.list(folder);
+		for (const entry of listing.files) {
+			if (isPartialPath(entry) && !isActive(entry)) {
+				await adapter.remove(entry);
+			}
+		}
+	} catch (error) {
+		console.error(
+			`Failed to sweep stale download temp files in "${folder}":`,
+			error,
+		);
+	}
 }

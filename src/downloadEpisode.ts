@@ -25,7 +25,10 @@ import {
 } from "./utility/mediaType";
 import {
 	appendableAdapter,
+	moveIntoPlace,
+	partialPathFor,
 	probeAndFetchFirstChunk,
+	sweepStalePartials,
 	writeStreamedFile,
 } from "./download/streaming";
 import { detectAudioFileExtension } from "./download/mediaSignatures";
@@ -80,6 +83,10 @@ function parentFolderPath(filePath: string): string {
 // requests for the same episode (e.g. a double-tap, or several queued at once)
 // into a single transfer so they can't stack N full downloads in memory.
 const downloadsInFlight = new Map<string, Promise<string>>();
+
+// Temp paths of downloads currently streaming, so the stale-partial sweep never
+// deletes a concurrent download's live temp when it sweeps the shared folder.
+const activePartialPaths = new Set<string>();
 
 // Single source of truth for "what extension and on-disk path does this download
 // get, and is it even playable". Shared by the streaming and legacy paths so the
@@ -163,30 +170,49 @@ async function downloadEpisodeToDisk(
 
 	await ensureFolderExists(parentFolderPath(filePath));
 
-	// Clean up a half-written file on any mid-stream failure so a later attempt
-	// can't mistake a truncated partial for a complete download — the legacy
-	// createBinary path was atomic, but chunked appendBinary is not.
-	let total: number;
+	// Stream to a sibling temp the vault watchers never see, then move the finished
+	// file into place as one rename — so watcher plugins (Waypoint, Dataview,
+	// Obsidian Git, ...) don't get a per-chunk modify storm on the growing media
+	// file and re-scan it into an OOM crash. See streaming.ts for the mechanism.
+	const tmpPath = partialPathFor(filePath);
+	activePartialPaths.add(tmpPath);
+	let moved = false;
 	try {
-		total = await writeStreamedFile(
+		// Reclaim temps orphaned by a previous download killed mid-stream (the very
+		// crash this fix addresses). The active set protects any concurrent
+		// download's live temp from being swept.
+		await sweepStalePartials(
+			parentFolderPath(filePath),
+			(path) => activePartialPaths.has(path),
+		);
+
+		const total = await writeStreamedFile(
 			episode.streamUrl,
-			filePath,
+			tmpPath,
 			probe,
 			onProgress,
 		);
-	} catch (error) {
-		await deleteEpisodeFile(filePath);
-		throw error;
-	}
-	if (probe.totalSize !== null && total !== probe.totalSize) {
-		await deleteEpisodeFile(filePath);
-		throw new Error(
-			`Incomplete download: got ${total} of ${probe.totalSize} bytes.`,
-		);
-	}
+		if (probe.totalSize !== null && total !== probe.totalSize) {
+			throw new Error(
+				`Incomplete download: got ${total} of ${probe.totalSize} bytes.`,
+			);
+		}
 
-	downloadedEpisodes.addEpisode(episode, filePath, total);
-	return filePath;
+		// Only a fully-written, size-verified file is exposed to the vault — as one
+		// atomic rename, so a partial never even momentarily occupies the real path.
+		await moveIntoPlace(tmpPath, filePath);
+		moved = true;
+
+		downloadedEpisodes.addEpisode(episode, filePath, total);
+		return filePath;
+	} finally {
+		// If the file never made it into place (stream, size or move failure), drop
+		// the temp so a later attempt can't mistake a truncated partial for a
+		// complete download — the legacy createBinary path was atomic, chunked
+		// appendBinary is not. deleteEpisodeFile is a no-op when the temp is absent.
+		if (!moved) await deleteEpisodeFile(tmpPath);
+		activePartialPaths.delete(tmpPath);
+	}
 }
 
 export default async function downloadEpisodeWithNotice(

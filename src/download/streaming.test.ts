@@ -3,7 +3,11 @@ import { requestUrl } from "obsidian";
 import { plugin } from "../store";
 import type PodNotes from "../main";
 import {
+	isPartialPath,
+	moveIntoPlace,
+	partialPathFor,
 	probeAndFetchFirstChunk,
+	sweepStalePartials,
 	writeStreamedFile,
 	type RangeProbe,
 } from "./streaming";
@@ -181,5 +185,101 @@ describe("writeStreamedFile", () => {
 		await expect(
 			writeStreamedFile("https://x/ep.mp3", "out.mp3", probe({ totalSize: 6 }), undefined, 2),
 		).rejects.toThrow(/Range request failed/);
+	});
+});
+
+describe("partialPathFor / isPartialPath", () => {
+	it("builds a dot-prefixed sibling temp in the same folder", () => {
+		const tmp = partialPathFor("Podcasts/Show/Ep 1.mp3");
+		// dir + ".<token>.<name>.podnotes-partial" (token first so it survives the cap)
+		expect(tmp).toMatch(/^Podcasts\/Show\/\..*\.Ep 1\.mp3\.podnotes-partial$/);
+		expect(isPartialPath(tmp)).toBe(true);
+	});
+
+	it("handles a vault-root (no folder) path", () => {
+		const tmp = partialPathFor("Ep 1.mp3");
+		expect(tmp).toMatch(/^\..*\.Ep 1\.mp3\.podnotes-partial$/);
+		expect(tmp).not.toContain("/");
+		expect(isPartialPath(tmp)).toBe(true);
+	});
+
+	it("is unique per call so concurrent downloads to one final path never clash", () => {
+		const a = partialPathFor("Podcasts/Ep.mp3");
+		const b = partialPathFor("Podcasts/Ep.mp3");
+		expect(a).not.toBe(b);
+	});
+
+	it("keeps the temp name within the filesystem limit for a maxed-out title (#22)", () => {
+		// The final name segment is already capped to ~255; the dot prefix + suffix
+		// must not push the temp past ENAMETOOLONG on the new write path.
+		const longFinal = `Podcasts/${"X".repeat(400)}.mp3`;
+		const tmp = partialPathFor(longFinal);
+		const lastSegment = tmp.split("/").pop() ?? "";
+		expect(lastSegment.length).toBeLessThanOrEqual(255);
+		expect(isPartialPath(tmp)).toBe(true);
+		// The unique token (front of the name) must survive the tail truncation.
+		expect(partialPathFor(longFinal)).not.toBe(tmp);
+	});
+
+	it("rejects non-partial paths", () => {
+		expect(isPartialPath("Podcasts/Ep.mp3")).toBe(false);
+		expect(isPartialPath("Podcasts/.Ep.mp3")).toBe(false); // dotfile, wrong suffix
+		expect(isPartialPath("Podcasts/Ep.mp3.podnotes-partial")).toBe(false); // no dot prefix
+	});
+});
+
+describe("moveIntoPlace", () => {
+	it("moves the temp into place with a single rename (buffers nothing)", async () => {
+		const rename = vi.fn(async () => {});
+		plugin.set({
+			app: { vault: { adapter: { writeBinary: vi.fn(), rename } } },
+		} as unknown as PodNotes);
+
+		await moveIntoPlace("dir/.tok.ep.mp3.podnotes-partial", "dir/ep.mp3");
+
+		expect(rename).toHaveBeenCalledWith(
+			"dir/.tok.ep.mp3.podnotes-partial",
+			"dir/ep.mp3",
+		);
+	});
+});
+
+describe("sweepStalePartials", () => {
+	function setupSweepAdapter(files: string[]) {
+		const remove = vi.fn(async () => {});
+		const list = vi.fn(async () => ({ files, folders: [] as string[] }));
+		plugin.set({
+			app: { vault: { adapter: { writeBinary: vi.fn(), list, remove } } },
+		} as unknown as PodNotes);
+		return { remove, list };
+	}
+
+	it("removes orphaned partials but never an active one or a real file", async () => {
+		const s = setupSweepAdapter([
+			"Podcasts/.Ep.dead.podnotes-partial", // orphan -> remove
+			"Podcasts/.Ep.live.podnotes-partial", // in flight -> keep
+			"Podcasts/Ep.mp3", // real file -> keep
+		]);
+
+		await sweepStalePartials(
+			"Podcasts",
+			(p) => p === "Podcasts/.Ep.live.podnotes-partial",
+		);
+
+		expect(s.remove).toHaveBeenCalledTimes(1);
+		expect(s.remove).toHaveBeenCalledWith("Podcasts/.Ep.dead.podnotes-partial");
+	});
+
+	it("never throws when listing fails (best-effort)", async () => {
+		const list = vi.fn(async () => {
+			throw new Error("list failed");
+		});
+		plugin.set({
+			app: { vault: { adapter: { writeBinary: vi.fn(), list, remove: vi.fn() } } },
+		} as unknown as PodNotes);
+
+		await expect(
+			sweepStalePartials("Podcasts", () => false),
+		).resolves.toBeUndefined();
 	});
 });

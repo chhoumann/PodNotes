@@ -55,6 +55,29 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 	const appendBinary = vi.fn(async (path: string, data: ArrayBuffer) => {
 		written.set(path, (written.get(path) ?? 0) + data.byteLength);
 	});
+	// A raw adapter rename moves bytes on disk AND reconciles the destination into
+	// the vault index (Obsidian fires a create event for it), so the moved file is
+	// immediately resolvable for playback — mirroring the on-device behaviour.
+	const rename = vi.fn(async (from: string, to: string) => {
+		if (written.has(from)) {
+			written.set(to, written.get(from) ?? 0);
+			written.delete(from);
+		}
+		disk.delete(from);
+		disk.add(to);
+		present.add(to);
+	});
+	// Immediate children of `folder`, mirroring DataAdapter.list (returns full
+	// vault-relative paths). Lets the stale-partial sweep find orphaned temps.
+	const list = vi.fn(async (folder: string) => {
+		const prefix = folder ? `${folder}/` : "";
+		const files: string[] = [];
+		for (const p of disk) {
+			if (!p.startsWith(prefix)) continue;
+			if (!p.slice(prefix.length).includes("/")) files.push(p);
+		}
+		return { files, folders: [] as string[] };
+	});
 
 	const adapter: Record<string, unknown> = {
 		exists: async (path: string) => disk.has(path) || present.has(path),
@@ -63,6 +86,8 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 	if (streaming) {
 		adapter.writeBinary = writeBinary;
 		adapter.appendBinary = appendBinary;
+		adapter.rename = rename;
+		adapter.list = list;
 	}
 
 	const app = {
@@ -91,6 +116,8 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 		removeFile,
 		writeBinary,
 		appendBinary,
+		rename,
+		list,
 		written,
 	};
 }
@@ -1239,6 +1266,99 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
 		expect(recorded?.filePath).toBe("Podcasts/My Title.mp3");
 		expect(recorded?.size).toBe(16);
+	});
+
+	it("streams to a dot-prefixed temp the watchers don't see, then renames it into place", async () => {
+		const v = setupVault({ streaming: true });
+		requestUrlMock
+			.mockResolvedValueOnce(
+				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {
+					"content-type": "audio/mpeg",
+					"content-range": "bytes 0-7/16",
+				}),
+			)
+			.mockResolvedValueOnce(
+				rangeResponse(206, [9, 10, 11, 12, 13, 14, 15, 16], {
+					"content-range": "bytes 8-15/16",
+				}),
+			);
+
+		await downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}");
+
+		// Every chunk went to a single temp path, and it was a hidden sibling partial
+		// (dot-prefixed, in the same folder) — never the final media path.
+		const [writePath] = v.writeBinary.mock.calls[0];
+		const [appendPath] = v.appendBinary.mock.calls[0];
+		expect(writePath).toBe(appendPath);
+		expect(writePath).toMatch(
+			/^Podcasts\/\..*\.My Title\.mp3\.podnotes-partial$/,
+		);
+		expect(writePath).not.toBe("Podcasts/My Title.mp3");
+
+		// Exactly one move into the real path; the temp does not survive.
+		expect(v.rename).toHaveBeenCalledTimes(1);
+		expect(v.rename).toHaveBeenCalledWith(writePath, "Podcasts/My Title.mp3");
+		expect(v.disk.has(writePath)).toBe(false);
+		// The moved file is index-resolvable, so playback (getAbstractFileByPath)
+		// resolves it rather than silently binding src="".
+		expect(v.present.has("Podcasts/My Title.mp3")).toBe(true);
+	});
+
+	it("cleans up the temp (not the final path) when the move into place fails", async () => {
+		const v = setupVault({ streaming: true });
+		v.rename.mockRejectedValueOnce(new Error("rename boom"));
+		requestUrlMock
+			.mockResolvedValueOnce(
+				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {
+					"content-type": "audio/mpeg",
+					"content-range": "bytes 0-7/16",
+				}),
+			)
+			.mockResolvedValueOnce(
+				rangeResponse(206, [9, 10, 11, 12, 13, 14, 15, 16], {
+					"content-range": "bytes 8-15/16",
+				}),
+			);
+
+		await expect(
+			downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}"),
+		).rejects.toThrow(/rename boom/);
+
+		const [tmpPath] = v.writeBinary.mock.calls[0];
+		// The failed move removed the temp via the adapter, and the final path was
+		// never created or registered.
+		expect(v.removeFile).toHaveBeenCalledWith(tmpPath);
+		expect(v.disk.has(tmpPath)).toBe(false);
+		expect(v.present.has("Podcasts/My Title.mp3")).toBe(false);
+		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
+	});
+
+	it("sweeps an orphaned partial from a prior killed download before streaming", async () => {
+		const v = setupVault({ streaming: true });
+		// A partial left behind in the target folder by a download that was killed
+		// mid-stream (the OOM crash this fix addresses).
+		v.disk.add("Podcasts/.My Title.mp3.dead-orphan.podnotes-partial");
+		// An unrelated real file in the same folder must be left untouched.
+		v.disk.add("Podcasts/Keep Me.mp3");
+		requestUrlMock
+			.mockResolvedValueOnce(
+				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {
+					"content-type": "audio/mpeg",
+					"content-range": "bytes 0-7/16",
+				}),
+			)
+			.mockResolvedValueOnce(
+				rangeResponse(206, [9, 10, 11, 12, 13, 14, 15, 16], {
+					"content-range": "bytes 8-15/16",
+				}),
+			);
+
+		await downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}");
+
+		expect(v.removeFile).toHaveBeenCalledWith(
+			"Podcasts/.My Title.mp3.dead-orphan.podnotes-partial",
+		);
+		expect(v.disk.has("Podcasts/Keep Me.mp3")).toBe(true);
 	});
 
 	it("writes the whole body in one shot when the server ignores Range (200)", async () => {
