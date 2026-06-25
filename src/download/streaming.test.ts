@@ -191,13 +191,14 @@ describe("writeStreamedFile", () => {
 describe("partialPathFor / isPartialPath", () => {
 	it("builds a dot-prefixed sibling temp in the same folder", () => {
 		const tmp = partialPathFor("Podcasts/Show/Ep 1.mp3");
-		expect(tmp).toMatch(/^Podcasts\/Show\/\.Ep 1\.mp3\..*\.podnotes-partial$/);
+		// dir + ".<token>.<name>.podnotes-partial" (token first so it survives the cap)
+		expect(tmp).toMatch(/^Podcasts\/Show\/\..*\.Ep 1\.mp3\.podnotes-partial$/);
 		expect(isPartialPath(tmp)).toBe(true);
 	});
 
 	it("handles a vault-root (no folder) path", () => {
 		const tmp = partialPathFor("Ep 1.mp3");
-		expect(tmp).toMatch(/^\.Ep 1\.mp3\..*\.podnotes-partial$/);
+		expect(tmp).toMatch(/^\..*\.Ep 1\.mp3\.podnotes-partial$/);
 		expect(tmp).not.toContain("/");
 		expect(isPartialPath(tmp)).toBe(true);
 	});
@@ -206,6 +207,18 @@ describe("partialPathFor / isPartialPath", () => {
 		const a = partialPathFor("Podcasts/Ep.mp3");
 		const b = partialPathFor("Podcasts/Ep.mp3");
 		expect(a).not.toBe(b);
+	});
+
+	it("keeps the temp name within the filesystem limit for a maxed-out title (#22)", () => {
+		// The final name segment is already capped to ~255; the dot prefix + suffix
+		// must not push the temp past ENAMETOOLONG on the new write path.
+		const longFinal = `Podcasts/${"X".repeat(400)}.mp3`;
+		const tmp = partialPathFor(longFinal);
+		const lastSegment = tmp.split("/").pop() ?? "";
+		expect(lastSegment.length).toBeLessThanOrEqual(255);
+		expect(isPartialPath(tmp)).toBe(true);
+		// The unique token (front of the name) must survive the tail truncation.
+		expect(partialPathFor(longFinal)).not.toBe(tmp);
 	});
 
 	it("rejects non-partial paths", () => {

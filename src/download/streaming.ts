@@ -2,6 +2,7 @@ import { requestUrl } from "obsidian";
 import { get } from "svelte/store";
 import { plugin } from "../store";
 import { encodeUrlForRequest } from "../utility/encodeUrlForRequest";
+import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
 
 // ---- Streaming download (issue #113) ---------------------------------------
 // Mobile WebViews have a tight per-process memory budget. Buffering a whole
@@ -189,12 +190,16 @@ let partialCounter = 0;
 // dot-prefixed so Obsidian keeps it out of the file index (no watcher events while
 // it grows), lives in the same folder as the final file so the move is a cheap
 // in-place rename, and carries a unique token so concurrent downloads can't clash.
+// The token comes first so it survives the length cap (#22), which trims the tail:
+// the final name's own segment is already at the byte limit, and prepending a dot +
+// appending the suffix would otherwise push the temp past ENAMETOOLONG. The embedded
+// final name is only there to make the temp recognisable while debugging.
 export function partialPathFor(filePath: string): string {
 	const slash = filePath.lastIndexOf("/");
 	const dir = slash === -1 ? "" : filePath.slice(0, slash + 1);
 	const name = slash === -1 ? filePath : filePath.slice(slash + 1);
 	const token = `${Date.now().toString(36)}-${(partialCounter++).toString(36)}`;
-	return `${dir}.${name}.${token}${PARTIAL_SUFFIX}`;
+	return enforceMaxPathLength(`${dir}.${token}.${name}${PARTIAL_SUFFIX}`, PARTIAL_SUFFIX);
 }
 
 export function isPartialPath(path: string): boolean {

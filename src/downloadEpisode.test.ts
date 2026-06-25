@@ -1291,7 +1291,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 		const [appendPath] = v.appendBinary.mock.calls[0];
 		expect(writePath).toBe(appendPath);
 		expect(writePath).toMatch(
-			/^Podcasts\/\.My Title\.mp3\..*\.podnotes-partial$/,
+			/^Podcasts\/\..*\.My Title\.mp3\.podnotes-partial$/,
 		);
 		expect(writePath).not.toBe("Podcasts/My Title.mp3");
 
