@@ -3,7 +3,11 @@ import { requestUrl } from "obsidian";
 import { plugin } from "../store";
 import type PodNotes from "../main";
 import {
+	isPartialPath,
+	moveIntoPlace,
+	partialPathFor,
 	probeAndFetchFirstChunk,
+	sweepStalePartials,
 	writeStreamedFile,
 	type RangeProbe,
 } from "./streaming";
@@ -181,5 +185,132 @@ describe("writeStreamedFile", () => {
 		await expect(
 			writeStreamedFile("https://x/ep.mp3", "out.mp3", probe({ totalSize: 6 }), undefined, 2),
 		).rejects.toThrow(/Range request failed/);
+	});
+});
+
+describe("partialPathFor / isPartialPath", () => {
+	it("builds a dot-prefixed sibling temp in the same folder", () => {
+		const tmp = partialPathFor("Podcasts/Show/Ep 1.mp3");
+		expect(tmp).toMatch(/^Podcasts\/Show\/\.Ep 1\.mp3\..*\.podnotes-partial$/);
+		expect(isPartialPath(tmp)).toBe(true);
+	});
+
+	it("handles a vault-root (no folder) path", () => {
+		const tmp = partialPathFor("Ep 1.mp3");
+		expect(tmp).toMatch(/^\.Ep 1\.mp3\..*\.podnotes-partial$/);
+		expect(tmp).not.toContain("/");
+		expect(isPartialPath(tmp)).toBe(true);
+	});
+
+	it("is unique per call so concurrent downloads to one final path never clash", () => {
+		const a = partialPathFor("Podcasts/Ep.mp3");
+		const b = partialPathFor("Podcasts/Ep.mp3");
+		expect(a).not.toBe(b);
+	});
+
+	it("rejects non-partial paths", () => {
+		expect(isPartialPath("Podcasts/Ep.mp3")).toBe(false);
+		expect(isPartialPath("Podcasts/.Ep.mp3")).toBe(false); // dotfile, wrong suffix
+		expect(isPartialPath("Podcasts/Ep.mp3.podnotes-partial")).toBe(false); // no dot prefix
+	});
+});
+
+describe("moveIntoPlace", () => {
+	function setupMoveAdapter(methods: {
+		rename?: boolean;
+		copy?: boolean;
+		remove?: boolean;
+	}) {
+		const adapter: Record<string, unknown> = {
+			writeBinary: vi.fn(),
+		};
+		const rename = vi.fn(async () => {});
+		const copy = vi.fn(async () => {});
+		const remove = vi.fn(async () => {});
+		if (methods.rename) adapter.rename = rename;
+		if (methods.copy) adapter.copy = copy;
+		if (methods.remove) adapter.remove = remove;
+		plugin.set({ app: { vault: { adapter } } } as unknown as PodNotes);
+		return { rename, copy, remove };
+	}
+
+	it("prefers rename (in-place, buffers nothing) when available", async () => {
+		const m = setupMoveAdapter({ rename: true, copy: true, remove: true });
+		await moveIntoPlace("dir/.ep.tok.podnotes-partial", "dir/ep.mp3");
+		expect(m.rename).toHaveBeenCalledWith(
+			"dir/.ep.tok.podnotes-partial",
+			"dir/ep.mp3",
+		);
+		expect(m.copy).not.toHaveBeenCalled();
+	});
+
+	it("falls back to copy + remove when rename is unavailable", async () => {
+		const m = setupMoveAdapter({ copy: true, remove: true });
+		await moveIntoPlace("dir/.ep.tok.podnotes-partial", "dir/ep.mp3");
+		expect(m.copy).toHaveBeenCalledWith(
+			"dir/.ep.tok.podnotes-partial",
+			"dir/ep.mp3",
+		);
+		expect(m.remove).toHaveBeenCalledWith("dir/.ep.tok.podnotes-partial");
+	});
+
+	it("throws (never re-buffers the whole file) when neither rename nor copy exists", async () => {
+		// Re-buffering via readBinary→writeBinary would reintroduce the #113 OOM, so
+		// an adapter that can do neither must fail loudly instead.
+		setupMoveAdapter({ remove: true });
+		await expect(
+			moveIntoPlace("dir/.ep.tok.podnotes-partial", "dir/ep.mp3"),
+		).rejects.toThrow(/cannot move a completed download/i);
+	});
+});
+
+describe("sweepStalePartials", () => {
+	function setupSweepAdapter(files: string[]) {
+		const remove = vi.fn(async () => {});
+		const list = vi.fn(async () => ({ files, folders: [] as string[] }));
+		plugin.set({
+			app: { vault: { adapter: { writeBinary: vi.fn(), list, remove } } },
+		} as unknown as PodNotes);
+		return { remove, list };
+	}
+
+	it("removes orphaned partials but never an active one or a real file", async () => {
+		const s = setupSweepAdapter([
+			"Podcasts/.Ep.dead.podnotes-partial", // orphan -> remove
+			"Podcasts/.Ep.live.podnotes-partial", // in flight -> keep
+			"Podcasts/Ep.mp3", // real file -> keep
+		]);
+
+		await sweepStalePartials(
+			"Podcasts",
+			(p) => p === "Podcasts/.Ep.live.podnotes-partial",
+		);
+
+		expect(s.remove).toHaveBeenCalledTimes(1);
+		expect(s.remove).toHaveBeenCalledWith("Podcasts/.Ep.dead.podnotes-partial");
+	});
+
+	it("is a no-op when the adapter cannot list", async () => {
+		const remove = vi.fn(async () => {});
+		plugin.set({
+			app: { vault: { adapter: { writeBinary: vi.fn(), remove } } },
+		} as unknown as PodNotes);
+
+		await sweepStalePartials("Podcasts", () => false);
+
+		expect(remove).not.toHaveBeenCalled();
+	});
+
+	it("never throws when listing fails (best-effort)", async () => {
+		const list = vi.fn(async () => {
+			throw new Error("list failed");
+		});
+		plugin.set({
+			app: { vault: { adapter: { writeBinary: vi.fn(), list, remove: vi.fn() } } },
+		} as unknown as PodNotes);
+
+		await expect(
+			sweepStalePartials("Podcasts", () => false),
+		).resolves.toBeUndefined();
 	});
 });
