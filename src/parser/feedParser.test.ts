@@ -10,6 +10,18 @@ import { requestWithTimeout } from "src/utility/networkRequest";
 
 const mockRequestWithTimeout = vi.mocked(requestWithTimeout);
 
+// Build the shape requestWithTimeout resolves to. Keeps the per-test mock setup
+// to a single line and makes the number of expected fetches obvious at a glance.
+function feedResponse(text: string) {
+	return {
+		text,
+		status: 200,
+		headers: {},
+		arrayBuffer: new ArrayBuffer(0),
+		json: {},
+	};
+}
+
 const sampleRssFeed = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
   <channel>
@@ -359,23 +371,10 @@ describe("FeedParser", () => {
 	});
 
 	describe("getEpisodes", () => {
-		test("parses all valid episodes from feed", async () => {
-			// getEpisodes now calls getFeed first, then parseFeed again
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: sampleRssFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: sampleRssFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+		test("parses all valid episodes from a single feed fetch", async () => {
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(sampleRssFeed),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -383,24 +382,16 @@ describe("FeedParser", () => {
 			expect(episodes).toHaveLength(2);
 			expect(episodes[0].title).toBe("Episode 1");
 			expect(episodes[1].title).toBe("Episode 2");
+			// A cold getEpisodes call must fetch + parse the feed exactly ONCE. It
+			// previously fetched twice (here, then again inside getFeed), doubling
+			// the load on the feed host.
+			expect(mockRequestWithTimeout).toHaveBeenCalledTimes(1);
 		});
 
 		test("parses episode properties correctly and populates feed metadata", async () => {
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: sampleRssFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: sampleRssFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(sampleRssFeed),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -418,21 +409,9 @@ describe("FeedParser", () => {
 		});
 
 		test("parses Podcasting 2.0 chapter URLs from episodes (#47)", async () => {
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: rssFeedWithPodcastChapters,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: rssFeedWithPodcastChapters,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(rssFeedWithPodcastChapters),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -456,21 +435,7 @@ describe("FeedParser", () => {
     </item>
   </channel>
 </rss>`;
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: videoFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: videoFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(videoFeed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -495,21 +460,9 @@ describe("FeedParser", () => {
     </item>
   </channel>
 </rss>`;
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: audioMp4Feed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: audioMp4Feed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(audioMp4Feed),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -544,21 +497,9 @@ describe("FeedParser", () => {
     </item>
   </channel>
 </rss>`;
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: untypedAmbiguousFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: untypedAmbiguousFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(untypedAmbiguousFeed),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -571,21 +512,9 @@ describe("FeedParser", () => {
 		});
 
 		test("filters out invalid episodes missing required fields", async () => {
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: rssFeedWithInvalidItem,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: rssFeedWithInvalidItem,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(rssFeedWithInvalidItem),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -601,37 +530,23 @@ describe("FeedParser", () => {
 				artworkUrl: "https://example.com/feed-artwork.jpg",
 			};
 
-			mockRequestWithTimeout.mockResolvedValueOnce({
-				text: sampleRssFeed,
-				status: 200,
-				headers: {},
-				arrayBuffer: new ArrayBuffer(0),
-				json: {},
-			});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(sampleRssFeed),
+			);
 
-			// When constructed with a feed, it skips calling getFeed
+			// When constructed with a feed, it skips re-deriving feed metadata.
 			const parser = new FeedParser(mockFeed);
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
 
 			expect(episodes[1].artworkUrl).toBe("https://example.com/feed-artwork.jpg");
+			// A pre-populated, matching feed still fetches the items exactly once.
+			expect(mockRequestWithTimeout).toHaveBeenCalledTimes(1);
 		});
 
 		test("uses episode artwork from itunes:image when available", async () => {
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: sampleRssFeedWithItunesImage,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: sampleRssFeedWithItunesImage,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(sampleRssFeedWithItunesImage),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -642,21 +557,9 @@ describe("FeedParser", () => {
 
 	describe("episode number and duration (#34, #88)", () => {
 		test("parses <itunes:episode>/<itunes:duration> with a title fallback", async () => {
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: rssFeedWithEpisodeNumberAndDuration,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: rssFeedWithEpisodeNumberAndDuration,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(
+				feedResponse(rssFeedWithEpisodeNumberAndDuration),
+			);
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -704,21 +607,7 @@ describe("FeedParser", () => {
   </channel>
 </rss>`;
 
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: emptyFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: emptyFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(emptyFeed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -740,21 +629,7 @@ describe("FeedParser", () => {
   </channel>
 </rss>`;
 
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: minimalFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: minimalFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(minimalFeed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -781,21 +656,7 @@ describe("FeedParser", () => {
   </channel>
 </rss>`;
 
-			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: cdataFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: cdataFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(cdataFeed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -805,20 +666,8 @@ describe("FeedParser", () => {
 
 		test("getFeed sets internal feed state for subsequent calls", async () => {
 			mockRequestWithTimeout
-				.mockResolvedValueOnce({
-					text: sampleRssFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				})
-				.mockResolvedValueOnce({
-					text: sampleRssFeed,
-					status: 200,
-					headers: {},
-					arrayBuffer: new ArrayBuffer(0),
-					json: {},
-				});
+				.mockResolvedValueOnce(feedResponse(sampleRssFeed))
+				.mockResolvedValueOnce(feedResponse(sampleRssFeed));
 
 			const parser = new FeedParser();
 			await parser.getFeed("https://example.com/feed.xml");
@@ -827,6 +676,9 @@ describe("FeedParser", () => {
 			// Episodes should have feed metadata populated
 			expect(episodes[0].podcastName).toBe("Test Podcast");
 			expect(episodes[0].feedUrl).toBe("https://example.com/feed.xml");
+			// One fetch for getFeed, one for getEpisodes: getEpisodes reuses the
+			// already-cached feed metadata and does NOT re-fetch it.
+			expect(mockRequestWithTimeout).toHaveBeenCalledTimes(2);
 		});
 	});
 });

@@ -16,19 +16,29 @@ export default class FeedParser {
 	}
 
 	public async getEpisodes(url: string): Promise<Episode[]> {
-		// Ensure feed metadata is loaded and cached
-		if (!this.feed || this.feed.url !== url) {
-			await this.getFeed(url);
-		}
-
+		// Fetch and parse the feed exactly ONCE, then reuse that single document
+		// for both the channel metadata and the episode items. Previously this
+		// parsed the feed here AND again inside getFeed, doubling the network
+		// round-trips and XML parses on every cold call (e.g. the URIHandler
+		// resume-link path that constructs a FeedParser with no cached feed).
 		const body = await this.parseFeed(url);
+
+		// Ensure feed metadata is loaded and cached; parseItem reads this.feed for
+		// the podcast name and the per-episode artwork fallback.
+		if (!this.feed || this.feed.url !== url) {
+			this.feed = this.extractFeed(body, url);
+		}
 
 		return this.parsePage(body);
 	}
 
 	public async getFeed(url: string): Promise<PodcastFeed> {
 		const body = await this.parseFeed(url);
+		this.feed = this.extractFeed(body, url);
+		return this.feed;
+	}
 
+	private extractFeed(body: Document, url: string): PodcastFeed {
 		const titleEl = body.querySelector("title");
 
 		// A feed must have a title. <link> is intentionally NOT required: it is the
@@ -73,7 +83,6 @@ export default class FeedParser {
 		]);
 		if (author) feed.author = author;
 
-		this.feed = feed;
 		return feed;
 	}
 
