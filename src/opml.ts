@@ -125,12 +125,17 @@ async function importOPML(opml: string): Promise<void> {
 		let completedImports = 0;
 
 		const updateProgress = () => {
-			const progress = (
-				(completedImports / newPodcastsToAdd.length) *
-				100
-			).toFixed(1);
+			const total = newPodcastsToAdd.length;
+			// When every imported feed is already subscribed there is nothing to
+			// fetch, so guard the 0/0 division that would otherwise render as
+			// "NaN%" in the progress notice.
+			if (total === 0) {
+				notice.update("No new podcasts to import.");
+				return;
+			}
+			const progress = ((completedImports / total) * 100).toFixed(1);
 			notice.update(
-				`Importing... ${completedImports}/${newPodcastsToAdd.length} podcasts completed (${progress}%)`,
+				`Importing... ${completedImports}/${total} podcasts completed (${progress}%)`,
 			);
 		};
 
@@ -158,19 +163,31 @@ async function importOPML(opml: string): Promise<void> {
 			(pod): pod is PodcastFeed => pod !== null,
 		);
 
+		// The store is keyed by title, so feeds whose title already exists (either
+		// from an earlier import in this batch or a previously saved feed) are
+		// dropped. Count what is actually written so the summary doesn't over-report.
+		let savedCount = 0;
 		savedFeeds.update((feeds) => {
 			for (const pod of validPodcasts) {
 				if (feeds[pod.title]) continue;
 				feeds[pod.title] = structuredClone(pod);
+				savedCount++;
 			}
 			return feeds;
 		});
 
-		const skippedCount =
+		// Feeds skipped before fetching because their URL was already subscribed.
+		const skippedExisting =
 			incompletePodcastsToAdd.length - newPodcastsToAdd.length;
-		notice.update(
-			`OPML import complete. Saved ${validPodcasts.length} new podcasts. Skipped ${skippedCount} existing podcasts.`,
-		);
+		// Feeds that fetched fine but collided with an existing/earlier title and
+		// were therefore silently dropped by the title-keyed store above.
+		const droppedDuplicateTitle = validPodcasts.length - savedCount;
+
+		let summary = `OPML import complete. Saved ${savedCount} new podcasts. Skipped ${skippedExisting} existing podcasts.`;
+		if (droppedDuplicateTitle > 0) {
+			summary += ` Skipped ${droppedDuplicateTitle} with duplicate titles.`;
+		}
+		notice.update(summary);
 
 		if (validPodcasts.length !== newPodcastsToAdd.length) {
 			const failedImports = newPodcastsToAdd.length - validPodcasts.length;
