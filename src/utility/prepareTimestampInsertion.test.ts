@@ -91,6 +91,24 @@ describe("escapeForTableCell", () => {
 		expect(escapeForTableCell("a \\| b")).toBe("a \\| b");
 	});
 
+	it("escapes a live pipe that follows an escaped backslash (\\\\|)", () => {
+		// `\\|` is an escaped backslash followed by a genuinely live pipe. A
+		// naive `(?<!\\)` lookbehind sees the backslash and skips the pipe,
+		// leaving it active and breaking the row. The even-length (2) backslash
+		// run means the pipe is live and must be escaped.
+		expect(escapeForTableCell("a\\\\|b")).toBe("a\\\\\\|b");
+	});
+
+	it("leaves a pipe escaped after an odd-length backslash run (\\\\\\|)", () => {
+		// Three backslashes = an escaped backslash plus an already-escaped pipe;
+		// the pipe must be left alone so the cell is never double-escaped.
+		expect(escapeForTableCell("a\\\\\\|b")).toBe("a\\\\\\|b");
+	});
+
+	it("escapes both of two adjacent live pipes", () => {
+		expect(escapeForTableCell("a||b")).toBe("a\\|\\|b");
+	});
+
 	it("collapses newlines (LF, CRLF, CR) to single spaces", () => {
 		expect(escapeForTableCell("line1\nline2")).toBe("line1 line2");
 		expect(escapeForTableCell("line1\r\nline2")).toBe("line1 line2");
