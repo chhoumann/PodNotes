@@ -16,6 +16,7 @@ import {
 	viewState,
 } from "./store";
 import type { Episode } from "./types/Episode";
+import { isFetchableUrl } from "./utility/assertFetchableUrl";
 import { getEpisodeKey } from "./utility/episodeKey";
 import { ViewState } from "./types/ViewState";
 
@@ -178,6 +179,17 @@ export default async function podNotesURIHandler(
 			.map((name) => localFiles.getLocalEpisode(name))
 			.find((ep) => ep !== undefined);
 	} else {
+		// The url here came straight from an untrusted obsidian://podnotes deep link
+		// (an attacker can put one behind <a href> on a web page), so a single click
+		// must not be able to fetch an arbitrary internal host. Refuse anything that
+		// isn't a public http(s) URL before handing it to FeedParser (blind SSRF).
+		if (!isFetchableUrl(url)) {
+			new Notice(
+				"Refusing to load a feed from a private, local, or non-http(s) URL",
+			);
+			return;
+		}
+
 		try {
 			// Fetch with the raw url (current-format links are correct as-is); only the title gets
 			// the legacy-candidate treatment. A '+' in a legacy feed URL is pre-existing and out of

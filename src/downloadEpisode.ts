@@ -7,6 +7,7 @@ import {
 } from "./TemplateEngine";
 import type { Episode, EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
+import { assertFetchableUrl } from "./utility/assertFetchableUrl";
 import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
@@ -53,6 +54,7 @@ interface DownloadedFile {
 // and transcription's getEpisodeAudioBuffer still need the entire buffer at once.
 // The Download command streams instead — see downloadEpisodeToDisk.
 async function downloadFile(url: string): Promise<DownloadedFile> {
+	assertFetchableUrl(url);
 	const encodedUrl = encodeUrlForRequest(url);
 	try {
 		const response = await requestUrl({ url: encodedUrl, method: "GET" });
@@ -708,6 +710,7 @@ export async function downloadEpisode(
 }
 
 async function getFileExtension(url: string): Promise<string> {
+	assertFetchableUrl(url);
 	const encodedUrl = encodeUrlForRequest(url);
 	const urlExtension = getUrlExtension(encodedUrl);
 	if (urlExtension) return urlExtension;
