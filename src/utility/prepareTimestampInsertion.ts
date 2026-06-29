@@ -80,9 +80,19 @@ export function isInsideTable(
  * space (a raw newline would end the row) and escape any unescaped pipe (a raw
  * pipe would open a new column). Already-escaped pipes (`\|`) are left alone so
  * the cell is never double-escaped.
+ *
+ * A pipe is "already escaped" only when it follows an odd-length run of
+ * backslashes; an even-length run (including zero) leaves the pipe live. Keying
+ * on the parity of the preceding backslash run - rather than the mere presence
+ * of one backslash - neutralizes pipes after an escaped backslash (`\\|`) and
+ * adjacent pipes (`||`), both of which a simple `(?<!\\)` lookbehind misses.
  */
 export function escapeForTableCell(text: string): string {
-	return text.replace(/\r\n?|\n/g, " ").replace(/(?<!\\)\|/g, "\\|");
+	return text
+		.replace(/\r\n?|\n/g, " ")
+		.replace(/(\\*)\|/g, (match, backslashes: string) =>
+			backslashes.length % 2 === 0 ? `${backslashes}\\|` : match,
+		);
 }
 
 /**
