@@ -57,6 +57,14 @@ function formatTime(ms: number): string {
 	return `${hours.toString().padStart(2, "0")}:${(minutes % 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
+// A chunk that exhausts its retries leaves this placeholder in its transcript
+// slot; the pattern matches it so buildTranscriptBody can tell real speech apart
+// from a body made only of error markers. Keep the builder and matcher in sync.
+function chunkErrorPlaceholder(index: number): string {
+	return `[Error transcribing chunk ${index}]`;
+}
+const CHUNK_ERROR_PLACEHOLDER_PATTERN = /\[Error transcribing chunk \d+\]/g;
+
 export class TranscriptionService {
 	private plugin: PodNotes;
 	private client: OpenAI | null = null;
@@ -168,7 +176,7 @@ export class TranscriptionService {
 			} = await getEpisodeAudioBuffer(episode);
 			const mimeType = getMimeType(fileExtension);
 
-			const transcriptBody = await this.buildTranscriptBody(
+			const { body: transcriptBody, warning } = await this.buildTranscriptBody(
 				{
 					buffer: fileBuffer,
 					mimeType,
@@ -182,7 +190,7 @@ export class TranscriptionService {
 			await this.saveTranscription(episode, transcriptBody);
 
 			notice.stop();
-			notice.update("Transcription completed and saved.");
+			notice.update(warning ?? "Transcription completed and saved.");
 		} catch (error) {
 			console.error("Transcription error:", error);
 			const message = error instanceof Error ? error.message : String(error);
@@ -201,11 +209,20 @@ export class TranscriptionService {
 	 * separated into paragraphs, so it is rendered as-is. Either path yielding no
 	 * speech is treated as a failure rather than writing an empty transcript (empty
 	 * Whisper chunks join to whitespace, so the body is trimmed before the check).
+	 *
+	 * A chunk that exhausts its retries leaves an `[Error transcribing chunk N]`
+	 * placeholder in its slot. If stripping those placeholders leaves no real text -
+	 * every chunk failed, or the only successes were empty - we throw, so no file is
+	 * written and the episode stays retryable instead of saving a "transcript" made
+	 * only of error markers that the existence check would then refuse to re-run
+	 * (mirrors the diarization provider's all-chunks-failed contract). When some
+	 * chunks fail but real speech remains we keep the otherwise-good transcript and
+	 * return a `warning` so the run is reported as partial, not a clean success.
 	 */
 	private async buildTranscriptBody(
 		audio: DiarizationAudio,
 		updateNotice: (message: string) => void,
-	): Promise<string> {
+	): Promise<{ body: string; warning?: string }> {
 		const diarization = this.plugin.settings.transcript.diarization;
 
 		if (diarization?.enabled) {
@@ -217,19 +234,41 @@ export class TranscriptionService {
 			if (segments.length === 0) {
 				throw new Error("Diarization returned no speech segments.");
 			}
-			return renderDiarizedTranscript(segments, diarization.speakerTemplate);
+			return {
+				body: renderDiarizedTranscript(segments, diarization.speakerTemplate),
+			};
 		}
 
 		updateNotice("Creating audio chunks...");
 		const files = await createChunkFiles(audio);
 		updateNotice("Starting transcription...");
-		const transcription = await this.transcribeChunks(files, updateNotice);
-		// Empty chunks join to " " (not ""), so trim before deciding it is empty.
-		const body = transcription.trim().replace(/\.\s+/g, ".\n\n");
-		if (body.length === 0) {
-			throw new Error("Transcription returned no text.");
+		const { text, failedChunks } = await this.transcribeChunks(
+			files,
+			updateNotice,
+		);
+
+		// Strip the error placeholders (and trim) to see whether ANY real speech was
+		// transcribed. Nothing real means every chunk failed or the only successes
+		// were empty - either way there is no usable transcript, so throw instead of
+		// saving a body of pure error markers (empty chunks join to " ", not "").
+		const realText = text.replace(CHUNK_ERROR_PLACEHOLDER_PATTERN, " ").trim();
+		if (realText.length === 0) {
+			throw new Error(
+				failedChunks > 0
+					? `Transcription failed: all ${files.length} audio chunk(s) failed or returned no text.`
+					: "Transcription returned no text.",
+			);
 		}
-		return body;
+
+		// Reflow the full body (placeholders kept inline so the user can see which
+		// chunks failed) after sentence periods for readability.
+		const body = text.trim().replace(/\.\s+/g, ".\n\n");
+
+		const warning =
+			failedChunks > 0
+				? `Transcription saved, but ${failedChunks} of ${files.length} chunk(s) failed - look for [Error transcribing chunk N] markers and re-run after deleting the note to retry.`
+				: undefined;
+		return { body, warning };
 	}
 
 	/** Route the episode audio to the configured diarization provider (#168). */
@@ -269,10 +308,11 @@ export class TranscriptionService {
 	private async transcribeChunks(
 		files: File[],
 		updateNotice: (message: string) => void,
-	): Promise<string> {
+	): Promise<{ text: string; failedChunks: number }> {
 		const client = await this.getClient();
 		const transcriptions: string[] = new Array(files.length);
 		let completedChunks = 0;
+		let failedChunks = 0;
 		let nextIndex = 0;
 
 		const updateProgress = () => {
@@ -308,7 +348,8 @@ export class TranscriptionService {
 								`Failed to transcribe chunk ${index} after ${this.MAX_RETRIES} attempts:`,
 								error,
 							);
-							transcriptions[index] = `[Error transcribing chunk ${index}]`;
+							transcriptions[index] = chunkErrorPlaceholder(index);
+							failedChunks++;
 							completedChunks++;
 							updateProgress();
 						} else {
@@ -329,7 +370,7 @@ export class TranscriptionService {
 
 		await Promise.all(workers);
 
-		return transcriptions.join(" ");
+		return { text: transcriptions.join(" "), failedChunks };
 	}
 
 	/**

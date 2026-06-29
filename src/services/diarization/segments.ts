@@ -153,7 +153,10 @@ export function mergeAdjacentSpeakers(
 export function formatSpeakerLabel(template: string, speaker: string): string {
 	if (SPEAKER_TOKEN.test(template)) {
 		SPEAKER_TOKEN.lastIndex = 0;
-		return template.replace(SPEAKER_TOKEN, speaker);
+		// Pass a replacer function so the label is inserted verbatim: String.replace
+		// interprets `$$`, `$&`, `$\``, `$'`, `$n` in a replacement *string*, which
+		// would mangle a label that happened to contain one of those sequences.
+		return template.replace(SPEAKER_TOKEN, () => speaker);
 	}
 	return `${speaker}: ${template}`;
 }

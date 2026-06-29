@@ -1,8 +1,8 @@
 /**
  * Pure audio chunking + WAV encoding for transcription uploads. Splits an episode
- * audio buffer into request-sized files, decoding and re-encoding m4a to WAV only
- * when it must be split (m4a can't be byte-split). Kept free of any
- * TranscriptionService/plugin state so it can be unit-tested directly — the
+ * audio buffer into request-sized files, decoding and re-encoding to WAV any
+ * format that can't be byte-split (everything except frame-synced MP3). Kept free
+ * of any TranscriptionService/plugin state so it can be unit-tested directly — the
  * service just orchestrates it.
  */
 
@@ -31,9 +31,26 @@ export function getMimeType(fileExtension: string): string {
 	}
 }
 
+/**
+ * Whether a buffer too large for one request must be decoded and re-encoded to
+ * standalone WAV chunks instead of sliced at raw byte boundaries.
+ *
+ * Only MP3 tolerates raw byte-splitting: its frames are self-synchronizing, so a
+ * decoder resyncs at the next frame header even when a slice starts mid-stream.
+ * Every other podcast format is container/header-dependent - m4a/mp4 (ISO-BMFF),
+ * Ogg, WebM/Matroska (EBML) and FLAC all carry codec setup data only at the
+ * stream start, and WAV is raw PCM behind a leading 44-byte header - so a
+ * non-first arbitrary byte slice lacks the headers needed to decode standalone
+ * and the transcription API rejects or garbles it. Treat anything that isn't
+ * unambiguously MP3 as needing the WAV path (the safe default for unknown
+ * formats); `getMimeType` only emits `audio/mp3` for an mp3 extension, while the
+ * catch-all `audio/mpeg` is deliberately NOT treated as splittable.
+ */
 export function shouldConvertToWav(extension: string, mimeType: string): boolean {
 	const normalizedExtension = extension.toLowerCase();
-	return normalizedExtension === "m4a" || mimeType === "audio/mp4";
+	const isMp3 =
+		normalizedExtension === "mp3" || mimeType.toLowerCase() === "audio/mp3";
+	return !isMp3;
 }
 
 export async function createChunkFiles({
@@ -58,11 +75,20 @@ export async function createChunkFiles({
 		return [new File([buffer], `${basename}.${extension}`, { type: mimeType })];
 	}
 
+	// Container/header-dependent formats must be decoded and re-encoded to WAV;
+	// only frame-synced MP3 falls through to raw byte-splitting.
 	if (shouldConvertToWav(extension, mimeType)) {
 		const wavChunks = await convertToWavChunks(buffer, basename);
 		if (wavChunks.length > 0) {
 			return wavChunks;
 		}
+		// WAV conversion produced nothing - the platform has no Web Audio decoder
+		// or couldn't decode this codec. Byte-splitting the raw container here would
+		// hand the API undecodable chunks (garbled or rejected output saved as a
+		// transcript), so fail loudly and keep the run retryable instead.
+		throw new Error(
+			`Could not split ${extension || "audio"} audio for transcription. This format must be decoded to WAV before splitting, but the audio decoder is unavailable or could not decode it.`,
+		);
 	}
 
 	return createBinaryChunkFiles(buffer, basename, extension, mimeType);
