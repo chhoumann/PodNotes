@@ -193,7 +193,20 @@ describe("TranscriptionService", () => {
 	});
 
 	describe("buildTranscriptBody (TR-01)", () => {
-		const buildBody = (plugin: PodNotes) => {
+		const buildBody = (
+			plugin: PodNotes,
+			audio: {
+				buffer: ArrayBuffer;
+				mimeType: string;
+				extension: string;
+				basename: string;
+			} = {
+				buffer: new ArrayBuffer(1024),
+				mimeType: "audio/mpeg",
+				extension: "mp3",
+				basename: "episode",
+			},
+		) => {
 			const service = new TranscriptionService(plugin);
 			return (
 				service as unknown as {
@@ -205,17 +218,9 @@ describe("TranscriptionService", () => {
 							basename: string;
 						},
 						update: (message: string) => void,
-					) => Promise<string>;
+					) => Promise<{ body: string; warning?: string }>;
 				}
-			).buildTranscriptBody(
-				{
-					buffer: new ArrayBuffer(1024),
-					mimeType: "audio/mpeg",
-					extension: "mp3",
-					basename: "episode",
-				},
-				() => {},
-			);
+			).buildTranscriptBody(audio, () => {});
 		};
 
 		test("throws when the trimmed Whisper body is empty", async () => {
@@ -231,9 +236,133 @@ describe("TranscriptionService", () => {
 				text: "One. Two.",
 			});
 
-			await expect(buildBody(createMockPlugin())).resolves.toBe(
-				"One.\n\nTwo.",
+			await expect(buildBody(createMockPlugin())).resolves.toEqual({
+				body: "One.\n\nTwo.",
+				warning: undefined,
+			});
+		});
+	});
+
+	describe("failed chunks are not saved as a completed transcript (other-silent-failure)", () => {
+		const buildBodyDirect = (
+			plugin: PodNotes,
+			audio: {
+				buffer: ArrayBuffer;
+				mimeType: string;
+				extension: string;
+				basename: string;
+			},
+		) => {
+			const service = new TranscriptionService(plugin);
+			return (
+				service as unknown as {
+					buildTranscriptBody: (
+						a: typeof audio,
+						update: (message: string) => void,
+					) => Promise<{ body: string; warning?: string }>;
+				}
+			).buildTranscriptBody(audio, () => {});
+		};
+
+		const mp3Audio = (byteLength: number) => ({
+			buffer: new ArrayBuffer(byteLength),
+			mimeType: "audio/mp3",
+			extension: "mp3",
+			basename: "episode",
+		});
+
+		test("throws (no file) when the single chunk fails every retry", async () => {
+			transcriptionsCreateMock.mockRejectedValue(new Error("boom"));
+			vi.useFakeTimers();
+			try {
+				const promise = buildBodyDirect(createMockPlugin(), mp3Audio(1024));
+				const assertion = expect(promise).rejects.toThrow(
+					"Transcription failed: all 1 audio chunk(s) failed or returned no text.",
+				);
+				await vi.runAllTimersAsync();
+				await assertion;
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		test("throws when failed chunks plus empty successes leave no real text", async () => {
+			// >20 MB mp3 → two chunks. chunk 0 fails every retry; chunk 1 "succeeds"
+			// but returns empty text. The body is then only an error marker, which
+			// must NOT be saved as a completed transcript.
+			transcriptionsCreateMock.mockImplementation(
+				async ({ file }: { file: File }) => {
+					if (file.name.includes("part0")) {
+						throw new Error("boom");
+					}
+					return { text: "   " };
+				},
 			);
+
+			vi.useFakeTimers();
+			try {
+				const promise = buildBodyDirect(
+					createMockPlugin(),
+					mp3Audio(20 * 1024 * 1024 + 1024),
+				);
+				const assertion = expect(promise).rejects.toThrow(
+					"Transcription failed: all 2 audio chunk(s) failed or returned no text.",
+				);
+				await vi.runAllTimersAsync();
+				await assertion;
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		test("does not write a file when transcription fails completely", async () => {
+			transcriptionsCreateMock.mockRejectedValue(new Error("boom"));
+			const plugin = createMockPlugin();
+			const service = new TranscriptionService(plugin);
+
+			vi.useFakeTimers();
+			try {
+				const promise = (
+					service as unknown as {
+						transcribeEpisode: (episode: Episode) => Promise<void>;
+					}
+				).transcribeEpisode(mockEpisode);
+				// One chunk, MAX_RETRIES=3 → backoff 1000ms + 2000ms before it gives up.
+				await vi.advanceTimersByTimeAsync(3500);
+				await promise;
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test("keeps an otherwise-good transcript but warns when only some chunks fail", async () => {
+			// A >20 MB mp3 byte-splits into two chunks; fail the second one.
+			transcriptionsCreateMock.mockImplementation(
+				async ({ file }: { file: File }) => {
+					if (file.name.includes("part1")) {
+						throw new Error("boom");
+					}
+					return { text: "Good chunk." };
+				},
+			);
+
+			vi.useFakeTimers();
+			try {
+				const promise = buildBodyDirect(
+					createMockPlugin(),
+					mp3Audio(20 * 1024 * 1024 + 1024),
+				);
+				await vi.runAllTimersAsync();
+				const result = await promise;
+
+				expect(result.body).toContain("Good chunk.");
+				expect(result.body).toContain("[Error transcribing chunk 1]");
+				expect(result.warning).toContain("1 of 2 chunk(s) failed");
+			} finally {
+				vi.useRealTimers();
+			}
 		});
 	});
 });
