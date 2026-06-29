@@ -253,12 +253,13 @@ describe("NoteTemplateEngine renders URL tags verbatim (#160 review)", () => {
 
 	it("does not mutate {{url}}/{{episodeurl}} — local-file wikilinks pass through", () => {
 		// For local-file episodes episode.url is a wikilink, not a URL
-		// (getContextMenuHandler stores generateMarkdownLink, and the episode has
-		// podcastName "local file"). The engine must not strip characters from a
-		// trusted vault link, or it would point at a different file.
+		// (getContextMenuHandler stores generateMarkdownLink, podcastName "local
+		// file", and a plugin-set filePath). The engine must not strip characters
+		// from a trusted vault link, or it would point at a different file.
 		const localFile = {
 			...demoEpisode,
 			podcastName: "local file",
+			filePath: "Audio/Talk \"A\".mp3",
 			url: '[[Talk "A".mp3]]',
 		} as Episode;
 		expect(NoteTemplateEngine("{{url}}", localFile)).toBe('[[Talk "A".mp3]]');
@@ -296,14 +297,15 @@ describe("default note template renders valid frontmatter (#160)", () => {
 		// title carries quotes/colons and {{url}} is a wikilink containing a quote.
 		// Both must stay in the BODY (never a quoted frontmatter scalar) so the
 		// frontmatter always parses. See issue #160 review.
-		const episode: Episode = {
+		const episode = {
 			...demoEpisode,
 			title: 'Why "AI": a deep dive: part 2',
 			url: '[[Audio/Talk "A".mp3]]',
-			// A local-file episode (podcastName "local file") is the only case where
-			// {{url}} is a trusted vault wikilink that passes through verbatim.
+			// A local-file episode (podcastName "local file" + plugin-set filePath) is
+			// the only case where {{url}} is a trusted vault wikilink passed verbatim.
 			podcastName: "local file",
-		};
+			filePath: 'Audio/Talk "A".mp3',
+		} as Episode;
 		const rendered = NoteTemplateEngine(
 			DEFAULT_SETTINGS.note.template,
 			episode,
@@ -855,11 +857,12 @@ describe("feed-controlled wikilink injection is neutralized (deepsec other-wikil
 	});
 
 	it("keeps a real local-file wikilink in {{url}} intact (no false positives)", () => {
-		const local: Episode = {
+		const local = {
 			...demoEpisode,
 			podcastName: "local file",
+			filePath: "Audio/My Talk.mp3", // plugin-set marker; a feed cannot forge it
 			url: "[[Audio/My Talk.mp3]]",
-		};
+		} as Episode;
 		expect(NoteTemplateEngine("{{url}}", local)).toBe("[[Audio/My Talk.mp3]]");
 	});
 
@@ -870,6 +873,22 @@ describe("feed-controlled wikilink injection is neutralized (deepsec other-wikil
 			url: "[[Victims Private Note]]",
 		};
 		const rendered = NoteTemplateEngine("{{url}}", forged);
+		expect(rendered).not.toContain("[[");
+		expect(rendered).not.toContain("]]");
+	});
+
+	it("does not trust a feed whose <title> is forged to 'local file' (no filePath) — P1 #228", () => {
+		// isLocalFile() alone (podcastName === "local file") is feed-controlled: the
+		// feed parser sets podcastName from the channel <title>. Without a plugin-set
+		// filePath the url stays untrusted and must be sanitized, so the bare {{url}}
+		// line cannot be used to inject a wikilink/Markdown after this forgery.
+		const forgedLocal: Episode = {
+			...demoEpisode,
+			podcastName: "local file", // forged feed title, but NO filePath
+			feedUrl: "https://evil.example/feed.xml",
+			url: "[[Victims Private Note]]",
+		};
+		const rendered = NoteTemplateEngine("{{url}}", forgedLocal);
 		expect(rendered).not.toContain("[[");
 		expect(rendered).not.toContain("]]");
 	});

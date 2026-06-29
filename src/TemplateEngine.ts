@@ -254,6 +254,22 @@ function formatTemplateChapters(
 	return lines.map((line) => `${prependToLines}${line}`).join("\n");
 }
 
+/**
+ * Resolve {{url}}/{{episodeurl}}. A genuine local-file episode stores a
+ * vault-generated wikilink in `url` that must pass through verbatim (sanitizing it
+ * would break the link). That trust is gated on the plugin-set `filePath` - a feed
+ * cannot forge it (only `getContextMenuHandler` sets it; `feedParser` never does) -
+ * NOT on `podcastName === "local file"` alone, which an attacker controls via the
+ * feed <title> and could otherwise use to skip sanitization (P1, PR #228 review).
+ * Every other (feed) episode's url is attacker-controlled and is sanitized so it
+ * cannot inject Markdown/wikilinks on the bare `{{url}}` line.
+ */
+function resolveEpisodeUrl(episode: Episode): string {
+	return isLocalFile(episode) && episode.filePath
+		? episode.url
+		: sanitizeUrlForTemplate(episode.url);
+}
+
 export function NoteTemplateEngine(
 	template: string,
 	episode: Episode,
@@ -261,13 +277,7 @@ export function NoteTemplateEngine(
 ) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	// For a local file episode.url is a vault-generated wikilink (trusted, and
-	// mutating it would break the link); for a feed episode it is attacker-
-	// controlled, so it is sanitized so it cannot inject Markdown/wikilinks on the
-	// bare `{{url}}` line. See note-injection findings.
-	const episodeUrl = isLocalFile(episode)
-		? episode.url
-		: sanitizeUrlForTemplate(episode.url);
+	const episodeUrl = resolveEpisodeUrl(episode);
 
 	addTag("title", sanitizeInlineText(episode.title));
 	addTag("description", (prependToLines?: string) => {
@@ -462,10 +472,7 @@ export function TranscriptTemplateEngine(
 
 		return feedHtmlToMarkdown(episode.description);
 	});
-	addTag(
-		"url",
-		isLocalFile(episode) ? episode.url : sanitizeUrlForTemplate(episode.url),
-	);
+	addTag("url", resolveEpisodeUrl(episode));
 	addTag("artwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
 
 	return replacer(template);
