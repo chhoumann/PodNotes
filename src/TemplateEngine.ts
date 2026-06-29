@@ -12,6 +12,7 @@ import { parseEpisodeNumberFromTitle } from "./utility/parseEpisodeNumber";
 import buildEpisodeResumeLink from "./utility/buildEpisodeResumeLink";
 import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
+import { isLocalFile } from "./utility/isLocalFile";
 import type { PodcastSegmentTimes } from "./utility/podcastSegment";
 import type { Chapter } from "./types/Chapter";
 import { normalizeChapters } from "./utility/normalizeChapters";
@@ -166,6 +167,75 @@ function escapeMarkdownText(text: string): string {
 		.replace(/([`*_{}[\]()#+.!|-])/g, "\\$1");
 }
 
+/**
+ * Neutralize Markdown/HTML injection in a raw, feed-controlled single-line value
+ * (an episode/feed title or author) while keeping it human-readable. Newlines and
+ * other control characters are collapsed to spaces so the value can never break
+ * out of its line (e.g. the `# {{title}}` heading) and inject extra blocks, and
+ * the characters that introduce links, images, inline code, or raw HTML are
+ * escaped so a crafted title cannot embed a tracking pixel, phishing link, or
+ * markup. Ordinary punctuation (dots, dashes, parentheses, colons, quotes) is
+ * preserved so legitimate titles render verbatim - this is deliberately lighter
+ * than `escapeMarkdownText` (which backslash-escapes `.`/`-`/`(`/`)` etc.), which
+ * would make a normal title like "Ep. 5 - A.I. (Part 1)" unreadable in source.
+ */
+function sanitizeInlineText(text: string): string {
+	return (
+		text
+			// Collapse control characters (newlines, tabs, carriage returns) to a
+			// single space so the value can never inject extra lines or blocks.
+			// eslint-disable-next-line no-control-regex
+			.replace(/[\u0000-\u001f\u007f]+/g, " ")
+			// Neutralize raw HTML and the link/image/inline-code metacharacters so a
+			// crafted value cannot embed a tracking pixel, phishing link, or markup.
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/([`[\]])/g, "\\$1")
+			.trim()
+	);
+}
+
+/**
+ * Render inert any executable Dataview code fence (```dataviewjs / ```dataview,
+ * including ~~~ fences) that a feed smuggled through `htmlToMarkdown`, in ANY
+ * Markdown container - top level, blockquote, callout, or list item - so the
+ * blockquote/list-indent nesting `htmlToMarkdown` produces cannot hide it.
+ *
+ * A run of three or more fence characters immediately followed by one of these
+ * language tokens only ever occurs as a code-fence info string, so rewriting that
+ * token to a non-executable one is always safe regardless of container or whether
+ * the fence is technically the opener or closer; ordinary code blocks and the rest
+ * of the show-note formatting are left intact. Feed content is never a legitimate
+ * source of executable Dataview (a feed cannot author a query against the reader's
+ * vault), so this has no false positives on genuine show notes.
+ */
+function neutralizeExecutableCodeBlocks(markdown: string): string {
+	return markdown.replace(
+		/(`{3,}|~{3,})[ \t]*(?:dataviewjs|dataview)\b/gi,
+		"$1text",
+	);
+}
+
+/**
+ * Convert feed-controlled HTML to Markdown and render any executable Dataview code
+ * fence inert. `htmlToMarkdown` strips active HTML (scripts, `javascript:`), and
+ * this additionally closes the `<pre><code class="language-dataviewjs">` ->
+ * ```dataviewjs code-execution path.
+ *
+ * Legitimate rich-text formatting in show notes (links, images, ordinary code
+ * blocks) is intentionally preserved: rendering the feed's own show notes is the
+ * purpose of {{description}}/{{content}}. That means a feed can still place an
+ * external image (a reader can disable external image loading in Obsidian) or a
+ * literal [[wikilink]] in this free-text body; unlike the structured tags
+ * ({{title}}, {{podcastlink}}, the URL tags) these are accepted as show-note
+ * content. Inline Dataview queries (`= ...`/`$= ...`) are a known residual of the
+ * same speculative, Dataview-must-be-installed class and are not rewritten here to
+ * avoid mangling legitimate inline code in programming show notes.
+ */
+function feedHtmlToMarkdown(html: string): string {
+	return neutralizeExecutableCodeBlocks(htmlToMarkdown(html));
+}
+
 function formatTemplateChapters(
 	chapters: Chapter[] | undefined,
 	prependToLines?: string,
@@ -191,10 +261,18 @@ export function NoteTemplateEngine(
 ) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	addTag("title", episode.title);
+	// For a local file episode.url is a vault-generated wikilink (trusted, and
+	// mutating it would break the link); for a feed episode it is attacker-
+	// controlled, so it is sanitized so it cannot inject Markdown/wikilinks on the
+	// bare `{{url}}` line. See note-injection findings.
+	const episodeUrl = isLocalFile(episode)
+		? episode.url
+		: sanitizeUrlForTemplate(episode.url);
+
+	addTag("title", sanitizeInlineText(episode.title));
 	addTag("description", (prependToLines?: string) => {
 		// reduce multiple new lines
-		const sanitizeDescription = htmlToMarkdown(episode.description).replace(
+		const sanitizeDescription = feedHtmlToMarkdown(episode.description).replace(
 			/\n{3,}/g,
 			"\n\n",
 		);
@@ -209,17 +287,17 @@ export function NoteTemplateEngine(
 	});
 	addTag("content", (prependToLines?: string) => {
 		if (prependToLines) {
-			return htmlToMarkdown(episode.content)
+			return feedHtmlToMarkdown(episode.content)
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return htmlToMarkdown(episode.content);
+		return feedHtmlToMarkdown(episode.content);
 	});
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
-	addTag("stream", episode.streamUrl);
-	addTag("url", episode.url);
+	addTag("stream", sanitizeUrlForTemplate(episode.streamUrl));
+	addTag("url", episodeUrl);
 	addTag("date", (format?: string) =>
 		episode.episodeDate
 			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
@@ -249,17 +327,22 @@ export function NoteTemplateEngine(
 		"podcast",
 		replaceIllegalFileNameCharactersInString(episode.podcastName),
 	);
-	addTag("artwork", episode.artworkUrl ?? "");
+	addTag("artwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
 
 	// Feed-scoped tags so an episode note can reference its parent podcast feed
 	// without changing the meaning of the existing {{url}}/{{artwork}} tags
 	// (which always describe the episode itself). See issue #163.
-	addTag("episodeurl", episode.url);
-	addTag("episodeartwork", episode.artworkUrl ?? "");
-	addTag("feedurl", episode.feedUrl ?? "");
+	addTag("episodeurl", episodeUrl);
+	addTag("episodeartwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
+	addTag("feedurl", sanitizeUrlForTemplate(episode.feedUrl ?? ""));
 	const parentFeed =
 		get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
-	addTag("feedartwork", parentFeed?.artworkUrl ?? episode.artworkUrl ?? "");
+	addTag(
+		"feedartwork",
+		sanitizeUrlForTemplate(
+			parentFeed?.artworkUrl ?? episode.artworkUrl ?? "",
+		),
+	);
 	// A ready-made wikilink to the parent feed's note, pointing at the same file
 	// createFeedNote writes (derived from the feed-note path setting).
 	addTag("podcastlink", getFeedNoteWikilink(episode.podcastName));
@@ -371,16 +454,19 @@ export function TranscriptTemplateEngine(
 	addTag("transcript", transcription);
 	addTag("description", (prependToLines?: string) => {
 		if (prependToLines) {
-			return htmlToMarkdown(episode.description)
+			return feedHtmlToMarkdown(episode.description)
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return htmlToMarkdown(episode.description);
+		return feedHtmlToMarkdown(episode.description);
 	});
-	addTag("url", episode.url);
-	addTag("artwork", episode.artworkUrl ?? "");
+	addTag(
+		"url",
+		isLocalFile(episode) ? episode.url : sanitizeUrlForTemplate(episode.url),
+	);
+	addTag("artwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
 
 	return replacer(template);
 }
@@ -391,20 +477,22 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 	const safeTitle = replaceIllegalFileNameCharactersInString(feed.title);
 
 	// In a feed note the subject is the feed, so {{url}}/{{artwork}} describe the
-	// feed (mirroring how they describe the episode in NoteTemplateEngine).
-	addTag("title", feed.title);
+	// feed (mirroring how they describe the episode in NoteTemplateEngine). The raw
+	// {{title}}/{{author}} are feed-controlled, so they are neutralized so a crafted
+	// feed cannot inject Markdown/HTML into the note body.
+	addTag("title", sanitizeInlineText(feed.title));
 	addTag("safetitle", safeTitle);
 	addTag("podcast", safeTitle);
-	// URL tags are sanitized so they stay valid inside quoted YAML frontmatter
-	// scalars (the default feed template quotes them). A well-formed URL never
-	// contains a raw double-quote, backslash, or control character.
+	// URL tags are sanitized so they stay safe as Markdown link/image targets and
+	// inside quoted YAML frontmatter scalars (the default feed template uses both).
+	// A well-formed URL never contains the characters this neutralizes.
 	addTag("url", sanitizeUrlForTemplate(feed.link ?? ""));
 	addTag("feedurl", sanitizeUrlForTemplate(feed.url));
 	addTag("artwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
 	addTag("feedartwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
-	addTag("author", feed.author ?? "");
+	addTag("author", sanitizeInlineText(feed.author ?? ""));
 	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = htmlToMarkdown(feed.description ?? "").replace(
+		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "").replace(
 			/\n{3,}/g,
 			"\n\n",
 		);
@@ -470,23 +558,33 @@ export function getFeedNoteWikilink(feedTitle: string): string {
 }
 
 /**
- * Strip the two characters that would break a double-quoted YAML scalar
- * (and never appear in a well-formed URL): the double-quote that ends the
- * scalar and the backslash that YAML reads as an escape. Lossless for valid
- * URLs; only sanitizes malformed feeds so quoted frontmatter stays valid.
+ * Make a feed-controlled URL safe to embed as a Markdown link/image target, a
+ * bare-line autolink, and a double-quoted YAML scalar. A well-formed URL never
+ * contains whitespace, control characters, quotes, backslashes, backticks,
+ * angle brackets, or parentheses/square brackets - all of which would let a
+ * crafted value break out of `![](...)` / `[](...)`, inject extra lines, or
+ * terminate a quoted YAML scalar. They are percent-encoded (not stripped) so
+ * legitimate URLs keep working while malicious feed values are neutralized; the
+ * scheme/path separators (`:` `/` `?` `&` `=` `#` `%`) are preserved so real
+ * URLs are unchanged.
  */
 function sanitizeUrlForTemplate(url: string): string {
-	return url.replace(/["\\]/g, "");
+	// eslint-disable-next-line no-control-regex
+	return url.replace(/[\u0000-\u0020"'`()[\]<>\\]/g, (char) => {
+		return `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`;
+	});
 }
 
 export function replaceIllegalFileNameCharactersInString(string: string) {
 	return (
 		string
 			// Strip characters that are illegal in file names on major platforms,
-			// plus a few the plugin removes for clean paths/wikilinks. Dots are
-			// intentionally preserved so titles like "Episode 1.5" are not mangled
-			// into "Episode 15".
-			.replace(/[\\,#%&{}/*<>$'":@\u2023|?]/g, "")
+			// plus a few the plugin removes for clean paths/wikilinks. The square
+			// brackets are included so a feed-controlled title cannot inject an
+			// Obsidian [[wikilink]] when used as a link name (e.g. {{podcastlink}}
+			// built from a feed <title>). Dots are intentionally preserved so titles
+			// like "Episode 1.5" are not mangled into "Episode 15".
+			.replace(/[\\,#%&{}/*<>$'":@\u2023|?[\]]/g, "")
 			// Replace any control characters (newlines, tabs, carriage returns)
 			// with spaces so they can never end up in a file name.
 			// eslint-disable-next-line no-control-regex

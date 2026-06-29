@@ -41,6 +41,15 @@ describe("replaceIllegalFileNameCharactersInString (via DownloadPathTemplateEngi
 		expect(sanitizeTitle("a#b%c&d{e}f")).toBe("abcdef");
 	});
 
+	it("strips square brackets so a feed title cannot inject a wikilink", () => {
+		// '[' and ']' are wikilink-significant; a feed <title> must not be able to
+		// smuggle a [[wikilink]] through a file-name/link tag (other-wikilink-injection).
+		expect(sanitizeTitle("Real]] [[Victims Private Note")).toBe(
+			"Real Victims Private Note",
+		);
+		expect(sanitizeTitle("a[b]c")).toBe("abc");
+	});
+
 	it("replaces every control character with a space (global), not just the first", () => {
 		expect(sanitizeTitle("a\nb\nc")).toBe("a b c");
 		expect(sanitizeTitle("a\tb\rc")).toBe("a b c");
@@ -244,10 +253,12 @@ describe("NoteTemplateEngine renders URL tags verbatim (#160 review)", () => {
 
 	it("does not mutate {{url}}/{{episodeurl}} — local-file wikilinks pass through", () => {
 		// For local-file episodes episode.url is a wikilink, not a URL
-		// (getContextMenuHandler stores generateMarkdownLink). The engine must not
-		// strip characters from it, or the link would point at a different file.
+		// (getContextMenuHandler stores generateMarkdownLink, and the episode has
+		// podcastName "local file"). The engine must not strip characters from a
+		// trusted vault link, or it would point at a different file.
 		const localFile = {
 			...demoEpisode,
+			podcastName: "local file",
 			url: '[[Talk "A".mp3]]',
 		} as Episode;
 		expect(NoteTemplateEngine("{{url}}", localFile)).toBe('[[Talk "A".mp3]]');
@@ -289,7 +300,9 @@ describe("default note template renders valid frontmatter (#160)", () => {
 			...demoEpisode,
 			title: 'Why "AI": a deep dive: part 2',
 			url: '[[Audio/Talk "A".mp3]]',
-			podcastName: "My Show",
+			// A local-file episode (podcastName "local file") is the only case where
+			// {{url}} is a trusted vault wikilink that passes through verbatim.
+			podcastName: "local file",
 		};
 		const rendered = NoteTemplateEngine(
 			DEFAULT_SETTINGS.note.template,
@@ -301,7 +314,7 @@ describe("default note template renders valid frontmatter (#160)", () => {
 
 		// The podcast link is quoted so its leading [[ isn't read as a flow sequence.
 		expect(line("podcast")).toBe(
-			'podcast: "[[PodNotes/Podcasts/My Show|My Show]]"',
+			'podcast: "[[PodNotes/Podcasts/local file|local file]]"',
 		);
 		// The url is NOT in the frontmatter (it could carry a quote for local files).
 		expect(line("url")).toBeUndefined();
@@ -373,17 +386,19 @@ describe("FeedNoteTemplateEngine (#163)", () => {
 		expect(FeedNoteTemplateEngine("{{url}}", { ...feed, link: undefined })).toBe("");
 	});
 
-	it("strips quote/backslash from URL tags so quoted YAML frontmatter stays valid", () => {
+	it("percent-encodes quote/backslash in URL tags so quoted YAML frontmatter and Markdown targets stay valid", () => {
 		const malformed: PodcastFeed = {
 			...feed,
 			link: 'https://example.com/a?x="b"\\c',
 			artworkUrl: 'https://example.com/art".png',
 		};
+		// Encoded (not stripped) so the value stays a working URL while no raw quote
+		// or backslash can terminate the quoted YAML scalar.
 		expect(FeedNoteTemplateEngine("{{url}}", malformed)).toBe(
-			"https://example.com/a?x=bc",
+			"https://example.com/a?x=%22b%22%5Cc",
 		);
 		expect(FeedNoteTemplateEngine("{{artwork}}", malformed)).toBe(
-			"https://example.com/art.png",
+			"https://example.com/art%22.png",
 		);
 	});
 });
@@ -652,5 +667,210 @@ describe("TranscriptTemplateEngine new tags (#75/#34/#88)", () => {
 		expect(
 			TranscriptTemplateEngine("[{{episodeNumber}}][{{duration}}]", blank, "t"),
 		).toBe("[][]");
+	});
+});
+
+describe("feed content injection is neutralized (deepsec other-markdown-injection)", () => {
+	beforeEach(() => {
+		plugin.set({
+			settings: {
+				feedNote: { path: "PodNotes/Podcasts/{{podcast}}.md" },
+				savedFeeds: {},
+			},
+		} as never);
+		downloadedEpisodes.set({});
+	});
+
+	// The headline attack from the finding: a crafted artwork URL tries to break
+	// out of the default template's `![]({{artwork}})` to inject extra external
+	// images (tracking pixels) and links.
+	it("prevents an artwork URL from breaking out of ![]() to inject images/links", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			artworkUrl: "x)![pwn](http://attacker.example/leak.png) [click](http://phish)",
+		};
+		const rendered = NoteTemplateEngine("![]({{artwork}})", malicious);
+
+		// Exactly one image, and the wrapping parens are the only parens left, so
+		// nothing escaped the target. The attacker's image/link markdown is inert.
+		expect((rendered.match(/!\[/g) ?? []).length).toBe(1);
+		expect(rendered).toMatch(/^!\[\]\([^()]*\)$/);
+		expect(rendered).not.toContain("](http://attacker.example/leak.png)");
+		expect(rendered).not.toContain("[click](http://phish)");
+	});
+
+	it("neutralizes a feed {{url}}/{{stream}} that injects Markdown on a bare line", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			podcastName: "Evil Pod", // not a local file -> feed-controlled URL
+			url: "x](http://phish) [more](http://evil)",
+			streamUrl: "x)![pwn](http://attacker.example/s.png)",
+		};
+		const url = NoteTemplateEngine("{{url}}", malicious);
+		const stream = NoteTemplateEngine("{{stream}}", malicious);
+
+		for (const value of [url, stream]) {
+			// No raw Markdown link/image metacharacters survive to form a link/image.
+			expect(value).not.toMatch(/[[\]()]/);
+			expect(value).not.toContain("](");
+		}
+	});
+
+	it("collapses newlines and neutralizes Markdown in a raw {{title}}", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			title:
+				"Real Title\n\n# Injected Heading\n\n![pixel](http://attacker.example/t.png)",
+		};
+		const rendered = NoteTemplateEngine("# {{title}}", malicious);
+
+		// Stays a single line: the title can no longer inject extra blocks/headings.
+		expect(rendered.split("\n")).toHaveLength(1);
+		// The image marker is escaped so it cannot load an external (tracking) image.
+		expect(rendered).not.toMatch(/!\[pixel\]\(/);
+		expect(rendered).toContain("\\[pixel\\]");
+	});
+
+	it("renders an injected ```dataviewjs code block inert while keeping normal formatting", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			// htmlToMarkdown is a passthrough in the test mock, so this is what a feed
+			// <content:encoded> would yield after conversion.
+			content:
+				"```dataviewjs\napp.vault.getFiles().forEach(f => f.unlink())\n```\n\nSome [docs](https://example.com) and a normal block:\n\n```js\nconsole.log(1)\n```",
+		};
+		const rendered = NoteTemplateEngine("{{content}}", malicious);
+
+		// The executable language is dropped; the code remains visible but inert.
+		expect(rendered).not.toContain("```dataviewjs");
+		expect(rendered).toContain("```text");
+		expect(rendered).toContain("app.vault.getFiles()");
+		// Legitimate formatting (links, ordinary code fences) is preserved.
+		expect(rendered).toContain("[docs](https://example.com)");
+		expect(rendered).toContain("```js");
+	});
+
+	it("neutralizes ~~~dataview and case/spacing variants of executable fences", () => {
+		const variants: Episode = {
+			...demoEpisode,
+			content: "~~~ DataViewJS\n42\n~~~",
+		};
+		const rendered = NoteTemplateEngine("{{content}}", variants);
+		expect(rendered.toLowerCase()).not.toContain("dataviewjs");
+		expect(rendered).toContain("~~~text");
+		expect(rendered).toContain("42");
+	});
+
+	// Regression: htmlToMarkdown nests feed HTML in blockquotes/callouts and list
+	// items, which would hide an executable fence from a line-anchored scanner.
+	it("neutralizes a dataviewjs fence nested in a blockquote, callout, or list item", () => {
+		const blockquoted: Episode = {
+			...demoEpisode,
+			content: "> ```dataviewjs\n> evil()\n> ```",
+		};
+		const callout: Episode = {
+			...demoEpisode,
+			content: "> [!note]\n> ```dataview\n> TABLE file.name\n> ```",
+		};
+		const listIndented: Episode = {
+			...demoEpisode,
+			content: "- item\n\n    ```dataviewjs\n    evil()\n    ```",
+		};
+
+		for (const ep of [blockquoted, callout, listIndented]) {
+			const rendered = NoteTemplateEngine("{{content}}", ep).toLowerCase();
+			expect(rendered).not.toContain("```dataviewjs");
+			expect(rendered).not.toContain("```dataview");
+		}
+	});
+
+	// Regression: a closing fence shorter than the opener must not desync a scanner
+	// into skipping a later executable fence.
+	it("neutralizes a dataviewjs fence that follows a longer fenced block", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			content: "`````text\n```\n`````\n```dataviewjs\nevil()\n```",
+		};
+		const rendered = NoteTemplateEngine("{{content}}", malicious);
+		expect(rendered).not.toContain("```dataviewjs");
+	});
+
+	it("preserves legitimate episode metadata verbatim", () => {
+		// A normal episode must be unaffected by the sanitizers.
+		expect(NoteTemplateEngine("# {{title}}", demoEpisode)).toBe("# Episode 1");
+		expect(NoteTemplateEngine("{{url}}|{{artwork}}", demoEpisode)).toBe(
+			"https://example.com/ep1|https://example.com/ep1.png",
+		);
+		// A title with ordinary punctuation (dots, colons, quotes, parens) is kept.
+		const punctuated: Episode = {
+			...demoEpisode,
+			title: 'Ep. 5: A.I. & You (Part 1)',
+		};
+		expect(NoteTemplateEngine("# {{title}}", punctuated)).toBe(
+			"# Ep. 5: A.I. & You (Part 1)",
+		);
+	});
+});
+
+describe("feed-controlled wikilink injection is neutralized (deepsec other-wikilink-injection)", () => {
+	beforeEach(() => {
+		plugin.set({
+			settings: {
+				feedNote: { path: "PodNotes/Podcasts/{{podcast}}.md" },
+				savedFeeds: {},
+			},
+		} as never);
+		downloadedEpisodes.set({});
+	});
+
+	it("strips brackets from a feed title so getFeedNoteWikilink emits a single wikilink", () => {
+		const link = getFeedNoteWikilink("Real]] [[Victims Private Note");
+		expect(link).toBe(
+			"[[PodNotes/Podcasts/Real Victims Private Note|Real Victims Private Note]]",
+		);
+		// No extra wikilink boundary smuggled in.
+		expect(link).not.toContain("]] [[");
+	});
+
+	it("prevents a feed podcastName from injecting a wikilink into {{podcastlink}}/{{podcast}}/{{safetitle}}", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			podcastName: "Real]] [[Victims Private Note",
+		};
+		const podcastlink = NoteTemplateEngine("{{podcastlink}}", malicious);
+		expect(podcastlink).not.toContain("]] [[");
+		expect(podcastlink).toBe(
+			"[[PodNotes/Podcasts/Real Victims Private Note|Real Victims Private Note]]",
+		);
+
+		expect(NoteTemplateEngine("{{podcast}}", malicious)).toBe(
+			"Real Victims Private Note",
+		);
+		expect(
+			NoteTemplateEngine("{{safetitle}}", {
+				...demoEpisode,
+				title: "Title]] [[Injected",
+			}),
+		).toBe("Title Injected");
+	});
+
+	it("keeps a real local-file wikilink in {{url}} intact (no false positives)", () => {
+		const local: Episode = {
+			...demoEpisode,
+			podcastName: "local file",
+			url: "[[Audio/My Talk.mp3]]",
+		};
+		expect(NoteTemplateEngine("{{url}}", local)).toBe("[[Audio/My Talk.mp3]]");
+	});
+
+	it("neutralizes a feed episode whose url forges a wikilink", () => {
+		const forged: Episode = {
+			...demoEpisode,
+			podcastName: "Evil Pod", // a feed, so the url is untrusted
+			url: "[[Victims Private Note]]",
+		};
+		const rendered = NoteTemplateEngine("{{url}}", forged);
+		expect(rendered).not.toContain("[[");
+		expect(rendered).not.toContain("]]");
 	});
 });
