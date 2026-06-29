@@ -11,6 +11,9 @@ on:
   repository_dispatch:
     types: [release-trigger]
 
+# Default-deny baseline; the release job grants only the scopes it needs below.
+permissions: {}
+
 jobs:
   release:
     name: Release
@@ -29,21 +32,16 @@ jobs:
       version: ${{ steps.extract-version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-
-      - name: Setup Deno
-        uses: denolib/setup-deno@v2
-        with:
-          deno-version: v1.x
 
       - name: Validate trigger
         id: validate
@@ -103,7 +101,7 @@ jobs:
       # by this workflow (GitHub attestations API).
       - name: Attest build provenance for release assets
         if: steps.release.outputs.released == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: |
             main.js
