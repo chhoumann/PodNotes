@@ -1225,6 +1225,23 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		expect(result.basename).toBe("recording");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		"file:///Users/victim/.ssh/id_rsa",
+		"http://169.254.169.254/latest/meta-data/",
+		"http://127.0.0.1:9200/_search",
+	])(
+		"refuses to fetch a feed-controlled stream URL pointing at %s (SSRF/exfil guard)",
+		async (streamUrl) => {
+			const ssrf = episode({
+				title: "Malicious Enclosure",
+				streamUrl,
+			});
+
+			await expect(getEpisodeAudioBuffer(ssrf)).rejects.toThrow(/Refusing/);
+			expect(requestUrlMock).not.toHaveBeenCalled();
+		},
+	);
 });
 
 describe("downloadEpisodeWithNotice (streaming range path)", () => {

@@ -188,6 +188,89 @@ describe("writeStreamedFile", () => {
 	});
 });
 
+describe("download size cap (resource exhaustion)", () => {
+	it("rejects a 206 whose advertised total exceeds the cap, up front", async () => {
+		requestUrlMock.mockResolvedValue(
+			res(206, [1, 2, 3, 4], {
+				"content-type": "audio/mpeg",
+				"content-range": "bytes 0-3/1099511627776", // 1 TiB
+			}),
+		);
+
+		await expect(
+			probeAndFetchFirstChunk("https://x/ep.mp3", 4, 100),
+		).rejects.toThrow(/maximum allowed size/);
+	});
+
+	it("rejects a 200 fallback whose whole body exceeds the cap", async () => {
+		// Server ignores Range and returns the entire (oversized) body in one 200.
+		requestUrlMock.mockResolvedValue(
+			res(200, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { "content-type": "audio/mpeg" }),
+		);
+
+		await expect(
+			probeAndFetchFirstChunk("https://x/ep.mp3", 4, 5),
+		).rejects.toThrow(/maximum allowed size/);
+	});
+
+	it("aborts the 206 loop once the running total exceeds the cap (unknown-total infinite stream)", async () => {
+		const a = setupAdapter();
+		// A malicious server with an unknown total ("/*") that returns full-size
+		// chunks forever — only the running-total cap can stop it.
+		requestUrlMock.mockResolvedValue(res(206, [9, 9]));
+
+		await expect(
+			writeStreamedFile(
+				"https://x/ep.mp3",
+				"out.mp3",
+				probe({ totalSize: null, firstChunk: new Uint8Array([1, 2]).buffer }),
+				undefined,
+				2, // chunkSize
+				5, // maxSize
+			),
+		).rejects.toThrow(/maximum allowed size/);
+
+		// It stopped instead of writing without bound.
+		expect((a.writes.get("out.mp3")?.length ?? 0)).toBeLessThanOrEqual(5 + 2);
+	});
+
+	it("rejects when even the first chunk already exceeds the cap", async () => {
+		const a = setupAdapter();
+
+		await expect(
+			writeStreamedFile(
+				"https://x/ep.mp3",
+				"out.mp3",
+				probe({ firstChunk: new Uint8Array([1, 2, 3, 4, 5, 6]).buffer, supportsRange: false }),
+				undefined,
+				2,
+				5,
+			),
+		).rejects.toThrow(/maximum allowed size/);
+		expect(a.writeBinary).not.toHaveBeenCalled();
+	});
+});
+
+describe("SSRF guard", () => {
+	it.each([
+		"http://169.254.169.254/latest/meta-data/",
+		"http://127.0.0.1:8080/ep.mp3",
+		"file:///Users/victim/.ssh/id_rsa",
+	])("probeAndFetchFirstChunk refuses %s without issuing a request", async (url) => {
+		await expect(probeAndFetchFirstChunk(url, 4)).rejects.toThrow(/Refusing/);
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+
+	it("writeStreamedFile refuses a blocked URL before touching the adapter", async () => {
+		const a = setupAdapter();
+		await expect(
+			writeStreamedFile("http://192.168.0.1/ep.mp3", "out.mp3", probe(), undefined, 2),
+		).rejects.toThrow(/Refusing/);
+		expect(a.writeBinary).not.toHaveBeenCalled();
+		expect(requestUrlMock).not.toHaveBeenCalled();
+	});
+});
+
 describe("partialPathFor / isPartialPath", () => {
 	it("builds a dot-prefixed sibling temp in the same folder", () => {
 		const tmp = partialPathFor("Podcasts/Show/Ep 1.mp3");

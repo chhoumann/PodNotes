@@ -171,6 +171,33 @@ describe("podNotesURIHandler", () => {
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 	});
 
+	test.each([
+		"http://169.254.169.254/latest/meta-data/",
+		"http://127.0.0.1:8080/feed.xml",
+		"http://192.168.0.1/feed.xml",
+	])(
+		"refuses a deep link whose url points at an internal host (%s) without fetching",
+		async (url) => {
+			const revealPlayer = vi.fn();
+
+			await podNotesURIHandler(
+				{
+					action: "podnotes",
+					url,
+					episodeName: "Some Episode",
+				},
+				api as never,
+				revealPlayer,
+			);
+
+			// The attacker-controlled url is never handed to the feed parser.
+			expect(mockGetEpisodes).not.toHaveBeenCalled();
+			expect(get(currentEpisode)).toBeUndefined();
+			expect(get(viewState)).toBe(ViewState.PodcastGrid);
+			expect(revealPlayer).not.toHaveBeenCalled();
+		},
+	);
+
 	test("keeps the requested segment end for the player to apply after loading metadata", async () => {
 		await podNotesURIHandler(
 			{

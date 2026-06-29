@@ -1,6 +1,7 @@
 import { type DataAdapter, requestUrl } from "obsidian";
 import { get } from "svelte/store";
 import { plugin } from "../store";
+import { assertFetchableUrl } from "../utility/assertFetchableUrl";
 import { encodeUrlForRequest } from "../utility/encodeUrlForRequest";
 import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
 
@@ -24,6 +25,23 @@ import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
 // file — the same shape the pre-#113 atomic createBinary path produced.
 
 export const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
+
+// Total-bytes ceiling for a single download. The per-chunk bound above keeps
+// peak memory flat, but without a TOTAL cap a malicious media server (the host of
+// a feed's enclosure URL is attacker-controlled) can fill the disk: it can answer
+// 200 with an enormous body, advertise an arbitrarily large Content-Range total,
+// or - with an unknown total ("bytes 0-N/*") - return full-size 206 chunks forever
+// so the append loop never terminates. 2 GiB clears any real podcast episode
+// (long-form audio is ~hundreds of MB; even large video episodes fit) while
+// turning the unbounded write into a bounded, recoverable failure.
+export const MAX_DOWNLOAD_SIZE = 2 * 1024 * 1024 * 1024; // 2 GiB
+
+function tooLargeError(maxSize: number): Error {
+	const maxMb = Math.round(maxSize / (1024 * 1024));
+	return new Error(
+		`Download exceeds the maximum allowed size (${maxMb} MB). Aborting.`,
+	);
+}
 
 // Obsidian's DataAdapter — writeBinary/rename/remove/list, all used below — is
 // fully typed and public. Only `appendBinary` exists at runtime on the desktop and
@@ -69,7 +87,9 @@ function readHeader(
 export async function probeAndFetchFirstChunk(
 	url: string,
 	chunkSize: number = DOWNLOAD_CHUNK_SIZE,
+	maxSize: number = MAX_DOWNLOAD_SIZE,
 ): Promise<RangeProbe> {
+	assertFetchableUrl(url);
 	const encodedUrl = encodeUrlForRequest(url);
 	const response = await requestUrl({
 		url: encodedUrl,
@@ -104,6 +124,17 @@ export async function probeAndFetchFirstChunk(
 		}
 	}
 
+	// Reject an oversized download up front: a known total over the cap, or a 200
+	// fallback whose whole body (requestUrl has already buffered it) is over the
+	// cap. The unknown-total 206 case can't be caught here and is bounded by the
+	// running-total check in writeStreamedFile instead.
+	if (totalSize !== null && totalSize > maxSize) {
+		throw tooLargeError(maxSize);
+	}
+	if (!supportsRange && response.arrayBuffer.byteLength > maxSize) {
+		throw tooLargeError(maxSize);
+	}
+
 	return {
 		firstChunk: response.arrayBuffer,
 		contentType,
@@ -123,8 +154,14 @@ export async function writeStreamedFile(
 	probe: RangeProbe,
 	onProgress?: (written: number, total: number | null) => void,
 	chunkSize: number = DOWNLOAD_CHUNK_SIZE,
+	maxSize: number = MAX_DOWNLOAD_SIZE,
 ): Promise<number> {
+	assertFetchableUrl(url);
 	const adapter = appendableAdapter();
+
+	if (probe.firstChunk.byteLength > maxSize) {
+		throw tooLargeError(maxSize);
+	}
 
 	await adapter.writeBinary(destPath, probe.firstChunk);
 	let written = probe.firstChunk.byteLength;
@@ -165,6 +202,14 @@ export async function writeStreamedFile(
 		await adapter.appendBinary(destPath, chunk);
 		written += chunk.byteLength;
 		onProgress?.(written, probe.totalSize);
+
+		// Hard ceiling on the total written. This is the only stop for a server
+		// that advertises an unknown total ("bytes 0-N/*") and returns full-size
+		// 206 chunks forever — without it the loop would append to disk until the
+		// disk fills. The caller's finally drops the (now over-cap) temp file.
+		if (written > maxSize) {
+			throw tooLargeError(maxSize);
+		}
 
 		// Unknown total: a short chunk means we hit EOF.
 		if (probe.totalSize === null && chunk.byteLength < chunkSize) break;
