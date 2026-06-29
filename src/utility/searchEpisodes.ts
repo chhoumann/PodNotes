@@ -9,17 +9,36 @@ const fuseOptions = {
     keys: ["title"],
 };
 
-const fuseCache = new WeakMap<Episode[], { fuse: Fuse<Episode>; size: number }>();
+const fuseCache = new WeakMap<
+    Episode[],
+    { fuse: Fuse<Episode>; signature: string }
+>();
+
+// Fingerprint the searchable content of the list. The Fuse index is keyed by the
+// array reference, but the same reference can be mutated in place (an entry
+// swapped or its title edited) while keeping the same length, so length alone is
+// too weak a validity check - it would hand back an index built from the old
+// contents. The signature captures each episode's title (the only indexed field)
+// and streamUrl (its stable identity, so a same-title swap is still detected) in
+// order, so any content or ordering change rebuilds the index while an unchanged
+// list keeps reusing it across keystrokes. JSON framing keeps it collision-free
+// regardless of what the titles and URLs contain.
+function contentSignature(episodes: Episode[]): string {
+    return JSON.stringify(
+        episodes.map((episode) => [episode.title, episode.streamUrl]),
+    );
+}
 
 function getFuse(episodes: Episode[]): Fuse<Episode> {
+    const signature = contentSignature(episodes);
     const cached = fuseCache.get(episodes);
 
-    if (cached && cached.size === episodes.length) {
+    if (cached && cached.signature === signature) {
         return cached.fuse;
     }
 
     const newFuse = new Fuse(episodes, fuseOptions);
-    fuseCache.set(episodes, { fuse: newFuse, size: episodes.length });
+    fuseCache.set(episodes, { fuse: newFuse, signature });
 
     return newFuse;
 }
