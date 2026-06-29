@@ -132,6 +132,16 @@ describe("formatSpeakerLabel (#168)", () => {
 	it("prefixes the label when the template has no token", () => {
 		expect(formatSpeakerLabel("> ", "A")).toBe("A: > ");
 	});
+
+	it("inserts a label containing $-replacement patterns verbatim", () => {
+		// `$&`, `$\``, `$'`, `$$` are special in a String.replace replacement string;
+		// the label must be inserted literally rather than expanded to matched text.
+		const speaker = "$`$'$&$$";
+		expect(formatSpeakerLabel("**{{speaker}}:** ", speaker)).toBe(
+			`**${speaker}:** `,
+		);
+		expect(formatSpeakerLabel("{{speaker}} - ", speaker)).toBe(`${speaker} - `);
+	});
 });
 
 describe("renderDiarizedTranscript (#168)", () => {
