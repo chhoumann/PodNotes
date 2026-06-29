@@ -6,11 +6,17 @@ import type { PodcastFeed } from "./types/PodcastFeed";
 // parse/validate/serialize logic: FeedParser would otherwise make real network
 // requests for every imported feed, and savedFeeds pulls in the whole store.
 const savedFeeds = writable<Record<string, PodcastFeed>>({});
-const getFeed = vi.fn(async (url: string) => ({
+const defaultGetFeed = async (url: string) => ({
 	title: `Feed for ${url}`,
 	url,
 	artworkUrl: "",
-}));
+});
+const getFeed = vi.fn(defaultGetFeed);
+
+// Every string the import flow renders into the progress Notice is recorded
+// here so tests can assert on what the user actually sees (e.g. no "NaN%", an
+// accurate saved count).
+const noticeMessages = vi.hoisted(() => [] as string[]);
 
 vi.mock("./store", () => ({
 	get savedFeeds() {
@@ -29,8 +35,12 @@ vi.mock("./parser/feedParser", () => ({
 // uses so the import flow can run to completion under jsdom.
 vi.mock("obsidian", () => ({
 	Notice: class {
-		constructor(public message?: unknown) {}
-		setMessage() {}
+		constructor(message?: unknown) {
+			if (typeof message === "string") noticeMessages.push(message);
+		}
+		setMessage(message?: unknown) {
+			if (typeof message === "string") noticeMessages.push(message);
+		}
 		hide() {}
 	},
 }));
@@ -39,7 +49,9 @@ import { exportOPML, importOPML } from "./opml";
 
 beforeEach(() => {
 	savedFeeds.set({});
-	getFeed.mockClear();
+	getFeed.mockReset();
+	getFeed.mockImplementation(defaultGetFeed);
+	noticeMessages.length = 0;
 });
 
 /** Minimal Obsidian App stub capturing the single file vault.create writes. */
@@ -188,5 +200,130 @@ describe("importOPML (IE-01)", () => {
 
 		expect(getFeed).not.toHaveBeenCalled();
 		expect(Object.keys(get(savedFeeds))).toEqual(["Existing"]);
+	});
+
+	it("never renders 'NaN%' when every feed is already subscribed", async () => {
+		savedFeeds.set({
+			Existing: {
+				title: "Existing",
+				url: "https://dup.test/feed",
+				artworkUrl: "",
+			},
+		});
+
+		const opml =
+			"<opml><body>" +
+			'<outline text="Dup" xmlUrl="https://dup.test/feed" />' +
+			"</body></opml>";
+
+		await importOPML(opml);
+
+		// Nothing to fetch, so the 0/0 progress division must not surface as NaN.
+		expect(getFeed).not.toHaveBeenCalled();
+		expect(noticeMessages.some((m) => m.includes("NaN"))).toBe(false);
+		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(
+			true,
+		);
+	});
+
+	it("reports the saved count, not the fetched count, on duplicate titles", async () => {
+		// Two distinct URLs that resolve to the same feed title. Both fetch fine,
+		// but the title-keyed store can only hold one of them.
+		getFeed.mockImplementation(async (url: string) => ({
+			title: "Same Title",
+			url,
+			artworkUrl: "",
+		}));
+
+		const opml =
+			"<opml><body>" +
+			'<outline text="A" xmlUrl="https://a.test/feed" />' +
+			'<outline text="B" xmlUrl="https://b.test/feed" />' +
+			"</body></opml>";
+
+		await importOPML(opml);
+
+		expect(getFeed).toHaveBeenCalledTimes(2);
+		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
+		// Exactly one was written, so the summary must say "Saved 1", not "Saved 2".
+		expect(noticeMessages.some((m) => m.includes("Saved 1 new podcasts"))).toBe(
+			true,
+		);
+		expect(noticeMessages.some((m) => m.includes("Saved 2 new podcasts"))).toBe(
+			false,
+		);
+		expect(
+			noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles")),
+		).toBe(true);
+	});
+
+	it("counts a title-collision against an existing feed as not saved", async () => {
+		// The existing feed has a different URL, so the new feed passes the
+		// URL-dedup and is fetched, but its title collides and it is dropped.
+		savedFeeds.set({
+			"Same Title": {
+				title: "Same Title",
+				url: "https://old.test/feed",
+				artworkUrl: "",
+			},
+		});
+		getFeed.mockImplementation(async (url: string) => ({
+			title: "Same Title",
+			url,
+			artworkUrl: "",
+		}));
+
+		const opml =
+			"<opml><body>" +
+			'<outline text="New" xmlUrl="https://new.test/feed" />' +
+			"</body></opml>";
+
+		await importOPML(opml);
+
+		expect(getFeed).toHaveBeenCalledTimes(1);
+		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
+		// The original feed must be preserved, not overwritten.
+		expect(get(savedFeeds)["Same Title"].url).toBe("https://old.test/feed");
+		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(
+			true,
+		);
+		expect(
+			noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles")),
+		).toBe(true);
+	});
+
+	it("reports URL-skipped and title-dropped feeds in distinct counters", async () => {
+		// One feed is already saved by URL (skipped before fetch); two new feeds
+		// share a title (one saved, one title-dropped). Each bucket is counted on
+		// its own axis so the summary stays honest.
+		savedFeeds.set({
+			Old: { title: "Old", url: "https://old.test/feed", artworkUrl: "" },
+		});
+		getFeed.mockImplementation(async (url: string) => ({
+			title: "Shared",
+			url,
+			artworkUrl: "",
+		}));
+
+		const opml =
+			"<opml><body>" +
+			'<outline text="Old" xmlUrl="https://old.test/feed" />' +
+			'<outline text="A" xmlUrl="https://a.test/feed" />' +
+			'<outline text="B" xmlUrl="https://b.test/feed" />' +
+			"</body></opml>";
+
+		await importOPML(opml);
+
+		// Only the two new URLs are fetched; one is saved, the other title-dropped.
+		expect(getFeed).toHaveBeenCalledTimes(2);
+		expect(Object.keys(get(savedFeeds)).sort()).toEqual(["Old", "Shared"]);
+		expect(
+			noticeMessages.some(
+				(m) =>
+					m.includes("Saved 1 new podcasts") &&
+					m.includes("Skipped 1 existing podcasts") &&
+					m.includes("Skipped 1 with duplicate titles"),
+			),
+		).toBe(true);
 	});
 });
