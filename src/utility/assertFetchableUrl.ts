@@ -154,7 +154,7 @@ function parseIpv6(input: string): number[] | null {
 	if (halves.length === 2) {
 		const missing = 8 - left.length - right.length;
 		if (missing < 1) return null; // "::" must stand for at least one zero group
-		return [...left, ...new Array<number>(missing).fill(0), ...right];
+		return [...left, ...Array.from({ length: missing }, () => 0), ...right];
 	}
 
 	return left.length === 8 ? left : null;

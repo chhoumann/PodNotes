@@ -310,7 +310,7 @@ export class TranscriptionService {
 		updateNotice: (message: string) => void,
 	): Promise<{ text: string; failedChunks: number }> {
 		const client = await this.getClient();
-		const transcriptions: string[] = new Array(files.length);
+		const transcriptions: string[] = Array.from({ length: files.length });
 		let completedChunks = 0;
 		let failedChunks = 0;
 		let nextIndex = 0;
