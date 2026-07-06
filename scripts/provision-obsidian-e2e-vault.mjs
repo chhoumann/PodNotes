@@ -102,8 +102,7 @@ export const DEFAULT_PODNOTES_DATA = {
 	diarizationApiKey: "",
 	transcript: {
 		path: "transcripts/{{podcast}}/{{title}}.md",
-		template:
-			"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
+		template: "# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
 		diarization: {
 			enabled: false,
 			provider: "openai",
@@ -192,8 +191,7 @@ function toOptionKey(arg) {
 export function resolveProvisionOptions(rawOptions, cwd = process.cwd()) {
 	const worktreePath = path.resolve(cwd, rawOptions.worktree ?? ".");
 	const vaultName =
-		rawOptions.vault ??
-		`${DEFAULT_VAULT_PREFIX}-${slugify(path.basename(worktreePath))}`;
+		rawOptions.vault ?? `${DEFAULT_VAULT_PREFIX}-${slugify(path.basename(worktreePath))}`;
 	// Default the vault root to the *worktree* (not cwd) so the provisioned vault
 	// always lives inside the checkout whose plugin it links. Anchoring to cwd
 	// would put `--worktree /other/checkout` vaults under the caller's directory,
@@ -203,9 +201,7 @@ export function resolveProvisionOptions(rawOptions, cwd = process.cwd()) {
 		? path.resolve(cwd, rawOptions.root)
 		: path.join(worktreePath, DEFAULT_ROOT);
 	const vaultPath = path.resolve(rootPath, vaultName);
-	const dataPath = rawOptions.data
-		? path.resolve(cwd, rawOptions.data)
-		: undefined;
+	const dataPath = rawOptions.data ? path.resolve(cwd, rawOptions.data) : undefined;
 
 	return {
 		dataPath,
@@ -248,10 +244,7 @@ async function assertRequiredPluginFiles(worktreePath) {
 
 async function writeJson(filePath, value) {
 	await fs.mkdir(path.dirname(filePath), { recursive: true });
-	await fs.writeFile(
-		`${filePath}.tmp`,
-		`${JSON.stringify(value, null, "\t")}\n`,
-	);
+	await fs.writeFile(`${filePath}.tmp`, `${JSON.stringify(value, null, "\t")}\n`);
 	await fs.rename(`${filePath}.tmp`, filePath);
 }
 
@@ -273,15 +266,11 @@ async function linkPluginFile(sourcePath, destinationPath, force) {
 		}
 
 		const currentTarget = await fs.readlink(destinationPath);
-		if (
-			path.resolve(path.dirname(destinationPath), currentTarget) === sourcePath
-		) {
+		if (path.resolve(path.dirname(destinationPath), currentTarget) === sourcePath) {
 			return;
 		}
 
-		throw new Error(
-			`${destinationPath} points at ${currentTarget}. Use --force to relink it.`,
-		);
+		throw new Error(`${destinationPath} points at ${currentTarget}. Use --force to relink it.`);
 	}
 
 	await fs.symlink(sourcePath, destinationPath);
@@ -297,9 +286,7 @@ export async function provisionVault(options) {
 	await writeJsonIfMissing(path.join(obsidianPath, "app.json"), {});
 	await writeJsonIfMissing(path.join(obsidianPath, "appearance.json"), {});
 	await writeJsonIfMissing(path.join(obsidianPath, "core-plugins.json"), []);
-	await writeJson(path.join(obsidianPath, "community-plugins.json"), [
-		PLUGIN_ID,
-	]);
+	await writeJson(path.join(obsidianPath, "community-plugins.json"), [PLUGIN_ID]);
 	await writeJsonIfMissing(path.join(obsidianPath, "workspace.json"), {
 		main: { id: "podnotes-e2e", type: "split", children: [] },
 		left: { id: "podnotes-e2e-left", type: "split", children: [] },

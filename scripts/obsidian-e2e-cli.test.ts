@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	obsidianCommandArgs,
-	obsidianEnv,
-	parseArgs,
-} from "./obsidian-e2e-cli.mjs";
+import { obsidianCommandArgs, obsidianEnv, parseArgs } from "./obsidian-e2e-cli.mjs";
 
 describe("obsidian-e2e-cli", () => {
 	it("defaults to an eval of the vault name when no Obsidian command is provided", () => {
@@ -63,11 +59,7 @@ describe("obsidian-e2e-cli", () => {
 				"eval",
 				"code=app.vault.getName()",
 			]),
-		).toEqual([
-			"vault=podnotes-worktree-a",
-			"eval",
-			"code=app.vault.getName()",
-		]);
+		).toEqual(["vault=podnotes-worktree-a", "eval", "code=app.vault.getName()"]);
 	});
 
 	it("runs Obsidian CLI commands with the isolated HOME", () => {

@@ -40,9 +40,7 @@ const externalDeps = [
 	"@lezer/lr",
 ];
 
-const builtinExternals = builtinModules.filter(
-	(moduleName) => !moduleName.startsWith("_"),
-);
+const builtinExternals = builtinModules.filter((moduleName) => !moduleName.startsWith("_"));
 
 const external = [
 	...externalDeps,

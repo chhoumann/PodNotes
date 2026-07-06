@@ -2,13 +2,20 @@
 	"name": "podnotes",
 	"version": "2.17.2",
 	"description": "Helps you write notes on podcasts.",
+	"keywords": [],
+	"license": "MIT",
+	"author": "Christian Bager Bach Houmann",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/chhoumann/PodNotes.git"
+	},
 	"main": "main.js",
 	"scripts": {
 		"dev": "vite build --watch --mode development",
 		"build": "npm run typecheck && vite build",
 		"typecheck": "tsc --noEmit",
 		"lint": "oxlint --deny-warnings src tests/e2e scripts",
-		"format:check": "biome check package.json manifest.json tsconfig.json .oxlintrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts tests/e2e scripts",
+		"format:check": "oxfmt --check package.json manifest.json tsconfig.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts tests/e2e scripts",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"semantic-release": "semantic-release",
 		"test": "npm run check:a11y && vitest",
@@ -19,16 +26,14 @@
 		"stop:e2e-obsidian": "node scripts/stop-obsidian-e2e-instance.mjs",
 		"check:a11y": "svelte-check --fail-on-warnings",
 		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
-		"docs:deploy": "npm run docs:build && npx wrangler pages deploy docs/site --project-name podnotes --branch master"
+		"docs:deploy": "npm run docs:build && npx wrangler pages deploy docs/site --project-name podnotes --branch master",
+		"format": "oxfmt package.json manifest.json tsconfig.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts tests/e2e scripts"
 	},
-	"keywords": [],
-	"author": "Christian Bager Bach Houmann",
-	"license": "MIT",
-	"engines": {
-		"node": ">=22.0.0"
+	"dependencies": {
+		"fuse.js": "^7.4.2",
+		"openai": "^6.45.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.2",
 		"@semantic-release/git": "^10.0.1",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@testing-library/jest-dom": "^6.9.1",
@@ -39,6 +44,7 @@
 		"jsdom": "^27.2.0",
 		"obsidian": "1.13.1",
 		"obsidian-e2e": "0.6.0",
+		"oxfmt": "^0.52.0",
 		"oxlint": "^1.67.0",
 		"semantic-release": "^25.0.5",
 		"svelte": "^5.43.14",
@@ -48,10 +54,6 @@
 		"typescript": "6.0.3",
 		"vite": "^8.1.3",
 		"vitest": "^4.1.10"
-	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/chhoumann/PodNotes.git"
 	},
 	"overrides": {
 		"@actions/http-client": {
@@ -113,8 +115,7 @@
 			]
 		]
 	},
-	"dependencies": {
-		"fuse.js": "^7.4.2",
-		"openai": "^6.45.0"
+	"engines": {
+		"node": ">=22.0.0"
 	}
 }

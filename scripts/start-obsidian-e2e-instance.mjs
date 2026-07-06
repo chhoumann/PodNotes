@@ -103,14 +103,8 @@ function toOptionKey(arg) {
 
 export function resolveInstanceOptions(rawOptions, cwd = process.cwd()) {
 	const provisionOptions = resolveProvisionOptions(rawOptions, cwd);
-	const profileRoot = path.resolve(
-		cwd,
-		rawOptions.profileRoot ?? DEFAULT_PROFILE_ROOT,
-	);
-	const instanceId = stableInstanceId(
-		provisionOptions.worktreePath,
-		provisionOptions.vaultName,
-	);
+	const profileRoot = path.resolve(cwd, rawOptions.profileRoot ?? DEFAULT_PROFILE_ROOT);
+	const instanceId = stableInstanceId(provisionOptions.worktreePath, provisionOptions.vaultName);
 	const instancePath = path.join(profileRoot, instanceId);
 	const obsidianHome = path.join(instancePath, "home");
 
@@ -220,11 +214,7 @@ async function linkHostKeychains(options) {
 }
 
 function stableVaultId(vaultPath) {
-	return crypto
-		.createHash("sha256")
-		.update(path.resolve(vaultPath))
-		.digest("hex")
-		.slice(0, 16);
+	return crypto.createHash("sha256").update(path.resolve(vaultPath)).digest("hex").slice(0, 16);
 }
 
 async function writeJson(filePath, value) {
@@ -341,10 +331,7 @@ export async function waitForInstanceReady(options) {
 			lastError = `resolved ${actualPath}, expected ${expectedPath}`;
 		} catch (error) {
 			lastError =
-				error?.stderr?.trim() ||
-				error?.stdout?.trim() ||
-				error?.message ||
-				String(error);
+				error?.stderr?.trim() || error?.stdout?.trim() || error?.message || String(error);
 		}
 		await sleep(READY_INTERVAL_MS);
 	}
@@ -355,11 +342,7 @@ export async function waitForInstanceReady(options) {
 }
 
 export async function trustVaultAndVerifyPodNotes(options) {
-	await execObsidian(options, [
-		`vault=${options.vaultName}`,
-		"plugins:restrict",
-		"off",
-	]);
+	await execObsidian(options, [`vault=${options.vaultName}`, "plugins:restrict", "off"]);
 
 	const deadline = Date.now() + READY_TIMEOUT_MS;
 	let lastError = "";
@@ -374,10 +357,7 @@ export async function trustVaultAndVerifyPodNotes(options) {
 			lastError = stdout.trim();
 		} catch (error) {
 			lastError =
-				error?.stderr?.trim() ||
-				error?.stdout?.trim() ||
-				error?.message ||
-				String(error);
+				error?.stderr?.trim() || error?.stdout?.trim() || error?.message || String(error);
 		}
 		await sleep(READY_INTERVAL_MS);
 	}
@@ -390,11 +370,7 @@ export async function trustVaultAndVerifyPodNotes(options) {
 export async function reloadPodNotes(options) {
 	// Reload the plugin so a reused instance picks up a rebuilt main.js (the
 	// symlink target) instead of running the bundle it loaded earlier.
-	await execObsidian(options, [
-		`vault=${options.vaultName}`,
-		"plugin:reload",
-		"id=podnotes",
-	]);
+	await execObsidian(options, [`vault=${options.vaultName}`, "plugin:reload", "id=podnotes"]);
 }
 
 function sleep(ms) {
@@ -426,9 +402,7 @@ function shellQuote(value) {
 // runtime). Logs go to stderr so `--print-env` keeps stdout to `export …` lines.
 export async function reapStaleInstances(options) {
 	try {
-		const { reapOrphanedInstances } = await import(
-			"./stop-obsidian-e2e-instance.mjs"
-		);
+		const { reapOrphanedInstances } = await import("./stop-obsidian-e2e-instance.mjs");
 		await reapOrphanedInstances({
 			profileRoot: options.profileRoot,
 			exceptInstancePath: options.instancePath,

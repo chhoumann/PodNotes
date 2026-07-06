@@ -19,9 +19,7 @@ async function makeTempDir(name: string) {
 
 afterEach(async () => {
 	await Promise.all(
-		tempRoots
-			.splice(0)
-			.map((dir) => fs.rm(dir, { recursive: true, force: true })),
+		tempRoots.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
 	);
 });
 
@@ -67,9 +65,7 @@ describe("start-obsidian-e2e-instance", () => {
 		);
 
 		const profile = await prepareObsidianProfile(options);
-		const registry = JSON.parse(
-			await fs.readFile(profile.obsidianJsonPath, "utf8"),
-		);
+		const registry = JSON.parse(await fs.readFile(profile.obsidianJsonPath, "utf8"));
 		const vaults = Object.values(registry.vaults) as Array<{
 			path: string;
 			open: boolean;
@@ -77,16 +73,8 @@ describe("start-obsidian-e2e-instance", () => {
 
 		expect(registry.cli).toBe(true);
 		expect(registry.updateDisabled).toBe(true);
-		const hostKeychains = path.join(
-			process.env.HOME ?? "",
-			"Library",
-			"Keychains",
-		);
-		const privateKeychains = path.join(
-			options.obsidianHome,
-			"Library",
-			"Keychains",
-		);
+		const hostKeychains = path.join(process.env.HOME ?? "", "Library", "Keychains");
+		const privateKeychains = path.join(options.obsidianHome, "Library", "Keychains");
 		if (await exists(hostKeychains)) {
 			await expect(fs.readlink(privateKeychains)).resolves.toBe(hostKeychains);
 		} else {
@@ -95,9 +83,7 @@ describe("start-obsidian-e2e-instance", () => {
 			});
 		}
 		expect(
-			options.obsidianHome.startsWith(
-				path.join(cwd, "profiles", "podnotes-worktree-a-"),
-			),
+			options.obsidianHome.startsWith(path.join(cwd, "profiles", "podnotes-worktree-a-")),
 		).toBe(true);
 		expect(options.obsidianHome.endsWith("/home")).toBe(true);
 		expect(vaults).toEqual([
@@ -124,12 +110,12 @@ describe("start-obsidian-e2e-instance", () => {
 		};
 
 		expect(toInstanceShellExports(base)).not.toContain("OBSIDIAN_BIN=");
-		expect(
-			toInstanceShellExports({ ...base, obsidianBin: "obsidian" }),
-		).not.toContain("OBSIDIAN_BIN=");
-		expect(
-			toInstanceShellExports({ ...base, obsidianBin: "/opt/custom/obsidian" }),
-		).toContain("export OBSIDIAN_BIN='/opt/custom/obsidian'");
+		expect(toInstanceShellExports({ ...base, obsidianBin: "obsidian" })).not.toContain(
+			"OBSIDIAN_BIN=",
+		);
+		expect(toInstanceShellExports({ ...base, obsidianBin: "/opt/custom/obsidian" })).toContain(
+			"export OBSIDIAN_BIN='/opt/custom/obsidian'",
+		);
 	});
 });
 

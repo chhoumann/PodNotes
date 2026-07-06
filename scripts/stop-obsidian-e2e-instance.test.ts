@@ -23,9 +23,7 @@ async function makeTempDir(name: string) {
 
 afterEach(async () => {
 	await Promise.all(
-		tempRoots
-			.splice(0)
-			.map((dir) => fs.rm(dir, { recursive: true, force: true })),
+		tempRoots.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
 	);
 });
 
@@ -119,20 +117,17 @@ describe("commandMatchesInstance", () => {
 	});
 
 	it("does not match a sibling whose id merely shares this one as a prefix", () => {
-		expect(
-			commandMatchesInstance(
-				`--user-data-dir=${INSTANCE}-extra/home/x`,
-				INSTANCE,
-			),
-		).toBe(false);
+		expect(commandMatchesInstance(`--user-data-dir=${INSTANCE}-extra/home/x`, INSTANCE)).toBe(
+			false,
+		);
 	});
 
 	it("does not match a process that mentions the path outside the --user-data-dir flag", () => {
 		// e.g. a log tail or editor referencing a file under the instance dir must
 		// never be pulled into the kill set.
-		expect(
-			commandMatchesInstance(`tail -f ${INSTANCE}/home/obsidian.log`, INSTANCE),
-		).toBe(false);
+		expect(commandMatchesInstance(`tail -f ${INSTANCE}/home/obsidian.log`, INSTANCE)).toBe(
+			false,
+		);
 	});
 });
 
@@ -180,9 +175,7 @@ describe("stopInstance", () => {
 			graceMs: 20,
 		});
 
-		const termed = calls
-			.filter((c) => c.signal === "SIGTERM")
-			.map((c) => c.pid);
+		const termed = calls.filter((c) => c.signal === "SIGTERM").map((c) => c.pid);
 		expect(termed).toEqual([100, 101, 102, 103]);
 		expect(calls.some((c) => c.signal === "SIGKILL")).toBe(false);
 		expect(removed).toEqual([INSTANCE]);
@@ -199,9 +192,7 @@ describe("stopInstance", () => {
 			pollMs: 1,
 			graceMs: 5,
 		});
-		const killed = calls
-			.filter((c) => c.signal === "SIGKILL")
-			.map((c) => c.pid);
+		const killed = calls.filter((c) => c.signal === "SIGKILL").map((c) => c.pid);
 		expect(killed).toEqual([100, 101, 102, 103]);
 		expect(result.killed).toEqual([100, 101, 102, 103]);
 	});
@@ -288,11 +279,7 @@ describe("stopInstance", () => {
 });
 
 describe("orphan detection", () => {
-	async function seedInstance(
-		profileRoot: string,
-		id: string,
-		vaultPath: string,
-	) {
+	async function seedInstance(profileRoot: string, id: string, vaultPath: string) {
 		const udd = path.join(
 			profileRoot,
 			id,
@@ -311,27 +298,15 @@ describe("orphan detection", () => {
 
 	it("reads the registered vault paths", async () => {
 		const root = await makeTempDir("podnotes-profiles");
-		const instance = await seedInstance(
-			root,
-			"podnotes-a-aaaaaaaaaaaa",
-			"/x/y",
-		);
+		const instance = await seedInstance(root, "podnotes-a-aaaaaaaaaaaa", "/x/y");
 		await expect(readInstanceVaultPaths(instance)).resolves.toEqual(["/x/y"]);
 	});
 
 	it("is orphaned only when every backing vault is gone", async () => {
 		const root = await makeTempDir("podnotes-profiles");
 		const liveVault = await makeTempDir("live-vault");
-		const live = await seedInstance(
-			root,
-			"podnotes-live-bbbbbbbbbbbb",
-			liveVault,
-		);
-		const gone = await seedInstance(
-			root,
-			"podnotes-gone-cccccccccccc",
-			"/does/not/exist",
-		);
+		const live = await seedInstance(root, "podnotes-live-bbbbbbbbbbbb", liveVault);
+		const gone = await seedInstance(root, "podnotes-gone-cccccccccccc", "/does/not/exist");
 
 		await expect(isInstanceOrphaned(live)).resolves.toBe(false);
 		await expect(isInstanceOrphaned(gone)).resolves.toBe(true);
@@ -342,22 +317,14 @@ describe("orphan detection", () => {
 		const liveWorktree = await makeTempDir("live-worktree");
 
 		// marker worktree alive, but the vault leaf is gone -> NOT orphaned
-		const spared = await seedInstance(
-			root,
-			"podnotes-m1-aaaaaaaaaaaa",
-			"/vault/leaf/gone",
-		);
+		const spared = await seedInstance(root, "podnotes-m1-aaaaaaaaaaaa", "/vault/leaf/gone");
 		await fs.writeFile(
 			path.join(spared, "podnotes-e2e-instance.json"),
 			JSON.stringify({ worktreePath: liveWorktree }),
 		);
 
 		// marker worktree gone, but the vault still exists -> orphaned (leaked)
-		const leaked = await seedInstance(
-			root,
-			"podnotes-m2-bbbbbbbbbbbb",
-			liveWorktree,
-		);
+		const leaked = await seedInstance(root, "podnotes-m2-bbbbbbbbbbbb", liveWorktree);
 		await fs.writeFile(
 			path.join(leaked, "podnotes-e2e-instance.json"),
 			JSON.stringify({ worktreePath: "/worktree/removed/on/merge" }),
@@ -376,11 +343,7 @@ describe("orphan detection", () => {
 });
 
 describe("reapOrphanedInstances", () => {
-	async function seedInstance(
-		profileRoot: string,
-		id: string,
-		vaultPath: string,
-	) {
+	async function seedInstance(profileRoot: string, id: string, vaultPath: string) {
 		const udd = path.join(
 			profileRoot,
 			id,
@@ -400,21 +363,9 @@ describe("reapOrphanedInstances", () => {
 	it("reaps only orphaned instances, skipping live ones, the exception, and non-instance dirs", async () => {
 		const root = await makeTempDir("podnotes-profiles");
 		const liveVault = await makeTempDir("live-vault");
-		const live = await seedInstance(
-			root,
-			"podnotes-live-bbbbbbbbbbbb",
-			liveVault,
-		);
-		const orphan = await seedInstance(
-			root,
-			"podnotes-gone-cccccccccccc",
-			"/does/not/exist",
-		);
-		const current = await seedInstance(
-			root,
-			"podnotes-current-dddddddddddd",
-			"/also/gone",
-		);
+		const live = await seedInstance(root, "podnotes-live-bbbbbbbbbbbb", liveVault);
+		const orphan = await seedInstance(root, "podnotes-gone-cccccccccccc", "/does/not/exist");
+		const current = await seedInstance(root, "podnotes-current-dddddddddddd", "/also/gone");
 		await fs.mkdir(path.join(root, "not-an-instance"), { recursive: true });
 
 		const removed: string[] = [];
@@ -436,16 +387,8 @@ describe("reapOrphanedInstances", () => {
 
 	it("continues reaping the rest of the scan when one orphan's teardown fails", async () => {
 		const root = await makeTempDir("podnotes-profiles");
-		const bad = await seedInstance(
-			root,
-			"podnotes-bad-aaaaaaaaaaaa",
-			"/gone/1",
-		);
-		const good = await seedInstance(
-			root,
-			"podnotes-good-bbbbbbbbbbbb",
-			"/gone/2",
-		);
+		const bad = await seedInstance(root, "podnotes-bad-aaaaaaaaaaaa", "/gone/1");
+		const good = await seedInstance(root, "podnotes-good-bbbbbbbbbbbb", "/gone/2");
 		const removed: string[] = [];
 		const logs: string[] = [];
 

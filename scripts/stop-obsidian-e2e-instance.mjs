@@ -4,10 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
-import {
-	INSTANCE_MARKER_FILE,
-	resolveInstanceOptions,
-} from "./start-obsidian-e2e-instance.mjs";
+import { INSTANCE_MARKER_FILE, resolveInstanceOptions } from "./start-obsidian-e2e-instance.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -106,19 +103,13 @@ function stripPrivatePrefix(value) {
 
 export function commandMatchesInstance(command, instancePath) {
 	const stripped = stripPrivatePrefix(instancePath);
-	const variants = new Set([
-		instancePath,
-		stripped,
-		stripped.replace(/^\//, "/private/"),
-	]);
+	const variants = new Set([instancePath, stripped, stripped.replace(/^\//, "/private/")]);
 	// Seed only on the Obsidian `--user-data-dir=` flag whose value is THIS
 	// instance's profile dir (with a trailing separator). Scoping to the flag, not
 	// a bare substring, means an unrelated process that merely mentions the path —
 	// a log tail, an editor, a grep — is never pulled into the kill set. The
 	// trailing slash stops a sibling whose id shares this one as a leading string.
-	return [...variants].some((variant) =>
-		command.includes(`--user-data-dir=${variant}/`),
-	);
+	return [...variants].some((variant) => command.includes(`--user-data-dir=${variant}/`));
 }
 
 export function parsePsOutput(stdout) {
@@ -170,9 +161,7 @@ export function collectInstancePids(processes, instancePath, options = {}) {
 
 function assertSafeInstancePath(instancePath, profileRoot) {
 	if (!instancePath || !path.isAbsolute(instancePath)) {
-		throw new Error(
-			`Refusing to remove non-absolute instance path: ${instancePath}`,
-		);
+		throw new Error(`Refusing to remove non-absolute instance path: ${instancePath}`);
 	}
 	const base = path.basename(instancePath);
 	if (!INSTANCE_DIR_PATTERN.test(base)) {
@@ -188,10 +177,7 @@ function assertSafeInstancePath(instancePath, profileRoot) {
 	// Containment guard: when the caller knows the profile root, the dir we remove
 	// must be a direct child of it. Real callers always do, so a bad --profile-root
 	// can never make us rm a path outside the e2e profile tree.
-	if (
-		profileRoot &&
-		path.resolve(path.dirname(instancePath)) !== path.resolve(profileRoot)
-	) {
+	if (profileRoot && path.resolve(path.dirname(instancePath)) !== path.resolve(profileRoot)) {
 		throw new Error(
 			`Refusing to remove ${instancePath}: not a direct child of profile root ${profileRoot}.`,
 		);
@@ -199,11 +185,9 @@ function assertSafeInstancePath(instancePath, profileRoot) {
 }
 
 async function defaultRunPs() {
-	const { stdout } = await execFileAsync(
-		"ps",
-		["-axww", "-o", "pid=,ppid=,command="],
-		{ maxBuffer: 16 * 1024 * 1024 },
-	);
+	const { stdout } = await execFileAsync("ps", ["-axww", "-o", "pid=,ppid=,command="], {
+		maxBuffer: 16 * 1024 * 1024,
+	});
 	return stdout;
 }
 
@@ -274,8 +258,7 @@ export async function stopInstance(instancePath, options = {}) {
 		await sleep(pollMs);
 		survivors = survivors.filter((pid) => pidAlive(pid, kill));
 	}
-	const killed =
-		survivors.length > 0 ? signalPids(survivors, "SIGKILL", kill) : [];
+	const killed = survivors.length > 0 ? signalPids(survivors, "SIGKILL", kill) : [];
 
 	await removeDir(instancePath);
 
@@ -320,9 +303,7 @@ async function pathExists(target) {
 export async function readInstanceMarker(instancePath, deps = {}) {
 	const readFile = deps.readFile ?? ((file) => fs.readFile(file, "utf8"));
 	try {
-		return JSON.parse(
-			await readFile(path.join(instancePath, INSTANCE_MARKER_FILE)),
-		);
+		return JSON.parse(await readFile(path.join(instancePath, INSTANCE_MARKER_FILE)));
 	} catch {
 		return null;
 	}
@@ -376,8 +357,7 @@ export async function reapOrphanedInstances(options = {}) {
 	let scanned = 0;
 	const except = exceptInstancePath ? path.resolve(exceptInstancePath) : null;
 	for (const entry of entries) {
-		if (!entry.isDirectory() || !INSTANCE_DIR_PATTERN.test(entry.name))
-			continue;
+		if (!entry.isDirectory() || !INSTANCE_DIR_PATTERN.test(entry.name)) continue;
 		const instancePath = path.join(profileRoot, entry.name);
 		if (except && path.resolve(instancePath) === except) continue;
 		scanned += 1;
@@ -393,9 +373,7 @@ export async function reapOrphanedInstances(options = {}) {
 			await stopInstance(instancePath, { ...deps, profileRoot, dryRun: false });
 			reaped.push(instancePath);
 		} catch (error) {
-			log(
-				`Failed to reap ${entry.name}: ${error instanceof Error ? error.message : error}`,
-			);
+			log(`Failed to reap ${entry.name}: ${error instanceof Error ? error.message : error}`);
 		}
 	}
 

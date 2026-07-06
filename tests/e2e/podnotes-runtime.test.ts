@@ -165,10 +165,7 @@ describe("PodNotes runtime", () => {
 
 		const state = await waitForPlaybackState(
 			obsidian,
-			(value) =>
-				value.title === episode.title &&
-				value.isPlaying &&
-				value.currentTime === 12,
+			(value) => value.title === episode.title && value.isPlaying && value.currentTime === 12,
 		);
 
 		expect(state).toMatchObject({
@@ -213,10 +210,7 @@ describe("PodNotes runtime", () => {
 	test("captures a linked segment into the active editor", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
 		const audioPath = await seedAudio(sandbox, "capture-segment-episode.mp3");
-		const episode = createLocalEpisode(
-			"E2E Capture Segment Episode",
-			audioPath,
-		);
+		const episode = createLocalEpisode("E2E Capture Segment Episode", audioPath);
 		const notePath = sandbox.path("capture-segment-target.md");
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -229,12 +223,7 @@ describe("PodNotes runtime", () => {
 
 		await obsidian.command(`${PLUGIN_ID}:capture-segment-10s`).run();
 
-		const expectedLink = `- ${expectedTimestampLink(
-			"00:01:55-00:02:05",
-			episode,
-			115,
-			125,
-		)}`;
+		const expectedLink = `- ${expectedTimestampLink("00:01:55-00:02:05", episode, 115, 125)}`;
 		const content = await sandbox.waitForContent(
 			"capture-segment-target.md",
 			(value) => value.includes(expectedLink),
@@ -246,12 +235,7 @@ describe("PodNotes runtime", () => {
 		expect(content).toContain("endTime=125");
 
 		await obsidian.command(`${PLUGIN_ID}:capture-segment-20s`).run();
-		const expected20SecondLink = expectedTimestampLink(
-			"00:01:45-00:02:05",
-			episode,
-			105,
-			125,
-		);
+		const expected20SecondLink = expectedTimestampLink("00:01:45-00:02:05", episode, 105, 125);
 		const contentWithBothSegments = await sandbox.waitForContent(
 			"capture-segment-target.md",
 			(value) => value.includes(expected20SecondLink),
@@ -290,9 +274,7 @@ describe("PodNotes runtime", () => {
 		const state = await waitForPlaybackState(
 			obsidian,
 			(value) =>
-				value.title === episode.title &&
-				!value.isPlaying &&
-				value.currentTime === 125,
+				value.title === episode.title && !value.isPlaying && value.currentTime === 125,
 		);
 
 		expect(state).toMatchObject({
@@ -336,10 +318,7 @@ describe("PodNotes runtime", () => {
 	test("previous-track Media Session action captures a timestamp into the active editor", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
 		const audioPath = await seedAudio(sandbox, "headphone-capture-episode.mp3");
-		const episode = createLocalEpisode(
-			"E2E Headphone Capture Episode",
-			audioPath,
-		);
+		const episode = createLocalEpisode("E2E Headphone Capture Episode", audioPath);
 		const notePath = sandbox.path("headphone-capture-target.md");
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -352,10 +331,7 @@ describe("PodNotes runtime", () => {
 			await openMarkdownFile(obsidian, notePath);
 			await setPlayback(obsidian, { currentTime: 95, paused: false });
 
-			const action = await invokeRecordedMediaSessionAction(
-				obsidian,
-				"previoustrack",
-			);
+			const action = await invokeRecordedMediaSessionAction(obsidian, "previoustrack");
 			expect(action).toMatchObject({
 				action: "previoustrack",
 				ok: true,
@@ -376,14 +352,8 @@ describe("PodNotes runtime", () => {
 
 	test("previous-track Media Session action appends to the episode note without an active editor", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(
-			sandbox,
-			"headphone-background-episode.mp3",
-		);
-		const episode = createLocalEpisode(
-			"E2E Background Capture Episode",
-			audioPath,
-		);
+		const audioPath = await seedAudio(sandbox, "headphone-background-episode.mp3");
+		const episode = createLocalEpisode("E2E Background Capture Episode", audioPath);
 		const noteRelativePath = `${episode.title}.md`;
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -405,10 +375,7 @@ describe("PodNotes runtime", () => {
 			`);
 			expect(noEditor).toBe(true);
 
-			const action = await invokeRecordedMediaSessionAction(
-				obsidian,
-				"previoustrack",
-			);
+			const action = await invokeRecordedMediaSessionAction(obsidian, "previoustrack");
 			expect(action).toMatchObject({
 				action: "previoustrack",
 				ok: true,
@@ -437,10 +404,7 @@ describe("PodNotes runtime", () => {
 		await waitForPodNotesReady(obsidian);
 
 		await setVolume(obsidian, 0.42);
-		await plugin.waitForData<PodNotesData>(
-			(data) => data.defaultVolume === 0.42,
-			WAIT_OPTS,
-		);
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.42, WAIT_OPTS);
 
 		await setVolume(obsidian, 1.5);
 		const data = await plugin.waitForData<PodNotesData>(
@@ -454,10 +418,7 @@ describe("PodNotes runtime", () => {
 	});
 });
 
-async function seedAudio(
-	sandbox: SandboxApi,
-	fileName: string,
-): Promise<string> {
+async function seedAudio(sandbox: SandboxApi, fileName: string): Promise<string> {
 	await sandbox.write(fileName, "podnotes e2e audio placeholder", {
 		waitForContent: true,
 		waitOptions: WAIT_OPTS,
@@ -900,9 +861,7 @@ async function installMediaSessionRecorder(
 	);
 
 	if (!result.ok) {
-		throw new Error(
-			result.error ?? "Failed to install Media Session recorder.",
-		);
+		throw new Error(result.error ?? "Failed to install Media Session recorder.");
 	}
 }
 
