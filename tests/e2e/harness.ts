@@ -45,11 +45,7 @@ export type PodNotesE2EContext = {
 	sandbox: SandboxApi;
 };
 
-const repoRoot = path.resolve(
-	path.dirname(fileURLToPath(import.meta.url)),
-	"..",
-	"..",
-);
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export function createPodNotesE2EHarness(testName: string) {
 	const state: HarnessState = {};
@@ -123,9 +119,7 @@ export function createPodNotesE2EHarness(testName: string) {
 			if (!state.obsidian) return undefined;
 			return clearVaultRunLockMarker(state.obsidian);
 		});
-		await runTeardown("release vault lock", errors, () =>
-			state.lock?.release(),
-		);
+		await runTeardown("release vault lock", errors, () => state.lock?.release());
 
 		if (errors.length > 0) {
 			throw errors[0];
@@ -203,9 +197,7 @@ async function flushPodNotesSaves(obsidian: ObsidianClient): Promise<void> {
 	);
 }
 
-export async function waitForPodNotesReady(
-	obsidian: ObsidianClient,
-): Promise<void> {
+export async function waitForPodNotesReady(obsidian: ObsidianClient): Promise<void> {
 	await obsidian.waitFor(
 		async () => {
 			return await obsidian.dev.evalJson<boolean>(`
@@ -226,10 +218,7 @@ type AsyncEvalEnvelope<T> =
 	| { ok: true; value: T }
 	| { error: { message: string; stack?: string }; ok: false };
 
-export async function evalJsonAsync<T>(
-	obsidian: ObsidianClient,
-	code: string,
-): Promise<T> {
+export async function evalJsonAsync<T>(obsidian: ObsidianClient, code: string): Promise<T> {
 	const envelope = await obsidian.dev.eval<AsyncEvalEnvelope<T>>(`
 		(async () => {
 			const code = ${JSON.stringify(code)};
@@ -262,9 +251,7 @@ export async function evalJsonAsync<T>(
 	return envelope.value;
 }
 
-export async function openPodNotesView(
-	obsidian: ObsidianClient,
-): Promise<void> {
+export async function openPodNotesView(obsidian: ObsidianClient): Promise<void> {
 	const result = await evalJsonAsync<{
 		activeViewType: string | null;
 		count: number;
@@ -305,10 +292,7 @@ async function assertDevVaultSymlinks(vaultPath: string): Promise<void> {
 	await assertSymlinkTarget(pluginDir, "manifest.json");
 }
 
-async function assertSymlinkTarget(
-	pluginDir: string,
-	fileName: string,
-): Promise<void> {
+async function assertSymlinkTarget(pluginDir: string, fileName: string): Promise<void> {
 	const linkPath = path.join(pluginDir, fileName);
 	const expected = path.join(repoRoot, fileName);
 	let target: string;

@@ -23,14 +23,8 @@ async function makeTempDir(name: string) {
 // so a seeded worktree never has a styles.css to link.
 async function seedWorktree(dir: string, label: string) {
 	await fs.mkdir(dir, { recursive: true });
-	await fs.writeFile(
-		path.join(dir, "manifest.json"),
-		JSON.stringify({ id: "podnotes" }),
-	);
-	await fs.writeFile(
-		path.join(dir, "main.js"),
-		`console.log(${JSON.stringify(label)});\n`,
-	);
+	await fs.writeFile(path.join(dir, "manifest.json"), JSON.stringify({ id: "podnotes" }));
+	await fs.writeFile(path.join(dir, "main.js"), `console.log(${JSON.stringify(label)});\n`);
 }
 
 async function readLinkedTarget(filePath: string) {
@@ -39,9 +33,7 @@ async function readLinkedTarget(filePath: string) {
 
 afterEach(async () => {
 	await Promise.all(
-		tempRoots
-			.splice(0)
-			.map((dir) => fs.rm(dir, { recursive: true, force: true })),
+		tempRoots.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
 	);
 });
 
@@ -102,37 +94,27 @@ describe("provision-obsidian-e2e-vault", () => {
 		});
 
 		const result = await provisionVault(options);
-		const pluginPath = path.join(
-			result.vaultPath,
-			".obsidian",
-			"plugins",
-			"podnotes",
-		);
+		const pluginPath = path.join(result.vaultPath, ".obsidian", "plugins", "podnotes");
 
 		await expect(
-			fs.readFile(
-				path.join(result.vaultPath, ".obsidian", "community-plugins.json"),
-				"utf8",
-			),
+			fs.readFile(path.join(result.vaultPath, ".obsidian", "community-plugins.json"), "utf8"),
 		).resolves.toBe('[\n\t"podnotes"\n]\n');
-		await expect(
-			readLinkedTarget(path.join(pluginPath, "main.js")),
-		).resolves.toBe(path.join(worktree, "main.js"));
-		await expect(
-			readLinkedTarget(path.join(pluginPath, "manifest.json")),
-		).resolves.toBe(path.join(worktree, "manifest.json"));
+		await expect(readLinkedTarget(path.join(pluginPath, "main.js"))).resolves.toBe(
+			path.join(worktree, "main.js"),
+		);
+		await expect(readLinkedTarget(path.join(pluginPath, "manifest.json"))).resolves.toBe(
+			path.join(worktree, "manifest.json"),
+		);
 		// CSS is injected into main.js, so no styles.css link is created.
-		await expect(
-			fs.lstat(path.join(pluginPath, "styles.css")),
-		).rejects.toMatchObject({ code: "ENOENT" });
+		await expect(fs.lstat(path.join(pluginPath, "styles.css"))).rejects.toMatchObject({
+			code: "ENOENT",
+		});
 		const seededData = JSON.parse(
 			await fs.readFile(path.join(pluginPath, "data.json"), "utf8"),
 		);
 		expect(seededData).toEqual(DEFAULT_PODNOTES_DATA);
 		expect(toShellExports(result)).toContain("PODNOTES_E2E_VAULT='podnotes-a'");
-		expect(toShellExports(result)).toContain(
-			`PODNOTES_E2E_VAULT_PATH='${result.vaultPath}'`,
-		);
+		expect(toShellExports(result)).toContain(`PODNOTES_E2E_VAULT_PATH='${result.vaultPath}'`);
 	});
 
 	it("keeps separately provisioned worktrees isolated", async () => {
@@ -157,27 +139,11 @@ describe("provision-obsidian-e2e-vault", () => {
 			}),
 		);
 
-		const mainA = path.join(
-			resultA.vaultPath,
-			".obsidian",
-			"plugins",
-			"podnotes",
-			"main.js",
-		);
-		const mainB = path.join(
-			resultB.vaultPath,
-			".obsidian",
-			"plugins",
-			"podnotes",
-			"main.js",
-		);
+		const mainA = path.join(resultA.vaultPath, ".obsidian", "plugins", "podnotes", "main.js");
+		const mainB = path.join(resultB.vaultPath, ".obsidian", "plugins", "podnotes", "main.js");
 
-		await expect(readLinkedTarget(mainA)).resolves.toBe(
-			path.join(worktreeA, "main.js"),
-		);
-		await expect(readLinkedTarget(mainB)).resolves.toBe(
-			path.join(worktreeB, "main.js"),
-		);
+		await expect(readLinkedTarget(mainA)).resolves.toBe(path.join(worktreeA, "main.js"));
+		await expect(readLinkedTarget(mainB)).resolves.toBe(path.join(worktreeB, "main.js"));
 		expect(resultA.vaultPath).not.toBe(resultB.vaultPath);
 	});
 
@@ -198,16 +164,12 @@ describe("provision-obsidian-e2e-vault", () => {
 		const result = await provisionVault(options);
 		const dataPath = path.join(result.pluginPath, "data.json");
 		// First provision with --data copies the seed verbatim (not DEFAULT_PODNOTES_DATA).
-		await expect(fs.readFile(dataPath, "utf8")).resolves.toBe(
-			'{"podNotes":{"seed":true}}\n',
-		);
+		await expect(fs.readFile(dataPath, "utf8")).resolves.toBe('{"podNotes":{"seed":true}}\n');
 
 		await fs.writeFile(dataPath, '{"podNotes":{"kept":true}}\n');
 		await provisionVault(options);
 
-		await expect(fs.readFile(dataPath, "utf8")).resolves.toBe(
-			'{"podNotes":{"kept":true}}\n',
-		);
+		await expect(fs.readFile(dataPath, "utf8")).resolves.toBe('{"podNotes":{"kept":true}}\n');
 	});
 
 	it("fails fast when the worktree has no built plugin artifacts", async () => {
@@ -215,9 +177,7 @@ describe("provision-obsidian-e2e-vault", () => {
 		const worktree = await makeTempDir("podnotes-worktree-empty");
 
 		await expect(
-			provisionVault(
-				resolveProvisionOptions({ root, vault: "podnotes-empty", worktree }),
-			),
+			provisionVault(resolveProvisionOptions({ root, vault: "podnotes-empty", worktree })),
 		).rejects.toThrow(/missing manifest\.json, main\.js/);
 	});
 });

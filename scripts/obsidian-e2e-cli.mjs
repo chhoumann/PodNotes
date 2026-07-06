@@ -57,9 +57,7 @@ export function parseArgs(argv) {
 			const next = argv[index + 1];
 			if (
 				index === 0 &&
-				(next === "--help" ||
-					BOOLEAN_OPTIONS.has(next) ||
-					VALUE_OPTIONS.has(next))
+				(next === "--help" || BOOLEAN_OPTIONS.has(next) || VALUE_OPTIONS.has(next))
 			) {
 				continue;
 			}
@@ -134,14 +132,10 @@ export async function ensureObsidianInstance(options) {
 
 function spawnObsidian(options, commandArgs) {
 	return new Promise((resolve) => {
-		const child = spawn(
-			options.obsidianBin,
-			obsidianCommandArgs(options, commandArgs),
-			{
-				env: obsidianEnv(options),
-				stdio: "inherit",
-			},
-		);
+		const child = spawn(options.obsidianBin, obsidianCommandArgs(options, commandArgs), {
+			env: obsidianEnv(options),
+			stdio: "inherit",
+		});
 		child.on("close", (code, signal) => {
 			if (signal) {
 				process.kill(process.pid, signal);
@@ -163,9 +157,7 @@ async function main() {
 		return;
 	}
 
-	const options = resolveInstanceOptions(
-		parseInstanceArgs(parsed.instanceArgs),
-	);
+	const options = resolveInstanceOptions(parseInstanceArgs(parsed.instanceArgs));
 	await reapStaleInstances(options);
 	await ensureObsidianInstance(options);
 	process.exitCode = await spawnObsidian(options, parsed.commandArgs);
