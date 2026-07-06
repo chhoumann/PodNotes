@@ -394,7 +394,8 @@ describe("PodNotes onload wiring (#55)", () => {
 		const { commands, ribbonCalls, activateSpy } = await loadPlugin();
 
 		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
-		(showCmd?.callback as () => void)();
+		expect(showCmd).toBeDefined();
+		(showCmd!.callback as () => void)();
 		expect(activateSpy).toHaveBeenCalledTimes(1);
 
 		const ribbon = ribbonCalls.find((r) => r.title === "Show PodNotes");
@@ -422,7 +423,7 @@ describe("PodNotes onload wiring (#55)", () => {
 		const transcribeCmd = commands.find((c) => c.id === "podnotes-transcribe");
 		expect(transcribeCmd).toBeDefined();
 		expect(
-			(transcribeCmd?.checkCallback as (checking: boolean) => boolean)(true),
+			(transcribeCmd!.checkCallback as (checking: boolean) => boolean)(true),
 		).toBe(false);
 	});
 });

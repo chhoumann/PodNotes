@@ -11,6 +11,7 @@ import {
 	hidePlayedEpisodes,
 	sanitizeEpisodeListLimit,
 	playbackRate,
+	plugin,
 	volume,
 	subscribeQueueToCurrentEpisode,
 } from "src/store";
@@ -36,7 +37,6 @@ import {
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
-import { plugin } from "./store";
 import type { IPodNotes } from "./types/IPodNotes";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import { prepareTimestampForInsertion } from "./utility/prepareTimestampInsertion";
@@ -453,13 +453,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
 		this.settings.timestamp = {
 			...DEFAULT_SETTINGS.timestamp,
-			...(loadedData?.timestamp ?? {}),
+			...loadedData?.timestamp,
 		};
 		// Build a fresh download object so we never mutate the shared
 		// DEFAULT_SETTINGS.download, then migrate the legacy empty default (#183).
 		this.settings.download = {
 			...DEFAULT_SETTINGS.download,
-			...(loadedData?.download ?? {}),
+			...loadedData?.download,
 		};
 		this.settings.download.path = migrateDownloadPath(
 			this.settings.download.path,

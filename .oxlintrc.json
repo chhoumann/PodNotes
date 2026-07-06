@@ -1,0 +1,64 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": ["typescript", "unicorn", "oxc", "import"],
+	"jsPlugins": ["eslint-plugin-obsidianmd"],
+	"categories": {
+		"correctness": "error"
+	},
+	"env": {
+		"browser": true,
+		"node": true,
+		"es2021": true
+	},
+	"globals": {
+		"app": "readonly",
+		"activeWindow": "readonly",
+		"activeDocument": "readonly"
+	},
+	"ignorePatterns": ["node_modules", "build", "npm", "main.js", "**/*.svelte"],
+	"rules": {
+		"no-prototype-builtins": "off",
+		"typescript/ban-ts-comment": "off",
+		"typescript/no-empty-function": "off",
+		"no-unused-vars": ["error", { "args": "none" }],
+		"import/no-duplicates": "error",
+		"typescript/consistent-type-imports": [
+			"error",
+			{
+				"prefer": "type-imports",
+				"disallowTypeAnnotations": false,
+				"fixStyle": "inline-type-imports"
+			}
+		]
+	},
+	"overrides": [
+		{
+			"files": ["src/**/*.ts"],
+			"excludeFiles": ["src/**/*.test.ts", "src/**/*.spec.ts"],
+			"rules": {
+				"obsidianmd/no-static-styles-assignment": "error",
+				"obsidianmd/prefer-window-timers": "error",
+				"obsidianmd/prefer-active-doc": "error",
+				"obsidianmd/detach-leaves": "error",
+				"obsidianmd/no-global-this": "error",
+				"obsidianmd/settings-tab/no-manual-html-headings": "error",
+				"obsidianmd/commands/no-plugin-name-in-command-name": "error",
+				"no-restricted-globals": [
+					"error",
+					{
+						"name": "app",
+						"message": "Avoid the global app object. Use the reference provided by your plugin instance (this.app, or get(plugin).app for module-level code)."
+					},
+					{
+						"name": "fetch",
+						"message": "Use Obsidian's requestUrl instead of fetch for network requests."
+					},
+					{
+						"name": "localStorage",
+						"message": "Use App#saveLocalStorage / App#loadLocalStorage for vault-scoped storage instead of the global localStorage."
+					}
+				]
+			}
+		}
+	]
+}
