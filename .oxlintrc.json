@@ -17,6 +17,9 @@
 	},
 	"ignorePatterns": ["node_modules", "build", "npm", "main.js", "**/*.svelte"],
 	"rules": {
+		"no-prototype-builtins": "off",
+		"typescript/ban-ts-comment": "off",
+		"typescript/no-empty-function": "off",
 		"no-unused-vars": ["error", { "args": "none" }],
 		"import/no-duplicates": "error",
 		"typescript/consistent-type-imports": [
