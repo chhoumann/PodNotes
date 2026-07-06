@@ -28,30 +28,30 @@
 		"node": ">=22.0.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.7",
+		"@biomejs/biome": "^2.5.2",
 		"@eslint/js": "^9.39.1",
 		"@semantic-release/git": "^10.0.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@testing-library/jest-dom": "^6.9.1",
-		"@testing-library/svelte": "^5.2.9",
+		"@testing-library/svelte": "^5.4.2",
 		"@types/node": "^26.1.0",
-		"@typescript-eslint/eslint-plugin": "8.47.0",
-		"@typescript-eslint/parser": "8.47.0",
+		"@typescript-eslint/eslint-plugin": "8.62.1",
+		"@typescript-eslint/parser": "8.62.1",
 		"cz-conventional-changelog": "^3.3.0",
 		"eslint": "^9.39.1",
-		"eslint-plugin-import-x": "4.16.1",
-		"eslint-plugin-obsidianmd": "^0.3.0",
+		"eslint-plugin-import-x": "4.17.1",
+		"eslint-plugin-obsidianmd": "^0.4.1",
 		"jsdom": "^27.2.0",
-		"obsidian": "1.10.3",
+		"obsidian": "1.13.1",
 		"obsidian-e2e": "0.6.0",
-		"semantic-release": "^25.0.2",
+		"semantic-release": "^25.0.5",
 		"svelte": "^5.43.14",
-		"svelte-check": "^4.3.4",
-		"svelte-preprocess": "^6.0.3",
+		"svelte-check": "^4.7.1",
+		"svelte-preprocess": "^6.0.5",
 		"tslib": "2.8.1",
 		"typescript": "5.9.3",
 		"vite": "^7.2.4",
-		"vitest": "^4.0.13"
+		"vitest": "^4.1.10"
 	},
 	"repository": {
 		"type": "git",
@@ -121,7 +121,7 @@
 		]
 	},
 	"dependencies": {
-		"fuse.js": "^7.1.0",
-		"openai": "^6.9.1"
+		"fuse.js": "^7.4.2",
+		"openai": "^6.45.0"
 	}
 }
