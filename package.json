@@ -60,9 +60,6 @@
 	"overrides": {
 		"@actions/http-client": {
 			"undici": "^6.27.0"
-		},
-		"node-gyp": {
-			"undici": "^6.27.0"
 		}
 	},
 	"config": {
