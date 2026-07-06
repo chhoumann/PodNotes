@@ -65,7 +65,7 @@ type MediaSessionActionName =
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api!: IAPI;
-	public settings!: IPodNotesSettings;
+	public override settings!: IPodNotesSettings;
 	public override app!: PartialAppExtension;
 
 	private views = new Set<MainView>();

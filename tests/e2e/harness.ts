@@ -211,7 +211,7 @@ export async function waitForPodNotesReady(
 			return await obsidian.dev.evalJson<boolean>(`
 			Boolean(
 				app.plugins.plugins.${PLUGIN_ID}?.api &&
-				app.workspace.protocolHandlers?.has(${JSON.stringify(PLUGIN_ID)})
+				(app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers)?.has(${JSON.stringify(PLUGIN_ID)})
 			)
 		`);
 		},

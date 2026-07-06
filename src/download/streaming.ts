@@ -43,11 +43,11 @@ function tooLargeError(maxSize: number): Error {
 	);
 }
 
-// Obsidian's DataAdapter — writeBinary/rename/remove/list, all used below — is
-// fully typed and public. Only `appendBinary` exists at runtime on the desktop and
-// mobile Capacitor adapters without appearing in the public typings, so we extend
-// the real interface with that single bolt-on and keep one cast (appendableAdapter).
-export interface BinaryAppendAdapter extends DataAdapter {
+// Obsidian's DataAdapter typings declare `appendBinary` as always present
+// (public since API 1.13), but our minAppVersion predates its availability,
+// so we re-declare it as optional and runtime-guard every call site.
+export interface BinaryAppendAdapter
+	extends Omit<DataAdapter, "appendBinary"> {
 	appendBinary?(path: string, data: ArrayBuffer): Promise<void>;
 }
 
@@ -58,10 +58,9 @@ export interface RangeProbe {
 	totalSize: number | null;
 }
 
-// `appendBinary` exists at runtime on the mobile CapacitorAdapter (and the
-// desktop adapter) but isn't in Obsidian's public DataAdapter typings. Keep the
-// single unsafe cast here so the "where we step outside the types" boundary is
-// greppable in one place.
+// Keep the single unsafe cast here so the "where we step outside the types"
+// boundary is greppable in one place: the cast widens `appendBinary` back to
+// optional for Obsidian runtimes older than API 1.13.
 export function appendableAdapter(): BinaryAppendAdapter {
 	return get(plugin).app.vault.adapter as unknown as BinaryAppendAdapter;
 }

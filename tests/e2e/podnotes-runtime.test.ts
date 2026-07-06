@@ -50,7 +50,7 @@ describe("PodNotes runtime", () => {
 					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCheckCallback === "function",
 				hasCaptureSegment10Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-10s`)}]),
 				hasCaptureSegment20Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-20s`)}]),
-				hasProtocolHandler: app.workspace.protocolHandlers?.has(${JSON.stringify(PLUGIN_ID)}) ?? false,
+				hasProtocolHandler: (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers)?.has(${JSON.stringify(PLUGIN_ID)}) ?? false,
 				hasRateCommands: [
 					${JSON.stringify(`${PLUGIN_ID}:increase-playback-rate`)},
 					${JSON.stringify(`${PLUGIN_ID}:decrease-playback-rate`)},
@@ -623,7 +623,7 @@ async function invokePodNotesUri(
 		obsidian,
 		`
 		(async () => {
-			const handler = app.workspace.protocolHandlers.get(${JSON.stringify(PLUGIN_ID)});
+			const handler = (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers).get(${JSON.stringify(PLUGIN_ID)});
 			if (!handler) {
 				return { ok: false, error: "PodNotes protocol handler is not registered." };
 			}
