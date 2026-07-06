@@ -106,7 +106,7 @@ export default defineConfig(({ mode }) => {
 			outDir,
 			emptyOutDir: false,
 			sourcemap: !isProd,
-			minify: isProd ? "esbuild" : false,
+			minify: false,
 			rollupOptions: {
 				external,
 				output: {
@@ -114,9 +114,14 @@ export default defineConfig(({ mode }) => {
 					inlineDynamicImports: true,
 					exports: "auto",
 					banner,
+					// Vite 8 dropped the esbuild transform (and with it
+					// esbuild.drop), so prod minification and console
+					// stripping both move to rolldown's oxc minifier.
+					minify: isProd
+						? { compress: { dropConsole: true }, mangle: true, codegen: true }
+						: false,
 				},
 			},
 		},
-		esbuild: isProd ? { drop: ["console"] } : {},
 	};
 });
