@@ -584,105 +584,13 @@ function normalizeAudioExtension(
 }
 
 /**
- * UNUSED IN PRODUCTION — kept only for the #178 tests. Do NOT use this for
- * transcription: it derives the on-disk path from the download-path template and
- * reuses any file already there without confirming episode identity, which is
- * the exact collision behind issue #107. Use {@link getEpisodeAudioBuffer} (for
- * transcription) or {@link downloadEpisodeWithNotice} (for the Download command)
- * instead. Candidate for removal in a follow-up.
- */
-export async function downloadEpisode(
-	episode: Episode,
-	downloadPathTemplate: string,
-): Promise<string> {
-	const { app } = get(plugin);
-	if (isLocalFile(episode)) {
-		const localFilePath = resolveLocalEpisodeFilePath(episode);
-		if (!localFilePath) {
-			throw new Error(
-				`Unable to locate the local audio file for "${episode.title}". Try playing the file again.`,
-			);
-		}
-
-		return localFilePath;
-	}
-
-	const provisionalExtension = await getFileExtension(episode.streamUrl);
-	const provisionalFilePath = safeDownloadFilePath(
-		downloadPathTemplate,
-		episode,
-		provisionalExtension,
-	);
-
-	// Check if the file already exists
-	const existingFile = app.vault.getAbstractFileByPath(provisionalFilePath);
-	if (existingFile instanceof TFile) {
-		return provisionalFilePath; // Return the existing file path
-	}
-
-	try {
-		const { data, contentType } = await downloadFile(episode.streamUrl);
-		const inferredExtension =
-			inferFileExtensionFromDownload(episode, data, contentType) ?? provisionalExtension;
-
-		if (!downloadAppearsPlayable(contentType, inferredExtension, episode.mediaType)) {
-			throw new Error("Not a playable media file.");
-		}
-
-		const filePath = safeDownloadFilePath(downloadPathTemplate, episode, inferredExtension);
-		const finalExistingFile = app.vault.getAbstractFileByPath(filePath);
-		if (finalExistingFile instanceof TFile) {
-			return filePath;
-		}
-
-		await createEpisodeFile({
-			episode,
-			downloadPathTemplate,
-			data,
-			extension: inferredExtension,
-		});
-
-		return filePath;
-	} catch (error: unknown) {
-		throw new Error(`Failed to download ${episode.title}: ${getErrorMessage(error)}`);
-	}
-}
-
-async function getFileExtension(url: string): Promise<string> {
-	assertFetchableUrl(url);
-	const encodedUrl = encodeUrlForRequest(url);
-	const urlExtension = getUrlExtension(encodedUrl);
-	if (urlExtension) return urlExtension;
-
-	// If URL doesn't have an extension, fetch headers to determine content type
-	try {
-		const response = await requestUrl({
-			url: encodedUrl,
-			method: "HEAD",
-			throw: false,
-		});
-		const contentType =
-			response.headers["content-type"] ?? response.headers["Content-Type"] ?? null;
-
-		const extensionFromContentType = getExtensionFromContentType(contentType);
-		if (extensionFromContentType) {
-			return extensionFromContentType;
-		}
-	} catch (error) {
-		console.error(`HEAD request failed for ${encodedUrl}`, error);
-	}
-
-	// Default to mp3 if we can't determine the type
-	return "mp3";
-}
-
-/**
  * Resolves the audio bytes for an episode for transcription.
  *
  * The returned bytes always belong to the given episode, regardless of the
  * user's download-path template. This is the fix for issue #107: transcription
- * previously went through downloadEpisode(), which derived an on-disk path from
- * the download-path template and reused whatever file already lived there, so
+ * previously went through the legacy download-to-disk path, which derived an
+ * on-disk path from the download-path template and reused whatever file already
+ * lived there, so
  * episodes that mapped to the same (non-unique) path — e.g. the default empty
  * path, or any path without `{{title}}` — were transcribed using a different
  * episode's audio.
