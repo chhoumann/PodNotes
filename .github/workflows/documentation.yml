@@ -1,13 +1,18 @@
 name: Documentation
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/documentation.yml"
+      - "wrangler.jsonc"
   push:
     branches:
-      - 'master'
+      - "master"
     paths:
-      - 'docs/**'
-      - '.github/workflows/documentation.yml'
-      - 'wrangler.jsonc'
+      - "docs/**"
+      - ".github/workflows/documentation.yml"
+      - "wrangler.jsonc"
 
 permissions:
   contents: read
@@ -21,6 +26,8 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: 3.x
+          cache: "pip"
+          cache-dependency-path: "docs/requirements.txt"
 
       - name: Install documentation dependencies
         run: python -m pip install -r docs/requirements.txt

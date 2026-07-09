@@ -5,9 +5,24 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "build"
+      prefix-development: "build"
+      include: "scope"
     groups:
-      npm-minor-patch:
+      npm-production-minor-patch:
         applies-to: version-updates
+        dependency-type: production
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      npm-development-minor-patch:
+        applies-to: version-updates
+        dependency-type: development
         patterns:
           - "*"
         update-types:
@@ -17,7 +32,43 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
+    ignore:
+      # Keep type definitions aligned with the Node 22 runtime used by CI.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
+      # TypeScript 7 is not yet supported by the current Svelte and lint toolchain.
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+  - package-ecosystem: "pip"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "docs"
+      include: "scope"
+    groups:
+      pip-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      pip-security:
+        applies-to: security-updates
+        patterns:
+          - "*"

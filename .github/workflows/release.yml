@@ -24,9 +24,6 @@ jobs:
       pull-requests: write # semantic-release PR comments
       id-token: write # mint the OIDC token used to sign artifact attestations
       attestations: write # publish build provenance attestations for the assets
-    strategy:
-      matrix:
-        node-version: [22]
     outputs:
       released: ${{ steps.release.outputs.released }}
       version: ${{ steps.extract-version.outputs.version }}
@@ -40,7 +37,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: ".nvmrc"
           cache: npm
 
       - name: Validate trigger
@@ -54,7 +51,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.validate.outputs.valid == 'true'
-        run: npm install
+        run: npm ci
 
       - name: Build
         if: steps.validate.outputs.valid == 'true'
@@ -69,7 +66,6 @@ jobs:
         if: steps.validate.outputs.valid == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
         run: |
           node - <<'NODE'
