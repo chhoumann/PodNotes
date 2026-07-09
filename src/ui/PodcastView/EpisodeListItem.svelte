@@ -13,7 +13,7 @@
 	const dateFormatter = new Intl.DateTimeFormat("en-GB", {
 		day: "2-digit",
 		month: "long",
-		year: "numeric"
+		year: "numeric",
 	});
 	const formattedDateCache = new Map<string, string>();
 	let overflowEl: HTMLDivElement;
@@ -93,7 +93,9 @@
 		{/if}
 		<div class="podcast-episode-information">
 			<span class="episode-item-date">{date}</span>
-			<span class={`episode-item-title ${episodeFinished && "strikeout"}`}>{episode.title}</span>
+			<span class={`episode-item-title ${episodeFinished && "strikeout"}`}
+				>{episode.title}</span
+			>
 			{#if unavailableReason}
 				<span class="episode-item-status">{unavailableReason}</span>
 			{/if}
@@ -165,7 +167,9 @@
 		padding: 0.35rem;
 		border-radius: 0.375rem;
 		color: var(--text-muted);
-		transition: background-color 120ms ease, color 120ms ease;
+		transition:
+			background-color 120ms ease,
+			color 120ms ease;
 	}
 
 	.podcast-episode-overflow :global(.icon-button:hover) {

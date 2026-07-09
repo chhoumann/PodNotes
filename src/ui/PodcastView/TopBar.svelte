@@ -7,17 +7,11 @@
 	export let canShowPlayer: boolean = false;
 
 	const gridTooltip = "Browse podcast grid";
-	const disabledEpisodeTooltip =
-		"Select a podcast or playlist to view its episodes.";
-	const disabledPlayerTooltip =
-		"Start playing an episode to open the player.";
+	const disabledEpisodeTooltip = "Select a podcast or playlist to view its episodes.";
+	const disabledPlayerTooltip = "Start playing an episode to open the player.";
 
-	$: episodeTooltip = canShowEpisodeList
-		? "View episode list"
-		: disabledEpisodeTooltip;
-	$: playerTooltip = canShowPlayer
-		? "Open player"
-		: disabledPlayerTooltip;
+	$: episodeTooltip = canShowEpisodeList ? "View episode list" : disabledEpisodeTooltip;
+	$: playerTooltip = canShowPlayer ? "Open player" : disabledPlayerTooltip;
 
 	function handleClickMenuItem(newState: ViewState) {
 		if (viewState === newState) return;
@@ -28,7 +22,6 @@
 
 		viewState = newState;
 	}
-
 </script>
 
 <div class="topbar-container">
@@ -54,11 +47,9 @@
             ${viewState === ViewState.EpisodeList ? "topbar-selected" : ""}
             ${canShowEpisodeList ? "topbar-selectable" : "topbar-disabled"}
         `}
-		aria-label={
-			canShowEpisodeList
-				? "Episode list"
-				: "Episode list (select a podcast or playlist first)"
-		}
+		aria-label={canShowEpisodeList
+			? "Episode list"
+			: "Episode list (select a podcast or playlist first)"}
 		aria-pressed={viewState === ViewState.EpisodeList}
 		disabled={!canShowEpisodeList}
 		title={episodeTooltip}
@@ -73,11 +64,9 @@
             ${viewState === ViewState.Player ? "topbar-selected" : ""}
             ${canShowPlayer ? "topbar-selectable" : "topbar-disabled"}
         `}
-		aria-label={
-			canShowPlayer
-				? "Player"
-				: "Player (start playing an episode to open the player)"
-		}
+		aria-label={canShowPlayer
+			? "Player"
+			: "Player (start playing an episode to open the player)"}
 		aria-pressed={viewState === ViewState.Player}
 		disabled={!canShowPlayer}
 		title={playerTooltip}

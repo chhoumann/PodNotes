@@ -50,8 +50,7 @@
 	// Hide the player's Queue list only when queue automation is off AND the queue
 	// is empty (issue #108) — otherwise show it (default-on state or a non-empty
 	// manual queue).
-	$: showQueue =
-		$plugin?.settings?.autoQueue !== false || $queue.episodes.length > 0;
+	$: showQueue = $plugin?.settings?.autoQueue !== false || $queue.episodes.length > 0;
 
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
 	$: titleCharCount = $currentEpisode?.title?.length ?? 0;
@@ -77,9 +76,9 @@
 		isPaused.update((value) => !value);
 	}
 
-	function onClickProgressbar(
-		{ detail: { event, percent } }: CustomEvent<{ event: MouseEvent | KeyboardEvent; percent?: number }>
-	) {
+	function onClickProgressbar({
+		detail: { event, percent },
+	}: CustomEvent<{ event: MouseEvent | KeyboardEvent; percent?: number }>) {
 		if (typeof percent === "number") {
 			seekPlaybackTo(percent * $duration);
 			return;
@@ -100,7 +99,7 @@
 		playlists.update((lists) => {
 			Object.values(lists).forEach((playlist) => {
 				playlist.episodes = playlist.episodes.filter(
-					(ep) => !isSameStoredEpisode(ep, $currentEpisode)
+					(ep) => !isSameStoredEpisode(ep, $currentEpisode),
 				);
 			});
 
@@ -154,9 +153,7 @@
 		// usable; fall back to the bare <video> element on iOS Safari/WKWebView,
 		// where requestFullscreen on a div is unsupported and only the media
 		// element itself can go fullscreen.
-		const container = mediaElement?.closest(
-			".episode-video-container",
-		) as HTMLElement | null;
+		const container = mediaElement?.closest(".episode-video-container") as HTMLElement | null;
 		if (container?.requestFullscreen) {
 			void container.requestFullscreen();
 			return;
@@ -223,10 +220,7 @@
 		restoreSavedPlaybackTime(currentEp, playedEps);
 	}
 
-	function restoreSavedPlaybackTime(
-		currentEp: Episode,
-		playedEps: typeof $playedEpisodes,
-	) {
+	function restoreSavedPlaybackTime(currentEp: Episode, playedEps: typeof $playedEpisodes) {
 		const key = getEpisodeKey(currentEp);
 
 		// Check composite key first, then fall back to the title-only key for
@@ -422,7 +416,7 @@
 	function handleContextMenuEpisodeImage(event: MouseEvent) {
 		spawnEpisodeContextMenu($currentEpisode, event, {
 			play: true,
-			markPlayed: true
+			markPlayed: true,
 		});
 	}
 
@@ -471,10 +465,7 @@
 	): downloadedEpisode is DownloadedEpisode {
 		if (!downloadedEpisode?.filePath) return false;
 
-		const downloadedMediaType = getDownloadedEpisodeMediaType(
-			episode,
-			downloadedEpisode,
-		);
+		const downloadedMediaType = getDownloadedEpisodeMediaType(episode, downloadedEpisode);
 		if (episode.mediaType && downloadedMediaType !== episode.mediaType) {
 			return false;
 		}
@@ -491,10 +482,7 @@
 		episode: Episode,
 		downloadedEpisode: DownloadedEpisode,
 	): EpisodeMediaType {
-		return getEpisodeMediaTypeWithContainerHint(
-			downloadedEpisode,
-			episode.mediaType,
-		);
+		return getEpisodeMediaTypeWithContainerHint(downloadedEpisode, episode.mediaType);
 	}
 
 	$: if (mediaElement && mediaElement.playbackRate !== $playbackRate) {
@@ -568,7 +556,10 @@
 					opacity={isHoveringArtwork || $isPaused ? 0.5 : 1}
 				>
 					<svelte:fragment slot="fallback">
-						<div class={"podcast-artwork-placeholder" + (isHoveringArtwork || $isPaused ? " opacity-50" : "")}>
+						<div
+							class={"podcast-artwork-placeholder" +
+								(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
+						>
 							<Icon icon="image" size={150} clickable={false} />
 						</div>
 					</svelte:fragment>
@@ -590,7 +581,9 @@
 		</div>
 	{/if}
 
-	<h2 class="podcast-title" style="--title-char-count: {titleCharCount}">{$currentEpisode.title}</h2>
+	<h2 class="podcast-title" style="--title-char-count: {titleCharCount}">
+		{$currentEpisode.title}
+	</h2>
 
 	{#if !isVideoEpisode}
 		<audio
@@ -639,11 +632,7 @@
 	<div class="slider-stack">
 		<div class="volume-container">
 			<span>Volume: {Math.round(playerVolume * 100)}%</span>
-			<Slider
-				on:change={onVolumeChange}
-				value={playerVolume}
-				limits={[0, 1, 0.05]}
-			/>
+			<Slider on:change={onVolumeChange} value={playerVolume} limits={[0, 1, 0.05]} />
 		</div>
 
 		<div class="playbackrate-container">
@@ -657,11 +646,7 @@
 	</div>
 
 	<div class="lists-container">
-		<ChapterList
-			{chapters}
-			currentTime={$currentTime}
-			on:seek={onChapterSeek}
-		/>
+		<ChapterList {chapters} currentTime={$currentTime} on:seek={onChapterSeek} />
 
 		{#if showQueue}
 			<EpisodeList
@@ -729,7 +714,9 @@
 		border-radius: 0.75rem;
 		overflow: hidden;
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-		transition: box-shadow 200ms ease, transform 200ms ease;
+		transition:
+			box-shadow 200ms ease,
+			transform 200ms ease;
 	}
 
 	.hover-container:hover {
@@ -814,7 +801,9 @@
 		color: var(--text-on-accent);
 		cursor: pointer;
 		opacity: 0;
-		transition: opacity 200ms ease, background-color 120ms ease;
+		transition:
+			opacity 200ms ease,
+			background-color 120ms ease;
 	}
 
 	.episode-video-container:hover .podcast-video-fullscreen,

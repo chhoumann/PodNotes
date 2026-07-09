@@ -8,7 +8,7 @@
 	import Text from "../obsidian/Text.svelte";
 	import PodcastResultCard from "./PodcastResultCard.svelte";
 	import { onMount } from "svelte";
-	import { fade } from 'svelte/transition';
+	import { fade } from "svelte/transition";
 
 	let searchResults: PodcastFeed[] = [];
 	let gridSizeClass: string = "grid-3";
@@ -52,7 +52,7 @@
 	}
 
 	const debouncedUpdate = debounce(
-		async ({detail: { value }}: CustomEvent<{ value: string }>) => {
+		async ({ detail: { value } }: CustomEvent<{ value: string }>) => {
 			searchQuery = value;
 			searchError = "";
 			const customFeedUrl = checkStringIsUrl(value);
@@ -60,8 +60,7 @@
 			// Only treat the input as a feed URL when it is an http(s) URL, so
 			// things like "podcast:name" don't get parsed as feeds.
 			const isFeedUrl =
-				customFeedUrl?.protocol === "http:" ||
-				customFeedUrl?.protocol === "https:";
+				customFeedUrl?.protocol === "http:" || customFeedUrl?.protocol === "https:";
 
 			if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
@@ -91,7 +90,7 @@
 			}
 		},
 		300,
-		true
+		true,
 	);
 
 	function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
@@ -123,17 +122,13 @@
 	/>
 
 	{#if isSearching}
-		<div class="podcast-query-status" role="status" aria-live="polite">
-			Searching...
-		</div>
+		<div class="podcast-query-status" role="status" aria-live="polite">Searching...</div>
 	{:else if searchError}
 		<div class="podcast-query-status podcast-query-error" role="alert">
 			{searchError}
 		</div>
 	{:else if searchQuery.trim() !== "" && searchResults.length === 0}
-		<div class="podcast-query-status" role="status" aria-live="polite">
-			No results.
-		</div>
+		<div class="podcast-query-status" role="status" aria-live="polite">No results.</div>
 	{/if}
 
 	<div class="podcast-query-results" role="list" aria-label="Podcast search results">
@@ -141,7 +136,8 @@
 			<div role="listitem">
 				<PodcastResultCard
 					{podcast}
-					isSaved={typeof podcast.url === "string" && $savedFeeds[podcast.title]?.url === podcast.url}
+					isSaved={typeof podcast.url === "string" &&
+						$savedFeeds[podcast.title]?.url === podcast.url}
 					on:addPodcast={addPodcast}
 					on:removePodcast={removePodcast}
 				/>

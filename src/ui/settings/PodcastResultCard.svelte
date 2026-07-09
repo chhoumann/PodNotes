@@ -50,7 +50,10 @@
 		border-radius: 0.5rem;
 		background-color: var(--background-secondary);
 		max-width: 100%;
-		transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+		transition:
+			transform 150ms ease,
+			box-shadow 150ms ease,
+			border-color 150ms ease;
 	}
 
 	.podcast-result-card:hover {

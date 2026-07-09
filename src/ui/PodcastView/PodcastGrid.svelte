@@ -10,7 +10,9 @@
 
 	const dispatch = createEventDispatcher();
 
-	function forwardClickPlaylist({detail: {playlist, event}}: CustomEvent<{event: MouseEvent, playlist: Playlist}>) {
+	function forwardClickPlaylist({
+		detail: { playlist, event },
+	}: CustomEvent<{ event: MouseEvent; playlist: Playlist }>) {
 		dispatch("clickPlaylist", { playlist, event });
 	}
 </script>
@@ -18,16 +20,13 @@
 <div class="podcast-grid">
 	{#if playlists.length > 0}
 		{#each playlists as playlist (playlist.name)}
-			<PlaylistCard playlist={playlist} on:clickPlaylist={forwardClickPlaylist} />
+			<PlaylistCard {playlist} on:clickPlaylist={forwardClickPlaylist} />
 		{/each}
 	{/if}
 
 	{#if feeds.length > 0}
 		{#each feeds as feed (feed.url)}
-			<PodcastGridCard
-				feed={feed}
-				on:clickPodcast
-			/>
+			<PodcastGridCard {feed} on:clickPodcast />
 		{/each}
 	{:else}
 		<div>

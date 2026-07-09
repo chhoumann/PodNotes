@@ -1,63 +1,62 @@
 <script lang="ts">
-    import { ButtonComponent } from "obsidian";
-    import type { CSSObject } from "src/types/CSSObject";
-    import type { IconType } from "src/types/IconType";
-    import extractStylesFromObj from "src/utility/extractStylesFromObj";
-    import { afterUpdate, createEventDispatcher, onMount } from "svelte";
+	import { ButtonComponent } from "obsidian";
+	import type { CSSObject } from "src/types/CSSObject";
+	import type { IconType } from "src/types/IconType";
+	import extractStylesFromObj from "src/utility/extractStylesFromObj";
+	import { afterUpdate, createEventDispatcher, onMount } from "svelte";
 
-    export let text: string = "";
-    export let tooltip: string = "";
-    export let ariaLabel: string = "";
-    export let icon: IconType | undefined = undefined;
-    export let disabled: boolean = false;
-    export let warning: boolean = false;
-    export let cta: boolean = false;
-    export { className as class };
-    export { styles as style };
+	export let text: string = "";
+	export let tooltip: string = "";
+	export let ariaLabel: string = "";
+	export let icon: IconType | undefined = undefined;
+	export let disabled: boolean = false;
+	export let warning: boolean = false;
+	export let cta: boolean = false;
+	export { className as class };
+	export { styles as style };
 
-    let buttonRef: HTMLSpanElement;
-    let className: string;
-    let styles: CSSObject;
+	let buttonRef: HTMLSpanElement;
+	let className: string;
+	let styles: CSSObject;
 
-    let button: ButtonComponent;
+	let button: ButtonComponent;
 
-    const dispatch = createEventDispatcher();
+	const dispatch = createEventDispatcher();
 
-    onMount(() => createButton(buttonRef));
-    afterUpdate(() => updateButtonAttributes(button));
+	onMount(() => createButton(buttonRef));
+	afterUpdate(() => updateButtonAttributes(button));
 
-    function createButton(container: HTMLElement) {
-        button = new ButtonComponent(container);
-        
-        updateButtonAttributes(button);
-    }
+	function createButton(container: HTMLElement) {
+		button = new ButtonComponent(container);
 
-    function updateButtonAttributes(btn: ButtonComponent) {
-        if (text) btn.setButtonText(text);
-        if (tooltip) btn.setTooltip(tooltip);
-        if (icon) btn.setIcon(icon);
-        if (disabled) btn.setDisabled(disabled);
-        if (warning) btn.setWarning(); else btn.buttonEl.classList.remove('mod-warning');
-        if (className) btn.setClass(className);
-        if (cta) btn.setCta(); else btn.removeCta();
+		updateButtonAttributes(button);
+	}
 
-        btn.onClick((event: MouseEvent) => {
-            dispatch("click", { event });
-        });
+	function updateButtonAttributes(btn: ButtonComponent) {
+		if (text) btn.setButtonText(text);
+		if (tooltip) btn.setTooltip(tooltip);
+		if (icon) btn.setIcon(icon);
+		if (disabled) btn.setDisabled(disabled);
+		if (warning) btn.setWarning();
+		else btn.buttonEl.classList.remove("mod-warning");
+		if (className) btn.setClass(className);
+		if (cta) btn.setCta();
+		else btn.removeCta();
 
-        if (styles) {
-            btn.buttonEl.setAttr('style', extractStylesFromObj(styles));
-        }
+		btn.onClick((event: MouseEvent) => {
+			dispatch("click", { event });
+		});
 
-        if (ariaLabel) {
-            btn.buttonEl.setAttr("aria-label", ariaLabel);
-        } else {
-            btn.buttonEl.removeAttribute("aria-label");
-        }
-    }
+		if (styles) {
+			btn.buttonEl.setAttr("style", extractStylesFromObj(styles));
+		}
 
+		if (ariaLabel) {
+			btn.buttonEl.setAttr("aria-label", ariaLabel);
+		} else {
+			btn.buttonEl.removeAttribute("aria-label");
+		}
+	}
 </script>
 
-<span 
-    bind:this={buttonRef} 
-></span>
+<span bind:this={buttonRef}></span>

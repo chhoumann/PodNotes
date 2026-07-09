@@ -1,13 +1,13 @@
 <script lang="ts">
-    export let text: string = "";
-    export let artworkUrl: string = "";
+	export let text: string = "";
+	export let artworkUrl: string = "";
 </script>
 
 <div class="podcast-header">
-    {#if artworkUrl}
-        <img id="podcast-artwork" src={artworkUrl} alt={text} />
-    {/if}
-    <h2 class="podcast-heading">{text}</h2>
+	{#if artworkUrl}
+		<img id="podcast-artwork" src={artworkUrl} alt={text} />
+	{/if}
+	<h2 class="podcast-heading">{text}</h2>
 </div>
 
 <style>

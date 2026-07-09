@@ -6,14 +6,14 @@
 
 	export let value: string = "";
 	export let options: Record<string, string> = {};
-    export let disabled: boolean = false;
-    export { styles as style };
-	
+	export let disabled: boolean = false;
+	export { styles as style };
+
 	let dropdownRef: HTMLSpanElement;
 	let dropdown: DropdownComponent;
 	let styles: CSSObject;
 
-    const dispatch = createEventDispatcher();
+	const dispatch = createEventDispatcher();
 
 	onMount(() => {
 		dropdown = new DropdownComponent(dropdownRef);
@@ -38,17 +38,15 @@
 		if (options) dropdown.addOptions(options);
 		if (value) dropdown.setValue(value);
 		if (disabled) dropdown.setDisabled(disabled);
-		
-		
+
 		dropdown.onChange((value: string) => {
 			dispatch("change", { value });
 		});
 
-        if (styles) {
-            dropdown.selectEl.setAttr('style', extractStylesFromObj(styles));
-        }
+		if (styles) {
+			dropdown.selectEl.setAttr("style", extractStylesFromObj(styles));
+		}
 	}
-
 </script>
 
 <span bind:this={dropdownRef}></span>
