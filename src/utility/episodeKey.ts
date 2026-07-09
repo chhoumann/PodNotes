@@ -24,11 +24,11 @@ function compositeKeyIsAmbiguous(podcastName: string, title: string): boolean {
 }
 
 /**
- * A NUL byte cannot appear in XML feed text (nor in the parsed PocketCasts
- * titles), so the escaped form below is prefixed with it. That keeps the escaped
- * key disjoint from the legacy title-only keys, which are raw, arbitrary titles
+ * A NUL byte cannot appear in XML feed text, so the escaped form below is
+ * prefixed with it. That keeps the escaped key disjoint from the legacy
+ * title-only keys, which are raw, arbitrary titles
  * (a feed with an empty `<title>` yields `podcastName === ""` and so a raw-title
- * key - see feedParser/pocketCastsParser). Without the prefix a crafted legacy
+ * key - see feedParser). Without the prefix a crafted legacy
  * title could equal an escaped composite key and re-introduce a cross-feed
  * collision.
  */

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import { Notice, requestUrl, TFile } from "obsidian";
 import downloadEpisodeWithNotice, {
-	downloadEpisode,
 	getEpisodeAudioBuffer,
 	safeDownloadBasename,
 	safeDownloadFilePath,
@@ -147,7 +146,7 @@ afterEach(() => {
 
 describe("downloadEpisodeWithNotice (download command path)", () => {
 	it("saves extensionless video downloads using the response content type", async () => {
-		const { createBinary } = setupVault();
+		const { createBinary, createdFolders } = setupVault();
 		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -164,16 +163,22 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
 
 		try {
-			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{podcast}}/{{title}}");
 		} finally {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/Video Title.mp4", buffer);
+		expect(createdFolders).toEqual(["Podcasts", "Podcasts/Pod"]);
+		expect(createBinary).toHaveBeenCalledTimes(1);
+		const [writtenPath, writtenData] = createBinary.mock.calls[0];
+		expect(writtenPath).toBe("Podcasts/Pod/Video Title.mp4");
+		// The active non-streaming fallback must pass the response buffer straight
+		// through to createBinary without making another whole-file copy (#113).
+		expect(writtenData).toBe(buffer);
 		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
 		expect(recorded).toMatchObject({
 			title: "Video Title",
-			filePath: "Podcasts/Video Title.mp4",
+			filePath: "Podcasts/Pod/Video Title.mp4",
 			mediaType: "video",
 			size: buffer.byteLength,
 		});
@@ -555,87 +560,6 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		}
 
 		expect(createBinary).toHaveBeenCalledWith("Podcasts/My Title.mp3", buffer);
-	});
-});
-
-describe("downloadEpisode (API path)", () => {
-	it("threads a single ArrayBuffer straight to createBinary (no Blob copy) and creates folders", async () => {
-		const { createBinary, createdFolders } = setupVault();
-		const buffer = bytes(0x49, 0x44, 0x33, 0x01, 0x02, 0x03);
-		requestUrlMock.mockResolvedValue({
-			status: 200,
-			headers: { "content-type": "audio/mpeg" },
-			arrayBuffer: buffer,
-		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
-
-		const episode = makeEpisode();
-		const path = await downloadEpisode(episode, "podcast/{{podcast}}/{{title}}");
-
-		expect(path).toBe("podcast/Pod/My Title.mp3");
-		expect(createdFolders).toEqual(["podcast", "podcast/Pod"]);
-		expect(createBinary).toHaveBeenCalledTimes(1);
-
-		const [writtenPath, writtenData] = createBinary.mock.calls[0];
-		expect(writtenPath).toBe("podcast/Pod/My Title.mp3");
-		// The exact buffer returned by requestUrl must reach createBinary — proving
-		// no Blob round-trip / extra full-file copy is made (issue #113).
-		expect(writtenData).toBe(buffer);
-
-		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
-		expect(recorded?.filePath).toBe("podcast/Pod/My Title.mp3");
-		expect(recorded?.size).toBe(buffer.byteLength);
-	});
-
-	it("returns the existing path without downloading when the file already exists", async () => {
-		const { present, createBinary } = setupVault();
-		present.add("My Title.mp3");
-
-		const path = await downloadEpisode(makeEpisode(), "{{title}}");
-
-		expect(path).toBe("My Title.mp3");
-		expect(requestUrlMock).not.toHaveBeenCalled();
-		expect(createBinary).not.toHaveBeenCalled();
-	});
-
-	it("never writes a '.<ext>' dotfile when the path template is empty (#183)", async () => {
-		const { createBinary } = setupVault();
-		const buffer = bytes(0x49, 0x44, 0x33, 0x01);
-		requestUrlMock.mockResolvedValue({
-			status: 200,
-			headers: { "content-type": "audio/mpeg" },
-			arrayBuffer: buffer,
-		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
-
-		const path = await downloadEpisode(makeEpisode(), "");
-
-		// Falls back to a per-episode name instead of the un-indexable ".mp3".
-		expect(path).toBe("My Title.mp3");
-		expect(createBinary).toHaveBeenCalledWith("My Title.mp3", buffer);
-		const [writtenPath] = createBinary.mock.calls[0];
-		expect(writtenPath).not.toBe(".mp3");
-	});
-
-	it("uses GET response metadata for the final extension on new writes", async () => {
-		const { createBinary } = setupVault();
-		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
-		requestUrlMock.mockResolvedValue({
-			status: 200,
-			headers: { "content-type": "video/ogg" },
-			arrayBuffer: buffer,
-		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
-
-		const episode = makeEpisode({
-			title: "API Ogg Video",
-			streamUrl: "https://example.com/video.ogg",
-			mediaType: "video",
-		});
-		const path = await downloadEpisode(episode, "Podcasts/{{title}}");
-
-		expect(path).toBe("Podcasts/API Ogg Video.ogv");
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/API Ogg Video.ogv", buffer);
-		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
-		expect(recorded?.filePath).toBe("Podcasts/API Ogg Video.ogv");
-		expect(recorded?.mediaType).toBe("video");
 	});
 });
 
