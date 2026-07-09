@@ -18,10 +18,7 @@ const episode: Episode = {
 	podcastName: "Design Podcast",
 };
 
-function playedEpisode(
-	podcastName: string,
-	finished: boolean,
-): PlayedEpisode {
+function playedEpisode(podcastName: string, finished: boolean): PlayedEpisode {
 	return {
 		title: episode.title,
 		podcastName,
@@ -87,9 +84,6 @@ describe("episodeStatus", () => {
 			"Design Podcast::Shared title",
 		);
 
-		expect(aliases).toEqual([
-			episode.title,
-			"Design Podcast::Shared title",
-		]);
+		expect(aliases).toEqual([episode.title, "Design Podcast::Shared title"]);
 	});
 });

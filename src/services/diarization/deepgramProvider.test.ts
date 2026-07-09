@@ -9,9 +9,7 @@ const audio: DiarizationAudio = {
 	basename: "episode",
 };
 
-function stubResponse(
-	overrides: Partial<{ status: number; json: unknown; text: string }>,
-) {
+function stubResponse(overrides: Partial<{ status: number; json: unknown; text: string }>) {
 	return {
 		status: 200,
 		json: {},
@@ -59,9 +57,11 @@ describe("diarizeWithDeepgram (#168)", () => {
 	});
 
 	it("throws a helpful error on a non-2xx response", async () => {
-		const request = vi.fn<RequestUrlFn>().mockResolvedValue(
-			stubResponse({ status: 401, json: { err_msg: "Invalid credentials" } }),
-		);
+		const request = vi
+			.fn<RequestUrlFn>()
+			.mockResolvedValue(
+				stubResponse({ status: 401, json: { err_msg: "Invalid credentials" } }),
+			);
 
 		await expect(
 			diarizeWithDeepgram({

@@ -30,9 +30,7 @@ describe("Progressbar", () => {
 		await fireEvent.keyDown(slider, { key: "ArrowRight" });
 		await fireEvent.keyDown(slider, { key: "Home" });
 
-		const [incrementEvent, homeEvent] = handler.mock.calls.map(
-			(call) => call[0].detail,
-		);
+		const [incrementEvent, homeEvent] = handler.mock.calls.map((call) => call[0].detail);
 
 		expect(incrementEvent.percent).toBeCloseTo(0.25, 5);
 		expect(homeEvent.percent).toBe(0);

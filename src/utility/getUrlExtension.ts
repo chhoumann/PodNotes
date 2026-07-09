@@ -3,11 +3,10 @@ export default function getUrlExtension(url: string): string {
 	const match = regexp.exec(url);
 
 	if (!match) {
-		return '';
+		return "";
 	}
 
 	const [, extension] = match;
 
 	return extension;
 }
-

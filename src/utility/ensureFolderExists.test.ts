@@ -19,8 +19,7 @@ function setupApp(existing: string[] = []) {
 	plugin.set({
 		app: {
 			vault: {
-				getAbstractFileByPath: (path: string) =>
-					present.has(path) ? { path } : null,
+				getAbstractFileByPath: (path: string) => (present.has(path) ? { path } : null),
 				createFolder,
 			},
 		},
@@ -39,19 +38,13 @@ describe("ensureFolderExists", () => {
 
 		await ensureFolderExists("podcast/My Show/Season 1");
 
-		expect(created).toEqual([
-			"podcast",
-			"podcast/My Show",
-			"podcast/My Show/Season 1",
-		]);
+		expect(created).toEqual(["podcast", "podcast/My Show", "podcast/My Show/Season 1"]);
 	});
 
 	it("does not recreate existing intermediate folders", async () => {
 		const { created, createFolder } = setupApp(["podcast", "podcast/My Show"]);
 
-		await expect(
-			ensureFolderExists("podcast/My Show/Season 1"),
-		).resolves.toBeUndefined();
+		await expect(ensureFolderExists("podcast/My Show/Season 1")).resolves.toBeUndefined();
 
 		expect(created).toEqual(["podcast/My Show/Season 1"]);
 		expect(createFolder).toHaveBeenCalledTimes(1);
@@ -125,8 +118,6 @@ describe("ensureFolderExists", () => {
 			},
 		} as never);
 
-		await expect(ensureFolderExists("Podcasts/My Show")).rejects.toThrow(
-			"EACCES",
-		);
+		await expect(ensureFolderExists("Podcasts/My Show")).rejects.toThrow("EACCES");
 	});
 });

@@ -13,22 +13,14 @@ export const AUDIO_MEDIA_EXTENSIONS = new Set([
 	"amr",
 ]);
 
-export const VIDEO_MEDIA_EXTENSIONS = new Set([
-	"mp4",
-	"m4v",
-	"mov",
-	"webm",
-	"ogv",
-]);
+export const VIDEO_MEDIA_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "ogv"]);
 
 export const PLAYABLE_MEDIA_EXTENSIONS = new Set([
 	...AUDIO_MEDIA_EXTENSIONS,
 	...VIDEO_MEDIA_EXTENSIONS,
 ]);
 
-export function getMediaTypeFromExtension(
-	extension?: string | null,
-): EpisodeMediaType | null {
+export function getMediaTypeFromExtension(extension?: string | null): EpisodeMediaType | null {
 	if (!extension) return null;
 
 	const normalizedExtension = extension.toLowerCase();
@@ -42,9 +34,7 @@ export function isPlayableMediaExtension(extension?: string | null): boolean {
 	return getMediaTypeFromExtension(extension) !== null;
 }
 
-export function getMediaTypeFromContentType(
-	contentType?: string | null,
-): EpisodeMediaType | null {
+export function getMediaTypeFromContentType(contentType?: string | null): EpisodeMediaType | null {
 	if (!contentType) return null;
 
 	const normalizedType = contentType.split(";")[0].trim().toLowerCase();
@@ -54,9 +44,7 @@ export function getMediaTypeFromContentType(
 	return null;
 }
 
-export function getMediaTypeFromPath(
-	pathOrUrl?: string | null,
-): EpisodeMediaType | null {
+export function getMediaTypeFromPath(pathOrUrl?: string | null): EpisodeMediaType | null {
 	if (!pathOrUrl) return null;
 
 	return getMediaTypeFromExtension(getUrlExtension(pathOrUrl));
@@ -83,9 +71,7 @@ export function getEpisodeMediaType(episode: Episode): EpisodeMediaType {
 	return getUnambiguousMediaTypeFromPath(episode.streamUrl) ?? "audio";
 }
 
-export function isAudioContainerExtension(
-	extension?: string | null,
-): boolean {
+export function isAudioContainerExtension(extension?: string | null): boolean {
 	if (!extension) return false;
 
 	const normalizedExtension = extension.toLowerCase();
@@ -132,10 +118,7 @@ export function isSameMediaSource(a: string, b: string): boolean {
 	}
 }
 
-function stableSearchParamEntriesMatch(
-	stableA: string[],
-	stableB: string[],
-): boolean {
+function stableSearchParamEntriesMatch(stableA: string[], stableB: string[]): boolean {
 	if (stableA.length === 0 || stableB.length === 0) return false;
 	if (stableA.length !== stableB.length) return false;
 

@@ -224,9 +224,7 @@ describe("createChunkFiles large-file routing (other-logic-bug)", () => {
 	test("decodes a large ogg to standalone WAV chunks instead of byte-splitting", async () => {
 		// Without the fix this returned raw .ogg byte slices that lack stream
 		// headers and can't be decoded standalone. Now it must produce .wav chunks.
-		stubAudioContext(
-			(buffer) => new FakeAudioBuffer(Math.ceil(buffer.byteLength / 2)),
-		);
+		stubAudioContext((buffer) => new FakeAudioBuffer(Math.ceil(buffer.byteLength / 2)));
 
 		const files = await createChunkFiles({
 			buffer: new ArrayBuffer(CHUNK_SIZE_BYTES + 1024),

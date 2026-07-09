@@ -21,8 +21,7 @@ const DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen";
  * a single whole-file request, so speaker identity stays consistent across the
  * entire episode (no cross-chunk drift).
  */
-const DEEPGRAM_QUERY =
-	"model=nova-3&diarize=true&punctuate=true&smart_format=true&utterances=true";
+const DEEPGRAM_QUERY = "model=nova-3&diarize=true&punctuate=true&smart_format=true&utterances=true";
 
 /**
  * Diarize with Deepgram's pre-recorded speech-to-text API (issue #168).

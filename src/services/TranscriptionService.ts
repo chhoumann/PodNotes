@@ -82,8 +82,7 @@ export class TranscriptionService {
 	async transcribeCurrentEpisode(): Promise<void> {
 		if (!requiredTranscriptionKeyPresent(this.plugin.settings)) {
 			const diarization = this.plugin.settings.transcript.diarization;
-			const needsDeepgram =
-				diarization?.enabled && diarization.provider === "deepgram";
+			const needsDeepgram = diarization?.enabled && diarization.provider === "deepgram";
 			new Notice(
 				needsDeepgram
 					? "Please add your Deepgram API key in the transcript settings to use Deepgram diarization."
@@ -99,20 +98,16 @@ export class TranscriptionService {
 		}
 
 		const transcriptPath = this.getTranscriptPath(currentEpisode);
-		const existingFile =
-			this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
+		const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 		if (existingFile instanceof TFile) {
-			new Notice(
-				`You've already transcribed this episode - found ${transcriptPath}.`,
-			);
+			new Notice(`You've already transcribed this episode - found ${transcriptPath}.`);
 			return;
 		}
 
 		const episodeKey = this.getEpisodeKey(currentEpisode);
 		const isAlreadyQueued =
-			this.pendingEpisodes.some(
-				(episode) => this.getEpisodeKey(episode) === episodeKey,
-			) || this.activeTranscriptions.has(episodeKey);
+			this.pendingEpisodes.some((episode) => this.getEpisodeKey(episode) === episodeKey) ||
+			this.activeTranscriptions.has(episodeKey);
 
 		if (isAlreadyQueued) {
 			new Notice("This episode is already queued or transcribing.");
@@ -151,20 +146,14 @@ export class TranscriptionService {
 	}
 
 	private async transcribeEpisode(episode: Episode): Promise<void> {
-		const notice = TimerNotice(
-			`Transcription: ${episode.title}`,
-			"Preparing to transcribe...",
-		);
+		const notice = TimerNotice(`Transcription: ${episode.title}`, "Preparing to transcribe...");
 
 		try {
 			const transcriptPath = this.getTranscriptPath(episode);
-			const existingFile =
-				this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
+			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 			if (existingFile instanceof TFile) {
 				notice.stop();
-				notice.update(
-					`Transcript already exists - skipped (${transcriptPath}).`,
-				);
+				notice.update(`Transcript already exists - skipped (${transcriptPath}).`);
 				return;
 			}
 
@@ -226,11 +215,7 @@ export class TranscriptionService {
 		const diarization = this.plugin.settings.transcript.diarization;
 
 		if (diarization?.enabled) {
-			const segments = await this.diarize(
-				audio,
-				diarization.provider,
-				updateNotice,
-			);
+			const segments = await this.diarize(audio, diarization.provider, updateNotice);
 			if (segments.length === 0) {
 				throw new Error("Diarization returned no speech segments.");
 			}
@@ -242,10 +227,7 @@ export class TranscriptionService {
 		updateNotice("Creating audio chunks...");
 		const files = await createChunkFiles(audio);
 		updateNotice("Starting transcription...");
-		const { text, failedChunks } = await this.transcribeChunks(
-			files,
-			updateNotice,
-		);
+		const { text, failedChunks } = await this.transcribeChunks(files, updateNotice);
 
 		// Strip the error placeholders (and trim) to see whether ANY real speech was
 		// transcribed. Nothing real means every chunk failed or the only successes
@@ -362,10 +344,7 @@ export class TranscriptionService {
 			}
 		};
 
-		const workerCount = Math.min(
-			this.MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS,
-			files.length,
-		);
+		const workerCount = Math.min(this.MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS, files.length);
 		const workers = Array.from({ length: workerCount }, () => worker());
 
 		await Promise.all(workers);
@@ -381,16 +360,10 @@ export class TranscriptionService {
 	 * the user's chosen suffix.
 	 */
 	private getTranscriptPath(episode: Episode): string {
-		return getEpisodeTranscriptPath(
-			episode,
-			this.plugin.settings.transcript.path,
-		);
+		return getEpisodeTranscriptPath(episode, this.plugin.settings.transcript.path);
 	}
 
-	private async saveTranscription(
-		episode: Episode,
-		transcriptBody: string,
-	): Promise<void> {
+	private async saveTranscription(episode: Episode, transcriptBody: string): Promise<void> {
 		const transcriptPath = this.getTranscriptPath(episode);
 		// transcriptBody is already formatted by buildTranscriptBody (sentence
 		// reflow for Whisper, speaker turns for diarization), so it is templated
@@ -407,10 +380,7 @@ export class TranscriptionService {
 		// "Folder already exists" thrown when a case-insensitive lookup misses an
 		// existing folder, which the old hand-rolled loop surfaced as a spurious
 		// failure (the #87 class of bug).
-		const directory = transcriptPath.substring(
-			0,
-			transcriptPath.lastIndexOf("/"),
-		);
+		const directory = transcriptPath.substring(0, transcriptPath.lastIndexOf("/"));
 		await ensureFolderExists(directory, vault);
 
 		const file = vault.getAbstractFileByPath(transcriptPath);

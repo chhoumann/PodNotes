@@ -70,10 +70,7 @@ export default class FeedParser {
 		const link = this.findFeedLink(channel);
 		if (link) feed.link = link;
 
-		const description = this.findDirectChildText(channel, [
-			"description",
-			"itunes:summary",
-		]);
+		const description = this.findDirectChildText(channel, ["description", "itunes:summary"]);
 		if (description) feed.description = description;
 
 		const author = this.findDirectChildText(channel, [
@@ -108,9 +105,7 @@ export default class FeedParser {
 		);
 		if (itunesImage) return itunesImage;
 
-		return (
-			directChildren.find((el) => el.tagName.toLowerCase() === "image") ?? null
-		);
+		return directChildren.find((el) => el.tagName.toLowerCase() === "image") ?? null;
 	}
 
 	/**
@@ -153,10 +148,7 @@ export default class FeedParser {
 	 * <itunes:summary>. Direct-child scoping keeps it from matching the same tags
 	 * nested inside an <item>.
 	 */
-	private findDirectChildText(
-		scope: Document | Element,
-		tagNames: string[],
-	): string {
+	private findDirectChildText(scope: Document | Element, tagNames: string[]): string {
 		const children = Array.from(scope.children);
 		for (const tag of tagNames) {
 			const wanted = tag.toLowerCase();
@@ -203,13 +195,9 @@ export default class FeedParser {
 		const description = descriptionEl?.textContent || "";
 		const content = contentEl?.textContent || "";
 		const pubDate = new Date(pubDateEl.textContent as string);
-		const artworkUrl =
-			itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
+		const artworkUrl = itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 		const itunesTitle = itunesTitleEl?.textContent;
-		const episodeNumber = parseEpisodeNumber(
-			itunesEpisodeEl?.textContent,
-			title,
-		);
+		const episodeNumber = parseEpisodeNumber(itunesEpisodeEl?.textContent, title);
 		const duration = parseDurationToSeconds(itunesDurationEl?.textContent);
 		const chaptersUrl = chaptersEl?.getAttribute("url") || undefined;
 

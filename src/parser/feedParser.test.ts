@@ -372,9 +372,7 @@ describe("FeedParser", () => {
 
 	describe("getEpisodes", () => {
 		test("parses all valid episodes from a single feed fetch", async () => {
-			mockRequestWithTimeout.mockResolvedValueOnce(
-				feedResponse(sampleRssFeed),
-			);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(sampleRssFeed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -389,9 +387,7 @@ describe("FeedParser", () => {
 		});
 
 		test("parses episode properties correctly and populates feed metadata", async () => {
-			mockRequestWithTimeout.mockResolvedValueOnce(
-				feedResponse(sampleRssFeed),
-			);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(sampleRssFeed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -409,16 +405,12 @@ describe("FeedParser", () => {
 		});
 
 		test("parses Podcasting 2.0 chapter URLs from episodes (#47)", async () => {
-			mockRequestWithTimeout.mockResolvedValueOnce(
-				feedResponse(rssFeedWithPodcastChapters),
-			);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(rssFeedWithPodcastChapters));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
 
-			expect(episodes[0].chaptersUrl).toBe(
-				"https://example.com/chapters.json",
-			);
+			expect(episodes[0].chaptersUrl).toBe("https://example.com/chapters.json");
 			expect(episodes[1].chaptersUrl).toBeUndefined();
 		});
 
@@ -460,9 +452,7 @@ describe("FeedParser", () => {
     </item>
   </channel>
 </rss>`;
-			mockRequestWithTimeout.mockResolvedValueOnce(
-				feedResponse(audioMp4Feed),
-			);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(audioMp4Feed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -497,9 +487,7 @@ describe("FeedParser", () => {
     </item>
   </channel>
 </rss>`;
-			mockRequestWithTimeout.mockResolvedValueOnce(
-				feedResponse(untypedAmbiguousFeed),
-			);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(untypedAmbiguousFeed));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -512,9 +500,7 @@ describe("FeedParser", () => {
 		});
 
 		test("filters out invalid episodes missing required fields", async () => {
-			mockRequestWithTimeout.mockResolvedValueOnce(
-				feedResponse(rssFeedWithInvalidItem),
-			);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(rssFeedWithInvalidItem));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
@@ -530,9 +516,7 @@ describe("FeedParser", () => {
 				artworkUrl: "https://example.com/feed-artwork.jpg",
 			};
 
-			mockRequestWithTimeout.mockResolvedValueOnce(
-				feedResponse(sampleRssFeed),
-			);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(sampleRssFeed));
 
 			// When constructed with a feed, it skips re-deriving feed metadata.
 			const parser = new FeedParser(mockFeed);

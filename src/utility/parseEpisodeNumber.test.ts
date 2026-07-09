@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	parseEpisodeNumber,
-	parseEpisodeNumberFromTitle,
-} from "./parseEpisodeNumber";
+import { parseEpisodeNumber, parseEpisodeNumberFromTitle } from "./parseEpisodeNumber";
 
 describe("parseEpisodeNumber", () => {
 	it("prefers a numeric <itunes:episode> value", () => {

@@ -116,9 +116,7 @@ describe("exportOPML (IE-02)", () => {
 
 describe("importOPML (IE-01)", () => {
 	it("throws on invalid XML (parsererror is detected)", async () => {
-		const consoleError = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		await importOPML("<opml><body><outline text='oops'></body></opml>");
 
@@ -221,9 +219,7 @@ describe("importOPML (IE-01)", () => {
 		// Nothing to fetch, so the 0/0 progress division must not surface as NaN.
 		expect(getFeed).not.toHaveBeenCalled();
 		expect(noticeMessages.some((m) => m.includes("NaN"))).toBe(false);
-		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(
-			true,
-		);
+		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(true);
 	});
 
 	it("reports the saved count, not the fetched count, on duplicate titles", async () => {
@@ -246,15 +242,11 @@ describe("importOPML (IE-01)", () => {
 		expect(getFeed).toHaveBeenCalledTimes(2);
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// Exactly one was written, so the summary must say "Saved 1", not "Saved 2".
-		expect(noticeMessages.some((m) => m.includes("Saved 1 new podcasts"))).toBe(
+		expect(noticeMessages.some((m) => m.includes("Saved 1 new podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Saved 2 new podcasts"))).toBe(false);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
 			true,
 		);
-		expect(noticeMessages.some((m) => m.includes("Saved 2 new podcasts"))).toBe(
-			false,
-		);
-		expect(
-			noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles")),
-		).toBe(true);
 	});
 
 	it("counts a title-collision against an existing feed as not saved", async () => {
@@ -284,12 +276,10 @@ describe("importOPML (IE-01)", () => {
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// The original feed must be preserved, not overwritten.
 		expect(get(savedFeeds)["Same Title"].url).toBe("https://old.test/feed");
-		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(
+		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
 			true,
 		);
-		expect(
-			noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles")),
-		).toBe(true);
 	});
 
 	it("reports URL-skipped and title-dropped feeds in distinct counters", async () => {

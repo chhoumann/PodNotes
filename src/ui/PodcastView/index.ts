@@ -6,7 +6,10 @@ import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
 
 export class MainView extends ItemView {
-	constructor(leaf: WorkspaceLeaf, private plugin: IPodNotes) {
+	constructor(
+		leaf: WorkspaceLeaf,
+		private plugin: IPodNotes,
+	) {
 		super(leaf);
 	}
 

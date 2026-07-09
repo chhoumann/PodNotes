@@ -105,9 +105,7 @@ function getStorage(): FeedCacheStorage | null {
 	}
 
 	try {
-		return typeof window !== "undefined" && window.localStorage
-			? window.localStorage
-			: null;
+		return typeof window !== "undefined" && window.localStorage ? window.localStorage : null;
 	} catch (error) {
 		console.error("Unable to access localStorage for feed cache:", error);
 		return null;
@@ -193,8 +191,7 @@ function persistCache(): void {
 		// Handle quota exceeded error specifically
 		if (
 			error instanceof DOMException &&
-			(error.name === "QuotaExceededError" ||
-				error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+			(error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED")
 		) {
 			console.warn("localStorage quota exceeded, clearing feed cache");
 			try {
@@ -288,9 +285,7 @@ export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void 
 
 	store[cacheKey] = {
 		updatedAt: Date.now(),
-		episodes: selectNewestEpisodes(episodes, MAX_EPISODES_PER_FEED).map(
-			serializeEpisode,
-		),
+		episodes: selectNewestEpisodes(episodes, MAX_EPISODES_PER_FEED).map(serializeEpisode),
 	};
 
 	persistCache();

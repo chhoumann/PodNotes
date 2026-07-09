@@ -48,9 +48,7 @@ function findEpisodeByCandidates(
 ): Episode | undefined {
 	for (const name of nameCandidates) {
 		const target = name.trim().toLowerCase();
-		const episode = episodes.find(
-			(ep) => ep.title.trim().toLowerCase() === target,
-		);
+		const episode = episodes.find((ep) => ep.title.trim().toLowerCase() === target);
 		if (episode) return episode;
 	}
 
@@ -68,8 +66,7 @@ function resolveResumeTime(episode: Episode): number {
 	const played = playedEpisodes.get(episode);
 	if (!played) return 0;
 
-	const isFinished =
-		played.finished || (played.duration > 0 && played.time >= played.duration);
+	const isFinished = played.finished || (played.duration > 0 && played.time >= played.duration);
 	return isFinished ? 0 : played.time;
 }
 
@@ -184,9 +181,7 @@ export default async function podNotesURIHandler(
 		// must not be able to fetch an arbitrary internal host. Refuse anything that
 		// isn't a public http(s) URL before handing it to FeedParser (blind SSRF).
 		if (!isFetchableUrl(url)) {
-			new Notice(
-				"Refusing to load a feed from a private, local, or non-http(s) URL",
-			);
+			new Notice("Refusing to load a feed from a private, local, or non-http(s) URL");
 			return;
 		}
 

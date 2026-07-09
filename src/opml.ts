@@ -10,10 +10,7 @@ import { get } from "svelte/store";
  * fixed-case `getAttribute("xmlUrl")` silently drops otherwise-valid feeds.
  * Returns the trimmed value, or null when absent/empty.
  */
-function getAttributeCaseInsensitive(
-	node: Element,
-	name: string,
-): string | null {
+function getAttributeCaseInsensitive(node: Element, name: string): string | null {
 	const target = name.toLowerCase();
 	for (let i = 0; i < node.attributes.length; i++) {
 		const attr = node.attributes.item(i);
@@ -116,9 +113,7 @@ async function importOPML(opml: string): Promise<void> {
 		const existingSavedFeeds = get(savedFeeds);
 		const newPodcastsToAdd = incompletePodcastsToAdd.filter(
 			(pod) =>
-				!Object.values(existingSavedFeeds).some(
-					(savedPod) => savedPod.url === pod.url,
-				),
+				!Object.values(existingSavedFeeds).some((savedPod) => savedPod.url === pod.url),
 		);
 
 		const notice = TimerNotice("Importing podcasts", "Preparing to import...");
@@ -159,9 +154,7 @@ async function importOPML(opml: string): Promise<void> {
 
 		notice.stop();
 
-		const validPodcasts = podcasts.filter(
-			(pod): pod is PodcastFeed => pod !== null,
-		);
+		const validPodcasts = podcasts.filter((pod): pod is PodcastFeed => pod !== null);
 
 		// The store is keyed by title, so feeds whose title already exists (either
 		// from an earlier import in this batch or a previously saved feed) are
@@ -177,8 +170,7 @@ async function importOPML(opml: string): Promise<void> {
 		});
 
 		// Feeds skipped before fetching because their URL was already subscribed.
-		const skippedExisting =
-			incompletePodcastsToAdd.length - newPodcastsToAdd.length;
+		const skippedExisting = incompletePodcastsToAdd.length - newPodcastsToAdd.length;
 		// Feeds that fetched fine but collided with an existing/earlier title and
 		// were therefore silently dropped by the title-keyed store above.
 		const droppedDuplicateTitle = validPodcasts.length - savedCount;
@@ -208,11 +200,7 @@ async function importOPML(opml: string): Promise<void> {
 	}
 }
 
-async function exportOPML(
-	app: App,
-	feeds: PodcastFeed[],
-	filePath = "PodNotes_Export.opml",
-) {
+async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_Export.opml") {
 	const header = `<?xml version="1.0" encoding="utf-8" standalone="no"?>`;
 	const opml = (child: string) => `<opml version="1.0">${child}</opml>`;
 	const head = (child: string) => `<head>${child}</head>`;

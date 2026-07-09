@@ -54,21 +54,14 @@ describe("API.getPodcastSegmentFormatted", () => {
 		currentEpisode.set(feedEpisode);
 		const api = new API();
 
-		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 115, 125)).toBe(
-			"00:01:55-00:02:05",
-		);
+		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 115, 125)).toBe("00:01:55-00:02:05");
 	});
 
 	test("links feed episodes with start and end times", () => {
 		currentEpisode.set(feedEpisode);
 		const api = new API();
 
-		const rendered = api.getPodcastSegmentFormatted(
-			"HH:mm:ss",
-			115,
-			125,
-			true,
-		);
+		const rendered = api.getPodcastSegmentFormatted("HH:mm:ss", 115, 125, true);
 
 		expect(rendered).toContain("[00:01:55-00:02:05]");
 		expect(rendered).toContain("time=115");
@@ -106,9 +99,9 @@ describe("API.getPodcastSegmentFormatted", () => {
 		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 126, 125, true)).toBe(
 			"00:02:06-00:02:05",
 		);
-		expect(
-			api.getPodcastSegmentFormatted("HH:mm:ss", 125, Number.NaN, true),
-		).toBe("00:02:05-00:00:00");
+		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 125, Number.NaN, true)).toBe(
+			"00:02:05-00:00:00",
+		);
 	});
 
 	test("seeking through the public API clears an active playback segment", () => {
@@ -263,12 +256,9 @@ describe("API volume (AP-07)", () => {
 
 describe("API transcript access", () => {
 	function setTranscriptVault(files: Record<string, string>) {
-		const createTFile = (path: string): TFile =>
-			Object.assign(new TFile(), { path });
+		const createTFile = (path: string): TFile => Object.assign(new TFile(), { path });
 		const getAbstractFileByPath = vi.fn((path: string) =>
-			Object.prototype.hasOwnProperty.call(files, path)
-				? createTFile(path)
-				: null,
+			Object.prototype.hasOwnProperty.call(files, path) ? createTFile(path) : null,
 		);
 		const read = vi.fn(async (file: TFile) => files[file.path] ?? "");
 

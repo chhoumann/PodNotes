@@ -14,9 +14,7 @@ export { diarizeWithDeepgram, type RequestUrlFn } from "./deepgramProvider";
  * that is certain to fail for a missing key. Pure so it is unit-testable and
  * usable from both the command callback and the service.
  */
-export function requiredTranscriptionKeyPresent(
-	settings: IPodNotesSettings,
-): boolean {
+export function requiredTranscriptionKeyPresent(settings: IPodNotesSettings): boolean {
 	const diarization = settings.transcript?.diarization;
 	if (diarization?.enabled && diarization.provider === "deepgram") {
 		return Boolean(settings.diarizationApiKey?.trim());

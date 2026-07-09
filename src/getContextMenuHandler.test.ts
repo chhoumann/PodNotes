@@ -14,7 +14,10 @@ function audioFile(path: string): TFile {
 	Object.assign(file as unknown as Record<string, unknown>, {
 		path,
 		extension: path.split(".").pop(),
-		basename: path.split("/").pop()?.replace(/\.[^.]+$/, ""),
+		basename: path
+			.split("/")
+			.pop()
+			?.replace(/\.[^.]+$/, ""),
 		stat: { ctime: 0, mtime: 0, size: 1024 },
 	});
 	return file;
@@ -62,9 +65,7 @@ function fakeMenu() {
 function setupWorkspace(openLeaves: unknown[]) {
 	const newLeaf = { setViewState: vi.fn().mockResolvedValue(undefined) };
 	const workspace = {
-		_fileMenuHandler: null as
-			| ((menu: unknown, file: unknown, source: string) => void)
-			| null,
+		_fileMenuHandler: null as ((menu: unknown, file: unknown, source: string) => void) | null,
 		on(event: string, cb: (menu: unknown, file: unknown, source: string) => void) {
 			if (event === "file-menu") workspace._fileMenuHandler = cb;
 			return { event } as unknown;
@@ -78,9 +79,7 @@ function setupWorkspace(openLeaves: unknown[]) {
 
 function makeApp(workspace: unknown, file: TFile) {
 	const vault = {
-		getAbstractFileByPath: vi.fn((path: string) =>
-			path ? audioFile(path) : file,
-		),
+		getAbstractFileByPath: vi.fn((path: string) => (path ? audioFile(path) : file)),
 		getResourcePath: vi.fn((f: TFile) => `app://resource/${f.path}?1`),
 	};
 	// createMediaUrlObjectFromFilePath reads the global `app`.
@@ -102,13 +101,11 @@ async function playFile(
 ) {
 	getContextMenuHandler(app as never);
 	const menu = fakeMenu();
-	(
-		workspace._fileMenuHandler as (
-			menu: unknown,
-			file: unknown,
-			source: string,
-		) => void
-	)(menu, file, "file-explorer-context-menu");
+	(workspace._fileMenuHandler as (menu: unknown, file: unknown, source: string) => void)(
+		menu,
+		file,
+		"file-explorer-context-menu",
+	);
 	const play = menu.items.find((i) => i.title === title);
 	expect(play).toBeTruthy();
 	await play?.onClick?.();
@@ -150,12 +147,7 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 		const { workspace } = setupWorkspace([{}]);
 		const app = makeApp(workspace, file);
 
-		const menu = await playFile(
-			app,
-			workspace,
-			file,
-			"Play as video with PodNotes",
-		);
+		const menu = await playFile(app, workspace, file, "Play as video with PodNotes");
 
 		expect(menu.items.map((item) => item.title)).toEqual([
 			"Play as audio with PodNotes",

@@ -23,9 +23,7 @@ const CONTENT_TYPE_EXTENSION_MAP: Array<{
 	{ pattern: /video\/ogg/i, extension: "ogv" },
 ];
 
-export default function getExtensionFromContentType(
-	contentType?: string | null,
-): string | null {
+export default function getExtensionFromContentType(contentType?: string | null): string | null {
 	if (!contentType) {
 		return null;
 	}

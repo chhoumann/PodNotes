@@ -4,11 +4,7 @@ import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { plugin } from "../store";
 import type PodNotes from "../main";
-import {
-	clearFeedCache,
-	getCachedEpisodes,
-	setCachedEpisodes,
-} from "./FeedCacheService";
+import { clearFeedCache, getCachedEpisodes, setCachedEpisodes } from "./FeedCacheService";
 
 const testFeed: PodcastFeed = {
 	title: "Accidental Tech Podcast",
@@ -25,7 +21,9 @@ function createEpisode(number: number): Episode {
 		content: `<p>Episode ${number}</p>`,
 		podcastName: testFeed.title,
 		artworkUrl: testFeed.artworkUrl,
-		episodeDate: new Date(`2024-01-${String((number % 28) + 1).padStart(2, "0")}T00:00:00.000Z`),
+		episodeDate: new Date(
+			`2024-01-${String((number % 28) + 1).padStart(2, "0")}T00:00:00.000Z`,
+		),
 	};
 }
 
@@ -45,9 +43,7 @@ describe("FeedCacheService", () => {
 
 	test("persists at most 75 newest episodes per feed (#124 cap)", () => {
 		// Newest-first feed (100 -> 1); the newest 75 are episodes 100..26.
-		const episodes = Array.from({ length: 100 }, (_, index) =>
-			datedEpisode(100 - index),
-		);
+		const episodes = Array.from({ length: 100 }, (_, index) => datedEpisode(100 - index));
 
 		setCachedEpisodes(testFeed, episodes);
 
@@ -56,38 +52,24 @@ describe("FeedCacheService", () => {
 		// Original (newest-first) order is preserved among the retained episodes.
 		expect(cached?.[0]?.title).toBe("Episode 100");
 		expect(cached?.[74]?.title).toBe("Episode 26");
-		expect(cached?.some((episode) => episode.title === "Episode 25")).toBe(
-			false,
-		);
-		expect(cached?.some((episode) => episode.title === "Episode 1")).toBe(
-			false,
-		);
+		expect(cached?.some((episode) => episode.title === "Episode 25")).toBe(false);
+		expect(cached?.some((episode) => episode.title === "Episode 1")).toBe(false);
 	});
 
 	test("retains the newest episodes when the feed is oldest-first (#114)", () => {
 		// Oldest-first feed (1 -> 100): the cache must keep the NEWEST 75 (26..100),
 		// not the first 75 in feed order, or a warm-cache Latest Episodes rebuild
 		// would surface stale episodes.
-		const episodes = Array.from({ length: 100 }, (_, index) =>
-			datedEpisode(index + 1),
-		);
+		const episodes = Array.from({ length: 100 }, (_, index) => datedEpisode(index + 1));
 
 		setCachedEpisodes(testFeed, episodes);
 
 		const cached = getCachedEpisodes(testFeed);
 		expect(cached).toHaveLength(75);
-		expect(cached?.some((episode) => episode.title === "Episode 100")).toBe(
-			true,
-		);
-		expect(cached?.some((episode) => episode.title === "Episode 26")).toBe(
-			true,
-		);
-		expect(cached?.some((episode) => episode.title === "Episode 25")).toBe(
-			false,
-		);
-		expect(cached?.some((episode) => episode.title === "Episode 1")).toBe(
-			false,
-		);
+		expect(cached?.some((episode) => episode.title === "Episode 100")).toBe(true);
+		expect(cached?.some((episode) => episode.title === "Episode 26")).toBe(true);
+		expect(cached?.some((episode) => episode.title === "Episode 25")).toBe(false);
+		expect(cached?.some((episode) => episode.title === "Episode 1")).toBe(false);
 		// Original (oldest-first) order is preserved among the retained episodes.
 		expect(cached?.[0]?.title).toBe("Episode 26");
 		expect(cached?.[74]?.title).toBe("Episode 100");
@@ -194,9 +176,7 @@ describe("App-backed (vault-scoped) storage", () => {
 		setCachedEpisodes(testFeed, episodes);
 
 		// Written to the App store (vault-scoped), not raw window.localStorage.
-		expect([...backing.keys()].some((key) => key.includes("feed-cache:v5"))).toBe(
-			true,
-		);
+		expect([...backing.keys()].some((key) => key.includes("feed-cache:v5"))).toBe(true);
 
 		// Read back on a COLD module so the read goes through App#loadLocalStorage
 		// rather than the in-module memo.
@@ -207,9 +187,7 @@ describe("App-backed (vault-scoped) storage", () => {
 		expect(freshSvc.getCachedEpisodes(testFeed)).toEqual(episodes);
 
 		freshSvc.clearFeedCache();
-		expect([...backing.keys()].some((key) => key.includes("feed-cache:v5"))).toBe(
-			false,
-		);
+		expect([...backing.keys()].some((key) => key.includes("feed-cache:v5"))).toBe(false);
 
 		plugin.set(undefined as unknown as PodNotes);
 	});

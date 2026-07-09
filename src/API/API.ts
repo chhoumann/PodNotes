@@ -16,10 +16,7 @@ import {
 import { get } from "svelte/store";
 import encodePodnotesURI from "src/utility/encodePodnotesURI";
 import { isLocalFile } from "src/utility/isLocalFile";
-import {
-	formatPodcastSegment,
-	normalizePodcastSegmentTimes,
-} from "src/utility/podcastSegment";
+import { formatPodcastSegment, normalizePodcastSegmentTimes } from "src/utility/podcastSegment";
 import {
 	adjustPlaybackRate,
 	normalizePlaybackRate,
@@ -39,12 +36,8 @@ const normalizeSkipLength = (length: number): number =>
 // two-way binds the store onto the media element. Fall back to the current value
 // (itself clamped) so a bad write is a no-op rather than corrupting playback.
 const clampVolume = (value: number, fallback = 1): number => {
-	const safeFallback = Number.isFinite(fallback)
-		? Math.min(1, Math.max(0, fallback))
-		: 1;
-	return Number.isFinite(value)
-		? Math.min(1, Math.max(0, value))
-		: safeFallback;
+	const safeFallback = Number.isFinite(fallback) ? Math.min(1, Math.max(0, fallback)) : 1;
+	return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : safeFallback;
 };
 
 export class API implements IAPI {
@@ -96,11 +89,7 @@ export class API implements IAPI {
 	 * @param offsetSeconds Optional offset to subtract from the current playback time.
 	 * @returns
 	 */
-	getPodcastTimeFormatted(
-		format: string,
-		linkify = false,
-		offsetSeconds = 0,
-	): string {
+	getPodcastTimeFormatted(format: string, linkify = false, offsetSeconds = 0): string {
 		if (!this.podcast) {
 			throw new Error("No podcast loaded");
 		}
@@ -118,11 +107,7 @@ export class API implements IAPI {
 			return time;
 		}
 
-		const url = encodePodnotesURI(
-			this.podcast.title,
-			feedUrl,
-			adjustedTime,
-		);
+		const url = encodePodnotesURI(this.podcast.title, feedUrl, adjustedTime);
 
 		return `[${time}](${url.href})`;
 	}
@@ -139,11 +124,7 @@ export class API implements IAPI {
 
 		const segmentTimes = normalizePodcastSegmentTimes(startTime, endTime);
 		const segment = segmentTimes
-			? formatPodcastSegment(
-					segmentTimes.startTime,
-					segmentTimes.endTime,
-					format,
-				)
+			? formatPodcastSegment(segmentTimes.startTime, segmentTimes.endTime, format)
 			: formatPodcastSegment(startTime, endTime, format);
 
 		if (!linkify || !segmentTimes) return segment;
@@ -174,8 +155,7 @@ export class API implements IAPI {
 			episode,
 			pluginInstance.settings.transcript.path,
 		);
-		const transcriptFile =
-			pluginInstance.app.vault.getAbstractFileByPath(transcriptPath);
+		const transcriptFile = pluginInstance.app.vault.getAbstractFileByPath(transcriptPath);
 
 		if (!(transcriptFile instanceof TFile)) {
 			return null;
@@ -204,18 +184,14 @@ export class API implements IAPI {
 	}
 
 	skipBackward(): void {
-		const skipBackLen = normalizeSkipLength(
-			get(plugin).settings.skipBackwardLength,
-		);
+		const skipBackLen = normalizeSkipLength(get(plugin).settings.skipBackwardLength);
 		// Never seek before the start. A cleared settings field (NaN/null) falls
 		// back to the default rather than corrupting currentTime (PB-02).
 		this.currentTime = Math.max(0, this.currentTime - skipBackLen);
 	}
 
 	skipForward(): void {
-		const skipForwardLen = normalizeSkipLength(
-			get(plugin).settings.skipForwardLength,
-		);
+		const skipForwardLen = normalizeSkipLength(get(plugin).settings.skipForwardLength);
 		const target = this.currentTime + skipForwardLen;
 		const dur = this.length;
 		// Clamp just short of the end so an over-skip lands at the end instead of
@@ -224,21 +200,15 @@ export class API implements IAPI {
 		// not rewind, so keep at least the current time (PB-02 / Codex review #213).
 		// With an unknown/zero duration (metadata not loaded) leave it unclamped.
 		this.currentTime =
-			dur > 0
-				? Math.max(this.currentTime, Math.min(target, dur - 0.25))
-				: target;
+			dur > 0 ? Math.max(this.currentTime, Math.min(target, dur - 0.25)) : target;
 	}
 
 	increasePlaybackRate(): void {
-		playbackRateStore.update((rate) =>
-			adjustPlaybackRate(rate, PLAYBACK_RATE_STEP),
-		);
+		playbackRateStore.update((rate) => adjustPlaybackRate(rate, PLAYBACK_RATE_STEP));
 	}
 
 	decreasePlaybackRate(): void {
-		playbackRateStore.update((rate) =>
-			adjustPlaybackRate(rate, -PLAYBACK_RATE_STEP),
-		);
+		playbackRateStore.update((rate) => adjustPlaybackRate(rate, -PLAYBACK_RATE_STEP));
 	}
 
 	resetPlaybackRate(): void {

@@ -20,12 +20,8 @@ function withDiarization(
 
 describe("requiredTranscriptionKeyPresent (#168)", () => {
 	it("requires the OpenAI key when diarization is off", () => {
-		expect(requiredTranscriptionKeyPresent(settings({ openAIApiKey: "sk" }))).toBe(
-			true,
-		);
-		expect(requiredTranscriptionKeyPresent(settings({ openAIApiKey: "" }))).toBe(
-			false,
-		);
+		expect(requiredTranscriptionKeyPresent(settings({ openAIApiKey: "sk" }))).toBe(true);
+		expect(requiredTranscriptionKeyPresent(settings({ openAIApiKey: "" }))).toBe(false);
 	});
 
 	it("requires the OpenAI key for the OpenAI diarization provider", () => {
@@ -71,9 +67,7 @@ describe("requiredTranscriptionKeyPresent (#168)", () => {
 	});
 
 	it("treats whitespace-only keys as absent", () => {
-		expect(
-			requiredTranscriptionKeyPresent(settings({ openAIApiKey: "   " })),
-		).toBe(false);
+		expect(requiredTranscriptionKeyPresent(settings({ openAIApiKey: "   " }))).toBe(false);
 		expect(
 			requiredTranscriptionKeyPresent(
 				withDiarization("deepgram", true, { diarizationApiKey: "  " }),

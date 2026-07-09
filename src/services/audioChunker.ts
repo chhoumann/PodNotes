@@ -48,8 +48,7 @@ export function getMimeType(fileExtension: string): string {
  */
 export function shouldConvertToWav(extension: string, mimeType: string): boolean {
 	const normalizedExtension = extension.toLowerCase();
-	const isMp3 =
-		normalizedExtension === "mp3" || mimeType.toLowerCase() === "audio/mp3";
+	const isMp3 = normalizedExtension === "mp3" || mimeType.toLowerCase() === "audio/mp3";
 	return !isMp3;
 }
 
@@ -125,10 +124,7 @@ export function createBinaryChunkFiles(
 	return files;
 }
 
-async function convertToWavChunks(
-	buffer: ArrayBuffer,
-	basename: string,
-): Promise<File[]> {
+async function convertToWavChunks(buffer: ArrayBuffer, basename: string): Promise<File[]> {
 	const audioContext = createAudioContext();
 	if (!audioContext) return [];
 
@@ -154,8 +150,7 @@ function createAudioContext(): AudioContext | null {
 
 	const contextCtor =
 		window.AudioContext ||
-		(window as typeof window & { webkitAudioContext?: typeof AudioContext })
-			.webkitAudioContext;
+		(window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 	if (!contextCtor) {
 		return null;
 	}
@@ -167,25 +162,15 @@ function renderWavChunks(audioBuffer: AudioBuffer, basename: string): File[] {
 	const numChannels = audioBuffer.numberOfChannels;
 	const bytesPerFrame = numChannels * PCM_BYTES_PER_SAMPLE;
 	const availableBytesPerChunk = CHUNK_SIZE_BYTES - WAV_HEADER_SIZE;
-	const maxSamplesPerChunk = Math.max(
-		1,
-		Math.floor(availableBytesPerChunk / bytesPerFrame),
-	);
+	const maxSamplesPerChunk = Math.max(1, Math.floor(availableBytesPerChunk / bytesPerFrame));
 	const channelData = Array.from({ length: numChannels }, (_, channelIndex) =>
 		audioBuffer.getChannelData(channelIndex),
 	);
 	const files: File[] = [];
 	let chunkIndex = 0;
 
-	for (
-		let startSample = 0;
-		startSample < audioBuffer.length;
-		startSample += maxSamplesPerChunk
-	) {
-		const endSample = Math.min(
-			audioBuffer.length,
-			startSample + maxSamplesPerChunk,
-		);
+	for (let startSample = 0; startSample < audioBuffer.length; startSample += maxSamplesPerChunk) {
+		const endSample = Math.min(audioBuffer.length, startSample + maxSamplesPerChunk);
 		const wavBuffer = renderWavBuffer(
 			channelData,
 			audioBuffer.sampleRate,

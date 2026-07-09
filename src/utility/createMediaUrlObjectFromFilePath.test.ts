@@ -20,9 +20,7 @@ function setupVault(
 	const getResourcePath = vi.fn(
 		opts.getResourcePath ?? ((file: TFile) => `app://resource/${file.path}?1`),
 	);
-	const getAbstractFileByPath = vi.fn(
-		opts.resolve ?? ((path: string) => tfile(path)),
-	);
+	const getAbstractFileByPath = vi.fn(opts.resolve ?? ((path: string) => tfile(path)));
 
 	const vault = { getAbstractFileByPath, getResourcePath } as unknown as Vault;
 
@@ -81,9 +79,7 @@ describe("createMediaUrlObjectFromFilePath", () => {
 		});
 
 		for (const path of ["a.wav", "b.flac", "c.m4a", "d.webm"]) {
-			expect(createMediaUrlObjectFromFilePath(vault, path)).toBe(
-				`app://resource/${path}`,
-			);
+			expect(createMediaUrlObjectFromFilePath(vault, path)).toBe(`app://resource/${path}`);
 		}
 
 		expect(seen).toEqual(["a.wav", "b.flac", "c.m4a", "d.webm"]);

@@ -1,19 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { get } from "svelte/store";
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import createPodcastNote from "src/createPodcastNote";
-import {
-	clearFeedCache,
-	setCachedEpisodes,
-} from "src/services/FeedCacheService";
+import { clearFeedCache, setCachedEpisodes } from "src/services/FeedCacheService";
 import {
 	currentEpisode,
 	episodeCache,
@@ -90,9 +80,7 @@ function createNumberedEpisode(number: number): Episode {
 }
 
 function createTruncatedFeedCache(): Episode[] {
-	return Array.from({ length: 75 }, (_, index) =>
-		createNumberedEpisode(622 + index),
-	);
+	return Array.from({ length: 75 }, (_, index) => createNumberedEpisode(622 + index));
 }
 
 function createFullFeed(): Episode[] {
@@ -181,16 +169,13 @@ describe("PodcastView integration flow", () => {
 		expect(current).toBeDefined();
 		await createPodcastNote(current as Episode);
 
-		const expectedPath =
-			"Podcasts/Test Podcast/2024-01-15/Episode 1 Launch.md";
+		const expectedPath = "Podcasts/Test Podcast/2024-01-15/Episode 1 Launch.md";
 
 		expect(createdFiles[0].path).toBe(expectedPath);
 		expect(createdFiles[0].data).toBe(
 			"# Episode 1: Launch\nEpisode description\nStream: https://pod.example.com/audio.mp3",
 		);
-		expect(leaf.openFile).toHaveBeenCalledWith(
-			expect.objectContaining({ path: expectedPath }),
-		);
+		expect(leaf.openFile).toHaveBeenCalledWith(expect.objectContaining({ path: expectedPath }));
 	});
 
 	test("shows loading state while fetching and streams episodes per feed", async () => {
@@ -260,21 +245,15 @@ describe("PodcastView integration flow", () => {
 
 		resolveFirstFeed([firstEpisode]);
 
-		expect(
-			await screen.findByText(firstEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(firstEpisode.title)).toBeInTheDocument();
 		expect(screen.getByText("Fetching episodes...")).toBeInTheDocument();
 		expect(screen.queryByText(secondEpisode.title)).toBeNull();
 
 		resolveSecondFeed([secondEpisode]);
 
-		expect(
-			await screen.findByText(secondEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(secondEpisode.title)).toBeInTheDocument();
 		await waitFor(() =>
-			expect(
-				screen.queryByText("Fetching episodes..."),
-			).not.toBeInTheDocument(),
+			expect(screen.queryByText("Fetching episodes...")).not.toBeInTheDocument(),
 		);
 	});
 
@@ -324,14 +303,12 @@ describe("PodcastView integration flow", () => {
 		};
 		let resolvePlayedFetch!: (value: Episode[]) => void;
 
-		mockGetEpisodes
-			.mockResolvedValueOnce([testEpisode])
-			.mockImplementationOnce(
-				() =>
-					new Promise<Episode[]>((resolve) => {
-						resolvePlayedFetch = resolve;
-					}),
-			);
+		mockGetEpisodes.mockResolvedValueOnce([testEpisode]).mockImplementationOnce(
+			() =>
+				new Promise<Episode[]>((resolve) => {
+					resolvePlayedFetch = resolve;
+				}),
+		);
 		playedEpisodes.set({
 			[`${testFeed.title}::${playedEpisode.title}`]: {
 				title: playedEpisode.title,
@@ -359,9 +336,7 @@ describe("PodcastView integration flow", () => {
 		await fireEvent.click(playedCard);
 		expect(await screen.findByText("Played")).toBeInTheDocument();
 
-		await fireEvent.click(
-			screen.getByRole("button", { name: /latest episodes/i }),
-		);
+		await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
 		expect(screen.queryByText("Already Finished")).not.toBeInTheDocument();
 
 		resolvePlayedFetch([testEpisode]);
@@ -386,22 +361,16 @@ describe("issue #174 feed cache cap regression", () => {
 	test("opening a show bypasses the truncated cache and loads older episodes", async () => {
 		render(PodcastView);
 
-		await waitFor(() =>
-			expect(get(episodeCache)[testFeed.title]).toHaveLength(75),
-		);
+		await waitFor(() => expect(get(episodeCache)[testFeed.title]).toHaveLength(75));
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 
 		const feedImage = await screen.findByAltText(testFeed.title);
 		await fireEvent.click(feedImage);
 
 		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
-		expect(
-			await screen.findByText(oldEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 		expect(get(episodeCache)[testFeed.title]).toHaveLength(76);
-		expect(
-			screen.queryByText(createNumberedEpisode(621).title),
-		).not.toBeInTheDocument();
+		expect(screen.queryByText(createNumberedEpisode(621).title)).not.toBeInTheDocument();
 	});
 
 	test("played view bypasses the truncated cache for older finished episodes", async () => {
@@ -418,9 +387,7 @@ describe("issue #174 feed cache cap regression", () => {
 
 		render(PodcastView);
 
-		await waitFor(() =>
-			expect(get(episodeCache)[testFeed.title]).toHaveLength(75),
-		);
+		await waitFor(() => expect(get(episodeCache)[testFeed.title]).toHaveLength(75));
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 
 		const playedCard = await screen.findByLabelText("Played");
@@ -428,12 +395,8 @@ describe("issue #174 feed cache cap regression", () => {
 
 		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText("Played")).toBeInTheDocument();
-		expect(
-			await screen.findByText(oldEpisode.title),
-		).toBeInTheDocument();
-		expect(
-			screen.queryByText("Unavailable in current feeds"),
-		).not.toBeInTheDocument();
+		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
+		expect(screen.queryByText("Unavailable in current feeds")).not.toBeInTheDocument();
 
 		await fireEvent.click(screen.getByText(oldEpisode.title));
 		expect(get(currentEpisode)).toMatchObject({ title: oldEpisode.title });
@@ -445,16 +408,10 @@ describe("issue #174 feed cache cap regression", () => {
 
 		render(PodcastView);
 
-		await waitFor(() =>
-			expect(get(episodeCache)[testFeed.title]).toHaveLength(75),
-		);
+		await waitFor(() => expect(get(episodeCache)[testFeed.title]).toHaveLength(75));
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
-		expect(
-			screen.queryByText(oldEpisode.title),
-		).not.toBeInTheDocument();
-		expect(
-			await screen.findByText(createNumberedEpisode(622).title),
-		).toBeInTheDocument();
+		expect(screen.queryByText(oldEpisode.title)).not.toBeInTheDocument();
+		expect(await screen.findByText(createNumberedEpisode(622).title)).toBeInTheDocument();
 	});
 
 	test("reopening a show reuses full in-memory cache without refetching", async () => {
@@ -464,19 +421,13 @@ describe("issue #174 feed cache cap regression", () => {
 		await fireEvent.click(feedImage);
 
 		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
-		expect(
-			await screen.findByText(oldEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 
-		await fireEvent.click(
-			screen.getByRole("button", { name: /podcast grid/i }),
-		);
+		await fireEvent.click(screen.getByRole("button", { name: /podcast grid/i }));
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 
 		await fireEvent.click(feedImage);
-		expect(
-			await screen.findByText(oldEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
 	});
 
@@ -488,9 +439,7 @@ describe("issue #174 feed cache cap regression", () => {
 		const feedImage = await screen.findByAltText(testFeed.title);
 		await fireEvent.click(feedImage);
 
-		expect(
-			await screen.findByText(createNumberedEpisode(622).title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(createNumberedEpisode(622).title)).toBeInTheDocument();
 		expect(screen.queryByText(oldEpisode.title)).not.toBeInTheDocument();
 		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
 	});
@@ -528,9 +477,7 @@ describe("issue #174 feed cache cap regression", () => {
 		await fireEvent.click(playedCard);
 
 		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
-		expect(
-			await screen.findByText(oldEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 	});
 
 	test("reopening played view reuses full in-memory cache without refetching", async () => {
@@ -551,18 +498,12 @@ describe("issue #174 feed cache cap regression", () => {
 		await fireEvent.click(playedCard);
 
 		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
-		expect(
-			await screen.findByText(oldEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 
-		await fireEvent.click(
-			screen.getByRole("button", { name: /latest episodes/i }),
-		);
+		await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
 		await fireEvent.click(playedCard);
 
-		expect(
-			await screen.findByText(oldEpisode.title),
-		).toBeInTheDocument();
+		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
 	});
 });

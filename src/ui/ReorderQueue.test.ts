@@ -35,14 +35,14 @@ describe("ReorderQueue", () => {
 		seed("A", "B", "C");
 		const { container } = render(ReorderQueue);
 
-		const renderedTitles = Array.from(
-			container.querySelectorAll(".queue-reorder-title"),
-		).map((el) => el.textContent);
+		const renderedTitles = Array.from(container.querySelectorAll(".queue-reorder-title")).map(
+			(el) => el.textContent,
+		);
 		expect(renderedTitles).toEqual(["A", "B", "C"]);
 
-		const positions = Array.from(
-			container.querySelectorAll(".queue-reorder-position"),
-		).map((el) => el.textContent);
+		const positions = Array.from(container.querySelectorAll(".queue-reorder-position")).map(
+			(el) => el.textContent,
+		);
 		expect(positions).toEqual(["1", "2", "3"]);
 	});
 
@@ -91,9 +91,7 @@ describe("ReorderQueue", () => {
 		const { getAllByLabelText } = render(ReorderQueue);
 
 		const firstMoveUp = getAllByLabelText("Move up")[0] as HTMLButtonElement;
-		const firstMoveToTop = getAllByLabelText(
-			"Move to top",
-		)[0] as HTMLButtonElement;
+		const firstMoveToTop = getAllByLabelText("Move to top")[0] as HTMLButtonElement;
 		expect(firstMoveUp).toBeDisabled();
 		expect(firstMoveToTop).toBeDisabled();
 
@@ -107,9 +105,7 @@ describe("ReorderQueue", () => {
 		const { getAllByLabelText } = render(ReorderQueue);
 
 		const lastMoveDown = getAllByLabelText("Move down")[2] as HTMLButtonElement;
-		const lastMoveToBottom = getAllByLabelText(
-			"Move to bottom",
-		)[2] as HTMLButtonElement;
+		const lastMoveToBottom = getAllByLabelText("Move to bottom")[2] as HTMLButtonElement;
 		expect(lastMoveDown).toBeDisabled();
 		expect(lastMoveToBottom).toBeDisabled();
 

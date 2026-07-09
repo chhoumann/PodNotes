@@ -16,18 +16,11 @@ describe("orderFeedsByCurrent", () => {
 
 	it("moves the current podcast's feed to the front", () => {
 		const feeds = [feed("A"), feed("B"), feed("C")];
-		expect(orderFeedsByCurrent(feeds, "B").map((f) => f.title)).toEqual([
-			"B",
-			"A",
-			"C",
-		]);
+		expect(orderFeedsByCurrent(feeds, "B").map((f) => f.title)).toEqual(["B", "A", "C"]);
 	});
 
 	it("is a no-op when the current podcast has no saved feed", () => {
 		const feeds = [feed("A"), feed("B")];
-		expect(orderFeedsByCurrent(feeds, "Z").map((f) => f.title)).toEqual([
-			"A",
-			"B",
-		]);
+		expect(orderFeedsByCurrent(feeds, "Z").map((f) => f.title)).toEqual(["A", "B"]);
 	});
 });

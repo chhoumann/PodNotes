@@ -38,16 +38,13 @@ export const MAX_DOWNLOAD_SIZE = 2 * 1024 * 1024 * 1024; // 2 GiB
 
 function tooLargeError(maxSize: number): Error {
 	const maxMb = Math.round(maxSize / (1024 * 1024));
-	return new Error(
-		`Download exceeds the maximum allowed size (${maxMb} MB). Aborting.`,
-	);
+	return new Error(`Download exceeds the maximum allowed size (${maxMb} MB). Aborting.`);
 }
 
 // Obsidian's DataAdapter typings declare `appendBinary` as always present
 // (public since API 1.13), but our minAppVersion predates its availability,
 // so we re-declare it as optional and runtime-guard every call site.
-export interface BinaryAppendAdapter
-	extends Omit<DataAdapter, "appendBinary"> {
+export interface BinaryAppendAdapter extends Omit<DataAdapter, "appendBinary"> {
 	appendBinary?(path: string, data: ArrayBuffer): Promise<void>;
 }
 
@@ -65,10 +62,7 @@ export function appendableAdapter(): BinaryAppendAdapter {
 	return get(plugin).app.vault.adapter as unknown as BinaryAppendAdapter;
 }
 
-function readHeader(
-	headers: Record<string, string> | undefined,
-	name: string,
-): string | undefined {
+function readHeader(headers: Record<string, string> | undefined, name: string): string | undefined {
 	if (!headers) return undefined;
 	const direct = headers[name] ?? headers[name.toLowerCase()];
 	if (direct !== undefined) return direct;
@@ -190,9 +184,7 @@ export async function writeStreamedFile(
 
 		if (response.status === 416) break; // requested past end of file
 		if (response.status !== 206) {
-			throw new Error(
-				`Range request failed (HTTP ${response.status}) at byte ${written}.`,
-			);
+			throw new Error(`Range request failed (HTTP ${response.status}) at byte ${written}.`);
 		}
 
 		const chunk = response.arrayBuffer;
@@ -252,10 +244,7 @@ export function isPartialPath(path: string): boolean {
 // file, an in-place metadata move that buffers zero bytes — preserving #113's
 // memory win. (We never finalize by reading the temp back into memory and
 // re-writing it: that whole-file buffer is exactly the #113 OOM this path avoids.)
-export async function moveIntoPlace(
-	tmpPath: string,
-	filePath: string,
-): Promise<void> {
+export async function moveIntoPlace(tmpPath: string, filePath: string): Promise<void> {
 	await appendableAdapter().rename(tmpPath, filePath);
 }
 
@@ -278,9 +267,6 @@ export async function sweepStalePartials(
 			}
 		}
 	} catch (error) {
-		console.error(
-			`Failed to sweep stale download temp files in "${folder}":`,
-			error,
-		);
+		console.error(`Failed to sweep stale download temp files in "${folder}":`, error);
 	}
 }

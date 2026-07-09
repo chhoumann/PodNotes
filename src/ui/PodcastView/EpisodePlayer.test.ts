@@ -80,9 +80,7 @@ function makeTFile(path: string): TFile {
 function mockVaultFile(path: string): void {
 	const file = makeTFile(path);
 	const vault = {
-		getAbstractFileByPath: vi.fn((candidate: string) =>
-			candidate === path ? file : null,
-		),
+		getAbstractFileByPath: vi.fn((candidate: string) => (candidate === path ? file : null)),
 		getResourcePath: vi.fn(() => `app://resource/${path}?token`),
 	};
 	// The player reads the vault off the plugin's app reference ($plugin.app),
@@ -349,9 +347,7 @@ describe("EpisodePlayer", () => {
 		await waitFor(() => {
 			expect(audio.playbackRate).toBe(1.7);
 		});
-		expect(container.querySelector(".playbackrate-container span")?.textContent).toBe(
-			"1.7x",
-		);
+		expect(container.querySelector(".playbackrate-container span")?.textContent).toBe("1.7x");
 	});
 
 	test("updates playbackRate store from the playback-rate slider", async () => {
@@ -458,9 +454,7 @@ describe("EpisodePlayer", () => {
 		const audio = container.querySelector("audio") as HTMLAudioElement;
 
 		expect(container.querySelector("video")).toBeNull();
-		expect(audio.getAttribute("src")).toBe(
-			"app://resource/Downloads/legacy-audio.mp4?token",
-		);
+		expect(audio.getAttribute("src")).toBe("app://resource/Downloads/legacy-audio.mp4?token");
 	});
 
 	test("uses a legacy downloaded video mp4 file for an explicitly video feed episode", async () => {
@@ -491,9 +485,7 @@ describe("EpisodePlayer", () => {
 		const video = container.querySelector("video") as HTMLVideoElement;
 
 		expect(container.querySelector("audio")).toBeNull();
-		expect(video.getAttribute("src")).toBe(
-			"app://resource/Downloads/legacy-video.mp4?token",
-		);
+		expect(video.getAttribute("src")).toBe("app://resource/Downloads/legacy-video.mp4?token");
 	});
 
 	test("uses matching downloaded video metadata to classify extensionless records", async () => {
@@ -633,9 +625,7 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 		await waitFor(() => {
 			expect(container.querySelector("audio")).not.toBeNull();
 		});
-		await fireEvent.loadedMetadata(
-			container.querySelector("audio") as HTMLAudioElement,
-		);
+		await fireEvent.loadedMetadata(container.querySelector("audio") as HTMLAudioElement);
 
 		// Switch to B in-player (queue click / auto-advance reuse this instance).
 		// The re-arm must set isLoading=true until B's metadata loads.

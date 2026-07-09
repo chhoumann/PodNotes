@@ -15,12 +15,7 @@ function fromLines(lines: string[]): {
 	return { getLine: (line: number) => lines[line] ?? "", lineCount: lines.length };
 }
 
-const TABLE = [
-	"| Time | Note |",
-	"| ---- | ---- |",
-	"| 0:00 | intro |",
-	"| 1:23 | topic |",
-];
+const TABLE = ["| Time | Note |", "| ---- | ---- |", "| 0:00 | intro |", "| 1:23 | topic |"];
 
 describe("isTableDelimiterRow", () => {
 	it("recognises plain, aligned, and tight delimiter rows", () => {

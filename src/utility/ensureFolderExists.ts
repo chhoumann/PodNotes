@@ -37,8 +37,7 @@ export async function ensureFolderExists(
 		try {
 			await vault.createFolder(current);
 		} catch (error) {
-			const alreadyExists =
-				error instanceof Error && /already exists/i.test(error.message);
+			const alreadyExists = error instanceof Error && /already exists/i.test(error.message);
 			// Re-check after a failed create: a case-insensitive filesystem or a
 			// concurrent create can leave the folder present even though the
 			// pre-check missed it. Only a genuine failure (still absent and not an

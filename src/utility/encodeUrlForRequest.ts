@@ -21,14 +21,12 @@ export function encodeUrlForRequest(rawUrl: string): string {
 	}
 
 	const encoded = normalized;
-	return encoded.replace(
-		PARENTHESIS_REGEXP,
-		(char) => PARENTHESIS_LOOKUP[char] ?? char,
-	);
+	return encoded.replace(PARENTHESIS_REGEXP, (char) => PARENTHESIS_LOOKUP[char] ?? char);
 }
 
 function encodeWhitespace(value: string): string {
-	return value.replace(/\s/g, (char) =>
-		`%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+	return value.replace(
+		/\s/g,
+		(char) => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
 	);
 }

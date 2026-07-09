@@ -19,8 +19,7 @@ function detectIsoBmffExtension(arr: Uint8Array): string | null {
 	// Need 4 bytes of box size + 'ftyp' + the 4-byte major brand.
 	if (arr.length < 12) return null;
 
-	const isFtyp =
-		arr[4] === 0x66 && arr[5] === 0x74 && arr[6] === 0x79 && arr[7] === 0x70;
+	const isFtyp = arr[4] === 0x66 && arr[5] === 0x74 && arr[6] === 0x79 && arr[7] === 0x70;
 	if (!isFtyp) return null;
 
 	const brand = String.fromCharCode(arr[8], arr[9], arr[10], arr[11]);
@@ -65,17 +64,10 @@ export function detectAudioFileExtension(data: ArrayBuffer): string | null {
 
 	// The ftyp brand lives at offset 8, past every offset-0 signature, so read a
 	// header window long enough to cover both before zero-copy-viewing it.
-	const maxSignatureLength = Math.max(
-		12,
-		...audioSignatures.map((sig) => sig.signature.length),
-	);
+	const maxSignatureLength = Math.max(12, ...audioSignatures.map((sig) => sig.signature.length));
 	// Zero-copy view over just the header bytes — no Blob slice, no FileReader,
 	// no extra full-file allocation.
-	const arr = new Uint8Array(
-		data,
-		0,
-		Math.min(maxSignatureLength, data.byteLength),
-	);
+	const arr = new Uint8Array(data, 0, Math.min(maxSignatureLength, data.byteLength));
 
 	// ISO-BMFF is special-cased first: its brand sits at offset 8, so it can't be
 	// expressed as an offset-0 signature like the entries above.

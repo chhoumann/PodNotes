@@ -25,10 +25,7 @@ vi.mock("fuse.js", async (importOriginal) => {
 
 import searchEpisodes from "./searchEpisodes";
 
-function makeEpisode(
-	title: string,
-	streamUrl = `https://example.com/${title}.mp3`,
-): Episode {
+function makeEpisode(title: string, streamUrl = `https://example.com/${title}.mp3`): Episode {
 	return {
 		title,
 		streamUrl,

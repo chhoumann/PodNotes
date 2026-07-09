@@ -1,10 +1,7 @@
 import { get, readable, writable } from "svelte/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import {
-	DEFAULT_EPISODE_LIST_LIMIT,
-	MAX_EPISODE_LIST_LIMIT,
-} from "src/constants";
+import { DEFAULT_EPISODE_LIST_LIMIT, MAX_EPISODE_LIST_LIMIT } from "src/constants";
 
 /**
  * Saved-feed metadata, the per-feed episode cache, and the aggregated "Latest
@@ -53,10 +50,7 @@ function getEpisodeTimestamp(episode?: Episode): number {
 	return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function getLatestEpisodesForFeed(
-	episodes: Episode[],
-	perFeedLimit: number,
-): Episode[] {
+function getLatestEpisodesForFeed(episodes: Episode[], perFeedLimit: number): Episode[] {
 	if (!episodes?.length) return [];
 
 	// Sort by date first, THEN take the newest N. Slicing before sorting would
@@ -121,9 +115,7 @@ function removeFeedEntries(
 
 	const feedKeys = new Set(feedEpisodes.map(latestEpisodeIdentifier));
 
-	return currentLatest.filter(
-		(episode) => !feedKeys.has(latestEpisodeIdentifier(episode)),
-	);
+	return currentLatest.filter((episode) => !feedKeys.has(latestEpisodeIdentifier(episode)));
 }
 
 function updateLatestEpisodesForFeed(
@@ -189,10 +181,7 @@ export const latestEpisodes = readable<Episode[]>([], (set) => {
 		for (const feedTitle of latestByFeed.keys()) {
 			if (!nextSources.has(feedTitle)) {
 				changed = true;
-				nextMerged = removeFeedEntries(
-					nextMerged,
-					latestByFeed.get(feedTitle),
-				);
+				nextMerged = removeFeedEntries(nextMerged, latestByFeed.get(feedTitle));
 			}
 		}
 
@@ -219,10 +208,7 @@ export const latestEpisodes = readable<Episode[]>([], (set) => {
 		const collected: Episode[] = [];
 
 		for (const [feedTitle, episodes] of cacheEntries) {
-			const nextLatestForFeed = getLatestEpisodesForFeed(
-				episodes,
-				perFeedLimit,
-			);
+			const nextLatestForFeed = getLatestEpisodesForFeed(episodes, perFeedLimit);
 			nextSources.set(feedTitle, episodes);
 			nextLatestByFeed.set(feedTitle, nextLatestForFeed);
 			collected.push(...nextLatestForFeed);

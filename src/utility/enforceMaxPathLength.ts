@@ -57,11 +57,7 @@ export function getPlatformFilenameLimit(): FilenameLimit {
  * split into a lone, malformed half. Iterating with `for...of` yields whole code
  * points; an astral character is kept only when both of its UTF-16 units fit.
  */
-function truncateToLimit(
-	value: string,
-	max: number,
-	mode: FilenameLimit["mode"],
-): string {
+function truncateToLimit(value: string, max: number, mode: FilenameLimit["mode"]): string {
 	if (measure(value, mode) <= max) {
 		return value;
 	}
@@ -99,24 +95,17 @@ function capFolderName(segment: string, limit: FilenameLimit): string {
 	return trimSegmentEdges(capped) || FALLBACK_BASENAME;
 }
 
-function capFileName(
-	segment: string,
-	extension: string,
-	limit: FilenameLimit,
-): string {
+function capFileName(segment: string, extension: string, limit: FilenameLimit): string {
 	// The path is built by addExtension, so the final segment normally ends with
 	// the known extension. Split it off (when present), cap only the base name,
 	// then always reattach the extension so the file stays a Markdown note even
 	// after truncation or when a caller passed a path without the suffix.
 	const hasExtension = segment.toLowerCase().endsWith(extension.toLowerCase());
-	const base = hasExtension
-		? segment.slice(0, segment.length - extension.length)
-		: segment;
+	const base = hasExtension ? segment.slice(0, segment.length - extension.length) : segment;
 
 	const budget = Math.max(1, limit.max - measure(extension, limit.mode));
 	const cappedBase =
-		trimSegmentEdges(truncateToLimit(base, budget, limit.mode)) ||
-		FALLBACK_BASENAME;
+		trimSegmentEdges(truncateToLimit(base, budget, limit.mode)) || FALLBACK_BASENAME;
 
 	return `${cappedBase}${extension}`;
 }

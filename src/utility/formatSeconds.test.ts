@@ -20,9 +20,7 @@ describe("formatSeconds", () => {
 	});
 
 	test("clamps non-finite Infinity to 0", () => {
-		expect(formatSeconds(Number.POSITIVE_INFINITY, "HH:mm:ss")).toBe(
-			"00:00:00",
-		);
+		expect(formatSeconds(Number.POSITIVE_INFINITY, "HH:mm:ss")).toBe("00:00:00");
 	});
 
 	test("substitutes each token once, never re-matching inserted digits (TS-09)", () => {

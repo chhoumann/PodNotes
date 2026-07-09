@@ -1,8 +1,5 @@
 import { DEFAULT_SETTINGS } from "./constants";
-import {
-	DIARIZATION_PROVIDERS,
-	type DiarizationProviderId,
-} from "./services/diarization/types";
+import { DIARIZATION_PROVIDERS, type DiarizationProviderId } from "./services/diarization/types";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
@@ -41,9 +38,7 @@ export const LEGACY_EMPTY_DOWNLOAD_PATH = "";
  * to apply the intended value and to keep a `null` from reaching
  * DownloadPathTemplateEngine, where `null.replace(...)` would throw.
  */
-export function migrateDownloadPath(
-	storedPath: string | null | undefined,
-): string {
+export function migrateDownloadPath(storedPath: string | null | undefined): string {
 	if (
 		storedPath === undefined ||
 		storedPath === null ||
@@ -131,10 +126,7 @@ export function migrateTranscriptSettings(
 
 	return {
 		path: typeof stored.path === "string" ? stored.path : defaults.path,
-		template:
-			typeof stored.template === "string"
-				? stored.template
-				: defaults.template,
+		template: typeof stored.template === "string" ? stored.template : defaults.template,
 		diarization: {
 			enabled:
 				typeof storedDiarization.enabled === "boolean"
@@ -171,12 +163,8 @@ export function migrateFeedNoteSettings(
 ): IPodNotesSettings["feedNote"] {
 	const s = stored ?? {};
 	return {
-		path:
-			typeof s.path === "string" ? s.path : DEFAULT_SETTINGS.feedNote.path,
-		template:
-			typeof s.template === "string"
-				? s.template
-				: DEFAULT_SETTINGS.feedNote.template,
+		path: typeof s.path === "string" ? s.path : DEFAULT_SETTINGS.feedNote.path,
+		template: typeof s.template === "string" ? s.template : DEFAULT_SETTINGS.feedNote.template,
 	};
 }
 

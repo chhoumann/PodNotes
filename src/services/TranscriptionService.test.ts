@@ -11,8 +11,7 @@ const getEpisodeAudioBufferMock = vi.fn();
 const transcriptionsCreateMock = vi.fn();
 
 vi.mock("../downloadEpisode", () => ({
-	getEpisodeAudioBuffer: (...args: unknown[]) =>
-		getEpisodeAudioBufferMock(...args),
+	getEpisodeAudioBuffer: (...args: unknown[]) => getEpisodeAudioBufferMock(...args),
 }));
 
 vi.mock("openai", () => ({
@@ -33,11 +32,13 @@ const mockEpisode: Episode = {
 	episodeDate: new Date("2024-01-01"),
 };
 
-function createMockPlugin(overrides: {
-	openAIApiKey?: string;
-	podcast?: Episode | null;
-	existingTranscriptPath?: string | null;
-} = {}): PodNotes {
+function createMockPlugin(
+	overrides: {
+		openAIApiKey?: string;
+		podcast?: Episode | null;
+		existingTranscriptPath?: string | null;
+	} = {},
+): PodNotes {
 	const {
 		openAIApiKey = "test-api-key",
 		podcast = mockEpisode,
@@ -290,14 +291,12 @@ describe("TranscriptionService", () => {
 			// >20 MB mp3 → two chunks. chunk 0 fails every retry; chunk 1 "succeeds"
 			// but returns empty text. The body is then only an error marker, which
 			// must NOT be saved as a completed transcript.
-			transcriptionsCreateMock.mockImplementation(
-				async ({ file }: { file: File }) => {
-					if (file.name.includes("part0")) {
-						throw new Error("boom");
-					}
-					return { text: "   " };
-				},
-			);
+			transcriptionsCreateMock.mockImplementation(async ({ file }: { file: File }) => {
+				if (file.name.includes("part0")) {
+					throw new Error("boom");
+				}
+				return { text: "   " };
+			});
 
 			vi.useFakeTimers();
 			try {
@@ -339,14 +338,12 @@ describe("TranscriptionService", () => {
 
 		test("keeps an otherwise-good transcript but warns when only some chunks fail", async () => {
 			// A >20 MB mp3 byte-splits into two chunks; fail the second one.
-			transcriptionsCreateMock.mockImplementation(
-				async ({ file }: { file: File }) => {
-					if (file.name.includes("part1")) {
-						throw new Error("boom");
-					}
-					return { text: "Good chunk." };
-				},
-			);
+			transcriptionsCreateMock.mockImplementation(async ({ file }: { file: File }) => {
+				if (file.name.includes("part1")) {
+					throw new Error("boom");
+				}
+				return { text: "Good chunk." };
+			});
 
 			vi.useFakeTimers();
 			try {

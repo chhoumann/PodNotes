@@ -17,10 +17,7 @@
  */
 export type DiarizationProviderId = "openai" | "deepgram";
 
-export const DIARIZATION_PROVIDERS: readonly DiarizationProviderId[] = [
-	"openai",
-	"deepgram",
-];
+export const DIARIZATION_PROVIDERS: readonly DiarizationProviderId[] = ["openai", "deepgram"];
 
 /** The fixed OpenAI model that performs diarization (no other OpenAI model does). */
 export const OPENAI_DIARIZE_MODEL = "gpt-4o-transcribe-diarize";

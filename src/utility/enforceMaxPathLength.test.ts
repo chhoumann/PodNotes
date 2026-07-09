@@ -24,11 +24,7 @@ describe("enforceMaxPathLength", () => {
 
 	it("caps an over-long ASCII file name at 255, keeping folders and extension", () => {
 		const longTitle = "A".repeat(400);
-		const result = enforceMaxPathLength(
-			`PodNotes/My Show/${longTitle}.md`,
-			".md",
-			BYTES,
-		);
+		const result = enforceMaxPathLength(`PodNotes/My Show/${longTitle}.md`, ".md", BYTES);
 
 		expect(result.startsWith("PodNotes/My Show/")).toBe(true);
 		expect(result.endsWith(".md")).toBe(true);
@@ -101,9 +97,9 @@ describe("enforceMaxPathLength", () => {
 	});
 
 	it("drops empty segments from leading/trailing/double slashes", () => {
-		expect(
-			enforceMaxPathLength("PodNotes//My Show/Episode 1.md", ".md", BYTES),
-		).toBe("PodNotes/My Show/Episode 1.md");
+		expect(enforceMaxPathLength("PodNotes//My Show/Episode 1.md", ".md", BYTES)).toBe(
+			"PodNotes/My Show/Episode 1.md",
+		);
 		expect(enforceMaxPathLength("/PodNotes/Episode 1.md", ".md", BYTES)).toBe(
 			"PodNotes/Episode 1.md",
 		);
@@ -131,9 +127,7 @@ describe("enforceMaxPathLength", () => {
 
 	it("preserves a non-.md extension when asked to (transcripts/downloads)", () => {
 		// With an empty extension it does not force one (preserves a no-suffix path).
-		expect(enforceMaxPathLength("transcripts/Show/Ep", "", BYTES)).toBe(
-			"transcripts/Show/Ep",
-		);
+		expect(enforceMaxPathLength("transcripts/Show/Ep", "", BYTES)).toBe("transcripts/Show/Ep");
 		expect(enforceMaxPathLength("transcripts/Show/Ep.txt", ".txt", BYTES)).toBe(
 			"transcripts/Show/Ep.txt",
 		);
@@ -192,11 +186,7 @@ describe("enforceMaxPathLength with template-derived extension (transcripts)", (
 		// rendered path. A dotted, very long title must NOT be mistaken for a huge
 		// extension that escapes the cap (round-3 regression guard).
 		const rendered = `transcripts/Show/Episode.Part.${"X".repeat(400)}`;
-		const result = enforceMaxPathLength(
-			rendered,
-			lastSegmentExtension(rendered),
-			BYTES,
-		);
+		const result = enforceMaxPathLength(rendered, lastSegmentExtension(rendered), BYTES);
 		const name = result.split("/").pop() ?? "";
 		expect(byteLength(name)).toBeLessThanOrEqual(MAX_FILENAME_UNITS);
 	});
@@ -204,11 +194,7 @@ describe("enforceMaxPathLength with template-derived extension (transcripts)", (
 	it("preserves a real .md/.txt extension on a long title", () => {
 		for (const ext of [".md", ".txt"]) {
 			const rendered = `transcripts/Show/${"Y".repeat(400)}${ext}`;
-			const result = enforceMaxPathLength(
-				rendered,
-				lastSegmentExtension(rendered),
-				BYTES,
-			);
+			const result = enforceMaxPathLength(rendered, lastSegmentExtension(rendered), BYTES);
 			const name = result.split("/").pop() ?? "";
 			expect(name.endsWith(ext)).toBe(true);
 			expect(byteLength(name)).toBeLessThanOrEqual(MAX_FILENAME_UNITS);
@@ -219,7 +205,11 @@ describe("enforceMaxPathLength with template-derived extension (transcripts)", (
 describe("getPlatformFilenameLimit", () => {
 	const original = { ...Platform };
 	const setPlatform = (flags: Partial<typeof Platform>) =>
-		Object.assign(Platform, { isWin: false, isMacOS: false, isLinux: false, isIosApp: false, isAndroidApp: false }, flags);
+		Object.assign(
+			Platform,
+			{ isWin: false, isMacOS: false, isLinux: false, isIosApp: false, isAndroidApp: false },
+			flags,
+		);
 
 	afterEach(() => {
 		Object.assign(Platform, original);

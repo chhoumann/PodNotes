@@ -1,9 +1,5 @@
 import type { Readable, Unsubscriber } from "svelte/store";
-import {
-	FAVORITES_SETTINGS,
-	LOCAL_FILES_SETTINGS,
-	QUEUE_SETTINGS,
-} from "src/constants";
+import { FAVORITES_SETTINGS, LOCAL_FILES_SETTINGS, QUEUE_SETTINGS } from "src/constants";
 import type { IPodNotes } from "src/types/IPodNotes";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import {
@@ -103,10 +99,7 @@ const BINDINGS: PersistenceBinding[] = [
 export function bindStoresToSettings(plugin: IPodNotes): Unsubscriber {
 	const unsubscribers = BINDINGS.map((binding) =>
 		binding.subscribe((value) => {
-			if (
-				binding.shouldPersist &&
-				!binding.shouldPersist(plugin.settings, value)
-			) {
+			if (binding.shouldPersist && !binding.shouldPersist(plugin.settings, value)) {
 				return;
 			}
 

@@ -30,11 +30,7 @@ describe("downloadedEpisodes.addEpisode basename collision (#LF-06)", () => {
 
 		// Same podcastName + title, DIFFERENT path -> basename collision. The store
 		// stays pure (no Notice); it signals the collision to the caller, which warns.
-		const replaced = downloadedEpisodes.addEpisode(
-			makeEpisode(),
-			"Folder B/Recording.mp3",
-			20,
-		);
+		const replaced = downloadedEpisodes.addEpisode(makeEpisode(), "Folder B/Recording.mp3", 20);
 		expect(replaced).toBe("Folder A/Recording.mp3");
 
 		// Behavior is otherwise unchanged: the single entry is replaced in place,

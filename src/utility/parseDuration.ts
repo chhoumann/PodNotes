@@ -10,9 +10,7 @@ const MAX_PLAUSIBLE_SECONDS = 86400 * 366;
  * Colon segments are summed as-is (a non-normalized "1:90" becomes 150). Returns
  * `undefined` for empty, malformed, non-numeric, or implausibly large input.
  */
-export function parseDurationToSeconds(
-	value: string | null | undefined,
-): number | undefined {
+export function parseDurationToSeconds(value: string | null | undefined): number | undefined {
 	if (value === null || value === undefined) return undefined;
 	const trimmed = value.trim();
 	if (!trimmed) return undefined;

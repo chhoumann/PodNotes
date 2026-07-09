@@ -1,9 +1,5 @@
 import { Notice, TFile } from "obsidian";
-import {
-	FilePathTemplateEngine,
-	NoteTemplateEngine,
-	templateHasTag,
-} from "./TemplateEngine";
+import { FilePathTemplateEngine, NoteTemplateEngine, templateHasTag } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { Chapter } from "./types/Chapter";
 import { get } from "svelte/store";
@@ -22,17 +18,12 @@ import { fetchChapters } from "./utility/fetchChapters";
 export function getPodcastNotePath(episode: Episode): string {
 	const pluginInstance = get(plugin);
 
-	const filePath = FilePathTemplateEngine(
-		pluginInstance.settings.note.path,
-		episode,
-	);
+	const filePath = FilePathTemplateEngine(pluginInstance.settings.note.path, episode);
 
 	return enforceMaxPathLength(addExtension(filePath, "md"));
 }
 
-export default async function createPodcastNote(
-	episode: Episode
-): Promise<void> {
+export default async function createPodcastNote(episode: Episode): Promise<void> {
 	try {
 		const file = await createPodcastNoteFileIfNotExists(episode);
 
@@ -43,9 +34,7 @@ export default async function createPodcastNote(
 	}
 }
 
-export async function createPodcastNoteFileIfNotExists(
-	episode: Episode,
-): Promise<TFile> {
+export async function createPodcastNoteFileIfNotExists(episode: Episode): Promise<TFile> {
 	const existingFile = getPodcastNote(episode);
 	if (existingFile) {
 		new Notice(`Note for "${episode.title}" already exists`);
@@ -56,11 +45,7 @@ export async function createPodcastNoteFileIfNotExists(
 	const filePathDotMd = getPodcastNotePath(episode);
 	const template = pluginInstance.settings.note.template;
 	const chapters = await getTemplateChapters(template, episode);
-	const content = NoteTemplateEngine(
-		template,
-		episode,
-		{ chapters },
-	);
+	const content = NoteTemplateEngine(template, episode, { chapters });
 
 	return await createFileIfNotExists(filePathDotMd, content, episode);
 }

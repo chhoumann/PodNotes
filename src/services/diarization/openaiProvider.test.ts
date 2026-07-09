@@ -3,8 +3,7 @@ import type { OpenAI } from "openai";
 import { diarizeWithOpenAI } from "./openaiProvider";
 
 function fakeClient(create: ReturnType<typeof vi.fn>): () => Promise<OpenAI> {
-	return async () =>
-		({ audio: { transcriptions: { create } } }) as unknown as OpenAI;
+	return async () => ({ audio: { transcriptions: { create } } }) as unknown as OpenAI;
 }
 
 function chunk(name: string): File {

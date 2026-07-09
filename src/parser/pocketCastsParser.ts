@@ -2,32 +2,34 @@ import type { Episode } from "src/types/Episode";
 import { Parser } from "./parser";
 
 export class PocketCastsParser extends Parser {
-    protected parsePage(page: Document): Episode {
-        const audioPlayerEl = page.getElementById('audio_player');
-		const headingEl = page.getElementsByTagName('h1')[0];
+	protected parsePage(page: Document): Episode {
+		const audioPlayerEl = page.getElementById("audio_player");
+		const headingEl = page.getElementsByTagName("h1")[0];
 		const titleEl = page.querySelector('[property="og:title"]');
 		const urlEl = page.querySelector('[property="og:url"]');
 		const descriptionEl = page.querySelector('[property="og:description"]');
-		const episodeDateEl = page.getElementById('episode_date');
-		const artworkEl = page.getElementsByTagName('img');
-		const rssLink = page.getElementsByClassName('rss_button')[0]?.getElementsByTagName('a')[0];
+		const episodeDateEl = page.getElementById("episode_date");
+		const artworkEl = page.getElementsByTagName("img");
+		const rssLink = page.getElementsByClassName("rss_button")[0]?.getElementsByTagName("a")[0];
 
 		if (!audioPlayerEl || !headingEl || !titleEl || !episodeDateEl || !artworkEl || !urlEl) {
 			throw new Error("Could not parse podcast");
 		}
 
-        const {title, podcastName} = this.parseTitleAndPodcastName(headingEl.innerText, titleEl.getAttribute('content') || "");
-		const url = urlEl?.getAttribute('content') || "";
-		const description = descriptionEl?.getAttribute('content') || "";
+		const { title, podcastName } = this.parseTitleAndPodcastName(
+			headingEl.innerText,
+			titleEl.getAttribute("content") || "",
+		);
+		const url = urlEl?.getAttribute("content") || "";
+		const description = descriptionEl?.getAttribute("content") || "";
 		const content = "";
-		const streamUrl = audioPlayerEl?.getAttribute('src');
+		const streamUrl = audioPlayerEl?.getAttribute("src");
 		const episodeDate = episodeDateEl?.textContent;
-		const artwork = artworkEl?.item(0)?.getAttribute('src') || undefined;
+		const artwork = artworkEl?.item(0)?.getAttribute("src") || undefined;
 
-
-        if (!title || !streamUrl) {
-            throw new Error("Unable to parse Pocket Cast podcast URL.");
-        }
+		if (!title || !streamUrl) {
+			throw new Error("Unable to parse Pocket Cast podcast URL.");
+		}
 
 		return {
 			title,
@@ -38,15 +40,18 @@ export class PocketCastsParser extends Parser {
 			artworkUrl: artwork,
 			description,
 			content,
-			feedUrl: rssLink?.getAttribute('href') || undefined,
+			feedUrl: rssLink?.getAttribute("href") || undefined,
 		};
 	}
-	
-	private parseTitleAndPodcastName(heading: string, meta: string): {title: string, podcastName: string} {
+
+	private parseTitleAndPodcastName(
+		heading: string,
+		meta: string,
+	): { title: string; podcastName: string } {
 		if (meta.includes(heading)) {
-			return {title: heading, podcastName: meta.replace(`${heading} - `, "")};
+			return { title: heading, podcastName: meta.replace(`${heading} - `, "") };
 		}
 
-		return {title: heading, podcastName: ""};
+		return { title: heading, podcastName: "" };
 	}
 }
