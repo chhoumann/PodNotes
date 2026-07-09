@@ -24,9 +24,7 @@ describe("TopBar", () => {
 		expect(player).toBeDisabled();
 		expect(player.className).not.toContain("topbar-selectable");
 		expect(player.className).toContain("topbar-disabled");
-		expect(player.getAttribute("title")).toBe(
-			"Start playing an episode to open the player."
-		);
+		expect(player.getAttribute("title")).toBe("Start playing an episode to open the player.");
 		expect(episode.getAttribute("title")).toBe("View episode list");
 	});
 
@@ -66,10 +64,10 @@ describe("TopBar", () => {
 		expect(episodeButton.className).toContain("topbar-disabled");
 		expect(playerButton.className).toContain("topbar-disabled");
 		expect(episodeButton.getAttribute("title")).toBe(
-			"Select a podcast or playlist to view its episodes."
+			"Select a podcast or playlist to view its episodes.",
 		);
 		expect(playerButton.getAttribute("title")).toBe(
-			"Start playing an episode to open the player."
+			"Start playing an episode to open the player.",
 		);
 	});
 

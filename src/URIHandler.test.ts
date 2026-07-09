@@ -1,12 +1,5 @@
 import { get } from "svelte/store";
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import podNotesURIHandler from "./URIHandler";
 import {

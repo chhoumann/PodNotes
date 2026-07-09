@@ -11,9 +11,7 @@ import {
 describe("mediaType", () => {
 	test("detects media type from enclosure content type", () => {
 		expect(getMediaTypeFromContentType("video/mp4")).toBe("video");
-		expect(getMediaTypeFromContentType("Audio/MPEG; charset=utf-8")).toBe(
-			"audio",
-		);
+		expect(getMediaTypeFromContentType("Audio/MPEG; charset=utf-8")).toBe("audio");
 		expect(getMediaTypeFromContentType("application/rss+xml")).toBeNull();
 	});
 
@@ -116,9 +114,7 @@ describe("mediaType", () => {
 		} satisfies Episode & { filePath: string };
 
 		expect(getEpisodeMediaType(episode)).toBe("audio");
-		expect(getEpisodeMediaTypeWithContainerHint(episode, "audio")).toBe(
-			"audio",
-		);
+		expect(getEpisodeMediaTypeWithContainerHint(episode, "audio")).toBe("audio");
 	});
 
 	test("video hints classify legacy ambiguous container file paths as video", () => {
@@ -133,9 +129,7 @@ describe("mediaType", () => {
 		} satisfies Episode & { filePath: string };
 
 		expect(getEpisodeMediaType(episode)).toBe("audio");
-		expect(getEpisodeMediaTypeWithContainerHint(episode, "video")).toBe(
-			"video",
-		);
+		expect(getEpisodeMediaTypeWithContainerHint(episode, "video")).toBe("video");
 	});
 
 	test("does not let an audio hint override explicit video metadata", () => {
@@ -150,9 +144,7 @@ describe("mediaType", () => {
 			filePath: "Podcasts/downloaded-video.mp4",
 		} satisfies Episode & { filePath: string };
 
-		expect(getEpisodeMediaTypeWithContainerHint(episode, "audio")).toBe(
-			"video",
-		);
+		expect(getEpisodeMediaTypeWithContainerHint(episode, "audio")).toBe("video");
 	});
 
 	test("trusts remote episode media metadata before URL extension fallback", () => {

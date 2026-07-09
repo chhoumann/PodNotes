@@ -304,23 +304,18 @@ describe("PodNotes onload wiring (#55)", () => {
 	});
 
 	it("registers a previous-track Media Session handler for headphone timestamp capture", async () => {
-		const originalMediaSession = Object.getOwnPropertyDescriptor(
-			navigator,
-			"mediaSession",
-		);
+		const originalMediaSession = Object.getOwnPropertyDescriptor(navigator, "mediaSession");
 		const calls: Array<{ action: string; hasHandler: boolean }> = [];
 
 		Object.defineProperty(navigator, "mediaSession", {
 			configurable: true,
 			value: {
-				setActionHandler: vi.fn(
-					(action: string, handler: (() => void) | null) => {
-						calls.push({
-							action,
-							hasHandler: typeof handler === "function",
-						});
-					},
-				),
+				setActionHandler: vi.fn((action: string, handler: (() => void) | null) => {
+					calls.push({
+						action,
+						hasHandler: typeof handler === "function",
+					});
+				}),
 			},
 		});
 
@@ -332,11 +327,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			});
 		} finally {
 			if (originalMediaSession) {
-				Object.defineProperty(
-					navigator,
-					"mediaSession",
-					originalMediaSession,
-				);
+				Object.defineProperty(navigator, "mediaSession", originalMediaSession);
 			} else {
 				Reflect.deleteProperty(navigator, "mediaSession");
 			}
@@ -344,23 +335,18 @@ describe("PodNotes onload wiring (#55)", () => {
 	});
 
 	it("clears the previous-track Media Session handler on unload", async () => {
-		const originalMediaSession = Object.getOwnPropertyDescriptor(
-			navigator,
-			"mediaSession",
-		);
+		const originalMediaSession = Object.getOwnPropertyDescriptor(navigator, "mediaSession");
 		const calls: Array<{ action: string; hasHandler: boolean }> = [];
 
 		Object.defineProperty(navigator, "mediaSession", {
 			configurable: true,
 			value: {
-				setActionHandler: vi.fn(
-					(action: string, handler: (() => void) | null) => {
-						calls.push({
-							action,
-							hasHandler: typeof handler === "function",
-						});
-					},
-				),
+				setActionHandler: vi.fn((action: string, handler: (() => void) | null) => {
+					calls.push({
+						action,
+						hasHandler: typeof handler === "function",
+					});
+				}),
 			},
 		});
 
@@ -379,11 +365,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			});
 		} finally {
 			if (originalMediaSession) {
-				Object.defineProperty(
-					navigator,
-					"mediaSession",
-					originalMediaSession,
-				);
+				Object.defineProperty(navigator, "mediaSession", originalMediaSession);
 			} else {
 				Reflect.deleteProperty(navigator, "mediaSession");
 			}
@@ -422,9 +404,7 @@ describe("PodNotes onload wiring (#55)", () => {
 
 		const transcribeCmd = commands.find((c) => c.id === "podnotes-transcribe");
 		expect(transcribeCmd).toBeDefined();
-		expect(
-			(transcribeCmd!.checkCallback as (checking: boolean) => boolean)(true),
-		).toBe(false);
+		expect((transcribeCmd!.checkCallback as (checking: boolean) => boolean)(true)).toBe(false);
 	});
 });
 
@@ -444,9 +424,7 @@ describe("PodNotes.dedupePlayerLeaves", () => {
 		(plugin as unknown as { app: { workspace: typeof workspace } }).app = {
 			workspace,
 		};
-		(
-			plugin as unknown as { dedupePlayerLeaves: () => void }
-		).dedupePlayerLeaves();
+		(plugin as unknown as { dedupePlayerLeaves: () => void }).dedupePlayerLeaves();
 	}
 
 	it("collapses multiple leaves to one, keeping the first", () => {

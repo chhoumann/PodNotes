@@ -16,9 +16,7 @@ function ep(title: string, podcastName?: string): Episode {
 
 describe("getEpisodeKey", () => {
 	it("keeps the plain podcastName::title format for ordinary episodes (backward compatible)", () => {
-		expect(getEpisodeKey(ep("Episode 1", "My Podcast"))).toBe(
-			"My Podcast::Episode 1",
-		);
+		expect(getEpisodeKey(ep("Episode 1", "My Podcast"))).toBe("My Podcast::Episode 1");
 	});
 
 	it("keeps the plain format when names/titles carry single colons", () => {

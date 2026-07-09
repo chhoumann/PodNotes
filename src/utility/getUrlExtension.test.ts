@@ -7,6 +7,8 @@ describe("getUrlExtension", () => {
 	});
 
 	test("should return the extension of a url with params", () => {
-		expect(getUrlExtension("https://example.com/file.mp3?key=value&key2=.mpegvalue")).toBe("mp3");
+		expect(getUrlExtension("https://example.com/file.mp3?key=value&key2=.mpegvalue")).toBe(
+			"mp3",
+		);
 	});
 });

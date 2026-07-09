@@ -33,9 +33,7 @@ export async function diarizeWithOpenAI(opts: {
 	let lastError: unknown;
 
 	for (let index = 0; index < chunkFiles.length; index++) {
-		onProgress(
-			`Diarizing with OpenAI... chunk ${index + 1}/${chunkFiles.length}`,
-		);
+		onProgress(`Diarizing with OpenAI... chunk ${index + 1}/${chunkFiles.length}`);
 		const file = chunkFiles[index];
 
 		let attempt = 0;

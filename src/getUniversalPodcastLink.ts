@@ -27,9 +27,7 @@ async function resolveCollectionId(
 	// we fall back to the name key, then a title match (Codex review #213).
 	const savedFeed =
 		(targetUrl
-			? Object.values(feeds).find(
-					(feed) => normalizeFeedUrl(feed.url) === targetUrl,
-				)
+			? Object.values(feeds).find((feed) => normalizeFeedUrl(feed.url) === targetUrl)
 			: undefined) ??
 		feeds[podcastName] ??
 		Object.values(feeds).find((feed) => feed.title === podcastName);
@@ -42,8 +40,7 @@ async function resolveCollectionId(
 	const match =
 		(targetUrl
 			? iTunesResponse.find((pod) => normalizeFeedUrl(pod.url) === targetUrl)
-			: undefined) ??
-		iTunesResponse.find((pod) => pod.title === podcastName);
+			: undefined) ?? iTunesResponse.find((pod) => pod.title === podcastName);
 
 	return match?.collectionId;
 }
@@ -67,19 +64,14 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 		});
 
 		if (res.status !== 200) {
-			throw new Error(
-				`Failed to get response from pod.link: ${podLinkUrl}`,
-			);
+			throw new Error(`Failed to get response from pod.link: ${podLinkUrl}`);
 		}
 
 		const targetTitle = itunesTitle ?? title;
 
 		const ep = res.json.episodes.find(
-			(episode: {
-				episodeId: string;
-				title: string;
-				[key: string]: string;
-			}) => episode.title === targetTitle,
+			(episode: { episodeId: string; title: string; [key: string]: string }) =>
+				episode.title === targetTitle,
 		);
 		if (!ep) {
 			new Notice(

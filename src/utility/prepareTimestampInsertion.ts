@@ -36,10 +36,7 @@ export function isTableDelimiterRow(line: string): boolean {
 	const trimmed = stripBlockquotePrefix(line).trim();
 	if (!trimmed.includes("|")) return false;
 
-	const cells = trimmed
-		.replace(/^\|/, "")
-		.replace(/\|$/, "")
-		.split("|");
+	const cells = trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|");
 
 	return cells.length > 0 && cells.every((cell) => /^\s*:?-+:?\s*$/.test(cell));
 }

@@ -38,9 +38,7 @@ export function parseOpenAIDiarizedSegments(payload: unknown): DiarizedSegment[]
 		const text = cleanText(raw.text);
 		if (!text) continue;
 		const speaker =
-			typeof raw.speaker === "string" && raw.speaker.trim()
-				? raw.speaker.trim()
-				: "?";
+			typeof raw.speaker === "string" && raw.speaker.trim() ? raw.speaker.trim() : "?";
 		segments.push({
 			speaker,
 			text,
@@ -119,9 +117,7 @@ function groupDeepgramWords(results: Record<string, unknown>): DiarizedSegment[]
 }
 
 function speakerLabelFromIndex(speaker: unknown): string {
-	return typeof speaker === "number" && Number.isFinite(speaker)
-		? String(speaker + 1)
-		: "?";
+	return typeof speaker === "number" && Number.isFinite(speaker) ? String(speaker + 1) : "?";
 }
 
 /**
@@ -129,9 +125,7 @@ function speakerLabelFromIndex(speaker: unknown): string {
  * back-to-back segments for the same speaker (e.g. one per sentence); merging
  * them yields readable paragraphs and a stable shape for rendering.
  */
-export function mergeAdjacentSpeakers(
-	segments: DiarizedSegment[],
-): DiarizedSegment[] {
+export function mergeAdjacentSpeakers(segments: DiarizedSegment[]): DiarizedSegment[] {
 	const merged: DiarizedSegment[] = [];
 	for (const segment of segments) {
 		const last = merged[merged.length - 1];

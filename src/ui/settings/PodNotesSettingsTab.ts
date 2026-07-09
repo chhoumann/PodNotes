@@ -31,10 +31,7 @@ import {
 	savedFeeds,
 	volume,
 } from "src/store/index";
-import {
-	DEFAULT_EPISODE_LIST_LIMIT,
-	MAX_EPISODE_LIST_LIMIT,
-} from "src/constants";
+import { DEFAULT_EPISODE_LIST_LIMIT, MAX_EPISODE_LIST_LIMIT } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
@@ -48,10 +45,7 @@ import {
 	serializeSettings,
 } from "src/settingsTransfer";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
-import {
-	DEFAULT_SPEAKER_TEMPLATE,
-	type DiarizationProviderId,
-} from "src/services/diarization";
+import { DEFAULT_SPEAKER_TEMPLATE, type DiarizationProviderId } from "src/services/diarization";
 
 /**
  * Stack a Setting's control beneath its name, full width — the layout the
@@ -154,15 +148,13 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				"When on, the episode you switch away from is kept at the top of the queue and playback automatically continues with the next queued episode when one ends. Turn this off to stop the queue from filling and advancing on its own — you can still add episodes to the queue manually.",
 			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.autoQueue)
-					.onChange(async (value) => {
-						this.plugin.settings.autoQueue = value;
-						await this.plugin.saveSettings();
-						// Re-emit the plugin store so an open player/grid recomputes
-						// the Queue tile/list visibility immediately (issue #108).
-						plugin.set(this.plugin);
-					}),
+				toggle.setValue(this.plugin.settings.autoQueue).onChange(async (value) => {
+					this.plugin.settings.autoQueue = value;
+					await this.plugin.saveSettings();
+					// Re-emit the plugin store so an open player/grid recomputes
+					// the Queue tile/list visibility immediately (issue #108).
+					plugin.set(this.plugin);
+				}),
 			);
 	}
 
@@ -177,9 +169,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent.inputEl.min = "1";
 				textComponent.inputEl.max = `${MAX_EPISODE_LIST_LIMIT}`;
 				textComponent
-					.setValue(
-						`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`,
-					)
+					.setValue(`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`)
 					.setPlaceholder(`${DEFAULT_EPISODE_LIST_LIMIT}`)
 					.onChange(async (value) => {
 						// Don't commit while the field is empty or mid-edit (e.g. cleared,
@@ -205,18 +195,16 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addDefaultPlaybackRateSetting(container: HTMLElement): void {
-		new Setting(container)
-			.setName("Default Playback Rate")
-			.addSlider((slider) =>
-				slider
-					.setLimits(0.5, 4, 0.1)
-					.setValue(this.plugin.settings.defaultPlaybackRate)
-					.onChange((value) => {
-						this.plugin.settings.defaultPlaybackRate = value;
-						void this.plugin.saveSettings();
-					})
-					.setDynamicTooltip(),
-			);
+		new Setting(container).setName("Default Playback Rate").addSlider((slider) =>
+			slider
+				.setLimits(0.5, 4, 0.1)
+				.setValue(this.plugin.settings.defaultPlaybackRate)
+				.onChange((value) => {
+					this.plugin.settings.defaultPlaybackRate = value;
+					void this.plugin.saveSettings();
+				})
+				.setDynamicTooltip(),
+		);
 	}
 
 	private addDefaultVolumeSetting(container: HTMLElement): void {
@@ -236,37 +224,33 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addSkipLengthSettings(container: HTMLElement): void {
-		new Setting(container)
-			.setName("Skip backward length (s)")
-			.addText((textComponent) => {
-				textComponent.inputEl.type = "number";
-				textComponent
-					.setValue(`${this.plugin.settings.skipBackwardLength}`)
-					.onChange((value) => {
-						// Ignore empty/invalid input instead of persisting NaN, which
-						// would corrupt the playback position when skipping (PB-02/ST-01).
-						const parsed = Number.parseInt(value, 10);
-						if (!Number.isFinite(parsed) || parsed <= 0) return;
-						this.plugin.settings.skipBackwardLength = parsed;
-						void this.plugin.saveSettings();
-					})
-					.setPlaceholder("seconds");
-			});
+		new Setting(container).setName("Skip backward length (s)").addText((textComponent) => {
+			textComponent.inputEl.type = "number";
+			textComponent
+				.setValue(`${this.plugin.settings.skipBackwardLength}`)
+				.onChange((value) => {
+					// Ignore empty/invalid input instead of persisting NaN, which
+					// would corrupt the playback position when skipping (PB-02/ST-01).
+					const parsed = Number.parseInt(value, 10);
+					if (!Number.isFinite(parsed) || parsed <= 0) return;
+					this.plugin.settings.skipBackwardLength = parsed;
+					void this.plugin.saveSettings();
+				})
+				.setPlaceholder("seconds");
+		});
 
-		new Setting(container)
-			.setName("Skip forward length (s)")
-			.addText((textComponent) => {
-				textComponent.inputEl.type = "number";
-				textComponent
-					.setValue(`${this.plugin.settings.skipForwardLength}`)
-					.onChange((value) => {
-						const parsed = Number.parseInt(value, 10);
-						if (!Number.isFinite(parsed) || parsed <= 0) return;
-						this.plugin.settings.skipForwardLength = parsed;
-						void this.plugin.saveSettings();
-					})
-					.setPlaceholder("seconds");
-			});
+		new Setting(container).setName("Skip forward length (s)").addText((textComponent) => {
+			textComponent.inputEl.type = "number";
+			textComponent
+				.setValue(`${this.plugin.settings.skipForwardLength}`)
+				.onChange((value) => {
+					const parsed = Number.parseInt(value, 10);
+					if (!Number.isFinite(parsed) || parsed <= 0) return;
+					this.plugin.settings.skipForwardLength = parsed;
+					void this.plugin.saveSettings();
+				})
+				.setPlaceholder("seconds");
+		});
 	}
 
 	private addNoteSettings(settingsContainer: HTMLDivElement) {
@@ -297,9 +281,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			// instead of leaving the preview blank so the control isn't mistaken
 			// for broken (TS-04).
 			if (!this.plugin.api.podcast) {
-				timestampFormatDemoEl.setText(
-					"Play an episode to preview the timestamp format.",
-				);
+				timestampFormatDemoEl.setText("Play an episode to preview the timestamp format.");
 				return;
 			}
 
@@ -336,9 +318,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setHeading()
 			.addText((textComponent) => {
 				textComponent.setValue(this.plugin.settings.note.path);
-				textComponent.setPlaceholder(
-					"inputs/podcasts/{{podcast}} - {{title}}.md",
-				);
+				textComponent.setPlaceholder("inputs/podcasts/{{podcast}} - {{title}}.md");
 				textComponent.onChange((value) => {
 					this.plugin.settings.note.path = value;
 					void this.plugin.saveSettings();
@@ -392,7 +372,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		const desc = container.createEl("p", {
 			text:
-				'Create a note for a whole podcast (the feed), not a single episode. ' +
+				"Create a note for a whole podcast (the feed), not a single episode. " +
 				'Run the "Create podcast feed note" command to pick a saved podcast. ' +
 				"Available tags: {{title}}, {{podcast}}, {{url}} (website), " +
 				"{{feedurl}} (RSS), {{artwork}}, {{author}}, {{description}}, {{date}}.",
@@ -499,12 +479,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setName("Cache podcast feeds")
 			.setDesc("Store recently downloaded feeds locally for faster startup.")
 			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.feedCache.enabled)
-					.onChange(async (value) => {
-						this.plugin.settings.feedCache.enabled = value;
-						await this.plugin.saveSettings();
-					}),
+				toggle.setValue(this.plugin.settings.feedCache.enabled).onChange(async (value) => {
+					this.plugin.settings.feedCache.enabled = value;
+					await this.plugin.saveSettings();
+				}),
 			);
 
 		new Setting(container)
@@ -525,13 +503,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setName("Clear cached feeds")
 			.setDesc("Remove stored feed data. PodNotes will refetch feeds as needed.")
 			.addButton((button) =>
-				button
-					.setButtonText("Clear cache")
-					.onClick(() => {
-						clearFeedCache();
-						episodeCache.set({});
-						new Notice("Cleared cached podcast feeds.");
-					}),
+				button.setButtonText("Clear cache").onClick(() => {
+					clearFeedCache();
+					episodeCache.set({});
+					new Notice("Cleared cached podcast feeds.");
+				}),
 			);
 	}
 
@@ -604,9 +580,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			)
 			.addButton((button) =>
 				button.setButtonText("Import").onClick(() => {
-					this.pickFile(".json", (contents) =>
-						this.handleSettingsImport(contents),
-					);
+					this.pickFile(".json", (contents) => this.handleSettingsImport(contents));
 				}),
 			);
 
@@ -654,8 +628,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		// import doesn't inherit the settings-file copy.
 		const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
 		const tooLargeMessage =
-			options.tooLargeMessage ??
-			"That file is too large to be a PodNotes settings file.";
+			options.tooLargeMessage ?? "That file is too large to be a PodNotes settings file.";
 
 		const fileInput = activeDocument.createElement("input");
 		fileInput.type = "file";
@@ -698,10 +671,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		fileInput.click();
 	}
 
-	private async handleSettingsExport(
-		fileName: string,
-		includeSecret: boolean,
-	): Promise<void> {
+	private async handleSettingsExport(fileName: string, includeSecret: boolean): Promise<void> {
 		try {
 			const envelope = serializeSettings(
 				this.plugin.settings,
@@ -715,16 +685,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			// vault file (which could be an unrelated note) without the user
 			// choosing a fresh name.
 			if (this.app.vault.getAbstractFileByPath(fileName)) {
-				new Notice(
-					`A file named "${fileName}" already exists. Choose a different name.`,
-				);
+				new Notice(`A file named "${fileName}" already exists. Choose a different name.`);
 				return;
 			}
 			await this.app.vault.create(fileName, contents);
 
-			const exportedSecrets = includeSecret
-				? describeSecrets(this.plugin.settings)
-				: [];
+			const exportedSecrets = includeSecret ? describeSecrets(this.plugin.settings) : [];
 			new Notice(
 				exportedSecrets.length
 					? `Exported PodNotes settings to "${fileName}" (includes your ${exportedSecrets.join(" and ")}).`
@@ -769,9 +735,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			sections.push("playlists");
 		}
 		sections.push(...describeSecrets(result.settings));
-		const detail = sections.length
-			? ` This also replaces your ${sections.join(", ")}.`
-			: "";
+		const detail = sections.length ? ` This also replaces your ${sections.join(", ")}.` : "";
 
 		new ConfirmModal(
 			this.app,
@@ -784,9 +748,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		).open();
 	}
 
-	private async applyImportedSettings(
-		imported: Partial<IPodNotesSettings>,
-	): Promise<void> {
+	private async applyImportedSettings(imported: Partial<IPodNotesSettings>): Promise<void> {
 		const merged = mergeImportedSettings(this.plugin.settings, imported);
 		this.plugin.settings = merged;
 
@@ -802,9 +764,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const sanitizedLimit = sanitizeEpisodeListLimit(merged.episodeListLimit);
 		merged.episodeListLimit = sanitizedLimit;
 		episodeListLimit.set(sanitizedLimit);
-		const importedVolume = Number.isFinite(merged.defaultVolume)
-			? merged.defaultVolume
-			: 1;
+		const importedVolume = Number.isFinite(merged.defaultVolume) ? merged.defaultVolume : 1;
 		volume.set(Math.min(1, Math.max(0, importedVolume)));
 		playbackRate.set(normalizePlaybackRate(merged.defaultPlaybackRate));
 
@@ -828,8 +788,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setName("OpenAI API Key")
 			.setDesc("Enter your OpenAI API key for transcription functionality.")
 			.addText((text) => {
-				text
-					.setPlaceholder("Enter your OpenAI API key")
+				text.setPlaceholder("Enter your OpenAI API key")
 					.setValue(this.plugin.settings.openAIApiKey)
 					.onChange(async (value) => {
 						this.plugin.settings.openAIApiKey = value;
@@ -840,12 +799,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		new Setting(container)
 			.setName("Transcript file path")
-			.setDesc(
-				"The path where transcripts will be saved. Use {{}} for dynamic values.",
-			)
+			.setDesc("The path where transcripts will be saved. Use {{}} for dynamic values.")
 			.addText((text) => {
-				text
-					.setPlaceholder("transcripts/{{podcast}}/{{title}}.md")
+				text.setPlaceholder("transcripts/{{podcast}}/{{title}}.md")
 					.setValue(this.plugin.settings.transcript.path)
 					.onChange(async (value) => {
 						this.plugin.settings.transcript.path = value;
@@ -869,10 +825,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("The template for the transcript file content.")
 			.setHeading()
 			.addTextArea((text) => {
-				text
-					.setPlaceholder(
-						"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\nURL: {{url}}\n\n## Description\n\n{{description}}\n\n## Transcript\n\n{{transcript}}",
-					)
+				text.setPlaceholder(
+					"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\nURL: {{url}}\n\n## Description\n\n{{description}}\n\n## Transcript\n\n{{transcript}}",
+				)
 					.setValue(this.plugin.settings.transcript.template)
 					.onChange(async (value) => {
 						this.plugin.settings.transcript.template = value;
@@ -935,12 +890,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			if (diarization.provider === "deepgram") {
 				new Setting(diarizationContainer)
 					.setName("Deepgram API key")
-					.setDesc(
-						"Used only for Deepgram diarization. Create one at deepgram.com.",
-					)
+					.setDesc("Used only for Deepgram diarization. Create one at deepgram.com.")
 					.addText((text) => {
-						text
-							.setPlaceholder("Enter your Deepgram API key")
+						text.setPlaceholder("Enter your Deepgram API key")
 							.setValue(this.plugin.settings.diarizationApiKey)
 							.onChange(async (value) => {
 								this.plugin.settings.diarizationApiKey = value;
@@ -960,8 +912,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						.setPlaceholder(DEFAULT_SPEAKER_TEMPLATE)
 						.setValue(diarization.speakerTemplate)
 						.onChange(async (value) => {
-							this.plugin.settings.transcript.diarization.speakerTemplate =
-								value;
+							this.plugin.settings.transcript.diarization.speakerTemplate = value;
 							await this.plugin.saveSettings();
 						}),
 				);
@@ -987,12 +938,10 @@ function getRandomEpisode(): Episode {
 	const feedEpisodes = Object.values(get(episodeCache));
 	if (!feedEpisodes.length) return fallbackDemoObj;
 
-	const randomFeed =
-		feedEpisodes[Math.floor(Math.random() * feedEpisodes.length)];
+	const randomFeed = feedEpisodes[Math.floor(Math.random() * feedEpisodes.length)];
 	if (!randomFeed.length) return fallbackDemoObj;
 
-	const randomEpisode =
-		randomFeed[Math.floor(Math.random() * randomFeed.length)];
+	const randomEpisode = randomFeed[Math.floor(Math.random() * randomFeed.length)];
 
 	return randomEpisode;
 }
@@ -1019,13 +968,7 @@ class ConfirmModal extends Modal {
 	private confirmText: string;
 	private onConfirm: () => void;
 
-	constructor(
-		app: App,
-		title: string,
-		body: string,
-		confirmText: string,
-		onConfirm: () => void,
-	) {
+	constructor(app: App, title: string, body: string, confirmText: string, onConfirm: () => void) {
 		super(app);
 		this.title = title;
 		this.body = body;
@@ -1039,9 +982,7 @@ class ConfirmModal extends Modal {
 		contentEl.createEl("p", { text: this.body });
 
 		new Setting(contentEl)
-			.addButton((button) =>
-				button.setButtonText("Cancel").onClick(() => this.close()),
-			)
+			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
 			.addButton((button) =>
 				button
 					.setButtonText(this.confirmText)

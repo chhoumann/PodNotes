@@ -110,9 +110,7 @@ describe("probeAndFetchFirstChunk", () => {
 
 	it("throws on a non-2xx status", async () => {
 		requestUrlMock.mockResolvedValue(res(404, []));
-		await expect(probeAndFetchFirstChunk("https://x/ep.mp3", 4)).rejects.toThrow(
-			/HTTP 404/,
-		);
+		await expect(probeAndFetchFirstChunk("https://x/ep.mp3", 4)).rejects.toThrow(/HTTP 404/);
 	});
 });
 
@@ -149,7 +147,11 @@ describe("writeStreamedFile", () => {
 		const total = await writeStreamedFile(
 			"https://x/ep.mp3",
 			"out.mp3",
-			probe({ firstChunk: new Uint8Array([1, 2, 3]).buffer, supportsRange: false, totalSize: 3 }),
+			probe({
+				firstChunk: new Uint8Array([1, 2, 3]).buffer,
+				supportsRange: false,
+				totalSize: 3,
+			}),
 			undefined,
 			2,
 		);
@@ -162,9 +164,7 @@ describe("writeStreamedFile", () => {
 
 	it("stops on a short chunk when the total size is unknown (EOF heuristic)", async () => {
 		const a = setupAdapter();
-		requestUrlMock
-			.mockResolvedValueOnce(res(206, [3, 4]))
-			.mockResolvedValueOnce(res(206, [5]));
+		requestUrlMock.mockResolvedValueOnce(res(206, [3, 4])).mockResolvedValueOnce(res(206, [5]));
 
 		const total = await writeStreamedFile(
 			"https://x/ep.mp3",
@@ -197,9 +197,9 @@ describe("download size cap (resource exhaustion)", () => {
 			}),
 		);
 
-		await expect(
-			probeAndFetchFirstChunk("https://x/ep.mp3", 4, 100),
-		).rejects.toThrow(/maximum allowed size/);
+		await expect(probeAndFetchFirstChunk("https://x/ep.mp3", 4, 100)).rejects.toThrow(
+			/maximum allowed size/,
+		);
 	});
 
 	it("rejects a 200 fallback whose whole body exceeds the cap", async () => {
@@ -208,9 +208,9 @@ describe("download size cap (resource exhaustion)", () => {
 			res(200, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { "content-type": "audio/mpeg" }),
 		);
 
-		await expect(
-			probeAndFetchFirstChunk("https://x/ep.mp3", 4, 5),
-		).rejects.toThrow(/maximum allowed size/);
+		await expect(probeAndFetchFirstChunk("https://x/ep.mp3", 4, 5)).rejects.toThrow(
+			/maximum allowed size/,
+		);
 	});
 
 	it("aborts the 206 loop once the running total exceeds the cap (unknown-total infinite stream)", async () => {
@@ -231,7 +231,7 @@ describe("download size cap (resource exhaustion)", () => {
 		).rejects.toThrow(/maximum allowed size/);
 
 		// It stopped instead of writing without bound.
-		expect((a.writes.get("out.mp3")?.length ?? 0)).toBeLessThanOrEqual(5 + 2);
+		expect(a.writes.get("out.mp3")?.length ?? 0).toBeLessThanOrEqual(5 + 2);
 	});
 
 	it("rejects when even the first chunk already exceeds the cap", async () => {
@@ -241,7 +241,10 @@ describe("download size cap (resource exhaustion)", () => {
 			writeStreamedFile(
 				"https://x/ep.mp3",
 				"out.mp3",
-				probe({ firstChunk: new Uint8Array([1, 2, 3, 4, 5, 6]).buffer, supportsRange: false }),
+				probe({
+					firstChunk: new Uint8Array([1, 2, 3, 4, 5, 6]).buffer,
+					supportsRange: false,
+				}),
 				undefined,
 				2,
 				5,
@@ -320,10 +323,7 @@ describe("moveIntoPlace", () => {
 
 		await moveIntoPlace("dir/.tok.ep.mp3.podnotes-partial", "dir/ep.mp3");
 
-		expect(rename).toHaveBeenCalledWith(
-			"dir/.tok.ep.mp3.podnotes-partial",
-			"dir/ep.mp3",
-		);
+		expect(rename).toHaveBeenCalledWith("dir/.tok.ep.mp3.podnotes-partial", "dir/ep.mp3");
 	});
 });
 
@@ -344,10 +344,7 @@ describe("sweepStalePartials", () => {
 			"Podcasts/Ep.mp3", // real file -> keep
 		]);
 
-		await sweepStalePartials(
-			"Podcasts",
-			(p) => p === "Podcasts/.Ep.live.podnotes-partial",
-		);
+		await sweepStalePartials("Podcasts", (p) => p === "Podcasts/.Ep.live.podnotes-partial");
 
 		expect(s.remove).toHaveBeenCalledTimes(1);
 		expect(s.remove).toHaveBeenCalledWith("Podcasts/.Ep.dead.podnotes-partial");
@@ -361,8 +358,6 @@ describe("sweepStalePartials", () => {
 			app: { vault: { adapter: { writeBinary: vi.fn(), list, remove: vi.fn() } } },
 		} as unknown as PodNotes);
 
-		await expect(
-			sweepStalePartials("Podcasts", () => false),
-		).resolves.toBeUndefined();
+		await expect(sweepStalePartials("Podcasts", () => false)).resolves.toBeUndefined();
 	});
 });

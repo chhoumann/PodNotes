@@ -25,9 +25,7 @@ export function createEpisodeListEntry(episode: Episode): EpisodeListEntry {
 	};
 }
 
-export function createEpisodeListEntries(
-	episodes: Episode[],
-): EpisodeListEntry[] {
+export function createEpisodeListEntries(episodes: Episode[]): EpisodeListEntry[] {
 	return episodes.map(createEpisodeListEntry);
 }
 
@@ -38,9 +36,7 @@ export function buildPlayedEpisodeListEntries(
 	const episodeLookup = buildEpisodeLookup(episodeSources.flat());
 
 	return getFinishedPlayedEpisodeRecords(playedEpisodes)
-		.map(({ key, episode }) =>
-			createPlayedEpisodeListEntry(key, episode, episodeLookup),
-		)
+		.map(({ key, episode }) => createPlayedEpisodeListEntry(key, episode, episodeLookup))
 		.sort(comparePlayedEpisodeEntries);
 }
 
@@ -74,11 +70,7 @@ function resolvePlayedEpisode(
 	playedEpisode: PlayedEpisode,
 	episodeLookup: Map<string, Episode>,
 ): Episode | undefined {
-	const lookupKeys = [
-		key,
-		getPlayedEpisodeRecordKey(playedEpisode),
-		playedEpisode.title,
-	];
+	const lookupKeys = [key, getPlayedEpisodeRecordKey(playedEpisode), playedEpisode.title];
 
 	for (const lookupKey of lookupKeys) {
 		const episode = episodeLookup.get(lookupKey);
@@ -121,10 +113,7 @@ export function createPlayedEpisodePlaceholder(
 	};
 }
 
-function comparePlayedEpisodeEntries(
-	a: PlayedEpisodeListEntry,
-	b: PlayedEpisodeListEntry,
-): number {
+function comparePlayedEpisodeEntries(a: PlayedEpisodeListEntry, b: PlayedEpisodeListEntry): number {
 	if (a.isAvailable !== b.isAvailable) {
 		return a.isAvailable ? -1 : 1;
 	}

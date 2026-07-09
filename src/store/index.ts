@@ -10,10 +10,7 @@ import type { PlaybackSegment } from "src/types/PlaybackSegment";
 import { LOCAL_FILES_SETTINGS } from "src/constants";
 import { DEFAULT_PLAYBACK_RATE } from "src/utility/playbackRate";
 import { getEpisodeKey } from "src/utility/episodeKey";
-import {
-	getPlayedEpisode,
-	getPlayedEpisodeAliasKeys,
-} from "src/utility/episodeStatus";
+import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
 
 // `src/store` is the single import surface for the store layer. The feed/cache/
 // Latest-Episodes projection and the offline downloads store are self-contained
@@ -169,11 +166,7 @@ function markPlayedEpisodeAliasesAsUnplayed(
 	episode: Pick<PlayedEpisode, "title" | "podcastName">,
 	preferredKey: string,
 ) {
-	const aliasKeys = getPlayedEpisodeAliasKeys(
-		playedEpisodeMap,
-		episode,
-		preferredKey,
-	);
+	const aliasKeys = getPlayedEpisodeAliasKeys(playedEpisodeMap, episode, preferredKey);
 	const keysToUpdate = aliasKeys.length > 0 ? aliasKeys : [preferredKey];
 
 	for (const key of keysToUpdate) {
@@ -202,11 +195,7 @@ function markPlayedEpisodeAliasesAsUnplayed(
  * `findIndex` miss yields -1, and `splice(-1, 1)` would destructively remove the
  * last element.
  */
-export function reorderEpisodes(
-	episodes: Episode[],
-	from: number,
-	to: number,
-): Episode[] {
+export function reorderEpisodes(episodes: Episode[], from: number, to: number): Episode[] {
 	const length = episodes.length;
 	if (from < 0 || from >= length || to < 0 || to >= length || from === to) {
 		return episodes;
@@ -287,9 +276,7 @@ export const queue = (() => {
 		},
 		remove: (episode: Episode) => {
 			update((queue) => {
-				queue.episodes = queue.episodes.filter(
-					(e) => e.title !== episode.title,
-				);
+				queue.episodes = queue.episodes.filter((e) => e.title !== episode.title);
 				return queue;
 			});
 		},
@@ -313,8 +300,7 @@ export const queue = (() => {
 		moveUp: (index: number) => move(index, index - 1),
 		moveDown: (index: number) => move(index, index + 1),
 		moveToTop: (index: number) => move(index, 0),
-		moveToBottom: (index: number) =>
-			move(index, get(store).episodes.length - 1),
+		moveToBottom: (index: number) => move(index, get(store).episodes.length - 1),
 	};
 })();
 
@@ -333,9 +319,7 @@ function getEpisodeFilePath(episode: Episode): string | undefined {
 function sameEpisodeProjection(a: Episode[], b: Episode[]): boolean {
 	if (a.length !== b.length) return false;
 
-	const episodesInA = new Map(
-		a.map((episode) => [getEpisodeKey(episode), episode]),
-	);
+	const episodesInA = new Map(a.map((episode) => [getEpisodeKey(episode), episode]));
 	for (const episode of b) {
 		const key = getEpisodeKey(episode);
 		const existing = key ? episodesInA.get(key) : undefined;
@@ -380,9 +364,7 @@ export const localFiles = (() => {
 		 * dual-write in getContextMenuHandler, so nothing reachable is lost — and a
 		 * removed download now correctly disappears from Local Files too.
 		 */
-		syncWithDownloaded: (downloaded: {
-			[podcastName: string]: DownloadedEpisode[];
-		}): void => {
+		syncWithDownloaded: (downloaded: { [podcastName: string]: DownloadedEpisode[] }): void => {
 			const seen = new Set<string>();
 			const episodes: Episode[] = [];
 
@@ -413,8 +395,7 @@ export const localFiles = (() => {
 			// manual local file so a same-titled downloaded episode (now mirrored
 			// into this playlist) can't shadow it.
 			const target = title.trim().toLowerCase();
-			const matches = (episode: Episode) =>
-				episode.title.trim().toLowerCase() === target;
+			const matches = (episode: Episode) => episode.title.trim().toLowerCase() === target;
 			const ep =
 				episodes.find(
 					(episode) => matches(episode) && episode.podcastName === "local file",
@@ -484,9 +465,7 @@ export function subscribeQueueToCurrentEpisode(): Unsubscriber {
 		if (!episodeIsInQueue) return;
 
 		queue.update((playlist) => {
-			playlist.episodes = playlist.episodes.filter(
-				(e) => e.title !== episode.title,
-			);
+			playlist.episodes = playlist.episodes.filter((e) => e.title !== episode.title);
 			return playlist;
 		});
 	});

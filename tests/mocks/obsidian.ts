@@ -194,9 +194,7 @@ export class SliderComponent extends BaseInteractiveElement {
 	}
 
 	onChange(callback: (value: number) => void) {
-		this.sliderEl.addEventListener("input", () =>
-			callback(Number(this.sliderEl.value)),
-		);
+		this.sliderEl.addEventListener("input", () => callback(Number(this.sliderEl.value)));
 		return this;
 	}
 }
@@ -226,9 +224,7 @@ export class TextComponent extends BaseInteractiveElement {
 	}
 
 	onChange(callback: (value: string) => void) {
-		this.inputEl.addEventListener("input", () =>
-			callback(this.inputEl.value),
-		);
+		this.inputEl.addEventListener("input", () => callback(this.inputEl.value));
 		return this;
 	}
 }

@@ -1,5 +1,14 @@
 {
 	"$schema": "./node_modules/oxfmt/configuration_schema.json",
 	"useTabs": true,
-	"ignorePatterns": []
+	"ignorePatterns": [],
+	"overrides": [
+		{
+			"files": ["**/*.yaml", "**/*.yml"],
+			"options": {
+				"tabWidth": 2,
+				"useTabs": false
+			}
+		}
+	]
 }

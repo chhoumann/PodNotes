@@ -69,11 +69,7 @@ export async function requestWithTimeout(
 		if (error instanceof NetworkError) {
 			throw error;
 		}
-		throw new NetworkError(
-			error instanceof Error ? error.message : String(error),
-			url,
-			error,
-		);
+		throw new NetworkError(error instanceof Error ? error.message : String(error), url, error);
 	} finally {
 		if (timeoutId) {
 			window.clearTimeout(timeoutId);

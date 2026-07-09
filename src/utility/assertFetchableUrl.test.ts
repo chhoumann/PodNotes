@@ -1,18 +1,12 @@
 import { describe, expect, it } from "vitest";
-import {
-	assertFetchableUrl,
-	isFetchableUrl,
-	UnsafeFetchUrlError,
-} from "./assertFetchableUrl";
+import { assertFetchableUrl, isFetchableUrl, UnsafeFetchUrlError } from "./assertFetchableUrl";
 
 describe("assertFetchableUrl", () => {
 	it("accepts ordinary public http(s) feed/enclosure URLs", () => {
 		expect(() =>
 			assertFetchableUrl("https://pod.example.com/audio.mp3?token=abc"),
 		).not.toThrow();
-		expect(() =>
-			assertFetchableUrl("http://cdn.example.org/ep/1.mp3"),
-		).not.toThrow();
+		expect(() => assertFetchableUrl("http://cdn.example.org/ep/1.mp3")).not.toThrow();
 		// A public IP is fine.
 		expect(() => assertFetchableUrl("https://8.8.8.8/feed.xml")).not.toThrow();
 	});
@@ -32,14 +26,12 @@ describe("assertFetchableUrl", () => {
 		expect(() => assertFetchableUrl(url)).toThrow(UnsafeFetchUrlError);
 	});
 
-	it.each([
-		"",
-		"   ",
-		"not a url",
-		"//example.com/no-scheme",
-	])("rejects empty/malformed url %s", (url) => {
-		expect(() => assertFetchableUrl(url)).toThrow(UnsafeFetchUrlError);
-	});
+	it.each(["", "   ", "not a url", "//example.com/no-scheme"])(
+		"rejects empty/malformed url %s",
+		(url) => {
+			expect(() => assertFetchableUrl(url)).toThrow(UnsafeFetchUrlError);
+		},
+	);
 
 	it.each([
 		"http://localhost/feed.xml",

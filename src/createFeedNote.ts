@@ -1,8 +1,5 @@
 import { Notice, TFile } from "obsidian";
-import {
-	FeedFilePathTemplateEngine,
-	FeedNoteTemplateEngine,
-} from "./TemplateEngine";
+import { FeedFilePathTemplateEngine, FeedNoteTemplateEngine } from "./TemplateEngine";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { get } from "svelte/store";
 import { plugin } from "./store";
@@ -19,10 +16,7 @@ import FeedParser from "./parser/feedParser";
 function getFeedNotePath(feed: PodcastFeed): string {
 	const pluginInstance = get(plugin);
 
-	const filePath = FeedFilePathTemplateEngine(
-		pluginInstance.settings.feedNote.path,
-		feed,
-	);
+	const filePath = FeedFilePathTemplateEngine(pluginInstance.settings.feedNote.path, feed);
 
 	// Cap the path so a very long feed title can't trip ENAMETOOLONG (#22). Both
 	// getFeedNote (existence/open) and createFeedNote derive the path here, so they
@@ -57,9 +51,7 @@ export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
 	const { path, template } = pluginInstance.settings.feedNote;
 
 	if (!path || !template) {
-		new Notice(
-			"Please set a podcast feed note path and template in the settings.",
-		);
+		new Notice("Please set a podcast feed note path and template in the settings.");
 		return;
 	}
 

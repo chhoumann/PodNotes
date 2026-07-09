@@ -74,9 +74,7 @@ describe("createPodcastNote chapters template support (#47)", () => {
 
 		await createPodcastNote(episode);
 
-		expect(mockFetchChapters).toHaveBeenCalledWith(
-			"https://example.com/chapters.json",
-		);
+		expect(mockFetchChapters).toHaveBeenCalledWith("https://example.com/chapters.json");
 		expect(createdFiles[0]).toMatchObject({
 			path: "PodNotes/Chaptered Episode.md",
 			data: "# Chaptered Episode\n\n- 0:00 Intro\n- 1:05 Deep Dive",

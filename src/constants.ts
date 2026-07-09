@@ -158,8 +158,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	diarizationApiKey: "",
 	transcript: {
 		path: "transcripts/{{podcast}}/{{title}}.md",
-		template:
-			"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
+		template: "# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
 		// Diarization is off by default so existing behaviour (plain Whisper) is
 		// unchanged; enabling it routes audio to the chosen provider (#168).
 		diarization: {

@@ -30,9 +30,7 @@ describe("QueueReorderModal", () => {
 
 		modal.open();
 		expect(modal.titleEl.textContent).toBe("Reorder Queue");
-		expect(
-			modal.contentEl.querySelectorAll(".queue-reorder-item").length,
-		).toBe(3);
+		expect(modal.contentEl.querySelectorAll(".queue-reorder-item").length).toBe(3);
 
 		modal.close();
 		expect(modal.contentEl.querySelector(".queue-reorder-item")).toBeNull();

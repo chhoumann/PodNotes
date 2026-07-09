@@ -17,13 +17,7 @@ import {
 } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import { registerCommands } from "src/commands";
-import {
-	Notice,
-	Platform,
-	Plugin,
-	type Editor,
-	type WorkspaceLeaf,
-} from "obsidian";
+import { Notice, Platform, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
@@ -40,10 +34,7 @@ import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import type { IPodNotes } from "./types/IPodNotes";
 import { TimestampTemplateEngine } from "./TemplateEngine";
 import { prepareTimestampForInsertion } from "./utility/prepareTimestampInsertion";
-import {
-	createPodcastNoteFileIfNotExists,
-	getPodcastNote,
-} from "./createPodcastNote";
+import { createPodcastNoteFileIfNotExists, getPodcastNote } from "./createPodcastNote";
 import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
@@ -110,27 +101,20 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// loadSettings() already sanitized this, so the store stays in sync with
 		// the (repaired) persisted value.
 		episodeListLimit.set(this.settings.episodeListLimit);
-		volume.set(
-			Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)),
-		);
-		playbackRate.set(
-			normalizePlaybackRate(this.settings.defaultPlaybackRate),
-		);
+		volume.set(Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)));
+		playbackRate.set(normalizePlaybackRate(this.settings.defaultPlaybackRate));
 
 		// Mirror every store-backed slice of state into settings, and wire the queue
 		// automation that drops the now-playing episode from the up-next queue. Both
 		// are store subscriptions tied to the plugin lifetime; onunload disposes them.
-		this.storeUnsubscribers.push(
-			bindStoresToSettings(this),
-			subscribeQueueToCurrentEpisode(),
-		);
+		this.storeUnsubscribers.push(bindStoresToSettings(this), subscribeQueueToCurrentEpisode());
 
 		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
 		// downloadedEpisodes is the authoritative offline set, so mirror it into the
 		// localFiles playlist that the Podcast grid renders. Svelte's immediate-fire
 		// backfills already-downloaded episodes on load; later changes keep it current.
-		this.localFilesMirrorUnsubscribe = downloadedEpisodes.subscribe(
-			(downloaded) => localFiles.syncWithDownloaded(downloaded),
+		this.localFilesMirrorUnsubscribe = downloadedEpisodes.subscribe((downloaded) =>
+			localFiles.syncWithDownloaded(downloaded),
 		);
 
 		this.api = new API();
@@ -170,11 +154,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// whenever the layout changes. This converges (it only acts when >1 exists)
 		// and never fires on a cold start, where only the restored leaf exists, so
 		// its position is preserved.
-		this.registerEvent(
-			this.app.workspace.on("layout-change", () =>
-				this.dedupePlayerLeaves(),
-			),
-		);
+		this.registerEvent(this.app.workspace.on("layout-change", () => this.dedupePlayerLeaves()));
 
 		// Persistent, discoverable entry point in the left ribbon. The right
 		// sidebar header can overflow and hide the view's tab icon (the original
@@ -213,9 +193,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// Workspace is not ready, schedule a retry
 			this.layoutReadyAttempts++;
 			if (this.layoutReadyAttempts >= this.maxLayoutReadyAttempts) {
-				console.error(
-					"Failed to initialize PodNotes layout after maximum attempts",
-				);
+				console.error("Failed to initialize PodNotes layout after maximum attempts");
 			} else if (!this.layoutReadyRetry) {
 				this.layoutReadyRetry = window.setTimeout(() => {
 					this.layoutReadyRetry = null;
@@ -355,19 +333,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				getPodcastNote(this.api.podcast) ??
 				(await createPodcastNoteFileIfNotExists(this.api.podcast));
 			const content = await this.app.vault.read(file);
-			const separator =
-				content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+			const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
 
-			await this.app.vault.modify(
-				file,
-				`${content}${separator}${textToAppend}`,
-			);
+			await this.app.vault.modify(file, `${content}${separator}${textToAppend}`);
 			return true;
 		} catch (error) {
-			console.error(
-				"PodNotes: failed to capture timestamp into episode note",
-				error,
-			);
+			console.error("PodNotes: failed to capture timestamp into episode note", error);
 			new Notice("Failed to capture timestamp into episode note");
 			return false;
 		}
@@ -387,10 +358,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		});
 	}
 
-	private registerMediaSessionAction(
-		action: MediaSessionActionName,
-		handler: () => void,
-	): void {
+	private registerMediaSessionAction(action: MediaSessionActionName, handler: () => void): void {
 		const mediaSession = window.navigator?.mediaSession;
 		if (!mediaSession?.setActionHandler) {
 			return;
@@ -400,10 +368,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			mediaSession.setActionHandler(action, handler);
 			this.mediaSessionActions.push(action);
 		} catch (error) {
-			console.warn(
-				`PodNotes: Media Session action "${action}" is not supported`,
-				error,
-			);
+			console.warn(`PodNotes: Media Session action "${action}" is not supported`, error);
 		}
 	}
 
@@ -461,15 +426,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			...DEFAULT_SETTINGS.download,
 			...loadedData?.download,
 		};
-		this.settings.download.path = migrateDownloadPath(
-			this.settings.download.path,
-		);
+		this.settings.download.path = migrateDownloadPath(this.settings.download.path);
 		// Normalise the persisted limit so a malformed value (e.g. 0 from an older
 		// data.json) is repaired in the settings object too, not just clamped for
 		// runtime behaviour, and so a later saveSettings() can't re-persist it (#114).
-		this.settings.episodeListLimit = sanitizeEpisodeListLimit(
-			this.settings.episodeListLimit,
-		);
+		this.settings.episodeListLimit = sanitizeEpisodeListLimit(this.settings.episodeListLimit);
 		// Repair persisted skip lengths so a cleared field (NaN -> null in JSON)
 		// can't feed the skip arithmetic and corrupt the playback position (PB-02).
 		this.settings.skipBackwardLength = migrateSkipLength(
@@ -492,9 +453,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// Backfill the diarization defaults onto the stored transcript object so an
 		// existing user (who has only { path, template } persisted) gets a valid
 		// transcript.diarization instead of undefined (#168).
-		this.settings.transcript = migrateTranscriptSettings(
-			loadedData?.transcript,
-		);
+		this.settings.transcript = migrateTranscriptSettings(loadedData?.transcript);
 		// Backfill a partial/legacy feedNote so a missing template can't crash
 		// createFeedNote's `template.replace(...)` (ST-08).
 		this.settings.feedNote = migrateFeedNoteSettings(loadedData?.feedNote);

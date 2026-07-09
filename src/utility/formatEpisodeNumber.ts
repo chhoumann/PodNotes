@@ -4,10 +4,7 @@
  * to that width so episode-numbered file names sort correctly; any other format
  * argument is ignored and the bare number is returned.
  */
-export function formatEpisodeNumber(
-	episodeNumber: number | undefined,
-	pad?: string,
-): string {
+export function formatEpisodeNumber(episodeNumber: number | undefined, pad?: string): string {
 	if (episodeNumber === undefined) return "";
 	const value = String(episodeNumber);
 	const width = pad?.trim();

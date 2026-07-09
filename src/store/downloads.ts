@@ -12,9 +12,7 @@ export const downloadedEpisodes = (() => {
 	const { subscribe, update, set } = store;
 
 	function isEpisodeDownloaded(episode: Episode): boolean {
-		return get(store)[episode.podcastName]?.some(
-			(e) => e.title === episode.title,
-		);
+		return get(store)[episode.podcastName]?.some((e) => e.title === episode.title);
 	}
 
 	return {
@@ -28,46 +26,36 @@ export const downloadedEpisodes = (() => {
 		 * collision), or `undefined` otherwise. The caller surfaces a Notice — this
 		 * store stays pure (no UI/side effects), per the PR #211/#212 layering (#LF-06).
 		 */
-		addEpisode: (
-			episode: Episode,
-			filePath: string,
-			size: number,
-		): string | undefined => {
+		addEpisode: (episode: Episode, filePath: string, size: number): string | undefined => {
 			let replacedFilePath: string | undefined;
 
-			update(
-				(downloadedEpisodes: {
-					[podcastName: string]: DownloadedEpisode[];
-				}) => {
-					const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
+			update((downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] }) => {
+				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
 
-					const idx = podcastEpisodes.findIndex(
-						(ep) => ep.title === episode.title,
-					);
-					if (idx !== -1) {
-						// Entries are keyed by podcastName+title, so two distinct local
-						// files that share a basename in different folders collapse onto
-						// the same key and the second replaces the first. The key must stay
-						// basename-only (URIHandler/{{episodelink}} resolve local files by
-						// basename), so report the collision to the caller instead of
-						// overwriting silently (#LF-06).
-						const existingFilePath = podcastEpisodes[idx].filePath;
-						if (existingFilePath && existingFilePath !== filePath) {
-							replacedFilePath = existingFilePath;
-						}
-						podcastEpisodes[idx] = { ...episode, filePath, size };
-					} else {
-						podcastEpisodes.push({
-							...episode,
-							filePath,
-							size,
-						});
+				const idx = podcastEpisodes.findIndex((ep) => ep.title === episode.title);
+				if (idx !== -1) {
+					// Entries are keyed by podcastName+title, so two distinct local
+					// files that share a basename in different folders collapse onto
+					// the same key and the second replaces the first. The key must stay
+					// basename-only (URIHandler/{{episodelink}} resolve local files by
+					// basename), so report the collision to the caller instead of
+					// overwriting silently (#LF-06).
+					const existingFilePath = podcastEpisodes[idx].filePath;
+					if (existingFilePath && existingFilePath !== filePath) {
+						replacedFilePath = existingFilePath;
 					}
+					podcastEpisodes[idx] = { ...episode, filePath, size };
+				} else {
+					podcastEpisodes.push({
+						...episode,
+						filePath,
+						size,
+					});
+				}
 
-					downloadedEpisodes[episode.podcastName] = podcastEpisodes;
-					return downloadedEpisodes;
-				},
-			);
+				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
+				return downloadedEpisodes;
+			});
 
 			return replacedFilePath;
 		},
@@ -81,9 +69,7 @@ export const downloadedEpisodes = (() => {
 
 			update((downloadedEpisodes) => {
 				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
-				const index = podcastEpisodes.findIndex(
-					(e) => e.title === episode.title,
-				);
+				const index = podcastEpisodes.findIndex((e) => e.title === episode.title);
 
 				// Guard against episode not found
 				if (index === -1) {
@@ -100,9 +86,7 @@ export const downloadedEpisodes = (() => {
 			return removedFilePath;
 		},
 		getEpisode: (episode: Episode) => {
-			return get(store)[episode.podcastName]?.find(
-				(e) => e.title === episode.title,
-			);
+			return get(store)[episode.podcastName]?.find((e) => e.title === episode.title);
 		},
 	};
 })();

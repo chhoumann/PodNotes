@@ -102,12 +102,8 @@ describe("getUniversalPodcastLink", () => {
 		expect(requestUrlMock).toHaveBeenCalledWith({
 			url: "https://pod.link/555.json?limit=1000",
 		});
-		expect(writeTextMock).toHaveBeenCalledWith(
-			"https://pod.link/555/episode/ep-123",
-		);
-		expect(noticeMessages()).toContain(
-			"Universal episode link copied to clipboard.",
-		);
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/555/episode/ep-123");
+		expect(noticeMessages()).toContain("Universal episode link copied to clipboard.");
 	});
 
 	test("matches a saved feed by normalized url when the key differs", async () => {
@@ -124,9 +120,7 @@ describe("getUniversalPodcastLink", () => {
 		await getUniversalPodcastLink(api);
 
 		expect(queryiTunesMock).not.toHaveBeenCalled();
-		expect(writeTextMock).toHaveBeenCalledWith(
-			"https://pod.link/777/episode/ep-123",
-		);
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/777/episode/ep-123");
 	});
 
 	test("prefers a saved feed whose URL matches over the name-keyed entry (#213)", async () => {
@@ -150,9 +144,7 @@ describe("getUniversalPodcastLink", () => {
 		await getUniversalPodcastLink(api);
 
 		expect(queryiTunesMock).not.toHaveBeenCalled();
-		expect(writeTextMock).toHaveBeenCalledWith(
-			"https://pod.link/222/episode/ep-123",
-		);
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/222/episode/ep-123");
 	});
 
 	test("falls back to a tolerant iTunes match when no saved collectionId exists", async () => {
@@ -168,9 +160,7 @@ describe("getUniversalPodcastLink", () => {
 		await getUniversalPodcastLink(api);
 
 		expect(queryiTunesMock).toHaveBeenCalledWith("Example Show");
-		expect(writeTextMock).toHaveBeenCalledWith(
-			"https://pod.link/999/episode/ep-123",
-		);
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/999/episode/ep-123");
 	});
 
 	test("prefers the feed-URL match over an earlier same-title iTunes result (#213)", async () => {
@@ -194,9 +184,7 @@ describe("getUniversalPodcastLink", () => {
 
 		await getUniversalPodcastLink(api);
 
-		expect(writeTextMock).toHaveBeenCalledWith(
-			"https://pod.link/222/episode/ep-123",
-		);
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/222/episode/ep-123");
 	});
 
 	test("shows an actionable notice when the podcast cannot be matched", async () => {
@@ -224,9 +212,7 @@ describe("getUniversalPodcastLink", () => {
 
 		await getUniversalPodcastLink(api);
 
-		expect(noticeMessages()).not.toContain(
-			"Universal episode link copied to clipboard.",
-		);
+		expect(noticeMessages()).not.toContain("Universal episode link copied to clipboard.");
 		expect(noticeMessages()).toContain(
 			"Could not copy to clipboard. Episode link: https://pod.link/555/episode/ep-123",
 		);

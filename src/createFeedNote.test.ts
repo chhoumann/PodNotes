@@ -44,8 +44,7 @@ function setupVault(options: {
 
 	const app = {
 		vault: {
-			getAbstractFileByPath: (path: string) =>
-				files.has(path) ? makeTFile(path) : null,
+			getAbstractFileByPath: (path: string) => (files.has(path) ? makeTFile(path) : null),
 			create: vi.fn(create),
 			createFolder: vi.fn(async (path: string) => {
 				files.add(path);

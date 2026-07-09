@@ -1,10 +1,18 @@
 import { Menu, Notice } from "obsidian";
 import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPodcastNote";
 import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
-import downloadEpisodeWithProgessNotice, {
-	removeDownloadedEpisode,
-} from "src/downloadEpisode";
-import { currentEpisode, downloadedEpisodes, favorites, playedEpisodes, playlists, plugin, queue, savedFeeds, viewState } from "src/store";
+import downloadEpisodeWithProgessNotice, { removeDownloadedEpisode } from "src/downloadEpisode";
+import {
+	currentEpisode,
+	downloadedEpisodes,
+	favorites,
+	playedEpisodes,
+	playlists,
+	plugin,
+	queue,
+	savedFeeds,
+	viewState,
+} from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
@@ -41,125 +49,143 @@ export default function spawnEpisodeContextMenu(
 	const menu = new Menu();
 
 	if (!disabledMenuItems?.play) {
-		menu.addItem(item => item
-			.setIcon("play")
-			.setTitle("Play")
-			.onClick(() => {
-				currentEpisode.set(episode);
-				viewState.set(ViewState.Player);
-			}));
+		menu.addItem((item) =>
+			item
+				.setIcon("play")
+				.setTitle("Play")
+				.onClick(() => {
+					currentEpisode.set(episode);
+					viewState.set(ViewState.Player);
+				}),
+		);
 	}
 
 	if (!disabledMenuItems?.markPlayed) {
 		const playedEpisodeMap = get(playedEpisodes);
 		const episodeIsPlayed = playedEpisodeKey
-			? playedEpisodeMap[playedEpisodeKey]?.finished ?? isEpisodeFinished(episode, playedEpisodeMap)
+			? (playedEpisodeMap[playedEpisodeKey]?.finished ??
+				isEpisodeFinished(episode, playedEpisodeMap))
 			: isEpisodeFinished(episode, playedEpisodeMap);
-		menu.addItem(item => item
-			.setIcon(episodeIsPlayed ? "x" : "check")
-			.setTitle(`Mark as ${episodeIsPlayed ? "Unplayed" : "Played"}`)
-			.onClick(() => {
-				if (episodeIsPlayed) {
-					if (playedEpisodeKey) {
-						playedEpisodes.markKeyAsUnplayed(playedEpisodeKey);
+		menu.addItem((item) =>
+			item
+				.setIcon(episodeIsPlayed ? "x" : "check")
+				.setTitle(`Mark as ${episodeIsPlayed ? "Unplayed" : "Played"}`)
+				.onClick(() => {
+					if (episodeIsPlayed) {
+						if (playedEpisodeKey) {
+							playedEpisodes.markKeyAsUnplayed(playedEpisodeKey);
+						} else {
+							playedEpisodes.markAsUnplayed(episode);
+						}
 					} else {
-						playedEpisodes.markAsUnplayed(episode);
+						playedEpisodes.markAsPlayed(episode);
 					}
-				} else {
-					playedEpisodes.markAsPlayed(episode);
-				}
-			})
+				}),
 		);
 	}
 
 	if (!disabledMenuItems?.download) {
 		const isDownloaded = downloadedEpisodes.isEpisodeDownloaded(episode);
 
-		menu.addItem(item => item
-			.setIcon(isDownloaded ? "cross" : "download")
-			.setTitle(isDownloaded ? "Remove file" : "Download")
-			.onClick(() => {
-				if (isDownloaded) {
-					void removeDownloadedEpisode(episode);
-				} else {
-					// The path template always yields a per-episode file via
-					// safeDownloadBasename (#183), so no empty-path guard is needed —
-					// this matches the Download command in main.ts. Settle the
-					// promise so a failure can't surface as an unhandled rejection
-					// (the in-notice error is the user-facing message), matching the
-					// adjacent void removeDownloadedEpisode(...).
-					void downloadEpisodeWithProgessNotice(
-						episode,
-						get(plugin).settings.download.path,
-					).catch((e) => console.error("PodNotes: download failed", e));
-				}
-			}));
+		menu.addItem((item) =>
+			item
+				.setIcon(isDownloaded ? "cross" : "download")
+				.setTitle(isDownloaded ? "Remove file" : "Download")
+				.onClick(() => {
+					if (isDownloaded) {
+						void removeDownloadedEpisode(episode);
+					} else {
+						// The path template always yields a per-episode file via
+						// safeDownloadBasename (#183), so no empty-path guard is needed —
+						// this matches the Download command in main.ts. Settle the
+						// promise so a failure can't surface as an unhandled rejection
+						// (the in-notice error is the user-facing message), matching the
+						// adjacent void removeDownloadedEpisode(...).
+						void downloadEpisodeWithProgessNotice(
+							episode,
+							get(plugin).settings.download.path,
+						).catch((e) => console.error("PodNotes: download failed", e));
+					}
+				}),
+		);
 	}
 
 	if (!disabledMenuItems?.createNote) {
 		const episodeNoteExists = Boolean(getPodcastNote(episode));
 
-		menu.addItem(item => item
-			.setIcon("pencil")
-			.setTitle(`${episodeNoteExists ? "Open" : "Create"} Note`)
-			.onClick(async () => {
-				if (episodeNoteExists) {
-					openPodcastNote(episode);
-				} else {
-					const { path, template } = get(plugin).settings.note;
-					const canCreateNote = Boolean(path && template);
+		menu.addItem((item) =>
+			item
+				.setIcon("pencil")
+				.setTitle(`${episodeNoteExists ? "Open" : "Create"} Note`)
+				.onClick(async () => {
+					if (episodeNoteExists) {
+						openPodcastNote(episode);
+					} else {
+						const { path, template } = get(plugin).settings.note;
+						const canCreateNote = Boolean(path && template);
 
-					if (!canCreateNote) {
-						new Notice(`Please set a note path and template in the settings.`);
-						return;
+						if (!canCreateNote) {
+							new Notice(`Please set a note path and template in the settings.`);
+							return;
+						}
+
+						await createPodcastNote(episode);
 					}
-
-					await createPodcastNote(episode);
-				}
-			}));
+				}),
+		);
 
 		// Feed-level note for the episode's parent podcast (issue #163).
 		const feed = resolveFeedForEpisode(episode);
 		const feedNoteExists = Boolean(getFeedNote(feed));
 
-		menu.addItem(item => item
-			.setIcon("rss")
-			.setTitle(`${feedNoteExists ? "Open" : "Create"} feed note`)
-			.onClick(async () => {
-				if (feedNoteExists) {
-					openFeedNote(feed);
-				} else {
-					const { path, template } = get(plugin).settings.feedNote;
-					if (!path || !template) {
-						new Notice(`Please set a podcast feed note path and template in the settings.`);
-						return;
-					}
+		menu.addItem((item) =>
+			item
+				.setIcon("rss")
+				.setTitle(`${feedNoteExists ? "Open" : "Create"} feed note`)
+				.onClick(async () => {
+					if (feedNoteExists) {
+						openFeedNote(feed);
+					} else {
+						const { path, template } = get(plugin).settings.feedNote;
+						if (!path || !template) {
+							new Notice(
+								`Please set a podcast feed note path and template in the settings.`,
+							);
+							return;
+						}
 
-					await createFeedNote(feed);
-				}
-			}));
+						await createFeedNote(feed);
+					}
+				}),
+		);
 	}
 
 	if (!disabledMenuItems?.favorite) {
-		const episodeIsFavorite = get(favorites).episodes.find(e => isSameStoredEpisode(e, episode));
-		menu.addItem(item => item
-			.setIcon("lucide-star")
-			.setTitle(`${episodeIsFavorite ? "Remove from" : "Add to"} Favorites`)
-			.onClick(() => {
-				if (episodeIsFavorite) {
-					favorites.update(playlist => {
-						playlist.episodes = playlist.episodes.filter(e => !isSameStoredEpisode(e, episode));
-						return playlist;
-					});
-				} else {
-					favorites.update(playlist => {
-						const newEpisodes = [...playlist.episodes, episode];
-						playlist.episodes = newEpisodes;
+		const episodeIsFavorite = get(favorites).episodes.find((e) =>
+			isSameStoredEpisode(e, episode),
+		);
+		menu.addItem((item) =>
+			item
+				.setIcon("lucide-star")
+				.setTitle(`${episodeIsFavorite ? "Remove from" : "Add to"} Favorites`)
+				.onClick(() => {
+					if (episodeIsFavorite) {
+						favorites.update((playlist) => {
+							playlist.episodes = playlist.episodes.filter(
+								(e) => !isSameStoredEpisode(e, episode),
+							);
+							return playlist;
+						});
+					} else {
+						favorites.update((playlist) => {
+							const newEpisodes = [...playlist.episodes, episode];
+							playlist.episodes = newEpisodes;
 
-						return playlist;
-					});
-				}
-			}));
+							return playlist;
+						});
+					}
+				}),
+		);
 	}
 
 	if (!disabledMenuItems?.queue) {
@@ -168,19 +194,19 @@ export default function spawnEpisodeContextMenu(
 		// check and the reorder lookup below must match by title too. A composite-key
 		// check would offer "Add to Queue" for a same-titled episode from another
 		// podcast, but queue.add would then no-op (Codex review #214).
-		const episodeIsInQueue = get(queue).episodes.find(
-			(e) => e.title === episode.title,
+		const episodeIsInQueue = get(queue).episodes.find((e) => e.title === episode.title);
+		menu.addItem((item) =>
+			item
+				.setIcon("list-ordered")
+				.setTitle(`${episodeIsInQueue ? "Remove from" : "Add to"} Queue`)
+				.onClick(() => {
+					if (episodeIsInQueue) {
+						queue.remove(episode);
+					} else {
+						queue.add(episode);
+					}
+				}),
 		);
-		menu.addItem(item => item
-			.setIcon("list-ordered")
-			.setTitle(`${episodeIsInQueue ? "Remove from" : "Add to"} Queue`)
-			.onClick(() => {
-				if (episodeIsInQueue) {
-					queue.remove(episode);
-				} else {
-					queue.add(episode);
-				}
-			}));
 
 		// Reorder controls — only meaningful when viewing the queue as an ordered
 		// list in the Player. spawnEpisodeContextMenu is shared with the feed,
@@ -195,33 +221,35 @@ export default function spawnEpisodeContextMenu(
 			menu.addSeparator();
 
 			for (const reorderItem of reorderItems) {
-				menu.addItem(item => item
-					.setIcon(reorderItem.icon)
-					.setTitle(reorderItem.title)
-					.onClick(() => {
-						// Resolve the index live: the queue can shift (e.g. the
-						// episode ends and playNext advances it) between opening
-						// the menu and clicking.
-						const index = get(queue).episodes.findIndex(
-							(e) => e.title === episode.title,
-						);
-						if (index === -1) return;
+				menu.addItem((item) =>
+					item
+						.setIcon(reorderItem.icon)
+						.setTitle(reorderItem.title)
+						.onClick(() => {
+							// Resolve the index live: the queue can shift (e.g. the
+							// episode ends and playNext advances it) between opening
+							// the menu and clicking.
+							const index = get(queue).episodes.findIndex(
+								(e) => e.title === episode.title,
+							);
+							if (index === -1) return;
 
-						switch (reorderItem.kind) {
-							case "top":
-								queue.moveToTop(index);
-								break;
-							case "up":
-								queue.moveUp(index);
-								break;
-							case "down":
-								queue.moveDown(index);
-								break;
-							case "bottom":
-								queue.moveToBottom(index);
-								break;
-						}
-					}));
+							switch (reorderItem.kind) {
+								case "top":
+									queue.moveToTop(index);
+									break;
+								case "up":
+									queue.moveUp(index);
+									break;
+								case "down":
+									queue.moveDown(index);
+									break;
+								case "bottom":
+									queue.moveToBottom(index);
+									break;
+							}
+						}),
+				);
 			}
 		}
 	}
@@ -237,27 +265,38 @@ export default function spawnEpisodeContextMenu(
 			menu.addSeparator();
 
 			for (const playlist of entries) {
-				const episodeIsInPlaylist = playlist.episodes.find(e => isSameStoredEpisode(e, episode));
+				const episodeIsInPlaylist = playlist.episodes.find((e) =>
+					isSameStoredEpisode(e, episode),
+				);
 
-				menu.addItem(item => item
-					.setIcon(playlist.icon)
-					.setTitle(`${episodeIsInPlaylist ? "Remove from" : "Add to"} ${playlist.name}`)
-					.onClick(() => {
-						if (episodeIsInPlaylist) {
-							playlists.update(playlists => {
-								playlists[playlist.name].episodes = playlists[playlist.name].episodes.filter(e => !isSameStoredEpisode(e, episode));
+				menu.addItem((item) =>
+					item
+						.setIcon(playlist.icon)
+						.setTitle(
+							`${episodeIsInPlaylist ? "Remove from" : "Add to"} ${playlist.name}`,
+						)
+						.onClick(() => {
+							if (episodeIsInPlaylist) {
+								playlists.update((playlists) => {
+									playlists[playlist.name].episodes = playlists[
+										playlist.name
+									].episodes.filter((e) => !isSameStoredEpisode(e, episode));
 
-								return playlists;
-							});
-						} else {
-							playlists.update(playlists => {
-								const newEpisodes = [...playlists[playlist.name].episodes, episode];
-								playlists[playlist.name].episodes = newEpisodes;
+									return playlists;
+								});
+							} else {
+								playlists.update((playlists) => {
+									const newEpisodes = [
+										...playlists[playlist.name].episodes,
+										episode,
+									];
+									playlists[playlist.name].episodes = newEpisodes;
 
-								return playlists;
-							});
-						}
-					}));
+									return playlists;
+								});
+							}
+						}),
+				);
 			}
 		}
 	}

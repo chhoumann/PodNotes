@@ -4,10 +4,7 @@ import { queue, savedFeeds } from "src/store";
 import { QueueReorderModal } from "src/ui/QueueReorderModal";
 import { TimestampTemplateEngine } from "src/TemplateEngine";
 import { prepareTimestampForInsertion } from "src/utility/prepareTimestampInsertion";
-import {
-	createRecentPodcastSegment,
-	getSegmentCaptureTemplate,
-} from "src/utility/podcastSegment";
+import { createRecentPodcastSegment, getSegmentCaptureTemplate } from "src/utility/podcastSegment";
 import createPodcastNote from "src/createPodcastNote";
 import createFeedNote from "src/createFeedNote";
 import { FeedSuggestModal, orderFeedsByCurrent } from "src/ui/FeedSuggestModal";
@@ -23,8 +20,7 @@ import type PodNotes from "src/main";
  * live state off the passed plugin (api/settings/app) at invocation time.
  */
 export function registerCommands(plugin: PodNotes): void {
-	const canCaptureTimestamp = () =>
-		!!plugin.api.podcast && !!plugin.settings.timestamp.template;
+	const canCaptureTimestamp = () => !!plugin.api.podcast && !!plugin.settings.timestamp.template;
 	const insertCapture = (editor: Editor, capture: string) => {
 		// Insert with replaceSelection (not getCursor + replaceRange +
 		// setCursor): it drops the text at the live cursor and lets the
@@ -143,10 +139,9 @@ export function registerCommands(plugin: PodNotes): void {
 			// Settle the promise so a failed download surfaces in its own Notice
 			// without leaving an unhandled rejection (DL-01). The notice itself is
 			// the user-facing error; the log aids diagnosis.
-			void downloadEpisodeWithNotice(
-				episode,
-				plugin.settings.download.path,
-			).catch((error) => console.error("PodNotes: download failed", error));
+			void downloadEpisodeWithNotice(episode, plugin.settings.download.path).catch((error) =>
+				console.error("PodNotes: download failed", error),
+			);
 		},
 	});
 
@@ -249,10 +244,7 @@ export function registerCommands(plugin: PodNotes): void {
 
 			// Pre-select the playing episode's feed when there is one, so the
 			// picker opens on the most likely choice without requiring playback.
-			const orderedFeeds = orderFeedsByCurrent(
-				feeds,
-				plugin.api.podcast?.podcastName,
-			);
+			const orderedFeeds = orderFeedsByCurrent(feeds, plugin.api.podcast?.podcastName);
 
 			new FeedSuggestModal(plugin.app, orderedFeeds, (feed) => {
 				void createFeedNote(feed);
@@ -334,8 +326,7 @@ export function registerCommands(plugin: PodNotes): void {
 			// the service's context-aware "set your API key" Notice instead of the
 			// command silently vanishing with no explanation (TR-02).
 			const canTranscribe =
-				!!plugin.api.podcast &&
-				getEpisodeMediaType(plugin.api.podcast) === "audio";
+				!!plugin.api.podcast && getEpisodeMediaType(plugin.api.podcast) === "audio";
 
 			if (checking) {
 				return canTranscribe;

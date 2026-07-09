@@ -27,9 +27,7 @@ describe("fetchChapters", () => {
 			}),
 		});
 
-		await expect(
-			fetchChapters("https://example.com/chapters.json"),
-		).resolves.toEqual([
+		await expect(fetchChapters("https://example.com/chapters.json")).resolves.toEqual([
 			{ startTime: 0, title: "Intro" },
 			{ startTime: 35, title: "" },
 			{ startTime: 65, title: "Deep Dive" },
@@ -46,8 +44,6 @@ describe("fetchChapters", () => {
 			text: " ".repeat(1_000_001),
 		});
 
-		await expect(
-			fetchChapters("https://example.com/chapters.json"),
-		).resolves.toEqual([]);
+		await expect(fetchChapters("https://example.com/chapters.json")).resolves.toEqual([]);
 	});
 });

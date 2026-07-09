@@ -29,9 +29,7 @@ describe("buildEpisodeResumeLink (#35)", () => {
 		expect(parsed.protocol).toBe("obsidian:");
 		expect(parsed.host).toBe("podnotes");
 		expect(parsed.searchParams.get("episodeName")).toBe("Episode 1");
-		expect(parsed.searchParams.get("url")).toBe(
-			"https://pod.example.com/feed.xml",
-		);
+		expect(parsed.searchParams.get("url")).toBe("https://pod.example.com/feed.xml");
 		// No time => URIHandler resumes from the last played location.
 		expect(parsed.searchParams.has("time")).toBe(false);
 	});
@@ -76,9 +74,7 @@ describe("buildEpisodeResumeLink (#35)", () => {
 
 		// A normal podcast episode resolves remotely; downloaded availability is the
 		// player's concern, so the link still addresses it by feed URL.
-		expect(parsed.searchParams.get("url")).toBe(
-			"https://pod.example.com/feed.xml",
-		);
+		expect(parsed.searchParams.get("url")).toBe("https://pod.example.com/feed.xml");
 	});
 
 	test("falls back to a downloaded copy's path for a non-local episode with no feed URL", () => {
@@ -107,8 +103,6 @@ describe("buildEpisodeResumeLink (#35)", () => {
 		// Obsidian decodes with decodeURIComponent only; encodePodnotesURI emits
 		// %2B (not '+') so the title decodes back to a literal '+'.
 		expect(link).toContain("Episode%2050%3A%20C%2B%2B%20Tips");
-		expect(new URL(link).searchParams.get("episodeName")).toBe(
-			"Episode 50: C++ Tips",
-		);
+		expect(new URL(link).searchParams.get("episodeName")).toBe("Episode 50: C++ Tips");
 	});
 });

@@ -20,8 +20,8 @@ import { isLocalFile } from "./isLocalFile";
 export default function buildEpisodeResumeLink(episode: Episode): string {
 	const downloadedPath = () => downloadedEpisodes.getEpisode(episode)?.filePath;
 	const target = isLocalFile(episode)
-		? episode.filePath ?? downloadedPath()
-		: episode.feedUrl ?? downloadedPath();
+		? (episode.filePath ?? downloadedPath())
+		: (episode.feedUrl ?? downloadedPath());
 
 	// URIHandler rejects an empty episodeName, so without a title there is no
 	// working link to emit — degrade to "" rather than a dead link (UR-03).

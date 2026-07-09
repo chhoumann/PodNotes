@@ -1,5 +1,5 @@
 export enum ViewState {
-    PodcastGrid,
-    EpisodeList,
-    Player,
+	PodcastGrid,
+	EpisodeList,
+	Player,
 }

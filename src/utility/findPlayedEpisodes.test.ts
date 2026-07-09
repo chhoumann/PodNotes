@@ -64,9 +64,7 @@ describe("findPlayedEpisodesInFeeds", () => {
 			episode("Ep A", "Pod A"),
 			episode("Ep Z", "Pod A"),
 		]);
-		feedEpisodes.set("https://proto.example/feed", [
-			episode("Ep P", "__proto__"),
-		]);
+		feedEpisodes.set("https://proto.example/feed", [episode("Ep P", "__proto__")]);
 
 		const played = [
 			playedEp("Ep A", "Pod A"),

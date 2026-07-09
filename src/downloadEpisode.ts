@@ -65,15 +65,11 @@ async function downloadFile(url: string): Promise<DownloadedFile> {
 
 		const data = response.arrayBuffer;
 		const contentType =
-			response.headers["content-type"] ??
-			response.headers["Content-Type"] ??
-			"";
+			response.headers["content-type"] ?? response.headers["Content-Type"] ?? "";
 
 		return { data, contentType, byteLength: data.byteLength };
 	} catch (error: unknown) {
-		throw new Error(
-			`Failed to download ${url}:\n\n${getErrorMessage(error)}`,
-		);
+		throw new Error(`Failed to download ${url}:\n\n${getErrorMessage(error)}`);
 	}
 }
 
@@ -100,8 +96,7 @@ function resolveDownloadTarget(
 	headerBytes: ArrayBuffer,
 	contentType: string,
 ): { extension: string; filePath: string } {
-	const extension =
-		inferFileExtensionFromDownload(episode, headerBytes, contentType) ?? "mp3";
+	const extension = inferFileExtensionFromDownload(episode, headerBytes, contentType) ?? "mp3";
 	if (!downloadAppearsPlayable(contentType, extension, episode.mediaType)) {
 		throw new Error("Not a playable media file");
 	}
@@ -127,11 +122,7 @@ async function downloadEpisodeToDisk(
 	// the final path when the URL's extension is wrong — both still handled below.
 	const urlExtension = getUrlExtension(episode.streamUrl);
 	if (urlExtension) {
-		const provisionalPath = safeDownloadFilePath(
-			downloadPathTemplate,
-			episode,
-			urlExtension,
-		);
+		const provisionalPath = safeDownloadFilePath(downloadPathTemplate, episode, urlExtension);
 		const cached = app.vault.getAbstractFileByPath(provisionalPath);
 		if (cached instanceof TFile) {
 			downloadedEpisodes.addEpisode(episode, provisionalPath, cached.stat.size);
@@ -141,8 +132,7 @@ async function downloadEpisodeToDisk(
 
 	const adapter = appendableAdapter();
 	const canStream =
-		typeof adapter.writeBinary === "function" &&
-		typeof adapter.appendBinary === "function";
+		typeof adapter.writeBinary === "function" && typeof adapter.appendBinary === "function";
 
 	if (!canStream) {
 		const { data, contentType } = await downloadFile(episode.streamUrl);
@@ -183,21 +173,13 @@ async function downloadEpisodeToDisk(
 		// Reclaim temps orphaned by a previous download killed mid-stream (the very
 		// crash this fix addresses). The active set protects any concurrent
 		// download's live temp from being swept.
-		await sweepStalePartials(
-			parentFolderPath(filePath),
-			(path) => activePartialPaths.has(path),
+		await sweepStalePartials(parentFolderPath(filePath), (path) =>
+			activePartialPaths.has(path),
 		);
 
-		const total = await writeStreamedFile(
-			episode.streamUrl,
-			tmpPath,
-			probe,
-			onProgress,
-		);
+		const total = await writeStreamedFile(episode.streamUrl, tmpPath, probe, onProgress);
 		if (probe.totalSize !== null && total !== probe.totalSize) {
-			throw new Error(
-				`Incomplete download: got ${total} of ${probe.totalSize} bytes.`,
-			);
+			throw new Error(`Incomplete download: got ${total} of ${probe.totalSize} bytes.`);
 		}
 
 		// Only a fully-written, size-verified file is exposed to the vault — as one
@@ -253,18 +235,11 @@ export default async function downloadEpisodeWithNotice(
 
 		update((bodyEl) => bodyEl.createEl("p", { text: "Starting download..." }));
 
-		const work = downloadEpisodeToDisk(
-			episode,
-			downloadPathTemplate,
-			(written, total) => {
-				const mb = (written / (1024 * 1024)).toFixed(1);
-				const pct =
-					total && total > 0 ? ` ${Math.round((written / total) * 100)}%` : "";
-				update((bodyEl) =>
-					bodyEl.createEl("p", { text: `Downloading...${pct} (${mb} MB)` }),
-				);
-			},
-		);
+		const work = downloadEpisodeToDisk(episode, downloadPathTemplate, (written, total) => {
+			const mb = (written / (1024 * 1024)).toFixed(1);
+			const pct = total && total > 0 ? ` ${Math.round((written / total) * 100)}%` : "";
+			update((bodyEl) => bodyEl.createEl("p", { text: `Downloading...${pct} (${mb} MB)` }));
+		});
 		downloadsInFlight.set(key, work);
 
 		try {
@@ -328,17 +303,13 @@ function createNoticeDoc(title: string) {
  * title is empty or all-illegal). Leading/interior empty segments are dropped so
  * a stray slash can never yield an absolute-looking or double-slashed path.
  */
-export function safeDownloadBasename(
-	downloadPathTemplate: string,
-	episode: Episode,
-): string {
+export function safeDownloadBasename(downloadPathTemplate: string, episode: Episode): string {
 	const resolved = DownloadPathTemplateEngine(downloadPathTemplate, episode);
 	const segments = resolved.split("/");
 	const lastIndex = segments.length - 1;
 
 	if (segments[lastIndex].trim() === "") {
-		segments[lastIndex] =
-			replaceIllegalFileNameCharactersInString(episode.title) || "episode";
+		segments[lastIndex] = replaceIllegalFileNameCharactersInString(episode.title) || "episode";
 	}
 
 	return segments
@@ -383,9 +354,7 @@ async function createEpisodeFile({
 	try {
 		await app.vault.createBinary(filePath, data);
 	} catch (error: unknown) {
-		throw new Error(
-			`Failed to write file "${filePath}": ${getErrorMessage(error)}`,
-		);
+		throw new Error(`Failed to write file "${filePath}": ${getErrorMessage(error)}`);
 	}
 
 	downloadedEpisodes.addEpisode(episode, filePath, data.byteLength);
@@ -471,10 +440,7 @@ function getLocalFilePathFromLink(link: string): string | null {
 		return directFile.path;
 	}
 
-	const linkedFile = app.metadataCache?.getFirstLinkpathDest(
-		normalizedTarget,
-		"",
-	);
+	const linkedFile = app.metadataCache?.getFirstLinkpathDest(normalizedTarget, "");
 	if (linkedFile instanceof TFile) {
 		return linkedFile.path;
 	}
@@ -488,10 +454,7 @@ function inferFileExtensionFromDownload(
 	contentType: string,
 ): string | null {
 	const contentTypeExtension = getExtensionFromContentType(contentType);
-	if (
-		getMediaTypeFromContentType(contentType) === "video" &&
-		contentTypeExtension
-	) {
+	if (getMediaTypeFromContentType(contentType) === "video" && contentTypeExtension) {
 		return contentTypeExtension;
 	}
 
@@ -511,13 +474,10 @@ function inferFileExtensionFromDownload(
 		// (Codex review #213). The hint comes from the content type or, failing
 		// that, the episode's known media type.
 		const isAudioDownload =
-			getMediaTypeFromContentType(contentType) === "audio" ||
-			episode.mediaType === "audio";
+			getMediaTypeFromContentType(contentType) === "audio" || episode.mediaType === "audio";
 		return (
-			normalizeAudioExtension(
-				signatureExtension,
-				isAudioDownload ? "audio" : undefined,
-			) ?? signatureExtension
+			normalizeAudioExtension(signatureExtension, isAudioDownload ? "audio" : undefined) ??
+			signatureExtension
 		);
 	}
 
@@ -579,9 +539,7 @@ function downloadAppearsPlayable(
 	}
 
 	return (
-		normalizedType === "" ||
-		contentMediaType === "audio" ||
-		isPlayableMediaExtension(extension)
+		normalizedType === "" || contentMediaType === "audio" || isPlayableMediaExtension(extension)
 	);
 }
 
@@ -596,10 +554,7 @@ function downloadAppearsAudio(
 
 	const contentMediaType = getMediaTypeFromContentType(contentType);
 	if (contentMediaType) {
-		return (
-			contentMediaType === "audio" ||
-			isExplicitAudioContainer(extension, mediaTypeHint)
-		);
+		return contentMediaType === "audio" || isExplicitAudioContainer(extension, mediaTypeHint);
 	}
 
 	const normalizedType = contentType.toLowerCase();
@@ -621,10 +576,7 @@ function normalizeAudioExtension(
 	extension: string | null,
 	mediaTypeHint?: EpisodeMediaType,
 ): string | null {
-	if (
-		mediaTypeHint === "audio" &&
-		extension?.toLowerCase() === "mp4"
-	) {
+	if (mediaTypeHint === "audio" && extension?.toLowerCase() === "mp4") {
 		return "m4a";
 	}
 
@@ -671,24 +623,13 @@ export async function downloadEpisode(
 	try {
 		const { data, contentType } = await downloadFile(episode.streamUrl);
 		const inferredExtension =
-			inferFileExtensionFromDownload(episode, data, contentType) ??
-			provisionalExtension;
+			inferFileExtensionFromDownload(episode, data, contentType) ?? provisionalExtension;
 
-		if (
-			!downloadAppearsPlayable(
-				contentType,
-				inferredExtension,
-				episode.mediaType,
-			)
-		) {
+		if (!downloadAppearsPlayable(contentType, inferredExtension, episode.mediaType)) {
 			throw new Error("Not a playable media file.");
 		}
 
-		const filePath = safeDownloadFilePath(
-			downloadPathTemplate,
-			episode,
-			inferredExtension,
-		);
+		const filePath = safeDownloadFilePath(downloadPathTemplate, episode, inferredExtension);
 		const finalExistingFile = app.vault.getAbstractFileByPath(filePath);
 		if (finalExistingFile instanceof TFile) {
 			return filePath;
@@ -703,9 +644,7 @@ export async function downloadEpisode(
 
 		return filePath;
 	} catch (error: unknown) {
-		throw new Error(
-			`Failed to download ${episode.title}: ${getErrorMessage(error)}`,
-		);
+		throw new Error(`Failed to download ${episode.title}: ${getErrorMessage(error)}`);
 	}
 }
 
@@ -723,9 +662,7 @@ async function getFileExtension(url: string): Promise<string> {
 			throw: false,
 		});
 		const contentType =
-			response.headers["content-type"] ??
-			response.headers["Content-Type"] ??
-			null;
+			response.headers["content-type"] ?? response.headers["Content-Type"] ?? null;
 
 		const extensionFromContentType = getExtensionFromContentType(contentType);
 		if (extensionFromContentType) {
@@ -787,10 +724,7 @@ export async function getEpisodeAudioBuffer(
 	// cache; a genuinely different episode has a different path and falls through
 	// to a fresh fetch — correct, just not cached.
 	const registered = downloadedEpisodes.getEpisode(episode);
-	if (
-		registered?.filePath &&
-		isSameMediaSource(registered.streamUrl, episode.streamUrl)
-	) {
+	if (registered?.filePath && isSameMediaSource(registered.streamUrl, episode.streamUrl)) {
 		const registeredMediaType = getEpisodeMediaTypeWithContainerHint(
 			registered,
 			audioContainerHint,
@@ -807,18 +741,8 @@ export async function getEpisodeAudioBuffer(
 
 	try {
 		const { data, contentType } = await downloadFile(episode.streamUrl);
-		const inferredExtension = inferFileExtensionFromDownload(
-			episode,
-			data,
-			contentType,
-		);
-		if (
-			!downloadAppearsAudio(
-				contentType,
-				inferredExtension,
-				audioContainerHint,
-			)
-		) {
+		const inferredExtension = inferFileExtensionFromDownload(episode, data, contentType);
+		if (!downloadAppearsAudio(contentType, inferredExtension, audioContainerHint)) {
 			throw new Error(
 				`The downloaded file is not audio (received "${contentType}"). The episode may be unavailable or require re-authentication.`,
 			);
@@ -826,15 +750,11 @@ export async function getEpisodeAudioBuffer(
 
 		return {
 			buffer: data,
-			extension:
-				normalizeAudioExtension(inferredExtension, audioContainerHint) ?? "mp3",
-			basename:
-				replaceIllegalFileNameCharactersInString(episode.title) || "episode",
+			extension: normalizeAudioExtension(inferredExtension, audioContainerHint) ?? "mp3",
+			basename: replaceIllegalFileNameCharactersInString(episode.title) || "episode",
 		};
 	} catch (error: unknown) {
-		throw new Error(
-			`Failed to fetch ${episode.title}: ${getErrorMessage(error)}`,
-		);
+		throw new Error(`Failed to fetch ${episode.title}: ${getErrorMessage(error)}`);
 	}
 }
 
@@ -845,9 +765,7 @@ function getAudioContainerHint(
 	if (episodeMediaType !== "audio") return undefined;
 	if (episode.mediaType === "audio") return "audio";
 
-	return isAudioContainerExtension(getUrlExtension(episode.streamUrl))
-		? "audio"
-		: undefined;
+	return isAudioContainerExtension(getUrlExtension(episode.streamUrl)) ? "audio" : undefined;
 }
 
 async function readVaultAudio(
@@ -860,16 +778,13 @@ async function readVaultAudio(
 		throw new Error(`Unable to read the audio file at "${filePath}".`);
 	}
 
-	const fileExtension =
-		file.extension || getUrlExtension(file.path || filePath) || "";
+	const fileExtension = file.extension || getUrlExtension(file.path || filePath) || "";
 	const explicitAudioContainer =
 		mediaTypeHint === "audio" &&
-		(fileExtension.toLowerCase() === "mp4" ||
-			fileExtension.toLowerCase() === "webm");
+		(fileExtension.toLowerCase() === "mp4" || fileExtension.toLowerCase() === "webm");
 	const mediaType = explicitAudioContainer
 		? "audio"
-		: getMediaTypeFromExtension(fileExtension) ??
-			getMediaTypeFromPath(file.path || filePath);
+		: (getMediaTypeFromExtension(fileExtension) ?? getMediaTypeFromPath(file.path || filePath));
 	if (mediaType !== "audio") {
 		throw new Error(`Unable to read the non-audio file at "${filePath}".`);
 	}

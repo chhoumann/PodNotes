@@ -25,9 +25,7 @@ export function parseEpisodeNumber(
 	return parseEpisodeNumberFromTitle(title);
 }
 
-function parseNonNegativeInt(
-	value: string | null | undefined,
-): number | undefined {
+function parseNonNegativeInt(value: string | null | undefined): number | undefined {
 	if (value === null || value === undefined) return undefined;
 	const trimmed = value.trim();
 	if (!/^\d+$/.test(trimmed)) return undefined;
@@ -41,9 +39,7 @@ function parseNonNegativeInt(
  * Best-effort extraction of an episode number from the start of a title. Exported
  * for focused unit testing of the heuristics; prefer {@link parseEpisodeNumber}.
  */
-export function parseEpisodeNumberFromTitle(
-	title: string | null | undefined,
-): number | undefined {
+export function parseEpisodeNumberFromTitle(title: string | null | undefined): number | undefined {
 	const trimmed = (title ?? "").trim();
 	if (!trimmed) return undefined;
 

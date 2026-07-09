@@ -26,11 +26,7 @@ export class FeedSuggestModal extends FuzzySuggestModal<PodcastFeed> {
 	private feeds: PodcastFeed[];
 	private onChoose: (feed: PodcastFeed) => void;
 
-	constructor(
-		app: App,
-		feeds: PodcastFeed[],
-		onChoose: (feed: PodcastFeed) => void,
-	) {
+	constructor(app: App, feeds: PodcastFeed[], onChoose: (feed: PodcastFeed) => void) {
 		super(app);
 		this.feeds = feeds;
 		this.onChoose = onChoose;

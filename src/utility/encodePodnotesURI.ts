@@ -7,13 +7,13 @@ export default function encodePodnotesURI(
 	const url = new URL(`obsidian://podnotes`);
 
 	const params = new URLSearchParams();
-	params.set('episodeName', title);
-	params.set('url', feedUrl);
+	params.set("episodeName", title);
+	params.set("url", feedUrl);
 
 	if (time !== undefined) {
-		params.set('time', time.toString());
+		params.set("time", time.toString());
 		if (endTime !== undefined) {
-			params.set('endTime', endTime.toString());
+			params.set("endTime", endTime.toString());
 		}
 	}
 
@@ -21,7 +21,7 @@ export default function encodePodnotesURI(
 	// '+' into a space. URLSearchParams serializes spaces as '+' and a literal '+' as '%2B', so
 	// replacing '+' with '%20' yields plain percent-encoding that round-trips losslessly through
 	// Obsidian's decoder — including titles or local-file paths that contain a literal '+'.
-	url.search = params.toString().replace(/\+/g, '%20');
+	url.search = params.toString().replace(/\+/g, "%20");
 
 	return url;
 }

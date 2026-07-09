@@ -1,4 +1,4 @@
-import type { Episode } from 'src/types/Episode';
+import type { Episode } from "src/types/Episode";
 
 export interface IAPI {
 	readonly podcast: Episode;
@@ -9,11 +9,7 @@ export interface IAPI {
 	playbackRate: number;
 	volume: number;
 
-	getPodcastTimeFormatted(
-		format: string,
-		linkify?: boolean,
-		offsetSeconds?: number,
-	): string;
+	getPodcastTimeFormatted(format: string, linkify?: boolean, offsetSeconds?: number): string;
 
 	getPodcastSegmentFormatted(
 		format: string,
@@ -23,7 +19,7 @@ export interface IAPI {
 	): string;
 
 	getTranscript(episode?: Episode): Promise<string | null>;
-	
+
 	start(): void;
 	stop(): void;
 	togglePlayback(): void;

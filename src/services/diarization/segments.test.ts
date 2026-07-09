@@ -12,8 +12,22 @@ describe("parseOpenAIDiarizedSegments (#168)", () => {
 	it("maps diarized_json segments to normalized turns", () => {
 		const payload = {
 			segments: [
-				{ type: "transcript.text.segment", id: "1", speaker: "A", start: 0, end: 2, text: "Hello there." },
-				{ type: "transcript.text.segment", id: "2", speaker: "B", start: 2, end: 4, text: "Hi!" },
+				{
+					type: "transcript.text.segment",
+					id: "1",
+					speaker: "A",
+					start: 0,
+					end: 2,
+					text: "Hello there.",
+				},
+				{
+					type: "transcript.text.segment",
+					id: "2",
+					speaker: "B",
+					start: 2,
+					end: 4,
+					text: "Hi!",
+				},
 			],
 		};
 
@@ -87,9 +101,27 @@ describe("parseDeepgramSegments (#168)", () => {
 						alternatives: [
 							{
 								words: [
-									{ word: "hello", punctuated_word: "Hello", speaker: 0, start: 0, end: 1 },
-									{ word: "there", punctuated_word: "there.", speaker: 0, start: 1, end: 2 },
-									{ word: "hi", punctuated_word: "Hi!", speaker: 1, start: 2, end: 3 },
+									{
+										word: "hello",
+										punctuated_word: "Hello",
+										speaker: 0,
+										start: 0,
+										end: 1,
+									},
+									{
+										word: "there",
+										punctuated_word: "there.",
+										speaker: 0,
+										start: 1,
+										end: 2,
+									},
+									{
+										word: "hi",
+										punctuated_word: "Hi!",
+										speaker: 1,
+										start: 2,
+										end: 3,
+									},
 								],
 							},
 						],
@@ -137,9 +169,7 @@ describe("formatSpeakerLabel (#168)", () => {
 		// `$&`, `$\``, `$'`, `$$` are special in a String.replace replacement string;
 		// the label must be inserted literally rather than expanded to matched text.
 		const speaker = "$`$'$&$$";
-		expect(formatSpeakerLabel("**{{speaker}}:** ", speaker)).toBe(
-			`**${speaker}:** `,
-		);
+		expect(formatSpeakerLabel("**{{speaker}}:** ", speaker)).toBe(`**${speaker}:** `);
 		expect(formatSpeakerLabel("{{speaker}} - ", speaker)).toBe(`${speaker} - `);
 	});
 });

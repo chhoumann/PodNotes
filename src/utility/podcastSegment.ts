@@ -26,11 +26,7 @@ export function createRecentPodcastSegment(
 	lengthSeconds: number,
 	offsetSeconds = 0,
 ): PodcastSegmentTimes | null {
-	if (
-		!Number.isFinite(currentTime) ||
-		!Number.isFinite(lengthSeconds) ||
-		lengthSeconds <= 0
-	) {
+	if (!Number.isFinite(currentTime) || !Number.isFinite(lengthSeconds) || lengthSeconds <= 0) {
 		return null;
 	}
 
@@ -40,11 +36,7 @@ export function createRecentPodcastSegment(
 	return normalizePodcastSegmentTimes(startTime, endTime);
 }
 
-export function formatPodcastSegment(
-	startTime: number,
-	endTime: number,
-	format: string,
-): string {
+export function formatPodcastSegment(startTime: number, endTime: number, format: string): string {
 	return `${formatSeconds(Math.max(0, startTime), format)}-${formatSeconds(
 		Math.max(0, endTime),
 		format,
@@ -56,14 +48,8 @@ export function getSegmentCaptureTemplate(template: string): string {
 		return template;
 	}
 
-	const withLinkSegment = template.replace(
-		/\{\{linktime(:\s*?.+?)?\}\}/gi,
-		"{{linksegment$1}}",
-	);
-	const withSegment = withLinkSegment.replace(
-		/\{\{time(:\s*?.+?)?\}\}/gi,
-		"{{segment$1}}",
-	);
+	const withLinkSegment = template.replace(/\{\{linktime(:\s*?.+?)?\}\}/gi, "{{linksegment$1}}");
+	const withSegment = withLinkSegment.replace(/\{\{time(:\s*?.+?)?\}\}/gi, "{{segment$1}}");
 
 	return withSegment === template ? "- {{linksegment}}" : withSegment;
 }

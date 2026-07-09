@@ -11,9 +11,7 @@ import {
 } from "./settingsTransfer";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
-function makeSettings(
-	overrides: Partial<IPodNotesSettings> = {},
-): IPodNotesSettings {
+function makeSettings(overrides: Partial<IPodNotesSettings> = {}): IPodNotesSettings {
 	return structuredClone({ ...DEFAULT_SETTINGS, ...overrides });
 }
 
@@ -21,12 +19,7 @@ const NOW = "2026-06-14T00:00:00.000Z";
 
 describe("serializeSettings", () => {
 	it("wraps settings in a versioned envelope", () => {
-		const envelope = serializeSettings(
-			makeSettings(),
-			{ includeSecret: false },
-			"2.16.0",
-			NOW,
-		);
+		const envelope = serializeSettings(makeSettings(), { includeSecret: false }, "2.16.0", NOW);
 
 		expect(envelope.type).toBe(SETTINGS_EXPORT_TYPE);
 		expect(envelope.version).toBe(SETTINGS_EXPORT_VERSION);
@@ -36,7 +29,9 @@ describe("serializeSettings", () => {
 
 	it("excludes runtime/vault-specific state even when populated", () => {
 		const settings = makeSettings({
-			playedEpisodes: { ep: { title: "ep", podcastName: "p", time: 1, duration: 2, finished: false } },
+			playedEpisodes: {
+				ep: { title: "ep", podcastName: "p", time: 1, duration: 2, finished: false },
+			},
 			podNotes: { ep: { title: "ep", podcastName: "p" } as never },
 			downloadedEpisodes: { p: [] },
 			currentEpisode: { title: "ep" } as never,
@@ -168,7 +163,9 @@ describe("parseImport", () => {
 	it("accepts a raw settings object and drops excluded runtime keys", () => {
 		const raw = makeSettings({
 			defaultVolume: 0.3,
-			playedEpisodes: { ep: { title: "ep", podcastName: "p", time: 1, duration: 2, finished: true } },
+			playedEpisodes: {
+				ep: { title: "ep", podcastName: "p", time: 1, duration: 2, finished: true },
+			},
 			currentEpisode: { title: "ep" } as never,
 		});
 
@@ -184,9 +181,7 @@ describe("parseImport", () => {
 	});
 
 	it("drops unknown keys", () => {
-		const result = parseImport(
-			JSON.stringify({ defaultVolume: 0.5, somethingElse: true }),
-		);
+		const result = parseImport(JSON.stringify({ defaultVolume: 0.5, somethingElse: true }));
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.settings).not.toHaveProperty("somethingElse");
 	});
@@ -208,9 +203,7 @@ describe("parseImport", () => {
 	});
 
 	it("drops a wrong-typed nested field but keeps valid siblings", () => {
-		const result = parseImport(
-			JSON.stringify({ note: { path: 5, template: "keep" } }),
-		);
+		const result = parseImport(JSON.stringify({ note: { path: 5, template: "keep" } }));
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.settings.note).toEqual({ template: "keep" });
@@ -228,9 +221,7 @@ describe("parseImport", () => {
 	});
 
 	it("does not pollute Object.prototype via __proto__", () => {
-		const result = parseImport(
-			'{"defaultVolume": 0.5, "__proto__": {"polluted": true}}',
-		);
+		const result = parseImport('{"defaultVolume": 0.5, "__proto__": {"polluted": true}}');
 		expect(result.ok).toBe(true);
 		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
 	});
@@ -345,7 +336,9 @@ describe("mergeImportedSettings", () => {
 	it("overrides preferences while preserving excluded runtime state", () => {
 		const current = makeSettings({
 			defaultVolume: 1,
-			playedEpisodes: { ep: { title: "ep", podcastName: "p", time: 5, duration: 9, finished: false } },
+			playedEpisodes: {
+				ep: { title: "ep", podcastName: "p", time: 5, duration: 9, finished: false },
+			},
 		});
 
 		const merged = mergeImportedSettings(current, { defaultVolume: 0.25 });
@@ -442,16 +435,12 @@ describe("mergeImportedSettings", () => {
 describe("describeSecrets (#168)", () => {
 	it("names only the secrets that actually hold a value", () => {
 		expect(describeSecrets(makeSettings())).toEqual([]);
-		expect(describeSecrets(makeSettings({ openAIApiKey: "sk" }))).toEqual([
-			"OpenAI API key",
+		expect(describeSecrets(makeSettings({ openAIApiKey: "sk" }))).toEqual(["OpenAI API key"]);
+		expect(describeSecrets(makeSettings({ diarizationApiKey: "dg" }))).toEqual([
+			"Deepgram API key",
 		]);
 		expect(
-			describeSecrets(makeSettings({ diarizationApiKey: "dg" })),
-		).toEqual(["Deepgram API key"]);
-		expect(
-			describeSecrets(
-				makeSettings({ openAIApiKey: "sk", diarizationApiKey: "dg" }),
-			),
+			describeSecrets(makeSettings({ openAIApiKey: "sk", diarizationApiKey: "dg" })),
 		).toEqual(["OpenAI API key", "Deepgram API key"]);
 	});
 

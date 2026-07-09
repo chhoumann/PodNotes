@@ -140,10 +140,7 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 
 		const episodes = get(localFiles).episodes;
 		expect(episodes).toHaveLength(2);
-		expect(episodes.map((ep) => ep.podcastName).sort()).toEqual([
-			"Podcast A",
-			"Podcast B",
-		]);
+		expect(episodes.map((ep) => ep.podcastName).sort()).toEqual(["Podcast A", "Podcast B"]);
 	});
 
 	test("preserves filePath/size and the real podcastName (not coerced)", () => {
@@ -271,9 +268,7 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 			],
 		});
 
-		expect(localFiles.getLocalEpisode("Collision")?.podcastName).toBe(
-			"local file",
-		);
+		expect(localFiles.getLocalEpisode("Collision")?.podcastName).toBe("local file");
 	});
 
 	test("dedupes identical composite keys, keeping the first occurrence", () => {
@@ -317,9 +312,7 @@ describe("localFiles store — syncWithDownloaded (issue #176)", () => {
 		const [ep] = get(localFiles).episodes;
 		expect(ep?.title).toBe("My Recording");
 		expect(ep?.podcastName).toBe("local file");
-		expect((ep as DownloadedEpisode).filePath).toBe(
-			"recordings/my recording.m4a",
-		);
+		expect((ep as DownloadedEpisode).filePath).toBe("recordings/my recording.m4a");
 	});
 });
 
@@ -380,21 +373,11 @@ describe("reorderEpisodes", () => {
 	const titles = (list: Episode[]) => list.map((e) => e.title);
 
 	test("moves forward (from < to)", () => {
-		expect(titles(reorderEpisodes(episodes, 0, 2))).toEqual([
-			"B",
-			"C",
-			"A",
-			"D",
-		]);
+		expect(titles(reorderEpisodes(episodes, 0, 2))).toEqual(["B", "C", "A", "D"]);
 	});
 
 	test("moves backward (from > to)", () => {
-		expect(titles(reorderEpisodes(episodes, 3, 1))).toEqual([
-			"A",
-			"D",
-			"B",
-			"C",
-		]);
+		expect(titles(reorderEpisodes(episodes, 3, 1))).toEqual(["A", "D", "B", "C"]);
 	});
 
 	test("move to last index truly lands last", () => {
@@ -422,12 +405,7 @@ describe("reorderEpisodes", () => {
 
 describe("dedupeEpisodesByTitle", () => {
 	test("keeps the first occurrence and preserves order", () => {
-		const result = dedupeEpisodesByTitle([
-			ep("A"),
-			ep("B"),
-			ep("A"),
-			ep("C"),
-		]);
+		const result = dedupeEpisodesByTitle([ep("A"), ep("B"), ep("A"), ep("C")]);
 		expect(result.map((e) => e.title)).toEqual(["A", "B", "C"]);
 	});
 
@@ -504,9 +482,7 @@ describe("queue store", () => {
 		try {
 			queue.moveToBottom(0);
 
-			expect(
-				fakePlugin.settings.queue.episodes.map((e) => e.title),
-			).toEqual(["B", "C", "A"]);
+			expect(fakePlugin.settings.queue.episodes.map((e) => e.title)).toEqual(["B", "C", "A"]);
 			expect(fakePlugin.saveSettings).toHaveBeenCalled();
 		} finally {
 			unbind();
@@ -604,22 +580,14 @@ describe("sanitizeEpisodeListLimit (issue #114)", () => {
 	test("falls back to the default for missing/invalid/non-positive values", () => {
 		expect(sanitizeEpisodeListLimit(0)).toBe(DEFAULT_EPISODE_LIST_LIMIT);
 		expect(sanitizeEpisodeListLimit(-5)).toBe(DEFAULT_EPISODE_LIST_LIMIT);
-		expect(sanitizeEpisodeListLimit(Number.NaN)).toBe(
-			DEFAULT_EPISODE_LIST_LIMIT,
-		);
-		expect(sanitizeEpisodeListLimit(undefined)).toBe(
-			DEFAULT_EPISODE_LIST_LIMIT,
-		);
+		expect(sanitizeEpisodeListLimit(Number.NaN)).toBe(DEFAULT_EPISODE_LIST_LIMIT);
+		expect(sanitizeEpisodeListLimit(undefined)).toBe(DEFAULT_EPISODE_LIST_LIMIT);
 		expect(sanitizeEpisodeListLimit("nope")).toBe(DEFAULT_EPISODE_LIST_LIMIT);
 	});
 
 	test("clamps to the maximum", () => {
-		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT)).toBe(
-			MAX_EPISODE_LIST_LIMIT,
-		);
-		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT + 1)).toBe(
-			MAX_EPISODE_LIST_LIMIT,
-		);
+		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT)).toBe(MAX_EPISODE_LIST_LIMIT);
+		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT + 1)).toBe(MAX_EPISODE_LIST_LIMIT);
 		expect(sanitizeEpisodeListLimit(10 ** 9)).toBe(MAX_EPISODE_LIST_LIMIT);
 	});
 });

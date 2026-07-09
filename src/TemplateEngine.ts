@@ -39,10 +39,7 @@ export interface NoteTemplateContext {
 	chapters?: Chapter[];
 }
 
-export function templateHasTag(
-	template: string,
-	tag: Lowercase<string>,
-): boolean {
+export function templateHasTag(template: string, tag: Lowercase<string>): boolean {
 	return Array.from(template.matchAll(TEMPLATE_TAG_REGEX)).some(
 		([, tagId]) => tagId.toLowerCase() === tag,
 	);
@@ -51,10 +48,7 @@ export function templateHasTag(
 function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	const tags: Tags = {};
 
-	function addTag(
-		tag: Lowercase<string>,
-		value: TagValue,
-	): void {
+	function addTag(tag: Lowercase<string>, value: TagValue): void {
 		tags[tag] = value;
 	}
 
@@ -75,9 +69,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 
 					new Notice(
 						`Tag ${tagId} is invalid.${
-							similarTag.length > 0
-								? ` Did you mean ${similarTag[0].item}?`
-								: ""
+							similarTag.length > 0 ? ` Did you mean ${similarTag[0].item}?` : ""
 						}`,
 					);
 					return match;
@@ -126,9 +118,7 @@ function resolveEpisodeNumber(episode: Episode): number | undefined {
 function legalizedNameTag(rawValue: string): TagValue {
 	return (whitespaceReplacement?: string) => {
 		const legal = replaceIllegalFileNameCharactersInString(rawValue);
-		return whitespaceReplacement
-			? legal.replace(/\s+/g, whitespaceReplacement)
-			: legal;
+		return whitespaceReplacement ? legal.replace(/\s+/g, whitespaceReplacement) : legal;
 	};
 }
 
@@ -143,13 +133,9 @@ function addEpisodeFileNameTags(addTag: AddTagFn, episode: Episode): void {
 	addTag("title", legalizedNameTag(episode.title));
 	addTag("podcast", legalizedNameTag(episode.podcastName));
 	addTag("date", (format?: string) =>
-		episode.episodeDate
-			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
-			: "",
+		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
 	);
-	addTag("currentdate", (format?: string) =>
-		formatDate(new Date(), format ?? "YYYY-MM-DD"),
-	);
+	addTag("currentdate", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
 	addTag("episodenumber", (pad?: string) =>
 		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
@@ -210,10 +196,7 @@ function sanitizeInlineText(text: string): string {
  * vault), so this has no false positives on genuine show notes.
  */
 function neutralizeExecutableCodeBlocks(markdown: string): string {
-	return markdown.replace(
-		/(`{3,}|~{3,})[ \t]*(?:dataviewjs|dataview)\b/gi,
-		"$1text",
-	);
+	return markdown.replace(/(`{3,}|~{3,})[ \t]*(?:dataviewjs|dataview)\b/gi, "$1text");
 }
 
 /**
@@ -236,10 +219,7 @@ function feedHtmlToMarkdown(html: string): string {
 	return neutralizeExecutableCodeBlocks(htmlToMarkdown(html));
 }
 
-function formatTemplateChapters(
-	chapters: Chapter[] | undefined,
-	prependToLines?: string,
-): string {
+function formatTemplateChapters(chapters: Chapter[] | undefined, prependToLines?: string): string {
 	const lines = normalizeChapters(chapters ?? []).map((chapter) => {
 		const title = formatChapterTitle(chapter.title);
 		const escapedTitle = title ? ` ${escapeMarkdownText(title)}` : "";
@@ -309,34 +289,25 @@ export function NoteTemplateEngine(
 	addTag("stream", sanitizeUrlForTemplate(episode.streamUrl));
 	addTag("url", episodeUrl);
 	addTag("date", (format?: string) =>
-		episode.episodeDate
-			? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD")
-			: "",
+		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
 	);
 	// The current date the note is created on, distinct from {{date}} (the episode
 	// publish date). Supports the same Moment.js format arg. See issue #75.
-	addTag("currentdate", (format?: string) =>
-		formatDate(new Date(), format ?? "YYYY-MM-DD"),
-	);
+	addTag("currentdate", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
 	// Episode number from <itunes:episode>, else best-effort from the title. See #34.
 	addTag("episodenumber", (pad?: string) =>
 		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
 	// Episode duration from <itunes:duration>. See issue #88.
 	addTag("duration", (format?: string) =>
-		episode.duration !== undefined
-			? formatDuration(episode.duration, format)
-			: "",
+		episode.duration !== undefined ? formatDuration(episode.duration, format) : "",
 	);
 	// Podcasting 2.0 chapters, fetched before note creation when the template
 	// asks for them. Empty when the feed has no chapters URL or fetching fails.
 	addTag("chapters", (prependToLines?: string) =>
 		formatTemplateChapters(context.chapters, prependToLines),
 	);
-	addTag(
-		"podcast",
-		replaceIllegalFileNameCharactersInString(episode.podcastName),
-	);
+	addTag("podcast", replaceIllegalFileNameCharactersInString(episode.podcastName));
 	addTag("artwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
 
 	// Feed-scoped tags so an episode note can reference its parent podcast feed
@@ -345,13 +316,10 @@ export function NoteTemplateEngine(
 	addTag("episodeurl", episodeUrl);
 	addTag("episodeartwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
 	addTag("feedurl", sanitizeUrlForTemplate(episode.feedUrl ?? ""));
-	const parentFeed =
-		get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
+	const parentFeed = get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
 	addTag(
 		"feedartwork",
-		sanitizeUrlForTemplate(
-			parentFeed?.artworkUrl ?? episode.artworkUrl ?? "",
-		),
+		sanitizeUrlForTemplate(parentFeed?.artworkUrl ?? episode.artworkUrl ?? ""),
 	);
 	// A ready-made wikilink to the parent feed's note, pointing at the same file
 	// createFeedNote writes (derived from the feed-note path setting).
@@ -382,11 +350,7 @@ export function TimestampTemplateEngine(
 	);
 	addTag("segment", (format?: string) => {
 		if (!options.segment) {
-			return api.getPodcastTimeFormatted(
-				format ?? "HH:mm:ss",
-				false,
-				timestampOffset,
-			);
+			return api.getPodcastTimeFormatted(format ?? "HH:mm:ss", false, timestampOffset);
 		}
 
 		return api.getPodcastSegmentFormatted(
@@ -398,11 +362,7 @@ export function TimestampTemplateEngine(
 	});
 	addTag("linksegment", (format?: string) => {
 		if (!options.segment) {
-			return api.getPodcastTimeFormatted(
-				format ?? "HH:mm:ss",
-				true,
-				timestampOffset,
-			);
+			return api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true, timestampOffset);
 		}
 
 		return api.getPodcastSegmentFormatted(
@@ -433,10 +393,7 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	const templateExtension = getUrlExtension(template);
 	const templateWithoutExtension = templateExtension
 		? template.replace(
-				new RegExp(
-					`\\.${templateExtension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
-					"i",
-				),
+				new RegExp(`\\.${templateExtension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
 				"",
 			)
 		: template;
@@ -457,9 +414,7 @@ export function TranscriptTemplateEngine(
 
 	addEpisodeFileNameTags(addTag, episode);
 	addTag("duration", (format?: string) =>
-		episode.duration !== undefined
-			? formatDuration(episode.duration, format)
-			: "",
+		episode.duration !== undefined ? formatDuration(episode.duration, format) : "",
 	);
 	addTag("transcript", transcription);
 	addTag("description", (prependToLines?: string) => {
@@ -512,9 +467,7 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 
 		return sanitizeDescription;
 	});
-	addTag("date", (format?: string) =>
-		formatDate(new Date(), format ?? "YYYY-MM-DD"),
-	);
+	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
 
 	return replacer(template);
 }
@@ -525,9 +478,7 @@ export function FeedFilePathTemplateEngine(template: string, feed: PodcastFeed) 
 	const nameTag = legalizedNameTag(feed.title);
 	addTag("title", nameTag);
 	addTag("podcast", nameTag);
-	addTag("date", (format?: string) =>
-		formatDate(new Date(), format ?? "YYYY-MM-DD"),
-	);
+	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
 
 	return replacer(template);
 }
@@ -559,9 +510,7 @@ export function getFeedNoteWikilink(feedTitle: string): string {
 	const linkPath = capped.replace(/\.md$/i, "").trim();
 	const basename = linkPath.split("/").pop()?.trim() || fallback;
 
-	return linkPath.includes("/")
-		? `[[${linkPath}|${basename}]]`
-		: `[[${basename}]]`;
+	return linkPath.includes("/") ? `[[${linkPath}|${basename}]]` : `[[${basename}]]`;
 }
 
 /**

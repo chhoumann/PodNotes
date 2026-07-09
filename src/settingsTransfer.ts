@@ -52,9 +52,7 @@ const SECRET_KEY_LABELS: Record<string, string> = {
  * import confirmation honest about which keys are involved — so a Deepgram-only
  * user is never told only "OpenAI API key" (and vice versa). See issue #168.
  */
-export function describeSecrets(
-	settings: Partial<IPodNotesSettings>,
-): string[] {
+export function describeSecrets(settings: Partial<IPodNotesSettings>): string[] {
 	return [...SECRET_KEYS]
 		.filter((key) => Boolean((settings[key] as string | undefined)?.trim()))
 		.map((key) => SECRET_KEY_LABELS[key as string]);
@@ -122,8 +120,7 @@ export function serializeSettings(
 	for (const key of Object.keys(settings)) {
 		if (DANGEROUS_KEYS.has(key)) continue;
 		if (!IMPORTABLE_KEYS.has(key)) continue;
-		if (SECRET_KEYS.has(key as keyof IPodNotesSettings) && !opts.includeSecret)
-			continue;
+		if (SECRET_KEYS.has(key as keyof IPodNotesSettings) && !opts.includeSecret) continue;
 		out[key] = settings[key as keyof IPodNotesSettings];
 	}
 
@@ -161,11 +158,7 @@ export function parseImport(jsonText: string): ParseResult {
 	if (raw.type === SETTINGS_EXPORT_TYPE) {
 		fromEnvelope = true;
 
-		if (
-			typeof raw.version !== "number" ||
-			!Number.isInteger(raw.version) ||
-			raw.version < 1
-		) {
+		if (typeof raw.version !== "number" || !Number.isInteger(raw.version) || raw.version < 1) {
 			return { ok: false, error: "Export file has an invalid version." };
 		}
 		if (raw.version > SETTINGS_EXPORT_VERSION) {
@@ -241,9 +234,7 @@ export function mergeImportedSettings(
 	return merged;
 }
 
-function sanitizeImportedSettings(
-	source: Record<string, unknown>,
-): Partial<IPodNotesSettings> {
+function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPodNotesSettings> {
 	const out: Record<string, unknown> = {};
 
 	for (const [key, value] of Object.entries(source)) {
@@ -261,10 +252,7 @@ function sanitizeImportedSettings(
 		// must not clobber a key the user already has. Skipping it here keeps it
 		// absent from `imported`, so the merge `{ ...current, ...imported }`
 		// preserves the configured key and meta.includesSecret stays honest.
-		if (
-			SECRET_KEYS.has(key as keyof IPodNotesSettings) &&
-			(value as string).trim() === ""
-		) {
+		if (SECRET_KEYS.has(key as keyof IPodNotesSettings) && (value as string).trim() === "") {
 			continue;
 		}
 
@@ -294,9 +282,7 @@ function sanitizeImportedSettings(
 }
 
 /** Drop any playlist entry that isn't a plain object with an `episodes` array. */
-function sanitizePlaylistMap(
-	value: Record<string, unknown>,
-): Record<string, unknown> {
+function sanitizePlaylistMap(value: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 
 	for (const [name, playlist] of Object.entries(value)) {

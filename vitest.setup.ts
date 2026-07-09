@@ -93,15 +93,7 @@ function createMoment(dateInput?: Date | string | number) {
 		format: (pattern: string = "YYYY-MM-DD") => formatDate(date, pattern),
 		startOf: (unit?: string) => {
 			if (unit === "day") {
-				date = new Date(
-					date.getFullYear(),
-					date.getMonth(),
-					date.getDate(),
-					0,
-					0,
-					0,
-					0,
-				);
+				date = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
 			}
 
 			return api;
@@ -174,26 +166,33 @@ if (typeof IntersectionObserver === "undefined") {
 		unobserve(): void {}
 	}
 
-	(globalThis as unknown as { IntersectionObserver: typeof MockIntersectionObserver })
-		.IntersectionObserver = MockIntersectionObserver;
+	(
+		globalThis as unknown as { IntersectionObserver: typeof MockIntersectionObserver }
+	).IntersectionObserver = MockIntersectionObserver;
 }
 
 if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};
 }
 
-if (!(HTMLElement.prototype as unknown as { setAttr?: (name: string, value: string) => void }).setAttr) {
-	(HTMLElement.prototype as unknown as { setAttr: (name: string, value: string) => void }).setAttr =
-		function (this: HTMLElement, name: string, value: string) {
-			this.setAttribute(name, value);
-		};
+if (
+	!(HTMLElement.prototype as unknown as { setAttr?: (name: string, value: string) => void })
+		.setAttr
+) {
+	(
+		HTMLElement.prototype as unknown as { setAttr: (name: string, value: string) => void }
+	).setAttr = function (this: HTMLElement, name: string, value: string) {
+		this.setAttribute(name, value);
+	};
 }
 
 if (!(HTMLElement.prototype as unknown as { setText?: (text: string) => void }).setText) {
-	(HTMLElement.prototype as unknown as { setText: (text: string) => void }).setText =
-		function (this: HTMLElement, text: string) {
-			this.textContent = text;
-		};
+	(HTMLElement.prototype as unknown as { setText: (text: string) => void }).setText = function (
+		this: HTMLElement,
+		text: string,
+	) {
+		this.textContent = text;
+	};
 }
 
 type ObsidianDomContainer = HTMLElement | DocumentFragment;
@@ -201,10 +200,7 @@ type CreateElOptions = { text?: string; cls?: string };
 
 function installCreateEl(proto: object): void {
 	const helpers = proto as {
-		createEl?: (
-			tag: keyof HTMLElementTagNameMap,
-			options?: CreateElOptions,
-		) => HTMLElement;
+		createEl?: (tag: keyof HTMLElementTagNameMap, options?: CreateElOptions) => HTMLElement;
 		createDiv?: (options?: CreateElOptions) => HTMLDivElement;
 	};
 
@@ -223,10 +219,7 @@ function installCreateEl(proto: object): void {
 	}
 
 	if (!helpers.createDiv) {
-		helpers.createDiv = function (
-			this: ObsidianDomContainer,
-			options: CreateElOptions = {},
-		) {
+		helpers.createDiv = function (this: ObsidianDomContainer, options: CreateElOptions = {}) {
 			const createEl = (
 				this as ObsidianDomContainer & {
 					createEl: (
@@ -244,28 +237,24 @@ installCreateEl(HTMLElement.prototype);
 installCreateEl(DocumentFragment.prototype);
 
 if (!(HTMLElement.prototype as unknown as { empty?: () => void }).empty) {
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty =
-		function (this: HTMLElement) {
-			while (this.firstChild) {
-				this.removeChild(this.firstChild);
-			}
-		};
+	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (
+		this: HTMLElement,
+	) {
+		while (this.firstChild) {
+			this.removeChild(this.firstChild);
+		}
+	};
 }
 
 // Obsidian augments HTMLElement with setCssStyles (assigns a batch of inline
 // styles, the sanctioned alternative to direct `el.style.x = y` writes). jsdom
 // has no such method, so mirror Obsidian's behaviour for component/DOM tests.
-if (
-	!(HTMLElement.prototype as unknown as { setCssStyles?: unknown }).setCssStyles
-) {
+if (!(HTMLElement.prototype as unknown as { setCssStyles?: unknown }).setCssStyles) {
 	(
 		HTMLElement.prototype as unknown as {
 			setCssStyles: (styles: Partial<CSSStyleDeclaration>) => void;
 		}
-	).setCssStyles = function (
-		this: HTMLElement,
-		styles: Partial<CSSStyleDeclaration>,
-	) {
+	).setCssStyles = function (this: HTMLElement, styles: Partial<CSSStyleDeclaration>) {
 		Object.assign(this.style, styles);
 	};
 }
@@ -281,35 +270,34 @@ if (
 // assert mid-transition or outro-timing behaviour, replace this with a fuller
 // fake (e.g. a timer-driven animation) instead of relying on these defaults.
 if (!Element.prototype.animate) {
-	(Element.prototype as unknown as { animate: () => Animation }).animate =
-		function () {
-			let onfinish: (() => void) | null = null;
-			const animation = {
-				cancel() {},
-				finish() {},
-				play() {},
-				pause() {},
-				reverse() {},
-				currentTime: 0,
-				startTime: 0,
-				playbackRate: 1,
-				playState: "finished",
-				finished: Promise.resolve(),
-				effect: null,
-				addEventListener() {},
-				removeEventListener() {},
-				get onfinish() {
-					return onfinish;
-				},
-				set onfinish(fn: (() => void) | null) {
-					onfinish = fn;
-					if (fn) {
-						queueMicrotask(() => fn());
-					}
-				},
-				oncancel: null,
-			};
-
-			return animation as unknown as Animation;
+	(Element.prototype as unknown as { animate: () => Animation }).animate = function () {
+		let onfinish: (() => void) | null = null;
+		const animation = {
+			cancel() {},
+			finish() {},
+			play() {},
+			pause() {},
+			reverse() {},
+			currentTime: 0,
+			startTime: 0,
+			playbackRate: 1,
+			playState: "finished",
+			finished: Promise.resolve(),
+			effect: null,
+			addEventListener() {},
+			removeEventListener() {},
+			get onfinish() {
+				return onfinish;
+			},
+			set onfinish(fn: (() => void) | null) {
+				onfinish = fn;
+				if (fn) {
+					queueMicrotask(() => fn());
+				}
+			},
+			oncancel: null,
 		};
+
+		return animation as unknown as Animation;
+	};
 }

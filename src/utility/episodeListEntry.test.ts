@@ -4,11 +4,7 @@ import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { buildPlayedEpisodeListEntries } from "./episodeListEntry";
 
-function episode(
-	title: string,
-	podcastName: string,
-	episodeDate: string,
-): Episode {
+function episode(title: string, podcastName: string, episodeDate: string): Episode {
 	return {
 		title,
 		podcastName,
@@ -20,11 +16,7 @@ function episode(
 	};
 }
 
-function played(
-	title: string,
-	podcastName: string,
-	finished: boolean = true,
-): PlayedEpisode {
+function played(title: string, podcastName: string, finished: boolean = true): PlayedEpisode {
 	return {
 		title,
 		podcastName,
@@ -36,11 +28,7 @@ function played(
 
 describe("episodeListEntry", () => {
 	test("resolves finished played records against available episode sources", () => {
-		const resolvedEpisode = episode(
-			"Resolved",
-			"Design Podcast",
-			"2024-02-01T00:00:00.000Z",
-		);
+		const resolvedEpisode = episode("Resolved", "Design Podcast", "2024-02-01T00:00:00.000Z");
 
 		const entries = buildPlayedEpisodeListEntries(
 			{
@@ -77,16 +65,8 @@ describe("episodeListEntry", () => {
 	});
 
 	test("sorts available played episodes by publish date and unavailable records last", () => {
-		const olderEpisode = episode(
-			"Older",
-			"Design Podcast",
-			"2024-01-01T00:00:00.000Z",
-		);
-		const newerEpisode = episode(
-			"Newer",
-			"Design Podcast",
-			"2024-03-01T00:00:00.000Z",
-		);
+		const olderEpisode = episode("Older", "Design Podcast", "2024-01-01T00:00:00.000Z");
+		const newerEpisode = episode("Newer", "Design Podcast", "2024-03-01T00:00:00.000Z");
 
 		const entries = buildPlayedEpisodeListEntries(
 			{
@@ -97,10 +77,6 @@ describe("episodeListEntry", () => {
 			[[olderEpisode, newerEpisode]],
 		);
 
-		expect(entries.map((entry) => entry.episode.title)).toEqual([
-			"Newer",
-			"Older",
-			"Missing",
-		]);
+		expect(entries.map((entry) => entry.episode.title)).toEqual(["Newer", "Older", "Missing"]);
 	});
 });

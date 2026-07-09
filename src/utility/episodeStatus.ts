@@ -53,11 +53,7 @@ export function getPlayedEpisodeAliasKeys(
 	const targetKey = getPlayedEpisodeRecordKey(episode);
 
 	for (const [key, playedEpisode] of Object.entries(playedEpisodes)) {
-		if (
-			key === sourceKey ||
-			key === targetKey ||
-			isSamePlayedEpisode(playedEpisode, episode)
-		) {
+		if (key === sourceKey || key === targetKey || isSamePlayedEpisode(playedEpisode, episode)) {
 			keys.add(key);
 		}
 	}

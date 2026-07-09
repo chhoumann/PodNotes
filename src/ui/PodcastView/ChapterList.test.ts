@@ -73,21 +73,15 @@ describe("ChapterList", () => {
 			props: { chapters, currentTime: 0 },
 		});
 
-		const header = container.querySelector(
-			".chapter-header",
-		) as HTMLButtonElement;
+		const header = container.querySelector(".chapter-header") as HTMLButtonElement;
 		const list = container.querySelector(".chapters") as HTMLUListElement;
 
 		expect(list.id).toBeTruthy();
 		expect(header.getAttribute("aria-controls")).toBe(list.id);
 
-		const labels = Array.from(container.querySelectorAll(".chapter-item")).map(
-			(b) => b.getAttribute("aria-label"),
+		const labels = Array.from(container.querySelectorAll(".chapter-item")).map((b) =>
+			b.getAttribute("aria-label"),
 		);
-		expect(labels).toEqual([
-			"Jump to Intro",
-			"Jump to Main topic",
-			"Jump to Wrap up",
-		]);
+		expect(labels).toEqual(["Jump to Intro", "Jump to Main topic", "Jump to Wrap up"]);
 	});
 });

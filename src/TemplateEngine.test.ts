@@ -44,9 +44,7 @@ describe("replaceIllegalFileNameCharactersInString (via DownloadPathTemplateEngi
 	it("strips square brackets so a feed title cannot inject a wikilink", () => {
 		// '[' and ']' are wikilink-significant; a feed <title> must not be able to
 		// smuggle a [[wikilink]] through a file-name/link tag (other-wikilink-injection).
-		expect(sanitizeTitle("Real]] [[Victims Private Note")).toBe(
-			"Real Victims Private Note",
-		);
+		expect(sanitizeTitle("Real]] [[Victims Private Note")).toBe("Real Victims Private Note");
 		expect(sanitizeTitle("a[b]c")).toBe("abc");
 	});
 
@@ -65,9 +63,7 @@ describe("replaceIllegalFileNameCharactersInString (via DownloadPathTemplateEngi
 	});
 
 	it("does not strip hyphens or ordinary letters", () => {
-		expect(sanitizeTitle("Part 1 - The Beginning")).toBe(
-			"Part 1 - The Beginning",
-		);
+		expect(sanitizeTitle("Part 1 - The Beginning")).toBe("Part 1 - The Beginning");
 	});
 });
 
@@ -85,24 +81,24 @@ const demoEpisode: Episode = {
 
 describe("DownloadPathTemplateEngine extension stripping (#DL-04)", () => {
 	it("strips only a trailing template extension", () => {
-		expect(
-			DownloadPathTemplateEngine("Podcasts/{{title}}.mp3", demoEpisode),
-		).toBe("Podcasts/Episode 1");
+		expect(DownloadPathTemplateEngine("Podcasts/{{title}}.mp3", demoEpisode)).toBe(
+			"Podcasts/Episode 1",
+		);
 	});
 
 	it("does not corrupt a folder that contains the extension string earlier in the path", () => {
 		// getUrlExtension returns the trailing 'mp3', but the old positional
 		// `.replace('mp3', '')` would strip the FIRST 'mp3' (in the folder name),
 		// mangling 'mp3folder' -> 'folder' and leaving the real '.mp3' behind.
-		expect(
-			DownloadPathTemplateEngine("mp3folder/{{title}}.mp3", demoEpisode),
-		).toBe("mp3folder/Episode 1");
+		expect(DownloadPathTemplateEngine("mp3folder/{{title}}.mp3", demoEpisode)).toBe(
+			"mp3folder/Episode 1",
+		);
 	});
 
 	it("leaves a template without a trailing extension untouched", () => {
-		expect(
-			DownloadPathTemplateEngine("Podcasts/{{title}}", demoEpisode),
-		).toBe("Podcasts/Episode 1");
+		expect(DownloadPathTemplateEngine("Podcasts/{{title}}", demoEpisode)).toBe(
+			"Podcasts/Episode 1",
+		);
 	});
 });
 
@@ -120,15 +116,13 @@ describe("TimestampTemplateEngine segment tags", () => {
 					format: string,
 					linkify: boolean,
 					offsetSeconds: number,
-				) =>
-					`time:${format}:${linkify ? "link" : "plain"}:${offsetSeconds}`,
+				) => `time:${format}:${linkify ? "link" : "plain"}:${offsetSeconds}`,
 				getPodcastSegmentFormatted: (
 					format: string,
 					startTime: number,
 					endTime: number,
 					linkify: boolean,
-				) =>
-					`segment:${format}:${startTime}-${endTime}:${linkify ? "link" : "plain"}`,
+				) => `segment:${format}:${startTime}-${endTime}:${linkify ? "link" : "plain"}`,
 			},
 		} as never);
 	});
@@ -182,15 +176,11 @@ describe("NoteTemplateEngine feed-scoped tags (#163)", () => {
 
 	it("adds episode aliases and {{feedurl}}", () => {
 		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
-		expect(NoteTemplateEngine("{{episodeurl}}", demoEpisode)).toBe(
-			"https://example.com/ep1",
-		);
+		expect(NoteTemplateEngine("{{episodeurl}}", demoEpisode)).toBe("https://example.com/ep1");
 		expect(NoteTemplateEngine("{{episodeartwork}}", demoEpisode)).toBe(
 			"https://example.com/ep1.png",
 		);
-		expect(NoteTemplateEngine("{{feedurl}}", demoEpisode)).toBe(
-			"https://example.com/feed.xml",
-		);
+		expect(NoteTemplateEngine("{{feedurl}}", demoEpisode)).toBe("https://example.com/feed.xml");
 	});
 
 	it("resolves {{feedartwork}} from the saved feed, else the episode art", () => {
@@ -259,13 +249,11 @@ describe("NoteTemplateEngine renders URL tags verbatim (#160 review)", () => {
 		const localFile = {
 			...demoEpisode,
 			podcastName: "local file",
-			filePath: "Audio/Talk \"A\".mp3",
+			filePath: 'Audio/Talk "A".mp3',
 			url: '[[Talk "A".mp3]]',
 		} as Episode;
 		expect(NoteTemplateEngine("{{url}}", localFile)).toBe('[[Talk "A".mp3]]');
-		expect(NoteTemplateEngine("{{episodeurl}}", localFile)).toBe(
-			'[[Talk "A".mp3]]',
-		);
+		expect(NoteTemplateEngine("{{episodeurl}}", localFile)).toBe('[[Talk "A".mp3]]');
 	});
 
 	it("renders a normal episode URL and artwork verbatim", () => {
@@ -306,18 +294,12 @@ describe("default note template renders valid frontmatter (#160)", () => {
 			podcastName: "local file",
 			filePath: 'Audio/Talk "A".mp3',
 		} as Episode;
-		const rendered = NoteTemplateEngine(
-			DEFAULT_SETTINGS.note.template,
-			episode,
-		);
+		const rendered = NoteTemplateEngine(DEFAULT_SETTINGS.note.template, episode);
 		const frontmatter = frontmatterOf(rendered);
-		const line = (key: string) =>
-			frontmatter.split("\n").find((l) => l.startsWith(`${key}:`));
+		const line = (key: string) => frontmatter.split("\n").find((l) => l.startsWith(`${key}:`));
 
 		// The podcast link is quoted so its leading [[ isn't read as a flow sequence.
-		expect(line("podcast")).toBe(
-			'podcast: "[[PodNotes/Podcasts/local file|local file]]"',
-		);
+		expect(line("podcast")).toBe('podcast: "[[PodNotes/Podcasts/local file|local file]]"');
 		// The url is NOT in the frontmatter (it could carry a quote for local files).
 		expect(line("url")).toBeUndefined();
 		// Every frontmatter line has balanced double-quotes.
@@ -334,13 +316,8 @@ describe("default note template renders valid frontmatter (#160)", () => {
 	});
 
 	it("renders an ISO date when present and an empty (null) date otherwise", () => {
-		const withDate = NoteTemplateEngine(
-			DEFAULT_SETTINGS.note.template,
-			demoEpisode,
-		);
-		expect(
-			withDate.split("\n").find((l) => l.startsWith("date:")),
-		).toBe("date: 2024-01-01");
+		const withDate = NoteTemplateEngine(DEFAULT_SETTINGS.note.template, demoEpisode);
+		expect(withDate.split("\n").find((l) => l.startsWith("date:"))).toBe("date: 2024-01-01");
 
 		const noDate = NoteTemplateEngine(DEFAULT_SETTINGS.note.template, {
 			...demoEpisode,
@@ -364,15 +341,9 @@ describe("FeedNoteTemplateEngine (#163)", () => {
 
 	it("maps {{url}}/{{artwork}} to the feed and exposes feed metadata", () => {
 		expect(FeedNoteTemplateEngine("{{url}}", feed)).toBe("https://example.com");
-		expect(FeedNoteTemplateEngine("{{feedurl}}", feed)).toBe(
-			"https://example.com/feed.xml",
-		);
-		expect(FeedNoteTemplateEngine("{{artwork}}", feed)).toBe(
-			"https://example.com/art.png",
-		);
-		expect(FeedNoteTemplateEngine("{{feedartwork}}", feed)).toBe(
-			"https://example.com/art.png",
-		);
+		expect(FeedNoteTemplateEngine("{{feedurl}}", feed)).toBe("https://example.com/feed.xml");
+		expect(FeedNoteTemplateEngine("{{artwork}}", feed)).toBe("https://example.com/art.png");
+		expect(FeedNoteTemplateEngine("{{feedartwork}}", feed)).toBe("https://example.com/art.png");
 		expect(FeedNoteTemplateEngine("{{author}}", feed)).toBe("Jane Doe");
 		// htmlToMarkdown is a passthrough in the test mock.
 		expect(FeedNoteTemplateEngine("{{description}}", feed)).toBe("<p>Great show</p>");
@@ -413,15 +384,13 @@ describe("FeedFilePathTemplateEngine (#163)", () => {
 	};
 
 	it("sanitizes the feed title for {{podcast}} and {{title}}", () => {
-		expect(
-			FeedFilePathTemplateEngine("PodNotes/Podcasts/{{podcast}}.md", feed),
-		).toBe("PodNotes/Podcasts/My Show A Podcast.md");
+		expect(FeedFilePathTemplateEngine("PodNotes/Podcasts/{{podcast}}.md", feed)).toBe(
+			"PodNotes/Podcasts/My Show A Podcast.md",
+		);
 	});
 
 	it("supports a whitespace-replacement argument", () => {
-		expect(FeedFilePathTemplateEngine("{{podcast:-}}", feed)).toBe(
-			"My-Show-A-Podcast",
-		);
+		expect(FeedFilePathTemplateEngine("{{podcast:-}}", feed)).toBe("My-Show-A-Podcast");
 	});
 });
 
@@ -439,9 +408,7 @@ describe("getFeedNoteWikilink (#163)", () => {
 		plugin.set({
 			settings: { feedNote: { path: "{{podcast}}.md" } },
 		} as never);
-		expect(getFeedNoteWikilink("My Show: A Podcast")).toBe(
-			"[[My Show A Podcast]]",
-		);
+		expect(getFeedNoteWikilink("My Show: A Podcast")).toBe("[[My Show A Podcast]]");
 	});
 
 	it("falls back to a plain sanitized link when no path is configured", () => {
@@ -454,10 +421,7 @@ describe("getFeedNoteWikilink (#163)", () => {
 			settings: { feedNote: { path: "PodNotes/Podcasts/{{podcast}}.md" } },
 		} as never);
 		const link = getFeedNoteWikilink("Z".repeat(400));
-		const linkPath = link
-			.replace(/^\[\[/, "")
-			.replace(/\]\]$/, "")
-			.split("|")[0];
+		const linkPath = link.replace(/^\[\[/, "").replace(/\]\]$/, "").split("|")[0];
 		const basename = linkPath.split("/").pop() ?? "";
 		// Without the cap the link would embed all 400 chars and never resolve.
 		expect(basename.length).toBeLessThanOrEqual(255);
@@ -483,24 +447,20 @@ describe("{{currentDate}} tag (#75)", () => {
 	});
 
 	it("supports a Moment.js format and is distinct from the episode {{date}}", () => {
-		expect(
-			NoteTemplateEngine("{{currentDate:YYYY}} vs {{date:YYYY}}", demoEpisode),
-		).toBe("2026 vs 2024");
+		expect(NoteTemplateEngine("{{currentDate:YYYY}} vs {{date:YYYY}}", demoEpisode)).toBe(
+			"2026 vs 2024",
+		);
 	});
 
 	it("supports a format containing commas (not truncated by the engine)", () => {
-		expect(
-			NoteTemplateEngine("{{currentDate:MMMM D, YYYY}}", demoEpisode),
-		).toBe("June 15, 2026");
+		expect(NoteTemplateEngine("{{currentDate:MMMM D, YYYY}}", demoEpisode)).toBe(
+			"June 15, 2026",
+		);
 	});
 
 	it("is available in file-path and download-path templates", () => {
-		expect(FilePathTemplateEngine("{{currentDate}}", demoEpisode)).toBe(
-			"2026-06-15",
-		);
-		expect(DownloadPathTemplateEngine("{{currentDate}}", demoEpisode)).toBe(
-			"2026-06-15",
-		);
+		expect(FilePathTemplateEngine("{{currentDate}}", demoEpisode)).toBe("2026-06-15");
+		expect(DownloadPathTemplateEngine("{{currentDate}}", demoEpisode)).toBe("2026-06-15");
 	});
 });
 
@@ -535,12 +495,12 @@ describe("{{episodeNumber}} tag (#34)", () => {
 	});
 
 	it("is available (and file-safe) in file-path and download-path templates", () => {
-		expect(
-			FilePathTemplateEngine("{{episodeNumber:000}} {{title}}", numbered),
-		).toBe("042 Episode 1");
-		expect(
-			DownloadPathTemplateEngine("{{episodeNumber:000}} {{title}}", numbered),
-		).toBe("042 Episode 1");
+		expect(FilePathTemplateEngine("{{episodeNumber:000}} {{title}}", numbered)).toBe(
+			"042 Episode 1",
+		);
+		expect(DownloadPathTemplateEngine("{{episodeNumber:000}} {{title}}", numbered)).toBe(
+			"042 Episode 1",
+		);
 	});
 });
 
@@ -562,9 +522,7 @@ describe("{{duration}} tag (#88)", () => {
 	});
 
 	it("supports a Moment.js clock format", () => {
-		expect(NoteTemplateEngine("{{duration:HH:mm:ss}}", withDuration)).toBe(
-			"01:02:03",
-		);
+		expect(NoteTemplateEngine("{{duration:HH:mm:ss}}", withDuration)).toBe("01:02:03");
 	});
 
 	it("renders a zero duration as 0:00 (not empty)", () => {
@@ -578,12 +536,8 @@ describe("{{duration}} tag (#88)", () => {
 
 	it("is not registered in file-path/download-path templates (left unreplaced)", () => {
 		// Intentionally absent there — the clock format's colons are path-illegal.
-		expect(FilePathTemplateEngine("{{duration}}", withDuration)).toBe(
-			"{{duration}}",
-		);
-		expect(DownloadPathTemplateEngine("{{duration}}", withDuration)).toBe(
-			"{{duration}}",
-		);
+		expect(FilePathTemplateEngine("{{duration}}", withDuration)).toBe("{{duration}}");
+		expect(DownloadPathTemplateEngine("{{duration}}", withDuration)).toBe("{{duration}}");
 	});
 });
 
@@ -666,9 +620,9 @@ describe("TranscriptTemplateEngine new tags (#75/#34/#88)", () => {
 
 	it("leaves number/duration empty when absent", () => {
 		const blank: Episode = { ...demoEpisode, title: "A Show With No Number" };
-		expect(
-			TranscriptTemplateEngine("[{{episodeNumber}}][{{duration}}]", blank, "t"),
-		).toBe("[][]");
+		expect(TranscriptTemplateEngine("[{{episodeNumber}}][{{duration}}]", blank, "t")).toBe(
+			"[][]",
+		);
 	});
 });
 
@@ -721,8 +675,7 @@ describe("feed content injection is neutralized (deepsec other-markdown-injectio
 	it("collapses newlines and neutralizes Markdown in a raw {{title}}", () => {
 		const malicious: Episode = {
 			...demoEpisode,
-			title:
-				"Real Title\n\n# Injected Heading\n\n![pixel](http://attacker.example/t.png)",
+			title: "Real Title\n\n# Injected Heading\n\n![pixel](http://attacker.example/t.png)",
 		};
 		const rendered = NoteTemplateEngine("# {{title}}", malicious);
 
@@ -806,11 +759,9 @@ describe("feed content injection is neutralized (deepsec other-markdown-injectio
 		// A title with ordinary punctuation (dots, colons, quotes, parens) is kept.
 		const punctuated: Episode = {
 			...demoEpisode,
-			title: 'Ep. 5: A.I. & You (Part 1)',
+			title: "Ep. 5: A.I. & You (Part 1)",
 		};
-		expect(NoteTemplateEngine("# {{title}}", punctuated)).toBe(
-			"# Ep. 5: A.I. & You (Part 1)",
-		);
+		expect(NoteTemplateEngine("# {{title}}", punctuated)).toBe("# Ep. 5: A.I. & You (Part 1)");
 	});
 });
 
@@ -845,9 +796,7 @@ describe("feed-controlled wikilink injection is neutralized (deepsec other-wikil
 			"[[PodNotes/Podcasts/Real Victims Private Note|Real Victims Private Note]]",
 		);
 
-		expect(NoteTemplateEngine("{{podcast}}", malicious)).toBe(
-			"Real Victims Private Note",
-		);
+		expect(NoteTemplateEngine("{{podcast}}", malicious)).toBe("Real Victims Private Note");
 		expect(
 			NoteTemplateEngine("{{safetitle}}", {
 				...demoEpisode,

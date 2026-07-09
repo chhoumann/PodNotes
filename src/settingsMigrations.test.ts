@@ -29,9 +29,7 @@ describe("migrateDownloadPath (#183)", () => {
 	});
 
 	it("treats an absent value (undefined/null) as the legacy default", () => {
-		expect(migrateDownloadPath(undefined)).toBe(
-			DEFAULT_SETTINGS.download.path,
-		);
+		expect(migrateDownloadPath(undefined)).toBe(DEFAULT_SETTINGS.download.path);
 		// null is reachable via a corrupted/hand-edited data.json; mapping it to the
 		// default also keeps null out of DownloadPathTemplateEngine (would crash).
 		expect(migrateDownloadPath(null)).toBe(DEFAULT_SETTINGS.download.path);
@@ -65,9 +63,7 @@ describe("episode note defaults (#160)", () => {
 		// Opens with a YAML frontmatter block...
 		expect(template.startsWith("---\n")).toBe(true);
 		// ...that closes before the body H1.
-		expect(template.indexOf("\n---\n")).toBeLessThan(
-			template.indexOf("# {{title}}"),
-		);
+		expect(template.indexOf("\n---\n")).toBeLessThan(template.indexOf("# {{title}}"));
 		// Carries the structured properties Bases sorts/filters on.
 		expect(template).toContain("type: podcastEpisode");
 		expect(template).toMatch(/^tags:/m);
@@ -81,9 +77,7 @@ describe("migrateNoteSettings (#160)", () => {
 	};
 
 	it("upgrades the legacy empty note (both fields empty) to the default", () => {
-		expect(migrateNoteSettings({ path: "", template: "" })).toEqual(
-			DEFAULT_NOTE,
-		);
+		expect(migrateNoteSettings({ path: "", template: "" })).toEqual(DEFAULT_NOTE);
 	});
 
 	it("treats an absent note (undefined/null/empty object) as the legacy default", () => {
@@ -96,9 +90,7 @@ describe("migrateNoteSettings (#160)", () => {
 		// A corrupted/hand-edited data.json could carry nulls; they must not reach
 		// the path/template engines (null.replace would throw) and a wholly-empty
 		// note still upgrades.
-		expect(migrateNoteSettings({ path: null, template: null })).toEqual(
-			DEFAULT_NOTE,
-		);
+		expect(migrateNoteSettings({ path: null, template: null })).toEqual(DEFAULT_NOTE);
 	});
 
 	it("preserves a fully-configured note verbatim", () => {
@@ -113,12 +105,14 @@ describe("migrateNoteSettings (#160)", () => {
 		// Custom path + empty template = note creation deliberately disabled; the
 		// empty template must NOT be filled with the new default (would re-enable
 		// the command). Symmetric for a custom template + empty path.
-		expect(
-			migrateNoteSettings({ path: "Custom/{{title}}.md", template: "" }),
-		).toEqual({ path: "Custom/{{title}}.md", template: "" });
-		expect(
-			migrateNoteSettings({ path: "", template: "## {{title}}" }),
-		).toEqual({ path: "", template: "## {{title}}" });
+		expect(migrateNoteSettings({ path: "Custom/{{title}}.md", template: "" })).toEqual({
+			path: "Custom/{{title}}.md",
+			template: "",
+		});
+		expect(migrateNoteSettings({ path: "", template: "## {{title}}" })).toEqual({
+			path: "",
+			template: "## {{title}}",
+		});
 	});
 
 	it("is idempotent on the current default", () => {
@@ -144,9 +138,7 @@ describe("migrateTranscriptSettings (#168)", () => {
 	});
 
 	it("treats an absent transcript (undefined/null) as all defaults", () => {
-		expect(migrateTranscriptSettings(undefined)).toEqual(
-			DEFAULT_SETTINGS.transcript,
-		);
+		expect(migrateTranscriptSettings(undefined)).toEqual(DEFAULT_SETTINGS.transcript);
 		expect(migrateTranscriptSettings(null)).toEqual(DEFAULT_SETTINGS.transcript);
 	});
 
@@ -200,12 +192,10 @@ describe("migrateFeedNoteSettings (ST-08)", () => {
 	};
 
 	it("backfills a missing template on a partial feedNote", () => {
-		expect(migrateFeedNoteSettings({ path: "Podcasts/{{podcast}}.md" })).toEqual(
-			{
-				path: "Podcasts/{{podcast}}.md",
-				template: DEFAULT_SETTINGS.feedNote.template,
-			},
-		);
+		expect(migrateFeedNoteSettings({ path: "Podcasts/{{podcast}}.md" })).toEqual({
+			path: "Podcasts/{{podcast}}.md",
+			template: DEFAULT_SETTINGS.feedNote.template,
+		});
 	});
 
 	it("treats an absent/empty feedNote as all defaults", () => {
@@ -215,9 +205,7 @@ describe("migrateFeedNoteSettings (ST-08)", () => {
 	});
 
 	it("coalesces null/non-string fields so they never reach template.replace()", () => {
-		expect(
-			migrateFeedNoteSettings({ path: null, template: null }),
-		).toEqual(DEFAULT_FEED_NOTE);
+		expect(migrateFeedNoteSettings({ path: null, template: null })).toEqual(DEFAULT_FEED_NOTE);
 	});
 
 	it("preserves a fully-configured feedNote verbatim", () => {

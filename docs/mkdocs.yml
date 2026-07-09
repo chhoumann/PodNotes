@@ -2,19 +2,19 @@ site_name: PodNotes
 repo_url: https://github.com/chhoumann/podnotes
 edit_uri: edit/master/docs/docs
 nav:
-    - Home: index.md
-    - Commands: commands.md
-    - Podcasts: podcasts.md
-    - 'Local files': local_files.md
-    - "Import & Export": import_export.md
-    - Transcripts: transcripts.md
-    - 'Notes':
-        - Timestamps: timestamps.md
-        - Templates: templates.md
-    - Advanced:
-          - API: api.md
-          - Usage with QuickAdd: QuickAdd.md
+  - Home: index.md
+  - Commands: commands.md
+  - Podcasts: podcasts.md
+  - "Local files": local_files.md
+  - "Import & Export": import_export.md
+  - Transcripts: transcripts.md
+  - "Notes":
+      - Timestamps: timestamps.md
+      - Templates: templates.md
+  - Advanced:
+      - API: api.md
+      - Usage with QuickAdd: QuickAdd.md
 theme:
-    name: material
-    palette:
-        primary: blue
+  name: material
+  palette:
+    primary: blue

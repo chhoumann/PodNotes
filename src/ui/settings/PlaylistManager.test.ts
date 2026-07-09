@@ -99,9 +99,7 @@ describe("PlaylistManager", () => {
 		const stored = get(playlists);
 		expect(Object.keys(stored)).toEqual(["Favorites Mix"]);
 		expect(stored["Favorites Mix"]).toBe(existing);
-		expect(noticeSpy).toHaveBeenCalledWith(
-			"A playlist with that name already exists.",
-		);
+		expect(noticeSpy).toHaveBeenCalledWith("A playlist with that name already exists.");
 		// The duplicate name was rejected, so the input is left for correction.
 		expect(input.value).toBe("Favorites Mix");
 	});
@@ -126,8 +124,6 @@ describe("PlaylistManager", () => {
 		await fireEvent.click(getByRole("button", { name: "Add playlist" }));
 
 		expect(Object.keys(get(playlists))).toEqual(["Daily"]);
-		expect(noticeSpy).toHaveBeenCalledWith(
-			"A playlist with that name already exists.",
-		);
+		expect(noticeSpy).toHaveBeenCalledWith("A playlist with that name already exists.");
 	});
 });

@@ -2,41 +2,29 @@ import type { App, EventRef, Menu, TAbstractFile, WorkspaceLeaf } from "obsidian
 import { Notice, TFile } from "obsidian";
 import { get } from "svelte/store";
 import { VIEW_TYPE } from "./constants";
-import {
-	downloadedEpisodes,
-	playedEpisodes,
-	currentEpisode,
-	viewState,
-	plugin,
-} from "./store";
+import { downloadedEpisodes, playedEpisodes, currentEpisode, viewState, plugin } from "./store";
 import type { EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
 import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
-import {
-	getMediaTypeFromPath,
-	isAudioContainerExtension,
-} from "./utility/mediaType";
+import { getMediaTypeFromPath, isAudioContainerExtension } from "./utility/mediaType";
 
 export default function getContextMenuHandler(app: App): EventRef {
-	return app.workspace.on(
-		"file-menu",
-		(menu: Menu, file: TAbstractFile) => {
-			if (!(file instanceof TFile)) return;
-			const mediaType = getMediaTypeFromPath(file.path);
-			const isAmbiguousContainer = isAudioContainerExtension(file.extension);
-			if (!mediaType && !isAmbiguousContainer) return;
+	return app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
+		if (!(file instanceof TFile)) return;
+		const mediaType = getMediaTypeFromPath(file.path);
+		const isAmbiguousContainer = isAudioContainerExtension(file.extension);
+		if (!mediaType && !isAmbiguousContainer) return;
 
-			if (isAmbiguousContainer) {
-				addPlayLocalFileItem(menu, app, file, "audio");
-				addPlayLocalFileItem(menu, app, file, "video");
-				return;
-			}
-
-			if (!mediaType) return;
-			addPlayLocalFileItem(menu, app, file, mediaType);
+		if (isAmbiguousContainer) {
+			addPlayLocalFileItem(menu, app, file, "audio");
+			addPlayLocalFileItem(menu, app, file, "video");
+			return;
 		}
-	);
+
+		if (!mediaType) return;
+		addPlayLocalFileItem(menu, app, file, mediaType);
+	});
 }
 
 function addPlayLocalFileItem(
@@ -120,8 +108,7 @@ function addPlayLocalFileItem(
 async function revealPodcastView(app: App): Promise<void> {
 	const { workspace } = app;
 
-	let leaf: WorkspaceLeaf | null =
-		workspace.getLeavesOfType(VIEW_TYPE)[0] ?? null;
+	let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VIEW_TYPE)[0] ?? null;
 
 	if (!leaf) {
 		leaf = workspace.getRightLeaf(false);

@@ -1,3 +1,3 @@
 export type CSSObject = {
-    [key: string]: CSSStyleDeclaration[keyof CSSStyleDeclaration];
+	[key: string]: CSSStyleDeclaration[keyof CSSStyleDeclaration];
 };

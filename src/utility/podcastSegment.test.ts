@@ -45,26 +45,18 @@ describe("createRecentPodcastSegment", () => {
 
 describe("formatPodcastSegment", () => {
 	test("formats start and end with the same clock format", () => {
-		expect(formatPodcastSegment(115, 125, "HH:mm:ss")).toBe(
-			"00:01:55-00:02:05",
-		);
+		expect(formatPodcastSegment(115, 125, "HH:mm:ss")).toBe("00:01:55-00:02:05");
 	});
 });
 
 describe("getSegmentCaptureTemplate", () => {
 	test("turns the default timestamp tags into segment tags", () => {
-		expect(getSegmentCaptureTemplate("- {{linktime}}")).toBe(
-			"- {{linksegment}}",
-		);
-		expect(getSegmentCaptureTemplate("- {{time:mm:ss}}")).toBe(
-			"- {{segment:mm:ss}}",
-		);
+		expect(getSegmentCaptureTemplate("- {{linktime}}")).toBe("- {{linksegment}}");
+		expect(getSegmentCaptureTemplate("- {{time:mm:ss}}")).toBe("- {{segment:mm:ss}}");
 	});
 
 	test("preserves an explicit segment template", () => {
-		expect(getSegmentCaptureTemplate("> {{linksegment}}")).toBe(
-			"> {{linksegment}}",
-		);
+		expect(getSegmentCaptureTemplate("> {{linksegment}}")).toBe("> {{linksegment}}");
 	});
 
 	test("falls back to a linked segment when no time tag exists", () => {
