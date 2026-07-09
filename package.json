@@ -27,7 +27,7 @@
 		"check:a11y": "svelte-check --fail-on-warnings",
 		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
 		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/site --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts version-bump.mjs wrangler.jsonc orca.yaml docs/mkdocs.yml"
+		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.json .oxlintrc.json .oxfmtrc.json svelte.config.mjs vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts version-bump.mjs wrangler.jsonc orca.yaml docs/mkdocs.yml"
 	},
 	"dependencies": {
 		"fuse.js": "^7.4.2",

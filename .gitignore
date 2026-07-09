@@ -1,5 +1,5 @@
 # vscode
-.vscode 
+.vscode
 
 # Intellij
 *.iml
@@ -14,6 +14,9 @@ main.js
 
 # Exclude sourcemaps
 *.map
+
+# Generated development and staged production bundles
+/build/
 
 # obsidian
 data.json
