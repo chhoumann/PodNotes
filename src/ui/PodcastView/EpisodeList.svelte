@@ -8,10 +8,7 @@
 	import Loading from "./Loading.svelte";
 	import { getEpisodeKey } from "src/utility/episodeKey";
 	import { isEpisodeFinished } from "src/utility/episodeStatus";
-	import {
-		createEpisodeListEntries,
-		type EpisodeListEntry,
-	} from "src/utility/episodeListEntry";
+	import { createEpisodeListEntries, type EpisodeListEntry } from "src/utility/episodeListEntry";
 
 	export let episodes: Episode[] = [];
 	export let episodeEntries: EpisodeListEntry[] | null = null;
@@ -24,9 +21,7 @@
 	$: listEntries = episodeEntries ?? createEpisodeListEntries(episodes);
 	$: shouldHidePlayedEpisodes = $hidePlayedEpisodes && !alwaysShowPlayedEpisodes;
 	$: visibleEntries = listEntries.filter(
-		(entry) =>
-			!shouldHidePlayedEpisodes ||
-			!isEpisodeFinished(entry.episode, $playedEpisodes),
+		(entry) => !shouldHidePlayedEpisodes || !isEpisodeFinished(entry.episode, $playedEpisodes),
 	);
 
 	const dispatch = createEventDispatcher();
@@ -43,7 +38,7 @@
 
 	function forwardContextMenuEpisode(
 		entry: EpisodeListEntry,
-		event: CustomEvent<{ episode: Episode; event: MouseEvent }>
+		event: CustomEvent<{ episode: Episode; event: MouseEvent }>,
 	) {
 		dispatch("contextMenuEpisode", {
 			episode: event.detail.episode,

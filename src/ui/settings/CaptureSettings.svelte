@@ -1,11 +1,9 @@
 <script lang="ts">
-	import {
-		MarkdownRenderer,
-	} from "obsidian";
+	import { MarkdownRenderer } from "obsidian";
 
 	import { episodeCache } from "src/store";
 
-import type { Episode } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import { NoteTemplateEngine } from "../../TemplateEngine";
@@ -44,12 +42,10 @@ PublishDate:: {{date: YYYY-MM-DD-HH-MM-SS}}
 		const feedEpisodes = Object.values(get(episodeCache));
 		if (!feedEpisodes.length) return fallbackDemoObj;
 
-		const randomFeed =
-			feedEpisodes[Math.floor(Math.random() * feedEpisodes.length)];
+		const randomFeed = feedEpisodes[Math.floor(Math.random() * feedEpisodes.length)];
 		if (!randomFeed.length) return fallbackDemoObj;
-		
-		const randomEpisode =
-			randomFeed[Math.floor(Math.random() * randomFeed.length)];
+
+		const randomEpisode = randomFeed[Math.floor(Math.random() * randomFeed.length)];
 
 		return randomEpisode;
 	}
@@ -64,7 +60,7 @@ PublishDate:: {{date: YYYY-MM-DD-HH-MM-SS}}
 			el,
 			"",
 			// @ts-ignore
-			null
+			null,
 		);
 
 		// CSS selectors didn't seem to work for me, so I'm using this hacky way to get the rendered element

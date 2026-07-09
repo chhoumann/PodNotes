@@ -10,7 +10,6 @@
 	function onClickPlaylist(event: MouseEvent) {
 		dispatch("clickPlaylist", { playlist, event });
 	}
-
 </script>
 
 <button
@@ -20,7 +19,7 @@
 	title={playlist.name}
 	on:click={onClickPlaylist}
 >
-	<Icon icon={playlist.icon} size={32} clickable={false}/>
+	<Icon icon={playlist.icon} size={32} clickable={false} />
 	<span class="playlist-card-name">{playlist.name}</span>
 	<span class="playlist-card-count">
 		({playlist.episodes.length})
@@ -45,7 +44,11 @@
 		text-align: center;
 		background: var(--background-secondary);
 		cursor: pointer;
-		transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
+		transition:
+			transform 150ms ease,
+			box-shadow 150ms ease,
+			border-color 150ms ease,
+			background-color 150ms ease;
 	}
 
 	.playlist-card:hover {

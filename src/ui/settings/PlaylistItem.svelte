@@ -32,11 +32,7 @@
 
 <div class="playlist-item">
 	<div class="playlist-item-left">
-		<Icon
-			icon={playlist.icon}
-			clickable={false}
-			size={18}
-		/>
+		<Icon icon={playlist.icon} clickable={false} size={18} />
 		<span class="playlist-name">{playlist.name}</span>
 		<span class="playlist-count">({playlist.episodes.length})</span>
 	</div>
@@ -50,11 +46,7 @@
 				on:click={onClickedDelete}
 				aria-label={clickedDelete ? "Confirm deletion" : "Delete playlist"}
 			>
-				<Icon
-					icon={clickedDelete ? "check" : "trash"}
-					clickable={false}
-					size={16}
-				/>
+				<Icon icon={clickedDelete ? "check" : "trash"} clickable={false} size={16} />
 			</button>
 		{/if}
 	</div>
@@ -114,7 +106,9 @@
 		background: transparent;
 		color: var(--text-muted);
 		cursor: pointer;
-		transition: background-color 120ms ease, color 120ms ease;
+		transition:
+			background-color 120ms ease,
+			color 120ms ease;
 	}
 
 	.delete-button:hover {

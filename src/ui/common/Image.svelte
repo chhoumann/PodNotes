@@ -7,7 +7,7 @@
 	export let opacity: number = 0; // Falsey value so condition isn't triggered if not set.
 	export let interactive: boolean = false;
 	export let loading: "lazy" | "eager" | null | undefined = "lazy";
-	export {_class as class};
+	export { _class as class };
 	let _class = "";
 
 	let loaded = false;
@@ -23,35 +23,43 @@
 
 {#if isLoading || loaded}
 	{#if interactive}
-		<button
-			type="button"
-			class="pn_image_container"
-			on:click={onClick}
-		>
-			<img 
+		<button type="button" class="pn_image_container" on:click={onClick}>
+			<img
 				draggable="false"
-				{src} 
-				{alt} 
+				{src}
+				{alt}
 				{loading}
 				class={_class}
 				style:opacity={opacity ? opacity : !fadeIn ? 1 : loaded ? 1 : 0}
 				style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
-				on:load={() => {loaded = true; isLoading = false;}}
-				on:error={() => {failed = true; isLoading = false;}}
+				on:load={() => {
+					loaded = true;
+					isLoading = false;
+				}}
+				on:error={() => {
+					failed = true;
+					isLoading = false;
+				}}
 			/>
 		</button>
 	{:else}
 		<div class="pn_image_container pn_image_container--static">
-			<img 
+			<img
 				draggable="false"
-				{src} 
-				{alt} 
+				{src}
+				{alt}
 				{loading}
 				class={_class}
 				style:opacity={opacity ? opacity : !fadeIn ? 1 : loaded ? 1 : 0}
 				style:transition={fadeIn ? "opacity 0.5s ease-out" : ""}
-				on:load={() => {loaded = true; isLoading = false;}}
-				on:error={() => {failed = true; isLoading = false;}}
+				on:load={() => {
+					loaded = true;
+					isLoading = false;
+				}}
+				on:error={() => {
+					failed = true;
+					isLoading = false;
+				}}
 			/>
 		</div>
 	{/if}

@@ -90,31 +90,17 @@
 
 <div class="playlist-manager-container">
 	<div class="playlist-list">
-		<PlaylistItem
-			playlist={$queue}
-			showDeleteButton={false}
-		/>
-		<PlaylistItem
-			playlist={$favorites}
-			showDeleteButton={false}
-		/>
+		<PlaylistItem playlist={$queue} showDeleteButton={false} />
+		<PlaylistItem playlist={$favorites} showDeleteButton={false} />
 		{#each playlistArr as playlist (playlist.name)}
-			<PlaylistItem
-				{playlist}
-				on:delete={onDeletePlaylist}
-			/>
+			<PlaylistItem {playlist} on:delete={onDeletePlaylist} />
 		{/each}
 	</div>
 
 	<div class="add-playlist-container">
 		<Dropdown {options} bind:value={icon} on:change={onChangeIcon} />
 		<Text placeholder="Playlist name" bind:value={playlistInput} />
-		<Button
-			text="Add"
-			cta={true}
-			ariaLabel="Add playlist"
-			on:click={onAddPlaylist}
-		/>
+		<Button text="Add" cta={true} ariaLabel="Add playlist" on:click={onAddPlaylist} />
 	</div>
 </div>
 

@@ -57,7 +57,9 @@
 							aria-label={`Jump to ${chapter.title}`}
 							on:click={() => handleChapterClick(chapter)}
 						>
-							<span class="chapter-time">{formatSeconds(chapter.startTime, "H:mm:ss")}</span>
+							<span class="chapter-time"
+								>{formatSeconds(chapter.startTime, "H:mm:ss")}</span
+							>
 							<span class="chapter-title">{chapter.title}</span>
 						</button>
 					</li>

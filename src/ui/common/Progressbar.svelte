@@ -1,77 +1,77 @@
 <script lang="ts">
-import type { CSSObject } from "src/types/CSSObject";
-import extractStylesFromObj from "src/utility/extractStylesFromObj";
-import { createEventDispatcher } from "svelte";
+	import type { CSSObject } from "src/types/CSSObject";
+	import extractStylesFromObj from "src/utility/extractStylesFromObj";
+	import { createEventDispatcher } from "svelte";
 
-export let max: number;
-export let value: number;
-export let ariaLabel = "Seek";
-export let valueText: string | undefined = undefined;
-export { _styled as style };
+	export let max: number;
+	export let value: number;
+	export let ariaLabel = "Seek";
+	export let valueText: string | undefined = undefined;
+	export { _styled as style };
 
-let isDragging: boolean = false;
-let _styled: CSSObject = {};
-let progressRef: HTMLDivElement;
+	let isDragging: boolean = false;
+	let _styled: CSSObject = {};
+	let progressRef: HTMLDivElement;
 
-let styles: string;
+	let styles: string;
 
-$: {
-	styles = extractStylesFromObj(_styled);
-}
-
-const dispatch = createEventDispatcher();
-
-function forwardClick(e: MouseEvent | KeyboardEvent, percent?: number) {
-	dispatch("click", { event: e, percent });
-}
-
-function onDragStart() {
-	isDragging = true;
-}
-
-function onDragEnd() {
-	isDragging = false;
-}
-
-function handleDragging(e: MouseEvent) {
-	if (!isDragging) return;
-
-	forwardClick(e);
-}
-
-function handleKeyDown(event: KeyboardEvent) {
-	if (!progressRef || !max) return;
-	const step = max * 0.05;
-	let nextValue = value;
-
-	switch (event.key) {
-		case "ArrowRight":
-		case "ArrowUp":
-			nextValue = Math.min(max, value + step);
-			break;
-		case "ArrowLeft":
-		case "ArrowDown":
-			nextValue = Math.max(0, value - step);
-			break;
-		case "Home":
-			nextValue = 0;
-			break;
-		case "End":
-			nextValue = max;
-			break;
-		case "Enter":
-		case " ":
-			// Keep current value; allow parent to handle if needed.
-			nextValue = value;
-			break;
-		default:
-			return;
+	$: {
+		styles = extractStylesFromObj(_styled);
 	}
 
-	event.preventDefault();
-	const percent = max ? nextValue / max : 0;
-	forwardClick(event, percent);
-}
+	const dispatch = createEventDispatcher();
+
+	function forwardClick(e: MouseEvent | KeyboardEvent, percent?: number) {
+		dispatch("click", { event: e, percent });
+	}
+
+	function onDragStart() {
+		isDragging = true;
+	}
+
+	function onDragEnd() {
+		isDragging = false;
+	}
+
+	function handleDragging(e: MouseEvent) {
+		if (!isDragging) return;
+
+		forwardClick(e);
+	}
+
+	function handleKeyDown(event: KeyboardEvent) {
+		if (!progressRef || !max) return;
+		const step = max * 0.05;
+		let nextValue = value;
+
+		switch (event.key) {
+			case "ArrowRight":
+			case "ArrowUp":
+				nextValue = Math.min(max, value + step);
+				break;
+			case "ArrowLeft":
+			case "ArrowDown":
+				nextValue = Math.max(0, value - step);
+				break;
+			case "Home":
+				nextValue = 0;
+				break;
+			case "End":
+				nextValue = max;
+				break;
+			case "Enter":
+			case " ":
+				// Keep current value; allow parent to handle if needed.
+				nextValue = value;
+				break;
+			default:
+				return;
+		}
+
+		event.preventDefault();
+		const percent = max ? nextValue / max : 0;
+		forwardClick(event, percent);
+	}
 </script>
 
 <div

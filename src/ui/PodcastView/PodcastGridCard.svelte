@@ -12,12 +12,12 @@
 	}
 </script>
 
-<Image 
-	src={feed.artworkUrl} 
-	alt={feed.title} 
+<Image
+	src={feed.artworkUrl}
+	alt={feed.title}
 	interactive={true}
-    on:click={onclickPodcast.bind(null, feed)}
-    class="podcast-image"
+	on:click={onclickPodcast.bind(null, feed)}
+	class="podcast-image"
 />
 
 <style>
@@ -32,7 +32,10 @@
 		background-repeat: no-repeat;
 		border: 1px solid var(--background-modifier-border);
 		border-radius: 0.5rem;
-		transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+		transition:
+			transform 150ms ease,
+			box-shadow 150ms ease,
+			border-color 150ms ease;
 	}
 
 	:global(.podcast-image:hover) {

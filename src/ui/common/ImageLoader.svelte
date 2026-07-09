@@ -31,12 +31,12 @@
 	style:aspect-ratio={resolvedAspectRatio}
 >
 	<Image
-		{alt} 
-		{src} 
+		{alt}
+		{src}
 		{fadeIn}
 		{interactive}
 		{loading}
-		on:click={event => dispatcher('click', { event })} 
+		on:click={(event) => dispatcher("click", { event })}
 		class={_class}
 	/>
 </div>
