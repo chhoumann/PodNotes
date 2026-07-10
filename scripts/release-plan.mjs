@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { analyzeCommits } from "@semantic-release/commit-analyzer";
 import { generateNotes } from "@semantic-release/release-notes-generator";
 import { assertReleaseVersion, validateCurrentVersionFiles } from "./release-contract.mjs";
@@ -23,6 +24,16 @@ function git(cwd, args) {
 		encoding: "utf8",
 		maxBuffer: 10 * 1024 * 1024,
 	}).trim();
+}
+
+/** @param {string} cwd @param {string} lastTag @param {string | undefined} pendingVersion */
+function assertReleasedVersionHistoryUnchanged(cwd, lastTag, pendingVersion) {
+	const currentVersions = JSON.parse(fs.readFileSync(path.join(cwd, "versions.json"), "utf8"));
+	if (pendingVersion) delete currentVersions[pendingVersion];
+	const releasedVersions = JSON.parse(git(cwd, ["show", `${lastTag}:versions.json`]));
+	if (!isDeepStrictEqual(currentVersions, releasedVersions)) {
+		throw new Error(`versions.json changed after the latest stable tag ${lastTag}.`);
+	}
 }
 
 /** @param {string} version */
@@ -142,7 +153,9 @@ export async function calculateReleasePlan(options) {
 		? assertReleaseVersion(options.expectedVersion)
 		: undefined;
 	const lastTag = latestStableTag(cwd, expectedVersion);
-	const currentVersion = validateCurrentVersionFiles(cwd).version;
+	const currentVersion = validateCurrentVersionFiles(cwd, {
+		allowPendingMinAppVersion: !expectedVersion,
+	}).version;
 	if (expectedVersion) {
 		if (currentVersion !== expectedVersion) {
 			throw new Error(
@@ -153,6 +166,9 @@ export async function calculateReleasePlan(options) {
 		throw new Error(
 			`Synchronized version ${currentVersion} does not match latest stable tag ${lastTag ?? "none"}.`,
 		);
+	}
+	if (lastTag) {
+		assertReleasedVersionHistoryUnchanged(cwd, lastTag, expectedVersion);
 	}
 	const previousVersion = lastTag ?? "0.0.0";
 	const lastReleaseSha = lastTag ? git(cwd, ["rev-parse", `${lastTag}^{commit}`]) : "";

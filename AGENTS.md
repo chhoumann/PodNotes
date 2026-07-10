@@ -206,6 +206,13 @@ containing the four synchronized version files. Review that exact diff, wait
 for its explicitly dispatched `Test` run, mark the PR ready, and squash-merge
 it with the generated title unchanged.
 
+When a feature requires a newer Obsidian API, change `manifest.json`
+`minAppVersion` in the feature PR and leave every existing `versions.json`
+entry unchanged. Those entries describe already-published releases. The
+release planner verifies that released history still matches the latest tag,
+then the generated release PR records the new compatibility floor only under
+the new version.
+
 Keep the repository's default `GITHUB_TOKEN` permission read-only. Enable the
 repository setting that lets GitHub Actions create and approve pull requests so
 the narrowly scoped `Open release PR` job can create the machine-generated PR;

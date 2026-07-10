@@ -118,6 +118,36 @@ describe("release plan", () => {
 		expect(plan.notes).toContain("(2024-03-04)");
 	});
 
+	it("plans a release with a pending minimum Obsidian version", async () => {
+		const root = await releaseRepository();
+		const manifestPath = path.join(root, "manifest.json");
+		const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+		manifest.minAppVersion = "1.11.4";
+		await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+		git(root, ["add", "manifest.json"]);
+		commit(root, "feat: require SecretStorage support");
+
+		await expect(calculateReleasePlan({ cwd: root })).resolves.toMatchObject({
+			nextVersion: "2.18.0",
+			previousVersion: "2.17.3",
+			release: true,
+		});
+	});
+
+	it("rejects changes to released compatibility history", async () => {
+		const root = await releaseRepository();
+		await fs.writeFile(
+			path.join(root, "versions.json"),
+			`${JSON.stringify({ "2.17.3": "0.9.0" }, null, 2)}\n`,
+		);
+		git(root, ["add", "versions.json"]);
+		commit(root, "fix: rewrite old compatibility history");
+
+		await expect(calculateReleasePlan({ cwd: root })).rejects.toThrow(
+			"versions.json changed after the latest stable tag 2.17.3",
+		);
+	});
+
 	it("ignores a release commit after the latest tag", async () => {
 		const root = await releaseRepository();
 		commit(root, "release(version): Release 2.17.3");
@@ -140,6 +170,22 @@ describe("release plan", () => {
 			previousVersion: "2.17.3",
 			release: true,
 		});
+	});
+
+	it("rejects recovery when released compatibility history was rewritten", async () => {
+		const root = await releaseRepository();
+		commit(root, "fix: correct playback");
+		await writeSynchronizedVersion(root, "2.17.4");
+		const versionsPath = path.join(root, "versions.json");
+		const versions = JSON.parse(await fs.readFile(versionsPath, "utf8"));
+		versions["2.17.3"] = "0.9.0";
+		await fs.writeFile(versionsPath, `${JSON.stringify(versions, null, 2)}\n`);
+		git(root, ["add", "package.json", "package-lock.json", "manifest.json", "versions.json"]);
+		commit(root, "release(version): Release 2.17.4");
+
+		await expect(
+			calculateReleasePlan({ cwd: root, expectedVersion: "2.17.4" }),
+		).rejects.toThrow("versions.json changed after the latest stable tag 2.17.3");
 	});
 
 	it("rejects an expected recovery tag that does not target HEAD", async () => {

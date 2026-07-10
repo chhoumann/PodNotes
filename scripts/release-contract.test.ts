@@ -62,6 +62,10 @@ describe("release version contract", () => {
 
 		await writeJson(path.join(root, "versions.json"), { "2.17.3": "0.9.0" });
 		expect(() => validateCurrentVersionFiles(root)).toThrow("does not record");
+		expect(validateCurrentVersionFiles(root, { allowPendingMinAppVersion: true })).toEqual({
+			minAppVersion: "1.0.0",
+			version: "2.17.3",
+		});
 	});
 
 	it("accepts stable semantic versions only", () => {
@@ -69,6 +73,32 @@ describe("release version contract", () => {
 		for (const value of ["v2.17.4", "2.17", "02.17.4", "2.17.4-beta.1", "../2.17.4"]) {
 			expect(() => assertReleaseVersion(value)).toThrow("Invalid release version");
 		}
+	});
+
+	it("rejects invalid or lowered pending compatibility floors", async () => {
+		const root = await makeTempRoot("release-invalid-pending-min-app");
+		await writeVersionFixture(root);
+		const manifestPath = path.join(root, "manifest.json");
+		const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+
+		manifest.minAppVersion = "0.9.0";
+		await writeJson(manifestPath, manifest);
+		expect(() =>
+			validateCurrentVersionFiles(root, { allowPendingMinAppVersion: true }),
+		).toThrow("must increase from the released compatibility floor");
+
+		manifest.minAppVersion = "latest";
+		await writeJson(manifestPath, manifest);
+		expect(() =>
+			validateCurrentVersionFiles(root, { allowPendingMinAppVersion: true }),
+		).toThrow("must be a stable semantic version");
+
+		manifest.minAppVersion = "1.0.0";
+		await writeJson(manifestPath, manifest);
+		await writeJson(path.join(root, "versions.json"), { "2.17.3": "legacy" });
+		expect(() =>
+			validateCurrentVersionFiles(root, { allowPendingMinAppVersion: true }),
+		).toThrow("compatibility record must be a stable semantic version");
 	});
 
 	it("materializes and validates exactly synchronized version files", async () => {
@@ -106,6 +136,31 @@ describe("release version contract", () => {
 		expect(versions["2.17.4"]).toBe("1.0.0");
 	});
 
+	it("preserves released compatibility history while materializing a pending floor", async () => {
+		const root = await makeTempRoot("release-pending-min-app-source");
+		const out = await makeTempRoot("release-pending-min-app-output");
+		await writeVersionFixture(root);
+		const manifest = JSON.parse(await fs.readFile(path.join(root, "manifest.json"), "utf8"));
+		manifest.minAppVersion = "1.11.4";
+		await writeJson(path.join(root, "manifest.json"), manifest);
+
+		materializeVersionFiles({
+			baseSha: BASE_SHA,
+			out,
+			root,
+			version: "2.18.0",
+		});
+		expect(
+			validateVersionFiles({ baseRoot: root, candidateRoot: out, version: "2.18.0" }),
+		).toEqual({ version: "2.18.0" });
+
+		const versions = JSON.parse(await fs.readFile(path.join(out, "versions.json"), "utf8"));
+		expect(versions).toEqual({
+			"2.17.3": "1.0.0",
+			"2.18.0": "1.11.4",
+		});
+	});
+
 	it("rejects output reuse and an existing version entry", async () => {
 		const root = await makeTempRoot("release-existing");
 		const out = await makeTempRoot("release-nonempty");
@@ -141,7 +196,7 @@ describe("release version contract", () => {
 		).toThrow("real directory");
 	});
 
-	it("rejects downgrades and unsynchronized version history", async () => {
+	it("rejects downgrades and missing released version history", async () => {
 		const root = await makeTempRoot("release-history");
 		await writeVersionFixture(root);
 		const downgradeOut = await makeTempRoot("release-downgrade");
@@ -154,7 +209,7 @@ describe("release version contract", () => {
 			}),
 		).toThrow("must be newer");
 
-		await writeJson(path.join(root, "versions.json"), { "2.17.3": "0.9.0" });
+		await writeJson(path.join(root, "versions.json"), {});
 		const historyOut = await makeTempRoot("release-bad-history");
 		expect(() =>
 			materializeVersionFiles({
@@ -163,7 +218,21 @@ describe("release version contract", () => {
 				root,
 				version: "2.17.4",
 			}),
-		).toThrow("version history");
+		).toThrow("does not record 2.17.3");
+
+		await writeVersionFixture(root);
+		const manifest = JSON.parse(await fs.readFile(path.join(root, "manifest.json"), "utf8"));
+		manifest.minAppVersion = "0.9.0";
+		await writeJson(path.join(root, "manifest.json"), manifest);
+		const loweredOut = await makeTempRoot("release-lowered-min-app");
+		expect(() =>
+			materializeVersionFiles({
+				baseSha: BASE_SHA,
+				out: loweredOut,
+				root,
+				version: "2.17.4",
+			}),
+		).toThrow("must increase from the released compatibility floor");
 	});
 
 	it.each([
