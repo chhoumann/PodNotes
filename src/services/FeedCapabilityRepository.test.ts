@@ -108,6 +108,15 @@ function updatedBundle(): FeedCapabilityEnvelope {
 	return { ...bundle, siteUrl: "https://example.com/updated" };
 }
 
+function storeAt(
+	repository: FeedCapabilityRepository,
+	value: unknown,
+	reference: unknown = referenceBase,
+	expectedFeedId: FeedHandle | string = feedId,
+): Promise<string> {
+	return repository.storeFeedCapabilitiesAt(expectedFeedId, reference, value);
+}
+
 function twoEpisodeBundle(): FeedCapabilityEnvelope {
 	return {
 		...bundle,
@@ -150,7 +159,7 @@ describe("FeedCapabilityRepository", () => {
 		const { storage, values } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
 
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 
 		expect(isFeedCapabilityReferenceFor(feedId, reference)).toBe(true);
 		expect(parseItem(values, reference).kind).toBe("feed-capability-namespace");
@@ -165,13 +174,79 @@ describe("FeedCapabilityRepository", () => {
 		);
 	});
 
+	it("provisions the same persisted suffix across independent SecretStorage instances", async () => {
+		const reference = feedCapabilityReferenceForAttempt(feedId, 2)!;
+		const first = memoryStorage();
+		const second = memoryStorage();
+		const firstRepository = new FeedCapabilityRepository(first.storage);
+		const secondRepository = new FeedCapabilityRepository(second.storage);
+
+		expect(await storeAt(firstRepository, bundle, reference)).toBe(reference);
+		expect(await storeAt(secondRepository, bundle, reference)).toBe(reference);
+		expect(first.values.has(referenceBase)).toBe(false);
+		expect(second.values.has(referenceBase)).toBe(false);
+		expect(await firstRepository.getFeedCapabilities(feedId, reference)).toEqual(bundle);
+		expect(await secondRepository.getFeedCapabilities(feedId, reference)).toEqual(bundle);
+	});
+
+	it("rejects a mismatched feed or reference before SecretStorage access", async () => {
+		const { storage } = memoryStorage();
+		const repository = new FeedCapabilityRepository(storage);
+		const otherReference = feedCapabilityReferenceForAttempt(otherFeedId, 1)!;
+
+		await expect(
+			repository.storeFeedCapabilitiesAt(otherFeedId, otherReference, bundle),
+		).rejects.toThrow("Invalid feed capability envelope");
+		await expect(
+			repository.storeFeedCapabilitiesAt(feedId, otherReference, bundle),
+		).rejects.toThrow("Invalid feed capability binding");
+		expect(storage.getSecret).not.toHaveBeenCalled();
+		expect(storage.setSecret).not.toHaveBeenCalled();
+	});
+
+	it("retries a partially reserved exact namespace without reallocating", async () => {
+		const { storage, values } = memoryStorage();
+		const failing = new FeedCapabilityRepository(storage, {
+			validatePhysicalManifest: () => null,
+		});
+
+		await expect(storeAt(failing, bundle)).rejects.toThrow(
+			"SecretStorage could not commit feed capabilities",
+		);
+		expect(parseItem(values, referenceBase).kind).toBe("feed-capability-namespace");
+
+		const retry = new FeedCapabilityRepository(storage);
+		expect(await storeAt(retry, bundle)).toBe(referenceBase);
+		expect(await retry.getFeedCapabilities(feedId, referenceBase)).toEqual(bundle);
+	});
+
+	it("accepts an ambiguous exact namespace write when readback proves success", async () => {
+		const harness = memoryStorage();
+		const repository = new FeedCapabilityRepository(harness.storage);
+		let injected = false;
+		harness.setSetInterceptor((id, value) => {
+			if (
+				!injected &&
+				id === referenceBase &&
+				physicalKind(value) === "feed-capability-namespace"
+			) {
+				injected = true;
+				return "throw-after";
+			}
+			return undefined;
+		});
+
+		expect(await storeAt(repository, bundle)).toBe(referenceBase);
+		expect(await repository.getFeedCapabilities(feedId, referenceBase)).toEqual(bundle);
+	});
+
 	it("performs an exact-content no-op without rewriting any item", async () => {
 		const { storage } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 		vi.mocked(storage.setSecret).mockClear();
 
-		expect(await repository.storeFeedCapabilities(bundle)).toBe(reference);
+		expect(await storeAt(repository, bundle)).toBe(reference);
 		expect(storage.setSecret).not.toHaveBeenCalled();
 	});
 
@@ -181,7 +256,7 @@ describe("FeedCapabilityRepository", () => {
 			validatePhysicalManifest: () => null,
 		});
 
-		await expect(repository.storeFeedCapabilities(bundle)).rejects.toThrow(
+		await expect(storeAt(repository, bundle)).rejects.toThrow(
 			"SecretStorage could not commit feed capabilities",
 		);
 
@@ -194,13 +269,13 @@ describe("FeedCapabilityRepository", () => {
 		const { storage, values } = memoryStorage();
 		const firstRepository = new FeedCapabilityRepository(storage);
 		const secondRepository = new FeedCapabilityRepository(storage);
-		const reference = await firstRepository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(firstRepository, bundle);
 		const second = { ...bundle, siteUrl: "https://example.com/concurrent-second" };
 		const third = { ...bundle, siteUrl: "https://example.com/concurrent-third" };
 
 		const references = await Promise.all([
-			firstRepository.storeFeedCapabilities(second),
-			secondRepository.storeFeedCapabilities(third),
+			storeAt(firstRepository, second),
+			storeAt(secondRepository, third),
 		]);
 
 		expect(references).toEqual([reference, reference]);
@@ -212,12 +287,12 @@ describe("FeedCapabilityRepository", () => {
 		const { storage } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
 		const initial = largeSplitBundle();
-		const reference = await repository.storeFeedCapabilities(initial);
+		const reference = await storeAt(repository, initial);
 
 		const read = repository.readFeedCapabilities(feedId, reference);
 		const commits = Promise.all([
-			repository.storeFeedCapabilities({ ...initial, siteUrl: "https://example.com/second" }),
-			repository.storeFeedCapabilities({ ...initial, siteUrl: "https://example.com/third" }),
+			storeAt(repository, { ...initial, siteUrl: "https://example.com/second" }),
+			storeAt(repository, { ...initial, siteUrl: "https://example.com/third" }),
 		]);
 
 		expect(await read).toEqual({ status: "available", value: initial });
@@ -231,10 +306,10 @@ describe("FeedCapabilityRepository", () => {
 	it("alternates slots while retaining the previous complete generation", async () => {
 		const { storage, values } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 		const first = highestManifest(values, reference);
 
-		await repository.storeFeedCapabilities(updatedBundle());
+		await storeAt(repository, updatedBundle());
 		const second = highestManifest(values, reference);
 
 		expect(first.generation).toBe(1);
@@ -251,7 +326,7 @@ describe("FeedCapabilityRepository", () => {
 		const repository = new FeedCapabilityRepository(storage);
 		const value = largeSplitBundle();
 
-		const reference = await repository.storeFeedCapabilities(value);
+		const reference = await storeAt(repository, value);
 		const manifest = highestManifest(values, reference);
 
 		expect(manifest.pages).toHaveLength(16);
@@ -267,7 +342,7 @@ describe("FeedCapabilityRepository", () => {
 		async (kind) => {
 			const harness = memoryStorage();
 			const repository = new FeedCapabilityRepository(harness.storage);
-			const reference = await repository.storeFeedCapabilities(bundle);
+			const reference = await storeAt(repository, bundle);
 			let injected = false;
 			harness.setSetInterceptor((id, value) => {
 				if (
@@ -281,7 +356,7 @@ describe("FeedCapabilityRepository", () => {
 				return undefined;
 			});
 
-			await expect(repository.storeFeedCapabilities(updatedBundle())).rejects.toThrow(
+			await expect(storeAt(repository, updatedBundle())).rejects.toThrow(
 				"SecretStorage could not commit feed capabilities",
 			);
 			harness.setSetInterceptor();
@@ -296,7 +371,7 @@ describe("FeedCapabilityRepository", () => {
 		async (kind) => {
 			const harness = memoryStorage();
 			const repository = new FeedCapabilityRepository(harness.storage);
-			const reference = await repository.storeFeedCapabilities(bundle);
+			const reference = await storeAt(repository, bundle);
 			let injected = false;
 			harness.setSetInterceptor((id, value) => {
 				if (
@@ -310,7 +385,7 @@ describe("FeedCapabilityRepository", () => {
 				return undefined;
 			});
 
-			expect(await repository.storeFeedCapabilities(updatedBundle())).toBe(reference);
+			expect(await storeAt(repository, updatedBundle())).toBe(reference);
 			harness.setSetInterceptor();
 			expect(await repository.getFeedCapabilities(feedId, reference)).toEqual(
 				updatedBundle(),
@@ -325,12 +400,12 @@ describe("FeedCapabilityRepository", () => {
 			const harness = memoryStorage();
 			const repository = new FeedCapabilityRepository(harness.storage);
 			const firstBundle = twoEpisodeBundle();
-			await repository.storeFeedCapabilities(firstBundle);
+			await storeAt(repository, firstBundle);
 			const secondBundle = {
 				...firstBundle,
 				siteUrl: "https://example.com/second",
 			};
-			const reference = await repository.storeFeedCapabilities(secondBundle);
+			const reference = await storeAt(repository, secondBundle);
 			let injected = false;
 			harness.setSetInterceptor((id, value) => {
 				if (
@@ -345,7 +420,7 @@ describe("FeedCapabilityRepository", () => {
 			});
 
 			await expect(
-				repository.storeFeedCapabilities({
+				storeAt(repository, {
 					...bundle,
 					siteUrl: "https://example.com/third",
 				}),
@@ -359,7 +434,7 @@ describe("FeedCapabilityRepository", () => {
 	it("rejects page digest corruption", async () => {
 		const { storage, values } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 		const manifest = highestManifest(values, reference);
 		const key = pageKey(reference, manifest.pages[0]);
 		const page = parseItem(values, key) as any;
@@ -373,7 +448,7 @@ describe("FeedCapabilityRepository", () => {
 	it("does not silently roll back from a higher incomplete generation", async () => {
 		const { storage, values } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 		const first = highestManifest(values, reference);
 		values.set(
 			`${reference}-bm`,
@@ -387,7 +462,7 @@ describe("FeedCapabilityRepository", () => {
 	it("rejects divergent manifests at the same generation", async () => {
 		const { storage, values } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 		const first = highestManifest(values, reference);
 		values.set(`${reference}-bm`, JSON.stringify({ ...first, contentDigest: "f".repeat(64) }));
 
@@ -414,7 +489,7 @@ describe("FeedCapabilityRepository", () => {
 	it("rejects cross-feed and foreign references before SecretStorage access", async () => {
 		const { storage } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 		vi.mocked(storage.getSecret).mockClear();
 		vi.mocked(storage.getSecret).mockImplementation(() => {
 			throw new Error("must not read");
@@ -430,7 +505,7 @@ describe("FeedCapabilityRepository", () => {
 		const { storage, values } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
 
-		await repository.storeFeedCapabilities(largeSplitBundle());
+		await storeAt(repository, largeSplitBundle());
 
 		for (const [id, serialized] of values) {
 			expect(id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
@@ -463,9 +538,9 @@ describe("FeedCapabilityRepository", () => {
 		const { storage, values } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
 		const firstBundle = twoEpisodeBundle();
-		const reference = await repository.storeFeedCapabilities(firstBundle);
+		const reference = await storeAt(repository, firstBundle);
 		const first = highestManifest(values, reference);
-		await repository.storeFeedCapabilities({
+		await storeAt(repository, {
 			...firstBundle,
 			siteUrl: "https://example.com/second",
 		});
@@ -476,7 +551,7 @@ describe("FeedCapabilityRepository", () => {
 
 		expect(values.get(pageKey(reference, firstKept))).not.toBe("");
 		expect(values.get(pageKey(reference, firstStale))).not.toBe("");
-		await repository.storeFeedCapabilities({ ...bundle, siteUrl: "https://example.com/third" });
+		await storeAt(repository, { ...bundle, siteUrl: "https://example.com/third" });
 		const third = highestManifest(values, reference);
 		const thirdKept = third.pages.find((page: any) => page.bucket === "3");
 
@@ -487,20 +562,37 @@ describe("FeedCapabilityRepository", () => {
 		expect(values.get(pageKey(reference, secondStale))).not.toBe("");
 	});
 
-	it("suffixes a namespace collision without overwriting it", async () => {
+	it("fails closed on a foreign exact namespace without trying another suffix", async () => {
+		const foreignMarker = JSON.stringify({
+			schemaVersion: 1,
+			kind: "feed-capability-namespace",
+			feedId: otherFeedId,
+		});
+		const { storage, values } = memoryStorage({ [referenceBase]: foreignMarker });
+		const repository = new FeedCapabilityRepository(storage);
+
+		await expect(storeAt(repository, bundle)).rejects.toThrow(
+			"Stored feed capability namespace is invalid",
+		);
+
+		expect(values.get(referenceBase)).toBe(foreignMarker);
+		expect(values.has(`${referenceBase}-2`)).toBe(false);
+	});
+
+	it("uses the requested suffix exactly even when the base is occupied", async () => {
+		const reference = feedCapabilityReferenceForAttempt(feedId, 2)!;
 		const { storage, values } = memoryStorage({ [referenceBase]: "occupied" });
 		const repository = new FeedCapabilityRepository(storage);
 
-		const reference = await repository.storeFeedCapabilities(bundle);
-
-		expect(reference).toBe(`${referenceBase}-2`);
+		expect(await storeAt(repository, bundle, reference)).toBe(reference);
 		expect(values.get(referenceBase)).toBe("occupied");
+		expect(await repository.getFeedCapabilities(feedId, reference)).toEqual(bundle);
 	});
 
 	it("reports a durable episode absent from the bundle as missing", async () => {
 		const { storage } = memoryStorage();
 		const repository = new FeedCapabilityRepository(storage);
-		const reference = await repository.storeFeedCapabilities(bundle);
+		const reference = await storeAt(repository, bundle);
 
 		expect(await repository.getEpisodeResources(feedId, otherEpisodeId, reference)).toBeNull();
 		expect(await repository.readEpisodeResources(feedId, otherEpisodeId, reference)).toEqual({
