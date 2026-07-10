@@ -336,6 +336,23 @@ describe("default note template renders valid frontmatter (#160)", () => {
 		// Empty publish date renders as a null property, never a broken value.
 		expect(dateLine?.replace(/\s+$/, "")).toBe("date:");
 	});
+
+	it("keeps quote- and backslash-heavy titles in Markdown body context", () => {
+		const episode: Episode = {
+			...demoEpisode,
+			title: 'A ""quoted"" \\[title\\]\nwith controls\u0000\u007f',
+		};
+		const rendered = NoteTemplateEngine(DEFAULT_SETTINGS.note.template, episode);
+		const frontmatter = frontmatterOf(rendered);
+		const body = rendered.slice(rendered.indexOf("\n---\n") + 5);
+
+		// The default contract keeps raw metadata out of YAML, where Markdown
+		// escaping would not protect a quoted scalar. Its body encoding preserves
+		// the visible characters while collapsing the injected line break.
+		expect(frontmatter).not.toContain("quoted");
+		expect(frontmatter).not.toContain("title");
+		expect(body).toContain(String.raw`# A ""quoted"" \\\[title\\\] with controls`);
+	});
 });
 
 describe("FeedNoteTemplateEngine (#163)", () => {
@@ -362,6 +379,25 @@ describe("FeedNoteTemplateEngine (#163)", () => {
 		expect(FeedNoteTemplateEngine("{{title}}", feed)).toBe("My Show: A Podcast");
 		expect(FeedNoteTemplateEngine("{{podcast}}", feed)).toBe("My Show A Podcast");
 		expect(FeedNoteTemplateEngine("{{safetitle}}", feed)).toBe("My Show A Podcast");
+	});
+
+	it("keeps the default line-leading author in plain Markdown text context", () => {
+		const attacks = [
+			["# forged heading", String.raw`\# forged heading`],
+			["> forged quote", "&gt; forged quote"],
+			["---", String.raw`\-\-\-`],
+			["~~~dataviewjs", String.raw`\~\~\~dataviewjs`],
+			["```dataviewjs", "\\`\\`\\`dataviewjs"],
+		] as const;
+
+		for (const [author, encodedAuthor] of attacks) {
+			const rendered = FeedNoteTemplateEngine(DEFAULT_SETTINGS.feedNote.template, {
+				...feed,
+				author,
+			});
+
+			expect(rendered).toContain(`\n${encodedAuthor}\n\n`);
+		}
 	});
 
 	it("leaves {{url}} empty when the feed has no website link", () => {
@@ -695,6 +731,125 @@ describe("feed content injection is neutralized (deepsec other-markdown-injectio
 		expect(rendered).toContain("\\[pixel\\]");
 	});
 
+	it("does not let input backslashes reactivate escaped Markdown links", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			// Each bracket arrives already preceded by a backslash. If the sanitizer
+			// only prefixes the bracket, the resulting even-length backslash run
+			// leaves that bracket active in CommonMark and recreates a live link.
+			title: String.raw`\[click\](//attacker.example/phish)`,
+		};
+
+		expect(NoteTemplateEngine("{{title}}", malicious)).toBe(
+			String.raw`\\\[click\\\]\(//attacker\.example/phish\)`,
+		);
+	});
+
+	it("keeps every Markdown metacharacter escaped after any input backslash run", () => {
+		const punctuation = [
+			"`",
+			"*",
+			"_",
+			"{",
+			"}",
+			"[",
+			"]",
+			"(",
+			")",
+			"#",
+			"+",
+			"-",
+			".",
+			"!",
+			"|",
+			"=",
+			"~",
+			"$",
+			"%",
+			"^",
+		];
+
+		for (const metacharacter of punctuation) {
+			for (let inputBackslashes = 0; inputBackslashes <= 6; inputBackslashes += 1) {
+				const inputPrefix = "\\".repeat(inputBackslashes);
+				const expectedPrefix = "\\".repeat(inputBackslashes * 2 + 1);
+				const episode: Episode = {
+					...demoEpisode,
+					title: `${inputPrefix}${metacharacter}text`,
+				};
+
+				expect(NoteTemplateEngine("{{title}}", episode)).toBe(
+					`${expectedPrefix}${metacharacter}text`,
+				);
+			}
+		}
+	});
+
+	it("neutralizes line-leading CommonMark and Obsidian block markers", () => {
+		const attacks = [
+			["# forged heading", String.raw`\# forged heading`],
+			["> forged quote", "&gt; forged quote"],
+			["- forged list", String.raw`\- forged list`],
+			["+ forged list", String.raw`\+ forged list`],
+			["1. forged list", String.raw`1\. forged list`],
+			["1) forged list", String.raw`1\) forged list`],
+			["---", String.raw`\-\-\-`],
+			["***", String.raw`\*\*\*`],
+			["___", String.raw`\_\_\_`],
+			["===", String.raw`\=\=\=`],
+			["~~~dataviewjs", String.raw`\~\~\~dataviewjs`],
+			["```dataviewjs", "\\`\\`\\`dataviewjs"],
+			["<script>alert(1)</script>", "&lt;script&gt;alert\\(1\\)&lt;/script&gt;"],
+		] as const;
+
+		for (const [title, encodedTitle] of attacks) {
+			expect(NoteTemplateEngine("{{title}}\n", { ...demoEpisode, title })).toBe(
+				`${encodedTitle}\n`,
+			);
+		}
+	});
+
+	it("encodes ampersands before angle entities so entity-looking input stays literal", () => {
+		const episode: Episode = {
+			...demoEpisode,
+			title: "Fish & chips <b>bold</b> &lt; &#35;",
+		};
+
+		expect(NoteTemplateEngine("{{title}}", episode)).toBe(
+			String.raw`Fish &amp; chips &lt;b&gt;bold&lt;/b&gt; &amp;lt; &amp;\#35;`,
+		);
+	});
+
+	it("preserves repeated input backslashes before ampersands and angle brackets", () => {
+		for (const [character, entity] of [
+			["&", "&amp;"],
+			["<", "&lt;"],
+			[">", "&gt;"],
+		] as const) {
+			for (let inputBackslashes = 0; inputBackslashes <= 6; inputBackslashes += 1) {
+				const episode: Episode = {
+					...demoEpisode,
+					title: `${"\\".repeat(inputBackslashes)}${character}text`,
+				};
+
+				expect(NoteTemplateEngine("{{title}}", episode)).toBe(
+					`${"\\".repeat(inputBackslashes * 2)}${entity}text`,
+				);
+			}
+		}
+	});
+
+	it("preserves quotes and visible backslashes while collapsing control sequences", () => {
+		const episode: Episode = {
+			...demoEpisode,
+			title: 'She said ""listen""\n\tthen\u0000\u001f\u007fopened C:\\Podcasts\\Episode',
+		};
+
+		expect(NoteTemplateEngine("{{title}}", episode)).toBe(
+			'She said ""listen"" then opened C:\\\\Podcasts\\\\Episode',
+		);
+	});
+
 	it("renders an injected ```dataviewjs code block inert while keeping normal formatting", () => {
 		const malicious: Episode = {
 			...demoEpisode,
@@ -759,18 +914,21 @@ describe("feed content injection is neutralized (deepsec other-markdown-injectio
 		expect(rendered).not.toContain("```dataviewjs");
 	});
 
-	it("preserves legitimate episode metadata verbatim", () => {
-		// A normal episode must be unaffected by the sanitizers.
+	it("preserves legitimate episode metadata when Markdown renders the encoded source", () => {
+		// Plain text stays readable in source when it has no structural punctuation.
 		expect(NoteTemplateEngine("# {{title}}", demoEpisode)).toBe("# Episode 1");
 		expect(NoteTemplateEngine("{{url}}|{{artwork}}", demoEpisode)).toBe(
 			"https://example.com/ep1|https://example.com/ep1.png",
 		);
-		// A title with ordinary punctuation (dots, colons, quotes, parens) is kept.
+		// Context-sensitive punctuation is escaped in source; quotes and colons remain
+		// readable, and Markdown renders the visible title exactly as supplied.
 		const punctuated: Episode = {
 			...demoEpisode,
 			title: "Ep. 5: A.I. & You (Part 1)",
 		};
-		expect(NoteTemplateEngine("# {{title}}", punctuated)).toBe("# Ep. 5: A.I. & You (Part 1)");
+		expect(NoteTemplateEngine("# {{title}}", punctuated)).toBe(
+			String.raw`# Ep\. 5: A\.I\. &amp; You \(Part 1\)`,
+		);
 	});
 });
 

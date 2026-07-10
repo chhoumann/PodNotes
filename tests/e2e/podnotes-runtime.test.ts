@@ -469,6 +469,117 @@ describe("PodNotes runtime", () => {
 		expect(await obsidian.dev.runtimeErrors()).toEqual([]);
 	});
 
+	test("renders feed-controlled Markdown punctuation only as visible text", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(sandbox, "template-escaping-episode.mp3");
+		const attacks = [
+			{
+				id: "link",
+				title: String.raw`\[click\](//attacker.example/phish)`,
+				encoded: String.raw`\\\[click\\\]\(//attacker\.example/phish\)`,
+				visible: String.raw`\[click\](//attacker.example/phish)`,
+			},
+			{ id: "heading", title: "# forged heading", encoded: String.raw`\# forged heading` },
+			{ id: "quote", title: "> forged quote", encoded: "&gt; forged quote" },
+			{ id: "thematic", title: "---", encoded: String.raw`\-\-\-` },
+			{ id: "list", title: "- forged list", encoded: String.raw`\- forged list` },
+			{ id: "ordered", title: "1. forged list", encoded: String.raw`1\. forged list` },
+			{
+				id: "setext",
+				title: "===",
+				encoded: String.raw`\=\=\=`,
+				template: "safe\n{{title}}\n",
+			},
+			{ id: "tilde-fence", title: "~~~dataviewjs", encoded: String.raw`\~\~\~dataviewjs` },
+			{ id: "backtick-fence", title: "```dataviewjs", encoded: "\\`\\`\\`dataviewjs" },
+			{
+				id: "html",
+				title: '<img src="//attacker.example/pixel">',
+				encoded: '&lt;img src\\="//attacker\\.example/pixel"&gt;',
+			},
+			{
+				id: "entity",
+				title: "&lt;script&gt;",
+				encoded: "&amp;lt;script&amp;gt;",
+			},
+		] as const;
+
+		for (const attack of attacks) {
+			const notePath = sandbox.path(`template-escaping-${attack.id}.md`);
+			const episode = createLocalEpisode(attack.title, audioPath);
+			const template = "template" in attack ? attack.template : "{{title}}\n";
+
+			await seedRuntimeData(plugin, sandbox, episode, {
+				currentEpisode: episode,
+				note: { path: notePath, template },
+			});
+			await waitForPodNotesReady(obsidian);
+
+			await obsidian.command(`${PLUGIN_ID}:create-podcast-note`).run();
+			const content = await sandbox.waitForContent(
+				`template-escaping-${attack.id}.md`,
+				(value) => value.includes(attack.encoded),
+				WAIT_OPTS,
+			);
+			expect(content).toContain(attack.encoded);
+
+			await evalJsonAsync<boolean>(
+				obsidian,
+				`
+				(async () => {
+					const file = app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});
+					if (!file) throw new Error("Template escaping note was not created.");
+					const leaf = app.workspace.getLeaf(true);
+					await leaf.setViewState({
+						type: "markdown",
+						state: { file: file.path, mode: "preview" },
+						active: true,
+					});
+					await app.workspace.revealLeaf(leaf);
+					return true;
+				})()
+			`,
+			);
+
+			const visible = "visible" in attack ? attack.visible : attack.title;
+			await obsidian.waitFor(
+				async () =>
+					await obsidian.dev.evalJson<boolean>(`
+						(() => {
+							const preview = document.querySelector(
+								".workspace-leaf.mod-active .markdown-preview-view",
+							);
+							return Boolean(preview?.textContent?.includes(${JSON.stringify(visible)}));
+						})()
+					`),
+				WAIT_OPTS,
+			);
+
+			const preview = await obsidian.dev.evalJson<{
+				forbiddenElements: string[];
+				text: string;
+			}>(`
+				(() => {
+					const preview = document.querySelector(
+						".workspace-leaf.mod-active .markdown-preview-view",
+					);
+					const forbidden = "h1,h2,h3,h4,h5,h6,blockquote,hr,ul,ol,pre,code,a,img,script,iframe,video,audio,table";
+					return {
+						forbiddenElements: Array.from(preview?.querySelectorAll(forbidden) ?? []).map(
+							(element) => element.tagName.toLowerCase(),
+						),
+						text: preview?.textContent ?? "",
+					};
+				})()
+			`);
+
+			expect(preview.text).toContain(visible);
+			expect(preview.forbiddenElements).toEqual([]);
+		}
+
+		expect(await obsidian.dev.runtimeErrors()).toEqual([]);
+	}, 60_000);
+
 	test("refuses a future schema without modifying its data", async () => {
 		const { obsidian, plugin } = getContext();
 		const original = await plugin.data<PodNotesData>().read();
