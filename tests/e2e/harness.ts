@@ -17,7 +17,9 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 
 export const PLUGIN_ID = "podnotes";
 export const VIEW_TYPE = "podcast_player_view";
-export const E2E_VAULT = process.env.PODNOTES_E2E_VAULT ?? "dev";
+// Canonical OBSIDIAN_E2E_* names are emitted by the shared obsidian-e2e runner;
+// the legacy PODNOTES_E2E_* alias remains a fallback during the migration.
+export const E2E_VAULT = process.env.OBSIDIAN_E2E_VAULT ?? process.env.PODNOTES_E2E_VAULT ?? "dev";
 export const E2E_BIN = process.env.OBSIDIAN_BIN ?? "obsidian";
 export const WAIT_OPTS = { timeoutMs: 15_000, intervalMs: 200 };
 export const RELOAD_OPTIONS: PluginReloadOptions = {

@@ -31,6 +31,7 @@ type PlaybackState = {
 };
 
 const getContext = createPodNotesE2EHarness("podnotes-runtime");
+let audioFixtureReady = false;
 
 describe("PodNotes runtime", () => {
 	test("registers commands, protocol handling, and the player view", async () => {
@@ -81,7 +82,7 @@ describe("PodNotes runtime", () => {
 
 	test("opens timestamp URI links at requested progress even after an episode is played", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "finished-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Finished Episode", audioPath);
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -92,7 +93,7 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		await invokePodNotesUri(obsidian, episode, 240);
-		await dispatchLoadedMetadata(obsidian);
+		await stabilizeLoadedMedia(obsidian);
 
 		const state = await waitForPlaybackState(
 			obsidian,
@@ -113,7 +114,7 @@ describe("PodNotes runtime", () => {
 
 	test("preserves zero-second timestamp URI links at runtime", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "zero-second-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Zero Second Episode", audioPath);
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -124,7 +125,7 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		await invokePodNotesUri(obsidian, episode, 0);
-		await dispatchLoadedMetadata(obsidian);
+		await stabilizeLoadedMedia(obsidian);
 
 		const state = await waitForPlaybackState(
 			obsidian,
@@ -145,7 +146,7 @@ describe("PodNotes runtime", () => {
 
 	test("seeks immediately when the linked episode is already loaded", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "already-loaded-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Already Loaded Episode", audioPath);
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -185,7 +186,7 @@ describe("PodNotes runtime", () => {
 
 	test("captures a linked timestamp into the active editor", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "capture-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Capture Episode", audioPath);
 		const notePath = sandbox.path("capture-target.md");
 
@@ -214,7 +215,7 @@ describe("PodNotes runtime", () => {
 
 	test("captures a linked segment into the active editor", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "capture-segment-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Capture Segment Episode", audioPath);
 		const notePath = sandbox.path("capture-segment-target.md");
 
@@ -252,7 +253,7 @@ describe("PodNotes runtime", () => {
 
 	test("stops playback when a segment URI reaches its end", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "segment-uri-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Segment URI Episode", audioPath);
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -263,7 +264,7 @@ describe("PodNotes runtime", () => {
 
 		await invokePodNotesUri(obsidian, episode, 115, 125);
 		await openPodNotesView(obsidian);
-		await dispatchLoadedMetadata(obsidian);
+		await stabilizeLoadedMedia(obsidian);
 
 		await waitForPlaybackState(
 			obsidian,
@@ -291,7 +292,7 @@ describe("PodNotes runtime", () => {
 
 	test("playback-rate commands update the live player rate and reset to the configured default", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "rate-command-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Rate Command Episode", audioPath);
 
 		await seedRuntimeData(plugin, sandbox, episode, {
@@ -301,7 +302,7 @@ describe("PodNotes runtime", () => {
 		await waitForPodNotesReady(obsidian);
 		await openPodNotesView(obsidian);
 		await invokePodNotesUri(obsidian, episode, 0);
-		await dispatchLoadedMetadata(obsidian);
+		await stabilizeLoadedMedia(obsidian);
 		await waitForPlaybackRate(obsidian, 1.5);
 
 		await obsidian.command(`${PLUGIN_ID}:increase-playback-rate`).run();
@@ -322,7 +323,7 @@ describe("PodNotes runtime", () => {
 
 	test("previous-track Media Session action captures a timestamp into the active editor", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "headphone-capture-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Headphone Capture Episode", audioPath);
 		const notePath = sandbox.path("headphone-capture-target.md");
 
@@ -357,7 +358,7 @@ describe("PodNotes runtime", () => {
 
 	test("previous-track Media Session action appends to the episode note without an active editor", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "headphone-background-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Background Capture Episode", audioPath);
 		const noteRelativePath = `${episode.title}.md`;
 
@@ -424,7 +425,7 @@ describe("PodNotes runtime", () => {
 
 	test("migrates legacy dates and credentials before runtime hydration", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "legacy-date-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const isoDate = "2024-03-01T10:05:03.000Z";
 		const episode = {
 			...createLocalEpisode("E2E Legacy Date Episode", audioPath),
@@ -525,7 +526,7 @@ describe("PodNotes runtime", () => {
 
 	test("renders feed-controlled Markdown punctuation only as visible text", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
-		const audioPath = await seedAudio(sandbox, "template-escaping-episode.mp3");
+		const audioPath = await seedAudio(obsidian, sandbox);
 		const attacks = [
 			{
 				id: "link",
@@ -577,13 +578,31 @@ describe("PodNotes runtime", () => {
 			);
 			expect(content).toContain(attack.encoded);
 
+			// createPodcastNote opens the created file without blocking the Obsidian
+			// command callback. Wait for that exact leaf before switching it to
+			// preview mode. Creating a second leaf while the first open was still
+			// settling raced Obsidian's Markdown renderer and produced delayed
+			// `Cannot read properties of null (reading 'children')` runtime errors.
+			await obsidian.waitFor(
+				async () =>
+					await obsidian.dev.evalJson<boolean>(`
+						app.workspace.getLeavesOfType("markdown").some(
+							(leaf) => leaf.view?.file?.path === ${JSON.stringify(notePath)},
+						)
+					`),
+				WAIT_OPTS,
+			);
+
 			await evalJsonAsync<boolean>(
 				obsidian,
 				`
 				(async () => {
 					const file = app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});
 					if (!file) throw new Error("Template escaping note was not created.");
-					const leaf = app.workspace.getLeaf(true);
+					const leaf = app.workspace.getLeavesOfType("markdown").find(
+						(candidate) => candidate.view?.file?.path === file.path,
+					);
+					if (!leaf) throw new Error("Template escaping note was not opened.");
 					await leaf.setViewState({
 						type: "markdown",
 						state: { file: file.path, mode: "preview" },
@@ -681,13 +700,57 @@ describe("PodNotes runtime", () => {
 	});
 });
 
-async function seedAudio(sandbox: SandboxApi, fileName: string): Promise<string> {
-	await sandbox.write(fileName, "podnotes e2e audio placeholder", {
-		waitForContent: true,
-		waitOptions: WAIT_OPTS,
-	});
+async function seedAudio(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+	sandbox: SandboxApi,
+): Promise<string> {
+	const fileName = "podnotes-e2e-silence.wav";
+	const audioPath = sandbox.path(fileName);
+	if (audioFixtureReady) return audioPath;
 
-	return sandbox.path(fileName);
+	await evalJsonAsync<boolean>(
+		obsidian,
+		`
+		(async () => {
+			const sampleRate = 8_000;
+			const sampleCount = sampleRate * 600;
+			const bytes = new Uint8Array(44 + sampleCount);
+			const view = new DataView(bytes.buffer);
+			const ascii = (offset, value) => {
+				for (let index = 0; index < value.length; index++) {
+					bytes[offset + index] = value.charCodeAt(index);
+				}
+			};
+
+			ascii(0, "RIFF");
+			view.setUint32(4, 36 + sampleCount, true);
+			ascii(8, "WAVE");
+			ascii(12, "fmt ");
+			view.setUint32(16, 16, true);
+			view.setUint16(20, 1, true);
+			view.setUint16(22, 1, true);
+			view.setUint32(24, sampleRate, true);
+			view.setUint32(28, sampleRate, true);
+			view.setUint16(32, 1, true);
+			view.setUint16(34, 8, true);
+			ascii(36, "data");
+			view.setUint32(40, sampleCount, true);
+			bytes.fill(128, 44);
+
+			const existing = app.vault.getAbstractFileByPath(${JSON.stringify(audioPath)});
+			if (existing) {
+				await app.vault.modifyBinary(existing, bytes.buffer);
+			} else {
+				await app.vault.createBinary(${JSON.stringify(audioPath)}, bytes.buffer);
+			}
+			return true;
+		})()
+	`,
+	);
+	await sandbox.waitForExists(fileName, WAIT_OPTS);
+	audioFixtureReady = true;
+
+	return audioPath;
 }
 
 async function openMarkdownFile(
@@ -878,7 +941,7 @@ async function invokePodNotesUri(
 	}
 }
 
-async function dispatchLoadedMetadata(obsidian: {
+async function stabilizeLoadedMedia(obsidian: {
 	dev: { evalJson: <T>(code: string) => Promise<T> };
 	sleep: (ms: number) => Promise<void>;
 }): Promise<void> {
@@ -895,25 +958,38 @@ async function dispatchLoadedMetadata(obsidian: {
 				if (!audio) {
 					return { ok: false, error: "No PodNotes audio element found." };
 				}
+				if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+					return { ok: false, error: "PodNotes audio playback data is not ready yet." };
+				}
+				if (audio.paused) {
+					return { ok: false, error: "PodNotes audio playback has not started yet." };
+				}
 
+				audio.pause();
+				const currentTime = Math.round(
+					app.plugins.plugins.${PLUGIN_ID}?.api?.currentTime ?? audio.currentTime,
+				);
+				Object.defineProperty(audio, "currentTime", {
+					configurable: true,
+					value: currentTime,
+					writable: true,
+				});
 				Object.defineProperty(audio, "duration", {
 					configurable: true,
 					value: 3600,
 				});
-				audio.dispatchEvent(new Event("loadedmetadata"));
 				Object.defineProperty(audio, "paused", {
 					configurable: true,
 					value: false,
 				});
 				audio.dispatchEvent(new Event("play"));
-
 				return { ok: true };
 			})()
 		`);
 
 		if (result.ok) return;
 
-		lastError = result.error ?? "Failed to dispatch loadedmetadata.";
+		lastError = result.error ?? "Failed to stabilize loaded media.";
 		await obsidian.sleep(WAIT_OPTS.intervalMs);
 	}
 
@@ -922,27 +998,50 @@ async function dispatchLoadedMetadata(obsidian: {
 
 async function dispatchAudioPlay(obsidian: {
 	dev: { evalJson: <T>(code: string) => Promise<T> };
+	sleep: (ms: number) => Promise<void>;
 }): Promise<void> {
-	const result = await obsidian.dev.evalJson<{ error?: string; ok: boolean }>(`
-		(() => {
-			const audio = document.querySelector(".podcast-view audio");
-			if (!audio) {
-				return { ok: false, error: "No PodNotes audio element found." };
-			}
+	const startedAt = Date.now();
+	let lastError = "No PodNotes audio element found.";
 
-			Object.defineProperty(audio, "paused", {
-				configurable: true,
-				value: false,
-			});
-			audio.dispatchEvent(new Event("play"));
+	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
+		const result = await obsidian.dev.evalJson<{ error?: string; ok: boolean }>(`
+			(() => {
+				const audio = document.querySelector(".podcast-view audio");
+				if (!audio) {
+					return { ok: false, error: "No PodNotes audio element found." };
+				}
+				if (audio.paused) {
+					return { ok: false, error: "PodNotes audio playback has not started yet." };
+				}
+				if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+					return { ok: false, error: "PodNotes audio playback data is not ready yet." };
+				}
 
-			return { ok: true };
-		})()
-	`);
+				audio.pause();
+				const currentTime = Math.round(
+					app.plugins.plugins.${PLUGIN_ID}?.api?.currentTime ?? audio.currentTime,
+				);
+				Object.defineProperty(audio, "currentTime", {
+					configurable: true,
+					value: currentTime,
+					writable: true,
+				});
+				Object.defineProperty(audio, "paused", {
+					configurable: true,
+					value: false,
+				});
+				audio.dispatchEvent(new Event("play"));
+				return { ok: true };
+			})()
+		`);
 
-	if (!result.ok) {
-		throw new Error(result.error ?? "Failed to dispatch audio play.");
+		if (result.ok) return;
+
+		lastError = result.error ?? "Failed to dispatch audio play.";
+		await obsidian.sleep(WAIT_OPTS.intervalMs);
 	}
+
+	throw new Error(lastError);
 }
 
 async function dispatchAudioTimeUpdate(

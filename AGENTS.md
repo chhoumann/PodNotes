@@ -117,6 +117,10 @@ npm run obsidian:e2e -- eval code='Boolean(app.plugins.plugins.podnotes)'
 npm run obsidian:e2e -- dev:errors
 ```
 
+- The four `provision:e2e-vault` / `start:e2e-obsidian` / `stop:e2e-obsidian` /
+  `obsidian:e2e` scripts run on the shared `obsidian-e2e` instance-runner bin,
+  configured by `obsidian-e2e.config.mjs` at the repo root (plugin id, the two
+  symlinked artifacts, the `data.json` seed, and the PodNotes ready probe).
 - The wrapper links the worktree's own `main.js`/`manifest.json` (PodNotes injects
   its CSS into the bundle, so there is no `styles.css` to link) and seeds a clean
   `DEFAULT_SETTINGS`-shaped `data.json` on first provision; it never touches
@@ -124,17 +128,20 @@ npm run obsidian:e2e -- dev:errors
 - `npm run provision:e2e-vault` and `npm run start:e2e-obsidian` expose the
   provision/launch steps individually; both accept `--help`.
 - Use `npm run start:e2e-obsidian -- --print-env` only when you need to export
-  `PODNOTES_E2E_VAULT` / `PODNOTES_E2E_VAULT_PATH` / `PODNOTES_E2E_OBSIDIAN_HOME`
-  for a separate process. The `obsidian` CLI routes by `$HOME` (it talks to
-  `$HOME/.obsidian-cli.sock`), so to point the Vitest `tests/e2e` suite at the
-  isolated instance you must remap `HOME` as well as the vault name — exporting
-  `PODNOTES_E2E_VAULT` alone leaves the suite talking to the shared `dev` vault:
+  the vault env for a separate process. `--print-env` emits export-only lines on
+  stdout (so `eval "$(...)"` is safe): the canonical `OBSIDIAN_E2E_VAULT` /
+  `OBSIDIAN_E2E_VAULT_PATH` / `OBSIDIAN_E2E_OBSIDIAN_HOME` names and, during the
+  migration, legacy `PODNOTES_E2E_*` aliases; `tests/e2e/harness.ts` reads the
+  canonical name first, then the alias. The `obsidian` CLI routes by `$HOME` (it
+  talks to `$HOME/.obsidian-cli.sock`), so to point the Vitest `tests/e2e` suite
+  at the isolated instance you must remap `HOME` as well as the vault name —
+  exporting the vault alone leaves the suite talking to the shared `dev` vault:
 
   ```bash
-  npm run build                               # required: provisioning links main.js
+  npm run build                                     # required: provisioning links main.js
   eval "$(npm run --silent start:e2e-obsidian -- --print-env)"
-  export HOME="$PODNOTES_E2E_OBSIDIAN_HOME"   # required: re-point the CLI socket
-  PODNOTES_E2E_VAULT="$PODNOTES_E2E_VAULT" npm run test:e2e
+  export HOME="$OBSIDIAN_E2E_OBSIDIAN_HOME"         # required: re-point the CLI socket
+  OBSIDIAN_E2E_VAULT="$OBSIDIAN_E2E_VAULT" npm run test:e2e
   ```
 
   Build first so the instance loads the current bundle (provisioning also needs
