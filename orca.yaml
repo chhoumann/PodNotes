@@ -22,7 +22,10 @@
 # - The hook needs `node` on the GUI app's PATH (Orca runs it via non-login
 #   /bin/bash). It is guarded with `command -v node` so a missing node degrades
 #   to a no-op (the reap-on-next-start safety net then handles cleanup) instead
-#   of erroring.
+#   of erroring. The runner is invoked through the worktree-local bin rather
+#   than `npm exec` because the npm shim is often absent from that GUI PATH,
+#   which would make the stop fail silently behind `|| true` and leak the
+#   instance; the bin launcher is POSIX sh and needs only node.
 scripts:
   archive: |
-    command -v node >/dev/null 2>&1 && npm exec obsidian-e2e -- stop --worktree "$ORCA_WORKTREE_PATH" || true
+    command -v node >/dev/null 2>&1 && "$ORCA_WORKTREE_PATH/node_modules/.bin/obsidian-e2e" stop --worktree "$ORCA_WORKTREE_PATH" || true
