@@ -646,6 +646,17 @@ jobs:
               }
             }
 
+            function assertPublishedReleaseMetadata(candidate) {
+              if (candidate.draft !== false ||
+                  candidate.prerelease !== false ||
+                  candidate.tag_name !== version ||
+                  candidate.target_commitish !== releaseSha ||
+                  candidate.name !== version ||
+                  candidate.body !== notes) {
+                throw new Error(`Published release ${version} metadata or target does not match.`);
+              }
+            }
+
             async function waitForPublishedRelease(releaseId) {
               for (let attempt = 0; attempt < 30; attempt += 1) {
                 const current = await github.rest.repos.getRelease({
@@ -740,9 +751,7 @@ jobs:
             }
 
             if (!release.draft) {
-              if (release.name !== version || release.body !== notes || release.prerelease) {
-                throw new Error(`Published release ${version} metadata does not match.`);
-              }
+              assertPublishedReleaseMetadata(release);
               await verifyRemoteAssets(release.id);
               if (await resolveTagCommit(version) !== releaseSha) {
                 throw new Error(`Published release tag ${version} changed during verification.`);
@@ -804,6 +813,7 @@ jobs:
               make_latest: 'true',
             });
             release = await waitForPublishedRelease(release.id);
+            assertPublishedReleaseMetadata(release);
             if (await resolveTagCommit(version) !== releaseSha) {
               throw new Error(`Release tag ${version} changed during publication.`);
             }
