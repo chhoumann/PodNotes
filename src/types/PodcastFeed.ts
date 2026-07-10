@@ -1,4 +1,8 @@
 export interface PodcastFeed {
+	/** PodNotes' canonical stable identity. */
+	feedId?: string;
+	/** Direct-child Podcasting 2.0 channel GUID. Never used as feed identity alone. */
+	guid?: string;
 	title: string;
 	url: string;
 	artworkUrl: string;

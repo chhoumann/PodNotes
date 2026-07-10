@@ -227,6 +227,42 @@ describe("FeedParser", () => {
 
 			expect(feed.title).toBe("Test Podcast");
 			expect(feed.url).toBe("https://example.com/feed.xml");
+			expect(feed.feedId).toMatch(/^pnf1_[A-Za-z0-9_-]{43}$/);
+		});
+
+		test("retains the direct channel GUID as evidence without using it as feed identity", async () => {
+			const feedWithGuid = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>GUID Podcast</title>
+    <podcast:guid>channel-guid</podcast:guid>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout
+				.mockResolvedValueOnce(feedResponse(feedWithGuid))
+				.mockResolvedValueOnce(feedResponse(feedWithGuid));
+
+			const first = await new FeedParser().getFeed("https://example.com/one.xml");
+			const second = await new FeedParser().getFeed("https://example.com/two.xml");
+
+			expect(first.guid).toBe("channel-guid");
+			expect(second.guid).toBe("channel-guid");
+			expect(first.feedId).not.toBe(second.feedId);
+		});
+
+		test("preserves a constructor feed ID across a confirmed URL and title refresh", async () => {
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(sampleRssFeed));
+			const existing = await new FeedParser().getFeed("https://example.com/original.xml");
+			const renamedFeed = sampleRssFeed.replace("Test Podcast", "Renamed Podcast");
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(renamedFeed));
+
+			const refreshed = await new FeedParser(existing).getFeed(
+				"https://redirected.example.com/feed.xml",
+			);
+
+			expect(refreshed.title).toBe("Renamed Podcast");
+			expect(refreshed.url).toBe("https://redirected.example.com/feed.xml");
+			expect(refreshed.feedId).toBe(existing.feedId);
 		});
 
 		test("parses artwork URL from image element", async () => {
@@ -396,12 +432,109 @@ describe("FeedParser", () => {
 			expect(episode.title).toBe("Episode 1");
 			expect(episode.streamUrl).toBe("https://example.com/episode1.mp3");
 			expect(episode.url).toBe("https://example.com/episode1");
+			expect(episode.itemLink).toBe("https://example.com/episode1");
+			expect(episode.feedId).toMatch(/^pnf1_[A-Za-z0-9_-]{43}$/);
+			expect(episode.episodeId).toMatch(/^pne1_[A-Za-z0-9_-]{43}$/);
 			expect(episode.description).toBe("First episode description");
 			expect(episode.episodeDate).toEqual(new Date("Mon, 01 Jan 2024 00:00:00 GMT"));
 			expect(episode.itunesTitle).toBe("Episode 1 iTunes Title");
 			// Feed metadata should now be populated
 			expect(episode.podcastName).toBe("Test Podcast");
 			expect(episode.feedUrl).toBe("https://example.com/feed.xml");
+		});
+
+		test("excludes a duplicated direct-child GUID and assigns distinct episode IDs", async () => {
+			const duplicateGuidFeed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Duplicate GUID Podcast</title>
+    <item>
+      <title>Episode One</title>
+      <guid>duplicate-guid</guid>
+      <enclosure url="https://example.com/one.mp3"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Episode Two</title>
+      <guid>duplicate-guid</guid>
+      <enclosure url="https://example.com/two.mp3"/>
+      <pubDate>Tue, 02 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(duplicateGuidFeed));
+
+			const episodes = await new FeedParser().getEpisodes("https://example.com/feed.xml");
+
+			expect(episodes.map((episode) => episode.guid)).toEqual([
+				"duplicate-guid",
+				"duplicate-guid",
+			]);
+			expect(episodes[0].episodeId).toMatch(/^pne1_[A-Za-z0-9_-]{43}$/);
+			expect(episodes[1].episodeId).toMatch(/^pne1_[A-Za-z0-9_-]{43}$/);
+			expect(episodes[0].episodeId).not.toBe(episodes[1].episodeId);
+		});
+
+		test("reconciles a newly appearing GUID through one-to-one media evidence", async () => {
+			const initialFeed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Initial Podcast</title>
+    <item>
+      <title>Initial Episode</title>
+      <enclosure url="https://cdn.example.com/stable.mp3"/>
+      <link>https://example.com/stable</link>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			const refreshedFeed = initialFeed
+				.replace("Initial Podcast", "Renamed Podcast")
+				.replace("Initial Episode", "Renamed Episode")
+				.replace(
+					'<enclosure url="https://cdn.example.com/stable.mp3"/>',
+					'<guid>appeared-guid</guid><enclosure url="https://cdn.example.com/stable.mp3"/>',
+				);
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(initialFeed));
+			const previousEpisodes = await new FeedParser().getEpisodes(
+				"https://example.com/original.xml",
+			);
+			const previousFeed: PodcastFeed = {
+				title: "Initial Podcast",
+				url: "https://example.com/original.xml",
+				artworkUrl: "",
+				feedId: previousEpisodes[0].feedId,
+			};
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(refreshedFeed));
+
+			const refreshed = await new FeedParser(previousFeed, previousEpisodes).getEpisodes(
+				"https://redirected.example.com/feed.xml",
+			);
+
+			expect(refreshed[0].guid).toBe("appeared-guid");
+			expect(refreshed[0].episodeId).toBe(previousEpisodes[0].episodeId);
+			expect(refreshed[0].episodeAliases).toContain(previousEpisodes[0].episodeId);
+		});
+
+		test("uses only an actual direct item link as itemLink identity evidence", async () => {
+			const nestedLinkFeed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Nested Link Podcast</title>
+    <item>
+      <title>Episode</title>
+      <enclosure url="https://example.com/episode.mp3"/>
+      <description><link>https://attacker.example/nested</link></description>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(nestedLinkFeed));
+
+			const [episode] = await new FeedParser().getEpisodes("https://example.com/feed.xml");
+
+			expect(episode.itemLink).toBeUndefined();
+			expect(episode.url).toBe("https://example.com/feed.xml");
 		});
 
 		test("keeps an episode with a malformed publication date but omits the date", async () => {
@@ -645,6 +778,7 @@ describe("FeedParser", () => {
 			expect(episodes[0].content).toBe("");
 			// url falls back to feed.url when episode link is missing
 			expect(episodes[0].url).toBe("https://example.com/feed.xml");
+			expect(episodes[0].itemLink).toBeUndefined();
 		});
 
 		test("handles CDATA content in description", async () => {

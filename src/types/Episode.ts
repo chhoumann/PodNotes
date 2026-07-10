@@ -1,6 +1,16 @@
 export type EpisodeMediaType = "audio" | "video";
 
 export interface Episode {
+	/** PodNotes' canonical identity, stabilized across observations by reconciliation. */
+	episodeId?: string;
+	/** Current strong locators plus bounded, trusted reconciliation history. */
+	episodeAliases?: string[];
+	/** Canonical identity of the parent feed. */
+	feedId?: string;
+	/** Direct-child RSS item GUID, retained as later reconciliation evidence. */
+	guid?: string;
+	/** The item's own RSS link, excluding the compatibility fallback in `url`. */
+	itemLink?: string;
 	title: string;
 	streamUrl: string;
 	url: string;

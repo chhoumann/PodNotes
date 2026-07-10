@@ -8,12 +8,22 @@ import {
 	getMediaTypeFromContentType,
 	getUnambiguousMediaTypeFromPath,
 } from "src/utility/mediaType";
+import {
+	assignEpisodeIdentities,
+	createFeedId,
+	isCanonicalFeedId,
+	reconcileEpisodeIdentities,
+	type EpisodeIdentitySource,
+	type PreviousEpisodeIdentity,
+} from "src/utility/identity";
 
 export default class FeedParser {
 	private feed: PodcastFeed | undefined;
+	private previousEpisodes: readonly Episode[];
 
-	constructor(feed?: PodcastFeed) {
+	constructor(feed?: PodcastFeed, previousEpisodes: readonly Episode[] = []) {
 		this.feed = feed;
+		this.previousEpisodes = Array.isArray(previousEpisodes) ? previousEpisodes : [];
 	}
 
 	public async getEpisodes(url: string): Promise<Episode[]> {
@@ -28,6 +38,9 @@ export default class FeedParser {
 		// the podcast name and the per-episode artwork fallback.
 		if (!this.feed || this.feed.url !== url) {
 			this.feed = this.extractFeed(body, url);
+		} else if (!isCanonicalFeedId(this.feed.feedId)) {
+			const feedId = createFeedId(url);
+			if (feedId) this.feed = { ...this.feed, feedId };
 		}
 
 		return this.parsePage(body);
@@ -67,6 +80,10 @@ export default class FeedParser {
 			url,
 			artworkUrl,
 		};
+		const feedId = isCanonicalFeedId(this.feed?.feedId) ? this.feed.feedId : createFeedId(url);
+		if (feedId) feed.feedId = feedId;
+		const guid = this.findDirectChildText(channel, ["podcast:guid"]);
+		if (guid) feed.guid = guid;
 
 		const link = this.findFeedLink(channel);
 		if (link) feed.link = link;
@@ -162,20 +179,73 @@ export default class FeedParser {
 		return "";
 	}
 
+	private findDirectChild(scope: Document | Element, tagName: string): Element | undefined {
+		const wanted = tagName.toLowerCase();
+		return Array.from(scope.children).find((child) => child.tagName.toLowerCase() === wanted);
+	}
+
+	private episodeIdentitySource(
+		episode: Episode,
+		publishedAtFallback = "",
+	): EpisodeIdentitySource {
+		const publishedAt =
+			episode.episodeDate instanceof Date && Number.isFinite(episode.episodeDate.getTime())
+				? episode.episodeDate.toISOString()
+				: publishedAtFallback;
+		return {
+			feedId: episode.feedId ?? this.feed?.feedId ?? "",
+			guid: episode.guid,
+			enclosureUrl: episode.streamUrl,
+			itemLink: episode.itemLink,
+			publishedAt,
+			title: episode.title,
+		};
+	}
+
 	protected parsePage(page: Document): Episode[] {
 		const items = page.querySelectorAll("item");
+		const parsed = Array.from(items).flatMap((item) => {
+			const episode = this.parseItem(item);
+			if (!episode) return [];
 
-		function isEpisode(ep: Episode | null): ep is Episode {
-			return !!ep;
-		}
+			return [
+				{
+					episode,
+					identitySource: this.episodeIdentitySource(
+						episode,
+						this.findDirectChildText(item, ["pubDate"]),
+					),
+				},
+			];
+		});
+		const currentSources = parsed.map(({ identitySource }) => identitySource);
+		const previous: PreviousEpisodeIdentity[] = this.previousEpisodes.map((episode) => ({
+			episodeId: episode.episodeId,
+			source: this.episodeIdentitySource(episode),
+			aliases: episode.episodeAliases,
+		}));
+		const identities = previous.length
+			? reconcileEpisodeIdentities(previous, currentSources)
+			: assignEpisodeIdentities(currentSources);
 
-		return Array.from(items).map(this.parseItem.bind(this)).filter(isEpisode);
+		return parsed.map(({ episode }, index) => {
+			const identity = identities[index];
+			return identity?.episodeId
+				? {
+						...episode,
+						episodeId: identity.episodeId,
+						...(identity.aliases.length
+							? { episodeAliases: [...identity.aliases] }
+							: {}),
+					}
+				: episode;
+		});
 	}
 
 	protected parseItem(item: Element): Episode | null {
 		const titleEl = item.querySelector("title");
 		const streamUrlEl = item.querySelector("enclosure");
-		const linkEl = item.querySelector("link");
+		const linkEl = this.findDirectChild(item, "link");
 		const descriptionEl = item.querySelector("description");
 		const contentEl = item.querySelector("*|encoded");
 		const pubDateEl = item.querySelector("pubDate");
@@ -184,6 +254,7 @@ export default class FeedParser {
 		const itunesEpisodeEl = item.getElementsByTagName("itunes:episode")[0];
 		const itunesDurationEl = item.getElementsByTagName("itunes:duration")[0];
 		const chaptersEl = item.getElementsByTagName("podcast:chapters")[0];
+		const guid = this.findDirectChildText(item, ["guid"]);
 
 		if (!titleEl || !streamUrlEl || !pubDateEl) {
 			return null;
@@ -192,7 +263,7 @@ export default class FeedParser {
 		const title = titleEl.textContent || "";
 		const streamUrl = streamUrlEl.getAttribute("url") || "";
 		const enclosureType = streamUrlEl.getAttribute("type");
-		const url = linkEl?.textContent || "";
+		const itemLink = linkEl?.textContent || "";
 		const description = descriptionEl?.textContent || "";
 		const content = contentEl?.textContent || "";
 		const pubDate = decodeDate(pubDateEl.textContent);
@@ -204,14 +275,17 @@ export default class FeedParser {
 
 		return {
 			title,
+			guid: guid || undefined,
 			streamUrl,
-			url: url || this.feed?.url || "",
+			url: itemLink || this.feed?.url || "",
+			itemLink: itemLink || undefined,
 			description,
 			content,
 			podcastName: this.feed?.title || "",
 			artworkUrl,
 			episodeDate: pubDate,
 			feedUrl: this.feed?.url || "",
+			feedId: isCanonicalFeedId(this.feed?.feedId) ? this.feed.feedId : undefined,
 			itunesTitle: itunesTitle || "",
 			episodeNumber,
 			duration,

@@ -28,6 +28,7 @@
 		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json svelte.config.mjs vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts wrangler.jsonc orca.yaml docs/mkdocs.yml"
 	},
 	"dependencies": {
+		"@noble/hashes": "^2.2.0",
 		"fuse.js": "^7.4.2",
 		"openai": "^6.45.0"
 	},
