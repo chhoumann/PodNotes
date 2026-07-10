@@ -7,6 +7,7 @@ import {
 	migrateTranscriptSettings,
 } from "src/settingsMigrations";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
+import { isValidSecretId } from "src/types/Credentials";
 import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
 import {
@@ -29,11 +30,12 @@ import {
 	warn,
 } from "./codecUtils";
 import { decodeEpisode, decodePlaylist } from "./episodeCodec";
+import type { PodNotesDataSchemaVersion } from "./podNotesData";
 
 export function decodeSettings(
 	root: UnknownRecord,
 	warnings: Set<string>,
-	sourceVersion: 0 | 1 = 1,
+	sourceVersion: PodNotesDataSchemaVersion = 2,
 ): IPodNotesSettings {
 	const defaultPlaybackRate = normalizePlaybackRate(root.defaultPlaybackRate);
 	if (
@@ -109,16 +111,23 @@ export function decodeSettings(
 		feedNote: decodeFeedNote(root.feedNote, warnings),
 		download: decodeDownload(root.download, warnings),
 		downloadedEpisodes: decodeDownloadedEpisodes(root.downloadedEpisodes, warnings),
-		openAIApiKey: readString(root, "openAIApiKey", DEFAULT_SETTINGS.openAIApiKey, warnings),
-		diarizationApiKey: readString(
-			root,
-			"diarizationApiKey",
-			DEFAULT_SETTINGS.diarizationApiKey,
-			warnings,
-		),
+		openAISecretId: decodeSecretId(root, "openAISecretId", warnings),
+		deepgramSecretId: decodeSecretId(root, "deepgramSecretId", warnings),
 		transcript: decodeTranscript(root.transcript, warnings),
 		feedCache: decodeFeedCache(root.feedCache, warnings),
 	};
+}
+
+function decodeSecretId(
+	root: UnknownRecord,
+	key: "openAISecretId" | "deepgramSecretId",
+	warnings: Set<string>,
+): string {
+	const value = readString(root, key, DEFAULT_SETTINGS[key], warnings);
+	if (!value || isValidSecretId(value)) return value;
+
+	warn(warnings, key, "invalid SecretStorage ID; reference was removed");
+	return "";
 }
 
 function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettings["timestamp"] {
@@ -145,7 +154,7 @@ function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettin
 function decodeNote(
 	value: unknown,
 	warnings: Set<string>,
-	sourceVersion: 0 | 1,
+	sourceVersion: PodNotesDataSchemaVersion,
 ): IPodNotesSettings["note"] {
 	const record = optionalRecord(value, warnings, "note");
 	const path = readNullableString(record, "path", warnings, "note");

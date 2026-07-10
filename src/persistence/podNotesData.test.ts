@@ -89,7 +89,7 @@ describe("PodNotes data schema", () => {
 		expect((persisted.currentEpisode as Record<string, unknown>).episodeDate).toBe(
 			episodeDate.toISOString(),
 		);
-		expect(decoded.sourceVersion).toBe(1);
+		expect(decoded.sourceVersion).toBe(2);
 		expect(decoded.changed).toBe(false);
 		expect(decoded.settings.currentEpisode?.episodeDate).toEqual(episodeDate);
 		expect(decoded.settings.queue.episodes[0].episodeDate).toEqual(episodeDate);
@@ -134,7 +134,7 @@ describe("PodNotes data schema", () => {
 		});
 	});
 
-	it("preserves an intentionally disabled note feature in schema v1 and on save", () => {
+	it("preserves an intentionally disabled note feature from schema v1 and on v2 save", () => {
 		const decoded = decodePodNotesData({
 			schemaVersion: 1,
 			note: { path: "", template: "" },
@@ -143,6 +143,55 @@ describe("PodNotes data schema", () => {
 
 		expect(decoded.settings.note).toEqual({ path: "", template: "" });
 		expect(persisted.note).toEqual({ path: "", template: "" });
+	});
+
+	it("extracts legacy plaintext credentials without putting them in runtime settings", () => {
+		const decoded = decodePodNotesData({
+			schemaVersion: 1,
+			openAIApiKey: "  sk-legacy  ",
+			diarizationApiKey: "dg-legacy",
+		});
+
+		expect(decoded.legacySecrets).toEqual({ openAI: "sk-legacy", deepgram: "dg-legacy" });
+		expect(decoded.settings).not.toHaveProperty("openAIApiKey");
+		expect(decoded.settings).not.toHaveProperty("diarizationApiKey");
+		expect(decoded.unknownFields).not.toHaveProperty("openAIApiKey");
+		expect(decoded.unknownFields).not.toHaveProperty("diarizationApiKey");
+	});
+
+	it("retires plaintext fields even if they appear in v2 data", () => {
+		const decoded = decodePodNotesData({
+			schemaVersion: 2,
+			openAIApiKey: "must-not-survive",
+			diarizationApiKey: "must-not-survive",
+		});
+		const persisted = encodePodNotesData(decoded.settings, decoded.unknownFields);
+
+		expect(decoded.legacySecrets).toEqual({});
+		expect(decoded.retiredPlaintextPresent).toBe(true);
+		expect(decoded.changed).toBe(true);
+		expect(decoded.unknownFields).not.toHaveProperty("openAIApiKey");
+		expect(decoded.unknownFields).not.toHaveProperty("diarizationApiKey");
+		expect(JSON.stringify(persisted)).not.toContain("must-not-survive");
+		expect(persisted).not.toHaveProperty("openAIApiKey");
+		expect(persisted).not.toHaveProperty("diarizationApiKey");
+	});
+
+	it("preserves valid SecretStorage IDs and removes invalid references", () => {
+		const valid = decodePodNotesData({
+			schemaVersion: 2,
+			openAISecretId: "podnotes-openai-api-key-2",
+		});
+		const invalid = decodePodNotesData({
+			schemaVersion: 2,
+			openAISecretId: "Not Valid!",
+		});
+
+		expect(valid.settings.openAISecretId).toBe("podnotes-openai-api-key-2");
+		expect(invalid.settings.openAISecretId).toBe("");
+		expect(invalid.warnings).toContain(
+			"openAISecretId: invalid SecretStorage ID; reference was removed",
+		);
 	});
 
 	it("salvages valid fields and only drops individually invalid collection entries", () => {
@@ -211,7 +260,7 @@ describe("PodNotes data schema", () => {
 		expect(decoded.settings.downloadedEpisodes["Old Podcast"][0].size).toBe(0);
 	});
 
-	it("preserves safe unknown root and nested fields across a v1 save", () => {
+	it("preserves safe unknown root and nested fields across a schema upgrade", () => {
 		const decoded = decodePodNotesData({
 			schemaVersion: 1,
 			futureRootField: { enabled: true },
@@ -250,8 +299,8 @@ describe("PodNotes data schema", () => {
 	});
 
 	it("fails closed for a future schema version", () => {
-		expect(() => decodePodNotesData({ schemaVersion: 2 })).toThrowError(
-			/schema v2 requires a newer version/,
+		expect(() => decodePodNotesData({ schemaVersion: 3 })).toThrowError(
+			/schema v3 requires a newer version/,
 		);
 	});
 });

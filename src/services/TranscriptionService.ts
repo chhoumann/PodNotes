@@ -69,24 +69,39 @@ export class TranscriptionService {
 	private plugin: PodNotes;
 	private client: OpenAI | null = null;
 	private cachedApiKey: string | null = null;
+	private disposed = false;
 	private MAX_RETRIES = 3;
 	private readonly MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 	private readonly MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
 	private pendingEpisodes: Episode[] = [];
 	private activeTranscriptions = new Set<string>();
 
-	constructor(plugin: PodNotes) {
+	constructor(
+		plugin: PodNotes,
+		private readonly loadOpenAI: () => Promise<Pick<typeof import("openai"), "OpenAI">> = () =>
+			import("openai"),
+	) {
 		this.plugin = plugin;
 	}
 
 	async transcribeCurrentEpisode(): Promise<void> {
-		if (!requiredTranscriptionKeyPresent(this.plugin.settings)) {
+		if (this.disposed) return;
+		if (
+			!requiredTranscriptionKeyPresent(this.plugin.settings, (kind) =>
+				this.plugin.credentials.has(this.plugin.settings, kind),
+			)
+		) {
 			const diarization = this.plugin.settings.transcript.diarization;
 			const needsDeepgram = diarization?.enabled && diarization.provider === "deepgram";
+			const kind = needsDeepgram ? "deepgram" : "openai";
+			const unavailableOnDevice =
+				this.plugin.credentials.status(this.plugin.settings, kind) === "missing";
 			new Notice(
-				needsDeepgram
-					? "Please add your Deepgram API key in the transcript settings to use Deepgram diarization."
-					: "Please add your OpenAI API key in the transcript settings first.",
+				unavailableOnDevice
+					? `The selected ${needsDeepgram ? "Deepgram" : "OpenAI"} API key is not available on this device. Select or create it in the transcript settings.`
+					: needsDeepgram
+						? "Select or create a Deepgram API key in the transcript settings on this device."
+						: "Select or create an OpenAI API key in the transcript settings on this device.",
 			);
 			return;
 		}
@@ -122,6 +137,10 @@ export class TranscriptionService {
 	}
 
 	private drainQueue(): void {
+		if (this.disposed) {
+			this.pendingEpisodes = [];
+			return;
+		}
 		while (
 			this.activeTranscriptions.size < this.MAX_CONCURRENT_TRANSCRIPTIONS &&
 			this.pendingEpisodes.length > 0
@@ -136,7 +155,7 @@ export class TranscriptionService {
 
 			void this.transcribeEpisode(nextEpisode).finally(() => {
 				this.activeTranscriptions.delete(episodeKey);
-				this.drainQueue();
+				if (!this.disposed) this.drainQueue();
 			});
 		}
 	}
@@ -259,10 +278,11 @@ export class TranscriptionService {
 		provider: DiarizationProviderId,
 		updateNotice: (message: string) => void,
 	): Promise<DiarizedSegment[]> {
+		this.assertActive();
 		if (provider === "deepgram") {
-			const apiKey = this.plugin.settings.diarizationApiKey?.trim();
+			const apiKey = this.plugin.credentials.get(this.plugin.settings, "deepgram");
 			if (!apiKey) {
-				throw new Error("Missing Deepgram API key for diarization.");
+				throw new Error("Missing Deepgram API key on this device.");
 			}
 			// Deepgram ingests the whole file in one request, so it needs no
 			// chunking — which is exactly why its speaker labels stay consistent
@@ -397,16 +417,18 @@ export class TranscriptionService {
 	}
 
 	private async getClient(): Promise<OpenAI> {
-		const apiKey = this.plugin.settings.openAIApiKey?.trim();
+		this.assertActive();
+		const apiKey = this.plugin.credentials.get(this.plugin.settings, "openai");
 		if (!apiKey) {
-			throw new Error("Missing OpenAI API key");
+			throw new Error("Missing OpenAI API key on this device");
 		}
 
 		if (this.client && this.cachedApiKey === apiKey) {
 			return this.client;
 		}
 
-		const { OpenAI } = await import("openai");
+		const { OpenAI } = await this.loadOpenAI();
+		this.assertActive();
 		this.client = new OpenAI({
 			apiKey,
 			dangerouslyAllowBrowser: true,
@@ -414,5 +436,21 @@ export class TranscriptionService {
 		this.cachedApiKey = apiKey;
 
 		return this.client;
+	}
+
+	/** Drop the client and its credential material when the plugin unloads. */
+	dispose(): void {
+		this.disposed = true;
+		this.pendingEpisodes = [];
+		this.clearCredentialCache();
+	}
+
+	clearCredentialCache(): void {
+		this.client = null;
+		this.cachedApiKey = null;
+	}
+
+	private assertActive(): void {
+		if (this.disposed) throw new Error("PodNotes was unloaded before transcription started.");
 	}
 }

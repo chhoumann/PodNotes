@@ -19,7 +19,7 @@ const NOW = "2026-06-14T00:00:00.000Z";
 
 describe("serializeSettings", () => {
 	it("wraps settings in a versioned envelope", () => {
-		const envelope = serializeSettings(makeSettings(), { includeSecret: false }, "2.16.0", NOW);
+		const envelope = serializeSettings(makeSettings(), {}, "2.16.0", NOW);
 
 		expect(envelope.type).toBe(SETTINGS_EXPORT_TYPE);
 		expect(envelope.version).toBe(SETTINGS_EXPORT_VERSION);
@@ -37,52 +37,55 @@ describe("serializeSettings", () => {
 			currentEpisode: { title: "ep" } as never,
 		});
 
-		const { settings: exported } = serializeSettings(
-			settings,
-			{ includeSecret: false },
-			"2.16.0",
-			NOW,
-		);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
 
 		for (const key of EXCLUDED_KEYS) {
 			expect(exported).not.toHaveProperty(key as string);
 		}
 	});
 
-	it("omits the API key unless includeSecret is set", () => {
-		const settings = makeSettings({ openAIApiKey: "sk-secret" });
+	it("keeps SecretStorage references out and puts opted-in values in a separate payload", () => {
+		const settings = makeSettings({ openAISecretId: "podnotes-openai-api-key" });
 
-		const without = serializeSettings(settings, { includeSecret: false }, "2.16.0", NOW);
-		expect(without.settings).not.toHaveProperty("openAIApiKey");
+		const ordinary = serializeSettings(settings, {}, "2.16.0", NOW);
+		expect(ordinary.settings).not.toHaveProperty("openAISecretId");
+		expect(ordinary).not.toHaveProperty("secrets");
 
-		const withKey = serializeSettings(settings, { includeSecret: true }, "2.16.0", NOW);
-		expect(withKey.settings.openAIApiKey).toBe("sk-secret");
+		const withKey = serializeSettings(
+			settings,
+			{ secrets: { openAI: "sk-secret" } },
+			"2.16.0",
+			NOW,
+		);
+		expect(withKey.settings).not.toHaveProperty("openAISecretId");
+		expect(withKey.secrets).toEqual({ openAI: "sk-secret" });
 	});
 
-	it("redacts the diarization (Deepgram) key alongside the OpenAI key (#168)", () => {
+	it("keeps both provider values in the explicit top-level payload (#168)", () => {
 		const settings = makeSettings({
-			openAIApiKey: "sk-secret",
-			diarizationApiKey: "dg-secret",
+			openAISecretId: "podnotes-openai-api-key",
+			deepgramSecretId: "podnotes-deepgram-api-key",
 		});
 
-		const without = serializeSettings(settings, { includeSecret: false }, "2.16.0", NOW);
-		expect(without.settings).not.toHaveProperty("openAIApiKey");
-		expect(without.settings).not.toHaveProperty("diarizationApiKey");
+		const without = serializeSettings(settings, {}, "2.16.0", NOW);
+		expect(without.settings).not.toHaveProperty("openAISecretId");
+		expect(without.settings).not.toHaveProperty("deepgramSecretId");
 
-		const withKey = serializeSettings(settings, { includeSecret: true }, "2.16.0", NOW);
-		expect(withKey.settings.diarizationApiKey).toBe("dg-secret");
+		const withKeys = serializeSettings(
+			settings,
+			{ secrets: { openAI: "sk-secret", deepgram: "dg-secret" } },
+			"2.16.0",
+			NOW,
+		);
+		expect(withKeys.secrets).toEqual({ openAI: "sk-secret", deepgram: "dg-secret" });
+		expect(JSON.stringify(withKeys.settings)).not.toContain("secret");
 	});
 
 	it("never lets the Deepgram key ride along inside the transcript object (#168)", () => {
 		// The key lives top-level precisely so it can be redacted; the nested
 		// transcript object (copied wholesale) must never carry a secret.
-		const settings = makeSettings({ diarizationApiKey: "dg-secret" });
-		const { settings: exported } = serializeSettings(
-			settings,
-			{ includeSecret: false },
-			"2.16.0",
-			NOW,
-		);
+		const settings = makeSettings({ deepgramSecretId: "podnotes-deepgram-api-key" });
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
 		expect(JSON.stringify(exported.transcript ?? {})).not.toContain("dg-secret");
 	});
 
@@ -94,12 +97,7 @@ describe("serializeSettings", () => {
 			},
 		});
 
-		const { settings: exported } = serializeSettings(
-			settings,
-			{ includeSecret: false },
-			"2.16.0",
-			NOW,
-		);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
 
 		expect(exported.note).toEqual(settings.note);
 		expect(exported.savedFeeds).toEqual(settings.savedFeeds);
@@ -125,7 +123,7 @@ describe("serializeSettings", () => {
 			},
 		});
 
-		const exported = serializeSettings(settings, { includeSecret: false }, "2.17.3", NOW);
+		const exported = serializeSettings(settings, {}, "2.17.3", NOW);
 		expect(exported.settings.queue?.episodes[0].episodeDate).toBe(date.toISOString());
 	});
 });
@@ -172,7 +170,7 @@ describe("parseImport", () => {
 			defaultPlaybackRate: 1.5,
 			note: { path: "p", template: "t" },
 		});
-		const envelope = serializeSettings(settings, { includeSecret: false }, "2.16.0", NOW);
+		const envelope = serializeSettings(settings, {}, "2.16.0", NOW);
 
 		const result = parseImport(JSON.stringify(envelope));
 		expect(result.ok).toBe(true);
@@ -215,9 +213,9 @@ describe("parseImport", () => {
 	});
 
 	it("rejects a raw data file from a newer persistence schema", () => {
-		const result = parseImport(JSON.stringify({ schemaVersion: 2, defaultVolume: 0.5 }));
+		const result = parseImport(JSON.stringify({ schemaVersion: 3, defaultVolume: 0.5 }));
 		expect(result).toEqual(
-			expect.objectContaining({ ok: false, error: expect.stringContaining("schema v2") }),
+			expect.objectContaining({ ok: false, error: expect.stringContaining("schema v3") }),
 		);
 	});
 
@@ -298,9 +296,61 @@ describe("parseImport", () => {
 		const result = parseImport(JSON.stringify({ openAIApiKey: "sk-real" }));
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.settings.openAIApiKey).toBe("sk-real");
+			expect(result.settings).not.toHaveProperty("openAIApiKey");
+			expect(result.secrets.openAI).toBe("sk-real");
 			expect(result.meta.includesSecret).toBe(true);
 		}
+	});
+
+	it("parses the v2 secrets payload separately from settings", () => {
+		const result = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				version: 2,
+				settings: { defaultVolume: 0.5, openAISecretId: "not-transferable" },
+				secrets: { openAI: " sk ", deepgram: "dg" },
+			}),
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.settings).not.toHaveProperty("openAISecretId");
+			expect(result.secrets).toEqual({ openAI: "sk", deepgram: "dg" });
+		}
+	});
+
+	it("rejects a malformed v2 secrets payload", () => {
+		const result = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				version: 2,
+				settings: { defaultVolume: 0.5 },
+				secrets: { openAI: 42 },
+			}),
+		);
+		expect(result).toEqual(expect.objectContaining({ ok: false }));
+	});
+
+	it("extracts legacy values from v1 envelopes but not from v2 data", () => {
+		const legacy = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				version: 1,
+				settings: { openAIApiKey: "sk-legacy" },
+			}),
+		);
+		expect(legacy).toEqual(
+			expect.objectContaining({ ok: true, secrets: { openAI: "sk-legacy" } }),
+		);
+
+		const retiredInV2 = parseImport(
+			JSON.stringify({
+				schemaVersion: 2,
+				defaultVolume: 0.5,
+				openAIApiKey: "must-not-return",
+			}),
+		);
+		expect(retiredInV2).toEqual(expect.objectContaining({ ok: true, secrets: {} }));
 	});
 
 	it("drops a built-in playlist whose episodes is not an array (PL-10)", () => {
@@ -429,16 +479,16 @@ describe("mergeImportedSettings", () => {
 
 	it("preserves a saved secret when the import omits it (IE-05)", () => {
 		const current = makeSettings({
-			openAIApiKey: "sk-saved",
-			diarizationApiKey: "dg-saved",
+			openAISecretId: "saved-openai",
+			deepgramSecretId: "saved-deepgram",
 		});
 
 		// parseImport strips empty secrets, so a raw data.json with blank keys
 		// arrives here without them; the merge must keep the configured keys.
 		const merged = mergeImportedSettings(current, { defaultVolume: 0.5 });
 
-		expect(merged.openAIApiKey).toBe("sk-saved");
-		expect(merged.diarizationApiKey).toBe("dg-saved");
+		expect(merged.openAISecretId).toBe("saved-openai");
+		expect(merged.deepgramSecretId).toBe("saved-deepgram");
 	});
 
 	it("keeps the current nested value when the import omits the field", () => {
@@ -487,17 +537,16 @@ describe("mergeImportedSettings", () => {
 
 describe("describeSecrets (#168)", () => {
 	it("names only the secrets that actually hold a value", () => {
-		expect(describeSecrets(makeSettings())).toEqual([]);
-		expect(describeSecrets(makeSettings({ openAIApiKey: "sk" }))).toEqual(["OpenAI API key"]);
-		expect(describeSecrets(makeSettings({ diarizationApiKey: "dg" }))).toEqual([
+		expect(describeSecrets({})).toEqual([]);
+		expect(describeSecrets({ openAI: "sk" })).toEqual(["OpenAI API key"]);
+		expect(describeSecrets({ deepgram: "dg" })).toEqual(["Deepgram API key"]);
+		expect(describeSecrets({ openAI: "sk", deepgram: "dg" })).toEqual([
+			"OpenAI API key",
 			"Deepgram API key",
 		]);
-		expect(
-			describeSecrets(makeSettings({ openAIApiKey: "sk", diarizationApiKey: "dg" })),
-		).toEqual(["OpenAI API key", "Deepgram API key"]);
 	});
 
 	it("ignores whitespace-only secrets", () => {
-		expect(describeSecrets(makeSettings({ openAIApiKey: "   " }))).toEqual([]);
+		expect(describeSecrets({ openAI: "   " })).toEqual([]);
 	});
 });

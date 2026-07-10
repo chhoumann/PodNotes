@@ -1,4 +1,22 @@
-export class App {}
+export class SecretStorage {
+	private values = new Map<string, string>();
+
+	setSecret(id: string, secret: string): void {
+		this.values.set(id, secret);
+	}
+
+	getSecret(id: string): string | null {
+		return this.values.get(id) ?? null;
+	}
+
+	listSecrets(): string[] {
+		return [...this.values.keys()];
+	}
+}
+
+export class App {
+	secretStorage = new SecretStorage();
+}
 export class Plugin {}
 export class Component {
 	app?: App;
@@ -229,6 +247,15 @@ export class TextComponent extends BaseInteractiveElement {
 	}
 }
 
+export class SecretComponent extends TextComponent {
+	constructor(
+		public app: App,
+		container: HTMLElement,
+	) {
+		super(container);
+	}
+}
+
 export class Setting {
 	settingEl: HTMLElement;
 
@@ -266,6 +293,11 @@ export class Setting {
 
 	addButton(callback: (component: ButtonComponent) => void) {
 		callback(new ButtonComponent(this.settingEl));
+		return this;
+	}
+
+	addComponent<T>(callback: (container: HTMLElement) => T) {
+		callback(this.settingEl);
 		return this;
 	}
 }

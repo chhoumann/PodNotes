@@ -18,6 +18,8 @@ import {
 
 type PodNotesData = Partial<IPodNotesSettings> & {
 	schemaVersion?: number;
+	openAIApiKey?: string;
+	diarizationApiKey?: string;
 	legacyExtension?: { enabled: boolean };
 };
 
@@ -420,7 +422,7 @@ describe("PodNotes runtime", () => {
 		expect(runtimeVolume).toBe(1);
 	});
 
-	test("migrates a legacy JSON date through note creation and the next durable save", async () => {
+	test("migrates legacy dates and credentials before runtime hydration", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
 		const audioPath = await seedAudio(sandbox, "legacy-date-episode.mp3");
 		const isoDate = "2024-03-01T10:05:03.000Z";
@@ -428,10 +430,19 @@ describe("PodNotes runtime", () => {
 			...createLocalEpisode("E2E Legacy Date Episode", audioPath),
 			episodeDate: isoDate as unknown as Date,
 		};
+		await evalJsonAsync<boolean>(
+			obsidian,
+			`(() => {
+				app.secretStorage.setSecret("podnotes-openai-api-key", "unrelated-openai-sentinel");
+				app.secretStorage.setSecret("podnotes-deepgram-api-key", "unrelated-deepgram-sentinel");
+				return true;
+			})()`,
+		);
 
 		await seedRuntimeData(plugin, sandbox, episode, {
 			currentEpisode: episode,
 			legacyData: true,
+			legacySecrets: { openAI: "e2e-openai-secret", deepgram: "e2e-deepgram-secret" },
 			note: {
 				path: sandbox.path("legacy-date-note.md"),
 				template: "date: {{date:YYYY-MM-DD}}\n",
@@ -440,8 +451,37 @@ describe("PodNotes runtime", () => {
 		await waitForPodNotesReady(obsidian);
 
 		const beforeSave = await plugin.data<PodNotesData>().read();
-		expect(beforeSave.schemaVersion).toBeUndefined();
+		expect(beforeSave.schemaVersion).toBe(2);
+		expect(beforeSave.openAIApiKey).toBeUndefined();
+		expect(beforeSave.diarizationApiKey).toBeUndefined();
+		expect(beforeSave.openAISecretId).toMatch(/^podnotes-openai-api-key(?:-\d+)?$/);
+		expect(beforeSave.deepgramSecretId).toMatch(/^podnotes-deepgram-api-key(?:-\d+)?$/);
+		expect(beforeSave.openAISecretId).not.toBe("podnotes-openai-api-key");
+		expect(beforeSave.deepgramSecretId).not.toBe("podnotes-deepgram-api-key");
 		expect(beforeSave.legacyExtension).toEqual({ enabled: true });
+		const storedSecrets = await evalJsonAsync<{
+			openAI: boolean;
+			deepgram: boolean;
+			openAISentinel: string | null;
+			deepgramSentinel: string | null;
+		}>(
+			obsidian,
+			`(() => {
+				const settings = app.plugins.plugins.${PLUGIN_ID}.settings;
+				return {
+					openAI: app.secretStorage.getSecret(settings.openAISecretId) === "e2e-openai-secret",
+					deepgram: app.secretStorage.getSecret(settings.deepgramSecretId) === "e2e-deepgram-secret",
+					openAISentinel: app.secretStorage.getSecret("podnotes-openai-api-key"),
+					deepgramSentinel: app.secretStorage.getSecret("podnotes-deepgram-api-key"),
+				};
+			})()`,
+		);
+		expect(storedSecrets).toEqual({
+			openAI: true,
+			deepgram: true,
+			openAISentinel: "unrelated-openai-sentinel",
+			deepgramSentinel: "unrelated-deepgram-sentinel",
+		});
 		const runtimeDate = await evalJsonAsync<{ isDate: boolean; iso: string }>(
 			obsidian,
 			`(() => {
@@ -461,11 +501,25 @@ describe("PodNotes runtime", () => {
 
 		await setVolume(obsidian, 0.42);
 		const persisted = await plugin.waitForData<PodNotesData>(
-			(data) => data.schemaVersion === 1 && data.defaultVolume === 0.42,
+			(data) => data.schemaVersion === 2 && data.defaultVolume === 0.42,
 			WAIT_OPTS,
 		);
 		expect(persisted.legacyExtension).toEqual({ enabled: true });
 		expect(persisted.currentEpisode?.episodeDate).toBe(isoDate);
+		const idsBeforeReload = await obsidian.dev.evalJson<string[]>(
+			'app.secretStorage.listSecrets().filter((id) => id.startsWith("podnotes-openai-api-key") || id.startsWith("podnotes-deepgram-api-key")).sort()',
+		);
+		await plugin.reload(RELOAD_OPTIONS);
+		await waitForPodNotesReady(obsidian);
+		const afterReload = await plugin.data<PodNotesData>().read();
+		const idsAfterReload = await obsidian.dev.evalJson<string[]>(
+			'app.secretStorage.listSecrets().filter((id) => id.startsWith("podnotes-openai-api-key") || id.startsWith("podnotes-deepgram-api-key")).sort()',
+		);
+		expect(idsAfterReload).toEqual(idsBeforeReload);
+		expect(afterReload.openAISecretId).toBe(beforeSave.openAISecretId);
+		expect(afterReload.deepgramSecretId).toBe(beforeSave.deepgramSecretId);
+		expect(afterReload.openAIApiKey).toBeUndefined();
+		expect(afterReload.diarizationApiKey).toBeUndefined();
 		expect(await obsidian.dev.runtimeErrors()).toEqual([]);
 	});
 
@@ -474,7 +528,7 @@ describe("PodNotes runtime", () => {
 		const original = await plugin.data<PodNotesData>().read();
 		const future = {
 			...original,
-			schemaVersion: 2,
+			schemaVersion: 3,
 			legacyExtension: { enabled: true },
 		};
 
@@ -496,14 +550,18 @@ describe("PodNotes runtime", () => {
 		} finally {
 			await plugin.data<PodNotesData>().write(original);
 			// A failed onload can leave Obsidian's enabled flag set without a live
-			// plugin instance. Await the plugin manager directly so cleanup cannot
-			// return before the restored onload finishes.
+			// plugin instance. Start the restored enable operation without awaiting
+			// its manager promise: after a rejected onload Obsidian can leave that
+			// promise pending even though the plugin becomes live. The readiness poll
+			// below is the authoritative completion signal.
 			await evalJsonAsync<boolean>(
 				obsidian,
 				`(async () => {
 					await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
-					await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});
-					return Boolean(app.plugins.plugins.${PLUGIN_ID});
+					void app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)}).catch((error) => {
+						console.error("PodNotes E2E: restored enable failed", error);
+					});
+					return true;
 				})()`,
 			);
 			await waitForPodNotesReady(obsidian);
@@ -599,6 +657,7 @@ async function seedRuntimeData(
 		played?: { duration: number; time: number };
 		timestampTemplate?: string;
 		legacyData?: boolean;
+		legacySecrets?: { openAI?: string; deepgram?: string };
 	} = {},
 ): Promise<void> {
 	const placeholderEpisode = createLocalEpisode(
@@ -615,6 +674,8 @@ async function seedRuntimeData(
 		if (options.legacyData) {
 			delete data.schemaVersion;
 			data.legacyExtension = { enabled: true };
+			data.openAIApiKey = options.legacySecrets?.openAI;
+			data.diarizationApiKey = options.legacySecrets?.deepgram;
 		}
 		data.currentEpisode = options.currentEpisode ?? placeholderEpisode;
 		data.defaultPlaybackRate = options.defaultPlaybackRate ?? 1;

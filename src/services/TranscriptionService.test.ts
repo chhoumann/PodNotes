@@ -34,20 +34,21 @@ const mockEpisode: Episode = {
 
 function createMockPlugin(
 	overrides: {
-		openAIApiKey?: string;
+		openAIKey?: string;
 		podcast?: Episode | null;
 		existingTranscriptPath?: string | null;
 	} = {},
 ): PodNotes {
 	const {
-		openAIApiKey = "test-api-key",
+		openAIKey = "test-api-key",
 		podcast = mockEpisode,
 		existingTranscriptPath = null,
 	} = overrides;
 
 	return {
 		settings: {
-			openAIApiKey,
+			openAISecretId: openAIKey ? "openai-secret" : "",
+			deepgramSecretId: "",
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",
 				template: "# {{title}}\n\n{{transcript}}",
@@ -55,6 +56,17 @@ function createMockPlugin(
 			download: {
 				path: "Downloads",
 			},
+		},
+		credentials: {
+			get: vi.fn((_settings, kind: "openai" | "deepgram") =>
+				kind === "openai" ? openAIKey || null : null,
+			),
+			has: vi.fn((_settings, kind: "openai" | "deepgram") =>
+				kind === "openai" ? Boolean(openAIKey) : false,
+			),
+			status: vi.fn((_settings, kind: "openai" | "deepgram") =>
+				kind === "openai" && openAIKey ? "available" : "unconfigured",
+			),
 		},
 		api: {
 			podcast,
@@ -133,7 +145,7 @@ describe("TranscriptionService", () => {
 
 	describe("transcribeCurrentEpisode validation", () => {
 		test("shows notice when no API key is configured", async () => {
-			const mockPlugin = createMockPlugin({ openAIApiKey: "" });
+			const mockPlugin = createMockPlugin({ openAIKey: "" });
 			const service = new TranscriptionService(mockPlugin);
 
 			await service.transcribeCurrentEpisode();
@@ -144,6 +156,52 @@ describe("TranscriptionService", () => {
 			const service = new TranscriptionService(mockPlugin);
 
 			await service.transcribeCurrentEpisode();
+		});
+	});
+
+	describe("dispose", () => {
+		test("prevents queued work and credential reads after unload", async () => {
+			const plugin = createMockPlugin();
+			const service = new TranscriptionService(plugin);
+			(service as unknown as { pendingEpisodes: Episode[] }).pendingEpisodes = [mockEpisode];
+			service.dispose();
+
+			(service as unknown as { drainQueue: () => void }).drainQueue();
+			await expect(
+				(service as unknown as { getClient: () => Promise<unknown> }).getClient(),
+			).rejects.toThrow("unloaded");
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(plugin.credentials.get).not.toHaveBeenCalled();
+		});
+
+		test("cannot recreate a client when unload happens during the dynamic import", async () => {
+			const plugin = createMockPlugin();
+			let resolveModule!: (module: Pick<typeof import("openai"), "OpenAI">) => void;
+			const loader = vi.fn(
+				() =>
+					new Promise<Pick<typeof import("openai"), "OpenAI">>((resolve) => {
+						resolveModule = resolve;
+					}),
+			);
+			const constructor = vi.fn(() => ({ audio: { transcriptions: { create: vi.fn() } } }));
+			const service = new TranscriptionService(plugin, loader);
+			const pending = (
+				service as unknown as { getClient: () => Promise<unknown> }
+			).getClient();
+			await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+
+			service.dispose();
+			resolveModule({ OpenAI: constructor as unknown as typeof import("openai").OpenAI });
+
+			await expect(pending).rejects.toThrow("unloaded");
+			expect(constructor).not.toHaveBeenCalled();
+			expect(
+				(service as unknown as { client: unknown; cachedApiKey: unknown }).client,
+			).toBeNull();
+			expect(
+				(service as unknown as { client: unknown; cachedApiKey: unknown }).cachedApiKey,
+			).toBeNull();
 		});
 	});
 
