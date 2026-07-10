@@ -27,6 +27,7 @@ jobs:
       release-sha: ${{ steps.resolve.outputs.release-sha }}
       pr-number: ${{ steps.resolve.outputs.pr-number }}
       source-ref: ${{ steps.resolve.outputs.source-ref }}
+      source-sha: ${{ steps.resolve.outputs.source-sha }}
       version: ${{ steps.resolve.outputs.version }}
     steps:
       - name: Validate merged release PR provenance
@@ -138,6 +139,7 @@ jobs:
             core.setOutput('release-sha', releaseSha);
             core.setOutput('pr-number', String(pullNumber));
             core.setOutput('source-ref', sourceRef);
+            core.setOutput('source-sha', process.env.EVENT_SHA);
             core.setOutput('version', version);
             core.notice(`Validated release PR #${pullNumber} for ${version} at ${releaseSha}.`);
 
@@ -470,7 +472,7 @@ jobs:
 
       - name: Verify GitHub attestations
         env:
-          EXPECTED_SHA: ${{ needs.resolve.outputs.release-sha }}
+          EXPECTED_SOURCE_SHA: ${{ needs.resolve.outputs.source-sha }}
           GH_TOKEN: ${{ github.token }}
           SOURCE_REF: ${{ needs.resolve.outputs.source-ref }}
         run: |
@@ -480,7 +482,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "$SIGNER_WORKFLOW" \
               --source-ref "$SOURCE_REF" \
-              --source-digest "$EXPECTED_SHA" \
+              --source-digest "$EXPECTED_SOURCE_SHA" \
               --deny-self-hosted-runners
           done
 
