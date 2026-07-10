@@ -377,6 +377,53 @@ describe("PodNotes onload wiring (#55)", () => {
 		}
 	});
 
+	it("owns and disposes one capability-network service aggregate per plugin load", async () => {
+		const { plugin } = await loadPlugin();
+		const services = (
+			plugin as unknown as {
+				networkServices?: { status: string; dispose(): void; isDisposed(): boolean };
+			}
+		).networkServices;
+
+		expect(services?.status).toBe("available");
+		expect(services?.isDisposed()).toBe(false);
+
+		plugin.onunload();
+		loaded.splice(loaded.indexOf(plugin), 1);
+
+		expect(services?.isDisposed()).toBe(true);
+		expect(
+			(
+				plugin as unknown as {
+					networkServices?: unknown;
+				}
+			).networkServices,
+		).toBeUndefined();
+	});
+
+	it("keeps capability networking explicitly unavailable on mobile", async () => {
+		Object.assign(Platform, {
+			isDesktop: false,
+			isDesktopApp: false,
+			isIosApp: true,
+			isMobile: true,
+			isMobileApp: true,
+			isPhone: true,
+		});
+
+		const { plugin } = await loadPlugin();
+		const services = (
+			plugin as unknown as {
+				networkServices?: { status: string; reason?: string };
+			}
+		).networkServices;
+
+		expect(services).toMatchObject({
+			status: "unavailable",
+			reason: "unsupported-platform",
+		});
+	});
+
 	it("Show PodNotes command and ribbon icon both route to activateView", async () => {
 		const { commands, ribbonCalls, activateSpy } = await loadPlugin();
 
