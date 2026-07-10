@@ -104,19 +104,25 @@ jobs:
               throw new Error(`PR #${pullNumber} merge tree does not match its validated head tree.`);
             }
 
-            const allowedSourceRefs = [
+            const exactSourceRefs = [
               `refs/heads/release-run/${version}`,
               `refs/tags/${version}`,
             ];
             const sourceRef = process.env.EVENT_REF;
-            if (!allowedSourceRefs.includes(sourceRef) || process.env.EVENT_SHA !== releaseSha) {
+            const master = await github.rest.git.getRef({ owner, repo, ref: 'heads/master' });
+            const exactReleaseSource =
+              exactSourceRefs.includes(sourceRef) && process.env.EVENT_SHA === releaseSha;
+            const trustedMasterRecovery =
+              sourceRef === 'refs/heads/master' &&
+              process.env.EVENT_SHA === master.data.object.sha;
+            if (!exactReleaseSource && !trustedMasterRecovery) {
               throw new Error(
-                `Release workflow must run from an exact release ref at ${releaseSha}; got ` +
-                `${process.env.EVENT_REF} at ${process.env.EVENT_SHA}.`,
+                `Release workflow must run from an exact release ref at ${releaseSha} or the ` +
+                `current protected master for workflow recovery; got ${sourceRef} at ` +
+                `${process.env.EVENT_SHA}.`,
               );
             }
 
-            const master = await github.rest.git.getRef({ owner, repo, ref: 'heads/master' });
             const comparison = await github.rest.repos.compareCommitsWithBasehead({
               owner,
               repo,
@@ -638,6 +644,40 @@ jobs:
               }
             }
 
+            async function waitForPublishedRelease(releaseId) {
+              for (let attempt = 0; attempt < 30; attempt += 1) {
+                const current = await github.rest.repos.getRelease({
+                  owner,
+                  repo,
+                  release_id: releaseId,
+                });
+                if (!current.data.draft && current.data.tag_name === version) {
+                  return current.data;
+                }
+                if (attempt < 29) {
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
+              }
+              throw new Error(`GitHub did not converge release ${version} to published state.`);
+            }
+
+            async function waitForDraftReleaseTag(releaseId) {
+              for (let attempt = 0; attempt < 30; attempt += 1) {
+                const current = await github.rest.repos.getRelease({
+                  owner,
+                  repo,
+                  release_id: releaseId,
+                });
+                if (current.data.draft && current.data.tag_name === version) {
+                  return current.data;
+                }
+                if (attempt < 29) {
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
+              }
+              throw new Error(`GitHub did not restore draft release ${version} to its tag.`);
+            }
+
             const tagSha = await resolveTagCommit(version);
             if (tagSha !== releaseSha) {
               throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
@@ -649,7 +689,36 @@ jobs:
             });
             const matches = releases.filter((release) => release.tag_name === version);
             if (matches.length > 1) throw new Error(`Multiple releases use tag ${version}.`);
+            const recoverableDrafts = releases.filter((release) =>
+              release.draft &&
+              /^untagged-[0-9a-f-]+$/.test(release.tag_name) &&
+              release.name === version &&
+              release.target_commitish === releaseSha &&
+              release.body === notes &&
+              !release.prerelease &&
+              release.author?.login === 'github-actions[bot]'
+            );
+            if (recoverableDrafts.length > 1 || (matches.length === 1 && recoverableDrafts.length)) {
+              throw new Error(`Multiple release records could represent ${version}.`);
+            }
             let release = matches[0];
+            if (!release && recoverableDrafts.length === 1) {
+              release = recoverableDrafts[0];
+              await verifyRemoteAssets(release.id);
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: release.id,
+                tag_name: version,
+                target_commitish: releaseSha,
+                name: version,
+                body: notes,
+                draft: true,
+                prerelease: false,
+              });
+              release = await waitForDraftReleaseTag(release.id);
+              core.notice(`Restored exact orphaned draft release ${version} to its durable tag.`);
+            }
             if (!release) {
               const created = await github.rest.repos.createRelease({
                 owner,
@@ -685,6 +754,8 @@ jobs:
               owner,
               repo,
               release_id: release.id,
+              tag_name: version,
+              target_commitish: releaseSha,
               name: version,
               body: notes,
               draft: true,
@@ -718,40 +789,28 @@ jobs:
             if (await resolveTagCommit(version) !== releaseSha) {
               throw new Error(`Release tag ${version} changed before publication.`);
             }
-            try {
-              const published = await github.rest.repos.updateRelease({
-                owner,
-                repo,
-                release_id: release.id,
-                name: version,
-                body: notes,
-                draft: false,
-                prerelease: false,
-                make_latest: 'true',
-              });
-              if (published.data.draft || published.data.tag_name !== version) {
-                throw new Error(`GitHub did not publish release ${version}.`);
-              }
-              if (await resolveTagCommit(version) !== releaseSha) {
-                throw new Error(`Release tag ${version} changed during publication.`);
-              }
-              await verifyRemoteAssets(release.id);
-            } catch (error) {
-              try {
-                await github.rest.repos.updateRelease({
-                  owner,
-                  repo,
-                  release_id: release.id,
-                  name: version,
-                  body: notes,
-                  draft: true,
-                  prerelease: false,
-                });
-                core.warning(`Returned release ${version} to draft after final verification failed.`);
-              } catch (rollbackError) {
-                core.error(`Could not return release ${version} to draft: ${rollbackError.message}`);
-              }
-              throw error;
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              tag_name: version,
+              target_commitish: releaseSha,
+              name: version,
+              body: notes,
+              draft: false,
+              prerelease: false,
+              make_latest: 'true',
+            });
+            release = await waitForPublishedRelease(release.id);
+            if (await resolveTagCommit(version) !== releaseSha) {
+              throw new Error(`Release tag ${version} changed during publication.`);
             }
+            await verifyRemoteAssets(release.id);
+
+            // All mutable release inputs were verified before publication. Do not
+            // demote a published release on a later verification failure: GitHub
+            // detaches its tag and renames the draft to `untagged-*`. A recovery
+            // run instead revalidates the public release exactly and finishes only
+            // when the tag and downloaded asset digests still match.
             await removeRecoveryBranch();
             core.notice(`Published and verified PodNotes ${version} at ${releaseSha}.`);

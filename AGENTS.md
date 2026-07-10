@@ -224,7 +224,14 @@ the recovery branch. Recover an interrupted run from its exact remaining ref:
 gh workflow run release.yml --ref release-run/<version> -f releasePr=<merged-pr-number>
 # After the durable tag exists:
 gh workflow run release.yml --ref <version> -f releasePr=<merged-pr-number>
+# If the release workflow itself needed a reviewed fix on master:
+gh workflow run release.yml --ref master -f releasePr=<merged-pr-number>
 ```
+
+The `master` recovery path still rebuilds and publishes the exact merge commit
+validated from the machine-generated release PR. It exists only so a reviewed
+workflow fix can recover an already-tagged release without moving the durable
+tag or rewriting the release commit.
 
 ## PR Expectations
 Pull requests should include:
