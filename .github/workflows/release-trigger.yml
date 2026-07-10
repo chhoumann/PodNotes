@@ -1,0 +1,161 @@
+name: Trigger release
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions: {}
+
+concurrency:
+  group: release-trigger
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Register and dispatch release
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'master' &&
+      startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Validate, tag, and dispatch exact release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+        with:
+          script: |
+            const expectedFiles = ['manifest.json', 'package-lock.json', 'package.json', 'versions.json'];
+            const { owner, repo } = context.repo;
+            const repository = `${owner}/${repo}`;
+            const pullNumber = context.payload.pull_request?.number;
+            if (!Number.isSafeInteger(pullNumber) || pullNumber < 1) {
+              throw new Error('Release event has an invalid PR number.');
+            }
+
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
+            if (!pull.merged || pull.state !== 'closed' || !pull.merged_at || !pull.merge_commit_sha) {
+              throw new Error(`PR #${pullNumber} is not merged.`);
+            }
+            if (pull.user?.login !== 'github-actions[bot]') {
+              throw new Error(`PR #${pullNumber} was not created by github-actions[bot].`);
+            }
+            if (pull.merged_by?.login !== owner) {
+              throw new Error(`PR #${pullNumber} was not merged by repository owner ${owner}.`);
+            }
+            if (pull.base.ref !== 'master' || pull.head.repo?.full_name !== repository) {
+              throw new Error(`PR #${pullNumber} has invalid base or repository provenance.`);
+            }
+            const branchMatch = /^release\/((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/.exec(pull.head.ref);
+            if (!branchMatch) throw new Error(`PR #${pullNumber} does not use a valid release branch.`);
+            const version = branchMatch[1];
+            const title = `release(version): Release ${version}`;
+            if (pull.title !== title) throw new Error(`PR #${pullNumber} title does not match ${version}.`);
+
+            const markerPattern = new RegExp(
+              `<!-- podnotes-release-pr schema=1 version=${version.replaceAll('.', '\\.')}` +
+              ' base=([0-9a-f]{40}) -->',
+            );
+            const marker = markerPattern.exec(pull.body || '');
+            if (!marker) throw new Error(`PR #${pullNumber} is missing valid release provenance.`);
+            const baseSha = marker[1];
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pullNumber,
+              per_page: 100,
+            });
+            const changedFiles = files.map((file) => file.filename).sort();
+            if (JSON.stringify(changedFiles) !== JSON.stringify(expectedFiles)) {
+              throw new Error(`PR #${pullNumber} must change exactly the synchronized version files.`);
+            }
+
+            const headCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: pull.head.sha });
+            if (headCommit.data.parents.length !== 1 || headCommit.data.parents[0].sha !== baseSha) {
+              throw new Error(`PR #${pullNumber} head does not descend directly from its recorded base.`);
+            }
+            if (headCommit.data.message.trim() !==
+                `${title}\n\npodnotes-release-commit schema=1 version=${version} base=${baseSha}`) {
+              throw new Error(`PR #${pullNumber} head commit message is invalid.`);
+            }
+
+            const releaseSha = pull.merge_commit_sha;
+            const releaseCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: releaseSha });
+            if (releaseCommit.data.parents.length !== 1 || releaseCommit.data.parents[0].sha !== baseSha) {
+              throw new Error(`PR #${pullNumber} was not squash-merged directly onto its recorded base.`);
+            }
+            if (releaseCommit.data.message.split('\n')[0] !== `${title} (#${pullNumber})`) {
+              throw new Error(`PR #${pullNumber} merge commit message is invalid.`);
+            }
+            if (releaseCommit.data.tree.sha !== headCommit.data.tree.sha) {
+              throw new Error(`PR #${pullNumber} merge tree does not match its validated head tree.`);
+            }
+            if (process.env.EVENT_REF !== 'refs/heads/master' || process.env.EVENT_SHA !== releaseSha) {
+              throw new Error(
+                `Release trigger must run from master at ${releaseSha}; got ` +
+                `${process.env.EVENT_REF} at ${process.env.EVENT_SHA}.`,
+              );
+            }
+
+            const master = await github.rest.git.getRef({ owner, repo, ref: 'heads/master' });
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: `${releaseSha}...${master.data.object.sha}`,
+            });
+            if (!['ahead', 'identical'].includes(comparison.data.status) ||
+                comparison.data.merge_base_commit.sha !== releaseSha) {
+              throw new Error(`Release commit ${releaseSha} is not on current master.`);
+            }
+
+            async function resolveTagCommit() {
+              let reference;
+              try {
+                reference = await github.rest.git.getRef({ owner, repo, ref: `tags/${version}` });
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+              let object = reference.data.object;
+              for (let depth = 0; object.type === 'tag' && depth < 5; depth += 1) {
+                const annotated = await github.rest.git.getTag({ owner, repo, tag_sha: object.sha });
+                object = annotated.data.object;
+              }
+              if (object.type !== 'commit') {
+                throw new Error(`Tag ${version} does not resolve to a commit.`);
+              }
+              return object.sha;
+            }
+
+            let tagSha = await resolveTagCommit();
+            if (!tagSha) {
+              try {
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/tags/${version}`,
+                  sha: releaseSha,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+              tagSha = await resolveTagCommit();
+            }
+            if (tagSha !== releaseSha) {
+              throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
+            }
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: 'release.yml',
+              ref: version,
+              inputs: { releasePr: String(pullNumber) },
+            });
+            core.notice(`Dispatched PodNotes ${version} from release PR #${pullNumber}.`);

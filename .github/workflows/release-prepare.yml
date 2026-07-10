@@ -7,9 +7,6 @@ on:
         description: "Current master SHA to plan from (defaults to master)"
         required: false
         type: string
-  workflow_run:
-    workflows: ["Test"]
-    types: [completed]
 
 permissions: {}
 
@@ -20,11 +17,6 @@ concurrency:
 jobs:
   plan:
     name: Plan release
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'master')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,9 +30,8 @@ jobs:
         id: target
         env:
           DISPATCH_SHA: ${{ inputs.targetSha }}
-          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          TARGET_SHA="${DISPATCH_SHA:-$WORKFLOW_SHA}"
+          TARGET_SHA="$DISPATCH_SHA"
           if [[ -z "$TARGET_SHA" ]]; then
             TARGET_SHA="${{ github.sha }}"
           fi

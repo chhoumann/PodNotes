@@ -198,23 +198,27 @@ Success means:
 Stop when: the GitHub release is public, its tag targets the validated release
 commit, and both remote assets match their recorded SHA-256 digests.
 
-After a successful `Test` run on `master`, the `Prepare release` workflow uses
-`npm run release:plan` to calculate the next Conventional Commits version. It
-opens a machine-generated draft PR containing the four synchronized version
-files. Review that exact diff, wait for its explicitly dispatched `Test` run,
-mark the PR ready, and squash-merge it with the generated title unchanged.
+After a successful `Test` run on `master`, the no-checkout
+`Trigger release preparation` workflow dispatches `Prepare release` at the
+exact tested commit. `Prepare release` uses `npm run release:plan` to calculate
+the next Conventional Commits version and opens a machine-generated draft PR
+containing the four synchronized version files. Review that exact diff, wait
+for its explicitly dispatched `Test` run, mark the PR ready, and squash-merge
+it with the generated title unchanged.
 
 Keep the repository's default `GITHUB_TOKEN` permission read-only. Enable the
 repository setting that lets GitHub Actions create and approve pull requests so
 the narrowly scoped `Open release PR` job can create the machine-generated PR;
 the publisher separately requires the repository owner to perform the merge.
 
-The `Release` workflow validates the merged PR provenance and field-level diff
-before installing dependencies. It builds and attests `main.js` and
-`manifest.json`, uploads both to a draft GitHub release, downloads and hashes
-the remote assets, and publishes the release as the final step. Recover an
-interrupted initial run by rerunning its failed jobs. Once the release tag
-exists, recover from a fresh run at the exact release source identity:
+The no-checkout `Trigger release` workflow validates the merged PR, creates its
+exact release tag, and dispatches `Release` from that tag. `Release` revalidates
+the PR provenance and field-level diff before installing dependencies. It
+builds and attests `main.js` and `manifest.json`, uploads both to a draft GitHub
+release, downloads and hashes the remote assets, and publishes the release as
+the final step. Recover an interrupted initial run by rerunning its failed
+jobs. Once the release tag exists, recover from a fresh run at the exact release
+source identity:
 
 ```bash
 gh workflow run release.yml --ref <version> -f releasePr=<merged-pr-number>

@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  pull_request_target:
-    types: [closed]
   workflow_dispatch:
     inputs:
       releasePr:
@@ -19,11 +17,6 @@ concurrency:
 jobs:
   resolve:
     name: Validate release PR
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.merged == true &&
-       github.event.pull_request.base.ref == 'master' &&
-       startsWith(github.event.pull_request.head.ref, 'release/'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,9 +41,7 @@ jobs:
             const expectedFiles = ['manifest.json', 'package-lock.json', 'package.json', 'versions.json'];
             const { owner, repo } = context.repo;
             const repository = `${owner}/${repo}`;
-            const rawNumber = context.eventName === 'workflow_dispatch'
-              ? process.env.DISPATCH_PR
-              : String(context.payload.pull_request?.number ?? '');
+            const rawNumber = process.env.DISPATCH_PR;
             if (!/^[1-9]\d*$/.test(rawNumber)) throw new Error('releasePr must be a positive PR number.');
 
             const pullNumber = Number(rawNumber);
@@ -113,9 +104,7 @@ jobs:
               throw new Error(`PR #${pullNumber} merge tree does not match its validated head tree.`);
             }
 
-            const sourceRef = context.eventName === 'workflow_dispatch'
-              ? `refs/tags/${version}`
-              : 'refs/heads/master';
+            const sourceRef = `refs/tags/${version}`;
             if (process.env.EVENT_REF !== sourceRef || process.env.EVENT_SHA !== releaseSha) {
               throw new Error(
                 `Release workflow must run from ${sourceRef} at ${releaseSha}; got ` +
@@ -280,13 +269,13 @@ jobs:
           retention-days: 1
 
   tag:
-    name: Register verified release tag
+    name: Verify release tag
     needs: [resolve, build]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
-      - name: Create or verify exact release tag
+      - name: Verify exact release tag
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           RELEASE_SHA: ${{ needs.resolve.outputs.release-sha }}
@@ -320,20 +309,7 @@ jobs:
               return object.sha;
             }
 
-            let tagSha = await resolveTagCommit();
-            if (!tagSha) {
-              try {
-                await github.rest.git.createRef({
-                  owner,
-                  repo,
-                  ref: `refs/tags/${version}`,
-                  sha: releaseSha,
-                });
-              } catch (error) {
-                if (error.status !== 422) throw error;
-              }
-              tagSha = await resolveTagCommit();
-            }
+            const tagSha = await resolveTagCommit();
             if (tagSha !== releaseSha) {
               throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
             }
