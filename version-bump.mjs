@@ -1,6 +1,12 @@
+// @ts-check
+
 import { readFileSync, writeFileSync } from "fs";
 
 const targetVersion = process.env.npm_package_version;
+
+if (!targetVersion) {
+	throw new Error("npm_package_version is required; run this script through `npm version`.");
+}
 
 // read minAppVersion from manifest.json and bump version to target version
 let manifest = JSON.parse(readFileSync("manifest.json", "utf8"));

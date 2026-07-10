@@ -13,7 +13,7 @@
 	"scripts": {
 		"dev": "vite build --watch --mode development",
 		"build": "npm run typecheck && vite build",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
 		"lint": "oxlint --deny-warnings src tests/e2e scripts",
 		"format:check": "npm run format -- --check",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
@@ -24,10 +24,10 @@
 		"provision:e2e-vault": "node scripts/provision-obsidian-e2e-vault.mjs",
 		"start:e2e-obsidian": "node scripts/start-obsidian-e2e-instance.mjs",
 		"stop:e2e-obsidian": "node scripts/stop-obsidian-e2e-instance.mjs",
-		"check:a11y": "svelte-check --fail-on-warnings",
+		"check:a11y": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --fail-on-warnings",
 		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
 		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/site --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.json .oxlintrc.json .oxfmtrc.json svelte.config.mjs vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts version-bump.mjs wrangler.jsonc orca.yaml docs/mkdocs.yml"
+		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json svelte.config.mjs vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts version-bump.mjs wrangler.jsonc orca.yaml docs/mkdocs.yml"
 	},
 	"dependencies": {
 		"fuse.js": "^7.4.2",

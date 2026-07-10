@@ -1,30 +1,8 @@
 {
+	"extends": "./tsconfig.base.json",
 	"compilerOptions": {
-		"paths": {
-			"src/*": ["./src/*"]
-		},
-		"module": "ESNext",
-		"target": "ES2020",
-		"moduleResolution": "bundler",
-		"strict": true,
-		"allowJs": true,
-		"noImplicitOverride": true,
-		"noEmit": true,
-		"forceConsistentCasingInFileNames": true,
-		"importHelpers": true,
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
-		"types": ["svelte", "node", "obsidian", "vitest/globals", "@testing-library/jest-dom"],
-		"skipLibCheck": true,
-		"lib": ["DOM", "ES2020"]
+		"types": ["svelte", "obsidian"]
 	},
-	"include": [
-		"src/**/*.ts",
-		"src/**/*.d.ts",
-		"vite.config.ts",
-		"vitest.config.ts",
-		"vitest.e2e.config.ts",
-		"tests/e2e/**/*.ts",
-		"scripts/**/*.ts"
-	]
+	"include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.svelte"],
+	"exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "src/**/__tests__/**"]
 }
