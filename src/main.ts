@@ -41,6 +41,10 @@ import {
 	PodNotesDataError,
 } from "./persistence/podNotesData";
 import { CredentialRepository } from "./services/CredentialRepository";
+import {
+	createPodNotesNetworkServices,
+	type PodNotesNetworkServices,
+} from "./services/PodNotesNetworkServices";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -79,6 +83,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	// Store subscriptions tied to the plugin lifetime: settings persistence and
 	// queue automation. Disposed together in onunload.
 	private storeUnsubscribers: Unsubscriber[] = [];
+	private networkServices?: PodNotesNetworkServices;
 	private transcriptionService?: TranscriptionService;
 	private volumeUnsubscribe?: Unsubscriber;
 	private localFilesMirrorUnsubscribe?: Unsubscriber;
@@ -190,6 +195,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.registerEvent(getContextMenuHandler(this.app));
 		this.registerMediaSessionHandlers();
+		this.networkServices = createPodNotesNetworkServices(this.app.secretStorage);
 
 		this.isReady = true;
 	}
@@ -413,6 +419,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	override onunload() {
 		this.isUnloaded = true;
+		this.networkServices?.dispose();
+		this.networkServices = undefined;
 		this.clearLayoutReadyRetry();
 		this.clearMediaSessionHandlers();
 		for (const unsubscribe of this.storeUnsubscribers) unsubscribe();
