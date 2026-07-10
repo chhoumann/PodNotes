@@ -46,6 +46,14 @@ type ReleaseCompatibilityContract = {
 	): void;
 };
 
+type TransientReadRetryContract = {
+	retryTransientGitHubRead<T>(options: {
+		read: () => Promise<T>;
+		sleep: (delayMs: number) => Promise<unknown>;
+		retryDelays?: number[];
+	}): Promise<T>;
+};
+
 async function readMergeSubjectValidator(workflowPath: string) {
 	const workflow = await fs.readFile(path.resolve(workflowPath), "utf8");
 	const functionStart = workflow.indexOf("            function isAllowedReleaseMergeSubject");
@@ -104,6 +112,119 @@ async function readReleaseCompatibilityContract() {
 		{ isDeepStrictEqual },
 	) as ReleaseCompatibilityContract;
 }
+
+async function readTransientReadRetryContract() {
+	const workflowPath = ".github/workflows/release-trigger.yml";
+	const workflow = await fs.readFile(path.resolve(workflowPath), "utf8");
+	const startMarker = "            // BEGIN transient-read-retry-contract";
+	const endMarker = "            // END transient-read-retry-contract";
+	const start = workflow.indexOf(startMarker);
+	const end = workflow.indexOf(endMarker, start);
+	expect(
+		start,
+		`${workflowPath} must define the transient-read retry contract`,
+	).toBeGreaterThanOrEqual(0);
+	expect(end, `${workflowPath} must close the transient-read retry contract`).toBeGreaterThan(
+		start,
+	);
+	const source = workflow.slice(start + startMarker.length, end).replace(/^ {12}/gm, "");
+	return runInNewContext(`(() => {
+		${source}
+		return { retryTransientGitHubRead };
+	})()`) as TransientReadRetryContract;
+}
+
+describe("release-trigger transient read retry contract", () => {
+	it("retries transient GitHub 5xx responses with the bounded schedule", async () => {
+		const contract = await readTransientReadRetryContract();
+		const responses: Array<string | { status: number }> = [
+			{ status: 502 },
+			{ status: 503 },
+			"ok",
+		];
+		const sleeps: number[] = [];
+
+		await expect(
+			contract.retryTransientGitHubRead({
+				read: async () => {
+					const response = responses.shift();
+					if (typeof response === "string") return response;
+					throw response ?? new Error("unexpected extra read");
+				},
+				sleep: async (delayMs) => {
+					sleeps.push(delayMs);
+				},
+				retryDelays: [10, 20, 30],
+			}),
+		).resolves.toBe("ok");
+		expect(sleeps).toEqual([10, 20]);
+	});
+
+	it.each([{ status: 404 }, { status: 600 }, new Error("connection failed")])(
+		"does not retry a non-5xx failure %#",
+		async (failure) => {
+			const contract = await readTransientReadRetryContract();
+			let reads = 0;
+			const sleeps: number[] = [];
+
+			await expect(
+				contract.retryTransientGitHubRead({
+					read: async () => {
+						reads += 1;
+						throw failure;
+					},
+					sleep: async (delayMs) => {
+						sleeps.push(delayMs);
+					},
+					retryDelays: [10, 20],
+				}),
+			).rejects.toBe(failure);
+			expect(reads).toBe(1);
+			expect(sleeps).toEqual([]);
+		},
+	);
+
+	it("rethrows the last transient failure after exhausting the schedule", async () => {
+		const contract = await readTransientReadRetryContract();
+		const failures = [{ status: 500 }, { status: 502 }, { status: 503 }, { status: 504 }];
+		let reads = 0;
+		const sleeps: number[] = [];
+
+		await expect(
+			contract.retryTransientGitHubRead({
+				read: async () => {
+					const failure = failures[reads];
+					reads += 1;
+					throw failure;
+				},
+				sleep: async (delayMs) => {
+					sleeps.push(delayMs);
+				},
+			}),
+		).rejects.toBe(failures[3]);
+		expect(reads).toBe(4);
+		expect(sleeps).toEqual([500, 1500, 4000]);
+	});
+
+	it("wraps every read-only API boundary while leaving mutations unwrapped", async () => {
+		const workflow = await fs.readFile(
+			path.resolve(".github/workflows/release-trigger.yml"),
+			"utf8",
+		);
+		expect(workflow).toContain("return retryTransientGitHubRead({");
+		expect(workflow).toContain(
+			"() => github.rest.repos.getContent({ owner, repo, path: file, ref })",
+		);
+		expect(workflow.match(/await readGitHubApi\(/gu)).toHaveLength(11);
+		expect(workflow.match(/await github\.rest\.[^(]+\(/gu)).toEqual([
+			"await github.rest.git.createRef(",
+			"await github.rest.actions.createWorkflowDispatch(",
+		]);
+		expect(workflow).not.toContain("() => github.rest.git.createRef(");
+		expect(workflow).not.toContain("() => github.rest.actions.createWorkflowDispatch(");
+		expect(workflow).not.toMatch(/^\s+retries:/mu);
+	});
+});
 
 describe.each(WORKFLOW_PATHS)("%s release merge-subject contract", (workflowPath) => {
 	it.each([
