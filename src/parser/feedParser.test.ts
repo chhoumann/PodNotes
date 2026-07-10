@@ -1,5 +1,6 @@
 import { describe, expect, test, vi, beforeEach } from "vitest";
 import FeedParser from "./feedParser";
+import type { FeedDocumentSource } from "./feedDocumentSource";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 
 vi.mock("src/utility/networkRequest", () => ({
@@ -227,6 +228,9 @@ describe("FeedParser", () => {
 
 			expect(feed.title).toBe("Test Podcast");
 			expect(feed.url).toBe("https://example.com/feed.xml");
+			expect(mockRequestWithTimeout).toHaveBeenCalledWith("https://example.com/feed.xml", {
+				timeoutMs: 30_000,
+			});
 		});
 
 		test("parses artwork URL from image element", async () => {
@@ -549,6 +553,36 @@ describe("FeedParser", () => {
 			expect(mockRequestWithTimeout).toHaveBeenCalledTimes(1);
 		});
 
+		test("uses matching cached feed metadata without requiring it in the fetched XML", async () => {
+			const cachedFeed: PodcastFeed = {
+				title: "Cached Podcast",
+				url: "https://example.com/feed.xml",
+				artworkUrl: "https://example.com/cached.jpg",
+			};
+			const itemsOnlyFeed = `<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Cached Episode</title>
+      <enclosure url="https://example.com/cached.mp3"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(itemsOnlyFeed));
+
+			const episodes = await new FeedParser(cachedFeed).getEpisodes(cachedFeed.url);
+
+			expect(episodes).toEqual([
+				expect.objectContaining({
+					title: "Cached Episode",
+					podcastName: "Cached Podcast",
+					artworkUrl: "https://example.com/cached.jpg",
+					feedUrl: cachedFeed.url,
+				}),
+			]);
+		});
+
 		test("uses episode artwork from itunes:image when available", async () => {
 			mockRequestWithTimeout.mockResolvedValueOnce(
 				feedResponse(sampleRssFeedWithItunesImage),
@@ -586,6 +620,22 @@ describe("FeedParser", () => {
 	});
 
 	describe("constructor", () => {
+		test("accepts an injected document source without using the legacy source", async () => {
+			const source: FeedDocumentSource = {
+				load: vi.fn().mockResolvedValue(sampleRssFeed),
+			};
+			const parser = new FeedParser(undefined, source);
+			const injectedUrl = "https://injected.example/feed.xml";
+
+			await expect(parser.getFeed(injectedUrl)).resolves.toMatchObject({
+				title: "Test Podcast",
+				url: injectedUrl,
+			});
+			expect(source.load).toHaveBeenCalledOnce();
+			expect(source.load).toHaveBeenCalledWith(injectedUrl);
+			expect(mockRequestWithTimeout).not.toHaveBeenCalled();
+		});
+
 		test("accepts optional feed parameter", () => {
 			const mockFeed: PodcastFeed = {
 				title: "Test Podcast",
