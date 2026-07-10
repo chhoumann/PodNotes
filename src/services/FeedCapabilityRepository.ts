@@ -1,7 +1,5 @@
 import type { SecretStorage } from "obsidian";
 import {
-	MAX_FEED_CAPABILITY_REFERENCE_ATTEMPTS,
-	feedCapabilityReferenceForAttempt,
 	getFeedCapabilityManifestStorageId,
 	getFeedCapabilityPageStorageId,
 	isFeedCapabilityReferenceFor,
@@ -142,18 +140,36 @@ export class FeedCapabilityRepository {
 		this.validatePhysicalManifest = options.validatePhysicalManifest ?? validateManifest;
 	}
 
-	async storeFeedCapabilities(value: unknown): Promise<FeedCapabilityReference> {
-		const envelope = validateFeedCapabilityEnvelope(value);
+	/**
+	 * Create, update, or reconstruct a feed capability at the persisted reference.
+	 *
+	 * The v3 library is the only authority for the binding. This repository never
+	 * allocates a replacement reference because doing so would leave synced data
+	 * pointing at a capability that exists only on another device.
+	 */
+	async storeFeedCapabilitiesAt(
+		feedId: FeedHandle | string,
+		reference: unknown,
+		value: unknown,
+	): Promise<FeedCapabilityReference> {
+		if (!isFeedCapabilityReferenceFor(feedId, reference)) {
+			throw new FeedCapabilityRepositoryError("Invalid feed capability binding.");
+		}
+		const envelope = validateFeedCapabilityEnvelope(value, feedId);
 		if (!envelope) {
 			throw new FeedCapabilityRepositoryError("Invalid feed capability envelope.");
 		}
-		return this.withFeedCommit(envelope.feedId, () => this.storeValidatedEnvelope(envelope));
+
+		return this.withFeedCommit(envelope.feedId, async () => {
+			this.reserveExactNamespace(envelope.feedId, reference);
+			return this.storeValidatedEnvelope(envelope, reference);
+		});
 	}
 
 	private async storeValidatedEnvelope(
 		envelope: FeedCapabilityEnvelope,
+		reference: FeedCapabilityReference,
 	): Promise<FeedCapabilityReference> {
-		const reference = await this.allocateNamespace(envelope.feedId);
 		const current = await this.loadGeneration(envelope.feedId, reference);
 		if (current.status === "invalid") {
 			throw new FeedCapabilityRepositoryError("Stored feed capabilities are invalid.");
@@ -340,45 +356,35 @@ export class FeedCapabilityRepository {
 		return (await this.readEpisodeResources(feedId, episodeId, reference)).status;
 	}
 
-	private async allocateNamespace(feedId: FeedHandle): Promise<FeedCapabilityReference> {
-		const marker = markerFor(feedId);
-		const serializedMarker = serializePhysicalItem(marker);
-		if (!serializedMarker) {
+	private reserveExactNamespace(feedId: FeedHandle, reference: FeedCapabilityReference): void {
+		const marker = serializePhysicalItem(markerFor(feedId));
+		if (!marker) {
 			throw new FeedCapabilityRepositoryError("Invalid feed capability namespace.");
 		}
 
-		for (let attempt = 1; attempt <= MAX_FEED_CAPABILITY_REFERENCE_ATTEMPTS; attempt += 1) {
-			const reference = feedCapabilityReferenceForAttempt(feedId, attempt);
-			if (!reference) {
-				throw new FeedCapabilityRepositoryError("Invalid feed capability binding.");
-			}
-			let existing: string | null;
-			try {
-				existing = this.storage.getSecret(reference);
-			} catch {
-				throw new FeedCapabilityRepositoryError("SecretStorage is unavailable.");
-			}
-
-			if (existing === null) {
-				try {
-					this.writeExact(reference, serializedMarker);
-				} catch {
-					throw new FeedCapabilityRepositoryError(
-						"SecretStorage could not reserve a feed capability namespace.",
-					);
-				}
-				return reference;
-			}
-
-			const decoded = parseBoundedItem(existing, (candidate) =>
-				validateNamespaceMarker(candidate, feedId),
-			);
-			if (decoded) return reference;
+		let existing: string | null;
+		try {
+			existing = this.storage.getSecret(reference);
+		} catch {
+			throw new FeedCapabilityRepositoryError("SecretStorage is unavailable.");
 		}
 
-		throw new FeedCapabilityRepositoryError(
-			"Could not allocate a SecretStorage namespace for feed capabilities.",
-		);
+		if (existing === null) {
+			try {
+				this.writeExact(reference, marker);
+			} catch {
+				throw new FeedCapabilityRepositoryError(
+					"SecretStorage could not reserve a feed capability namespace.",
+				);
+			}
+			return;
+		}
+
+		if (
+			!parseBoundedItem(existing, (candidate) => validateNamespaceMarker(candidate, feedId))
+		) {
+			throw new FeedCapabilityRepositoryError("Stored feed capability namespace is invalid.");
+		}
 	}
 
 	async readFeedCapabilities(
