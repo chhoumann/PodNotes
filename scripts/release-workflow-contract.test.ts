@@ -16,6 +16,20 @@ type MergeSubjectValidator = (
 	expectedPullNumber: number,
 ) => boolean;
 
+type ReleaseTagContract = {
+	createOrResolveReleaseTag(options: {
+		resolve: () => Promise<string | null>;
+		create: () => Promise<unknown>;
+		sleep: (delayMs: number) => Promise<unknown>;
+		retryDelays?: number[];
+	}): Promise<string | null>;
+	assertExpectedReleaseTag(
+		tagSha: string | null,
+		expectedSha: string,
+		releaseVersion: string,
+	): void;
+};
+
 async function readMergeSubjectValidator(workflowPath: string) {
 	const workflow = await fs.readFile(path.resolve(workflowPath), "utf8");
 	const functionStart = workflow.indexOf("            function isAllowedReleaseMergeSubject");
@@ -31,6 +45,24 @@ async function readMergeSubjectValidator(workflowPath: string) {
 		.slice(functionStart, functionEnd + "\n            }".length)
 		.replace(/^ {12}/gm, "");
 	return runInNewContext(`(${source})`) as MergeSubjectValidator;
+}
+
+async function readReleaseTagContract() {
+	const workflowPath = ".github/workflows/release.yml";
+	const workflow = await fs.readFile(path.resolve(workflowPath), "utf8");
+	const startMarker = "            // BEGIN release-tag-visibility-contract";
+	const endMarker = "            // END release-tag-visibility-contract";
+	const start = workflow.indexOf(startMarker);
+	const end = workflow.indexOf(endMarker, start);
+	expect(start, `${workflowPath} must define the tag-visibility contract`).toBeGreaterThanOrEqual(
+		0,
+	);
+	expect(end, `${workflowPath} must close the tag-visibility contract`).toBeGreaterThan(start);
+	const source = workflow.slice(start + startMarker.length, end).replace(/^ {12}/gm, "");
+	return runInNewContext(`(() => {
+		${source}
+		return { createOrResolveReleaseTag, assertExpectedReleaseTag };
+	})()`) as ReleaseTagContract;
 }
 
 describe.each(WORKFLOW_PATHS)("%s release merge-subject contract", (workflowPath) => {
@@ -54,5 +86,113 @@ describe.each(WORKFLOW_PATHS)("%s release merge-subject contract", (workflowPath
 		expect(workflow).toContain(
 			"if (!isAllowedReleaseMergeSubject(releaseCommit.data.message, title, pullNumber)) {",
 		);
+	});
+});
+
+describe("release tag visibility contract", () => {
+	const expectedSha = "9b65d91ec47b56f61dedbfb78210734c4f29b2d5";
+
+	it("returns an already visible exact tag without creating or waiting", async () => {
+		const contract = await readReleaseTagContract();
+		let createCalls = 0;
+		const sleeps: number[] = [];
+		await expect(
+			contract.createOrResolveReleaseTag({
+				resolve: async () => expectedSha,
+				create: async () => {
+					createCalls += 1;
+				},
+				sleep: async (delayMs) => {
+					sleeps.push(delayMs);
+				},
+			}),
+		).resolves.toBe(expectedSha);
+		expect(createCalls).toBe(0);
+		expect(sleeps).toEqual([]);
+	});
+
+	it("retries a successful create until the tag becomes visible", async () => {
+		const contract = await readReleaseTagContract();
+		const resolutions = [null, null, expectedSha];
+		let createCalls = 0;
+		const sleeps: number[] = [];
+		await expect(
+			contract.createOrResolveReleaseTag({
+				resolve: async () => resolutions.shift() ?? null,
+				create: async () => {
+					createCalls += 1;
+				},
+				sleep: async (delayMs) => {
+					sleeps.push(delayMs);
+				},
+				retryDelays: [0, 10, 20],
+			}),
+		).resolves.toBe(expectedSha);
+		expect(createCalls).toBe(1);
+		expect(sleeps).toEqual([10]);
+	});
+
+	it("retries after a concurrent-create 422 response", async () => {
+		const contract = await readReleaseTagContract();
+		const resolutions = [null, null, expectedSha];
+		await expect(
+			contract.createOrResolveReleaseTag({
+				resolve: async () => resolutions.shift() ?? null,
+				create: async () => Promise.reject({ status: 422 }),
+				sleep: async () => undefined,
+				retryDelays: [0, 1],
+			}),
+		).resolves.toBe(expectedSha);
+	});
+
+	it("fails closed on a non-race create error", async () => {
+		const contract = await readReleaseTagContract();
+		await expect(
+			contract.createOrResolveReleaseTag({
+				resolve: async () => null,
+				create: async () => Promise.reject({ status: 500 }),
+				sleep: async () => undefined,
+			}),
+		).rejects.toMatchObject({ status: 500 });
+	});
+
+	it("stops after the bounded retry schedule when the tag stays absent", async () => {
+		const contract = await readReleaseTagContract();
+		let resolveCalls = 0;
+		const sleeps: number[] = [];
+		await expect(
+			contract.createOrResolveReleaseTag({
+				resolve: async () => {
+					resolveCalls += 1;
+					return null;
+				},
+				create: async () => undefined,
+				sleep: async (delayMs) => {
+					sleeps.push(delayMs);
+				},
+			}),
+		).resolves.toBeNull();
+		expect(resolveCalls).toBe(9);
+		expect(sleeps).toEqual([250, 500, 1000, 2000, 4000, 8000, 16000]);
+	});
+
+	it("rejects an absent or wrong tag SHA", async () => {
+		const contract = await readReleaseTagContract();
+		expect(() =>
+			contract.assertExpectedReleaseTag(expectedSha, expectedSha, "2.18.1"),
+		).not.toThrow();
+		expect(() => contract.assertExpectedReleaseTag(null, expectedSha, "2.18.1")).toThrow(
+			`Tag 2.18.1 points to null, expected ${expectedSha}.`,
+		);
+		expect(() =>
+			contract.assertExpectedReleaseTag("f".repeat(40), expectedSha, "2.18.1"),
+		).toThrow(`Tag 2.18.1 points to ${"f".repeat(40)}, expected ${expectedSha}.`);
+	});
+
+	it("wraps the real tag create call and validates its resolved SHA", async () => {
+		const workflow = await fs.readFile(path.resolve(".github/workflows/release.yml"), "utf8");
+		expect(workflow).toContain("const tagSha = await createOrResolveReleaseTag({");
+		expect(workflow).toContain("create: () => github.rest.git.createRef({");
+		expect(workflow).toContain("assertExpectedReleaseTag(tagSha, releaseSha, version);");
 	});
 });

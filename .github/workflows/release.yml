@@ -354,24 +354,45 @@ jobs:
               return object.sha;
             }
 
-            await assertNoHigherStableTag();
-            let tagSha = await resolveTagCommit();
-            if (!tagSha) {
+            // BEGIN release-tag-visibility-contract
+            async function createOrResolveReleaseTag(options) {
+              const retryDelays = options.retryDelays ?? [0, 250, 500, 1000, 2000, 4000, 8000, 16000];
+              let tagSha = await options.resolve();
+              if (tagSha !== null) return tagSha;
+
               try {
-                await github.rest.git.createRef({
-                  owner,
-                  repo,
-                  ref: `refs/tags/${version}`,
-                  sha: releaseSha,
-                });
+                await options.create();
               } catch (error) {
                 if (error.status !== 422) throw error;
               }
-              tagSha = await resolveTagCommit();
+
+              for (const delayMs of retryDelays) {
+                if (delayMs > 0) await options.sleep(delayMs);
+                tagSha = await options.resolve();
+                if (tagSha !== null) return tagSha;
+              }
+              return null;
             }
-            if (tagSha !== releaseSha) {
-              throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
+
+            function assertExpectedReleaseTag(tagSha, expectedSha, releaseVersion) {
+              if (tagSha !== expectedSha) {
+                throw new Error(`Tag ${releaseVersion} points to ${tagSha}, expected ${expectedSha}.`);
+              }
             }
+            // END release-tag-visibility-contract
+
+            await assertNoHigherStableTag();
+            const tagSha = await createOrResolveReleaseTag({
+              resolve: resolveTagCommit,
+              create: () => github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/tags/${version}`,
+                sha: releaseSha,
+              }),
+              sleep: (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+            });
+            assertExpectedReleaseTag(tagSha, releaseSha, version);
             await assertNoHigherStableTag();
             core.notice(`Release tag ${version} targets verified commit ${releaseSha}.`);
 
