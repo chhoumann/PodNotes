@@ -21,12 +21,13 @@ const PLUGIN_ID = "podnotes";
 // "=> true" so an echoed command can't be mistaken for a positive result.
 export const PODNOTES_READY_EVAL = `Boolean(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}])`;
 
-// A valid, empty PodNotes settings document. Mirrors DEFAULT_SETTINGS in
-// src/constants.ts so a freshly provisioned vault loads with clean state instead
-// of QuickAdd's { choices, migrations } shape. Keep in sync with constants.ts.
-// (currentEpisode is intentionally omitted — DEFAULT_SETTINGS sets it to
+// A valid, empty PodNotes schema-v1 document. Mirrors DEFAULT_SETTINGS plus the
+// persistence marker so a freshly provisioned vault loads with clean state
+// instead of QuickAdd's { choices, migrations } shape. Keep in sync with
+// constants.ts. (currentEpisode is intentionally omitted - DEFAULT_SETTINGS sets it to
 // undefined, which JSON cannot represent and PodNotes treats as absent.)
 export const DEFAULT_PODNOTES_DATA = {
+	schemaVersion: 1,
 	savedFeeds: {},
 	podNotes: {},
 	defaultPlaybackRate: 1,

@@ -404,6 +404,28 @@ describe("FeedParser", () => {
 			expect(episode.feedUrl).toBe("https://example.com/feed.xml");
 		});
 
+		test("keeps an episode with a malformed publication date but omits the date", async () => {
+			const malformedDateFeed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Test Podcast</title>
+    <item>
+      <title>Malformed Date Episode</title>
+      <enclosure url="https://example.com/episode.mp3" type="audio/mpeg"/>
+      <pubDate>definitely not a date</pubDate>
+    </item>
+  </channel>
+</rss>`;
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(malformedDateFeed));
+
+			const parser = new FeedParser();
+			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
+
+			expect(episodes).toHaveLength(1);
+			expect(episodes[0]).toMatchObject({ title: "Malformed Date Episode" });
+			expect(episodes[0].episodeDate).toBeUndefined();
+		});
+
 		test("parses Podcasting 2.0 chapter URLs from episodes (#47)", async () => {
 			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(rssFeedWithPodcastChapters));
 

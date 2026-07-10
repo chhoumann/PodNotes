@@ -1,7 +1,11 @@
 import { get, readable, writable } from "svelte/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { DEFAULT_EPISODE_LIST_LIMIT, MAX_EPISODE_LIST_LIMIT } from "src/constants";
+import { DEFAULT_EPISODE_LIST_LIMIT } from "src/constants";
+import { dateTimestamp } from "src/persistence/dateCodec";
+import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
+
+export { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
 
 /**
  * Saved-feed metadata, the per-feed episode cache, and the aggregated "Latest
@@ -23,31 +27,11 @@ export const episodeCache = writable<{ [podcastName: string]: Episode[] }>({});
  */
 export const episodeListLimit = writable<number>(DEFAULT_EPISODE_LIST_LIMIT);
 
-/**
- * Coerce a stored/raw limit into a usable positive integer, falling back to the
- * default for missing/NaN/zero/negative values and clamping the upper bound so a
- * stray huge number can't materialise an unbounded list.
- */
-export function sanitizeEpisodeListLimit(value: unknown): number {
-	const numeric = typeof value === "number" ? value : Number(value);
-	if (!Number.isFinite(numeric) || numeric < 1) {
-		return DEFAULT_EPISODE_LIST_LIMIT;
-	}
-
-	return Math.min(Math.floor(numeric), MAX_EPISODE_LIST_LIMIT);
-}
-
 type LatestEpisodesByFeed = Map<string, Episode[]>;
 type FeedEpisodeSources = Map<string, Episode[]>;
 
 function getEpisodeTimestamp(episode?: Episode): number {
-	if (!episode?.episodeDate) return 0;
-
-	// An Invalid Date coerces to NaN, which makes every comparison false and
-	// produces an unstable/incorrect sort order. Collapse it to 0 (sorts as
-	// oldest), matching FeedCacheService.episodeTimestamp (FP-12).
-	const timestamp = Number(episode.episodeDate);
-	return Number.isFinite(timestamp) ? timestamp : 0;
+	return dateTimestamp(episode?.episodeDate) ?? 0;
 }
 
 function getLatestEpisodesForFeed(episodes: Episode[], perFeedLimit: number): Episode[] {

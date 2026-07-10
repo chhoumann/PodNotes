@@ -2,6 +2,9 @@ import { get } from "svelte/store";
 import { plugin } from "../store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { dateTimestamp, decodeDate, encodeDate } from "src/persistence/dateCodec";
+import { decodeEpisode } from "src/persistence/episodeCodec";
+import { DANGEROUS_KEYS } from "src/persistence/codecUtils";
 
 type SerializableEpisode = Omit<Episode, "episodeDate"> & {
 	episodeDate?: string;
@@ -135,14 +138,46 @@ function loadCache(): FeedCache {
 			return cache;
 		}
 
-		const parsed = JSON.parse(raw) as FeedCache;
-		cache = parsed;
+		cache = decodeCache(JSON.parse(raw));
 		return cache;
 	} catch (error) {
 		console.error("Failed to parse feed cache:", error);
 		cache = {};
 		return cache;
 	}
+}
+
+function decodeCache(value: unknown): FeedCache {
+	if (!isPlainObject(value)) {
+		throw new TypeError("Feed cache root must be an object");
+	}
+
+	const decoded: FeedCache = {};
+	for (const [key, candidate] of Object.entries(value)) {
+		if (DANGEROUS_KEYS.has(key)) continue;
+		if (
+			!isPlainObject(candidate) ||
+			!Array.isArray(candidate.episodes) ||
+			typeof candidate.updatedAt !== "number" ||
+			!Number.isFinite(candidate.updatedAt) ||
+			candidate.updatedAt < 0
+		) {
+			continue;
+		}
+
+		decoded[key] = {
+			updatedAt: candidate.updatedAt,
+			episodes: candidate.episodes.flatMap((episode) => {
+				const runtimeEpisode = decodeEpisode(episode);
+				return runtimeEpisode ? [serializeEpisode(runtimeEpisode)] : [];
+			}),
+		};
+	}
+	return decoded;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function evictOldestEntries(cacheData: FeedCache, targetSizeBytes: number): FeedCache {
@@ -211,14 +246,12 @@ function persistCache(): void {
 function serializeEpisode(episode: Episode): SerializableEpisode {
 	return {
 		...episode,
-		episodeDate: episode.episodeDate?.toISOString(),
+		episodeDate: encodeDate(episode.episodeDate),
 	};
 }
 
 function episodeTimestamp(episode: Episode): number {
-	if (!episode.episodeDate) return 0;
-	const time = new Date(episode.episodeDate).getTime();
-	return Number.isNaN(time) ? 0 : time;
+	return dateTimestamp(episode.episodeDate) ?? 0;
 }
 
 /**
@@ -245,7 +278,7 @@ function selectNewestEpisodes(episodes: Episode[], limit: number): Episode[] {
 function deserializeEpisode(episode: SerializableEpisode): Episode {
 	return {
 		...episode,
-		episodeDate: episode.episodeDate ? new Date(episode.episodeDate) : undefined,
+		episodeDate: decodeDate(episode.episodeDate),
 	};
 }
 

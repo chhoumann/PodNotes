@@ -164,6 +164,15 @@ describe("empty tag arguments (NT-05/CH-09)", () => {
 		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
 		expect(NoteTemplateEngine("{{date:YYYY}}", demoEpisode)).toBe("2024");
 	});
+
+	it("renders a JSON-restored episode date without throwing", () => {
+		const restoredEpisode = {
+			...demoEpisode,
+			episodeDate: "2024-01-01T00:00:00.000Z" as unknown as Date,
+		};
+
+		expect(NoteTemplateEngine("{{date:YYYY-MM-DD}}", restoredEpisode)).toBe("2024-01-01");
+	});
 });
 
 describe("NoteTemplateEngine feed-scoped tags (#163)", () => {

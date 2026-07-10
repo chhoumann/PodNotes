@@ -749,8 +749,37 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private async applyImportedSettings(imported: Partial<IPodNotesSettings>): Promise<void> {
-		const merged = mergeImportedSettings(this.plugin.settings, imported);
+		const previous = this.plugin.settings;
+		const merged = mergeImportedSettings(previous, imported);
 		this.plugin.settings = merged;
+		try {
+			// Persist before mutating live stores so a disk failure can restore the
+			// previous in-memory settings without leaving the UI half-imported.
+			await this.plugin.saveSettingsStrict();
+		} catch (error) {
+			this.plugin.settings = previous;
+			try {
+				// A store event may have queued a newer merged snapshot while the first
+				// write was pending. Queue the rollback after it and wait for durability
+				// before claiming that the previous settings were kept.
+				await this.plugin.saveSettingsStrict();
+				new Notice(
+					"Could not import PodNotes settings. Previous settings were kept.",
+					10000,
+				);
+			} catch (rollbackError) {
+				new Notice(
+					"Could not import PodNotes settings or persist the rollback. Previous settings remain active for this session.",
+					10000,
+				);
+				console.error(
+					"PodNotes: failed to persist settings-import rollback",
+					rollbackError,
+				);
+			}
+			console.error("PodNotes: failed to persist imported settings", error);
+			return;
+		}
 
 		// Re-hydrate the live stores so the running UI and the persistence
 		// bindings reflect the import. Keys without a store (templates, paths,
@@ -768,7 +797,19 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		volume.set(Math.min(1, Math.max(0, importedVolume)));
 		playbackRate.set(normalizePlaybackRate(merged.defaultPlaybackRate));
 
-		await this.plugin.saveSettings();
+		try {
+			// Store setters can canonicalize or deduplicate their slices. Await one
+			// final strict snapshot so the success notice means that live state is
+			// durable too.
+			await this.plugin.saveSettingsStrict();
+		} catch (error) {
+			new Notice(
+				"Imported PodNotes settings, but could not finish saving normalized live state. Change any setting to retry.",
+				10000,
+			);
+			console.error("PodNotes: failed to persist normalized imported settings", error);
+			return;
+		}
 		// Re-emit the plugin store so an open player/grid recomputes Queue tile/list
 		// visibility (and any other $plugin-derived UI) after an import, mirroring the
 		// autoQueue toggle. Today the queue.set above already triggers that recompute;

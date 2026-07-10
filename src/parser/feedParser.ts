@@ -1,5 +1,6 @@
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { Episode } from "src/types/Episode";
+import { decodeDate } from "src/persistence/dateCodec";
 import { requestWithTimeout } from "src/utility/networkRequest";
 import { parseEpisodeNumber } from "src/utility/parseEpisodeNumber";
 import { parseDurationToSeconds } from "src/utility/parseDuration";
@@ -194,7 +195,7 @@ export default class FeedParser {
 		const url = linkEl?.textContent || "";
 		const description = descriptionEl?.textContent || "";
 		const content = contentEl?.textContent || "";
-		const pubDate = new Date(pubDateEl.textContent as string);
+		const pubDate = decodeDate(pubDateEl.textContent);
 		const artworkUrl = itunesImageEl?.getAttribute("href") || this.feed?.artworkUrl;
 		const itunesTitle = itunesTitleEl?.textContent;
 		const episodeNumber = parseEpisodeNumber(itunesEpisodeEl?.textContent, title);

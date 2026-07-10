@@ -1,3 +1,5 @@
+import { decodeDate } from "src/persistence/dateCodec";
+
 /**
  * Formats a date using Moment.js-style format tokens for backward compatibility.
  * Common tokens supported:
@@ -11,7 +13,10 @@
  * - A: AM/PM, a: am/pm
  * - [text]: literal text (escaped, not parsed as tokens)
  */
-export function formatDate(date: Date, format: string): string {
+export function formatDate(value: unknown, format: string): string {
+	const date = decodeDate(value);
+	if (!date) return "";
+
 	const year = date.getFullYear();
 	const month = date.getMonth();
 	const day = date.getDate();
