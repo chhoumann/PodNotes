@@ -290,29 +290,39 @@ jobs:
               throw new Error(`Previous release tag ${baseVersion} is not an ancestor of the base.`);
             }
 
-            let tagSha = await resolveTagCommit(version);
-            if (!tagSha) {
-              try {
-                await github.rest.git.createRef({
-                  owner,
-                  repo,
-                  ref: `refs/tags/${version}`,
-                  sha: releaseSha,
-                });
-              } catch (error) {
-                if (error.status !== 422) throw error;
-              }
-              tagSha = await resolveTagCommit(version);
+            const existingTagSha = await resolveTagCommit(version);
+            if (existingTagSha && existingTagSha !== releaseSha) {
+              throw new Error(`Tag ${version} points to ${existingTagSha}, expected ${releaseSha}.`);
             }
-            if (tagSha !== releaseSha) {
-              throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
+
+            const runBranch = `release-run/${version}`;
+            let runRef;
+            try {
+              runRef = await github.rest.git.getRef({ owner, repo, ref: `heads/${runBranch}` });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            if (runRef && runRef.data.object.sha !== releaseSha) {
+              throw new Error(
+                `Recovery branch ${runBranch} points to ${runRef.data.object.sha}, expected ${releaseSha}.`,
+              );
+            }
+            if (!runRef) {
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/heads/${runBranch}`,
+                sha: releaseSha,
+              });
             }
 
             await github.rest.actions.createWorkflowDispatch({
               owner,
               repo,
               workflow_id: 'release.yml',
-              ref: version,
+              ref: runBranch,
               inputs: { releasePr: String(pullNumber) },
             });
-            core.notice(`Dispatched PodNotes ${version} from release PR #${pullNumber}.`);
+            core.notice(
+              `Dispatched PodNotes ${version} from release PR #${pullNumber} at ${runBranch}.`,
+            );

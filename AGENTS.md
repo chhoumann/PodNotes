@@ -211,16 +211,18 @@ repository setting that lets GitHub Actions create and approve pull requests so
 the narrowly scoped `Open release PR` job can create the machine-generated PR;
 the publisher separately requires the repository owner to perform the merge.
 
-The no-checkout `Trigger release` workflow validates the merged PR, creates its
-exact release tag, and dispatches `Release` from that tag. `Release` revalidates
-the PR provenance and field-level diff before installing dependencies. It
-builds and attests `main.js` and `manifest.json`, uploads both to a draft GitHub
-release, downloads and hashes the remote assets, and publishes the release as
-the final step. Recover an interrupted initial run by rerunning its failed
-jobs. Once the release tag exists, recover from a fresh run at the exact release
-source identity:
+The no-checkout `Trigger release` workflow validates the merged PR, creates an
+exact `release-run/<version>` recovery branch, and dispatches `Release` from
+that ref. `Release` revalidates the PR provenance and field-level diff before
+installing dependencies. It recomputes the exact version, runs every build
+gate, creates the durable release tag, attests `main.js` and `manifest.json`,
+uploads both to a draft GitHub release, downloads and hashes the remote assets,
+and publishes the release as the final step. Successful publication removes
+the recovery branch. Recover an interrupted run from its exact remaining ref:
 
 ```bash
+gh workflow run release.yml --ref release-run/<version> -f releasePr=<merged-pr-number>
+# After the durable tag exists:
 gh workflow run release.yml --ref <version> -f releasePr=<merged-pr-number>
 ```
 

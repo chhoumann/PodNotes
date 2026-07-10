@@ -104,10 +104,14 @@ jobs:
               throw new Error(`PR #${pullNumber} merge tree does not match its validated head tree.`);
             }
 
-            const sourceRef = `refs/tags/${version}`;
-            if (process.env.EVENT_REF !== sourceRef || process.env.EVENT_SHA !== releaseSha) {
+            const allowedSourceRefs = [
+              `refs/heads/release-run/${version}`,
+              `refs/tags/${version}`,
+            ];
+            const sourceRef = process.env.EVENT_REF;
+            if (!allowedSourceRefs.includes(sourceRef) || process.env.EVENT_SHA !== releaseSha) {
               throw new Error(
-                `Release workflow must run from ${sourceRef} at ${releaseSha}; got ` +
+                `Release workflow must run from an exact release ref at ${releaseSha}; got ` +
                 `${process.env.EVENT_REF} at ${process.env.EVENT_SHA}.`,
               );
             }
@@ -269,13 +273,13 @@ jobs:
           retention-days: 1
 
   tag:
-    name: Verify release tag
+    name: Register verified release tag
     needs: [resolve, build]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Verify exact release tag
+      - name: Create or verify exact release tag
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           RELEASE_SHA: ${{ needs.resolve.outputs.release-sha }}
@@ -289,6 +293,33 @@ jobs:
               throw new Error('Invalid release tag identity.');
             }
             const { owner, repo } = context.repo;
+
+            function compareVersions(left, right) {
+              const leftParts = left.split('.').map(Number);
+              const rightParts = right.split('.').map(Number);
+              for (let index = 0; index < 3; index += 1) {
+                if (leftParts[index] !== rightParts[index]) {
+                  return leftParts[index] - rightParts[index];
+                }
+              }
+              return 0;
+            }
+
+            async function assertNoHigherStableTag() {
+              const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+                owner,
+                repo,
+                ref: 'tags/',
+                per_page: 100,
+              });
+              const stableTags = refs
+                .map((reference) => reference.ref.replace('refs/tags/', ''))
+                .filter((tag) => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(tag));
+              const higher = stableTags.find((tag) => compareVersions(tag, version) > 0);
+              if (higher) {
+                throw new Error(`Higher stable tag ${higher} appeared before release ${version}.`);
+              }
+            }
 
             async function resolveTagCommit() {
               let reference;
@@ -309,10 +340,25 @@ jobs:
               return object.sha;
             }
 
-            const tagSha = await resolveTagCommit();
+            await assertNoHigherStableTag();
+            let tagSha = await resolveTagCommit();
+            if (!tagSha) {
+              try {
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/tags/${version}`,
+                  sha: releaseSha,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+              tagSha = await resolveTagCommit();
+            }
             if (tagSha !== releaseSha) {
               throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
             }
+            await assertNoHigherStableTag();
             core.notice(`Release tag ${version} targets verified commit ${releaseSha}.`);
 
   attest:
@@ -528,6 +574,23 @@ jobs:
               return object.sha;
             }
 
+            async function removeRecoveryBranch() {
+              const ref = `heads/release-run/${version}`;
+              let branch;
+              try {
+                branch = await github.rest.git.getRef({ owner, repo, ref });
+              } catch (error) {
+                if (error.status === 404) return;
+                throw error;
+              }
+              if (branch.data.object.sha !== releaseSha) {
+                throw new Error(
+                  `Recovery branch points to ${branch.data.object.sha}, expected ${releaseSha}.`,
+                );
+              }
+              await github.rest.git.deleteRef({ owner, repo, ref });
+            }
+
             async function downloadDigest(asset) {
               const response = await github.request(
                 'GET /repos/{owner}/{repo}/releases/assets/{asset_id}',
@@ -613,6 +676,7 @@ jobs:
               if (await resolveTagCommit(version) !== releaseSha) {
                 throw new Error(`Published release tag ${version} changed during verification.`);
               }
+              await removeRecoveryBranch();
               core.notice(`Release ${version} was already published and verifies exactly.`);
               return;
             }
@@ -689,4 +753,5 @@ jobs:
               }
               throw error;
             }
+            await removeRecoveryBranch();
             core.notice(`Published and verified PodNotes ${version} at ${releaseSha}.`);
