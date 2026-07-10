@@ -44,6 +44,9 @@ describe("start-obsidian-e2e-instance", () => {
 			),
 		).toBe(true);
 		expect(options.obsidianHome.endsWith("/home")).toBe(true);
+		expect(options.userDataPath).toBe(
+			path.join(options.obsidianHome, "Library", "Application Support", "obsidian"),
+		);
 		expect(options.vaultPath).toBe(
 			path.join("/tmp/podnotes-instance", "vaults", "podnotes-worktree-a"),
 		);
@@ -65,6 +68,7 @@ describe("start-obsidian-e2e-instance", () => {
 		);
 
 		const profile = await prepareObsidianProfile(options);
+		expect(profile.userDataPath).toBe(options.userDataPath);
 		const registry = JSON.parse(await fs.readFile(profile.obsidianJsonPath, "utf8"));
 		const vaults = Object.values(registry.vaults) as Array<{
 			path: string;

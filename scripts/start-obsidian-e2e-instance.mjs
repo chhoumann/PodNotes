@@ -5,12 +5,19 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
+import { commandErrorMessage, errorHasCode } from "./obsidian-e2e-errors.mjs";
 import {
 	PODNOTES_READY_EVAL,
 	provisionVault,
 	resolveProvisionOptions,
 	toShellExports,
 } from "./provision-obsidian-e2e-vault.mjs";
+
+/** @typedef {import("./obsidian-e2e-types").InstanceOptions} InstanceOptions */
+/** @typedef {import("./obsidian-e2e-types").InstanceRawOptions} InstanceRawOptions */
+/** @typedef {import("./obsidian-e2e-types").InstanceShellResult} InstanceShellResult */
+/** @typedef {import("./obsidian-e2e-types").LaunchResult} LaunchResult */
+/** @typedef {import("./obsidian-e2e-types").ProfileResult} ProfileResult */
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_PROFILE_ROOT = "/tmp/podnotes-obsidian-e2e";
@@ -43,7 +50,12 @@ Options:
 `);
 }
 
+/**
+ * @param {readonly string[]} argv
+ * @returns {InstanceRawOptions}
+ */
 export function parseArgs(argv) {
+	/** @type {InstanceRawOptions} */
 	const options = {
 		force: false,
 		json: false,
@@ -94,19 +106,41 @@ export function parseArgs(argv) {
 	return options;
 }
 
+/**
+ * @param {"--vault" | "--root" | "--worktree" | "--data" | "--profile-root" | "--obsidian-app" | "--obsidian-bin"} arg
+ * @returns {"vault" | "root" | "worktree" | "data" | "profileRoot" | "obsidianApp" | "obsidianBin"}
+ */
 function toOptionKey(arg) {
-	if (arg === "--profile-root") return "profileRoot";
-	if (arg === "--obsidian-app") return "obsidianApp";
-	if (arg === "--obsidian-bin") return "obsidianBin";
-	return arg.slice(2);
+	switch (arg) {
+		case "--vault":
+			return "vault";
+		case "--root":
+			return "root";
+		case "--worktree":
+			return "worktree";
+		case "--data":
+			return "data";
+		case "--profile-root":
+			return "profileRoot";
+		case "--obsidian-app":
+			return "obsidianApp";
+		case "--obsidian-bin":
+			return "obsidianBin";
+	}
 }
 
+/**
+ * @param {InstanceRawOptions} rawOptions
+ * @param {string} [cwd]
+ * @returns {InstanceOptions}
+ */
 export function resolveInstanceOptions(rawOptions, cwd = process.cwd()) {
 	const provisionOptions = resolveProvisionOptions(rawOptions, cwd);
 	const profileRoot = path.resolve(cwd, rawOptions.profileRoot ?? DEFAULT_PROFILE_ROOT);
 	const instanceId = stableInstanceId(provisionOptions.worktreePath, provisionOptions.vaultName);
 	const instancePath = path.join(profileRoot, instanceId);
 	const obsidianHome = path.join(instancePath, "home");
+	const userDataPath = path.join(obsidianHome, "Library", "Application Support", "obsidian");
 
 	return {
 		...provisionOptions,
@@ -117,9 +151,14 @@ export function resolveInstanceOptions(rawOptions, cwd = process.cwd()) {
 		obsidianBin: rawOptions.obsidianBin ?? DEFAULT_OBSIDIAN_BIN,
 		obsidianHome,
 		profileRoot,
+		userDataPath,
 	};
 }
 
+/**
+ * @param {string} worktreePath
+ * @param {string} vaultName
+ */
 function stableInstanceId(worktreePath, vaultName) {
 	const hash = crypto
 		.createHash("sha256")
@@ -129,6 +168,7 @@ function stableInstanceId(worktreePath, vaultName) {
 	return `${safeName(vaultName).slice(0, 32)}-${hash}`;
 }
 
+/** @param {string} value */
 function safeName(value) {
 	return (
 		value
@@ -138,13 +178,12 @@ function safeName(value) {
 	);
 }
 
+/**
+ * @param {InstanceOptions} options
+ * @returns {Promise<ProfileResult>}
+ */
 export async function prepareObsidianProfile(options) {
-	const userDataPath = path.join(
-		options.obsidianHome,
-		"Library",
-		"Application Support",
-		"obsidian",
-	);
+	const { userDataPath } = options;
 	await fs.mkdir(userDataPath, { recursive: true, mode: 0o700 });
 	await fs.mkdir(path.join(options.obsidianHome, "Library", "Logs"), {
 		recursive: true,
@@ -181,6 +220,7 @@ export async function prepareObsidianProfile(options) {
 	};
 }
 
+/** @param {InstanceOptions} options */
 async function linkHostKeychains(options) {
 	const realHome = process.env.HOME;
 	if (!realHome) return;
@@ -195,7 +235,7 @@ async function linkHostKeychains(options) {
 	try {
 		await fs.lstat(source);
 	} catch (error) {
-		if (error?.code === "ENOENT") return;
+		if (errorHasCode(error, "ENOENT")) return;
 		throw error;
 	}
 
@@ -206,17 +246,22 @@ async function linkHostKeychains(options) {
 		if (path.resolve(path.dirname(destination), target) === source) return;
 		await fs.unlink(destination);
 	} catch (error) {
-		if (error?.code !== "ENOENT") throw error;
+		if (!errorHasCode(error, "ENOENT")) throw error;
 	}
 
 	await fs.mkdir(path.dirname(destination), { recursive: true });
 	await fs.symlink(source, destination);
 }
 
+/** @param {string} vaultPath */
 function stableVaultId(vaultPath) {
 	return crypto.createHash("sha256").update(path.resolve(vaultPath)).digest("hex").slice(0, 16);
 }
 
+/**
+ * @param {string} filePath
+ * @param {unknown} value
+ */
 async function writeJson(filePath, value) {
 	await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
 	try {
@@ -225,13 +270,17 @@ async function writeJson(filePath, value) {
 			throw new Error(`${filePath} exists but is not a regular file.`);
 		}
 	} catch (error) {
-		if (error?.code !== "ENOENT") throw error;
+		if (!errorHasCode(error, "ENOENT")) throw error;
 	}
 	await fs.writeFile(filePath, `${JSON.stringify(value, null, "\t")}\n`, {
 		mode: 0o600,
 	});
 }
 
+/**
+ * @param {InstanceOptions} options
+ * @returns {Promise<LaunchResult>}
+ */
 export async function launchObsidianInstance(options) {
 	await fs.mkdir(options.instancePath, { recursive: true });
 	await execFileAsync(
@@ -258,6 +307,10 @@ export async function launchObsidianInstance(options) {
 	};
 }
 
+/**
+ * @param {InstanceOptions} options
+ * @returns {NodeJS.ProcessEnv}
+ */
 function obsidianEnv(options) {
 	return {
 		...process.env,
@@ -265,19 +318,27 @@ function obsidianEnv(options) {
 	};
 }
 
+/**
+ * @param {InstanceOptions} options
+ * @param {readonly string[]} args
+ * @param {Omit<import("node:child_process").ExecFileOptionsWithStringEncoding, "encoding">} [execOptions]
+ */
 async function execObsidian(options, args, execOptions = {}) {
 	return execFileAsync(options.obsidianBin, args, {
+		encoding: "utf8",
 		env: obsidianEnv(options),
 		...execOptions,
 	});
 }
 
+/** @param {InstanceOptions} options */
 function cliSocketPath(options) {
 	// The obsidian CLI talks to this unix socket; its presence means an instance
 	// for this private HOME is up (or starting to listen).
 	return path.join(options.obsidianHome, ".obsidian-cli.sock");
 }
 
+/** @param {InstanceOptions} options */
 async function cliSocketExists(options) {
 	try {
 		await fs.lstat(cliSocketPath(options));
@@ -287,6 +348,7 @@ async function cliSocketExists(options) {
 	}
 }
 
+/** @param {InstanceOptions} options */
 export async function isInstanceReady(options) {
 	// Non-launching readiness probe: the obsidian CLI auto-launches Obsidian on
 	// the first command when nothing is running, so probing a cold HOME would
@@ -306,6 +368,10 @@ export async function isInstanceReady(options) {
 	}
 }
 
+/**
+ * @param {InstanceOptions} options
+ * @returns {Promise<string>}
+ */
 export async function waitForInstanceReady(options) {
 	const expectedPath = path.resolve(options.vaultPath);
 	const deadline = Date.now() + READY_TIMEOUT_MS;
@@ -330,8 +396,7 @@ export async function waitForInstanceReady(options) {
 			if (actualPath === expectedPath) return actualPath;
 			lastError = `resolved ${actualPath}, expected ${expectedPath}`;
 		} catch (error) {
-			lastError =
-				error?.stderr?.trim() || error?.stdout?.trim() || error?.message || String(error);
+			lastError = commandErrorMessage(error);
 		}
 		await sleep(READY_INTERVAL_MS);
 	}
@@ -341,6 +406,10 @@ export async function waitForInstanceReady(options) {
 	);
 }
 
+/**
+ * @param {InstanceOptions} options
+ * @returns {Promise<boolean>}
+ */
 export async function trustVaultAndVerifyPodNotes(options) {
 	await execObsidian(options, [`vault=${options.vaultName}`, "plugins:restrict", "off"]);
 
@@ -356,8 +425,7 @@ export async function trustVaultAndVerifyPodNotes(options) {
 			if (stdout.includes(PODNOTES_READY_MARKER)) return true;
 			lastError = stdout.trim();
 		} catch (error) {
-			lastError =
-				error?.stderr?.trim() || error?.stdout?.trim() || error?.message || String(error);
+			lastError = commandErrorMessage(error);
 		}
 		await sleep(READY_INTERVAL_MS);
 	}
@@ -367,16 +435,19 @@ export async function trustVaultAndVerifyPodNotes(options) {
 	);
 }
 
+/** @param {InstanceOptions} options */
 export async function reloadPodNotes(options) {
 	// Reload the plugin so a reused instance picks up a rebuilt main.js (the
 	// symlink target) instead of running the bundle it loaded earlier.
 	await execObsidian(options, [`vault=${options.vaultName}`, "plugin:reload", "id=podnotes"]);
 }
 
+/** @param {number} ms */
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** @param {InstanceShellResult} result */
 export function toInstanceShellExports(result) {
 	const lines = [
 		toShellExports(result),
@@ -390,6 +461,7 @@ export function toInstanceShellExports(result) {
 	return lines.join("\n");
 }
 
+/** @param {unknown} value */
 function shellQuote(value) {
 	return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
@@ -400,6 +472,7 @@ function shellQuote(value) {
 // start. The reaper is imported lazily so the static module graph stays acyclic
 // (the stop module imports our option resolver; we only need its reaper at
 // runtime). Logs go to stderr so `--print-env` keeps stdout to `export …` lines.
+/** @param {InstanceOptions} options */
 export async function reapStaleInstances(options) {
 	try {
 		const { reapOrphanedInstances } = await import("./stop-obsidian-e2e-instance.mjs");
@@ -426,7 +499,6 @@ async function main() {
 	await reapStaleInstances(options);
 	const provisionResult = await provisionVault(options);
 	const profileResult = await prepareObsidianProfile(options);
-	options.userDataPath = profileResult.userDataPath;
 
 	let launchResult = { pid: null, pidPath: null };
 	let resolvedVaultPath = null;

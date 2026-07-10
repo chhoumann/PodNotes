@@ -14,6 +14,9 @@ import {
 	waitForInstanceReady,
 } from "./start-obsidian-e2e-instance.mjs";
 
+/** @typedef {import("./obsidian-e2e-types").InstanceOptions} InstanceOptions */
+/** @typedef {import("./obsidian-e2e-types").WrapperArgs} WrapperArgs */
+
 const VALUE_OPTIONS = new Set([
 	"--vault",
 	"--root",
@@ -47,8 +50,14 @@ Instance options:
 `);
 }
 
+/**
+ * @param {readonly string[]} argv
+ * @returns {WrapperArgs}
+ */
 export function parseArgs(argv) {
+	/** @type {string[]} */
 	const instanceArgs = [];
+	/** @type {string[]} */
 	const commandArgs = [];
 
 	for (let index = 0; index < argv.length; index += 1) {
@@ -92,6 +101,10 @@ export function parseArgs(argv) {
 	};
 }
 
+/**
+ * @param {Pick<InstanceOptions, "obsidianHome">} options
+ * @returns {NodeJS.ProcessEnv}
+ */
 export function obsidianEnv(options) {
 	return {
 		...process.env,
@@ -99,14 +112,18 @@ export function obsidianEnv(options) {
 	};
 }
 
+/**
+ * @param {Pick<InstanceOptions, "vaultName">} options
+ * @param {readonly string[]} commandArgs
+ */
 export function obsidianCommandArgs(options, commandArgs) {
 	return [`vault=${options.vaultName}`, ...commandArgs];
 }
 
+/** @param {InstanceOptions} options */
 export async function ensureObsidianInstance(options) {
 	const provisionResult = await provisionVault(options);
 	const profileResult = await prepareObsidianProfile(options);
-	options.userDataPath = profileResult.userDataPath;
 
 	const reused = await isInstanceReady(options);
 	if (reused) {
@@ -130,6 +147,11 @@ export async function ensureObsidianInstance(options) {
 	};
 }
 
+/**
+ * @param {InstanceOptions} options
+ * @param {readonly string[]} commandArgs
+ * @returns {Promise<number>}
+ */
 function spawnObsidian(options, commandArgs) {
 	return new Promise((resolve) => {
 		const child = spawn(options.obsidianBin, obsidianCommandArgs(options, commandArgs), {
