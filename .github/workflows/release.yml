@@ -65,6 +65,12 @@ jobs:
             const title = `release(version): Release ${version}`;
             if (pull.title !== title) throw new Error(`PR #${pullNumber} title does not match ${version}.`);
 
+            function isAllowedReleaseMergeSubject(message, expectedTitle, expectedPullNumber) {
+              const subject = message.split('\n', 1)[0];
+              return subject === expectedTitle ||
+                subject === `${expectedTitle} (#${expectedPullNumber})`;
+            }
+
             const markerPattern = new RegExp(
               `<!-- podnotes-release-pr schema=1 version=${version.replaceAll('.', '\\.')}` +
               ' base=([0-9a-f]{40}) -->',
@@ -98,7 +104,7 @@ jobs:
             if (releaseCommit.data.parents.length !== 1 || releaseCommit.data.parents[0].sha !== baseSha) {
               throw new Error(`PR #${pullNumber} was not squash-merged directly onto its recorded base.`);
             }
-            if (releaseCommit.data.message.split('\n')[0] !== `${title} (#${pullNumber})`) {
+            if (!isAllowedReleaseMergeSubject(releaseCommit.data.message, title, pullNumber)) {
               throw new Error(`PR #${pullNumber} merge commit message is invalid.`);
             }
             if (releaseCommit.data.tree.sha !== headCommit.data.tree.sha) {
