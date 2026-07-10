@@ -2,9 +2,11 @@ import { DEFAULT_SETTINGS } from "./constants";
 import {
 	decodePodNotesData,
 	encodePodNotesData,
+	PODNOTES_DATA_SCHEMA_VERSION,
 	type PersistedPodNotesSettings,
 	PodNotesDataError,
 } from "./persistence/podNotesData";
+import type { CredentialValues } from "./types/Credentials";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
@@ -18,7 +20,7 @@ import type { IPodNotesSettings } from "./types/IPodNotesSettings";
  */
 
 export const SETTINGS_EXPORT_TYPE = "podnotes-settings";
-export const SETTINGS_EXPORT_VERSION = 1;
+export const SETTINGS_EXPORT_VERSION = 2;
 
 /**
  * Runtime / vault-specific state that must never travel between vaults: playback
@@ -33,22 +35,22 @@ export const EXCLUDED_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"currentEpisode",
 ];
 
-/**
- * API keys are only exported when the user explicitly opts in. Both the OpenAI
- * key and the dedicated diarization (Deepgram) key are top-level so they can be
- * redacted by name here; the diarization key is deliberately NOT nested inside
- * `transcript` (a wholesale-copied nested key) so it can never leak (#168).
- */
-export const SECRET_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
-	"openAIApiKey",
-	"diarizationApiKey",
+/** SecretStorage references are device-local implementation details, not settings transfer data. */
+export const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
+	"openAISecretId",
+	"deepgramSecretId",
 ]);
+
+const LEGACY_SECRET_KEYS = {
+	openAIApiKey: "openAI",
+	diarizationApiKey: "deepgram",
+} as const;
 
 /** Human-facing names for each secret, so export/import copy can name exactly
  * which keys leave or enter the vault instead of hard-coding "OpenAI". */
-const SECRET_KEY_LABELS: Record<string, string> = {
-	openAIApiKey: "OpenAI API key",
-	diarizationApiKey: "Deepgram API key",
+const SECRET_KEY_LABELS: Record<keyof CredentialValues, string> = {
+	openAI: "OpenAI API key",
+	deepgram: "Deepgram API key",
 };
 
 /**
@@ -57,10 +59,10 @@ const SECRET_KEY_LABELS: Record<string, string> = {
  * import confirmation honest about which keys are involved — so a Deepgram-only
  * user is never told only "OpenAI API key" (and vice versa). See issue #168.
  */
-export function describeSecrets(settings: Partial<IPodNotesSettings>): string[] {
-	return [...SECRET_KEYS]
-		.filter((key) => Boolean((settings[key] as string | undefined)?.trim()))
-		.map((key) => SECRET_KEY_LABELS[key as string]);
+export function describeSecrets(secrets: CredentialValues): string[] {
+	return (Object.keys(SECRET_KEY_LABELS) as (keyof CredentialValues)[])
+		.filter((key) => Boolean(secrets[key]?.trim()))
+		.map((key) => SECRET_KEY_LABELS[key]);
 }
 
 /** Keys that, if copied into the settings object, could pollute Object.prototype. */
@@ -69,7 +71,9 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 /** Known top-level setting keys that are safe to import (excludes runtime state). */
 const IMPORTABLE_KEYS = new Set(
 	Object.keys(DEFAULT_SETTINGS).filter(
-		(key) => !EXCLUDED_KEYS.includes(key as keyof IPodNotesSettings),
+		(key) =>
+			!EXCLUDED_KEYS.includes(key as keyof IPodNotesSettings) &&
+			!SECRET_REFERENCE_KEYS.has(key as keyof IPodNotesSettings),
 	),
 );
 
@@ -89,17 +93,20 @@ export interface SettingsEnvelope {
 	pluginVersion: string;
 	exportedAt: string;
 	settings: Partial<PersistedPodNotesSettings>;
+	/** Present only after the user explicitly opts into a plaintext credential backup. */
+	secrets?: CredentialValues;
 }
 
 export interface ExportOptions {
-	/** Include the (plaintext) OpenAI API key in the export. */
-	includeSecret: boolean;
+	/** Explicit values resolved by the UI after the user opts in. Never inferred here. */
+	secrets?: CredentialValues;
 }
 
 export type ParseResult =
 	| {
 			ok: true;
 			settings: Partial<IPodNotesSettings>;
+			secrets: CredentialValues;
 			meta: {
 				fromEnvelope: boolean;
 				version: number | null;
@@ -111,8 +118,9 @@ export type ParseResult =
 
 /**
  * Build a versioned export envelope from the live settings, copying only
- * allow-listed keys by name (never spreading the whole object). Runtime state is
- * always excluded; the API key is excluded unless `opts.includeSecret` is set.
+ * allow-listed keys by name (never spreading the whole object). Runtime state and
+ * SecretStorage references are always excluded. Plaintext values appear only in
+ * the separate payload explicitly passed by the caller.
  */
 export function serializeSettings(
 	settings: IPodNotesSettings,
@@ -126,9 +134,9 @@ export function serializeSettings(
 	for (const key of Object.keys(settings)) {
 		if (DANGEROUS_KEYS.has(key)) continue;
 		if (!IMPORTABLE_KEYS.has(key)) continue;
-		if (SECRET_KEYS.has(key as keyof IPodNotesSettings) && !opts.includeSecret) continue;
 		out[key] = persisted[key];
 	}
+	const secrets = normalizeSecrets(opts.secrets ?? {});
 
 	return {
 		type: SETTINGS_EXPORT_TYPE,
@@ -136,6 +144,7 @@ export function serializeSettings(
 		pluginVersion,
 		exportedAt: nowISO,
 		settings: out as Partial<PersistedPodNotesSettings>,
+		...(Object.keys(secrets).length > 0 ? { secrets } : {}),
 	};
 }
 
@@ -160,6 +169,7 @@ export function parseImport(jsonText: string): ParseResult {
 	let fromEnvelope = false;
 	let version: number | null = null;
 	let pluginVersion: string | null = null;
+	let secrets: CredentialValues = {};
 
 	if (raw.type === SETTINGS_EXPORT_TYPE) {
 		fromEnvelope = true;
@@ -187,22 +197,34 @@ export function parseImport(jsonText: string): ParseResult {
 		}
 
 		source = raw.settings;
+		if (version >= 2) {
+			const parsedSecrets = parseSecretsPayload(raw.secrets);
+			if ("error" in parsedSecrets) return { ok: false, error: parsedSecrets.error };
+			secrets = parsedSecrets.values;
+		} else {
+			secrets = extractLegacySecrets(source);
+		}
 	} else if (Object.prototype.hasOwnProperty.call(raw, "schemaVersion")) {
 		try {
 			// Validate raw data.json imports against the same schema gate as plugin
 			// startup. The field sanitizer below still keeps import partial.
-			decodePodNotesData(raw);
+			const decoded = decodePodNotesData(raw);
+			if (decoded.sourceVersion < PODNOTES_DATA_SCHEMA_VERSION) {
+				secrets = extractLegacySecrets(source);
+			}
 		} catch (error) {
 			if (error instanceof PodNotesDataError) {
 				return { ok: false, error: error.message };
 			}
 			throw error;
 		}
+	} else {
+		secrets = extractLegacySecrets(source);
 	}
 
 	const settings = sanitizeImportedSettings(source);
 
-	if (Object.keys(settings).length === 0) {
+	if (Object.keys(settings).length === 0 && Object.keys(secrets).length === 0) {
 		return {
 			ok: false,
 			error: "No recognizable PodNotes settings were found in the file.",
@@ -212,11 +234,12 @@ export function parseImport(jsonText: string): ParseResult {
 	return {
 		ok: true,
 		settings,
+		secrets,
 		meta: {
 			fromEnvelope,
 			version,
 			pluginVersion,
-			includesSecret: [...SECRET_KEYS].some((key) => key in settings),
+			includesSecret: Object.keys(secrets).length > 0,
 		},
 	};
 }
@@ -242,9 +265,9 @@ export function mergeImportedSettings(
 	}
 
 	// Converge import and startup on the same deep validators and date revival.
-	// Marking the in-memory merge as v1 avoids treating this internal call as a
-	// legacy migration while preserving the import envelope's independent version.
-	return decodePodNotesData({ ...merged, schemaVersion: 1 }).settings;
+	// Mark the in-memory merge as current so it cannot be mistaken for a legacy
+	// data migration while preserving the import envelope's independent version.
+	return decodePodNotesData({ ...merged, schemaVersion: PODNOTES_DATA_SCHEMA_VERSION }).settings;
 }
 
 function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPodNotesSettings> {
@@ -260,14 +283,6 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 		// note.path) that would later break the volume slider or crash note
 		// creation. Drop anything whose type does not match the default.
 		if (!typeMatchesDefault(defaultValue, value)) continue;
-
-		// An empty/whitespace secret means "no key configured", so importing one
-		// must not clobber a key the user already has. Skipping it here keeps it
-		// absent from `imported`, so the merge `{ ...current, ...imported }`
-		// preserves the configured key and meta.includesSecret stays honest.
-		if (SECRET_KEYS.has(key as keyof IPodNotesSettings) && (value as string).trim() === "") {
-			continue;
-		}
 
 		if ((NESTED_KEYS as readonly string[]).includes(key)) {
 			out[key] = sanitizeNestedObject(
@@ -292,6 +307,43 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 	}
 
 	return out as Partial<IPodNotesSettings>;
+}
+
+function extractLegacySecrets(source: Record<string, unknown>): CredentialValues {
+	const values: CredentialValues = {};
+
+	for (const [legacyKey, credentialKey] of Object.entries(LEGACY_SECRET_KEYS) as Array<
+		[keyof typeof LEGACY_SECRET_KEYS, keyof CredentialValues]
+	>) {
+		const value = source[legacyKey];
+		if (typeof value === "string" && value.trim()) values[credentialKey] = value.trim();
+	}
+
+	return values;
+}
+
+function parseSecretsPayload(value: unknown): { values: CredentialValues } | { error: string } {
+	if (value === undefined) return { values: {} };
+	if (!isPlainObject(value)) {
+		return { error: "Export file has an invalid secrets payload." };
+	}
+
+	for (const key of ["openAI", "deepgram"] as const) {
+		if (value[key] !== undefined && typeof value[key] !== "string") {
+			return { error: `Export file has an invalid ${SECRET_KEY_LABELS[key]}.` };
+		}
+	}
+
+	return { values: normalizeSecrets(value as CredentialValues) };
+}
+
+function normalizeSecrets(values: CredentialValues): CredentialValues {
+	const openAI = values.openAI?.trim();
+	const deepgram = values.deepgram?.trim();
+	return {
+		...(openAI ? { openAI } : {}),
+		...(deepgram ? { deepgram } : {}),
+	};
 }
 
 /** Drop any playlist entry that isn't a plain object with an `episodes` array. */

@@ -254,6 +254,11 @@ describe("PodNotes onload wiring (#55)", () => {
 			storeUnsubscribers: [],
 			views: new Set(),
 			app: {
+				secretStorage: {
+					getSecret: vi.fn(() => null),
+					setSecret: vi.fn(),
+					listSecrets: vi.fn(() => []),
+				},
 				workspace: {
 					onLayoutReady: vi.fn(),
 					on: vi.fn(() => ({})),
@@ -398,7 +403,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			mediaType: "video",
 		};
 		const { commands } = await loadPlugin({
-			openAIApiKey: "sk-test",
+			openAISecretId: "podnotes-openai-api-key",
 			currentEpisode: videoEpisode,
 		});
 

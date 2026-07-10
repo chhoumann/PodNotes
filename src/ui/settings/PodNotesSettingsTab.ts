@@ -5,6 +5,7 @@ import {
 	Modal,
 	Notice,
 	PluginSettingTab,
+	SecretComponent,
 	Setting,
 } from "obsidian";
 import type PodNotes from "../../main";
@@ -46,6 +47,122 @@ import {
 } from "src/settingsTransfer";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
 import { DEFAULT_SPEAKER_TEMPLATE, type DiarizationProviderId } from "src/services/diarization";
+import type { CredentialKind, CredentialValues } from "src/types/Credentials";
+import { observePersistedStoreChanges } from "src/store/persistence";
+
+type SecretReferenceKey = "openAISecretId" | "deepgramSecretId";
+type SettingsControl =
+	| HTMLButtonElement
+	| HTMLInputElement
+	| HTMLSelectElement
+	| HTMLTextAreaElement;
+
+interface SecretReferenceSaveResult {
+	persistedId: string;
+	saved: boolean;
+	isLatest: boolean;
+}
+
+type ImportMutationResult = "failed" | "applied" | "complete";
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
+function settingsValuesEqual(left: unknown, right: unknown): boolean {
+	if (Object.is(left, right)) return true;
+	if (left instanceof Date || right instanceof Date) {
+		return left instanceof Date && right instanceof Date && left.getTime() === right.getTime();
+	}
+	if (Array.isArray(left) || Array.isArray(right)) {
+		return (
+			Array.isArray(left) &&
+			Array.isArray(right) &&
+			left.length === right.length &&
+			left.every((value, index) => settingsValuesEqual(value, right[index]))
+		);
+	}
+	if (!isPlainRecord(left) || !isPlainRecord(right)) return false;
+
+	const leftKeys = Object.keys(left);
+	const rightKeys = Object.keys(right);
+	return (
+		leftKeys.length === rightKeys.length &&
+		leftKeys.every(
+			(key) =>
+				Object.prototype.hasOwnProperty.call(right, key) &&
+				settingsValuesEqual(left[key], right[key]),
+		)
+	);
+}
+
+/**
+ * Three-way rollback for a failed import. Only values changed by the import and
+ * still equal to its failed candidate are restored. Store subscriptions and
+ * other runtime writers that changed a value while the write was pending win.
+ */
+function restoreFailedImport(
+	previous: IPodNotesSettings,
+	candidate: IPodNotesSettings,
+	current: IPodNotesSettings,
+): IPodNotesSettings {
+	const restored = structuredClone(current);
+	restoreFailedImportChanges(
+		previous as unknown as Record<string, unknown>,
+		candidate as unknown as Record<string, unknown>,
+		current as unknown as Record<string, unknown>,
+		restored as unknown as Record<string, unknown>,
+	);
+	return restored;
+}
+
+function restoreFailedImportChanges(
+	previous: Record<string, unknown>,
+	candidate: Record<string, unknown>,
+	current: Record<string, unknown>,
+	restored: Record<string, unknown>,
+): void {
+	for (const key of new Set([...Object.keys(previous), ...Object.keys(candidate)])) {
+		const previousHasKey = Object.prototype.hasOwnProperty.call(previous, key);
+		const candidateHasKey = Object.prototype.hasOwnProperty.call(candidate, key);
+		const currentHasKey = Object.prototype.hasOwnProperty.call(current, key);
+
+		if (
+			previousHasKey === candidateHasKey &&
+			(!previousHasKey || settingsValuesEqual(previous[key], candidate[key]))
+		) {
+			continue;
+		}
+
+		if (
+			currentHasKey === candidateHasKey &&
+			(!currentHasKey || settingsValuesEqual(current[key], candidate[key]))
+		) {
+			if (previousHasKey) restored[key] = structuredClone(previous[key]);
+			else delete restored[key];
+			continue;
+		}
+
+		if (
+			previousHasKey &&
+			candidateHasKey &&
+			currentHasKey &&
+			isPlainRecord(previous[key]) &&
+			isPlainRecord(candidate[key]) &&
+			isPlainRecord(current[key]) &&
+			isPlainRecord(restored[key])
+		) {
+			restoreFailedImportChanges(previous[key], candidate[key], current[key], restored[key]);
+		}
+	}
+}
+
+const CREDENTIAL_KIND_BY_REFERENCE: Record<SecretReferenceKey, CredentialKind> = {
+	openAISecretId: "openai",
+	deepgramSecretId: "deepgram",
+};
 
 /**
  * Stack a Setting's control beneath its name, full width — the layout the
@@ -77,6 +194,13 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private podcastQueryGrid: Record<string, unknown> | null = null;
 	private playlistManager: Record<string, unknown> | null = null;
+	private settingsMutationTail: Promise<void> = Promise.resolve();
+	private credentialSaveGenerations: Record<SecretReferenceKey, number> = {
+		openAISecretId: 0,
+		deepgramSecretId: 0,
+	};
+	private settingsInteractionLockCount = 0;
+	private settingsControlDisabledStates = new Map<SettingsControl, boolean>();
 
 	private settingsTab: PodNotesSettingsTab;
 
@@ -590,7 +714,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Include API keys")
 			.setDesc(
-				"When enabled, the export file contains your OpenAI and Deepgram API keys in plaintext (whichever you have set). The file is stored in your vault, so it may sync to other devices and be read by other plugins.",
+				"When enabled, a separate plaintext secrets payload is added for the OpenAI and Deepgram keys available on this device. The file is stored in your vault, so it may sync to other devices and be read by other plugins.",
 			)
 			.addToggle((toggle) =>
 				toggle.setValue(includeSecret).onChange((value) => {
@@ -673,9 +797,14 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private async handleSettingsExport(fileName: string, includeSecret: boolean): Promise<void> {
 		try {
+			const secrets = includeSecret
+				? this.plugin.credentials.exportValues(this.plugin.settings, {
+						requireConfigured: true,
+					})
+				: {};
 			const envelope = serializeSettings(
 				this.plugin.settings,
-				{ includeSecret },
+				{ secrets: includeSecret ? secrets : undefined },
 				this.plugin.manifest.version,
 				new Date().toISOString(),
 			);
@@ -690,7 +819,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			}
 			await this.app.vault.create(fileName, contents);
 
-			const exportedSecrets = includeSecret ? describeSecrets(this.plugin.settings) : [];
+			const exportedSecrets = describeSecrets(secrets);
 			new Notice(
 				exportedSecrets.length
 					? `Exported PodNotes settings to "${fileName}" (includes your ${exportedSecrets.join(" and ")}).`
@@ -734,42 +863,98 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		if (willReplace("playlists", this.plugin.settings.playlists)) {
 			sections.push("playlists");
 		}
-		sections.push(...describeSecrets(result.settings));
+		sections.push(...describeSecrets(result.secrets));
 		const detail = sections.length ? ` This also replaces your ${sections.join(", ")}.` : "";
+		const secretDetail =
+			Object.keys(result.secrets).length > 0
+				? " Existing Obsidian secrets are never overwritten; conflicts are saved under a new PodNotes name."
+				: "";
 
 		new ConfirmModal(
 			this.app,
 			"Import PodNotes settings?",
-			`This overwrites your current PodNotes preferences and templates with the imported values.${detail} Your playback progress and downloads are kept.`,
+			`This overwrites your current PodNotes preferences and templates with the imported values.${detail}${secretDetail} Your playback progress and downloads are kept.`,
 			"Import",
 			() => {
-				void this.applyImportedSettings(result.settings);
+				void this.applyImportedSettings(result.settings, result.secrets);
 			},
 		).open();
 	}
 
-	private async applyImportedSettings(imported: Partial<IPodNotesSettings>): Promise<void> {
-		const previous = this.plugin.settings;
-		const merged = mergeImportedSettings(previous, imported);
+	private async applyImportedSettings(
+		imported: Partial<IPodNotesSettings>,
+		secrets: CredentialValues = {},
+	): Promise<void> {
+		const unlockSettingsInteractions = this.lockSettingsInteractions();
+		try {
+			const result = await this.enqueueSettingsMutation(() =>
+				this.persistImportedSettings(imported, secrets),
+			);
+			if (result === "failed") return;
+
+			await this.waitForSettingsMutationLaneToDrain();
+			this.display();
+			if (result === "complete") new Notice("Imported PodNotes settings.");
+		} finally {
+			await this.waitForSettingsMutationLaneToDrain();
+			unlockSettingsInteractions();
+		}
+	}
+
+	private async persistImportedSettings(
+		imported: Partial<IPodNotesSettings>,
+		secrets: CredentialValues,
+	): Promise<ImportMutationResult> {
+		const previousSettings = this.plugin.settings;
+		const previous = structuredClone(previousSettings);
+		let secretReferences: Partial<IPodNotesSettings> = {};
+		try {
+			secretReferences = this.plugin.credentials.storeValues(secrets);
+		} catch (error) {
+			new Notice(
+				"Could not finish importing API keys into Obsidian SecretStorage. Existing settings were kept, and retrying will safely reuse any PodNotes secrets already created.",
+				10000,
+			);
+			console.error("PodNotes: failed to import credentials into SecretStorage", error);
+			return "failed";
+		}
+
+		const merged = mergeImportedSettings(previous, { ...imported, ...secretReferences });
+		const failedCandidate = structuredClone(merged);
+		const openAIReferenceChanged = merged.openAISecretId !== previous.openAISecretId;
+		if (openAIReferenceChanged) this.plugin.invalidateTranscriptionCredentialCache();
+		const concurrentStoreChanges = observePersistedStoreChanges();
 		this.plugin.settings = merged;
 		try {
 			// Persist before mutating live stores so a disk failure can restore the
 			// previous in-memory settings without leaving the UI half-imported.
 			await this.plugin.saveSettingsStrict();
 		} catch (error) {
-			this.plugin.settings = previous;
+			let restored: IPodNotesSettings;
+			try {
+				restored = restoreFailedImport(previous, failedCandidate, this.plugin.settings);
+				concurrentStoreChanges.replayInto(restored);
+			} finally {
+				concurrentStoreChanges.dispose();
+			}
+			this.plugin.settings =
+				settingsValuesEqual(restored, previous) &&
+				settingsValuesEqual(previousSettings, previous)
+					? previousSettings
+					: restored;
+			if (openAIReferenceChanged) this.plugin.invalidateTranscriptionCredentialCache();
 			try {
 				// A store event may have queued a newer merged snapshot while the first
 				// write was pending. Queue the rollback after it and wait for durability
 				// before claiming that the previous settings were kept.
 				await this.plugin.saveSettingsStrict();
 				new Notice(
-					"Could not import PodNotes settings. Previous settings were kept.",
+					"Could not import PodNotes settings. The failed import was rolled back without overwriting newer changes.",
 					10000,
 				);
 			} catch (rollbackError) {
 				new Notice(
-					"Could not import PodNotes settings or persist the rollback. Previous settings remain active for this session.",
+					"Could not import PodNotes settings or persist its rollback. The safest recovered settings remain active for this session.",
 					10000,
 				);
 				console.error(
@@ -778,8 +963,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				);
 			}
 			console.error("PodNotes: failed to persist imported settings", error);
-			return;
+			return "failed";
 		}
+		concurrentStoreChanges.dispose();
 
 		// Re-hydrate the live stores so the running UI and the persistence
 		// bindings reflect the import. Keys without a store (templates, paths,
@@ -808,7 +994,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				10000,
 			);
 			console.error("PodNotes: failed to persist normalized imported settings", error);
-			return;
+			return "applied";
 		}
 		// Re-emit the plugin store so an open player/grid recomputes Queue tile/list
 		// visibility (and any other $plugin-derived UI) after an import, mirroring the
@@ -816,8 +1002,132 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		// this keeps the import path correct independent of that incidental emission
 		// (issue #108).
 		plugin.set(this.plugin);
-		this.display();
-		new Notice("Imported PodNotes settings.");
+		return "complete";
+	}
+
+	private enqueueSettingsMutation<T>(mutation: () => Promise<T>): Promise<T> {
+		const operation = this.settingsMutationTail.then(mutation);
+		this.settingsMutationTail = operation.then(
+			() => undefined,
+			() => undefined,
+		);
+		return operation;
+	}
+
+	private lockSettingsInteractions(): () => void {
+		this.settingsInteractionLockCount++;
+		if (this.settingsInteractionLockCount === 1) {
+			for (const control of this.containerEl.querySelectorAll<SettingsControl>(
+				"button, input, select, textarea",
+			)) {
+				this.settingsControlDisabledStates.set(control, control.disabled);
+				control.disabled = true;
+			}
+		}
+
+		let released = false;
+		return () => {
+			if (released) return;
+			released = true;
+			this.settingsInteractionLockCount--;
+			if (this.settingsInteractionLockCount > 0) return;
+
+			for (const [control, wasDisabled] of this.settingsControlDisabledStates) {
+				control.disabled = wasDisabled;
+			}
+			this.settingsControlDisabledStates.clear();
+		};
+	}
+
+	private async waitForSettingsMutationLaneToDrain(): Promise<void> {
+		while (true) {
+			const tail = this.settingsMutationTail;
+			await tail;
+			if (tail === this.settingsMutationTail) return;
+		}
+	}
+
+	private async saveSecretReference(
+		key: SecretReferenceKey,
+		selectedId: string,
+	): Promise<SecretReferenceSaveResult> {
+		const generation = ++this.credentialSaveGenerations[key];
+		const operation = this.enqueueSettingsMutation(() =>
+			this.persistSecretReference(key, selectedId),
+		);
+		const result = await operation;
+		return {
+			...result,
+			isLatest: generation === this.credentialSaveGenerations[key],
+		};
+	}
+
+	private async persistSecretReference(
+		key: SecretReferenceKey,
+		selectedId: string,
+	): Promise<Omit<SecretReferenceSaveResult, "isLatest">> {
+		const previous = this.plugin.settings[key];
+		let persistedId: string;
+		try {
+			persistedId = selectedId
+				? this.plugin.credentials.adoptReference(
+						CREDENTIAL_KIND_BY_REFERENCE[key],
+						selectedId,
+					)
+				: "";
+		} catch (error) {
+			new Notice(
+				"Could not use the selected API key. It may no longer be available in Obsidian SecretStorage.",
+				0,
+			);
+			console.error("PodNotes: failed to adopt credential reference", error);
+			return { persistedId: previous, saved: false };
+		}
+
+		if (persistedId === previous) return { persistedId, saved: true };
+		if (key === "openAISecretId") this.plugin.invalidateTranscriptionCredentialCache();
+		this.plugin.settings[key] = persistedId;
+
+		try {
+			await this.plugin.saveSettingsStrict();
+			return { persistedId, saved: true };
+		} catch (error) {
+			this.plugin.settings[key] = previous;
+			if (key === "openAISecretId") this.plugin.invalidateTranscriptionCredentialCache();
+			try {
+				await this.plugin.saveSettingsStrict();
+				new Notice(
+					"Could not save the API key selection. The previous selection was kept.",
+					0,
+				);
+			} catch (rollbackError) {
+				new Notice(
+					"Could not save the API key selection or its rollback. The previous selection remains active for this session.",
+					0,
+				);
+				console.error(
+					"PodNotes: failed to persist credential-reference rollback",
+					rollbackError,
+				);
+			}
+			console.error("PodNotes: failed to persist credential reference", error);
+			return { persistedId: previous, saved: false };
+		}
+	}
+
+	private async handleSecretSelection(
+		key: SecretReferenceKey,
+		selectedId: string,
+		secret: Pick<SecretComponent, "setValue">,
+		onLatestSettled: () => void,
+	): Promise<void> {
+		const result = await this.saveSecretReference(key, selectedId);
+		if (!result.isLatest) return;
+
+		// Always show the canonical persisted ID. Foreign/shared selections are
+		// copied into provider-scoped PodNotes IDs before they reach data.json.
+		secret.setValue(result.persistedId);
+		onLatestSettled();
 	}
 
 	private addTranscriptSettings(container: HTMLDivElement) {
@@ -825,18 +1135,29 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		const randomEpisode = getRandomEpisode();
 
-		new Setting(container)
-			.setName("OpenAI API Key")
-			.setDesc("Enter your OpenAI API key for transcription functionality.")
-			.addText((text) => {
-				text.setPlaceholder("Enter your OpenAI API key")
-					.setValue(this.plugin.settings.openAIApiKey)
-					.onChange(async (value) => {
-						this.plugin.settings.openAIApiKey = value;
-						await this.plugin.saveSettings();
-					});
-				text.inputEl.type = "password";
+		const openAISetting = new Setting(container).setName("OpenAI API key");
+		const updateOpenAIDescription = () => {
+			openAISetting.setDesc(
+				this.plugin.credentials.status(this.plugin.settings, "openai") === "missing"
+					? "The selected secret is not available on this device. Select an existing secret or create one."
+					: "Select an existing Obsidian secret or create one for transcription.",
+			);
+		};
+		updateOpenAIDescription();
+		openAISetting.addComponent((element) => {
+			const secret = new SecretComponent(this.app, element).setValue(
+				this.plugin.settings.openAISecretId,
+			);
+			secret.onChange(async (value) => {
+				await this.handleSecretSelection(
+					"openAISecretId",
+					value,
+					secret,
+					updateOpenAIDescription,
+				);
 			});
+			return secret;
+		});
 
 		new Setting(container)
 			.setName("Transcript file path")
@@ -882,84 +1203,90 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addDiarizationSettings(container);
 	}
 
-	/**
-	 * Opt-in speaker diarization controls (issue #168). Rendered into its own
-	 * container so the provider-dependent fields (Deepgram key) can be shown or
-	 * hidden in place when the toggle/provider changes, without re-rendering the
-	 * whole settings tab.
-	 */
+	/** Opt-in speaker diarization controls (issue #168). */
 	private addDiarizationSettings(container: HTMLElement): void {
 		const diarizationContainer = container.createDiv();
+		const diarization = this.plugin.settings.transcript.diarization;
+		let updateVisibility = () => {};
 
-		const renderDiarizationSettings = () => {
-			diarizationContainer.empty();
-			const diarization = this.plugin.settings.transcript.diarization;
+		new Setting(diarizationContainer)
+			.setName("Speaker diarization")
+			.setDesc(
+				"Label transcript segments by speaker. Routes the episode audio to a diarization-capable provider instead of plain Whisper.",
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(diarization.enabled).onChange(async (value) => {
+					this.plugin.settings.transcript.diarization.enabled = value;
+					await this.plugin.saveSettings();
+					updateVisibility();
+				}),
+			);
 
-			new Setting(diarizationContainer)
-				.setName("Speaker diarization")
-				.setDesc(
-					"Label transcript segments by speaker. Routes the episode audio to a diarization-capable provider instead of plain Whisper.",
-				)
-				.addToggle((toggle) =>
-					toggle.setValue(diarization.enabled).onChange(async (value) => {
-						this.plugin.settings.transcript.diarization.enabled = value;
+		const providerSetting = new Setting(diarizationContainer)
+			.setName("Diarization provider")
+			.setDesc(
+				"OpenAI reuses your OpenAI API key above (long episodes are chunked, so speaker labels can reset across chunks). Deepgram needs its own key and keeps speaker labels consistent across the whole episode.",
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("openai", "OpenAI (gpt-4o-transcribe-diarize)")
+					.addOption("deepgram", "Deepgram")
+					.setValue(diarization.provider)
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.diarization.provider =
+							value as DiarizationProviderId;
 						await this.plugin.saveSettings();
-						renderDiarizationSettings();
+						updateVisibility();
 					}),
-				);
+			);
 
-			if (!diarization.enabled) return;
-
-			new Setting(diarizationContainer)
-				.setName("Diarization provider")
-				.setDesc(
-					"OpenAI reuses your OpenAI API key above (long episodes are chunked, so speaker labels can reset across chunks). Deepgram needs its own key and keeps speaker labels consistent across the whole episode.",
-				)
-				.addDropdown((dropdown) =>
-					dropdown
-						.addOption("openai", "OpenAI (gpt-4o-transcribe-diarize)")
-						.addOption("deepgram", "Deepgram")
-						.setValue(diarization.provider)
-						.onChange(async (value) => {
-							this.plugin.settings.transcript.diarization.provider =
-								value as DiarizationProviderId;
-							await this.plugin.saveSettings();
-							renderDiarizationSettings();
-						}),
-				);
-
-			if (diarization.provider === "deepgram") {
-				new Setting(diarizationContainer)
-					.setName("Deepgram API key")
-					.setDesc("Used only for Deepgram diarization. Create one at deepgram.com.")
-					.addText((text) => {
-						text.setPlaceholder("Enter your Deepgram API key")
-							.setValue(this.plugin.settings.diarizationApiKey)
-							.onChange(async (value) => {
-								this.plugin.settings.diarizationApiKey = value;
-								await this.plugin.saveSettings();
-							});
-						text.inputEl.type = "password";
-					});
-			}
-
-			new Setting(diarizationContainer)
-				.setName("Speaker label format")
-				.setDesc(
-					"Prefix added before each speaker's turn. Use {{speaker}} for the speaker label (OpenAI labels speakers A, B, …; Deepgram labels them 1, 2, …).",
-				)
-				.addText((text) =>
-					text
-						.setPlaceholder(DEFAULT_SPEAKER_TEMPLATE)
-						.setValue(diarization.speakerTemplate)
-						.onChange(async (value) => {
-							this.plugin.settings.transcript.diarization.speakerTemplate = value;
-							await this.plugin.saveSettings();
-						}),
-				);
+		const deepgramSetting = new Setting(diarizationContainer).setName("Deepgram API key");
+		const updateDeepgramDescription = () => {
+			deepgramSetting.setDesc(
+				this.plugin.credentials.status(this.plugin.settings, "deepgram") === "missing"
+					? "The selected secret is not available on this device. Select an existing secret or create one."
+					: "Select an Obsidian secret for Deepgram diarization, or create one at deepgram.com.",
+			);
 		};
+		updateDeepgramDescription();
+		deepgramSetting.addComponent((element) => {
+			const secret = new SecretComponent(this.app, element).setValue(
+				this.plugin.settings.deepgramSecretId,
+			);
+			secret.onChange(async (value) => {
+				await this.handleSecretSelection(
+					"deepgramSecretId",
+					value,
+					secret,
+					updateDeepgramDescription,
+				);
+			});
+			return secret;
+		});
 
-		renderDiarizationSettings();
+		const speakerSetting = new Setting(diarizationContainer)
+			.setName("Speaker label format")
+			.setDesc(
+				"Prefix added before each speaker's turn. Use {{speaker}} for the speaker label (OpenAI labels speakers A, B, …; Deepgram labels them 1, 2, …).",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder(DEFAULT_SPEAKER_TEMPLATE)
+					.setValue(diarization.speakerTemplate)
+					.onChange(async (value) => {
+						this.plugin.settings.transcript.diarization.speakerTemplate = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		updateVisibility = () => {
+			providerSetting.settingEl.toggle(diarization.enabled);
+			deepgramSetting.settingEl.toggle(
+				diarization.enabled && diarization.provider === "deepgram",
+			);
+			speakerSetting.settingEl.toggle(diarization.enabled);
+		};
+		updateVisibility();
 	}
 }
 

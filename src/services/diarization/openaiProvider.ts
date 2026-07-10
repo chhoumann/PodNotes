@@ -25,29 +25,38 @@ export async function diarizeWithOpenAI(opts: {
 	chunkFiles: File[];
 	maxRetries: number;
 	onProgress: (message: string) => void;
+	signal: AbortSignal;
 }): Promise<DiarizedSegment[]> {
-	const { getClient, chunkFiles, maxRetries, onProgress } = opts;
+	const { getClient, chunkFiles, maxRetries, onProgress, signal } = opts;
+	throwIfAborted(signal);
 	const client = await getClient();
+	throwIfAborted(signal);
 	const segments: DiarizedSegment[] = [];
 	let failedChunks = 0;
 	let lastError: unknown;
 
 	for (let index = 0; index < chunkFiles.length; index++) {
+		throwIfAborted(signal);
 		onProgress(`Diarizing with OpenAI... chunk ${index + 1}/${chunkFiles.length}`);
 		const file = chunkFiles[index];
 
 		let attempt = 0;
 		while (true) {
+			throwIfAborted(signal);
 			try {
-				const result = await client.audio.transcriptions.create({
-					model: OPENAI_DIARIZE_MODEL,
-					file,
-					// The SDK types `response_format`/`chunking_strategy` for this model,
-					// but the create() overload returns a union; parse from the raw
-					// payload so we never depend on which arm TS narrows to.
-					response_format: "diarized_json",
-					chunking_strategy: "auto",
-				});
+				const result = await client.audio.transcriptions.create(
+					{
+						model: OPENAI_DIARIZE_MODEL,
+						file,
+						// The SDK types `response_format`/`chunking_strategy` for this model,
+						// but the create() overload returns a union; parse from the raw
+						// payload so we never depend on which arm TS narrows to.
+						response_format: "diarized_json",
+						chunking_strategy: "auto",
+					},
+					{ signal },
+				);
+				throwIfAborted(signal);
 				// Each chunk's start/end are relative to that chunk, so the
 				// concatenated segments' timestamps are not episode-absolute. The
 				// rendered transcript does not surface timestamps today; if it ever
@@ -55,6 +64,7 @@ export async function diarizeWithOpenAI(opts: {
 				segments.push(...parseOpenAIDiarizedSegments(result));
 				break;
 			} catch (error) {
+				throwIfAborted(signal);
 				attempt++;
 				if (attempt >= maxRetries) {
 					console.error(
@@ -69,7 +79,7 @@ export async function diarizeWithOpenAI(opts: {
 					});
 					break;
 				}
-				await new Promise((resolve) => window.setTimeout(resolve, 1000 * attempt));
+				await waitForRetry(1000 * attempt, signal);
 			}
 		}
 	}
@@ -80,4 +90,30 @@ export async function diarizeWithOpenAI(opts: {
 	}
 
 	return segments;
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+	if (!signal.aborted) return;
+	throw signal.reason ?? new DOMException("OpenAI diarization was aborted.", "AbortError");
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+	throwIfAborted(signal);
+
+	return new Promise((resolve, reject) => {
+		const timeout = window.setTimeout(() => {
+			signal.removeEventListener("abort", onAbort);
+			resolve();
+		}, delayMs);
+		const onAbort = () => {
+			window.clearTimeout(timeout);
+			signal.removeEventListener("abort", onAbort);
+			reject(
+				signal.reason ?? new DOMException("OpenAI diarization was aborted.", "AbortError"),
+			);
+		};
+
+		signal.addEventListener("abort", onAbort, { once: true });
+		if (signal.aborted) onAbort();
+	});
 }

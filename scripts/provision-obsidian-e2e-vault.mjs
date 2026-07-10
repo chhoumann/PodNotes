@@ -27,7 +27,7 @@ export const PODNOTES_READY_EVAL = `Boolean(app.plugins.plugins[${JSON.stringify
 // constants.ts. (currentEpisode is intentionally omitted - DEFAULT_SETTINGS sets it to
 // undefined, which JSON cannot represent and PodNotes treats as absent.)
 export const DEFAULT_PODNOTES_DATA = {
-	schemaVersion: 1,
+	schemaVersion: 2,
 	savedFeeds: {},
 	podNotes: {},
 	defaultPlaybackRate: 1,
@@ -104,8 +104,8 @@ export const DEFAULT_PODNOTES_DATA = {
 		shouldRepeat: false,
 		episodes: [],
 	},
-	openAIApiKey: "",
-	diarizationApiKey: "",
+	openAISecretId: "",
+	deepgramSecretId: "",
 	transcript: {
 		path: "transcripts/{{podcast}}/{{title}}.md",
 		template: "# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",

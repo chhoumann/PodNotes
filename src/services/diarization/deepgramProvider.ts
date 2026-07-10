@@ -36,13 +36,15 @@ export async function diarizeWithDeepgram(opts: {
 	apiKey: string;
 	onProgress: (message: string) => void;
 	request?: RequestUrlFn;
+	signal?: AbortSignal;
 }): Promise<DiarizedSegment[]> {
-	const { audio, apiKey, onProgress } = opts;
+	const { audio, apiKey, onProgress, signal } = opts;
 	const request = opts.request ?? (requestUrl as unknown as RequestUrlFn);
 
+	if (signal) throwIfAborted(signal);
 	onProgress("Diarizing with Deepgram...");
 
-	const response = await request({
+	const requestPromise = request({
 		url: `${DEEPGRAM_LISTEN_URL}?${DEEPGRAM_QUERY}`,
 		method: "POST",
 		headers: { Authorization: `Token ${apiKey}` },
@@ -50,6 +52,7 @@ export async function diarizeWithDeepgram(opts: {
 		body: audio.buffer,
 		throw: false,
 	});
+	const response = signal ? await waitForAbort(requestPromise, signal) : await requestPromise;
 
 	if (response.status < 200 || response.status >= 300) {
 		const detail = extractDeepgramError(response);
@@ -60,6 +63,54 @@ export async function diarizeWithDeepgram(opts: {
 	}
 
 	return parseDeepgramSegments(response.json);
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+	if (!signal.aborted) return;
+	throw signal.reason ?? new DOMException("Deepgram diarization was aborted.", "AbortError");
+}
+
+function waitForAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+	throwIfAborted(signal);
+
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		const cleanup = () => signal.removeEventListener("abort", onAbort);
+		const onAbort = () => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			reject(
+				signal.reason ??
+					new DOMException("Deepgram diarization was aborted.", "AbortError"),
+			);
+		};
+
+		signal.addEventListener("abort", onAbort, { once: true });
+		void operation.then(
+			(value) => {
+				if (settled) return;
+				if (signal.aborted) {
+					onAbort();
+					return;
+				}
+				settled = true;
+				cleanup();
+				resolve(value);
+			},
+			(error) => {
+				if (settled) return;
+				if (signal.aborted) {
+					onAbort();
+					return;
+				}
+				settled = true;
+				cleanup();
+				reject(error);
+			},
+		);
+		if (signal.aborted) onAbort();
+	});
 }
 
 /** Pull a human-readable message out of Deepgram's error body, if any. */

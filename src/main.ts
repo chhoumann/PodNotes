@@ -37,8 +37,10 @@ import { normalizePlaybackRate } from "./utility/playbackRate";
 import {
 	decodePodNotesData,
 	encodePodNotesData,
+	PODNOTES_DATA_SCHEMA_VERSION,
 	PodNotesDataError,
 } from "./persistence/podNotesData";
+import { CredentialRepository } from "./services/CredentialRepository";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -56,10 +58,21 @@ interface SaveWaiter {
 	reject: (error: unknown) => void;
 }
 
+class PodNotesSchemaMigrationError extends Error {
+	constructor(
+		public readonly originalCause: unknown,
+		public readonly includedCredentials: boolean,
+	) {
+		super(originalCause instanceof Error ? originalCause.message : String(originalCause));
+		this.name = "PodNotesSchemaMigrationError";
+	}
+}
+
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api!: IAPI;
 	public override settings!: IPodNotesSettings;
 	public override app!: PartialAppExtension;
+	public credentials!: CredentialRepository;
 
 	private views = new Set<MainView>();
 
@@ -88,6 +101,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isUnloaded = false;
 		this.podcastViewMountEnabled = !this.isMobileRuntime();
 		plugin.set(this);
+		this.credentials = new CredentialRepository(this.app.secretStorage);
 
 		await this.loadSettings();
 
@@ -290,6 +304,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.transcriptionService;
 	}
 
+	invalidateTranscriptionCredentialCache(): void {
+		this.transcriptionService?.clearCredentialCache();
+	}
+
 	captureTimestamp(editor: Editor | null | undefined): boolean {
 		if (!editor || !this.api.podcast || !this.settings.timestamp.template) {
 			return false;
@@ -401,6 +419,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.storeUnsubscribers = [];
 		this.volumeUnsubscribe?.();
 		this.localFilesMirrorUnsubscribe?.();
+		this.transcriptionService?.dispose();
+		this.transcriptionService = undefined;
 		this.views.clear();
 
 		// Intentionally do NOT detach the view's leaves here. Obsidian persists and
@@ -419,7 +439,43 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	async loadSettings() {
 		try {
 			const decoded = decodePodNotesData(await this.loadData());
-			this.settings = decoded.settings;
+			let settings = decoded.settings;
+			this.credentials ??= new CredentialRepository(this.app.secretStorage);
+
+			if (
+				decoded.sourceVersion < PODNOTES_DATA_SCHEMA_VERSION ||
+				decoded.retiredPlaintextPresent
+			) {
+				// SecretStorage writes are synchronous. Store every legacy value and
+				// verify it first, then write the v2 snapshot directly because the normal
+				// save queue intentionally stays dormant until onload finishes. A v2 file
+				// carrying retired fields is scrubbed without importing their values. If
+				// any step fails, the old data.json is left untouched and loading stops.
+				try {
+					const references =
+						decoded.sourceVersion < PODNOTES_DATA_SCHEMA_VERSION
+							? this.credentials.storeValues(decoded.legacySecrets)
+							: {};
+					settings = { ...settings, ...references };
+					await this.saveData(encodePodNotesData(settings, decoded.unknownFields));
+				} catch (error) {
+					throw new PodNotesSchemaMigrationError(
+						error,
+						Boolean(decoded.legacySecrets.openAI || decoded.legacySecrets.deepgram),
+					);
+				}
+				const migratedProviders = [
+					decoded.legacySecrets.openAI ? "OpenAI" : null,
+					decoded.legacySecrets.deepgram ? "Deepgram" : null,
+				].filter((provider): provider is string => provider !== null);
+				if (migratedProviders.length > 0) {
+					new Notice(
+						`Moved your ${migratedProviders.join(" and ")} API ${migratedProviders.length === 1 ? "key" : "keys"} into Obsidian SecretStorage.`,
+					);
+				}
+			}
+
+			this.settings = settings;
 			this.persistenceUnknownFields = decoded.unknownFields;
 
 			if (decoded.warnings.length > 0) {
@@ -429,6 +485,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			if (error instanceof PodNotesDataError) {
 				new Notice(error.message, 0);
 				console.error("PodNotes refused to load unsafe persisted data", error);
+			} else if (error instanceof PodNotesSchemaMigrationError) {
+				new Notice(
+					error.includedCredentials
+						? "PodNotes could not securely migrate its API keys. Your existing data was kept unchanged. Restart PodNotes to retry."
+						: "PodNotes could not upgrade its settings data. Your existing data was kept unchanged. Restart PodNotes to retry.",
+					0,
+				);
+				console.error("PodNotes failed to migrate persisted settings", error.originalCause);
 			}
 			throw error;
 		}

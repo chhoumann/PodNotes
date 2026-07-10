@@ -20,6 +20,29 @@ function stubResponse(overrides: Partial<{ status: number; json: unknown; text: 
 	} as unknown as Awaited<ReturnType<RequestUrlFn>>;
 }
 
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	const promise = new Promise<T>((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
+
+async function settlesAfterMicrotasks(promise: Promise<unknown>): Promise<boolean> {
+	let settled = false;
+	void promise.then(
+		() => {
+			settled = true;
+		},
+		() => {
+			settled = true;
+		},
+	);
+
+	for (let turn = 0; turn < 10 && !settled; turn++) await Promise.resolve();
+	return settled;
+}
+
 describe("diarizeWithDeepgram (#168)", () => {
 	it("posts the whole audio buffer with token auth and parses the response", async () => {
 		const request = vi.fn<RequestUrlFn>().mockResolvedValue(
@@ -71,5 +94,38 @@ describe("diarizeWithDeepgram (#168)", () => {
 				request,
 			}),
 		).rejects.toThrow(/HTTP 401.*Invalid credentials/);
+	});
+
+	it("aborts promptly and ignores a late HTTP failure from requestUrl", async () => {
+		const controller = new AbortController();
+		const abortError = new DOMException("plugin unloaded", "AbortError");
+		const response = deferred<Awaited<ReturnType<RequestUrlFn>>>();
+		const request = vi.fn<RequestUrlFn>().mockReturnValue(response.promise);
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+		const pending = diarizeWithDeepgram({
+			audio,
+			apiKey: "bad",
+			onProgress: () => {},
+			request,
+			signal: controller.signal,
+		});
+		const outcome = pending.then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+
+		try {
+			controller.abort(abortError);
+			const settledPromptly = await settlesAfterMicrotasks(outcome);
+			response.resolve(stubResponse({ status: 401, json: { err_msg: "late failure" } }));
+			const result = await outcome;
+
+			expect(settledPromptly).toBe(true);
+			expect(result).toBe(abortError);
+			expect(consoleError).not.toHaveBeenCalled();
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });

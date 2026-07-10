@@ -53,13 +53,10 @@ export interface IPodNotesSettings {
 		path: string;
 	};
 	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] };
-	openAIApiKey: string;
-	/**
-	 * API key for the dedicated diarization provider (Deepgram). Kept separate
-	 * from `openAIApiKey` and top-level so the settings export can redact it as a
-	 * secret; OpenAI diarization reuses `openAIApiKey` instead. See issue #168.
-	 */
-	diarizationApiKey: string;
+	/** SecretStorage ID for the OpenAI API key. Never contains the key itself. */
+	openAISecretId: string;
+	/** SecretStorage ID for the Deepgram API key. Never contains the key itself. */
+	deepgramSecretId: string;
 	transcript: {
 		path: string;
 		template: string;

@@ -1,7 +1,7 @@
 ## Show player
 Opens the PodNotes pane and brings it into focus.
 
-If the pane already exists but is hidden — for example in a collapsed sidebar or out of view because the right sidebar has too many icons — this command reveals it. If it does not exist yet, the command creates it in the right sidebar. You can run it from the command palette or bind it to a hotkey.
+If the pane already exists but is hidden - for example in a collapsed sidebar or out of view because the right sidebar has too many icons - this command reveals it. If it does not exist yet, the command creates it in the right sidebar. You can run it from the command palette or bind it to a hotkey.
 
 PodNotes also adds a **podcast icon to the left ribbon** as a reliable way to reopen the pane. On mobile it appears in the ribbon menu, and you can hide it via Obsidian's *Manage ribbon actions* if you prefer to use the command instead.
 
@@ -25,7 +25,7 @@ This will skip the current episode forward by the amount of seconds specified in
 ## Download Playing Episode
 This will download the currently playing episode.
 
-Downloads are stored in the location specified by the **Episode download path** setting. This path is a template and **must include a per-episode token** such as `{{title}}` (the default is `PodNotes/{{podcast}}/{{title}}`). A path without `{{title}}` makes every episode resolve to the same file, so downloads overwrite each other or fail. The file extension is added automatically — do not include one.
+Downloads are stored in the location specified by the **Episode download path** setting. This path is a template and **must include a per-episode token** such as `{{title}}` (the default is `PodNotes/{{podcast}}/{{title}}`). A path without `{{title}}` makes every episode resolve to the same file, so downloads overwrite each other or fail. The file extension is added automatically - do not include one.
 
 ## Capture Timestamp
 This will capture the current timestamp of the currently playing episode.
@@ -85,8 +85,16 @@ Episode links look like this: [https://pod.link/1138055739/episode/1732808e781cc
 They can be used to share the episode with others, no matter what podcast app they use.
 
 ## Transcribe current episode
-This command will transcribe the currently playing episode using OpenAI's Whisper model.
 
-The transcription will be saved in the location specified in the transcript settings.
+This command transcribes the currently playing audio episode and saves the
+result at the path configured in **Transcript settings**.
 
-Note: This feature requires an OpenAI API key to be set in the settings.
+Plain Whisper transcription and OpenAI speaker diarization require an available
+OpenAI secret on the current device. Deepgram speaker diarization requires an
+available Deepgram secret instead. In **Settings -> PodNotes -> Transcript
+settings**, select an existing Obsidian secret or create one for the provider
+you use.
+
+The command remains available when a required secret is missing so PodNotes can
+tell you which provider needs to be configured. If a selected secret is not
+available on this device, open PodNotes settings and select or create it again.
