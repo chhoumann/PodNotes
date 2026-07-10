@@ -3,109 +3,755 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      dryRun:
-        description: "Dry run (no actual release)"
-        required: false
-        default: false
-        type: boolean
-  repository_dispatch:
-    types: [release-trigger]
+      releasePr:
+        description: "Merged machine-generated release PR number to recover"
+        required: true
+        type: string
 
-# Default-deny baseline; the release job grants only the scopes it needs below.
 permissions: {}
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  release:
-    name: Release
+  resolve:
+    name: Validate release PR
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create releases/tags and push the version-bump commit
-      issues: write # semantic-release success/failure comments
-      pull-requests: write # semantic-release PR comments
-      id-token: write # mint the OIDC token used to sign artifact attestations
-      attestations: write # publish build provenance attestations for the assets
+      contents: read
+      pull-requests: read
     outputs:
-      released: ${{ steps.release.outputs.released }}
-      version: ${{ steps.extract-version.outputs.version }}
+      artifact-name: ${{ steps.resolve.outputs.artifact-name }}
+      base-sha: ${{ steps.resolve.outputs.base-sha }}
+      release-sha: ${{ steps.resolve.outputs.release-sha }}
+      pr-number: ${{ steps.resolve.outputs.pr-number }}
+      source-ref: ${{ steps.resolve.outputs.source-ref }}
+      version: ${{ steps.resolve.outputs.version }}
     steps:
-      - name: Checkout
+      - name: Validate merged release PR provenance
+        id: resolve
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          DISPATCH_PR: ${{ inputs.releasePr }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+        with:
+          script: |
+            const expectedFiles = ['manifest.json', 'package-lock.json', 'package.json', 'versions.json'];
+            const { owner, repo } = context.repo;
+            const repository = `${owner}/${repo}`;
+            const rawNumber = process.env.DISPATCH_PR;
+            if (!/^[1-9]\d*$/.test(rawNumber)) throw new Error('releasePr must be a positive PR number.');
+
+            const pullNumber = Number(rawNumber);
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
+            if (!pull.merged || pull.state !== 'closed' || !pull.merged_at || !pull.merge_commit_sha) {
+              throw new Error(`PR #${pullNumber} is not merged.`);
+            }
+            if (pull.user?.login !== 'github-actions[bot]') {
+              throw new Error(`PR #${pullNumber} was not created by github-actions[bot].`);
+            }
+            if (pull.merged_by?.login !== owner) {
+              throw new Error(`PR #${pullNumber} was not merged by repository owner ${owner}.`);
+            }
+            if (pull.base.ref !== 'master' || pull.head.repo?.full_name !== repository) {
+              throw new Error(`PR #${pullNumber} has invalid base or repository provenance.`);
+            }
+            const branchMatch = /^release\/((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/.exec(pull.head.ref);
+            if (!branchMatch) throw new Error(`PR #${pullNumber} does not use a valid release branch.`);
+            const version = branchMatch[1];
+            const title = `release(version): Release ${version}`;
+            if (pull.title !== title) throw new Error(`PR #${pullNumber} title does not match ${version}.`);
+
+            const markerPattern = new RegExp(
+              `<!-- podnotes-release-pr schema=1 version=${version.replaceAll('.', '\\.')}` +
+              ' base=([0-9a-f]{40}) -->',
+            );
+            const marker = markerPattern.exec(pull.body || '');
+            if (!marker) throw new Error(`PR #${pullNumber} is missing valid release provenance.`);
+            const baseSha = marker[1];
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pullNumber,
+              per_page: 100,
+            });
+            const changedFiles = files.map((file) => file.filename).sort();
+            if (JSON.stringify(changedFiles) !== JSON.stringify(expectedFiles)) {
+              throw new Error(`PR #${pullNumber} must change exactly the synchronized version files.`);
+            }
+
+            const headCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: pull.head.sha });
+            if (headCommit.data.parents.length !== 1 || headCommit.data.parents[0].sha !== baseSha) {
+              throw new Error(`PR #${pullNumber} head does not descend directly from its recorded base.`);
+            }
+            if (headCommit.data.message.trim() !==
+                `${title}\n\npodnotes-release-commit schema=1 version=${version} base=${baseSha}`) {
+              throw new Error(`PR #${pullNumber} head commit message is invalid.`);
+            }
+
+            const releaseSha = pull.merge_commit_sha;
+            const releaseCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: releaseSha });
+            if (releaseCommit.data.parents.length !== 1 || releaseCommit.data.parents[0].sha !== baseSha) {
+              throw new Error(`PR #${pullNumber} was not squash-merged directly onto its recorded base.`);
+            }
+            if (releaseCommit.data.message.split('\n')[0] !== `${title} (#${pullNumber})`) {
+              throw new Error(`PR #${pullNumber} merge commit message is invalid.`);
+            }
+            if (releaseCommit.data.tree.sha !== headCommit.data.tree.sha) {
+              throw new Error(`PR #${pullNumber} merge tree does not match its validated head tree.`);
+            }
+
+            const allowedSourceRefs = [
+              `refs/heads/release-run/${version}`,
+              `refs/tags/${version}`,
+            ];
+            const sourceRef = process.env.EVENT_REF;
+            if (!allowedSourceRefs.includes(sourceRef) || process.env.EVENT_SHA !== releaseSha) {
+              throw new Error(
+                `Release workflow must run from an exact release ref at ${releaseSha}; got ` +
+                `${process.env.EVENT_REF} at ${process.env.EVENT_SHA}.`,
+              );
+            }
+
+            const master = await github.rest.git.getRef({ owner, repo, ref: 'heads/master' });
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: `${releaseSha}...${master.data.object.sha}`,
+            });
+            if (!['ahead', 'identical'].includes(comparison.data.status) ||
+                comparison.data.merge_base_commit.sha !== releaseSha) {
+              throw new Error(`Release commit ${releaseSha} is not on current master.`);
+            }
+
+            core.setOutput('artifact-name', `release-payload-${releaseSha}`);
+            core.setOutput('base-sha', baseSha);
+            core.setOutput('release-sha', releaseSha);
+            core.setOutput('pr-number', String(pullNumber));
+            core.setOutput('source-ref', sourceRef);
+            core.setOutput('version', version);
+            core.notice(`Validated release PR #${pullNumber} for ${version} at ${releaseSha}.`);
+
+  build:
+    name: Build and verify
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact release commit
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+          ref: ${{ needs.resolve.outputs.release-sha }}
+
+      - name: Validate release commit and version-file diff
+        env:
+          BASE_SHA: ${{ needs.resolve.outputs.base-sha }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release-sha }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/master
+          ACTUAL_DIFF="$(git diff --name-status --no-renames "$BASE_SHA" "$RELEASE_SHA")"
+          EXPECTED_DIFF=$'M\tmanifest.json\nM\tpackage-lock.json\nM\tpackage.json\nM\tversions.json'
+          test "$ACTUAL_DIFF" = "$EXPECTED_DIFF"
+
+          BASE_ROOT="$RUNNER_TEMP/release-base"
+          mkdir "$BASE_ROOT"
+          for FILE in package.json package-lock.json manifest.json versions.json; do
+            git show "$BASE_SHA:$FILE" > "$BASE_ROOT/$FILE"
+          done
+          node scripts/release-contract.mjs validate-files \
+            --base-root "$BASE_ROOT" \
+            --candidate-root . \
+            --version "$VERSION"
 
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: ".nvmrc"
-          cache: npm
-
-      - name: Validate trigger
-        id: validate
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            echo "valid=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-          fi
+          package-manager-cache: false
 
       - name: Install dependencies
-        if: steps.validate.outputs.valid == 'true'
         run: npm ci
 
-      - name: Build
-        if: steps.validate.outputs.valid == 'true'
-        run: npm run build --if-present
+      - name: Recompute release plan and notes
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          node scripts/release-plan.mjs \
+            --cwd . \
+            --expected-version "$VERSION" \
+            --notes-output "$RUNNER_TEMP/release-notes.md" \
+            --output "$RUNNER_TEMP/release-plan.json"
+          test -s "$RUNNER_TEMP/release-notes.md"
 
-      - name: Run tests
-        if: steps.validate.outputs.valid == 'true'
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build release assets
+        run: npm run build
+
+      - name: Test
         run: npm run test
 
-      - name: Release
-        id: release
-        if: steps.validate.outputs.valid == 'true'
+      - name: Setup Python for documentation
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: 3.x
+
+      - name: Install documentation dependencies
+        run: python -m pip install -r docs/requirements.txt
+
+      - name: Build documentation
+        run: npm run docs:build
+
+      - name: Revalidate clean release tree
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
+          VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          node - <<'NODE'
+          git diff --exit-code
+          git diff --cached --exit-code
+          node scripts/release-contract.mjs validate-files \
+            --base-root "$RUNNER_TEMP/release-base" \
+            --candidate-root . \
+            --version "$VERSION"
+
+      - name: Assemble verified release payload
+        env:
+          BASE_SHA: ${{ needs.resolve.outputs.base-sha }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr-number }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release-sha }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          PAYLOAD="$RUNNER_TEMP/release-payload"
+          mkdir "$PAYLOAD"
+          cp main.js manifest.json "$PAYLOAD/"
+          cp "$RUNNER_TEMP/release-notes.md" "$PAYLOAD/release-notes.md"
+          node scripts/release-contract.mjs manifest \
+            --root "$PAYLOAD" \
+            --artifacts main.js,manifest.json \
+            --output "$PAYLOAD/release-assets.json"
+          node --input-type=module - <<'NODE'
           import fs from 'node:fs';
+          import path from 'node:path';
 
-          (async () => {
-            try {
-              const { default: semanticRelease } = await import('semantic-release');
-              const result = await semanticRelease({
-                dryRun: process.env.DRY_RUN === 'true',
-              });
-
-              if (!result || process.env.DRY_RUN === 'true') {
-                fs.appendFileSync(process.env.GITHUB_OUTPUT, 'released=false\n');
-                process.exit(0);
-              }
-
-              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'released=true\n');
-              fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${result.nextRelease.version}\n`);
-            } catch (error) {
-              console.error(error);
-              process.exit(1);
-            }
-          })();
+          const context = {
+            baseSha: process.env.BASE_SHA,
+            prNumber: Number(process.env.PR_NUMBER),
+            releaseSha: process.env.RELEASE_SHA,
+            repository: process.env.GITHUB_REPOSITORY,
+            schemaVersion: 1,
+            version: process.env.VERSION,
+          };
+          fs.writeFileSync(
+            path.join(process.env.RUNNER_TEMP, 'release-payload', 'release-context.json'),
+            `${JSON.stringify(context, null, 2)}\n`,
+            { flag: 'wx' },
+          );
           NODE
 
-      # Generate cryptographic build-provenance attestations for the released
-      # assets so users can verify they were built from this repository's source
-      # by this workflow (GitHub attestations API).
-      - name: Attest build provenance for release assets
-        if: steps.release.outputs.released == 'true'
+      - name: Upload verified build payload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ needs.resolve.outputs.artifact-name }}
+          path: ${{ runner.temp }}/release-payload
+          if-no-files-found: error
+          retention-days: 1
+
+  tag:
+    name: Register verified release tag
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create or verify exact release tag
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          RELEASE_SHA: ${{ needs.resolve.outputs.release-sha }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        with:
+          script: |
+            const releaseSha = process.env.RELEASE_SHA;
+            const version = process.env.VERSION;
+            if (!/^[0-9a-f]{40}$/.test(releaseSha) ||
+                !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
+              throw new Error('Invalid release tag identity.');
+            }
+            const { owner, repo } = context.repo;
+
+            function compareVersions(left, right) {
+              const leftParts = left.split('.').map(Number);
+              const rightParts = right.split('.').map(Number);
+              for (let index = 0; index < 3; index += 1) {
+                if (leftParts[index] !== rightParts[index]) {
+                  return leftParts[index] - rightParts[index];
+                }
+              }
+              return 0;
+            }
+
+            async function assertNoHigherStableTag() {
+              const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+                owner,
+                repo,
+                ref: 'tags/',
+                per_page: 100,
+              });
+              const stableTags = refs
+                .map((reference) => reference.ref.replace('refs/tags/', ''))
+                .filter((tag) => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(tag));
+              const higher = stableTags.find((tag) => compareVersions(tag, version) > 0);
+              if (higher) {
+                throw new Error(`Higher stable tag ${higher} appeared before release ${version}.`);
+              }
+            }
+
+            async function resolveTagCommit() {
+              let reference;
+              try {
+                reference = await github.rest.git.getRef({ owner, repo, ref: `tags/${version}` });
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+              let object = reference.data.object;
+              for (let depth = 0; object.type === 'tag' && depth < 5; depth += 1) {
+                const annotated = await github.rest.git.getTag({ owner, repo, tag_sha: object.sha });
+                object = annotated.data.object;
+              }
+              if (object.type !== 'commit') {
+                throw new Error(`Tag ${version} does not resolve to a commit.`);
+              }
+              return object.sha;
+            }
+
+            await assertNoHigherStableTag();
+            let tagSha = await resolveTagCommit();
+            if (!tagSha) {
+              try {
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/tags/${version}`,
+                  sha: releaseSha,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+              tagSha = await resolveTagCommit();
+            }
+            if (tagSha !== releaseSha) {
+              throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
+            }
+            await assertNoHigherStableTag();
+            core.notice(`Release tag ${version} targets verified commit ${releaseSha}.`);
+
+  attest:
+    name: Attest verified assets
+    needs: [resolve, build, tag]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download verified build payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.resolve.outputs.artifact-name }}
+          path: release-payload
+
+      - name: Validate attestation inputs
+        env:
+          EXPECTED_BASE: ${{ needs.resolve.outputs.base-sha }}
+          EXPECTED_PR: ${{ needs.resolve.outputs.pr-number }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.release-sha }}
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const crypto = require('node:crypto');
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const root = path.resolve('release-payload');
+          const expectedEntries = [
+            'main.js',
+            'manifest.json',
+            'release-assets.json',
+            'release-context.json',
+            'release-notes.md',
+          ];
+          if (JSON.stringify(fs.readdirSync(root).sort()) !== JSON.stringify(expectedEntries)) {
+            throw new Error('Attestation payload contains unexpected files.');
+          }
+          for (const name of expectedEntries) {
+            const stat = fs.lstatSync(path.join(root, name));
+            if (!stat.isFile() || stat.isSymbolicLink()) {
+              throw new Error(`Attestation payload entry is not a regular file: ${name}`);
+            }
+          }
+
+          const context = JSON.parse(fs.readFileSync(path.join(root, 'release-context.json'), 'utf8'));
+          if (context.schemaVersion !== 1 ||
+              context.baseSha !== process.env.EXPECTED_BASE ||
+              context.prNumber !== Number(process.env.EXPECTED_PR) ||
+              context.releaseSha !== process.env.EXPECTED_SHA ||
+              context.repository !== process.env.GITHUB_REPOSITORY ||
+              context.version !== process.env.EXPECTED_VERSION) {
+            throw new Error('Attestation context does not match validated workflow outputs.');
+          }
+
+          const manifest = JSON.parse(fs.readFileSync(path.join(root, 'release-assets.json'), 'utf8'));
+          const names = ['main.js', 'manifest.json'];
+          if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.artifacts) ||
+              JSON.stringify(manifest.artifacts.map((entry) => entry.name).sort()) !== JSON.stringify(names)) {
+            throw new Error('Attestation asset manifest is invalid.');
+          }
+          for (const name of names) {
+            const contents = fs.readFileSync(path.join(root, name));
+            const entry = manifest.artifacts.find((candidate) => candidate.name === name);
+            const digest = crypto.createHash('sha256').update(contents).digest('hex');
+            if (!entry || entry.size !== contents.byteLength || entry.sha256 !== digest) {
+              throw new Error(`Attestation asset does not match its manifest: ${name}`);
+            }
+          }
+          const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+          if (pluginManifest.id !== 'podnotes' || pluginManifest.version !== process.env.EXPECTED_VERSION) {
+            throw new Error('Plugin manifest identity does not match the expected release.');
+          }
+          if (!fs.readFileSync(path.join(root, 'release-notes.md'), 'utf8').trim()) {
+            throw new Error('Release notes are empty.');
+          }
+          NODE
+
+      - name: Attest release assets
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: |
-            main.js
-            manifest.json
+            release-payload/main.js
+            release-payload/manifest.json
 
-      - name: Extract version
-        id: extract-version
-        if: steps.release.outputs.released == 'true'
+  publish:
+    name: Publish verified release
+    needs: [resolve, build, tag, attest]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      attestations: read
+      contents: write
+    steps:
+      - name: Download verified release payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.resolve.outputs.artifact-name }}
+          path: release-payload
+
+      - name: Verify GitHub attestations
+        env:
+          EXPECTED_SHA: ${{ needs.resolve.outputs.release-sha }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REF: ${{ needs.resolve.outputs.source-ref }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          SIGNER_WORKFLOW="github.com/$GITHUB_REPOSITORY/.github/workflows/release.yml"
+          for ASSET in main.js manifest.json; do
+            gh attestation verify "release-payload/$ASSET" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$SIGNER_WORKFLOW" \
+              --source-ref "$SOURCE_REF" \
+              --source-digest "$EXPECTED_SHA" \
+              --deny-self-hosted-runners
+          done
+
+      - name: Upload, verify, and publish release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          EXPECTED_BASE: ${{ needs.resolve.outputs.base-sha }}
+          EXPECTED_PR: ${{ needs.resolve.outputs.pr-number }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.release-sha }}
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.version }}
+        with:
+          script: |
+            const crypto = require('node:crypto');
+            const fs = require('node:fs');
+            const path = require('node:path');
+
+            const root = path.resolve('release-payload');
+            const expectedEntries = [
+              'main.js',
+              'manifest.json',
+              'release-assets.json',
+              'release-context.json',
+              'release-notes.md',
+            ];
+            const actualEntries = fs.readdirSync(root).sort();
+            if (JSON.stringify(actualEntries) !== JSON.stringify(expectedEntries)) {
+              throw new Error('Release payload contains unexpected files.');
+            }
+            for (const name of expectedEntries) {
+              const stat = fs.lstatSync(path.join(root, name));
+              if (!stat.isFile() || stat.isSymbolicLink()) {
+                throw new Error(`Release payload entry is not a regular file: ${name}`);
+              }
+            }
+
+            const releaseContext = JSON.parse(fs.readFileSync(path.join(root, 'release-context.json'), 'utf8'));
+            const manifest = JSON.parse(fs.readFileSync(path.join(root, 'release-assets.json'), 'utf8'));
+            const version = process.env.EXPECTED_VERSION;
+            const releaseSha = process.env.EXPECTED_SHA;
+            const expectedPr = Number(process.env.EXPECTED_PR);
+            if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) ||
+                !/^[0-9a-f]{40}$/.test(releaseSha) ||
+                !Number.isSafeInteger(expectedPr) || expectedPr < 1) {
+              throw new Error('Invalid expected release identity.');
+            }
+            if (releaseContext.schemaVersion !== 1 ||
+                releaseContext.baseSha !== process.env.EXPECTED_BASE ||
+                releaseContext.version !== version ||
+                releaseContext.releaseSha !== releaseSha ||
+                releaseContext.prNumber !== expectedPr ||
+                releaseContext.repository !== process.env.GITHUB_REPOSITORY) {
+              throw new Error('Release context does not match validated workflow outputs.');
+            }
+            if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.artifacts) ||
+                manifest.artifacts.length !== 2) {
+              throw new Error('Invalid release asset manifest.');
+            }
+
+            const assetNames = ['main.js', 'manifest.json'];
+            const assets = new Map();
+            for (const name of assetNames) {
+              const entry = manifest.artifacts.find((candidate) => candidate.name === name);
+              const contents = fs.readFileSync(path.join(root, name));
+              const digest = crypto.createHash('sha256').update(contents).digest('hex');
+              if (!entry || entry.sha256 !== digest || entry.size !== contents.byteLength) {
+                throw new Error(`Local release asset does not match its manifest: ${name}`);
+              }
+              assets.set(name, { contents, digest, size: contents.byteLength });
+            }
+            const manifestNames = manifest.artifacts.map((entry) => entry.name).sort();
+            if (JSON.stringify(manifestNames) !== JSON.stringify(assetNames)) {
+              throw new Error('Release asset manifest contains unexpected names.');
+            }
+
+            const notes = fs.readFileSync(path.join(root, 'release-notes.md'), 'utf8');
+            if (!notes.trim()) throw new Error('Release notes are empty.');
+            const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+            if (pluginManifest.id !== 'podnotes' || pluginManifest.version !== version) {
+              throw new Error('Plugin manifest identity does not match the expected release.');
+            }
+            const { owner, repo } = context.repo;
+
+            async function resolveTagCommit(tag) {
+              let reference;
+              try {
+                reference = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+              let object = reference.data.object;
+              for (let depth = 0; object.type === 'tag' && depth < 5; depth += 1) {
+                const annotated = await github.rest.git.getTag({ owner, repo, tag_sha: object.sha });
+                object = annotated.data.object;
+              }
+              if (object.type !== 'commit') throw new Error(`Tag ${tag} does not resolve to a commit.`);
+              return object.sha;
+            }
+
+            async function removeRecoveryBranch() {
+              const ref = `heads/release-run/${version}`;
+              let branch;
+              try {
+                branch = await github.rest.git.getRef({ owner, repo, ref });
+              } catch (error) {
+                if (error.status === 404) return;
+                throw error;
+              }
+              if (branch.data.object.sha !== releaseSha) {
+                throw new Error(
+                  `Recovery branch points to ${branch.data.object.sha}, expected ${releaseSha}.`,
+                );
+              }
+              await github.rest.git.deleteRef({ owner, repo, ref });
+            }
+
+            async function downloadDigest(asset) {
+              const response = await github.request(
+                'GET /repos/{owner}/{repo}/releases/assets/{asset_id}',
+                {
+                  owner,
+                  repo,
+                  asset_id: asset.id,
+                  headers: { accept: 'application/octet-stream' },
+                },
+              );
+              let contents;
+              if (Buffer.isBuffer(response.data)) contents = response.data;
+              else if (response.data instanceof ArrayBuffer) contents = Buffer.from(response.data);
+              else if (ArrayBuffer.isView(response.data)) {
+                contents = Buffer.from(response.data.buffer, response.data.byteOffset, response.data.byteLength);
+              } else {
+                contents = Buffer.from(response.data);
+              }
+              return crypto.createHash('sha256').update(contents).digest('hex');
+            }
+
+            async function verifyRemoteAssets(releaseId) {
+              const remoteAssets = await github.paginate(github.rest.repos.listReleaseAssets, {
+                owner,
+                repo,
+                release_id: releaseId,
+                per_page: 100,
+              });
+              const names = remoteAssets.map((asset) => asset.name).sort();
+              if (JSON.stringify(names) !== JSON.stringify(assetNames)) {
+                throw new Error('GitHub release contains unexpected or missing assets.');
+              }
+              for (const remote of remoteAssets) {
+                const expected = assets.get(remote.name);
+                if (!expected || remote.size !== expected.size) {
+                  throw new Error(`GitHub release asset size mismatch: ${remote.name}`);
+                }
+                if (remote.digest && remote.digest !== `sha256:${expected.digest}`) {
+                  throw new Error(`GitHub release asset API digest mismatch: ${remote.name}`);
+                }
+                const downloadedDigest = await downloadDigest(remote);
+                if (downloadedDigest !== expected.digest) {
+                  throw new Error(`Downloaded GitHub release asset digest mismatch: ${remote.name}`);
+                }
+              }
+            }
+
+            const tagSha = await resolveTagCommit(version);
+            if (tagSha !== releaseSha) {
+              throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
+            }
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+            const matches = releases.filter((release) => release.tag_name === version);
+            if (matches.length > 1) throw new Error(`Multiple releases use tag ${version}.`);
+            let release = matches[0];
+            if (!release) {
+              const created = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: version,
+                target_commitish: releaseSha,
+                name: version,
+                body: notes,
+                draft: true,
+                prerelease: false,
+              });
+              release = created.data;
+            }
+            const resolvedTagSha = await resolveTagCommit(version);
+            if (resolvedTagSha !== releaseSha) {
+              throw new Error(`Release tag ${version} does not resolve to ${releaseSha}.`);
+            }
+
+            if (!release.draft) {
+              if (release.name !== version || release.body !== notes || release.prerelease) {
+                throw new Error(`Published release ${version} metadata does not match.`);
+              }
+              await verifyRemoteAssets(release.id);
+              if (await resolveTagCommit(version) !== releaseSha) {
+                throw new Error(`Published release tag ${version} changed during verification.`);
+              }
+              await removeRecoveryBranch();
+              core.notice(`Release ${version} was already published and verifies exactly.`);
+              return;
+            }
+
+            const updated = await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              name: version,
+              body: notes,
+              draft: true,
+              prerelease: false,
+            });
+            release = updated.data;
+            const existingAssets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: release.id,
+              per_page: 100,
+            });
+            for (const asset of existingAssets) {
+              await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+            }
+            for (const [name, asset] of assets) {
+              await github.rest.repos.uploadReleaseAsset({
+                owner,
+                repo,
+                release_id: release.id,
+                name,
+                headers: {
+                  'content-type': name.endsWith('.json') ? 'application/json' : 'text/javascript',
+                  'content-length': asset.size,
+                },
+                data: asset.contents,
+              });
+            }
+            await verifyRemoteAssets(release.id);
+
+            if (await resolveTagCommit(version) !== releaseSha) {
+              throw new Error(`Release tag ${version} changed before publication.`);
+            }
+            try {
+              const published = await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: release.id,
+                name: version,
+                body: notes,
+                draft: false,
+                prerelease: false,
+                make_latest: 'true',
+              });
+              if (published.data.draft || published.data.tag_name !== version) {
+                throw new Error(`GitHub did not publish release ${version}.`);
+              }
+              if (await resolveTagCommit(version) !== releaseSha) {
+                throw new Error(`Release tag ${version} changed during publication.`);
+              }
+              await verifyRemoteAssets(release.id);
+            } catch (error) {
+              try {
+                await github.rest.repos.updateRelease({
+                  owner,
+                  repo,
+                  release_id: release.id,
+                  name: version,
+                  body: notes,
+                  draft: true,
+                  prerelease: false,
+                });
+                core.warning(`Returned release ${version} to draft after final verification failed.`);
+              } catch (rollbackError) {
+                core.error(`Could not return release ${version} to draft: ${rollbackError.message}`);
+              }
+              throw error;
+            }
+            await removeRecoveryBranch();
+            core.notice(`Published and verified PodNotes ${version} at ${releaseSha}.`);

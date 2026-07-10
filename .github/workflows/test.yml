@@ -1,5 +1,11 @@
 name: Test
 on:
+  workflow_dispatch:
+    inputs:
+      targetSha:
+        description: "Exact commit SHA to test"
+        required: true
+        type: string
   pull_request:
   push:
     branches:
@@ -17,6 +23,17 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          ref: ${{ inputs.targetSha || github.sha }}
+      - name: Verify dispatched commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TARGET_SHA: ${{ inputs.targetSha }}
+        run: |
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "targetSha must be a full commit SHA" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:

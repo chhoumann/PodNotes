@@ -15,8 +15,7 @@
 		"typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
 		"lint": "oxlint --deny-warnings src tests/e2e scripts",
 		"format:check": "npm run format -- --check",
-		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"semantic-release": "semantic-release",
+		"release:plan": "node scripts/release-plan.mjs",
 		"test": "npm run check:a11y && vitest",
 		"test:e2e": "npm run build && vitest run --config vitest.e2e.config.ts",
 		"obsidian:e2e": "node scripts/obsidian-e2e-cli.mjs",
@@ -26,14 +25,15 @@
 		"check:a11y": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --fail-on-warnings",
 		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
 		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/site --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json svelte.config.mjs vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts version-bump.mjs wrangler.jsonc orca.yaml docs/mkdocs.yml"
+		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json svelte.config.mjs vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts wrangler.jsonc orca.yaml docs/mkdocs.yml"
 	},
 	"dependencies": {
 		"fuse.js": "^7.4.2",
 		"openai": "^6.45.0"
 	},
 	"devDependencies": {
-		"@semantic-release/git": "^10.0.1",
+		"@semantic-release/commit-analyzer": "^13.0.1",
+		"@semantic-release/release-notes-generator": "^14.1.1",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/svelte": "^5.4.2",
@@ -57,61 +57,6 @@
 		"@actions/http-client": {
 			"undici": "^6.27.0"
 		}
-	},
-	"release": {
-		"tagFormat": "${version}",
-		"plugins": [
-			[
-				"@semantic-release/commit-analyzer",
-				{
-					"releaseRules": [
-						{
-							"type": "chore",
-							"release": "patch"
-						},
-						{
-							"type": "build",
-							"scope": "deps",
-							"release": "patch"
-						}
-					]
-				}
-			],
-			"@semantic-release/release-notes-generator",
-			[
-				"@semantic-release/npm",
-				{
-					"npmPublish": false
-				}
-			],
-			[
-				"@semantic-release/git",
-				{
-					"assets": [
-						"package.json",
-						"package-lock.json",
-						"manifest.json",
-						"versions.json"
-					],
-					"message": "release(version): Release ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
-				}
-			],
-			[
-				"@semantic-release/github",
-				{
-					"assets": [
-						{
-							"path": "main.js",
-							"label": "main.js"
-						},
-						{
-							"path": "manifest.json",
-							"label": "manifest.json"
-						}
-					]
-				}
-			]
-		]
 	},
 	"engines": {
 		"node": "^22.14.0"
