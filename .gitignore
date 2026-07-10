@@ -32,5 +32,5 @@ docs/site
 # Obsidian E2E failure artifacts
 .obsidian-e2e-artifacts
 
-# Isolated per-worktree Obsidian E2E vaults (provisioned by scripts/obsidian-e2e-*)
+# Isolated per-worktree Obsidian E2E vaults (provisioned by the obsidian-e2e runner)
 .obsidian-e2e-vaults
