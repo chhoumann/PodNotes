@@ -145,40 +145,40 @@ function formatChapterTitle(title: string): string {
 	return title.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Encode plain text for an arbitrary Markdown body position. The template engine
+ * cannot know whether a tag is placed at the start of a line, after text that can
+ * become a Setext heading, or inside another Markdown construct, so every
+ * CommonMark/Obsidian punctuation character that can change structure is escaped
+ * everywhere. Quotes, colons, commas, and other inert prose punctuation remain
+ * readable in source; all escapes render as the original visible characters.
+ *
+ * Ampersands must be encoded before producing the angle-bracket entities. This
+ * preserves a literal input such as `&lt;` instead of letting it decode into `<`.
+ * Input backslashes and slash-escaped punctuation are handled in one replacement,
+ * so a punctuation character after n input backslashes always has 2n + 1 slashes.
+ */
 function escapeMarkdownText(text: string): string {
 	return text
-		.replace(/\\/g, "\\\\")
+		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
-		.replace(/([`*_{}[\]()#+.!|-])/g, "\\$1");
+		.replace(/[\\`*_{}[\]()#+.!|=~$%^-]/g, "\\$&");
 }
 
 /**
- * Neutralize Markdown/HTML injection in a raw, feed-controlled single-line value
- * (an episode/feed title or author) while keeping it human-readable. Newlines and
- * other control characters are collapsed to spaces so the value can never break
- * out of its line (e.g. the `# {{title}}` heading) and inject extra blocks, and
- * the characters that introduce links, images, inline code, or raw HTML are
- * escaped so a crafted title cannot embed a tracking pixel, phishing link, or
- * markup. Ordinary punctuation (dots, dashes, parentheses, colons, quotes) is
- * preserved so legitimate titles render verbatim - this is deliberately lighter
- * than `escapeMarkdownText` (which backslash-escapes `.`/`-`/`(`/`)` etc.), which
- * would make a normal title like "Ep. 5 - A.I. (Part 1)" unreadable in source.
+ * Collapse a feed-controlled title/author to one line, then encode it as plain
+ * Markdown body text. This blocks both inline constructs and line-leading block
+ * constructs regardless of where a user places the tag in a body template.
+ *
+ * This is not a YAML or JavaScript string encoder. The built-in templates keep
+ * these metadata tags out of frontmatter and executable code, and custom templates
+ * must maintain that context boundary.
  */
-function sanitizeInlineText(text: string): string {
-	return (
-		text
-			// Collapse control characters (newlines, tabs, carriage returns) to a
-			// single space so the value can never inject extra lines or blocks.
-			// eslint-disable-next-line no-control-regex
-			.replace(/[\u0000-\u001f\u007f]+/g, " ")
-			// Neutralize raw HTML and the link/image/inline-code metacharacters so a
-			// crafted value cannot embed a tracking pixel, phishing link, or markup.
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;")
-			.replace(/([`[\]])/g, "\\$1")
-			.trim()
-	);
+function escapeMarkdownBodyText(text: string): string {
+	// eslint-disable-next-line no-control-regex
+	const singleLine = text.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+	return escapeMarkdownText(singleLine);
 }
 
 /**
@@ -259,7 +259,7 @@ export function NoteTemplateEngine(
 
 	const episodeUrl = resolveEpisodeUrl(episode);
 
-	addTag("title", sanitizeInlineText(episode.title));
+	addTag("title", escapeMarkdownBodyText(episode.title));
 	addTag("description", (prependToLines?: string) => {
 		// reduce multiple new lines
 		const sanitizeDescription = feedHtmlToMarkdown(episode.description).replace(
@@ -442,7 +442,7 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 	// feed (mirroring how they describe the episode in NoteTemplateEngine). The raw
 	// {{title}}/{{author}} are feed-controlled, so they are neutralized so a crafted
 	// feed cannot inject Markdown/HTML into the note body.
-	addTag("title", sanitizeInlineText(feed.title));
+	addTag("title", escapeMarkdownBodyText(feed.title));
 	addTag("safetitle", safeTitle);
 	addTag("podcast", safeTitle);
 	// URL tags are sanitized so they stay safe as Markdown link/image targets and
@@ -452,7 +452,7 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 	addTag("feedurl", sanitizeUrlForTemplate(feed.url));
 	addTag("artwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
 	addTag("feedartwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
-	addTag("author", sanitizeInlineText(feed.author ?? ""));
+	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
 	addTag("description", (prependToLines?: string) => {
 		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "").replace(
 			/\n{3,}/g,
