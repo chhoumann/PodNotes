@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 
@@ -27,6 +28,21 @@ type ReleaseTagContract = {
 		tagSha: string | null,
 		expectedSha: string,
 		releaseVersion: string,
+	): void;
+};
+
+type ReleaseCompatibilityContract = {
+	validateCompatibilityTransition(input: {
+		baseManifest: { minAppVersion?: unknown };
+		baseVersion: string;
+		baseVersions: Record<string, unknown>;
+		nextManifest: { minAppVersion?: unknown };
+		nextVersion: string;
+		nextVersions: Record<string, unknown>;
+	}): void;
+	assertReleasedHistoryUnchanged(
+		baseVersions: Record<string, unknown>,
+		tagVersions: Record<string, unknown>,
 	): void;
 };
 
@@ -63,6 +79,30 @@ async function readReleaseTagContract() {
 		${source}
 		return { createOrResolveReleaseTag, assertExpectedReleaseTag };
 	})()`) as ReleaseTagContract;
+}
+
+async function readReleaseCompatibilityContract() {
+	const workflowPath = ".github/workflows/release-trigger.yml";
+	const workflow = await fs.readFile(path.resolve(workflowPath), "utf8");
+	const startMarker = "            // BEGIN release-compatibility-contract";
+	const endMarker = "            // END release-compatibility-contract";
+	const start = workflow.indexOf(startMarker);
+	const end = workflow.indexOf(endMarker, start);
+	expect(
+		start,
+		`${workflowPath} must define the release-compatibility contract`,
+	).toBeGreaterThanOrEqual(0);
+	expect(end, `${workflowPath} must close the release-compatibility contract`).toBeGreaterThan(
+		start,
+	);
+	const source = workflow.slice(start + startMarker.length, end).replace(/^ {12}/gm, "");
+	return runInNewContext(
+		`(() => {
+			${source}
+			return { validateCompatibilityTransition, assertReleasedHistoryUnchanged };
+		})()`,
+		{ isDeepStrictEqual },
+	) as ReleaseCompatibilityContract;
 }
 
 describe.each(WORKFLOW_PATHS)("%s release merge-subject contract", (workflowPath) => {
@@ -194,5 +234,88 @@ describe("release tag visibility contract", () => {
 		expect(workflow).toContain("const tagSha = await createOrResolveReleaseTag({");
 		expect(workflow).toContain("create: () => github.rest.git.createRef({");
 		expect(workflow).toContain("assertExpectedReleaseTag(tagSha, releaseSha, version);");
+	});
+});
+
+describe("release compatibility transition contract", () => {
+	const transition = {
+		baseManifest: { minAppVersion: "1.11.4" },
+		baseVersion: "2.18.2",
+		baseVersions: { "2.18.2": "0.15.9" },
+		nextManifest: { minAppVersion: "1.11.4" },
+		nextVersion: "2.19.0",
+		nextVersions: { "2.18.2": "0.15.9", "2.19.0": "1.11.4" },
+	};
+
+	it("accepts a pending compatibility floor without rewriting the released version", async () => {
+		const contract = await readReleaseCompatibilityContract();
+		expect(() => contract.validateCompatibilityTransition(transition)).not.toThrow();
+	});
+
+	it("rejects a missing released compatibility record", async () => {
+		const contract = await readReleaseCompatibilityContract();
+		expect(() =>
+			contract.validateCompatibilityTransition({ ...transition, baseVersions: {} }),
+		).toThrow("Released version 2.18.2 has no compatibility record");
+	});
+
+	it("rejects a new release that is not mapped to its manifest floor", async () => {
+		const contract = await readReleaseCompatibilityContract();
+		expect(() =>
+			contract.validateCompatibilityTransition({
+				...transition,
+				nextVersions: { ...transition.nextVersions, "2.19.0": "0.15.9" },
+			}),
+		).toThrow("New release compatibility does not match its manifest");
+	});
+
+	it("rejects empty pending compatibility values", async () => {
+		const contract = await readReleaseCompatibilityContract();
+		expect(() =>
+			contract.validateCompatibilityTransition({
+				...transition,
+				baseManifest: { minAppVersion: "" },
+			}),
+		).toThrow("Manifest compatibility versions must be stable semantic versions");
+	});
+
+	it("rejects invalid or lowered pending compatibility floors", async () => {
+		const contract = await readReleaseCompatibilityContract();
+		expect(() =>
+			contract.validateCompatibilityTransition({
+				...transition,
+				baseManifest: { minAppVersion: "latest" },
+			}),
+		).toThrow("Manifest compatibility versions must be stable semantic versions");
+		expect(() =>
+			contract.validateCompatibilityTransition({
+				...transition,
+				baseManifest: { minAppVersion: "0.14.0" },
+			}),
+		).toThrow("Pending manifest compatibility must increase the released floor");
+	});
+
+	it("requires released history to match the previous stable tag exactly", async () => {
+		const contract = await readReleaseCompatibilityContract();
+		expect(() =>
+			contract.assertReleasedHistoryUnchanged(
+				transition.baseVersions,
+				structuredClone(transition.baseVersions),
+			),
+		).not.toThrow();
+		expect(() =>
+			contract.assertReleasedHistoryUnchanged(transition.baseVersions, {
+				"2.18.2": "1.11.4",
+			}),
+		).toThrow("Released compatibility history changed after the previous tag");
+	});
+
+	it("wires both compatibility checks into the fetched release provenance path", async () => {
+		const workflow = await fs.readFile(
+			path.resolve(".github/workflows/release-trigger.yml"),
+			"utf8",
+		);
+		expect(workflow).toContain("validateCompatibilityTransition({");
+		expect(workflow).toContain("assertReleasedHistoryUnchanged(baseVersions, tagVersions);");
 	});
 });

@@ -133,20 +133,57 @@ function compareVersions(left, right) {
 	return 0;
 }
 
-/** @param {string} root */
-export function validateCurrentVersionFiles(root) {
+/** @param {unknown} value @param {string} label */
+function assertCompatibilityVersion(value, label) {
+	if (typeof value !== "string" || !SEMVER_PATTERN.test(value)) {
+		throw new Error(`${label} must be a stable semantic version.`);
+	}
+	return value;
+}
+
+/**
+ * @param {Record<string, unknown>} versions
+ * @param {string} version
+ * @param {string} label
+ */
+function recordedMinAppVersion(versions, version, label) {
+	const value = versions[version];
+	if (typeof value !== "string" || !value) {
+		throw new Error(`${label} versions.json does not record ${version}.`);
+	}
+	return assertCompatibilityVersion(value, `${label} compatibility record`);
+}
+
+/** @param {string} released @param {string} manifest @param {string} label */
+function assertPendingMinAppVersion(released, manifest, label) {
+	if (manifest !== released && compareVersions(manifest, released) <= 0) {
+		throw new Error(
+			`${label} minAppVersion must increase from the released compatibility floor.`,
+		);
+	}
+}
+
+/**
+ * @param {string} root
+ * @param {{ allowPendingMinAppVersion?: boolean }} [options]
+ */
+export function validateCurrentVersionFiles(root, options = {}) {
 	const packageJson = readJson(root, "package.json");
 	const packageLock = readJson(root, "package-lock.json");
 	const manifest = readJson(root, "manifest.json");
 	const versions = readJson(root, "versions.json");
 	const version = assertCurrentVersions(packageJson, packageLock, manifest, "current");
-	if (typeof manifest.minAppVersion !== "string" || !manifest.minAppVersion) {
-		throw new Error("manifest.json minAppVersion must be a non-empty string.");
-	}
-	if (versions[version] !== manifest.minAppVersion) {
+	const manifestMinAppVersion = assertCompatibilityVersion(
+		manifest.minAppVersion,
+		"manifest.json minAppVersion",
+	);
+	const releasedMinAppVersion = recordedMinAppVersion(versions, version, "Current");
+	if (options.allowPendingMinAppVersion) {
+		assertPendingMinAppVersion(releasedMinAppVersion, manifestMinAppVersion, "Pending");
+	} else if (releasedMinAppVersion !== manifestMinAppVersion) {
 		throw new Error("versions.json does not record the current manifest version.");
 	}
-	return { minAppVersion: manifest.minAppVersion, version };
+	return { minAppVersion: manifestMinAppVersion, version };
 }
 
 /**
@@ -176,17 +213,15 @@ export function materializeVersionFiles(options) {
 	if (compareVersions(version, currentVersion) <= 0) {
 		throw new Error(`Release version ${version} must be newer than ${currentVersion}.`);
 	}
-	if (versions[currentVersion] !== manifest.minAppVersion) {
-		throw new Error(
-			"versions.json version history is not synchronized with the current manifest.",
-		);
-	}
+	const releasedMinAppVersion = recordedMinAppVersion(versions, currentVersion, "Source");
 	if (Object.prototype.hasOwnProperty.call(versions, version)) {
 		throw new Error(`versions.json already contains ${version}.`);
 	}
-	if (typeof manifest.minAppVersion !== "string" || !manifest.minAppVersion) {
-		throw new Error("manifest.json minAppVersion must be a non-empty string.");
-	}
+	const manifestMinAppVersion = assertCompatibilityVersion(
+		manifest.minAppVersion,
+		"manifest.json minAppVersion",
+	);
+	assertPendingMinAppVersion(releasedMinAppVersion, manifestMinAppVersion, "Source");
 
 	packageJson.version = version;
 	packageLock.version = version;
@@ -250,9 +285,13 @@ export function validateVersionFiles(options) {
 	if (compareVersions(version, baseVersion) <= 0) {
 		throw new Error(`Release version ${version} must be newer than ${baseVersion}.`);
 	}
-	if (baseVersions[baseVersion] !== baseManifest.minAppVersion) {
-		throw new Error("Base versions.json is not synchronized with its manifest.");
-	}
+	const releasedMinAppVersion = recordedMinAppVersion(baseVersions, baseVersion, "Base");
+	const baseManifestMinAppVersion = assertCompatibilityVersion(
+		baseManifest.minAppVersion,
+		"Base manifest minAppVersion",
+	);
+	assertPendingMinAppVersion(releasedMinAppVersion, baseManifestMinAppVersion, "Base manifest");
+	assertCompatibilityVersion(nextManifest.minAppVersion, "Candidate manifest minAppVersion");
 	if (nextPackage.version !== version) {
 		throw new Error(
 			`Candidate version is ${String(nextPackage.version)}, expected ${version}.`,

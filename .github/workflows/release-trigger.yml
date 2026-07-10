@@ -163,6 +163,49 @@ jobs:
               return isDeepStrictEqual(normalized, baseline);
             }
 
+            // BEGIN release-compatibility-contract
+            function compareStableCompatibilityVersions(left, right) {
+              const leftParts = left.split('.').map(Number);
+              const rightParts = right.split('.').map(Number);
+              for (let index = 0; index < 3; index += 1) {
+                if (leftParts[index] !== rightParts[index]) {
+                  return leftParts[index] - rightParts[index];
+                }
+              }
+              return 0;
+            }
+
+            function validateCompatibilityTransition(input) {
+              const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+              if (typeof input.baseManifest.minAppVersion !== 'string' ||
+                  !stableVersion.test(input.baseManifest.minAppVersion) ||
+                  typeof input.nextManifest.minAppVersion !== 'string' ||
+                  !stableVersion.test(input.nextManifest.minAppVersion)) {
+                throw new Error('Manifest compatibility versions must be stable semantic versions.');
+              }
+              const releasedMinimum = input.baseVersions[input.baseVersion];
+              if (typeof releasedMinimum !== 'string' || !stableVersion.test(releasedMinimum)) {
+                throw new Error(`Released version ${input.baseVersion} has no compatibility record.`);
+              }
+              if (input.baseManifest.minAppVersion !== releasedMinimum &&
+                  compareStableCompatibilityVersions(
+                    input.baseManifest.minAppVersion,
+                    releasedMinimum,
+                  ) <= 0) {
+                throw new Error('Pending manifest compatibility must increase the released floor.');
+              }
+              if (input.nextVersions[input.nextVersion] !== input.nextManifest.minAppVersion) {
+                throw new Error('New release compatibility does not match its manifest.');
+              }
+            }
+
+            function assertReleasedHistoryUnchanged(baseVersions, tagVersions) {
+              if (!isDeepStrictEqual(baseVersions, tagVersions)) {
+                throw new Error('Released compatibility history changed after the previous tag.');
+              }
+            }
+            // END release-compatibility-contract
+
             async function readJsonAt(ref, file) {
               const response = await github.rest.repos.getContent({ owner, repo, path: file, ref });
               const data = response.data;
@@ -210,14 +253,14 @@ jobs:
                 nextVersion !== version || compareVersions(nextVersion, baseVersion) <= 0) {
               throw new Error('Release identity or version progression is invalid.');
             }
-            if (typeof baseManifest.minAppVersion !== 'string' || !baseManifest.minAppVersion ||
-                typeof nextManifest.minAppVersion !== 'string' || !nextManifest.minAppVersion) {
-              throw new Error('Manifest compatibility versions must be non-empty strings.');
-            }
-            if (baseVersions[baseVersion] !== baseManifest.minAppVersion ||
-                nextVersions[nextVersion] !== nextManifest.minAppVersion) {
-              throw new Error('Release version history does not match manifest compatibility.');
-            }
+            validateCompatibilityTransition({
+              baseManifest,
+              baseVersion,
+              baseVersions,
+              nextManifest,
+              nextVersion,
+              nextVersions,
+            });
             if (!equalExceptField(nextPackage, basePackage, 'version')) {
               throw new Error('package.json changed outside its version field.');
             }
@@ -286,6 +329,7 @@ jobs:
                 tagVersions[baseVersion] !== tagManifest.minAppVersion) {
               throw new Error(`Previous release tag ${baseVersion} has invalid version metadata.`);
             }
+            assertReleasedHistoryUnchanged(baseVersions, tagVersions);
             const previousComparison = await github.rest.repos.compareCommitsWithBasehead({
               owner,
               repo,
