@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ensureFolderExists } from "./ensureFolderExists";
 import { plugin } from "../store";
 
+function deferred() {
+	let resolve!: () => void;
+	const promise = new Promise<void>((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
+
 function setupApp(existing: string[] = []) {
 	const present = new Set(existing);
 	const created: string[] = [];
@@ -119,5 +127,30 @@ describe("ensureFolderExists", () => {
 		} as never);
 
 		await expect(ensureFolderExists("Podcasts/My Show")).rejects.toThrow("EACCES");
+	});
+
+	it("stops between folder segments when the lifecycle guard fails", async () => {
+		const firstCreate = deferred();
+		const created: string[] = [];
+		const createFolder = vi.fn(async (path: string) => {
+			created.push(path);
+			if (created.length === 1) await firstCreate.promise;
+		});
+		const vault = {
+			getAbstractFileByPath: () => null,
+			createFolder,
+		} as unknown as Parameters<typeof ensureFolderExists>[1];
+		const lifecycleError = new DOMException("plugin unloaded", "AbortError");
+		let active = true;
+		const guard = () => {
+			if (!active) throw lifecycleError;
+		};
+		const pending = ensureFolderExists("Podcasts/My Show/Season 1", vault, guard);
+		await vi.waitFor(() => expect(createFolder).toHaveBeenCalledOnce());
+		active = false;
+		firstCreate.resolve();
+
+		await expect(pending).rejects.toBe(lifecycleError);
+		expect(created).toEqual(["Podcasts"]);
 	});
 });

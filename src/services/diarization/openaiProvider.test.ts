@@ -26,6 +26,7 @@ describe("diarizeWithOpenAI (#168)", () => {
 			chunkFiles: [chunk("a.mp3"), chunk("b.mp3")],
 			maxRetries: 2,
 			onProgress: () => {},
+			signal: new AbortController().signal,
 		});
 
 		expect(segments).toEqual([
@@ -45,6 +46,7 @@ describe("diarizeWithOpenAI (#168)", () => {
 			chunkFiles: [chunk("a.mp3"), chunk("b.mp3")],
 			maxRetries: 1,
 			onProgress: () => {},
+			signal: new AbortController().signal,
 		});
 
 		expect(segments).toEqual([
@@ -62,7 +64,44 @@ describe("diarizeWithOpenAI (#168)", () => {
 				chunkFiles: [chunk("a.mp3"), chunk("b.mp3")],
 				maxRetries: 1,
 				onProgress: () => {},
+				signal: new AbortController().signal,
 			}),
 		).rejects.toThrow(/every chunk: invalid api key/);
+	});
+
+	it("aborts an in-flight request without retrying or logging a failure", async () => {
+		const controller = new AbortController();
+		const abortError = new DOMException("plugin unloaded", "AbortError");
+		const create = vi.fn(
+			(_request: unknown, options?: { signal?: AbortSignal }): Promise<never> =>
+				new Promise((_resolve, reject) => {
+					options?.signal?.addEventListener(
+						"abort",
+						() => reject(options.signal?.reason ?? new Error("aborted")),
+						{ once: true },
+					);
+				}),
+		);
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		try {
+			const pending = diarizeWithOpenAI({
+				getClient: fakeClient(create),
+				chunkFiles: [chunk("a.mp3")],
+				maxRetries: 3,
+				onProgress: () => {},
+				signal: controller.signal,
+			});
+			await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+
+			controller.abort(abortError);
+
+			await expect(pending).rejects.toBe(abortError);
+			expect(create).toHaveBeenCalledTimes(1);
+			expect(create.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
+			expect(consoleError).not.toHaveBeenCalled();
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });

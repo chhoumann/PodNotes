@@ -9,6 +9,32 @@ import type PodNotes from "src/main";
 
 const getEpisodeAudioBufferMock = vi.fn();
 const transcriptionsCreateMock = vi.fn();
+const diarizeWithDeepgramMock = vi.hoisted(() => vi.fn());
+
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise;
+		reject = rejectPromise;
+	});
+	return { promise, resolve, reject };
+}
+
+async function settlesAfterMicrotasks(promise: Promise<unknown>): Promise<boolean> {
+	let settled = false;
+	void promise.then(
+		() => {
+			settled = true;
+		},
+		() => {
+			settled = true;
+		},
+	);
+
+	for (let turn = 0; turn < 10 && !settled; turn++) await Promise.resolve();
+	return settled;
+}
 
 vi.mock("../downloadEpisode", () => ({
 	getEpisodeAudioBuffer: (...args: unknown[]) => getEpisodeAudioBufferMock(...args),
@@ -19,6 +45,14 @@ vi.mock("openai", () => ({
 		audio = { transcriptions: { create: transcriptionsCreateMock } };
 	},
 }));
+
+vi.mock("./diarization", async () => {
+	const actual = await vi.importActual<typeof import("./diarization")>("./diarization");
+	return {
+		...actual,
+		diarizeWithDeepgram: diarizeWithDeepgramMock,
+	};
+});
 
 const mockEpisode: Episode = {
 	title: "Test Episode",
@@ -34,20 +68,21 @@ const mockEpisode: Episode = {
 
 function createMockPlugin(
 	overrides: {
-		openAIApiKey?: string;
+		openAIKey?: string;
 		podcast?: Episode | null;
 		existingTranscriptPath?: string | null;
 	} = {},
 ): PodNotes {
 	const {
-		openAIApiKey = "test-api-key",
+		openAIKey = "test-api-key",
 		podcast = mockEpisode,
 		existingTranscriptPath = null,
 	} = overrides;
 
 	return {
 		settings: {
-			openAIApiKey,
+			openAISecretId: openAIKey ? "openai-secret" : "",
+			deepgramSecretId: "",
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",
 				template: "# {{title}}\n\n{{transcript}}",
@@ -55,6 +90,17 @@ function createMockPlugin(
 			download: {
 				path: "Downloads",
 			},
+		},
+		credentials: {
+			get: vi.fn((_settings, kind: "openai" | "deepgram") =>
+				kind === "openai" ? openAIKey || null : null,
+			),
+			has: vi.fn((_settings, kind: "openai" | "deepgram") =>
+				kind === "openai" ? Boolean(openAIKey) : false,
+			),
+			status: vi.fn((_settings, kind: "openai" | "deepgram") =>
+				kind === "openai" && openAIKey ? "available" : "unconfigured",
+			),
 		},
 		api: {
 			podcast,
@@ -83,6 +129,7 @@ function createMockPlugin(
 describe("TranscriptionService", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		diarizeWithDeepgramMock.mockReset();
 		getEpisodeAudioBufferMock.mockResolvedValue({
 			buffer: new ArrayBuffer(1024),
 			extension: "mp3",
@@ -133,7 +180,7 @@ describe("TranscriptionService", () => {
 
 	describe("transcribeCurrentEpisode validation", () => {
 		test("shows notice when no API key is configured", async () => {
-			const mockPlugin = createMockPlugin({ openAIApiKey: "" });
+			const mockPlugin = createMockPlugin({ openAIKey: "" });
 			const service = new TranscriptionService(mockPlugin);
 
 			await service.transcribeCurrentEpisode();
@@ -144,6 +191,211 @@ describe("TranscriptionService", () => {
 			const service = new TranscriptionService(mockPlugin);
 
 			await service.transcribeCurrentEpisode();
+		});
+	});
+
+	describe("dispose", () => {
+		test("prevents queued work and credential reads after unload", async () => {
+			const plugin = createMockPlugin();
+			const service = new TranscriptionService(plugin);
+			(service as unknown as { pendingEpisodes: Episode[] }).pendingEpisodes = [mockEpisode];
+			service.dispose();
+
+			(service as unknown as { drainQueue: () => void }).drainQueue();
+			await expect(
+				(service as unknown as { getClient: () => Promise<unknown> }).getClient(),
+			).rejects.toThrow("unloaded");
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(plugin.credentials.get).not.toHaveBeenCalled();
+		});
+
+		test("cannot recreate a client when unload happens during the dynamic import", async () => {
+			const plugin = createMockPlugin();
+			let resolveModule!: (module: Pick<typeof import("openai"), "OpenAI">) => void;
+			const loader = vi.fn(
+				() =>
+					new Promise<Pick<typeof import("openai"), "OpenAI">>((resolve) => {
+						resolveModule = resolve;
+					}),
+			);
+			const constructor = vi.fn(() => ({ audio: { transcriptions: { create: vi.fn() } } }));
+			const service = new TranscriptionService(plugin, loader);
+			const pending = (
+				service as unknown as { getClient: () => Promise<unknown> }
+			).getClient();
+			await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+
+			service.dispose();
+			resolveModule({ OpenAI: constructor as unknown as typeof import("openai").OpenAI });
+
+			await expect(pending).rejects.toThrow("unloaded");
+			expect(constructor).not.toHaveBeenCalled();
+			expect(
+				(service as unknown as { client: unknown; cachedApiKey: unknown }).client,
+			).toBeNull();
+			expect(
+				(service as unknown as { client: unknown; cachedApiKey: unknown }).cachedApiKey,
+			).toBeNull();
+		});
+
+		test("settles promptly when unloaded during audio acquisition", async () => {
+			const audioRequest = deferred<{
+				buffer: ArrayBuffer;
+				extension: string;
+				basename: string;
+			}>();
+			getEpisodeAudioBufferMock.mockReturnValue(audioRequest.promise);
+			const plugin = createMockPlugin();
+			const service = new TranscriptionService(plugin);
+			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (episode: Episode) => Promise<void>;
+				}
+			).transcribeEpisode(mockEpisode);
+			await vi.waitFor(() => expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce());
+
+			service.dispose();
+			const settledPromptly = await settlesAfterMicrotasks(pending);
+			audioRequest.reject(new Error("late audio failure"));
+			await pending;
+
+			expect(settledPromptly).toBe(true);
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			expect(consoleError).not.toHaveBeenCalled();
+			consoleError.mockRestore();
+		});
+
+		test("aborts active OpenAI work without writing a note or updating notices", async () => {
+			const plugin = createMockPlugin();
+			const service = new TranscriptionService(plugin);
+			let finishRequest!: (result: { text: string }) => void;
+			let requestSignal: AbortSignal | undefined;
+			transcriptionsCreateMock.mockImplementation(
+				(
+					_request: unknown,
+					options?: { signal?: AbortSignal },
+				): Promise<{ text: string }> =>
+					new Promise((resolve, reject) => {
+						finishRequest = resolve;
+						requestSignal = options?.signal;
+						requestSignal?.addEventListener(
+							"abort",
+							() => reject(requestSignal?.reason ?? new Error("aborted")),
+							{ once: true },
+						);
+					}),
+			);
+			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+			try {
+				const pending = (
+					service as unknown as {
+						transcribeEpisode: (episode: Episode) => Promise<void>;
+					}
+				).transcribeEpisode(mockEpisode);
+				await vi.waitFor(() => expect(transcriptionsCreateMock).toHaveBeenCalledOnce());
+
+				const messagesBeforeDispose = setMessage.mock.calls.length;
+				service.dispose();
+				finishRequest({ text: "This must not be saved." });
+				await pending;
+
+				expect(requestSignal?.aborted).toBe(true);
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+				expect(setMessage).toHaveBeenCalledTimes(messagesBeforeDispose);
+			} finally {
+				setMessage.mockRestore();
+			}
+		});
+
+		test("does not save Deepgram results that finish after unload", async () => {
+			const plugin = createMockPlugin();
+			plugin.settings.transcript.diarization = {
+				enabled: true,
+				provider: "deepgram",
+				speakerTemplate: "**{{speaker}}:** {{text}}",
+			};
+			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
+				kind === "deepgram" ? "deepgram-key" : "test-api-key",
+			);
+			let finishRequest!: (segments: Array<{ speaker: string; text: string }>) => void;
+			diarizeWithDeepgramMock.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						finishRequest = resolve;
+					}),
+			);
+			const service = new TranscriptionService(plugin);
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (episode: Episode) => Promise<void>;
+				}
+			).transcribeEpisode(mockEpisode);
+			await vi.waitFor(() => expect(diarizeWithDeepgramMock).toHaveBeenCalledOnce());
+
+			service.dispose();
+			finishRequest([{ speaker: "A", text: "This must not be saved." }]);
+			await pending;
+
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test("settles promptly when unloaded during a non-cancelable Deepgram request", async () => {
+			const plugin = createMockPlugin();
+			plugin.settings.transcript.diarization = {
+				enabled: true,
+				provider: "deepgram",
+				speakerTemplate: "**{{speaker}}:** {{text}}",
+			};
+			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
+				kind === "deepgram" ? "deepgram-key" : "test-api-key",
+			);
+			const request = deferred<Array<{ speaker: string; text: string }>>();
+			diarizeWithDeepgramMock.mockReturnValue(request.promise);
+			const service = new TranscriptionService(plugin);
+			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (episode: Episode) => Promise<void>;
+				}
+			).transcribeEpisode(mockEpisode);
+			await vi.waitFor(() => expect(diarizeWithDeepgramMock).toHaveBeenCalledOnce());
+
+			service.dispose();
+			const settledPromptly = await settlesAfterMicrotasks(pending);
+			request.reject(new Error("late Deepgram failure"));
+			await pending;
+
+			expect(settledPromptly).toBe(true);
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			expect(consoleError).not.toHaveBeenCalled();
+			consoleError.mockRestore();
+		});
+
+		test("cancels a completed notice hide timer when disposed", async () => {
+			vi.useFakeTimers();
+			const hide = vi.spyOn(Notice.prototype, "hide");
+			try {
+				transcriptionsCreateMock.mockResolvedValue({ text: "Completed transcript." });
+				const plugin = createMockPlugin();
+				const service = new TranscriptionService(plugin);
+				await (
+					service as unknown as {
+						transcribeEpisode: (episode: Episode) => Promise<void>;
+					}
+				).transcribeEpisode(mockEpisode);
+
+				expect(hide).not.toHaveBeenCalled();
+				service.dispose();
+				expect(hide).toHaveBeenCalledOnce();
+
+				await vi.advanceTimersByTimeAsync(5000);
+				expect(hide).toHaveBeenCalledOnce();
+			} finally {
+				hide.mockRestore();
+				vi.useRealTimers();
+			}
 		});
 	});
 

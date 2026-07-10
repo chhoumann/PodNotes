@@ -20,15 +20,20 @@ import { plugin } from "../store";
  * `vault` defaults to the plugin's app vault; callers holding an injected vault
  * (e.g. a service given `plugin.app`) pass it so folder creation and the
  * subsequent file write target the same vault instance.
+ *
+ * `assertActive`, when supplied, runs around each asynchronous folder creation
+ * so a lifecycle-bound caller can stop before creating another path segment.
  */
 export async function ensureFolderExists(
 	folderPath: string,
 	vault: Vault = get(plugin).app.vault,
+	assertActive?: () => void,
 ): Promise<void> {
 	const segments = folderPath.split("/").filter(Boolean);
 
 	let current = "";
 	for (const segment of segments) {
+		assertActive?.();
 		current = current ? `${current}/${segment}` : segment;
 		if (vault.getAbstractFileByPath(current)) {
 			continue;
@@ -37,6 +42,7 @@ export async function ensureFolderExists(
 		try {
 			await vault.createFolder(current);
 		} catch (error) {
+			assertActive?.();
 			const alreadyExists = error instanceof Error && /already exists/i.test(error.message);
 			// Re-check after a failed create: a case-insensitive filesystem or a
 			// concurrent create can leave the folder present even though the
@@ -46,5 +52,6 @@ export async function ensureFolderExists(
 				throw error;
 			}
 		}
+		assertActive?.();
 	}
 }

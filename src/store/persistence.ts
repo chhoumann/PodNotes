@@ -5,6 +5,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import {
 	currentEpisode,
 	downloadedEpisodes,
+	episodeListLimit,
 	favorites,
 	hidePlayedEpisodes,
 	localFiles,
@@ -12,7 +13,9 @@ import {
 	playlists,
 	queue,
 	savedFeeds,
+	volume,
 } from "src/store";
+import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
 
 /**
  * A type-erased rule for mirroring one Svelte store into plugin settings. The
@@ -89,6 +92,65 @@ const BINDINGS: PersistenceBinding[] = [
 		(settings, value) => settings.hidePlayedEpisodes !== value,
 	),
 ];
+
+const IMPORT_ROLLBACK_BINDINGS: PersistenceBinding[] = [
+	...BINDINGS,
+	// Volume changes are persisted by main.ts rather than bindStoresToSettings.
+	// Capture them here so an equal-to-candidate event cannot be lost on rollback.
+	bind(volume, (settings, value) => {
+		if (Number.isFinite(value)) settings.defaultVolume = Math.min(1, Math.max(0, value));
+	}),
+	// The limit control owns both this store and the persisted setting. It lives
+	// outside BINDINGS because changing it also rebuilds the Latest Episodes list.
+	bind(episodeListLimit, (settings, value) => {
+		settings.episodeListLimit = sanitizeEpisodeListLimit(value);
+	}),
+];
+
+export interface PersistedStoreChangeReplay {
+	replayInto: (settings: IPodNotesSettings) => void;
+	dispose: () => void;
+}
+
+/**
+ * Record authoritative store emissions while an import candidate is being
+ * written. Replaying only stores that emitted avoids stale snapshots and solves
+ * the ABA case where the new store value already equals the import candidate,
+ * so the normal persistence binding intentionally performs no settings write.
+ *
+ * playbackRate is deliberately absent. That store is the current episode's
+ * transient speed, while defaultPlaybackRate is a preference changed directly
+ * by the settings tab. The tab locks its controls while an import is pending.
+ */
+export function observePersistedStoreChanges(): PersistedStoreChangeReplay {
+	const latestValues = new Map<PersistenceBinding, unknown>();
+	const unsubscribers = IMPORT_ROLLBACK_BINDINGS.map((binding) => {
+		let receivedInitialValue = false;
+		return binding.subscribe((value) => {
+			if (!receivedInitialValue) {
+				receivedInitialValue = true;
+				return;
+			}
+
+			latestValues.set(binding, structuredClone(value));
+		});
+	});
+	let disposed = false;
+
+	return {
+		replayInto(settings) {
+			for (const [binding, value] of latestValues) {
+				binding.apply(settings, structuredClone(value));
+			}
+		},
+		dispose() {
+			if (disposed) return;
+			disposed = true;
+			for (const unsubscribe of unsubscribers) unsubscribe();
+			latestValues.clear();
+		},
+	};
+}
 
 /**
  * Subscribes every persisted store to plugin settings and returns a single

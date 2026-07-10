@@ -1,12 +1,27 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { SecretStorage } from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
+import { CredentialRepository } from "./services/CredentialRepository";
+
+function memorySecretStorage(initial: Record<string, string> = {}) {
+	const values = new Map(Object.entries(initial));
+	const storage = {
+		getSecret: vi.fn((id: string) => values.get(id) ?? null),
+		setSecret: vi.fn((id: string, value: string) => values.set(id, value)),
+		listSecrets: vi.fn(() => [...values.keys()]),
+	} as unknown as SecretStorage;
+	return { storage, values };
+}
 
 function makePlugin(
 	saveData: (data: unknown) => Promise<void> = vi.fn().mockResolvedValue(undefined),
 ): PodNotes {
+	const { storage } = memorySecretStorage();
 	const plugin = Object.create(PodNotes.prototype) as PodNotes;
 	Object.assign(plugin, {
+		app: { secretStorage: storage },
+		credentials: new CredentialRepository(storage),
 		isReady: true,
 		settings: structuredClone(DEFAULT_SETTINGS),
 		pendingSave: null,
@@ -51,15 +66,15 @@ describe("PodNotes persistence integration", () => {
 		const saveData = vi.fn().mockResolvedValue(undefined);
 		const plugin = makePlugin(saveData);
 		Object.assign(plugin, {
-			loadData: vi.fn().mockResolvedValue({ schemaVersion: 2 }),
+			loadData: vi.fn().mockResolvedValue({ schemaVersion: 3 }),
 		});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-		await expect(plugin.loadSettings()).rejects.toThrow(/schema v2/);
+		await expect(plugin.loadSettings()).rejects.toThrow(/schema v3/);
 		expect(saveData).not.toHaveBeenCalled();
 	});
 
-	it("writes schema v1, canonical dates, and preserved unknown fields", async () => {
+	it("writes schema v2, canonical dates, and preserved unknown fields", async () => {
 		const saveData = vi.fn().mockResolvedValue(undefined);
 		const plugin = makePlugin(saveData);
 		plugin.settings.currentEpisode = {
@@ -77,13 +92,183 @@ describe("PodNotes persistence integration", () => {
 
 		expect(saveData).toHaveBeenCalledWith(
 			expect.objectContaining({
-				schemaVersion: 1,
+				schemaVersion: 2,
 				retained: { enabled: true },
 				currentEpisode: expect.objectContaining({
 					episodeDate: "2024-03-01T10:05:03.000Z",
 				}),
 			}),
 		);
+	});
+
+	it("moves legacy credentials into SecretStorage before writing schema v2", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const { storage, values } = memorySecretStorage();
+		const plugin = makePlugin(saveData);
+		Object.assign(plugin, {
+			app: { secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue({
+				schemaVersion: 1,
+				openAIApiKey: "sk-legacy",
+				diarizationApiKey: "dg-legacy",
+				retained: true,
+			}),
+		});
+
+		await plugin.loadSettings();
+
+		expect(values.get("podnotes-openai-api-key")).toBe("sk-legacy");
+		expect(values.get("podnotes-deepgram-api-key")).toBe("dg-legacy");
+		expect(plugin.settings.openAISecretId).toBe("podnotes-openai-api-key");
+		expect(plugin.settings.deepgramSecretId).toBe("podnotes-deepgram-api-key");
+		expect(saveData).toHaveBeenCalledTimes(1);
+		const persisted = saveData.mock.calls[0][0] as Record<string, unknown>;
+		expect(persisted).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				openAISecretId: "podnotes-openai-api-key",
+				deepgramSecretId: "podnotes-deepgram-api-key",
+				retained: true,
+			}),
+		);
+		expect(persisted).not.toHaveProperty("openAIApiKey");
+		expect(persisted).not.toHaveProperty("diarizationApiKey");
+	});
+
+	it("leaves legacy data untouched when SecretStorage migration fails", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const raw = { schemaVersion: 1, openAIApiKey: "sk", defaultVolume: 0.3 };
+		const storage = {
+			getSecret: vi.fn(() => null),
+			setSecret: vi.fn(() => {
+				throw new Error("keychain unavailable");
+			}),
+			listSecrets: vi.fn(() => []),
+		} as unknown as SecretStorage;
+		const plugin = makePlugin(saveData);
+		Object.assign(plugin, {
+			app: { secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue(raw),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await expect(plugin.loadSettings()).rejects.toThrow("keychain unavailable");
+		expect(saveData).not.toHaveBeenCalled();
+		expect(raw).toEqual({ schemaVersion: 1, openAIApiKey: "sk", defaultVolume: 0.3 });
+	});
+
+	it("does not save v2 when the second credential write fails", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const values = new Map<string, string>();
+		const storage = {
+			getSecret: vi.fn((id: string) => values.get(id) ?? null),
+			setSecret: vi.fn((id: string, value: string) => {
+				if (id.startsWith("podnotes-deepgram")) throw new Error("Deepgram write failed");
+				values.set(id, value);
+			}),
+			listSecrets: vi.fn(() => [...values.keys()]),
+		} as unknown as SecretStorage;
+		const plugin = makePlugin(saveData);
+		Object.assign(plugin, {
+			app: { secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue({
+				schemaVersion: 1,
+				openAIApiKey: "sk-created",
+				diarizationApiKey: "dg-fails",
+			}),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await expect(plugin.loadSettings()).rejects.toThrow("Deepgram write failed");
+		expect(values.get("podnotes-openai-api-key")).toBe("sk-created");
+		expect(saveData).not.toHaveBeenCalled();
+	});
+
+	it("reuses an already-created secret after the v2 save fails and is retried", async () => {
+		const { storage, values } = memorySecretStorage();
+		const raw = { schemaVersion: 1, openAIApiKey: "sk-retry" };
+		const first = makePlugin(vi.fn().mockRejectedValue(new Error("disk full")));
+		Object.assign(first, {
+			app: { secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue(raw),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await expect(first.loadSettings()).rejects.toThrow("disk full");
+		expect(values.get("podnotes-openai-api-key")).toBe("sk-retry");
+
+		const retrySave = vi.fn().mockResolvedValue(undefined);
+		const retry = makePlugin(retrySave);
+		Object.assign(retry, {
+			app: { secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue(raw),
+		});
+		await retry.loadSettings();
+
+		expect(retry.settings.openAISecretId).toBe("podnotes-openai-api-key");
+		expect(values.has("podnotes-openai-api-key-2")).toBe(false);
+		expect(retrySave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				schemaVersion: 2,
+				openAISecretId: "podnotes-openai-api-key",
+			}),
+		);
+	});
+
+	it("does not rewrite data that is already schema v2", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		Object.assign(plugin, {
+			loadData: vi.fn().mockResolvedValue({ schemaVersion: 2, defaultVolume: 0.4 }),
+		});
+
+		await plugin.loadSettings();
+
+		expect(plugin.settings.defaultVolume).toBe(0.4);
+		expect(saveData).not.toHaveBeenCalled();
+	});
+
+	it("scrubs retired plaintext fields from schema v2 without importing them", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const { storage, values } = memorySecretStorage();
+		const plugin = makePlugin(saveData);
+		Object.assign(plugin, {
+			app: { secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue({
+				schemaVersion: 2,
+				openAIApiKey: "must-not-import",
+				defaultVolume: 0.4,
+			}),
+		});
+
+		await plugin.loadSettings();
+
+		expect(values.size).toBe(0);
+		expect(plugin.settings.openAISecretId).toBe("");
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ schemaVersion: 2, defaultVolume: 0.4 }),
+		);
+		expect(saveData.mock.calls[0][0]).not.toHaveProperty("openAIApiKey");
+	});
+
+	it("fails closed if a v2 retired-field scrub cannot be persisted", async () => {
+		const plugin = makePlugin(vi.fn().mockRejectedValue(new Error("disk full")));
+		Object.assign(plugin, {
+			loadData: vi
+				.fn()
+				.mockResolvedValue({ schemaVersion: 2, openAIApiKey: "must-stay-unread" }),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await expect(plugin.loadSettings()).rejects.toThrow("disk full");
+		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
 	});
 
 	it("rejects a strict caller when saveData fails", async () => {

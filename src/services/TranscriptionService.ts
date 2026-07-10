@@ -21,6 +21,9 @@ function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
 	const startTime = Date.now();
 	let stopTime: number;
+	let interval: number | null = null;
+	let hideTimeout: number | null = null;
+	let disposed = false;
 	const notice = new Notice(initialMessage, 0);
 
 	function formatMsg(message: string): string {
@@ -28,11 +31,12 @@ function TimerNotice(heading: string, initialMessage: string) {
 	}
 
 	function update(message: string) {
+		if (disposed) return;
 		currentMessage = message;
 		notice.setMessage(formatMsg(currentMessage));
 	}
 
-	const interval = window.setInterval(() => {
+	interval = window.setInterval(() => {
 		notice.setMessage(formatMsg(currentMessage));
 	}, 1000);
 
@@ -40,13 +44,41 @@ function TimerNotice(heading: string, initialMessage: string) {
 		return formatTime(stopTime ? stopTime - startTime : Date.now() - startTime);
 	}
 
+	function stop() {
+		if (interval === null) return;
+		stopTime = Date.now();
+		window.clearInterval(interval);
+		interval = null;
+	}
+
+	function scheduleHide(delayMs: number, onHide: () => void) {
+		if (disposed) return;
+		if (hideTimeout !== null) window.clearTimeout(hideTimeout);
+		hideTimeout = window.setTimeout(() => {
+			hideTimeout = null;
+			if (disposed) return;
+			disposed = true;
+			notice.hide();
+			onHide();
+		}, delayMs);
+	}
+
+	function dispose() {
+		if (disposed) return;
+		disposed = true;
+		stop();
+		if (hideTimeout !== null) {
+			window.clearTimeout(hideTimeout);
+			hideTimeout = null;
+		}
+		notice.hide();
+	}
+
 	return {
 		update,
-		hide: () => notice.hide(),
-		stop: () => {
-			stopTime = Date.now();
-			window.clearInterval(interval);
-		},
+		stop,
+		scheduleHide,
+		dispose,
 	};
 }
 
@@ -69,24 +101,41 @@ export class TranscriptionService {
 	private plugin: PodNotes;
 	private client: OpenAI | null = null;
 	private cachedApiKey: string | null = null;
+	private disposed = false;
+	private readonly lifetimeAbortController = new AbortController();
+	private readonly activeNotices = new Set<ReturnType<typeof TimerNotice>>();
 	private MAX_RETRIES = 3;
 	private readonly MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 	private readonly MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
 	private pendingEpisodes: Episode[] = [];
 	private activeTranscriptions = new Set<string>();
 
-	constructor(plugin: PodNotes) {
+	constructor(
+		plugin: PodNotes,
+		private readonly loadOpenAI: () => Promise<Pick<typeof import("openai"), "OpenAI">> = () =>
+			import("openai"),
+	) {
 		this.plugin = plugin;
 	}
 
 	async transcribeCurrentEpisode(): Promise<void> {
-		if (!requiredTranscriptionKeyPresent(this.plugin.settings)) {
+		if (this.disposed) return;
+		if (
+			!requiredTranscriptionKeyPresent(this.plugin.settings, (kind) =>
+				this.plugin.credentials.has(this.plugin.settings, kind),
+			)
+		) {
 			const diarization = this.plugin.settings.transcript.diarization;
 			const needsDeepgram = diarization?.enabled && diarization.provider === "deepgram";
+			const kind = needsDeepgram ? "deepgram" : "openai";
+			const unavailableOnDevice =
+				this.plugin.credentials.status(this.plugin.settings, kind) === "missing";
 			new Notice(
-				needsDeepgram
-					? "Please add your Deepgram API key in the transcript settings to use Deepgram diarization."
-					: "Please add your OpenAI API key in the transcript settings first.",
+				unavailableOnDevice
+					? `The selected ${needsDeepgram ? "Deepgram" : "OpenAI"} API key is not available on this device. Select or create it in the transcript settings.`
+					: needsDeepgram
+						? "Select or create a Deepgram API key in the transcript settings on this device."
+						: "Select or create an OpenAI API key in the transcript settings on this device.",
 			);
 			return;
 		}
@@ -122,6 +171,10 @@ export class TranscriptionService {
 	}
 
 	private drainQueue(): void {
+		if (this.disposed) {
+			this.pendingEpisodes = [];
+			return;
+		}
 		while (
 			this.activeTranscriptions.size < this.MAX_CONCURRENT_TRANSCRIPTIONS &&
 			this.pendingEpisodes.length > 0
@@ -136,7 +189,7 @@ export class TranscriptionService {
 
 			void this.transcribeEpisode(nextEpisode).finally(() => {
 				this.activeTranscriptions.delete(episodeKey);
-				this.drainQueue();
+				if (!this.disposed) this.drainQueue();
 			});
 		}
 	}
@@ -146,23 +199,29 @@ export class TranscriptionService {
 	}
 
 	private async transcribeEpisode(episode: Episode): Promise<void> {
+		this.assertActive();
 		const notice = TimerNotice(`Transcription: ${episode.title}`, "Preparing to transcribe...");
+		this.activeNotices.add(notice);
+		const updateNotice = (message: string) => {
+			if (!this.disposed) notice.update(message);
+		};
 
 		try {
 			const transcriptPath = this.getTranscriptPath(episode);
 			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 			if (existingFile instanceof TFile) {
 				notice.stop();
-				notice.update(`Transcript already exists - skipped (${transcriptPath}).`);
+				updateNotice(`Transcript already exists - skipped (${transcriptPath}).`);
 				return;
 			}
 
-			notice.update("Fetching episode audio...");
+			updateNotice("Fetching episode audio...");
 			const {
 				buffer: fileBuffer,
 				extension: fileExtension,
 				basename,
-			} = await getEpisodeAudioBuffer(episode);
+			} = await this.waitForLifecycle(getEpisodeAudioBuffer(episode));
+			this.assertActive();
 			const mimeType = getMimeType(fileExtension);
 
 			const { body: transcriptBody, warning } = await this.buildTranscriptBody(
@@ -172,22 +231,30 @@ export class TranscriptionService {
 					extension: fileExtension,
 					basename,
 				},
-				notice.update,
+				updateNotice,
 			);
+			this.assertActive();
 
-			notice.update("Saving transcription...");
+			updateNotice("Saving transcription...");
 			await this.saveTranscription(episode, transcriptBody);
+			this.assertActive();
 
 			notice.stop();
-			notice.update(warning ?? "Transcription completed and saved.");
+			updateNotice(warning ?? "Transcription completed and saved.");
 		} catch (error) {
+			if (this.disposed || this.lifetimeAbortController.signal.aborted) return;
 			console.error("Transcription error:", error);
 			const message = error instanceof Error ? error.message : String(error);
 			notice.stop();
-			notice.update(`Transcription failed: ${message}`);
+			updateNotice(`Transcription failed: ${message}`);
 		} finally {
 			notice.stop();
-			window.setTimeout(() => notice.hide(), 5000);
+			if (this.disposed) {
+				notice.dispose();
+				this.activeNotices.delete(notice);
+			} else {
+				notice.scheduleHide(5000, () => this.activeNotices.delete(notice));
+			}
 		}
 	}
 
@@ -216,6 +283,7 @@ export class TranscriptionService {
 
 		if (diarization?.enabled) {
 			const segments = await this.diarize(audio, diarization.provider, updateNotice);
+			this.assertActive();
 			if (segments.length === 0) {
 				throw new Error("Diarization returned no speech segments.");
 			}
@@ -226,8 +294,10 @@ export class TranscriptionService {
 
 		updateNotice("Creating audio chunks...");
 		const files = await createChunkFiles(audio);
+		this.assertActive();
 		updateNotice("Starting transcription...");
 		const { text, failedChunks } = await this.transcribeChunks(files, updateNotice);
+		this.assertActive();
 
 		// Strip the error placeholders (and trim) to see whether ANY real speech was
 		// transcribed. Nothing real means every chunk failed or the only successes
@@ -259,19 +329,25 @@ export class TranscriptionService {
 		provider: DiarizationProviderId,
 		updateNotice: (message: string) => void,
 	): Promise<DiarizedSegment[]> {
+		this.assertActive();
 		if (provider === "deepgram") {
-			const apiKey = this.plugin.settings.diarizationApiKey?.trim();
+			const apiKey = this.plugin.credentials.get(this.plugin.settings, "deepgram");
 			if (!apiKey) {
-				throw new Error("Missing Deepgram API key for diarization.");
+				throw new Error("Missing Deepgram API key on this device.");
 			}
 			// Deepgram ingests the whole file in one request, so it needs no
 			// chunking — which is exactly why its speaker labels stay consistent
 			// across the entire episode.
-			return diarizeWithDeepgram({
-				audio,
-				apiKey,
-				onProgress: updateNotice,
-			});
+			const segments = await this.waitForLifecycle(
+				diarizeWithDeepgram({
+					audio,
+					apiKey,
+					onProgress: updateNotice,
+					signal: this.lifetimeAbortController.signal,
+				}),
+			);
+			this.assertActive();
+			return segments;
 		}
 
 		// OpenAI diarization shares Whisper's ~20 MB chunk limit (a conservative
@@ -279,12 +355,16 @@ export class TranscriptionService {
 		// Speaker labels can differ across chunks on a long episode.
 		updateNotice("Creating audio chunks...");
 		const chunkFiles = await createChunkFiles(audio);
-		return diarizeWithOpenAI({
+		this.assertActive();
+		const segments = await diarizeWithOpenAI({
 			getClient: () => this.getClient(),
 			chunkFiles,
 			maxRetries: this.MAX_RETRIES,
 			onProgress: updateNotice,
+			signal: this.lifetimeAbortController.signal,
 		});
+		this.assertActive();
+		return segments;
 	}
 
 	private async transcribeChunks(
@@ -292,6 +372,7 @@ export class TranscriptionService {
 		updateNotice: (message: string) => void,
 	): Promise<{ text: string; failedChunks: number }> {
 		const client = await this.getClient();
+		this.assertActive();
 		const transcriptions: string[] = Array.from({ length: files.length });
 		let completedChunks = 0;
 		let failedChunks = 0;
@@ -308,22 +389,29 @@ export class TranscriptionService {
 
 		const worker = async () => {
 			while (true) {
+				this.assertActive();
 				const index = nextIndex++;
 				if (index >= files.length) return;
 				const file = files[index];
 
 				let retries = 0;
 				while (retries < this.MAX_RETRIES) {
+					this.assertActive();
 					try {
-						const result = await client.audio.transcriptions.create({
-							model: "whisper-1",
-							file,
-						});
+						const result = await client.audio.transcriptions.create(
+							{
+								model: "whisper-1",
+								file,
+							},
+							{ signal: this.lifetimeAbortController.signal },
+						);
+						this.assertActive();
 						transcriptions[index] = result.text;
 						completedChunks++;
 						updateProgress();
 						break;
 					} catch (error) {
+						this.assertActive();
 						retries++;
 						if (retries >= this.MAX_RETRIES) {
 							console.error(
@@ -335,9 +423,7 @@ export class TranscriptionService {
 							completedChunks++;
 							updateProgress();
 						} else {
-							await new Promise((resolve) =>
-								window.setTimeout(resolve, 1000 * retries),
-							);
+							await this.waitForRetry(1000 * retries);
 						}
 					}
 				}
@@ -348,8 +434,70 @@ export class TranscriptionService {
 		const workers = Array.from({ length: workerCount }, () => worker());
 
 		await Promise.all(workers);
+		this.assertActive();
 
 		return { text: transcriptions.join(" "), failedChunks };
+	}
+
+	private waitForRetry(delayMs: number): Promise<void> {
+		this.assertActive();
+		const signal = this.lifetimeAbortController.signal;
+
+		return new Promise((resolve, reject) => {
+			const timeout = window.setTimeout(() => {
+				signal.removeEventListener("abort", onAbort);
+				resolve();
+			}, delayMs);
+			const onAbort = () => {
+				window.clearTimeout(timeout);
+				signal.removeEventListener("abort", onAbort);
+				reject(this.getAbortReason());
+			};
+
+			signal.addEventListener("abort", onAbort, { once: true });
+			if (signal.aborted) onAbort();
+		});
+	}
+
+	private waitForLifecycle<T>(operation: Promise<T>): Promise<T> {
+		this.assertActive();
+		const signal = this.lifetimeAbortController.signal;
+
+		return new Promise((resolve, reject) => {
+			let settled = false;
+			const cleanup = () => signal.removeEventListener("abort", onAbort);
+			const onAbort = () => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				reject(this.getAbortReason());
+			};
+
+			signal.addEventListener("abort", onAbort, { once: true });
+			void operation.then(
+				(value) => {
+					if (settled) return;
+					if (signal.aborted) {
+						onAbort();
+						return;
+					}
+					settled = true;
+					cleanup();
+					resolve(value);
+				},
+				(error) => {
+					if (settled) return;
+					if (signal.aborted) {
+						onAbort();
+						return;
+					}
+					settled = true;
+					cleanup();
+					reject(error);
+				},
+			);
+			if (signal.aborted) onAbort();
+		});
 	}
 
 	/**
@@ -364,6 +512,7 @@ export class TranscriptionService {
 	}
 
 	private async saveTranscription(episode: Episode, transcriptBody: string): Promise<void> {
+		this.assertActive();
 		const transcriptPath = this.getTranscriptPath(episode);
 		// transcriptBody is already formatted by buildTranscriptBody (sentence
 		// reflow for Whisper, speaker turns for diarization), so it is templated
@@ -381,15 +530,19 @@ export class TranscriptionService {
 		// existing folder, which the old hand-rolled loop surfaced as a spurious
 		// failure (the #87 class of bug).
 		const directory = transcriptPath.substring(0, transcriptPath.lastIndexOf("/"));
-		await ensureFolderExists(directory, vault);
+		await ensureFolderExists(directory, vault, () => this.assertActive());
+		this.assertActive();
 
 		const file = vault.getAbstractFileByPath(transcriptPath);
 
 		if (!file) {
+			this.assertActive();
 			const newFile = await vault.create(transcriptPath, transcriptContent);
+			this.assertActive();
 			await this.plugin.app.workspace.getLeaf().openFile(newFile);
 		} else if (file instanceof TFile) {
 			// File already exists - open it without overwriting
+			this.assertActive();
 			await this.plugin.app.workspace.getLeaf().openFile(file);
 		} else {
 			throw new Error("Expected a file but found a folder at transcript path.");
@@ -397,16 +550,18 @@ export class TranscriptionService {
 	}
 
 	private async getClient(): Promise<OpenAI> {
-		const apiKey = this.plugin.settings.openAIApiKey?.trim();
+		this.assertActive();
+		const apiKey = this.plugin.credentials.get(this.plugin.settings, "openai");
 		if (!apiKey) {
-			throw new Error("Missing OpenAI API key");
+			throw new Error("Missing OpenAI API key on this device");
 		}
 
 		if (this.client && this.cachedApiKey === apiKey) {
 			return this.client;
 		}
 
-		const { OpenAI } = await import("openai");
+		const { OpenAI } = await this.loadOpenAI();
+		this.assertActive();
 		this.client = new OpenAI({
 			apiKey,
 			dangerouslyAllowBrowser: true,
@@ -414,5 +569,38 @@ export class TranscriptionService {
 		this.cachedApiKey = apiKey;
 
 		return this.client;
+	}
+
+	/** Drop the client and its credential material when the plugin unloads. */
+	dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		this.lifetimeAbortController.abort(
+			new DOMException("PodNotes was unloaded during transcription.", "AbortError"),
+		);
+		this.pendingEpisodes = [];
+		for (const notice of this.activeNotices) {
+			notice.dispose();
+		}
+		this.activeNotices.clear();
+		this.clearCredentialCache();
+	}
+
+	clearCredentialCache(): void {
+		this.client = null;
+		this.cachedApiKey = null;
+	}
+
+	private assertActive(): void {
+		if (this.disposed || this.lifetimeAbortController.signal.aborted) {
+			throw this.getAbortReason();
+		}
+	}
+
+	private getAbortReason(): unknown {
+		return (
+			this.lifetimeAbortController.signal.reason ??
+			new DOMException("PodNotes was unloaded during transcription.", "AbortError")
+		);
 	}
 }

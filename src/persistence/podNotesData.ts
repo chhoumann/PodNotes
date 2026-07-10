@@ -8,12 +8,22 @@ import {
 	type PersistedPlaylist,
 } from "./episodeCodec";
 import { decodeSettings } from "./settingsCodec";
+import type { CredentialValues } from "src/types/Credentials";
 
 export { decodeEpisode, decodePlaylist, encodeEpisode, encodePlaylist } from "./episodeCodec";
 
-export const PODNOTES_DATA_SCHEMA_VERSION = 1;
+export const PODNOTES_DATA_SCHEMA_VERSION = 2;
 
-const KNOWN_TOP_LEVEL_KEYS = new Set([...Object.keys(DEFAULT_SETTINGS), "schemaVersion"]);
+/** Plaintext fields accepted only as migration input and never persisted again. */
+export const RETIRED_PLAINTEXT_SECRET_KEYS = new Set(["openAIApiKey", "diarizationApiKey"]);
+
+const KNOWN_TOP_LEVEL_KEYS = new Set([
+	...Object.keys(DEFAULT_SETTINGS),
+	...RETIRED_PLAINTEXT_SECRET_KEYS,
+	"schemaVersion",
+]);
+
+export type PodNotesDataSchemaVersion = 0 | 1 | typeof PODNOTES_DATA_SCHEMA_VERSION;
 
 export class PodNotesDataError extends Error {
 	constructor(
@@ -27,10 +37,14 @@ export class PodNotesDataError extends Error {
 
 export interface DecodedPodNotesData {
 	settings: IPodNotesSettings;
-	sourceVersion: 0 | typeof PODNOTES_DATA_SCHEMA_VERSION;
+	sourceVersion: PodNotesDataSchemaVersion;
 	changed: boolean;
 	warnings: string[];
-	/** Unknown v0/v1 root fields retained so a normal save does not erase them. */
+	/** Plaintext v0/v1 values that must move into SecretStorage before a v2 save. */
+	legacySecrets: CredentialValues;
+	/** Retired fields found in v2 must be scrubbed without importing their values. */
+	retiredPlaintextPresent: boolean;
+	/** Unknown supported-schema root fields retained so a normal save does not erase them. */
 	unknownFields: UnknownRecord;
 }
 
@@ -46,7 +60,7 @@ export type PersistedPodNotesSettings = Omit<
 	downloadedEpisodes: Record<string, PersistedEpisode[]>;
 };
 
-export type PersistedPodNotesDataV1 = PersistedPodNotesSettings &
+export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
 	UnknownRecord & {
 		schemaVersion: typeof PODNOTES_DATA_SCHEMA_VERSION;
 	};
@@ -54,7 +68,7 @@ export type PersistedPodNotesDataV1 = PersistedPodNotesSettings &
 /**
  * Decode and validate plugin data before any store sees it.
  *
- * Missing `schemaVersion` is the legacy v0 shape. V1 deliberately remains flat
+ * Missing `schemaVersion` is the legacy v0 shape. Persisted data remains flat
  * so existing data files, rollback paths, and E2E tooling stay compatible. A
  * newer version fails closed so an older plugin can never overwrite data it
  * does not understand.
@@ -72,13 +86,22 @@ export function decodePodNotesData(value: unknown): DecodedPodNotesData {
 	const sourceVersion = readSchemaVersion(value);
 	const warnings = new Set<string>();
 	const settings = decodeSettings(value, warnings, sourceVersion);
+	const legacySecrets = decodeLegacySecrets(value, sourceVersion, warnings);
+	const retiredPlaintextPresent = [...RETIRED_PLAINTEXT_SECRET_KEYS].some((key) =>
+		Object.prototype.hasOwnProperty.call(value, key),
+	);
 	const unknownFields = copyUnknownRootFields(value);
 
 	return {
 		settings,
 		sourceVersion,
-		changed: sourceVersion !== PODNOTES_DATA_SCHEMA_VERSION || warnings.size > 0,
+		changed:
+			sourceVersion !== PODNOTES_DATA_SCHEMA_VERSION ||
+			retiredPlaintextPresent ||
+			warnings.size > 0,
 		warnings: [...warnings],
+		legacySecrets,
+		retiredPlaintextPresent,
 		unknownFields,
 	};
 }
@@ -87,8 +110,12 @@ export function decodePodNotesData(value: unknown): DecodedPodNotesData {
 export function encodePodNotesData(
 	settings: IPodNotesSettings,
 	unknownFields: UnknownRecord = {},
-): PersistedPodNotesDataV1 {
-	const validated = decodeSettings(settings as unknown as UnknownRecord, new Set(), 1);
+): PersistedPodNotesDataV2 {
+	const validated = decodeSettings(
+		settings as unknown as UnknownRecord,
+		new Set(),
+		PODNOTES_DATA_SCHEMA_VERSION,
+	);
 
 	return {
 		...copyUnknownRootFields(unknownFields),
@@ -104,15 +131,19 @@ export function encodePodNotesData(
 		downloadedEpisodes: mapRecord(validated.downloadedEpisodes, (episodes) =>
 			episodes.map((episode) => encodeEpisode(episode)),
 		),
-	} as PersistedPodNotesDataV1;
+	} as PersistedPodNotesDataV2;
 }
 
-function readSchemaVersion(root: UnknownRecord): 0 | 1 {
+function readSchemaVersion(root: UnknownRecord): PodNotesDataSchemaVersion {
 	if (!Object.prototype.hasOwnProperty.call(root, "schemaVersion")) return 0;
 
 	const version = root.schemaVersion;
-	if (version === PODNOTES_DATA_SCHEMA_VERSION) return version;
-	if (typeof version === "number" && Number.isInteger(version) && version > 1) {
+	if (version === 1 || version === PODNOTES_DATA_SCHEMA_VERSION) return version;
+	if (
+		typeof version === "number" &&
+		Number.isInteger(version) &&
+		version > PODNOTES_DATA_SCHEMA_VERSION
+	) {
 		throw new PodNotesDataError(
 			`PodNotes data schema v${version} requires a newer version of PodNotes. The file was not modified.`,
 			"unsupported-version",
@@ -123,6 +154,37 @@ function readSchemaVersion(root: UnknownRecord): 0 | 1 {
 		"PodNotes data.json has an invalid schemaVersion. The file was not modified.",
 		"invalid-data",
 	);
+}
+
+function decodeLegacySecrets(
+	root: UnknownRecord,
+	sourceVersion: PodNotesDataSchemaVersion,
+	warnings: Set<string>,
+): CredentialValues {
+	if (sourceVersion >= PODNOTES_DATA_SCHEMA_VERSION) return {};
+
+	const values: CredentialValues = {};
+	readLegacySecret(root, "openAIApiKey", "openAI", values, warnings);
+	readLegacySecret(root, "diarizationApiKey", "deepgram", values, warnings);
+	return values;
+}
+
+function readLegacySecret(
+	root: UnknownRecord,
+	legacyKey: "openAIApiKey" | "diarizationApiKey",
+	credentialKey: keyof CredentialValues,
+	values: CredentialValues,
+	warnings: Set<string>,
+): void {
+	const value = root[legacyKey];
+	if (value === undefined || value === null || value === "") return;
+	if (typeof value !== "string") {
+		warnings.add(`${legacyKey}: expected a string; value was ignored`);
+		return;
+	}
+
+	const normalized = value.trim();
+	if (normalized) values[credentialKey] = normalized;
 }
 
 function copyUnknownRootFields(root: UnknownRecord): UnknownRecord {
