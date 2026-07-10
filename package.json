@@ -41,7 +41,7 @@
 		"eslint-plugin-obsidianmd": "^0.4.1",
 		"jsdom": "^29.1.1",
 		"obsidian": "1.13.1",
-		"obsidian-e2e": "^0.7.0",
+		"obsidian-e2e": "^0.8.1",
 		"oxfmt": "^0.57.0",
 		"oxlint": "^1.72.0",
 		"semantic-release": "^25.0.5",
