@@ -138,6 +138,7 @@ if (typeof IntersectionObserver === "undefined") {
 
 		readonly root: Element | Document | null = null;
 		readonly rootMargin: string = this._options?.rootMargin ?? "0px";
+		readonly scrollMargin: string = this._options?.scrollMargin ?? "0px";
 		readonly thresholds: ReadonlyArray<number> = [0];
 
 		disconnect(): void {}
