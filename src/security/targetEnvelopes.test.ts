@@ -106,13 +106,56 @@ describe("feed capability bundles", () => {
 
 	it("fails closed for unsupported versions and hostile objects", () => {
 		const hostile = new Proxy(feedBundle(), {
-			get() {
-				throw new Error("hostile getter");
+			ownKeys() {
+				throw new Error("hostile ownKeys trap");
 			},
 		});
 
 		expect(validateFeedCapabilityEnvelope({ ...feedBundle(), schemaVersion: 2 })).toBeNull();
 		expect(validateFeedCapabilityEnvelope(hostile)).toBeNull();
+	});
+
+	it("snapshots proxy data descriptors once instead of rereading changing getters", () => {
+		let rootGuidReads = 0;
+		let episodeGuidReads = 0;
+		const episode = new Proxy(
+			{ ...episodeResources(), guid: "stable-episode-guid" },
+			{
+				get(target, key, receiver) {
+					if (key === "guid") {
+						episodeGuidReads += 1;
+						return "x".repeat(9_000);
+					}
+					return Reflect.get(target, key, receiver);
+				},
+			},
+		);
+		const value = new Proxy(
+			{
+				...feedBundle(),
+				guid: "stable-feed-guid",
+				episodeResources: { [episodeId]: episode },
+			},
+			{
+				get(target, key, receiver) {
+					if (key === "guid") {
+						rootGuidReads += 1;
+						return "x".repeat(9_000);
+					}
+					return Reflect.get(target, key, receiver);
+				},
+			},
+		);
+
+		expect(validateFeedCapabilityEnvelope(value)).toEqual({
+			...feedBundle(),
+			guid: "stable-feed-guid",
+			episodeResources: {
+				[episodeId]: { ...episodeResources(), guid: "stable-episode-guid" },
+			},
+		});
+		expect(rootGuidReads).toBe(0);
+		expect(episodeGuidReads).toBe(0);
 	});
 
 	it("preserves bounded channel GUID evidence without imposing uniqueness", () => {
@@ -271,8 +314,8 @@ describe("episode resource envelopes", () => {
 
 	it("fails closed for unsupported versions and hostile objects", () => {
 		const hostile = new Proxy(episodeResources(), {
-			get() {
-				throw new Error("hostile getter");
+			getOwnPropertyDescriptor() {
+				throw new Error("hostile descriptor trap");
 			},
 		});
 

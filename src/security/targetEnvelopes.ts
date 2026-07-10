@@ -4,6 +4,12 @@ import {
 	type EpisodeHandle,
 	type FeedHandle,
 } from "./resourceHandles";
+import {
+	snapshotAllowedDataRecord,
+	snapshotDenseDataArray,
+	snapshotPlainDataRecord,
+	type StrictDataRecord,
+} from "./strictData";
 
 export const TARGET_ENVELOPE_SCHEMA_VERSION = 1;
 export const MAX_TARGET_URL_BYTES = 16 * 1024;
@@ -80,24 +86,7 @@ const EPISODE_KEYS = new Set([
 ]);
 const PRIVATE_GRANT_KEYS = new Set<string>(PRIVATE_TARGET_GRANT_KINDS);
 
-type UnknownRecord = Record<string, unknown>;
-
-function isPlainDataRecord(value: unknown): value is UnknownRecord {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-	const prototype = Object.getPrototypeOf(value);
-	if (prototype !== Object.prototype && prototype !== null) return false;
-
-	for (const key of Reflect.ownKeys(value)) {
-		if (typeof key !== "string") return false;
-		const descriptor = Object.getOwnPropertyDescriptor(value, key);
-		if (!descriptor?.enumerable || !("value" in descriptor)) return false;
-	}
-	return true;
-}
-
-function isStrictRecord(value: unknown, allowedKeys: ReadonlySet<string>): value is UnknownRecord {
-	return isPlainDataRecord(value) && Object.keys(value).every((key) => allowedKeys.has(key));
-}
+type UnknownRecord = StrictDataRecord;
 
 function hasUnsafeUnicode(value: string): boolean {
 	for (let index = 0; index < value.length; index += 1) {
@@ -157,22 +146,14 @@ function normalizePrivateOrigin(value: unknown): string | undefined {
 
 function normalizePrivateGrants(value: unknown): PrivateTargetGrants | null | undefined {
 	if (value === undefined) return undefined;
-	if (!isStrictRecord(value, PRIVATE_GRANT_KEYS)) return null;
+	const record = snapshotAllowedDataRecord(value, PRIVATE_GRANT_KEYS);
+	if (!record) return null;
 
 	const normalized: PrivateTargetGrants = {};
 	for (const kind of PRIVATE_TARGET_GRANT_KINDS) {
-		if (!Object.prototype.hasOwnProperty.call(value, kind)) continue;
-		const grants = value[kind];
-		if (
-			!Array.isArray(grants) ||
-			grants.length === 0 ||
-			grants.length > MAX_PRIVATE_GRANTS_PER_KIND
-		) {
-			return null;
-		}
-		for (let index = 0; index < grants.length; index += 1) {
-			if (!Object.prototype.hasOwnProperty.call(grants, index)) return null;
-		}
+		if (!Object.prototype.hasOwnProperty.call(record, kind)) continue;
+		const grants = snapshotDenseDataArray(record[kind], MAX_PRIVATE_GRANTS_PER_KIND);
+		if (!grants || grants.length === 0) return null;
 		const origins = grants.map(normalizePrivateOrigin);
 		if (origins.some((origin) => origin === undefined)) return null;
 		const concrete = origins as string[];
@@ -200,45 +181,46 @@ function validateEpisodeResourcesEnvelopeUnchecked(
 	expectedFeedId?: unknown,
 	expectedEpisodeId?: unknown,
 ): EpisodeResourcesEnvelope | null {
-	if (!isStrictRecord(value, EPISODE_KEYS)) return null;
+	const record = snapshotAllowedDataRecord(value, EPISODE_KEYS);
+	if (!record) return null;
 	if (
-		value.schemaVersion !== TARGET_ENVELOPE_SCHEMA_VERSION ||
-		value.kind !== "episode-resources" ||
-		!isFeedHandle(value.feedId) ||
-		!isEpisodeHandle(value.episodeId) ||
-		(expectedFeedId !== undefined && value.feedId !== expectedFeedId) ||
-		(expectedEpisodeId !== undefined && value.episodeId !== expectedEpisodeId)
+		record.schemaVersion !== TARGET_ENVELOPE_SCHEMA_VERSION ||
+		record.kind !== "episode-resources" ||
+		!isFeedHandle(record.feedId) ||
+		!isEpisodeHandle(record.episodeId) ||
+		(expectedFeedId !== undefined && record.feedId !== expectedFeedId) ||
+		(expectedEpisodeId !== undefined && record.episodeId !== expectedEpisodeId)
 	) {
 		return null;
 	}
 
-	const streamUrl = readOptionalTarget(value, "streamUrl");
-	const chaptersUrl = readOptionalTarget(value, "chaptersUrl");
-	const artworkUrl = readOptionalTarget(value, "artworkUrl");
-	const itemLink = readOptionalTarget(value, "itemLink");
+	const streamUrl = readOptionalTarget(record, "streamUrl");
+	const chaptersUrl = readOptionalTarget(record, "chaptersUrl");
+	const artworkUrl = readOptionalTarget(record, "artworkUrl");
+	const itemLink = readOptionalTarget(record, "itemLink");
 	if (streamUrl === null || chaptersUrl === null || artworkUrl === null || itemLink === null) {
 		return null;
 	}
 	if (
-		Object.prototype.hasOwnProperty.call(value, "guid") &&
-		!isBoundedString(value.guid, MAX_GUID_BYTES)
+		Object.prototype.hasOwnProperty.call(record, "guid") &&
+		!isBoundedString(record.guid, MAX_GUID_BYTES)
 	) {
 		return null;
 	}
-	if (!streamUrl && !chaptersUrl && !artworkUrl && !itemLink && typeof value.guid !== "string") {
+	if (!streamUrl && !chaptersUrl && !artworkUrl && !itemLink && typeof record.guid !== "string") {
 		return null;
 	}
 
 	const normalized: EpisodeResourcesEnvelope = {
 		schemaVersion: TARGET_ENVELOPE_SCHEMA_VERSION,
 		kind: "episode-resources",
-		feedId: value.feedId,
-		episodeId: value.episodeId,
+		feedId: record.feedId,
+		episodeId: record.episodeId,
 		...(streamUrl ? { streamUrl } : {}),
 		...(chaptersUrl ? { chaptersUrl } : {}),
 		...(artworkUrl ? { artworkUrl } : {}),
 		...(itemLink ? { itemLink } : {}),
-		...(typeof value.guid === "string" ? { guid: value.guid } : {}),
+		...(typeof record.guid === "string" ? { guid: record.guid } : {}),
 	};
 	return serializedFits(normalized, MAX_EPISODE_RESOURCES_ENVELOPE_BYTES) ? normalized : null;
 }
@@ -259,41 +241,46 @@ function validateFeedCapabilityEnvelopeUnchecked(
 	value: unknown,
 	expectedFeedId?: unknown,
 ): FeedCapabilityEnvelope | null {
-	if (!isStrictRecord(value, FEED_CAPABILITY_KEYS)) return null;
+	const record = snapshotAllowedDataRecord(value, FEED_CAPABILITY_KEYS);
+	if (!record) return null;
+	const episodeResourcesRecord = snapshotPlainDataRecord(
+		record.episodeResources,
+		MAX_EPISODE_RESOURCES_PER_FEED,
+	);
 	if (
-		value.schemaVersion !== TARGET_ENVELOPE_SCHEMA_VERSION ||
-		value.kind !== "feed-capability-bundle" ||
-		!isFeedHandle(value.feedId) ||
-		(expectedFeedId !== undefined && value.feedId !== expectedFeedId) ||
-		!isPlainDataRecord(value.episodeResources)
+		record.schemaVersion !== TARGET_ENVELOPE_SCHEMA_VERSION ||
+		record.kind !== "feed-capability-bundle" ||
+		!isFeedHandle(record.feedId) ||
+		(expectedFeedId !== undefined && record.feedId !== expectedFeedId) ||
+		!episodeResourcesRecord
 	) {
 		return null;
 	}
 
-	const episodeIds = Object.keys(value.episodeResources);
+	const episodeIds = Object.keys(episodeResourcesRecord);
 	if (episodeIds.length > MAX_EPISODE_RESOURCES_PER_FEED) return null;
 
-	const subscriptionUrl = normalizeHttpTarget(value.subscriptionUrl);
-	const artworkUrl = readOptionalTarget(value, "artworkUrl");
-	const siteUrl = readOptionalTarget(value, "siteUrl");
-	const privateGrants = normalizePrivateGrants(value.privateGrants);
+	const subscriptionUrl = normalizeHttpTarget(record.subscriptionUrl);
+	const artworkUrl = readOptionalTarget(record, "artworkUrl");
+	const siteUrl = readOptionalTarget(record, "siteUrl");
+	const privateGrants = normalizePrivateGrants(record.privateGrants);
 	if (!subscriptionUrl || artworkUrl === null || siteUrl === null || privateGrants === null) {
 		return null;
 	}
 	if (
-		Object.prototype.hasOwnProperty.call(value, "guid") &&
-		!isBoundedString(value.guid, MAX_GUID_BYTES)
+		Object.prototype.hasOwnProperty.call(record, "guid") &&
+		!isBoundedString(record.guid, MAX_GUID_BYTES)
 	) {
 		return null;
 	}
 	const normalizedMetadata: Omit<FeedCapabilityEnvelope, "episodeResources"> = {
 		schemaVersion: TARGET_ENVELOPE_SCHEMA_VERSION,
 		kind: "feed-capability-bundle" as const,
-		feedId: value.feedId,
+		feedId: record.feedId,
 		subscriptionUrl,
 		...(artworkUrl ? { artworkUrl } : {}),
 		...(siteUrl ? { siteUrl } : {}),
-		...(typeof value.guid === "string" ? { guid: value.guid } : {}),
+		...(typeof record.guid === "string" ? { guid: record.guid } : {}),
 		...(privateGrants ? { privateGrants } : {}),
 	};
 	if (!serializedFits(normalizedMetadata, MAX_FEED_CAPABILITY_METADATA_BYTES)) return null;
@@ -302,8 +289,8 @@ function validateFeedCapabilityEnvelopeUnchecked(
 	for (const episodeId of episodeIds.sort()) {
 		if (!isEpisodeHandle(episodeId)) return null;
 		const entry = validateEpisodeResourcesEnvelope(
-			value.episodeResources[episodeId],
-			value.feedId,
+			episodeResourcesRecord[episodeId],
+			record.feedId,
 			episodeId,
 		);
 		if (!entry) return null;
