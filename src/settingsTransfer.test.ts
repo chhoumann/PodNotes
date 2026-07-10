@@ -105,6 +105,29 @@ describe("serializeSettings", () => {
 		expect(exported.savedFeeds).toEqual(settings.savedFeeds);
 		expect(exported.timestamp).toEqual(settings.timestamp);
 	});
+
+	it("encodes dates inside exported playlists as canonical text", () => {
+		const date = new Date("2024-03-01T10:05:03.000Z");
+		const settings = makeSettings({
+			queue: {
+				...DEFAULT_SETTINGS.queue,
+				episodes: [
+					{
+						title: "Queued",
+						streamUrl: "queued.mp3",
+						url: "",
+						description: "",
+						content: "",
+						podcastName: "Podcast",
+						episodeDate: date,
+					},
+				],
+			},
+		});
+
+		const exported = serializeSettings(settings, { includeSecret: false }, "2.17.3", NOW);
+		expect(exported.settings.queue?.episodes[0].episodeDate).toBe(date.toISOString());
+	});
 });
 
 describe("parseImport", () => {
@@ -189,6 +212,13 @@ describe("parseImport", () => {
 	it("fails when no recognizable settings remain", () => {
 		const result = parseImport(JSON.stringify({ somethingElse: true }));
 		expect(result.ok).toBe(false);
+	});
+
+	it("rejects a raw data file from a newer persistence schema", () => {
+		const result = parseImport(JSON.stringify({ schemaVersion: 2, defaultVolume: 0.5 }));
+		expect(result).toEqual(
+			expect.objectContaining({ ok: false, error: expect.stringContaining("schema v2") }),
+		);
 	});
 
 	it("drops a wrong-typed top-level value", () => {
@@ -356,6 +386,29 @@ describe("mergeImportedSettings", () => {
 
 		expect(merged.timestamp.offset).toBe(7);
 		expect(merged.timestamp.template).toBe(DEFAULT_SETTINGS.timestamp.template);
+	});
+
+	it("revives imported playlist dates before hydrating live stores", () => {
+		const date = "2024-03-01T10:05:03.000Z";
+		const current = makeSettings();
+		const merged = mergeImportedSettings(current, {
+			queue: {
+				...DEFAULT_SETTINGS.queue,
+				episodes: [
+					{
+						title: "Queued",
+						streamUrl: "queued.mp3",
+						url: "",
+						description: "",
+						content: "",
+						podcastName: "Podcast",
+						episodeDate: date as unknown as Date,
+					},
+				],
+			},
+		});
+
+		expect(merged.queue.episodes[0].episodeDate).toEqual(new Date(date));
 	});
 
 	it("replaces collection settings wholesale rather than merging them", () => {

@@ -1,5 +1,10 @@
 import { DEFAULT_SETTINGS } from "./constants";
-import { migrateTranscriptSettings } from "./settingsMigrations";
+import {
+	decodePodNotesData,
+	encodePodNotesData,
+	type PersistedPodNotesSettings,
+	PodNotesDataError,
+} from "./persistence/podNotesData";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
@@ -83,7 +88,7 @@ export interface SettingsEnvelope {
 	version: number;
 	pluginVersion: string;
 	exportedAt: string;
-	settings: Partial<IPodNotesSettings>;
+	settings: Partial<PersistedPodNotesSettings>;
 }
 
 export interface ExportOptions {
@@ -116,12 +121,13 @@ export function serializeSettings(
 	nowISO: string,
 ): SettingsEnvelope {
 	const out: Record<string, unknown> = {};
+	const persisted = encodePodNotesData(settings);
 
 	for (const key of Object.keys(settings)) {
 		if (DANGEROUS_KEYS.has(key)) continue;
 		if (!IMPORTABLE_KEYS.has(key)) continue;
 		if (SECRET_KEYS.has(key as keyof IPodNotesSettings) && !opts.includeSecret) continue;
-		out[key] = settings[key as keyof IPodNotesSettings];
+		out[key] = persisted[key];
 	}
 
 	return {
@@ -129,7 +135,7 @@ export function serializeSettings(
 		version: SETTINGS_EXPORT_VERSION,
 		pluginVersion,
 		exportedAt: nowISO,
-		settings: out as Partial<IPodNotesSettings>,
+		settings: out as Partial<PersistedPodNotesSettings>,
 	};
 }
 
@@ -181,6 +187,17 @@ export function parseImport(jsonText: string): ParseResult {
 		}
 
 		source = raw.settings;
+	} else if (Object.prototype.hasOwnProperty.call(raw, "schemaVersion")) {
+		try {
+			// Validate raw data.json imports against the same schema gate as plugin
+			// startup. The field sanitizer below still keeps import partial.
+			decodePodNotesData(raw);
+		} catch (error) {
+			if (error instanceof PodNotesDataError) {
+				return { ok: false, error: error.message };
+			}
+			throw error;
+		}
 	}
 
 	const settings = sanitizeImportedSettings(source);
@@ -224,14 +241,10 @@ export function mergeImportedSettings(
 		} as never;
 	}
 
-	// The per-key spread above is only one level deep, so an imported
-	// `transcript.diarization` overrides the whole nested object — which could
-	// carry an unknown provider or drop `speakerTemplate`. Run the same migration
-	// the load path uses so the import path converges on a clamped, fully-formed
-	// transcript instead of relying on the next reload to repair it (#168).
-	merged.transcript = migrateTranscriptSettings(merged.transcript);
-
-	return merged;
+	// Converge import and startup on the same deep validators and date revival.
+	// Marking the in-memory merge as v1 avoids treating this internal call as a
+	// legacy migration while preserving the import envelope's independent version.
+	return decodePodNotesData({ ...merged, schemaVersion: 1 }).settings;
 }
 
 function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPodNotesSettings> {

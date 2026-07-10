@@ -9,7 +9,6 @@ import {
 	queue,
 	savedFeeds,
 	hidePlayedEpisodes,
-	sanitizeEpisodeListLimit,
 	playbackRate,
 	plugin,
 	volume,
@@ -20,14 +19,7 @@ import { registerCommands } from "src/commands";
 import { Notice, Platform, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
-import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
-import {
-	migrateDownloadPath,
-	migrateFeedNoteSettings,
-	migrateNoteSettings,
-	migrateSkipLength,
-	migrateTranscriptSettings,
-} from "src/settingsMigrations";
+import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
@@ -42,6 +34,11 @@ import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
 import { type Unsubscriber } from "svelte/store";
 import { normalizePlaybackRate } from "./utility/playbackRate";
+import {
+	decodePodNotesData,
+	encodePodNotesData,
+	PodNotesDataError,
+} from "./persistence/podNotesData";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -53,6 +50,11 @@ type MediaSessionActionName =
 	| "seekforward"
 	| "seekto"
 	| "skipad";
+
+interface SaveWaiter {
+	resolve: () => void;
+	reject: (error: unknown) => void;
+}
 
 export default class PodNotes extends Plugin implements IPodNotes {
 	public api!: IAPI;
@@ -76,8 +78,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private podcastViewMountEnabled = true;
 	private isReady = false;
 	private pendingSave: IPodNotesSettings | null = null;
+	private pendingSaveWaiters: SaveWaiter[] = [];
 	private saveScheduled = false;
 	private saveChain: Promise<void> = Promise.resolve();
+	private persistenceUnknownFields: Record<string, unknown> = {};
 	private mediaSessionActions: MediaSessionActionName[] = [];
 
 	override async onload() {
@@ -413,84 +417,83 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	async loadSettings() {
-		const loadedData = await this.loadData();
+		try {
+			const decoded = decodePodNotesData(await this.loadData());
+			this.settings = decoded.settings;
+			this.persistenceUnknownFields = decoded.unknownFields;
 
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
-		this.settings.timestamp = {
-			...DEFAULT_SETTINGS.timestamp,
-			...loadedData?.timestamp,
-		};
-		// Build a fresh download object so we never mutate the shared
-		// DEFAULT_SETTINGS.download, then migrate the legacy empty default (#183).
-		this.settings.download = {
-			...DEFAULT_SETTINGS.download,
-			...loadedData?.download,
-		};
-		this.settings.download.path = migrateDownloadPath(this.settings.download.path);
-		// Normalise the persisted limit so a malformed value (e.g. 0 from an older
-		// data.json) is repaired in the settings object too, not just clamped for
-		// runtime behaviour, and so a later saveSettings() can't re-persist it (#114).
-		this.settings.episodeListLimit = sanitizeEpisodeListLimit(this.settings.episodeListLimit);
-		// Repair persisted skip lengths so a cleared field (NaN -> null in JSON)
-		// can't feed the skip arithmetic and corrupt the playback position (PB-02).
-		this.settings.skipBackwardLength = migrateSkipLength(
-			this.settings.skipBackwardLength,
-			DEFAULT_SETTINGS.skipBackwardLength,
-		);
-		this.settings.skipForwardLength = migrateSkipLength(
-			this.settings.skipForwardLength,
-			DEFAULT_SETTINGS.skipForwardLength,
-		);
-		// Self-heal a corrupt persisted default playback rate so the loaded store
-		// and the settings slider both read a clamped value (ST-02).
-		this.settings.defaultPlaybackRate = normalizePlaybackRate(
-			this.settings.defaultPlaybackRate,
-		);
-		// Upgrade the legacy empty episode-note default to the Bases-friendly
-		// default, preserving any path/template the user configured (#160). Returns
-		// a fresh object, so DEFAULT_SETTINGS.note is never mutated.
-		this.settings.note = migrateNoteSettings(loadedData?.note);
-		// Backfill the diarization defaults onto the stored transcript object so an
-		// existing user (who has only { path, template } persisted) gets a valid
-		// transcript.diarization instead of undefined (#168).
-		this.settings.transcript = migrateTranscriptSettings(loadedData?.transcript);
-		// Backfill a partial/legacy feedNote so a missing template can't crash
-		// createFeedNote's `template.replace(...)` (ST-08).
-		this.settings.feedNote = migrateFeedNoteSettings(loadedData?.feedNote);
+			if (decoded.warnings.length > 0) {
+				console.warn("PodNotes repaired invalid persisted values:", decoded.warnings);
+			}
+		} catch (error) {
+			if (error instanceof PodNotesDataError) {
+				new Notice(error.message, 0);
+				console.error("PodNotes refused to load unsafe persisted data", error);
+			}
+			throw error;
+		}
 	}
 
-	async saveSettings() {
-		if (!this.isReady) return;
+	saveSettings(): Promise<void> {
+		return this.requestSettingsSave().catch(() => undefined);
+	}
 
-		this.pendingSave = this.cloneSettings();
+	/** Awaitable save for migrations/imports that must not report success on failure. */
+	saveSettingsStrict(): Promise<void> {
+		return this.requestSettingsSave();
+	}
 
-		if (this.saveScheduled) {
-			return this.saveChain;
+	private requestSettingsSave(): Promise<void> {
+		if (!this.isReady) return Promise.resolve();
+
+		try {
+			this.pendingSave = this.cloneSettings();
+		} catch (error) {
+			console.error("PodNotes: failed to snapshot settings", error);
+			const failure = Promise.reject<void>(error);
+			void failure.catch(() => undefined);
+			return failure;
 		}
 
-		this.saveScheduled = true;
+		const completion = new Promise<void>((resolve, reject) => {
+			this.pendingSaveWaiters.push({ resolve, reject });
+		});
+		// Attach a handler so even a mistakenly ignored strict save cannot become an
+		// unhandled rejection. Awaiting the original promise still receives failure.
+		void completion.catch(() => undefined);
 
-		this.saveChain = this.saveChain
-			.then(async () => {
-				while (this.pendingSave) {
-					const snapshot = this.pendingSave;
-					this.pendingSave = null;
-					await this.saveData(snapshot);
+		if (!this.saveScheduled) {
+			this.saveScheduled = true;
+			this.saveChain = this.runSaveLoop();
+		}
+
+		return completion;
+	}
+
+	private async runSaveLoop(): Promise<void> {
+		try {
+			while (this.pendingSave) {
+				const snapshot = this.pendingSave;
+				const waiters = this.pendingSaveWaiters;
+				this.pendingSave = null;
+				this.pendingSaveWaiters = [];
+
+				try {
+					await this.saveData(
+						encodePodNotesData(snapshot, this.persistenceUnknownFields),
+					);
+					for (const waiter of waiters) waiter.resolve();
+				} catch (error) {
+					console.error("PodNotes: failed to save settings", error);
+					for (const waiter of waiters) waiter.reject(error);
 				}
-			})
-			.catch((error) => {
-				console.error("PodNotes: failed to save settings", error);
-			})
-			.finally(() => {
-				this.saveScheduled = false;
-
-				// If a save was requested while we were saving, run again.
-				if (this.pendingSave) {
-					void this.saveSettings();
-				}
-			});
-
-		return this.saveChain;
+			}
+		} finally {
+			// No await occurs between the loop's empty check and this assignment, so a
+			// request cannot land in a gap where it sees a scheduled loop that has
+			// already decided to exit.
+			this.saveScheduled = false;
+		}
 	}
 
 	private cloneSettings(): IPodNotesSettings {

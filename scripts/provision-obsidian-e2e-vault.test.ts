@@ -49,14 +49,15 @@ describe("provision-obsidian-e2e-vault", () => {
 		expect(options.vaultPath).toBe("/tmp/podnotes-repo/vaults/podnotes-a");
 	});
 
-	it("seeds a data.json that mirrors the real DEFAULT_SETTINGS", () => {
+	it("seeds schema v1 data that mirrors the real DEFAULT_SETTINGS", () => {
 		// JSON cannot represent currentEpisode: undefined, so compare the
-		// serialized forms — this is exactly what lands in the vault's data.json
+		// serialized forms - this is exactly what lands in the vault's data.json
 		// and it fails if a new setting is added to src/constants.ts without
 		// updating DEFAULT_PODNOTES_DATA.
-		expect(JSON.parse(JSON.stringify(DEFAULT_PODNOTES_DATA))).toEqual(
-			JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
-		);
+		expect(JSON.parse(JSON.stringify(DEFAULT_PODNOTES_DATA))).toEqual({
+			schemaVersion: 1,
+			...JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
+		});
 	});
 
 	it("defaults the vault name to podnotes-<worktree>", () => {

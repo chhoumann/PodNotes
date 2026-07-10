@@ -191,4 +191,78 @@ describe("App-backed (vault-scoped) storage", () => {
 
 		plugin.set(undefined as unknown as PodNotes);
 	});
+
+	test("salvages a cached episode with an invalid date without creating Invalid Date", async () => {
+		const backing = new Map<string, string>();
+		backing.set(
+			"podnotes:feed-cache:v5",
+			JSON.stringify({
+				[testFeed.url]: {
+					updatedAt: Date.now(),
+					episodes: [{ ...createEpisode(1), episodeDate: "not-a-date" }],
+				},
+			}),
+		);
+		const app = {
+			loadLocalStorage: (key: string) => backing.get(key) ?? null,
+			saveLocalStorage: (key: string, value: string | null) => {
+				if (value == null) backing.delete(key);
+				else backing.set(key, value);
+			},
+		};
+
+		vi.resetModules();
+		const freshStore = await import("../store");
+		const freshSvc = await import("./FeedCacheService");
+		(freshStore.plugin as typeof plugin).set({ app } as unknown as PodNotes);
+
+		const cached = freshSvc.getCachedEpisodes(testFeed);
+		expect(cached).toHaveLength(1);
+		expect(cached?.[0]).toMatchObject({ title: "Episode 1" });
+		expect(cached?.[0].episodeDate).toBeUndefined();
+	});
+
+	test.each([
+		JSON.stringify([]),
+		JSON.stringify({
+			[testFeed.url]: { updatedAt: "yesterday", episodes: [createEpisode(1)] },
+		}),
+	])("ignores a structurally invalid cache without throwing", async (stored) => {
+		const backing = new Map([["podnotes:feed-cache:v5", stored]]);
+		const app = {
+			loadLocalStorage: (key: string) => backing.get(key) ?? null,
+			saveLocalStorage: (key: string, value: string | null) => {
+				if (value == null) backing.delete(key);
+				else backing.set(key, value);
+			},
+		};
+
+		vi.resetModules();
+		const freshStore = await import("../store");
+		const freshSvc = await import("./FeedCacheService");
+		(freshStore.plugin as typeof plugin).set({ app } as unknown as PodNotes);
+
+		expect(() => freshSvc.getCachedEpisodes(testFeed)).not.toThrow();
+		expect(freshSvc.getCachedEpisodes(testFeed)).toBeNull();
+	});
+
+	test("drops prototype-pollution cache keys", async () => {
+		const stored = `{"__proto__":{"updatedAt":1,"episodes":[]},"${testFeed.url}":{"updatedAt":${Date.now()},"episodes":[]}}`;
+		const backing = new Map([["podnotes:feed-cache:v5", stored]]);
+		const app = {
+			loadLocalStorage: (key: string) => backing.get(key) ?? null,
+			saveLocalStorage: (key: string, value: string | null) => {
+				if (value == null) backing.delete(key);
+				else backing.set(key, value);
+			},
+		};
+
+		vi.resetModules();
+		const freshStore = await import("../store");
+		const freshSvc = await import("./FeedCacheService");
+		(freshStore.plugin as typeof plugin).set({ app } as unknown as PodNotes);
+
+		expect(freshSvc.getCachedEpisodes(testFeed)).toEqual([]);
+		expect(({} as { updatedAt?: number }).updatedAt).toBeUndefined();
+	});
 });

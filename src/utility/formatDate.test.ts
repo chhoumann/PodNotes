@@ -14,6 +14,19 @@ describe("formatDate", () => {
 	// Noon edge case
 	const noonDate = new Date("2024-01-01T12:00:00");
 
+	it("formats a date restored from JSON text", () => {
+		expect(formatDate("2024-03-01T10:05:03", "YYYY-MM-DD HH:mm:ss")).toBe(
+			"2024-03-01 10:05:03",
+		);
+	});
+
+	it.each([undefined, null, "", "not-a-date", new Date("invalid")])(
+		"returns an empty value for invalid input %p",
+		(value) => {
+			expect(formatDate(value, "YYYY-MM-DD")).toBe("");
+		},
+	);
+
 	describe("year tokens", () => {
 		it("formats YYYY as 4-digit year", () => {
 			expect(formatDate(testDate, "YYYY")).toBe("2024");

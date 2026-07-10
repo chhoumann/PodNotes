@@ -16,7 +16,10 @@ import {
 	waitForPodNotesReady,
 } from "./harness";
 
-type PodNotesData = Partial<IPodNotesSettings>;
+type PodNotesData = Partial<IPodNotesSettings> & {
+	schemaVersion?: number;
+	legacyExtension?: { enabled: boolean };
+};
 
 type PlaybackState = {
 	currentTime: number | null;
@@ -416,6 +419,97 @@ describe("PodNotes runtime", () => {
 		expect(data.defaultVolume).toBe(1);
 		expect(runtimeVolume).toBe(1);
 	});
+
+	test("migrates a legacy JSON date through note creation and the next durable save", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(sandbox, "legacy-date-episode.mp3");
+		const isoDate = "2024-03-01T10:05:03.000Z";
+		const episode = {
+			...createLocalEpisode("E2E Legacy Date Episode", audioPath),
+			episodeDate: isoDate as unknown as Date,
+		};
+
+		await seedRuntimeData(plugin, sandbox, episode, {
+			currentEpisode: episode,
+			legacyData: true,
+			note: {
+				path: sandbox.path("legacy-date-note.md"),
+				template: "date: {{date:YYYY-MM-DD}}\n",
+			},
+		});
+		await waitForPodNotesReady(obsidian);
+
+		const beforeSave = await plugin.data<PodNotesData>().read();
+		expect(beforeSave.schemaVersion).toBeUndefined();
+		expect(beforeSave.legacyExtension).toEqual({ enabled: true });
+		const runtimeDate = await evalJsonAsync<{ isDate: boolean; iso: string }>(
+			obsidian,
+			`(() => {
+				const value = app.plugins.plugins.${PLUGIN_ID}.settings.currentEpisode.episodeDate;
+				return { isDate: value instanceof Date, iso: value.toISOString() };
+			})()`,
+		);
+		expect(runtimeDate).toEqual({ isDate: true, iso: isoDate });
+
+		await obsidian.command(`${PLUGIN_ID}:create-podcast-note`).run();
+		const note = await sandbox.waitForContent(
+			"legacy-date-note.md",
+			(value) => value.includes("date: 2024-03-01"),
+			WAIT_OPTS,
+		);
+		expect(note).toContain("date: 2024-03-01");
+
+		await setVolume(obsidian, 0.42);
+		const persisted = await plugin.waitForData<PodNotesData>(
+			(data) => data.schemaVersion === 1 && data.defaultVolume === 0.42,
+			WAIT_OPTS,
+		);
+		expect(persisted.legacyExtension).toEqual({ enabled: true });
+		expect(persisted.currentEpisode?.episodeDate).toBe(isoDate);
+		expect(await obsidian.dev.runtimeErrors()).toEqual([]);
+	});
+
+	test("refuses a future schema without modifying its data", async () => {
+		const { obsidian, plugin } = getContext();
+		const original = await plugin.data<PodNotesData>().read();
+		const future = {
+			...original,
+			schemaVersion: 2,
+			legacyExtension: { enabled: true },
+		};
+
+		await plugin.disable();
+		await plugin.data<PodNotesData>().write(future);
+		try {
+			await plugin.enable().catch(() => undefined);
+			await obsidian.sleep(200);
+
+			const after = await plugin.data<PodNotesData>().read();
+			const state = await obsidian.dev.evalJson<{ hasCommand: boolean; ready: boolean }>(
+				`(() => ({
+					hasCommand: Boolean(app.commands.commands[${JSON.stringify(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
+					ready: app.plugins.plugins.${PLUGIN_ID}?.isReady === true,
+				}))()`,
+			);
+			expect(after).toEqual(future);
+			expect(state).toEqual({ hasCommand: false, ready: false });
+		} finally {
+			await plugin.data<PodNotesData>().write(original);
+			// A failed onload can leave Obsidian's enabled flag set without a live
+			// plugin instance. Await the plugin manager directly so cleanup cannot
+			// return before the restored onload finishes.
+			await evalJsonAsync<boolean>(
+				obsidian,
+				`(async () => {
+					await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
+					await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});
+					return Boolean(app.plugins.plugins.${PLUGIN_ID});
+				})()`,
+			);
+			await waitForPodNotesReady(obsidian);
+			await obsidian.dev.resetDiagnostics().catch(() => undefined);
+		}
+	});
 });
 
 async function seedAudio(sandbox: SandboxApi, fileName: string): Promise<string> {
@@ -504,6 +598,7 @@ async function seedRuntimeData(
 		note?: { path: string; template: string };
 		played?: { duration: number; time: number };
 		timestampTemplate?: string;
+		legacyData?: boolean;
 	} = {},
 ): Promise<void> {
 	const placeholderEpisode = createLocalEpisode(
@@ -517,6 +612,10 @@ async function seedRuntimeData(
 	}
 
 	await plugin.updateDataAndReload<PodNotesData>((data) => {
+		if (options.legacyData) {
+			delete data.schemaVersion;
+			data.legacyExtension = { enabled: true };
+		}
 		data.currentEpisode = options.currentEpisode ?? placeholderEpisode;
 		data.defaultPlaybackRate = options.defaultPlaybackRate ?? 1;
 		data.defaultVolume = 1;
