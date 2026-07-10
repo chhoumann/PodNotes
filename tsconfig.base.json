@@ -10,7 +10,6 @@
 		"noImplicitOverride": true,
 		"noEmit": true,
 		"forceConsistentCasingInFileNames": true,
-		"importHelpers": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
 		"skipLibCheck": true,
