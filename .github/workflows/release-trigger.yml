@@ -30,6 +30,8 @@ jobs:
           EVENT_SHA: ${{ github.sha }}
         with:
           script: |
+            const { isDeepStrictEqual } = require('node:util');
+
             const expectedFiles = ['manifest.json', 'package-lock.json', 'package.json', 'versions.json'];
             const { owner, repo } = context.repo;
             const repository = `${owner}/${repo}`;
@@ -103,6 +105,135 @@ jobs:
               );
             }
 
+            function assertRecord(value, label) {
+              if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+                throw new Error(`${label} must be a JSON object.`);
+              }
+            }
+
+            function versionParts(value, label) {
+              if (typeof value !== 'string' ||
+                  !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value)) {
+                throw new Error(`${label} is not a stable semantic version.`);
+              }
+              return value.split('.').map(Number);
+            }
+
+            function compareVersions(left, right) {
+              const leftParts = versionParts(left, 'candidate version');
+              const rightParts = versionParts(right, 'base version');
+              for (let index = 0; index < 3; index += 1) {
+                if (leftParts[index] !== rightParts[index]) {
+                  return leftParts[index] - rightParts[index];
+                }
+              }
+              return 0;
+            }
+
+            function rootLockPackage(lock, label) {
+              assertRecord(lock.packages, `${label}.packages`);
+              const rootPackage = lock.packages[''];
+              assertRecord(rootPackage, `${label}.packages[""]`);
+              return rootPackage;
+            }
+
+            function synchronizedVersion(packageJson, lock, manifest, label) {
+              const values = [
+                packageJson.version,
+                lock.version,
+                rootLockPackage(lock, label).version,
+                manifest.version,
+              ];
+              if (!values.every((value) => value === values[0])) {
+                throw new Error(`${label} version fields are not synchronized.`);
+              }
+              versionParts(values[0], `${label} version`);
+              return values[0];
+            }
+
+            function equalExceptField(candidate, baseline, field) {
+              const normalized = structuredClone(candidate);
+              normalized[field] = baseline[field];
+              return isDeepStrictEqual(normalized, baseline);
+            }
+
+            async function readJsonAt(ref, file) {
+              const response = await github.rest.repos.getContent({ owner, repo, path: file, ref });
+              const data = response.data;
+              if (Array.isArray(data) || data.type !== 'file' || data.encoding !== 'base64' ||
+                  typeof data.content !== 'string') {
+                throw new Error(`Unable to read regular JSON file ${file} at ${ref}.`);
+              }
+              const value = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+              assertRecord(value, `${file} at ${ref}`);
+              return value;
+            }
+
+            const [
+              basePackage,
+              baseLock,
+              baseManifest,
+              baseVersions,
+              nextPackage,
+              nextLock,
+              nextManifest,
+              nextVersions,
+            ] = await Promise.all([
+              readJsonAt(baseSha, 'package.json'),
+              readJsonAt(baseSha, 'package-lock.json'),
+              readJsonAt(baseSha, 'manifest.json'),
+              readJsonAt(baseSha, 'versions.json'),
+              readJsonAt(releaseSha, 'package.json'),
+              readJsonAt(releaseSha, 'package-lock.json'),
+              readJsonAt(releaseSha, 'manifest.json'),
+              readJsonAt(releaseSha, 'versions.json'),
+            ]);
+            const baseVersion = synchronizedVersion(
+              basePackage,
+              baseLock,
+              baseManifest,
+              'base',
+            );
+            const nextVersion = synchronizedVersion(
+              nextPackage,
+              nextLock,
+              nextManifest,
+              'release',
+            );
+            if (basePackage.name !== 'podnotes' || baseManifest.id !== 'podnotes' ||
+                nextVersion !== version || compareVersions(nextVersion, baseVersion) <= 0) {
+              throw new Error('Release identity or version progression is invalid.');
+            }
+            if (typeof baseManifest.minAppVersion !== 'string' || !baseManifest.minAppVersion ||
+                typeof nextManifest.minAppVersion !== 'string' || !nextManifest.minAppVersion) {
+              throw new Error('Manifest compatibility versions must be non-empty strings.');
+            }
+            if (baseVersions[baseVersion] !== baseManifest.minAppVersion ||
+                nextVersions[nextVersion] !== nextManifest.minAppVersion) {
+              throw new Error('Release version history does not match manifest compatibility.');
+            }
+            if (!equalExceptField(nextPackage, basePackage, 'version')) {
+              throw new Error('package.json changed outside its version field.');
+            }
+            const normalizedLock = structuredClone(nextLock);
+            normalizedLock.version = baseLock.version;
+            rootLockPackage(normalizedLock, 'release lock').version =
+              rootLockPackage(baseLock, 'base lock').version;
+            if (!isDeepStrictEqual(normalizedLock, baseLock)) {
+              throw new Error('package-lock.json changed outside its version fields.');
+            }
+            if (!equalExceptField(nextManifest, baseManifest, 'version')) {
+              throw new Error('manifest.json changed outside its version field.');
+            }
+            if (Object.prototype.hasOwnProperty.call(baseVersions, nextVersion)) {
+              throw new Error(`Base versions.json already contains ${nextVersion}.`);
+            }
+            const normalizedVersions = structuredClone(nextVersions);
+            delete normalizedVersions[nextVersion];
+            if (!isDeepStrictEqual(normalizedVersions, baseVersions)) {
+              throw new Error('versions.json changed outside the new release entry.');
+            }
+
             const master = await github.rest.git.getRef({ owner, repo, ref: 'heads/master' });
             const comparison = await github.rest.repos.compareCommitsWithBasehead({
               owner,
@@ -114,10 +245,10 @@ jobs:
               throw new Error(`Release commit ${releaseSha} is not on current master.`);
             }
 
-            async function resolveTagCommit() {
+            async function resolveTagCommit(tag) {
               let reference;
               try {
-                reference = await github.rest.git.getRef({ owner, repo, ref: `tags/${version}` });
+                reference = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
               } catch (error) {
                 if (error.status === 404) return null;
                 throw error;
@@ -128,12 +259,38 @@ jobs:
                 object = annotated.data.object;
               }
               if (object.type !== 'commit') {
-                throw new Error(`Tag ${version} does not resolve to a commit.`);
+                throw new Error(`Tag ${tag} does not resolve to a commit.`);
               }
               return object.sha;
             }
 
-            let tagSha = await resolveTagCommit();
+            const previousTagSha = await resolveTagCommit(baseVersion);
+            if (!previousTagSha) {
+              throw new Error(`Previous release tag ${baseVersion} does not exist.`);
+            }
+            const [tagPackage, tagLock, tagManifest, tagVersions] = await Promise.all([
+              readJsonAt(previousTagSha, 'package.json'),
+              readJsonAt(previousTagSha, 'package-lock.json'),
+              readJsonAt(previousTagSha, 'manifest.json'),
+              readJsonAt(previousTagSha, 'versions.json'),
+            ]);
+            if (tagPackage.name !== 'podnotes' || tagManifest.id !== 'podnotes' ||
+                synchronizedVersion(tagPackage, tagLock, tagManifest, 'previous tag') !==
+                  baseVersion ||
+                tagVersions[baseVersion] !== tagManifest.minAppVersion) {
+              throw new Error(`Previous release tag ${baseVersion} has invalid version metadata.`);
+            }
+            const previousComparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: `${previousTagSha}...${baseSha}`,
+            });
+            if (!['ahead', 'identical'].includes(previousComparison.data.status) ||
+                previousComparison.data.merge_base_commit.sha !== previousTagSha) {
+              throw new Error(`Previous release tag ${baseVersion} is not an ancestor of the base.`);
+            }
+
+            let tagSha = await resolveTagCommit(version);
             if (!tagSha) {
               try {
                 await github.rest.git.createRef({
@@ -145,7 +302,7 @@ jobs:
               } catch (error) {
                 if (error.status !== 422) throw error;
               }
-              tagSha = await resolveTagCommit();
+              tagSha = await resolveTagCommit(version);
             }
             if (tagSha !== releaseSha) {
               throw new Error(`Tag ${version} points to ${tagSha}, expected ${releaseSha}.`);
