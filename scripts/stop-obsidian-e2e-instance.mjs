@@ -4,7 +4,18 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
+import { errorHasCode, isRecord } from "./obsidian-e2e-errors.mjs";
 import { INSTANCE_MARKER_FILE, resolveInstanceOptions } from "./start-obsidian-e2e-instance.mjs";
+
+/** @typedef {import("./obsidian-e2e-types").CollectInstanceOptions} CollectInstanceOptions */
+/** @typedef {import("./obsidian-e2e-types").InstanceReadDependencies} InstanceReadDependencies */
+/** @typedef {import("./obsidian-e2e-types").KillFunction} KillFunction */
+/** @typedef {import("./obsidian-e2e-types").ProcessInfo} ProcessInfo */
+/** @typedef {import("./obsidian-e2e-types").ReapOptions} ReapOptions */
+/** @typedef {import("./obsidian-e2e-types").ReapResult} ReapResult */
+/** @typedef {import("./obsidian-e2e-types").StopOptions} StopOptions */
+/** @typedef {import("./obsidian-e2e-types").StopRawOptions} StopRawOptions */
+/** @typedef {import("./obsidian-e2e-types").StopResult} StopResult */
 
 const execFileAsync = promisify(execFile);
 
@@ -29,6 +40,14 @@ const VALUE_OPTIONS = new Set([
 	"--obsidian-bin",
 ]);
 
+/**
+ * @param {string} arg
+ * @returns {arg is "--vault" | "--root" | "--worktree" | "--data" | "--profile-root" | "--obsidian-app" | "--obsidian-bin"}
+ */
+function isValueOption(arg) {
+	return VALUE_OPTIONS.has(arg);
+}
+
 function printUsage() {
 	console.log(`Usage: node scripts/stop-obsidian-e2e-instance.mjs [options]
 
@@ -49,7 +68,12 @@ Options:
 `);
 }
 
+/**
+ * @param {readonly string[]} argv
+ * @returns {StopRawOptions}
+ */
 export function parseArgs(argv) {
+	/** @type {StopRawOptions} */
 	const options = { dryRun: false, json: false, prune: false };
 
 	for (let index = 0; index < argv.length; index += 1) {
@@ -70,7 +94,7 @@ export function parseArgs(argv) {
 				options.help = true;
 				break;
 			default: {
-				if (!VALUE_OPTIONS.has(arg)) {
+				if (!isValueOption(arg)) {
 					throw new Error(`Unknown option: ${arg}`);
 				}
 				const value = argv[index + 1];
@@ -86,21 +110,42 @@ export function parseArgs(argv) {
 	return options;
 }
 
+/**
+ * @param {"--vault" | "--root" | "--worktree" | "--data" | "--profile-root" | "--obsidian-app" | "--obsidian-bin"} arg
+ * @returns {"vault" | "root" | "worktree" | "data" | "profileRoot" | "obsidianApp" | "obsidianBin"}
+ */
 function toOptionKey(arg) {
-	if (arg === "--profile-root") return "profileRoot";
-	if (arg === "--obsidian-app") return "obsidianApp";
-	if (arg === "--obsidian-bin") return "obsidianBin";
-	return arg.slice(2);
+	switch (arg) {
+		case "--vault":
+			return "vault";
+		case "--root":
+			return "root";
+		case "--worktree":
+			return "worktree";
+		case "--data":
+			return "data";
+		case "--profile-root":
+			return "profileRoot";
+		case "--obsidian-app":
+			return "obsidianApp";
+		case "--obsidian-bin":
+			return "obsidianBin";
+	}
 }
 
 // macOS firmlinks /tmp, /var, and /etc under /private. Obsidian's main process
 // keeps the literal `--user-data-dir` we pass (e.g. /tmp/...), while Electron
 // canonicalizes the same flag to /private/tmp/... for its helper processes.
 // Strip a leading /private so one instance path matches the whole process tree.
+/** @param {string} value */
 function stripPrivatePrefix(value) {
 	return value.replace(/^\/private(?=\/)/, "");
 }
 
+/**
+ * @param {string} command
+ * @param {string} instancePath
+ */
 export function commandMatchesInstance(command, instancePath) {
 	const stripped = stripPrivatePrefix(instancePath);
 	const variants = new Set([instancePath, stripped, stripped.replace(/^\//, "/private/")]);
@@ -112,7 +157,12 @@ export function commandMatchesInstance(command, instancePath) {
 	return [...variants].some((variant) => command.includes(`--user-data-dir=${variant}/`));
 }
 
+/**
+ * @param {string} stdout
+ * @returns {ProcessInfo[]}
+ */
 export function parsePsOutput(stdout) {
+	/** @type {ProcessInfo[]} */
 	const processes = [];
 	for (const line of stdout.split("\n")) {
 		const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.*\S)\s*$/);
@@ -131,8 +181,15 @@ export function parsePsOutput(stdout) {
 // descendant. The descendant walk is belt-and-suspenders — Electron helpers
 // already carry --user-data-dir, but this also reaps any grandchild a helper
 // spawned that does not echo the flag.
+/**
+ * @param {readonly ProcessInfo[]} processes
+ * @param {string} instancePath
+ * @param {CollectInstanceOptions} [options]
+ * @returns {number[]}
+ */
 export function collectInstancePids(processes, instancePath, options = {}) {
 	const selfPid = options.selfPid ?? process.pid;
+	/** @type {Map<number, ProcessInfo[]>} */
 	const childrenByParent = new Map();
 	for (const proc of processes) {
 		const siblings = childrenByParent.get(proc.ppid) ?? [];
@@ -140,12 +197,14 @@ export function collectInstancePids(processes, instancePath, options = {}) {
 		childrenByParent.set(proc.ppid, siblings);
 	}
 
+	/** @type {Set<number>} */
 	const collected = new Set();
 	const stack = processes
 		.filter((proc) => commandMatchesInstance(proc.command, instancePath))
 		.map((proc) => proc.pid);
 	while (stack.length > 0) {
 		const pid = stack.pop();
+		if (pid === undefined) continue;
 		if (collected.has(pid)) continue;
 		collected.add(pid);
 		for (const child of childrenByParent.get(pid) ?? []) {
@@ -159,6 +218,10 @@ export function collectInstancePids(processes, instancePath, options = {}) {
 	return [...collected].sort((a, b) => a - b);
 }
 
+/**
+ * @param {string} instancePath
+ * @param {string | undefined} profileRoot
+ */
 function assertSafeInstancePath(instancePath, profileRoot) {
 	if (!instancePath || !path.isAbsolute(instancePath)) {
 		throw new Error(`Refusing to remove non-absolute instance path: ${instancePath}`);
@@ -184,6 +247,7 @@ function assertSafeInstancePath(instancePath, profileRoot) {
 	}
 }
 
+/** @returns {Promise<string>} */
 async function defaultRunPs() {
 	const { stdout } = await execFileAsync("ps", ["-axww", "-o", "pid=,ppid=,command="], {
 		maxBuffer: 16 * 1024 * 1024,
@@ -191,6 +255,10 @@ async function defaultRunPs() {
 	return stdout;
 }
 
+/**
+ * @param {number} pid
+ * @param {KillFunction} kill
+ */
 function pidAlive(pid, kill) {
 	try {
 		kill(pid, 0);
@@ -198,10 +266,13 @@ function pidAlive(pid, kill) {
 	} catch (error) {
 		// EPERM means the process exists but is owned by someone else; for our own
 		// instances that should not happen, but treat it as alive to be safe.
-		return error?.code === "EPERM";
+		if (errorHasCode(error, "EPERM")) return true;
+		if (errorHasCode(error, "ESRCH")) return false;
+		throw error;
 	}
 }
 
+/** @param {number} ms */
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -212,6 +283,17 @@ function sleep(ms) {
 // recycled by a foreign process; skip rather than touch it), ENOENT (defensive).
 const IGNORABLE_KILL_CODES = new Set(["ESRCH", "EPERM", "ENOENT"]);
 
+/** @param {unknown} error */
+function isIgnorableKillError(error) {
+	return [...IGNORABLE_KILL_CODES].some((code) => errorHasCode(error, code));
+}
+
+/**
+ * @param {readonly number[]} pids
+ * @param {NodeJS.Signals} signal
+ * @param {KillFunction} kill
+ * @returns {number[]}
+ */
 function signalPids(pids, signal, kill) {
 	const signalled = [];
 	for (const pid of pids) {
@@ -219,7 +301,7 @@ function signalPids(pids, signal, kill) {
 			kill(pid, signal);
 			signalled.push(pid);
 		} catch (error) {
-			if (!IGNORABLE_KILL_CODES.has(error?.code)) throw error;
+			if (!isIgnorableKillError(error)) throw error;
 		}
 	}
 	return signalled;
@@ -229,6 +311,11 @@ function signalPids(pids, signal, kill) {
 // stragglers) and remove its profile directory. Safe to call when nothing is
 // running — it then just removes a leftover directory. All side effects are
 // injectable so the orchestration is unit-testable without real processes.
+/**
+ * @param {string} instancePath
+ * @param {StopOptions} [options]
+ * @returns {Promise<StopResult>}
+ */
 export async function stopInstance(instancePath, options = {}) {
 	const {
 		dryRun = false,
@@ -268,6 +355,11 @@ export async function stopInstance(instancePath, options = {}) {
 // Reads the vault paths an instance registered in its private obsidian.json.
 // Returns null when the registration is unreadable (so callers can stay
 // conservative and not reap an instance they cannot reason about).
+/**
+ * @param {string} instancePath
+ * @param {InstanceReadDependencies} [deps]
+ * @returns {Promise<string[] | null>}
+ */
 export async function readInstanceVaultPaths(instancePath, deps = {}) {
 	const readFile = deps.readFile ?? ((file) => fs.readFile(file, "utf8"));
 	const jsonPath = path.join(
@@ -279,31 +371,46 @@ export async function readInstanceVaultPaths(instancePath, deps = {}) {
 		"obsidian.json",
 	);
 	try {
-		const parsed = JSON.parse(await readFile(jsonPath));
-		return Object.values(parsed?.vaults ?? {})
-			.map((vault) => vault?.path)
-			.filter((vaultPath) => typeof vaultPath === "string");
+		const parsed = /** @type {unknown} */ (JSON.parse(await readFile(jsonPath)));
+		if (!isRecord(parsed) || !isRecord(parsed.vaults)) return null;
+
+		const vaultPaths = [];
+		for (const vault of Object.values(parsed.vaults)) {
+			if (isRecord(vault) && typeof vault.path === "string") {
+				vaultPaths.push(vault.path);
+			}
+		}
+		return vaultPaths;
 	} catch {
 		return null;
 	}
 }
 
+/** @param {string} target */
 async function pathExists(target) {
 	try {
 		await fs.lstat(target);
 		return true;
 	} catch (error) {
-		if (error?.code === "ENOENT") return false;
+		if (errorHasCode(error, "ENOENT")) return false;
 		throw error;
 	}
 }
 
 // Reads the instance marker that start writes (worktreePath/vaultName/vaultPath).
 // Returns null when it is missing/unreadable so callers can fall back.
+/**
+ * @param {string} instancePath
+ * @param {InstanceReadDependencies} [deps]
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
 export async function readInstanceMarker(instancePath, deps = {}) {
 	const readFile = deps.readFile ?? ((file) => fs.readFile(file, "utf8"));
 	try {
-		return JSON.parse(await readFile(path.join(instancePath, INSTANCE_MARKER_FILE)));
+		const parsed = /** @type {unknown} */ (
+			JSON.parse(await readFile(path.join(instancePath, INSTANCE_MARKER_FILE)))
+		);
+		return isRecord(parsed) ? parsed : null;
 	} catch {
 		return null;
 	}
@@ -316,6 +423,10 @@ export async function readInstanceMarker(instancePath, deps = {}) {
 // as the signal — an idle-but-valid instance for a live worktree, or a vault on a
 // momentarily-unmounted volume, must survive. The worktree path is read from the
 // marker; pre-marker instances fall back to "every registered vault path is gone".
+/**
+ * @param {string} instancePath
+ * @param {InstanceReadDependencies} [deps]
+ */
 export async function isInstanceOrphaned(instancePath, deps = {}) {
 	const exists = deps.exists ?? pathExists;
 	const marker = await readInstanceMarker(instancePath, deps);
@@ -333,6 +444,10 @@ export async function isInstanceOrphaned(instancePath, deps = {}) {
 // Scans the profile root and tears down every orphaned instance. Used as a
 // self-healing safety net on the next `start:e2e-obsidian` so leaks survive even
 // when a worktree is removed without the orca archive hook (`--run-hooks`).
+/**
+ * @param {ReapOptions} [options]
+ * @returns {Promise<ReapResult>}
+ */
 export async function reapOrphanedInstances(options = {}) {
 	const {
 		profileRoot,
@@ -349,10 +464,11 @@ export async function reapOrphanedInstances(options = {}) {
 	try {
 		entries = await readdir(profileRoot);
 	} catch (error) {
-		if (error?.code === "ENOENT") return { scanned: 0, reaped: [] };
+		if (errorHasCode(error, "ENOENT")) return { scanned: 0, reaped: [] };
 		throw error;
 	}
 
+	/** @type {string[]} */
 	const reaped = [];
 	let scanned = 0;
 	const except = exceptInstancePath ? path.resolve(exceptInstancePath) : null;
@@ -399,6 +515,7 @@ async function main() {
 		profileRoot: options.profileRoot,
 	});
 
+	/** @type {ReapResult} */
 	let pruneResult = { scanned: 0, reaped: [] };
 	if (rawOptions.prune) {
 		pruneResult = await reapOrphanedInstances({

@@ -2,8 +2,8 @@
 	"extends": "./tsconfig.base.json",
 	"compilerOptions": {
 		"allowJs": true,
-		// JavaScript tools opt in with `@ts-check` until the E2E runner scripts are typed.
-		"checkJs": false,
+		"checkJs": true,
+		"lib": ["DOM", "ES2021"],
 		"types": ["svelte", "node", "obsidian", "vitest/globals", "@testing-library/jest-dom"]
 	},
 	"include": [
@@ -13,6 +13,7 @@
 		"tests/**/*.ts",
 		"tests/**/*.svelte",
 		"scripts/**/*.ts",
+		"scripts/**/*.mjs",
 		"*.ts",
 		"*.mjs"
 	]

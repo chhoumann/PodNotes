@@ -8,6 +8,7 @@ import {
 	isInstanceOrphaned,
 	parseArgs,
 	parsePsOutput,
+	readInstanceMarker,
 	readInstanceVaultPaths,
 	reapOrphanedInstances,
 	stopInstance,
@@ -266,6 +267,29 @@ describe("stopInstance", () => {
 		expect(result.removed).toBe(true);
 	});
 
+	it("preserves the profile when a liveness probe fails unexpectedly", async () => {
+		let removeCalled = false;
+		const kill = (_pid: number, signal: string | number) => {
+			if (signal === 0) {
+				throw Object.assign(new Error("I/O failure"), { code: "EIO" });
+			}
+		};
+
+		await expect(
+			stopInstance(INSTANCE, {
+				runPs,
+				kill,
+				removeDir: async () => {
+					removeCalled = true;
+				},
+				selfPid: 999999,
+				pollMs: 1,
+				graceMs: 5,
+			}),
+		).rejects.toThrow("I/O failure");
+		expect(removeCalled).toBe(false);
+	});
+
 	it("refuses to remove a dir that is not a child of the given profile root", async () => {
 		await expect(
 			stopInstance(INSTANCE, {
@@ -300,6 +324,36 @@ describe("orphan detection", () => {
 		const root = await makeTempDir("podnotes-profiles");
 		const instance = await seedInstance(root, "podnotes-a-aaaaaaaaaaaa", "/x/y");
 		await expect(readInstanceVaultPaths(instance)).resolves.toEqual(["/x/y"]);
+	});
+
+	it("ignores malformed vault entries while keeping valid paths", async () => {
+		await expect(
+			readInstanceVaultPaths(INSTANCE, {
+				readFile: async () =>
+					JSON.stringify({
+						vaults: {
+							missing: {},
+							nonObject: null,
+							nonString: { path: 42 },
+							valid: { path: "/valid/vault" },
+						},
+					}),
+			}),
+		).resolves.toEqual(["/valid/vault"]);
+	});
+
+	it("rejects a registry whose JSON value is not an object", async () => {
+		await expect(
+			readInstanceVaultPaths(INSTANCE, { readFile: async () => '"not-a-registry"' }),
+		).resolves.toBeNull();
+	});
+
+	it("rejects an array-shaped vault registry", async () => {
+		await expect(
+			readInstanceVaultPaths(INSTANCE, {
+				readFile: async () => JSON.stringify({ vaults: [{ path: "/unexpected/vault" }] }),
+			}),
+		).resolves.toBeNull();
 	});
 
 	it("is orphaned only when every backing vault is gone", async () => {
@@ -339,6 +393,18 @@ describe("orphan detection", () => {
 		const bare = path.join(root, "podnotes-bare-dddddddddddd");
 		await fs.mkdir(bare, { recursive: true });
 		await expect(isInstanceOrphaned(bare)).resolves.toBe(false);
+	});
+
+	it("rejects a marker whose JSON value is not an object", async () => {
+		await expect(
+			readInstanceMarker(INSTANCE, { readFile: async () => '"not-a-marker"' }),
+		).resolves.toBeNull();
+	});
+
+	it("rejects an array-shaped marker", async () => {
+		await expect(
+			readInstanceMarker(INSTANCE, { readFile: async () => "[]" }),
+		).resolves.toBeNull();
 	});
 });
 

@@ -2,6 +2,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { errorHasCode } from "./obsidian-e2e-errors.mjs";
+
+/** @typedef {import("./obsidian-e2e-types").ProvisionOptions} ProvisionOptions */
+/** @typedef {import("./obsidian-e2e-types").ProvisionRawOptions} ProvisionRawOptions */
+/** @typedef {import("./obsidian-e2e-types").ProvisionResult} ProvisionResult */
 
 // PodNotes bundles its CSS into main.js (svelte compilerOptions css: "injected"),
 // so there is no styles.css artifact to symlink — only the manifest and bundle.
@@ -115,6 +120,7 @@ export const DEFAULT_PODNOTES_DATA = {
 	},
 };
 
+/** @param {string} value */
 function slugify(value) {
 	return (
 		value
@@ -140,7 +146,12 @@ Options:
 `);
 }
 
+/**
+ * @param {string[]} argv
+ * @returns {ProvisionRawOptions}
+ */
 export function parseArgs(argv) {
+	/** @type {ProvisionRawOptions} */
 	const options = {
 		force: false,
 		json: false,
@@ -184,10 +195,28 @@ export function parseArgs(argv) {
 	return options;
 }
 
+/**
+ * @param {"--vault" | "--root" | "--worktree" | "--data"} arg
+ * @returns {"vault" | "root" | "worktree" | "data"}
+ */
 function toOptionKey(arg) {
-	return arg.slice(2);
+	switch (arg) {
+		case "--vault":
+			return "vault";
+		case "--root":
+			return "root";
+		case "--worktree":
+			return "worktree";
+		case "--data":
+			return "data";
+	}
 }
 
+/**
+ * @param {ProvisionRawOptions} rawOptions
+ * @param {string} [cwd]
+ * @returns {ProvisionOptions}
+ */
 export function resolveProvisionOptions(rawOptions, cwd = process.cwd()) {
 	const worktreePath = path.resolve(cwd, rawOptions.worktree ?? ".");
 	const vaultName =
@@ -215,16 +244,18 @@ export function resolveProvisionOptions(rawOptions, cwd = process.cwd()) {
 	};
 }
 
+/** @param {string} filePath */
 async function pathExists(filePath) {
 	try {
 		await fs.lstat(filePath);
 		return true;
 	} catch (error) {
-		if (error?.code === "ENOENT") return false;
+		if (errorHasCode(error, "ENOENT")) return false;
 		throw error;
 	}
 }
 
+/** @param {string} worktreePath */
 async function assertRequiredPluginFiles(worktreePath) {
 	const missing = [];
 	for (const fileName of REQUIRED_PLUGIN_FILES) {
@@ -242,17 +273,30 @@ async function assertRequiredPluginFiles(worktreePath) {
 	}
 }
 
+/**
+ * @param {string} filePath
+ * @param {unknown} value
+ */
 async function writeJson(filePath, value) {
 	await fs.mkdir(path.dirname(filePath), { recursive: true });
 	await fs.writeFile(`${filePath}.tmp`, `${JSON.stringify(value, null, "\t")}\n`);
 	await fs.rename(`${filePath}.tmp`, filePath);
 }
 
+/**
+ * @param {string} filePath
+ * @param {unknown} value
+ */
 async function writeJsonIfMissing(filePath, value) {
 	if (await pathExists(filePath)) return;
 	await writeJson(filePath, value);
 }
 
+/**
+ * @param {string} sourcePath
+ * @param {string} destinationPath
+ * @param {boolean} force
+ */
 async function linkPluginFile(sourcePath, destinationPath, force) {
 	const existing = await pathExists(destinationPath);
 	if (existing && force) {
@@ -276,6 +320,10 @@ async function linkPluginFile(sourcePath, destinationPath, force) {
 	await fs.symlink(sourcePath, destinationPath);
 }
 
+/**
+ * @param {ProvisionOptions} options
+ * @returns {Promise<ProvisionResult>}
+ */
 export async function provisionVault(options) {
 	await assertRequiredPluginFiles(options.worktreePath);
 
@@ -316,6 +364,7 @@ export async function provisionVault(options) {
 	};
 }
 
+/** @param {Pick<ProvisionResult, "vaultName" | "vaultPath">} result */
 export function toShellExports(result) {
 	return [
 		`export PODNOTES_E2E_VAULT=${shellQuote(result.vaultName)}`,
@@ -323,6 +372,7 @@ export function toShellExports(result) {
 	].join("\n");
 }
 
+/** @param {unknown} value */
 function shellQuote(value) {
 	return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
