@@ -8,10 +8,8 @@ import { parseDurationToSeconds } from "src/utility/parseDuration";
 import { parseEpisodeNumber } from "src/utility/parseEpisodeNumber";
 
 /**
- * Transient parser output. Raw targets stay purpose-explicit here so the
- * capability broker can seal each one under the correct resource kind. This
- * object must never be persisted or exposed to the UI, public API, or template
- * engine.
+ * Transient parser output. This object must never be persisted or exposed to
+ * the UI, public API, or template engine.
  */
 export interface ParsedFeedDocument {
 	title: string;

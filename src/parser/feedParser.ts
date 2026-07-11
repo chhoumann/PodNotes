@@ -41,8 +41,8 @@ function projectLegacyEpisode(parsed: ParsedEpisodeDocument, feed: PodcastFeed):
 
 /**
  * Compatibility facade for the existing target-shaped runtime.
- * Retrieval is injected so parsing can migrate to the capability broker without
- * pretending Obsidian's opaque `requestUrl` primitive is a pinned transport.
+ * Retrieval stays injected so transport policy can evolve independently from
+ * pure feed parsing.
  * Legacy target fallbacks live only here and never erase parser provenance.
  */
 export default class FeedParser {
