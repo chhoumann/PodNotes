@@ -555,10 +555,16 @@ function sanitizeUrlForTemplate(url: string): string {
 }
 
 /**
- * URL for a browser-managed media/artwork reference in a generated note. The
- * note renderer fetches these outside PodNotes' network gate, so only a
- * public http(s) target without embedded credentials may be emitted; anything
- * else becomes "".
+ * URL for a browser-managed media/artwork reference in a generated note (the
+ * default template embeds {{artwork}} as a live image). The note renderer
+ * fetches these outside PodNotes' network gate, so only a public http(s)
+ * target without embedded credentials is emitted; anything else becomes "".
+ *
+ * Residual (same ceiling as the network gate, PR #290): a public HOSTNAME that
+ * resolves via DNS to a private/loopback address still passes, because that can
+ * only be caught by resolving DNS - which a synchronous template function, and
+ * Obsidian's renderer fetch, cannot do. Literal private/loopback/link-local
+ * targets and credentialed URLs, the cases fully decidable here, are blocked.
  */
 function sanitizePortableResourceUrl(rawUrl: string): string {
 	if (!rawUrl || !isFetchableUrl(rawUrl)) return "";
