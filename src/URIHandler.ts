@@ -12,11 +12,15 @@ import {
 	localFiles,
 	playedEpisodes,
 	plugin,
+	savedFeeds,
 	requestedPlaybackTime,
 	viewState,
 } from "./store";
 import type { Episode } from "./types/Episode";
+import type { PodcastFeed } from "./types/PodcastFeed";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
+import { resolveFeedUrl } from "./services/privateFeeds";
+import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { getEpisodeKey } from "./utility/episodeKey";
 import { ViewState } from "./types/ViewState";
 
@@ -163,11 +167,15 @@ export default async function podNotesURIHandler(
 
 	let episode: Episode | undefined;
 
-	if (localFile) {
+	// A private-feed placeholder always routes to placeholder resolution (the
+	// final branch): a vault file literally named like a placeholder must not
+	// shadow private links.
+	const isPlaceholderLink = isPrivateFeedPlaceholder(url);
+	if (!isPlaceholderLink && localFile) {
 		episode = nameCandidates
 			.map((name) => localFiles.getLocalEpisode(name))
 			.find((ep) => ep !== undefined);
-	} else if (!candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
+	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
 		// a vault path whose file was moved/renamed. Resolve the episode by name from
 		// the local-files store rather than handing the bare path to FeedParser (which
@@ -176,11 +184,34 @@ export default async function podNotesURIHandler(
 			.map((name) => localFiles.getLocalEpisode(name))
 			.find((ep) => ep !== undefined);
 	} else {
+		// Links for a private feed carry the non-fetchable placeholder, not the
+		// secret URL. Resolution is local-only: the placeholder's feed name must
+		// match a saved feed on THIS device, and the real URL comes from
+		// SecretStorage. An attacker-crafted placeholder link can therefore only
+		// make the user's own device fetch the user's own subscribed feed - and
+		// the resolved URL still passes the fetchability gate below.
+		let fetchUrl = url;
+		let placeholderFeed: PodcastFeed | undefined;
+		const placeholderName = parsePrivateFeedPlaceholder(url);
+		if (placeholderName !== null) {
+			placeholderFeed = get(savedFeeds)[placeholderName];
+			const resolved = placeholderFeed
+				? resolveFeedUrl(placeholderFeed, get(plugin).feedUrls)
+				: null;
+			if (resolved === null) {
+				new Notice(
+					"This link points to a private feed that is not available on this device.",
+				);
+				return;
+			}
+			fetchUrl = resolved;
+		}
+
 		// The url here came straight from an untrusted obsidian://podnotes deep link
 		// (an attacker can put one behind <a href> on a web page), so a single click
 		// must not be able to fetch an arbitrary internal host. Refuse anything that
 		// isn't a public http(s) URL before handing it to FeedParser (blind SSRF).
-		if (!isFetchableUrl(url)) {
+		if (!isFetchableUrl(fetchUrl)) {
 			new Notice("Refusing to load a feed from a private, local, or non-http(s) URL");
 			return;
 		}
@@ -190,8 +221,11 @@ export default async function podNotesURIHandler(
 			// the legacy-candidate treatment. A '+' in a legacy feed URL is pre-existing and out of
 			// scope. getEpisodes returns fully-populated episodes, so we match in memory rather than
 			// re-fetching once per candidate.
-			const feedparser = new FeedParser();
-			const episodes = await feedparser.getEpisodes(url);
+			// For a private feed, parse against the SAVED feed so episodes keep the
+			// placeholder identity - never the resolved secret - on url/feedUrl
+			// (the picked episode persists via currentEpisode).
+			const feedparser = new FeedParser(placeholderFeed);
+			const episodes = await feedparser.getEpisodes(fetchUrl);
 			episode = findEpisodeByCandidates(episodes, nameCandidates);
 		} catch (error) {
 			// A fetch/parse failure is distinct from a genuine title miss; surface it instead of

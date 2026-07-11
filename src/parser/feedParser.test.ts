@@ -206,6 +206,27 @@ describe("FeedParser", () => {
 		vi.clearAllMocks();
 	});
 
+	describe("private feed identity (getEpisodes with a resolved secret URL)", () => {
+		test("stamps episodes with the saved placeholder, never the resolved secret", async () => {
+			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(sampleRssFeed));
+			const savedFeed: PodcastFeed = {
+				title: "Test Podcast",
+				url: "podnotes-private-feed:Test%20Podcast",
+				urlSecretId: "podnotes-feed-url",
+				artworkUrl: "",
+			};
+			const resolvedSecretUrl = "https://www.patreon.com/rss/test?auth=se-cret";
+
+			const episodes = await new FeedParser(savedFeed).getEpisodes(resolvedSecretUrl);
+
+			expect(episodes.length).toBeGreaterThan(0);
+			for (const episode of episodes) {
+				expect(episode.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
+				expect(JSON.stringify(episode)).not.toContain("se-cret");
+			}
+		});
+	});
+
 	describe("getFeed", () => {
 		test("parses feed title and URL correctly", async () => {
 			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(sampleRssFeed));

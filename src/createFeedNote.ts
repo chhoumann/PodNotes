@@ -7,6 +7,7 @@ import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
 import FeedParser from "./parser/feedParser";
+import { resolveFeedUrl } from "./services/privateFeeds";
 
 /**
  * Resolve the on-disk path of a feed's note from the feed-note path template.
@@ -84,9 +85,11 @@ async function enrichFeed(feed: PodcastFeed): Promise<PodcastFeed> {
 	if (!needsEnrichment || !feed.url) {
 		return feed;
 	}
+	const feedUrl = resolveFeedUrl(feed, get(plugin).feedUrls);
+	if (feedUrl === null) return feed;
 
 	try {
-		const parsed = await new FeedParser(feed).getFeed(feed.url);
+		const parsed = await new FeedParser(feed).getFeed(feedUrl);
 
 		// Keep the saved title/url/artwork; only backfill the new metadata fields
 		// so the computed basename can never change mid-flight. Use `||` (not `??`)

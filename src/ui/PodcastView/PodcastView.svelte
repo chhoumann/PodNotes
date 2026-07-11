@@ -31,6 +31,7 @@
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import { getCachedEpisodes, setCachedEpisodes } from "src/services/FeedCacheService";
 	import { get } from "svelte/store";
+	import { resolveFeedUrlWithNotice } from "src/services/privateFeeds";
 	import { PLAYED_SETTINGS } from "src/constants";
 	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
 	import {
@@ -206,7 +207,9 @@
 		}
 
 		try {
-			const episodes = await new FeedParser(feed).getEpisodes(feed.url);
+			const feedUrl = resolveFeedUrlWithNotice(feed, get(plugin).feedUrls);
+			if (feedUrl === null) return [];
+			const episodes = await new FeedParser(feed).getEpisodes(feedUrl);
 
 			episodeCache.update((cache) => ({
 				...cache,

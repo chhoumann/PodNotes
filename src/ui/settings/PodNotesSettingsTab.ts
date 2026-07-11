@@ -39,6 +39,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 import { clearFeedCache } from "src/services/FeedCacheService";
+import { migratePrivateFeedUrls } from "src/services/privateFeeds";
 import {
 	describeSecrets,
 	mergeImportedSettings,
@@ -920,6 +921,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		}
 
 		const merged = mergeImportedSettings(previous, { ...imported, ...secretReferences });
+		// A raw data.json import can carry credential-bearing feed URLs; intern
+		// them BEFORE the strict persist below so the secret never reaches disk.
+		merged.savedFeeds = migratePrivateFeedUrls(
+			merged.savedFeeds,
+			this.plugin.feedUrls,
+		).savedFeeds;
 		const failedCandidate = structuredClone(merged);
 		const openAIReferenceChanged = merged.openAISecretId !== previous.openAISecretId;
 		if (openAIReferenceChanged) this.plugin.invalidateTranscriptionCredentialCache();

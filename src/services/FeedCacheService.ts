@@ -324,6 +324,25 @@ export function setCachedEpisodes(feed: PodcastFeed, episodes: Episode[]): void 
 	persistCache();
 }
 
+/**
+ * Drop cache entries keyed by the given feed URLs. Used when a private feed's
+ * credential-bearing URL migrates to a placeholder: the old entry would never
+ * be read again (lookups now use the placeholder key), so its plaintext URL
+ * would otherwise sit in localStorage until eviction.
+ */
+export function evictCachedFeedUrls(urls: string[]): void {
+	if (!urls.length) return;
+	const store = loadCache();
+	let changed = false;
+	for (const url of urls) {
+		if (url in store) {
+			delete store[url];
+			changed = true;
+		}
+	}
+	if (changed) persistCache();
+}
+
 export function clearFeedCache(): void {
 	cache = {};
 	const storage = getStorage();

@@ -122,6 +122,29 @@ export type ParseResult =
  * SecretStorage references are always excluded. Plaintext values appear only in
  * the separate payload explicitly passed by the caller.
  */
+/**
+ * SecretStorage references are device-local capabilities and never transfer
+ * data: an imported urlSecretId is at best meaningless on this device. The
+ * private URL itself stays behind (placeholder) unless the source device
+ * exports it another way; the feed is re-added on the target device.
+ */
+function stripFeedUrlSecretReferences(savedFeeds: unknown): unknown {
+	if (typeof savedFeeds !== "object" || savedFeeds === null || Array.isArray(savedFeeds)) {
+		return savedFeeds;
+	}
+	const out: Record<string, unknown> = {};
+	for (const [key, feed] of Object.entries(savedFeeds)) {
+		if (typeof feed === "object" && feed !== null && !Array.isArray(feed)) {
+			const rest = { ...(feed as Record<string, unknown>) };
+			delete rest.urlSecretId;
+			out[key] = rest;
+		} else {
+			out[key] = feed;
+		}
+	}
+	return out;
+}
+
 export function serializeSettings(
 	settings: IPodNotesSettings,
 	opts: ExportOptions,
@@ -136,6 +159,7 @@ export function serializeSettings(
 		if (!IMPORTABLE_KEYS.has(key)) continue;
 		out[key] = persisted[key];
 	}
+	out.savedFeeds = stripFeedUrlSecretReferences(out.savedFeeds);
 	const secrets = normalizeSecrets(opts.secrets ?? {});
 
 	return {
@@ -223,6 +247,11 @@ export function parseImport(jsonText: string): ParseResult {
 	}
 
 	const settings = sanitizeImportedSettings(source);
+	if ("savedFeeds" in settings) {
+		(settings as Record<string, unknown>).savedFeeds = stripFeedUrlSecretReferences(
+			settings.savedFeeds,
+		);
+	}
 
 	if (Object.keys(settings).length === 0 && Object.keys(secrets).length === 0) {
 		return {

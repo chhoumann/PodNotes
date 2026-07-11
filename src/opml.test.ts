@@ -18,9 +18,28 @@ const getFeed = vi.fn(defaultGetFeed);
 // accurate saved count).
 const noticeMessages = vi.hoisted(() => [] as string[]);
 
+const feedUrlSecrets = vi.hoisted(() => new Map<string, string>());
+
 vi.mock("./store", () => ({
 	get savedFeeds() {
 		return savedFeeds;
+	},
+	// opml resolves/interns private feed URLs through the plugin's repository;
+	// a Map-backed stand-in keeps those paths inert for public-feed fixtures.
+	plugin: {
+		subscribe: (run: (value: unknown) => void) => {
+			run({
+				feedUrls: {
+					resolve: (id: string) => feedUrlSecrets.get(id) ?? null,
+					store: (url: string) => {
+						feedUrlSecrets.set("podnotes-feed-url", url);
+						return "podnotes-feed-url";
+					},
+					delete: (id: string) => feedUrlSecrets.delete(id),
+				},
+			});
+			return () => {};
+		},
 	},
 }));
 

@@ -1,6 +1,7 @@
 import { type App, Notice } from "obsidian";
 import FeedParser from "./parser/feedParser";
-import { savedFeeds } from "./store";
+import { plugin, savedFeeds } from "./store";
+import { internPrivateFeed, resolveFeedUrl } from "./services/privateFeeds";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { get } from "svelte/store";
 
@@ -163,7 +164,8 @@ async function importOPML(opml: string): Promise<void> {
 		savedFeeds.update((feeds) => {
 			for (const pod of validPodcasts) {
 				if (feeds[pod.title]) continue;
-				feeds[pod.title] = structuredClone(pod);
+				// Imported private URLs go straight to SecretStorage, never data.json.
+				feeds[pod.title] = internPrivateFeed(structuredClone(pod), get(plugin).feedUrls);
 				savedCount++;
 			}
 			return feeds;
@@ -216,8 +218,16 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 			.replace(/</g, "&lt;")
 			.replace(/>/g, "&gt;")
 			.replace(/"/g, "&quot;");
-	const feedOutline = (feed: PodcastFeed) =>
-		`<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(feed.url)}" />`;
+	// An OPML export is a deliberate, user-initiated portability action, so a
+	// private feed exports its REAL url (an export with placeholders is useless).
+	// A private URL that cannot be resolved on this device exports as an empty
+	// xmlUrl rather than a placeholder.
+	let exportedPrivateFeeds = 0;
+	const feedOutline = (feed: PodcastFeed) => {
+		const url = resolveFeedUrl(feed, get(plugin).feedUrls) ?? "";
+		if (feed.urlSecretId && url) exportedPrivateFeeds += 1;
+		return `<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(url)}" />`;
+	};
 	const feedsOutline = (_feeds: PodcastFeed[]) =>
 		`<outline text="feeds">${feeds.map(feedOutline).join("")}</outline>`;
 
@@ -227,6 +237,12 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 		await app.vault.create(filePath, doc);
 
 		new Notice(`Exported ${feeds.length} podcast feeds to file "${filePath}".`);
+		if (exportedPrivateFeeds > 0) {
+			new Notice(
+				`The export contains ${exportedPrivateFeeds} private feed ${exportedPrivateFeeds === 1 ? "URL" : "URLs"} in plaintext. The file is inside your vault - delete it after importing it elsewhere.`,
+				10000,
+			);
+		}
 	} catch (error) {
 		if (error instanceof Error) {
 			if (error.message.includes("Folder does not exist")) {
