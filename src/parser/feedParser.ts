@@ -61,7 +61,12 @@ export default class FeedParser {
 	async getEpisodes(sourceUrl: string): Promise<Episode[]> {
 		const xml = await this.source.load(sourceUrl);
 		const existingFeed = this.feed;
-		if (existingFeed?.url === sourceUrl) {
+		// A private feed's sourceUrl is its RESOLVED secret while feed.url holds
+		// the placeholder, so the URLs never match. The caller resolved sourceUrl
+		// from this very feed, so the pairing holds - and projecting against the
+		// saved feed keeps the placeholder (never the secret) on every episode's
+		// url/feedUrl, which flow into the persisted episode cache.
+		if (existingFeed && (existingFeed.url === sourceUrl || existingFeed.urlSecretId)) {
 			return defaultDocumentParser
 				.parseEpisodeItems(xml)
 				.map((episode) => projectLegacyEpisode(episode, existingFeed));

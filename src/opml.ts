@@ -1,6 +1,7 @@
 import { type App, Notice } from "obsidian";
 import FeedParser from "./parser/feedParser";
-import { savedFeeds } from "./store";
+import { plugin, savedFeeds } from "./store";
+import { internPrivateFeed, resolveFeedUrl } from "./services/privateFeeds";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { get } from "svelte/store";
 
@@ -163,7 +164,8 @@ async function importOPML(opml: string): Promise<void> {
 		savedFeeds.update((feeds) => {
 			for (const pod of validPodcasts) {
 				if (feeds[pod.title]) continue;
-				feeds[pod.title] = structuredClone(pod);
+				// Imported private URLs go straight to SecretStorage, never data.json.
+				feeds[pod.title] = internPrivateFeed(structuredClone(pod), get(plugin).feedUrls);
 				savedCount++;
 			}
 			return feeds;
@@ -216,8 +218,12 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 			.replace(/</g, "&lt;")
 			.replace(/>/g, "&gt;")
 			.replace(/"/g, "&quot;");
+	// An OPML export is a deliberate, user-initiated portability action, so a
+	// private feed exports its REAL url (an export with placeholders is useless).
+	// A private URL that cannot be resolved on this device exports as an empty
+	// xmlUrl rather than a placeholder.
 	const feedOutline = (feed: PodcastFeed) =>
-		`<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(feed.url)}" />`;
+		`<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(resolveFeedUrl(feed, get(plugin).feedUrls) ?? "")}" />`;
 	const feedsOutline = (_feeds: PodcastFeed[]) =>
 		`<outline text="feeds">${feeds.map(feedOutline).join("")}</outline>`;
 

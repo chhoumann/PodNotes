@@ -41,6 +41,8 @@ import {
 	PodNotesDataError,
 } from "./persistence/podNotesData";
 import { CredentialRepository } from "./services/CredentialRepository";
+import { FeedUrlRepository } from "./services/FeedUrlRepository";
+import { migratePrivateFeedUrls } from "./services/privateFeeds";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -73,6 +75,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public override settings!: IPodNotesSettings;
 	public override app!: PartialAppExtension;
 	public credentials!: CredentialRepository;
+	public feedUrls!: FeedUrlRepository;
 
 	private views = new Set<MainView>();
 
@@ -102,6 +105,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.podcastViewMountEnabled = !this.isMobileRuntime();
 		plugin.set(this);
 		this.credentials = new CredentialRepository(this.app.secretStorage);
+		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
 
 		await this.loadSettings();
 
@@ -473,6 +477,21 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					);
 				}
 			}
+
+			// Private feed URLs: move credential-bearing subscription URLs out of
+			// data.json into SecretStorage, then reap feed-url secrets no saved feed
+			// references anymore (e.g. after a settings import replaced savedFeeds).
+			// Best-effort: a failure keeps the URL where it was, never breaks loading.
+			this.feedUrls ??= new FeedUrlRepository(this.app.secretStorage);
+			const feedMigration = migratePrivateFeedUrls(settings.savedFeeds, this.feedUrls);
+			if (feedMigration.migrated > 0) {
+				settings = { ...settings, savedFeeds: feedMigration.savedFeeds };
+				await this.saveData(encodePodNotesData(settings, decoded.unknownFields));
+				new Notice(
+					`Moved ${feedMigration.migrated} private feed ${feedMigration.migrated === 1 ? "URL" : "URLs"} into Obsidian SecretStorage.`,
+				);
+			}
+			this.feedUrls.sweepOrphans(settings.savedFeeds);
 
 			this.settings = settings;
 			this.persistenceUnknownFields = decoded.unknownFields;

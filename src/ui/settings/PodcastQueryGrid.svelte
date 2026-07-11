@@ -2,7 +2,9 @@
 	import { debounce, Notice } from "obsidian";
 	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
 	import FeedParser from "src/parser/feedParser";
-	import { savedFeeds, podcastsUpdated } from "src/store";
+	import { plugin, savedFeeds, podcastsUpdated } from "src/store";
+	import { get } from "svelte/store";
+	import { internPrivateFeed } from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
 	import Text from "../obsidian/Text.svelte";
@@ -94,7 +96,9 @@
 	);
 
 	function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
-		const { podcast } = event.detail;
+		// A pasted private feed URL must never reach persisted settings: intern it
+		// into SecretStorage and save the placeholder + reference instead.
+		const podcast = internPrivateFeed(event.detail.podcast, get(plugin).feedUrls);
 		savedFeeds.update((feeds) => ({ ...feeds, [podcast.title]: podcast }));
 		updateSearchResults();
 	}
@@ -102,6 +106,8 @@
 	function removePodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
 		const { podcast } = event.detail;
 		savedFeeds.update((feeds) => {
+			const removed = feeds[podcast.title];
+			if (removed?.urlSecretId) get(plugin).feedUrls.delete(removed.urlSecretId);
 			const newFeeds = { ...feeds };
 			delete newFeeds[podcast.title];
 			return newFeeds;

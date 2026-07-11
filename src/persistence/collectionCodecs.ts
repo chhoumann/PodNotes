@@ -35,6 +35,7 @@ export function decodeSavedFeeds(
 		feed.title = readString(candidate, "title", key, warnings, `savedFeeds.${key}`);
 		feed.url = readString(candidate, "url", "", warnings, `savedFeeds.${key}`);
 		feed.artworkUrl = readString(candidate, "artworkUrl", "", warnings, `savedFeeds.${key}`);
+		setOptionalString(feed, candidate, "urlSecretId", warnings, `savedFeeds.${key}`);
 		setOptionalString(feed, candidate, "description", warnings, `savedFeeds.${key}`);
 		setOptionalString(feed, candidate, "link", warnings, `savedFeeds.${key}`);
 		setOptionalString(feed, candidate, "author", warnings, `savedFeeds.${key}`);
