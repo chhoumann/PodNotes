@@ -137,6 +137,18 @@ function registeredDownloadOwnsPath(episode: Episode, filePath: string): boolean
 	return isSameMediaSource(registered.streamUrl, episode.streamUrl);
 }
 
+// Fast-path variant: the path here is only the URL-extension guess, so a foreign
+// occupant is not a collision yet - the sniffed final path may differ. Returns a
+// size only when this episode already owns the file.
+function ownedExistingDownloadSize(episode: Episode, filePath: string): number | undefined {
+	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
+	if (!(existing instanceof TFile)) return undefined;
+	if (!registeredDownloadOwnsPath(episode, filePath)) return undefined;
+	return downloadedEpisodes.getEpisode(episode)?.size;
+}
+
+// Resolved-destination variant: the final path is known, so a foreign occupant
+// is a hard collision.
 function reusableExistingDownloadSize(episode: Episode, filePath: string): number | undefined {
 	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
 	if (!(existing instanceof TFile)) return undefined;
@@ -162,7 +174,7 @@ async function startDownloadEpisodeToDisk(
 	const urlExtension = getUrlExtension(episode.streamUrl);
 	if (urlExtension) {
 		const provisionalPath = safeDownloadFilePath(downloadPathTemplate, episode, urlExtension);
-		const cachedSize = reusableExistingDownloadSize(episode, provisionalPath);
+		const cachedSize = ownedExistingDownloadSize(episode, provisionalPath);
 		if (cachedSize !== undefined) {
 			downloadedEpisodes.addEpisode(episode, provisionalPath, cachedSize);
 			return provisionalPath;

@@ -333,6 +333,40 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		});
 	});
 
+	it("ignores a foreign file at the provisional URL-extension path when the sniffed final path is free (Codex #290)", async () => {
+		const { createBinary, present } = setupVault();
+		// A different episode's file occupies the path the URL extension implies
+		// (.mp4). The response sniffs to .m4a, so the real destination is free and
+		// the fast-path check must fall through to the probe instead of throwing a
+		// destination collision.
+		present.add("Podcasts/Audio MP4 Title.mp4");
+		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mp4" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Audio MP4 Title",
+			streamUrl: "https://example.com/episode.mp4",
+			mediaType: "audio",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith("Podcasts/Audio MP4 Title.m4a", buffer);
+		expect(get(downloadedEpisodes)["Pod"]?.[0]).toMatchObject({
+			filePath: "Podcasts/Audio MP4 Title.m4a",
+		});
+	});
+
 	it("saves an audio/mp4 download with a generic ISO-BMFF brand as m4a, not mp4 (Codex #213)", async () => {
 		const { createBinary } = setupVault();
 		// Real ISO-BMFF: 4-byte box size, 'ftyp', then a generic 'mp42' major brand.
@@ -1322,7 +1356,10 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 			"A different episode already occupies the selected destination.",
 		);
 
-		expect(requestUrlMock).toHaveBeenCalledOnce();
+		// Episode B pays one Range probe before the collision surfaces: the
+		// provisional URL-extension path cannot distinguish a real collision from a
+		// wrong URL extension, so the check runs on the sniffed final path.
+		expect(requestUrlMock).toHaveBeenCalledTimes(2);
 		expect(v.writeBinary).toHaveBeenCalledOnce();
 		expect(get(downloadedEpisodes)["Podcast A"]?.[0]).toMatchObject({
 			filePath: "Podcasts/shared.mp3",
@@ -1330,8 +1367,9 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 		});
 		expect(get(downloadedEpisodes)["Podcast B"]).toBeUndefined();
 
+		// The registered owner still reuses the fast path with no network traffic.
 		await downloadEpisodeWithNotice(episodeA, template);
-		expect(requestUrlMock).toHaveBeenCalledOnce();
+		expect(requestUrlMock).toHaveBeenCalledTimes(2);
 		expect(get(downloadedEpisodes)["Podcast A"]).toHaveLength(1);
 	});
 
