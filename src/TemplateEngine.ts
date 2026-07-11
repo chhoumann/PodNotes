@@ -16,6 +16,7 @@ import { isLocalFile } from "./utility/isLocalFile";
 import type { PodcastSegmentTimes } from "./utility/podcastSegment";
 import type { Chapter } from "./types/Chapter";
 import { normalizeChapters } from "./utility/normalizeChapters";
+import { isFetchableUrl } from "./utility/assertFetchableUrl";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -200,23 +201,45 @@ function neutralizeExecutableCodeBlocks(markdown: string): string {
 }
 
 /**
+ * Escape `![` so feed text cannot form a live Markdown embed. Balanced escaping:
+ * an even run of backslashes before `![` leaves the embed live, so one more is
+ * added; an odd run already escapes it and is left alone.
+ */
+function neutralizeMarkdownEmbeds(markdown: string): string {
+	return markdown.replace(/\\*!\[/g, (match) => {
+		const slashCount = match.length - 2;
+		const safeSlashCount = slashCount % 2 === 0 ? slashCount + 1 : slashCount;
+		return `${"\\".repeat(safeSlashCount)}![`;
+	});
+}
+
+/**
  * Convert feed-controlled HTML to Markdown and render any executable Dataview code
  * fence inert. `htmlToMarkdown` strips active HTML (scripts, `javascript:`), and
  * this additionally closes the `<pre><code class="language-dataviewjs">` ->
  * ```dataviewjs code-execution path.
  *
- * Legitimate rich-text formatting in show notes (links, images, ordinary code
- * blocks) is intentionally preserved: rendering the feed's own show notes is the
- * purpose of {{description}}/{{content}}. That means a feed can still place an
- * external image (a reader can disable external image loading in Obsidian) or a
- * literal [[wikilink]] in this free-text body; unlike the structured tags
- * ({{title}}, {{podcastlink}}, the URL tags) these are accepted as show-note
- * content. Inline Dataview queries (`= ...`/`$= ...`) are a known residual of the
- * same speculative, Dataview-must-be-installed class and are not rewritten here to
- * avoid mangling legitimate inline code in programming show notes.
+ * Legitimate text formatting, links, and ordinary code blocks are preserved.
+ * Active media elements (img/audio/video/source/iframe/object/embed/link) are
+ * removed before conversion, and Markdown image embeds are neutralized after it,
+ * so opening a generated note cannot make a browser-managed request to a
+ * feed-selected local/private target - those renders never pass PodNotes'
+ * network gate. Inline Dataview queries (`= ...`/`$= ...`) are a known residual
+ * of the same speculative, Dataview-must-be-installed class and are not
+ * rewritten here to avoid mangling legitimate inline code in programming show
+ * notes.
  */
 function feedHtmlToMarkdown(html: string): string {
-	return neutralizeExecutableCodeBlocks(htmlToMarkdown(html));
+	const document = new DOMParser().parseFromString(html, "text/html");
+	for (const element of document.querySelectorAll(
+		"img, audio, video, source, iframe, object, embed, link",
+	)) {
+		const alt = element instanceof HTMLImageElement ? element.alt.trim() : "";
+		element.replaceWith(document.createTextNode(alt));
+	}
+	return neutralizeMarkdownEmbeds(
+		neutralizeExecutableCodeBlocks(htmlToMarkdown(document.body.innerHTML)),
+	);
 }
 
 function formatTemplateChapters(chapters: Chapter[] | undefined, prependToLines?: string): string {
@@ -286,7 +309,7 @@ export function NoteTemplateEngine(
 		return feedHtmlToMarkdown(episode.content);
 	});
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
-	addTag("stream", sanitizeUrlForTemplate(episode.streamUrl));
+	addTag("stream", sanitizePortableResourceUrl(episode.streamUrl));
 	addTag("url", episodeUrl);
 	addTag("date", (format?: string) =>
 		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
@@ -308,18 +331,18 @@ export function NoteTemplateEngine(
 		formatTemplateChapters(context.chapters, prependToLines),
 	);
 	addTag("podcast", replaceIllegalFileNameCharactersInString(episode.podcastName));
-	addTag("artwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
+	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
 
 	// Feed-scoped tags so an episode note can reference its parent podcast feed
 	// without changing the meaning of the existing {{url}}/{{artwork}} tags
 	// (which always describe the episode itself). See issue #163.
 	addTag("episodeurl", episodeUrl);
-	addTag("episodeartwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
+	addTag("episodeartwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
 	addTag("feedurl", sanitizeUrlForTemplate(episode.feedUrl ?? ""));
 	const parentFeed = get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
 	addTag(
 		"feedartwork",
-		sanitizeUrlForTemplate(parentFeed?.artworkUrl ?? episode.artworkUrl ?? ""),
+		sanitizePortableResourceUrl(parentFeed?.artworkUrl ?? episode.artworkUrl ?? ""),
 	);
 	// A ready-made wikilink to the parent feed's note, pointing at the same file
 	// createFeedNote writes (derived from the feed-note path setting).
@@ -428,7 +451,7 @@ export function TranscriptTemplateEngine(
 		return feedHtmlToMarkdown(episode.description);
 	});
 	addTag("url", resolveEpisodeUrl(episode));
-	addTag("artwork", sanitizeUrlForTemplate(episode.artworkUrl ?? ""));
+	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
 
 	return replacer(template);
 }
@@ -450,8 +473,8 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 	// A well-formed URL never contains the characters this neutralizes.
 	addTag("url", sanitizeUrlForTemplate(feed.link ?? ""));
 	addTag("feedurl", sanitizeUrlForTemplate(feed.url));
-	addTag("artwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
-	addTag("feedartwork", sanitizeUrlForTemplate(feed.artworkUrl ?? ""));
+	addTag("artwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
+	addTag("feedartwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
 	addTag("description", (prependToLines?: string) => {
 		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "").replace(
@@ -529,6 +552,25 @@ function sanitizeUrlForTemplate(url: string): string {
 	return url.replace(/[\u0000-\u0020"'`()[\]<>\\]/g, (char) => {
 		return `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`;
 	});
+}
+
+/**
+ * URL for a browser-managed media/artwork reference in a generated note (the
+ * default template embeds {{artwork}} as a live image). The note renderer
+ * fetches these outside PodNotes' network gate, so only a public http(s)
+ * target without embedded credentials is emitted; anything else becomes "".
+ *
+ * Residual (same ceiling as the network gate, PR #290): a public HOSTNAME that
+ * resolves via DNS to a private/loopback address still passes, because that can
+ * only be caught by resolving DNS - which a synchronous template function, and
+ * Obsidian's renderer fetch, cannot do. Literal private/loopback/link-local
+ * targets and credentialed URLs, the cases fully decidable here, are blocked.
+ */
+function sanitizePortableResourceUrl(rawUrl: string): string {
+	if (!rawUrl || !isFetchableUrl(rawUrl)) return "";
+	const parsed = new URL(rawUrl);
+	if (parsed.username || parsed.password) return "";
+	return sanitizeUrlForTemplate(rawUrl);
 }
 
 export function replaceIllegalFileNameCharactersInString(string: string) {

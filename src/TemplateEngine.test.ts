@@ -175,6 +175,63 @@ describe("empty tag arguments (NT-05/CH-09)", () => {
 	});
 });
 
+describe("note-render hardening (browser-managed requests from generated notes)", () => {
+	it("omits private and local resource targets from portable artwork tags", () => {
+		for (const artworkUrl of [
+			"http://127.0.0.1/private.png",
+			"http://169.254.169.254/latest/meta-data/",
+			"file:///Users/example/secret.png",
+		]) {
+			expect(NoteTemplateEngine("{{artwork}}", { ...demoEpisode, artworkUrl })).toBe("");
+		}
+	});
+
+	it("omits credential-bearing artwork URLs (userinfo never reaches a note)", () => {
+		expect(
+			NoteTemplateEngine("{{artwork}}", {
+				...demoEpisode,
+				artworkUrl: "https://user:pass@example.com/art.png",
+			}),
+		).toBe("");
+	});
+
+	it("keeps ordinary public artwork URLs", () => {
+		expect(
+			NoteTemplateEngine("{{artwork}}", {
+				...demoEpisode,
+				artworkUrl: "https://cdn.example.com/art.png",
+			}),
+		).toBe("https://cdn.example.com/art.png");
+	});
+
+	it("removes active media elements from feed descriptions while preserving alt text", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			description:
+				'<p>Introduction <img src="http://127.0.0.1/private.png" alt="cover art"><iframe src="http://169.254.169.254/"></iframe></p>',
+		};
+		const rendered = NoteTemplateEngine("{{description}}", malicious);
+		expect(rendered).toContain("Introduction");
+		expect(rendered).toContain("cover art");
+		expect(rendered).not.toContain("127.0.0.1");
+		expect(rendered).not.toContain("169.254.169.254");
+		expect(rendered).not.toContain("<img");
+		expect(rendered).not.toContain("<iframe");
+	});
+
+	it("renders raw Markdown image and vault-embed syntax inert in feed text", () => {
+		const malicious: Episode = {
+			...demoEpisode,
+			description:
+				"![private](http://127.0.0.1/admin) ![[Secrets.md]] \\![metadata](http://169.254.169.254/)",
+		};
+		const rendered = NoteTemplateEngine("{{description}}", malicious);
+		expect(rendered).not.toMatch(/(^|[^\\])!\[/);
+		expect(rendered).toContain("private");
+		expect(rendered).toContain("Secrets.md");
+	});
+});
+
 describe("NoteTemplateEngine feed-scoped tags (#163)", () => {
 	it("keeps {{url}} and {{artwork}} pointing at the episode itself", () => {
 		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
