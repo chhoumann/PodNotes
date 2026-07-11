@@ -63,6 +63,10 @@
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
 	let loadError: string | null = null;
+	// Distinct from isLoading (a display flag): gates persistence so it stays
+	// closed when media fails to load, since a failed load clears the spinner
+	// without restoring the saved position. Only a real metadata load opens it.
+	let playbackRestored: boolean = false;
 	let playerVolume: number = 1;
 	let mediaElement: HTMLMediaElement | null = null;
 	// The currentEpisode subscription fires synchronously on subscribe with the
@@ -179,6 +183,7 @@
 	function onMetadataLoaded() {
 		isLoading = false;
 		loadError = null;
+		playbackRestored = true;
 
 		restorePlaybackTime();
 	}
@@ -273,9 +278,10 @@
 
 	function persistPlaybackPosition() {
 		// Never persist before metadata has loaded and the saved position has been
-		// restored (onMetadataLoaded) — writing the pre-restore 0 would clobber the
-		// stored position we are about to resume from.
-		if (isLoading || !$currentEpisode) return;
+		// restored (onMetadataLoaded), including the failed-load path where the
+		// spinner clears but no restore ran — writing the pre-restore 0 would
+		// clobber the stored position we resume from.
+		if (!playbackRestored || !$currentEpisode) return;
 		if (shouldSuppressSegmentProgressPersistence()) return;
 
 		playedEpisodes.setEpisodeTime(
@@ -350,6 +356,7 @@
 			// time and clobber its saved resume position (issue #33).
 			isLoading = true;
 			loadError = null;
+			playbackRestored = false;
 			lastPositionSaveMs = Number.NEGATIVE_INFINITY;
 			segmentStopTimeWithoutProgressSave = null;
 
@@ -363,7 +370,7 @@
 			// progress bar stays pinned at 100% and the timestamps show the
 			// previous episode's end for the whole (network-bound) metadata fetch.
 			// onMetadataLoaded → restorePlaybackTime sets the real position, and
-			// the isLoading guard above keeps this reset from being persisted.
+			// the playbackRestored guard keeps this reset from being persisted.
 			if (hasSeenFirstEpisodeFire) {
 				currentTime.set(0);
 				duration.set(0);

@@ -131,6 +131,23 @@ describe("EpisodePlayer", () => {
 		expect(error?.textContent).toContain("Could not load");
 	});
 
+	test("does not persist a pre-restore position when media fails to load", async () => {
+		// Seed a saved resume point; a failed load must not overwrite it with 0.
+		playedEpisodes.setEpisodeTime(testEpisode, 1234, 3600, false);
+		const { container, unmount } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+
+		await fireEvent.error(audio);
+		// Destroy fires persistPlaybackPosition; the guard must keep it closed.
+		unmount();
+
+		const saved = get(playedEpisodes)[`${testEpisode.podcastName}::${testEpisode.title}`];
+		expect(saved?.time).toBe(1234);
+	});
+
 	test("clears the error state when the next episode loads", async () => {
 		const { container } = render(EpisodePlayer);
 		await waitFor(() => {
