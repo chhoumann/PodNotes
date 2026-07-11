@@ -15,7 +15,6 @@
 		"typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
 		"lint": "oxlint --deny-warnings src tests/e2e scripts",
 		"format:check": "npm run format -- --check",
-		"release:plan": "node scripts/release-plan.mjs",
 		"test": "npm run check:a11y && vitest",
 		"test:e2e": "npm run build && vitest run --config vitest.e2e.config.ts",
 		"obsidian:e2e": "obsidian-e2e run",
@@ -32,8 +31,6 @@
 		"openai": "^6.45.0"
 	},
 	"devDependencies": {
-		"@semantic-release/commit-analyzer": "^13.0.1",
-		"@semantic-release/release-notes-generator": "^14.1.1",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/svelte": "^5.4.2",
@@ -44,7 +41,6 @@
 		"obsidian-e2e": "^0.7.0",
 		"oxfmt": "^0.57.0",
 		"oxlint": "^1.72.0",
-		"semantic-release": "^25.0.5",
 		"svelte": "^5.46.4",
 		"svelte-check": "^4.7.1",
 		"svelte-preprocess": "^6.0.5",
