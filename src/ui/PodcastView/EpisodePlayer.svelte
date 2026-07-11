@@ -62,6 +62,7 @@
 
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
+	let loadError: string | null = null;
 	let playerVolume: number = 1;
 	let mediaElement: HTMLMediaElement | null = null;
 	// The currentEpisode subscription fires synchronously on subscribe with the
@@ -177,8 +178,17 @@
 
 	function onMetadataLoaded() {
 		isLoading = false;
+		loadError = null;
 
 		restorePlaybackTime();
+	}
+
+	// A blocked, dead, or unreachable media URL never fires loadedmetadata, so
+	// without this the loading overlay spins forever (found while gating all
+	// outbound requests: a refused stream URL looked identical to a slow one).
+	function onMediaError() {
+		isLoading = false;
+		loadError = "Could not load this episode's media.";
 	}
 
 	function restorePlaybackTime() {
@@ -339,6 +349,7 @@
 			// the src swap persist the new episode under its key with the old/zero
 			// time and clobber its saved resume position (issue #33).
 			isLoading = true;
+			loadError = null;
 			lastPositionSaveMs = Number.NEGATIVE_INFINITY;
 			segmentStopTimeWithoutProgressSave = null;
 
@@ -504,6 +515,7 @@
 				bind:volume={playerVolume}
 				on:ended={onEpisodeEnded}
 				on:loadedmetadata={onMetadataLoaded}
+				on:error={onMediaError}
 				on:timeupdate={onTimeUpdate}
 				on:pause={onPause}
 				on:play|preventDefault
@@ -515,6 +527,11 @@
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />
+				</div>
+			{:else if loadError}
+				<div class="podcast-artwork-load-error" role="alert">
+					<Icon icon="alert-triangle" clickable={false} />
+					<span>{loadError}</span>
 				</div>
 			{:else}
 				<button
@@ -569,6 +586,11 @@
 					<div class="podcast-artwork-isloading-overlay">
 						<Loading />
 					</div>
+				{:else if loadError}
+					<div class="podcast-artwork-load-error" role="alert">
+						<Icon icon="alert-triangle" clickable={false} />
+						<span>{loadError}</span>
+					</div>
 				{:else}
 					<div
 						class="podcast-artwork-overlay"
@@ -595,6 +617,7 @@
 			bind:volume={playerVolume}
 			on:ended={onEpisodeEnded}
 			on:loadedmetadata={onMetadataLoaded}
+			on:error={onMediaError}
 			on:timeupdate={onTimeUpdate}
 			on:pause={onPause}
 			on:play|preventDefault
@@ -818,6 +841,24 @@
 	.podcast-video-fullscreen:focus-visible {
 		outline: 2px solid var(--background-modifier-border-focus);
 		outline-offset: 2px;
+	}
+
+	.podcast-artwork-load-error {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		text-align: center;
+		padding: 0.5rem;
+		background-color: rgba(0, 0, 0, 0.6);
+		color: var(--text-error);
+		font-size: 0.85rem;
 	}
 
 	.podcast-artwork-isloading-overlay {
