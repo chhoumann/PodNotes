@@ -12,7 +12,7 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const head = (await github.rest.git.getRef({ owner, repo, ref: 'heads/master' })).data.object.sha;
-            const release = '2bd1306047df9d5ffb93b1d0e35b957fcbafa9ba';
+            const release = '4657f4167391627e88401d52b8f7b4009be645f5';
             const cases = [
               ['plain-at-head', 'refs/heads/probe-a', head],
               ['release-run-at-head', 'refs/heads/release-run/9.9.9', head],
