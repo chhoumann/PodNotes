@@ -1,8 +1,21 @@
-import { requestUrl, Notice } from "obsidian";
+import { Notice } from "obsidian";
 import { get } from "svelte/store";
 import type { IAPI } from "./API/IAPI";
 import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
 import { savedFeeds } from "./store";
+import { NetworkError, fetchJsonWithTimeout } from "./utility/networkRequest";
+
+const POD_LINK_REQUEST_TIMEOUT_MS = 15_000;
+const MAX_POD_LINK_RESPONSE_BYTES = 4 * 1024 * 1024;
+
+interface PodLinkEpisode {
+	episodeId: string;
+	title: string;
+}
+
+interface PodLinkResponse {
+	episodes: PodLinkEpisode[];
+}
 
 const normalizeFeedUrl = (url: string | undefined): string =>
 	(url ?? "").trim().replace(/\/+$/, "").toLowerCase();
@@ -59,18 +72,23 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 		}
 
 		const podLinkUrl = `https://pod.link/${collectionId}.json?limit=1000`;
-		const res = await requestUrl({
-			url: podLinkUrl,
+		const data = await fetchJsonWithTimeout<PodLinkResponse>(podLinkUrl, {
+			timeoutMs: POD_LINK_REQUEST_TIMEOUT_MS,
+			maxResponseBytes: MAX_POD_LINK_RESPONSE_BYTES,
+			acceptedStatuses: [200],
 		});
-
-		if (res.status !== 200) {
-			throw new Error(`Failed to get response from pod.link: ${podLinkUrl}`);
-		}
 
 		const targetTitle = itunesTitle ?? title;
 
-		const ep = res.json.episodes.find(
-			(episode: { episodeId: string; title: string; [key: string]: string }) =>
+		if (!data || typeof data !== "object" || !Array.isArray(data.episodes)) {
+			throw new NetworkError("invalid-response");
+		}
+		const ep = data.episodes.find(
+			(episode) =>
+				episode !== null &&
+				typeof episode === "object" &&
+				typeof episode.episodeId === "string" &&
+				typeof episode.title === "string" &&
 				episode.title === targetTitle,
 		);
 		if (!ep) {
@@ -81,9 +99,9 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 		}
 
 		url = `https://pod.link/${collectionId}/episode/${ep.episodeId}`;
-	} catch (error) {
+	} catch {
 		new Notice("Could not get podcast link.");
-		console.error(error);
+		console.error("Could not resolve universal podcast link.");
 
 		return;
 	}
@@ -95,8 +113,8 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 		try {
 			await navigator.clipboard.writeText(url);
 			new Notice("Universal episode link copied to clipboard.");
-		} catch (error) {
-			console.error(error);
+		} catch {
+			console.error("Could not copy universal podcast link to the clipboard.");
 			new Notice(`Could not copy to clipboard. Episode link: ${url}`);
 		}
 	} else {

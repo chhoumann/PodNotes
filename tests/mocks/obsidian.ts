@@ -36,6 +36,16 @@ export class Notice {
 	hide(): void {}
 }
 
+export const normalizePath = (path: string): string => {
+	const normalized: string[] = [];
+	for (const segment of path.replaceAll("\\", "/").split("/")) {
+		if (!segment || segment === ".") continue;
+		if (segment === "..") normalized.pop();
+		else normalized.push(segment);
+	}
+	return normalized.join("/");
+};
+
 export class WorkspaceLeaf {}
 export class ItemView {}
 
@@ -68,6 +78,7 @@ export class Modal {
 }
 
 export class SuggestModal<T> extends Modal {
+	declare protected readonly itemType?: T;
 	setPlaceholder(_placeholder: string): void {}
 }
 
@@ -382,8 +393,11 @@ export const setIcon = (el: HTMLElement | null, icon: string) => {
 };
 
 export const requestUrl = async () => ({
+	status: 200,
+	headers: {},
+	arrayBuffer: new ArrayBuffer(0),
 	text: "",
-	json: async () => ({}),
+	json: {},
 });
 
 export const htmlToMarkdown = (value: string) => value;

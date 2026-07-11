@@ -4,7 +4,7 @@ import type { CredentialKind } from "src/types/Credentials";
 export * from "./types";
 export * from "./segments";
 export { diarizeWithOpenAI } from "./openaiProvider";
-export { diarizeWithDeepgram, type RequestUrlFn } from "./deepgramProvider";
+export { diarizeWithDeepgram } from "./deepgramProvider";
 
 /**
  * Whether the credentials the active transcription mode needs are present.

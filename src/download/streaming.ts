@@ -1,9 +1,9 @@
-import { type DataAdapter, requestUrl } from "obsidian";
+import { type DataAdapter } from "obsidian";
 import { get } from "svelte/store";
 import { plugin } from "../store";
 import { assertFetchableUrl } from "../utility/assertFetchableUrl";
-import { encodeUrlForRequest } from "../utility/encodeUrlForRequest";
 import { enforceMaxPathLength } from "../utility/enforceMaxPathLength";
+import { NetworkError, requestWithTimeout } from "../utility/networkRequest";
 
 // ---- Streaming download (issue #113) ---------------------------------------
 // Mobile WebViews have a tight per-process memory budget. Buffering a whole
@@ -35,6 +35,12 @@ export const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
 // (long-form audio is ~hundreds of MB; even large video episodes fit) while
 // turning the unbounded write into a bounded, recoverable failure.
 export const MAX_DOWNLOAD_SIZE = 2 * 1024 * 1024 * 1024; // 2 GiB
+
+// `requestUrl` cannot be cancelled natively, so these are logical per-request
+// ceilings enforced by the shared network boundary. Range downloads still get
+// a fresh timeout for each bounded chunk.
+const RANGE_PROBE_TIMEOUT_MS = 15 * 60_000;
+const RANGE_CHUNK_TIMEOUT_MS = 5 * 60_000;
 
 function tooLargeError(maxSize: number): Error {
 	const maxMb = Math.round(maxSize / (1024 * 1024));
@@ -82,17 +88,20 @@ export async function probeAndFetchFirstChunk(
 	chunkSize: number = DOWNLOAD_CHUNK_SIZE,
 	maxSize: number = MAX_DOWNLOAD_SIZE,
 ): Promise<RangeProbe> {
-	assertFetchableUrl(url);
-	const encodedUrl = encodeUrlForRequest(url);
-	const response = await requestUrl({
-		url: encodedUrl,
-		method: "GET",
-		headers: { Range: `bytes=0-${chunkSize - 1}` },
-		throw: false,
-	});
-
-	if (response.status !== 200 && response.status !== 206) {
-		throw new Error(`Could not download episode (HTTP ${response.status}).`);
+	let response;
+	try {
+		response = await requestWithTimeout(url, {
+			method: "GET",
+			headers: { Range: `bytes=0-${chunkSize - 1}` },
+			timeoutMs: RANGE_PROBE_TIMEOUT_MS,
+			maxResponseBytes: maxSize,
+			acceptedStatuses: [200, 206],
+		});
+	} catch (error) {
+		if (error instanceof NetworkError && error.code === "response-too-large") {
+			throw tooLargeError(maxSize);
+		}
+		throw error;
 	}
 
 	const contentType = readHeader(response.headers, "content-type") ?? "";
@@ -166,7 +175,6 @@ export async function writeStreamedFile(
 		return written;
 	}
 
-	const encodedUrl = encodeUrlForRequest(url);
 	for (;;) {
 		if (probe.totalSize !== null && written >= probe.totalSize) break;
 
@@ -175,17 +183,23 @@ export async function writeStreamedFile(
 				? Math.min(written + chunkSize, probe.totalSize) - 1
 				: written + chunkSize - 1;
 
-		const response = await requestUrl({
-			url: encodedUrl,
-			method: "GET",
-			headers: { Range: `bytes=${written}-${rangeEnd}` },
-			throw: false,
-		});
+		let response;
+		try {
+			response = await requestWithTimeout(url, {
+				method: "GET",
+				headers: { Range: `bytes=${written}-${rangeEnd}` },
+				timeoutMs: RANGE_CHUNK_TIMEOUT_MS,
+				maxResponseBytes: maxSize - written,
+				acceptedStatuses: [206, 416],
+			});
+		} catch (error) {
+			if (error instanceof NetworkError && error.code === "response-too-large") {
+				throw tooLargeError(maxSize);
+			}
+			throw error;
+		}
 
 		if (response.status === 416) break; // requested past end of file
-		if (response.status !== 206) {
-			throw new Error(`Range request failed (HTTP ${response.status}) at byte ${written}.`);
-		}
 
 		const chunk = response.arrayBuffer;
 		if (chunk.byteLength === 0) break;

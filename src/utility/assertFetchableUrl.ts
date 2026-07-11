@@ -1,68 +1,343 @@
-/**
- * SSRF guard for every fetch whose URL comes from untrusted feed/URI content.
- *
- * Podcast enclosure URLs (`<enclosure url="...">`) and `obsidian://podnotes`
- * deep-link URLs are fully attacker-controlled, yet they flow straight into
- * Obsidian's `requestUrl`. Before issuing any such request we:
- *   - require an http(s) scheme, so a feed can't make the client read a local
- *     file (`file:`), inline a payload (`data:`/`blob:`), or hit a non-HTTP
- *     service (`ftp:`, ...); and
- *   - reject hosts that resolve to loopback / link-local / private / cloud-metadata
- *     ranges, so a feed can't turn the client into a blind SSRF proxy against
- *     127.0.0.1, 169.254.169.254, or the user's intranet.
- *
- * This applies the same http(s)-only check the project already uses for the
- * chapters URL (`isSupportedChaptersUrl` in fetchChapters.ts) and for feed-add
- * (`PodcastQueryGrid.svelte`), and additionally filters the host, for the
- * download/feed/URI fetch paths.
- *
- * Limitations (both inherent to validating a URL string ahead of an opaque
- * `requestUrl`):
- *   - DNS rebinding: a public hostname that resolves to a private/loopback IP is
- *     allowed, because this checks the literal host, not the resolved address.
- *   - Redirects: `requestUrl` follows them, and an allowed http(s) host could 302
- *     into a blocked range, which cannot be re-checked per hop here.
- * The scheme allowlist (the `file:`/`data:` local-read/exfil vector) is unaffected
- * by both.
- */
+import { encodeUrlForRequest } from "./encodeUrlForRequest";
+
+/** Maximum UTF-8 size accepted for both raw and encoded network targets. */
+export const MAX_NETWORK_TARGET_BYTES = 16 * 1024;
+
+type HostClassification =
+	| "ordinary-public-literal"
+	| "non-public-or-special-literal"
+	| "hostname-requires-resolution";
+
+type LiteralAddressClassification = Exclude<HostClassification, "hostname-requires-resolution">;
+
+type TargetPolicyFailureReason =
+	| "empty"
+	| "too-large"
+	| "malformed"
+	| "unsupported-scheme"
+	| "unsafe-unicode";
+
+export type UnsafeFetchUrlReason = TargetPolicyFailureReason | "non-public-or-special-host";
+
+interface AddressRange {
+	readonly network: bigint;
+	readonly prefixLength: number;
+}
+
+interface ParsedTargetPolicy {
+	readonly url: URL;
+	readonly hostClassification: HostClassification;
+}
+
+type TargetPolicyResult =
+	| { readonly ok: true; readonly value: ParsedTargetPolicy }
+	| { readonly ok: false; readonly reason: TargetPolicyFailureReason };
+
+const IPV4_BIT_LENGTH = 32;
+const IPV6_BIT_LENGTH = 128;
+
+const IPV4_BLOCKED_RANGES = [
+	["0.0.0.0", 8],
+	["10.0.0.0", 8],
+	["100.64.0.0", 10],
+	["127.0.0.0", 8],
+	["169.254.0.0", 16],
+	["172.16.0.0", 12],
+	["192.0.0.0", 24],
+	["192.0.2.0", 24],
+	["192.31.196.0", 24],
+	["192.52.193.0", 24],
+	["192.88.99.0", 24],
+	["192.168.0.0", 16],
+	["192.175.48.0", 24],
+	["198.18.0.0", 15],
+	["198.51.100.0", 24],
+	["203.0.113.0", 24],
+	["224.0.0.0", 4],
+	["240.0.0.0", 4],
+] as const;
+
+const IPV6_BLOCKED_RANGES = [
+	["::", 128],
+	["::1", 128],
+	["64:ff9b::", 96],
+	["64:ff9b:1::", 48],
+	["100::", 64],
+	["100:0:0:1::", 64],
+	["2001::", 23],
+	["2001:db8::", 32],
+	["2002::", 16],
+	["2620:4f:8000::", 48],
+	["3fff::", 20],
+	["5f00::", 16],
+	["fc00::", 7],
+	["fe80::", 10],
+	["fec0::", 10],
+	["ff00::", 8],
+] as const;
+
+function parseCanonicalIpv4(value: string): bigint | undefined {
+	const parts = value.split(".");
+	if (parts.length !== 4) return undefined;
+
+	let address = 0n;
+	for (const part of parts) {
+		if (!/^(?:0|[1-9][0-9]{0,2})$/.test(part)) return undefined;
+		const octet = Number(part);
+		if (octet > 255) return undefined;
+		address = (address << 8n) | BigInt(octet);
+	}
+	return address;
+}
+
+function parseIpv6(value: string): bigint | undefined {
+	const candidate = value.toLowerCase();
+	if (candidate.length === 0 || candidate.includes("%")) return undefined;
+
+	const compressionIndex = candidate.indexOf("::");
+	if (compressionIndex !== -1 && candidate.indexOf("::", compressionIndex + 2) !== -1) {
+		return undefined;
+	}
+
+	const parseSide = (side: string): string[] | undefined => {
+		if (side.length === 0) return [];
+		const pieces = side.split(":");
+		if (pieces.some((piece) => piece.length === 0)) return undefined;
+		return pieces;
+	};
+
+	const left = parseSide(
+		compressionIndex === -1 ? candidate : candidate.slice(0, compressionIndex),
+	);
+	const right = parseSide(compressionIndex === -1 ? "" : candidate.slice(compressionIndex + 2));
+	if (!left || !right) return undefined;
+
+	const sideWithLastPiece = right.length > 0 ? right : left;
+	const lastPiece = sideWithLastPiece[sideWithLastPiece.length - 1];
+	if (lastPiece?.includes(".")) {
+		// An embedded dotted quad is the final 32 bits of an IPv6 spelling. It
+		// cannot precede a trailing compression marker such as 192.0.2.1::.
+		if (compressionIndex !== -1 && right.length === 0) return undefined;
+		const ipv4 = parseCanonicalIpv4(lastPiece);
+		if (ipv4 === undefined) return undefined;
+		sideWithLastPiece.splice(
+			sideWithLastPiece.length - 1,
+			1,
+			Number((ipv4 >> 16n) & 0xffffn).toString(16),
+			Number(ipv4 & 0xffffn).toString(16),
+		);
+	}
+
+	const combined = [...left, ...right];
+	if (combined.some((piece) => piece.includes("."))) return undefined;
+	if (combined.some((piece) => !/^[0-9a-f]{1,4}$/.test(piece))) return undefined;
+	if (compressionIndex === -1 && combined.length !== 8) return undefined;
+	if (compressionIndex !== -1 && combined.length >= 8) return undefined;
+
+	const missing = 8 - combined.length;
+	const hextets =
+		compressionIndex === -1
+			? combined
+			: [...left, ...Array.from({ length: missing }, () => "0"), ...right];
+	if (hextets.length !== 8) return undefined;
+
+	let address = 0n;
+	for (const hextet of hextets) address = (address << 16n) | BigInt(`0x${hextet}`);
+	return address;
+}
+
+function rangeFromIpv4(network: string, prefixLength: number): AddressRange {
+	const parsed = parseCanonicalIpv4(network);
+	if (parsed === undefined) throw new Error("Invalid internal IPv4 range");
+	return Object.freeze({ network: parsed, prefixLength });
+}
+
+function rangeFromIpv6(network: string, prefixLength: number): AddressRange {
+	const parsed = parseIpv6(network);
+	if (parsed === undefined) throw new Error("Invalid internal IPv6 range");
+	return Object.freeze({ network: parsed, prefixLength });
+}
+
+const BLOCKED_IPV4 = IPV4_BLOCKED_RANGES.map(([network, prefixLength]) =>
+	rangeFromIpv4(network, prefixLength),
+);
+const BLOCKED_IPV6 = IPV6_BLOCKED_RANGES.map(([network, prefixLength]) =>
+	rangeFromIpv6(network, prefixLength),
+);
+
+function isInRange(address: bigint, range: AddressRange, bitLength: number): boolean {
+	const trailingBits = BigInt(bitLength - range.prefixLength);
+	return address >> trailingBits === range.network >> trailingBits;
+}
+
+function classifyIpv4(address: bigint): LiteralAddressClassification {
+	return BLOCKED_IPV4.some((range) => isInRange(address, range, IPV4_BIT_LENGTH))
+		? "non-public-or-special-literal"
+		: "ordinary-public-literal";
+}
+
+function classifyIpv6(address: bigint): LiteralAddressClassification {
+	// IPv4-mapped IPv6 addresses inherit the IPv4 classification.
+	if (address >> 32n === 0xffffn) return classifyIpv4(address & 0xffff_ffffn);
+
+	if (BLOCKED_IPV6.some((range) => isInRange(address, range, IPV6_BIT_LENGTH))) {
+		return "non-public-or-special-literal";
+	}
+
+	// Only the globally allocated 2000::/3 space is accepted by default. Newly
+	// allocated special ranges outside it therefore fail closed until reviewed.
+	return address >> 125n === 1n ? "ordinary-public-literal" : "non-public-or-special-literal";
+}
+
+function containsUnsafeCodePoint(value: string): boolean {
+	for (let index = 0; index < value.length; index += 1) {
+		const codeUnit = value.charCodeAt(index);
+		if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+			const following = value.charCodeAt(index + 1);
+			if (following < 0xdc00 || following > 0xdfff) return true;
+			index += 1;
+			continue;
+		}
+		if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) return true;
+		// Literal ASCII space is permitted inside a URL because WHATWG encodes it.
+		// Every other C0/C1 control remains forbidden.
+		if (codeUnit < 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) return true;
+		if (
+			codeUnit === 0x061c ||
+			codeUnit === 0x200b ||
+			codeUnit === 0x200c ||
+			codeUnit === 0x200d ||
+			codeUnit === 0x200e ||
+			codeUnit === 0x200f ||
+			(codeUnit >= 0x2028 && codeUnit <= 0x202e) ||
+			(codeUnit >= 0x2066 && codeUnit <= 0x2069) ||
+			codeUnit === 0xfeff
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function classifyHostname(hostname: string): HostClassification {
+	const ipv4 = parseCanonicalIpv4(hostname);
+	if (ipv4 !== undefined) return classifyIpv4(ipv4);
+
+	const ipv6 = parseIpv6(hostname);
+	if (ipv6 !== undefined) return classifyIpv6(ipv6);
+
+	const labels = hostname.split(".");
+	if (
+		labels.length === 1 ||
+		labels.some((label) => label.length === 0 || label.length > 63) ||
+		hostname.length > 253 ||
+		hostname === "localhost" ||
+		hostname.endsWith(".localhost") ||
+		hostname === "local" ||
+		hostname.endsWith(".local") ||
+		hostname === "internal" ||
+		hostname.endsWith(".internal") ||
+		hostname === "home.arpa" ||
+		hostname.endsWith(".home.arpa")
+	) {
+		return "non-public-or-special-literal";
+	}
+
+	return "hostname-requires-resolution";
+}
+
+function normalizedHostFromUrl(url: URL): string | undefined {
+	let hostname = url.hostname.toLowerCase();
+	if (hostname.startsWith("[") && hostname.endsWith("]")) {
+		hostname = hostname.slice(1, -1);
+	} else if (hostname.endsWith(".")) {
+		hostname = hostname.slice(0, -1);
+		if (hostname.endsWith(".")) return undefined;
+	}
+	return hostname.length === 0 ? undefined : hostname;
+}
+
+function exceedsTargetByteLimit(value: string): boolean {
+	return (
+		value.length > MAX_NETWORK_TARGET_BYTES ||
+		new TextEncoder().encode(value).byteLength > MAX_NETWORK_TARGET_BYTES
+	);
+}
+
+function parseTargetPolicy(value: unknown): TargetPolicyResult {
+	if (typeof value !== "string" || value.length === 0) {
+		return { ok: false, reason: "empty" };
+	}
+	if (value.length > MAX_NETWORK_TARGET_BYTES) return { ok: false, reason: "too-large" };
+	// Reject leading and trailing whitespace rather than silently normalizing it.
+	if (value !== value.trim()) return { ok: false, reason: "empty" };
+	if (containsUnsafeCodePoint(value)) return { ok: false, reason: "unsafe-unicode" };
+	if (exceedsTargetByteLimit(value)) return { ok: false, reason: "too-large" };
+	// WHATWG special-URL backslash normalization is not safe for an exact target
+	// interpreted later by a different transport.
+	if (value.includes("\\")) return { ok: false, reason: "malformed" };
+	const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1]?.toLowerCase();
+	if (scheme !== "http" && scheme !== "https") {
+		return { ok: false, reason: scheme ? "unsupported-scheme" : "malformed" };
+	}
+	// Require an explicit authority spelling. WHATWG otherwise accepts and
+	// rewrites forms such as `http:example.com` and `http:///example.com`.
+	if (!/^https?:\/\/[^/?#]/i.test(value)) return { ok: false, reason: "malformed" };
+
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		return { ok: false, reason: "malformed" };
+	}
+
+	if (url.protocol !== "http:" && url.protocol !== "https:") {
+		return { ok: false, reason: "unsupported-scheme" };
+	}
+	if (url.hash.length > 0) return { ok: false, reason: "malformed" };
+
+	const hostname = normalizedHostFromUrl(url);
+	if (!hostname) return { ok: false, reason: "malformed" };
+	const port = url.port.length > 0 ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+	if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+		return { ok: false, reason: "malformed" };
+	}
+
+	return { ok: true, value: { url, hostClassification: classifyHostname(hostname) } };
+}
+
+const UNSAFE_FETCH_URL_MESSAGES: Readonly<Record<UnsafeFetchUrlReason, string>> = Object.freeze({
+	empty: "Refusing to fetch an empty URL.",
+	"too-large": "Refusing to fetch an oversized URL.",
+	malformed: "Refusing to fetch a malformed URL.",
+	"unsupported-scheme": "Refusing to fetch an unsupported URL scheme.",
+	"unsafe-unicode": "Refusing to fetch a URL containing unsafe characters.",
+	"non-public-or-special-host": "Refusing to fetch a non-public or special address.",
+});
+
+/** A stable, redacted target-policy error that never contains the rejected URL. */
 export class UnsafeFetchUrlError extends Error {
-	constructor(message: string) {
-		super(message);
+	constructor(public readonly reason: UnsafeFetchUrlReason) {
+		super(UNSAFE_FETCH_URL_MESSAGES[reason]);
 		this.name = "UnsafeFetchUrlError";
 	}
 }
 
 /**
- * Validates that `rawUrl` is safe to fetch and returns the parsed URL.
- * Throws {@link UnsafeFetchUrlError} for an unparseable URL, a non-http(s)
- * scheme, or a host in a blocked (loopback/link-local/private/metadata) range.
+ * Applies the synchronous target policy and returns the canonical encoded
+ * HTTP(S) target. Credentials remain confined to this returned URL; failures
+ * expose only a stable reason and redacted message.
  */
 export function assertFetchableUrl(rawUrl: string): URL {
-	const trimmed = rawUrl?.trim() ?? "";
-	if (!trimmed) {
-		throw new UnsafeFetchUrlError("Refusing to fetch an empty URL.");
+	const policy = parseTargetPolicy(rawUrl);
+	if (!policy.ok) throw new UnsafeFetchUrlError(policy.reason);
+	if (policy.value.hostClassification === "non-public-or-special-literal") {
+		throw new UnsafeFetchUrlError("non-public-or-special-host");
 	}
 
-	let url: URL;
-	try {
-		url = new URL(trimmed);
-	} catch {
-		throw new UnsafeFetchUrlError(`Refusing to fetch a malformed URL: ${rawUrl}`);
-	}
-
-	if (url.protocol !== "http:" && url.protocol !== "https:") {
-		throw new UnsafeFetchUrlError(
-			`Refusing to fetch a non-http(s) URL (${url.protocol}): ${rawUrl}`,
-		);
-	}
-
-	if (isBlockedHost(url.hostname)) {
-		throw new UnsafeFetchUrlError(
-			`Refusing to fetch a loopback/private/link-local address: ${url.hostname}`,
-		);
-	}
-
-	return url;
+	const encodedTarget = encodeUrlForRequest(policy.value.url.href);
+	if (exceedsTargetByteLimit(encodedTarget)) throw new UnsafeFetchUrlError("too-large");
+	return new URL(encodedTarget);
 }
 
 /** Non-throwing companion to {@link assertFetchableUrl}. */
@@ -73,117 +348,4 @@ export function isFetchableUrl(rawUrl: string): boolean {
 	} catch {
 		return false;
 	}
-}
-
-function isBlockedHost(hostname: string): boolean {
-	// Drop a single trailing dot: "localhost." / "intranet.host." is the absolute
-	// FQDN form and resolves to the same address as the dotless name, so it must be
-	// classified the same. (The URL parser already strips it from IPv4 literals,
-	// but not from registrable names.)
-	const host = hostname.toLowerCase().replace(/\.$/, "");
-
-	// Names that always mean the local machine, regardless of DNS.
-	if (host === "localhost" || host.endsWith(".localhost")) return true;
-
-	// IPv6 literals keep their brackets in URL.hostname (e.g. "[::1]").
-	if (host.startsWith("[") && host.endsWith("]")) {
-		const groups = parseIpv6(host.slice(1, -1));
-		return groups !== null && isBlockedIpv6(groups);
-	}
-
-	// The WHATWG URL parser normalizes every IPv4 form (decimal, octal, hex,
-	// integer) to dotted-decimal, so this single check also covers obfuscated
-	// literals like http://2130706433/ or http://0x7f.1/.
-	const octets = parseIpv4(host);
-	if (octets) return isBlockedIpv4(octets);
-
-	return false;
-}
-
-function parseIpv4(host: string): number[] | null {
-	const parts = host.split(".");
-	if (parts.length !== 4) return null;
-
-	const octets: number[] = [];
-	for (const part of parts) {
-		if (!/^\d{1,3}$/.test(part)) return null;
-		const value = Number.parseInt(part, 10);
-		if (value > 255) return null;
-		octets.push(value);
-	}
-	return octets;
-}
-
-function isBlockedIpv4(octets: number[]): boolean {
-	const [a, b] = octets;
-	return (
-		a === 0 || // 0.0.0.0/8 "this host"
-		a === 127 || // 127.0.0.0/8 loopback
-		a === 10 || // 10.0.0.0/8 private
-		(a === 172 && b >= 16 && b <= 31) || // 172.16.0.0/12 private
-		(a === 192 && b === 168) || // 192.168.0.0/16 private
-		(a === 169 && b === 254) // 169.254.0.0/16 link-local (incl. cloud metadata)
-	);
-}
-
-/** Expand an IPv6 literal (no brackets) to its eight 16-bit groups. */
-function parseIpv6(input: string): number[] | null {
-	// Drop any zone id ("fe80::1%eth0").
-	const zone = input.indexOf("%");
-	let addr = zone === -1 ? input : input.slice(0, zone);
-
-	// An embedded dotted-quad in the final group ("::ffff:127.0.0.1") becomes
-	// two hex groups so the rest of the parser only deals in hextets.
-	const lastColon = addr.lastIndexOf(":");
-	const tail = addr.slice(lastColon + 1);
-	if (tail.includes(".")) {
-		const v4 = parseIpv4(tail);
-		if (!v4) return null;
-		const high = ((v4[0] << 8) | v4[1]).toString(16);
-		const low = ((v4[2] << 8) | v4[3]).toString(16);
-		addr = `${addr.slice(0, lastColon + 1)}${high}:${low}`;
-	}
-
-	const halves = addr.split("::");
-	if (halves.length > 2) return null;
-
-	const left = toGroups(halves[0]);
-	const right = halves.length === 2 ? toGroups(halves[1]) : [];
-	if (!left || !right) return null;
-
-	if (halves.length === 2) {
-		const missing = 8 - left.length - right.length;
-		if (missing < 1) return null; // "::" must stand for at least one zero group
-		return [...left, ...Array.from({ length: missing }, () => 0), ...right];
-	}
-
-	return left.length === 8 ? left : null;
-}
-
-function toGroups(segment: string): number[] | null {
-	if (segment === "") return [];
-	const groups: number[] = [];
-	for (const part of segment.split(":")) {
-		if (!/^[0-9a-f]{1,4}$/.test(part)) return null;
-		groups.push(Number.parseInt(part, 16));
-	}
-	return groups;
-}
-
-function isBlockedIpv6(g: number[]): boolean {
-	// fc00::/7 unique-local.
-	if ((g[0] & 0xfe00) === 0xfc00) return true;
-	// fe80::/10 link-local.
-	if ((g[0] & 0xffc0) === 0xfe80) return true;
-
-	// IPv4-mapped ("::ffff:a.b.c.d") and IPv4-compatible ("::a.b.c.d", which also
-	// covers ::1 loopback and :: unspecified): fold the trailing 32 bits back into
-	// an IPv4 address and reuse the IPv4 ranges.
-	const firstFiveZero = g.slice(0, 5).every((part) => part === 0);
-	if (firstFiveZero && (g[5] === 0xffff || g[5] === 0)) {
-		const v4 = [g[6] >> 8, g[6] & 0xff, g[7] >> 8, g[7] & 0xff];
-		return isBlockedIpv4(v4);
-	}
-
-	return false;
 }

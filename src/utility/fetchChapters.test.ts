@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchChapters } from "./fetchChapters";
 
-const mockRequestWithTimeout = vi.hoisted(() => vi.fn());
+const mockFetchTextWithTimeout = vi.hoisted(() => vi.fn());
 
 vi.mock("./networkRequest", () => ({
-	requestWithTimeout: mockRequestWithTimeout,
+	fetchTextWithTimeout: mockFetchTextWithTimeout,
 }));
 
 describe("fetchChapters", () => {
 	beforeEach(() => {
-		mockRequestWithTimeout.mockReset();
+		mockFetchTextWithTimeout.mockReset();
 	});
 
 	it("normalizes malformed chapter entries instead of returning raw JSON", async () => {
-		mockRequestWithTimeout.mockResolvedValue({
-			text: JSON.stringify({
+		mockFetchTextWithTimeout.mockResolvedValue(
+			JSON.stringify({
 				version: "1.2.0",
 				chapters: [
 					{ startTime: 65, title: "Deep Dive" },
@@ -25,24 +25,31 @@ describe("fetchChapters", () => {
 					{ startTime: 0, title: "Intro" },
 				],
 			}),
-		});
+		);
 
 		await expect(fetchChapters("https://example.com/chapters.json")).resolves.toEqual([
 			{ startTime: 0, title: "Intro" },
 			{ startTime: 35, title: "" },
 			{ startTime: 65, title: "Deep Dive" },
 		]);
+		expect(mockFetchTextWithTimeout).toHaveBeenCalledWith("https://example.com/chapters.json", {
+			timeoutMs: 10_000,
+			maxResponseBytes: 4_000_000,
+			acceptedStatuses: [200],
+		});
 	});
 
-	it("ignores unsupported chapter URL protocols", async () => {
+	it("lets the shared request boundary reject unsupported chapter URL protocols", async () => {
+		mockFetchTextWithTimeout.mockRejectedValue(
+			new Error("Network request target is not allowed."),
+		);
+
 		await expect(fetchChapters("file:///tmp/chapters.json")).resolves.toEqual([]);
-		expect(mockRequestWithTimeout).not.toHaveBeenCalled();
+		expect(mockFetchTextWithTimeout).toHaveBeenCalledOnce();
 	});
 
 	it("ignores oversized chapter payloads", async () => {
-		mockRequestWithTimeout.mockResolvedValue({
-			text: " ".repeat(1_000_001),
-		});
+		mockFetchTextWithTimeout.mockResolvedValue(" ".repeat(1_000_001));
 
 		await expect(fetchChapters("https://example.com/chapters.json")).resolves.toEqual([]);
 	});

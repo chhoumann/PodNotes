@@ -1,4 +1,4 @@
-import { Notice, TFile, requestUrl } from "obsidian";
+import { normalizePath, Notice, TFile } from "obsidian";
 import { get } from "svelte/store";
 import { downloadedEpisodes, plugin } from "./store";
 import {
@@ -7,8 +7,6 @@ import {
 } from "./TemplateEngine";
 import type { Episode, EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
-import { assertFetchableUrl } from "./utility/assertFetchableUrl";
-import { encodeUrlForRequest } from "./utility/encodeUrlForRequest";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
 import { isLocalFile } from "./utility/isLocalFile";
@@ -31,8 +29,12 @@ import {
 	probeAndFetchFirstChunk,
 	sweepStalePartials,
 	writeStreamedFile,
+	MAX_DOWNLOAD_SIZE,
 } from "./download/streaming";
 import { detectAudioFileExtension } from "./download/mediaSignatures";
+import { NetworkError, requestWithTimeout } from "./utility/networkRequest";
+
+const WHOLE_FILE_DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -54,37 +56,47 @@ interface DownloadedFile {
 // and transcription's getEpisodeAudioBuffer still need the entire buffer at once.
 // The Download command streams instead — see downloadEpisodeToDisk.
 async function downloadFile(url: string): Promise<DownloadedFile> {
-	assertFetchableUrl(url);
-	const encodedUrl = encodeUrlForRequest(url);
+	let response;
 	try {
-		const response = await requestUrl({ url: encodedUrl, method: "GET" });
-
-		if (response.status !== 200) {
-			throw new Error("Could not download episode.");
-		}
-
-		const data = response.arrayBuffer;
-		const contentType =
-			response.headers["content-type"] ?? response.headers["Content-Type"] ?? "";
-
-		return { data, contentType, byteLength: data.byteLength };
+		response = await requestWithTimeout(url, {
+			method: "GET",
+			timeoutMs: WHOLE_FILE_DOWNLOAD_TIMEOUT_MS,
+			maxResponseBytes: MAX_DOWNLOAD_SIZE,
+			acceptedStatuses: [200],
+		});
 	} catch (error: unknown) {
-		throw new Error(`Failed to download ${url}:\n\n${getErrorMessage(error)}`);
+		if (error instanceof NetworkError) {
+			throw new Error(`Failed to download episode: ${error.message}`);
+		}
+		throw new Error("Failed to download episode.");
 	}
+
+	const data = response.arrayBuffer;
+	const contentType = response.headers["content-type"] ?? response.headers["Content-Type"] ?? "";
+
+	return { data, contentType, byteLength: data.byteLength };
 }
 
 function parentFolderPath(filePath: string): string {
 	return filePath.split("/").slice(0, -1).join("/");
 }
 
-// In-flight downloads keyed by episode identity: collapses duplicate/concurrent
-// requests for the same episode (e.g. a double-tap, or several queued at once)
-// into a single transfer so they can't stack N full downloads in memory.
-const downloadsInFlight = new Map<string, Promise<string>>();
+// One destination family can have only one live download. The map is acquired
+// before any request or allocation and released only after the underlying work
+// and cleanup settle. Different episodes never share another download's result.
+const downloadsInFlight = new Map<string, true>();
 
-// Temp paths of downloads currently streaming, so the stale-partial sweep never
-// deletes a concurrent download's live temp when it sweeps the shared folder.
-const activePartialPaths = new Set<string>();
+function normalizedDestinationFamily(downloadPathTemplate: string, episode: Episode): string {
+	return normalizePath(safeDownloadBasename(downloadPathTemplate, episode));
+}
+
+function downloadAlreadyInProgressError(): Error {
+	return new Error("A download is already in progress for the selected destination.");
+}
+
+function downloadDestinationCollisionError(): Error {
+	return new Error("A different episode already occupies the selected destination.");
+}
 
 // Single source of truth for "what extension and on-disk path does this download
 // get, and is it even playable". Shared by the streaming and legacy paths so the
@@ -106,16 +118,43 @@ function resolveDownloadTarget(
 	};
 }
 
+function registeredDownloadOwnsPath(episode: Episode, filePath: string): boolean {
+	const normalizedPath = normalizePath(filePath);
+	const registered = downloadedEpisodes.getEpisode(episode);
+	if (!registered || normalizePath(registered.filePath) !== normalizedPath) return false;
+
+	const anotherOwner = Object.values(get(downloadedEpisodes))
+		.flat()
+		.some(
+			(candidate) =>
+				candidate !== registered && normalizePath(candidate.filePath) === normalizedPath,
+		);
+	if (anotherOwner) return false;
+
+	if (isLocalFile(episode)) {
+		return Boolean(episode.filePath && normalizePath(episode.filePath) === normalizedPath);
+	}
+	return isSameMediaSource(registered.streamUrl, episode.streamUrl);
+}
+
+function reusableExistingDownloadSize(episode: Episode, filePath: string): number | undefined {
+	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
+	if (!(existing instanceof TFile)) return undefined;
+	if (!registeredDownloadOwnsPath(episode, filePath)) {
+		throw downloadDestinationCollisionError();
+	}
+	return downloadedEpisodes.getEpisode(episode)?.size;
+}
+
 // Download an episode to a vault file with bounded memory. Streams via Range
 // chunks when the adapter supports binary append; otherwise falls back to the
 // legacy whole-file buffer (so a non-appendable adapter is never truncated).
 // Returns the on-disk path.
-async function downloadEpisodeToDisk(
+async function startDownloadEpisodeToDisk(
 	episode: Episode,
 	downloadPathTemplate: string,
 	onProgress?: (written: number, total: number | null) => void,
 ): Promise<string> {
-	const { app } = get(plugin);
 	// Fast path: if this episode is already on disk under the extension its URL
 	// implies, skip the (potentially multi-MB) Range probe entirely. The probe is
 	// only needed to discover the extension when the URL lacks one, or to confirm
@@ -123,9 +162,9 @@ async function downloadEpisodeToDisk(
 	const urlExtension = getUrlExtension(episode.streamUrl);
 	if (urlExtension) {
 		const provisionalPath = safeDownloadFilePath(downloadPathTemplate, episode, urlExtension);
-		const cached = app.vault.getAbstractFileByPath(provisionalPath);
-		if (cached instanceof TFile) {
-			downloadedEpisodes.addEpisode(episode, provisionalPath, cached.stat.size);
+		const cachedSize = reusableExistingDownloadSize(episode, provisionalPath);
+		if (cachedSize !== undefined) {
+			downloadedEpisodes.addEpisode(episode, provisionalPath, cachedSize);
 			return provisionalPath;
 		}
 	}
@@ -142,6 +181,11 @@ async function downloadEpisodeToDisk(
 			data,
 			contentType,
 		);
+		const existingSize = reusableExistingDownloadSize(episode, filePath);
+		if (existingSize !== undefined) {
+			downloadedEpisodes.addEpisode(episode, filePath, existingSize);
+			return filePath;
+		}
 		await createEpisodeFile({ episode, downloadPathTemplate, data, extension });
 		return filePath;
 	}
@@ -153,49 +197,51 @@ async function downloadEpisodeToDisk(
 		probe.firstChunk,
 		probe.contentType,
 	);
-
-	const existing = app.vault.getAbstractFileByPath(filePath);
-	if (existing instanceof TFile) {
-		downloadedEpisodes.addEpisode(episode, filePath, existing.stat.size);
+	const existingSize = reusableExistingDownloadSize(episode, filePath);
+	if (existingSize !== undefined) {
+		downloadedEpisodes.addEpisode(episode, filePath, existingSize);
 		return filePath;
 	}
 
 	await ensureFolderExists(parentFolderPath(filePath));
 
 	// Stream to a sibling temp the vault watchers never see, then move the finished
-	// file into place as one rename — so watcher plugins (Waypoint, Dataview,
-	// Obsidian Git, ...) don't get a per-chunk modify storm on the growing media
-	// file and re-scan it into an OOM crash. See streaming.ts for the mechanism.
+	// file into place as one rename - so watcher plugins don't get a per-chunk
+	// modify storm on the growing media file and re-scan it into an OOM crash.
 	const tmpPath = partialPathFor(filePath);
-	activePartialPaths.add(tmpPath);
 	let moved = false;
 	try {
-		// Reclaim temps orphaned by a previous download killed mid-stream (the very
-		// crash this fix addresses). The active set protects any concurrent
-		// download's live temp from being swept.
-		await sweepStalePartials(parentFolderPath(filePath), (path) =>
-			activePartialPaths.has(path),
-		);
+		// When another destination is active, keep every partial. A later solo
+		// download will sweep any orphan once no live writer could own it.
+		await sweepStalePartials(parentFolderPath(filePath), () => downloadsInFlight.size > 1);
 
 		const total = await writeStreamedFile(episode.streamUrl, tmpPath, probe, onProgress);
 		if (probe.totalSize !== null && total !== probe.totalSize) {
 			throw new Error(`Incomplete download: got ${total} of ${probe.totalSize} bytes.`);
 		}
 
-		// Only a fully-written, size-verified file is exposed to the vault — as one
-		// atomic rename, so a partial never even momentarily occupies the real path.
 		await moveIntoPlace(tmpPath, filePath);
 		moved = true;
 
 		downloadedEpisodes.addEpisode(episode, filePath, total);
 		return filePath;
 	} finally {
-		// If the file never made it into place (stream, size or move failure), drop
-		// the temp so a later attempt can't mistake a truncated partial for a
-		// complete download — the legacy createBinary path was atomic, chunked
-		// appendBinary is not. deleteEpisodeFile is a no-op when the temp is absent.
 		if (!moved) await deleteEpisodeFile(tmpPath);
-		activePartialPaths.delete(tmpPath);
+	}
+}
+
+async function downloadEpisodeToDisk(
+	episode: Episode,
+	downloadPathTemplate: string,
+	onProgress?: (written: number, total: number | null) => void,
+): Promise<string> {
+	const destination = normalizedDestinationFamily(downloadPathTemplate, episode);
+	if (downloadsInFlight.has(destination)) throw downloadAlreadyInProgressError();
+	downloadsInFlight.set(destination, true);
+	try {
+		return await startDownloadEpisodeToDisk(episode, downloadPathTemplate, onProgress);
+	} finally {
+		downloadsInFlight.delete(destination);
 	}
 }
 
@@ -218,21 +264,6 @@ export default async function downloadEpisodeWithNotice(
 	// exactly once (#DL-03), then rethrows so the (fire-and-forget) caller can log
 	// it. Callers that need the resulting path call downloadEpisodeToDisk directly.
 	try {
-		// Dedupe by episode identity (podcast + title — the same key the download
-		// registry uses), so a double-tap collapses onto one transfer while two
-		// genuinely different episodes never block each other.
-		const key = `${episode.podcastName}\u0000${episode.title}`;
-
-		const inProgress = downloadsInFlight.get(key);
-		if (inProgress) {
-			update((bodyEl) =>
-				bodyEl.createEl("p", { text: "Already downloading this episode..." }),
-			);
-			await inProgress;
-			showSuccess();
-			return;
-		}
-
 		update((bodyEl) => bodyEl.createEl("p", { text: "Starting download..." }));
 
 		const work = downloadEpisodeToDisk(episode, downloadPathTemplate, (written, total) => {
@@ -240,13 +271,7 @@ export default async function downloadEpisodeWithNotice(
 			const pct = total && total > 0 ? ` ${Math.round((written / total) * 100)}%` : "";
 			update((bodyEl) => bodyEl.createEl("p", { text: `Downloading...${pct} (${mb} MB)` }));
 		});
-		downloadsInFlight.set(key, work);
-
-		try {
-			await work;
-		} finally {
-			downloadsInFlight.delete(key);
-		}
+		await work;
 
 		showSuccess();
 	} catch (error: unknown) {
