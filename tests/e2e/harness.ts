@@ -1,3 +1,5 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	type ObsidianClient,
 	type PluginReloadOptions,
@@ -54,6 +56,9 @@ export const createPodNotesE2EHarness = createPluginHarness({
 		await flushPodNotesSaves(obsidian);
 	},
 	symlinkArtifacts: ["main.js", "manifest.json"],
+	// Module-relative, not process.cwd(): the factory otherwise compares dev-vault
+	// symlinks against <caller-cwd>/main.js, which breaks IDE-launched runs.
+	symlinkRepoRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
 	captureOnFailure: true,
 });
 
