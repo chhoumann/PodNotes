@@ -30,7 +30,7 @@ jobs:
       contents: write
       id-token: write
       pull-requests: read
-    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release.yml@d7dad49d7e0f147d484a05d1049354406169fd97 # v3
+    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release.yml@8471ad7827fcee306ac2b8c10e984e57aeefe7df # v3
     with:
       release-pr: ${{ inputs.releasePr }}
       plugin-name: podnotes
@@ -48,7 +48,7 @@ jobs:
       setup-python: true
       python-version: "3.x"
       docs-requirements: docs/requirements.txt
-      workflows-ref: d7dad49d7e0f147d484a05d1049354406169fd97 # v3
+      workflows-ref: 8471ad7827fcee306ac2b8c10e984e57aeefe7df # v3
     secrets:
       # Optional: unset secrets resolve to '' and the notify job skips them.
       slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
