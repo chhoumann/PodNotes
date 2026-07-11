@@ -41,16 +41,18 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-prepare.yml@8471ad7827fcee306ac2b8c10e984e57aeefe7df # v3
+    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-prepare.yml@2e742593fc551932a7bf42a84f8d44e2b2f49028 # v3
     with:
       plugin-name: podnotes
       package-manager: npm
+      # Pin the commit-to-release policy so a toolkit update can never change it.
+      release-policy: '[{"scope":"deps","type":"build","release":"patch"}]'
       default-branch: master
       node-version: "22"
       target-sha: ${{ github.event.workflow_run.head_sha || inputs.targetSha }}
       release-bot-app-slug: podnotes-release-bot
       app-id: ${{ vars.RELEASE_APP_ID }}
-      workflows-ref: 8471ad7827fcee306ac2b8c10e984e57aeefe7df # v3
+      workflows-ref: 2e742593fc551932a7bf42a84f8d44e2b2f49028 # v3
       # dry-run: true   # plan only; skip opening the PR (smoke test)
     secrets:
       release-app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}

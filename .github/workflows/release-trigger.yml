@@ -40,7 +40,7 @@ jobs:
       actions: write
       contents: write
       pull-requests: read
-    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-validate.yml@8471ad7827fcee306ac2b8c10e984e57aeefe7df # v3
+    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-validate.yml@2e742593fc551932a7bf42a84f8d44e2b2f49028 # v3
     with:
       pr-number: ${{ github.event.pull_request.number || inputs.pr-number }}
       plugin-name: podnotes
@@ -48,3 +48,4 @@ jobs:
       default-branch: master
       release-bot-app-slug: podnotes-release-bot
       release-workflow: release.yml
+      workflows-ref: 2e742593fc551932a7bf42a84f8d44e2b2f49028 # v3
