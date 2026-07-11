@@ -66,7 +66,7 @@ describe("probeAndFetchFirstChunk", () => {
 			}),
 		);
 
-		const p = await probeAndFetchFirstChunk("https://x/ep.mp3", 4);
+		const p = await probeAndFetchFirstChunk("https://example.com/ep.mp3", 4);
 
 		expect(p.supportsRange).toBe(true);
 		expect(p.totalSize).toBe(10);
@@ -86,7 +86,7 @@ describe("probeAndFetchFirstChunk", () => {
 			}),
 		);
 
-		const p = await probeAndFetchFirstChunk("https://x/ep.mp3", 4);
+		const p = await probeAndFetchFirstChunk("https://example.com/ep.mp3", 4);
 
 		expect(p.supportsRange).toBe(true);
 		// Must NOT adopt the 4-byte partial Content-Length as the total, or the
@@ -102,7 +102,7 @@ describe("probeAndFetchFirstChunk", () => {
 			}),
 		);
 
-		const p = await probeAndFetchFirstChunk("https://x/ep.mp3", 4);
+		const p = await probeAndFetchFirstChunk("https://example.com/ep.mp3", 4);
 
 		expect(p.supportsRange).toBe(false);
 		expect(p.totalSize).toBe(5);
@@ -110,7 +110,9 @@ describe("probeAndFetchFirstChunk", () => {
 
 	it("throws on a non-2xx status", async () => {
 		requestUrlMock.mockResolvedValue(res(404, []));
-		await expect(probeAndFetchFirstChunk("https://x/ep.mp3", 4)).rejects.toThrow(/HTTP 404/);
+		await expect(probeAndFetchFirstChunk("https://example.com/ep.mp3", 4)).rejects.toThrow(
+			/HTTP 404/,
+		);
 	});
 });
 
@@ -122,7 +124,7 @@ describe("writeStreamedFile", () => {
 			.mockResolvedValueOnce(res(206, [5, 6], { "content-range": "bytes 4-5/6" }));
 
 		const total = await writeStreamedFile(
-			"https://x/ep.mp3",
+			"https://example.com/ep.mp3",
 			"out.mp3",
 			probe({ totalSize: 6 }),
 			undefined,
@@ -145,7 +147,7 @@ describe("writeStreamedFile", () => {
 		const a = setupAdapter();
 
 		const total = await writeStreamedFile(
-			"https://x/ep.mp3",
+			"https://example.com/ep.mp3",
 			"out.mp3",
 			probe({
 				firstChunk: new Uint8Array([1, 2, 3]).buffer,
@@ -167,7 +169,7 @@ describe("writeStreamedFile", () => {
 		requestUrlMock.mockResolvedValueOnce(res(206, [3, 4])).mockResolvedValueOnce(res(206, [5]));
 
 		const total = await writeStreamedFile(
-			"https://x/ep.mp3",
+			"https://example.com/ep.mp3",
 			"out.mp3",
 			probe({ totalSize: null }),
 			undefined,
@@ -183,8 +185,14 @@ describe("writeStreamedFile", () => {
 		requestUrlMock.mockResolvedValueOnce(res(500, []));
 
 		await expect(
-			writeStreamedFile("https://x/ep.mp3", "out.mp3", probe({ totalSize: 6 }), undefined, 2),
-		).rejects.toThrow(/Range request failed/);
+			writeStreamedFile(
+				"https://example.com/ep.mp3",
+				"out.mp3",
+				probe({ totalSize: 6 }),
+				undefined,
+				2,
+			),
+		).rejects.toThrow(/HTTP 500/);
 	});
 });
 
@@ -197,7 +205,7 @@ describe("download size cap (resource exhaustion)", () => {
 			}),
 		);
 
-		await expect(probeAndFetchFirstChunk("https://x/ep.mp3", 4, 100)).rejects.toThrow(
+		await expect(probeAndFetchFirstChunk("https://example.com/ep.mp3", 4, 100)).rejects.toThrow(
 			/maximum allowed size/,
 		);
 	});
@@ -208,7 +216,7 @@ describe("download size cap (resource exhaustion)", () => {
 			res(200, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { "content-type": "audio/mpeg" }),
 		);
 
-		await expect(probeAndFetchFirstChunk("https://x/ep.mp3", 4, 5)).rejects.toThrow(
+		await expect(probeAndFetchFirstChunk("https://example.com/ep.mp3", 4, 5)).rejects.toThrow(
 			/maximum allowed size/,
 		);
 	});
@@ -221,7 +229,7 @@ describe("download size cap (resource exhaustion)", () => {
 
 		await expect(
 			writeStreamedFile(
-				"https://x/ep.mp3",
+				"https://example.com/ep.mp3",
 				"out.mp3",
 				probe({ totalSize: null, firstChunk: new Uint8Array([1, 2]).buffer }),
 				undefined,
@@ -239,7 +247,7 @@ describe("download size cap (resource exhaustion)", () => {
 
 		await expect(
 			writeStreamedFile(
-				"https://x/ep.mp3",
+				"https://example.com/ep.mp3",
 				"out.mp3",
 				probe({
 					firstChunk: new Uint8Array([1, 2, 3, 4, 5, 6]).buffer,
@@ -260,7 +268,7 @@ describe("SSRF guard", () => {
 		"http://127.0.0.1:8080/ep.mp3",
 		"file:///Users/victim/.ssh/id_rsa",
 	])("probeAndFetchFirstChunk refuses %s without issuing a request", async (url) => {
-		await expect(probeAndFetchFirstChunk(url, 4)).rejects.toThrow(/Refusing/);
+		await expect(probeAndFetchFirstChunk(url, 4)).rejects.toThrow(/not allowed/);
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 

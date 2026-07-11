@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { requestUrl } from "obsidian";
 
 import getUniversalPodcastLink from "./getUniversalPodcastLink";
 import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
 import { savedFeeds } from "./store";
 import type { IAPI } from "./API/IAPI";
 import type { Episode } from "./types/Episode";
+import { fetchJsonWithTimeout } from "./utility/networkRequest";
 
 const noticeSpy = vi.fn();
 
@@ -13,7 +13,6 @@ vi.mock("obsidian", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("obsidian")>();
 	return {
 		...actual,
-		requestUrl: vi.fn(),
 		// A spy class so we can assert which user-facing messages were shown.
 		Notice: class {
 			message?: string;
@@ -30,7 +29,11 @@ vi.mock("./iTunesAPIConsumer", () => ({
 	queryiTunesPodcasts: vi.fn(),
 }));
 
-const requestUrlMock = vi.mocked(requestUrl);
+vi.mock("./utility/networkRequest", () => ({
+	fetchJsonWithTimeout: vi.fn(),
+}));
+
+const requestMock = vi.mocked(fetchJsonWithTimeout);
 const queryiTunesMock = vi.mocked(queryiTunesPodcasts);
 
 const podcast: Episode = {
@@ -72,10 +75,9 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	vi.spyOn(console, "error").mockImplementation(() => {});
 	savedFeeds.set({});
-	requestUrlMock.mockResolvedValue({
-		status: 200,
-		json: { episodes: [{ episodeId: "ep-123", title: "Episode One" }] },
-	} as never);
+	requestMock.mockResolvedValue({
+		episodes: [{ episodeId: "ep-123", title: "Episode One" }],
+	});
 	queryiTunesMock.mockResolvedValue([]);
 	setClipboard();
 });
@@ -99,8 +101,10 @@ describe("getUniversalPodcastLink", () => {
 		await getUniversalPodcastLink(api);
 
 		expect(queryiTunesMock).not.toHaveBeenCalled();
-		expect(requestUrlMock).toHaveBeenCalledWith({
-			url: "https://pod.link/555.json?limit=1000",
+		expect(requestMock).toHaveBeenCalledWith("https://pod.link/555.json?limit=1000", {
+			timeoutMs: 15_000,
+			maxResponseBytes: 4 * 1024 * 1024,
+			acceptedStatuses: [200],
 		});
 		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/555/episode/ep-123");
 		expect(noticeMessages()).toContain("Universal episode link copied to clipboard.");
@@ -192,7 +196,7 @@ describe("getUniversalPodcastLink", () => {
 
 		await getUniversalPodcastLink(api);
 
-		expect(requestUrlMock).not.toHaveBeenCalled();
+		expect(requestMock).not.toHaveBeenCalled();
 		expect(writeTextMock).not.toHaveBeenCalled();
 		expect(noticeMessages()).toContain(
 			'Could not find "Example Show" on Apple Podcasts to build a universal link.',

@@ -1,4 +1,7 @@
-import { requestWithTimeout } from "src/utility/networkRequest";
+import { fetchTextWithTimeout } from "src/utility/networkRequest";
+
+const FEED_REQUEST_TIMEOUT_MS = 30_000;
+const MAX_FEED_DOCUMENT_BYTES = 16 * 1024 * 1024;
 
 /** Retrieval port for the legacy target-shaped feed parser. */
 export interface FeedDocumentSource {
@@ -14,7 +17,10 @@ export interface FeedDocumentSource {
  */
 export const legacyObsidianFeedDocumentSource: FeedDocumentSource = Object.freeze({
 	async load(sourceUrl: string): Promise<string> {
-		const response = await requestWithTimeout(sourceUrl, { timeoutMs: 30_000 });
-		return response.text;
+		return fetchTextWithTimeout(sourceUrl, {
+			timeoutMs: FEED_REQUEST_TIMEOUT_MS,
+			maxResponseBytes: MAX_FEED_DOCUMENT_BYTES,
+			acceptedStatuses: [200],
+		});
 	},
 });

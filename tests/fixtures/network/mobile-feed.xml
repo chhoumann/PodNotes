@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>PodNotes Mobile Network Gate Fixture</title>
+    <link>https://example.com/podnotes-mobile-network-gate</link>
+    <description>Deterministic feed used only for real-device PodNotes network verification.</description>
+    <itunes:image href="https://raw.githubusercontent.com/chhoumann/PodNotes/6ac0187a778fc06354cf01b4ace3340c5693066b/docs/docs/resources/quickadd_example_note.png" />
+    <item>
+      <title>Mobile URL Boundary Episode</title>
+      <link>https://example.com/podnotes-mobile-network-gate/episode</link>
+      <description>Confirms that the mobile feed retrieval and parsing path completed.</description>
+      <guid isPermaLink="false">podnotes-mobile-network-gate-episode-1</guid>
+      <pubDate>Wed, 01 Jul 2026 12:00:00 GMT</pubDate>
+      <enclosure
+        url="https://example.com/podnotes-mobile-network-gate/episode.mp3"
+        type="audio/mpeg"
+        length="1"
+      />
+      <itunes:duration>1</itunes:duration>
+    </item>
+  </channel>
+</rss>

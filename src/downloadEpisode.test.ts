@@ -22,6 +22,16 @@ function bytes(...values: number[]): ArrayBuffer {
 	return new Uint8Array(values).buffer;
 }
 
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise;
+		reject = rejectPromise;
+	});
+	return { promise, reject, resolve };
+}
+
 function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 	const present = new Set<string>(); // vault index (getAbstractFileByPath)
 	const disk = new Set<string>(); // raw filesystem (adapter.exists)
@@ -323,6 +333,40 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		});
 	});
 
+	it("ignores a foreign file at the provisional URL-extension path when the sniffed final path is free (Codex #290)", async () => {
+		const { createBinary, present } = setupVault();
+		// A different episode's file occupies the path the URL extension implies
+		// (.mp4). The response sniffs to .m4a, so the real destination is free and
+		// the fast-path check must fall through to the probe instead of throwing a
+		// destination collision.
+		present.add("Podcasts/Audio MP4 Title.mp4");
+		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mp4" },
+			arrayBuffer: buffer,
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+		const episode = makeEpisode({
+			title: "Audio MP4 Title",
+			streamUrl: "https://example.com/episode.mp4",
+			mediaType: "audio",
+		});
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+
+		try {
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+
+		expect(createBinary).toHaveBeenCalledWith("Podcasts/Audio MP4 Title.m4a", buffer);
+		expect(get(downloadedEpisodes)["Pod"]?.[0]).toMatchObject({
+			filePath: "Podcasts/Audio MP4 Title.m4a",
+		});
+	});
+
 	it("saves an audio/mp4 download with a generic ISO-BMFF brand as m4a, not mp4 (Codex #213)", async () => {
 		const { createBinary } = setupVault();
 		// Real ISO-BMFF: 4-byte box size, 'ftyp', then a generic 'mp42' major brand.
@@ -428,7 +472,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		try {
 			await expect(
 				downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}"),
-			).rejects.toThrow(/network down/);
+			).rejects.toThrow("Failed to download episode: Network request failed.");
 			// The dismissal lives in a finally, so a rejected download still hides the
 			// notice exactly once instead of leaving it open forever.
 			vi.runAllTimers();
@@ -1130,10 +1174,27 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 				streamUrl,
 			});
 
-			await expect(getEpisodeAudioBuffer(ssrf)).rejects.toThrow(/Refusing/);
+			await expect(getEpisodeAudioBuffer(ssrf)).rejects.toThrow(/not allowed/);
 			expect(requestUrlMock).not.toHaveBeenCalled();
 		},
 	);
+
+	it("redacts credentialed media targets and native transport errors", async () => {
+		const marker = "private-download-marker";
+		requestUrlMock.mockRejectedValue(new Error(`native failure: ${marker}`));
+		const privateEpisode = episode({
+			title: "Private episode",
+			streamUrl: `https://listener:${marker}@example.com/audio.mp3?token=${marker}`,
+		});
+
+		const error = await getEpisodeAudioBuffer(privateEpisode).catch(
+			(caught: unknown) => caught,
+		);
+
+		expect(String(error)).toContain("Network request failed");
+		expect(String(error)).not.toContain(marker);
+		expect(String(error)).not.toContain("listener:");
+	});
 });
 
 describe("downloadEpisodeWithNotice (streaming range path)", () => {
@@ -1279,6 +1340,70 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 		expect(get(downloadedEpisodes)["Pod"]?.[0]?.size).toBe(8);
 	});
 
+	it("never reuses a sequential shared destination for a different episode", async () => {
+		const v = setupVault({ streaming: true });
+		const template = "Podcasts/shared";
+		const episodeA = makeEpisode({ title: "Episode A", podcastName: "Podcast A" });
+		const episodeB = makeEpisode({ title: "Episode B", podcastName: "Podcast B" });
+		requestUrlMock.mockResolvedValue(
+			rangeResponse(200, [0xff, 0xfb, 0x90, 0x00], {
+				"content-type": "audio/mpeg",
+			}),
+		);
+
+		await downloadEpisodeWithNotice(episodeA, template);
+		await expect(downloadEpisodeWithNotice(episodeB, template)).rejects.toThrow(
+			"A different episode already occupies the selected destination.",
+		);
+
+		// Episode B pays one Range probe before the collision surfaces: the
+		// provisional URL-extension path cannot distinguish a real collision from a
+		// wrong URL extension, so the check runs on the sniffed final path.
+		expect(requestUrlMock).toHaveBeenCalledTimes(2);
+		expect(v.writeBinary).toHaveBeenCalledOnce();
+		expect(get(downloadedEpisodes)["Podcast A"]?.[0]).toMatchObject({
+			filePath: "Podcasts/shared.mp3",
+			title: "Episode A",
+		});
+		expect(get(downloadedEpisodes)["Podcast B"]).toBeUndefined();
+
+		// The registered owner still reuses the fast path with no network traffic.
+		await downloadEpisodeWithNotice(episodeA, template);
+		expect(requestUrlMock).toHaveBeenCalledTimes(2);
+		expect(get(downloadedEpisodes)["Podcast A"]).toHaveLength(1);
+	});
+
+	it("holds one normalized destination in flight and releases it after failure", async () => {
+		setupVault();
+		const response = deferred<Awaited<ReturnType<typeof requestUrl>>>();
+		const template = "Podcasts/shared";
+		const episodeA = makeEpisode({ title: "Episode A", podcastName: "Podcast A" });
+		const episodeB = makeEpisode({ title: "Episode B", podcastName: "Podcast B" });
+		requestUrlMock.mockImplementationOnce(
+			() => response.promise as unknown as ReturnType<typeof requestUrl>,
+		);
+
+		const first = downloadEpisodeWithNotice(episodeA, template);
+		await vi.waitFor(() => expect(requestUrlMock).toHaveBeenCalledOnce());
+
+		await expect(downloadEpisodeWithNotice(episodeB, template)).rejects.toThrow(
+			"A download is already in progress for the selected destination.",
+		);
+		expect(requestUrlMock).toHaveBeenCalledOnce();
+
+		response.reject(new Error("first attempt failed"));
+		await expect(first).rejects.toThrow("Network request failed.");
+
+		requestUrlMock.mockResolvedValueOnce(
+			rangeResponse(200, [0xff, 0xfb, 0x90, 0x00], {
+				"content-type": "audio/mpeg",
+			}),
+		);
+		await downloadEpisodeWithNotice(episodeB, template);
+		expect(requestUrlMock).toHaveBeenCalledTimes(2);
+		expect(get(downloadedEpisodes)["Podcast B"]?.[0]?.filePath).toBe("Podcasts/shared.mp3");
+	});
+
 	it("removes the partial file via the adapter (not yet vault-indexed) and rethrows on a mid-stream failure", async () => {
 		const v = setupVault({ streaming: true });
 		requestUrlMock
@@ -1292,7 +1417,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 
 		await expect(
 			downloadEpisodeWithNotice(makeEpisode(), "Podcasts/{{title}}"),
-		).rejects.toThrow(/Range request failed/);
+		).rejects.toThrow(/HTTP 500/);
 
 		// The partial was written through the adapter, so it isn't in the vault
 		// index — cleanup must fall back to adapter.remove (#218).
