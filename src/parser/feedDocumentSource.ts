@@ -8,10 +8,9 @@ export interface FeedDocumentSource {
 /**
  * Current Obsidian compatibility source.
  *
- * This is deliberately named legacy: `requestUrl` does not expose DNS pinning,
- * the connected peer, redirect hops, or native cancellation, so it must never
- * be presented as a `PinnedNetworkHopAdapter` or as equivalent to the
- * capability-scoped transport.
+ * `requestUrl` does not expose redirect hops, the final URL, DNS answers, the
+ * connected peer, or native cancellation. Callers must not infer those
+ * guarantees from this adapter.
  */
 export const legacyObsidianFeedDocumentSource: FeedDocumentSource = Object.freeze({
 	async load(sourceUrl: string): Promise<string> {
