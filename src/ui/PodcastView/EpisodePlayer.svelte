@@ -62,6 +62,11 @@
 
 	let isHoveringArtwork: boolean = false;
 	let isLoading: boolean = true;
+	let loadError: string | null = null;
+	// Distinct from isLoading (a display flag): gates persistence so it stays
+	// closed when media fails to load, since a failed load clears the spinner
+	// without restoring the saved position. Only a real metadata load opens it.
+	let playbackRestored: boolean = false;
 	let playerVolume: number = 1;
 	let mediaElement: HTMLMediaElement | null = null;
 	// The currentEpisode subscription fires synchronously on subscribe with the
@@ -177,8 +182,18 @@
 
 	function onMetadataLoaded() {
 		isLoading = false;
+		loadError = null;
+		playbackRestored = true;
 
 		restorePlaybackTime();
+	}
+
+	// A blocked, dead, or unreachable media URL never fires loadedmetadata, so
+	// without this the loading overlay spins forever (found while gating all
+	// outbound requests: a refused stream URL looked identical to a slow one).
+	function onMediaError() {
+		isLoading = false;
+		loadError = "Could not load this episode's media.";
 	}
 
 	function restorePlaybackTime() {
@@ -263,9 +278,10 @@
 
 	function persistPlaybackPosition() {
 		// Never persist before metadata has loaded and the saved position has been
-		// restored (onMetadataLoaded) — writing the pre-restore 0 would clobber the
-		// stored position we are about to resume from.
-		if (isLoading || !$currentEpisode) return;
+		// restored (onMetadataLoaded), including the failed-load path where the
+		// spinner clears but no restore ran — writing the pre-restore 0 would
+		// clobber the stored position we resume from.
+		if (!playbackRestored || !$currentEpisode) return;
 		if (shouldSuppressSegmentProgressPersistence()) return;
 
 		playedEpisodes.setEpisodeTime(
@@ -339,6 +355,8 @@
 			// the src swap persist the new episode under its key with the old/zero
 			// time and clobber its saved resume position (issue #33).
 			isLoading = true;
+			loadError = null;
+			playbackRestored = false;
 			lastPositionSaveMs = Number.NEGATIVE_INFINITY;
 			segmentStopTimeWithoutProgressSave = null;
 
@@ -352,7 +370,7 @@
 			// progress bar stays pinned at 100% and the timestamps show the
 			// previous episode's end for the whole (network-bound) metadata fetch.
 			// onMetadataLoaded → restorePlaybackTime sets the real position, and
-			// the isLoading guard above keeps this reset from being persisted.
+			// the playbackRestored guard keeps this reset from being persisted.
 			if (hasSeenFirstEpisodeFire) {
 				currentTime.set(0);
 				duration.set(0);
@@ -504,6 +522,7 @@
 				bind:volume={playerVolume}
 				on:ended={onEpisodeEnded}
 				on:loadedmetadata={onMetadataLoaded}
+				on:error={onMediaError}
 				on:timeupdate={onTimeUpdate}
 				on:pause={onPause}
 				on:play|preventDefault
@@ -515,6 +534,11 @@
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />
+				</div>
+			{:else if loadError}
+				<div class="podcast-artwork-load-error" role="alert">
+					<Icon icon="alert-triangle" clickable={false} />
+					<span>{loadError}</span>
 				</div>
 			{:else}
 				<button
@@ -569,6 +593,11 @@
 					<div class="podcast-artwork-isloading-overlay">
 						<Loading />
 					</div>
+				{:else if loadError}
+					<div class="podcast-artwork-load-error" role="alert">
+						<Icon icon="alert-triangle" clickable={false} />
+						<span>{loadError}</span>
+					</div>
 				{:else}
 					<div
 						class="podcast-artwork-overlay"
@@ -595,6 +624,7 @@
 			bind:volume={playerVolume}
 			on:ended={onEpisodeEnded}
 			on:loadedmetadata={onMetadataLoaded}
+			on:error={onMediaError}
 			on:timeupdate={onTimeUpdate}
 			on:pause={onPause}
 			on:play|preventDefault
@@ -818,6 +848,24 @@
 	.podcast-video-fullscreen:focus-visible {
 		outline: 2px solid var(--background-modifier-border-focus);
 		outline-offset: 2px;
+	}
+
+	.podcast-artwork-load-error {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		text-align: center;
+		padding: 0.5rem;
+		background-color: rgba(0, 0, 0, 0.6);
+		color: var(--text-error);
+		font-size: 0.85rem;
 	}
 
 	.podcast-artwork-isloading-overlay {

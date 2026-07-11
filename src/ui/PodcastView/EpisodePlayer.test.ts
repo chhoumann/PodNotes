@@ -115,6 +115,56 @@ describe("EpisodePlayer", () => {
 		expect(get(requestedPlaybackTime)).toBeNull();
 	});
 
+	test("shows an error state instead of a permanent spinner when media fails to load", async () => {
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+
+		// A blocked/dead stream URL fires error, never loadedmetadata.
+		await fireEvent.error(audio);
+
+		expect(container.querySelector(".podcast-artwork-isloading-overlay")).toBeNull();
+		const error = container.querySelector(".podcast-artwork-load-error");
+		expect(error).not.toBeNull();
+		expect(error?.textContent).toContain("Could not load");
+	});
+
+	test("does not persist a pre-restore position when media fails to load", async () => {
+		// Seed a saved resume point; a failed load must not overwrite it with 0.
+		playedEpisodes.setEpisodeTime(testEpisode, 1234, 3600, false);
+		const { container, unmount } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+
+		await fireEvent.error(audio);
+		// Destroy fires persistPlaybackPosition; the guard must keep it closed.
+		unmount();
+
+		const saved = get(playedEpisodes)[`${testEpisode.podcastName}::${testEpisode.title}`];
+		expect(saved?.time).toBe(1234);
+	});
+
+	test("clears the error state when the next episode loads", async () => {
+		const { container } = render(EpisodePlayer);
+		await waitFor(() => {
+			expect(container.querySelector("audio")).not.toBeNull();
+		});
+		const audio = container.querySelector("audio") as HTMLAudioElement;
+		await fireEvent.error(audio);
+		expect(container.querySelector(".podcast-artwork-load-error")).not.toBeNull();
+
+		currentEpisode.set({ ...testEpisode, title: "Next Episode" });
+		await waitFor(() => {
+			expect(container.querySelector(".podcast-artwork-isloading-overlay")).not.toBeNull();
+		});
+		await fireEvent.loadedMetadata(container.querySelector("audio") as HTMLAudioElement);
+		expect(container.querySelector(".podcast-artwork-load-error")).toBeNull();
+	});
+
 	test("arms a requested segment after metadata loads", async () => {
 		requestedPlaybackTime.set({
 			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
