@@ -38,7 +38,7 @@
 		"eslint-plugin-obsidianmd": "^0.4.1",
 		"jsdom": "^29.1.1",
 		"obsidian": "1.13.1",
-		"obsidian-e2e": "^0.8.1",
+		"obsidian-e2e": "^0.8.2",
 		"oxfmt": "^0.57.0",
 		"oxlint": "^1.72.0",
 		"svelte": "^5.46.4",
