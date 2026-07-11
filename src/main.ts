@@ -42,7 +42,8 @@ import {
 } from "./persistence/podNotesData";
 import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
-import { migratePrivateFeedUrls } from "./services/privateFeeds";
+import { migratePrivateFeedUrls, scrubMigratedEpisodeUrls } from "./services/privateFeeds";
+import { evictCachedFeedUrls } from "./services/FeedCacheService";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -479,16 +480,30 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			}
 
 			// Private feed URLs: move credential-bearing subscription URLs out of
-			// data.json into SecretStorage, then reap feed-url secrets no saved feed
-			// references anymore (e.g. after a settings import replaced savedFeeds).
-			// Best-effort: a failure keeps the URL where it was, never breaks loading.
+			// data.json into SecretStorage, scrub the same URLs out of persisted
+			// episode snapshots (queue/favorites/playlists/downloads/history stamp
+			// url/feedUrl at fetch time) and the local feed cache, then reap feed-url
+			// secrets no saved feed references anymore (e.g. after a settings import
+			// replaced savedFeeds). Best-effort: a failure keeps that feed's URL
+			// where it was, is reported, and never breaks loading.
 			this.feedUrls ??= new FeedUrlRepository(this.app.secretStorage);
 			const feedMigration = migratePrivateFeedUrls(settings.savedFeeds, this.feedUrls);
-			if (feedMigration.migrated > 0) {
-				settings = { ...settings, savedFeeds: feedMigration.savedFeeds };
+			if (feedMigration.replacements.size > 0) {
+				settings = scrubMigratedEpisodeUrls(
+					{ ...settings, savedFeeds: feedMigration.savedFeeds },
+					feedMigration.replacements,
+				);
+				evictCachedFeedUrls([...feedMigration.replacements.keys()]);
 				await this.saveData(encodePodNotesData(settings, decoded.unknownFields));
+				const count = feedMigration.replacements.size;
 				new Notice(
-					`Moved ${feedMigration.migrated} private feed ${feedMigration.migrated === 1 ? "URL" : "URLs"} into Obsidian SecretStorage.`,
+					`Moved ${count} private feed ${count === 1 ? "URL" : "URLs"} into Obsidian SecretStorage.`,
+				);
+			}
+			if (feedMigration.failed.length > 0) {
+				new Notice(
+					`PodNotes could not protect the private feed ${feedMigration.failed.length === 1 ? "URL" : "URLs"} for ${feedMigration.failed.join(", ")}; ${feedMigration.failed.length === 1 ? "it stays" : "they stay"} in data.json for now. Restart PodNotes to retry.`,
+					0,
 				);
 			}
 			this.feedUrls.sweepOrphans(settings.savedFeeds);

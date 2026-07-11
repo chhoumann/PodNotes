@@ -17,6 +17,54 @@ function makeSettings(overrides: Partial<IPodNotesSettings> = {}): IPodNotesSett
 
 const NOW = "2026-06-14T00:00:00.000Z";
 
+describe("private feed reference stripping", () => {
+	it("drops device-local urlSecretId from exported savedFeeds but keeps the placeholder", async () => {
+		const { serializeSettings } = await import("./settingsTransfer");
+		const { DEFAULT_SETTINGS } = await import("./constants");
+		const settings = {
+			...structuredClone(DEFAULT_SETTINGS),
+			savedFeeds: {
+				Private: {
+					title: "Private",
+					url: "podnotes-private-feed:Private",
+					urlSecretId: "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef",
+					artworkUrl: "",
+				},
+			},
+		};
+		const envelope = serializeSettings(settings, {}, "0.0.0", "2026-07-11T00:00:00Z");
+		const exported = (
+			envelope.settings as unknown as Record<string, Record<string, Record<string, unknown>>>
+		).savedFeeds.Private;
+		expect(exported.urlSecretId).toBeUndefined();
+		expect(exported.url).toBe("podnotes-private-feed:Private");
+	});
+
+	it("drops urlSecretId arriving through an import", async () => {
+		const { parseImport } = await import("./settingsTransfer");
+		const result = parseImport(
+			JSON.stringify({
+				savedFeeds: {
+					Foreign: {
+						title: "Foreign",
+						url: "podnotes-private-feed:Foreign",
+						urlSecretId: "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef",
+						artworkUrl: "",
+					},
+				},
+			}),
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			const feed = (
+				result.settings.savedFeeds as unknown as Record<string, Record<string, unknown>>
+			).Foreign;
+			expect(feed.urlSecretId).toBeUndefined();
+			expect(feed.url).toBe("podnotes-private-feed:Foreign");
+		}
+	});
+});
+
 describe("serializeSettings", () => {
 	it("wraps settings in a versioned envelope", () => {
 		const envelope = serializeSettings(makeSettings(), {}, "2.16.0", NOW);

@@ -167,14 +167,15 @@ export default async function podNotesURIHandler(
 
 	let episode: Episode | undefined;
 
-	if (localFile) {
+	// A private-feed placeholder always routes to placeholder resolution (the
+	// final branch): a vault file literally named like a placeholder must not
+	// shadow private links.
+	const isPlaceholderLink = isPrivateFeedPlaceholder(url);
+	if (!isPlaceholderLink && localFile) {
 		episode = nameCandidates
 			.map((name) => localFiles.getLocalEpisode(name))
 			.find((ep) => ep !== undefined);
-	} else if (
-		!isPrivateFeedPlaceholder(url) &&
-		!candidateValues(url).some((u) => /^https?:\/\//i.test(u))
-	) {
+	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
 		// a vault path whose file was moved/renamed. Resolve the episode by name from
 		// the local-files store rather than handing the bare path to FeedParser (which

@@ -19,7 +19,7 @@ const PLACEHOLDER_SCHEME = "podnotes-private-feed:";
  * working, their URL just stays in data.json like before.
  */
 const SECRET_QUERY_PARAM =
-	/^(auth|token|key|secret|pass|password|apikey|api[-_]key|access[-_]token|sig|signature)$/i;
+	/^(auth|token|key|secret|pass|password|apikey|api[-_]key|access[-_]token|sig|signature|jwt|credential|credentials)$/i;
 
 export function isCredentialBearingUrl(rawUrl: string): boolean {
 	let url: URL;

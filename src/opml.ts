@@ -222,8 +222,12 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 	// private feed exports its REAL url (an export with placeholders is useless).
 	// A private URL that cannot be resolved on this device exports as an empty
 	// xmlUrl rather than a placeholder.
-	const feedOutline = (feed: PodcastFeed) =>
-		`<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(resolveFeedUrl(feed, get(plugin).feedUrls) ?? "")}" />`;
+	let exportedPrivateFeeds = 0;
+	const feedOutline = (feed: PodcastFeed) => {
+		const url = resolveFeedUrl(feed, get(plugin).feedUrls) ?? "";
+		if (feed.urlSecretId && url) exportedPrivateFeeds += 1;
+		return `<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(url)}" />`;
+	};
 	const feedsOutline = (_feeds: PodcastFeed[]) =>
 		`<outline text="feeds">${feeds.map(feedOutline).join("")}</outline>`;
 
@@ -233,6 +237,12 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 		await app.vault.create(filePath, doc);
 
 		new Notice(`Exported ${feeds.length} podcast feeds to file "${filePath}".`);
+		if (exportedPrivateFeeds > 0) {
+			new Notice(
+				`The export contains ${exportedPrivateFeeds} private feed ${exportedPrivateFeeds === 1 ? "URL" : "URLs"} in plaintext. The file is inside your vault - delete it after importing it elsewhere.`,
+				10000,
+			);
+		}
 	} catch (error) {
 		if (error instanceof Error) {
 			if (error.message.includes("Folder does not exist")) {

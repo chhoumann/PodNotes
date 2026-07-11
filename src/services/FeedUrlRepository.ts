@@ -7,13 +7,17 @@ import { isValidSecretId } from "src/types/Credentials";
  * contract: runtime reads fail closed and never cache secret values; writes
  * return an ID only after the exact value reads back.
  *
- * SecretStorage is device-local, so a second synced device sees the feed's
- * placeholder without its secret - the feed is re-added there. IDs are
- * content-free (`podnotes-feed-url`, `-2`, `-3`, ...) so neither the feed name
- * nor the URL leaks through the ID namespace, which `listSecrets` exposes.
+ * IDs are `podnotes-feed-url-<uuid>`. The UUID matters: `urlSecretId`
+ * references sync through data.json while SecretStorage stays device-local,
+ * so IDs must never collide across devices. With sequential IDs, device A's
+ * synced reference could resolve on device B to an UNRELATED feed's secret
+ * and silently fetch the wrong private feed; with UUIDs a foreign reference
+ * simply misses and the user re-adds the feed. Content-free by construction -
+ * neither the feed name nor the URL leaks through the ID namespace, which
+ * `listSecrets` exposes.
  */
-const BASE_ID = "podnotes-feed-url";
-const FEED_URL_SECRET_ID = /^podnotes-feed-url(?:-[1-9]\d*)?$/;
+const FEED_URL_SECRET_ID =
+	/^podnotes-feed-url-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function isFeedUrlSecretId(value: string): boolean {
 	return FEED_URL_SECRET_ID.test(value);
@@ -35,30 +39,17 @@ export class FeedUrlRepository {
 		}
 	}
 
-	/**
-	 * Store a private feed URL under a PodNotes-owned ID. An existing identical
-	 * value is reused (idempotent retries); a conflicting value is never
-	 * overwritten - the first free numeric suffix is used instead.
-	 */
+	/** Store a private feed URL under a fresh PodNotes-owned ID and verify the readback. */
 	store(url: string): string {
 		const value = url.trim();
 		if (!value) throw new Error("A private feed URL must not be empty.");
 
-		for (let suffix = 1; suffix <= 10_000; suffix++) {
-			const id = suffix === 1 ? BASE_ID : `${BASE_ID}-${suffix}`;
-			const existing = this.storage.getSecret(id);
-
-			if (existing === value) return id;
-			if (existing !== null && existing !== "") continue;
-
-			this.storage.setSecret(id, value);
-			if (this.storage.getSecret(id) !== value) {
-				throw new Error("SecretStorage did not retain the private feed URL.");
-			}
-			return id;
+		const id = `podnotes-feed-url-${crypto.randomUUID()}`;
+		this.storage.setSecret(id, value);
+		if (this.storage.getSecret(id) !== value) {
+			throw new Error("SecretStorage did not retain the private feed URL.");
 		}
-
-		throw new Error("Could not allocate a SecretStorage ID for the private feed URL.");
+		return id;
 	}
 
 	/** Clearing to "" is SecretStorage's deletion idiom; reads treat "" as absent. */
@@ -75,24 +66,24 @@ export class FeedUrlRepository {
 	/**
 	 * Delete every PodNotes-owned feed-url secret no saved feed references.
 	 * Covers removals that bypassed the remove flow (e.g. a settings import
-	 * replacing savedFeeds wholesale).
+	 * replacing savedFeeds wholesale). Never throws: a sweep failure must not
+	 * abort plugin loading.
 	 */
 	sweepOrphans(feeds: Record<string, PodcastFeed>): void {
 		const referenced = new Set<string>();
 		for (const feed of Object.values(feeds)) {
-			if (feed.urlSecretId) referenced.add(feed.urlSecretId);
+			// Trim to match resolve(): a reference that resolves must also protect
+			// its secret from the sweep.
+			if (feed.urlSecretId?.trim()) referenced.add(feed.urlSecretId.trim());
 		}
-		let ids: string[];
 		try {
-			ids = this.storage.listSecrets();
+			for (const id of this.storage.listSecrets()) {
+				if (!isFeedUrlSecretId(id) || referenced.has(id)) continue;
+				if (!this.storage.getSecret(id)) continue;
+				this.delete(id);
+			}
 		} catch (error) {
-			console.error("PodNotes: failed to list secrets for the orphan sweep", error);
-			return;
-		}
-		for (const id of ids) {
-			if (!isFeedUrlSecretId(id) || referenced.has(id)) continue;
-			if (!this.storage.getSecret(id)) continue;
-			this.delete(id);
+			console.error("PodNotes: the private feed URL orphan sweep failed", error);
 		}
 	}
 }

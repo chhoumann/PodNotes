@@ -107,9 +107,16 @@
 		const { podcast } = event.detail;
 		savedFeeds.update((feeds) => {
 			const removed = feeds[podcast.title];
-			if (removed?.urlSecretId) get(plugin).feedUrls.delete(removed.urlSecretId);
 			const newFeeds = { ...feeds };
 			delete newFeeds[podcast.title];
+			// Identical private URLs dedupe to one secret ID, so delete only when no
+			// remaining feed still references it (the load-time sweep is the backstop).
+			const stillReferenced = Object.values(newFeeds).some(
+				(feed) => feed.urlSecretId === removed?.urlSecretId,
+			);
+			if (removed?.urlSecretId && !stillReferenced) {
+				get(plugin).feedUrls.delete(removed.urlSecretId);
+			}
 			return newFeeds;
 		});
 		updateSearchResults();
