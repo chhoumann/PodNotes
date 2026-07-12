@@ -41,7 +41,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-prepare.yml@b209e4363280e632c36da5e58939a20ebe39784d # v4
+    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-prepare.yml@69b85e58a8158cacf55e3f1ac8e2790e4e33c8c0 # v4
     with:
       plugin-name: podnotes
       package-manager: npm
