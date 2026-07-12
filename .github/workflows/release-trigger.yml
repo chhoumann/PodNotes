@@ -40,7 +40,7 @@ jobs:
       actions: write
       contents: write
       pull-requests: read
-    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-validate.yml@b209e4363280e632c36da5e58939a20ebe39784d # v4
+    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-validate.yml@69b85e58a8158cacf55e3f1ac8e2790e4e33c8c0 # v4
     with:
       pr-number: ${{ github.event.pull_request.number || inputs.pr-number }}
       plugin-name: podnotes
