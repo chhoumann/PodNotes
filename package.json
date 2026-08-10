@@ -37,7 +37,7 @@
 		"@testing-library/svelte": "^5.4.2",
 		"@types/node": "^22.20.1",
 		"eslint-plugin-obsidianmd": "^0.4.1",
-		"jsdom": "^29.1.1",
+		"jsdom": "^30.0.1",
 		"obsidian": "1.13.1",
 		"obsidian-e2e": "^0.9.0",
 		"oxfmt": "^0.61.0",
@@ -60,6 +60,6 @@
 		"brace-expansion@5.0.7": "5.0.9"
 	},
 	"engines": {
-		"node": "^22.14.0"
+		"node": "^22.22.2"
 	}
 }
