@@ -619,6 +619,6 @@ export function replaceIllegalFileNameCharactersInString(string: string) {
 export function legacyReplaceIllegalFileNameCharactersInString(string: string) {
 	return string
 		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.?]/g, "")
-		.replace(/\n/, " ")
+		.replace(/\n/g, " ")
 		.replace("  ", " ");
 }

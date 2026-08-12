@@ -76,6 +76,7 @@ describe("replaceIllegalFileNameCharactersInString (via DownloadPathTemplateEngi
 				"Episode #001 ... Presocratic Philosophy - Ionian",
 			),
 		).toBe("Episode 001 Presocratic Philosophy - Ionian");
+		expect(legacyReplaceIllegalFileNameCharactersInString("a\nb\nc")).toBe("a b c");
 	});
 });
 
