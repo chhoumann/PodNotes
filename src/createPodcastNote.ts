@@ -58,6 +58,19 @@ function noteBasename(path: string): string {
 	return (path.split("/").pop() ?? "").replace(/\.md$/i, "");
 }
 
+function getPodcastNoteTitleCandidates(episode: Episode): string[] {
+	return [
+		...new Set([
+			FilePathTemplateEngine("{{title}}", episode),
+			FilePathTemplateEngine(
+				"{{title}}",
+				episode,
+				legacyReplaceIllegalFileNameCharactersInString,
+			),
+		]),
+	];
+}
+
 export default async function createPodcastNote(episode: Episode): Promise<void> {
 	try {
 		const file = await createPodcastNoteFileIfNotExists(episode);
@@ -122,7 +135,7 @@ function findPodcastNoteByTitleOverlap(episode: Episode): TFile | null {
 		.filter((file) => parentFolder(file.path) === folder && file instanceof TFile);
 
 	return (
-		findUniqueTitleMatch([noteBasename(expectedPath)], siblings, (file) =>
+		findUniqueTitleMatch(getPodcastNoteTitleCandidates(episode), siblings, (file) =>
 			noteBasename(file.path),
 		) ?? null
 	);

@@ -254,6 +254,37 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		]);
 	});
 
+	it("does not treat a sibling note as a match just because they share a long path prefix", () => {
+		const apple: Episode = {
+			title: "Apple",
+			streamUrl: "https://example.com/apple.mp3",
+			url: "https://example.com/apple",
+			description: "",
+			content: "",
+			podcastName: "The Really Long Daily Technology Podcast",
+			feedUrl: "https://example.com/tech.xml",
+		};
+		const androidNote = fileAt(
+			"podcasts/The Really Long Daily Technology Podcast - Android.md",
+		);
+
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === androidNote.path ? androidNote : null,
+					),
+					getMarkdownFiles: vi.fn(() => [androidNote]),
+				},
+			},
+			settings: {
+				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
+			},
+		} as never);
+
+		expect(getPodcastNote(apple)).toBeNull();
+	});
+
 	it("does not open a different episode that only shares generic words", () => {
 		const other = fileAt("podcasts/Huberman Lab - Optimize Testosterone Dr Kyle Gillett.md");
 

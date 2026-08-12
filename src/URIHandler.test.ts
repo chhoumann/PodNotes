@@ -512,6 +512,28 @@ describe("podNotesURIHandler", () => {
 		});
 	});
 
+	test("does not pick a leftover similar episode when the linked title is gone (#315)", async () => {
+		mockGetEpisodes.mockResolvedValue([
+			{
+				...testEpisode,
+				title: "Weekly News Roundup Extra",
+			},
+		]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: "Weekly News Roundup",
+				time: "10",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
 	test("does not treat a weakly similar feed title as a match (#315)", async () => {
 		mockGetEpisodes.mockResolvedValue([
 			{

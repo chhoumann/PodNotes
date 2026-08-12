@@ -60,8 +60,8 @@ export function titleTokenSimilarity(left: string, right: string): number {
 
 /**
  * Return the single candidate whose title is a strong unique match for any of
- * `targets`. Ties (two candidates at the same top score) return undefined so
- * we never open or play the wrong episode.
+ * `targets`. If more than one candidate meets `minSimilarity`, the match is
+ * ambiguous and we return undefined rather than taking the highest score.
  */
 export function findUniqueTitleMatch<T>(
 	targets: readonly string[],
@@ -82,12 +82,7 @@ export function findUniqueTitleMatch<T>(
 		}
 	}
 
-	if (scored.length === 0) return undefined;
-
-	scored.sort((left, right) => right.score - left.score);
-	if (scored.length > 1 && scored[0].score === scored[1].score) {
-		return undefined;
-	}
+	if (scored.length !== 1) return undefined;
 
 	return scored[0].candidate;
 }

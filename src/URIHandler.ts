@@ -57,7 +57,7 @@ function findEpisodeByCandidates(
 		if (episode) return episode;
 	}
 
-	return findUniqueTitleMatch(nameCandidates, episodes, (episode) => episode.title);
+	return findUniqueTitleMatch(nameCandidates, episodes, (episode) => episode.title, 1);
 }
 
 function findLocalEpisodeByCandidates(nameCandidates: string[]): Episode | undefined {
@@ -70,6 +70,7 @@ function findLocalEpisodeByCandidates(nameCandidates: string[]): Episode | undef
 		nameCandidates,
 		get(localFiles).episodes,
 		(episode) => episode.title,
+		1,
 	);
 }
 

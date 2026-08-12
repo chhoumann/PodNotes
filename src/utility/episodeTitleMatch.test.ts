@@ -64,4 +64,14 @@ describe("episodeTitleMatch", () => {
 			),
 		).toBeUndefined();
 	});
+
+	it("refuses when two candidates both qualify at different scores", () => {
+		expect(
+			findUniqueTitleMatch(
+				["The Weekly News Roundup"],
+				[{ title: "The Weekly News Roundup" }, { title: "The Weekly News Roundup Extra" }],
+				(episode) => episode.title,
+			),
+		).toBeUndefined();
+	});
 });
