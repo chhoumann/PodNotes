@@ -4,6 +4,7 @@ import {
 	FeedFilePathTemplateEngine,
 	FeedNoteTemplateEngine,
 	FilePathTemplateEngine,
+	legacyReplaceIllegalFileNameCharactersInString,
 	NoteTemplateEngine,
 	TimestampTemplateEngine,
 	TranscriptTemplateEngine,
@@ -65,6 +66,18 @@ describe("replaceIllegalFileNameCharactersInString (via DownloadPathTemplateEngi
 	it("does not strip hyphens or ordinary letters", () => {
 		expect(sanitizeTitle("Part 1 - The Beginning")).toBe("Part 1 - The Beginning");
 	});
+
+	it("keeps mid-title ellipses that the 2.16 sanitizer stripped", () => {
+		expect(sanitizeTitle("Episode #001 ... Presocratic Philosophy - Ionian")).toBe(
+			"Episode 001 ... Presocratic Philosophy - Ionian",
+		);
+		expect(
+			legacyReplaceIllegalFileNameCharactersInString(
+				"Episode #001 ... Presocratic Philosophy - Ionian",
+			),
+		).toBe("Episode 001 Presocratic Philosophy - Ionian");
+		expect(legacyReplaceIllegalFileNameCharactersInString("a\nb\nc")).toBe("a b c");
+	});
 });
 
 const demoEpisode: Episode = {
@@ -78,6 +91,27 @@ const demoEpisode: Episode = {
 	artworkUrl: "https://example.com/ep1.png",
 	episodeDate: new Date("2024-01-01"),
 };
+
+describe("FilePathTemplateEngine legacy sanitizer (#315)", () => {
+	const episode: Episode = {
+		...demoEpisode,
+		title: "Episode #001 ... Presocratic Philosophy - Ionian",
+		podcastName: "Philosophize This!",
+	};
+
+	it("renders the current and 2.16 filenames for the same episode", () => {
+		expect(FilePathTemplateEngine("podcasts/{{podcast}} - {{title}}", episode)).toBe(
+			"podcasts/Philosophize This! - Episode 001 ... Presocratic Philosophy - Ionian",
+		);
+		expect(
+			FilePathTemplateEngine(
+				"podcasts/{{podcast}} - {{title}}",
+				episode,
+				legacyReplaceIllegalFileNameCharactersInString,
+			),
+		).toBe("podcasts/Philosophize This! - Episode 001 Presocratic Philosophy - Ionian");
+	});
+});
 
 describe("DownloadPathTemplateEngine extension stripping (#DL-04)", () => {
 	it("strips only a trailing template extension", () => {

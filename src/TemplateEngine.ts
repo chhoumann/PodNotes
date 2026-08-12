@@ -116,9 +116,14 @@ function resolveEpisodeNumber(episode: Episode): number | undefined {
  * the tag is used with an argument (e.g. `{{title:_}}`), collapses whitespace to
  * that replacement. Shared by the file-name {{title}}/{{podcast}} tags.
  */
-function legalizedNameTag(rawValue: string): TagValue {
+type FileNameSanitizer = (value: string) => string;
+
+function legalizedNameTag(
+	rawValue: string,
+	sanitizeFileName: FileNameSanitizer = replaceIllegalFileNameCharactersInString,
+): TagValue {
 	return (whitespaceReplacement?: string) => {
-		const legal = replaceIllegalFileNameCharactersInString(rawValue);
+		const legal = sanitizeFileName(rawValue);
 		return whitespaceReplacement ? legal.replace(/\s+/g, whitespaceReplacement) : legal;
 	};
 }
@@ -130,9 +135,13 @@ function legalizedNameTag(rawValue: string): TagValue {
  * {{currentdate}}, and {{episodenumber}}. NoteTemplateEngine intentionally does
  * NOT use this — there {{title}} is the raw episode title, not a file name.
  */
-function addEpisodeFileNameTags(addTag: AddTagFn, episode: Episode): void {
-	addTag("title", legalizedNameTag(episode.title));
-	addTag("podcast", legalizedNameTag(episode.podcastName));
+function addEpisodeFileNameTags(
+	addTag: AddTagFn,
+	episode: Episode,
+	sanitizeFileName: FileNameSanitizer = replaceIllegalFileNameCharactersInString,
+): void {
+	addTag("title", legalizedNameTag(episode.title, sanitizeFileName));
+	addTag("podcast", legalizedNameTag(episode.podcastName, sanitizeFileName));
 	addTag("date", (format?: string) =>
 		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
 	);
@@ -399,10 +408,14 @@ export function TimestampTemplateEngine(
 	return replacer(template);
 }
 
-export function FilePathTemplateEngine(template: string, episode: Episode) {
+export function FilePathTemplateEngine(
+	template: string,
+	episode: Episode,
+	sanitizeFileName: FileNameSanitizer = replaceIllegalFileNameCharactersInString,
+) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	addEpisodeFileNameTags(addTag, episode);
+	addEpisodeFileNameTags(addTag, episode, sanitizeFileName);
 
 	return replacer(template);
 }
@@ -596,4 +609,16 @@ export function replaceIllegalFileNameCharactersInString(string: string) {
 			.replace(/\.+$/, "")
 			.trim()
 	);
+}
+
+/**
+ * Filename sanitizer used through PodNotes 2.16. Dots were stripped, so a title
+ * like "Episode #001 ..." became "Episode 001". Note lookup still has to find
+ * files created with that scheme.
+ */
+export function legacyReplaceIllegalFileNameCharactersInString(string: string) {
+	return string
+		.replace(/[\\,#%&{}/*<>$'":@\u2023|\\.?]/g, "")
+		.replace(/\n/g, " ")
+		.replace("  ", " ");
 }

@@ -417,6 +417,146 @@ describe("podNotesURIHandler", () => {
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 
+	test("resolves a feed episode after the publisher rearranges the title (#315)", async () => {
+		const currentTitle =
+			"Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination | Dr. Martha Beck";
+		const hubermanEpisode: Episode = {
+			...testEpisode,
+			title: currentTitle,
+			url: "https://pod.example.com/martha",
+			streamUrl: "https://pod.example.com/martha.mp3",
+			podcastName: "Huberman Lab",
+		};
+		mockGetEpisodes.mockResolvedValue([hubermanEpisode, testEpisode]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName:
+					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+				time: "2580",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: currentTitle });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `Huberman Lab::${currentTitle}`,
+			time: 2580,
+		});
+	});
+
+	test("seeks the already-loaded episode when a timestamp uses the old title (#315)", async () => {
+		const currentTitle =
+			"Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination | Dr. Martha Beck";
+		const hubermanEpisode: Episode = {
+			...testEpisode,
+			title: currentTitle,
+			podcastName: "Huberman Lab",
+		};
+		currentEpisode.set(hubermanEpisode);
+		viewState.set(ViewState.Player);
+		isPaused.set(true);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName:
+					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+				time: "90",
+			},
+			api as never,
+		);
+
+		expect(get(currentTime)).toBe(90);
+		expect(get(isPaused)).toBe(false);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("does not seek a loaded Part 2 when the link is for Part 1 (#315)", async () => {
+		const part1: Episode = {
+			...testEpisode,
+			title: "The History of Rome: The Fall of the Republic, Part 1",
+			url: "https://pod.example.com/part1",
+			streamUrl: "https://pod.example.com/part1.mp3",
+			podcastName: "The History of Rome",
+		};
+		const part2: Episode = {
+			...part1,
+			title: "The History of Rome: The Fall of the Republic, Part 2",
+			url: "https://pod.example.com/part2",
+			streamUrl: "https://pod.example.com/part2.mp3",
+		};
+		currentEpisode.set(part2);
+		viewState.set(ViewState.Player);
+		isPaused.set(true);
+		mockGetEpisodes.mockResolvedValue([part1, part2]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: part1.title,
+				time: "90",
+			},
+			api as never,
+		);
+
+		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(get(currentEpisode)).toMatchObject({ title: part1.title });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${part1.podcastName}::${part1.title}`,
+			time: 90,
+		});
+	});
+
+	test("does not pick a leftover similar episode when the linked title is gone (#315)", async () => {
+		mockGetEpisodes.mockResolvedValue([
+			{
+				...testEpisode,
+				title: "Weekly News Roundup Extra",
+			},
+		]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: "Weekly News Roundup",
+				time: "10",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
+	test("does not treat a weakly similar feed title as a match (#315)", async () => {
+		mockGetEpisodes.mockResolvedValue([
+			{
+				...testEpisode,
+				title: "Optimize Testosterone & Estrogen | Dr. Kyle Gillett",
+			},
+		]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName:
+					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+				time: "10",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
 	test("shows a notice and changes nothing when the episode cannot be found", async () => {
 		mockGetEpisodes.mockResolvedValue([]);
 

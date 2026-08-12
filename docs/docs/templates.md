@@ -19,6 +19,8 @@ This template will be used to create the file path for the note. You can use the
 
 `{{title}}` and `{{podcast}}` are sanitized so they are safe to use in a file path: the following characters are removed: `\ , # % & / { } * < > $ ' " : @ ‣ | ?`. `{{episodeNumber}}` is always file-safe. `{{date}}` and `{{currentDate}}` are inserted as-is, so when using them in a path, avoid format strings that contain path-illegal characters (e.g. `{{currentDate:HH:mm}}`).
 
+New notes are always created at the current sanitized path. When opening an existing note, PodNotes also checks the older filename sanitizer (used through 2.16, which stripped dots) and, if needed, a unique same-folder title match. Notes created before that sanitizer change, or after a feed retitles an episode, stay linked to the player.
+
 ## Note template
 This template will be used to create the note text. You can use the following syntax:
 
