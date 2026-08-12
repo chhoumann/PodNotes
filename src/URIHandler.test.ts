@@ -475,6 +475,43 @@ describe("podNotesURIHandler", () => {
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 
+	test("does not seek a loaded Part 2 when the link is for Part 1 (#315)", async () => {
+		const part1: Episode = {
+			...testEpisode,
+			title: "The History of Rome: The Fall of the Republic, Part 1",
+			url: "https://pod.example.com/part1",
+			streamUrl: "https://pod.example.com/part1.mp3",
+			podcastName: "The History of Rome",
+		};
+		const part2: Episode = {
+			...part1,
+			title: "The History of Rome: The Fall of the Republic, Part 2",
+			url: "https://pod.example.com/part2",
+			streamUrl: "https://pod.example.com/part2.mp3",
+		};
+		currentEpisode.set(part2);
+		viewState.set(ViewState.Player);
+		isPaused.set(true);
+		mockGetEpisodes.mockResolvedValue([part1, part2]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName: part1.title,
+				time: "90",
+			},
+			api as never,
+		);
+
+		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(get(currentEpisode)).toMatchObject({ title: part1.title });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `${part1.podcastName}::${part1.title}`,
+			time: 90,
+		});
+	});
+
 	test("does not treat a weakly similar feed title as a match (#315)", async () => {
 		mockGetEpisodes.mockResolvedValue([
 			{

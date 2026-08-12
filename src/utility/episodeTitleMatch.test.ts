@@ -25,10 +25,22 @@ describe("episodeTitleMatch", () => {
 				"Episode #001 ... Presocratic Philosophy - Ionian",
 				"Episode #007 ... Daoism",
 			),
-		).toBeLessThan(0.75);
+		).toBe(0);
+		expect(
+			titleTokenSimilarity(
+				"The History of Rome: The Fall of the Republic, Part 1",
+				"The History of Rome: The Fall of the Republic, Part 2",
+			),
+		).toBe(0);
 	});
 
-	it("returns the unique strong match and refuses a tie", () => {
+	it("treats padded and unpadded episode numbers as the same number", () => {
+		expect(titleTokenSimilarity("Episode 001 The Beginning", "Episode 1 The Beginning")).toBe(
+			1,
+		);
+	});
+
+	it("returns the unique strong match", () => {
 		const episodes = [
 			{ title: "Access Your Best Self | Dr. Martha Beck" },
 			{ title: "Optimize Testosterone | Dr. Kyle Gillett" },
@@ -41,11 +53,13 @@ describe("episodeTitleMatch", () => {
 				(episode) => episode.title,
 			),
 		).toEqual(episodes[0]);
+	});
 
+	it("refuses two candidates at the same qualifying score", () => {
 		expect(
 			findUniqueTitleMatch(
-				["Interview"],
-				[{ title: "Interview with Alice" }, { title: "Interview with Bob" }],
+				["Weekly News Roundup"],
+				[{ title: "Weekly News Roundup Extra" }, { title: "Weekly News Roundup Bonus" }],
 				(episode) => episode.title,
 			),
 		).toBeUndefined();

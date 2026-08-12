@@ -17,10 +17,38 @@ export function titleTokens(title: string): Set<string> {
 	return new Set(tokens);
 }
 
+function canonicalizeTokens(tokens: Set<string>): Set<string> {
+	const canonical = new Set<string>();
+	for (const token of tokens) {
+		canonical.add(/^\d+$/.test(token) ? String(Number(token)) : token);
+	}
+	return canonical;
+}
+
+function numericTokens(tokens: Set<string>): Set<string> {
+	const numbers = new Set<string>();
+	for (const token of tokens) {
+		if (/^\d+$/.test(token)) numbers.add(token);
+	}
+	return numbers;
+}
+
+function numericTokenSetsConflict(left: Set<string>, right: Set<string>): boolean {
+	const a = numericTokens(left);
+	const b = numericTokens(right);
+	if (a.size === 0 || b.size === 0) return false;
+	if (a.size !== b.size) return true;
+	for (const value of a) {
+		if (!b.has(value)) return true;
+	}
+	return false;
+}
+
 export function titleTokenSimilarity(left: string, right: string): number {
-	const a = titleTokens(left);
-	const b = titleTokens(right);
+	const a = canonicalizeTokens(titleTokens(left));
+	const b = canonicalizeTokens(titleTokens(right));
 	if (a.size === 0 || b.size === 0) return 0;
+	if (numericTokenSetsConflict(a, b)) return 0;
 
 	let intersection = 0;
 	for (const token of a) {

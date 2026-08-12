@@ -211,6 +211,49 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		expect(createdFiles).toEqual([]);
 	});
 
+	it("does not treat a Part 2 note as the Part 1 note", async () => {
+		const part1: Episode = {
+			title: "The Fall of the Republic, Part 1",
+			streamUrl: "https://example.com/part1.mp3",
+			url: "https://example.com/part1",
+			description: "",
+			content: "",
+			podcastName: "The History of Rome",
+			feedUrl: "https://example.com/rome.xml",
+		};
+		const part2Note = fileAt(
+			"podcasts/The History of Rome - The Fall of the Republic, Part 2.md",
+		);
+		const createdFiles: Array<{ path: string }> = [];
+
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === part2Note.path ? part2Note : null,
+					),
+					getMarkdownFiles: vi.fn(() => [part2Note]),
+					createFolder: vi.fn(async () => {}),
+					create: vi.fn(async (path: string) => {
+						createdFiles.push({ path });
+						return { path };
+					}),
+				},
+				workspace: { getLeaf: vi.fn(() => ({ openFile: vi.fn() })) },
+			},
+			settings: {
+				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
+			},
+		} as never);
+
+		expect(getPodcastNote(part1)).toBeNull();
+
+		await createPodcastNote(part1);
+		expect(createdFiles).toEqual([
+			{ path: "podcasts/The History of Rome - The Fall of the Republic Part 1.md" },
+		]);
+	});
+
 	it("does not open a different episode that only shares generic words", () => {
 		const other = fileAt("podcasts/Huberman Lab - Optimize Testosterone Dr Kyle Gillett.md");
 

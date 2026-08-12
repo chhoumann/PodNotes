@@ -22,7 +22,7 @@ import { isFetchableUrl } from "./utility/assertFetchableUrl";
 import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { getEpisodeKey } from "./utility/episodeKey";
-import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
+import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
@@ -133,11 +133,14 @@ export default async function podNotesURIHandler(
 	// a rare false-positive — a current-format link to a "X+Y" episode while a distinct "X Y" twin
 	// is loaded resumes the loaded twin instead of switching — which we accept over regressing the
 	// far more common same-episode legacy-link case.
+	// A retitled same-episode link (guest name moved) has the same token set.
+	// Sub-1.0 overlap is not enough here: "… Part 1" vs the loaded "… Part 2"
+	// scores ~0.78, and with only one candidate the uniqueness guard is vacuous.
+	// Those links fall through to the feed lookup, which can still exact-match.
 	const episodeIsPlaying =
 		!!currentEp &&
 		(nameCandidates.includes(currentEp.title) ||
-			findUniqueTitleMatch(nameCandidates, [currentEp], (episode) => episode.title) ===
-				currentEp);
+			nameCandidates.some((name) => titleTokenSimilarity(name, currentEp.title) === 1));
 	const playerIsVisible = get(viewState) === ViewState.Player;
 
 	if (episodeIsPlaying) {
