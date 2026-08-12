@@ -1,5 +1,10 @@
 import { Notice, TFile } from "obsidian";
-import { FilePathTemplateEngine, NoteTemplateEngine, templateHasTag } from "./TemplateEngine";
+import {
+	FilePathTemplateEngine,
+	legacyReplaceIllegalFileNameCharactersInString,
+	NoteTemplateEngine,
+	templateHasTag,
+} from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { Chapter } from "./types/Chapter";
 import { get } from "svelte/store";
@@ -8,6 +13,7 @@ import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
 import { fetchChapters } from "./utility/fetchChapters";
+import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
 
 /**
  * Resolve the on-disk path of an episode's note from the configured template.
@@ -16,11 +22,40 @@ import { fetchChapters } from "./utility/fetchChapters";
  * re-created on every invocation. See issue #22.
  */
 export function getPodcastNotePath(episode: Episode): string {
-	const pluginInstance = get(plugin);
+	return renderPodcastNotePath(get(plugin).settings.note.path, episode);
+}
 
-	const filePath = FilePathTemplateEngine(pluginInstance.settings.note.path, episode);
+function renderPodcastNotePath(
+	template: string,
+	episode: Episode,
+	sanitizeFileName?: (value: string) => string,
+): string {
+	return enforceMaxPathLength(
+		addExtension(FilePathTemplateEngine(template, episode, sanitizeFileName), "md"),
+	);
+}
 
-	return enforceMaxPathLength(addExtension(filePath, "md"));
+function getPodcastNotePathCandidates(episode: Episode): string[] {
+	const template = get(plugin).settings.note.path;
+	return [
+		...new Set([
+			renderPodcastNotePath(template, episode),
+			renderPodcastNotePath(
+				template,
+				episode,
+				legacyReplaceIllegalFileNameCharactersInString,
+			),
+		]),
+	];
+}
+
+function parentFolder(path: string): string {
+	const separator = path.lastIndexOf("/");
+	return separator === -1 ? "" : path.slice(0, separator);
+}
+
+function noteBasename(path: string): string {
+	return (path.split("/").pop() ?? "").replace(/\.md$/i, "");
 }
 
 export default async function createPodcastNote(episode: Episode): Promise<void> {
@@ -62,14 +97,35 @@ async function getTemplateChapters(
 }
 
 export function getPodcastNote(episode: Episode): TFile | null {
-	const filePathDotMd = getPodcastNotePath(episode);
-	const file = get(plugin).app.vault.getAbstractFileByPath(filePathDotMd);
+	const { vault } = get(plugin).app;
 
-	if (!file || !(file instanceof TFile)) {
+	for (const filePath of getPodcastNotePathCandidates(episode)) {
+		const file = vault.getAbstractFileByPath(filePath);
+		if (file instanceof TFile) {
+			return file;
+		}
+	}
+
+	return findPodcastNoteByTitleOverlap(episode);
+}
+
+function findPodcastNoteByTitleOverlap(episode: Episode): TFile | null {
+	const { vault } = get(plugin).app;
+	if (typeof vault.getMarkdownFiles !== "function") {
 		return null;
 	}
 
-	return file;
+	const expectedPath = getPodcastNotePath(episode);
+	const folder = parentFolder(expectedPath);
+	const siblings = vault
+		.getMarkdownFiles()
+		.filter((file) => parentFolder(file.path) === folder && file instanceof TFile);
+
+	return (
+		findUniqueTitleMatch([noteBasename(expectedPath)], siblings, (file) =>
+			noteBasename(file.path),
+		) ?? null
+	);
 }
 
 export function openPodcastNote(epiosode: Episode): void {

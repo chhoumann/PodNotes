@@ -417,6 +417,87 @@ describe("podNotesURIHandler", () => {
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 
+	test("resolves a feed episode after the publisher rearranges the title (#315)", async () => {
+		const currentTitle =
+			"Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination | Dr. Martha Beck";
+		const hubermanEpisode: Episode = {
+			...testEpisode,
+			title: currentTitle,
+			url: "https://pod.example.com/martha",
+			streamUrl: "https://pod.example.com/martha.mp3",
+			podcastName: "Huberman Lab",
+		};
+		mockGetEpisodes.mockResolvedValue([hubermanEpisode, testEpisode]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName:
+					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+				time: "2580",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toMatchObject({ title: currentTitle });
+		expect(get(requestedPlaybackTime)).toEqual({
+			episodeKey: `Huberman Lab::${currentTitle}`,
+			time: 2580,
+		});
+	});
+
+	test("seeks the already-loaded episode when a timestamp uses the old title (#315)", async () => {
+		const currentTitle =
+			"Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination | Dr. Martha Beck";
+		const hubermanEpisode: Episode = {
+			...testEpisode,
+			title: currentTitle,
+			podcastName: "Huberman Lab",
+		};
+		currentEpisode.set(hubermanEpisode);
+		viewState.set(ViewState.Player);
+		isPaused.set(true);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName:
+					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+				time: "90",
+			},
+			api as never,
+		);
+
+		expect(get(currentTime)).toBe(90);
+		expect(get(isPaused)).toBe(false);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("does not treat a weakly similar feed title as a match (#315)", async () => {
+		mockGetEpisodes.mockResolvedValue([
+			{
+				...testEpisode,
+				title: "Optimize Testosterone & Estrogen | Dr. Kyle Gillett",
+			},
+		]);
+
+		await podNotesURIHandler(
+			{
+				action: "podnotes",
+				url: testFeedUrl,
+				episodeName:
+					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+				time: "10",
+			},
+			api as never,
+		);
+
+		expect(get(currentEpisode)).toBeUndefined();
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
 	test("shows a notice and changes nothing when the episode cannot be found", async () => {
 		mockGetEpisodes.mockResolvedValue([]);
 

@@ -22,6 +22,7 @@ import { isFetchableUrl } from "./utility/assertFetchableUrl";
 import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { getEpisodeKey } from "./utility/episodeKey";
+import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
 import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
@@ -56,7 +57,20 @@ function findEpisodeByCandidates(
 		if (episode) return episode;
 	}
 
-	return undefined;
+	return findUniqueTitleMatch(nameCandidates, episodes, (episode) => episode.title);
+}
+
+function findLocalEpisodeByCandidates(nameCandidates: string[]): Episode | undefined {
+	for (const name of nameCandidates) {
+		const episode = localFiles.getLocalEpisode(name);
+		if (episode) return episode;
+	}
+
+	return findUniqueTitleMatch(
+		nameCandidates,
+		get(localFiles).episodes,
+		(episode) => episode.title,
+	);
 }
 
 /**
@@ -119,7 +133,11 @@ export default async function podNotesURIHandler(
 	// a rare false-positive — a current-format link to a "X+Y" episode while a distinct "X Y" twin
 	// is loaded resumes the loaded twin instead of switching — which we accept over regressing the
 	// far more common same-episode legacy-link case.
-	const episodeIsPlaying = !!currentEp && nameCandidates.includes(currentEp.title);
+	const episodeIsPlaying =
+		!!currentEp &&
+		(nameCandidates.includes(currentEp.title) ||
+			findUniqueTitleMatch(nameCandidates, [currentEp], (episode) => episode.title) ===
+				currentEp);
 	const playerIsVisible = get(viewState) === ViewState.Player;
 
 	if (episodeIsPlaying) {
@@ -172,17 +190,13 @@ export default async function podNotesURIHandler(
 	// shadow private links.
 	const isPlaceholderLink = isPrivateFeedPlaceholder(url);
 	if (!isPlaceholderLink && localFile) {
-		episode = nameCandidates
-			.map((name) => localFiles.getLocalEpisode(name))
-			.find((ep) => ep !== undefined);
+		episode = findLocalEpisodeByCandidates(nameCandidates);
 	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
 		// a vault path whose file was moved/renamed. Resolve the episode by name from
 		// the local-files store rather than handing the bare path to FeedParser (which
 		// would fail and show a misleading "Could not load the podcast feed").
-		episode = nameCandidates
-			.map((name) => localFiles.getLocalEpisode(name))
-			.find((ep) => ep !== undefined);
+		episode = findLocalEpisodeByCandidates(nameCandidates);
 	} else {
 		// Links for a private feed carry the non-fetchable placeholder, not the
 		// secret URL. Resolution is local-only: the placeholder's feed name must

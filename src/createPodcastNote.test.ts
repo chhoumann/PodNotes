@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TFile } from "obsidian";
-import createPodcastNote from "./createPodcastNote";
+import createPodcastNote, { getPodcastNote } from "./createPodcastNote";
 import { plugin } from "./store";
 import type { Episode } from "./types/Episode";
 
@@ -127,5 +127,105 @@ describe("createPodcastNote chapters template support (#47)", () => {
 			path: "PodNotes/Chaptered Episode.md",
 			data: "# Chaptered Episode",
 		});
+	});
+});
+
+describe("getPodcastNote title fallbacks (#315)", () => {
+	const philosophizeEpisode: Episode = {
+		title: "Episode #001 ... Presocratic Philosophy - Ionian",
+		streamUrl: "https://example.com/ep001.mp3",
+		url: "https://example.com/ep001",
+		description: "",
+		content: "",
+		podcastName: "Philosophize This!",
+		feedUrl: "https://feeds.megaphone.fm/QCD6036500916",
+	};
+
+	const hubermanEpisode: Episode = {
+		title: "Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination | Dr. Martha Beck",
+		streamUrl: "https://example.com/martha.mp3",
+		url: "https://example.com/martha",
+		description: "",
+		content: "",
+		podcastName: "Huberman Lab",
+		feedUrl: "https://feeds.megaphone.fm/hubermanlab",
+	};
+
+	afterEach(() => {
+		plugin.set(undefined as never);
+	});
+
+	function fileAt(path: string): TFile {
+		return Object.assign(Object.create(TFile.prototype), { path }) as TFile;
+	}
+
+	it("opens a note written with the 2.16 filename sanitizer", () => {
+		const legacy = fileAt(
+			"podcasts/Philosophize This! - Episode 001 Presocratic Philosophy - Ionian.md",
+		);
+		const files = new Map<string, TFile>([[legacy.path, legacy]]);
+
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null),
+					getMarkdownFiles: vi.fn(() => [...files.values()]),
+				},
+			},
+			settings: {
+				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
+			},
+		} as never);
+
+		expect(getPodcastNote(philosophizeEpisode)).toBe(legacy);
+	});
+
+	it("opens a note whose filename still has the pre-retitle episode words", async () => {
+		const legacy = fileAt(
+			"podcasts/Huberman Lab - Dr. Martha Beck Access Your Best Self With Mind-Body Practices Belief Testing Imagination.md",
+		);
+		const files = new Map<string, TFile>([[legacy.path, legacy]]);
+		const createdFiles: Array<{ path: string }> = [];
+
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null),
+					getMarkdownFiles: vi.fn(() => [...files.values()]),
+					createFolder: vi.fn(async () => {}),
+					create: vi.fn(async (path: string) => {
+						createdFiles.push({ path });
+						return { path };
+					}),
+				},
+				workspace: { getLeaf: vi.fn(() => ({ openFile: vi.fn() })) },
+			},
+			settings: {
+				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
+			},
+		} as never);
+
+		expect(getPodcastNote(hubermanEpisode)).toBe(legacy);
+
+		await createPodcastNote(hubermanEpisode);
+		expect(createdFiles).toEqual([]);
+	});
+
+	it("does not open a different episode that only shares generic words", () => {
+		const other = fileAt("podcasts/Huberman Lab - Optimize Testosterone Dr Kyle Gillett.md");
+
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn(() => null),
+					getMarkdownFiles: vi.fn(() => [other]),
+				},
+			},
+			settings: {
+				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
+			},
+		} as never);
+
+		expect(getPodcastNote(hubermanEpisode)).toBeNull();
 	});
 });
