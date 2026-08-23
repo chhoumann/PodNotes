@@ -24,10 +24,19 @@ export class Component {
 
 export class TFile {
 	path: string;
+	extension: string;
 
-	constructor(path: string) {
+	constructor(path = "") {
 		this.path = path;
+		this.extension = path.split(".").pop() ?? "";
 	}
+}
+
+export class TFolder {
+	constructor(
+		public path: string,
+		public children: Array<TFile | TFolder> = [],
+	) {}
 }
 
 export class Notice {
@@ -134,6 +143,11 @@ export class ButtonComponent extends BaseInteractiveElement {
 
 	setWarning() {
 		this.buttonEl.classList.add("mod-warning");
+		return this;
+	}
+
+	setDestructive() {
+		this.buttonEl.classList.add("mod-destructive");
 		return this;
 	}
 
@@ -325,10 +339,20 @@ export class PluginSettingTab {
 	}
 
 	display(): void {}
+	update(): void {}
 	hide(): void {}
 }
 
 export const MarkdownRenderer = {
+	render: async (
+		_app: App,
+		markdown: string,
+		container: HTMLElement,
+		_source: string,
+		_component: Component,
+	) => {
+		container.textContent = markdown;
+	},
 	renderMarkdown: async (
 		markdown: string,
 		container: HTMLElement,

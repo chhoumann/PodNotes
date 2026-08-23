@@ -4,6 +4,7 @@ import type PodNotes from "../main";
 import { getEpisodeAudioBuffer } from "../downloadEpisode";
 import { TranscriptTemplateEngine } from "../TemplateEngine";
 import { ensureFolderExists } from "../utility/ensureFolderExists";
+import { toError } from "../utility/toError";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 import { createChunkFiles, getMimeType } from "./audioChunker";
@@ -451,7 +452,7 @@ export class TranscriptionService {
 			const onAbort = () => {
 				window.clearTimeout(timeout);
 				signal.removeEventListener("abort", onAbort);
-				reject(this.getAbortReason());
+				reject(toError(this.getAbortReason(), "PodNotes transcription was aborted."));
 			};
 
 			signal.addEventListener("abort", onAbort, { once: true });
@@ -470,7 +471,7 @@ export class TranscriptionService {
 				if (settled) return;
 				settled = true;
 				cleanup();
-				reject(this.getAbortReason());
+				reject(toError(this.getAbortReason(), "PodNotes transcription was aborted."));
 			};
 
 			signal.addEventListener("abort", onAbort, { once: true });
@@ -493,7 +494,7 @@ export class TranscriptionService {
 					}
 					settled = true;
 					cleanup();
-					reject(error);
+					reject(toError(error, "PodNotes transcription failed."));
 				},
 			);
 			if (signal.aborted) onAbort();

@@ -29,7 +29,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
 		const tab = new PodNotesSettingsTab({} as App, plugin);
-		vi.spyOn(tab, "display").mockImplementation(() => {});
+		vi.spyOn(tab, "update").mockImplementation(() => {});
 
 		await (
 			tab as unknown as {
@@ -58,7 +58,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				.mockResolvedValueOnce(undefined),
 		} as unknown as PodNotes;
 		const tab = new PodNotesSettingsTab({} as App, plugin);
-		const display = vi.spyOn(tab, "display").mockImplementation(() => {});
+		const update = vi.spyOn(tab, "update").mockImplementation(() => {});
 		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -72,7 +72,7 @@ describe("PodNotesSettingsTab settings import", () => {
 
 		expect(plugin.settings).toBe(previous);
 		expect(get(playbackRate)).toBe(1);
-		expect(display).not.toHaveBeenCalled();
+		expect(update).not.toHaveBeenCalled();
 		expect(notice).toHaveBeenCalledWith(
 			"Could not import PodNotes settings. The failed import was rolled back without overwriting newer changes.",
 			10000,
@@ -95,7 +95,7 @@ describe("PodNotesSettingsTab settings import", () => {
 		const enabledInput = tab.containerEl.createEl("input");
 		const disabledButton = tab.containerEl.createEl("button");
 		disabledButton.disabled = true;
-		vi.spyOn(tab, "display").mockImplementation(() => {});
+		vi.spyOn(tab, "update").mockImplementation(() => {});
 
 		const importing = (
 			tab as unknown as {
@@ -129,7 +129,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
 		const tab = new PodNotesSettingsTab({} as App, plugin);
-		vi.spyOn(tab, "display").mockImplementation(() => {});
+		vi.spyOn(tab, "update").mockImplementation(() => {});
 
 		await (
 			tab as unknown as {
@@ -432,7 +432,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			saveData,
 		});
 		const tab = new PodNotesSettingsTab({} as App, plugin);
-		vi.spyOn(tab, "display").mockImplementation(() => {});
+		vi.spyOn(tab, "update").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		let ui = "shared-newer";
 		const secret = {
@@ -514,7 +514,7 @@ describe("PodNotesSettingsTab settings import", () => {
 		const unsubscribe = bindStoresToSettings(plugin);
 		Object.assign(plugin, { isReady: true });
 		const tab = new PodNotesSettingsTab({} as App, plugin);
-		vi.spyOn(tab, "display").mockImplementation(() => {});
+		vi.spyOn(tab, "update").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
 		try {

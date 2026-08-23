@@ -176,6 +176,21 @@ if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};
 }
 
+if (!(Element.prototype as unknown as { instanceOf?: unknown }).instanceOf) {
+	(
+		Element.prototype as unknown as {
+			instanceOf: (constructor: typeof Element) => boolean;
+		}
+	).instanceOf = function (this: Element, constructor: typeof Element): boolean {
+		const localConstructor = this.ownerDocument.defaultView?.[
+			constructor.name as keyof Window
+		] as unknown;
+		const elementConstructor =
+			typeof localConstructor === "function" ? localConstructor : constructor;
+		return this instanceof elementConstructor;
+	};
+}
+
 if (
 	!(HTMLElement.prototype as unknown as { setAttr?: (name: string, value: string) => void })
 		.setAttr
@@ -203,6 +218,7 @@ function installCreateEl(proto: object): void {
 	const helpers = proto as {
 		createEl?: (tag: keyof HTMLElementTagNameMap, options?: CreateElOptions) => HTMLElement;
 		createDiv?: (options?: CreateElOptions) => HTMLDivElement;
+		createSpan?: (options?: CreateElOptions) => HTMLSpanElement;
 	};
 
 	if (!helpers.createEl) {
@@ -230,6 +246,20 @@ function installCreateEl(proto: object): void {
 				}
 			).createEl;
 			return createEl.call(this, "div", options) as HTMLDivElement;
+		};
+	}
+
+	if (!helpers.createSpan) {
+		helpers.createSpan = function (this: ObsidianDomContainer, options: CreateElOptions = {}) {
+			const createEl = (
+				this as ObsidianDomContainer & {
+					createEl: (
+						tag: keyof HTMLElementTagNameMap,
+						options?: CreateElOptions,
+					) => HTMLElement;
+				}
+			).createEl;
+			return createEl.call(this, "span", options) as HTMLSpanElement;
 		};
 	}
 }

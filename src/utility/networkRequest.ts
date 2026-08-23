@@ -6,10 +6,10 @@ export const MAX_NETWORK_TIMEOUT_MS = 2_147_483_647;
 export const DEFAULT_MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024;
 export const DEFAULT_MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 
-const ARRAY_BUFFER_BYTE_LENGTH_GETTER = Object.getOwnPropertyDescriptor(
+const ARRAY_BUFFER_BYTE_LENGTH_DESCRIPTOR = Object.getOwnPropertyDescriptor(
 	ArrayBuffer.prototype,
 	"byteLength",
-)?.get;
+);
 
 export type NetworkErrorCode =
 	| "invalid-options"
@@ -213,12 +213,12 @@ function arrayBufferByteLength(value: unknown): number | undefined {
 	if (
 		typeof value !== "object" ||
 		value === null ||
-		ARRAY_BUFFER_BYTE_LENGTH_GETTER === undefined
+		ARRAY_BUFFER_BYTE_LENGTH_DESCRIPTOR?.get === undefined
 	) {
 		return undefined;
 	}
 	try {
-		const byteLength = Reflect.apply(ARRAY_BUFFER_BYTE_LENGTH_GETTER, value, []);
+		const byteLength = ARRAY_BUFFER_BYTE_LENGTH_DESCRIPTOR.get.call(value);
 		return Number.isSafeInteger(byteLength) && byteLength >= 0 ? byteLength : undefined;
 	} catch {
 		// Reject views, SharedArrayBuffer, proxies, and objects spoofing toStringTag.

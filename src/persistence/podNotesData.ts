@@ -131,7 +131,7 @@ export function encodePodNotesData(
 		downloadedEpisodes: mapRecord(validated.downloadedEpisodes, (episodes) =>
 			episodes.map((episode) => encodeEpisode(episode)),
 		),
-	} as PersistedPodNotesDataV2;
+	};
 }
 
 function readSchemaVersion(root: UnknownRecord): PodNotesDataSchemaVersion {

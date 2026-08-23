@@ -695,6 +695,21 @@ describe("PodNotes runtime", () => {
 				})()`,
 			);
 			await waitForPodNotesReady(obsidian);
+			await evalJsonAsync<boolean>(
+				obsidian,
+				`(() => {
+					for (const notice of document.querySelectorAll(".notice")) {
+						const text = notice.textContent ?? "";
+						if (
+							text.includes("PodNotes data schema v3 requires a newer version of PodNotes.") ||
+							(text.includes("Failed to load plugin") && text.includes("podnotes"))
+						) {
+							notice.remove();
+						}
+					}
+					return true;
+				})()`,
+			);
 			await obsidian.dev.resetDiagnostics().catch(() => undefined);
 		}
 	});

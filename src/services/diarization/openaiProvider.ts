@@ -1,4 +1,5 @@
 import type { OpenAI } from "openai";
+import { toError } from "../../utility/toError";
 import { type DiarizedSegment, OPENAI_DIARIZE_MODEL } from "./types";
 import { parseOpenAIDiarizedSegments } from "./segments";
 
@@ -108,9 +109,7 @@ function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
 		const onAbort = () => {
 			window.clearTimeout(timeout);
 			signal.removeEventListener("abort", onAbort);
-			reject(
-				signal.reason ?? new DOMException("OpenAI diarization was aborted.", "AbortError"),
-			);
+			reject(toError(signal.reason, "OpenAI diarization was aborted."));
 		};
 
 		signal.addEventListener("abort", onAbort, { once: true });

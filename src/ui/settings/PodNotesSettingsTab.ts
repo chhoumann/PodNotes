@@ -7,6 +7,7 @@ import {
 	PluginSettingTab,
 	SecretComponent,
 	Setting,
+	type SettingDefinitionItem,
 } from "obsidian";
 import type PodNotes from "../../main";
 import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
@@ -65,6 +66,38 @@ interface SecretReferenceSaveResult {
 }
 
 type ImportMutationResult = "failed" | "applied" | "complete";
+
+const SETTINGS_SEARCH_ALIASES = [
+	"Search podcasts",
+	"Playlists",
+	"Keep a queue",
+	"Latest episodes per podcast",
+	"Default playback rate",
+	"Default volume",
+	"Skip backward length",
+	"Skip forward length",
+	"Capture timestamp format",
+	"Timestamp offset",
+	"Note creation file path",
+	"Note creation template",
+	"Feed note file path",
+	"Feed note template",
+	"Episode download path",
+	"Cache podcast feeds",
+	"Cache duration",
+	"Clear cached feeds",
+	"Import OPML",
+	"Export OPML",
+	"Import preferences",
+	"Export preferences",
+	"OpenAI API key",
+	"Transcript file path",
+	"Transcript template",
+	"Speaker diarization",
+	"Diarization provider",
+	"Deepgram API key",
+	"Speaker label format",
+];
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -185,9 +218,9 @@ function stackSettingVertically(setting: Setting): void {
  * content. Shared by the path/template demo fields that echo what the configured
  * template resolves to.
  */
-function renderMarkdownPreview(markdown: string, el: HTMLElement): void {
+function renderMarkdownPreview(app: App, markdown: string, el: HTMLElement): void {
 	el.empty();
-	void MarkdownRenderer.renderMarkdown(markdown, el, "", new Component());
+	void MarkdownRenderer.render(app, markdown, el, "", new Component());
 }
 
 export class PodNotesSettingsTab extends PluginSettingTab {
@@ -211,12 +244,25 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.settingsTab = this;
 	}
 
-	override display(): void {
-		const { containerEl } = this;
+	override getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				name: "Podcast preferences",
+				aliases: SETTINGS_SEARCH_ALIASES,
+				render: (setting) => {
+					const { settingEl } = setting;
+					settingEl.empty();
+					settingEl.classList.remove("setting-item");
+					this.renderSettings(settingEl);
+					return () => this.unmountSettingsComponents();
+				},
+			},
+		];
+	}
 
+	private renderSettings(containerEl: HTMLElement): void {
+		this.unmountSettingsComponents();
 		containerEl.empty();
-
-		new Setting(containerEl).setName("PodNotes").setHeading();
 
 		const settingsContainer = containerEl.createDiv();
 		settingsContainer.classList.add("settings-container");
@@ -255,6 +301,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	override hide(): void {
+		this.unmountSettingsComponents();
+	}
+
+	private unmountSettingsComponents(): void {
 		if (this.podcastQueryGrid) {
 			void unmount(this.podcastQueryGrid);
 			this.podcastQueryGrid = null;
@@ -327,8 +377,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				.onChange((value) => {
 					this.plugin.settings.defaultPlaybackRate = value;
 					void this.plugin.saveSettings();
-				})
-				.setDynamicTooltip(),
+				}),
 		);
 	}
 
@@ -343,8 +392,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					.onChange((value) => {
 						this.plugin.settings.defaultVolume = value;
 						void this.plugin.saveSettings();
-					})
-					.setDynamicTooltip(),
+					}),
 			);
 	}
 
@@ -381,7 +429,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	private addNoteSettings(settingsContainer: HTMLDivElement) {
 		const container = settingsContainer.createDiv();
 
-		new Setting(container).setName("Note settings").setHeading();
+		new Setting(container).setName("Episode notes").setHeading();
 
 		const timestampSetting = new Setting(container)
 			.setName("Capture timestamp format")
@@ -411,7 +459,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			}
 
 			const demoVal = TimestampTemplateEngine(value);
-			renderMarkdownPreview(demoVal, timestampFormatDemoEl);
+			renderMarkdownPreview(this.app, demoVal, timestampFormatDemoEl);
 		};
 
 		new Setting(container)
@@ -449,7 +497,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					void this.plugin.saveSettings();
 
 					const demoVal = FilePathTemplateEngine(value, randomEpisode);
-					renderMarkdownPreview(demoVal, noteCreationFilePathDemoEl);
+					renderMarkdownPreview(this.app, demoVal, noteCreationFilePathDemoEl);
 				});
 				textComponent.inputEl.setCssStyles({ width: "100%" });
 			});
@@ -493,7 +541,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	private addFeedNoteSettings(settingsContainer: HTMLDivElement) {
 		const container = settingsContainer.createDiv();
 
-		new Setting(container).setName("Podcast feed note settings").setHeading();
+		new Setting(container).setName("Feed notes").setHeading();
 
 		const desc = container.createEl("p", {
 			text:
@@ -529,7 +577,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		const renderFeedPathDemo = (value: string) => {
 			const demoVal = FeedFilePathTemplateEngine(value, randomFeed);
-			renderMarkdownPreview(demoVal, feedNotePathDemoEl);
+			renderMarkdownPreview(this.app, demoVal, feedNotePathDemoEl);
 		};
 
 		renderFeedPathDemo(this.plugin.settings.feedNote.path);
@@ -550,7 +598,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addDownloadSettings(container: HTMLDivElement) {
-		new Setting(container).setName("Download settings").setHeading();
+		new Setting(container).setName("Downloads").setHeading();
 
 		const randomEpisode = getRandomEpisode();
 
@@ -582,7 +630,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		// empty path resolves to ".mp3" at the vault root (#183). Warn inline.
 		const refreshDownloadPathHints = (value: string) => {
 			const demoVal = DownloadPathTemplateEngine(value, randomEpisode);
-			renderMarkdownPreview(`${demoVal}.mp3`, downloadFilePathDemoEl);
+			renderMarkdownPreview(this.app, `${demoVal}.mp3`, downloadFilePathDemoEl);
 
 			// Match only the forms DownloadPathTemplateEngine actually resolves —
 			// {{title}} or {{title:...}}. A looser test (e.g. \s* after {{, or \b)
@@ -617,7 +665,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				slider
 					.setLimits(1, 24, 1)
 					.setValue(this.plugin.settings.feedCache.ttlHours)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.feedCache.ttlHours = value;
 						await this.plugin.saveSettings();
@@ -696,7 +743,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addSettingsTransferControls(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName("Settings & templates").setHeading();
+		new Setting(containerEl).setName("Preferences & templates").setHeading();
 
 		new Setting(containerEl)
 			.setName("Import settings")
@@ -755,11 +802,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const tooLargeMessage =
 			options.tooLargeMessage ?? "That file is too large to be a PodNotes settings file.";
 
-		const fileInput = activeDocument.createElement("input");
+		const fileInput = activeDocument.body.createEl("input");
 		fileInput.type = "file";
 		fileInput.accept = accept;
 		fileInput.setCssStyles({ display: "none" });
-		activeDocument.body.appendChild(fileInput);
 
 		// The native picker firing "cancel" (no selection) never triggers
 		// "change", so clean up the orphaned input then too.
@@ -894,7 +940,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			if (result === "failed") return;
 
 			await this.waitForSettingsMutationLaneToDrain();
-			this.display();
+			this.update();
 			if (result === "complete") new Notice("Imported PodNotes settings.");
 		} finally {
 			await this.waitForSettingsMutationLaneToDrain();
@@ -1138,7 +1184,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private addTranscriptSettings(container: HTMLDivElement) {
-		new Setting(container).setName("Transcript settings").setHeading();
+		new Setting(container).setName("Transcripts").setHeading();
 
 		const randomEpisode = getRandomEpisode();
 
@@ -1361,7 +1407,7 @@ class ConfirmModal extends Modal {
 			.addButton((button) =>
 				button
 					.setButtonText(this.confirmText)
-					.setWarning()
+					.setDestructive()
 					.onClick(() => {
 						this.close();
 						this.onConfirm();

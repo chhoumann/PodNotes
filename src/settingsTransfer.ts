@@ -167,7 +167,7 @@ export function serializeSettings(
 		version: SETTINGS_EXPORT_VERSION,
 		pluginVersion,
 		exportedAt: nowISO,
-		settings: out as Partial<PersistedPodNotesSettings>,
+		settings: out,
 		...(Object.keys(secrets).length > 0 ? { secrets } : {}),
 	};
 }
@@ -335,7 +335,7 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 		}
 	}
 
-	return out as Partial<IPodNotesSettings>;
+	return out;
 }
 
 function extractLegacySecrets(source: Record<string, unknown>): CredentialValues {
@@ -363,7 +363,7 @@ function parseSecretsPayload(value: unknown): { values: CredentialValues } | { e
 		}
 	}
 
-	return { values: normalizeSecrets(value as CredentialValues) };
+	return { values: normalizeSecrets(value) };
 }
 
 function normalizeSecrets(values: CredentialValues): CredentialValues {

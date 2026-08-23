@@ -30,7 +30,6 @@ import { createPodcastNoteFileIfNotExists, getPodcastNote } from "./createPodcas
 import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
-import type { IconType } from "./types/IconType";
 import { TranscriptionService } from "./services/TranscriptionService";
 import { type Unsubscriber } from "svelte/store";
 import { normalizePlaybackRate } from "./utility/playbackRate";
@@ -44,6 +43,7 @@ import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { migratePrivateFeedUrls, scrubMigratedEpisodeUrls } from "./services/privateFeeds";
 import { evictCachedFeedUrls } from "./services/FeedCacheService";
+import { toError } from "./utility/toError";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -183,7 +183,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// sidebar header can overflow and hide the view's tab icon (the original
 		// report in #55), but the ribbon is always reachable, so users can always
 		// reopen PodNotes.
-		this.addRibbonIcon("podcast" as IconType, "Show PodNotes", () => {
+		this.addRibbonIcon("podcast", "Show PodNotes", () => {
 			void this.activateView();
 		});
 
@@ -547,7 +547,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			this.pendingSave = this.cloneSettings();
 		} catch (error) {
 			console.error("PodNotes: failed to snapshot settings", error);
-			const failure = Promise.reject<void>(error);
+			const failure = Promise.reject<void>(
+				toError(error, "PodNotes could not snapshot settings before saving."),
+			);
 			void failure.catch(() => undefined);
 			return failure;
 		}

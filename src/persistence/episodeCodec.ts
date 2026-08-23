@@ -158,7 +158,7 @@ export function decodePlaylist(
 }
 
 export function encodePlaylist(value: Playlist): PersistedPlaylist {
-	const encoded = copySafeObject(value as unknown as UnknownRecord);
+	const encoded = copySafeObject(value);
 	encoded.episodes = value.episodes.map((episode) => encodeEpisode(episode));
 	const currentEpisode = value.currentEpisode ? encodeEpisode(value.currentEpisode) : undefined;
 	if (currentEpisode) encoded.currentEpisode = currentEpisode;

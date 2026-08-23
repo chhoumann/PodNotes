@@ -11,7 +11,6 @@ import { FeedSuggestModal, orderFeedsByCurrent } from "src/ui/FeedSuggestModal";
 import downloadEpisodeWithNotice from "src/downloadEpisode";
 import getUniversalPodcastLink from "src/getUniversalPodcastLink";
 import { getEpisodeMediaType } from "src/utility/mediaType";
-import type { IconType } from "src/types/IconType";
 import type PodNotes from "src/main";
 
 /**
@@ -59,7 +58,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "podnotes-show-leaf",
 		name: "Show player",
-		icon: "podcast" as IconType,
+		icon: "podcast",
 		// Always available, and always reveals the view. The previous
 		// checkCallback hid this command whenever a leaf already existed, so
 		// once the view was open-but-hidden (collapsed sidebar, sidebar
@@ -73,7 +72,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "start-playing",
 		name: "Play Podcast",
-		icon: "play-circle" as IconType,
+		icon: "play-circle",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !plugin.api.isPlaying && !!plugin.api.podcast;
@@ -86,7 +85,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "stop-playing",
 		name: "Stop Podcast",
-		icon: "stop-circle" as IconType,
+		icon: "stop-circle",
 		checkCallback: (checking) => {
 			if (checking) {
 				return plugin.api.isPlaying && !!plugin.api.podcast;
@@ -99,7 +98,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "skip-backward",
 		name: "Skip Backward",
-		icon: "skip-back" as IconType,
+		icon: "skip-back",
 		checkCallback: (checking) => {
 			// Skipping only seeks the position, so it is available whenever an
 			// episode is loaded — paused or playing — matching the always-active
@@ -116,7 +115,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "skip-forward",
 		name: "Skip Forward",
-		icon: "skip-forward" as IconType,
+		icon: "skip-forward",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !!plugin.api.podcast;
@@ -129,7 +128,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "download-playing-episode",
 		name: "Download Playing Episode",
-		icon: "download" as IconType,
+		icon: "download",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !!plugin.api.podcast;
@@ -148,7 +147,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "reorder-queue",
 		name: "Reorder Queue",
-		icon: "list-ordered" as IconType,
+		icon: "list-ordered",
 		checkCallback: (checking) => {
 			if (checking) {
 				return get(queue).episodes.length > 1;
@@ -161,7 +160,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "capture-timestamp",
 		name: "Capture Timestamp",
-		icon: "clock" as IconType,
+		icon: "clock",
 		// Keep this an editorCallback (not editorCheckCallback): an unconditional
 		// editor command stays addable to the mobile editor toolbar / command
 		// picker even before an episode is loaded, whereas a checkCallback that
@@ -181,7 +180,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "capture-segment-10s",
 		name: "Capture Last 10 Seconds",
-		icon: "scissors" as IconType,
+		icon: "scissors",
 		editorCheckCallback: (checking, editor) => {
 			if (checking) {
 				return canCaptureTimestamp();
@@ -194,7 +193,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "capture-segment-20s",
 		name: "Capture Last 20 Seconds",
-		icon: "scissors" as IconType,
+		icon: "scissors",
 		editorCheckCallback: (checking, editor) => {
 			if (checking) {
 				return canCaptureTimestamp();
@@ -211,7 +210,7 @@ export function registerCommands(plugin: PodNotes): void {
 		// "Create podcast feed note" command below (issue #163). The id is kept
 		// for backward compatibility (hotkeys/API).
 		name: "Create episode note",
-		icon: "file-plus" as IconType,
+		icon: "file-plus",
 		checkCallback: (checking) => {
 			if (checking) {
 				return (
@@ -228,7 +227,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "create-podcast-feed-note",
 		name: "Create podcast feed note",
-		icon: "file-plus" as IconType,
+		icon: "file-plus",
 		checkCallback: (checking) => {
 			const feeds = Object.values(get(savedFeeds));
 			const canCreate =
@@ -255,7 +254,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "get-share-link-episode",
 		name: "Copy universal episode link to clipboard",
-		icon: "share" as IconType,
+		icon: "share",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !!plugin.api.podcast;
@@ -268,7 +267,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "podnotes-toggle-playback",
 		name: "Toggle playback",
-		icon: "play" as IconType,
+		icon: "play",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !!plugin.api.podcast;
@@ -281,7 +280,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "increase-playback-rate",
 		name: "Increase playback rate",
-		icon: "gauge" as IconType,
+		icon: "gauge",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !!plugin.api.podcast;
@@ -294,7 +293,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "decrease-playback-rate",
 		name: "Decrease playback rate",
-		icon: "gauge" as IconType,
+		icon: "gauge",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !!plugin.api.podcast;
@@ -307,7 +306,7 @@ export function registerCommands(plugin: PodNotes): void {
 	plugin.addCommand({
 		id: "reset-playback-rate",
 		name: "Reset playback rate",
-		icon: "rotate-ccw" as IconType,
+		icon: "rotate-ccw",
 		checkCallback: (checking) => {
 			if (checking) {
 				return !!plugin.api.podcast;
