@@ -186,7 +186,7 @@ function escapeMarkdownText(text: string): string {
  * must maintain that context boundary.
  */
 function escapeMarkdownBodyText(text: string): string {
-	// eslint-disable-next-line no-control-regex
+	// eslint-disable-next-line no-control-regex -- Control characters must be collapsed before feed text enters Markdown.
 	const singleLine = text.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
 	return escapeMarkdownText(singleLine);
 }
@@ -243,7 +243,7 @@ function feedHtmlToMarkdown(html: string): string {
 	for (const element of document.querySelectorAll(
 		"img, audio, video, source, iframe, object, embed, link",
 	)) {
-		const alt = element instanceof HTMLImageElement ? element.alt.trim() : "";
+		const alt = element.instanceOf(HTMLImageElement) ? element.alt.trim() : "";
 		element.replaceWith(document.createTextNode(alt));
 	}
 	return neutralizeMarkdownEmbeds(
@@ -561,7 +561,7 @@ export function getFeedNoteWikilink(feedTitle: string): string {
  * URLs are unchanged.
  */
 function sanitizeUrlForTemplate(url: string): string {
-	// eslint-disable-next-line no-control-regex
+	// eslint-disable-next-line no-control-regex -- URL control characters must be encoded before interpolation.
 	return url.replace(/[\u0000-\u0020"'`()[\]<>\\]/g, (char) => {
 		return `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`;
 	});
@@ -598,7 +598,7 @@ export function replaceIllegalFileNameCharactersInString(string: string) {
 			.replace(/[\\,#%&{}/*<>$'":@\u2023|?[\]]/g, "")
 			// Replace any control characters (newlines, tabs, carriage returns)
 			// with spaces so they can never end up in a file name.
-			// eslint-disable-next-line no-control-regex
+			// eslint-disable-next-line no-control-regex -- File names cannot contain control characters.
 			.replace(/[\u0000-\u001f]/g, " ")
 			// Collapse every run of whitespace into a single space.
 			.replace(/\s+/g, " ")

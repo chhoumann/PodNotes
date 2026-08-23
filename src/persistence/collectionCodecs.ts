@@ -73,7 +73,7 @@ export function decodePodNotes(value: unknown, warnings: Set<string>): Record<st
 				warnings,
 				`podNotes.${key}`,
 			),
-		} as PodNote;
+		};
 	}
 	return notes;
 }
@@ -112,7 +112,7 @@ export function decodePlayedEpisodes(
 				`playedEpisodes.${key}`,
 			),
 			finished: readBoolean(candidate, "finished", false, warnings, `playedEpisodes.${key}`),
-		} as PlayedEpisode;
+		};
 	}
 	return played;
 }
@@ -179,7 +179,7 @@ export function decodeDownloadedEpisodes(
 					? entry.size
 					: 0;
 			if (size !== entry.size) warn(warnings, `${path}.size`, "value was normalized");
-			return [{ ...decoded, filePath: entry.filePath, size } as DownloadedEpisode];
+			return [{ ...decoded, filePath: entry.filePath, size }];
 		});
 	}
 	return downloads;

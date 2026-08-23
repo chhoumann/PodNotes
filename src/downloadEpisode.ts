@@ -23,7 +23,6 @@ import {
 	isSameMediaSource,
 } from "./utility/mediaType";
 import {
-	appendableAdapter,
 	moveIntoPlace,
 	partialPathFor,
 	probeAndFetchFirstChunk,
@@ -52,9 +51,14 @@ interface DownloadedFile {
 	byteLength: number;
 }
 
-// Whole-file download: only the legacy fallback (adapters without binary append)
-// and transcription's getEpisodeAudioBuffer still need the entire buffer at once.
-// The Download command streams instead — see downloadEpisodeToDisk.
+function downloadRequestError(error: unknown): Error {
+	return error instanceof NetworkError
+		? new Error(`Failed to download episode: ${error.message}`)
+		: new Error("Failed to download episode.");
+}
+
+// Transcription needs the entire audio buffer at once. Episode downloads use the
+// bounded streaming path instead - see downloadEpisodeToDisk.
 async function downloadFile(url: string): Promise<DownloadedFile> {
 	let response;
 	try {
@@ -65,10 +69,7 @@ async function downloadFile(url: string): Promise<DownloadedFile> {
 			acceptedStatuses: [200],
 		});
 	} catch (error: unknown) {
-		if (error instanceof NetworkError) {
-			throw new Error(`Failed to download episode: ${error.message}`);
-		}
-		throw new Error("Failed to download episode.");
+		throw downloadRequestError(error);
 	}
 
 	const data = response.arrayBuffer;
@@ -158,10 +159,8 @@ function reusableExistingDownloadSize(episode: Episode, filePath: string): numbe
 	return downloadedEpisodes.getEpisode(episode)?.size;
 }
 
-// Download an episode to a vault file with bounded memory. Streams via Range
-// chunks when the adapter supports binary append; otherwise falls back to the
-// legacy whole-file buffer (so a non-appendable adapter is never truncated).
-// Returns the on-disk path.
+// Download an episode to a vault file with bounded memory using the binary append
+// API guaranteed by the plugin's minimum Obsidian version. Returns the on-disk path.
 async function startDownloadEpisodeToDisk(
 	episode: Episode,
 	downloadPathTemplate: string,
@@ -181,28 +180,12 @@ async function startDownloadEpisodeToDisk(
 		}
 	}
 
-	const adapter = appendableAdapter();
-	const canStream =
-		typeof adapter.writeBinary === "function" && typeof adapter.appendBinary === "function";
-
-	if (!canStream) {
-		const { data, contentType } = await downloadFile(episode.streamUrl);
-		const { extension, filePath } = resolveDownloadTarget(
-			episode,
-			downloadPathTemplate,
-			data,
-			contentType,
-		);
-		const existingSize = reusableExistingDownloadSize(episode, filePath);
-		if (existingSize !== undefined) {
-			downloadedEpisodes.addEpisode(episode, filePath, existingSize);
-			return filePath;
-		}
-		await createEpisodeFile({ episode, downloadPathTemplate, data, extension });
-		return filePath;
+	let probe;
+	try {
+		probe = await probeAndFetchFirstChunk(episode.streamUrl);
+	} catch (error) {
+		throw downloadRequestError(error);
 	}
-
-	const probe = await probeAndFetchFirstChunk(episode.streamUrl);
 	const { filePath } = resolveDownloadTarget(
 		episode,
 		downloadPathTemplate,
@@ -304,7 +287,7 @@ function createNoticeDoc(title: string) {
 	const container = doc.createDiv();
 	container.setCssStyles({ width: "100%", display: "flex" });
 
-	const titleEl = container.createEl("span", { text: title });
+	const titleEl = container.createSpan({ text: title });
 	titleEl.setCssStyles({
 		textAlign: "center",
 		fontWeight: "bold",
@@ -368,35 +351,6 @@ export function safeDownloadFilePath(
 	return enforceMaxPathLength(`${basename}.${extension}`, `.${extension}`);
 }
 
-async function createEpisodeFile({
-	episode,
-	downloadPathTemplate,
-	data,
-	extension,
-}: {
-	episode: Episode;
-	downloadPathTemplate: string;
-	data: ArrayBuffer;
-	extension: string;
-}) {
-	const { app } = get(plugin);
-	const filePath = safeDownloadFilePath(downloadPathTemplate, episode, extension);
-
-	// `createBinary` throws if a parent folder is missing, which previously left
-	// users with a templated path like `podcast/{{podcast}}/{{title}}` unable to
-	// download anything (issue #86). Create the folders first.
-	const folderPath = filePath.split("/").slice(0, -1).join("/");
-	await ensureFolderExists(folderPath);
-
-	try {
-		await app.vault.createBinary(filePath, data);
-	} catch (error: unknown) {
-		throw new Error(`Failed to write file "${filePath}": ${getErrorMessage(error)}`);
-	}
-
-	downloadedEpisodes.addEpisode(episode, filePath, data.byteLength);
-}
-
 /**
  * Remove a downloaded episode: drop it from the offline set and delete its
  * backing vault file. This composes the pure store removal with the file I/O so
@@ -419,7 +373,7 @@ async function deleteEpisodeFile(filePath: string): Promise<void> {
 	try {
 		const file = app.vault.getAbstractFileByPath(filePath);
 		if (file instanceof TFile) {
-			await app.vault.delete(file);
+			await app.fileManager.trashFile(file);
 			return;
 		}
 		// Streamed downloads are written through the adapter, so the vault index

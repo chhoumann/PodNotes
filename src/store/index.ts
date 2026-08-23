@@ -353,7 +353,7 @@ export const localFiles = (() => {
 		 * Mirrors downloadedEpisodes into the Local Files playlist (issue #176).
 		 *
 		 * downloadedEpisodes is the authoritative set of offline-available episodes:
-		 * downloads (createEpisodeFile) and manual local files (getContextMenuHandler)
+		 * downloads (downloadEpisodeToDisk) and manual local files (getContextMenuHandler)
 		 * both write there. Entries are copied verbatim so filePath/size and the real
 		 * podcastName survive — playback resolves the local file from downloadedEpisodes
 		 * keyed by podcastName::title, so coercing podcastName would break it.

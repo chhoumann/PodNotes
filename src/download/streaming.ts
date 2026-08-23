@@ -1,4 +1,3 @@
-import { type DataAdapter } from "obsidian";
 import { get } from "svelte/store";
 import { plugin } from "../store";
 import { assertFetchableUrl } from "../utility/assertFetchableUrl";
@@ -47,13 +46,6 @@ function tooLargeError(maxSize: number): Error {
 	return new Error(`Download exceeds the maximum allowed size (${maxMb} MB). Aborting.`);
 }
 
-// Obsidian's DataAdapter typings declare `appendBinary` as always present
-// (public since API 1.13), but our minAppVersion predates its availability,
-// so we re-declare it as optional and runtime-guard every call site.
-export interface BinaryAppendAdapter extends Omit<DataAdapter, "appendBinary"> {
-	appendBinary?(path: string, data: ArrayBuffer): Promise<void>;
-}
-
 export interface RangeProbe {
 	firstChunk: ArrayBuffer;
 	contentType: string;
@@ -61,11 +53,8 @@ export interface RangeProbe {
 	totalSize: number | null;
 }
 
-// Keep the single unsafe cast here so the "where we step outside the types"
-// boundary is greppable in one place: the cast widens `appendBinary` back to
-// optional for Obsidian runtimes older than API 1.13.
-export function appendableAdapter(): BinaryAppendAdapter {
-	return get(plugin).app.vault.adapter as unknown as BinaryAppendAdapter;
+export function downloadAdapter() {
+	return get(plugin).app.vault.adapter;
 }
 
 function readHeader(headers: Record<string, string> | undefined, name: string): string | undefined {
@@ -159,7 +148,7 @@ export async function writeStreamedFile(
 	maxSize: number = MAX_DOWNLOAD_SIZE,
 ): Promise<number> {
 	assertFetchableUrl(url);
-	const adapter = appendableAdapter();
+	const adapter = downloadAdapter();
 
 	if (probe.firstChunk.byteLength > maxSize) {
 		throw tooLargeError(maxSize);
@@ -169,9 +158,9 @@ export async function writeStreamedFile(
 	let written = probe.firstChunk.byteLength;
 	onProgress?.(written, probe.totalSize);
 
-	// Server returned the whole body (ignored Range), or this adapter can't
-	// append: the first response already holds everything we can get.
-	if (!probe.supportsRange || typeof adapter.appendBinary !== "function") {
+	// Server returned the whole body after ignoring Range, so the first response
+	// already contains the complete download.
+	if (!probe.supportsRange) {
 		return written;
 	}
 
@@ -259,7 +248,7 @@ export function isPartialPath(path: string): boolean {
 // memory win. (We never finalize by reading the temp back into memory and
 // re-writing it: that whole-file buffer is exactly the #113 OOM this path avoids.)
 export async function moveIntoPlace(tmpPath: string, filePath: string): Promise<void> {
-	await appendableAdapter().rename(tmpPath, filePath);
+	await downloadAdapter().rename(tmpPath, filePath);
 }
 
 // Remove temp partials orphaned in `folder` by a previous download that was hard-
@@ -272,7 +261,7 @@ export async function sweepStalePartials(
 	folder: string,
 	isActive: (path: string) => boolean,
 ): Promise<void> {
-	const adapter = appendableAdapter();
+	const adapter = downloadAdapter();
 	try {
 		const listing = await adapter.list(folder);
 		for (const entry of listing.files) {

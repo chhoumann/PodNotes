@@ -1,4 +1,4 @@
-import { Notice, TFile } from "obsidian";
+import { Notice, TFile, TFolder } from "obsidian";
 import {
 	FilePathTemplateEngine,
 	legacyReplaceIllegalFileNameCharactersInString,
@@ -124,15 +124,14 @@ export function getPodcastNote(episode: Episode): TFile | null {
 
 function findPodcastNoteByTitleOverlap(episode: Episode): TFile | null {
 	const { vault } = get(plugin).app;
-	if (typeof vault.getMarkdownFiles !== "function") {
-		return null;
-	}
-
 	const expectedPath = getPodcastNotePath(episode);
-	const folder = parentFolder(expectedPath);
-	const siblings = vault
-		.getMarkdownFiles()
-		.filter((file) => parentFolder(file.path) === folder && file instanceof TFile);
+	const folderPath = parentFolder(expectedPath);
+	const folder = folderPath ? vault.getAbstractFileByPath(folderPath) : vault.getRoot();
+	if (!(folder instanceof TFolder)) return null;
+
+	const siblings = folder.children.filter(
+		(file): file is TFile => file instanceof TFile && file.extension === "md",
+	);
 
 	return (
 		findUniqueTitleMatch(getPodcastNoteTitleCandidates(episode), siblings, (file) =>

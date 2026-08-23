@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import { Notice, requestUrl, TFile } from "obsidian";
 import downloadEpisodeWithNotice, {
 	getEpisodeAudioBuffer,
+	removeDownloadedEpisode,
 	safeDownloadBasename,
 	safeDownloadFilePath,
 } from "./downloadEpisode";
@@ -32,7 +33,7 @@ function deferred<T>() {
 	return { promise, reject, resolve };
 }
 
-function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
+function setupVault() {
 	const present = new Set<string>(); // vault index (getAbstractFileByPath)
 	const disk = new Set<string>(); // raw filesystem (adapter.exists)
 	const createdFolders: string[] = [];
@@ -48,15 +49,17 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 		createdFolders.push(path);
 	});
 	const deleteFile = vi.fn(async (_file: unknown) => {});
+	const trashFile = vi.fn(async (file: TFile) => {
+		present.delete(file.path);
+		disk.delete(file.path);
+	});
 	const removeFile = vi.fn(async (path: string) => {
 		disk.delete(path);
 	});
 
 	// Adapter writes land on "disk" but NOT in the vault index (present),
 	// mirroring how getAbstractFileByPath can miss a freshly adapter-written file
-	// until the watcher reconciles it. The streaming download path additionally
-	// needs writeBinary + appendBinary; the legacy path uses neither and falls
-	// back to vault.createBinary.
+	// until the watcher reconciles it.
 	const writeBinary = vi.fn(async (path: string, data: ArrayBuffer) => {
 		disk.add(path);
 		written.set(path, data.byteLength);
@@ -88,25 +91,25 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 		return { files, folders: [] as string[] };
 	});
 
-	const adapter: Record<string, unknown> = {
+	const adapter = {
 		exists: async (path: string) => disk.has(path) || present.has(path),
 		remove: removeFile,
+		writeBinary,
+		appendBinary,
+		rename,
+		list,
 	};
-	if (streaming) {
-		adapter.writeBinary = writeBinary;
-		adapter.appendBinary = appendBinary;
-		adapter.rename = rename;
-		adapter.list = list;
-	}
 
 	const app = {
 		vault: {
-			getAbstractFileByPath: (path: string) => (present.has(path) ? new TFile() : null),
+			getAbstractFileByPath: (path: string) =>
+				present.has(path) ? Object.assign(new TFile(), { path }) : null,
 			createBinary,
 			createFolder,
 			delete: deleteFile,
 			adapter,
 		},
+		fileManager: { trashFile },
 	};
 	// The download code (and ensureFolderExists's default) read app from the
 	// plugin store; the global `app` is set to the same mock too so any other
@@ -121,6 +124,7 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 		createBinary,
 		createFolder,
 		deleteFile,
+		trashFile,
 		removeFile,
 		writeBinary,
 		appendBinary,
@@ -128,6 +132,18 @@ function setupVault({ streaming = false }: { streaming?: boolean } = {}) {
 		list,
 		written,
 	};
+}
+
+function expectStreamedTo(
+	vault: ReturnType<typeof setupVault>,
+	filePath: string,
+	data: ArrayBuffer,
+): void {
+	expect(vault.writeBinary).toHaveBeenCalledTimes(1);
+	const [temporaryPath, writtenData] = vault.writeBinary.mock.calls[0];
+	expect(temporaryPath).toMatch(/\.podnotes-partial$/);
+	expect(writtenData).toBe(data);
+	expect(vault.rename).toHaveBeenCalledWith(temporaryPath, filePath);
 }
 
 function makeEpisode(overrides: Partial<Episode> = {}): Episode {
@@ -156,7 +172,7 @@ afterEach(() => {
 
 describe("downloadEpisodeWithNotice (download command path)", () => {
 	it("saves extensionless video downloads using the response content type", async () => {
-		const { createBinary, createdFolders } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -178,13 +194,8 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createdFolders).toEqual(["Podcasts", "Podcasts/Pod"]);
-		expect(createBinary).toHaveBeenCalledTimes(1);
-		const [writtenPath, writtenData] = createBinary.mock.calls[0];
-		expect(writtenPath).toBe("Podcasts/Pod/Video Title.mp4");
-		// The active non-streaming fallback must pass the response buffer straight
-		// through to createBinary without making another whole-file copy (#113).
-		expect(writtenData).toBe(buffer);
+		expect(vault.createdFolders).toEqual(["Podcasts", "Podcasts/Pod"]);
+		expectStreamedTo(vault, "Podcasts/Pod/Video Title.mp4", buffer);
 		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
 		expect(recorded).toMatchObject({
 			title: "Video Title",
@@ -195,7 +206,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 	});
 
 	it("rejects unsupported extensionless video downloads instead of saving them as mp3", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x00, 0x01, 0x02, 0x03);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -212,12 +223,12 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			"Not a playable media file",
 		);
 
-		expect(createBinary).not.toHaveBeenCalled();
+		expect(vault.createBinary).not.toHaveBeenCalled();
 		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
 	});
 
 	it("rejects blank-type extensionless video downloads instead of saving them as mp3", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x00, 0x01, 0x02, 0x03);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -234,12 +245,12 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			"Not a playable media file",
 		);
 
-		expect(createBinary).not.toHaveBeenCalled();
+		expect(vault.createBinary).not.toHaveBeenCalled();
 		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
 	});
 
 	it("saves video/ogg downloads with a video extension even when bytes have an Ogg signature", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -261,7 +272,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/Ogg Video Title.ogv", buffer);
+		expectStreamedTo(vault, "Podcasts/Ogg Video Title.ogv", buffer);
 		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
 		expect(recorded).toMatchObject({
 			title: "Ogg Video Title",
@@ -272,7 +283,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 	});
 
 	it("uses an unambiguous video URL extension before the Ogg audio signature", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x4f, 0x67, 0x67, 0x53);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -294,14 +305,14 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/Generic Ogg Video.ogv", buffer);
+		expectStreamedTo(vault, "Podcasts/Generic Ogg Video.ogv", buffer);
 		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
 		expect(recorded?.filePath).toBe("Podcasts/Generic Ogg Video.ogv");
 		expect(recorded?.mediaType).toBe("video");
 	});
 
 	it("saves audio/mp4 downloads with an audio extension even when the URL ends in mp4", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -323,7 +334,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/Audio MP4 Title.m4a", buffer);
+		expectStreamedTo(vault, "Podcasts/Audio MP4 Title.m4a", buffer);
 		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
 		expect(recorded).toMatchObject({
 			title: "Audio MP4 Title",
@@ -334,7 +345,8 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 	});
 
 	it("ignores a foreign file at the provisional URL-extension path when the sniffed final path is free (Codex #290)", async () => {
-		const { createBinary, present } = setupVault();
+		const vault = setupVault();
+		const { present } = vault;
 		// A different episode's file occupies the path the URL extension implies
 		// (.mp4). The response sniffs to .m4a, so the real destination is free and
 		// the fast-path check must fall through to the probe instead of throwing a
@@ -361,14 +373,14 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/Audio MP4 Title.m4a", buffer);
+		expectStreamedTo(vault, "Podcasts/Audio MP4 Title.m4a", buffer);
 		expect(get(downloadedEpisodes)["Pod"]?.[0]).toMatchObject({
 			filePath: "Podcasts/Audio MP4 Title.m4a",
 		});
 	});
 
 	it("saves an audio/mp4 download with a generic ISO-BMFF brand as m4a, not mp4 (Codex #213)", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		// Real ISO-BMFF: 4-byte box size, 'ftyp', then a generic 'mp42' major brand.
 		// detectAudioFileExtension returns "mp4" for this; for an audio download it
 		// must still be saved as m4a so it isn't treated as an ambiguous container.
@@ -406,11 +418,11 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/Brandy MP4 Title.m4a", buffer);
+		expectStreamedTo(vault, "Podcasts/Brandy MP4 Title.m4a", buffer);
 	});
 
 	it("preserves audio/webm downloads as audio WebM files", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x00, 0x00, 0x00, 0x18);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -432,7 +444,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/Audio WebM Title.webm", buffer);
+		expectStreamedTo(vault, "Podcasts/Audio WebM Title.webm", buffer);
 		const recorded = get(downloadedEpisodes)["Pod"]?.[0];
 		expect(recorded).toMatchObject({
 			title: "Audio WebM Title",
@@ -509,7 +521,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 	});
 
 	it("rejects an HTML error page served at a .mp3 URL instead of saving it (#DL-07)", async () => {
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		requestUrlMock.mockResolvedValue({
 			status: 200,
 			headers: { "content-type": "text/html; charset=utf-8" },
@@ -532,7 +544,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).not.toHaveBeenCalled();
+		expect(vault.createBinary).not.toHaveBeenCalled();
 		expect(get(downloadedEpisodes)["Pod"]).toBeUndefined();
 	});
 
@@ -583,7 +595,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 		// octet-stream is genuinely ambiguous and is intentionally NOT rejected up
 		// front — real CDNs serve media this way, so it falls through to the
 		// extension/signature heuristic.
-		const { createBinary } = setupVault();
+		const vault = setupVault();
 		const buffer = bytes(0x49, 0x44, 0x33, 0x01);
 		requestUrlMock.mockResolvedValue({
 			status: 200,
@@ -603,7 +615,7 @@ describe("downloadEpisodeWithNotice (download command path)", () => {
 			setTimeoutSpy.mockRestore();
 		}
 
-		expect(createBinary).toHaveBeenCalledWith("Podcasts/My Title.mp3", buffer);
+		expectStreamedTo(vault, "Podcasts/My Title.mp3", buffer);
 	});
 });
 
@@ -628,6 +640,24 @@ describe("safeDownloadBasename (#183)", () => {
 		expect(safeDownloadBasename("podcast/{{podcast}}/{{title}}", makeEpisode())).toBe(
 			"podcast/Pod/My Title",
 		);
+	});
+});
+
+describe("removeDownloadedEpisode", () => {
+	it("trashes the indexed download through FileManager", async () => {
+		const vault = setupVault();
+		const episode = makeEpisode();
+		const filePath = "Podcasts/My Title.mp3";
+		vault.present.add(filePath);
+		vault.disk.add(filePath);
+		downloadedEpisodes.addEpisode(episode, filePath, 4);
+
+		await removeDownloadedEpisode(episode);
+
+		expect(vault.trashFile).toHaveBeenCalledOnce();
+		expect(vault.trashFile.mock.calls[0][0].path).toBe(filePath);
+		expect(vault.removeFile).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes)[episode.podcastName]).toEqual([]);
 	});
 });
 
@@ -1210,7 +1240,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 	}
 
 	it("streams a ranged (206) download in chunks via writeBinary + appendBinary", async () => {
-		const v = setupVault({ streaming: true });
+		const v = setupVault();
 		requestUrlMock
 			.mockResolvedValueOnce(
 				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {
@@ -1235,7 +1265,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 	});
 
 	it("streams to a dot-prefixed temp the watchers don't see, then renames it into place", async () => {
-		const v = setupVault({ streaming: true });
+		const v = setupVault();
 		requestUrlMock
 			.mockResolvedValueOnce(
 				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {
@@ -1269,7 +1299,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 	});
 
 	it("cleans up the temp (not the final path) when the move into place fails", async () => {
-		const v = setupVault({ streaming: true });
+		const v = setupVault();
 		v.rename.mockRejectedValueOnce(new Error("rename boom"));
 		requestUrlMock
 			.mockResolvedValueOnce(
@@ -1298,7 +1328,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 	});
 
 	it("sweeps an orphaned partial from a prior killed download before streaming", async () => {
-		const v = setupVault({ streaming: true });
+		const v = setupVault();
 		// A partial left behind in the target folder by a download that was killed
 		// mid-stream (the OOM crash this fix addresses).
 		v.disk.add("Podcasts/.My Title.mp3.dead-orphan.podnotes-partial");
@@ -1326,7 +1356,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 	});
 
 	it("writes the whole body in one shot when the server ignores Range (200)", async () => {
-		const v = setupVault({ streaming: true });
+		const v = setupVault();
 		requestUrlMock.mockResolvedValue(
 			rangeResponse(200, [0xff, 0xfb, 0x90, 0x00, 1, 2, 3, 4], {
 				"content-type": "audio/mpeg",
@@ -1341,7 +1371,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 	});
 
 	it("never reuses a sequential shared destination for a different episode", async () => {
-		const v = setupVault({ streaming: true });
+		const v = setupVault();
 		const template = "Podcasts/shared";
 		const episodeA = makeEpisode({ title: "Episode A", podcastName: "Podcast A" });
 		const episodeB = makeEpisode({ title: "Episode B", podcastName: "Podcast B" });
@@ -1405,7 +1435,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 	});
 
 	it("removes the partial file via the adapter (not yet vault-indexed) and rethrows on a mid-stream failure", async () => {
-		const v = setupVault({ streaming: true });
+		const v = setupVault();
 		requestUrlMock
 			.mockResolvedValueOnce(
 				rangeResponse(206, [1, 2, 3, 4, 5, 6, 7, 8], {

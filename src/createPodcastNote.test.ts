@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TFile } from "obsidian";
+import { TFile, TFolder } from "obsidian";
 import createPodcastNote, { getPodcastNote } from "./createPodcastNote";
 import { plugin } from "./store";
 import type { Episode } from "./types/Episode";
@@ -156,7 +156,17 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 	});
 
 	function fileAt(path: string): TFile {
-		return Object.assign(Object.create(TFile.prototype), { path }) as TFile;
+		return Object.assign(Object.create(TFile.prototype), {
+			path,
+			extension: path.split(".").pop() ?? "",
+		}) as TFile;
+	}
+
+	function folderWith(files: TFile[]): TFolder {
+		return Object.assign(Object.create(TFolder.prototype), {
+			path: "podcasts",
+			children: files,
+		}) as TFolder;
 	}
 
 	it("opens a note written with the 2.16 filename sanitizer", () => {
@@ -168,8 +178,11 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		plugin.set({
 			app: {
 				vault: {
-					getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null),
-					getMarkdownFiles: vi.fn(() => [...files.values()]),
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === "podcasts"
+							? folderWith([...files.values()])
+							: (files.get(path) ?? null),
+					),
 				},
 			},
 			settings: {
@@ -190,8 +203,11 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		plugin.set({
 			app: {
 				vault: {
-					getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null),
-					getMarkdownFiles: vi.fn(() => [...files.values()]),
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === "podcasts"
+							? folderWith([...files.values()])
+							: (files.get(path) ?? null),
+					),
 					createFolder: vi.fn(async () => {}),
 					create: vi.fn(async (path: string) => {
 						createdFiles.push({ path });
@@ -229,10 +245,10 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		plugin.set({
 			app: {
 				vault: {
-					getAbstractFileByPath: vi.fn((path: string) =>
-						path === part2Note.path ? part2Note : null,
-					),
-					getMarkdownFiles: vi.fn(() => [part2Note]),
+					getAbstractFileByPath: vi.fn((path: string) => {
+						if (path === "podcasts") return folderWith([part2Note]);
+						return path === part2Note.path ? part2Note : null;
+					}),
 					createFolder: vi.fn(async () => {}),
 					create: vi.fn(async (path: string) => {
 						createdFiles.push({ path });
@@ -271,10 +287,10 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		plugin.set({
 			app: {
 				vault: {
-					getAbstractFileByPath: vi.fn((path: string) =>
-						path === androidNote.path ? androidNote : null,
-					),
-					getMarkdownFiles: vi.fn(() => [androidNote]),
+					getAbstractFileByPath: vi.fn((path: string) => {
+						if (path === "podcasts") return folderWith([androidNote]);
+						return path === androidNote.path ? androidNote : null;
+					}),
 				},
 			},
 			settings: {
@@ -291,8 +307,9 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		plugin.set({
 			app: {
 				vault: {
-					getAbstractFileByPath: vi.fn(() => null),
-					getMarkdownFiles: vi.fn(() => [other]),
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === "podcasts" ? folderWith([other]) : null,
+					),
 				},
 			},
 			settings: {
