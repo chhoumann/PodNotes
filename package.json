@@ -35,20 +35,20 @@
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@testing-library/jest-dom": "^7.0.1",
 		"@testing-library/svelte": "^5.4.2",
-		"@types/node": "^22.20.1",
+		"@types/node": "^22.20.2",
 		"eslint-plugin-obsidianmd": "^0.4.2",
 		"jsdom": "^30.0.1",
 		"obsidian": "1.13.1",
 		"obsidian-e2e": "^0.10.0",
-		"oxfmt": "^0.66.0",
-		"oxlint": "^1.81.0",
+		"oxfmt": "^0.67.0",
+		"oxlint": "^1.82.0",
 		"svelte": "^5.57.0",
 		"svelte-check": "^4.7.6",
 		"svelte-preprocess": "^6.0.5",
 		"typescript": "6.0.3",
-		"vite": "^8.2.2",
+		"vite": "^8.3.0",
 		"vitest": "^4.1.11",
-		"wrangler": "4.128.0"
+		"wrangler": "4.130.0"
 	},
 	"overrides": {
 		"@actions/http-client": {
