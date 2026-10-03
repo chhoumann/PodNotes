@@ -101,11 +101,10 @@ obsidian vault=dev eval code='app.plugins.plugins.podnotes?.manifest?.version'
   is for the main checkout. Worktrees must use the isolated wrapper below.
 
 ### Isolated worktree vault (parallel worktrees)
-In a worktree (e.g. `/Users/christian/orca/workspaces/PodNotes/<slug>`), do **not**
-race the shared `dev` vault — multiple worktree agents would clobber each other on
-the plugin symlink, `data.json`, and `plugin:reload`. Use the isolated worktree
-wrapper instead, which provisions a worktree-local vault under
-`.obsidian-e2e-vaults/podnotes-<worktree>` (git-ignored), starts or reuses a
+In a worktree, do **not** race the shared `dev` vault — multiple worktree agents
+would clobber each other on the plugin symlink, `data.json`, and `plugin:reload`.
+Use the isolated worktree wrapper instead, which provisions a worktree-local vault
+under `.obsidian-e2e-vaults/podnotes-<worktree>` (git-ignored), starts or reuses a
 private-`HOME` Obsidian instance bound to that vault, disables Restricted Mode,
 waits until PodNotes is live, and then runs your command with the right
 `vault=<worktree vault>` and private `HOME` already applied:
@@ -167,20 +166,14 @@ process tree (SIGTERM, then SIGKILL for stragglers), and removes its profile
 directory. It never touches the shared `dev` vault, other worktrees, or quickadd
 instances.
 
-Two layers keep instances from leaking, so you rarely need to run `stop` by hand:
-
-- **Orca archive hook** — `orca.yaml` defines a `scripts.archive` hook that runs
-  this teardown for the worktree being removed. Remove worktrees with
-  `orca worktree rm --worktree <selector> --run-hooks` so the hook fires (Orca
-  skips archive hooks without `--run-hooks`).
-- **Reap on next start** — `start:e2e-obsidian` and `obsidian:e2e` reap any
-  orphaned instance (one whose backing worktree no longer exists on disk, i.e.
-  it was removed) before launching, even if its Obsidian is still running. An
-  idle instance for a worktree that still exists is left alone so concurrent
-  workers can reuse it. Reaping scans the default profile root
-  (`/tmp/podnotes-obsidian-e2e`); instances started under a custom
-  `--profile-root` are only reaped by a start that uses that same root, so stop
-  those explicitly.
+You rarely need to run `stop` by hand: `start:e2e-obsidian` and `obsidian:e2e`
+reap any orphaned instance (one whose backing worktree no longer exists on disk,
+i.e. it was removed) before launching, even if its Obsidian is still running. An
+idle instance for a worktree that still exists is left alone so concurrent
+workers can reuse it. Reaping scans the default profile root
+(`/tmp/podnotes-obsidian-e2e`); instances started under a custom
+`--profile-root` are only reaped by a start that uses that same root, so stop
+those explicitly.
 
 ## Documentation
 Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
