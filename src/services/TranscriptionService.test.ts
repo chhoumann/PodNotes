@@ -4,9 +4,6 @@ import { TranscriptionService } from "./TranscriptionService";
 import type { Episode } from "src/types/Episode";
 import type PodNotes from "src/main";
 
-// The shared obsidian mock's Notice has no setMessage; TimerNotice needs one.
-(Notice.prototype as unknown as { setMessage: () => void }).setMessage = () => {};
-
 const noticeMessages = vi.hoisted(() => [] as string[]);
 
 vi.mock("obsidian", async (importOriginal) => {
