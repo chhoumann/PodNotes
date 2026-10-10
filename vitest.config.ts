@@ -17,7 +17,8 @@ export default defineConfig({
 			"scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
 		],
 		globals: true,
-		environment: "jsdom",
+		// Files that need a DOM opt in with `// @vitest-environment jsdom`.
+		// Creating a jsdom environment per file is the suite's largest cost.
 		environmentOptions: {
 			jsdom: {
 				url: "https://podnotes.test/",

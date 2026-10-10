@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Menu } from "obsidian";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 

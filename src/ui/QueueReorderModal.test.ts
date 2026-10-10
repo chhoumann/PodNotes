@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { App } from "obsidian";
 import { beforeEach, describe, expect, test } from "vitest";
 
