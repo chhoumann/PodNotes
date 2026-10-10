@@ -1,8 +1,8 @@
-# [PodNotes](https://chhoumann.github.io/PodNotes)
+# [PodNotes](https://podnotes.obsidian.guide)
 
 <img src="https://github.com/chhoumann/PodNotes/blob/master/docs/public/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
 
-<h3 align="center">You can find the documentation <a href="https://chhoumann.github.io/PodNotes">here</a>.</h3>
+<h3 align="center">You can find the documentation <a href="https://podnotes.obsidian.guide">here</a>.</h3>
 
 ## Demo Video
 [![Demo video](https://img.youtube.com/vi/SGLfuN15uJY/0.jpg)](https://www.youtube.com/watch?v=SGLfuN15uJY)
@@ -32,7 +32,7 @@ Here are the features that will help you do that 👇.
 
 **This plugin is in the Obsidian community plugin store. You can find it by searching in the store.**
 
-Other installation options can be found in the [documentation](https://chhoumann.github.io/PodNotes).
+Other installation options can be found in the [documentation](https://podnotes.obsidian.guide).
 
 ## Development
 
