@@ -2,7 +2,7 @@ import type { Episode } from "src/types/Episode";
 import type { IconType } from "src/types/IconType";
 import { ViewState } from "src/types/ViewState";
 
-export type QueueMoveKind = "top" | "up" | "down" | "bottom";
+type QueueMoveKind = "top" | "up" | "down" | "bottom";
 
 export interface QueueReorderMenuItem {
 	icon: IconType;
