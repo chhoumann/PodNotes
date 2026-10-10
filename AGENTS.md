@@ -101,7 +101,7 @@ obsidian vault=dev eval code='app.plugins.plugins.podnotes?.manifest?.version'
   is for the main checkout. Worktrees must use the isolated wrapper below.
 
 ### Isolated worktree vault (parallel worktrees)
-In a worktree, do **not** race the shared `dev` vault — multiple worktree agents
+In a worktree, do **not** race the shared `dev` vault - multiple worktree agents
 would clobber each other on the plugin symlink, `data.json`, and `plugin:reload`.
 Use the isolated worktree wrapper instead, which provisions a worktree-local vault
 under `.obsidian-e2e-vaults/podnotes-<worktree>` (git-ignored), starts or reuses a
@@ -133,7 +133,7 @@ npm run obsidian:e2e -- dev:errors
   migration, legacy `PODNOTES_E2E_*` aliases; `tests/e2e/harness.ts` reads the
   canonical name first, then the alias. The `obsidian` CLI routes by `$HOME` (it
   talks to `$HOME/.obsidian-cli.sock`), so to point the Vitest `tests/e2e` suite
-  at the isolated instance you must remap `HOME` as well as the vault name —
+  at the isolated instance you must remap `HOME` as well as the vault name -
   exporting the vault alone leaves the suite talking to the shared `dev` vault:
 
   ```bash

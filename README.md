@@ -15,7 +15,7 @@ Here are the features that will help you do that 👇.
 
 ## Features
 
-- Mobile friendly — works on iOS and Android, including offline playback of local files and downloads
+- Mobile friendly - works on iOS and Android, including offline playback of local files and downloads
 - Podcast player built into Obsidian, for both audio and video episodes
 - Add any publicly available podcast through search, or custom feeds by URL
 - Track played episodes & playback progress, with continuous resume
