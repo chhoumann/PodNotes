@@ -1,0 +1,21 @@
+import type { APIRoute, GetStaticPaths } from "astro";
+import { getCollection } from "astro:content";
+
+/**
+ * Raw markdown for every docs page at `<page-url>.md` (e.g. /commands.md,
+ * and /index.md for the home page) - for LLMs and coding agents.
+ */
+export const getStaticPaths = (async () => {
+	const docs = await getCollection("docs");
+	return docs.map((entry) => ({
+		params: { slug: entry.id },
+		props: { entry },
+	}));
+}) satisfies GetStaticPaths;
+
+export const GET: APIRoute = ({ props }) => {
+	const { entry } = props;
+	return new Response(`# ${entry.data.title}\n\n${entry.body ?? ""}`, {
+		headers: { "Content-Type": "text/markdown; charset=utf-8" },
+	});
+};

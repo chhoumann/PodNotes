@@ -1,0 +1,17 @@
+{
+	"name": "podnotes-docs",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview"
+	},
+	"dependencies": {
+		"@astrojs/starlight": "^0.42.6",
+		"astro": "^7.3.8",
+		"sharp": "^0.35.5",
+		"starlight-links-validator": "^0.27.0",
+		"starlight-llms-txt": "^0.12.0"
+	}
+}
