@@ -2,7 +2,7 @@
 	import { debounce, Notice } from "obsidian";
 	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
 	import FeedParser from "src/parser/feedParser";
-	import { plugin, savedFeeds, podcastsUpdated } from "src/store";
+	import { plugin, savedFeeds } from "src/store";
 	import { get } from "svelte/store";
 	import { internPrivateFeed } from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
@@ -39,11 +39,9 @@
 	}
 
 	$: {
-		// This will run whenever savedFeeds or podcastsUpdated changes
 		if (searchQuery.trim() === "") {
 			searchResults = Object.values($savedFeeds);
 		}
-		$podcastsUpdated; // This ensures the block runs when podcastsUpdated changes
 	}
 
 	function updateSearchResults() {
