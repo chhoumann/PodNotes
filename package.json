@@ -25,7 +25,7 @@
 		"check:a11y": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --fail-on-warnings",
 		"docs:build": "npm ci --prefix docs && npm run build --prefix docs",
 		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/dist --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts obsidian-e2e.config.mjs wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/pages docs/tsconfig.json"
+		"format": "oxfmt src tests scripts .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts obsidian-e2e.config.mjs wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/markdown.ts docs/src/site.mjs docs/src/pages docs/tsconfig.json"
 	},
 	"dependencies": {
 		"fuse.js": "^7.5.0",

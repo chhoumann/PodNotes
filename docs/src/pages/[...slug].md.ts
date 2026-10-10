@@ -1,5 +1,6 @@
 import type { APIRoute, GetStaticPaths, InferGetStaticPropsType } from "astro";
 import { getCollection } from "astro:content";
+import { pageMarkdown } from "../markdown";
 
 /**
  * Raw markdown for every docs page at `<page-url>.md` (e.g. /commands.md,
@@ -13,9 +14,7 @@ export const getStaticPaths = (async () => {
 	}));
 }) satisfies GetStaticPaths;
 
-export const GET: APIRoute<InferGetStaticPropsType<typeof getStaticPaths>> = ({ props }) => {
-	const { entry } = props;
-	return new Response(`# ${entry.data.title}\n\n${entry.body ?? ""}`, {
+export const GET: APIRoute<InferGetStaticPropsType<typeof getStaticPaths>> = ({ props }) =>
+	new Response(pageMarkdown(props.entry), {
 		headers: { "Content-Type": "text/markdown; charset=utf-8" },
 	});
-};

@@ -1,25 +1,17 @@
 // @ts-check
-import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLinksValidator from "starlight-links-validator";
-import starlightLlmsTxt from "starlight-llms-txt";
-
-const { description } = JSON.parse(
-	readFileSync(new URL("../manifest.json", import.meta.url), "utf8"),
-);
+import { description, sidebar, site } from "./src/site.mjs";
 
 // https://astro.build/config
 export default defineConfig({
-	site: "https://podnotes.obsidian.guide",
+	site,
 	integrations: [
 		starlight({
 			title: "PodNotes",
 			description,
-			plugins: [
-				starlightLinksValidator(),
-				starlightLlmsTxt({ projectName: "PodNotes", description }),
-			],
+			plugins: [starlightLinksValidator()],
 			social: [
 				{
 					icon: "github",
@@ -35,32 +27,11 @@ export default defineConfig({
 					tag: "meta",
 					attrs: {
 						property: "og:image",
-						content: "https://podnotes.obsidian.guide/resources/podcast_grid.png",
+						content: `${site}/resources/podcast_grid.png`,
 					},
 				},
 			],
-			sidebar: [
-				{ label: "Home", slug: "index" },
-				{ label: "Commands", slug: "commands" },
-				{ label: "Podcasts", slug: "podcasts" },
-				{ label: "Local files", slug: "local_files" },
-				{ label: "Import & Export", slug: "import_export" },
-				{ label: "Transcripts", slug: "transcripts" },
-				{
-					label: "Notes",
-					items: [
-						{ label: "Timestamps", slug: "timestamps" },
-						{ label: "Templates", slug: "templates" },
-					],
-				},
-				{
-					label: "Advanced",
-					items: [
-						{ label: "API", slug: "api" },
-						{ label: "Usage with QuickAdd", slug: "QuickAdd" },
-					],
-				},
-			],
+			sidebar,
 		}),
 	],
 });

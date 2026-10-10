@@ -178,7 +178,7 @@ those explicitly.
 ## Documentation
 Docs are an Astro Starlight site in `docs/`, a standalone npm package with its
 own `package-lock.json`. Pages live in `docs/src/content/docs/`, images in
-`docs/public/resources/`, and the sidebar in `docs/astro.config.mjs`. Every page
+`docs/public/resources/`, and the sidebar in `docs/src/site.mjs`. Every page
 sets `slug:` frontmatter to pin its URL, and the build fails without it. Update
 docs with user-facing behavior changes, new commands, API changes, template
 syntax, transcript behavior, local-file behavior, or import/export changes.
