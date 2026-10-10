@@ -50,9 +50,6 @@ vi.mock("./parser/feedParser", () => ({
 	},
 }));
 
-// The shared obsidian mock's Notice lacks setMessage, which TimerNotice calls
-// on its progress ticker. Provide a minimal Notice with the methods opml.ts
-// uses so the import flow can run to completion under jsdom.
 vi.mock("obsidian", () => ({
 	Notice: class {
 		constructor(message?: unknown) {

@@ -187,64 +187,109 @@ Use `npm run docs:build` to validate docs locally. The Cloudflare Pages output
 directory is `docs/site`, configured in `wrangler.jsonc`.
 
 ## Release Workflow
-Goal: publish each version from a tested, reviewable, and cryptographically
-attested commit.
+Goal: publish each version from a tested, reviewed, and attested commit. Stop
+when the GitHub release is public, its tag points at the release commit, and
+`main.js` and `manifest.json` match their recorded SHA-256 digests.
 
-Success means:
-- the release PR changes exactly `package.json`, `package-lock.json`,
-  `manifest.json`, and `versions.json`;
-- the release commit passes the full lint, format, type, build, test, and docs
-  gates;
-- `main.js` and `manifest.json` receive build-provenance attestations and match
-  the assets downloaded back from the draft GitHub release.
+Three workflows in `.github/workflows/` call reusable workflows in
+`chhoumann/obsidian-plugin-workflows` pinned to v4
+(`ebcf84b80dc48ba15e0eec1f3575d41519a78ed5`):
 
-Stop when: the GitHub release is public, its tag targets the validated release
-commit, and both remote assets match their recorded SHA-256 digests.
+1. `Prepare release` (`release-prepare.yml`) runs after a green `Test` push run
+   on `master`, or by `workflow_dispatch` with an optional `targetSha`. It skips
+   if `master` moved past the tested commit. It plans the version with
+   semantic-release's commit analyzer from the Conventional Commits since the
+   latest tag. `feat` is minor, `fix` and `perf` are patch, and a
+   `BREAKING CHANGE:` footer is major. The pinned `release-policy` makes
+   `build(deps)` a patch, so production Dependabot bumps release and
+   `build(deps-dev)` bumps do not. A `build(deps)` commit stays a patch even
+   with a `BREAKING CHANGE:` footer. The analyzer ignores the `!` marker, so the
+   PR title check rejects it. The `podnotes-release-bot` GitHub App then opens
+   or refreshes one draft PR from `release/<version>` titled
+   `release(version): Release <version>`, with the generated notes in its body.
+   It changes exactly `package.json`, `package-lock.json`, `manifest.json`, and
+   `versions.json`. Release PRs that a newer plan supersedes are closed.
+2. `Trigger release` (`release-trigger.yml`) runs on `pull_request_target`
+   `closed` for a merged `release/*` PR into `master`. It validates the bot
+   author, branch, title, exact version-file diff, merger, squash parent, and
+   tree, creates the `release-run/<version>` recovery branch at the release
+   commit, and dispatches `release.yml` on it.
+3. `Release` (`release.yml`) validates again, recomputes the version, and runs
+   `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm run test`,
+   and `npm run docs:build`. It builds, creates the `<version>` tag, attests
+   `main.js` and `manifest.json`, uploads them to a draft GitHub release,
+   downloads and re-hashes them, publishes, and then deletes the recovery
+   branch. Slack and Discord notifications are optional secrets.
 
-After a successful `Test` run on `master`, the no-checkout
-`Trigger release preparation` workflow dispatches `Prepare release` at the
-exact tested commit. `Prepare release` uses `npm run release:plan` to calculate
-the next Conventional Commits version and opens a machine-generated draft PR
-containing the four synchronized version files. Review that exact diff, wait
-for its explicitly dispatched `Test` run, mark the PR ready, and squash-merge
-it with the generated title unchanged.
+The App, not `GITHUB_TOKEN`, opens the release PR, so it gets the normal PR
+checks. Review the exact diff, wait for the required checks, mark it ready, and
+squash-merge it with the generated title unchanged. Only the repository owner
+(`chhoumann`) may merge it, and only directly onto its recorded base. When
+`master` moves, the ruleset marks the PR out of date until the bot refreshes it
+after the next green `Test` push run. Each refresh puts the PR back in draft
+and restarts its checks, so once the owner marks it ready, stop merging other
+PRs until it merges.
 
-When a feature requires a newer Obsidian API, change `manifest.json`
-`minAppVersion` in the feature PR and leave every existing `versions.json`
-entry unchanged. Those entries describe already-published releases. The
-release planner verifies that released history still matches the latest tag,
-then the generated release PR records the new compatibility floor only under
-the new version.
+Never update a release PR's branch yourself, not even with
+`gh pr update-branch`. The bot refuses to overwrite a branch head it did not
+generate, so release planning fails on every later push. To recover before the
+PR merges, close it and delete its `release/<version>` branch. The next green
+`Test` push run creates both again.
 
-Keep the repository's default `GITHUB_TOKEN` permission read-only. Enable the
-repository setting that lets GitHub Actions create and approve pull requests so
-the narrowly scoped `Open release PR` job can create the machine-generated PR;
-the publisher separately requires the repository owner to perform the merge.
+When a feature requires a newer Obsidian API, raise `manifest.json`
+`minAppVersion` in the feature PR and leave existing `versions.json` entries
+unchanged. The floor can only go up, and the release PR records it under the
+new version.
 
-The no-checkout `Trigger release` workflow validates the merged PR, creates an
-exact `release-run/<version>` recovery branch, and dispatches `Release` from
-that ref. `Release` revalidates the PR provenance and field-level diff before
-installing dependencies. It recomputes the exact version, runs every build
-gate, creates the durable release tag, attests `main.js` and `manifest.json`,
-uploads both to a draft GitHub release, downloads and hashes the remote assets,
-and publishes the release as the final step. Successful publication removes
-the recovery branch. Recover an interrupted run from its exact remaining ref:
+Setup: install the `podnotes-release-bot` App with the `RELEASE_APP_ID`
+variable and the `RELEASE_APP_PRIVATE_KEY` secret. The default `GITHUB_TOKEN`
+stays read-only. The pipeline writes only `release/*` and `release-run/*`
+branches and tags, never `master`, so the master ruleset needs no bypass actor.
+Keep CodeQL default setup enabled: the required `CodeQL` check comes from it, so
+turning it off blocks every PR.
+
+`.github/rulesets/protect-master.json` is the source of truth for the "Protect
+master" ruleset: no deletion, no force push, PRs only, squash only, PRs up to
+date with `master`, and the required checks `Test`, `Docs`, `Validate PR title`,
+`Dependency Review`, and `CodeQL`. Bring any PR except a release PR up to date
+with `gh pr update-branch <number>`. Each check is pinned to the app that
+reports it: GitHub Actions, or GitHub Advanced Security for `CodeQL`, the code
+scanning check that CodeQL default setup reports on every PR. Apply or update
+the ruleset with:
 
 ```bash
+gh api -X POST repos/chhoumann/PodNotes/rulesets --input .github/rulesets/protect-master.json
+gh api -X PUT repos/chhoumann/PodNotes/rulesets/<id> --input .github/rulesets/protect-master.json
+```
+
+To rename a required job, change the JSON in the same PR. For `Test`, `Docs`,
+and `Dependency Review`, apply it with `PUT` just before that PR merges. For
+`Validate PR title`, apply it right after: `pull_request_target` runs the
+workflow from `master`, so the PR still reports the old name. `Prepare release`
+also matches the `Test` workflow by its top-level `name:`, so renaming the
+workflow stops release planning without failing any check.
+
+Recovery is for the owner. Agents never dispatch release workflows. The release
+stage accepts only the refs below, re-derives and re-verifies the release commit
+from the PR on each, and re-running a published version verifies it and changes
+nothing.
+
+```bash
+# Re-validate from the current master head:
+gh workflow run release-trigger.yml --ref master -f pr-number=<merged-pr-number>
+# Re-run only the release stage. Use the tag once it exists, or master to pick
+# up a reviewed workflow fix:
 gh workflow run release.yml --ref release-run/<version> -f releasePr=<merged-pr-number>
-# After the durable tag exists:
 gh workflow run release.yml --ref <version> -f releasePr=<merged-pr-number>
-# If the release workflow itself needed a reviewed fix on master:
 gh workflow run release.yml --ref master -f releasePr=<merged-pr-number>
 ```
 
-The `master` recovery path still rebuilds and publishes the exact merge commit
-validated from the machine-generated release PR. It exists only so a reviewed
-workflow fix can recover an already-tagged release without moving the durable
-tag or rewriting the release commit.
-
 ## PR Expectations
 Pull requests should include:
+- a Conventional Commits title with a type from
+  `.github/workflows/pr-title.yml`, because the squash-merge commit takes the
+  PR title and the release planner reads it; record a breaking change with a
+  `BREAKING CHANGE:` footer in the squash commit body, not with `!`;
 - a concise summary of the user-facing change;
 - linked issues when relevant;
 - screenshots or short recordings for visible UI changes;
@@ -252,6 +297,8 @@ Pull requests should include:
 - exact commands run and whether Obsidian runtime verification was performed;
 - release or migration impact, especially for settings, storage, API, or URI
   behavior.
+
+The sections of `.github/PULL_REQUEST_TEMPLATE.md` follow this list.
 
 Keep changes scoped to the touched behavior. Do not mix unrelated formatting,
 dependency churn, docs rewrites, or generated artifact changes into feature and

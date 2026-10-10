@@ -36,7 +36,7 @@ export const EXCLUDED_KEYS: readonly (keyof IPodNotesSettings)[] = [
 ];
 
 /** SecretStorage references are device-local implementation details, not settings transfer data. */
-export const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
+const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
 	"openAISecretId",
 	"deepgramSecretId",
 ]);

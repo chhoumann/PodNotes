@@ -23,7 +23,7 @@ import { NetworkError, requestWithTimeout } from "../utility/networkRequest";
 // single rename. Watchers then see exactly one create of an already-complete
 // file — the same shape the pre-#113 atomic createBinary path produced.
 
-export const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
+const DOWNLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB per range request
 
 // Total-bytes ceiling for a single download. The per-chunk bound above keeps
 // peak memory flat, but without a TOTAL cap a malicious media server (the host of
@@ -53,7 +53,7 @@ export interface RangeProbe {
 	totalSize: number | null;
 }
 
-export function downloadAdapter() {
+function downloadAdapter() {
 	return get(plugin).app.vault.adapter;
 }
 

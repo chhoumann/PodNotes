@@ -236,12 +236,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	private settingsInteractionLockCount = 0;
 	private settingsControlDisabledStates = new Map<SettingsControl, boolean>();
 
-	private settingsTab: PodNotesSettingsTab;
-
 	constructor(app: App, plugin: PodNotes) {
 		super(app, plugin);
 		this.plugin = plugin;
-		this.settingsTab = this;
 	}
 
 	override getSettingDefinitions(): SettingDefinitionItem[] {
