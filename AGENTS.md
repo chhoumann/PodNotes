@@ -198,8 +198,9 @@ Three workflows in `.github/workflows/` call reusable workflows in
    semantic-release's commit analyzer from the Conventional Commits since the
    latest tag. `feat` is minor, `fix` and `perf` are patch, and a
    `BREAKING CHANGE:` footer is major. The pinned `release-policy` makes
-   `build(deps)` a patch even with that footer, so production Dependabot bumps
-   release and `build(deps-dev)` bumps do not. The analyzer ignores the `!` marker, so the
+   `build(deps)` a patch, so production Dependabot bumps release and
+   `build(deps-dev)` bumps do not. A `build(deps)` commit stays a patch even
+   with a `BREAKING CHANGE:` footer. The analyzer ignores the `!` marker, so the
    PR title check rejects it. The `podnotes-release-bot` GitHub App then opens
    or refreshes one draft PR from `release/<version>` titled
    `release(version): Release <version>`, with the generated notes in its body.
@@ -222,8 +223,14 @@ checks. Review the exact diff, wait for the required checks, mark it ready, and
 squash-merge it with the generated title unchanged. Only the repository owner
 (`chhoumann`) may merge it, and only directly onto its recorded base. When
 `master` moves, the ruleset marks the PR out of date until the bot refreshes it
-after the next green `Test` push run. Never update a release PR's branch
-yourself: the merge commit breaks the single-parent check.
+after the next green `Test` push run, which restarts its checks. So stop
+merging other PRs while a release PR waits to merge.
+
+Never update a release PR's branch yourself, not even with
+`gh pr update-branch`. The bot refuses to overwrite a branch it did not
+generate, so release planning fails on every later push. To recover, close the
+PR and delete its `release/<version>` branch. The next green `Test` push run
+creates both again.
 
 When a feature requires a newer Obsidian API, raise `manifest.json`
 `minAppVersion` in the feature PR and leave existing `versions.json` entries
@@ -237,16 +244,20 @@ branches and tags, never `master`, so the master ruleset needs no bypass actor.
 
 `.github/rulesets/protect-master.json` is the source of truth for the "Protect
 master" ruleset: no deletion, no force push, PRs only, squash only, PRs up to
-date with `master` (`gh pr update-branch <number>`), and the required checks
-`Test`, `Docs`, `Validate PR title`, `Dependency Review`, and `CodeQL`. Each
-check is pinned to the app that reports it: GitHub Actions, or GitHub Advanced
-Security for `CodeQL`, which comes from CodeQL default setup. Keep default setup
-enabled; an advanced CodeQL workflow replaces that check and blocks every PR.
-Apply the ruleset with
+date with `master`, and the required checks `Test`, `Docs`, `Validate PR title`,
+`Dependency Review`, and `CodeQL`. Bring any other PR up to date with
+`gh pr update-branch <number>`. Each check is pinned to the app that reports
+it: GitHub Actions, or GitHub Advanced Security for `CodeQL`, the code scanning
+check that CodeQL default setup reports on every PR. Apply the ruleset with
 `gh api -X POST repos/chhoumann/PodNotes/rulesets --input .github/rulesets/protect-master.json`,
-and update it with `-X PUT repos/chhoumann/PodNotes/rulesets/<id>`. To rename
-a required job, change the JSON in the same PR and apply it with `PUT` just
-before that PR merges. Until then the live ruleset waits for the old name.
+and update it with `-X PUT repos/chhoumann/PodNotes/rulesets/<id>`.
+
+To rename a required job, change the JSON in the same PR. For `Test`, `Docs`,
+and `Dependency Review`, apply it with `PUT` just before that PR merges. For
+`Validate PR title`, apply it right after: `pull_request_target` runs the
+workflow from `master`, so the PR still reports the old name. `Prepare release`
+also pins the `Test` workflow name, so renaming that workflow stops release
+planning without failing any check.
 
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit
