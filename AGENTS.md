@@ -198,8 +198,8 @@ Three workflows in `.github/workflows/` call reusable workflows in
    semantic-release's commit analyzer from the Conventional Commits since the
    latest tag. `feat` is minor, `fix` and `perf` are patch, and a
    `BREAKING CHANGE:` footer is major. The pinned `release-policy` makes
-   `build(deps)` a patch too, so production Dependabot bumps release and
-   `build(deps-dev)` bumps do not. The analyzer ignores the `!` marker, so the
+   `build(deps)` a patch even with that footer, so production Dependabot bumps
+   release and `build(deps-dev)` bumps do not. The analyzer ignores the `!` marker, so the
    PR title check rejects it. The `podnotes-release-bot` GitHub App then opens
    or refreshes one draft PR from `release/<version>` titled
    `release(version): Release <version>`, with the generated notes in its body.
