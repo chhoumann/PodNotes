@@ -50,6 +50,13 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        # Release-pipeline pin bumps change how releases are cut, so they stay in their own PR.
+        exclude-patterns:
+          - "chhoumann/obsidian-plugin-workflows*"
   - package-ecosystem: "npm"
     directory: "/docs"
     schedule:
