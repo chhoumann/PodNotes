@@ -10,12 +10,10 @@ import {
 import { decodeSettings } from "./settingsCodec";
 import type { CredentialValues } from "src/types/Credentials";
 
-export { decodeEpisode, decodePlaylist, encodeEpisode, encodePlaylist } from "./episodeCodec";
-
 export const PODNOTES_DATA_SCHEMA_VERSION = 2;
 
 /** Plaintext fields accepted only as migration input and never persisted again. */
-export const RETIRED_PLAINTEXT_SECRET_KEYS = new Set(["openAIApiKey", "diarizationApiKey"]);
+const RETIRED_PLAINTEXT_SECRET_KEYS = new Set(["openAIApiKey", "diarizationApiKey"]);
 
 const KNOWN_TOP_LEVEL_KEYS = new Set([
 	...Object.keys(DEFAULT_SETTINGS),

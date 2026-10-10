@@ -18,7 +18,7 @@ export interface PlayedEpisodeListEntry extends EpisodeListEntry {
 	playedEpisodeKey: string;
 }
 
-export function createEpisodeListEntry(episode: Episode): EpisodeListEntry {
+function createEpisodeListEntry(episode: Episode): EpisodeListEntry {
 	return {
 		episode,
 		isAvailable: true,

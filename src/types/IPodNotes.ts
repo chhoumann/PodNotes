@@ -1,7 +1,7 @@
 import type { IAPI } from "src/API/IAPI";
 import type { IPodNotesSettings } from "./IPodNotesSettings";
 
-export interface PodNotesViewRegistration {
+interface PodNotesViewRegistration {
 	mountPodcastView(): void;
 }
 
