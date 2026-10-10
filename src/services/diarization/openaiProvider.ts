@@ -1,5 +1,5 @@
-import type { OpenAI } from "openai";
 import { toError } from "../../utility/toError";
+import { createTranscription } from "../openaiTranscription";
 import { type DiarizedSegment, OPENAI_DIARIZE_MODEL } from "./types";
 import { parseOpenAIDiarizedSegments } from "./segments";
 
@@ -22,15 +22,13 @@ import { parseOpenAIDiarizedSegments } from "./segments";
  * saving a transcript made only of error markers.
  */
 export async function diarizeWithOpenAI(opts: {
-	getClient: () => Promise<OpenAI>;
+	apiKey: string;
 	chunkFiles: File[];
 	maxRetries: number;
 	onProgress: (message: string) => void;
 	signal: AbortSignal;
 }): Promise<DiarizedSegment[]> {
-	const { getClient, chunkFiles, maxRetries, onProgress, signal } = opts;
-	throwIfAborted(signal);
-	const client = await getClient();
+	const { apiKey, chunkFiles, maxRetries, onProgress, signal } = opts;
 	throwIfAborted(signal);
 	const segments: DiarizedSegment[] = [];
 	let failedChunks = 0;
@@ -45,17 +43,15 @@ export async function diarizeWithOpenAI(opts: {
 		while (true) {
 			throwIfAborted(signal);
 			try {
-				const result = await client.audio.transcriptions.create(
+				const result = await createTranscription(
+					apiKey,
 					{
 						model: OPENAI_DIARIZE_MODEL,
 						file,
-						// The SDK types `response_format`/`chunking_strategy` for this model,
-						// but the create() overload returns a union; parse from the raw
-						// payload so we never depend on which arm TS narrows to.
 						response_format: "diarized_json",
 						chunking_strategy: "auto",
 					},
-					{ signal },
+					signal,
 				);
 				throwIfAborted(signal);
 				// Each chunk's start/end are relative to that chunk, so the

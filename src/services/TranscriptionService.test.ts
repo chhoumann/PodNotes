@@ -1,5 +1,6 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, test, vi, beforeEach } from "vitest";
 import { Notice } from "obsidian";
+import { OPENAI_FAILURES } from "../../tests/mocks/openaiFailures";
 import { TranscriptionService } from "./TranscriptionService";
 import type { Episode } from "src/types/Episode";
 import type PodNotes from "src/main";
@@ -18,7 +19,7 @@ vi.mock("obsidian", async (importOriginal) => {
 });
 
 const getEpisodeAudioBufferMock = vi.fn();
-const transcriptionsCreateMock = vi.fn();
+const fetchMock = vi.fn<typeof fetch>();
 const diarizeWithDeepgramMock = vi.hoisted(() => vi.fn());
 
 function deferred<T>() {
@@ -48,12 +49,6 @@ async function settlesAfterMicrotasks(promise: Promise<unknown>): Promise<boolea
 
 vi.mock("../downloadEpisode", () => ({
 	getEpisodeAudioBuffer: (...args: unknown[]) => getEpisodeAudioBufferMock(...args),
-}));
-
-vi.mock("openai", () => ({
-	OpenAI: class {
-		audio = { transcriptions: { create: transcriptionsCreateMock } };
-	},
 }));
 
 vi.mock("./diarization", async () => {
@@ -136,16 +131,27 @@ function createMockPlugin(
 	} as unknown as PodNotes;
 }
 
+const whisperReturns = (text: string) =>
+	fetchMock.mockImplementation(async () => Response.json({ text }));
+
+const sentFile = (init?: RequestInit) => (init?.body as FormData | undefined)?.get("file") as File;
+
 describe("TranscriptionService", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		noticeMessages.length = 0;
+		fetchMock.mockReset();
+		vi.stubGlobal("fetch", fetchMock);
 		diarizeWithDeepgramMock.mockReset();
 		getEpisodeAudioBufferMock.mockResolvedValue({
 			buffer: new ArrayBuffer(1024),
 			extension: "mp3",
 			basename: "episode",
 		});
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
 	});
 
 	describe("transcribeCurrentEpisode validation", () => {
@@ -178,41 +184,12 @@ describe("TranscriptionService", () => {
 			service.dispose();
 
 			(service as unknown as { drainQueue: () => void }).drainQueue();
-			await expect(
-				(service as unknown as { getClient: () => Promise<unknown> }).getClient(),
-			).rejects.toThrow("unloaded");
+			expect(() => (service as unknown as { getApiKey: () => string }).getApiKey()).toThrow(
+				"unloaded",
+			);
 
 			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 			expect(plugin.credentials.get).not.toHaveBeenCalled();
-		});
-
-		test("cannot recreate a client when unload happens during the dynamic import", async () => {
-			const plugin = createMockPlugin();
-			let resolveModule!: (module: Pick<typeof import("openai"), "OpenAI">) => void;
-			const loader = vi.fn(
-				() =>
-					new Promise<Pick<typeof import("openai"), "OpenAI">>((resolve) => {
-						resolveModule = resolve;
-					}),
-			);
-			const constructor = vi.fn(() => ({ audio: { transcriptions: { create: vi.fn() } } }));
-			const service = new TranscriptionService(plugin, loader);
-			const pending = (
-				service as unknown as { getClient: () => Promise<unknown> }
-			).getClient();
-			await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
-
-			service.dispose();
-			resolveModule({ OpenAI: constructor as unknown as typeof import("openai").OpenAI });
-
-			await expect(pending).rejects.toThrow("unloaded");
-			expect(constructor).not.toHaveBeenCalled();
-			expect(
-				(service as unknown as { client: unknown; cachedApiKey: unknown }).client,
-			).toBeNull();
-			expect(
-				(service as unknown as { client: unknown; cachedApiKey: unknown }).cachedApiKey,
-			).toBeNull();
 		});
 
 		test("settles promptly when unloaded during audio acquisition", async () => {
@@ -246,21 +223,11 @@ describe("TranscriptionService", () => {
 		test("aborts active OpenAI work without writing a note or updating notices", async () => {
 			const plugin = createMockPlugin();
 			const service = new TranscriptionService(plugin);
-			let finishRequest!: (result: { text: string }) => void;
-			let requestSignal: AbortSignal | undefined;
-			transcriptionsCreateMock.mockImplementation(
-				(
-					_request: unknown,
-					options?: { signal?: AbortSignal },
-				): Promise<{ text: string }> =>
-					new Promise((resolve, reject) => {
+			let finishRequest!: (response: Response) => void;
+			fetchMock.mockImplementation(
+				() =>
+					new Promise((resolve) => {
 						finishRequest = resolve;
-						requestSignal = options?.signal;
-						requestSignal?.addEventListener(
-							"abort",
-							() => reject(requestSignal?.reason ?? new Error("aborted")),
-							{ once: true },
-						);
 					}),
 			);
 			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
@@ -270,14 +237,14 @@ describe("TranscriptionService", () => {
 						transcribeEpisode: (episode: Episode) => Promise<void>;
 					}
 				).transcribeEpisode(mockEpisode);
-				await vi.waitFor(() => expect(transcriptionsCreateMock).toHaveBeenCalledOnce());
+				await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
 
 				const messagesBeforeDispose = setMessage.mock.calls.length;
 				service.dispose();
-				finishRequest({ text: "This must not be saved." });
+				finishRequest(Response.json({ text: "This must not be saved." }));
 				await pending;
 
-				expect(requestSignal?.aborted).toBe(true);
+				expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
 				expect(plugin.app.vault.create).not.toHaveBeenCalled();
 				expect(setMessage).toHaveBeenCalledTimes(messagesBeforeDispose);
 			} finally {
@@ -353,7 +320,7 @@ describe("TranscriptionService", () => {
 			vi.useFakeTimers();
 			const hide = vi.spyOn(Notice.prototype, "hide");
 			try {
-				transcriptionsCreateMock.mockResolvedValue({ text: "Completed transcript." });
+				whisperReturns("Completed transcript.");
 				const plugin = createMockPlugin();
 				const service = new TranscriptionService(plugin);
 				await (
@@ -390,7 +357,7 @@ describe("TranscriptionService", () => {
 		};
 
 		test("does not write a file when the transcript is empty", async () => {
-			transcriptionsCreateMock.mockResolvedValue({ text: "" });
+			whisperReturns("");
 			const plugin = createMockPlugin();
 
 			await runTranscribeEpisode(plugin);
@@ -401,7 +368,7 @@ describe("TranscriptionService", () => {
 		test("does not write a file when the transcript is only whitespace", async () => {
 			// Multiple empty chunks join to " ", not "" — the trimmed-emptiness check
 			// must still treat this as failure.
-			transcriptionsCreateMock.mockResolvedValue({ text: "   \n\t  " });
+			whisperReturns("   \n\t  ");
 			const plugin = createMockPlugin();
 
 			await runTranscribeEpisode(plugin);
@@ -410,9 +377,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("writes a file when the transcript has content", async () => {
-			transcriptionsCreateMock.mockResolvedValue({
-				text: "Hello world. This is a transcript.",
-			});
+			whisperReturns("Hello world. This is a transcript.");
 			const plugin = createMockPlugin();
 
 			await runTranscribeEpisode(plugin);
@@ -453,7 +418,7 @@ describe("TranscriptionService", () => {
 		};
 
 		test("throws when the trimmed Whisper body is empty", async () => {
-			transcriptionsCreateMock.mockResolvedValue({ text: "   \n  " });
+			whisperReturns("   \n  ");
 
 			await expect(buildBody(createMockPlugin())).rejects.toThrow(
 				"Transcription returned no text.",
@@ -461,9 +426,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("returns the reflowed body when there is text", async () => {
-			transcriptionsCreateMock.mockResolvedValue({
-				text: "One. Two.",
-			});
+			whisperReturns("One. Two.");
 
 			await expect(buildBody(createMockPlugin())).resolves.toEqual({
 				body: "One.\n\nTwo.",
@@ -501,7 +464,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("throws (no file) when the single chunk fails every retry", async () => {
-			transcriptionsCreateMock.mockRejectedValue(new Error("boom"));
+			fetchMock.mockImplementation(async () => new Response("boom", { status: 500 }));
 			vi.useFakeTimers();
 			try {
 				const promise = buildBodyDirect(createMockPlugin(), mp3Audio(1024));
@@ -519,12 +482,11 @@ describe("TranscriptionService", () => {
 			// >20 MB mp3 → two chunks. chunk 0 fails every retry; chunk 1 "succeeds"
 			// but returns empty text. The body is then only an error marker, which
 			// must NOT be saved as a completed transcript.
-			transcriptionsCreateMock.mockImplementation(async ({ file }: { file: File }) => {
-				if (file.name.includes("part0")) {
-					throw new Error("boom");
-				}
-				return { text: "   " };
-			});
+			fetchMock.mockImplementation(async (_url, init) =>
+				sentFile(init).name.includes("part0")
+					? new Response("boom", { status: 500 })
+					: Response.json({ text: "   " }),
+			);
 
 			vi.useFakeTimers();
 			try {
@@ -543,7 +505,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("does not write a file when transcription fails completely", async () => {
-			transcriptionsCreateMock.mockRejectedValue(new Error("boom"));
+			fetchMock.mockImplementation(async () => new Response("boom", { status: 500 }));
 			const plugin = createMockPlugin();
 			const service = new TranscriptionService(plugin);
 
@@ -566,12 +528,11 @@ describe("TranscriptionService", () => {
 
 		test("keeps an otherwise-good transcript but warns when only some chunks fail", async () => {
 			// A >20 MB mp3 byte-splits into two chunks; fail the second one.
-			transcriptionsCreateMock.mockImplementation(async ({ file }: { file: File }) => {
-				if (file.name.includes("part1")) {
-					throw new Error("boom");
-				}
-				return { text: "Good chunk." };
-			});
+			fetchMock.mockImplementation(async (_url, init) =>
+				sentFile(init).name.includes("part1")
+					? new Response("boom", { status: 500 })
+					: Response.json({ text: "Good chunk." }),
+			);
 
 			vi.useFakeTimers();
 			try {
@@ -589,5 +550,86 @@ describe("TranscriptionService", () => {
 				vi.useRealTimers();
 			}
 		});
+	});
+
+	describe("OpenAI requests and failures", () => {
+		const transcribe = (plugin: PodNotes) =>
+			(
+				new TranscriptionService(plugin) as unknown as {
+					transcribeEpisode: (episode: Episode) => Promise<void>;
+				}
+			).transcribeEpisode(mockEpisode);
+
+		const finalNotice = async (plugin: PodNotes): Promise<string> => {
+			vi.useFakeTimers();
+			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				const pending = transcribe(plugin);
+				await vi.runAllTimersAsync();
+				await pending;
+				const calls = setMessage.mock.calls;
+				const message = String(calls[calls.length - 1][0]);
+				return message.slice(message.indexOf("\n\n") + 2);
+			} finally {
+				setMessage.mockRestore();
+				consoleError.mockRestore();
+				vi.useRealTimers();
+			}
+		};
+
+		test("sends Whisper only the model and the episode file", async () => {
+			whisperReturns("Hello.");
+
+			await transcribe(createMockPlugin());
+
+			expect(fetchMock).toHaveBeenCalledOnce();
+			const form = fetchMock.mock.calls[0][1]?.body as FormData;
+			expect([...form.keys()]).toEqual(["model", "file"]);
+			expect(form.get("model")).toBe("whisper-1");
+			const file = sentFile(fetchMock.mock.calls[0][1]);
+			expect(file.name).toBe("episode.mp3");
+			expect(file.type).toBe("audio/mp3");
+			expect(file.size).toBe(1024);
+		});
+
+		test.each(OPENAI_FAILURES)(
+			"Whisper %s fails the run after three sends",
+			async (_name, respond) => {
+				fetchMock.mockImplementation(respond);
+
+				await expect(finalNotice(createMockPlugin())).resolves.toBe(
+					"Transcription failed: Transcription failed: all 1 audio chunk(s) failed or returned no text.",
+				);
+				expect(fetchMock).toHaveBeenCalledTimes(3);
+			},
+		);
+
+		test("Whisper answering without text fails the run after three sends", async () => {
+			fetchMock.mockImplementation(async () => Response.json({}));
+
+			await expect(finalNotice(createMockPlugin())).resolves.toBe(
+				"Transcription failed: Transcription failed: all 1 audio chunk(s) failed or returned no text.",
+			);
+			expect(fetchMock).toHaveBeenCalledTimes(3);
+		});
+
+		test.each(OPENAI_FAILURES)(
+			"OpenAI diarization %s shows the API error after three sends",
+			async (_name, respond, message) => {
+				fetchMock.mockImplementation(respond);
+				const plugin = createMockPlugin();
+				plugin.settings.transcript.diarization = {
+					enabled: true,
+					provider: "openai",
+					speakerTemplate: "**{{speaker}}:** {{text}}",
+				};
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					`Transcription failed: OpenAI diarization failed for every chunk: ${message}`,
+				);
+				expect(fetchMock).toHaveBeenCalledTimes(3);
+			},
+		);
 	});
 });

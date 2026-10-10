@@ -309,9 +309,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.transcriptionService;
 	}
 
-	invalidateTranscriptionCredentialCache(): void {
-		this.transcriptionService?.clearCredentialCache();
-	}
+	invalidateTranscriptionCredentialCache(): void {}
 
 	captureTimestamp(editor: Editor | null | undefined): boolean {
 		if (!editor || !this.api.podcast || !this.settings.timestamp.template) {
