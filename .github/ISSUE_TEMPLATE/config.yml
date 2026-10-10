@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: PodNotes documentation
+    url: https://podnotes.obsidian.guide
+    about: Guides for every PodNotes feature.
+  - name: Report a security vulnerability
+    url: https://github.com/chhoumann/PodNotes/security/advisories/new
+    about: Report security problems privately, not in a public issue.
