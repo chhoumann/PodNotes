@@ -1,0 +1,28 @@
+# The squash-merge commit takes the PR title, and the release planner reads that
+# commit to pick the next version. Validate the title as a Conventional Commit.
+name: PR Title
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      # The planner ignores the "!" breaking marker, so the pattern rejects it.
+      - name: Lint PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types="feat|fix|perf|docs|style|refactor|test|build|ci|chore|revert|release"
+          if [[ ! "$TITLE" =~ ^($types)(\([^()]+\))?:\ [^[:space:]] ]]; then
+            echo "::error::PR title \"$TITLE\" is not a Conventional Commit: <type>(<scope>): <subject>, with type one of ${types//|/, }. Mark a breaking change with a BREAKING CHANGE: footer in the squash commit body, not with \"!\"."
+            exit 1
+          fi
