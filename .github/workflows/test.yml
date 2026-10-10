@@ -1,11 +1,6 @@
 name: Test
 on:
   workflow_dispatch:
-    inputs:
-      targetSha:
-        description: "Exact commit SHA to test"
-        required: true
-        type: string
   pull_request:
   push:
     branches:
@@ -13,6 +8,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -22,18 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-          ref: ${{ inputs.targetSha || github.sha }}
-      - name: Verify dispatched commit
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          TARGET_SHA: ${{ inputs.targetSha }}
-        run: |
-          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "targetSha must be a full commit SHA" >&2
-            exit 1
-          fi
-          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          persist-credentials: false
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -45,9 +33,7 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
-      - name: Type check
-        run: npm run typecheck
-      - name: Build
+      - name: Type check and build
         run: npm run build
       - name: Run tests
         run: npm run test
