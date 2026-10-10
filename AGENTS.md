@@ -223,14 +223,15 @@ checks. Review the exact diff, wait for the required checks, mark it ready, and
 squash-merge it with the generated title unchanged. Only the repository owner
 (`chhoumann`) may merge it, and only directly onto its recorded base. When
 `master` moves, the ruleset marks the PR out of date until the bot refreshes it
-after the next green `Test` push run, which restarts its checks. So stop
-merging other PRs while a release PR waits to merge.
+after the next green `Test` push run. Each refresh puts the PR back in draft
+and restarts its checks, so once the owner marks it ready, stop merging other
+PRs until it merges.
 
 Never update a release PR's branch yourself, not even with
-`gh pr update-branch`. The bot refuses to overwrite a branch it did not
-generate, so release planning fails on every later push. To recover, close the
-PR and delete its `release/<version>` branch. The next green `Test` push run
-creates both again.
+`gh pr update-branch`. The bot refuses to overwrite a branch head it did not
+generate, so release planning fails on every later push. To recover before the
+PR merges, close it and delete its `release/<version>` branch. The next green
+`Test` push run creates both again.
 
 When a feature requires a newer Obsidian API, raise `manifest.json`
 `minAppVersion` in the feature PR and leave existing `versions.json` entries
@@ -241,23 +242,29 @@ Setup: install the `podnotes-release-bot` App with the `RELEASE_APP_ID`
 variable and the `RELEASE_APP_PRIVATE_KEY` secret. The default `GITHUB_TOKEN`
 stays read-only. The pipeline writes only `release/*` and `release-run/*`
 branches and tags, never `master`, so the master ruleset needs no bypass actor.
+Keep CodeQL default setup enabled: the required `CodeQL` check comes from it, so
+turning it off blocks every PR.
 
 `.github/rulesets/protect-master.json` is the source of truth for the "Protect
 master" ruleset: no deletion, no force push, PRs only, squash only, PRs up to
 date with `master`, and the required checks `Test`, `Docs`, `Validate PR title`,
-`Dependency Review`, and `CodeQL`. Bring any other PR up to date with
-`gh pr update-branch <number>`. Each check is pinned to the app that reports
-it: GitHub Actions, or GitHub Advanced Security for `CodeQL`, the code scanning
-check that CodeQL default setup reports on every PR. Apply the ruleset with
-`gh api -X POST repos/chhoumann/PodNotes/rulesets --input .github/rulesets/protect-master.json`,
-and update it with `-X PUT repos/chhoumann/PodNotes/rulesets/<id>`.
+`Dependency Review`, and `CodeQL`. Bring any PR except a release PR up to date
+with `gh pr update-branch <number>`. Each check is pinned to the app that
+reports it: GitHub Actions, or GitHub Advanced Security for `CodeQL`, the code
+scanning check that CodeQL default setup reports on every PR. Apply or update
+the ruleset with:
+
+```bash
+gh api -X POST repos/chhoumann/PodNotes/rulesets --input .github/rulesets/protect-master.json
+gh api -X PUT repos/chhoumann/PodNotes/rulesets/<id> --input .github/rulesets/protect-master.json
+```
 
 To rename a required job, change the JSON in the same PR. For `Test`, `Docs`,
 and `Dependency Review`, apply it with `PUT` just before that PR merges. For
 `Validate PR title`, apply it right after: `pull_request_target` runs the
 workflow from `master`, so the PR still reports the old name. `Prepare release`
-also pins the `Test` workflow name, so renaming that workflow stops release
-planning without failing any check.
+also matches the `Test` workflow by its top-level `name:`, so renaming the
+workflow stops release planning without failing any check.
 
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit
