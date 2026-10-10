@@ -27,14 +27,14 @@
 		{
 			"type": "required_status_checks",
 			"parameters": {
-				"strict_required_status_checks_policy": false,
+				"strict_required_status_checks_policy": true,
 				"do_not_enforce_on_create": false,
 				"required_status_checks": [
-					{ "context": "Test" },
-					{ "context": "Docs" },
-					{ "context": "Validate PR title" },
-					{ "context": "Dependency Review" },
-					{ "context": "CodeQL" }
+					{ "context": "Test", "integration_id": 15368 },
+					{ "context": "Docs", "integration_id": 15368 },
+					{ "context": "Validate PR title", "integration_id": 15368 },
+					{ "context": "Dependency Review", "integration_id": 15368 },
+					{ "context": "CodeQL", "integration_id": 57789 }
 				]
 			}
 		}

@@ -220,9 +220,10 @@ Three workflows in `.github/workflows/` call reusable workflows in
 The App, not `GITHUB_TOKEN`, opens the release PR, so it gets the normal PR
 checks. Review the exact diff, wait for the required checks, mark it ready, and
 squash-merge it with the generated title unchanged. Only the repository owner
-(`chhoumann`) may merge it, and only directly onto its recorded base. If
-`master` moved after the PR was prepared, wait for the bot to refresh it after
-the next green `Test` push run.
+(`chhoumann`) may merge it, and only directly onto its recorded base. When
+`master` moves, the ruleset marks the PR out of date until the bot refreshes it
+after the next green `Test` push run. Never update a release PR's branch
+yourself: the merge commit breaks the single-parent check.
 
 When a feature requires a newer Obsidian API, raise `manifest.json`
 `minAppVersion` in the feature PR and leave existing `versions.json` entries
@@ -235,12 +236,17 @@ stays read-only. The pipeline writes only `release/*` and `release-run/*`
 branches and tags, never `master`, so the master ruleset needs no bypass actor.
 
 `.github/rulesets/protect-master.json` is the source of truth for the "Protect
-master" ruleset: no deletion, no force push, PRs only, squash only, and the
-required checks `Test`, `Docs`, `Validate PR title`, `Dependency Review`, and
-`CodeQL`. Rename one of those jobs only together with the ruleset in the same
-PR, or every PR blocks. Apply it with
-`gh api -X POST repos/chhoumann/PodNotes/rulesets --input .github/rulesets/protect-master.json`
-(`-X PUT repos/chhoumann/PodNotes/rulesets/<id>` to update).
+master" ruleset: no deletion, no force push, PRs only, squash only, PRs up to
+date with `master` (`gh pr update-branch <number>`), and the required checks
+`Test`, `Docs`, `Validate PR title`, `Dependency Review`, and `CodeQL`. Each
+check is pinned to the app that reports it: GitHub Actions, or GitHub Advanced
+Security for `CodeQL`, which comes from CodeQL default setup. Keep default setup
+enabled; an advanced CodeQL workflow replaces that check and blocks every PR.
+Apply the ruleset with
+`gh api -X POST repos/chhoumann/PodNotes/rulesets --input .github/rulesets/protect-master.json`,
+and update it with `-X PUT repos/chhoumann/PodNotes/rulesets/<id>`. To rename
+a required job, change the JSON in the same PR and apply it with `PUT` just
+before that PR merges. Until then the live ruleset waits for the old name.
 
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit
