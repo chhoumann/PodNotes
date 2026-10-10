@@ -50,7 +50,7 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
-  - package-ecosystem: "pip"
+  - package-ecosystem: "npm"
     directory: "/docs"
     schedule:
       interval: "weekly"
@@ -61,14 +61,14 @@ updates:
       prefix: "docs"
       include: "scope"
     groups:
-      pip-minor-patch:
+      docs-minor-patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
           - "minor"
           - "patch"
-      pip-security:
+      docs-security:
         applies-to: security-updates
         patterns:
           - "*"
