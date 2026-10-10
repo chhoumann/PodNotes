@@ -12,5 +12,8 @@
 		"astro": "^7.3.8",
 		"sharp": "^0.35.5",
 		"starlight-links-validator": "^0.27.0"
+	},
+	"overrides": {
+		"postcss-nested": "^7.0.2"
 	}
 }
