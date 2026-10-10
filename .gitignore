@@ -26,9 +26,8 @@ data.json
 
 __snapshots__
 
-# Documentation build output and dependencies
+# Documentation build output
 docs/dist
-docs/node_modules
 docs/.astro
 
 # Obsidian E2E failure artifacts
