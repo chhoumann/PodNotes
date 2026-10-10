@@ -1,6 +1,6 @@
 # [PodNotes](https://chhoumann.github.io/PodNotes)
 
-<img src="https://github.com/chhoumann/PodNotes/blob/master/docs/docs/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
+<img src="https://github.com/chhoumann/PodNotes/blob/master/docs/public/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
 
 <h3 align="center">You can find the documentation <a href="https://chhoumann.github.io/PodNotes">here</a>.</h3>
 
@@ -55,36 +55,36 @@ vault automatically.
 
 ### Demo
 
-![Demo](docs/docs/resources/demo.gif)
+![Demo](docs/public/resources/demo.gif)
 
 ### Podcast Grid
 
-![Podcast Grid](docs/docs/resources/podcast_grid.png)
+![Podcast Grid](docs/public/resources/podcast_grid.png)
 
 ### Episode List
 
-![Episode List](docs/docs/resources/episode_list.png)
+![Episode List](docs/public/resources/episode_list.png)
 
 ### Player
 
-![Player](docs/docs/resources/player.png)
+![Player](docs/public/resources/player.png)
 
 ### Episode notes (Bases-friendly)
 
-![Episode note](docs/docs/resources/podcast_note.png)
+![Episode note](docs/public/resources/podcast_note.png)
 
 ### Timestamps
 
-![Timestamps](docs/docs/resources/timestamps.png)
+![Timestamps](docs/public/resources/timestamps.png)
 
 ### Transcripts with speaker labels
 
-![Transcript with speaker labels](docs/docs/resources/transcript_diarization.png)
+![Transcript with speaker labels](docs/public/resources/transcript_diarization.png)
 
 ### Browse your library with Bases
 
-![Bases view of episode notes](docs/docs/resources/bases_view.png)
+![Bases view of episode notes](docs/public/resources/bases_view.png)
 
 ### Podcast search
 
-![Podcast Search](docs/docs/resources/podcast_search.png)
+![Podcast Search](docs/public/resources/podcast_search.png)
