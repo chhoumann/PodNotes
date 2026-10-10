@@ -1,6 +1,9 @@
 ---
 title: PodNotes
 slug: index
+head:
+  - tag: title
+    content: PodNotes
 ---
 
 The one goal for PodNotes is to make it easier to write notes on podcasts.
