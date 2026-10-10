@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a problem with PodNotes
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - Desktop - Windows
+        - Desktop - macOS
+        - Desktop - Linux
+        - Mobile - iOS or iPadOS
+        - Mobile - Android
+    validations:
+      required: true
+  - type: textarea
+    id: debug-info
+    attributes:
+      label: Obsidian debug info
+      description: Command palette, run "Show debug info", then "Copy to clipboard" and paste it here.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: feed-url
+    attributes:
+      label: Feed URL
+      placeholder: https://
+  - type: textarea
+    id: local-file
+    attributes:
+      label: Local file details
+      description: "For local audio files: file format, size, and where it is in your vault."
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: Open developer tools with Ctrl+Shift+I (Cmd+Option+I on macOS) and paste any errors.
+      render: text
