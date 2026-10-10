@@ -83,6 +83,10 @@ async function launchLinux(target) {
 	const env = {
 		...process.env,
 		HOME: target.obsidianHome,
+		// A clicked obsidian:// link relaunches Obsidian through xdg-open without
+		// --user-data-dir. With this default profile it finds this instance's
+		// single-instance lock and hands the URL over instead of starting a second app.
+		XDG_CONFIG_HOME: path.dirname(target.userDataPath),
 		XDG_SESSION_TYPE: "x11",
 		// Marks the display as private, so `capture record` picks x11grab.
 		OBSIDIAN_E2E_CAPTURE_XVFB: "1",
