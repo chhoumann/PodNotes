@@ -33,8 +33,9 @@ export async function createTranscription(
 			text = await response.text();
 		} catch (error) {
 			if (signal.aborted) throw signal.reason;
+			const mentionsTimeout = /timed? ?out/i.test(String(error));
 			throw new Error(
-				timedOut || mentionsTimeout(error) ? "Request timed out." : "Connection error.",
+				timedOut || mentionsTimeout ? "Request timed out." : "Connection error.",
 			);
 		}
 
@@ -48,12 +49,8 @@ export async function createTranscription(
 	}
 }
 
-function mentionsTimeout(error: unknown): boolean {
-	const cause =
-		typeof error === "object" && error !== null && "cause" in error ? String(error.cause) : "";
-	return /timed? ?out/i.test(String(error) + cause);
-}
-
+// Mirrors openai-node's makeStatusError and APIError.makeMessage, so failure
+// notices read exactly as they did when PodNotes used the SDK.
 function errorDetail(body: string): string | undefined {
 	let json: unknown;
 	try {

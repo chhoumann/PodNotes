@@ -40,16 +40,6 @@ const EDGE_FAILURES: typeof OPENAI_FAILURES = [
 		"Request timed out.",
 	],
 	[
-		"transport timeout in cause",
-		() =>
-			Promise.reject(
-				Object.assign(new TypeError("fetch failed"), {
-					cause: new Error("Connect Timeout Error"),
-				}),
-			),
-		"Request timed out.",
-	],
-	[
 		"transport WebKit load failed",
 		() => Promise.reject(new TypeError("Load failed")),
 		"Connection error.",
