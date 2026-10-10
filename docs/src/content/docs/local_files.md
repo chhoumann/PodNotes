@@ -1,3 +1,8 @@
+---
+title: Local files
+slug: local_files
+---
+
 PodNotes supports local media files. You can right-click any audio or video file and click `Play with PodNotes`.
 
 In the podcast grid, you will see a playlist with a folder icon. This is a playlist of every episode you have available offline: both local media files you have played with `Play with PodNotes` and episodes you have downloaded. Removing a downloaded file also removes it from this playlist.

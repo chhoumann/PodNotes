@@ -1,13 +1,17 @@
-# QuickAdd
+---
+title: QuickAdd
+slug: QuickAdd
+---
+
 I have made some QuickAdd macros & actions that might be helpful to others.
 
 Both of these are seen in the demo:
-![Demo](resources/demo.gif)
+![Demo](/resources/demo.gif)
 
 ## Timestamp capture
 This is how I capture timestamps so fast in the demo.
 You can make a Capture action like so:
-![Capture](resources/quickadd_timestamp_podcast.png)
+![Capture](/resources/quickadd_timestamp_podcast.png)
 
 The capture format is as follows:
 ````
@@ -95,19 +99,19 @@ Their file names are up to you, but ensure that they end in .js and .md, for the
 
 Once you have created the macro in the macro panel, you should add a macro action to the QuickAdd menu.
 This is done from the main QuickAdd settings. You should see an input field where you can input the name of the macro choice.
-Right next to it is a dropdown menu with the type of choice you'd like to add—select macro here. Then click `Add Choice`.
+Right next to it is a dropdown menu with the type of choice you'd like to add - select macro here. Then click `Add Choice`.
 
 Once the choice has been added, you should see the macro in the QuickAdd menu in the settings panel.
 Click the cogwheel next to the macro choice to edit the macro. You'll want to select the appropriate macro that you created in the macros panel.
 Notably, we distinguish between a macro and a macro choice. Selecting a macro in the menu that pops up 'links' it to the macro choice, so the macro choice can execute the macro.
 
 My settings for the Template action/step in the macro are as follows:
-![Template action](resources/quickadd_create_note_settings.png)
+![Template action](/resources/quickadd_create_note_settings.png)
 
 Which means that it creates a file with the podcast episode title as the file name in the `inputs/podcasts` folder, and then opens the file after.
 
 Ultimately, activating the macro will lead to notes like this one.
-![Example note](resources/quickadd_example_note.png)
+![Example note](/resources/quickadd_example_note.png)
 
 If you want more information / guidance on how to use QuickAdd, you can check out the [QuickAdd documentation](https://github.com/chhoumann/quickadd/). You can also check out the [video I made to help you get started with QuickAdd](https://www.youtube.com/watch?v=gYK3VDQsZJo).
 There are also similar use cases to this one, which all have similar instructions for installation. These may help:

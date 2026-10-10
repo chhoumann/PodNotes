@@ -1,4 +1,7 @@
-# Transcripts
+---
+title: Transcripts
+slug: transcripts
+---
 
 PodNotes can create transcript notes from podcast episodes. Plain transcription
 uses OpenAI's Whisper model, while optional speaker diarization can use OpenAI
@@ -71,13 +74,13 @@ secret is missing so it can tell you which provider must be configured on the
 current device.
 
 Generated transcript notes are also available to workflow plugins through the
-[PodNotes API](./api.md#transcript), so tools such as QuickAdd or Templater can
+[PodNotes API](/api/#transcript), so tools such as QuickAdd or Templater can
 read the text and send it to the AI provider configured in your own macro.
 
 ## Transcript Template
 
 The transcript template works similarly to the
-[note template](./templates.md#note-template), with the additional
+[note template](/templates/#note-template), with the additional
 `{{transcript}}` placeholder.
 
 ## Speaker Diarization
@@ -86,13 +89,13 @@ By default, transcription uses OpenAI's Whisper model, which produces plain
 text with **no speaker labels**. Speaker diarization is an opt-in setting that
 labels each transcript segment by speaker:
 
-![Transcript with speaker labels](resources/transcript_diarization.png)
+![Transcript with speaker labels](/resources/transcript_diarization.png)
 
 ### Enabling it
 
 In the **Transcript settings** section, turn on **Speaker diarization** and choose a provider:
 
-![Speaker diarization settings](resources/diarization_settings.png)
+![Speaker diarization settings](/resources/diarization_settings.png)
 
 - **OpenAI** (`gpt-4o-transcribe-diarize`) reuses the OpenAI secret selected
   above. Because each request is capped at about 20 MB, a conservative margin

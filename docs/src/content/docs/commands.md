@@ -1,3 +1,8 @@
+---
+title: Commands
+slug: commands
+---
+
 ## Show player
 Opens the PodNotes pane and brings it into focus.
 
@@ -30,13 +35,13 @@ Downloads are stored in the location specified by the **Episode download path** 
 ## Capture Timestamp
 This will capture the current timestamp of the currently playing episode.
 
-See [timestamps](timestamps.md) for more information on timestamp templates.
+See [timestamps](/timestamps/) for more information on timestamp templates.
 
 ## Capture Last 10 Seconds / Capture Last 20 Seconds
 These commands capture a linked start-end segment ending at the current playback time.
 When opened, the link seeks to the segment start and pauses playback at the segment end.
 
-See [timestamps](timestamps.md#capturing-segments) for more information on segment templates and behavior.
+See [timestamps](/timestamps/#capturing-segments) for more information on segment templates and behavior.
 
 On mobile, this command can be added to Obsidian's editor toolbar. PodNotes also
 registers the Media Session `previous track` action for headphone controls: when
@@ -62,7 +67,7 @@ This will create a note for the currently playing episode.
 (This command was previously named "Create Podcast Note". The name was changed to
 distinguish it from the feed-level command below; existing hotkeys are unaffected.)
 
-See [templates](templates.md) for more information on note templates.
+See [templates](/templates/) for more information on note templates.
 
 ## Create podcast feed note
 This creates a note for a whole podcast (the feed as a whole), not a single
@@ -71,7 +76,7 @@ picker of your saved podcasts, and choosing one creates (or opens) that podcast'
 note. You can also create a feed note from an episode's right-click menu
 ("Create feed note").
 
-See [templates](templates.md#podcast-feed-notes) for the feed note template and
+See [templates](/templates/#podcast-feed-notes) for the feed note template and
 its available tags.
 
 ## Copy universal episode link to clipboard

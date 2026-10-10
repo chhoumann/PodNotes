@@ -1,4 +1,8 @@
-# API
+---
+title: API
+slug: api
+---
+
 ```js
 export interface IAPI {
 	readonly podcast: Episode;
