@@ -73,7 +73,9 @@ and observed plugin state before and after the action.
 ## Obsidian Runtime Workflow
 Prove runtime behavior in a real Obsidian whose PodNotes plugin folder links this
 checkout's build. Prefer scripted, repeatable checks, and for commands or URIs
-test both the user-facing path and the direct command/URI path.
+test both the user-facing path and the direct command/URI path. The project
+verify skill (`.claude/skills/verify/SKILL.md`) shows how to seed a feed and a
+local file, drive each feature, and capture evidence.
 
 ### Shared dev vault (macOS main checkout)
 The canonical `/Users/christian/Developer/PodNotes` checkout uses the shared
