@@ -4,8 +4,18 @@ import { TranscriptionService } from "./TranscriptionService";
 import type { Episode } from "src/types/Episode";
 import type PodNotes from "src/main";
 
-// The shared obsidian mock's Notice has no setMessage; TimerNotice needs one.
-(Notice.prototype as unknown as { setMessage: () => void }).setMessage = () => {};
+const noticeMessages = vi.hoisted(() => [] as string[]);
+
+vi.mock("obsidian", async (importOriginal) => {
+	const obsidian = await importOriginal<typeof import("obsidian")>();
+	class RecordingNotice extends obsidian.Notice {
+		constructor(message: string | DocumentFragment, duration?: number) {
+			super(message, duration);
+			noticeMessages.push(String(message));
+		}
+	}
+	return { ...obsidian, Notice: RecordingNotice };
+});
 
 const getEpisodeAudioBufferMock = vi.fn();
 const transcriptionsCreateMock = vi.fn();
@@ -129,52 +139,12 @@ function createMockPlugin(
 describe("TranscriptionService", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		noticeMessages.length = 0;
 		diarizeWithDeepgramMock.mockReset();
 		getEpisodeAudioBufferMock.mockResolvedValue({
 			buffer: new ArrayBuffer(1024),
 			extension: "mp3",
 			basename: "episode",
-		});
-	});
-
-	describe("formatTime", () => {
-		test("formats time correctly for seconds", () => {
-			const formatTime = (ms: number): string => {
-				const seconds = Math.floor(ms / 1000);
-				const minutes = Math.floor(seconds / 60);
-				const hours = Math.floor(minutes / 60);
-				return `${hours.toString().padStart(2, "0")}:${(minutes % 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
-			};
-
-			expect(formatTime(0)).toBe("00:00:00");
-			expect(formatTime(1000)).toBe("00:00:01");
-			expect(formatTime(60000)).toBe("00:01:00");
-			expect(formatTime(3600000)).toBe("01:00:00");
-			expect(formatTime(3661000)).toBe("01:01:01");
-		});
-	});
-
-	// NOTE: the audio chunking + WAV encoding tests (getMimeType, shouldConvertToWav,
-	// createBinaryChunkFiles, writeWavHeader, createChunkFiles) moved to
-	// audioChunker.test.ts, where they exercise the real exported functions instead
-	// of inline copies. This file keeps the service-orchestration tests.
-
-	describe("getEpisodeKey", () => {
-		test("generates unique key from podcast name and title", () => {
-			const getEpisodeKey = (episode: Episode): string => {
-				return `${episode.podcastName}:${episode.title}`;
-			};
-
-			expect(getEpisodeKey(mockEpisode)).toBe("Test Podcast:Test Episode");
-		});
-	});
-
-	describe("TranscriptionService instantiation", () => {
-		test("creates instance with plugin reference", () => {
-			const mockPlugin = createMockPlugin();
-			const service = new TranscriptionService(mockPlugin);
-
-			expect(service).toBeInstanceOf(TranscriptionService);
 		});
 	});
 
@@ -184,6 +154,10 @@ describe("TranscriptionService", () => {
 			const service = new TranscriptionService(mockPlugin);
 
 			await service.transcribeCurrentEpisode();
+
+			expect(noticeMessages).toEqual([
+				"Select or create an OpenAI API key in the transcript settings on this device.",
+			]);
 		});
 
 		test("shows notice when no episode is playing", async () => {
@@ -191,6 +165,8 @@ describe("TranscriptionService", () => {
 			const service = new TranscriptionService(mockPlugin);
 
 			await service.transcribeCurrentEpisode();
+
+			expect(noticeMessages).toEqual(["No episode is currently playing."]);
 		});
 	});
 

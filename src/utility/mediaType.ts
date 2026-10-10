@@ -2,23 +2,9 @@ import type { Episode, EpisodeMediaType } from "src/types/Episode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import getUrlExtension from "./getUrlExtension";
 
-export const AUDIO_MEDIA_EXTENSIONS = new Set([
-	"mp3",
-	"m4a",
-	"aac",
-	"ogg",
-	"wav",
-	"flac",
-	"wma",
-	"amr",
-]);
+const AUDIO_MEDIA_EXTENSIONS = new Set(["mp3", "m4a", "aac", "ogg", "wav", "flac", "wma", "amr"]);
 
-export const VIDEO_MEDIA_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "ogv"]);
-
-export const PLAYABLE_MEDIA_EXTENSIONS = new Set([
-	...AUDIO_MEDIA_EXTENSIONS,
-	...VIDEO_MEDIA_EXTENSIONS,
-]);
+const VIDEO_MEDIA_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "ogv"]);
 
 export function getMediaTypeFromExtension(extension?: string | null): EpisodeMediaType | null {
 	if (!extension) return null;

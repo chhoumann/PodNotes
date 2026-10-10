@@ -21,7 +21,7 @@ import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
  * the exact same (length-capped) path — otherwise a truncated note would be
  * re-created on every invocation. See issue #22.
  */
-export function getPodcastNotePath(episode: Episode): string {
+function getPodcastNotePath(episode: Episode): string {
 	return renderPodcastNotePath(get(plugin).settings.note.path, episode);
 }
 

@@ -4,7 +4,7 @@
  * referring to the same episode.
  */
 
-export const MIN_TITLE_SIMILARITY = 0.75;
+const MIN_TITLE_SIMILARITY = 0.75;
 
 export function titleTokens(title: string): Set<string> {
 	const tokens = title

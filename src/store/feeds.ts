@@ -13,9 +13,6 @@ export { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
  * stores it reads, so it has no dependency on the rest of the store layer.
  */
 
-/** Bumped whenever the set of podcasts/feeds changes, so views can refresh. */
-export const podcastsUpdated = writable(0);
-
 export const savedFeeds = writable<{ [podcastName: string]: PodcastFeed }>({});
 
 export const episodeCache = writable<{ [podcastName: string]: Episode[] }>({});
