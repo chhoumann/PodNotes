@@ -87,7 +87,7 @@ export class PlayerController {
 	private snapshot: PlayerState;
 	private el: HTMLMediaElement;
 	private session: Session | null = null;
-	/** With no session, the user moved the position: a load starts there, not at the saved progress. */
+	/** The user moved the position since the last load: a new load starts there, not at the saved progress. */
 	private moved = false;
 	private stage: HTMLElement | null = null;
 	/** Advanced by every intent that makes a deferred play stale. */
@@ -211,6 +211,7 @@ export class PlayerController {
 	seek(time: number): boolean {
 		if (this.disposed || !this.snapshot.episode || !isTime(time)) return false;
 		this.endPreview();
+		this.moved = true;
 		this.moveTo(time);
 		return true;
 	}
@@ -393,7 +394,6 @@ export class PlayerController {
 		const status = was === "ended" ? "paused" : was;
 		if (!this.holdsMedia()) {
 			if (session) session.pendingTime = time;
-			else this.moved = true;
 			this.setState({ currentTime: time, status });
 			return true;
 		}
@@ -560,7 +560,7 @@ export class PlayerController {
 	 */
 	private restartTime(episode: Episode): number {
 		const { status, currentTime } = this.snapshot;
-		const live = this.session ? status !== "ended" : this.moved;
+		const live = status !== "ended" && (!!this.session || this.moved);
 		return live ? currentTime : this.resumeTime(episode);
 	}
 

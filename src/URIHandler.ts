@@ -157,7 +157,7 @@ export default async function podNotesURIHandler(
 				? localEpisodeFromFile(
 						app,
 						localFile,
-						// Only the registration knows whether an mp4 or webm is audio or video.
+						// A file does not record whether an mp4 or webm is audio or video, so it takes the registration's.
 						getUnambiguousMediaTypeFromPath(localFile.path) ??
 							getEpisodeMediaType(named),
 					)
