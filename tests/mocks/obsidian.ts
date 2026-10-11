@@ -74,7 +74,10 @@ export class Modal {
 		this.containerEl = document.createElement("div");
 		this.titleEl = document.createElement("div");
 		this.contentEl = document.createElement("div");
-		this.containerEl.append(this.titleEl, this.contentEl);
+		const closeButtonEl = document.createElement("div");
+		closeButtonEl.className = "modal-header-button";
+		closeButtonEl.addEventListener("click", () => this.close());
+		this.containerEl.append(closeButtonEl, this.titleEl, this.contentEl);
 	}
 
 	open(): void {

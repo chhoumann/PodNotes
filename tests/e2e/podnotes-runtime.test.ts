@@ -15,6 +15,7 @@ import {
 	VIEW_TYPE,
 	WAIT_OPTS,
 	waitForPodNotesReady,
+	writeSilentWav,
 } from "./harness";
 
 type PodNotesData = Partial<IPodNotesSettings> & {
@@ -819,45 +820,7 @@ async function seedAudio(
 	const audioPath = sandbox.path(fileName);
 	if (audioFixtureReady) return audioPath;
 
-	await evalJsonAsync<boolean>(
-		obsidian,
-		`
-		(async () => {
-			const sampleRate = 8_000;
-			const sampleCount = sampleRate * 600;
-			const bytes = new Uint8Array(44 + sampleCount);
-			const view = new DataView(bytes.buffer);
-			const ascii = (offset, value) => {
-				for (let index = 0; index < value.length; index++) {
-					bytes[offset + index] = value.charCodeAt(index);
-				}
-			};
-
-			ascii(0, "RIFF");
-			view.setUint32(4, 36 + sampleCount, true);
-			ascii(8, "WAVE");
-			ascii(12, "fmt ");
-			view.setUint32(16, 16, true);
-			view.setUint16(20, 1, true);
-			view.setUint16(22, 1, true);
-			view.setUint32(24, sampleRate, true);
-			view.setUint32(28, sampleRate, true);
-			view.setUint16(32, 1, true);
-			view.setUint16(34, 8, true);
-			ascii(36, "data");
-			view.setUint32(40, sampleCount, true);
-			bytes.fill(128, 44);
-
-			const existing = app.vault.getAbstractFileByPath(${JSON.stringify(audioPath)});
-			if (existing) {
-				await app.vault.modifyBinary(existing, bytes.buffer);
-			} else {
-				await app.vault.createBinary(${JSON.stringify(audioPath)}, bytes.buffer);
-			}
-			return true;
-		})()
-	`,
-	);
+	await writeSilentWav(obsidian, audioPath, 600);
 	await sandbox.waitForExists(fileName, WAIT_OPTS);
 	audioFixtureReady = true;
 
