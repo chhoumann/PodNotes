@@ -217,7 +217,7 @@ export default async function podNotesURIHandler(
 			if (request !== latestRequest) return;
 			const state = get(feeds).get(placeholderKey);
 			episode = findEpisodeByCandidates(state?.episodes ?? [], nameCandidates);
-			if (!episode && (!state?.channel || state.error === "unavailable")) {
+			if (!episode && (!state || state.error)) {
 				new Notice(
 					state?.error === "network"
 						? "Could not load the podcast feed"

@@ -167,6 +167,20 @@ describe("podNotesURIHandler with saved feeds", () => {
 		expect(get(currentEpisode)).toBeUndefined();
 	});
 
+	test("a private feed link to an episode the last copy lacks says the feed could not load when offline", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { feeds } = follow();
+		load.mockResolvedValue(feedDocument("Patron Show", [first]));
+		await feeds.ensureAll();
+		load.mockRejectedValue(new Error("offline"));
+
+		await open(privateLink, second.title);
+
+		expect(notice.mock.calls).toEqual([["Could not load the podcast feed"]]);
+		expect(get(currentEpisode)).toBeUndefined();
+	});
+
 	test("a private feed link that loads after a newer link changes nothing", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		follow();
