@@ -31,18 +31,24 @@ async function resolveCollectionId(
 	podcastName: string,
 	feedUrl: string | undefined,
 ): Promise<string | undefined> {
-	const feeds = Object.values(get(savedFeeds));
+	// The playing episode's podcastName is its subscription's title, normally also
+	// its savedFeeds key, but a key can differ from the title and several saved
+	// podcasts can share one URL. So: the own-key entry when it has the episode's
+	// URL, then an entry with the episode's URL and name, then any entry with the
+	// episode's URL (titles repeat and feeds get rehosted, Codex review #213), then
+	// the name alone. `own` is only compared with saved entries, so a podcast called
+	// "toString" never picks up Object.prototype.
+	const saved = get(savedFeeds);
+	const own = saved[podcastName];
+	const feeds = Object.values(saved);
 	const targetUrl = normalizeFeedUrl(feedUrl);
-	// Several saved podcasts can share one URL, so the playing episode's own
-	// subscription (its URL and podcast name) comes first. A same-name entry that
-	// points at another feed loses to any entry with the episode's URL, since
-	// podcast titles repeat and feeds get rehosted (Codex review #213). Without a
-	// URL match, fall back to the saved podcast with the episode's name.
-	const sameFeed = feeds.filter((feed) => targetUrl && normalizeFeedUrl(feed.url) === targetUrl);
+	const hasUrl = (feed: { url: string }) => targetUrl && normalizeFeedUrl(feed.url) === targetUrl;
+	const sameFeed = feeds.filter(hasUrl);
 	const savedFeed =
+		sameFeed.find((feed) => feed === own) ??
 		sameFeed.find((feed) => feed.title === podcastName) ??
 		sameFeed[0] ??
-		feeds.find((feed) => feed.title === podcastName);
+		feeds.find((feed) => feed === own || feed.title === podcastName);
 
 	if (savedFeed?.collectionId) {
 		return savedFeed.collectionId;
@@ -50,9 +56,7 @@ async function resolveCollectionId(
 
 	const iTunesResponse = await queryiTunesPodcasts(podcastName);
 	const match =
-		(targetUrl
-			? iTunesResponse.find((pod) => normalizeFeedUrl(pod.url) === targetUrl)
-			: undefined) ?? iTunesResponse.find((pod) => pod.title === podcastName);
+		iTunesResponse.find(hasUrl) ?? iTunesResponse.find((pod) => pod.title === podcastName);
 
 	return match?.collectionId;
 }
@@ -79,16 +83,11 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 
 		const targetTitle = itunesTitle ?? title;
 
-		if (!data || typeof data !== "object" || !Array.isArray(data.episodes)) {
+		if (!Array.isArray(data?.episodes)) {
 			throw new NetworkError("invalid-response");
 		}
 		const ep = data.episodes.find(
-			(episode) =>
-				episode !== null &&
-				typeof episode === "object" &&
-				typeof episode.episodeId === "string" &&
-				typeof episode.title === "string" &&
-				episode.title === targetTitle,
+			(episode) => episode?.title === targetTitle && typeof episode.episodeId === "string",
 		);
 		if (!ep) {
 			new Notice(
