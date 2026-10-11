@@ -1,8 +1,5 @@
-// Consumer config for the shared obsidian-e2e instance runner. The four
-// `provision:e2e-vault` / `start:e2e-obsidian` / `stop:e2e-obsidian` /
-// `obsidian:e2e` scripts point at the `obsidian-e2e` bin, which reads this file
-// from the worktree root. See the runner's README ("Instance Runner (CLI)") for
-// the full schema.
+// Config for the obsidian-e2e instance runner, read from the worktree root.
+// Schema: the runner's README ("Instance Runner (CLI)").
 //
 // `defaultData` seeds a freshly provisioned vault's data.json. It mirrors
 // DEFAULT_SETTINGS in src/constants.ts (plus the `schemaVersion: 2` persistence

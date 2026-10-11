@@ -74,109 +74,99 @@ setup, feed or local file used, command or URI invoked, console/runtime errors,
 and observed plugin state before and after the action.
 
 ## Obsidian Runtime Workflow
-Use a dedicated development vault for manual or scripted Obsidian checks. Ensure
-the vault's PodNotes plugin folder points at this checkout's generated plugin
-artifacts before trusting runtime evidence.
+Prove runtime behavior in a real Obsidian whose PodNotes plugin folder links this
+checkout's build. Prefer scripted, repeatable checks, and for commands or URIs
+test both the user-facing path and the direct command/URI path. The project
+verify skill (`.claude/skills/verify/SKILL.md`) shows how to seed a feed and a
+local file, drive each feature, and capture evidence.
 
-If using the `obsidian` CLI, pass the vault selector consistently and prefer
-scripted, repeatable checks for non-trivial flows. For bugs involving commands
-or URIs, test both the user-facing path and the direct command/URI path when
-possible.
-
-### Shared dev vault (main checkout)
-For work in the canonical `/Users/christian/Developer/PodNotes` checkout, use the
-shared `dev` vault and target it explicitly with the `obsidian` CLI:
+### Shared dev vault (macOS main checkout)
+The canonical `/Users/christian/Developer/PodNotes` checkout uses the shared
+`dev` vault at `/Users/christian/Developer/dev_vault/dev`, whose
+`.obsidian/plugins/podnotes` symlinks point at that checkout's artifacts:
 
 ```bash
 npm run dev
-# reload or re-enable PodNotes in the dev vault, e.g.:
 obsidian vault=dev plugin:reload id=podnotes
-# trigger the relevant command, UI flow, or obsidian://podnotes URI
 obsidian vault=dev eval code='app.plugins.plugins.podnotes?.manifest?.version'
-# inspect console/errors and plugin state
 ```
 
-- Dev vault root: `/Users/christian/Developer/dev_vault/dev`.
-- PodNotes plugin folder in the vault:
-  `/Users/christian/Developer/dev_vault/dev/.obsidian/plugins/podnotes`, whose
-  `main.js`/`manifest.json` symlinks point at the canonical checkout's artifacts.
-- Only one checkout can own those symlinks at a time, so the shared `dev` vault
-  is for the main checkout. Worktrees must use the isolated wrapper below.
+Only one checkout can own those symlinks, so worktrees never touch the `dev`
+vault. They use the isolated instance below.
 
-### Isolated worktree vault (parallel worktrees)
-In a worktree, do **not** race the shared `dev` vault — multiple worktree agents
-would clobber each other on the plugin symlink, `data.json`, and `plugin:reload`.
-Use the isolated worktree wrapper instead, which provisions a worktree-local vault
-under `.obsidian-e2e-vaults/podnotes-<worktree>` (git-ignored), starts or reuses a
-private-`HOME` Obsidian instance bound to that vault, disables Restricted Mode,
-waits until PodNotes is live, and then runs your command with the right
-`vault=<worktree vault>` and private `HOME` already applied:
+### Isolated worktree instance (macOS and Linux)
+`scripts/obsidian-e2e.mjs` wraps the `obsidian-e2e` instance runner, configured
+by `obsidian-e2e.config.mjs`. Each worktree gets its own vault
+(`.obsidian-e2e-vaults/podnotes-<worktree>`, git-ignored, seeded with
+`DEFAULT_SETTINGS` on first provision), private `HOME`, CLI socket, and
+Obsidian process. The same commands work on both platforms:
 
 ```bash
-npm run build                              # produce root main.js + manifest.json first
-npm run obsidian:e2e -- eval code=app.vault.getName()
-npm run obsidian:e2e -- eval code='Boolean(app.plugins.plugins.podnotes)'
+npm run build                    # the vault links the root main.js
+npm run start:e2e-obsidian       # start, or reuse and reload PodNotes
+npm run obsidian:e2e -- eval code='Boolean(app.plugins.plugins.podnotes)'   # => true
 npm run obsidian:e2e -- dev:errors
+npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins.podnotes.manifest.version'
 ```
 
-- The four `provision:e2e-vault` / `start:e2e-obsidian` / `stop:e2e-obsidian` /
-  `obsidian:e2e` scripts run on the shared `obsidian-e2e` instance-runner bin,
-  configured by `obsidian-e2e.config.mjs` at the repo root (plugin id, the two
-  symlinked artifacts, the `data.json` seed, and the PodNotes ready probe).
-- The wrapper links the worktree's own `main.js`/`manifest.json` (PodNotes injects
-  its CSS into the bundle, so there is no `styles.css` to link) and seeds a clean
-  `DEFAULT_SETTINGS`-shaped `data.json` on first provision; it never touches
-  `/Users/christian/Developer/dev_vault/dev`.
-- `npm run provision:e2e-vault` and `npm run start:e2e-obsidian` expose the
-  provision/launch steps individually; both accept `--help`.
-- Use `npm run start:e2e-obsidian -- --print-env` only when you need to export
-  the vault env for a separate process. `--print-env` emits export-only lines on
-  stdout (so `eval "$(...)"` is safe): the canonical `OBSIDIAN_E2E_VAULT` /
-  `OBSIDIAN_E2E_VAULT_PATH` / `OBSIDIAN_E2E_OBSIDIAN_HOME` names and, during the
-  migration, legacy `PODNOTES_E2E_*` aliases; `tests/e2e/harness.ts` reads the
-  canonical name first, then the alias. The `obsidian` CLI routes by `$HOME` (it
-  talks to `$HOME/.obsidian-cli.sock`), so to point the Vitest `tests/e2e` suite
-  at the isolated instance you must remap `HOME` as well as the vault name —
-  exporting the vault alone leaves the suite talking to the shared `dev` vault:
+| | macOS | Linux (headless) |
+| --- | --- | --- |
+| App | `Obsidian.app` via `open` | `/opt/Obsidian/obsidian` under `xvfb-run`, no `DISPLAY` needed |
+| Profile | `/private/tmp/podnotes-obsidian-e2e/<vault>-<hash>/` | `/tmp/podnotes-obsidian-e2e/<vault>-<hash>/` |
+| Evidence | `npx obsidian-e2e capture launch` (a separate instance) | the capture commands below, against this instance |
 
-  ```bash
-  npm run build                                     # required: provisioning links main.js
-  eval "$(npm run --silent start:e2e-obsidian -- --print-env)"
-  export HOME="$OBSIDIAN_E2E_OBSIDIAN_HOME"         # required: re-point the CLI socket
-  OBSIDIAN_E2E_VAULT="$OBSIDIAN_E2E_VAULT" npm run test:e2e
-  ```
+- `obsidian:e2e` brings the instance up when needed. A warm instance is used as
+  is: since obsidian-e2e 0.11 `run` does not reload the plugin, so pass
+  `--reload` after every rebuild or you test the old bundle.
+- `npm run start:e2e-obsidian -- --print-env` prints only `export` lines
+  (`OBSIDIAN_E2E_VAULT`, `_VAULT_PATH`, `_OBSIDIAN_HOME`, legacy `PODNOTES_E2E_*`
+  aliases; on Linux also `XDG_RUNTIME_DIR`). After
+  `eval "$(npm run --silent start:e2e-obsidian -- --print-env)"` the raw
+  `obsidian vault="$OBSIDIAN_E2E_VAULT" ...` CLI reaches the instance on Linux.
+  On macOS also `export HOME="$OBSIDIAN_E2E_OBSIDIAN_HOME"`.
 
-  Build first so the instance loads the current bundle (provisioning also needs
-  `main.js` to exist). `start:e2e-obsidian` reloads PodNotes when it reuses a
-  running instance, so the exported instance is never stale.
+### E2E suite
+`npm run test:e2e` is the one command. Vitest arguments pass through
+(`npm run test:e2e -- -t "timestamp"`), every test is listed, and a filter that
+matches no test fails the run.
 
-### Stopping an isolated instance (avoid leaks)
+- Linux: it builds, starts or reuses this worktree's instance, runs `tests/e2e`
+  against it, and stops the instance afterwards only if this run launched it.
+- macOS: it runs against whatever the environment selects, the shared `dev`
+  vault by default. For the isolated instance, export its env first:
+  `eval "$(npm run --silent start:e2e-obsidian -- --print-env)" && npm run test:e2e`.
+- An interrupted run can leave test fixtures in the vault's `data.json`. Reset
+  the vault with `npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults`.
 
-Each started instance is a real Obsidian process tree plus a private profile
-directory under `/private/tmp/podnotes-obsidian-e2e/<vault>-<hash>/`. Removing a
-worktree does **not** stop it, so a finished worktree would leak an Obsidian
-process tree and a `/private/tmp` directory. Stop it explicitly:
+### Evidence (Linux)
+Screenshots and recordings come from the same instance. Write them under the
+git-ignored `.obsidian-e2e-artifacts/`, not `/tmp`:
 
 ```bash
-npm run stop:e2e-obsidian            # stop THIS worktree's instance + remove its tmp dir
-npm run stop:e2e-obsidian -- --dry-run   # show what would be stopped/removed
-npm run stop:e2e-obsidian -- --prune     # also reap orphaned instances (worktree gone)
+npm run screenshot:e2e-obsidian -- .obsidian-e2e-artifacts/player.png         # the PodNotes view
+npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/player.mp4             # 3 s take of the window
+npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/flow.mp4 -- ./drive.sh  # take while a driver runs
+npm run capture:e2e-obsidian -- screenshot .obsidian-e2e-artifacts/modal.png --modal
 ```
 
-The teardown identifies only this worktree's instance by its private
-`--user-data-dir` token (which contains a per-worktree hash), terminates that
-process tree (SIGTERM, then SIGKILL for stragglers), and removes its profile
-directory. It never touches the shared `dev` vault, other worktrees, or quickadd
-instances.
+`screenshot` and `record` open the player first and fail without capturing
+when it does not open. `capture` forwards to `obsidian-e2e capture` (see its
+README), with this instance's CDP port for the verbs that connect. A record
+driver that exits non-zero discards the take.
 
-You rarely need to run `stop` by hand: `start:e2e-obsidian` and `obsidian:e2e`
-reap any orphaned instance (one whose backing worktree no longer exists on disk,
-i.e. it was removed) before launching, even if its Obsidian is still running. An
-idle instance for a worktree that still exists is left alone so concurrent
-workers can reuse it. Reaping scans the default profile root
-(`/tmp/podnotes-obsidian-e2e`); instances started under a custom
-`--profile-root` are only reaped by a start that uses that same root, so stop
-those explicitly.
+### Stopping (avoid leaks)
+Removing a worktree does not stop its instance. Stop it when you are done:
+
+```bash
+npm run stop:e2e-obsidian                # this worktree's process tree and profile
+npm run stop:e2e-obsidian -- --dry-run   # show what would be stopped
+npm run stop:e2e-obsidian -- --prune     # also reap instances whose worktree is gone
+```
+
+`stop` matches only this worktree's `--user-data-dir` (it carries a
+per-worktree hash), including Xvfb on Linux, and never touches the `dev` vault
+or other worktrees. `start:e2e-obsidian` and `obsidian:e2e` also reap orphaned
+instances under the default profile root before launching.
 
 ## Documentation
 Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
