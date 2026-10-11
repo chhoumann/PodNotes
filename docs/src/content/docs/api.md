@@ -1,9 +1,13 @@
 ---
 title: API
 slug: api
-description: Public API members, episode types, playback controls, transcript reads, and timestamp formatting.
+description: Read and control the PodNotes player from QuickAdd scripts, Templater, or the console, and read transcripts and timestamps.
 legacyTitleId: api
 ---
+
+Read and control the PodNotes player from your own scripts through `app.plugins.plugins.podnotes.api`.
+It works wherever a script can reach Obsidian's `app`, such as a QuickAdd script, a Templater template, or the developer console.
+The API exists while PodNotes is enabled. For links that open PodNotes, see [PodNotes URI](/timestamps/#podnotes-uri).
 
 ```ts
 export interface IAPI {
@@ -38,12 +42,10 @@ export interface IAPI {
 }
 ```
 
-The public API is available at `app.plugins.plugins.podnotes.api` when the plugin is enabled.
-It reads and controls the current PodNotes player. [PodNotes URI parameters](/timestamps/#podnotes-uri) are documented separately.
-
 ## `podcast`
-This returns the loaded episode, including when playback is paused.
-Although `IAPI` declares `Episode`, the value can be `undefined` before an episode is loaded.
+
+The loaded episode, also while it is paused.
+`IAPI` declares `Episode`, but the value is `undefined` until an episode is loaded.
 
 ```ts
 export type EpisodeMediaType = "audio" | "video";
@@ -66,49 +68,52 @@ export interface Episode {
 }
 ```
 
-`streamUrl` is the media source. `url` identifies the episode's page, the feed URL when the item has no link, or a vault link for a local file.
-`feedUrl` can contain a private-feed placeholder rather than a fetchable URL.
-`duration` is the feed-provided duration in seconds, which can differ from the player's measured `length`.
-Local episodes extend this type with `podcastName: "local file"`, empty `description` and `content`, and an optional `filePath`.
+- `streamUrl` is the media source.
+- `url` is the episode's web page. It is the feed URL when the episode has no link, and a vault link for a local file.
+- `feedUrl` can hold a private-feed placeholder instead of a URL you can fetch.
+- `duration` is the length in seconds that the feed reports. It can differ from the player's measured `length`.
+- A local file has `podcastName: "local file"`, an empty `description` and `content`, and an optional `filePath`.
 
 ## `isPlaying`
 
-Returns the inverse of PodNotes' paused state. It describes the requested player state rather than proof that media playback has started.
+`true` when PodNotes is not paused.
+It reports the state PodNotes asked for, so it can be `true` before the media starts playing.
 
 ## `length`
 
-Returns the player duration in seconds. The value starts at zero before media metadata loads.
+The duration of the loaded media in seconds. It is `0` until the media's metadata loads.
 
 ## `currentTime`
 
-Gets or sets the player position in seconds. Setting a position clears an active segment's end boundary.
+Gets or sets the playback position in seconds.
+Setting it cancels the end of an active segment, so playback no longer pauses there.
 
 ## `volume`
 
-Gets or sets the volume between `0` and `1`.
-Finite writes are clamped to this range. Non-finite writes preserve the current volume.
-Volume changes also update the saved **Default Volume** preference.
+Gets or sets the volume, from `0` to `1`.
+PodNotes clamps finite values to that range and ignores values that are not finite.
+Setting the volume also changes the saved **Default Volume** setting.
 
 ## `transcript`
-This is a convenience getter for `getTranscript()`:
+
+A shortcut for `getTranscript()` with no argument:
 
 ```js
 const transcript = await app.plugins.plugins.podnotes.api.transcript;
 ```
 
-It returns the generated transcript note for the current episode, or `null` if no
-episode is loaded or no transcript file exists yet. It does not call a transcription provider or
-create a new transcript. **Transcribe current episode** creates transcript notes.
+It resolves to the text of the current episode's transcript note.
+It resolves to `null` when no episode is loaded or the episode has no transcript note yet.
+It never calls a transcription provider. Run **PodNotes: Transcribe current episode** to create the note.
 
-If your transcript template includes metadata such as the title and date, that
-metadata is included in the returned text. A **Transcript template** containing only
-`{{transcript}}` produces a note containing only the transcript body.
+The text is the whole note.
+If your **Transcript template** adds a title and date, the text includes them. A template of only `{{transcript}}` returns only the transcript.
 
 ## `getTranscript(episode?: Episode)`
-This reads the generated transcript note for the provided episode. If no episode
-is provided, it reads the current episode's transcript.
-The path comes from **Transcript file path** rendered for that episode.
-A missing episode or file returns `null`. File read errors reject the promise.
+
+Reads the transcript note of `episode`, or of the current episode when you omit it.
+PodNotes finds the note at the **Transcript file path** rendered for that episode.
+It resolves to `null` when there is no episode or no note, and rejects when the note cannot be read.
 
 ```js
 const api = app.plugins.plugins.podnotes.api;
@@ -117,8 +122,8 @@ const transcript = await api.getTranscript();
 
 ### QuickAdd AI prompt example
 
-This macro returns a prompt containing the saved transcript note.
-A QuickAdd AI action or another workflow can consume that prompt.
+This QuickAdd user script returns a prompt that contains the current episode's transcript note.
+Add it to a QuickAdd macro, then insert its result with `{{MACRO:<macro name>}}`, for example in a prompt template for QuickAdd's AI Assistant.
 
 ```js
 module.exports = async (params) => {
@@ -142,32 +147,35 @@ ${transcript}`;
 ```
 
 ## `getPodcastTimeFormatted(format: string, linkify?: boolean, offsetSeconds?: number)`
-Returns the current playback time using the [supported time tokens](/timestamps/#time-formats).
-`linkify` defaults to `false`. With `true`, the result is a Markdown timestamp link when a feed URL or registered local file path is available.
-Without a target, the result remains plain text.
-`offsetSeconds` defaults to `0`. It is subtracted before formatting and linking, with a minimum result of zero.
-The method throws `"No podcast loaded"` without a loaded episode.
+
+Returns the current playback time, formatted with the [time tokens](/timestamps/#time-formats).
+
+- `linkify` defaults to `false`. With `true`, the result is a Markdown link that opens PodNotes at that time. Without a feed URL or a local file path to link to, the result stays plain text.
+- `offsetSeconds` defaults to `0`. PodNotes subtracts it before formatting and linking, and never goes below zero.
+
+Throws `"No podcast loaded"` when no episode is loaded.
 
 ## `getPodcastSegmentFormatted(format: string, startTime: number, endTime: number, linkify?: boolean)`
-Returns a `start-end` range using the [supported time tokens](/timestamps/#time-formats).
-Times are in seconds. `linkify` defaults to `false`.
-With `true`, a valid range links to the episode through `time` and `endTime`, so playback pauses at the end.
-Negative bounds are normalized to zero. The end must exceed the start after normalization, and both values must be finite.
-An invalid range or missing link target returns plain text.
-This method has no offset parameter and throws `"No podcast loaded"` without a loaded episode.
+
+Returns a `start-end` range, formatted with the [time tokens](/timestamps/#time-formats).
+
+- `startTime` and `endTime` are in seconds. Both must be finite. PodNotes raises negative values to zero, and the end must be after the start.
+- `linkify` defaults to `false`. With `true`, a valid range becomes a link with `time` and `endTime`, so playback pauses at the end.
+- An invalid range, or an episode with nothing to link to, returns plain text.
+
+There is no offset parameter. Throws `"No podcast loaded"` when no episode is loaded.
 
 ## `playbackRate`
-Gets or sets the current player speed between `0.5` and `4`, rounded to tenths.
-Non-finite writes fall back to **Default Playback Rate**.
-Changing the current rate does not change that saved default.
+
+Gets or sets the current playback speed, from `0.5` to `4`, rounded to tenths.
+A value that is not finite sets the speed to **Default Playback Rate**.
+Setting the speed does not change **Default Playback Rate**.
 
 ## Playback controls
-`start()`, `stop()`, and `togglePlayback()` control the current episode.
-`stop()` pauses without resetting the position.
-`skipBackward()` and `skipForward()` use **Skip backward length (s)** and **Skip forward length (s)**.
-Invalid skip lengths fall back to 15 seconds. Backward skips stop at zero.
-With a known duration, forward skips stop up to 0.25 seconds before the end without moving backward.
 
-`increasePlaybackRate()` and `decreasePlaybackRate()` adjust the current playback
-speed in `0.1x` steps. `resetPlaybackRate()` returns playback to the default
-playback rate configured in settings.
+- `start()` and `stop()` play and pause the current episode. `stop()` keeps the position.
+- `togglePlayback()` switches between playing and paused.
+- `skipBackward()` and `skipForward()` move by **Skip backward length (s)** and **Skip forward length (s)**. An invalid length falls back to 15 seconds.
+- A backward skip stops at the start. When the duration is known, a forward skip stops 0.25 seconds before the end, and never moves backward.
+- `increasePlaybackRate()` and `decreasePlaybackRate()` change the current speed by `0.1`, within `0.5` to `4`.
+- `resetPlaybackRate()` sets the current speed to **Default Playback Rate**.

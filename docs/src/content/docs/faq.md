@@ -1,99 +1,109 @@
 ---
 title: FAQ
 slug: faq
-description: Answers about the player, supported podcasts, private feeds, downloads, links, transcription, and devices.
+description: Short answers about finding the player, adding podcasts, timestamps, sync, and transcription, with links to the full guides.
 ---
 
-## Where is the player?
+Find short answers to the questions PodNotes users ask most. Each answer links to the page that covers the topic in full.
 
-Run **PodNotes: Show player** from Obsidian's command palette. The command opens the player or reveals its existing pane.
-The podcast ribbon action, **Show PodNotes**, opens the same view.
+## Setup and installation
 
-On mobile, the player stays closed at startup until you open it. See [Use PodNotes on mobile](/mobile/).
+### Where is the player?
 
-## Why are some commands missing?
+Run **PodNotes: Show player** from the command palette, or select the **Show PodNotes** podcast icon in the ribbon.
+Both open the player or reveal it if it is already open.
+On a phone, the player stays closed until you open it. See [Use PodNotes on your phone](/mobile/).
 
-Most playback commands need a loaded episode. **PodNotes: Create episode note** also needs a non-empty note path and template.
-The episode can be paused. **PodNotes: Reorder Queue** appears when the queue contains at least two episodes.
+### Why are some commands missing?
 
-**PodNotes: Show player** is always available. **PodNotes: Capture Timestamp** is an editor command, so it needs an active note editor.
-The [command reference](/commands/) lists each command's requirements.
+Most commands appear only while an episode is loaded. A paused episode counts.
+**PodNotes: Capture Timestamp** needs an open note, and **PodNotes: Reorder Queue** needs at least two episodes in the queue.
+**PodNotes: Show player** is always available. [Commands](/commands/) lists what each command needs.
 
-## Which podcasts can I add?
+### How do I install a beta version or install manually?
 
-PodNotes plays media published through podcast RSS feeds. Search uses the Apple Podcasts directory and requests up to 20 results.
-You can also paste an RSS feed URL or an Apple Podcasts show link into **Search Podcasts** in PodNotes settings.
-An Apple link works when the directory provides a feed for that show.
+To install with BRAT:
 
-A missing search result does not mean a podcast is unsupported. Its publisher's RSS URL can work without a directory listing.
-An ordinary website or episode page is not an RSS feed. See [Getting started](/getting-started/).
+1. Install and turn on the [BRAT](obsidian://show-plugin?id=obsidian42-brat) plugin.
+2. Run **BRAT: Plugins: Add a beta plugin for testing (with or without version)**.
+3. Enter `chhoumann/PodNotes` and select **Add plugin**.
+4. If PodNotes is not turned on afterwards, turn it on in **Settings → Community plugins**.
 
-## Can I add Spotify exclusives or YouTube links?
+To install manually:
 
-PodNotes does not import Spotify or YouTube page links. A show available only inside a service, with no accessible RSS feed, cannot be added.
-If the publisher also offers an RSS feed, use that feed. A Spotify subscription does not provide PodNotes with access to Spotify-only media.
+1. From the [latest release](https://github.com/chhoumann/PodNotes/releases/latest), download `main.js` and `manifest.json`.
+2. In your vault, put both files in `.obsidian/plugins/podnotes/`. Create the folder if it does not exist.
+3. In **Settings → Community plugins**, reload the list of installed plugins.
+4. Turn on PodNotes.
 
-## Can I use a private feed?
+## Podcasts and feeds
 
-Yes, when your provider gives you a personal RSS URL that PodNotes can fetch. Paste the complete URL into **Search Podcasts**.
-PodNotes has no provider sign-in flow for feeds that require a browser login.
+### Which podcasts can I add?
 
-When secret storage succeeds, URLs with embedded credentials or recognized secret query parameters move into Obsidian's device-local secret storage.
-The saved subscription and new links then use a placeholder.
-On another device, PodNotes asks you to remove the saved feed and add it again with its private URL.
-Re-adding creates a new device-local secret reference. Once that reference syncs back, the first device cannot resolve it with its old secret.
-Protected private-feed subscriptions do not work across devices through plugin data sync alone.
+Any podcast with an RSS feed.
+In **Settings → PodNotes**, under **Search Podcasts**, search the Apple Podcasts directory by name, or paste an RSS feed URL or an Apple Podcasts show link.
+A show missing from search can still work if you paste its RSS feed URL. See [Add and play podcasts](/podcasts/).
 
-If secret storage fails, the real URL stays in `data.json` and can sync.
-A failed migration shows a persistent notice asking you to restart PodNotes to retry.
+### Can I add Spotify exclusives or YouTube links?
 
-Tokens embedded in a URL path are not detected. Those URLs remain in `data.json`.
-OPML exports include the real subscription URLs. Treat a private feed URL and an export containing it as credentials.
-See [Sync and devices](/sync/).
+No. PodNotes plays RSS feeds and cannot open Spotify or YouTube pages.
+A show that exists only inside Spotify or another app has no feed to add. If the publisher also offers an RSS feed, add that feed.
 
-## Do downloads sync with my vault?
+### Can I use a private feed?
 
-Downloads are files inside your vault. Your sync service must include the media files as well as PodNotes' plugin data.
-PodNotes records file paths in `data.json`; syncing that file alone does not transfer audio or video.
+Yes, if your provider gives you a personal RSS URL. Paste the whole URL into **Search Podcasts**.
+PodNotes cannot sign in to providers that require a browser login.
+When the URL contains a password or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#secrets-on-each-device).
 
-File types, size limits, and exclusions depend on your sync service. See [Downloads on another device](/sync/#downloads-on-another-device).
+### Can I annotate my own audio or video?
 
-## What happens to notes and links when I remove a download?
+Yes. In the file explorer, right-click a media file and select **Play with PodNotes**. On a phone, long-press the file.
+You can then capture timestamps and create an episode note as with any episode.
+For MP4 and WebM files, select **Play as audio with PodNotes** or **Play as video with PodNotes**. See [Downloads and local files](/local_files/).
 
-Removing a download leaves your notes and captured timestamps unchanged.
-Podcast timestamp links address the feed and episode, so they can play online again when the feed and media remain available.
-A local-file link needs the media file and its registration in PodNotes on that device.
+## Notes and timestamps
 
-**Remove from Local Files** keeps a manually added file in the vault.
-For a downloaded episode, **Remove file** removes its registration and trashes the file.
-If PodNotes cannot confirm that it downloaded the file, it asks whether to **Keep file** or **Delete file**.
-The [sync page](/sync/#removal-and-existing-links) explains the limits of older links and downloads.
-File deletion follows Obsidian's **Deleted files** setting under **Files and links**, including permanent deletion if selected.
+### Why are my timestamps plain text?
 
-## Can I annotate my own audio or video?
+Your **Capture timestamp format** uses `{{time}}`, which inserts plain text.
+Installs set up before PodNotes 2.21.0 keep the old default, `- {{time}} `. New installs use `- {{linktime}} `, which inserts a link that plays the episode from that moment.
+In **Settings → PodNotes**, change `{{time}}` to `{{linktime}}` in **Capture timestamp format**. See [Capture timestamps](/timestamps/).
 
-Yes. Open a vault media file's context menu and choose **Play with PodNotes**.
-On mobile, long-press the file. You can capture timestamps, create an episode note, and resume playback.
-For MP4 and WebM files, choose **Play as audio with PodNotes** or **Play as video with PodNotes**.
+### Can I take notes on an episode I listen to in another app?
 
-Playback depends on the codecs supported by Obsidian and your device. Transcription accepts audio episodes, including local audio, but not video episodes.
-See [Local files](/local_files/).
+Yes. Add the podcast to PodNotes, find the episode in the podcast's episode list, and select **Create Note** from the episode's menu. The episode does not have to play.
+Timestamps come from the PodNotes player, so to capture them, play the episode in PodNotes.
+For notes about a whole show, use a feed note. See [Create episode notes](/notes/).
 
-## Does transcription cost money?
+### Do headset buttons control PodNotes?
 
-PodNotes has no transcription subscription. The transcription provider bills your API account.
-Plain transcription uses OpenAI Whisper. Optional **Speaker diarization** uses OpenAI or Deepgram, selected through **Diarization provider**.
+One button does. The previous-track action captures a timestamp into the open note, or into the episode note if no note is open.
+PodNotes adds no other headset actions, so play, pause, and skip depend on your device. See [Capture with a headset](/mobile/#capture-with-a-headset).
 
-Configure the matching **OpenAI API key** or **Deepgram API key** in PodNotes settings under **Transcripts**.
-Your provider account needs the billing or credit required for API use. PodNotes does not include API credit.
-Costs depend on the provider, model, and audio length. Check your provider's current API pricing before a long transcription.
+## Devices and sync
 
-PodNotes generates transcript notes from audio. It does not import transcripts shown in Apple Podcasts or automatically read transcripts published in a feed.
-See [Transcripts](/transcripts/).
+### Do downloads sync with my vault?
 
-## Does playback progress sync between devices?
+Downloads are files in your vault, so they sync only if your sync service includes them.
+Syncing PodNotes' `data.json` alone does not move the audio or video. File types and size limits depend on your sync service.
+See [Downloads on another device](/sync/#downloads-on-another-device).
 
-Saved progress, subscriptions, playlists, templates, and preferences can travel with PodNotes' `data.json` when your sync service includes plugin data.
-PodNotes has no separate sync account or live playback handoff. Two devices can overwrite each other's changes.
-API key values and protected private-feed URLs remain local to each device.
-See [Sync and devices](/sync/) before switching between devices.
+### What happens to notes and links when I remove a download?
+
+Your notes and timestamps stay.
+Timestamp links point at the feed and the episode, so they stream the episode again while the feed still lists it.
+Links to your own media files need the file. See [Removed downloads and existing links](/sync/#removal-and-existing-links).
+
+### Does playback progress sync between devices?
+
+Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`.
+PodNotes does not merge changes from two devices. Use one device at a time, because one device can overwrite the other's changes.
+API keys and protected private feeds stay on each device. See [Sync between devices](/sync/).
+
+## Transcription
+
+### Does transcription cost money?
+
+PodNotes is free, but transcription uses your own OpenAI or Deepgram account, and the provider bills you for API use.
+Plain transcripts use OpenAI Whisper. **Speaker diarization** uses OpenAI or Deepgram.
+PodNotes transcribes the audio itself. It does not import transcripts from Apple Podcasts or from a feed. See [Transcribe episodes](/transcripts/#cost).

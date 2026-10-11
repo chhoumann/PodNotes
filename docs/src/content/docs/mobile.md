@@ -1,71 +1,62 @@
 ---
-title: Use PodNotes on mobile
+title: Use PodNotes on your phone
 slug: mobile
-description: Open the player, capture timestamps from the mobile toolbar or headset, and download episodes on a phone.
+description: Open the player, capture timestamps from the editor toolbar or a headset, and listen offline on iOS and Android.
 ---
 
-## Enable PodNotes and open the player
+Open the player, capture timestamps from the editor toolbar or a headset, and listen offline on iOS and Android.
+To install PodNotes, follow [Install PodNotes](/getting-started/#install-podnotes). The steps are the same on a phone.
 
-1. Open Obsidian settings and go to **Community plugins**.
-2. If restricted mode is enabled, turn it off.
-3. Browse for **PodNotes**, install it, and enable it.
-4. Open the command palette and run **PodNotes: Show player**.
+## <span id="enable-podnotes-and-open-the-player"></span>Open the player
 
-The player appears. The **Show PodNotes** podcast action in the mobile ribbon opens the same view.
-On mobile, the player does not open at startup. PodNotes still loads its saved data when Obsidian starts.
+On a phone, PodNotes does not open the player when Obsidian starts. Open it yourself:
 
-To add and play your first podcast, follow [Getting started](/getting-started/#add-a-podcast).
-If **Create episode note** is missing, load an episode first. A paused episode is sufficient.
+1. In the navigation bar, select **Open menu**.
+2. Select **Show PodNotes**.
+
+You can also run **PodNotes: Show player** from the command palette.
+The player opens in the right sidebar. To bring it back after you close it, select **Show PodNotes** again.
+
+To add your first podcast, see [Add and play podcasts](/podcasts/).
+Most PodNotes commands appear only after you load an episode. A paused episode counts. [Commands](/commands/) lists when each one is available.
 
 ## Add a capture button to the editor toolbar
 
-1. In Obsidian settings, open **Interface** and choose **Configure mobile toolbar**.
-2. Add **PodNotes: Capture Timestamp** to the toolbar.
-3. Load an episode in PodNotes.
-4. Open a Markdown note in edit mode and place the cursor where you want the timestamp.
-5. Tap the capture button in the editor toolbar.
+1. In **Settings → Interface**, select **Configure mobile toolbar**.
+2. Under **Manage toolbar options**, select **Add a command...**.
+3. Find and select **PodNotes: Capture Timestamp**.
+4. In PodNotes, play an episode.
+5. In a note in edit mode, place the cursor where the timestamp goes.
+6. In the editor toolbar, select the clock button.
 
-The timestamp appears at the cursor. New installs use a clickable episode link.
-If your existing format produces plain text, set **Capture timestamp format** to `- {{linktime}} ` in PodNotes settings.
-The final space separates the link from the text you type next.
+PodNotes inserts a timestamp link at the cursor. If no episode is loaded, the button shows a notice instead.
+If your timestamps come out as plain text, set **Capture timestamp format** to `- {{linktime}} ` in **Settings → PodNotes**. [Capture timestamps](/timestamps/) explains the format.
 
-For recent playback ranges, use **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**.
-These commands need a loaded episode and a non-empty timestamp format.
-See [Timestamps](/timestamps/) for formats and the **Timestamp offset (s)** setting.
+**PodNotes: Capture Last 10 Seconds** and **PodNotes: Capture Last 20 Seconds** can go on the toolbar too. Obsidian lists them only while an episode is loaded, so load one before you add them.
 
 ## Capture with a headset
 
-1. Load an episode in PodNotes.
-2. Send your headset's previous-track action.
+While an episode plays, press your headset's previous-track control. PodNotes captures a timestamp:
 
-When the device delivers the Media Session `previoustrack` action, PodNotes captures a timestamp.
-It inserts the timestamp into the active editor. Without an active editor, it appends to the current episode note and creates that note if needed.
-The fallback requires non-empty **Note creation file path** and **Note creation template** settings.
+- If a note is open in an editor, the timestamp goes in at the cursor.
+- If no note is open, the timestamp goes at the end of the episode's note. PodNotes creates the note if it does not exist, as long as **Note creation file path** and **Note creation template** are set.
 
-Headset gestures vary by device. Ordinary play and pause events do not capture timestamps.
-PodNotes registers no dedicated Media Session seek-forward or seek-backward handlers.
+Play and pause do not capture a timestamp.
 
 ## Download an episode
 
-1. Load the episode in PodNotes.
-2. Run **PodNotes: Download Playing Episode**.
-3. Wait for the download to finish before going offline.
+Download an episode before you go offline. Run **PodNotes: Download Playing Episode**, or select the ⋮ button next to an episode and select **Download**.
+Wait for the notice that says the download succeeded. [Downloads and local files](/local_files/) explains where the file goes and how to remove it.
 
-The file is saved inside your vault at **Episode download path** and appears in **Local Files**.
-You can also tap an episode's **More options** button and choose **Download**.
-Offline playback needs the saved file on this device. See [Downloads on another device](/sync/#downloads-on-another-device).
+## Play your own audio and video
 
-To play your own audio or video, long-press a vault media file and choose **Play with PodNotes**.
-For MP4 and WebM files, choose **Play as audio with PodNotes** or **Play as video with PodNotes**.
+In the file explorer, long-press an audio or video file and select **Play with PodNotes**.
+For MP4 and WebM files, select **Play as audio with PodNotes** or **Play as video with PodNotes**.
+[Downloads and local files](/local_files/#play-your-own-audio-and-video) lists the file types PodNotes plays.
 
-## Known limits and verified devices
+## <span id="known-limits-and-verified-devices"></span>Known limits
 
-Toolbar capture, local MP3 playback, adding a feed, dormant startup, and a completed download were verified on an Android 14 Pixel 6 emulator.
-That check used Obsidian 1.14.4 and PodNotes 2.21.1.
-The evidence is recorded on issues [#89](https://github.com/chhoumann/PodNotes/issues/89#issuecomment-6105824251), [#100](https://github.com/chhoumann/PodNotes/issues/100#issuecomment-6105823837), [#109](https://github.com/chhoumann/PodNotes/issues/109#issuecomment-6105824406), [#110](https://github.com/chhoumann/PodNotes/issues/110#issuecomment-6105823950), and [#113](https://github.com/chhoumann/PodNotes/issues/113#issuecomment-6105824122).
-
-These checks do not verify iOS, iPadOS, every physical Android phone, or headset delivery.
-Media playback also depends on the device's supported codecs.
-Values stored in Obsidian's secret storage do not sync through plugin data. Unprotected private-feed URLs can sync.
-Plugin data sync does not guarantee that a media file has arrived.
-See [Sync and devices](/sync/) for those limits.
+- Playback depends on the codecs your phone supports. A file that plays on desktop can fail on a phone.
+- Headset gestures vary. Which press sends previous track depends on the headset and the phone, and some send none.
+- API keys and private feed URLs that PodNotes keeps in Obsidian's secret storage do not sync. Enter them again on each device. See [Secrets on each device](/sync/#secrets-on-each-device).
+- A download made on another device plays only after its media file has synced to this one. See [Downloads on another device](/sync/#downloads-on-another-device).

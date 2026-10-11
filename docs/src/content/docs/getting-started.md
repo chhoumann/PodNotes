@@ -13,7 +13,7 @@ In about five minutes you will have a podcast playing in Obsidian, a timestamp i
 3. Select **Browse**, search for **PodNotes**, and select **Install**.
 4. Select **Enable**.
 
-On a computer, the PodNotes view opens in the right sidebar. To open it at any time, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select **Show PodNotes** in the ribbon. On a phone, the view stays closed until you open it this way.
+On a computer, the PodNotes view opens in the right sidebar. To open it again later, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select **Show PodNotes** in the ribbon. On a phone, see [Open the player](/mobile/#enable-podnotes-and-open-the-player).
 
 ## Add a podcast
 

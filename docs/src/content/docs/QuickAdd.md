@@ -1,123 +1,103 @@
 ---
-title: QuickAdd
+title: Use with QuickAdd
 slug: QuickAdd
 legacyTitleId: quickadd
+description: Call the PodNotes API from QuickAdd to capture timestamps with comments and create episode notes from your own template.
 ---
 
-I have made some QuickAdd macros & actions that might be helpful to others.
+Build your own capture and note workflows with the [QuickAdd](https://quickadd.obsidian.guide/docs/) plugin and the [PodNotes API](/api/).
+PodNotes already captures timestamps and creates episode notes on its own. See [Capture timestamps](/timestamps/) and [Create episode notes](/notes/).
+Use QuickAdd when you want more, such as a comment prompt next to each timestamp, or a note template that asks you questions.
 
-Both of these are seen in the demo:
-![Demo](/resources/demo.gif)
+## <span id="timestamp-capture"></span>Capture a timestamp with a comment
 
-## Timestamp capture
-This is how I capture timestamps so fast in the demo.
-You can make a Capture action like so:
-![Capture](/resources/quickadd_timestamp_podcast.png)
+This Capture choice asks for a comment and writes it after a timestamp link, on a new line below the cursor:
 
-The capture format is as follows:
-````
-\n- **```js quickadd
-const pn = this.app.plugins.plugins.podnotes.api;
-return pn.getPodcastTimeFormatted("HH:mm:ss", true);
-```** | 
-````
-
-This captures a new line with the current time, linked to the current podcast, in the active file.
-
-## Add podcast note
-This is how I add podcast notes with QuickAdd.
-First, you will need my template.
-
-```
----
-tags: in/podcast state/process
-aliases:
-  - "{{VALUE:title}}"
-cssclass: null
-image: {{VALUE:artworkUrl}}
----
-
-# {{VALUE:title}}
-### Metadata
-Type:: [[%]]
-Tags:: 
-Podcast:: [[{{VALUE:podcastName}}]]
-Title:: {{VALUE:title}}
-URL:: {{VALUE:url}}
-Guest:: 
-Reference:: 
-Reviewed Date:: ==UPDATE THIS==
-
-### Description
-> {{VALUE:description}}
-
----
-## Notes
-
+```md
+- [00:12:41](obsidian://podnotes?...) Why tariffs raise prices
 ```
 
-Now, you should make a macro with the following script:
-```js
-module.exports = {
-    entry: (params, settings) => {
-        const pn = params.app.plugins.plugins.podnotes.api;
-        const podcast = pn.podcast;
+1. In **Settings → QuickAdd**, select **New choice**, then **Capture**.
+2. Set **Name** to `Podcast timestamp`.
+3. Turn on **Capture to active file**.
+4. Set **Write position** to **New line below cursor**.
+5. In **Capture format**, enter:
 
-        if (!podcast) {
-            new Notice("No podcast loaded.", 5000);
-            throw new Error();
-        }
+   ````md
+   - ```js quickadd
+   const podnotes = this.app.plugins.plugins.podnotes.api;
+   return podnotes.getPodcastTimeFormatted("HH:mm:ss", true);
+   ``` {{VALUE}}
+   ````
 
-        params.variables = {
-            ...podcast,
-            ...params.variables,
-            safeTitle: replaceIllegalFileNameCharactersInString(podcast.title),
-        };
-    },
-    settings: {
-        name: 'Podcast Script',
-        author: 'Christian',
-        options: {
+6. Play an episode in PodNotes.
+7. Open the note you want to write in.
+8. Run **QuickAdd: Run** and select `Podcast timestamp`.
+9. Type your comment.
 
-        }
-    }
-}
+The `js quickadd` block is a QuickAdd [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/). It returns the current playback time, and `true` makes it a link that opens PodNotes at that moment.
+To change the time format, use the tokens in [Time formats](/timestamps/#time-formats).
+To subtract reaction time the way **Timestamp offset (s)** does, pass the seconds as a third argument: `getPodcastTimeFormatted("HH:mm:ss", true, 5)`.
+Without a loaded episode, the call fails with `No podcast loaded`.
 
-function replaceIllegalFileNameCharactersInString(string) {
-    return string
-        .replace(/[\\,#%&\{\}\/*<>$\'\":@\u2023\|\?]*/g, '') // Replace illegal file name characters with empty string
-        .replace(/\n/, ' ') // replace newlines with spaces
-        .replace('  ', ' '); // replace multiple spaces with single space to make sure we don't have double spaces in the file name
-}
-```
+To run the capture from a hotkey, select the lightning icon next to the choice in **Settings → QuickAdd**, then assign a hotkey in **Settings → Hotkeys**.
+QuickAdd's [Capture docs](https://quickadd.obsidian.guide/docs/Choices/CaptureChoice/) describe every option.
 
-First, create a new macro in the macro panel. This is accessed by clicking `Manage Macros`.
-Add a macro with any name you like.
+## <span id="add-podcast-note"></span>Create an episode note from your own template
 
-Now, add the script as the first step and the template as the second step.
-Adding these requires that the script and template is saved as files in your Obsidian vault.
-Their file names are up to you, but ensure that they end in .js and .md, for the script and template respectively.
+This macro creates an episode note from a QuickAdd template, so QuickAdd can ask you questions while it creates the note.
+A user script reads the loaded episode from `api.podcast` and saves its fields as QuickAdd variables. A Template choice in the same macro uses them.
 
-Once you have created the macro in the macro panel, you should add a macro action to the QuickAdd menu.
-This is done from the main QuickAdd settings. You should see an input field where you can input the name of the macro choice.
-Right next to it is a dropdown menu with the type of choice you'd like to add - select macro here. Then click `Add Choice`.
+1. In your vault, create `scripts/podnotes-episode.js`. Keep it out of `.obsidian` and other hidden folders, or QuickAdd cannot find it.
 
-Once the choice has been added, you should see the macro in the QuickAdd menu in the settings panel.
-Click the cogwheel next to the macro choice to edit the macro. You'll want to select the appropriate macro that you created in the macros panel.
-Notably, we distinguish between a macro and a macro choice. Selecting a macro in the menu that pops up 'links' it to the macro choice, so the macro choice can execute the macro.
+   ```js
+   module.exports = async (params) => {
+   	const episode = params.app.plugins.plugins.podnotes?.api?.podcast;
+   	if (!episode) params.abort("Load an episode in PodNotes first.");
 
-My settings for the Template action/step in the macro are as follows:
-![Template action](/resources/quickadd_create_note_settings.png)
+   	params.variables.title = episode.title;
+   	params.variables.podcast = episode.podcastName;
+   	params.variables.url = episode.url;
+   	params.variables.artwork = episode.artworkUrl ?? "";
+   	params.variables.fileName = episode.title.replace(/[\\\/:*?"<>|#^[\]]/g, "");
+   };
+   ```
 
-Which means that it creates a file with the podcast episode title as the file name in the `inputs/podcasts` folder, and then opens the file after.
+2. Create `Templates/Podcast episode.md`:
 
-Ultimately, activating the macro will lead to notes like this one.
-![Example note](/resources/quickadd_example_note.png)
+   ```md
+   ---
+   podcast: "{{VALUE:podcast}}"
+   guest: "{{VALUE:guest}}"
+   ---
+   # {{VALUE:title}}
 
-If you want more information / guidance on how to use QuickAdd, you can check out the [QuickAdd documentation](https://github.com/chhoumann/quickadd/). You can also check out the [video I made to help you get started with QuickAdd](https://www.youtube.com/watch?v=gYK3VDQsZJo).
-There are also similar use cases to this one, which all have similar instructions for installation. These may help:
+   ![]({{VALUE:artwork}})
 
-- [How I Import Literature Notes into Obsidian](https://bagerbach.com/blog/importing-source-notes-to-obsidian)
-- [Macro: Zettelizer - easily create new notes from headings while keeping the contents in the file](https://github.com/chhoumann/quickadd/blob/master/docs/Examples/Macro_Zettelizer.md)
-- [Macro: Toggl Manager - set preset Toggl Track time entries and start them from Obsidian](https://github.com/chhoumann/quickadd/blob/master/docs/Examples/Macro_TogglManager.md)
-- [Macro: Fetching movies and TV shows into your vault](https://github.com/chhoumann/quickadd/blob/master/docs/Examples/Macro_MovieAndSeriesScript.md)
+   {{VALUE:url}}
+
+   ## Notes
+   ```
+
+3. In **Settings → QuickAdd**, select **New choice**, then **Macro**.
+4. Set **Name** to `Podcast episode note`.
+5. In the Macro Builder, under **User scripts**, select **Browse**, then select `scripts/podnotes-episode.js`.
+6. In the command bar, select **Template**. QuickAdd adds a Template choice after the script.
+7. Select the gear icon next to the new Template choice.
+8. Set **Template path** to `Templates/Podcast episode.md`.
+9. Set **File name** to `{{VALUE:fileName}}`.
+10. Load an episode in PodNotes. It can be paused.
+11. Run **QuickAdd: Run** and select `Podcast episode note`.
+
+QuickAdd fills in the episode's fields. The script does not set `guest`, so QuickAdd asks you for it.
+The `fileName` variable is the episode title without the characters a file name cannot hold.
+For the other fields of `api.podcast`, see [`podcast`](/api/#podcast).
+
+PodNotes does not know about notes that QuickAdd creates.
+The episode menu's **Open Note**, **PodNotes: Create episode note**, and headset capture look for the note at **Note creation file path** instead.
+QuickAdd's [Macros](https://quickadd.obsidian.guide/docs/Choices/MacroChoice/) and [User Scripts](https://quickadd.obsidian.guide/docs/UserScripts/) docs describe the Macro Builder in full.
+
+## Send a transcript to an AI prompt
+
+To summarize an episode with QuickAdd's AI Assistant, use the script in [QuickAdd AI prompt example](/api/#quickadd-ai-prompt-example).
+It reads the episode's transcript note, so transcribe the episode first. See [Transcribe episodes](/transcripts/).

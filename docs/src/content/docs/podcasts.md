@@ -1,95 +1,115 @@
 ---
-title: Podcasts
+title: Add and play podcasts
 slug: podcasts
+description: Add podcasts by name, RSS feed URL, or Apple Podcasts link, then browse, play, queue, and organize their episodes.
 ---
 
-## Adding podcasts
-You can add podcasts by searching for them in the podcast search box in settings.
-This searches the iTunes podcast repository.
+Add podcasts to PodNotes, find their episodes, and control what plays next.
 
-It is also possible to add custom podcast feeds by pasting the feed URL in the search box.
-PodNotes will try to parse the feed, and if successful, will prompt you to add it to your saved feeds.
+## <span id="adding-podcasts"></span>Add a podcast
 
+1. Open **Settings → PodNotes**.
+2. Under **Search Podcasts**, type a podcast's name in the search box, such as `planet money`.
+3. Next to the podcast, select **Add**.
 
-## Playlists
-PodNotes can create playlists, which are lists of episodes.
-For each playlist, you can specify a name and an icon.
+![Search Podcasts in PodNotes settings with results for "planet money", each with an Add or Remove button](/screenshots/add-podcast.webp)
 
-The playlists are shown in the episode grid, represented by their icons.
+The search box also accepts a link:
 
-By default, you will have a queue playlist and a favorites playlist.
+- An RSS feed URL that starts with `https://` or `http://`, such as `https://feeds.npr.org/510289/podcast.xml`.
+- An Apple Podcasts show link, such as `https://podcasts.apple.com/us/podcast/planet-money/id290783428`. PodNotes looks up the show's RSS feed.
 
-The queue plays from top to bottom: the episode at the top is played next. See [Reordering the queue](#reordering-the-queue) to resequence it.
+Search uses the Apple Podcasts directory and shows up to 20 podcasts. If a show is missing, paste its RSS feed URL instead. [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) explains what works.
+For a paid or members-only feed, see [Can I use a private feed?](/faq/#can-i-use-a-private-feed)
 
-PodNotes also shows a Played playlist in the episode grid. It is a virtual playlist that lists episodes marked as played across all podcasts. Episodes still available in your feeds can be played or managed like normal episodes. Older played-history entries that can no longer be found in current feeds remain visible so you can mark them as unplayed.
+## Remove a podcast
 
-You can delete playlists by pressing the trash bin icon next to the playlist name.
-The icon will change to a checkmark, which should be pressed within a short duration to confirm the deletion.
+1. Open **Settings → PodNotes**.
+2. Under **Search Podcasts**, clear the search box. It lists the podcasts you follow.
+3. Next to the podcast, select **Remove**.
 
-## Episode list
-The episode list is a dynamic view, which will change depending on your selection.
+Removing a podcast leaves its episode notes, downloads, and playlist entries in place.
 
-If you have no podcast selected, the episode list will show the latest episodes of all your saved feeds.
+## <span id="episode-list"></span>Browse episodes
 
-If you have a podcast selected, the episode list will show all episodes of that podcast.
+PodNotes opens on the podcast grid. The playlists come first, then one tile per podcast.
 
-And lastly, if you select a playlist, the episode list shows all episodes in that playlist.
+![The podcast grid with the Queue, Favorites, Local Files, and Played playlists above podcast artwork tiles](/screenshots/podcast-grid.webp)
 
-### How many latest episodes are shown
+- To see all of a podcast's episodes, select its artwork.
+- To see a playlist's episodes, select the playlist.
+- To see the newest episodes of every podcast in one list, select the list button in the top bar. From a podcast's or a playlist's list, select **Latest Episodes** at the top.
 
-The "Latest Episodes" list keeps a limited number of the most recent episodes
-from each saved podcast. This same set is what the search box filters when no
-podcast is selected, so episodes older than the limit will not appear in those
-search results.
+![Latest Episodes with the search box, the played toggle, the refresh button, and episodes with their dates](/screenshots/episode-list.webp)
 
-You can change this with the **Latest episodes per podcast** setting in the
-PodNotes settings tab. It defaults to 10 and can be raised up to 75. Raise it to
-surface more of each feed's history in the Latest Episodes list and to search
-further back; lower it for a shorter list. Selecting an individual podcast still
-shows all of that podcast's episodes regardless of this setting, so the full
-back catalogue of any one show always remains searchable from its own view.
+Above each list, **Search episodes** filters it as you type. The eye button hides or shows played episodes, and the refresh button fetches new episodes. Played episodes are struck through.
 
-## Context menu
-You can right-click (desktop) or long-press (mobile) on an episode in the episode list to open the context menu.
+### <span id="how-many-latest-episodes-are-shown"></span>Show more latest episodes
 
-The context menu will let you
+By default, **Latest Episodes** shows the 10 newest episodes of each podcast, and its search covers only those. To reach further back, raise **Latest episodes per podcast** in **Settings → PodNotes**, up to 75.
+A podcast's own list always shows all of its episodes.
 
-- Play the episode
-- Mark the episode as played
-- Download / remove the episode
-- Add / remove the episode to favorites
-- Add / remove the episode to queue
-- Add / remove the episode to a playlist
+## <span id="player"></span>Play an episode
 
-When you open the context menu on an episode in the queue list (shown in the player), it also offers **Move to top / up / down / bottom of queue** so you can resequence without leaving the player.
+Select an episode to play it. The player opens and resumes where you stopped last time. To return to the player from a list, select the play button in the top bar.
 
-## Reordering the queue
-The queue plays from the top down, so its order is its play order. There are two ways to change it:
+![The player with episode artwork, the progress bar, skip buttons, volume and speed sliders, and the queue](/screenshots/player.webp)
 
-- **From the player's queue list:** right-click (desktop) or long-press (mobile) a queued episode and choose **Move to top**, **Move up**, **Move down**, or **Move to bottom of queue**.
-- **From the command palette:** run **PodNotes: Reorder Queue** to open a dedicated window listing the whole queue, where each episode has move-up / move-down / move-to-top / move-to-bottom buttons (and a remove button). This works the same on desktop and mobile and is the easiest way to resequence a long queue.
+- Select the artwork to play or pause. A video episode shows the video instead.
+- Select a point on the progress bar to jump there. The left time is your position and the right time is what remains.
+- The skip buttons jump back and forward 15 seconds. To change that, set **Skip backward length (s)** and **Skip forward length (s)**.
+- The volume slider sets the volume, and PodNotes remembers it.
+- The speed slider goes from 0.5x to 4x. Each time Obsidian starts, the speed resets to **Default Playback Rate**.
+- **Chapters** lists the episode's chapters when it has them. Select a chapter to jump to it.
 
-The new order is saved automatically and restored the next time you open Obsidian.
+## Manage the queue
 
-Episodes in the queue are kept unique by title, so adding an episode that is already queued will not create a duplicate.
+The **Queue** list under the player shows what plays next, top first. When an episode ends, the top episode in the queue starts.
+When you switch to another episode, PodNotes puts the one you left at the top of the queue.
 
-## Turning off the queue
-By default the queue fills itself: when you switch to a new episode, the one you were listening to is kept at the top of the queue, and playback continues with the next queued episode when the current one ends.
+To add an episode yourself, right-click it or select its ⋮ button, then select **Add to Queue**. It goes to the bottom of the queue.
 
-If you would rather manage the queue yourself, turn off **Keep a queue of episodes you switch away from** in PodNotes settings. With it off:
+### <span id="reordering-the-queue"></span>Reorder the queue
 
-- episodes are no longer added to the queue automatically when you switch, and
-- playback no longer advances to the next queued episode on its own.
+In the player's **Queue** list, open an episode's menu and select **Move to top of queue**, **Move up in queue**, **Move down in queue**, or **Move to bottom of queue**.
 
-You can still add, remove, and reorder episodes in the queue manually from the episode context menu. While the queue is empty in this mode, its tile in the podcast grid and its list in the player are hidden.
+To reorder a long queue, run **PodNotes: Reorder Queue**. It lists the whole queue with buttons to move or remove each episode. The command appears when the queue has two or more episodes.
 
-## Player
-The player will automatically load and play the current episode.
+### <span id="turning-off-the-queue"></span>Turn off the automatic queue
 
-Clicking on the epsiode image will toggle episode playback.
+To fill the queue only by hand, turn off **Keep a queue of episodes you switch away from** in **Settings → PodNotes**.
+PodNotes then stops adding the episode you switch away from, and stops starting the next queued episode when one ends. **Add to Queue** still works.
+While the queue is empty, its tile and its list in the player are hidden.
 
-The player also features a progress bar, which you can use to seek to a specific time in the episode.
-You can also press the buttons on the player to skip backwards or forwards in the episode.
+## <span id="playlists"></span>Collect episodes in playlists
 
-Episode playback rate can be controlled by using the playback rate slider.
-This is, by default, what you have set in the settings.
+The podcast grid shows three more built-in playlists:
+
+- **Favorites** holds the episodes you add with **Add to Favorites**.
+- **Local Files** holds your downloads and your own media files. See [Downloads and local files](/local_files/).
+- **Played** lists every episode you finished or marked as played. An episode that has left its feed stays here so you can mark it as unplayed.
+
+To make your own playlist:
+
+1. Open **Settings → PodNotes**.
+2. Under **Playlists**, choose an icon from the dropdown.
+3. In **Playlist name**, type a name, such as `Commute`.
+4. Select **Add**.
+
+To add an episode, open its menu and select **Add to Commute**. To delete a playlist, select its trash button under **Playlists**, then select the check button within two seconds.
+
+## <span id="context-menu"></span>Episode menu reference
+
+To open an episode's menu, right-click the episode or select its ⋮ button. The menu shows these items in this order:
+
+| Item | What it does |
+| --- | --- |
+| **Play** | Plays the episode. |
+| **Mark as Played** or **Mark as Unplayed** | Changes whether the episode counts as played. |
+| **Download**, **Remove file**, or **Remove from Local Files** | Downloads the episode, or removes the download or your own file. See [Downloads and local files](/local_files/). |
+| **Create Note** or **Open Note** | Creates or opens the episode note. See [Create episode notes](/notes/). |
+| **Create feed note** or **Open feed note** | Creates or opens the note for the whole podcast. |
+| **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites** or removes it. |
+| **Add to Queue** or **Remove from Queue** | Adds the episode to the bottom of the queue or removes it. |
+| **Move to top of queue**, **Move up in queue**, **Move down in queue**, **Move to bottom of queue** | Moves the episode within the queue. Shown only in the player's **Queue** list. |
+| **Add to** or **Remove from** followed by a playlist name | Adds the episode to that playlist or removes it. One item per playlist you made. |
