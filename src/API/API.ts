@@ -178,11 +178,12 @@ export class API implements IAPI {
 		const skipForwardLen = normalizeSkipLength(get(plugin).settings.skipForwardLength);
 		const target = this.currentTime + skipForwardLen;
 		const dur = this.length;
-		// Clamp just short of the end so an over-skip lands at the end instead of
-		// firing 'ended' and auto-advancing the queue. Never let the clamp move the
-		// position BACKWARD: when already within the last 0.25s, a forward skip must
-		// not rewind, so keep at least the current time (PB-02 / Codex review #213).
-		// With an unknown/zero duration (metadata not loaded) leave it unclamped.
+		// An over-skip lands 0.25s short of the end and keeps playing, so the episode
+		// finishes and the queue advances; a seek to the end itself would pause. Never
+		// let the clamp move the position BACKWARD: when already within the last 0.25s,
+		// a forward skip must not rewind, so keep at least the current time (PB-02 /
+		// Codex review #213). With an unknown/zero duration (metadata not loaded)
+		// leave it unclamped.
 		this.currentTime =
 			dur > 0 ? Math.max(this.currentTime, Math.min(target, dur - 0.25)) : target;
 	}

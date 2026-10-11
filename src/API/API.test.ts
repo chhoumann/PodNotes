@@ -209,7 +209,7 @@ describe("API skip controls (PB-02)", () => {
 		expect(api.currentTime).toBe(100);
 	});
 
-	test("clamps a forward skip just short of the end so it doesn't auto-advance", () => {
+	test("clamps a forward skip just short of the end and keeps playing", () => {
 		const { api, media } = playingAt(100, 110, lengths);
 
 		api.skipForward();
