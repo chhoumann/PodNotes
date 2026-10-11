@@ -589,6 +589,53 @@ describe("FeedRepository", () => {
 		},
 	);
 
+	test("a cached feed still shows when earlier caches cannot be removed", () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const storage = new MemoryStorage();
+		storage.saveLocalStorage(
+			CACHE_KEY,
+			JSON.stringify({
+				[alpha.url]: {
+					updatedAt: Date.UTC(2026, 9, 11),
+					complete: true,
+					channel: { title: "Alpha" },
+					items: [item(1)],
+				},
+			}),
+		);
+		vi.stubGlobal("window", {
+			localStorage: {
+				removeItem: () => {
+					throw new Error("storage unavailable");
+				},
+			},
+		});
+		const t = setup({ storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+
+		void t.repo.ensureAll();
+
+		expect(t.load).not.toHaveBeenCalled();
+		expect(t.titles("Alpha")).toEqual(["Episode 1"]);
+	});
+
+	test("earlier caches stay when the feed cache cannot be read", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const storage = new MemoryStorage();
+		storage.saveLocalStorage("podnotes:feed-cache:v5", "{}");
+		legacyStorage.set("podnotes:feed-cache:v4", "{}");
+		storage.loadLocalStorage = () => {
+			throw new Error("storage unavailable");
+		};
+		const t = setup({ storage });
+		t.repo.setSubscriptions({});
+
+		await t.repo.ensureAll();
+
+		expect(storage.values.has("podnotes:feed-cache:v5")).toBe(true);
+		expect([...legacyStorage.keys()]).toEqual(["podnotes:feed-cache:v4"]);
+	});
+
 	test("a feed link's episodes are named after its channel and never cached", async () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Beta: beta });

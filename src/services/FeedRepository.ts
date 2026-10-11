@@ -283,10 +283,10 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		this.hydrated = true;
 		let cached: [string, FeedDocument][] = [];
 		try {
-			removeLegacyCaches(this.deps.storage);
 			if (this.deps.cache().enabled) {
 				cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
 			}
+			removeLegacyCaches(this.deps.storage);
 		} catch (error) {
 			console.warn("PodNotes: could not read the feed cache", error);
 		}
