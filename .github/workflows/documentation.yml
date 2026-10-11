@@ -18,6 +18,13 @@ jobs:
     name: Docs
     runs-on: ubuntu-latest
     steps:
+      - name: Record probe event
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "action=$EVENT_ACTION head=$EVENT_SHA"
+          sleep 45
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
