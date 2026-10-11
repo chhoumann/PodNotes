@@ -258,7 +258,7 @@ describe("stale events", () => {
 
 		expect(doc.media).not.toBe(audio);
 		expect(doc.media.tagName).toBe("VIDEO");
-		expect(audio.parent).toBeNull();
+		expect(audio.parentNode).toBeNull();
 		expect(state()).toEqual(before);
 		expect(progress(A)?.finished).toBe(false);
 	});
@@ -779,6 +779,51 @@ describe("video stage", () => {
 		older.destroy();
 
 		expect(newer.children).toEqual([doc.media]);
+	});
+
+	test("a video carried to a popout reloads where it was and keeps playing in the main window", () => {
+		const { player, doc, media, state, writes } = setup();
+		const written = writes(VIDEO);
+		const stage = new FakeParent(doc);
+		player.play(VIDEO);
+		metadata(media());
+		player.videoStage(stage as unknown as HTMLElement);
+		reach(media(), 40, 1000);
+		written.length = 0;
+
+		// The popout adopts the stage with the video in it, and the browser reloads the video.
+		stage.ownerDocument = {};
+		media().load();
+		media().emit("emptied");
+		media().emit("timeupdate");
+
+		expect(written).toEqual([]);
+		expect(state()).toMatchObject({ status: "loading", currentTime: 40 });
+		expect(doc.body.children).toEqual([media()]);
+		metadata(media());
+		expect(media().currentTime).toBe(40);
+		expect(media().paused).toBe(false);
+		expect(state().status).toBe("playing");
+	});
+
+	test("a reset element saves no position until it holds media again", () => {
+		const { player, media, state, writes } = setup();
+		const written = writes(A);
+		player.play(A);
+		metadata(media());
+		reach(media(), 40, 1000);
+		written.length = 0;
+
+		media().load();
+		player.save();
+		player.pause();
+		media().emit("emptied");
+
+		expect(written).toEqual([]);
+		expect(state()).toMatchObject({ status: "paused", currentTime: 40 });
+		metadata(media());
+		expect(media().currentTime).toBe(40);
+		expect(media().paused).toBe(true);
 	});
 
 	test("keeps audio hidden in the main window", () => {

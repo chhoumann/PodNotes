@@ -10,13 +10,13 @@ export class FakeParent {
 	append(media: FakeMedia): void {
 		media.remove();
 		this.children.push(media);
-		media.parent = this;
+		media.parentNode = this;
 	}
 
 	prepend(media: FakeMedia): void {
 		media.remove();
 		this.children.unshift(media);
-		media.parent = this;
+		media.parentNode = this;
 	}
 
 	/** Obsidian's DOM extension: runs `listener` when the element moves to another window. */
@@ -36,17 +36,19 @@ export class FakeParent {
 
 /**
  * A media element without a browser. Tests set what the browser would (duration,
- * position) and dispatch its events. Setting `src` starts over like the HTML load
- * algorithm: position 0, paused, the default rate, and pending plays rejected.
+ * position) and dispatch its events. Setting `src` or `load()` starts over like the
+ * HTML load algorithm: no media, position 0, paused, the default rate, and pending
+ * plays rejected. `loadedmetadata` marks the metadata as loaded.
  */
 export class FakeMedia extends EventTarget {
 	readonly tagName: string;
 	className = "";
 	hidden = false;
-	parent: FakeParent | null = null;
+	parentNode: FakeParent | null = null;
 	currentTime = 0;
 	duration = Number.NaN;
 	paused = true;
+	readyState = 0;
 	defaultPlaybackRate = 1;
 	playbackRate = 1;
 	volume = 1;
@@ -93,16 +95,18 @@ export class FakeMedia extends EventTarget {
 	}
 
 	remove(): void {
-		const siblings = this.parent?.children;
+		const siblings = this.parentNode?.children;
 		siblings?.splice(siblings.indexOf(this), 1);
-		this.parent = null;
+		this.parentNode = null;
 	}
 
 	emit(type: string): void {
+		if (type === "loadedmetadata") this.readyState = 1;
 		this.dispatchEvent(new Event(type));
 	}
 
 	private reset(): void {
+		this.readyState = 0;
 		this.currentTime = 0;
 		this.duration = Number.NaN;
 		this.paused = true;

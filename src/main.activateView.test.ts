@@ -564,6 +564,8 @@ describe("PodNotes onload wiring (#55)", () => {
 		vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
 		const { plugin } = await loadPlugin(savedData);
 		plugin.api.start();
+		// jsdom loads no media; the browser would hold its metadata by now.
+		Object.defineProperty(media(), "readyState", { value: HTMLMediaElement.HAVE_METADATA });
 		media().dispatchEvent(new Event("loadedmetadata"));
 		media().currentTime = 1300;
 

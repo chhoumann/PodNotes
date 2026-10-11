@@ -53,7 +53,7 @@ interface Session {
 	src: string;
 	/** Where playback starts once the metadata loads. */
 	pendingTime: number;
-	/** The metadata loaded and the start position is set. Only now is progress saved. */
+	/** The metadata loaded and the start position is set. */
 	ready: boolean;
 	segmentEnd: number | null;
 	/** A segment link's session saves no progress and does not finish until a normal intent. */
@@ -62,6 +62,8 @@ interface Session {
 }
 
 const SAVE_POSITION_THROTTLE_MS = 5000;
+/** HTMLMediaElement.HAVE_NOTHING: the element holds no media. */
+const HAVE_NOTHING = 0;
 /** A seek at or past the end stops this far short of it, so a seek never finishes an episode. */
 const END_MARGIN_S = 0.25;
 /** The media element's class, wherever it is. */
@@ -323,6 +325,7 @@ export class PlayerController {
 			pause: () => this.onPause(),
 			timeupdate: () => this.onTimeUpdate(),
 			ended: () => this.onEnded(),
+			emptied: () => this.onEmptied(),
 			error: () => this.onError(),
 		};
 		for (const [type, handle] of Object.entries(handlers)) {
@@ -339,15 +342,15 @@ export class PlayerController {
 		if (this.disposed) return;
 		const { stage, el } = this;
 		const staged = !!stage && stage.ownerDocument === this.doc && el.tagName === "VIDEO";
-		if (staged) stage.prepend(el);
-		else this.doc.body.append(el);
+		if (staged && el.parentNode !== stage) stage.prepend(el);
+		if (!staged && el.parentNode !== this.doc.body) this.doc.body.append(el);
 		el.hidden = !staged;
 	}
 
 	private start(): void {
 		const { status } = this.snapshot;
 		if (status === "playing" || status === "loading") return;
-		if (!this.session?.ready) this.setState({ status: "loading" });
+		if (!this.holdsMedia()) this.setState({ status: "loading" });
 		this.playElement();
 	}
 
@@ -367,7 +370,7 @@ export class PlayerController {
 	 */
 	private moveTo(time: number): boolean {
 		const session = this.session;
-		if (!session?.ready) {
+		if (!this.holdsMedia()) {
 			if (session) session.pendingTime = time;
 			this.setState({ currentTime: time });
 			return true;
@@ -395,7 +398,7 @@ export class PlayerController {
 
 	private settlePaused(): void {
 		this.setState(
-			this.session?.ready
+			this.holdsMedia()
 				? { status: "paused", currentTime: this.el.currentTime }
 				: { status: "paused" },
 		);
@@ -406,6 +409,8 @@ export class PlayerController {
 		const session = this.session;
 		if (!session || session.ready) return;
 		session.ready = true;
+		// A reset element (see onEmptied) lost the play() of its load.
+		if (this.snapshot.status === "loading" && this.el.paused) this.playElement();
 		this.setState({
 			status: this.el.paused ? "paused" : "playing",
 			duration: finiteOr0(this.el.duration),
@@ -413,8 +418,22 @@ export class PlayerController {
 		this.moveTo(session.pendingTime);
 	}
 
+	/**
+	 * The element dropped its media without a load from us. Moving a media element
+	 * to another window's document reloads it, which a video stage in a popout does.
+	 * Start again where it was, playing if it played, back in the main window.
+	 */
+	private onEmptied(): void {
+		const session = this.session;
+		if (!session?.ready) return;
+		session.ready = false;
+		session.pendingTime = this.snapshot.currentTime;
+		if (this.snapshot.status === "playing") this.setState({ status: "loading" });
+		this.placeElement();
+	}
+
 	private onPlay(): void {
-		if (this.session?.ready && !this.el.paused) this.setState({ status: "playing" });
+		if (this.holdsMedia() && !this.el.paused) this.setState({ status: "playing" });
 	}
 
 	private onPause(): void {
@@ -423,7 +442,7 @@ export class PlayerController {
 
 	private onTimeUpdate(): void {
 		const session = this.session;
-		if (!session?.ready) return;
+		if (!session || !this.holdsMedia()) return;
 		const time = this.el.currentTime;
 		if (session.segmentEnd !== null && time >= session.segmentEnd) {
 			this.el.currentTime = session.segmentEnd;
@@ -444,7 +463,7 @@ export class PlayerController {
 	private onEnded(): void {
 		const session = this.session;
 		const { status, episode } = this.snapshot;
-		if (!session?.ready || !episode || status === "ended") return;
+		if (!session || !this.holdsMedia() || !episode || status === "ended") return;
 		if (session.preview) {
 			session.segmentEnd = null;
 			this.settlePaused();
@@ -481,10 +500,15 @@ export class PlayerController {
 		this.setState({ status: "error" });
 	}
 
+	/** The current load set its start position, and the element still holds its media. */
+	private holdsMedia(): boolean {
+		return !!this.session?.ready && this.el.readyState > HAVE_NOTHING;
+	}
+
 	private persist(): void {
 		const { session } = this;
 		const { episode, duration } = this.snapshot;
-		if (!session?.ready || session.preview || this.disposed || !episode) return;
+		if (!session || !this.holdsMedia() || session.preview || this.disposed || !episode) return;
 		const time = this.el.currentTime;
 		playedEpisodes.setEpisodeTime(episode, time, duration, duration > 0 && time >= duration);
 	}
