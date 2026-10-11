@@ -38,6 +38,7 @@
 	$: paused = $playerState.status !== "playing";
 	$: isLoading = $playerState.status === "loading";
 	$: loadError = $playerState.status === "error" ? "Could not load this episode's media." : null;
+	$: remaining = Math.max(0, $playerState.duration - $playerState.currentTime);
 
 	let isHoveringArtwork: boolean = false;
 	let root: HTMLDivElement;
@@ -215,12 +216,7 @@
 			ariaLabel="Seek within episode"
 			valueText={`${formatSeconds($playerState.currentTime, "HH:mm:ss")} of ${formatSeconds($playerState.duration, "HH:mm:ss")}`}
 		/>
-		<span
-			>{formatSeconds(
-				Math.max(0, $playerState.duration - $playerState.currentTime),
-				"HH:mm:ss",
-			)}</span
-		>
+		<span>{formatSeconds(remaining, "HH:mm:ss")}</span>
 	</div>
 
 	<div class="controls-container">
