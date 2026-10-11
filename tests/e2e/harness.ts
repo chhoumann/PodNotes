@@ -267,21 +267,7 @@ async function flushPodNotesSaves(obsidian: ObsidianClient): Promise<void> {
 		obsidian,
 		`
 		(async () => {
-			const podnotes = app.plugins.plugins.${PLUGIN_ID};
-			if (!podnotes) return true;
-
-			if (podnotes.saveChain) {
-				await podnotes.saveChain;
-			}
-
-			if (podnotes.pendingSave) {
-				await podnotes.saveSettings();
-			}
-
-			if (podnotes.saveChain) {
-				await podnotes.saveChain;
-			}
-
+			await app.plugins.plugins.${PLUGIN_ID}?.flushSaves();
 			return true;
 		})()
 	`,

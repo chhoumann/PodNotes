@@ -1,0 +1,486 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { manualClock } from "../../tests/mocks/dataFileWriter";
+import { type DataFileAccess, DataFileWriter } from "./writer";
+
+type Doc = {
+	defaultVolume: number;
+	savedFeeds: Record<string, { title: string }>;
+	playedEpisodes: Record<string, { time: number }>;
+};
+
+function doc(): Doc {
+	return {
+		defaultVolume: 1,
+		savedFeeds: { Local: { title: "Local" } },
+		playedEpisodes: { "Pod::Ep": { time: 10 } },
+	};
+}
+
+/** data.json and the in-memory state as two plain documents. */
+function memoryFile(initial: Doc = doc()) {
+	const state = {
+		disk: structuredClone(initial) as Doc | null,
+		memory: structuredClone(initial),
+		writes: [] as Doc[],
+		published: [] as Doc[],
+		onPublish: () => {},
+	};
+	const access = {
+		read: vi.fn(async (): Promise<Doc | null> => structuredClone(state.disk)),
+		write: vi.fn(async (next: Doc) => {
+			state.writes.push(structuredClone(next));
+			state.disk = structuredClone(next);
+		}),
+		local: () => structuredClone(state.memory),
+		publish: (next: Doc) => {
+			state.published.push(structuredClone(next));
+			state.memory = structuredClone(next);
+			state.onPublish();
+		},
+	} satisfies DataFileAccess<Doc>;
+	return { state, access };
+}
+
+function setup(initial: Doc = doc()) {
+	const file = memoryFile(initial);
+	const clock = manualClock();
+	const writer = new DataFileWriter<Doc>(file.access, clock, structuredClone(initial));
+	return { ...file, clock, writer };
+}
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
+describe("DataFileWriter saves", () => {
+	it("writes once a moment after a burst of requests, on the given clock", async () => {
+		const { state, clock, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+
+		writer.request();
+		writer.request();
+		writer.request();
+		expect(clock.pending()).toBe(1);
+		expect(state.writes).toHaveLength(0);
+
+		clock.runAll();
+		await writer.flush();
+
+		expect(state.writes).toEqual([{ ...doc(), defaultVolume: 0.5 }]);
+	});
+
+	it("waits at least 10 s after a write before writing a requested save", async () => {
+		const { clock, state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		expect(clock.delays).toEqual([1000]);
+		clock.runAll();
+		await writer.flush();
+
+		clock.advance(4000);
+		state.memory.defaultVolume = 0.25;
+		writer.request();
+
+		expect(clock.delays).toEqual([1000, 6000]);
+	});
+
+	it("waits 10 s after a save that was still writing when the request came", async () => {
+		const { access, clock, state, writer } = setup();
+		let finishWrite = () => {};
+		access.write.mockImplementationOnce(async (next: Doc) => {
+			await new Promise<void>((resolve) => (finishWrite = resolve));
+			state.disk = structuredClone(next);
+		});
+		state.memory.defaultVolume = 0.5;
+		const saving = writer.save();
+		await vi.waitFor(() => expect(access.write).toHaveBeenCalledTimes(1));
+
+		clock.advance(100);
+		state.memory.defaultVolume = 0.25;
+		writer.request();
+		finishWrite();
+		await saving;
+
+		expect(clock.delays).toEqual([9900]);
+	});
+
+	it("starts a requested save 10 s after the last one even when it waited behind other work", async () => {
+		const { access, clock, state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		await writer.save();
+		let releaseRead = () => {};
+		access.read.mockImplementationOnce(
+			() =>
+				new Promise(
+					(resolve) => (releaseRead = () => resolve(structuredClone(state.disk))),
+				),
+		);
+		const external = writer.onExternalChange();
+		await vi.waitFor(() => expect(access.read).toHaveBeenCalledTimes(2));
+
+		clock.advance(5000);
+		state.memory.defaultVolume = 0.25;
+		writer.request();
+		clock.advance(5000);
+		clock.runAll();
+		writer.request();
+		releaseRead();
+		await external;
+		await vi.waitFor(() => expect(state.writes).toHaveLength(2));
+
+		state.memory.defaultVolume = 0.2;
+		clock.advance(1000);
+		clock.runAll();
+		await writer.onExternalChange();
+
+		expect(state.writes).toHaveLength(2);
+		expect(clock.delays).toEqual([5000, 1000, 9000]);
+	});
+
+	it("reads and writes nothing while memory equals what it last loaded or wrote", async () => {
+		const { access, state, writer } = setup();
+
+		await writer.save();
+
+		expect(access.read).not.toHaveBeenCalled();
+		expect(state.writes).toHaveLength(0);
+	});
+
+	it("keeps a feed another device added when this device saves its own change (#357)", async () => {
+		const { state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await writer.save();
+
+		const expected = { ...doc(), defaultVolume: 0.5 };
+		expected.savedFeeds.Synced = { title: "Synced" };
+		expect(state.writes).toEqual([expected]);
+		// Memory holds the synced feed too, or the next save would read its absence as a deletion.
+		expect(state.memory).toEqual(expected);
+	});
+
+	it("keeps an edit made during the write on top of what it wrote, and saves it next", async () => {
+		const { access, state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+		access.write.mockImplementationOnce(async (next: Doc) => {
+			state.memory.playedEpisodes["Pod::Ep"] = { time: 42 };
+			state.writes.push(structuredClone(next));
+			state.disk = structuredClone(next);
+		});
+
+		await writer.save();
+		expect(state.writes[0].playedEpisodes["Pod::Ep"]).toEqual({ time: 10 });
+		expect(state.memory).toMatchObject({
+			defaultVolume: 0.5,
+			savedFeeds: { Synced: { title: "Synced" } },
+			playedEpisodes: { "Pod::Ep": { time: 42 } },
+		});
+
+		await writer.save();
+		expect(state.writes[1]).toEqual(state.memory);
+	});
+
+	it("leaves memory untouched when the write fails", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await expect(writer.save()).rejects.toThrow("disk full");
+
+		expect(state.published).toHaveLength(0);
+		expect(state.memory.savedFeeds.Synced).toBeUndefined();
+	});
+
+	it("writes memory back over a write that failed after it reached disk", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(async (next: Doc) => {
+			state.disk = structuredClone(next);
+			throw new Error("could not verify");
+		});
+		state.memory.defaultVolume = 0.5;
+		await expect(writer.save()).rejects.toThrow("could not verify");
+
+		// A failed import puts the previous settings back and saves them.
+		state.memory.defaultVolume = 1;
+		await writer.save();
+
+		expect(state.disk).toEqual(doc());
+	});
+
+	it("keeps a change made elsewhere that a failed write carried to disk", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(async (next: Doc) => {
+			state.disk = structuredClone(next);
+			throw new Error("could not verify");
+		});
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+		await expect(writer.save()).rejects.toThrow("could not verify");
+
+		state.memory.defaultVolume = 0.25;
+		await writer.save();
+
+		expect(state.disk).toMatchObject({
+			defaultVolume: 0.25,
+			savedFeeds: { Synced: { title: "Synced" } },
+		});
+		expect(state.memory).toEqual(state.disk);
+	});
+
+	it("rewrites a file its own failed write cut short, with what that write merged in", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+		await expect(writer.save()).rejects.toThrow("disk full");
+
+		// The access reports a file cut short by this device's own write as missing.
+		access.read.mockResolvedValue(null);
+		state.memory.defaultVolume = 0.25;
+		await writer.save();
+
+		expect(state.disk).toMatchObject({
+			defaultVolume: 0.25,
+			savedFeeds: { Synced: { title: "Synced" } },
+		});
+		expect(state.memory).toEqual(state.disk);
+	});
+
+	it("writes nothing over a file it cannot read, even after a failed write", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+		state.memory.defaultVolume = 0.5;
+		await expect(writer.save()).rejects.toThrow("disk full");
+
+		access.read.mockRejectedValue(new Error("newer schema"));
+		await expect(writer.save()).rejects.toThrow("newer schema");
+
+		expect(access.write).toHaveBeenCalledTimes(1);
+	});
+
+	it("never mistakes progress it took from disk for an edit made here", async () => {
+		const { state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		state.disk!.playedEpisodes["Pod::Ep"] = { time: 20 };
+		await writer.save();
+
+		state.memory.defaultVolume = 0.25;
+		state.disk!.playedEpisodes["Pod::Ep"] = { time: 30 };
+		await writer.save();
+
+		expect(state.writes[1].playedEpisodes["Pod::Ep"]).toEqual({ time: 30 });
+		expect(state.memory.playedEpisodes["Pod::Ep"]).toEqual({ time: 30 });
+	});
+
+	it("schedules no save when the store bindings ask for one while a save publishes", async () => {
+		const { clock, state, writer } = setup();
+		state.onPublish = () => writer.request();
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await writer.save();
+
+		expect(state.published).toHaveLength(1);
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("writes memory as is when the file is missing", async () => {
+		const { state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		state.disk = null;
+
+		await writer.save();
+
+		expect(state.writes).toEqual([{ ...doc(), defaultVolume: 0.5 }]);
+	});
+
+	it("rejects a strict save when the write fails, and logs a requested one", async () => {
+		const { access, clock, state, writer } = setup();
+		const failure = new Error("disk full");
+		access.write.mockRejectedValue(failure);
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		state.memory.defaultVolume = 0.5;
+
+		await expect(writer.save()).rejects.toBe(failure);
+
+		writer.request();
+		clock.runAll();
+		await writer.flush();
+		expect(consoleError).toHaveBeenCalledWith("PodNotes: failed to save settings", failure);
+	});
+});
+
+describe("DataFileWriter changes made elsewhere", () => {
+	it("applies a change made elsewhere to memory and writes nothing back", async () => {
+		const { clock, state, writer } = setup();
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await writer.onExternalChange();
+
+		expect(state.memory.savedFeeds.Synced).toEqual({ title: "Synced" });
+		expect(writer.hasBase).toBe(true);
+		expect(clock.pending()).toBe(0);
+		expect(state.writes).toHaveLength(0);
+	});
+
+	it("merges an edit not saved yet with a change made elsewhere, and saves both", async () => {
+		const { clock, state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await writer.onExternalChange();
+		expect(state.memory).toMatchObject({ defaultVolume: 0.5, savedFeeds: { Synced: {} } });
+
+		clock.runAll();
+		await writer.flush();
+		expect(state.writes).toEqual([state.memory]);
+	});
+
+	it("leaves no save pending when a store binding asks for one while memory takes the file", async () => {
+		const { clock, state, writer } = setup();
+		state.onPublish = () => writer.request();
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await writer.onExternalChange();
+
+		expect(state.published).toHaveLength(1);
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("leaves memory alone when the file is missing or cannot be read", async () => {
+		const { access, state, writer } = setup();
+		const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		state.disk = null;
+		await writer.onExternalChange();
+
+		access.read.mockRejectedValueOnce(new SyntaxError("Unexpected end of JSON input"));
+		await writer.onExternalChange();
+
+		expect(state.published).toHaveLength(0);
+		expect(consoleWarn).toHaveBeenCalledTimes(1);
+	});
+
+	it("adopts the file when it had nothing to merge against", async () => {
+		const file = memoryFile();
+		const writer = new DataFileWriter<Doc>(file.access, manualClock(), null);
+		file.state.memory.defaultVolume = 0.3;
+		file.state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await writer.onExternalChange();
+
+		expect(file.state.memory).toEqual(file.state.disk);
+		expect(writer.hasBase).toBe(true);
+	});
+});
+
+describe("DataFileWriter lifecycle", () => {
+	it("drops a change read after unload", async () => {
+		const { access, state, writer } = setup();
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		access.read.mockImplementationOnce(async () => {
+			await held;
+			return structuredClone(state.disk);
+		});
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+		const external = writer.onExternalChange();
+
+		const unloading = writer.unload();
+		release();
+		await Promise.all([external, unloading]);
+
+		expect(state.published).toHaveLength(0);
+	});
+
+	it("still merges with disk when unload writes a requested save", async () => {
+		const { clock, state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		await writer.unload();
+
+		const expected = { ...doc(), defaultVolume: 0.5 };
+		expected.savedFeeds.Synced = { title: "Synced" };
+		expect(state.writes).toEqual([expected]);
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("on close writes what is pending, then starts nothing", async () => {
+		const { clock, state, writer } = setup();
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+
+		const closing = writer.close();
+		expect(closing).not.toBeNull();
+		await closing;
+		expect(state.writes).toHaveLength(1);
+
+		state.memory.defaultVolume = 0.25;
+		writer.request();
+		expect(clock.pending()).toBe(0);
+		await expect(writer.save()).rejects.toThrow(/closes/);
+		await writer.onExternalChange();
+		expect(state.writes).toHaveLength(1);
+	});
+
+	it("on close retries a requested save whose write failed", async () => {
+		const { access, clock, state, writer } = setup();
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		clock.runAll();
+		await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+		expect(state.disk!.defaultVolume).toBe(1);
+
+		const closing = writer.close();
+		expect(closing).not.toBeNull();
+		await closing;
+
+		expect(state.disk!.defaultVolume).toBe(0.5);
+	});
+
+	it("on close writes an edit whose save could not read the file", async () => {
+		const { access, clock, state, writer } = setup();
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		access.read.mockRejectedValueOnce(new Error("busy"));
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		clock.runAll();
+		await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+
+		const closing = writer.close();
+		expect(closing).not.toBeNull();
+		await closing;
+
+		expect(state.disk!.defaultVolume).toBe(0.5);
+	});
+
+	it("starts no write once closed, not even to retry a failed one", async () => {
+		const { access, clock, state, writer } = setup();
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		access.write.mockRejectedValue(new Error("disk full"));
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		clock.runAll();
+		await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+		await writer.close();
+		const writes = access.write.mock.calls.length;
+
+		await writer.unload();
+		await writer.flush();
+
+		expect(access.write).toHaveBeenCalledTimes(writes);
+	});
+
+	it("gives close nothing to wait for when no save is pending or running", () => {
+		const { writer } = setup();
+
+		expect(writer.close()).toBeNull();
+	});
+});

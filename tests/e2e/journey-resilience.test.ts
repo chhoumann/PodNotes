@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, expectKnownFailure, PLUGIN_ID } from "./harness";
+import { createPodNotesE2EHarness, PLUGIN_ID } from "./harness";
 import {
 	click,
 	closeSettings,
@@ -46,7 +46,7 @@ async function serve(...feeds: FixtureFeed[]): Promise<FixtureServer> {
 }
 
 describe("resilience journeys", () => {
-	test("#357 known failure J-EDGE-12: a data.json replaced by sync keeps both the remote and the local change", async () => {
+	test("J-EDGE-12: a data.json replaced by sync keeps both the remote and the local change (#357)", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
 		const local: FixtureFeed = {
@@ -106,21 +106,10 @@ describe("resilience journeys", () => {
 			(library) => library.skipBackwardSeconds === 42,
 			"the local setting change saved",
 		);
-		const captured = {
-			skipBackwardSeconds: saved.skipBackwardSeconds,
-			subscriptions: saved.subscriptions.map((entry) => entry.title).sort(),
-		};
-
-		expectKnownFailure(357, captured, {
-			correct: (value) =>
-				expect(value).toEqual({
-					skipBackwardSeconds: 42,
-					subscriptions: ["Journey Local Feed", "Journey Remote Feed"],
-				}),
-			reproduces: (value) =>
-				value.skipBackwardSeconds === 42 &&
-				value.subscriptions.join() === "Journey Local Feed",
-		});
+		expect(saved.subscriptions.map((entry) => entry.title).sort()).toEqual([
+			"Journey Local Feed",
+			"Journey Remote Feed",
+		]);
 	});
 
 	test.runIf(isolatedInstance)(

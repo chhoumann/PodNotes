@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PodNotes from "./main";
+import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { VIEW_TYPE } from "./constants";
 import { Platform } from "obsidian";
 import type { Episode } from "./types/Episode";
@@ -252,20 +253,25 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerObsidianProtocolHandler: vi.fn(),
 			registerEvent: vi.fn(),
 			registerDomEvent: vi.fn(),
-			pendingSave: null,
-			pendingSaveWaiters: [],
-			saveScheduled: false,
-			saveChain: Promise.resolve(),
 			writeRefusal: null,
 			writeInFlight: null,
 			mediaSessionActions: [],
 			storeUnsubscribers: [],
 			views: new Set(),
+			manifest: { dir: ".obsidian/plugins/podnotes" },
 			app: {
 				secretStorage: {
 					getSecret: vi.fn(() => null),
 					setSecret: vi.fn(),
 					listSecrets: vi.fn(() => []),
+				},
+				vault: {
+					adapter: {
+						exists: vi.fn(async () => true),
+						read: vi.fn(async () =>
+							dataFileText(vi.mocked(plugin.saveData).mock.lastCall?.[0]),
+						),
+					},
 				},
 				workspace: {
 					onLayoutReady: vi.fn(),
@@ -334,7 +340,8 @@ describe("PodNotes onload wiring (#55)", () => {
 		);
 		const addPromise = vi.fn();
 
-		void plugin.saveSettings();
+		plugin.settings.defaultVolume = 0.5;
+		void plugin.saveSettingsStrict();
 		await vi.waitFor(() => expect(plugin.saveData).toHaveBeenCalled());
 		quitHandler(plugin)({ addPromise });
 
@@ -353,13 +360,16 @@ describe("PodNotes onload wiring (#55)", () => {
 	it("gives quit a task that resolves even when the save in flight fails", async () => {
 		const { plugin } = await loadPlugin({ schemaVersion: 2 });
 		let failWrite = (_error: Error) => {};
-		vi.mocked(plugin.saveData).mockImplementation(
-			() => new Promise<void>((_resolve, reject) => (failWrite = reject)),
-		);
+		vi.mocked(plugin.saveData)
+			.mockRejectedValue(new Error("disk full"))
+			.mockImplementationOnce(
+				() => new Promise<void>((_resolve, reject) => (failWrite = reject)),
+			);
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		const addPromise = vi.fn();
 
-		void plugin.saveSettings();
+		plugin.settings.defaultVolume = 0.5;
+		void plugin.saveSettingsStrict().catch(() => undefined);
 		await vi.waitFor(() => expect(plugin.saveData).toHaveBeenCalled());
 		quitHandler(plugin)({ addPromise });
 		failWrite(new Error("disk full"));

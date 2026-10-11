@@ -31,19 +31,21 @@ import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
-import { type Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 import { normalizePlaybackRate } from "./utility/playbackRate";
 import {
 	decodePodNotesData,
 	encodePodNotesData,
 	PODNOTES_DATA_SCHEMA_VERSION,
 	PodNotesDataError,
+	type PersistedPodNotesDataV2,
 } from "./persistence/podNotesData";
+import { jsonValuesEqual, restoreDropped } from "./persistence/merge";
+import { type Clock, type DataFileAccess, DataFileWriter } from "./persistence/writer";
 import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { migratePrivateFeedUrls, scrubMigratedEpisodeUrls } from "./services/privateFeeds";
 import { evictCachedFeedUrls } from "./services/FeedCacheService";
-import { toError } from "./utility/toError";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -56,9 +58,36 @@ type MediaSessionActionName =
 	| "seekto"
 	| "skipad";
 
-interface SaveWaiter {
-	resolve: () => void;
-	reject: (error: unknown) => void;
+type WriteRefusal = "unreadable-data-file" | "window-unloading" | "obsidian-closing";
+
+const WRITE_REFUSALS: Record<WriteRefusal, string> = {
+	"unreadable-data-file": "PodNotes does not save over a data.json it could not read.",
+	"window-unloading": "PodNotes does not start a save while the window unloads.",
+	"obsidian-closing": "PodNotes does not start a save while Obsidian closes.",
+};
+
+// Saves run on the main window's timers: a popout's timers stop when it closes.
+const MAIN_WINDOW_CLOCK: Clock = {
+	setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+	clearTimeout: (id) => window.clearTimeout(id),
+	now: () => window.performance.now(),
+};
+
+/** Whether data.json's text holds this data. */
+function holdsData(text: string, data: unknown): boolean {
+	try {
+		return jsonValuesEqual(JSON.parse(text), JSON.parse(JSON.stringify(data)));
+	} catch {
+		return false;
+	}
+}
+
+/** data.json as plain JSON: what the merge compares and what saveData writes. */
+function toDocument(
+	settings: IPodNotesSettings,
+	unknownFields: Record<string, unknown>,
+): PersistedPodNotesDataV2 {
+	return JSON.parse(JSON.stringify(encodePodNotesData(settings, unknownFields)));
 }
 
 class PodNotesSchemaMigrationError extends Error {
@@ -98,14 +127,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	// file exists but could not be read (a sync client's half-written copy, or one a
 	// reload cut off), and when the window starts unloading or Obsidian quits: a write
 	// started then is cut off after it truncates the file, which leaves data.json empty.
-	private writeRefusal: string | null = null;
+	private writeRefusal: WriteRefusal | null = null;
 	// The data.json write in progress, settled either way, or null. Writes never overlap.
 	private writeInFlight: Promise<void> | null = null;
-	private pendingSave: IPodNotesSettings | null = null;
-	private pendingSaveWaiters: SaveWaiter[] = [];
-	private saveScheduled = false;
-	// tests/e2e/harness.ts awaits this to let in-flight saves finish before it restores data.json.
-	private saveChain: Promise<void> = Promise.resolve();
+	// What the last write was writing when it left data.json cut short, as a full disk
+	// does. Null once a write succeeds.
+	private incompleteWrite: string | null = null;
+	// Every save after load, and every change synced in from elsewhere, goes through it.
+	private writer: DataFileWriter<PersistedPodNotesDataV2> | null = null;
+	private unreadableNotice: Notice | null = null;
 	private persistenceUnknownFields: Record<string, unknown> = {};
 	private mediaSessionActions: MediaSessionActionName[] = [];
 
@@ -113,37 +143,40 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isUnloaded = false;
 		this.podcastViewMountEnabled = !this.isMobileRuntime();
 		this.registerDomEvent(window, "pagehide", () => {
-			this.writeRefusal = "PodNotes does not start a save while the window unloads.";
+			this.writeRefusal = "window-unloading";
 		});
-		// Obsidian closes the window once its quit tasks settle, so start no write after
-		// quit and let a write in flight finish first. A reload fires no quit; pagehide
-		// covers it. A rejected quit task would stall the close until Obsidian forces it.
+		// Obsidian closes the window once its quit tasks settle, so write what is pending,
+		// let a write in flight finish, and start nothing after. A reload fires no quit;
+		// pagehide covers it. A rejected quit task would stall the close until Obsidian forces it.
 		this.registerEvent(
 			this.app.workspace.on("quit", (tasks) => {
-				this.writeRefusal = "PodNotes does not start a save while Obsidian closes.";
+				if (this.writer) {
+					const saving = this.writer.close();
+					if (saving) tasks.addPromise(saving);
+					return;
+				}
+				// Still loading: only a migration write can be in flight.
+				this.writeRefusal = "obsidian-closing";
 				if (this.writeInFlight) tasks.addPromise(this.writeInFlight);
 			}),
 		);
+		// A phone can kill the app once it is in the background, with no event first.
+		// The main window's document: the app, not a popout, goes to the background.
+		const mainDocument = window.document;
+		this.registerDomEvent(mainDocument, "visibilitychange", () => {
+			if (mainDocument.visibilityState === "hidden") void this.flushSaves();
+		});
 		plugin.set(this);
 		this.credentials = new CredentialRepository(this.app.secretStorage);
 		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
 
 		await this.loadSettings();
+		this.writer = this.createWriter(MAIN_WINDOW_CLOCK);
 
-		playedEpisodes.set(this.settings.playedEpisodes);
-		savedFeeds.set(this.settings.savedFeeds);
-		playlists.set(this.settings.playlists);
-		queue.set(this.settings.queue);
-		favorites.set(this.settings.favorites);
-		localFiles.set(this.settings.localFiles);
-		downloadedEpisodes.set(this.settings.downloadedEpisodes);
+		this.setCollectionStores();
 		if (this.settings.currentEpisode) {
 			currentEpisode.set(this.settings.currentEpisode);
 		}
-		hidePlayedEpisodes.set(this.settings.hidePlayedEpisodes);
-		// loadSettings() already sanitized this, so the store stays in sync with
-		// the (repaired) persisted value.
-		episodeListLimit.set(this.settings.episodeListLimit);
 		volume.set(Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)));
 		playbackRate.set(normalizePlaybackRate(this.settings.defaultPlaybackRate));
 
@@ -433,6 +466,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	override onunload() {
 		this.isUnloaded = true;
+		void this.writer?.unload();
 		this.clearLayoutReadyRetry();
 		this.clearMediaSessionHandlers();
 		for (const unsubscribe of this.storeUnsubscribers) unsubscribe();
@@ -462,11 +496,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// loadData resolves nullish both for a missing file and for one it could
 			// not read or parse, so tell them apart by whether the file exists.
 			if (data == null && (await this.app.vault.adapter.exists(this.dataFilePath()))) {
-				this.writeRefusal = "PodNotes does not save over a data.json it could not read.";
+				this.writeRefusal = "unreadable-data-file";
 				this.settings = structuredClone(DEFAULT_SETTINGS);
 				this.persistenceUnknownFields = {};
-				new Notice(
-					`PodNotes could not read ${this.dataFilePath()}, so it left the file unchanged and started with default settings. Nothing is saved until you restore or delete that file and restart Obsidian.`,
+				this.unreadableNotice = new Notice(
+					`PodNotes could not read ${this.dataFilePath()}, so it left the file unchanged and started with default settings. Nothing is saved until the file can be read again, or until you delete it and restart Obsidian.`,
 					0,
 				);
 				console.error(
@@ -565,77 +599,115 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	saveSettings(): Promise<void> {
-		return this.requestSettingsSave().catch(() => undefined);
+		if (this.isReady && !this.writeRefusal) this.writer?.request();
+		return Promise.resolve();
 	}
 
 	/** Awaitable save for migrations/imports that must not report success on failure. */
 	saveSettingsStrict(): Promise<void> {
-		return this.requestSettingsSave();
+		if (!this.isReady || !this.writer) return Promise.resolve();
+		if (this.writeRefusal) return Promise.reject(new Error(WRITE_REFUSALS[this.writeRefusal]));
+		return this.writer.save();
 	}
 
-	private requestSettingsSave(): Promise<void> {
-		if (!this.isReady) return Promise.resolve();
-		if (this.writeRefusal) {
-			const refused = Promise.reject<void>(new Error(this.writeRefusal));
-			void refused.catch(() => undefined);
-			return refused;
-		}
-
-		try {
-			this.pendingSave = this.cloneSettings();
-		} catch (error) {
-			console.error("PodNotes: failed to snapshot settings", error);
-			const failure = Promise.reject<void>(
-				toError(error, "PodNotes could not snapshot settings before saving."),
-			);
-			void failure.catch(() => undefined);
-			return failure;
-		}
-
-		const completion = new Promise<void>((resolve, reject) => {
-			this.pendingSaveWaiters.push({ resolve, reject });
-		});
-		// Attach a handler so even a mistakenly ignored strict save cannot become an
-		// unhandled rejection. Awaiting the original promise still receives failure.
-		void completion.catch(() => undefined);
-
-		if (!this.saveScheduled) {
-			this.saveScheduled = true;
-			this.saveChain = this.runSaveLoop();
-		}
-
-		return completion;
+	/** Write a requested save now. Never rejects. */
+	flushSaves(): Promise<void> {
+		// A refused write would only fail again.
+		if (this.writeRefusal) return Promise.resolve();
+		return this.writer?.flush() ?? Promise.resolve();
 	}
 
-	private async runSaveLoop(): Promise<void> {
-		try {
-			while (this.pendingSave) {
-				const snapshot = this.pendingSave;
-				const waiters = this.pendingSaveWaiters;
-				this.pendingSave = null;
-				this.pendingSaveWaiters = [];
+	override async onExternalSettingsChange(): Promise<void> {
+		if (!this.writer) return;
+		await this.writer.onExternalChange();
+		// The data.json this session could not read at load has become readable.
+		if (this.writeRefusal === "unreadable-data-file" && this.writer.hasBase) {
+			this.writeRefusal = null;
+			this.unreadableNotice?.hide();
+			this.unreadableNotice = null;
+		}
+	}
 
-				try {
-					await this.writeDataFile(
-						encodePodNotesData(snapshot, this.persistenceUnknownFields),
-					);
-					for (const waiter of waiters) waiter.resolve();
-				} catch (error) {
-					console.error("PodNotes: failed to save settings", error);
-					for (const waiter of waiters) waiter.reject(error);
+	private createWriter(clock: Clock): DataFileWriter<PersistedPodNotesDataV2> {
+		return new DataFileWriter(
+			this.dataFileAccess(),
+			clock,
+			this.writeRefusal ? null : this.localDocument(),
+		);
+	}
+
+	private localDocument(): PersistedPodNotesDataV2 {
+		return toDocument(this.settings, this.persistenceUnknownFields);
+	}
+
+	private dataFileAccess(): DataFileAccess<PersistedPodNotesDataV2> {
+		return {
+			read: async (base) => {
+				const data: unknown = await this.loadData();
+				if (data == null) {
+					const path = this.dataFilePath();
+					if (!(await this.app.vault.adapter.exists(path))) return null;
+					// Only the start of this device's failed write: what it was writing replaces it.
+					if (this.incompleteWrite?.startsWith(await this.app.vault.adapter.read(path))) {
+						return null;
+					}
+					throw new Error(`PodNotes could not read ${path}`);
 				}
-			}
-		} finally {
-			// No await occurs between the loop's empty check and this assignment, so a
-			// request cannot land in a gap where it sees a scheduled loop that has
-			// already decided to exit.
-			this.saveScheduled = false;
-		}
+				const decoded = decodePodNotesData(data);
+				const doc: Record<string, unknown> = toDocument(
+					decoded.settings,
+					decoded.unknownFields,
+				);
+				// An entry the codec dropped while repairing a value (an invalid episode, a
+				// collection reset) is not a deletion on the other device. Keep it.
+				const raw = data as Record<string, unknown>;
+				for (const [key, value] of Object.entries(base ?? {})) {
+					if (!jsonValuesEqual(raw[key], doc[key])) {
+						doc[key] = restoreDropped(value, doc[key], raw[key], [key]);
+					}
+				}
+				return doc as PersistedPodNotesDataV2;
+			},
+			write: (doc) => this.writeDataFile(doc),
+			local: () => this.localDocument(),
+			publish: (doc) => this.publishDocument(doc),
+		};
+	}
+
+	// In place, so code that holds plugin.settings across a save (an import) sees the
+	// merge. Never through currentEpisode.set: it saves the outgoing episode's position
+	// from the live player and queues that episode. A sync leaves what is playing alone.
+	/** The stores of the persisted collections, from settings. The player's state is not one. */
+	private setCollectionStores(): void {
+		// Before downloads: their mirror rebuilds Local Files from this store's playlist.
+		localFiles.set(this.settings.localFiles);
+		playedEpisodes.set(this.settings.playedEpisodes);
+		savedFeeds.set(this.settings.savedFeeds);
+		playlists.set(this.settings.playlists);
+		queue.set(this.settings.queue);
+		favorites.set(this.settings.favorites);
+		downloadedEpisodes.set(this.settings.downloadedEpisodes);
+		hidePlayedEpisodes.set(this.settings.hidePlayedEpisodes);
+		episodeListLimit.set(this.settings.episodeListLimit);
+	}
+
+	private publishDocument(doc: PersistedPodNotesDataV2): void {
+		const decoded = decodePodNotesData(doc);
+		const settings = this.settings as unknown as Record<string, unknown>;
+		for (const key of Object.keys(settings)) delete settings[key];
+		Object.assign(settings, decoded.settings);
+		this.persistenceUnknownFields = decoded.unknownFields;
+		this.setCollectionStores();
+		// Memory keeps naming the episode loaded here, and the next save writes it. With
+		// nothing loaded, the synced episode loads, as it would at startup.
+		const loaded = get(currentEpisode);
+		if (loaded) this.settings.currentEpisode = loaded;
+		else if (this.settings.currentEpisode) currentEpisode.set(this.settings.currentEpisode);
 	}
 
 	// Every data.json write goes through here, so no path can write while writes are refused.
 	private async writeDataFile(data: unknown): Promise<void> {
-		if (this.writeRefusal) throw new Error(this.writeRefusal);
+		if (this.writeRefusal) throw new Error(WRITE_REFUSALS[this.writeRefusal]);
 		const write = this.saveData(data);
 		this.writeInFlight = write.catch(() => undefined);
 		try {
@@ -643,18 +715,17 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		} finally {
 			this.writeInFlight = null;
 		}
+		// saveData resolves even when the write failed (Obsidian's writeJson swallows the
+		// error), so read the file back.
+		const text = await this.app.vault.adapter.read(this.dataFilePath()).catch(() => null);
+		this.incompleteWrite = null;
+		if (text !== null && holdsData(text, data)) return;
+		const expected = JSON.stringify(data, undefined, 2);
+		if (text !== null && expected.startsWith(text)) this.incompleteWrite = expected;
+		throw new Error(`PodNotes could not write ${this.dataFilePath()}.`);
 	}
 
 	private dataFilePath(): string {
 		return normalizePath(`${this.manifest.dir}/data.json`);
-	}
-
-	private cloneSettings(): IPodNotesSettings {
-		// structuredClone is available in Obsidian's Electron runtime; fallback for safety.
-		if (typeof structuredClone === "function") {
-			return structuredClone(this.settings);
-		}
-
-		return JSON.parse(JSON.stringify(this.settings)) as IPodNotesSettings;
 	}
 }

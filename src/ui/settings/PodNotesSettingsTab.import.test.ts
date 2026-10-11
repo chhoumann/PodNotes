@@ -6,9 +6,10 @@ import * as obsidian from "obsidian";
 
 import { DEFAULT_SETTINGS } from "src/constants";
 import PodNotes from "src/main";
-import { episodeListLimit, hidePlayedEpisodes, playbackRate, volume } from "src/store";
+import { episodeListLimit, hidePlayedEpisodes, playbackRate, savedFeeds, volume } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import { PodNotesSettingsTab } from "./PodNotesSettingsTab";
+import { attachDataFileWriter, dataFileText } from "../../../tests/mocks/dataFileWriter";
 
 function deferred<T = void>() {
 	let resolve!: (value: T | PromiseLike<T>) => void;
@@ -416,13 +417,20 @@ describe("PodNotesSettingsTab settings import", () => {
 				adoptReference: vi.fn(() => newerSecretId),
 			},
 			isReady: true,
-			pendingSave: null,
-			pendingSaveWaiters: [],
-			saveScheduled: false,
-			saveChain: Promise.resolve(),
 			persistenceUnknownFields: {},
+			app: {
+				vault: {
+					adapter: {
+						exists: vi.fn().mockResolvedValue(true),
+						read: vi.fn(async () => dataFileText(disk)),
+					},
+				},
+			},
+			manifest: { dir: ".obsidian/plugins/podnotes" },
+			loadData: vi.fn(async () => structuredClone(disk)),
 			saveData,
 		});
+		attachDataFileWriter(plugin);
 		const tab = new PodNotesSettingsTab({} as App, plugin);
 		vi.spyOn(tab, "update").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -456,7 +464,7 @@ describe("PodNotesSettingsTab settings import", () => {
 		await vi.waitFor(() => expect(saveData).toHaveBeenCalledTimes(1));
 
 		plugin.settings.playedEpisodes = newerProgress;
-		const savingProgress = plugin.saveSettings();
+		const savingProgress = plugin.saveSettings().then(() => plugin.flushSaves());
 		const selecting = selectSecret("openAISecretId", "shared-newer", secret, vi.fn());
 		await Promise.resolve();
 
@@ -491,13 +499,20 @@ describe("PodNotesSettingsTab settings import", () => {
 			settings: structuredClone(DEFAULT_SETTINGS),
 			credentials: { storeValues: vi.fn(() => ({})) },
 			isReady: false,
-			pendingSave: null,
-			pendingSaveWaiters: [],
-			saveScheduled: false,
-			saveChain: Promise.resolve(),
 			persistenceUnknownFields: {},
+			app: {
+				vault: {
+					adapter: {
+						exists: vi.fn().mockResolvedValue(true),
+						read: vi.fn(async () => dataFileText(disk)),
+					},
+				},
+			},
+			manifest: { dir: ".obsidian/plugins/podnotes" },
+			loadData: vi.fn(async () => structuredClone(disk)),
 			saveData,
 		});
+		attachDataFileWriter(plugin);
 		hidePlayedEpisodes.set(false);
 		volume.set(DEFAULT_SETTINGS.defaultVolume);
 		episodeListLimit.set(DEFAULT_SETTINGS.episodeListLimit);
@@ -548,6 +563,85 @@ describe("PodNotesSettingsTab settings import", () => {
 			episodeListLimit.set(DEFAULT_SETTINGS.episodeListLimit);
 			playbackRate.set(DEFAULT_SETTINGS.defaultPlaybackRate);
 		}
+	});
+
+	describe("with a podcast another device synced into data.json", () => {
+		const feed = (title: string) => ({
+			title,
+			url: `https://example.com/${title}.xml`,
+			artworkUrl: "",
+		});
+
+		function setup(saveData: (snapshot: unknown) => Promise<void>) {
+			let disk: Record<string, unknown> = structuredClone({
+				...DEFAULT_SETTINGS,
+				savedFeeds: { Before: feed("Before") },
+			});
+			const plugin = Object.create(PodNotes.prototype) as PodNotes;
+			Object.assign(plugin, {
+				settings: structuredClone(disk),
+				credentials: { storeValues: vi.fn(() => ({})) },
+				isReady: true,
+				persistenceUnknownFields: {},
+				app: {
+					vault: {
+						adapter: {
+							exists: vi.fn().mockResolvedValue(true),
+							read: vi.fn(async () => dataFileText(disk)),
+						},
+					},
+				},
+				manifest: { dir: ".obsidian/plugins/podnotes" },
+				loadData: vi.fn(async () => structuredClone(disk)),
+				saveData: async (snapshot: Record<string, unknown>) => {
+					await saveData(snapshot);
+					disk = structuredClone(snapshot);
+				},
+			});
+			attachDataFileWriter(plugin);
+			savedFeeds.set(plugin.settings.savedFeeds);
+			const unbind = bindStoresToSettings(plugin);
+			disk.savedFeeds = { Before: feed("Before"), Remote: feed("Remote") };
+			const tab = new PodNotesSettingsTab({} as App, plugin);
+			vi.spyOn(tab, "update").mockImplementation(() => {});
+			vi.spyOn(console, "error").mockImplementation(() => undefined);
+			const applyImport = (
+				tab as unknown as {
+					applyImportedSettings: (
+						imported: Partial<typeof DEFAULT_SETTINGS>,
+					) => Promise<void>;
+				}
+			).applyImportedSettings.bind(tab);
+			return { plugin, unbind, applyImport, disk: () => disk };
+		}
+
+		it("keeps that podcast through a successful import", async () => {
+			const { plugin, unbind, applyImport, disk } = setup(async () => {});
+			try {
+				await applyImport({ timestamp: { template: "- {{time}} ", offset: 5 } });
+
+				expect(Object.keys(disk().savedFeeds as object)).toEqual(["Before", "Remote"]);
+				expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Before", "Remote"]);
+				expect((disk().timestamp as { offset: number }).offset).toBe(5);
+			} finally {
+				unbind();
+			}
+		});
+
+		it("rolls a failed import back to the podcasts it replaced, keeping the synced one", async () => {
+			let calls = 0;
+			const { plugin, unbind, applyImport, disk } = setup(async () => {
+				if (++calls === 1) throw new Error("first import write failed");
+			});
+			try {
+				await applyImport({ savedFeeds: { Imported: feed("Imported") } });
+
+				expect(Object.keys(disk().savedFeeds as object)).toEqual(["Before", "Remote"]);
+				expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Before", "Remote"]);
+			} finally {
+				unbind();
+			}
+		});
 	});
 
 	it("ordinary settings export never resolves or serializes SecretStorage values", async () => {

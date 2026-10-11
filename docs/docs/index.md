@@ -10,6 +10,7 @@ Here are the features that will help you do that 👇.
 - Podcast player built into Obsidian, for both audio and video episodes
 - Add any publicly available podcast through search, or custom feeds by URL
 - Track played episodes & playback progress, with continuous resume
+- Works with Obsidian Sync and other sync tools: changes made on another device merge in without a restart
 - Create podcast notes from templates with rich metadata about episodes
 - Bases-friendly default notes you can sort, filter, and group with [Obsidian Bases](https://help.obsidian.md/bases)
 - Create a feed note for an entire podcast that every episode note links back to

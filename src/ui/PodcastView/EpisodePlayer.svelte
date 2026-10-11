@@ -69,6 +69,7 @@
 	let playbackRestored: boolean = false;
 	let playerVolume: number = 1;
 	let mediaElement: HTMLMediaElement | null = null;
+	let playerElement: HTMLDivElement;
 	// The currentEpisode subscription fires synchronously on subscribe with the
 	// already-loaded episode; that first fire must not wipe a restored position
 	// (or flash 0) on the initial mount. Only genuine in-player switches reset.
@@ -111,11 +112,9 @@
 			return lists;
 		});
 
-		// The queue is title-identified everywhere (add/remove/dedupe by title; see
-		// src/store/index.ts), so remove the finished episode from it by title to
-		// stay consistent with that identity. The finished episode is usually already
-		// gone from the queue (subscribeQueueToCurrentEpisode drops it when it became
-		// current), so this is otherwise a no-op (PB-07 / Codex review #214).
+		// The finished episode is usually already gone from the queue
+		// (subscribeQueueToCurrentEpisode drops it when it became current), so this is
+		// otherwise a no-op.
 		queue.remove($currentEpisode);
 	}
 
@@ -270,9 +269,9 @@
 	// the episode restarted from 0 on reopen.
 	//
 	// Persist periodically while audio plays (throttled) and immediately when it
-	// pauses, so an abrupt kill loses at most SAVE_POSITION_THROTTLE_MS of
-	// progress. saveSettings already coalesces rapid writes, so this cadence
-	// stays cheap.
+	// pauses. data.json is written at most every 10 s, so an abrupt kill loses at
+	// most that plus SAVE_POSITION_THROTTLE_MS of progress; hiding the window
+	// writes at once.
 	const SAVE_POSITION_THROTTLE_MS = 5000;
 	let lastPositionSaveMs = Number.NEGATIVE_INFINITY;
 
@@ -404,19 +403,28 @@
 		// Backgrounding the app (mobile home button / app switch) or hiding the
 		// window is the last reliable moment before the OS may suspend or kill the
 		// process. It fires no pause event when audio keeps playing, and the next
-		// throttled tick may never arrive — so persist immediately on hide to make
-		// progress durable in exactly the scenario issue #33 reports.
+		// throttled tick may never arrive, so save the position on hide (issue #33).
+		// The player's own document: in a popout, that is the window being hidden.
+		let playerDocument = playerElement.ownerDocument;
 		const onVisibilityChange = () => {
-			if (document.visibilityState === "hidden") {
+			if (playerDocument.visibilityState === "hidden") {
 				persistPlaybackPosition();
+				void $plugin.flushSaves();
 			}
 		};
-		document.addEventListener("visibilitychange", onVisibilityChange);
+		playerDocument.addEventListener("visibilitychange", onVisibilityChange);
+		// Moving the leaf to another window keeps this component mounted.
+		const stopFollowingWindow = playerElement.onWindowMigrated?.(() => {
+			playerDocument.removeEventListener("visibilitychange", onVisibilityChange);
+			playerDocument = playerElement.ownerDocument;
+			playerDocument.addEventListener("visibilitychange", onVisibilityChange);
+		});
 
 		return () => {
 			unsubCurrentEpisode();
 			unsubVolume();
-			document.removeEventListener("visibilitychange", onVisibilityChange);
+			playerDocument.removeEventListener("visibilitychange", onVisibilityChange);
+			stopFollowingWindow?.();
 		};
 	});
 
@@ -508,7 +516,7 @@
 	}
 </script>
 
-<div class="episode-player">
+<div class="episode-player" bind:this={playerElement}>
 	{#if isVideoEpisode}
 		<div class="episode-video-container">
 			<!-- svelte-ignore a11y_media_has_caption -->

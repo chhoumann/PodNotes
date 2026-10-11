@@ -55,6 +55,7 @@ beforeEach(() => {
 		settings: {
 			defaultPlaybackRate: 1,
 		},
+		flushSaves: vi.fn(() => Promise.resolve()),
 		api: {
 			skipBackward: vi.fn(),
 			skipForward: vi.fn(),
@@ -757,6 +758,8 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 		try {
 			document.dispatchEvent(new Event("visibilitychange"));
 			expect(get(playedEpisodes)[episodeKey]?.time).toBe(222);
+			// Written now, not after the save delay: the OS may kill a backgrounded app.
+			expect(get(plugin).flushSaves).toHaveBeenCalledTimes(1);
 		} finally {
 			if (originalDescriptor) {
 				Object.defineProperty(document, "visibilityState", originalDescriptor);
