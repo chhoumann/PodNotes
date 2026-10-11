@@ -31,5 +31,7 @@ jobs:
         run: npm run format:check
       - name: Type check and build
         run: npm run build
+      - name: Bundle and persistence sizes
+        run: npm run size && npm run size:data
       - name: Run tests
         run: npm run test
