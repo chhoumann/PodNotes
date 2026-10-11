@@ -70,14 +70,14 @@ describe("PodcastQueryGrid", () => {
 		const { findByRole, queryByRole, type } = renderGrid();
 		type("apple news");
 		await settle();
-		type("planet money");
+		type("huberman lab");
 		await settle();
-		newer.resolve(searchPlanetMoney);
-		await findByRole("button", { name: "Add Planet Money podcast" });
+		newer.resolve(lookupHubermanLab);
+		await findByRole("button", { name: "Add Huberman Lab podcast" });
 		older.resolve(searchAppleNews);
 		await settle();
 
-		expect(queryByRole("button", { name: "Add Planet Money podcast" })).toBeInTheDocument();
+		expect(queryByRole("button", { name: "Add Huberman Lab podcast" })).toBeInTheDocument();
 		expect(
 			queryByRole("button", { name: "Add Apple News In Conversation podcast" }),
 		).toBeNull();
