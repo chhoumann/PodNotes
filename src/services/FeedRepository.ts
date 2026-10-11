@@ -366,9 +366,13 @@ const MAX_ITEMS_PER_FEED = 75;
 const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 
 function removeLegacyCaches(storage: FeedCacheStorage): void {
-	storage.saveLocalStorage("podnotes:feed-cache:v5", null);
-	for (const version of [1, 2, 3, 4]) {
-		window.localStorage.removeItem(`podnotes:feed-cache:v${version}`);
+	try {
+		storage.saveLocalStorage("podnotes:feed-cache:v5", null);
+		for (const version of [1, 2, 3, 4]) {
+			window.localStorage.removeItem(`podnotes:feed-cache:v${version}`);
+		}
+	} catch (error) {
+		console.warn("PodNotes: could not remove old feed caches", error);
 	}
 }
 

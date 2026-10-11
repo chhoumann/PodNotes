@@ -562,6 +562,31 @@ describe("FeedRepository", () => {
 		},
 	);
 
+	test.each([
+		{ enabled: true, failing: "saveLocalStorage" },
+		{ enabled: false, failing: "saveLocalStorage" },
+		{ enabled: true, failing: "removeItem" },
+		{ enabled: false, failing: "removeItem" },
+	])(
+		"a feed loads when earlier caches cannot be removed (cache on: $enabled, $failing throws)",
+		async ({ enabled, failing }) => {
+			vi.spyOn(console, "warn").mockImplementation(() => {});
+			const fail = () => {
+				throw new Error("storage unavailable");
+			};
+			const storage = new MemoryStorage();
+			if (failing === "saveLocalStorage") storage.saveLocalStorage = fail;
+			else vi.stubGlobal("window", { localStorage: { removeItem: fail } });
+			const t = setup({ storage, enabled });
+
+			await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1)]));
+
+			expect(t.load).toHaveBeenCalledWith(alpha.url);
+			expect(t.feed("Alpha")).toMatchObject({ status: "ready" });
+			expect(t.titles("Alpha")).toEqual(["Episode 1"]);
+		},
+	);
+
 	test("a feed link's episodes are named after its channel and never cached", async () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Beta: beta });
