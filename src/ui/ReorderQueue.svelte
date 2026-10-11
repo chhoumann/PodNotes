@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { queue } from "src/store";
 	import type { Episode } from "src/types/Episode";
-	import { isSameEpisode } from "src/utility/episodeKey";
+	import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 	import Icon from "./obsidian/Icon.svelte";
 
 	export let close: () => void = () => {};
@@ -49,7 +49,7 @@
 		<p class="queue-reorder-empty">Your queue is empty.</p>
 	{:else}
 		<ol class="queue-reorder-list">
-			{#each episodes as episode, index (episode.title)}
+			{#each episodes as episode, index (getEpisodeKey(episode))}
 				<li class="queue-reorder-item">
 					<span class="queue-reorder-position">{index + 1}</span>
 					<div class="queue-reorder-info">
