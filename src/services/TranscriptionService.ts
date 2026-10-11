@@ -1,5 +1,4 @@
 import { Notice, TFile } from "obsidian";
-import type { OpenAI } from "openai";
 import type PodNotes from "../main";
 import { getEpisodeAudioBuffer } from "../downloadEpisode";
 import { TranscriptTemplateEngine } from "../TemplateEngine";
@@ -9,6 +8,7 @@ import type { Episode } from "src/types/Episode";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 import { TimerNotice } from "src/ui/TimerNotice";
 import { createChunkFiles, getMimeType } from "./audioChunker";
+import { createTranscription, retryDelayMs } from "./openaiTranscription";
 import {
 	type DiarizationAudio,
 	type DiarizationProviderId,
@@ -29,8 +29,6 @@ const CHUNK_ERROR_PLACEHOLDER_PATTERN = /\[Error transcribing chunk \d+\]/g;
 
 export class TranscriptionService {
 	private plugin: PodNotes;
-	private client: OpenAI | null = null;
-	private cachedApiKey: string | null = null;
 	private disposed = false;
 	private readonly lifetimeAbortController = new AbortController();
 	private readonly activeNotices = new Set<ReturnType<typeof TimerNotice>>();
@@ -40,11 +38,7 @@ export class TranscriptionService {
 	private pendingEpisodes: Episode[] = [];
 	private activeTranscriptions = new Set<string>();
 
-	constructor(
-		plugin: PodNotes,
-		private readonly loadOpenAI: () => Promise<Pick<typeof import("openai"), "OpenAI">> = () =>
-			import("openai"),
-	) {
+	constructor(plugin: PodNotes) {
 		this.plugin = plugin;
 	}
 
@@ -287,7 +281,7 @@ export class TranscriptionService {
 		const chunkFiles = await createChunkFiles(audio);
 		this.assertActive();
 		const segments = await diarizeWithOpenAI({
-			getClient: () => this.getClient(),
+			apiKey: this.getApiKey(),
 			chunkFiles,
 			maxRetries: this.MAX_RETRIES,
 			onProgress: updateNotice,
@@ -301,8 +295,7 @@ export class TranscriptionService {
 		files: File[],
 		updateNotice: (message: string) => void,
 	): Promise<{ text: string; failedChunks: number }> {
-		const client = await this.getClient();
-		this.assertActive();
+		const apiKey = this.getApiKey();
 		const transcriptions: string[] = Array.from({ length: files.length });
 		let completedChunks = 0;
 		let failedChunks = 0;
@@ -328,15 +321,17 @@ export class TranscriptionService {
 				while (retries < this.MAX_RETRIES) {
 					this.assertActive();
 					try {
-						const result = await client.audio.transcriptions.create(
-							{
-								model: "whisper-1",
-								file,
-							},
-							{ signal: this.lifetimeAbortController.signal },
+						const result = await createTranscription(
+							apiKey,
+							{ model: "whisper-1", file },
+							this.lifetimeAbortController.signal,
 						);
 						this.assertActive();
-						transcriptions[index] = result.text;
+						const text = (result as { text?: unknown } | null)?.text;
+						if (typeof text !== "string") {
+							throw new Error("OpenAI returned a transcription without text.");
+						}
+						transcriptions[index] = text;
 						completedChunks++;
 						updateProgress();
 						break;
@@ -353,7 +348,7 @@ export class TranscriptionService {
 							completedChunks++;
 							updateProgress();
 						} else {
-							await this.waitForRetry(1000 * retries);
+							await this.waitForRetry(retryDelayMs(error, 1000 * retries));
 						}
 					}
 				}
@@ -479,29 +474,15 @@ export class TranscriptionService {
 		}
 	}
 
-	private async getClient(): Promise<OpenAI> {
+	private getApiKey(): string {
 		this.assertActive();
 		const apiKey = this.plugin.credentials.get(this.plugin.settings, "openai");
 		if (!apiKey) {
 			throw new Error("Missing OpenAI API key on this device");
 		}
-
-		if (this.client && this.cachedApiKey === apiKey) {
-			return this.client;
-		}
-
-		const { OpenAI } = await this.loadOpenAI();
-		this.assertActive();
-		this.client = new OpenAI({
-			apiKey,
-			dangerouslyAllowBrowser: true,
-		});
-		this.cachedApiKey = apiKey;
-
-		return this.client;
+		return apiKey;
 	}
 
-	/** Drop the client and its credential material when the plugin unloads. */
 	dispose(): void {
 		if (this.disposed) return;
 		this.disposed = true;
@@ -513,12 +494,6 @@ export class TranscriptionService {
 			notice.dispose();
 		}
 		this.activeNotices.clear();
-		this.clearCredentialCache();
-	}
-
-	clearCredentialCache(): void {
-		this.client = null;
-		this.cachedApiKey = null;
 	}
 
 	private assertActive(): void {

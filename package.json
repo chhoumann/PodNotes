@@ -31,8 +31,7 @@
 		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs wrangler.jsonc docs/mkdocs.yml"
 	},
 	"dependencies": {
-		"fuse.js": "^7.5.0",
-		"openai": "^7.25.0"
+		"fuse.js": "^7.5.0"
 	},
 	"devDependencies": {
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",

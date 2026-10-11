@@ -125,7 +125,6 @@ describe("PodNotesSettingsTab settings import", () => {
 					deepgramSecretId: "podnotes-deepgram-api-key",
 				})),
 			},
-			invalidateTranscriptionCredentialCache: vi.fn(),
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
@@ -147,7 +146,6 @@ describe("PodNotesSettingsTab settings import", () => {
 		});
 		expect(plugin.settings.openAISecretId).toBe("podnotes-openai-api-key");
 		expect(plugin.settings.deepgramSecretId).toBe("podnotes-deepgram-api-key");
-		expect(plugin.invalidateTranscriptionCredentialCache).toHaveBeenCalledOnce();
 		expect(plugin.settings).not.toHaveProperty("openAIApiKey");
 		expect(plugin.settings).not.toHaveProperty("diarizationApiKey");
 	});
@@ -195,7 +193,6 @@ describe("PodNotesSettingsTab settings import", () => {
 			credentials: {
 				storeValues: vi.fn(() => ({ openAISecretId: "podnotes-openai-api-key-2" })),
 			},
-			invalidateTranscriptionCredentialCache: vi.fn(),
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			saveSettingsStrict: vi
 				.fn()
@@ -216,7 +213,6 @@ describe("PodNotesSettingsTab settings import", () => {
 
 		expect(plugin.settings).toBe(previous);
 		expect(plugin.settings.openAISecretId).toBe("podnotes-openai-api-key");
-		expect(plugin.invalidateTranscriptionCredentialCache).toHaveBeenCalledTimes(2);
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
 	});
 
@@ -233,7 +229,6 @@ describe("PodNotesSettingsTab settings import", () => {
 				.fn()
 				.mockRejectedValueOnce(new Error("disk full"))
 				.mockResolvedValueOnce(undefined),
-			invalidateTranscriptionCredentialCache: vi.fn(),
 		} as unknown as PodNotes;
 		const tab = new PodNotesSettingsTab({} as App, plugin);
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -253,7 +248,6 @@ describe("PodNotesSettingsTab settings import", () => {
 			isLatest: true,
 		});
 		expect(plugin.settings.openAISecretId).toBe("podnotes-openai-api-key");
-		expect(plugin.invalidateTranscriptionCredentialCache).toHaveBeenCalledTimes(2);
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
 	});
 
@@ -271,7 +265,6 @@ describe("PodNotesSettingsTab settings import", () => {
 					id === "shared-a" ? "podnotes-openai-api-key-2" : "podnotes-openai-api-key-3",
 				),
 			},
-			invalidateTranscriptionCredentialCache: vi.fn(),
 			saveSettingsStrict: vi.fn(() => {
 				const snapshot = plugin.settings.openAISecretId;
 				saveCall++;
@@ -333,7 +326,6 @@ describe("PodNotesSettingsTab settings import", () => {
 					id === "shared-a" ? "podnotes-openai-api-key-2" : "podnotes-openai-api-key-3",
 				),
 			},
-			invalidateTranscriptionCredentialCache: vi.fn(),
 			saveSettingsStrict: vi.fn(() => {
 				const snapshot = plugin.settings.openAISecretId;
 				saveCall++;
@@ -423,7 +415,6 @@ describe("PodNotesSettingsTab settings import", () => {
 				storeValues: vi.fn(() => ({ openAISecretId: importedSecretId })),
 				adoptReference: vi.fn(() => newerSecretId),
 			},
-			invalidateTranscriptionCredentialCache: vi.fn(),
 			isReady: true,
 			pendingSave: null,
 			pendingSaveWaiters: [],
@@ -499,7 +490,6 @@ describe("PodNotesSettingsTab settings import", () => {
 		Object.assign(plugin, {
 			settings: structuredClone(DEFAULT_SETTINGS),
 			credentials: { storeValues: vi.fn(() => ({})) },
-			invalidateTranscriptionCredentialCache: vi.fn(),
 			isReady: false,
 			pendingSave: null,
 			pendingSaveWaiters: [],
