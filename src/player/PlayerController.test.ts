@@ -922,6 +922,23 @@ describe("errors", () => {
 
 		expect(media().currentTime).toBe(300);
 	});
+
+	test.each([
+		["on loaded media", true],
+		["while it loads", false],
+	])("resume() retries at a position the user sought %s", (_, loaded) => {
+		saved(A, 600, 3600);
+		const { player, media } = setup();
+		player.play(A);
+		if (loaded) metadata(media());
+		player.seek(2000);
+		media().emit("error");
+
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(2000);
+	});
 });
 
 describe("dispose", () => {
