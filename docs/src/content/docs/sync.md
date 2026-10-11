@@ -38,11 +38,11 @@ It merges changes to different entries, including subscriptions, progress, playl
 For example, one device can add a podcast while another updates its playback progress.
 Once the subscription reaches the second device's `data.json`, its next save keeps both changes.
 
-When `data.json` files identify different libraries, PodNotes combines their podcasts, progress records, and playlists.
-This includes a new device that starts PodNotes before its synced data arrives.
+When `data.json` files identify different libraries, PodNotes combines their entries, including podcasts, progress records, and playlists.
+A new device's library combines with the synced library even if PodNotes starts before sync delivers `data.json`.
 A setting changed from its default in only one library keeps that library's value.
-The combined file keeps the identity of the library that started first.
-If a podcast has different names in the two libraries, both names appear.
+The combined file keeps the `libraryId` of the library that started first.
+If a podcast has different names in the two libraries, it appears twice, once under each name.
 
 When Obsidian reports a synced file change, PodNotes updates its library without a restart.
 Sync does not switch an episode already loaded in the player or seek to another device's position.
@@ -152,7 +152,8 @@ PodNotes does not repair a non-empty, partly written file.
    If the notice remains, restart Obsidian.
 3. For an older-format notice, update PodNotes on every device, let sync finish, and restart Obsidian to migrate the file.
 
-If you want to discard the old library, back up the file, delete it, and restart Obsidian.
-Deletion starts a new library.
-After an unreadable startup, PodNotes adopts the recovered library instead of merging changes made while saving was disabled.
+After an unreadable startup, PodNotes adopts the recovered library instead of merging changes made after saving stopped.
 If PodNotes had already loaded a library, it merges those changes with the recovered file.
+
+To start a new library on this device, back up `data.json`, delete it, and restart Obsidian.
+Another device with the old library loaded combines it with the new library when the new file arrives.

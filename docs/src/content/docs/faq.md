@@ -96,9 +96,10 @@ See [Transcripts](/transcripts/).
 Saved progress, subscriptions, playlists, templates, and preferences can travel with PodNotes' `data.json` when your sync service includes plugin data.
 PodNotes merges changes from other devices before saving and updates its library when Obsidian reports a synced file change.
 
-When their `data.json` files identify separate libraries, PodNotes combines their podcasts, progress records, and playlists.
-This also works when a new device starts before sync finishes.
-PodNotes records the library's identity in `data.json` and keeps the identity of the library that started first.
+When `data.json` files identify different libraries, PodNotes combines their entries, including podcasts, progress records, and playlists.
+A new device's library combines with the synced library even if PodNotes starts before sync delivers `data.json`.
+PodNotes records which library a file belongs to with a `libraryId` in `data.json`.
+The combined file keeps the `libraryId` of the library that started first.
 If both devices change the same progress record or feed, the device saving keeps its own version of that entry.
 
 Periodic playback checkpoints write at most once every 10 seconds.
