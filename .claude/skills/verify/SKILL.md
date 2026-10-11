@@ -63,7 +63,8 @@ palette, the file menu, links in notes. Reach for internal setters only to
 read state.
 
 - **UI.** `node .claude/skills/verify/ui.mjs` sends real mouse and keyboard
-  events. Each verb waits up to 10 s for exactly one visible match:
+  events to the running instance. `click`, `type`, `fill` and `wait` wait up
+  to 10 s for exactly one visible match. `key` and `uri` do not wait:
 
     ```bash
     node .claude/skills/verify/ui.mjs click '.podcast-view [aria-label="Podcast grid"]'
@@ -133,8 +134,9 @@ npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/player/flow.mp4 -- .obsid
 npm run capture:e2e-obsidian -- sheet .obsidian-e2e-artifacts/player/flow.mp4 .obsidian-e2e-artifacts/player/flow-sheet.png
 ```
 
-`record` opens the player, then records the window while the driver runs. The
-driver is an executable script of `ui.mjs` and `obsidian:e2e` calls with short
+`screenshot` and `record` open the player first and fail without capturing
+when it does not open. `record` then records the window while the driver runs.
+The driver is an executable script of `ui.mjs` and `obsidian:e2e` calls with short
 `sleep`s between steps. A driver that exits non-zero discards the take.
 Without a driver, `record` takes 3 s.
 
@@ -166,9 +168,10 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
 - `.claude/skills/verify/ui.mjs` sends trusted input through
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,
   `type <css> <text>` (insert at the cursor), `fill <css> <text>` (replace),
-  `key <Enter|Escape|Tab|ArrowUp|ArrowDown|Backspace|Ctrl+<k>>`,
-  `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `--timeout <ms>`
-  works with every verb that waits.
+  `key <Enter|Escape|Tab|ArrowUp|ArrowDown|Backspace|<char>|Ctrl+<char>>`,
+  `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `click`, `type`,
+  `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. `key` and
+  `uri` do not wait. Each CLI call fails after 15 s without an answer.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `audio [vault path]` or
   `stop`. The feed URL uses `127.0.0.1.nip.io`, a public DNS name for
   127.0.0.1, because PodNotes refuses literal loopback hosts. Its port is fixed
