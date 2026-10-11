@@ -7,23 +7,51 @@ plugin's dependencies.
 
 ## Layout
 
+- `STYLE.md` is the standard every page follows. Read it before you write.
 - `src/content/docs/` holds the pages as markdown. Each page sets `slug:`
   frontmatter to its URL path. For example, `slug: commands` serves
   `/commands/`, and `slug: index` serves `/`. The build fails if a page has no
   `slug:`, because Astro would otherwise lowercase the generated slug and
   change URLs such as `/QuickAdd/`. If you change a slug, add a 301 in
   `public/_redirects`.
+- `index.md` is the landing page. It uses Starlight's splash template, and
+  `src/components/Hero.astro` renders its hero with the hero screenshot.
 - `astro.config.mjs` holds the Starlight config. The sidebar lives in
-  `src/site.mjs`, which the LLM files below also read.
+  `src/site.mjs`, which the LLM files below also read. `src/styles/custom.css`
+  holds the theme.
+- `src/components/MarkdownContent.astro` post-processes every page:
+  `src/screenshots.mjs` gives each screenshot its size and its dark twin, and
+  `src/tables.mjs` labels table cells so wide tables stack on phones.
 - `scripts/legacy-fragments.mjs` runs after every build and fails it if a
-  heading fragment from the old MkDocs site (`legacy-fragments.json`) has no
+  heading fragment the site has published (`legacy-fragments.json`) has no
   target. When a heading's new id differs from the old one, start the heading
   with an empty `<span id="old-id"></span>`, as `commands.md` does. For an old
   page-title id, set `legacyTitleId:` in the frontmatter instead.
-- `public/` holds static assets served as-is. Images live in
-  `public/resources/` and are referenced with site-absolute paths such as
-  `/resources/podcast_grid.png`. The repo-root `README.md` uses the same
-  images.
+- `public/` holds static assets served as-is. Older images live in
+  `public/resources/` and stay for existing links.
+
+## Screenshots
+
+Every screenshot in `public/screenshots/` comes from one script. From the repo
+root, after `npm run build`:
+
+```sh
+node docs/scripts/screenshots.mjs
+```
+
+It builds a vault from `screenshots/` (the notes, a Bases file, the PodNotes
+settings in `seed.json`, and the Minimal theme), opens it in a private Obsidian
+capture instance at 2x, adds the podcast feeds through Settings, plays the
+episodes, creates notes and captures timestamps with PodNotes' own commands, and
+writes each shot as `<name>.webp` and `<name>-dark.webp`, plus the README demo
+GIFs and the social preview `og.png`. It needs network access for the feeds,
+their artwork, and the theme. The episodes in `seed.json` must still be among
+each feed's latest episodes. If one has left, pick a newer one and update its
+notes in `screenshots/notes/`.
+
+To show a screenshot on a page, write
+`![What it shows](/screenshots/<name>.webp)`. The site adds the size, lazy
+loading, and the dark twin.
 
 ## Commands
 

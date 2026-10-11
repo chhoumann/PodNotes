@@ -196,16 +196,25 @@ terminal session and allow their documented timeout.
 
 ## Documentation
 Docs are an Astro Starlight site in `docs/`, a standalone npm package with its
-own `package-lock.json`. Pages live in `docs/src/content/docs/`, images in
-`docs/public/resources/`, and the sidebar in `docs/src/site.mjs`. Every page
-sets `slug:` frontmatter to pin its URL, and the build fails without it. Update
-docs with user-facing behavior changes, new commands, API changes, template
-syntax, transcript behavior, local-file behavior, or import/export changes.
+own `package-lock.json`. Pages live in `docs/src/content/docs/` and the sidebar
+in `docs/src/site.mjs`. Every page sets `slug:` frontmatter to pin its URL, and
+the build fails without it. Update docs with user-facing behavior changes, new
+commands, API changes, template syntax, transcript behavior, local-file
+behavior, or import/export changes.
+
+Every page follows the standard in `docs/STYLE.md`: pages grouped by what the
+reader is doing, one job per page, UI labels spelled as PodNotes shows them,
+and facts that describe the latest published release, not unreleased `master`.
+Screenshots come only from `node docs/scripts/screenshots.mjs`, which captures
+them in light and dark from the seeded vault in `docs/screenshots/`. Rerun it
+after a UI change instead of adding images by hand.
 
 Use `npm run docs:build` to validate docs locally. It installs the docs
 dependencies and runs `astro build`, which fails on a broken internal link or
-anchor. Cloudflare Pages builds from `docs/` and publishes `docs/dist`, configured in
-`docs/wrangler.jsonc`. See `docs/README.md` for the docs project layout.
+anchor, a page missing from the sidebar, or a published heading id that no
+longer resolves. Cloudflare Pages builds from `docs/` and publishes `docs/dist`,
+configured in `docs/wrangler.jsonc`. See `docs/README.md` for the docs project
+layout.
 
 ## Release Workflow
 Goal: publish each version from a tested, reviewed, and attested commit. Stop
