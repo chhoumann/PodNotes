@@ -48,6 +48,8 @@ export class FakeMedia extends EventTarget {
 	currentTime = 0;
 	duration = Number.NaN;
 	paused = true;
+	/** True at a natural end, from the `pause` before `ended` on. */
+	ended = false;
 	readyState = 0;
 	defaultPlaybackRate = 1;
 	playbackRate = 1;
@@ -110,6 +112,7 @@ export class FakeMedia extends EventTarget {
 		this.currentTime = 0;
 		this.duration = Number.NaN;
 		this.paused = true;
+		this.ended = false;
 		this.playbackRate = this.defaultPlaybackRate;
 		this.rejectPlays();
 	}

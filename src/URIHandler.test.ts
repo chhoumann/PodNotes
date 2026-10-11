@@ -497,6 +497,30 @@ describe("podNotesURIHandler", () => {
 		notice.mockRestore();
 	});
 
+	test.each([
+		["fails", (older: ReturnType<typeof deferred<Episode[]>>) => older.reject(new Error("offline"))],
+		["lacks the title", (older: ReturnType<typeof deferred<Episode[]>>) => older.resolve([])],
+	])(
+		"a link whose feed %s after a newer link to the loaded episode shows no notice",
+		async (_, settle) => {
+			const notice = vi.spyOn(obsidian, "Notice");
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			loadedAt(plusEpisode, 30);
+			const older = deferred<Episode[]>();
+			mockEpisodesAt.mockReturnValueOnce(older.promise);
+
+			const opening = link({ episodeName: testEpisode.title, time: "5" });
+			await link({ episodeName: plusEpisode.title, time: "15" });
+			settle(older);
+			await opening;
+
+			expect(notice).not.toHaveBeenCalled();
+			expect(state().episode).toMatchObject({ title: plusEpisode.title });
+			expect(media().currentTime).toBe(15);
+			vi.restoreAllMocks();
+		},
+	);
+
 	test("does not reject when feed parsing throws (no silent unhandled rejection)", async () => {
 		mockEpisodesAt.mockRejectedValue(new Error("network down"));
 

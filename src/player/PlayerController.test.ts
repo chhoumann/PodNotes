@@ -929,6 +929,59 @@ describe("deferPlay", () => {
 		expect(media().src).toBe(A.streamUrl);
 	});
 
+	test("a resume() while it already plays makes it stale", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		const link = player.deferPlay();
+
+		player.resume();
+
+		expect(link(B)).toBe(false);
+		expect(state().episode).toBe(A);
+	});
+
+	test("a play the browser starts, such as from a media key, makes it stale", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		player.pause();
+		const link = player.deferPlay();
+
+		media().paused = false;
+		media().emit("play");
+
+		expect(link(B)).toBe(false);
+		expect(state()).toMatchObject({ status: "playing", episode: A });
+	});
+
+	test("a pause the browser makes, such as from a media key, makes it stale", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		const link = player.deferPlay();
+
+		pausedByBrowser(media());
+
+		expect(link(B)).toBe(false);
+		expect(state()).toMatchObject({ status: "paused", episode: A });
+	});
+
+	test("a natural end with nothing queued leaves it to play", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media(), 60);
+		const link = player.deferPlay();
+
+		reach(media(), 60);
+		media().ended = true;
+		pausedByBrowser(media());
+		media().emit("ended");
+
+		expect(link(B)).toBe(true);
+		expect(state().episode).toBe(B);
+	});
+
 	test("a queue advance makes it stale", () => {
 		queue.set({ ...get(queue), episodes: [B] });
 		const { player, media, state } = setup();
