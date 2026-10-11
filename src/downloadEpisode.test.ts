@@ -15,8 +15,6 @@ import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 
-type StoredDownload = DownloadedEpisode & { downloadedByPodNotes?: true };
-
 vi.mock("obsidian", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("obsidian")>();
 	return { ...actual, requestUrl: vi.fn() };
@@ -689,7 +687,12 @@ describe("removeDownloadedEpisode", () => {
 		const episode = makeEpisode();
 		const filePath = "Podcasts/My Title.mp3";
 		putOnDisk(vault, filePath);
-		const owned: StoredDownload = { ...episode, filePath, size: 4, downloadedByPodNotes: true };
+		const owned: DownloadedEpisode = {
+			...episode,
+			filePath,
+			size: 4,
+			downloadedByPodNotes: true,
+		};
 		downloadedEpisodes.set({ Pod: [owned] });
 
 		await removeDownloadedEpisode(episode);

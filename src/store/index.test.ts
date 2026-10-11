@@ -321,15 +321,15 @@ describe("downloadedEpisodes store — removeEpisode is pure (no vault I/O)", ()
 		downloadedEpisodes.set({});
 	});
 
-	test("removes the entry and returns its backing file path", () => {
+	test("removes the entry and returns the stored download", () => {
 		const downloaded = downloadedEpisode("Design Podcast", "Episode 1", {
 			filePath: "podcasts/design/ep1.mp3",
 		});
-		downloadedEpisodes.addEpisode(downloaded, downloaded.filePath, 2048);
+		downloadedEpisodes.addEpisode(downloaded, downloaded.filePath, 2048, true);
 
-		const removedFilePath = downloadedEpisodes.removeEpisode(downloaded);
+		const removed = downloadedEpisodes.removeEpisode(ep("Episode 1", "Design Podcast"));
 
-		expect(removedFilePath).toBe("podcasts/design/ep1.mp3");
+		expect(removed).toEqual({ ...downloaded, size: 2048, downloadedByPodNotes: true });
 		expect(downloadedEpisodes.isEpisodeDownloaded(downloaded)).toBe(false);
 		expect(get(downloadedEpisodes)["Design Podcast"]).toEqual([]);
 	});
@@ -339,9 +339,9 @@ describe("downloadedEpisodes store — removeEpisode is pure (no vault I/O)", ()
 		downloadedEpisodes.addEpisode(present, present.filePath, 1024);
 
 		const missing = downloadedEpisode("Design Podcast", "Never downloaded");
-		const removedFilePath = downloadedEpisodes.removeEpisode(missing);
+		const removed = downloadedEpisodes.removeEpisode(missing);
 
-		expect(removedFilePath).toBeUndefined();
+		expect(removed).toBeUndefined();
 		expect(downloadedEpisodes.isEpisodeDownloaded(present)).toBe(true);
 	});
 });

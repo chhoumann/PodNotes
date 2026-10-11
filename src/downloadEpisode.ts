@@ -1,6 +1,7 @@
 import { normalizePath, Notice, TFile } from "obsidian";
 import { get } from "svelte/store";
 import { downloadedEpisodes, plugin } from "./store";
+import type DownloadedEpisode from "./types/DownloadedEpisode";
 import {
 	DownloadPathTemplateEngine,
 	replaceIllegalFileNameCharactersInString,
@@ -31,6 +32,7 @@ import {
 	MAX_DOWNLOAD_SIZE,
 } from "./download/streaming";
 import { detectAudioFileExtension } from "./download/mediaSignatures";
+import { confirmTrashUnownedFile } from "./ui/ConfirmTrashUnownedFileModal";
 import { NetworkError, requestWithTimeout } from "./utility/networkRequest";
 
 const WHOLE_FILE_DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
@@ -139,24 +141,27 @@ function registeredDownloadOwnsPath(episode: Episode, filePath: string): boolean
 }
 
 // Fast-path variant: the path here is only the URL-extension guess, so a foreign
-// occupant is not a collision yet - the sniffed final path may differ. Returns a
-// size only when this episode already owns the file.
-function ownedExistingDownloadSize(episode: Episode, filePath: string): number | undefined {
+// occupant is not a collision yet - the sniffed final path may differ. Returns the
+// registered entry only when this episode already owns the file.
+function ownedExistingDownload(episode: Episode, filePath: string): DownloadedEpisode | undefined {
 	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
 	if (!(existing instanceof TFile)) return undefined;
 	if (!registeredDownloadOwnsPath(episode, filePath)) return undefined;
-	return downloadedEpisodes.getEpisode(episode)?.size;
+	return downloadedEpisodes.getEpisode(episode);
 }
 
 // Resolved-destination variant: the final path is known, so a foreign occupant
 // is a hard collision.
-function reusableExistingDownloadSize(episode: Episode, filePath: string): number | undefined {
+function reusableExistingDownload(
+	episode: Episode,
+	filePath: string,
+): DownloadedEpisode | undefined {
 	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
 	if (!(existing instanceof TFile)) return undefined;
 	if (!registeredDownloadOwnsPath(episode, filePath)) {
 		throw downloadDestinationCollisionError();
 	}
-	return downloadedEpisodes.getEpisode(episode)?.size;
+	return downloadedEpisodes.getEpisode(episode);
 }
 
 // Download an episode to a vault file with bounded memory using the binary append
@@ -173,9 +178,14 @@ async function startDownloadEpisodeToDisk(
 	const urlExtension = getUrlExtension(episode.streamUrl);
 	if (urlExtension) {
 		const provisionalPath = safeDownloadFilePath(downloadPathTemplate, episode, urlExtension);
-		const cachedSize = ownedExistingDownloadSize(episode, provisionalPath);
-		if (cachedSize !== undefined) {
-			downloadedEpisodes.addEpisode(episode, provisionalPath, cachedSize);
+		const cached = ownedExistingDownload(episode, provisionalPath);
+		if (cached) {
+			downloadedEpisodes.addEpisode(
+				episode,
+				provisionalPath,
+				cached.size,
+				cached.downloadedByPodNotes,
+			);
 			return provisionalPath;
 		}
 	}
@@ -192,9 +202,14 @@ async function startDownloadEpisodeToDisk(
 		probe.firstChunk,
 		probe.contentType,
 	);
-	const existingSize = reusableExistingDownloadSize(episode, filePath);
-	if (existingSize !== undefined) {
-		downloadedEpisodes.addEpisode(episode, filePath, existingSize);
+	const existing = reusableExistingDownload(episode, filePath);
+	if (existing) {
+		downloadedEpisodes.addEpisode(
+			episode,
+			filePath,
+			existing.size,
+			existing.downloadedByPodNotes,
+		);
 		return filePath;
 	}
 
@@ -218,7 +233,7 @@ async function startDownloadEpisodeToDisk(
 		await moveIntoPlace(tmpPath, filePath);
 		moved = true;
 
-		downloadedEpisodes.addEpisode(episode, filePath, total);
+		downloadedEpisodes.addEpisode(episode, filePath, total, true);
 		return filePath;
 	} finally {
 		if (!moved) await deleteEpisodeFile(tmpPath);
@@ -352,9 +367,13 @@ export function safeDownloadFilePath(
 }
 
 export async function removeDownloadedEpisode(episode: Episode): Promise<void> {
-	const removedFilePath = downloadedEpisodes.removeEpisode(episode);
-	if (removedFilePath && !isLocalFile(episode)) {
-		await deleteEpisodeFile(removedFilePath);
+	const removed = downloadedEpisodes.removeEpisode(episode);
+	if (!removed || isLocalFile(removed)) return;
+	if (
+		removed.downloadedByPodNotes ||
+		(await confirmTrashUnownedFile(get(plugin).app, removed.filePath))
+	) {
+		await deleteEpisodeFile(removed.filePath);
 	}
 }
 
