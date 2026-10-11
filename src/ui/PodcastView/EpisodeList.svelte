@@ -10,7 +10,7 @@
 	import { isEpisodeFinished } from "src/utility/episodeStatus";
 	import { createEpisodeListEntries, type EpisodeListEntry } from "src/utility/episodeListEntry";
 
-	export let episodes: Episode[] = [];
+	export let episodes: readonly Episode[] = [];
 	export let episodeEntries: EpisodeListEntry[] | null = null;
 	export let showThumbnails: boolean = false;
 	export let showListMenu: boolean = true;
@@ -23,6 +23,23 @@
 	$: visibleEntries = listEntries.filter(
 		(entry) => !shouldHidePlayedEpisodes || !isEpisodeFinished(entry.episode, $playedEpisodes),
 	);
+
+	/**
+	 * Episode keys repeat for same-titled podcasts or episodes, so a repeat gets a
+	 * suffix. It starts with NUL, which feed text cannot contain (see episodeKey.ts),
+	 * so a suffixed key never equals another episode's key and rows stay put as the
+	 * list changes.
+	 */
+	function keyRows(entries: EpisodeListEntry[]): [string, EpisodeListEntry][] {
+		const keys = new Set<string>();
+		return entries.map((entry) => {
+			const key = getEpisodeKey(entry.episode);
+			let row = key;
+			for (let repeat = 1; keys.has(row); repeat++) row = `${key}\u0000${repeat}`;
+			keys.add(row);
+			return [row, entry];
+		});
+	}
 
 	const dispatch = createEventDispatcher();
 
@@ -95,7 +112,7 @@
 		{#if visibleEntries.length === 0 && !isLoading}
 			<p>No episodes found.</p>
 		{/if}
-		{#each visibleEntries as entry, index (getEpisodeKey(entry.episode) ?? `${entry.episode.title}-${entry.episode.episodeDate ?? ""}-${index}`)}
+		{#each keyRows(visibleEntries) as [key, entry] (key)}
 			<EpisodeListItem
 				episode={entry.episode}
 				episodeFinished={isEpisodeFinished(entry.episode, $playedEpisodes)}

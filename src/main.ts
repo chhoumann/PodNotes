@@ -33,15 +33,21 @@ import {
 	decodePodNotesData,
 	encodePodNotesData,
 	PODNOTES_DATA_SCHEMA_VERSION,
+	newLibraryId,
 	PodNotesDataError,
+	toDocument,
 	type PersistedPodNotesDataV2,
 } from "./persistence/podNotesData";
 import { jsonValuesEqual, restoreDropped } from "./persistence/merge";
 import { type Clock, type DataFileAccess, DataFileWriter } from "./persistence/writer";
 import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
-import { migratePrivateFeedUrls, scrubMigratedEpisodeUrls } from "./services/privateFeeds";
-import { evictCachedFeedUrls } from "./services/FeedCacheService";
+import {
+	migratePrivateFeedUrls,
+	resolveFeedUrl,
+	scrubMigratedEpisodeUrls,
+} from "./services/privateFeeds";
+import { FeedRepository, loadFeed } from "./services/FeedRepository";
 
 type MediaSessionActionName =
 	| "previoustrack"
@@ -83,14 +89,6 @@ function holdsData(text: string, data: unknown): boolean {
 	}
 }
 
-/** data.json as plain JSON: what the merge compares and what saveData writes. */
-function toDocument(
-	settings: IPodNotesSettings,
-	unknownFields: Record<string, unknown>,
-): PersistedPodNotesDataV2 {
-	return JSON.parse(JSON.stringify(encodePodNotesData(settings, unknownFields)));
-}
-
 class PodNotesSchemaMigrationError extends Error {
 	constructor(
 		public readonly originalCause: unknown,
@@ -108,6 +106,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public credentials!: CredentialRepository;
 	public feedUrls!: FeedUrlRepository;
 	public player!: PlayerController;
+	public feeds!: FeedRepository;
 
 	private views = new Set<MainView>();
 
@@ -155,6 +154,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		plugin.set(this);
 		this.credentials = new CredentialRepository(this.app.secretStorage);
 		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
+		this.feeds = new FeedRepository({
+			load: loadFeed,
+			resolveUrl: (feed) => resolveFeedUrl(feed, this.feedUrls),
+			storage: this.app,
+			cache: () => this.settings.feedCache,
+			now: Date.now,
+		});
 
 		await this.loadSettings();
 		this.writer = this.createWriter(MAIN_WINDOW_CLOCK);
@@ -172,9 +178,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			void this.flushSaves();
 		});
 
-		// Mirror every store-backed slice of state into settings. The subscriptions
-		// are tied to the plugin lifetime; onunload disposes them.
-		this.storeUnsubscribers.push(bindStoresToSettings(this));
+		// Mirror every store-backed slice of state into settings, and keep the feed
+		// repository's subscriptions current. The subscriptions are tied to the plugin
+		// lifetime; onunload disposes them.
+		this.storeUnsubscribers.push(
+			bindStoresToSettings(this),
+			savedFeeds.subscribe((feeds) => this.feeds.setSubscriptions(feeds)),
+		);
 
 		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
 		// downloadedEpisodes is the authoritative offline set, so mirror it into the
@@ -476,7 +486,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// not read or parse.
 			if (data == null && !(await this.dataFileHoldsNothing())) {
 				this.settings = structuredClone(DEFAULT_SETTINGS);
-				this.persistenceUnknownFields = {};
+				this.persistenceUnknownFields = { libraryId: newLibraryId() };
 				this.refuseSaves(
 					"unreadable-data-file",
 					`PodNotes could not read ${this.dataFilePath()}, so it left the file unchanged and started with default settings. Nothing is saved until the file can be read again, or until you delete it and restart Obsidian.`,
@@ -527,10 +537,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// Private feed URLs: move credential-bearing subscription URLs out of
 			// data.json into SecretStorage, scrub the same URLs out of persisted
 			// episode snapshots (queue/favorites/playlists/downloads/history stamp
-			// url/feedUrl at fetch time) and the local feed cache, then reap feed-url
-			// secrets no saved feed references anymore (e.g. after a settings import
-			// replaced savedFeeds). Best-effort: a failure keeps that feed's URL
-			// where it was, is reported, and never breaks loading.
+			// url/feedUrl at fetch time), then reap feed-url secrets no saved feed
+			// references anymore (e.g. after a settings import replaced savedFeeds).
+			// Best-effort: a failure keeps that feed's URL where it was, is
+			// reported, and never breaks loading.
 			this.feedUrls ??= new FeedUrlRepository(this.app.secretStorage);
 			const feedMigration = migratePrivateFeedUrls(settings.savedFeeds, this.feedUrls);
 			if (feedMigration.replacements.size > 0) {
@@ -538,7 +548,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					{ ...settings, savedFeeds: feedMigration.savedFeeds },
 					feedMigration.replacements,
 				);
-				evictCachedFeedUrls([...feedMigration.replacements.keys()]);
 				await this.writeDataFile(encodePodNotesData(settings, decoded.unknownFields));
 				const count = feedMigration.replacements.size;
 				new Notice(

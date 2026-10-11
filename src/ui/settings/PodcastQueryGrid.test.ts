@@ -5,6 +5,7 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type PodNotes from "src/main";
+import { FeedRepository, loadFeed } from "src/services/FeedRepository";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import { plugin, savedFeeds } from "src/store";
 import {
@@ -19,6 +20,7 @@ import searchAppleNews from "../../../tests/fixtures/itunes/search-apple-news.js
 import searchHubermanLab from "../../../tests/fixtures/itunes/search-huberman-lab.json";
 import searchPlanetMoney from "../../../tests/fixtures/itunes/search-planet-money.json";
 import searchPlanetMoneyNamesake from "../../../tests/fixtures/itunes/search-planet-money-namesake.json";
+import { MemoryStorage } from "../../../tests/mocks/feeds";
 import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
 
 vi.mock("src/utility/networkRequest", async (importOriginal) => {
@@ -53,6 +55,17 @@ function deferred<T>() {
 	return { promise, resolve };
 }
 
+function usePlugin(feedUrls: FeedUrlRepository | object) {
+	const feeds = new FeedRepository({
+		load: loadFeed,
+		resolveUrl: (feed) => feed.url,
+		storage: new MemoryStorage(),
+		cache: () => ({ enabled: false, ttlHours: 6 }),
+		now: Date.now,
+	});
+	plugin.set({ feedUrls, feeds } as unknown as PodNotes);
+}
+
 // Runs the debounced handler and every response already resolved.
 const settle = () => new Promise((resolve) => setTimeout(resolve));
 
@@ -63,7 +76,7 @@ const PRIVATE_URL = "https://www.patreon.com/rss/show?auth=se-cret";
 function followPrivateShow() {
 	const secrets = new obsidian.SecretStorage();
 	const feedUrls = new FeedUrlRepository(secrets);
-	plugin.set({ feedUrls } as PodNotes);
+	usePlugin(feedUrls);
 	const saved = {
 		title: "Private Show",
 		url: privateFeedPlaceholder("Private Show"),
@@ -79,7 +92,7 @@ function followPrivateShow() {
 
 describe("PodcastQueryGrid", () => {
 	beforeEach(() => {
-		plugin.set({ feedUrls: {} } as PodNotes);
+		usePlugin({});
 		savedFeeds.set({});
 		fetchJsonMock.mockReset();
 		fetchTextMock.mockReset();
@@ -134,6 +147,36 @@ describe("PodcastQueryGrid", () => {
 		expect(await findByRole("button", { name: "Remove toString podcast" })).toBeInTheDocument();
 	});
 
+	test("two saved podcasts sharing a feed URL each have a Remove for only themselves", async () => {
+		const shared = {
+			title: "Shared",
+			url: "https://feeds.example.com/shared.xml",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ Shared: shared, "Shared Alias": { ...shared, title: "Shared Alias" } });
+
+		const { findByRole } = renderGrid();
+		await fireEvent.click(await findByRole("button", { name: "Remove Shared Alias podcast" }));
+
+		expect(Object.keys(get(savedFeeds))).toEqual(["Shared"]);
+		expect(await findByRole("button", { name: "Remove Shared podcast" })).toBeInTheDocument();
+	});
+
+	test("Remove deletes the saved podcast under its own key", async () => {
+		savedFeeds.set({
+			"Old Name": {
+				title: "New Name",
+				url: "https://feeds.example.com/renamed.xml",
+				artworkUrl: "",
+			},
+		});
+
+		const { findByRole } = renderGrid();
+		await fireEvent.click(await findByRole("button", { name: "Remove New Name podcast" }));
+
+		expect(get(savedFeeds)).toEqual({});
+	});
+
 	test("lists a followed private feed as saved", async () => {
 		followPrivateShow();
 
@@ -172,7 +215,7 @@ describe("PodcastQueryGrid", () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		const { saved } = followPrivateShow();
 		const thisDevice = new obsidian.SecretStorage();
-		plugin.set({ feedUrls: new FeedUrlRepository(thisDevice) } as PodNotes);
+		usePlugin(new FeedUrlRepository(thisDevice));
 
 		const { findByRole } = paste(PRIVATE_URL);
 		await fireEvent.click(await findByRole("button", { name: "Add Private Show podcast" }));

@@ -1,13 +1,10 @@
 import { Notice, TFile } from "obsidian";
 import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
-import FeedParser from "./parser/feedParser";
 import { localFiles, plugin, savedFeeds, viewState } from "./store";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
-import type { PodcastFeed } from "./types/PodcastFeed";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
-import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { episodeLinkTarget } from "./utility/episodeLinkTarget";
@@ -38,7 +35,7 @@ function candidateValues(raw: string): string[] {
 }
 
 function findEpisodeByCandidates(
-	episodes: Episode[],
+	episodes: readonly Episode[],
 	nameCandidates: string[],
 ): Episode | undefined {
 	for (const name of nameCandidates) {
@@ -68,6 +65,10 @@ function findLocalEpisodeByCandidates(nameCandidates: string[]): Episode | undef
 function parseSeconds(value: string): number {
 	return value.trim() === "" ? Number.NaN : Number(value);
 }
+
+// Two links opened in quick succession can load their feeds out of order, so a
+// link acts after loading only if no newer link that passed its checks has arrived since.
+let latestRequest = 0;
 
 export default async function podNotesURIHandler(
 	{ url, episodeName, time, endTime, end, to }: PodNotesProtocolData,
@@ -174,53 +175,57 @@ export default async function podNotesURIHandler(
 		// match a saved feed on THIS device, and the real URL comes from
 		// SecretStorage. An attacker-crafted placeholder link can therefore only
 		// make the user's own device fetch the user's own subscribed feed - and
-		// the resolved URL still passes the fetchability gate below.
-		let fetchUrl = url;
-		let placeholderFeed: PodcastFeed | undefined;
-		const placeholderName = parsePrivateFeedPlaceholder(url);
-		if (placeholderName !== null) {
-			placeholderFeed = get(savedFeeds)[placeholderName];
-			const resolved = placeholderFeed
-				? resolveFeedUrl(placeholderFeed, get(plugin).feedUrls)
-				: null;
-			if (resolved === null) {
+		// the resolved URL still passes the network fetchability gate.
+		const feeds = get(plugin).feeds;
+		const placeholderKey = parsePrivateFeedPlaceholder(url);
+		if (placeholderKey !== null) {
+			// A link to a feed this device does not have is refused without cancelling an
+			// earlier link; for a feed it has, a newer link or play wins.
+			const known = Object.prototype.hasOwnProperty.call(get(savedFeeds), placeholderKey);
+			const request = known ? ++latestRequest : latestRequest;
+			if (known) play = player.deferPlay();
+			// Fetch even a fresh feed so the link finds an episode published since.
+			await feeds.load([placeholderKey], "network");
+			if (request !== latestRequest) return;
+			const state = get(feeds).get(placeholderKey);
+			episode = findEpisodeByCandidates(state?.episodes ?? [], nameCandidates);
+			if (!episode && (!state || state.error)) {
 				new Notice(
-					"This link points to a private feed that is not available on this device.",
+					state?.error === "network"
+						? "Could not load the podcast feed"
+						: "This link points to a private feed that is not available on this device.",
 				);
 				return;
 			}
-			fetchUrl = resolved;
-		}
+		} else {
+			// The url here came straight from an untrusted obsidian://podnotes deep link
+			// (an attacker can put one behind <a href> on a web page), so a single click
+			// must not be able to fetch an arbitrary internal host. Refuse anything that
+			// isn't a public http(s) URL before fetching it (blind SSRF).
+			if (!isFetchableUrl(url)) {
+				new Notice("Refusing to load a feed from a private, local, or non-http(s) URL");
+				return;
+			}
 
-		// The url here came straight from an untrusted obsidian://podnotes deep link
-		// (an attacker can put one behind <a href> on a web page), so a single click
-		// must not be able to fetch an arbitrary internal host. Refuse anything that
-		// isn't a public http(s) URL before handing it to FeedParser (blind SSRF).
-		if (!isFetchableUrl(fetchUrl)) {
-			new Notice("Refusing to load a feed from a private, local, or non-http(s) URL");
-			return;
-		}
-
-		// Taken once the link passed every check, so a refused link cancels nothing,
-		// and a play the user starts during the fetch wins.
-		play = player.deferPlay();
-		try {
-			// Fetch with the raw url (current-format links are correct as-is); only the title gets
-			// the legacy-candidate treatment. A '+' in a legacy feed URL is pre-existing and out of
-			// scope. getEpisodes returns fully-populated episodes, so we match in memory rather than
-			// re-fetching once per candidate.
-			// For a private feed, parse against the SAVED feed so episodes keep the
-			// placeholder identity - never the resolved secret - on url/feedUrl
-			// (the picked episode persists via currentEpisode).
-			const feedparser = new FeedParser(placeholderFeed);
-			const episodes = await feedparser.getEpisodes(fetchUrl);
+			// Taken once the link passed every check, so a refused link cancels nothing,
+			// and a newer link or play wins.
+			const request = ++latestRequest;
+			play = player.deferPlay();
+			let episodes: Episode[];
+			try {
+				// Fetch with the raw url (current-format links are correct as-is); only the
+				// title gets the legacy-candidate treatment. A '+' in a legacy feed URL is
+				// pre-existing and out of scope.
+				episodes = await feeds.episodesAt(url);
+			} catch (error) {
+				if (request !== latestRequest) return;
+				// A fetch/parse failure is distinct from a genuine title miss; surface it.
+				console.error(error);
+				new Notice("Could not load the podcast feed");
+				return;
+			}
+			if (request !== latestRequest) return;
 			episode = findEpisodeByCandidates(episodes, nameCandidates);
-		} catch (error) {
-			// A fetch/parse failure is distinct from a genuine title miss; surface it instead of
-			// rejecting silently (the previous behaviour threw an unhandled rejection).
-			console.error(error);
-			new Notice("Could not load the podcast feed");
-			return;
 		}
 	}
 

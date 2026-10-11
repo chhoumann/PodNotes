@@ -14,7 +14,7 @@ export const DEFAULT_EPISODE_LIST_LIMIT = 10;
 
 /**
  * Upper bound for {@link DEFAULT_EPISODE_LIST_LIMIT}. Kept in lockstep with the
- * feed cache's `MAX_EPISODES_PER_FEED` (see src/services/FeedCacheService.ts):
+ * feed cache's `MAX_ITEMS_PER_FEED` (see src/services/FeedRepository.ts):
  * on a warm start the Latest Episodes list is rebuilt from the persisted cache,
  * which retains at most that many episodes per feed, so a limit larger than the
  * cap could never actually be served. Selecting an individual podcast still

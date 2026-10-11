@@ -151,6 +151,91 @@ describe("getUniversalPodcastLink", () => {
 		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/222/episode/ep-123");
 	});
 
+	test("uses the playing podcast's own saved feed when two saved podcasts share its URL", async () => {
+		savedFeeds.set({
+			"Example Show": {
+				title: "Example Show",
+				url: "https://feeds.example.com/rss",
+				artworkUrl: "",
+				collectionId: "111",
+			},
+			"Example Show Alias": {
+				title: "Example Show Alias",
+				url: "https://feeds.example.com/rss",
+				artworkUrl: "",
+				collectionId: "222",
+			},
+		});
+
+		await getUniversalPodcastLink({
+			podcast: { ...podcast, podcastName: "Example Show Alias" },
+		} as unknown as IAPI);
+
+		expect(requestMock).toHaveBeenCalledWith(
+			"https://pod.link/222.json?limit=1000",
+			expect.anything(),
+		);
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/222/episode/ep-123");
+	});
+
+	test("prefers the playing podcast's own key over an earlier entry with the same URL and title", async () => {
+		savedFeeds.set({
+			"Example Show": {
+				title: "Example Show Alias",
+				url: "https://feeds.example.com/rss",
+				artworkUrl: "",
+				collectionId: "111",
+			},
+			"Example Show Alias": {
+				title: "Example Show Alias",
+				url: "https://feeds.example.com/rss",
+				artworkUrl: "",
+				collectionId: "222",
+			},
+		});
+
+		await getUniversalPodcastLink({
+			podcast: { ...podcast, podcastName: "Example Show Alias" },
+		} as unknown as IAPI);
+
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/222/episode/ep-123");
+	});
+
+	test("a podcast named like an object property still finds its saved feed by name", async () => {
+		savedFeeds.set({
+			Renamed: {
+				title: "toString",
+				url: "https://other.example.com/rss",
+				artworkUrl: "",
+				collectionId: "333",
+			},
+		});
+
+		await getUniversalPodcastLink({
+			podcast: { ...podcast, podcastName: "toString" },
+		} as unknown as IAPI);
+
+		expect(queryiTunesMock).not.toHaveBeenCalled();
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/333/episode/ep-123");
+	});
+
+	test("an episode without an iTunes title asks pod.link for its own title", async () => {
+		savedFeeds.set({
+			"Example Show": {
+				title: "Example Show",
+				url: "https://feeds.example.com/rss",
+				artworkUrl: "",
+				collectionId: "555",
+			},
+		});
+
+		await getUniversalPodcastLink({
+			podcast: { ...podcast, itunesTitle: "" },
+		} as unknown as IAPI);
+
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/555/episode/ep-123");
+	});
+
 	test("falls back to a tolerant iTunes match when no saved collectionId exists", async () => {
 		queryiTunesMock.mockResolvedValue([
 			{

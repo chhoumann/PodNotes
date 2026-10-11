@@ -4,15 +4,15 @@ import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { PodcastFeed } from "./types/PodcastFeed";
 
 // Mock the heavy collaborators so the tests exercise only opml.ts's own
-// parse/validate/serialize logic: FeedParser would otherwise make real network
-// requests for every imported feed, and savedFeeds pulls in the whole store.
+// parse/validate/serialize logic: the feed repository would otherwise make real
+// network requests for every imported feed, and savedFeeds pulls in the whole store.
 const savedFeeds = writable<Record<string, PodcastFeed>>({});
-const defaultGetFeed = async (url: string) => ({
+const defaultChannelAt = async ({ url }: { url: string }) => ({
 	title: `Feed for ${url}`,
 	url,
 	artworkUrl: "",
 });
-const getFeed = vi.fn(defaultGetFeed);
+const channelAt = vi.fn(defaultChannelAt);
 
 // Every string the import flow renders into the progress Notice is recorded
 // here so tests can assert on what the user actually sees (e.g. no "NaN%", an
@@ -30,6 +30,7 @@ vi.mock("./store", () => ({
 	plugin: {
 		subscribe: (run: (value: unknown) => void) => {
 			run({
+				feeds: { channelAt },
 				feedUrls: {
 					resolve: (id: string) => feedUrlSecrets.get(id) ?? null,
 					store: (url: string) => {
@@ -41,12 +42,6 @@ vi.mock("./store", () => ({
 			});
 			return () => {};
 		},
-	},
-}));
-
-vi.mock("./parser/feedParser", () => ({
-	default: class {
-		getFeed = getFeed;
 	},
 }));
 
@@ -66,8 +61,8 @@ import { exportOPML, importOPML } from "./opml";
 
 beforeEach(() => {
 	savedFeeds.set({});
-	getFeed.mockReset();
-	getFeed.mockImplementation(defaultGetFeed);
+	channelAt.mockReset();
+	channelAt.mockImplementation(defaultChannelAt);
 	noticeMessages.length = 0;
 });
 
@@ -126,8 +121,8 @@ describe("exportOPML (IE-02)", () => {
 		await importOPML(created[0]?.data ?? "");
 
 		// The escaped attributes parse back to the original raw values.
-		expect(getFeed).toHaveBeenCalledTimes(1);
-		expect(getFeed).toHaveBeenCalledWith("https://x.test/feed?a=1&b=2");
+		expect(channelAt).toHaveBeenCalledTimes(1);
+		expect(channelAt).toHaveBeenCalledWith({ url: "https://x.test/feed?a=1&b=2" });
 	});
 });
 
@@ -143,7 +138,7 @@ describe("importOPML (IE-01)", () => {
 			"Error importing OPML:",
 			expect.objectContaining({ message: "Invalid XML format" }),
 		);
-		expect(getFeed).not.toHaveBeenCalled();
+		expect(channelAt).not.toHaveBeenCalled();
 
 		consoleError.mockRestore();
 	});
@@ -158,8 +153,8 @@ describe("importOPML (IE-01)", () => {
 
 		await importOPML(validOpml);
 
-		expect(getFeed).toHaveBeenCalledTimes(1);
-		expect(getFeed).toHaveBeenCalledWith("https://a.test/feed");
+		expect(channelAt).toHaveBeenCalledTimes(1);
+		expect(channelAt).toHaveBeenCalledWith({ url: "https://a.test/feed" });
 	});
 
 	it("imports feeds whose xmlUrl attribute is lower/variant cased", async () => {
@@ -174,7 +169,7 @@ describe("importOPML (IE-01)", () => {
 
 		await importOPML(opml);
 
-		const urls = getFeed.mock.calls.map((c) => c[0]).sort();
+		const urls = channelAt.mock.calls.map(([feed]) => feed.url).sort();
 		expect(urls).toEqual([
 			"https://camel.test/feed",
 			"https://lower.test/feed",
@@ -193,8 +188,8 @@ describe("importOPML (IE-01)", () => {
 
 		await importOPML(opml);
 
-		expect(getFeed).toHaveBeenCalledTimes(1);
-		expect(getFeed).toHaveBeenCalledWith("https://good.test/feed");
+		expect(channelAt).toHaveBeenCalledTimes(1);
+		expect(channelAt).toHaveBeenCalledWith({ url: "https://good.test/feed" });
 	});
 
 	it("does not re-fetch a feed whose url is already saved", async () => {
@@ -213,7 +208,7 @@ describe("importOPML (IE-01)", () => {
 
 		await importOPML(opml);
 
-		expect(getFeed).not.toHaveBeenCalled();
+		expect(channelAt).not.toHaveBeenCalled();
 		expect(Object.keys(get(savedFeeds))).toEqual(["Existing"]);
 	});
 
@@ -234,7 +229,7 @@ describe("importOPML (IE-01)", () => {
 		await importOPML(opml);
 
 		// Nothing to fetch, so the 0/0 progress division must not surface as NaN.
-		expect(getFeed).not.toHaveBeenCalled();
+		expect(channelAt).not.toHaveBeenCalled();
 		expect(noticeMessages.some((m) => m.includes("NaN"))).toBe(false);
 		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(true);
 	});
@@ -242,7 +237,7 @@ describe("importOPML (IE-01)", () => {
 	it("reports the saved count, not the fetched count, on duplicate titles", async () => {
 		// Two distinct URLs that resolve to the same feed title. Both fetch fine,
 		// but the title-keyed store can only hold one of them.
-		getFeed.mockImplementation(async (url: string) => ({
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Same Title",
 			url,
 			artworkUrl: "",
@@ -256,7 +251,7 @@ describe("importOPML (IE-01)", () => {
 
 		await importOPML(opml);
 
-		expect(getFeed).toHaveBeenCalledTimes(2);
+		expect(channelAt).toHaveBeenCalledTimes(2);
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// Exactly one was written, so the summary must say "Saved 1", not "Saved 2".
 		expect(noticeMessages.some((m) => m.includes("Saved 1 new podcasts"))).toBe(true);
@@ -276,7 +271,7 @@ describe("importOPML (IE-01)", () => {
 				artworkUrl: "",
 			},
 		});
-		getFeed.mockImplementation(async (url: string) => ({
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Same Title",
 			url,
 			artworkUrl: "",
@@ -289,7 +284,7 @@ describe("importOPML (IE-01)", () => {
 
 		await importOPML(opml);
 
-		expect(getFeed).toHaveBeenCalledTimes(1);
+		expect(channelAt).toHaveBeenCalledTimes(1);
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// The original feed must be preserved, not overwritten.
 		expect(get(savedFeeds)["Same Title"].url).toBe("https://old.test/feed");
@@ -306,7 +301,7 @@ describe("importOPML (IE-01)", () => {
 		savedFeeds.set({
 			Old: { title: "Old", url: "https://old.test/feed", artworkUrl: "" },
 		});
-		getFeed.mockImplementation(async (url: string) => ({
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Shared",
 			url,
 			artworkUrl: "",
@@ -322,7 +317,7 @@ describe("importOPML (IE-01)", () => {
 		await importOPML(opml);
 
 		// Only the two new URLs are fetched; one is saved, the other title-dropped.
-		expect(getFeed).toHaveBeenCalledTimes(2);
+		expect(channelAt).toHaveBeenCalledTimes(2);
 		expect(Object.keys(get(savedFeeds)).sort()).toEqual(["Old", "Shared"]);
 		expect(
 			noticeMessages.some(

@@ -866,3 +866,201 @@ describe("PodNotes persistence integration", () => {
 		expect(secondResolved).toBe(true);
 	});
 });
+
+describe("a device that started before sync delivered its data.json", () => {
+	const feed = (title: string) => ({
+		title,
+		url: `https://example.com/${title}.xml`,
+		artworkUrl: "",
+	});
+	const library = JSON.parse(
+		JSON.stringify(
+			encodePodNotesData({
+				...structuredClone(DEFAULT_SETTINGS),
+				savedFeeds: { "Library Feed": feed("Library Feed") },
+				playedEpisodes: {
+					"Library Feed::Episode": {
+						title: "Episode",
+						podcastName: "Library Feed",
+						time: 1234,
+						duration: 3600,
+						finished: false,
+					},
+				},
+				playlists: {
+					"Road Trip": {
+						icon: "list",
+						name: "Road Trip",
+						shouldEpisodeRemoveAfterPlay: false,
+						shouldRepeat: false,
+						episodes: [],
+					},
+				},
+				defaultPlaybackRate: 1.5,
+			}),
+		),
+	);
+
+	async function startDevice(data?: unknown) {
+		let disk = structuredClone(data);
+		const plugin = makePlugin();
+		const saveData = vi.fn(async (next: unknown) => {
+			disk = JSON.parse(JSON.stringify(next));
+		});
+		Object.assign(plugin, { loadData: vi.fn(async () => structuredClone(disk)), saveData });
+		Object.assign(plugin.app.vault.adapter, {
+			exists: vi.fn(async () => disk !== undefined),
+			read: vi.fn(async () => dataFileText(disk)),
+		});
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		return {
+			plugin,
+			file: () => structuredClone(disk),
+			writes: () => saveData.mock.calls.length,
+			receive: async (file: unknown) => {
+				disk = structuredClone(file);
+				await plugin.onExternalSettingsChange();
+				await plugin.flushSaves();
+			},
+		};
+	}
+
+	function expectBothLibraries(...devices: Array<{ plugin: PodNotes }>) {
+		for (const { plugin } of devices) {
+			expect(Object.keys(plugin.settings.savedFeeds).sort()).toEqual([
+				"Library Feed",
+				"New Device Feed",
+			]);
+			expect(plugin.settings.playedEpisodes["Library Feed::Episode"]?.time).toBe(1234);
+			expect(Object.keys(plugin.settings.playlists)).toEqual(["Road Trip"]);
+			expect(plugin.settings.defaultPlaybackRate).toBe(1.5);
+		}
+	}
+
+	it("keeps both libraries when the new device's file reaches the library first", async () => {
+		const established = await startDevice(library);
+		const newDevice = await startDevice();
+		newDevice.plugin.settings.savedFeeds = { "New Device Feed": feed("New Device Feed") };
+		await newDevice.plugin.saveSettingsStrict();
+
+		await established.receive(newDevice.file());
+		await newDevice.receive(established.file());
+
+		expectBothLibraries(established, newDevice);
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
+	});
+
+	it("keeps both libraries when the library reaches the new device first", async () => {
+		const established = await startDevice(library);
+		const newDevice = await startDevice();
+		newDevice.plugin.settings.savedFeeds = { "New Device Feed": feed("New Device Feed") };
+		await newDevice.plugin.saveSettingsStrict();
+
+		await newDevice.receive(established.file());
+		await established.receive(newDevice.file());
+
+		expectBothLibraries(established, newDevice);
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
+	});
+
+	it("keeps the library when the file a new device wrote at install reaches it", async () => {
+		const established = await startDevice(library);
+		const newDevice = await startDevice();
+
+		await established.receive(newDevice.file());
+		await newDevice.receive(established.file());
+
+		for (const { plugin } of [established, newDevice]) {
+			expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Library Feed"]);
+			expect(plugin.settings.playedEpisodes["Library Feed::Episode"]?.time).toBe(1234);
+			expect(plugin.settings.defaultPlaybackRate).toBe(1.5);
+		}
+	});
+
+	it("still takes a podcast removed on another device of the same library", async () => {
+		const established = await startDevice(library);
+		const newDevice = await startDevice();
+		await newDevice.receive(established.file());
+
+		delete newDevice.plugin.settings.savedFeeds["Library Feed"];
+		await newDevice.plugin.saveSettingsStrict();
+		await established.receive(newDevice.file());
+
+		expect(established.plugin.settings.savedFeeds).toEqual({});
+	});
+
+	it("settles on one file when the two devices take each other's files at once", async () => {
+		const queued = (title: string) => ({
+			title,
+			podcastName: "Pod",
+			streamUrl: `https://example.com/${title}.mp3`,
+			url: "",
+			description: "",
+			content: "",
+		});
+		const established = await startDevice(library);
+		established.plugin.settings.queue.episodes = [queued("Library Episode")];
+		await established.plugin.saveSettingsStrict();
+		const newDevice = await startDevice();
+		newDevice.plugin.settings.savedFeeds = { "New Device Feed": feed("New Device Feed") };
+		newDevice.plugin.settings.queue.episodes = [queued("New Device Episode")];
+		await newDevice.plugin.saveSettingsStrict();
+
+		const [libraryFile, newDeviceFile] = [established.file(), newDevice.file()];
+		await established.receive(newDeviceFile);
+		await newDevice.receive(libraryFile);
+		const writes = [established.writes(), newDevice.writes()];
+		await newDevice.receive(established.file());
+
+		expectBothLibraries(established, newDevice);
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
+		expect([established.writes(), newDevice.writes()]).toEqual(writes);
+	});
+
+	it("keeps the new device's podcast when Obsidian Sync key-merges the files on the library's device", async () => {
+		const established = await startDevice(library);
+		established.plugin.settings.defaultVolume = 0.5;
+		await established.plugin.saveSettingsStrict();
+		const newDevice = await startDevice();
+		newDevice.plugin.settings.savedFeeds = { "New Device Feed": feed("New Device Feed") };
+		await newDevice.plugin.saveSettingsStrict();
+
+		const keyMerged = { ...(newDevice.file() as object), ...(established.file() as object) };
+		await newDevice.receive(keyMerged);
+		await established.receive(keyMerged);
+		await established.receive(newDevice.file());
+		await newDevice.receive(established.file());
+
+		expectBothLibraries(established, newDevice);
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
+	});
+
+	it("keeps the library when a device that could not read its file at start writes a new one", async () => {
+		const established = await startDevice(library);
+		const device = makePlugin();
+		let text = '{"schemaVersion": 2, "savedFeeds": {"Library Fe';
+		Object.assign(device, {
+			loadData: vi.fn(async () => (text.endsWith("}") ? JSON.parse(text) : undefined)),
+			saveData: vi.fn(async (next: unknown) => {
+				text = dataFileText(next);
+			}),
+		});
+		Object.assign(device.app.vault.adapter, {
+			exists: vi.fn(async () => text !== ""),
+			read: vi.fn(async () => text),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		await device.loadSettings();
+		attachDataFileWriter(device);
+
+		text = "";
+		await device.onExternalSettingsChange();
+		device.settings.defaultVolume = 0.5;
+		await device.saveSettingsStrict();
+		await established.receive(JSON.parse(text));
+
+		expect(Object.keys(established.plugin.settings.savedFeeds)).toEqual(["Library Feed"]);
+		expect(established.plugin.settings.defaultVolume).toBe(0.5);
+	});
+});

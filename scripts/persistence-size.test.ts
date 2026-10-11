@@ -4,11 +4,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import FeedParser from "src/parser/feedParser";
 import FeedDocumentParser from "src/parser/feedDocumentParser";
+import { FeedRepository } from "src/services/FeedRepository";
 import { decodePodNotesData, encodePodNotesData } from "src/persistence/podNotesData";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import { createLargeV2Fixture } from "../tests/fixtures/persistence/large-v2.mjs";
+import { MemoryStorage } from "../tests/mocks/feeds";
 import { assertAdditive, measureSnapshot } from "./persistence-size.mjs";
 
 describe("persistence byte fixture", () => {
@@ -43,14 +44,19 @@ describe("persistence byte fixture", () => {
 			readFileSync("tests/fixtures/persistence/feed-sample.json", "utf8"),
 		);
 		const xml = readFileSync("tests/fixtures/persistence/planet-money.xml", "utf8");
-		const parser = new FeedParser(undefined, { load: async () => xml });
-		expect(await parser.getFeed(sample.source.url)).toEqual(sample.feed);
-		expect(JSON.parse(JSON.stringify(await parser.getEpisodes(sample.source.url)))).toEqual(
+		const parsed = new FeedDocumentParser().parseEpisodes(xml);
+		const feeds = new FeedRepository({
+			load: async () => parsed,
+			resolveUrl: (feed) => feed.url,
+			storage: new MemoryStorage(),
+			cache: () => ({ enabled: false, ttlHours: 6 }),
+			now: Date.now,
+		});
+		expect(await feeds.channelAt({ url: sample.source.url })).toEqual(sample.feed);
+		expect(JSON.parse(JSON.stringify(await feeds.episodesAt(sample.source.url)))).toEqual(
 			sample.episodes,
 		);
-		expect(
-			new FeedDocumentParser().parseEpisodeItems(xml).map((episode) => episode.guid),
-		).toEqual(sample.guids);
+		expect(parsed.episodes.map((episode) => episode.guid)).toEqual(sample.guids);
 	});
 
 	it("retains a complete stress library through the released v2 codec", () => {
@@ -60,7 +66,7 @@ describe("persistence byte fixture", () => {
 		expect(decoded.changed).toBe(false);
 		expect(
 			JSON.parse(JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields))),
-		).toEqual(data);
+		).toEqual({ ...data, libraryId: "" });
 		expect(Object.keys(data.savedFeeds)).toHaveLength(50);
 		expect(Object.keys(data.playedEpisodes)).toHaveLength(2000);
 		const downloads = Object.values(decoded.settings.downloadedEpisodes).flat();

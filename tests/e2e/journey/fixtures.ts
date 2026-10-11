@@ -24,6 +24,8 @@ export type FixtureServer = Readonly<{
 	mediaUrl(feed: FixtureFeed, episode: FixtureEpisode): string;
 	artworkUrl(feed: FixtureFeed): string;
 	audio(feed: FixtureFeed, episode: FixtureEpisode): Buffer;
+	/** Hold every later response to this feed's XML for `ms` milliseconds. */
+	delayFeed(feed: FixtureFeed, ms: number): void;
 	requests(): readonly string[];
 	stop(): Promise<void>;
 }>;
@@ -44,6 +46,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 
 	const requests: string[] = [];
 	const routes = new Map<string, { type: string; body: Buffer; cache?: boolean }>();
+	const delays = new Map<string, number>();
 	const server = http.createServer((request, response) => {
 		const path = request.url ?? "";
 		requests.push(path);
@@ -52,7 +55,10 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 			response.writeHead(404).end();
 			return;
 		}
-		serveRange(request, response, route.type, route.body, route.cache === true);
+		setTimeout(
+			() => serveRange(request, response, route.type, route.body, route.cache === true),
+			delays.get(path) ?? 0,
+		);
 	});
 	await new Promise<void>((resolve, reject) => {
 		server.once("error", reject);
@@ -104,6 +110,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		artworkUrl,
 		mediaUrl: (feed, episode) => `${origin}${mediaPath(feed, episode)}`,
 		audio,
+		delayFeed: (feed, ms) => delays.set(`/${feed.slug}/feed.xml`, ms),
 		requests: () => [...requests],
 		stop: () =>
 			new Promise<void>((resolve) => {

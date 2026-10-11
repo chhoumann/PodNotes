@@ -10,6 +10,8 @@ This searches the iTunes podcast repository.
 It is also possible to add custom podcast feeds by pasting the feed URL in the search box.
 PodNotes will try to parse the feed, and if successful, will prompt you to add it to your saved feeds.
 
+Each saved podcast gets a tile in the podcast grid, which shows its artwork or, when it has none, its initials.
+
 
 ## Playlists
 PodNotes can create playlists, which are lists of episodes.
@@ -34,6 +36,12 @@ If you have no podcast selected, the episode list will show the latest episodes 
 If you have a podcast selected, the episode list will show all episodes of that podcast.
 
 And lastly, if you select a playlist, the episode list shows all episodes in that playlist.
+
+### When a feed cannot be reached
+
+While **Cache podcast feeds** is on, PodNotes keeps the last copy of each saved podcast's feed on this device.
+When a feed cannot be reached, for example offline, the episode list shows that copy, however old it is.
+To remove the copies, select **Clear cache** under **Clear cached feeds** in PodNotes settings.
 
 ### How many latest episodes are shown
 
