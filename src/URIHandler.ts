@@ -130,23 +130,25 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
-	// Taken before resolving the episode: a play the user starts meanwhile wins.
-	const play = player.deferPlay();
-
-	// The path probe only decides local-vs-feed routing; the episode itself is resolved by name.
+	// The path probe decides local-vs-feed routing; the episode itself is resolved by name.
 	const { vault } = get(plugin).app;
 	const localFile = candidateValues(url)
 		.map((path) => vault.getAbstractFileByPath(path))
 		.find((file) => file !== null);
 
 	let episode: Episode | undefined;
+	// Taken before resolving the episode: a play the user starts meanwhile wins.
+	const play = player.deferPlay();
 
 	// A private-feed placeholder always routes to placeholder resolution (the
 	// final branch): a vault file literally named like a placeholder must not
 	// shadow private links.
 	const isPlaceholderLink = isPrivateFeedPlaceholder(url);
 	if (!isPlaceholderLink && localFile) {
-		episode = findLocalEpisodeByCandidates(nameCandidates);
+		// The file the link names plays, even when a same-named file in another
+		// folder has since taken over the name's registration.
+		const named = findLocalEpisodeByCandidates(nameCandidates);
+		episode = named && ({ ...named, filePath: localFile.path } as Episode);
 	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
 		// a vault path whose file was moved/renamed. Resolve the episode by name from
