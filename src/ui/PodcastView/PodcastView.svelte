@@ -39,6 +39,7 @@
 		type PlayedEpisodeListEntry,
 	} from "src/utility/episodeListEntry";
 	import type { FeedKey, FeedState, LoadMode } from "src/services/FeedRepository";
+	import { notifyPrivateFeedUnavailable } from "src/services/privateFeeds";
 	import {
 		feedKeysWithPlayedEpisodes,
 		selectFeedEpisodes,
@@ -151,11 +152,14 @@
 		return typeof entry.playedEpisodeKey === "string" ? entry.playedEpisodeKey : undefined;
 	}
 
-	// Only an interactive load says it failed, and only when nothing can be shown.
+	// Only an interactive load reports a failure. A network failure is reported
+	// only when nothing can be shown.
 	async function loadSelectedFeed(key: FeedKey, mode: LoadMode) {
 		await feeds.load([key], mode);
 		const state = get(feeds).get(key);
-		if (
+		if (state?.error === "unavailable") {
+			notifyPrivateFeedUnavailable(state.feed.title);
+		} else if (
 			state?.error === "network" &&
 			selectFeedEpisodes(state, get(downloadedEpisodes)).length === 0
 		) {

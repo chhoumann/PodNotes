@@ -10,7 +10,8 @@
 	import {
 		internPrivateFeed,
 		isSavedFeed,
-		resolveFeedUrlWithNotice,
+		notifyPrivateFeedUnavailable,
+		resolveFeedUrl,
 	} from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
@@ -160,7 +161,10 @@
 		const saved = savedFeedTitled($savedFeeds, podcast.title);
 		if (saved) {
 			if (isSavedFeed(saved, podcast.url, feedUrls)) return;
-			if (resolveFeedUrlWithNotice(saved, feedUrls) === null) return;
+			if (resolveFeedUrl(saved, feedUrls) === null) {
+				notifyPrivateFeedUnavailable(saved.title);
+				return;
+			}
 			new Notice(`You already follow a podcast called ${podcast.title} from another feed.`);
 			return;
 		}

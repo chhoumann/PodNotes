@@ -71,19 +71,12 @@ export function isSavedFeed(saved: PodcastFeed, url: string, feedUrls: FeedUrlRe
 	return saved.url === url || resolveFeedUrl(saved, feedUrls) === url;
 }
 
-/** resolveFeedUrl plus the standard user-facing failure Notice. */
-export function resolveFeedUrlWithNotice(
-	feed: PodcastFeed,
-	feedUrls: FeedUrlRepository,
-): string | null {
-	const url = resolveFeedUrl(feed, feedUrls);
-	if (url === null) {
-		new Notice(
-			`The private feed URL for "${feed.title}" is not available on this device. ` +
-				"Remove the feed and add it again with its private URL.",
-		);
-	}
-	return url;
+/** Tells the user that a saved private feed's URL is not on this device. */
+export function notifyPrivateFeedUnavailable(title: string): void {
+	new Notice(
+		`The private feed URL for "${title}" is not available on this device. ` +
+			"Remove the feed and add it again with its private URL.",
+	);
 }
 
 export interface PrivateFeedMigration {

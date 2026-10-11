@@ -46,7 +46,7 @@ import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import {
 	migratePrivateFeedUrls,
-	resolveFeedUrlWithNotice,
+	resolveFeedUrl,
 	scrubMigratedEpisodeUrls,
 } from "./services/privateFeeds";
 import { FeedRepository, loadFeed } from "./services/FeedRepository";
@@ -173,7 +173,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
 		this.feeds = new FeedRepository({
 			load: loadFeed,
-			resolveUrl: (feed) => resolveFeedUrlWithNotice(feed, this.feedUrls),
+			resolveUrl: (feed) => resolveFeedUrl(feed, this.feedUrls),
 			storage: this.app,
 			cache: () => this.settings.feedCache,
 			now: Date.now,

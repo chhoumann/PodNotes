@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import createPodcastNote from "src/createPodcastNote";
 import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { FeedRepository } from "src/services/FeedRepository";
+import { FeedUrlRepository } from "src/services/FeedUrlRepository";
+import { resolveFeedUrl } from "src/services/privateFeeds";
 import {
 	currentEpisode,
 	hidePlayedEpisodes,
@@ -18,6 +20,7 @@ import {
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
+import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
 import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 
@@ -97,9 +100,10 @@ let unsubscribeFeeds = () => {};
 
 /** Builds the plugin the view reads, with a repository fed by `mockLoad` and `storage`. */
 function usePlugin(fields: Record<string, unknown> = {}, cacheEnabled = false) {
+	const feedUrls = new FeedUrlRepository(new obsidian.SecretStorage());
 	const feeds = new FeedRepository({
 		load: (url) => mockLoad(url),
-		resolveUrl: (feed) => feed.url,
+		resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 		storage,
 		cache: () => ({ enabled: cacheEnabled, ttlHours: 6 }),
 		now: Date.now,
@@ -405,6 +409,33 @@ describe("PodcastView integration flow", () => {
 			),
 		);
 		expect(notice).not.toHaveBeenCalledWith(failure);
+	});
+
+	test("a private podcast whose URL is not on this device says so when opened, not before", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const patron: PodcastFeed = {
+			title: "Patron Show",
+			url: privateFeedPlaceholder("Patron Show"),
+			urlSecretId: "podnotes-feed-url-gone",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ [testFeed.title]: testFeed, [patron.title]: patron });
+		usePlugin();
+		render(PodcastView);
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
+		expect(notice).not.toHaveBeenCalled();
+
+		await fireEvent.click(await screen.findByRole("button", { name: patron.title }));
+
+		await waitFor(() =>
+			expect(notice.mock.calls).toEqual([
+				[
+					'The private feed URL for "Patron Show" is not available on this device. ' +
+						"Remove the feed and add it again with its private URL.",
+				],
+			]),
+		);
+		expect(mockLoad).toHaveBeenCalledTimes(1);
 	});
 
 	test("Latest Episodes drops a podcast as soon as it is removed", async () => {
