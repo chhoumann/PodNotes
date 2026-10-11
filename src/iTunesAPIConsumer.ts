@@ -1,29 +1,77 @@
 import type { PodcastFeed } from "./types/PodcastFeed";
+import checkStringIsUrl from "./utility/checkStringIsUrl";
 import { NetworkError, fetchJsonWithTimeout } from "./utility/networkRequest";
 
 const ITUNES_REQUEST_TIMEOUT_MS = 15_000;
 const MAX_ITUNES_RESPONSE_BYTES = 2 * 1024 * 1024;
+const APPLE_PODCASTS_HOSTS = new Set(["podcasts.apple.com", "itunes.apple.com"]);
 
 interface iTunesResult {
 	collectionName: string;
-	feedUrl: string;
+	artistName?: string;
+	feedUrl?: string;
 	artworkUrl100: string;
-	collectionId: string;
+	collectionId: number;
 }
 
-interface iTunesSearchResponse {
+interface iTunesResponse {
 	results: iTunesResult[];
 }
 
 export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]> {
-	const url = new URL("https://itunes.apple.com/search?");
+	const url = new URL("https://itunes.apple.com/search");
 	url.searchParams.append("term", query);
 	url.searchParams.append("media", "podcast");
-	url.searchParams.append("limit", "3");
+	url.searchParams.append("limit", "20");
 	url.searchParams.append("kind", "podcast");
 
+	// Search can list one feed under several shows; keep the best-ranked one.
+	const feeds = new Map<string, PodcastFeed>();
+	for (const feed of await fetchPodcastFeeds(url)) {
+		if (!feeds.has(feed.url)) feeds.set(feed.url, feed);
+	}
+	return [...feeds.values()];
+}
+
+/** Resolve an Apple Podcasts show id to its public RSS feed, or null when it has none. */
+export async function lookupiTunesPodcast(id: string): Promise<PodcastFeed | null> {
+	const url = new URL("https://itunes.apple.com/lookup");
+	url.searchParams.append("id", id);
+	url.searchParams.append("entity", "podcast");
+	// An artist id returns the artist's shows, none of which is the linked show.
+	const feeds = await fetchPodcastFeeds(url);
+	return feeds.find((feed) => feed.collectionId === id) ?? null;
+}
+
+/**
+ * Extract the show id from an Apple Podcasts link: a `podcast` or `viewPodcast`
+ * path with the id in its last `id<digits>` segment or an `id` query parameter.
+ */
+export function parseApplePodcastsId(input: string): string | null {
+	const url = checkStringIsUrl(input);
+	if (
+		!url ||
+		(url.protocol !== "https:" && url.protocol !== "http:") ||
+		!APPLE_PODCASTS_HOSTS.has(url.hostname)
+	) {
+		return null;
+	}
+
+	const segments = url.pathname.split("/");
+	if (!segments.some((segment) => segment === "podcast" || segment === "viewPodcast")) {
+		return null;
+	}
+	const id =
+		segments
+			.filter((segment) => /^id\d+$/.test(segment))
+			.pop()
+			?.slice(2) ?? url.searchParams.get("id");
+	return id && /^\d+$/.test(id) ? id : null;
+}
+
+async function fetchPodcastFeeds(url: URL): Promise<PodcastFeed[]> {
 	try {
-		const data = await fetchJsonWithTimeout<iTunesSearchResponse>(url.href, {
+		const data = await fetchJsonWithTimeout<iTunesResponse>(url.href, {
 			timeoutMs: ITUNES_REQUEST_TIMEOUT_MS,
 			maxResponseBytes: MAX_ITUNES_RESPONSE_BYTES,
 			acceptedStatuses: [200],
@@ -32,21 +80,28 @@ export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]>
 			throw new NetworkError("invalid-response");
 		}
 
-		return data.results.map((d) => ({
-			title: d.collectionName,
-			url: d.feedUrl,
-			artworkUrl: d.artworkUrl100,
-			collectionId: d.collectionId,
-		}));
+		return data.results.map(toPodcastFeed).filter((feed) => feed !== null);
 	} catch (error) {
 		// Keep diagnostics useful without copying a target, query, native error, or
 		// response body into the console. NetworkError messages and status values are
 		// deliberately redacted by the shared boundary.
 		if (error instanceof NetworkError) {
-			console.error("iTunes search failed.", error.code, error.status);
+			console.error("iTunes request failed.", error.code, error.status);
 			throw error;
 		}
-		console.error("iTunes search response is invalid.");
+		console.error("iTunes response is invalid.");
 		throw new NetworkError("invalid-response");
 	}
+}
+
+// Shows without a public RSS feed (Apple-hosted or subscription-only) cannot be added.
+function toPodcastFeed(result: iTunesResult): PodcastFeed | null {
+	if (typeof result.feedUrl !== "string") return null;
+	return {
+		title: result.collectionName,
+		url: result.feedUrl,
+		artworkUrl: result.artworkUrl100,
+		collectionId: String(result.collectionId),
+		...(typeof result.artistName === "string" ? { author: result.artistName } : {}),
+	};
 }

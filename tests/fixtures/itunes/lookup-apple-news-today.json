@@ -1,0 +1,36 @@
+{
+	"resultCount": 1,
+	"results": [
+		{
+			"wrapperType": "track",
+			"kind": "podcast",
+			"collectionId": 1473872585,
+			"trackId": 1473872585,
+			"artistName": "Apple News",
+			"collectionName": "Apple News Today",
+			"trackName": "Apple News Today",
+			"collectionCensoredName": "Apple News Today",
+			"trackCensoredName": "Apple News Today",
+			"collectionViewUrl": "https://podcasts.apple.com/us/podcast/apple-news-today/id1473872585?uo=4",
+			"trackViewUrl": "https://podcasts.apple.com/us/podcast/apple-news-today/id1473872585?uo=4",
+			"artworkUrl30": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/f2/04/2a/f2042a31-a0c9-9eaa-9823-463b64a12da7/mza_11550077189211837325.jpg/30x30bb.jpg",
+			"artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/f2/04/2a/f2042a31-a0c9-9eaa-9823-463b64a12da7/mza_11550077189211837325.jpg/60x60bb.jpg",
+			"artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/f2/04/2a/f2042a31-a0c9-9eaa-9823-463b64a12da7/mza_11550077189211837325.jpg/100x100bb.jpg",
+			"collectionPrice": 0.0,
+			"trackPrice": 0.0,
+			"collectionHdPrice": 0,
+			"releaseDate": "2026-10-10T11:00:00Z",
+			"collectionExplicitness": "notExplicit",
+			"trackExplicitness": "cleaned",
+			"trackCount": 1669,
+			"trackTimeMillis": 2040,
+			"country": "USA",
+			"currency": "USD",
+			"primaryGenreName": "Daily News",
+			"contentAdvisoryRating": "Clean",
+			"artworkUrl600": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/f2/04/2a/f2042a31-a0c9-9eaa-9823-463b64a12da7/mza_11550077189211837325.jpg/600x600bb.jpg",
+			"genreIds": ["1526", "26", "1489"],
+			"genres": ["Daily News", "Podcasts", "News"]
+		}
+	]
+}

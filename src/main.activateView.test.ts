@@ -251,6 +251,13 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerView: vi.fn(),
 			registerObsidianProtocolHandler: vi.fn(),
 			registerEvent: vi.fn(),
+			registerDomEvent: vi.fn(),
+			pendingSave: null,
+			pendingSaveWaiters: [],
+			saveScheduled: false,
+			saveChain: Promise.resolve(),
+			writeRefusal: null,
+			writeInFlight: null,
 			mediaSessionActions: [],
 			storeUnsubscribers: [],
 			views: new Set(),
@@ -276,6 +283,89 @@ describe("PodNotes onload wiring (#55)", () => {
 
 		return { commands, ribbonCalls, activateSpy, plugin };
 	}
+
+	it("starts no save once the window fires pagehide", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+		const domEvents = vi.mocked(plugin.registerDomEvent).mock.calls as unknown as Array<
+			[EventTarget, string, () => void]
+		>;
+		const onPageHide = domEvents.find(
+			([target, type]) => target === window && type === "pagehide",
+		)?.[2];
+		const saveData = vi.mocked(plugin.saveData);
+		saveData.mockClear();
+
+		expect(onPageHide).toBeDefined();
+		onPageHide?.();
+
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/window unloads/);
+		expect(saveData).not.toHaveBeenCalled();
+	});
+
+	function quitHandler(
+		plugin: PodNotes,
+	): (tasks: { addPromise: (p: Promise<void>) => void }) => void {
+		const calls = vi.mocked(plugin.app.workspace.on).mock.calls as unknown as Array<
+			[string, (tasks: { addPromise: (p: Promise<void>) => void }) => void]
+		>;
+		const handler = calls.find(([name]) => name === "quit")?.[1];
+		expect(handler).toBeDefined();
+		return handler!;
+	}
+
+	it("adds no quit task when no save is in flight, and saves nothing after quit", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+		const saveData = vi.mocked(plugin.saveData);
+		saveData.mockClear();
+		const addPromise = vi.fn();
+
+		quitHandler(plugin)({ addPromise });
+
+		expect(addPromise).not.toHaveBeenCalled();
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/closes/);
+		expect(saveData).not.toHaveBeenCalled();
+	});
+
+	it("makes quit wait for the save in flight", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+		let finishWrite = () => {};
+		vi.mocked(plugin.saveData).mockImplementation(
+			() => new Promise<void>((resolve) => (finishWrite = resolve)),
+		);
+		const addPromise = vi.fn();
+
+		void plugin.saveSettings();
+		await vi.waitFor(() => expect(plugin.saveData).toHaveBeenCalled());
+		quitHandler(plugin)({ addPromise });
+
+		expect(addPromise).toHaveBeenCalledTimes(1);
+		const quitTask: Promise<void> = addPromise.mock.calls[0][0];
+		let quitTaskDone = false;
+		void quitTask.then(() => (quitTaskDone = true));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(quitTaskDone).toBe(false);
+
+		finishWrite();
+		await quitTask;
+		expect(quitTaskDone).toBe(true);
+	});
+
+	it("gives quit a task that resolves even when the save in flight fails", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+		let failWrite = (_error: Error) => {};
+		vi.mocked(plugin.saveData).mockImplementation(
+			() => new Promise<void>((_resolve, reject) => (failWrite = reject)),
+		);
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const addPromise = vi.fn();
+
+		void plugin.saveSettings();
+		await vi.waitFor(() => expect(plugin.saveData).toHaveBeenCalled());
+		quitHandler(plugin)({ addPromise });
+		failWrite(new Error("disk full"));
+
+		await expect(addPromise.mock.calls[0][0]).resolves.toBeUndefined();
+	});
 
 	it("registers Show PodNotes as an always-available callback, not a leaf-gated checkCallback", async () => {
 		const { commands } = await loadPlugin();

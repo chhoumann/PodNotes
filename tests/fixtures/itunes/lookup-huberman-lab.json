@@ -1,0 +1,37 @@
+{
+	"resultCount": 1,
+	"results": [
+		{
+			"wrapperType": "track",
+			"kind": "podcast",
+			"collectionId": 1545953110,
+			"trackId": 1545953110,
+			"artistName": "Scicomm Media",
+			"collectionName": "Huberman Lab",
+			"trackName": "Huberman Lab",
+			"collectionCensoredName": "Huberman Lab",
+			"trackCensoredName": "Huberman Lab",
+			"collectionViewUrl": "https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110?uo=4",
+			"feedUrl": "https://feeds.megaphone.fm/hubermanlab",
+			"trackViewUrl": "https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110?uo=4",
+			"artworkUrl30": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/30x30bb.jpg",
+			"artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/60x60bb.jpg",
+			"artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/100x100bb.jpg",
+			"collectionPrice": 0.0,
+			"trackPrice": 0.0,
+			"collectionHdPrice": 0,
+			"releaseDate": "2026-10-05T08:00:00Z",
+			"collectionExplicitness": "notExplicit",
+			"trackExplicitness": "cleaned",
+			"trackCount": 448,
+			"trackTimeMillis": 8151,
+			"country": "USA",
+			"currency": "USD",
+			"primaryGenreName": "Health & Fitness",
+			"contentAdvisoryRating": "Clean",
+			"artworkUrl600": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/600x600bb.jpg",
+			"genreIds": ["1512", "26", "1533", "1541"],
+			"genres": ["Health & Fitness", "Podcasts", "Science", "Life Sciences"]
+		}
+	]
+}
