@@ -3,6 +3,7 @@ import { Menu, MenuItem } from "obsidian";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+import { get } from "svelte/store";
 import { downloadedEpisodes, playedEpisodes, playlists, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
 
@@ -92,5 +93,50 @@ describe("spawnEpisodeContextMenu removal item", () => {
 		});
 
 		expect(downloadItemTitles(episode)).toEqual(["Remove file"]);
+	});
+});
+
+describe("spawnEpisodeContextMenu queue item (#356)", () => {
+	const queueOnly = { ...allDisabled, queue: false };
+	const fromOtherPodcast: Episode = { ...episode, podcastName: "Other Podcast" };
+
+	function queueItem(target: Episode): { title: string; click: () => void } {
+		const items: { title: string; click: () => void }[] = [];
+		const addItem = vi.spyOn(Menu.prototype, "addItem").mockImplementation(function (
+			this: Menu,
+			callback: (item: MenuItem) => void,
+		) {
+			const item = { title: "", click: () => {} };
+			const builder = {
+				setIcon: () => builder,
+				setTitle: (title: string) => {
+					item.title = title;
+					return builder;
+				},
+				onClick: (click: () => void) => {
+					item.click = click;
+					return builder;
+				},
+			};
+			callback(builder as unknown as MenuItem);
+			items.push(item);
+			return this;
+		});
+		spawnEpisodeContextMenu(target, { x: 0, y: 0 }, queueOnly);
+		addItem.mockRestore();
+		const found = items.find((item) => item.title.endsWith("Queue"));
+		if (!found) throw new Error("no queue menu item");
+		return found;
+	}
+
+	test("offers to add a same-titled episode from another podcast, and adding keeps both", () => {
+		queue.add(episode);
+
+		const item = queueItem(fromOtherPodcast);
+		expect(item.title).toBe("Add to Queue");
+		item.click();
+
+		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Podcast", "Other Podcast"]);
+		expect(queueItem(episode).title).toBe("Remove from Queue");
 	});
 });

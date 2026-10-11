@@ -465,21 +465,22 @@ describe("marketplace review runtime paths", () => {
 		const result = await evalJsonAsync<{
 			lifecycle: { isError: boolean; message: string };
 			retryAbort: { isError: boolean; message: string };
-			snapshot: { isError: boolean; message: string };
+			save: { isError: boolean; message: string };
 		}>(
 			obsidian,
 			`(async () => {
 				const podnotes = app.plugins.plugins.${PLUGIN_ID};
-				const originalStructuredClone = window.structuredClone;
-				let snapshot;
+				const originalLoadData = podnotes.loadData;
+				let save;
 				try {
-					window.structuredClone = () => { throw "raw snapshot failure"; };
+					podnotes.loadData = () => Promise.reject("raw read failure");
+					podnotes.settings.defaultVolume = podnotes.settings.defaultVolume === 0.5 ? 0.6 : 0.5;
 					await podnotes.saveSettingsStrict();
-					snapshot = { isError: false, message: "resolved" };
+					save = { isError: false, message: "resolved" };
 				} catch (error) {
-					snapshot = { isError: error instanceof Error, message: error?.message ?? String(error) };
+					save = { isError: error instanceof Error, message: error?.message ?? String(error) };
 				} finally {
-					window.structuredClone = originalStructuredClone;
+					podnotes.loadData = originalLoadData;
 				}
 
 				const service = podnotes.getTranscriptionService();
@@ -501,17 +502,14 @@ describe("marketplace review runtime paths", () => {
 					retryAbort = { isError: error instanceof Error, message: error?.message ?? String(error) };
 				}
 
-				return { lifecycle, retryAbort, snapshot };
+				return { lifecycle, retryAbort, save };
 			})()`,
 		);
 
 		expect(result).toEqual({
 			lifecycle: { isError: true, message: "PodNotes transcription failed." },
 			retryAbort: { isError: true, message: "PodNotes transcription was aborted." },
-			snapshot: {
-				isError: true,
-				message: "PodNotes could not snapshot settings before saving.",
-			},
+			save: { isError: true, message: "PodNotes could not save its settings." },
 		});
 		expect(await obsidian.dev.runtimeErrors()).toEqual([]);
 	});

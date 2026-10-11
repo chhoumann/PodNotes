@@ -47,6 +47,16 @@ describe("ReorderQueue", () => {
 		expect(positions).toEqual(["1", "2", "3"]);
 	});
 
+	test("lists and reorders same-titled episodes from different podcasts (#356)", async () => {
+		queue.set({ ...QUEUE_SETTINGS, episodes: [ep("Ep 1", "Pod A"), ep("Ep 1", "Pod B")] });
+		const { container, getAllByLabelText } = render(ReorderQueue);
+
+		expect(container.querySelectorAll(".queue-reorder-title")).toHaveLength(2);
+		await fireEvent.click(getAllByLabelText("Move up")[1]);
+
+		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod B", "Pod A"]);
+	});
+
 	test("moving an episode up updates the queue order", async () => {
 		seed("A", "B", "C");
 		const { getAllByLabelText } = render(ReorderQueue);

@@ -3,11 +3,15 @@ import type { PluginHandle, SandboxApi } from "obsidian-e2e";
 import { describe, expect, test } from "vitest";
 import type DownloadedEpisode from "../../src/types/DownloadedEpisode";
 import type { Episode } from "../../src/types/Episode";
-import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
 import encodePodnotesURI from "../../src/utility/encodePodnotesURI";
 import {
+	createLocalEpisode,
 	createPodNotesE2EHarness,
+	invokePodNotesUri,
+	type PodNotesData,
+	seedAudio,
+	waitForPlaybackState,
 	evalJsonAsync,
 	openPodNotesView,
 	PLUGIN_ID,
@@ -15,25 +19,9 @@ import {
 	VIEW_TYPE,
 	WAIT_OPTS,
 	waitForPodNotesReady,
-	writeSilentWav,
 } from "./harness";
 
-type PodNotesData = Partial<IPodNotesSettings> & {
-	schemaVersion?: number;
-	openAIApiKey?: string;
-	diarizationApiKey?: string;
-	legacyExtension?: { enabled: boolean };
-};
-
-type PlaybackState = {
-	currentTime: number | null;
-	hasPlayer: boolean;
-	isPlaying: boolean;
-	title: string | null;
-};
-
 const getContext = createPodNotesE2EHarness("podnotes-runtime");
-let audioFixtureReady = false;
 
 describe("PodNotes runtime", () => {
 	test("registers commands, protocol handling, and the player view", async () => {
@@ -812,21 +800,6 @@ describe("PodNotes runtime", () => {
 	});
 });
 
-async function seedAudio(
-	obsidian: Parameters<typeof evalJsonAsync>[0],
-	sandbox: SandboxApi,
-): Promise<string> {
-	const fileName = "podnotes-e2e-silence.wav";
-	const audioPath = sandbox.path(fileName);
-	if (audioFixtureReady) return audioPath;
-
-	await writeSilentWav(obsidian, audioPath, 600);
-	await sandbox.waitForExists(fileName, WAIT_OPTS);
-	audioFixtureReady = true;
-
-	return audioPath;
-}
-
 async function openMarkdownFile(
 	obsidian: Parameters<typeof evalJsonAsync>[0],
 	path: string,
@@ -880,18 +853,6 @@ async function openMarkdownFile(
 			`Failed to open ${path}. Active file: ${result.activePath}. ${result.error ?? ""}`,
 		);
 	}
-}
-
-function createLocalEpisode(title: string, audioPath: string): LocalEpisode {
-	return {
-		title,
-		streamUrl: audioPath,
-		url: audioPath,
-		description: "",
-		content: "",
-		podcastName: "local file",
-		filePath: audioPath,
-	};
 }
 
 async function seedRuntimeData(
@@ -980,39 +941,6 @@ function toDownloadedEpisode(episode: LocalEpisode): DownloadedEpisode {
 
 function episodeKey(episode: Episode): string {
 	return `${episode.podcastName}::${episode.title}`;
-}
-
-async function invokePodNotesUri(
-	obsidian: Parameters<typeof evalJsonAsync>[0],
-	episode: LocalEpisode,
-	time: number,
-	endTime?: number,
-): Promise<void> {
-	const result = await evalJsonAsync<{ error?: string; ok: boolean }>(
-		obsidian,
-		`
-		(async () => {
-			const handler = (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers).get(${JSON.stringify(PLUGIN_ID)});
-			if (!handler) {
-				return { ok: false, error: "PodNotes protocol handler is not registered." };
-			}
-
-			await handler({
-				action: ${JSON.stringify(PLUGIN_ID)},
-				url: ${JSON.stringify(episode.filePath ?? episode.streamUrl)},
-				episodeName: ${JSON.stringify(episode.title)},
-				time: ${JSON.stringify(String(time))},
-				endTime: ${JSON.stringify(endTime === undefined ? undefined : String(endTime))},
-			});
-
-			return { ok: true };
-		})()
-	`,
-	);
-
-	if (!result.ok) {
-		throw new Error(result.error ?? "PodNotes URI handler failed.");
-	}
 }
 
 async function stabilizeLoadedMedia(obsidian: {
@@ -1152,43 +1080,6 @@ async function dispatchAudioTimeUpdate(
 	if (!result.ok) {
 		throw new Error(result.error ?? "Failed to dispatch audio timeupdate.");
 	}
-}
-
-async function waitForPlaybackState(
-	obsidian: {
-		dev: { evalJson: <T>(code: string) => Promise<T> };
-		sleep: (ms: number) => Promise<void>;
-	},
-	predicate: (state: PlaybackState) => boolean,
-): Promise<PlaybackState> {
-	const startedAt = Date.now();
-	let lastState: PlaybackState | null = null;
-
-	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
-		lastState = await getPlaybackState(obsidian);
-		if (predicate(lastState)) return lastState;
-		await obsidian.sleep(WAIT_OPTS.intervalMs);
-	}
-
-	throw new Error(
-		`Timed out waiting for playback state. Last state: ${JSON.stringify(lastState)}`,
-	);
-}
-
-async function getPlaybackState(obsidian: {
-	dev: { evalJson: <T>(code: string) => Promise<T> };
-}): Promise<PlaybackState> {
-	return await obsidian.dev.evalJson<PlaybackState>(`
-		(() => {
-			const plugin = app.plugins.plugins.${PLUGIN_ID};
-			return {
-				currentTime: plugin?.api?.currentTime ?? null,
-				hasPlayer: Boolean(document.querySelector(".episode-player")),
-				isPlaying: Boolean(plugin?.api?.isPlaying),
-				title: plugin?.api?.podcast?.title ?? null,
-			};
-		})()
-	`);
 }
 
 async function setPlayback(

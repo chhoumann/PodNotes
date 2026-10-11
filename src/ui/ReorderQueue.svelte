@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { queue } from "src/store";
 	import type { Episode } from "src/types/Episode";
+	import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 	import Icon from "./obsidian/Icon.svelte";
 
 	export let close: () => void = () => {};
 
 	$: episodes = $queue.episodes;
 
-	// Resolve the live index by title at click time rather than trusting the
-	// index captured at render. The queue is title-unique (deduped on add), so
-	// this is unambiguous, and it stays correct even if playback advances the
-	// queue while the modal is open.
+	// Resolve the live index at click time rather than trusting the index captured
+	// at render, so it stays correct even if playback advances the queue while the
+	// modal is open.
 	function indexOf(episode: Episode): number {
-		return $queue.episodes.findIndex((e) => e.title === episode.title);
+		return $queue.episodes.findIndex((e) => isSameEpisode(e, episode));
 	}
 
 	function moveToTop(episode: Episode) {
@@ -49,7 +49,7 @@
 		<p class="queue-reorder-empty">Your queue is empty.</p>
 	{:else}
 		<ol class="queue-reorder-list">
-			{#each episodes as episode, index (episode.title)}
+			{#each episodes as episode, index (getEpisodeKey(episode))}
 				<li class="queue-reorder-item">
 					<span class="queue-reorder-position">{index + 1}</span>
 					<div class="queue-reorder-info">

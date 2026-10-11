@@ -368,10 +368,12 @@ async function appProcess(obsidian: ObsidianClient): Promise<AppProcess> {
  * Runner provisioning replaces the enabled-plugin list. Relaunch without it so
  * the startup recorder stays first. macOS needs app.quit because closing its last
  * window leaves it running.
+ * `beforeClose` is renderer code that runs 50 ms before the window closes.
  */
 export async function restartObsidian(
 	obsidian: ObsidianClient,
 	whileClosed: () => Promise<void> = async () => {},
+	beforeClose = "",
 ): Promise<{ before: AppProcess; after: AppProcess }> {
 	await assertNoRuntimeErrors(obsidian);
 	const before = await appProcess(obsidian);
@@ -379,10 +381,12 @@ export async function restartObsidian(
 	const instance = await isolatedInstance();
 	if (!argv.includes(`--user-data-dir=${instance.userDataPath}`))
 		throw new Error("Refusing to quit a different Obsidian profile.");
-	await obsidian.dev.evalJson(
+	const close =
 		process.platform === "darwin"
-			? "setTimeout(() => window.electron.remote.app.quit(), 50), true"
-			: "setTimeout(() => electronWindow.close(), 50), true",
+			? "window.electron.remote.app.quit()"
+			: "electronWindow.close()";
+	await obsidian.dev.evalJson(
+		`(() => { ${beforeClose}; setTimeout(() => ${close}, 50); return true; })()`,
 	);
 	await obsidian.waitFor(() => !processAlive(before.mainPid), {
 		timeoutMs: 30_000,
