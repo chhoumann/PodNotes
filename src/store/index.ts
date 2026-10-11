@@ -12,16 +12,10 @@ import { DEFAULT_PLAYBACK_RATE } from "src/utility/playbackRate";
 import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
 
-// `src/store` is the single import surface for the store layer. The feed/cache/
-// Latest-Episodes projection and the offline downloads store are self-contained
-// leaf modules; re-export them here so consumers keep importing from one place.
-export {
-	savedFeeds,
-	episodeCache,
-	episodeListLimit,
-	sanitizeEpisodeListLimit,
-	latestEpisodes,
-} from "./feeds";
+// `src/store` is the single import surface for the store layer. The saved-feed
+// and offline downloads stores are self-contained leaf modules; re-export them
+// here so consumers keep importing from one place.
+export { savedFeeds, episodeListLimit, sanitizeEpisodeListLimit } from "./feeds";
 export { downloadedEpisodes } from "./downloads";
 
 export const plugin = writable<PodNotes>();

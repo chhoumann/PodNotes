@@ -138,7 +138,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			.poll(
 				() =>
 					obsidian.dev.evalJson<boolean>(
-						`Boolean(document.querySelector('.podcast-view .pn_image_container img[alt="Synced Feed"]'))`,
+						`Boolean(document.querySelector('.podcast-view .podcast-card[aria-label="Synced Feed"]'))`,
 					),
 				POLL,
 			)
