@@ -17,7 +17,8 @@ import type { FeedUrlRepository } from "./FeedUrlRepository";
  * value confined to the fetch call and never persist or log it. Outside a
  * fetch, a secret is resolved only to compare it with a URL already in hand
  * (`isSavedFeed`, which returns just the answer) or to check that it exists
- * on this device.
+ * on this device. OPML export is the one deliberate exception: the user asks
+ * for a file that carries the real feed URLs.
  */
 
 /**

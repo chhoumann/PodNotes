@@ -120,7 +120,7 @@ describe("PodcastQueryGrid", () => {
 			collectionId: "290783428",
 		});
 		expect(notice).toHaveBeenCalledWith(
-			"You already follow a different podcast called Planet Money.",
+			"You already follow a podcast called Planet Money from another feed.",
 		);
 	});
 
@@ -162,7 +162,7 @@ describe("PodcastQueryGrid", () => {
 		await fireEvent.click(await findByRole("button", { name: "Add Private Show podcast" }));
 
 		expect(notice).toHaveBeenCalledWith(
-			"You already follow a different podcast called Private Show.",
+			"You already follow a podcast called Private Show from another feed.",
 		);
 		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
 		expect(secrets.listSecrets()).toEqual([saved.urlSecretId]);
@@ -182,7 +182,7 @@ describe("PodcastQueryGrid", () => {
 				"Remove the feed and add it again with its private URL.",
 		);
 		expect(notice).not.toHaveBeenCalledWith(
-			"You already follow a different podcast called Private Show.",
+			"You already follow a podcast called Private Show from another feed.",
 		);
 		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
 		expect(thisDevice.listSecrets()).toEqual([]);

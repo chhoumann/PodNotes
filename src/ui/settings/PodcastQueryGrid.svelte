@@ -151,12 +151,9 @@
 		// URL is missing on this device cannot be compared, so say that instead.
 		const saved = savedFeedTitled($savedFeeds, podcast.title);
 		if (saved) {
-			if (
-				!isSavedFeed(saved, podcast.url, feedUrls) &&
-				resolveFeedUrlWithNotice(saved, feedUrls) !== null
-			) {
-				new Notice(`You already follow a different podcast called ${podcast.title}.`);
-			}
+			if (isSavedFeed(saved, podcast.url, feedUrls)) return;
+			if (resolveFeedUrlWithNotice(saved, feedUrls) === null) return;
+			new Notice(`You already follow a podcast called ${podcast.title} from another feed.`);
 			return;
 		}
 		// A pasted private feed URL must never reach persisted settings: intern it
