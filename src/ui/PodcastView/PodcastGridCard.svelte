@@ -1,22 +1,20 @@
 <script lang="ts">
 	import type { PodcastFeed } from "src/types/PodcastFeed";
+	import type { FeedKey } from "src/services/FeedRepository";
 	import { createEventDispatcher } from "svelte";
 	import Image from "../common/Image.svelte";
 
+	export let key: FeedKey;
 	export let feed: PodcastFeed;
 
 	const dispatch = createEventDispatcher();
-
-	function onclickPodcast(feed: PodcastFeed) {
-		dispatch("clickPodcast", { feed });
-	}
 </script>
 
 <Image
 	src={feed.artworkUrl}
 	alt={feed.title}
 	interactive={true}
-	on:click={onclickPodcast.bind(null, feed)}
+	on:click={() => dispatch("clickPodcast", { key, feed })}
 	class="podcast-image"
 />
 

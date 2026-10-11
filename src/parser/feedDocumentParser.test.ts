@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import FeedDocumentParser from "./feedDocumentParser";
 
-const subscriptionUrl = "https://feeds.example.com/podcast.xml";
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
   <channel>
@@ -24,11 +23,10 @@ const xml = `<?xml version="1.0" encoding="UTF-8"?>
 
 describe("FeedDocumentParser", () => {
 	it("keeps feed and episode targets purpose-explicit without performing retrieval", () => {
-		const parsed = new FeedDocumentParser().parseEpisodes(xml, subscriptionUrl);
+		const parsed = new FeedDocumentParser().parseEpisodes(xml);
 
 		expect(parsed.feed).toEqual({
 			title: "Pure Parser Podcast",
-			subscriptionUrl,
 			artworkUrl: "https://cdn.example.com/feed.jpg",
 			siteUrl: "https://example.com/show",
 			guid: "feed-guid",
@@ -61,7 +59,7 @@ describe("FeedDocumentParser", () => {
   </channel>
 </rss>`;
 
-		const parsed = new FeedDocumentParser().parseEpisodes(noEpisodeTargets, subscriptionUrl);
+		const parsed = new FeedDocumentParser().parseEpisodes(noEpisodeTargets);
 
 		expect(parsed.feed.artworkUrl).toBe("https://cdn.example.com/feed.jpg");
 		expect(parsed.episodes[0]).not.toHaveProperty("artworkUrl");
@@ -69,9 +67,9 @@ describe("FeedDocumentParser", () => {
 	});
 
 	it("rejects a parser-generated malformed XML document", () => {
-		expect(() =>
-			new FeedDocumentParser().parseFeed("<rss><channel><title>broken", subscriptionUrl),
-		).toThrow("Invalid RSS feed");
+		expect(() => new FeedDocumentParser().parseFeed("<rss><channel><title>broken")).toThrow(
+			"Invalid RSS feed",
+		);
 	});
 
 	it("accepts a valid feed containing an extension named parsererror", () => {
@@ -83,9 +81,8 @@ describe("FeedDocumentParser", () => {
   </channel>
 </rss>`;
 
-		expect(new FeedDocumentParser().parseFeed(validExtension, subscriptionUrl)).toEqual({
+		expect(new FeedDocumentParser().parseFeed(validExtension)).toEqual({
 			title: "Valid Extension Podcast",
-			subscriptionUrl,
 		});
 	});
 
@@ -100,9 +97,9 @@ describe("FeedDocumentParser", () => {
   <channel><title>Partial Recovery</title></channel>
 </rss>`;
 
-		expect(() =>
-			new FeedDocumentParser().parseFeed(chromiumErrorShape, subscriptionUrl),
-		).toThrow("Invalid RSS feed");
+		expect(() => new FeedDocumentParser().parseFeed(chromiumErrorShape)).toThrow(
+			"Invalid RSS feed",
+		);
 	});
 
 	it("accepts a nested XHTML extension with the same local name", () => {
@@ -114,9 +111,8 @@ describe("FeedDocumentParser", () => {
   </channel>
 </rss>`;
 
-		expect(new FeedDocumentParser().parseFeed(nestedXhtmlExtension, subscriptionUrl)).toEqual({
+		expect(new FeedDocumentParser().parseFeed(nestedXhtmlExtension)).toEqual({
 			title: "Nested Extension Podcast",
-			subscriptionUrl,
 		});
 	});
 });

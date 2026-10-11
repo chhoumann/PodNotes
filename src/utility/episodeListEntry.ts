@@ -25,13 +25,13 @@ function createEpisodeListEntry(episode: Episode): EpisodeListEntry {
 	};
 }
 
-export function createEpisodeListEntries(episodes: Episode[]): EpisodeListEntry[] {
+export function createEpisodeListEntries(episodes: readonly Episode[]): EpisodeListEntry[] {
 	return episodes.map(createEpisodeListEntry);
 }
 
 export function buildPlayedEpisodeListEntries(
 	playedEpisodes: PlayedEpisodeMap,
-	episodeSources: Episode[][],
+	episodeSources: readonly (readonly Episode[])[],
 ): PlayedEpisodeListEntry[] {
 	const episodeLookup = buildEpisodeLookup(episodeSources.flat());
 

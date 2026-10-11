@@ -8,12 +8,12 @@ import { parseDurationToSeconds } from "src/utility/parseDuration";
 import { parseEpisodeNumber } from "src/utility/parseEpisodeNumber";
 
 /**
- * Transient parser output. This object must never be persisted or exposed to
- * the UI, public API, or template engine.
+ * Channel metadata as parsed. FeedRepository caches it in vault-local storage, so
+ * it never carries the URL it was fetched from, which may hold a private feed's
+ * secret.
  */
 export interface ParsedFeedDocument {
 	title: string;
-	subscriptionUrl: string;
 	artworkUrl?: string;
 	siteUrl?: string;
 	description?: string;
@@ -60,14 +60,14 @@ function isParserErrorDocument(document: Document): boolean {
 
 /** Pure XML parsing boundary with no network or Obsidian dependency. */
 export default class FeedDocumentParser {
-	parseFeed(xml: string, subscriptionUrl: string): ParsedFeedDocument {
-		return this.extractFeed(this.parseXml(xml), subscriptionUrl);
+	parseFeed(xml: string): ParsedFeedDocument {
+		return this.extractFeed(this.parseXml(xml));
 	}
 
-	parseEpisodes(xml: string, subscriptionUrl: string): ParsedFeedEpisodes {
+	parseEpisodes(xml: string): ParsedFeedEpisodes {
 		const document = this.parseXml(xml);
 		return {
-			feed: this.extractFeed(document, subscriptionUrl),
+			feed: this.extractFeed(document),
 			episodes: this.parsePage(document),
 		};
 	}
@@ -83,7 +83,7 @@ export default class FeedDocumentParser {
 		return document;
 	}
 
-	private extractFeed(body: Document, subscriptionUrl: string): ParsedFeedDocument {
+	private extractFeed(body: Document): ParsedFeedDocument {
 		const titleEl = body.querySelector("title");
 
 		// A feed must have a title. <link> is intentionally not required: it is the
@@ -105,7 +105,6 @@ export default class FeedDocumentParser {
 
 		return {
 			title: titleEl.textContent || "",
-			subscriptionUrl,
 			...(artworkUrl ? { artworkUrl } : {}),
 			...(siteUrl ? { siteUrl } : {}),
 			...(description ? { description } : {}),

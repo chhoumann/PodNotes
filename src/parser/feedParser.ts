@@ -9,10 +9,10 @@ import { legacyObsidianFeedDocumentSource, type FeedDocumentSource } from "./fee
 
 const defaultDocumentParser = new FeedDocumentParser();
 
-function projectLegacyFeed(parsed: ParsedFeedDocument): PodcastFeed {
+function projectLegacyFeed(parsed: ParsedFeedDocument, url: string): PodcastFeed {
 	return {
 		title: parsed.title,
-		url: parsed.subscriptionUrl,
+		url,
 		artworkUrl: parsed.artworkUrl ?? "",
 		...(parsed.siteUrl ? { link: parsed.siteUrl } : {}),
 		...(parsed.description ? { description: parsed.description } : {}),
@@ -71,15 +71,15 @@ export default class FeedParser {
 				.parseEpisodeItems(xml)
 				.map((episode) => projectLegacyEpisode(episode, existingFeed));
 		}
-		const parsed = defaultDocumentParser.parseEpisodes(xml, sourceUrl);
-		const feed = projectLegacyFeed(parsed.feed);
+		const parsed = defaultDocumentParser.parseEpisodes(xml);
+		const feed = projectLegacyFeed(parsed.feed, sourceUrl);
 		this.feed = feed;
 		return parsed.episodes.map((episode) => projectLegacyEpisode(episode, feed));
 	}
 
 	async getFeed(sourceUrl: string): Promise<PodcastFeed> {
 		const xml = await this.source.load(sourceUrl);
-		this.feed = projectLegacyFeed(defaultDocumentParser.parseFeed(xml, sourceUrl));
+		this.feed = projectLegacyFeed(defaultDocumentParser.parseFeed(xml), sourceUrl);
 		return this.feed;
 	}
 }

@@ -58,7 +58,7 @@ type JourneyContext = Readonly<{
 }>;
 type Json = Record<string, any>;
 
-const FEED_CACHE_KEY = "podnotes:feed-cache:v5";
+const FEED_CACHE_KEY = "podnotes:feed-cache:v6";
 
 type JourneySnapshot = Readonly<{
 	cache: unknown;

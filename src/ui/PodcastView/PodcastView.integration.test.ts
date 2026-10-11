@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import createPodcastNote from "src/createPodcastNote";
-import { clearFeedCache, setCachedEpisodes } from "src/services/FeedCacheService";
+import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
+import { FeedRepository } from "src/services/FeedRepository";
 import {
 	currentEpisode,
-	episodeCache,
 	hidePlayedEpisodes,
 	playedEpisodes,
 	plugin,
@@ -18,6 +19,7 @@ import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
 import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
+import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 
 vi.mock("./EpisodePlayer.svelte", () => ({
 	default: EpisodePlayerStub,
@@ -25,22 +27,18 @@ vi.mock("./EpisodePlayer.svelte", () => ({
 
 import PodcastView from "./PodcastView.svelte";
 
-const mockGetEpisodes = vi.fn<() => Promise<Episode[]>>();
-
-vi.mock("src/parser/feedParser", () => {
-	return {
-		default: class {
-			async getEpisodes() {
-				return mockGetEpisodes();
-			}
-		},
-	};
-});
+const mockLoad = vi.fn<(url: string) => Promise<ParsedFeedEpisodes>>();
 
 const testFeed: PodcastFeed = {
 	title: "Test Podcast",
 	url: "https://pod.example.com/feed.xml",
 	artworkUrl: "https://pod.example.com/art.jpg",
+};
+
+const secondFeed: PodcastFeed = {
+	title: "Second Podcast",
+	url: "https://pod.example.com/feed-two.xml",
+	artworkUrl: "https://pod.example.com/art-two.jpg",
 };
 
 const testEpisode: Episode = {
@@ -54,15 +52,17 @@ const testEpisode: Episode = {
 	episodeDate: new Date("2024-01-15T00:00:00.000Z"),
 };
 
-function resetStores() {
-	savedFeeds.set({});
-	episodeCache.set({});
-	hidePlayedEpisodes.set(false);
-	playedEpisodes.set({});
-	viewState.set(ViewState.PodcastGrid);
-	currentEpisode.update(() => undefined as unknown as Episode);
-	plugin.set(undefined as never);
-	clearFeedCache();
+function episode(title: string, feed: PodcastFeed, date: string): Episode {
+	return {
+		title,
+		streamUrl: `https://pod.example.com/${encodeURIComponent(title)}.mp3`,
+		url: `https://pod.example.com/${encodeURIComponent(title)}`,
+		description: `${title} description`,
+		content: "",
+		podcastName: feed.title,
+		artworkUrl: feed.artworkUrl,
+		episodeDate: new Date(date),
+	};
 }
 
 function createNumberedEpisode(number: number): Episode {
@@ -84,30 +84,85 @@ function createTruncatedFeedCache(): Episode[] {
 	return Array.from({ length: 75 }, (_, index) => createNumberedEpisode(622 + index));
 }
 
+// The cache keeps the newest 75 by date, so the extra episode is the oldest.
 function createFullFeed(): Episode[] {
-	return [createNumberedEpisode(100), ...createTruncatedFeedCache()];
+	return [
+		{ ...createNumberedEpisode(100), episodeDate: new Date("2023-01-15T00:00:00.000Z") },
+		...createTruncatedFeedCache(),
+	];
 }
 
-function enableFeedCache() {
+let storage = new MemoryStorage();
+let unsubscribeFeeds = () => {};
+
+/** Builds the plugin the view reads, with a repository fed by `mockLoad` and `storage`. */
+function usePlugin(fields: Record<string, unknown> = {}, cacheEnabled = false) {
+	const feeds = new FeedRepository({
+		load: (url) => mockLoad(url),
+		resolveUrl: (feed) => feed.url,
+		storage,
+		cache: () => ({ enabled: cacheEnabled, ttlHours: 6 }),
+		now: Date.now,
+	});
+	unsubscribeFeeds();
+	unsubscribeFeeds = savedFeeds.subscribe((saved) => feeds.setSubscriptions(saved));
 	plugin.set({
-		settings: {
-			feedCache: {
-				enabled: true,
-				ttlHours: 6,
-			},
-		},
+		settings: { feedCache: { enabled: cacheEnabled, ttlHours: 6 } },
+		...fields,
+		feeds,
 	} as never);
+	return feeds;
 }
+
+/** Writes feeds into `storage` the way an earlier session would have. */
+async function cacheFeeds(...entries: [PodcastFeed, Episode[]][]) {
+	const earlier = new FeedRepository({
+		load: async (url) => {
+			const [feed, episodes] = entries.find(([candidate]) => candidate.url === url)!;
+			return feedDocument(feed.title, episodes);
+		},
+		resolveUrl: (saved) => saved.url,
+		storage,
+		cache: () => ({ enabled: true, ttlHours: 6 }),
+		now: Date.now,
+	});
+	earlier.setSubscriptions(Object.fromEntries(entries.map(([feed]) => [feed.title, feed])));
+	await earlier.ensureAll();
+}
+
+function respondByUrl(responses: Record<string, Episode[]>) {
+	mockLoad.mockImplementation(async (url) => {
+		const feed = [testFeed, secondFeed].find((candidate) => candidate.url === url);
+		return feedDocument(feed?.title ?? url, responses[url] ?? []);
+	});
+}
+
+function resetStores() {
+	unsubscribeFeeds();
+	unsubscribeFeeds = () => {};
+	savedFeeds.set({});
+	hidePlayedEpisodes.set(false);
+	playedEpisodes.set({});
+	viewState.set(ViewState.PodcastGrid);
+	currentEpisode.update(() => undefined as unknown as Episode);
+	plugin.set(undefined as never);
+}
+
+const listed = () =>
+	Array.from(document.querySelectorAll(".episode-item-title"), (node) =>
+		node.textContent?.trim(),
+	);
 
 beforeEach(() => {
 	resetStores();
+	storage = new MemoryStorage();
 	savedFeeds.set({ [testFeed.title]: testFeed });
-	mockGetEpisodes.mockResolvedValue([testEpisode]);
+	respondByUrl({ [testFeed.url]: [testEpisode] });
 });
 
 afterEach(() => {
 	resetStores();
-	mockGetEpisodes.mockClear();
+	mockLoad.mockReset();
 	delete (globalThis as Record<string, unknown>).app;
 });
 
@@ -138,22 +193,18 @@ describe("PodcastView integration flow", () => {
 	test("select feed → play episode → create note with resolved template", async () => {
 		const { appMock, createdFiles, leaf } = bootstrapAppMock();
 
-		const pluginSettings = {
-			// createPodcastNote resolves the vault/workspace off the plugin's app
-			// reference (get(plugin).app), so expose the same mock there too.
+		// createPodcastNote resolves the vault/workspace off the plugin's app
+		// reference (get(plugin).app), so expose the same mock there too.
+		usePlugin({
 			app: appMock,
 			settings: {
 				note: {
 					path: "Podcasts/{{podcast}}/{{date}}/{{title}}",
 					template: "# {{title}}\n{{description}}\nStream: {{stream}}",
 				},
-				feedCache: {
-					enabled: false,
-					ttlHours: 6,
-				},
+				feedCache: { enabled: false, ttlHours: 6 },
 			},
-		};
-		plugin.set(pluginSettings as never);
+		});
 
 		render(PodcastView);
 
@@ -180,77 +231,28 @@ describe("PodcastView integration flow", () => {
 	});
 
 	test("shows loading state while fetching and streams episodes per feed", async () => {
-		const secondFeed: PodcastFeed = {
-			title: "Second Podcast",
-			url: "https://pod.example.com/feed-two.xml",
-			artworkUrl: "https://pod.example.com/art-two.jpg",
-		};
-
-		const firstEpisode: Episode = {
-			title: "Episode A",
-			streamUrl: "https://pod.example.com/a.mp3",
-			url: "https://pod.example.com/a",
-			description: "Episode A description",
-			content: "<p>Episode A content</p>",
-			podcastName: testFeed.title,
-			artworkUrl: testFeed.artworkUrl,
-			episodeDate: new Date("2024-02-01T00:00:00.000Z"),
-		};
-
-		const secondEpisode: Episode = {
-			title: "Episode B",
-			streamUrl: "https://pod.example.com/b.mp3",
-			url: "https://pod.example.com/b",
-			description: "Episode B description",
-			content: "<p>Episode B content</p>",
-			podcastName: secondFeed.title,
-			artworkUrl: secondFeed.artworkUrl,
-			episodeDate: new Date("2024-01-15T00:00:00.000Z"),
-		};
-
-		let resolveFirstFeed!: (value: Episode[]) => void;
-		let resolveSecondFeed!: (value: Episode[]) => void;
-
-		mockGetEpisodes
-			.mockImplementationOnce(
-				() =>
-					new Promise<Episode[]>((resolve) => {
-						resolveFirstFeed = resolve;
-					}),
-			)
-			.mockImplementationOnce(
-				() =>
-					new Promise<Episode[]>((resolve) => {
-						resolveSecondFeed = resolve;
-					}),
-			);
-
-		plugin.set({
-			settings: {
-				feedCache: {
-					enabled: false,
-					ttlHours: 6,
-				},
-			},
-		} as never);
-
-		savedFeeds.set({
-			[testFeed.title]: testFeed,
-			[secondFeed.title]: secondFeed,
-		});
+		const firstEpisode = episode("Episode A", testFeed, "2024-02-01T00:00:00.000Z");
+		const secondEpisode = episode("Episode B", secondFeed, "2024-01-15T00:00:00.000Z");
+		const first = deferred<ParsedFeedEpisodes>();
+		const second = deferred<ParsedFeedEpisodes>();
+		mockLoad.mockImplementation((url) =>
+			url === testFeed.url ? first.promise : second.promise,
+		);
+		usePlugin();
+		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 		viewState.set(ViewState.EpisodeList);
 
 		render(PodcastView);
 
 		await screen.findByText("Fetching episodes...");
 
-		resolveFirstFeed([firstEpisode]);
+		first.resolve(feedDocument(testFeed.title, [firstEpisode]));
 
 		expect(await screen.findByText(firstEpisode.title)).toBeInTheDocument();
 		expect(screen.getByText("Fetching episodes...")).toBeInTheDocument();
 		expect(screen.queryByText(secondEpisode.title)).toBeNull();
 
-		resolveSecondFeed([secondEpisode]);
+		second.resolve(feedDocument(secondFeed.title, [secondEpisode]));
 
 		expect(await screen.findByText(secondEpisode.title)).toBeInTheDocument();
 		await waitFor(() =>
@@ -259,18 +261,8 @@ describe("PodcastView integration flow", () => {
 	});
 
 	test("opens a global played episodes view from the podcast grid", async () => {
-		const playedEpisode: Episode = {
-			title: "Already Finished",
-			streamUrl: "https://pod.example.com/finished.mp3",
-			url: "https://pod.example.com/finished",
-			description: "Finished episode description",
-			content: "<p>Finished episode content</p>",
-			podcastName: testFeed.title,
-			artworkUrl: testFeed.artworkUrl,
-			episodeDate: new Date("2023-01-15T00:00:00.000Z"),
-		};
-
-		mockGetEpisodes.mockResolvedValue([testEpisode, playedEpisode]);
+		const playedEpisode = episode("Already Finished", testFeed, "2023-01-15T00:00:00.000Z");
+		respondByUrl({ [testFeed.url]: [testEpisode, playedEpisode] });
 		hidePlayedEpisodes.set(true);
 		playedEpisodes.set({
 			[`${testFeed.title}::${playedEpisode.title}`]: {
@@ -281,6 +273,7 @@ describe("PodcastView integration flow", () => {
 				finished: true,
 			},
 		});
+		usePlugin();
 
 		render(PodcastView);
 
@@ -292,24 +285,9 @@ describe("PodcastView integration flow", () => {
 	});
 
 	test("does not apply a delayed played feed refresh after leaving the played view", async () => {
-		const playedEpisode: Episode = {
-			title: "Already Finished",
-			streamUrl: "https://pod.example.com/finished.mp3",
-			url: "https://pod.example.com/finished",
-			description: "Finished episode description",
-			content: "<p>Finished episode content</p>",
-			podcastName: testFeed.title,
-			artworkUrl: testFeed.artworkUrl,
-			episodeDate: new Date("2023-01-15T00:00:00.000Z"),
-		};
-		let resolvePlayedFetch!: (value: Episode[]) => void;
-
-		mockGetEpisodes.mockResolvedValueOnce([testEpisode]).mockImplementationOnce(
-			() =>
-				new Promise<Episode[]>((resolve) => {
-					resolvePlayedFetch = resolve;
-				}),
-		);
+		const playedEpisode = episode("Already Finished", testFeed, "2023-01-15T00:00:00.000Z");
+		const refresh = deferred<ParsedFeedEpisodes>();
+		respondByUrl({ [testFeed.url]: [testEpisode, playedEpisode] });
 		playedEpisodes.set({
 			[`${testFeed.title}::${playedEpisode.title}`]: {
 				title: playedEpisode.title,
@@ -319,59 +297,151 @@ describe("PodcastView integration flow", () => {
 				finished: true,
 			},
 		});
-		plugin.set({
-			settings: {
-				feedCache: {
-					enabled: false,
-					ttlHours: 6,
-				},
-			},
-		} as never);
+		usePlugin();
 
 		render(PodcastView);
 
 		const playedCard = await screen.findByLabelText("Played");
-		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
-		episodeCache.set({});
-
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		await fireEvent.click(playedCard);
-		expect(await screen.findByText("Played")).toBeInTheDocument();
+		expect(await screen.findByText("Already Finished")).toBeInTheDocument();
 
+		mockLoad.mockReturnValueOnce(refresh.promise);
+		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
 		await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
-		expect(screen.queryByText("Already Finished")).not.toBeInTheDocument();
+		refresh.resolve(feedDocument(testFeed.title, [testEpisode]));
 
-		resolvePlayedFetch([testEpisode]);
+		await waitFor(() => expect(listed()).toEqual([testEpisode.title]));
+		expect(screen.getByText("Latest Episodes")).toBeInTheDocument();
+	});
+
+	test("the Episode list tab shows episodes that loaded while the grid was open (#375)", async () => {
+		usePlugin();
+
+		render(PodcastView);
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
+		await screen.findByAltText(testFeed.title);
+		await fireEvent.click(screen.getByRole("button", { name: /episode list/i }));
 
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
-		expect(screen.queryByText("Already Finished")).not.toBeInTheDocument();
+	});
+
+	describe("a refresh that answers after the user moved on", () => {
+		const alphaEpisode = episode("Alpha One", testFeed, "2024-03-01T00:00:00.000Z");
+		const betaEpisode = episode("Beta One", secondFeed, "2024-02-01T00:00:00.000Z");
+		let refresh: ReturnType<typeof deferred<ParsedFeedEpisodes>>;
+
+		beforeEach(async () => {
+			respondByUrl({ [testFeed.url]: [alphaEpisode], [secondFeed.url]: [betaEpisode] });
+			savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
+			usePlugin();
+			render(PodcastView);
+			await fireEvent.click(await screen.findByAltText(testFeed.title));
+			expect(await screen.findByText(alphaEpisode.title)).toBeInTheDocument();
+			refresh = deferred<ParsedFeedEpisodes>();
+			mockLoad.mockReturnValueOnce(refresh.promise);
+			await fireEvent.click(screen.getByLabelText("Refresh episodes"));
+			expect(screen.getByText("Fetching episodes...")).toBeInTheDocument();
+			expect(screen.queryByText(/Updating/)).toBeNull();
+		});
+
+		test("never lists it under the podcast opened since, and the banner clears", async () => {
+			await fireEvent.click(screen.getByRole("button", { name: /podcast grid/i }));
+			await fireEvent.click(await screen.findByAltText(secondFeed.title));
+			expect(screen.getByText("Updating 1 feed")).toBeInTheDocument();
+
+			refresh.resolve(feedDocument(testFeed.title, [alphaEpisode]));
+
+			await waitFor(() => expect(screen.queryByText("Updating 1 feed")).toBeNull());
+			expect(listed()).toEqual([betaEpisode.title]);
+			expect(screen.getAllByText(secondFeed.title).length).toBeGreaterThan(0);
+		});
+
+		test("lists every podcast when the user went back to Latest Episodes", async () => {
+			await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
+
+			refresh.resolve(feedDocument(testFeed.title, [alphaEpisode]));
+
+			await waitFor(() => expect(screen.queryByText(/Updating/)).toBeNull());
+			expect(listed()).toEqual([alphaEpisode.title, betaEpisode.title]);
+		});
+	});
+
+	test("an open podcast that is removed falls back to Latest Episodes", async () => {
+		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
+		usePlugin();
+		render(PodcastView);
+		await fireEvent.click(await screen.findByAltText(secondFeed.title));
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(2));
+
+		savedFeeds.set({ [testFeed.title]: testFeed });
+		await fireEvent.click(await screen.findByLabelText("Refresh episodes"));
+
+		expect(mockLoad).toHaveBeenLastCalledWith(testFeed.url);
+		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
+	});
+
+	test("a podcast that fails to load says so only when nothing can be shown", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const failure = `Could not load episodes for ${testFeed.title}. Check your connection and try again.`;
+		usePlugin();
+		render(PodcastView);
+		await fireEvent.click(await screen.findByAltText(testFeed.title));
+		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
+
+		mockLoad.mockRejectedValue(new Error("offline"));
+		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(screen.queryByText("Fetching episodes...")).toBeNull());
+		expect(notice).not.toHaveBeenCalledWith(failure);
+
+		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
+		await fireEvent.click(screen.getByRole("button", { name: /podcast grid/i }));
+		await fireEvent.click(await screen.findByAltText(secondFeed.title));
+		await waitFor(() =>
+			expect(notice).toHaveBeenCalledWith(
+				`Could not load episodes for ${secondFeed.title}. Check your connection and try again.`,
+			),
+		);
+		expect(notice).not.toHaveBeenCalledWith(failure);
+	});
+
+	test("Latest Episodes drops a podcast as soon as it is removed", async () => {
+		const betaEpisode = episode("Beta One", secondFeed, "2024-02-01T00:00:00.000Z");
+		respondByUrl({ [testFeed.url]: [testEpisode], [secondFeed.url]: [betaEpisode] });
+		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
+		viewState.set(ViewState.EpisodeList);
+		usePlugin();
+		render(PodcastView);
+		await waitFor(() => expect(listed()).toEqual([betaEpisode.title, testEpisode.title]));
+
+		savedFeeds.set({ [testFeed.title]: testFeed });
+
+		await waitFor(() => expect(listed()).toEqual([testEpisode.title]));
 	});
 });
 
 describe("issue #174 feed cache cap regression", () => {
-	const oldEpisode = createNumberedEpisode(100);
-	const truncatedCache = createTruncatedFeedCache();
 	const fullFeed = createFullFeed();
+	const [oldEpisode, ...truncatedCache] = fullFeed;
 
-	beforeEach(() => {
-		enableFeedCache();
-		episodeCache.set({ [testFeed.title]: truncatedCache });
-		setCachedEpisodes(testFeed, truncatedCache);
-		mockGetEpisodes.mockResolvedValue(fullFeed);
+	beforeEach(async () => {
+		await cacheFeeds([testFeed, fullFeed]);
+		respondByUrl({ [testFeed.url]: fullFeed });
+		usePlugin({}, true);
 	});
 
 	test("opening a show bypasses the truncated cache and loads older episodes", async () => {
 		render(PodcastView);
 
-		await waitFor(() => expect(get(episodeCache)[testFeed.title]).toHaveLength(75));
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
-
 		const feedImage = await screen.findByAltText(testFeed.title);
+		expect(mockLoad).not.toHaveBeenCalled();
 		await fireEvent.click(feedImage);
 
-		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
-		expect(get(episodeCache)[testFeed.title]).toHaveLength(76);
-		expect(screen.queryByText(createNumberedEpisode(621).title)).not.toBeInTheDocument();
+		expect(listed()).toHaveLength(76);
 	});
 
 	test("played view bypasses the truncated cache for older finished episodes", async () => {
@@ -388,13 +458,11 @@ describe("issue #174 feed cache cap regression", () => {
 
 		render(PodcastView);
 
-		await waitFor(() => expect(get(episodeCache)[testFeed.title]).toHaveLength(75));
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
-
 		const playedCard = await screen.findByLabelText("Played");
+		expect(mockLoad).not.toHaveBeenCalled();
 		await fireEvent.click(playedCard);
 
-		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText("Played")).toBeInTheDocument();
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 		expect(screen.queryByText("Unavailable in current feeds")).not.toBeInTheDocument();
@@ -409,31 +477,31 @@ describe("issue #174 feed cache cap regression", () => {
 
 		render(PodcastView);
 
-		await waitFor(() => expect(get(episodeCache)[testFeed.title]).toHaveLength(75));
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
-		expect(screen.queryByText(oldEpisode.title)).not.toBeInTheDocument();
 		expect(await screen.findByText(createNumberedEpisode(622).title)).toBeInTheDocument();
+		expect(mockLoad).not.toHaveBeenCalled();
+		expect(screen.queryByText(oldEpisode.title)).not.toBeInTheDocument();
 	});
 
-	test("reopening a show reuses full in-memory cache without refetching", async () => {
+	test("reopening a show reuses the full feed without refetching", async () => {
 		render(PodcastView);
 
 		const feedImage = await screen.findByAltText(testFeed.title);
 		await fireEvent.click(feedImage);
 
-		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 
 		await fireEvent.click(screen.getByRole("button", { name: /podcast grid/i }));
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 
-		await fireEvent.click(feedImage);
+		await fireEvent.click(await screen.findByAltText(testFeed.title));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
-		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
+		expect(mockLoad).toHaveBeenCalledTimes(1);
 	});
 
 	test("falls back to truncated cache when a full feed fetch fails", async () => {
-		mockGetEpisodes.mockRejectedValue(new Error("network unavailable"));
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		mockLoad.mockRejectedValue(new Error("network unavailable"));
 
 		render(PodcastView);
 
@@ -441,27 +509,15 @@ describe("issue #174 feed cache cap regression", () => {
 		await fireEvent.click(feedImage);
 
 		expect(await screen.findByText(createNumberedEpisode(622).title)).toBeInTheDocument();
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(screen.queryByText(oldEpisode.title)).not.toBeInTheDocument();
-		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
+		expect(listed()).toHaveLength(truncatedCache.length);
 	});
 
 	test("played view only fetches feeds with finished played episodes", async () => {
-		const secondFeed: PodcastFeed = {
-			title: "Second Podcast",
-			url: "https://pod.example.com/feed-two.xml",
-			artworkUrl: "https://pod.example.com/art-two.jpg",
-		};
-
 		hidePlayedEpisodes.set(true);
-		savedFeeds.set({
-			[testFeed.title]: testFeed,
-			[secondFeed.title]: secondFeed,
-		});
-		episodeCache.set({
-			[testFeed.title]: truncatedCache,
-			[secondFeed.title]: [createNumberedEpisode(900)],
-		});
-		setCachedEpisodes(secondFeed, [createNumberedEpisode(900)]);
+		await cacheFeeds([testFeed, fullFeed], [secondFeed, [createNumberedEpisode(900)]]);
+		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 		playedEpisodes.set({
 			[`${testFeed.title}::${oldEpisode.title}`]: {
 				title: oldEpisode.title,
@@ -471,17 +527,18 @@ describe("issue #174 feed cache cap regression", () => {
 				finished: true,
 			},
 		});
+		usePlugin({}, true);
 
 		render(PodcastView);
 
 		const playedCard = await screen.findByLabelText("Played");
 		await fireEvent.click(playedCard);
 
-		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
+		expect(mockLoad.mock.calls).toEqual([[testFeed.url]]);
 	});
 
-	test("reopening played view reuses full in-memory cache without refetching", async () => {
+	test("reopening played view reuses the full feed without refetching", async () => {
 		hidePlayedEpisodes.set(true);
 		playedEpisodes.set({
 			[`${testFeed.title}::${oldEpisode.title}`]: {
@@ -498,13 +555,13 @@ describe("issue #174 feed cache cap regression", () => {
 		const playedCard = await screen.findByLabelText("Played");
 		await fireEvent.click(playedCard);
 
-		await waitFor(() => expect(mockGetEpisodes).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 
 		await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
 		await fireEvent.click(playedCard);
 
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
-		expect(mockGetEpisodes).toHaveBeenCalledTimes(1);
+		expect(mockLoad).toHaveBeenCalledTimes(1);
 	});
 });

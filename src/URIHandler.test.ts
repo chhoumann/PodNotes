@@ -19,14 +19,8 @@ import type { LocalEpisode } from "./types/LocalEpisode";
 import type { Playlist } from "./types/Playlist";
 import { ViewState } from "./types/ViewState";
 
-const mockGetEpisodes = vi.fn();
+const mockEpisodesAt = vi.fn();
 const testFeedUrl = "https://pod.example.com/feed.xml";
-
-vi.mock("./parser/feedParser", () => ({
-	default: class {
-		getEpisodes = mockGetEpisodes;
-	},
-}));
 
 const testEpisode: Episode = {
 	title: "Finished Episode",
@@ -78,18 +72,19 @@ const api = {
 function setApp(getAbstractFileByPath: (path: string) => unknown) {
 	plugin.set({
 		app: { vault: { getAbstractFileByPath: vi.fn(getAbstractFileByPath) } },
+		feeds: { episodesAt: mockEpisodesAt },
 	} as never);
 }
 
 beforeEach(() => {
 	resetStores();
-	mockGetEpisodes.mockResolvedValue([testEpisode]);
+	mockEpisodesAt.mockResolvedValue([testEpisode]);
 	setApp(() => null);
 });
 
 afterEach(() => {
 	resetStores();
-	mockGetEpisodes.mockReset();
+	mockEpisodesAt.mockReset();
 	plugin.set(undefined as never);
 });
 
@@ -114,7 +109,7 @@ describe("podNotesURIHandler", () => {
 		expect(get(currentTime)).toBe(120);
 		expect(get(isPaused)).toBe(false);
 		expect(get(requestedPlaybackTime)).toBeNull();
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("keeps the requested time for the player to apply after loading metadata", async () => {
@@ -132,7 +127,7 @@ describe("podNotesURIHandler", () => {
 			revealPlayer,
 		);
 
-		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
 		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 		expect(get(requestedPlaybackTime)).toEqual({
@@ -184,7 +179,7 @@ describe("podNotesURIHandler", () => {
 			);
 
 			// The attacker-controlled url is never handed to the feed parser.
-			expect(mockGetEpisodes).not.toHaveBeenCalled();
+			expect(mockEpisodesAt).not.toHaveBeenCalled();
 			expect(get(currentEpisode)).toBeUndefined();
 			expect(get(viewState)).toBe(ViewState.PodcastGrid);
 			expect(revealPlayer).not.toHaveBeenCalled();
@@ -203,7 +198,7 @@ describe("podNotesURIHandler", () => {
 			api as never,
 		);
 
-		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
 		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 		expect(get(requestedPlaybackTime)).toEqual({
@@ -242,7 +237,7 @@ describe("podNotesURIHandler", () => {
 			startTime: 120,
 			endTime: 135,
 		});
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("normal timestamp links clear a stale active segment", async () => {
@@ -267,7 +262,7 @@ describe("podNotesURIHandler", () => {
 	});
 
 	test("switches to a non-loaded episode whose title contains a literal '+'", async () => {
-		mockGetEpisodes.mockResolvedValue([plusEpisode]);
+		mockEpisodesAt.mockResolvedValue([plusEpisode]);
 
 		await podNotesURIHandler(
 			{
@@ -305,11 +300,11 @@ describe("podNotesURIHandler", () => {
 
 		expect(get(currentTime)).toBe(90);
 		expect(get(isPaused)).toBe(false);
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("resolves a legacy '+'-as-space link to a non-loaded episode", async () => {
-		mockGetEpisodes.mockResolvedValue([testEpisode]);
+		mockEpisodesAt.mockResolvedValue([testEpisode]);
 
 		await podNotesURIHandler(
 			{
@@ -346,7 +341,7 @@ describe("podNotesURIHandler", () => {
 
 		expect(get(currentTime)).toBe(45);
 		expect(get(isPaused)).toBe(false);
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("resolves a local-file episode whose path and title both contain '+'", async () => {
@@ -379,7 +374,7 @@ describe("podNotesURIHandler", () => {
 			episodeKey: "local file::C++ Tips",
 			time: 30,
 		});
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("resolves a moved/renamed local file by name instead of routing to the feed parser (LF-08)", async () => {
@@ -414,7 +409,7 @@ describe("podNotesURIHandler", () => {
 			time: 15,
 		});
 		// A schemeless path must never hit the feed parser.
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("resolves a feed episode after the publisher rearranges the title (#315)", async () => {
@@ -427,7 +422,7 @@ describe("podNotesURIHandler", () => {
 			streamUrl: "https://pod.example.com/martha.mp3",
 			podcastName: "Huberman Lab",
 		};
-		mockGetEpisodes.mockResolvedValue([hubermanEpisode, testEpisode]);
+		mockEpisodesAt.mockResolvedValue([hubermanEpisode, testEpisode]);
 
 		await podNotesURIHandler(
 			{
@@ -472,7 +467,7 @@ describe("podNotesURIHandler", () => {
 
 		expect(get(currentTime)).toBe(90);
 		expect(get(isPaused)).toBe(false);
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("does not seek a loaded Part 2 when the link is for Part 1 (#315)", async () => {
@@ -492,7 +487,7 @@ describe("podNotesURIHandler", () => {
 		currentEpisode.set(part2);
 		viewState.set(ViewState.Player);
 		isPaused.set(true);
-		mockGetEpisodes.mockResolvedValue([part1, part2]);
+		mockEpisodesAt.mockResolvedValue([part1, part2]);
 
 		await podNotesURIHandler(
 			{
@@ -504,7 +499,7 @@ describe("podNotesURIHandler", () => {
 			api as never,
 		);
 
-		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
 		expect(get(currentEpisode)).toMatchObject({ title: part1.title });
 		expect(get(requestedPlaybackTime)).toEqual({
 			episodeKey: `${part1.podcastName}::${part1.title}`,
@@ -513,7 +508,7 @@ describe("podNotesURIHandler", () => {
 	});
 
 	test("does not pick a leftover similar episode when the linked title is gone (#315)", async () => {
-		mockGetEpisodes.mockResolvedValue([
+		mockEpisodesAt.mockResolvedValue([
 			{
 				...testEpisode,
 				title: "Weekly News Roundup Extra",
@@ -535,7 +530,7 @@ describe("podNotesURIHandler", () => {
 	});
 
 	test("does not treat a weakly similar feed title as a match (#315)", async () => {
-		mockGetEpisodes.mockResolvedValue([
+		mockEpisodesAt.mockResolvedValue([
 			{
 				...testEpisode,
 				title: "Optimize Testosterone & Estrogen | Dr. Kyle Gillett",
@@ -558,7 +553,7 @@ describe("podNotesURIHandler", () => {
 	});
 
 	test("shows a notice and changes nothing when the episode cannot be found", async () => {
-		mockGetEpisodes.mockResolvedValue([]);
+		mockEpisodesAt.mockResolvedValue([]);
 
 		await expect(
 			podNotesURIHandler(
@@ -577,7 +572,7 @@ describe("podNotesURIHandler", () => {
 	});
 
 	test("does not reject when feed parsing throws (no silent unhandled rejection)", async () => {
-		mockGetEpisodes.mockRejectedValue(new Error("network down"));
+		mockEpisodesAt.mockRejectedValue(new Error("network down"));
 
 		await expect(
 			podNotesURIHandler(
@@ -609,7 +604,7 @@ describe("podNotesURIHandler", () => {
 			streamUrl: "https://pod.example.com/plus.mp3",
 		};
 		// Space-twin first: an order-insensitive (membership) match would wrongly pick it.
-		mockGetEpisodes.mockResolvedValue([spaceVariant, plusVariant]);
+		mockEpisodesAt.mockResolvedValue([spaceVariant, plusVariant]);
 
 		await podNotesURIHandler(
 			{
@@ -641,7 +636,7 @@ describe("podNotesURIHandler", () => {
 			api as never,
 		);
 
-		expect(mockGetEpisodes).toHaveBeenCalledWith(testFeedUrl);
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
 		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 		// The resume point is resolved from saved progress and armed explicitly, so
@@ -704,7 +699,7 @@ describe("podNotesURIHandler", () => {
 		expect(get(viewState)).toBe(ViewState.Player);
 		expect(get(currentTime)).toBe(0);
 		expect(get(isPaused)).toBe(false);
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("surfaces the player and resumes the already-loaded episode without seeking when no timestamp is given (#35)", async () => {
@@ -727,7 +722,7 @@ describe("podNotesURIHandler", () => {
 		expect(get(currentTime)).toBe(1234);
 		expect(get(isPaused)).toBe(false);
 		expect(get(requestedPlaybackTime)).toBeNull();
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("treats an empty timestamp the same as an omitted one (resume, not error) (#35)", async () => {
@@ -763,7 +758,7 @@ describe("podNotesURIHandler", () => {
 
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("rejects a segment end without a start timestamp", async () => {
@@ -780,7 +775,7 @@ describe("podNotesURIHandler", () => {
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 		expect(get(activePlaybackSegment)).toBeNull();
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("rejects a segment end before the start timestamp", async () => {
@@ -798,7 +793,7 @@ describe("podNotesURIHandler", () => {
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 		expect(get(activePlaybackSegment)).toBeNull();
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("rejects a negative plain (non-segment) timestamp", async () => {
@@ -814,7 +809,7 @@ describe("podNotesURIHandler", () => {
 
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("rejects a negative segment start timestamp", async () => {
@@ -832,7 +827,7 @@ describe("podNotesURIHandler", () => {
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 		expect(get(activePlaybackSegment)).toBeNull();
-		expect(mockGetEpisodes).not.toHaveBeenCalled();
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("picks the '+'-variant local file (raw-first) even when its space-twin precedes it", async () => {

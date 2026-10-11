@@ -36,7 +36,7 @@ function makeEpisode(title: string, streamUrl = `https://example.com/${title}.mp
 	};
 }
 
-function titlesOf(episodes: Episode[]): string[] {
+function titlesOf(episodes: readonly Episode[]): string[] {
 	return episodes.map((episode) => episode.title);
 }
 

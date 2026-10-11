@@ -310,7 +310,7 @@ describe("feed journeys", () => {
 		});
 	});
 
-	test("#375 known failure: the Episode list tab shows episodes that loaded while the grid was open", async () => {
+	test("the Episode list tab shows episodes that loaded while the grid was open (#375)", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const show = feed("Journey Latest", "latest", ["Latest Two", "Latest One"]);
@@ -324,14 +324,7 @@ describe("feed journeys", () => {
 		});
 		await click(obsidian, ui.episodeListTab);
 		await obsidian.sleep(1000);
-		const captured = {
-			listed: await listedEpisodes(obsidian),
-			emptyState: (await shownText(obsidian)).includes("No episodes found."),
-		};
 
-		expectKnownFailure(375, captured, {
-			correct: (value) => expect(value.listed).toEqual(["Latest Two", "Latest One"]),
-			reproduces: (value) => value.listed.length === 0 && value.emptyState,
-		});
+		expect(await listedEpisodes(obsidian)).toEqual(["Latest Two", "Latest One"]);
 	});
 });

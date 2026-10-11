@@ -10,7 +10,7 @@
 	import { isEpisodeFinished } from "src/utility/episodeStatus";
 	import { createEpisodeListEntries, type EpisodeListEntry } from "src/utility/episodeListEntry";
 
-	export let episodes: Episode[] = [];
+	export let episodes: readonly Episode[] = [];
 	export let episodeEntries: EpisodeListEntry[] | null = null;
 	export let showThumbnails: boolean = false;
 	export let showListMenu: boolean = true;
