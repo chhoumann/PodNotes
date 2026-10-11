@@ -85,6 +85,22 @@ describe("PodcastQueryGrid", () => {
 		).toBeNull();
 	});
 
+	test("drops a search that answers while the next input is debouncing", async () => {
+		const older = deferred<unknown>();
+		fetchJsonMock.mockReturnValueOnce(older.promise).mockReturnValueOnce(new Promise(() => {}));
+
+		const { queryByRole, type } = renderGrid();
+		type("apple news");
+		await settle();
+		type("huberman lab");
+		older.resolve(searchAppleNews);
+		await settle();
+
+		expect(
+			queryByRole("button", { name: "Add Apple News In Conversation podcast" }),
+		).toBeNull();
+	});
+
 	test("keeps searching until the newest search answers", async () => {
 		const older = deferred<unknown>();
 		fetchJsonMock.mockReturnValueOnce(older.promise).mockReturnValueOnce(new Promise(() => {}));
