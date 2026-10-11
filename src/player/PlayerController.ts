@@ -87,6 +87,8 @@ export class PlayerController {
 	private snapshot: PlayerState;
 	private el: HTMLMediaElement;
 	private session: Session | null = null;
+	/** With no session, the user moved the position: a load starts there, not at the saved progress. */
+	private moved = false;
 	private stage: HTMLElement | null = null;
 	/** Advanced by every intent that makes a deferred play stale. */
 	private requests = 0;
@@ -114,16 +116,18 @@ export class PlayerController {
 
 	/**
 	 * Shows the selected episode paused at its saved position, without loading it: at
-	 * startup, and again after a sync while nothing is loaded. Loaded media stays.
+	 * startup, and again after a sync while nothing is loaded. Loaded media stays, and
+	 * so does a position the user moved the same episode to.
 	 */
 	restore(episode: Episode | undefined): void {
-		const { status } = this.snapshot;
+		const { status, episode: shown, currentTime } = this.snapshot;
 		if (!episode || (status !== "empty" && status !== "restored")) return;
+		this.moved &&= !!shown && getEpisodeKey(shown) === getEpisodeKey(episode);
 		this.setState({
 			status: "restored",
 			episode,
 			mediaType: getEpisodeMediaType(episode),
-			currentTime: this.resumeTime(episode),
+			currentTime: this.moved ? currentTime : this.resumeTime(episode),
 			duration: this.startDuration(episode),
 		});
 	}
@@ -139,7 +143,7 @@ export class PlayerController {
 		this.requests++;
 
 		const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
-		const { status, episode: outgoing, currentTime, mediaType } = this.snapshot;
+		const { status, episode: outgoing, mediaType } = this.snapshot;
 		const sameEpisode = !!outgoing && getEpisodeKey(outgoing) === getEpisodeKey(episode);
 		this.select(episode);
 
@@ -166,19 +170,19 @@ export class PlayerController {
 		) {
 			queue.prepend(outgoing);
 		}
-		const resumeAt = sameEpisode && status !== "ended" ? currentTime : this.resumeTime(episode);
+		const resumeAt = sameEpisode ? this.restartTime(episode) : this.resumeTime(episode);
 		this.load(episode, source, time ?? resumeAt, endTime);
 		return true;
 	}
 
 	/** Continues the current episode without selecting it. */
 	resume(): void {
-		const { status, episode, currentTime } = this.snapshot;
+		const { status, episode } = this.snapshot;
 		if (this.disposed || !episode || status === "playing" || status === "loading") return;
 		this.endPreview();
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
-			this.load(episode, source, status === "ended" ? 0 : currentTime);
+			this.load(episode, source, this.restartTime(episode));
 		} else {
 			if (status === "ended") this.moveTo(0);
 			this.start();
@@ -278,6 +282,7 @@ export class PlayerController {
 
 	private load(episode: Episode, source: PlaybackSource, time: number, endTime?: number): void {
 		this.session = null;
+		this.moved = false;
 		const duration = this.startDuration(episode);
 		if (!source.src) {
 			this.release();
@@ -388,6 +393,7 @@ export class PlayerController {
 		const status = was === "ended" ? "paused" : was;
 		if (!this.holdsMedia()) {
 			if (session) session.pendingTime = time;
+			else this.moved = true;
 			this.setState({ currentTime: time, status });
 			return true;
 		}
@@ -543,6 +549,16 @@ export class PlayerController {
 				? legacy
 				: undefined)
 		);
+	}
+
+	/**
+	 * Where the shown episode starts on a new load: where it is while a session holds it
+	 * or after the user moved it, else at its saved progress, which a sync may have changed.
+	 */
+	private restartTime(episode: Episode): number {
+		const { status, currentTime } = this.snapshot;
+		const live = this.session ? status !== "ended" : this.moved;
+		return live ? currentTime : this.resumeTime(episode);
 	}
 
 	private resumeTime(episode: Episode): number {
