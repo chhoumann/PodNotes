@@ -59,7 +59,7 @@
 
 	const debouncedUpdate = debounce(
 		async ({ detail: { value } }: CustomEvent<{ value: string }>) => {
-			const request = ++latestRequest;
+			const request = latestRequest;
 			searchQuery = value;
 			searchError = "";
 			const applePodcastsId = parseApplePodcastsId(value);
@@ -127,6 +127,12 @@
 		true,
 	);
 
+	// Count the change before the debounce, so a response for the previous input is already stale.
+	function handleSearchChange(event: CustomEvent<{ value: string }>) {
+		latestRequest += 1;
+		debouncedUpdate(event);
+	}
+
 	function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
 		// A pasted private feed URL must never reach persisted settings: intern it
 		// into SecretStorage and save the placeholder + reference instead.
@@ -158,7 +164,7 @@
 <div class="podcast-query-container" transition:fade={{ duration: 300 }}>
 	<Text
 		placeholder="Search or enter feed URL..."
-		on:change={debouncedUpdate}
+		on:change={handleSearchChange}
 		style={{
 			width: "100%",
 			"margin-bottom": "1rem",
