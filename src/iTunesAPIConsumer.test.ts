@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import lookupAppleNewsToday from "../tests/fixtures/itunes/lookup-apple-news-today.json";
+import lookupHubermanLab from "../tests/fixtures/itunes/lookup-huberman-lab.json";
+import lookupUnknownId from "../tests/fixtures/itunes/lookup-unknown-id.json";
 import searchAppleNews from "../tests/fixtures/itunes/search-apple-news.json";
 import { fetchJsonWithTimeout, NetworkError } from "./utility/networkRequest";
-import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
+import {
+	lookupiTunesPodcast,
+	parseApplePodcastsId,
+	queryiTunesPodcasts,
+} from "./iTunesAPIConsumer";
 
 vi.mock("./utility/networkRequest", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./utility/networkRequest")>();
@@ -74,5 +81,86 @@ describe("queryiTunesPodcasts", () => {
 			"invalid-response",
 			undefined,
 		);
+	});
+});
+
+describe("parseApplePodcastsId", () => {
+	it.each([
+		["https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110", "1545953110"],
+		["https://podcasts.apple.com/podcast/huberman-lab/id1545953110", "1545953110"],
+		["https://podcasts.apple.com/us/podcast/id1545953110", "1545953110"],
+		["https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110?uo=4", "1545953110"],
+		[
+			"https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110?i=1000650000000",
+			"1545953110",
+		],
+		["https://podcasts.apple.com/us/podcast/ideas/id151485663?uo=4", "151485663"],
+		["  https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110\n", "1545953110"],
+		["http://podcasts.apple.com/us/podcast/huberman-lab/id1545953110", "1545953110"],
+		["https://itunes.apple.com/us/podcast/huberman-lab/id1545953110?mt=2", "1545953110"],
+		[
+			"https://itunes.apple.com/WebObjects/MZStore.woa/wa/viewPodcast?id=1545953110",
+			"1545953110",
+		],
+		["https://podcasts.apple.com/podcast?id=1545953110", "1545953110"],
+	])("reads the show id from %s", (input, id) => {
+		expect(parseApplePodcastsId(input)).toBe(id);
+	});
+
+	it.each([
+		"https://podcasts.apple.com.evil.example/us/podcast/huberman-lab/id1545953110",
+		"https://evil.example/us/podcast/huberman-lab/id1545953110",
+		"ftp://podcasts.apple.com/us/podcast/huberman-lab/id1545953110",
+		"podcasts://podcasts.apple.com/us/podcast/huberman-lab/id1545953110",
+		"https://podcasts.apple.com/us/channel/scicomm-media/id6442692632",
+		"https://podcasts.apple.com/us/podcast/huberman-lab",
+		"https://podcasts.apple.com/us/podcast/huberman-lab/idhuberman",
+		"https://podcasts.apple.com/podcast?id=huberman",
+		"https://podcasts.apple.com/us/browse?id=1545953110",
+		"https://feeds.megaphone.fm/hubermanlab",
+		"huberman lab",
+	])("rejects %s", (input) => {
+		expect(parseApplePodcastsId(input)).toBeNull();
+	});
+});
+
+describe("lookupiTunesPodcast", () => {
+	it("resolves a show id to its RSS feed through a bounded request", async () => {
+		fetchJsonMock.mockResolvedValue(lookupHubermanLab);
+
+		await expect(lookupiTunesPodcast("1545953110")).resolves.toEqual({
+			title: "Huberman Lab",
+			url: "https://feeds.megaphone.fm/hubermanlab",
+			artworkUrl:
+				"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/100x100bb.jpg",
+			collectionId: "1545953110",
+		});
+		const url = requestedUrl();
+		expect(url.origin + url.pathname).toBe("https://itunes.apple.com/lookup");
+		expect(url.searchParams.get("id")).toBe("1545953110");
+		expect(url.searchParams.get("entity")).toBe("podcast");
+		expect(fetchJsonMock).toHaveBeenCalledWith(expect.any(String), {
+			timeoutMs: 15_000,
+			maxResponseBytes: 2 * 1024 * 1024,
+			acceptedStatuses: [200],
+		});
+	});
+
+	it("returns null for an id Apple does not know", async () => {
+		fetchJsonMock.mockResolvedValue(lookupUnknownId);
+
+		await expect(lookupiTunesPodcast("1")).resolves.toBeNull();
+	});
+
+	it("returns null for a show without a public RSS feed", async () => {
+		fetchJsonMock.mockResolvedValue(lookupAppleNewsToday);
+
+		await expect(lookupiTunesPodcast("1473872585")).resolves.toBeNull();
+	});
+
+	it("rejects on a failed request instead of reporting a missing feed", async () => {
+		fetchJsonMock.mockRejectedValue(new NetworkError("timeout"));
+
+		await expect(lookupiTunesPodcast("1545953110")).rejects.toMatchObject({ code: "timeout" });
 	});
 });

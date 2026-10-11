@@ -1,8 +1,10 @@
 import type { PodcastFeed } from "./types/PodcastFeed";
+import checkStringIsUrl from "./utility/checkStringIsUrl";
 import { NetworkError, fetchJsonWithTimeout } from "./utility/networkRequest";
 
 const ITUNES_REQUEST_TIMEOUT_MS = 15_000;
 const MAX_ITUNES_RESPONSE_BYTES = 2 * 1024 * 1024;
+const APPLE_PODCASTS_HOSTS = new Set(["podcasts.apple.com", "itunes.apple.com"]);
 
 interface iTunesResult {
 	collectionName: string;
@@ -22,6 +24,38 @@ export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]>
 	url.searchParams.append("limit", "20");
 	url.searchParams.append("kind", "podcast");
 	return fetchPodcastFeeds(url);
+}
+
+/** Resolve an Apple Podcasts show id to its public RSS feed, or null when it has none. */
+export async function lookupiTunesPodcast(id: string): Promise<PodcastFeed | null> {
+	const url = new URL("https://itunes.apple.com/lookup");
+	url.searchParams.append("id", id);
+	url.searchParams.append("entity", "podcast");
+	const [feed] = await fetchPodcastFeeds(url);
+	return feed ?? null;
+}
+
+/**
+ * Extract the show id from an Apple Podcasts link: a `podcast` or `viewPodcast`
+ * path with the id in an `id<digits>` segment or an `id` query parameter.
+ */
+export function parseApplePodcastsId(input: string): string | null {
+	const url = checkStringIsUrl(input);
+	if (
+		!url ||
+		(url.protocol !== "https:" && url.protocol !== "http:") ||
+		!APPLE_PODCASTS_HOSTS.has(url.hostname)
+	) {
+		return null;
+	}
+
+	const segments = url.pathname.split("/");
+	if (!segments.some((segment) => segment === "podcast" || segment === "viewPodcast")) {
+		return null;
+	}
+	const id =
+		segments.find((segment) => /^id\d+$/.test(segment))?.slice(2) ?? url.searchParams.get("id");
+	return id && /^\d+$/.test(id) ? id : null;
 }
 
 async function fetchPodcastFeeds(url: URL): Promise<PodcastFeed[]> {

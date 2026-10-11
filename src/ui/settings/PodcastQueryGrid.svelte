@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { debounce, Notice } from "obsidian";
-	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
+	import {
+		lookupiTunesPodcast,
+		parseApplePodcastsId,
+		queryiTunesPodcasts,
+	} from "src/iTunesAPIConsumer";
 	import FeedParser from "src/parser/feedParser";
 	import { plugin, savedFeeds } from "src/store";
 	import { get } from "svelte/store";
@@ -55,6 +59,7 @@
 		async ({ detail: { value } }: CustomEvent<{ value: string }>) => {
 			searchQuery = value;
 			searchError = "";
+			const applePodcastsId = parseApplePodcastsId(value);
 			const customFeedUrl = checkStringIsUrl(value);
 
 			// Only treat the input as a feed URL when it is an http(s) URL, so
@@ -62,7 +67,25 @@
 			const isFeedUrl =
 				customFeedUrl?.protocol === "http:" || customFeedUrl?.protocol === "https:";
 
-			if (isFeedUrl && customFeedUrl) {
+			if (applePodcastsId) {
+				isSearching = true;
+				try {
+					const feed = await lookupiTunesPodcast(applePodcastsId);
+					if (feed) {
+						searchResults = [feed];
+					} else {
+						searchResults = [];
+						searchError = "No public RSS feed found for this Apple Podcasts link.";
+						new Notice(searchError);
+					}
+				} catch {
+					searchResults = [];
+					searchError = "Could not look up this Apple Podcasts link. Please try again.";
+					new Notice(searchError);
+				} finally {
+					isSearching = false;
+				}
+			} else if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
 				try {
 					const feed = await new FeedParser().getFeed(customFeedUrl.href);
