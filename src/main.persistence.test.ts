@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SecretStorage } from "obsidian";
+import { Notice, type SecretStorage } from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import { encodePodNotesData } from "./persistence/podNotesData";
@@ -643,6 +643,27 @@ describe("PodNotes persistence integration", () => {
 			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 
 			expect(disk.text).toBe('{"schemaVersion": 2, "savedFeeds": {"Other device');
+		});
+
+		it("stops saving while the file cannot be read, and saves again once it can", async () => {
+			const { plugin, disk } = cutShortOnce();
+			const readable = disk.text;
+			disk.full = false;
+			disk.text = '{"schemaVersion": 2, "savedFeeds": {"Other device';
+			plugin.settings.defaultVolume = 0.25;
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
+			// Refused now, with the Notice up: no save even tries to read the file.
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			const hideNotice = vi.spyOn(Notice.prototype, "hide");
+
+			disk.text = readable;
+			await plugin.onExternalSettingsChange();
+			expect(hideNotice).toHaveBeenCalled();
+			await plugin.saveSettingsStrict();
+			expect(JSON.parse(disk.text)).toMatchObject({
+				defaultVolume: 0.25,
+				savedFeeds: { Synced: { title: "Synced" } },
+			});
 		});
 
 		it("never writes over a file a newer PodNotes wrote since", async () => {

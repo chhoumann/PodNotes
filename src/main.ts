@@ -622,12 +622,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	override async onExternalSettingsChange(): Promise<void> {
 		if (!this.writer) return;
 		await this.writer.onExternalChange();
-		// The data.json this session could not read at load has become readable.
-		if (this.writeRefusal === "unreadable-data-file" && this.writer.hasBase) {
-			this.writeRefusal = null;
-			this.refusalNotice?.hide();
-			this.refusalNotice = null;
-		}
 	}
 
 	/** No save until `refusal` lifts, if it does, with a Notice saying why. */
@@ -635,6 +629,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		refusal: "unreadable-data-file" | "older-data-file",
 		message: string,
 	): void {
+		// Closing refusals never lift; this one would.
+		if (this.writeRefusal === "window-unloading" || this.writeRefusal === "obsidian-closing") {
+			return;
+		}
+		if (this.writeRefusal === refusal) return;
 		this.writeRefusal = refusal;
 		this.refusalNotice?.hide();
 		this.refusalNotice = new Notice(message, 0);
@@ -659,23 +658,31 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				const path = this.dataFilePath();
 				if (data == null) {
 					if (!(await this.app.vault.adapter.exists(path))) return null;
+					this.refuseSaves(
+						"unreadable-data-file",
+						`PodNotes could not read ${path}, so it leaves the file unchanged and saves nothing until the file can be read again.`,
+					);
 					throw new Error(`PodNotes could not read ${path}`);
 				}
 				const decoded = decodePodNotesData(data);
 				// Only startup moves an older file's API keys into SecretStorage; a save now
 				// would drop them.
 				if (decoded.sourceVersion !== PODNOTES_DATA_SCHEMA_VERSION) {
-					if (this.writeRefusal !== "older-data-file") {
-						this.refuseSaves(
-							"older-data-file",
-							`${path} was replaced by a copy from an older version of PodNotes, likely synced from another device. PodNotes saves nothing until you restart Obsidian, which updates the file and keeps its API keys.`,
-						);
-					}
+					this.refuseSaves(
+						"older-data-file",
+						`${path} was replaced by a copy from an older version of PodNotes, likely synced from another device. PodNotes saves nothing until you restart Obsidian, which updates the file and keeps its API keys.`,
+					);
 					throw new Error(WRITE_REFUSALS["older-data-file"]);
 				}
 				// With nothing loaded, an entry the codec drops has nothing to be kept from.
 				if (!base && decoded.changed) {
 					throw new Error(`PodNotes could not read ${path} without repairing it`);
+				}
+				// The file reads again, as it is: saves resume.
+				if (this.writeRefusal === "unreadable-data-file") {
+					this.writeRefusal = null;
+					this.refusalNotice?.hide();
+					this.refusalNotice = null;
 				}
 				const doc: Record<string, unknown> = toDocument(
 					decoded.settings,
