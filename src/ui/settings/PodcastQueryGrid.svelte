@@ -23,7 +23,6 @@
 	// Saved podcasts carry their savedFeeds key; search results have none.
 	let searchResults: [key: string | undefined, podcast: PodcastFeed][] = [];
 	const unsaved = (podcast: PodcastFeed): [undefined, PodcastFeed] => [undefined, podcast];
-	let gridSizeClass: string = "grid-3";
 	let searchQuery: string = "";
 	let isSearching: boolean = false;
 	let searchError: string = "";
@@ -39,16 +38,6 @@
 			searchInput.focus();
 		}
 	});
-
-	$: {
-		if (searchResults.length % 3 === 0 || searchResults.length > 3) {
-			gridSizeClass = "grid-3";
-		} else if (searchResults.length % 2 === 0) {
-			gridSizeClass = "grid-2";
-		} else if (searchResults.length % 1 === 0) {
-			gridSizeClass = "grid-1";
-		}
-	}
 
 	$: {
 		if (searchQuery.trim() === "") {
