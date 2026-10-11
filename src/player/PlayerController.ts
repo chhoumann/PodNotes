@@ -356,9 +356,11 @@ export class PlayerController {
 	}
 
 	private playElement(): void {
-		this.el.play().catch(() => {
-			// The autoplay policy, a pause or another load. A play that has since
-			// started, such as the next load's, leaves the element playing.
+		this.el.play().catch((error: unknown) => {
+			// A pause, a newer load or an element reset aborts a play, and onEmptied
+			// recovers a reset. Only a refusal, such as the autoplay policy, pauses.
+			if (error instanceof DOMException && error.name === "AbortError") return;
+			// A play that has since started, such as the next load's, keeps playing.
 			const { status } = this.snapshot;
 			if (this.disposed || !this.el.paused) return;
 			if (status === "loading" || status === "playing") this.settlePaused();
