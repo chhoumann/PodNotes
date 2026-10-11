@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import type { PluginHandle } from "obsidian-e2e";
 import { describe, expect, test } from "vitest";
 import type { Episode } from "../../src/types/Episode";
@@ -327,6 +327,60 @@ describe("PodNotes data.json changed elsewhere", () => {
 				return true;
 			})()`);
 		}
+	});
+
+	// PodNotes started with no data.json writes one at once: the file a new device has
+	// before the sync client delivers the library.
+	async function startAsNewDevice(plugin: PluginHandle): Promise<PodNotesData> {
+		await plugin.data<PodNotesData>().patch((data) => data);
+		await rm(await plugin.dataPath());
+		await plugin.reload(RELOAD_OPTIONS);
+		return plugin.data<PodNotesData>().read();
+	}
+
+	test("keeps its library when a new device's file replaces data.json", async () => {
+		const { obsidian, plugin } = getContext();
+		const library = await plugin.data<PodNotesData>().read();
+		addSyncedChanges(library);
+		const newDeviceFile = await startAsNewDevice(plugin);
+		await plugin.data<PodNotesData>().write(library);
+		await plugin.reload(RELOAD_OPTIONS);
+
+		await plugin.data<PodNotesData>().write(newDeviceFile);
+
+		const disk = await plugin.waitForData<PodNotesData>(
+			(data) => Boolean(data.savedFeeds?.[SYNCED_FEED.title]),
+			WAIT_OPTS,
+		);
+		expect(disk.playedEpisodes?.["Synced Podcast::Synced Episode"]).toEqual(SYNCED_PROGRESS);
+		expect(await obsidian.dev.evalJson<Memory>(MEMORY)).toMatchObject({
+			feed: true,
+			playlist: true,
+			progress: 1234,
+		});
+	});
+
+	test("keeps a new device's change when the library replaces its data.json", async () => {
+		const { obsidian, plugin } = getContext();
+		const library = await plugin.data<PodNotesData>().read();
+		addSyncedChanges(library);
+		await startAsNewDevice(plugin);
+		await setVolume(obsidian, 0.42);
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.42, WAIT_OPTS);
+
+		await plugin.data<PodNotesData>().write(library);
+
+		const disk = await plugin.waitForData<PodNotesData>(
+			(data) => data.defaultVolume === 0.42 && Boolean(data.savedFeeds?.[SYNCED_FEED.title]),
+			WAIT_OPTS,
+		);
+		expect(disk.playedEpisodes?.["Synced Podcast::Synced Episode"]).toEqual(SYNCED_PROGRESS);
+		expect(await obsidian.dev.evalJson<Memory>(MEMORY)).toMatchObject({
+			feed: true,
+			playlist: true,
+			progress: 1234,
+			volume: 0.42,
+		});
 	});
 });
 
