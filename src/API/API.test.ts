@@ -296,6 +296,30 @@ describe("API playback", () => {
 		expect(api.currentTime).toBe(100);
 	});
 
+	test("start() while a segment plays leaves its stop in place", () => {
+		playedEpisodes.set({
+			"Feed Podcast::Feed Episode": {
+				title: feedEpisode.title,
+				podcastName: feedEpisode.podcastName,
+				time: 1000,
+				duration: 3600,
+				finished: false,
+			},
+		});
+		const { api, player, media } = setup();
+		player.play(feedEpisode, { time: 100, endTime: 125 });
+		media().duration = 3600;
+		media().emit("loadedmetadata");
+
+		api.start();
+		media().currentTime = 130;
+		media().emit("timeupdate");
+
+		expect(media().currentTime).toBe(125);
+		expect(media().paused).toBe(true);
+		expect(get(playedEpisodes)["Feed Podcast::Feed Episode"]?.time).toBe(1000);
+	});
+
 	test("ignores an undefined seek before the metadata loads", () => {
 		const { api, player, media } = setup();
 		player.play(feedEpisode, { time: 115 });
