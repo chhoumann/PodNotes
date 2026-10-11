@@ -213,7 +213,8 @@ export default async function podNotesURIHandler(
 		const placeholderKey = parsePrivateFeedPlaceholder(url);
 		let episodes: readonly Episode[];
 		if (placeholderKey !== null) {
-			await feeds.load([placeholderKey], "complete");
+			// Fetch even a fresh feed so the link finds an episode published since.
+			await feeds.load([placeholderKey], "network");
 			if (request !== latestRequest) return;
 			const state = get(feeds).get(placeholderKey);
 			if (!state?.channel) {

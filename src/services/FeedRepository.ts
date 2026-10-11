@@ -130,9 +130,13 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		return this.load(this.subscriptions.keys(), "cached");
 	}
 
-	/** Episodes of the feed at `url`, named after its channel, for links that name a feed by URL. */
+	/**
+	 * Episodes of the feed at `url`, named after its channel, for links that name a
+	 * feed by URL. Fetches even a fresh feed, so a link finds an episode published
+	 * since; the last copy stands in when the feed cannot be reached.
+	 */
 	async episodesAt(url: string): Promise<Episode[]> {
-		const doc = await this.documentAt(url);
+		const doc = await this.documentAt(url, "network");
 		const feed = channelFeed(doc.channel, url);
 		return doc.items.map((item) => projectEpisode(item, feed));
 	}
@@ -153,7 +157,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 
 	/** The feed at `url` as a podcast, to preview or subscribe to. */
 	async channelAt(url: string): Promise<PodcastFeed> {
-		return channelFeed((await this.documentAt(url)).channel, url);
+		return channelFeed((await this.documentAt(url, "complete")).channel, url);
 	}
 
 	clear(): void {
@@ -164,12 +168,12 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		void this.ensureAll();
 	}
 
-	private async documentAt(url: string): Promise<FeedDocument> {
+	private async documentAt(url: string, mode: LoadMode): Promise<FeedDocument> {
 		this.hydrate();
 		const source = this.source(url);
 		const request =
 			source.inflight ??
-			(this.needsFetch(source.doc, "complete") ? this.fetch(url, url) : undefined);
+			(this.needsFetch(source.doc, mode) ? this.fetch(url, url) : undefined);
 		const failure = await request?.then(
 			() => undefined,
 			(error: unknown) => error,
