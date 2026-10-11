@@ -23,7 +23,13 @@ export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]>
 	url.searchParams.append("media", "podcast");
 	url.searchParams.append("limit", "20");
 	url.searchParams.append("kind", "podcast");
-	return fetchPodcastFeeds(url);
+
+	// Search can list one feed under several shows; keep the best-ranked one.
+	const feeds = new Map<string, PodcastFeed>();
+	for (const feed of await fetchPodcastFeeds(url)) {
+		if (!feeds.has(feed.url)) feeds.set(feed.url, feed);
+	}
+	return [...feeds.values()];
 }
 
 /** Resolve an Apple Podcasts show id to its public RSS feed, or null when it has none. */
@@ -73,13 +79,7 @@ async function fetchPodcastFeeds(url: URL): Promise<PodcastFeed[]> {
 			throw new NetworkError("invalid-response");
 		}
 
-		// Search can list one feed under several shows; keep the best-ranked one.
-		const feeds = new Map<string, PodcastFeed>();
-		for (const result of data.results) {
-			const feed = toPodcastFeed(result);
-			if (feed && !feeds.has(feed.url)) feeds.set(feed.url, feed);
-		}
-		return [...feeds.values()];
+		return data.results.map(toPodcastFeed).filter((feed) => feed !== null);
 	} catch (error) {
 		// Keep diagnostics useful without copying a target, query, native error, or
 		// response body into the console. NetworkError messages and status values are
