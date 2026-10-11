@@ -59,8 +59,8 @@ interface FeedDocument {
 interface Source {
 	doc?: FeedDocument;
 	error?: FeedError;
-	/** Resolves to the failure, if any. */
-	inflight?: Promise<unknown>;
+	/** Rejects when the fetch fails. */
+	inflight?: Promise<void>;
 }
 
 interface Projection {
@@ -109,7 +109,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	/** Resolves when every request it started or joined has settled. Never rejects. */
 	load(keys: Iterable<FeedKey>, mode: LoadMode): Promise<void> {
 		this.hydrate();
-		const requests: Promise<unknown>[] = [];
+		const requests: Promise<void>[] = [];
 		for (const key of keys) {
 			const feed = this.subscriptions.get(key);
 			if (!feed) continue;
@@ -123,7 +123,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			}
 		}
 		this.emit();
-		return Promise.all(requests).then(() => undefined);
+		return Promise.allSettled(requests).then(() => undefined);
 	}
 
 	ensureAll(): Promise<void> {
@@ -167,10 +167,15 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	private async documentAt(url: string): Promise<FeedDocument> {
 		this.hydrate();
 		const source = this.source(url);
-		const failure = await (source.inflight ??
-			(this.needsFetch(source.doc, "complete") ? this.fetch(url, url) : undefined));
-		if (!source.doc) throw failure;
-		return source.doc;
+		const request =
+			source.inflight ??
+			(this.needsFetch(source.doc, "complete") ? this.fetch(url, url) : undefined);
+		const failure = await request?.then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		if (source.doc) return source.doc;
+		throw failure instanceof Error ? failure : new Error("Could not load the feed");
 	}
 
 	private source(url: string): Source {
@@ -195,9 +200,9 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	}
 
 	/** `sourceUrl` keys the document; `url` is what to fetch, the secret one for a private feed. */
-	private fetch(sourceUrl: string, url: string): Promise<unknown> {
+	private fetch(sourceUrl: string, url: string): Promise<void> {
 		const source = this.source(sourceUrl);
-		source.inflight = this.deps
+		const request = this.deps
 			.load(url)
 			.then(
 				(parsed) => {
@@ -211,17 +216,19 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 					if (this.urls.has(sourceUrl)) this.persist();
 				},
 				(error: unknown) => {
-					console.error(`PodNotes: could not load the feed ${sourceUrl}`, error);
+					// A pasted or linked URL can carry a credential, so the log leaves it out.
+					console.error("PodNotes: could not load a feed", error);
 					source.error = "network";
-					return error;
+					throw error;
 				},
 			)
-			.then((failure) => {
+			.finally(() => {
 				source.inflight = undefined;
 				this.emit();
-				return failure;
 			});
-		return source.inflight;
+		source.inflight = request;
+		this.emit();
+		return request;
 	}
 
 	private statusOf(source: Source | undefined): FeedStatus {

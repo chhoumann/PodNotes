@@ -626,6 +626,38 @@ describe("FeedRepository", () => {
 		});
 	});
 
+	test("a feed link for a podcast shows the podcast loading", async () => {
+		const t = setup();
+		t.repo.setSubscriptions({ Alpha: alpha });
+
+		const episodes = t.repo.episodesAt(alpha.url);
+		expect(t.feed("Alpha")?.status).toBe("loading");
+		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
+		await episodes;
+
+		expect(t.feed("Alpha")?.status).toBe("ready");
+	});
+
+	test("a feed that fails to load is logged without its URL", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const t = setup();
+
+		const episodes = t.repo.episodesAt("https://private.test/feed.xml?auth=s3cret");
+		t.requests[0].respond.reject(new Error("offline"));
+		await expect(episodes).rejects.toThrow("offline");
+
+		expect(logged).toHaveBeenCalled();
+		expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain("s3cret");
+	});
+
+	test("a feed link that fails without a reason still rejects with an error", async () => {
+		const t = setup();
+		const episodes = t.repo.episodesAt(alpha.url);
+		t.requests[0].respond.reject(undefined);
+
+		await expect(episodes).rejects.toBeInstanceOf(Error);
+	});
+
 	test("a feed link that cannot load rejects", async () => {
 		const t = setup();
 		const episodes = t.repo.episodesAt(alpha.url);
