@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import createPodcastNote from "src/createPodcastNote";
 import { clearFeedCache, setCachedEpisodes } from "src/services/FeedCacheService";
 import {
-	currentEpisode,
 	episodeCache,
 	hidePlayedEpisodes,
 	playedEpisodes,
@@ -18,6 +17,9 @@ import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
 import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
+import { FakeDocument } from "../../../tests/mocks/fakeMedia";
+import { DEFAULT_SETTINGS } from "src/constants";
+import { PlayerController } from "src/player/PlayerController";
 
 vi.mock("./EpisodePlayer.svelte", () => ({
 	default: EpisodePlayerStub,
@@ -60,9 +62,21 @@ function resetStores() {
 	hidePlayedEpisodes.set(false);
 	playedEpisodes.set({});
 	viewState.set(ViewState.PodcastGrid);
-	currentEpisode.update(() => undefined as unknown as Episode);
-	plugin.set(undefined as never);
+	player = new PlayerController(new FakeDocument().asPlayerDocument(), {
+		settings: structuredClone(DEFAULT_SETTINGS),
+		app: { vault: {} as never },
+		checkpoint: (update) => update(),
+		saveSettings: () => Promise.resolve(),
+	});
+	setPlugin({});
 	clearFeedCache();
+}
+
+let player: PlayerController;
+const playingEpisode = () => get(player.state).episode;
+
+function setPlugin(value: object) {
+	plugin.set({ ...value, player } as never);
 }
 
 function createNumberedEpisode(number: number): Episode {
@@ -89,7 +103,7 @@ function createFullFeed(): Episode[] {
 }
 
 function enableFeedCache() {
-	plugin.set({
+	setPlugin({
 		settings: {
 			feedCache: {
 				enabled: true,
@@ -153,7 +167,7 @@ describe("PodcastView integration flow", () => {
 				},
 			},
 		};
-		plugin.set(pluginSettings as never);
+		setPlugin(pluginSettings);
 
 		render(PodcastView);
 
@@ -163,10 +177,10 @@ describe("PodcastView integration flow", () => {
 		const episodeNode = await screen.findByText(testEpisode.title);
 		await fireEvent.click(episodeNode);
 
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(playingEpisode()).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 
-		const current = get(currentEpisode);
+		const current = playingEpisode();
 		expect(current).toBeDefined();
 		await createPodcastNote(current as Episode);
 
@@ -225,7 +239,7 @@ describe("PodcastView integration flow", () => {
 					}),
 			);
 
-		plugin.set({
+		setPlugin({
 			settings: {
 				feedCache: {
 					enabled: false,
@@ -319,7 +333,7 @@ describe("PodcastView integration flow", () => {
 				finished: true,
 			},
 		});
-		plugin.set({
+		setPlugin({
 			settings: {
 				feedCache: {
 					enabled: false,
@@ -400,7 +414,7 @@ describe("issue #174 feed cache cap regression", () => {
 		expect(screen.queryByText("Unavailable in current feeds")).not.toBeInTheDocument();
 
 		await fireEvent.click(screen.getByText(oldEpisode.title));
-		expect(get(currentEpisode)).toMatchObject({ title: oldEpisode.title });
+		expect(playingEpisode()).toMatchObject({ title: oldEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 	});
 

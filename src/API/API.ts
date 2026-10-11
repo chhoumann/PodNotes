@@ -2,17 +2,7 @@ import type { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
 import type { IAPI } from "./IAPI";
 import { TFile } from "obsidian";
-import {
-	currentEpisode,
-	currentTime,
-	downloadedEpisodes,
-	duration,
-	isPaused,
-	activePlaybackSegment,
-	playbackRate as playbackRateStore,
-	plugin,
-	volume as volumeStore,
-} from "src/store";
+import { downloadedEpisodes, plugin } from "src/store";
 import { get } from "svelte/store";
 import encodePodnotesURI from "src/utility/encodePodnotesURI";
 import { isLocalFile } from "src/utility/isLocalFile";
@@ -23,6 +13,7 @@ import {
 	PLAYBACK_RATE_STEP,
 } from "src/utility/playbackRate";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
+import type DownloadedEpisode from "src/types/DownloadedEpisode";
 
 // Default used when a persisted/configured skip length is missing or invalid
 // (e.g. a cleared settings field serialized to null/NaN). Mirrors
@@ -32,17 +23,17 @@ const DEFAULT_SKIP_LENGTH = 15;
 const normalizeSkipLength = (length: number): number =>
 	Number.isFinite(length) && length > 0 ? length : DEFAULT_SKIP_LENGTH;
 
-// A non-finite volume (e.g. api.volume = NaN) must never poison the player, which
-// two-way binds the store onto the media element. Fall back to the current value
-// (itself clamped) so a bad write is a no-op rather than corrupting playback.
-const clampVolume = (value: number, fallback = 1): number => {
-	const safeFallback = Number.isFinite(fallback) ? Math.min(1, Math.max(0, fallback)) : 1;
-	return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : safeFallback;
-};
-
 export class API implements IAPI {
+	private get player() {
+		return get(plugin).player;
+	}
+
+	private get state() {
+		return get(this.player.state);
+	}
+
 	public get podcast(): Episode {
-		return get(currentEpisode);
+		return this.state.episode as Episode;
 	}
 
 	public get transcript(): Promise<string | null> {
@@ -50,36 +41,37 @@ export class API implements IAPI {
 	}
 
 	public get length(): number {
-		return get(duration);
+		return this.state.duration;
 	}
 
 	public get currentTime(): number {
-		return get(currentTime);
+		return this.state.currentTime;
 	}
 
 	public set currentTime(value: number) {
-		activePlaybackSegment.set(null);
-		currentTime.update((_) => value);
+		this.player.seek(value);
 	}
 
+	/** True while loading too: it plays once the media is ready, and Stop can cancel that. */
 	public get isPlaying(): boolean {
-		return !get(isPaused);
+		const { status } = this.state;
+		return status === "playing" || status === "loading";
 	}
 
 	public get volume(): number {
-		return get(volumeStore);
+		return this.state.volume;
 	}
 
 	public set volume(value: number) {
-		volumeStore.set(clampVolume(value, get(volumeStore)));
+		this.player.setVolume(value);
 	}
 
 	public get playbackRate(): number {
-		return get(playbackRateStore);
+		return this.state.playbackRate;
 	}
 
 	public set playbackRate(value: number) {
-		playbackRateStore.set(normalizePlaybackRate(value, this.defaultPlaybackRate));
+		this.player.setPlaybackRate(value);
 	}
 
 	/**
@@ -165,22 +157,23 @@ export class API implements IAPI {
 	}
 
 	private getEpisodeLinkTarget(): string | undefined {
-		const epIsLocal = isLocalFile(this.podcast);
-		return !epIsLocal
-			? this.podcast.feedUrl
-			: downloadedEpisodes.getEpisode(this.podcast)?.filePath;
+		if (!isLocalFile(this.podcast)) return this.podcast.feedUrl;
+		return (
+			(this.podcast as Partial<DownloadedEpisode>).filePath ??
+			downloadedEpisodes.getEpisode(this.podcast)?.filePath
+		);
 	}
 
 	start(): void {
-		isPaused.update((_) => false);
+		this.player.resume();
 	}
 
 	stop(): void {
-		isPaused.update((_) => true);
+		this.player.pause();
 	}
 
 	togglePlayback(): void {
-		isPaused.update((isPaused) => !isPaused);
+		this.player.toggle();
 	}
 
 	skipBackward(): void {
@@ -204,11 +197,11 @@ export class API implements IAPI {
 	}
 
 	increasePlaybackRate(): void {
-		playbackRateStore.update((rate) => adjustPlaybackRate(rate, PLAYBACK_RATE_STEP));
+		this.playbackRate = adjustPlaybackRate(this.playbackRate, PLAYBACK_RATE_STEP);
 	}
 
 	decreasePlaybackRate(): void {
-		playbackRateStore.update((rate) => adjustPlaybackRate(rate, -PLAYBACK_RATE_STEP));
+		this.playbackRate = adjustPlaybackRate(this.playbackRate, -PLAYBACK_RATE_STEP);
 	}
 
 	resetPlaybackRate(): void {

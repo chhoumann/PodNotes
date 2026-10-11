@@ -3,7 +3,6 @@ import { FAVORITES_SETTINGS, LOCAL_FILES_SETTINGS, QUEUE_SETTINGS } from "src/co
 import type { IPodNotes } from "src/types/IPodNotes";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import {
-	currentEpisode,
 	downloadedEpisodes,
 	episodeListLimit,
 	favorites,
@@ -13,7 +12,6 @@ import {
 	playlists,
 	queue,
 	savedFeeds,
-	volume,
 } from "src/store";
 import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
 
@@ -79,9 +77,6 @@ const BINDINGS: PersistenceBinding[] = [
 	bind(downloadedEpisodes, (settings, value) => {
 		settings.downloadedEpisodes = value;
 	}),
-	bind(currentEpisode, (settings, value) => {
-		settings.currentEpisode = value;
-	}),
 	bind(
 		hidePlayedEpisodes,
 		(settings, value) => {
@@ -95,11 +90,6 @@ const BINDINGS: PersistenceBinding[] = [
 
 const IMPORT_ROLLBACK_BINDINGS: PersistenceBinding[] = [
 	...BINDINGS,
-	// Volume changes are persisted by main.ts rather than bindStoresToSettings.
-	// Capture them here so an equal-to-candidate event cannot be lost on rollback.
-	bind(volume, (settings, value) => {
-		if (Number.isFinite(value)) settings.defaultVolume = Math.min(1, Math.max(0, value));
-	}),
 	// The limit control owns both this store and the persisted setting. It lives
 	// outside BINDINGS because changing it also rebuilds the Latest Episodes list.
 	bind(episodeListLimit, (settings, value) => {
@@ -129,12 +119,13 @@ export interface PersistedStoreChangeReplay {
 }
 
 /**
- * Record authoritative store emissions while an import candidate is being
- * written. Replaying only stores that emitted avoids stale snapshots and solves
- * the ABA case where the new store value already equals the import candidate,
- * so the normal persistence binding intentionally performs no settings write.
+ * Record authoritative store emissions and the player's settings writes while
+ * an import candidate is being written. Replaying only what changed avoids stale
+ * snapshots and solves the ABA case where the new value already equals the import
+ * candidate, so the normal persistence binding intentionally performs no settings
+ * write.
  *
- * playbackRate is deliberately absent. That store is the current episode's
+ * The live playback rate is deliberately absent. It is the current episode's
  * transient speed, while defaultPlaybackRate is a preference changed directly
  * by the settings tab. The tab locks its controls while an import is pending.
  */

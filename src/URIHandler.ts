@@ -1,28 +1,16 @@
 import { Notice } from "obsidian";
 import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
-import type { IAPI } from "./API/IAPI";
 import FeedParser from "./parser/feedParser";
-import {
-	currentEpisode,
-	currentTime,
-	duration,
-	isPaused,
-	activePlaybackSegment,
-	localFiles,
-	playedEpisodes,
-	plugin,
-	savedFeeds,
-	requestedPlaybackTime,
-	viewState,
-} from "./store";
+import { downloadedEpisodes, localFiles, plugin, savedFeeds, viewState } from "./store";
+import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
 import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
-import { getEpisodeKey } from "./utility/episodeKey";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
+import { isLocalFile } from "./utility/isLocalFile";
 import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
@@ -74,24 +62,13 @@ function findLocalEpisodeByCandidates(nameCandidates: string[]): Episode | undef
 	);
 }
 
-/**
- * The time a no-timestamp link ({{episodelink}}, issue #35) should resume an
- * episode at: the last played location, or the start. A FINISHED episode is
- * stored at its end (time === duration); resuming there would immediately fire
- * the player's `ended` handler and auto-advance the queue, so we restart it from
- * the beginning instead — matching the issue's "the beginning if not played".
- */
-function resolveResumeTime(episode: Episode): number {
-	const played = playedEpisodes.get(episode);
-	if (!played) return 0;
-
-	const isFinished = played.finished || (played.duration > 0 && played.time >= played.duration);
-	return isFinished ? 0 : played.time;
+/** A number of seconds from a link, or NaN unless the whole value is one. */
+function parseSeconds(value: string): number {
+	return value.trim() === "" ? Number.NaN : Number(value);
 }
 
 export default async function podNotesURIHandler(
 	{ url, episodeName, time, endTime, end, to }: PodNotesProtocolData,
-	api: IAPI,
 	revealPlayer?: RevealPodNotesPlayer,
 ) {
 	if (!url || !episodeName) {
@@ -99,14 +76,12 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
-	// A link may omit the timestamp ({{episodelink}}, issue #35). When it does we
-	// reopen the episode and resume from the last played location (resolved from
-	// saved progress below), or the start if it was never played or already
-	// finished — rather than seeking to a baked-in time.
+	// A link may omit the timestamp ({{episodelink}}, issue #35). The player then
+	// resumes the episode where it was left, or from the start once finished.
 	const hasExplicitTime = time !== undefined && time !== "";
 	let requestedTime = 0;
 	if (hasExplicitTime) {
-		requestedTime = parseFloat(time);
+		requestedTime = parseSeconds(time);
 		if (!Number.isFinite(requestedTime)) {
 			new Notice("Timestamp must be a valid number");
 			return;
@@ -127,59 +102,42 @@ export default async function podNotesURIHandler(
 	if (requestedEndTime === null) return;
 
 	const nameCandidates = candidateValues(episodeName);
-	const currentEp = get(currentEpisode);
+	const player = get(plugin).player;
+	const playOptions = hasExplicitTime ? { time: requestedTime, endTime: requestedEndTime } : {};
+	const loaded = get(player.state).episode;
+	// A link to the loaded episode names its feed, or its file for a local file, so a
+	// same-titled episode of another show is not taken for it.
+	const loadedLinkTarget =
+		loaded &&
+		(isLocalFile(loaded)
+			? ((loaded as Partial<DownloadedEpisode>).filePath ??
+				downloadedEpisodes.getEpisode(loaded)?.filePath)
+			: loaded.feedUrl);
 	// Membership (not ordered selection) is correct here: there is only one loaded episode, and
 	// keeping the legacy candidate lets a legacy '+'-as-space link to the loaded episode resume
-	// without a feed round-trip (and without currentEpisode.set re-enqueueing it). The only cost is
-	// a rare false-positive — a current-format link to a "X+Y" episode while a distinct "X Y" twin
-	// is loaded resumes the loaded twin instead of switching — which we accept over regressing the
-	// far more common same-episode legacy-link case.
+	// without a feed round-trip. The only cost is a rare false-positive - a current-format link to
+	// a "X+Y" episode while a distinct "X Y" twin is loaded resumes the loaded twin instead of
+	// switching - which we accept over regressing the far more common same-episode legacy-link case.
 	// A retitled same-episode link (guest name moved) has the same token set.
 	// Sub-1.0 overlap is not enough here: "… Part 1" vs the loaded "… Part 2"
 	// scores ~0.78, and with only one candidate the uniqueness guard is vacuous.
 	// Those links fall through to the feed lookup, which can still exact-match.
-	const episodeIsPlaying =
-		!!currentEp &&
-		(nameCandidates.includes(currentEp.title) ||
-			nameCandidates.some((name) => titleTokenSimilarity(name, currentEp.title) === 1));
-	const playerIsVisible = get(viewState) === ViewState.Player;
+	const episodeIsLoaded =
+		!!loaded &&
+		!!loadedLinkTarget &&
+		candidateValues(url).includes(loadedLinkTarget) &&
+		(nameCandidates.includes(loaded.title) ||
+			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
 
-	if (episodeIsPlaying) {
-		if (hasExplicitTime) {
-			const episodeKey = getEpisodeKey(currentEp);
-			requestedPlaybackTime.set({
-				episodeKey,
-				time: requestedTime,
-				endTime: requestedEndTime,
-			});
-			viewState.set(ViewState.Player);
-			api.currentTime = requestedTime;
-			setActivePlaybackSegment(episodeKey, requestedTime, requestedEndTime);
-			isPaused.set(false);
-			if (playerIsVisible) {
-				requestedPlaybackTime.set(null);
-			}
-
-			await revealPlayer?.();
-			return;
-		}
-
-		// No timestamp: the live position already is the last played location, so
-		// surface the player and resume playback without seeking — unless the
-		// episode already finished (live position at its end), in which case
-		// replaying would instantly fire `ended` and auto-advance, so restart it.
-		activePlaybackSegment.set(null);
+	if (episodeIsLoaded) {
+		if (!player.play(loaded, playOptions)) return;
 		viewState.set(ViewState.Player);
-		const liveTime = get(currentTime);
-		const liveDuration = get(duration);
-		if (liveDuration > 0 && liveTime >= liveDuration) {
-			api.currentTime = 0;
-		}
-		isPaused.set(false);
-
 		await revealPlayer?.();
 		return;
 	}
+
+	// Taken before resolving the episode: a play the user starts meanwhile wins.
+	const play = player.deferPlay();
 
 	// The path probe only decides local-vs-feed routing; the episode itself is resolved by name.
 	const { vault } = get(plugin).app;
@@ -259,22 +217,7 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
-	// Always arm requestedPlaybackTime so the resume point is explicit. For a
-	// no-timestamp link (issue #35) we resolve it from saved progress here rather
-	// than relying on the player's restore-on-absence: that makes the seek
-	// deterministic and overrides any stale pending request from an earlier link
-	// to this same episode (which would otherwise win on metadata load).
-	requestedPlaybackTime.set({
-		episodeKey: getEpisodeKey(episode),
-		time: hasExplicitTime ? requestedTime : resolveResumeTime(episode),
-		endTime: hasExplicitTime ? requestedEndTime : undefined,
-	});
-	setActivePlaybackSegment(
-		getEpisodeKey(episode),
-		hasExplicitTime ? requestedTime : resolveResumeTime(episode),
-		hasExplicitTime ? requestedEndTime : undefined,
-	);
-	currentEpisode.set(episode);
+	if (!play(episode, playOptions)) return;
 	viewState.set(ViewState.Player);
 	await revealPlayer?.();
 }
@@ -296,7 +239,7 @@ function parseSegmentEndTime(
 		return null;
 	}
 
-	const parsed = parseFloat(rawEndTime);
+	const parsed = parseSeconds(rawEndTime);
 	if (!Number.isFinite(parsed)) {
 		new Notice("Segment end time must be a valid number");
 		return null;
@@ -308,20 +251,4 @@ function parseSegmentEndTime(
 	}
 
 	return parsed;
-}
-
-function setActivePlaybackSegment(
-	episodeKey: string,
-	startTime: number,
-	endTime: number | undefined,
-): void {
-	activePlaybackSegment.set(
-		endTime === undefined
-			? null
-			: {
-					episodeKey,
-					startTime,
-					endTime,
-				},
-	);
 }

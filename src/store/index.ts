@@ -1,4 +1,4 @@
-import { get, writable, type Unsubscriber } from "svelte/store";
+import { get, writable } from "svelte/store";
 import type PodNotes from "src/main";
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
@@ -6,9 +6,7 @@ import type { Playlist } from "src/types/Playlist";
 import { ViewState } from "src/types/ViewState";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
-import type { PlaybackSegment } from "src/types/PlaybackSegment";
 import { LOCAL_FILES_SETTINGS } from "src/constants";
-import { DEFAULT_PLAYBACK_RATE } from "src/utility/playbackRate";
 import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
 
@@ -25,50 +23,8 @@ export {
 export { downloadedEpisodes } from "./downloads";
 
 export const plugin = writable<PodNotes>();
-export const currentTime = writable<number>(0);
-export const requestedPlaybackTime = writable<{
-	episodeKey: string;
-	time: number;
-	endTime?: number;
-} | null>(null);
-export const activePlaybackSegment = writable<PlaybackSegment | null>(null);
-export const duration = writable<number>(0);
-export const playbackRate = writable<number>(DEFAULT_PLAYBACK_RATE);
-export const volume = writable<number>(1);
 export const hidePlayedEpisodes = writable<boolean>(false);
 
-export const currentEpisode = (() => {
-	const store = writable<Episode>();
-	const { subscribe, update } = store;
-
-	return {
-		subscribe,
-		update,
-		set: (newEpisode: Episode, addPrevToQueue = true) => {
-			update((previousEpisode) => {
-				if (previousEpisode) {
-					if (addPrevToQueue) {
-						addEpisodeToQueue(previousEpisode);
-					}
-
-					const ct = get(currentTime);
-					const dur = get(duration);
-					// A zero/unknown duration is never a finished episode. The player
-					// resets currentTime/duration to 0 the instant the episode changes
-					// (issue #94); if the user switches away again before the next
-					// episode's metadata loads, ct === dur === 0 would otherwise persist
-					// a never-played episode as finished at 0:00 and surface it as played.
-					const isFinished = dur > 0 && ct === dur;
-					playedEpisodes.setEpisodeTime(previousEpisode, ct, dur, isFinished);
-				}
-
-				return newEpisode;
-			});
-		},
-	};
-})();
-
-export const isPaused = writable<boolean>(true);
 export const playedEpisodes = (() => {
 	const store = writable<{ [key: string]: PlayedEpisode }>({});
 	const { subscribe, update, set } = store;
@@ -227,6 +183,8 @@ export function dedupeEpisodesByKey(episodes: Episode[] = []): Episode[] {
 	return result;
 }
 
+export type QueueMove = "top" | "up" | "down" | "bottom";
+
 export const queue = (() => {
 	const store = writable<Playlist>({
 		icon: "list-ordered",
@@ -242,19 +200,6 @@ export const queue = (() => {
 	// lookups unambiguous.
 	const isAlreadyQueued = (episodes: Episode[], episode: Episode) =>
 		episodes.some((e) => isSameEpisode(e, episode));
-
-	function move(from: number, to: number) {
-		const { episodes } = get(store);
-		const reordered = reorderEpisodes(episodes, from, to);
-
-		// No-op move: skip the store write so we don't churn saveSettings.
-		if (reordered === episodes) return;
-
-		update((queue) => {
-			queue.episodes = reordered;
-			return queue;
-		});
-	}
 
 	return {
 		subscribe,
@@ -289,27 +234,23 @@ export const queue = (() => {
 				return queue;
 			});
 		},
-		playNext: () => {
-			// Auto-advance is part of queue automation (issue #108): when the user
-			// has turned the queue off, finishing an episode must not pull the next
-			// one in. The manual queue is left intact for when they re-enable it.
-			if (!autoQueueEnabled()) return;
+		/** Finds the episode when the move applies, so a queue that changed since cannot move another. */
+		move: (episode: Episode, to: QueueMove) => {
+			const { episodes } = get(store);
+			const from = episodes.findIndex((e) => isSameEpisode(e, episode));
+			const target = { top: 0, up: from - 1, down: from + 1, bottom: episodes.length - 1 }[
+				to
+			];
+			const reordered = reorderEpisodes(episodes, from, target);
+
+			// No-op move: skip the store write so we don't churn saveSettings.
+			if (reordered === episodes) return;
 
 			update((queue) => {
-				const nextEp = queue.episodes.shift();
-
-				if (nextEp) {
-					currentEpisode.set(nextEp, false);
-				}
-
+				queue.episodes = reordered;
 				return queue;
 			});
 		},
-		move,
-		moveUp: (index: number) => move(index, index - 1),
-		moveDown: (index: number) => move(index, index + 1),
-		moveToTop: (index: number) => move(index, 0),
-		moveToBottom: (index: number) => move(index, get(store).episodes.length - 1),
 	};
 })();
 
@@ -434,57 +375,3 @@ export const viewState = (() => {
 		},
 	};
 })();
-
-/**
- * Whether the queue's automatic behavior is enabled (issue #108). Gates both
- * auto-population (enqueuing the episode you switch away from) and auto-advance
- * (queue.playNext on episode end). Reads the live plugin setting on each call so
- * toggling takes effect without a reload. Defaults to enabled so a missing
- * setting or an uninitialised plugin store preserves the historical behavior.
- */
-function autoQueueEnabled(): boolean {
-	return get(plugin)?.settings?.autoQueue !== false;
-}
-
-/**
- * Drops the current episode from the queue whenever it changes — an episode you
- * are now playing should not also sit in the up-next queue. Subscribes to
- * currentEpisode and returns an unsubscriber for lifecycle cleanup.
- *
- * This is queue automation, not persistence: it formerly lived inside
- * QueueController, which conflated the two. Unlike auto-population/advance it is
- * intentionally NOT gated on autoQueueEnabled — a manually started episode is
- * removed from the queue regardless of the automation toggle.
- */
-export function subscribeQueueToCurrentEpisode(): Unsubscriber {
-	return currentEpisode.subscribe((episode) => {
-		if (!episode) return;
-
-		const { episodes } = get(queue);
-		const episodeIsInQueue = episodes.some((e) => isSameEpisode(e, episode));
-		if (!episodeIsInQueue) return;
-
-		queue.update((playlist) => {
-			playlist.episodes = playlist.episodes.filter((e) => !isSameEpisode(e, episode));
-			return playlist;
-		});
-	});
-}
-
-function addEpisodeToQueue(episode: Episode) {
-	// Gate at the operation, not the call site, so no future caller can bypass it.
-	if (!autoQueueEnabled()) return;
-
-	queue.update((playlist) => {
-		// Keep the queue unique: a previously-played episode that is already queued
-		// stays in place rather than being re-prepended.
-		if (playlist.episodes.some((e) => isSameEpisode(e, episode))) {
-			return playlist;
-		}
-
-		const newEpisodes = [episode, ...playlist.episodes];
-		playlist.episodes = newEpisodes;
-
-		return playlist;
-	});
-}

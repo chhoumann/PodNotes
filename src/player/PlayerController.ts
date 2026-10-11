@@ -219,9 +219,7 @@ export class PlayerController {
 		const clamped = Math.min(1, Math.max(0, volume));
 		this.el.volume = clamped;
 		this.setState({ volume: clamped });
-		if (this.plugin.settings.defaultVolume !== clamped) {
-			writePlayerSettings(this.plugin, { defaultVolume: clamped });
-		}
+		writePlayerSettings(this.plugin, { defaultVolume: clamped });
 	}
 
 	/** Saves the position now rather than at the next checkpoint. */

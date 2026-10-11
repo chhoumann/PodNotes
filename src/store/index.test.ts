@@ -13,21 +13,16 @@ import {
 } from "src/constants";
 import { bindStoresToSettings } from "src/store/persistence";
 import {
-	currentEpisode,
-	currentTime,
 	dedupeEpisodesByKey,
 	downloadedEpisodes,
-	duration,
 	episodeCache,
 	episodeListLimit,
 	latestEpisodes,
 	localFiles,
 	playedEpisodes,
-	plugin,
 	queue,
 	reorderEpisodes,
 	sanitizeEpisodeListLimit,
-	subscribeQueueToCurrentEpisode,
 } from "./index";
 
 const episode: Episode = {
@@ -459,40 +454,62 @@ describe("queue store", () => {
 		expect(queueTitles()).toEqual(["A", "B", "C"]);
 	});
 
-	test("moveToTop / moveToBottom reorder the queue", () => {
+	test("move takes an episode to the top or the bottom", () => {
 		setQueue("A", "B", "C");
 
-		queue.moveToBottom(0);
+		queue.move(ep("A"), "bottom");
 		expect(queueTitles()).toEqual(["B", "C", "A"]);
 
-		queue.moveToTop(2);
+		queue.move(ep("A"), "top");
 		expect(queueTitles()).toEqual(["A", "B", "C"]);
 	});
 
-	test("moveUp / moveDown shift a single position", () => {
+	test("move shifts an episode up or down one place", () => {
 		setQueue("A", "B", "C");
 
-		queue.moveDown(0);
+		queue.move(ep("A"), "down");
 		expect(queueTitles()).toEqual(["B", "A", "C"]);
 
-		queue.moveUp(2);
+		queue.move(ep("C"), "up");
 		expect(queueTitles()).toEqual(["B", "C", "A"]);
 	});
 
-	test("end and out-of-range moves are no-ops", () => {
-		setQueue("A", "B", "C");
+	test("move finds the episode itself, not a same-titled one from another podcast (#356)", () => {
+		queue.set({
+			...QUEUE_SETTINGS,
+			episodes: [ep("Trailer", "Pod A"), ep("Trailer", "Pod B")],
+		});
 
-		queue.moveUp(0);
-		queue.moveDown(2);
-		queue.move(-1, 0);
-		queue.move(0, 99);
+		queue.move(ep("Trailer", "Pod B"), "top");
+
+		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod B", "Pod A"]);
+	});
+
+	test("a move past an end, or of an episode not queued, changes and saves nothing", () => {
+		setQueue("A", "B", "C");
+		let writes = 0;
+		const unsubscribe = queue.subscribe(() => writes++);
+
+		queue.move(ep("A"), "up");
+		queue.move(ep("C"), "down");
+		queue.move(ep("Z"), "top");
+		unsubscribe();
 
 		expect(queueTitles()).toEqual(["A", "B", "C"]);
+		expect(writes).toBe(1);
+	});
+
+	test("prepend puts an episode first unless it is already queued", () => {
+		setQueue("A", "B");
+
+		queue.prepend(ep("C"));
+		queue.prepend(ep("B"));
+
+		expect(queueTitles()).toEqual(["C", "A", "B"]);
 	});
 
 	test("a move persists the new order through the settings binding", () => {
 		setQueue("A", "B", "C");
-		currentEpisode.set(undefined as unknown as Episode, false);
 
 		const fakePlugin = {
 			settings: { queue: { ...QUEUE_SETTINGS, episodes: [] } },
@@ -502,108 +519,13 @@ describe("queue store", () => {
 		const unbind = bindStoresToSettings(fakePlugin);
 
 		try {
-			queue.moveToBottom(0);
+			queue.move(ep("A"), "bottom");
 
 			expect(fakePlugin.settings.queue.episodes.map((e) => e.title)).toEqual(["B", "C", "A"]);
 			expect(fakePlugin.saveSettings).toHaveBeenCalled();
 		} finally {
 			unbind();
 		}
-	});
-
-	test("subscribeQueueToCurrentEpisode drops the now-playing episode", () => {
-		setQueue("A", "B", "C");
-		currentEpisode.set(undefined as unknown as Episode, false);
-
-		const unsubscribe = subscribeQueueToCurrentEpisode();
-
-		try {
-			// Switching to B (without auto-enqueuing the prior episode) removes B
-			// from the up-next queue while leaving the rest in place.
-			currentEpisode.set(ep("B"), false);
-
-			expect(queueTitles()).toEqual(["A", "C"]);
-		} finally {
-			unsubscribe();
-		}
-	});
-
-	test("playing an episode keeps a same-titled episode from another podcast queued (#356)", () => {
-		queue.set({
-			...QUEUE_SETTINGS,
-			episodes: [ep("Trailer", "Pod A"), ep("Trailer", "Pod B")],
-		});
-		currentEpisode.set(undefined as unknown as Episode, false);
-
-		const unsubscribe = subscribeQueueToCurrentEpisode();
-
-		try {
-			currentEpisode.set(ep("Trailer", "Pod A"), false);
-
-			expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod B"]);
-		} finally {
-			unsubscribe();
-		}
-	});
-});
-
-describe("queue automation toggle (issue #108)", () => {
-	beforeEach(() => {
-		queue.set({ ...QUEUE_SETTINGS, episodes: [] });
-		currentEpisode.set(undefined as unknown as Episode, false);
-	});
-
-	afterEach(() => {
-		// Reset the shared module singletons so other suites keep the default
-		// (enabled) behavior that an unset plugin store implies.
-		plugin.set(undefined as never);
-		currentEpisode.set(undefined as unknown as Episode, false);
-	});
-
-	function setAutoQueue(value: boolean) {
-		plugin.set({ settings: { autoQueue: value } } as never);
-	}
-
-	test("enqueues the episode you switch away from when enabled", () => {
-		setAutoQueue(true);
-		currentEpisode.set(ep("A"));
-		currentEpisode.set(ep("B"));
-
-		expect(queueTitles()).toEqual(["A"]);
-	});
-
-	test("does not enqueue the previous episode when disabled", () => {
-		setAutoQueue(false);
-		currentEpisode.set(ep("A"));
-		currentEpisode.set(ep("B"));
-
-		expect(queueTitles()).toEqual([]);
-	});
-
-	test("treats an unset plugin store as enabled (historical default)", () => {
-		currentEpisode.set(ep("A"));
-		currentEpisode.set(ep("B"));
-
-		expect(queueTitles()).toEqual(["A"]);
-	});
-
-	test("playNext advances to the front of the queue when enabled", () => {
-		setAutoQueue(true);
-		setQueue("A", "B");
-
-		queue.playNext();
-
-		expect(get(currentEpisode)?.title).toBe("A");
-		expect(queueTitles()).toEqual(["B"]);
-	});
-
-	test("playNext is a no-op when disabled", () => {
-		setAutoQueue(false);
-		setQueue("A", "B");
-
-		queue.playNext();
-
-		expect(queueTitles()).toEqual(["A", "B"]);
 	});
 });
 
@@ -749,44 +671,5 @@ describe("latestEpisodes respects episodeListLimit (issue #114)", () => {
 			"Show A #23",
 		]);
 		tracker.stop();
-	});
-});
-
-describe("currentEpisode.set finished guard (issue #94)", () => {
-	beforeEach(() => {
-		playedEpisodes.set({});
-		currentTime.set(0);
-		duration.set(0);
-		currentEpisode.set(undefined as unknown as Episode, false);
-	});
-
-	afterEach(() => {
-		currentTime.set(0);
-		duration.set(0);
-		currentEpisode.set(undefined as unknown as Episode, false);
-	});
-
-	test("does not persist a never-played episode as finished when switched away at unknown (0) duration", () => {
-		// The player resets currentTime/duration to 0 the instant the episode
-		// changes (#94). Rapidly switching A -> B -> C before B's metadata loads
-		// reads ct === dur === 0; that must not mark the skipped episode finished.
-		currentEpisode.set(ep("A"), false);
-		currentTime.set(0);
-		duration.set(0);
-		currentEpisode.set(ep("B"), false);
-
-		const stored = get(playedEpisodes)["Pod::A"];
-		expect(stored?.finished).toBe(false);
-	});
-
-	test("still persists a genuinely finished episode as finished", () => {
-		currentEpisode.set(ep("A"), false);
-		currentTime.set(3600);
-		duration.set(3600);
-		currentEpisode.set(ep("B"), false);
-
-		const stored = get(playedEpisodes)["Pod::A"];
-		expect(stored?.finished).toBe(true);
-		expect(stored?.time).toBe(3600);
 	});
 });

@@ -2,7 +2,7 @@ import type { App, EventRef, Menu, TAbstractFile, WorkspaceLeaf } from "obsidian
 import { Notice, TFile } from "obsidian";
 import { get } from "svelte/store";
 import { VIEW_TYPE } from "./constants";
-import { downloadedEpisodes, playedEpisodes, currentEpisode, viewState, plugin } from "./store";
+import { downloadedEpisodes, playedEpisodes, viewState, plugin } from "./store";
 import type { EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
@@ -83,16 +83,14 @@ function addPlayLocalFileItem(
 					playedEpisodes.markAsUnplayed(localEpisode);
 				}
 
-				currentEpisode.set(localEpisode);
+				get(plugin).player.play(localEpisode);
 				viewState.set(ViewState.Player);
 				get(plugin)?.enablePodcastViewMount();
 
-				// Setting the stores above only updates an already-mounted
-				// PodNotes view. When the view is closed (or hidden in a
-				// collapsed sidebar) nothing reacts, so "Play with PodNotes"
-				// silently did nothing — the file played to no visible player
-				// (issue #84). Open the view if needed and reveal it so the
-				// player surfaces with the just-selected episode.
+				// Playing opens no view, so with the view closed (or hidden in a
+				// collapsed sidebar) the file played to no visible player (issue
+				// #84). Open the view if needed and reveal it so the player
+				// surfaces with the just-selected episode.
 				await revealPodcastView(app);
 			}),
 	);

@@ -2,7 +2,6 @@
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import PodcastGrid from "./PodcastGrid.svelte";
 	import {
-		currentEpisode,
 		savedFeeds,
 		episodeCache,
 		latestEpisodes as latestEpisodesStore,
@@ -41,6 +40,8 @@
 		type PlayedEpisodeListEntry,
 	} from "src/utility/episodeListEntry";
 
+	const player = get(plugin).player;
+	const playerState = player.state;
 	let feeds: PodcastFeed[] = [];
 	let selectedFeed: PodcastFeed | null = null;
 	let selectedPlaylist: Playlist | null = null;
@@ -471,7 +472,7 @@
 			return;
 		}
 
-		currentEpisode.set(episode);
+		player.play(episode);
 
 		viewState.set(ViewState.Player);
 	}
@@ -576,11 +577,7 @@
 			selectedPlaylist = null;
 			isShowingPlayedEpisodes = false;
 			displayedEpisodeEntries = null;
-			// Only need to set the current episode if there isn't any.
-			// The current episode _is_ the front of the queue.
-			if (!$currentEpisode) {
-				currentEpisode.set($queue.episodes[0]);
-			}
+			if ($playerState.status === "empty") player.play($queue.episodes[0]);
 
 			viewState.set(ViewState.Player);
 		} else {
@@ -599,7 +596,7 @@
 	<TopBar
 		bind:viewState={$viewState}
 		canShowEpisodeList={true}
-		canShowPlayer={!!$currentEpisode}
+		canShowPlayer={$playerState.status !== "empty"}
 	/>
 
 	{#if $viewState === ViewState.Player}
