@@ -88,13 +88,14 @@ The handler accepts these query parameters:
 | --- | --- | --- |
 | `url` | Yes | Podcast feed URL, vault media path, or protected private-feed placeholder. |
 | `episodeName` | Yes | Episode title. |
-| `time` | No | Start time parsed as a non-negative finite number of seconds. |
-| `endTime` | No | Segment end parsed as a finite number of seconds greater than `time`. Requires a start time. |
+| `time` | No | Start time in seconds. The whole value must be a non-negative finite number, so `12abc` is refused. |
+| `endTime` | No | Segment end in seconds, greater than `time`. The whole value must be a finite number. Requires a start time. |
 | `end` | No | Accepted alias of `endTime`. |
 | `to` | No | Accepted alias of `endTime`, after `end` in precedence. |
 
 An omitted or empty `time` resumes from saved progress.
 An unplayed or finished episode starts at zero.
+A `time` at or past the episode's end stops 0.25 seconds before the end and pauses.
 `endTime` takes precedence over `end`, which takes precedence over `to`.
 
 Query values are percent-encoded. Current links encode spaces as `%20` and literal plus signs as `%2B`.
@@ -103,6 +104,7 @@ Older links using `+` for spaces are also tried during title and local-path look
 Feed targets must use a public HTTP or HTTPS URL. A protected private-feed placeholder resolves only through a saved subscription and its device-local secret.
 Local targets need a registered episode and a media file. See [Sync and devices](/sync/#removal-and-existing-links).
 
+A link plays the loaded episode without a feed lookup only when its `url` names that episode's feed, or its file for a local file.
 Episode lookup first tries the title, ignoring case and surrounding whitespace.
 Its fallback requires a unique match with the same normalized word set, ignoring punctuation, word order, and leading zeros in numeric words.
 Different words or episode numbers can prevent a match. Timestamp links do not guarantee recovery after every feed title change.

@@ -73,15 +73,17 @@ Local episodes extend this type with `podcastName: "local file"`, empty `descrip
 
 ## `isPlaying`
 
-Returns the inverse of PodNotes' paused state. It describes the requested player state rather than proof that media playback has started.
+Returns `true` while the current episode plays, or loads to play. It is `false` for a paused, finished, or freshly restored episode.
 
 ## `length`
 
-Returns the player duration in seconds. The value starts at zero before media metadata loads.
+Returns the player duration in seconds. Before the media loads, it is the saved or feed-provided duration, or zero when neither is known.
 
 ## `currentTime`
 
-Gets or sets the player position in seconds. Setting a position clears an active segment's end boundary.
+Gets or sets the player position in seconds. Before the media loads, it is the position playback starts from.
+Setting a position clears an active segment's end boundary. A value that is not a finite, non-negative number is ignored.
+A position at or past the end stops 0.25 seconds before the end and pauses, so the episode does not finish.
 
 ## `volume`
 
@@ -162,8 +164,8 @@ Non-finite writes fall back to **Default Playback Rate**.
 Changing the current rate does not change that saved default.
 
 ## Playback controls
-`start()`, `stop()`, and `togglePlayback()` control the current episode.
-`stop()` pauses without resetting the position.
+`start()`, `stop()`, and `togglePlayback()` control the current episode, also while the PodNotes view is closed.
+`stop()` pauses without resetting the position. `start()` on a finished episode starts it over.
 `skipBackward()` and `skipForward()` use **Skip backward length (s)** and **Skip forward length (s)**.
 Invalid skip lengths fall back to 15 seconds. Backward skips stop at zero.
 With a known duration, forward skips stop up to 0.25 seconds before the end without moving backward.
