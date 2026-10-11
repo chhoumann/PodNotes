@@ -678,11 +678,27 @@ describe("removeDownloadedEpisode", () => {
 		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
 	}
 
+	// Plays a user who confirms whatever PodNotes asks, so a wrong prompt shows its effect.
+	async function removeConfirmingAnyPrompt(episode: Episode): Promise<{ asked: boolean }> {
+		let settled = false;
+		const removal = removeDownloadedEpisode(episode).finally(() => {
+			settled = true;
+		});
+		let asked = false;
+		await vi.waitFor(() => {
+			if (settled) return;
+			moveToTrash();
+			asked = true;
+		});
+		await removal;
+		return { asked };
+	}
+
 	afterEach(() => {
 		document.body.replaceChildren();
 	});
 
-	it("trashes a file PodNotes downloaded without asking", async () => {
+	it("trashes a stored entry marked as PodNotes' own without asking", async () => {
 		const vault = setupVault();
 		const episode = makeEpisode();
 		const filePath = "Podcasts/My Title.mp3";
@@ -739,6 +755,61 @@ describe("removeDownloadedEpisode", () => {
 		},
 	);
 
+	it("drops an unconfirmed entry whose file the vault has not indexed and leaves the file", async () => {
+		const vault = setupVault();
+		const episode = makeEpisode({ title: "Fixture Episode 2" });
+		const filePath = "Recordings/Fixture Episode 2.wav";
+		// A case-only folder rename on a case-insensitive disk: the adapter still
+		// finds the old path, the vault index does not.
+		vault.disk.add(filePath);
+		downloadedEpisodes.set({ Pod: [{ ...episode, filePath, size: 4 }] });
+
+		const { asked } = await removeConfirmingAnyPrompt(episode);
+
+		expect({
+			asked,
+			trashed: vault.trashFile.mock.calls.length,
+			unlinked: vault.removeFile.mock.calls.length,
+			onDisk: vault.disk.has(filePath),
+		}).toEqual({ asked: false, trashed: 0, unlinked: 0, onDisk: true });
+		expect(get(downloadedEpisodes).Pod).toEqual([]);
+	});
+
+	it.each([
+		["whose file is gone", "Recordings/Gone.wav"],
+		["without a file path", ""],
+	])("drops an unconfirmed entry %s without asking", async (_case, filePath) => {
+		const vault = setupVault();
+		const episode = makeEpisode();
+		downloadedEpisodes.set({ Pod: [{ ...episode, filePath, size: 4 }] });
+
+		const { asked } = await removeConfirmingAnyPrompt(episode);
+
+		expect(asked).toBe(false);
+		expect(get(downloadedEpisodes).Pod).toEqual([]);
+		expect(vault.trashFile).not.toHaveBeenCalled();
+		expect(vault.removeFile).not.toHaveBeenCalled();
+	});
+
+	it("trashes the file it asked about even if the vault index loses its path meanwhile", async () => {
+		const vault = setupVault();
+		const episode = makeEpisode({ title: "Fixture Episode 2" });
+		const filePath = "Recordings/Fixture Episode 2.wav";
+		putOnDisk(vault, filePath);
+		downloadedEpisodes.set({ Pod: [{ ...episode, filePath, size: 4 }] });
+
+		const removal = removeDownloadedEpisode(episode);
+		await vi.waitFor(() => expect(screen.getByText(promptFor(filePath))).toBeTruthy());
+		vault.present.delete(filePath);
+		moveToTrash();
+		await removal;
+
+		expect({
+			trashed: vault.trashFile.mock.calls.map(([file]) => file.path),
+			unlinked: vault.removeFile.mock.calls.length,
+		}).toEqual({ trashed: [filePath], unlinked: 0 });
+	});
+
 	const interviewPath = "Recordings/Interview.wav";
 	const interview: LocalEpisode = {
 		title: "Interview",
@@ -780,7 +851,7 @@ describe("removeDownloadedEpisode", () => {
 		expectKeptOnDisk(vault, interviewPath);
 	});
 
-	it("trashes a file it downloaded itself without asking", async () => {
+	it("trashes a file the download flow wrote without asking", async () => {
 		const vault = setupVault();
 		mockAudioResponse();
 		const episode = makeEpisode();
@@ -815,6 +886,34 @@ describe("removeDownloadedEpisode", () => {
 		expect(vault.writeBinary).not.toHaveBeenCalled();
 		expect(get(downloadedEpisodes).Pod).toEqual([registered]);
 	});
+
+	it.each([
+		["its URL extension", "https://example.com/ep.mp3", 1],
+		["its sniffed destination", "https://example.com/stream?id=42", 2],
+	])(
+		"keeps its own download confirmed when it reuses it at %s",
+		async (_case, streamUrl, requests) => {
+			const vault = setupVault();
+			mockAudioResponse();
+			const episode = makeEpisode({ streamUrl });
+			const filePath = "Podcasts/My Title.mp3";
+
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+			await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+
+			expect(vault.writeBinary).toHaveBeenCalledOnce();
+			expect(requestUrlMock).toHaveBeenCalledTimes(requests);
+			expect(get(downloadedEpisodes).Pod).toEqual([
+				expect.objectContaining({ filePath, downloadedByPodNotes: true }),
+			]);
+
+			const { asked } = await removeConfirmingAnyPrompt(episode);
+
+			expect(asked).toBe(false);
+			expect(vault.trashFile).toHaveBeenCalledOnce();
+			expect(vault.present.has(filePath)).toBe(false);
+		},
+	);
 });
 
 describe("safeDownloadFilePath (#22)", () => {
