@@ -23,9 +23,6 @@ import {
 } from "obsidian-e2e/runner";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
-// Linux Obsidian's CLI socket follows $XDG_RUNTIME_DIR when it is set; this
-// instance's socket is in its private HOME (see scripts/obsidian-e2e.mjs).
-if (process.platform === "linux") delete process.env.XDG_RUNTIME_DIR;
 const config = await loadRunnerConfig(root);
 const instance = resolveInstanceOptions(
 	resolveProvisionOptions({}, config, root),

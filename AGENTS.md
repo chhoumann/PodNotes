@@ -113,7 +113,7 @@ npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins
 
 | | macOS | Linux (headless) |
 | --- | --- | --- |
-| App | `Obsidian.app` via `open` | `/opt/Obsidian/obsidian` under `xvfb-run`, no `DISPLAY` needed |
+| App | `Obsidian.app` via `open` | `/opt/Obsidian/obsidian`, under `xvfb-run` when `DISPLAY` is unset |
 | Profile | `/private/tmp/podnotes-obsidian-e2e/<vault>-<hash>/` | `/tmp/podnotes-obsidian-e2e/<vault>-<hash>/` |
 | Evidence | `npx obsidian-e2e capture launch` (a separate instance) | the capture commands below, against this instance |
 
@@ -122,10 +122,11 @@ npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins
   `--reload` after every rebuild or you test the old bundle.
 - `npm run start:e2e-obsidian -- --print-env` prints only `export` lines
   (`OBSIDIAN_E2E_VAULT`, `_VAULT_PATH`, `_OBSIDIAN_HOME`, legacy `PODNOTES_E2E_*`
-  aliases; on Linux also `XDG_RUNTIME_DIR`). After
-  `eval "$(npm run --silent start:e2e-obsidian -- --print-env)"` the raw
-  `obsidian vault="$OBSIDIAN_E2E_VAULT" ...` CLI reaches the instance on Linux.
-  On macOS also `export HOME="$OBSIDIAN_E2E_OBSIDIAN_HOME"`.
+  aliases). On macOS, after
+  `eval "$(npm run --silent start:e2e-obsidian -- --print-env)"` and
+  `export HOME="$OBSIDIAN_E2E_OBSIDIAN_HOME"`, the raw
+  `obsidian vault="$OBSIDIAN_E2E_VAULT" ...` CLI reaches the instance. On Linux
+  it does not, so use `npm run obsidian:e2e -- <command>`.
 
 ### E2E suite
 `npm run test:e2e` is the one command. Vitest arguments pass through
