@@ -3,14 +3,12 @@ import { DIARIZATION_PROVIDERS, type DiarizationProviderId } from "./services/di
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
- * Settings migrations applied when settings are loaded from disk.
+ * Settings migrations that the persistence codec
+ * (`src/persistence/settingsCodec.ts`) applies while decoding `data.json`.
  *
- * These run in `PodNotes.loadSettings` after the persisted `data.json` is merged
- * over `DEFAULT_SETTINGS`. Changing a default alone is NOT enough for existing
- * users: the plugin persists the whole settings object, so anyone who has used
- * PodNotes already has the old value written to `data.json`, which overrides the
- * new default on load. A migration rewrites that stored value in memory so the
- * change actually reaches existing users (it is re-persisted on the next save).
+ * PodNotes persists the whole settings object, so a changed default reaches only
+ * new installs. Existing users keep their stored value unless a migration
+ * rewrites it, which we do only when the old stored value is broken.
  *
  * This module is pure (no Obsidian/UI dependencies) so the risky rewrite logic is
  * unit-testable.
@@ -178,10 +176,3 @@ export function migrateSkipLength(value: unknown, fallback: number): number {
 	const n = typeof value === "number" ? value : Number(value);
 	return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
-
-/**
- * The timestamp template before `{{linktime}}` became the default (#345).
- * PodNotes always writes the template, so data without one is older or
- * hand-edited and keeps the template it ran with.
- */
-export const LEGACY_TIMESTAMP_TEMPLATE = "- {{time}} ";

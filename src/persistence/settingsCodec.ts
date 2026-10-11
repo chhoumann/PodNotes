@@ -1,6 +1,5 @@
 import { DEFAULT_SETTINGS } from "src/constants";
 import {
-	LEGACY_TIMESTAMP_TEMPLATE,
 	migrateDownloadPath,
 	migrateFeedNoteSettings,
 	migrateNoteSettings,
@@ -131,6 +130,13 @@ function decodeSecretId(
 	warn(warnings, key, "foreign or wrong-provider SecretStorage ID; reference was removed");
 	return "";
 }
+
+/**
+ * The timestamp template before `{{linktime}}` became the default (#345).
+ * PodNotes always writes the template, so data without one is older or
+ * hand-edited and keeps the template it ran with.
+ */
+const LEGACY_TIMESTAMP_TEMPLATE = "- {{time}} ";
 
 function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettings["timestamp"] {
 	const record = optionalRecord(value, warnings, "timestamp");
