@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import type { ParsedEpisodeDocument, ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import type { FeedCacheStorage } from "src/services/FeedRepository";
 import type { Episode } from "src/types/Episode";
@@ -14,6 +15,18 @@ export class MemoryStorage implements FeedCacheStorage {
 		if (value === null) this.values.delete(key);
 		else this.values.set(key, value);
 	}
+}
+
+/**
+ * Stands in for `window.localStorage`, where feed caches before v5 lived, so a
+ * Node test can build a FeedRepository. Undo it with `vi.unstubAllGlobals()`.
+ */
+export function stubLegacyStorage(): Map<string, string> {
+	const legacy = new Map<string, string>();
+	vi.stubGlobal("window", {
+		localStorage: { removeItem: (key: string) => legacy.delete(key) },
+	});
+	return legacy;
 }
 
 /** The parsed feed whose projection for a subscription yields `episodes`. */

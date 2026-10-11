@@ -5,7 +5,7 @@ import type { ParsedEpisodeDocument, ParsedFeedEpisodes } from "src/parser/feedD
 import { encodeEpisode } from "src/persistence/episodeCodec";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
-import { deferred, MemoryStorage } from "../../tests/mocks/feeds";
+import { deferred, MemoryStorage, stubLegacyStorage } from "../../tests/mocks/feeds";
 import { FeedRepository } from "./FeedRepository";
 
 const CACHE_KEY = "podnotes:feed-cache:v6";
@@ -83,15 +83,10 @@ async function loaded(
 	await loading;
 }
 
-const legacyStorage = new Map<string, string>();
+let legacyStorage = new Map<string, string>();
 
 beforeEach(() => {
-	legacyStorage.clear();
-	vi.stubGlobal("window", {
-		localStorage: {
-			removeItem: (key: string) => legacyStorage.delete(key),
-		},
-	});
+	legacyStorage = stubLegacyStorage();
 });
 
 afterEach(() => {
@@ -308,6 +303,80 @@ describe("FeedRepository", () => {
 		expect(Object.keys(t.cached())).toEqual([alpha.url]);
 	});
 
+	test("a podcast removed while PodNotes was closed leaves the cache when it is read", async () => {
+		const first = setup();
+		await loaded(first, { Alpha: alpha, Beta: beta }, doc("Show", [item(1)]));
+
+		const t = setup({ storage: first.storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+		await t.repo.ensureAll();
+
+		expect(t.load).not.toHaveBeenCalled();
+		expect(Object.keys(t.cached())).toEqual([alpha.url]);
+	});
+
+	test("a feed previewed and then added is cached without fetching it again", async () => {
+		const t = setup();
+		t.repo.setSubscriptions({ Alpha: alpha });
+		const preview = t.repo.channelAt(beta.url);
+		t.requests[0].respond.resolve(doc("Beta", [item(1)]));
+		await preview;
+
+		t.repo.setSubscriptions({ Alpha: alpha, Beta: beta });
+
+		expect(t.load).toHaveBeenCalledTimes(1);
+		expect(Object.keys(t.cached())).toEqual([beta.url]);
+	});
+
+	test("changing podcasts before the cache is read keeps the cache", async () => {
+		const first = setup();
+		await loaded(first, { Alpha: alpha }, doc("Alpha", [item(1)]));
+
+		const t = setup({ storage: first.storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+		t.repo.setSubscriptions({ Alpha: alpha, Beta: beta });
+
+		expect(Object.keys(t.cached())).toEqual([alpha.url]);
+	});
+
+	test("previews and links of other feeds do not rewrite the cache", async () => {
+		const t = setup();
+		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1)]));
+		const save = vi.spyOn(t.storage, "saveLocalStorage");
+
+		const preview = t.repo.channelAt(beta.url);
+		t.requests[1].respond.resolve(doc("Beta", [item(2)]));
+		await preview;
+
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	test("a cache that cannot be saved is dropped and the feed still loads", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const t = setup();
+		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1)]));
+		const save = vi.spyOn(t.storage, "saveLocalStorage").mockImplementation((key, value) => {
+			if (value !== null) throw new DOMException("full", "QuotaExceededError");
+			t.storage.values.delete(key);
+		});
+
+		const quota = t.repo.load(["Alpha"], "network");
+		t.requests[1].respond.resolve(doc("Alpha", [item(2)]));
+		await quota;
+		expect(t.storage.loadLocalStorage(CACHE_KEY)).toBeNull();
+		expect(t.feed("Alpha")).toMatchObject({ status: "ready" });
+
+		save.mockImplementation(() => {
+			throw new Error("storage unavailable");
+		});
+		const broken = t.repo.load(["Alpha"], "network");
+		t.requests[2].respond.resolve(doc("Alpha", [item(3)]));
+		await broken;
+
+		expect(t.feed("Alpha")).toMatchObject({ status: "ready" });
+		expect(t.titles("Alpha")).toEqual(["Episode 3"]);
+	});
+
 	test("a cache over 4 MB keeps the most recently fetched feeds", async () => {
 		const t = setup();
 		const feeds = [1, 2, 3].map((number) => ({
@@ -476,19 +545,22 @@ describe("FeedRepository", () => {
 		expect(({} as { updatedAt?: number }).updatedAt).toBeUndefined();
 	});
 
-	test("removes the caches of earlier versions", async () => {
-		const storage = new MemoryStorage();
-		storage.saveLocalStorage("podnotes:feed-cache:v5", "{}");
-		for (const version of [1, 2, 3, 4])
-			legacyStorage.set(`podnotes:feed-cache:v${version}`, "{}");
-		const t = setup({ storage });
-		t.repo.setSubscriptions({});
+	test.each([true, false])(
+		"removes the caches of earlier versions (cache on: %s)",
+		async (enabled) => {
+			const storage = new MemoryStorage();
+			storage.saveLocalStorage("podnotes:feed-cache:v5", "{}");
+			for (const version of [1, 2, 3, 4])
+				legacyStorage.set(`podnotes:feed-cache:v${version}`, "{}");
+			const t = setup({ storage, enabled });
+			t.repo.setSubscriptions({});
 
-		await t.repo.ensureAll();
+			await t.repo.ensureAll();
 
-		expect(storage.values.has("podnotes:feed-cache:v5")).toBe(false);
-		expect([...legacyStorage.keys()]).toEqual([]);
-	});
+			expect(storage.values.has("podnotes:feed-cache:v5")).toBe(false);
+			expect([...legacyStorage.keys()]).toEqual([]);
+		},
+	);
 
 	test("a feed link's episodes are named after its channel and never cached", async () => {
 		const t = setup();
@@ -500,7 +572,7 @@ describe("FeedRepository", () => {
 		expect(await episodes).toEqual([
 			expect.objectContaining({ podcastName: "Alpha Channel", feedUrl: alpha.url }),
 		]);
-		expect(t.storage.loadLocalStorage(CACHE_KEY)).not.toContain(alpha.url);
+		expect(Object.keys(t.cached())).toEqual([]);
 	});
 
 	test("a feed link for a subscribed feed shares its request", async () => {

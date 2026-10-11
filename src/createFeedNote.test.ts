@@ -3,7 +3,7 @@ import { TFile } from "obsidian";
 import { plugin, savedFeeds } from "./store";
 import createFeedNote from "./createFeedNote";
 import { FeedRepository } from "./services/FeedRepository";
-import { MemoryStorage } from "../tests/mocks/feeds";
+import { MemoryStorage, stubLegacyStorage } from "../tests/mocks/feeds";
 import type { PodcastFeed } from "./types/PodcastFeed";
 
 // A feed with every metadata field already populated, so createFeedNote's
@@ -80,6 +80,7 @@ beforeEach(() => {
 afterEach(() => {
 	plugin.set(undefined as never);
 	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
 
 describe("createFeedNote", () => {
@@ -150,6 +151,7 @@ describe("createFeedNote", () => {
 			url: fullFeed.url,
 			artworkUrl: "",
 		};
+		stubLegacyStorage();
 		const load = vi.fn(async () => ({
 			feed: { title: "Channel", siteUrl: "https://example.com/show" },
 			episodes: [],

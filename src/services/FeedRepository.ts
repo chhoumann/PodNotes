@@ -80,6 +80,8 @@ interface Projection {
  */
 export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>> {
 	private subscriptions = new Map<FeedKey, PodcastFeed>();
+	/** The subscriptions' URLs: the documents worth caching. */
+	private urls = new Set<string>();
 	private readonly sources = new Map<string, Source>();
 	private projections = new Map<FeedKey, Projection>();
 	private readonly state = writable<ReadonlyMap<FeedKey, FeedState>>(new Map());
@@ -92,15 +94,15 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	}
 
 	setSubscriptions(feeds: Record<FeedKey, PodcastFeed>): void {
-		this.subscriptions = new Map(Object.entries(feeds));
 		const urls = new Set(Object.values(feeds).map((feed) => feed.url));
-		let dropped = false;
+		const changed =
+			urls.size !== this.urls.size || [...urls].some((url) => !this.urls.has(url));
+		this.subscriptions = new Map(Object.entries(feeds));
+		this.urls = urls;
 		for (const url of this.sources.keys()) {
-			if (urls.has(url)) continue;
-			this.sources.delete(url);
-			dropped = true;
+			if (!urls.has(url)) this.sources.delete(url);
 		}
-		if (dropped) this.persist();
+		if (changed) this.persist();
 		this.emit();
 	}
 
@@ -206,7 +208,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 						updatedAt: this.deps.now(),
 					};
 					source.error = undefined;
-					this.persist();
+					if (this.urls.has(sourceUrl)) this.persist();
 				},
 				(error: unknown) => {
 					console.error(`PodNotes: could not load the feed ${sourceUrl}`, error);
@@ -264,18 +266,20 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	private hydrate(): void {
 		if (this.hydrated) return;
 		this.hydrated = true;
-		if (!this.deps.cache().enabled) return;
 		removeLegacyCaches(this.deps.storage);
-		for (const [url, doc] of decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY))) {
-			this.source(url).doc = doc;
+		if (!this.deps.cache().enabled) return;
+		const cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
+		for (const [url, doc] of cached) {
+			if (this.urls.has(url)) this.source(url).doc = doc;
 		}
+		if (cached.some(([url]) => !this.urls.has(url))) this.persist();
 	}
 
 	/** Writes only subscribed feeds, so a removed one leaves the cache with the next write. */
 	private persist(): void {
-		if (!this.deps.cache().enabled) return;
+		if (!this.hydrated || !this.deps.cache().enabled) return;
 		const entries: Record<string, FeedDocument> = {};
-		for (const { url } of this.subscriptions.values()) {
+		for (const url of this.urls) {
 			const doc = this.sources.get(url)?.doc;
 			if (doc) entries[url] = keepNewestItems(doc);
 		}
@@ -284,10 +288,11 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			serialized = JSON.stringify(evictOldest(entries, MAX_CACHE_BYTES * 0.8));
 		}
 		try {
+			// Clearing first leaves no cache, rather than an outdated one, when the write fails.
+			this.deps.storage.saveLocalStorage(CACHE_KEY, null);
 			this.deps.storage.saveLocalStorage(CACHE_KEY, serialized);
 		} catch (error) {
 			console.warn("PodNotes: could not save the feed cache", error);
-			this.deps.storage.saveLocalStorage(CACHE_KEY, null);
 		}
 	}
 }
