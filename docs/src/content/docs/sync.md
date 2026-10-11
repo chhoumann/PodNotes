@@ -37,8 +37,10 @@ For example, one device can add a podcast while another updates its playback pro
 Once the subscription reaches the second device's `data.json`, its next save keeps both changes.
 When Obsidian reports a synced file change, PodNotes updates its library without a restart.
 Sync does not switch an episode already loaded in the player or seek to another device's position.
+The loaded episode stays current on this device.
+The player saves its own position for that episode, even after progress from another device arrives.
 
-If both devices change the same entry before seeing each other's changes, the device saving keeps its own version.
+For other changes, conflicts favor the device saving when both devices edit the same setting or entry before seeing each other's changes.
 PodNotes takes these entries whole, rather than combining their fields:
 
 - A saved feed, including its URL and private-feed secret reference.
@@ -47,19 +49,21 @@ PodNotes takes these entries whole, rather than combining their fields:
 - Each episode in the queue, favorites, Local Files, custom playlists, or downloads.
 
 Episodes match by podcast name and title, so equal titles from different podcasts stay separate.
-A download's stream URL, file path, and record that PodNotes downloaded it stay together.
+A download's stream URL, file path, and ownership record stay together.
 
 A change that arrives between the read and write can still be overwritten.
 Sync can also see a partly written file because PodNotes writes `data.json` in place.
 An older PodNotes version on another device can overwrite the whole file.
 Keep PodNotes updated on every device and let sync finish before switching devices.
+On a new device, keep PodNotes disabled until sync delivers `data.json`. Then enable it.
 
 ## When PodNotes saves
 
 User changes request a save at once. Changes made during a save share the next save.
 During playback, periodic position checkpoints write at most once every 10 seconds.
 Pausing, hiding the player's window, or closing the player requests a position save at once, including in a popout.
-Once the Obsidian window starts closing, PodNotes starts no new writes and lets an in-flight write finish when Obsidian quits.
+Once the Obsidian window starts closing, PodNotes starts no new writes.
+When Obsidian quits, it lets an in-flight write finish.
 
 PodNotes reads the file back after each write to check that the saved data matches.
 A mismatch counts as a failed save.
@@ -122,14 +126,14 @@ Older links can contain the original private URL and are not rewritten by the se
 
 If a non-empty `data.json` cannot be read or parsed, PodNotes leaves it unchanged and shows a persistent notice that saving has stopped.
 The notice includes the file path. If the file is unreadable at startup, PodNotes starts with default settings.
-It accepts a replacement only if that file loads without repairs that could discard data.
-When a readable file arrives during a session with a loaded library, invalid entries are not treated as deletions.
+After an unreadable startup, a replacement must load without repairs before saving resumes.
+When PodNotes already has a loaded library, entries dropped while reading a synced file do not count as deletions.
 PodNotes keeps their last known values while merging other changes.
 
 If a copy from an older data format arrives during a session, PodNotes stops saving and shows a notice asking you to restart Obsidian.
 Restarting runs the migration, including moving old API keys into secret storage.
 
-An empty file counts as missing. At startup, it starts a new library.
+An empty file counts as missing. At startup, PodNotes starts a new library.
 After a failed write leaves the file empty, the next save can write the data again, including changes merged from another device.
 PodNotes does not repair a non-empty, partly written file.
 
@@ -137,7 +141,10 @@ PodNotes does not repair a non-empty, partly written file.
 
 1. For an unreadable file, let sync finish. Check available disk space and file permissions if the notice remains.
 2. Restore a readable backup of the file named in the notice if needed. PodNotes resumes saving when it reads a usable copy.
+   If the notice remains, restart Obsidian.
 3. For an older-format notice, update PodNotes on every device, let sync finish, and restart Obsidian to migrate the file.
 
 If you want to discard the old library, back up the file, delete it, and restart Obsidian.
-Deletion starts a new library. Changes made with saving disabled are not saved over the unreadable file.
+Deletion starts a new library.
+After an unreadable startup, PodNotes adopts the recovered library instead of merging changes made while saving was disabled.
+If PodNotes had already loaded a library, it merges those changes with the recovered file.
