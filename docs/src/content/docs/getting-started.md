@@ -4,7 +4,7 @@ slug: getting-started
 description: Install PodNotes, add a podcast, play an episode, and save your first timestamp and episode note in about five minutes.
 ---
 
-In about five minutes you will have a podcast playing in Obsidian, a timestamp in a note that jumps back to that moment, and a note for the episode.
+In about five minutes, you get a podcast playing in Obsidian, a timestamp in a note that jumps back to that moment, and a note for the episode. PodNotes needs Obsidian 1.13 or later.
 
 ## Install PodNotes
 
@@ -15,7 +15,7 @@ In about five minutes you will have a podcast playing in Obsidian, a timestamp i
 5. Select **Install**.
 6. Select **Enable**.
 
-On a computer, the PodNotes view opens in the right sidebar. To open it again later, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select **Show PodNotes** in the ribbon. On a phone, see [Open the player](/mobile/#open-the-player).
+On a computer, the PodNotes view opens in the right sidebar. To open it again later, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select the **Show PodNotes** podcast icon in the ribbon. On a phone, see [Open the player](/mobile/#open-the-player).
 
 ## Add a podcast
 
@@ -31,11 +31,11 @@ You can also paste the show's RSS feed URL or its Apple Podcasts link into the s
 
 ## Play an episode
 
-1. At the top of the PodNotes view, select **Podcast grid**.
+1. At the top of the PodNotes view, select **Podcast grid**, the first of the three buttons.
 2. Select the show's artwork.
 3. Select an episode.
 
-The episode starts, and the view switches to the player.
+The episode starts, and the view switches to the player. Select the artwork in the player to pause or play.
 
 ## Capture a timestamp
 
@@ -45,11 +45,11 @@ The episode starts, and the view switches to the player.
 
 PodNotes inserts the playback time as a link:
 
-```md
+```md wrap
 - [00:12:41](obsidian://podnotes?...)
 ```
 
-Select the link later to play the episode from that moment.
+Select the link, in editing or reading view, to play the episode from that moment.
 
 ## Create an episode note
 
@@ -73,7 +73,7 @@ To install a release by hand:
 
 1. From the [latest release](https://github.com/chhoumann/PodNotes/releases/latest), download `main.js` and `manifest.json`.
 2. In your vault, put both files in `.obsidian/plugins/podnotes/`. Create the folder if it does not exist.
-3. In **Settings → Community plugins**, reload the list of installed plugins.
+3. In **Settings → Community plugins**, select **Reload plugins**.
 4. Turn on PodNotes.
 
 ## Next steps

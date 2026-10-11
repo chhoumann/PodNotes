@@ -15,7 +15,7 @@ Capture a timestamp while you listen, and PodNotes inserts the playback time at 
 3. Place the cursor where you want the timestamp.
 4. Run **PodNotes: Capture Timestamp** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-PodNotes inserts a list item with a link such as `00:12:41`, followed by a space for your note. A capture replaces any selected text. Select the link later to play the episode from that moment. To keep your timestamps in one note per episode, see [Create episode notes](/notes/).
+PodNotes inserts a list item with a link such as `00:12:41`, followed by a space for your note. A capture replaces any selected text. Select the link, in editing or reading view, to play the episode from that moment. To keep your timestamps in one note per episode, see [Create episode notes](/notes/).
 
 ## Capture from a hotkey, the toolbar, or a headset
 
@@ -37,12 +37,12 @@ The range commands adapt **Capture timestamp format**, as [Timestamp tags](#time
 
 ## Make timestamps clickable
 
-If your captures come out as plain text with no link, your format uses `{{time}}`, the default before PodNotes 2.21.0.
+If your captures come out as plain text with no link, your format most likely uses `{{time}}`, the default before PodNotes 2.21.0.
 
 1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end.
 
-New captures are links. Timestamps that you captured before stay plain text.
+New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the episode has no feed URL or local file to link to.
 
 ## Compensate for reaction time
 

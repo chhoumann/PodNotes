@@ -188,11 +188,11 @@ async function main() {
 				css,
 			});
 			// The Xvfb pointer rests mid-screen and would leave a hover state, so park
-			// it over empty space.
+			// it over empty space: the desktop file explorer, or the phone's note title.
 			await client.call("Input.dispatchMouseEvent", {
 				type: "mouseMoved",
-				x: 130,
-				y: size.height - 80,
+				x: size === PHONE ? size.width / 2 : 130,
+				y: size === PHONE ? 120 : size.height - 80,
 			});
 			await run(
 				`document.querySelectorAll(".has-focus").forEach((el) => el.classList.remove("has-focus")); return true;`,
@@ -231,13 +231,16 @@ async function main() {
 	const noteCrop = (fromLine, toLine) => ({
 		kind: "rect",
 		expression: `(() => {
-			const view = app.workspace.getLeavesOfType("markdown")[0].view.contentEl;
+			const leaf = app.workspace.getLeavesOfType("markdown")[0].view;
+			const view = leaf.contentEl;
+			const pane = view.getBoundingClientRect();
+			const header = leaf.containerEl.querySelector(".view-header").getBoundingClientRect();
 			const column = view.querySelector(".cm-sizer").getBoundingClientRect();
 			const lines = [...view.querySelectorAll(".inline-title, .metadata-container, .cm-line, .callout")];
-			const top = Math.max(0, (${fromLine})(lines).getBoundingClientRect().top - 20);
-			const bottom = Math.min(innerHeight, (${toLine})(lines).getBoundingClientRect().bottom + 20);
-			const left = Math.max(0, column.x - 16);
-			const right = Math.min(innerWidth, column.right + 16);
+			const top = Math.max(pane.top, header.bottom, (${fromLine})(lines).getBoundingClientRect().top - 16);
+			const bottom = Math.min(pane.bottom, innerHeight, (${toLine})(lines).getBoundingClientRect().bottom + 12);
+			const left = Math.max(pane.left, column.x - 16);
+			const right = Math.min(pane.right, column.right + 16);
 			return { x: left, y: top, width: right - left, height: bottom - top };
 		})()`,
 	});
@@ -583,9 +586,10 @@ async function main() {
 			expression: `(() => {
 				const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
 				const rows = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')];
+				const top = rows[0].getBoundingClientRect().top - 12;
 				const last = rows.at(-1).getBoundingClientRect();
 				const right = Math.max(...rows.flatMap((row) => [...row.children].map((cell) => cell.getBoundingClientRect().right)));
-				return { x: box.x, y: box.y, width: Math.min(box.width, right - box.x + 24), height: last.bottom + 32 - box.y };
+				return { x: box.x, y: top, width: Math.min(box.width, right - box.x + 24), height: last.bottom + 24 - top };
 			})()`,
 		});
 		// Obsidian's mobile layout at phone size. The switch reloads the window, so
@@ -605,19 +609,6 @@ async function main() {
 			css: CAPTURE_CSS,
 		});
 		const phone = { css: CAPTURE_CSS, size: PHONE };
-		await run(`app.setting.open(); app.setting.openTabById("podnotes"); return true;`);
-		await fill(search, seed.search);
-		await waitFor(
-			`document.querySelectorAll(".podcast-query-results > *").length >= 4`,
-			"search results",
-		);
-		await settle(2500);
-		await shoot(
-			"add-podcast-phone",
-			{ kind: "rect", expression: SEARCH_SECTION },
-			{ ...phone, css: `${CAPTURE_CSS} ${FIRST_FOUR_RESULTS}` },
-		);
-		await run(`app.setting.close(); return true;`);
 		await run(`app.workspace.leftSplit.collapse();
 			app.workspace.rightSplit.collapse();
 			await app.workspace.getLeaf(false).openFile(app.vault.getAbstractFileByPath("PodNotes/Episodes.base"));
@@ -629,8 +620,10 @@ async function main() {
 				kind: "rect",
 				expression: `(() => {
 					const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
-					const last = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')].at(-1).getBoundingClientRect();
-					return { x: box.x, y: box.y, width: box.width, height: Math.min(innerHeight, last.bottom + 24) - box.y };
+					const rows = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')];
+					const top = rows[0].getBoundingClientRect().top - 12;
+					const last = rows.at(-1).getBoundingClientRect();
+					return { x: box.x, y: top, width: box.width, height: Math.min(innerHeight, last.bottom + 24) - top };
 				})()`,
 			},
 			phone,
@@ -644,6 +637,16 @@ async function main() {
 		await showProperties(false);
 		await scrollNote("## Notes");
 		await shoot("timestamps-phone", notesSection, phone);
+		// The landing page's hero on phones: the note with its timestamps.
+		await scrollNote("");
+		await shoot(
+			"hero-phone",
+			noteCrop(
+				`(lines) => lines.find((el) => el.matches(".inline-title"))`,
+				`(lines) => lines.filter((el) => /\\d\\d:\\d\\d:\\d\\d/.test(el.textContent.trim())).at(-1)`,
+			),
+			phone,
+		);
 		await run(`const editor = app.workspace.activeEditor.editor;
 			const last = [...Array(editor.lineCount()).keys()].findLast((i) => /^- \\[\\d/.test(editor.getLine(i)));
 			editor.focus();
@@ -662,7 +665,11 @@ async function main() {
 					return { x: 0, y: top, width: innerWidth, height: innerHeight - top };
 				})()`,
 			},
-			{ css: `${CAPTURE_CSS} .cm-cursorLayer { display: none; }`, size: PHONE, clean: false },
+			{
+				css: `${CAPTURE_CSS} .cm-cursorLayer { display: none; } .cm-content { caret-color: transparent !important; }`,
+				size: PHONE,
+				clean: false,
+			},
 		);
 		await run(`app.commands.executeCommandById("podnotes:podnotes-show-leaf"); return true;`);
 		await settle(2000);
@@ -675,8 +682,9 @@ async function main() {
 				kind: "rect",
 				expression: `(() => {
 					const drawer = document.querySelector(".podcast-view").closest(".workspace-drawer, .workspace-split").getBoundingClientRect();
+					const top = document.querySelector('.podcast-view [aria-label="Podcast grid"]').getBoundingClientRect().top - 16;
 					const controls = document.querySelector(".podcast-view .controls-container").getBoundingClientRect();
-					return { x: drawer.x, y: drawer.y, width: drawer.width, height: controls.bottom + 24 - drawer.y };
+					return { x: drawer.x, y: top, width: drawer.width, height: controls.bottom + 24 - top };
 				})()`,
 			},
 			{ css: CAPTURE_CSS, size: PHONE },

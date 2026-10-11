@@ -1,19 +1,19 @@
 ---
 // The landing page hero: the pitch and actions from the page's `hero`
 // frontmatter, then the captured hero screenshot in light and dark. Phones get
-// the player in Obsidian's mobile layout, which stays readable at that width.
+// the note in Obsidian's mobile layout, which stays readable at that width.
 import { LinkButton } from "@astrojs/starlight/components";
 import { darkTwin, screenshotSize } from "../screenshots.mjs";
 
 const { data } = Astro.locals.starlightRoute.entry;
 const { title = data.title, tagline, actions = [] } = data.hero ?? {};
 const shot = "/screenshots/hero.webp";
-const phoneShot = "/screenshots/mobile-player.webp";
+const phoneShot = "/screenshots/hero-phone.webp";
 const size = await screenshotSize(shot);
 const phoneSize = await screenshotSize(phoneShot);
 const phone = "(max-width: 50rem)";
 const alt =
-	"The PodNotes player in Obsidian playing an episode, beside the episode's note with its captured timestamp links";
+	"An episode note in Obsidian with timestamp links captured while the episode plays in PodNotes";
 ---
 
 <div class="hero">
@@ -52,8 +52,8 @@ const alt =
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: clamp(1.75rem, 4vw, 2.5rem);
-			padding-block: clamp(1.5rem, 4vw, 3rem) 0.5rem;
+			gap: clamp(1.75rem, 3vw, 2.25rem);
+			padding-block: clamp(1.5rem, 3vw, 2rem) 0.5rem;
 			text-align: center;
 		}
 		.copy {
@@ -71,7 +71,7 @@ const alt =
 			color: var(--sl-color-text-accent);
 		}
 		h1 {
-			font-size: clamp(var(--sl-text-3xl), calc(1rem + 4vw), var(--sl-text-6xl));
+			font-size: clamp(var(--sl-text-3xl), calc(1rem + 3vw), var(--sl-text-5xl));
 			line-height: 1.1;
 			letter-spacing: -0.025em;
 			font-weight: 650;
@@ -82,7 +82,7 @@ const alt =
 			font-size: clamp(var(--sl-text-base), calc(0.5rem + 1.2vw), var(--sl-text-xl));
 			line-height: 1.5;
 			color: var(--sl-color-gray-2);
-			max-width: 38rem;
+			max-width: 42rem;
 			text-wrap: pretty;
 		}
 		.actions {

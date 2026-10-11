@@ -4,7 +4,7 @@ slug: templates
 description: Every template tag PodNotes fills in for note paths, episode notes, feed notes, downloads, and transcripts, with the default templates and date formats.
 ---
 
-Look up every `{{tag}}` that PodNotes fills in when it creates a note, a download, or a transcript. To change where notes go and what they hold, see [Create episode notes](/notes/).
+Look up every `{{tag}}` that PodNotes fills in when it creates a note, a download, or a transcript. To change where notes go and what they hold, see [Create episode notes](/notes/). The tags for captured timestamps are under [Timestamp tags](/timestamps/#timestamp-tags).
 
 ## Tag rules
 
@@ -126,7 +126,7 @@ favorite: false
 {{description}}
 ```
 
-Its properties work with Obsidian Bases. You fill in `status`, `rating`, and `favorite`. To build a table of episode notes, see [Browse your notes with Bases](/notes/#browse-your-notes-with-bases).
+Its properties work with Obsidian Bases. You fill in `status` and `rating`, and change `favorite` to `true` for the episodes you like. To build a table of episode notes, see [Browse your notes with Bases](/notes/#browse-your-notes-with-bases).
 
 The title and the URL are in the body, not the properties. An escaped title can contain backslashes, and a vault link can contain quotes, so either value can break a quoted property. The quoted `{{podcastlink}}` is safe as long as **Feed note file path** has no quotes or backslashes.
 
@@ -188,7 +188,7 @@ Date: {{date}}
 
 **Speaker label format** accepts `{{speaker}}`, the label of the speaker for each turn. See [Transcribe episodes](/transcripts/) for speaker labels.
 
-**Capture timestamp format** accepts `{{time}}`, `{{linktime}}`, `{{segment}}`, and `{{linksegment}}`. See [Timestamp tags](/timestamps/#timestamp-tags).
+**Capture timestamp format** accepts `{{time}}`, `{{linktime}}`, `{{segment}}`, and `{{linksegment}}`. See [Timestamp tags](/timestamps/#timestamp-tags). If your captures come out as plain text, see [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ## Date formats
 

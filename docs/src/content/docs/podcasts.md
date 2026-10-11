@@ -30,11 +30,11 @@ PodNotes keeps the podcast's episode notes, downloads, and playlist entries.
 
 ![The podcast grid with the Queue, Favorites, Local Files, and Played playlists above podcast artwork tiles](/screenshots/podcast-grid.webp)
 
-The view then lists that podcast's or playlist's episodes. When the queue holds episodes, **Queue** opens the player instead, which shows the **Queue** list.
+The view then lists that podcast's or playlist's episodes. **Queue** is the exception: when it holds episodes, it opens the player, which shows the **Queue** list.
 
 To return to the last list you saw, select **Episode list**. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
 
-Above each list, **Search episodes** filters it, and **Refresh episodes** fetches new episodes. Except in **Played**, **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back.
+Above each list, **Search episodes** filters it, and **Refresh episodes** fetches new episodes. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
 
 <span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
 
@@ -67,4 +67,4 @@ To open an episode's menu, right-click the episode or select its **More options*
 | **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites** or removes it. |
 | **Add to Queue** or **Remove from Queue** | Adds the episode to the bottom of the queue or removes it. |
 | **Move to top of queue**, **Move up in queue**, **Move down in queue**, **Move to bottom of queue** | Moves the episode within the queue. Shown only in the player's **Queue** list. |
-| **Add to** or **Remove from** followed by a playlist name | Adds the episode to that playlist or removes it. One item per playlist you made. |
+| **Add to** *playlist* or **Remove from** *playlist* | Adds the episode to that playlist or removes it. One item per playlist you made. |

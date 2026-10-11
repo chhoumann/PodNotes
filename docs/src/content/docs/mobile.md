@@ -24,13 +24,12 @@ To add your first podcast, see [Add and play podcasts](/podcasts/). Most command
 
 ### Set up the button once
 
-1. Open a note in editing view.
-2. To add the range commands too, play an episode in PodNotes. You can pause it.
-3. In **Settings → Interface**, select **Configure mobile toolbar**.
-4. Under **Manage toolbar options**, select **Add a command...**.
-5. Find and select **PodNotes: Capture Timestamp**.
+1. Open a note in editing view. Obsidian lists the capture command only while a note is open in an editor.
+2. In **Settings → Interface**, select **Configure mobile toolbar**.
+3. Under **Manage toolbar options**, select **Add a command...**.
+4. Find and select **PodNotes: Capture Timestamp**.
 
-To add a range button, repeat steps 4 and 5 with **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**. Obsidian lists them only while [the range commands are available](/commands/#capture-last-10-seconds--capture-last-20-seconds).
+To add a range button, play an episode in PodNotes first (you can pause it), then repeat steps 3 and 4 with **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**. Obsidian lists them only while [the range commands are available](/commands/#capture-last-10-seconds--capture-last-20-seconds).
 
 ### Capture from the toolbar
 
@@ -45,7 +44,7 @@ PodNotes inserts a timestamp link at the cursor, or shows a notice when no episo
 
 ## Capture with a headset
 
-While an episode plays, press the headset button that sends the previous-track action. This works on a computer too.
+While an episode plays, press the headset button that sends the previous-track action, often a triple press. This works on a computer too.
 
 - If a note is open in an editor, the timestamp goes in at the cursor.
 - If no note is open in an editor, the timestamp goes at the end of the episode's note. PodNotes creates that note if needed, as long as **Note creation file path** and **Note creation template** are set.

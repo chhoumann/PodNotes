@@ -6,8 +6,6 @@ description: Create a note for an episode or a whole podcast, choose where notes
 
 Create a note for the episode you are listening to, with the episode's details and a link that resumes playback, and keep your timestamps in it.
 
-![The top of an episode note with its title, properties, artwork, a Resume in PodNotes link, and a collapsed episode description](/screenshots/episode-note.webp)
-
 ## Create a note for the current episode
 
 1. Play an episode in PodNotes. You can pause it.
@@ -52,7 +50,7 @@ Feed notes and downloads have their own paths: **Feed note file path** under **F
 
 ## Change what notes contain
 
-**Note creation template** under **Episode notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This template adds the episode's duration and a section for your notes:
+**Note creation template** under **Episode notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This template adds the episode's duration and its artwork at 96 pixels wide, folds the description into a callout, and keeps the `status` and `rating` properties for [Bases](#browse-your-notes-with-bases):
 
 ```md
 ---
@@ -60,19 +58,30 @@ type: podcastEpisode
 podcast: "{{podcastlink}}"
 date: {{date:YYYY-MM-DD}}
 duration: "{{duration}}"
+tags:
+  - podcastEpisode
+status:
+rating:
 ---
-# {{title}}
+![|96]({{artwork}})
 
 [Resume in PodNotes]({{episodelink}})
 
+> [!summary]- Episode description
+{{description:> }}
+
 ## Notes
 ```
+
+A note made with this template looks like this:
+
+![An episode note made with this template, with its properties, artwork, a Resume in PodNotes link, and the description folded into a callout](/screenshots/episode-note.webp)
 
 **Resume in PodNotes** continues the episode from where you stopped. A changed template applies only to new notes. Feed notes use **Feed note template** under **Feed notes**. [Template tags](/templates/) lists every tag and the [default episode note template](/templates/#default-episode-note-template).
 
 ## Browse your notes with Bases
 
-[Obsidian Bases](https://obsidian.md/help/bases) shows notes as a table that you can filter, sort, and group. The default episode note template sets `type: podcastEpisode`, `podcast`, `date`, and `tags`, and leaves `status`, `rating`, and `favorite` for you to fill in. To list your episode notes grouped by status, add this code block to a note:
+[Obsidian Bases](https://obsidian.md/help/bases) shows notes as a table that you can filter, sort, and group. The default episode note template sets `type: podcastEpisode`, `podcast`, `date`, `tags`, and `favorite: false`, and leaves `status` and `rating` for you to fill in. To list your episode notes grouped by status, add this code block to a note:
 
 ````md
 ```base
