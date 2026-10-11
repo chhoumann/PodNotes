@@ -5,6 +5,7 @@
 	"scripts": {
 		"dev": "astro dev",
 		"build": "astro build && node scripts/legacy-fragments.mjs check",
+		"docs:build": "npm run build",
 		"preview": "astro preview"
 	},
 	"dependencies": {

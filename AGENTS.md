@@ -203,8 +203,8 @@ syntax, transcript behavior, local-file behavior, or import/export changes.
 
 Use `npm run docs:build` to validate docs locally. It installs the docs
 dependencies and runs `astro build`, which fails on a broken internal link or
-anchor. The Cloudflare Pages output directory is `docs/dist`, configured in
-`wrangler.jsonc`. See `docs/README.md` for the docs project layout.
+anchor. Cloudflare Pages builds from `docs/` and publishes `docs/dist`, configured in
+`docs/wrangler.jsonc`. See `docs/README.md` for the docs project layout.
 
 ## Release Workflow
 Goal: publish each version from a tested, reviewed, and attested commit. Stop
