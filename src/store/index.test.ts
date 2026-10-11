@@ -325,7 +325,9 @@ describe("downloadedEpisodes store — removeEpisode is pure (no vault I/O)", ()
 		const downloaded = downloadedEpisode("Design Podcast", "Episode 1", {
 			filePath: "podcasts/design/ep1.mp3",
 		});
-		downloadedEpisodes.addEpisode(downloaded, downloaded.filePath, 2048, true);
+		downloadedEpisodes.addEpisode(downloaded, downloaded.filePath, 2048, {
+			downloadedByPodNotes: true,
+		});
 
 		const removed = downloadedEpisodes.removeEpisode(ep("Episode 1", "Design Podcast"));
 

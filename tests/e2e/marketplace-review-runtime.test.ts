@@ -214,6 +214,11 @@ describe("marketplace review runtime paths", () => {
 					AUDIO_BYTES.byteLength,
 				WAIT_OPTS,
 			);
+			const stored = await plugin.data<PodNotesData>().read();
+			expect(stored.downloadedEpisodes?.[episode.podcastName]?.[0]).toMatchObject({
+				filePath: expectedPath,
+				downloadedByPodNotes: true,
+			});
 
 			const downloaded = await evalJsonAsync<{
 				appendCalls: number;

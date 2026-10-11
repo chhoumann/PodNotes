@@ -97,8 +97,8 @@ function downloadAlreadyInProgressError(): Error {
 	return new Error("A download is already in progress for the selected destination.");
 }
 
-function downloadDestinationCollisionError(): Error {
-	return new Error("A different episode already occupies the selected destination.");
+function downloadDestinationCollisionError(filePath: string): Error {
+	return new Error(`A file already exists at "${filePath}".`);
 }
 
 // Single source of truth for "what extension and on-disk path does this download
@@ -121,10 +121,10 @@ function resolveDownloadTarget(
 	};
 }
 
-function registeredDownloadOwnsPath(episode: Episode, filePath: string): boolean {
+function registeredOwnerOfPath(episode: Episode, filePath: string): DownloadedEpisode | undefined {
 	const normalizedPath = normalizePath(filePath);
 	const registered = downloadedEpisodes.getEpisode(episode);
-	if (!registered || normalizePath(registered.filePath) !== normalizedPath) return false;
+	if (!registered || normalizePath(registered.filePath) !== normalizedPath) return undefined;
 
 	const anotherOwner = Object.values(get(downloadedEpisodes))
 		.flat()
@@ -132,12 +132,12 @@ function registeredDownloadOwnsPath(episode: Episode, filePath: string): boolean
 			(candidate) =>
 				candidate !== registered && normalizePath(candidate.filePath) === normalizedPath,
 		);
-	if (anotherOwner) return false;
+	if (anotherOwner) return undefined;
 
-	if (isLocalFile(episode)) {
-		return Boolean(episode.filePath && normalizePath(episode.filePath) === normalizedPath);
-	}
-	return isSameMediaSource(registered.streamUrl, episode.streamUrl);
+	const owns = isLocalFile(episode)
+		? Boolean(episode.filePath && normalizePath(episode.filePath) === normalizedPath)
+		: isSameMediaSource(registered.streamUrl, episode.streamUrl);
+	return owns ? registered : undefined;
 }
 
 // Fast-path variant: the path here is only the URL-extension guess, so a foreign
@@ -146,8 +146,7 @@ function registeredDownloadOwnsPath(episode: Episode, filePath: string): boolean
 function ownedExistingDownload(episode: Episode, filePath: string): DownloadedEpisode | undefined {
 	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
 	if (!(existing instanceof TFile)) return undefined;
-	if (!registeredDownloadOwnsPath(episode, filePath)) return undefined;
-	return downloadedEpisodes.getEpisode(episode);
+	return registeredOwnerOfPath(episode, filePath);
 }
 
 // Resolved-destination variant: the final path is known, so a foreign occupant
@@ -158,10 +157,9 @@ function reusableExistingDownload(
 ): DownloadedEpisode | undefined {
 	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
 	if (!(existing instanceof TFile)) return undefined;
-	if (!registeredDownloadOwnsPath(episode, filePath)) {
-		throw downloadDestinationCollisionError();
-	}
-	return downloadedEpisodes.getEpisode(episode);
+	const owner = registeredOwnerOfPath(episode, filePath);
+	if (!owner) throw downloadDestinationCollisionError(filePath);
+	return owner;
 }
 
 // Download an episode to a vault file with bounded memory using the binary append
@@ -180,12 +178,9 @@ async function startDownloadEpisodeToDisk(
 		const provisionalPath = safeDownloadFilePath(downloadPathTemplate, episode, urlExtension);
 		const cached = ownedExistingDownload(episode, provisionalPath);
 		if (cached) {
-			downloadedEpisodes.addEpisode(
-				episode,
-				provisionalPath,
-				cached.size,
-				cached.downloadedByPodNotes,
-			);
+			downloadedEpisodes.addEpisode(episode, provisionalPath, cached.size, {
+				downloadedByPodNotes: cached.downloadedByPodNotes,
+			});
 			return provisionalPath;
 		}
 	}
@@ -204,12 +199,9 @@ async function startDownloadEpisodeToDisk(
 	);
 	const existing = reusableExistingDownload(episode, filePath);
 	if (existing) {
-		downloadedEpisodes.addEpisode(
-			episode,
-			filePath,
-			existing.size,
-			existing.downloadedByPodNotes,
-		);
+		downloadedEpisodes.addEpisode(episode, filePath, existing.size, {
+			downloadedByPodNotes: existing.downloadedByPodNotes,
+		});
 		return filePath;
 	}
 
@@ -233,7 +225,7 @@ async function startDownloadEpisodeToDisk(
 		await moveIntoPlace(tmpPath, filePath);
 		moved = true;
 
-		downloadedEpisodes.addEpisode(episode, filePath, total, true);
+		downloadedEpisodes.addEpisode(episode, filePath, total, { downloadedByPodNotes: true });
 		return filePath;
 	} finally {
 		if (!moved) await deleteEpisodeFile(tmpPath);
@@ -369,11 +361,21 @@ export function safeDownloadFilePath(
 export async function removeDownloadedEpisode(episode: Episode): Promise<void> {
 	const removed = downloadedEpisodes.removeEpisode(episode);
 	if (!removed || isLocalFile(removed)) return;
-	if (
-		removed.downloadedByPodNotes ||
-		(await confirmTrashUnownedFile(get(plugin).app, removed.filePath))
-	) {
+	if (removed.downloadedByPodNotes) {
 		await deleteEpisodeFile(removed.filePath);
+		return;
+	}
+
+	// The file may be the user's own. Trash only a file the vault index resolves,
+	// because deleteEpisodeFile's adapter fallback deletes a path the index misses
+	// permanently.
+	const { app } = get(plugin);
+	const file = app.vault.getAbstractFileByPath(removed.filePath);
+	if (!(file instanceof TFile) || !(await confirmTrashUnownedFile(app, file.path))) return;
+	try {
+		await app.fileManager.trashFile(file);
+	} catch (error) {
+		console.error(`Failed to delete downloaded file "${file.path}":`, error);
 	}
 }
 

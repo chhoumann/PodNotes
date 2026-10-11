@@ -30,7 +30,7 @@ export const downloadedEpisodes = (() => {
 			episode: Episode,
 			filePath: string,
 			size: number,
-			downloadedByPodNotes?: true,
+			{ downloadedByPodNotes }: { downloadedByPodNotes?: true } = {},
 		): string | undefined => {
 			let replacedFilePath: string | undefined;
 

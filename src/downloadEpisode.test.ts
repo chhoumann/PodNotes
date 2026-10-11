@@ -1638,7 +1638,7 @@ describe("downloadEpisodeWithNotice (streaming range path)", () => {
 
 		await downloadEpisodeWithNotice(episodeA, template);
 		await expect(downloadEpisodeWithNotice(episodeB, template)).rejects.toThrow(
-			"A different episode already occupies the selected destination.",
+			'A file already exists at "Podcasts/shared.mp3".',
 		);
 
 		// Episode B pays one Range probe before the collision surfaces: the
