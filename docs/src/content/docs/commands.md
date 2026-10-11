@@ -1,105 +1,118 @@
 ---
 title: Commands
 slug: commands
+description: Current PodNotes command names, IDs, availability requirements, and effects.
 ---
 
+The command palette prefixes these names with **PodNotes:**.
+Most playback commands appear only after an episode is loaded. A loaded episode can be paused.
+Each command's full ID is listed below for workflow plugins.
+
 ## Show player
-Opens the PodNotes pane and brings it into focus.
 
-If the pane already exists but is hidden - for example in a collapsed sidebar or out of view because the right sidebar has too many icons - this command reveals it. If it does not exist yet, the command creates it in the right sidebar. You can run it from the command palette or bind it to a hotkey.
-
-PodNotes also adds a **podcast icon to the left ribbon** as a reliable way to reopen the pane. On mobile it appears in the ribbon menu, and you can hide it via Obsidian's *Manage ribbon actions* if you prefer to use the command instead.
-
-If you are having issues with PodNotes not being shown, feel free to create an [issue](https://github.com/chhoumann/PodNotes/issues/new).
+`podnotes:podnotes-show-leaf` opens the PodNotes view or reveals its existing pane.
+It is always available. If no pane exists, it creates one in the right sidebar.
+The podcast ribbon action **Show PodNotes** opens the same view.
 
 ## Play Podcast
-This will start playback if the current episode is paused.
+
+`podnotes:start-playing` starts playback of a loaded, paused episode.
+It is available when an episode is loaded and PodNotes is paused.
 
 ## Stop Podcast
-This will stop playback if the current episode is playing.
+
+`podnotes:stop-playing` pauses the loaded episode and keeps its position.
+It is available when PodNotes is playing.
 
 ## Toggle playback
-This will toggle playback between playing and paused.
+
+`podnotes:podnotes-toggle-playback` switches the loaded episode between playing and paused.
+It requires a loaded episode.
 
 ## Skip Backward
-This will skip the current episode back by the amount of seconds specified in the settings.
+
+`podnotes:skip-backward` seeks backward by **Skip backward length (s)**, with a minimum position of zero.
+It requires a loaded episode and works while paused. The default skip length is 15 seconds.
 
 ## Skip Forward
-This will skip the current episode forward by the amount of seconds specified in the settings.
+
+`podnotes:skip-forward` seeks forward by **Skip forward length (s)**.
+When duration is known, a forward skip stops up to 0.25 seconds before the end without rewinding an episode already nearer its end.
+It requires a loaded episode and works while paused. The default skip length is 15 seconds.
 
 ## Download Playing Episode
-This will download the currently playing episode.
 
-Downloads are stored in the location specified by the **Episode download path** setting. This path is a template and **must include a per-episode token** such as `{{title}}` (the default is `PodNotes/{{podcast}}/{{title}}`). A path without `{{title}}` makes every episode resolve to the same file, so downloads overwrite each other or fail. The file extension is added automatically - do not include one.
+`podnotes:download-playing-episode` downloads the loaded episode. Playback does not need to be running.
+**Episode download path** controls the vault destination and defaults to `PodNotes/{{podcast}}/{{title}}`.
+The media extension is added automatically.
+
+A path that distinguishes episodes, such as one containing `{{title}}`, avoids file collisions.
+A collision with another episode's file causes an error rather than an overwrite.
+See [Path templates](/templates/#file-path) and [Downloads and sync](/sync/#downloads-on-another-device).
+
+## Reorder Queue
+
+`podnotes:reorder-queue` opens a queue editor with controls to move and remove episodes.
+It appears when the queue contains at least two episodes. The saved order is the play order.
 
 ## Capture Timestamp
-This will capture the current timestamp of the currently playing episode.
 
-See [timestamps](/timestamps/) for more information on timestamp templates.
+`podnotes:capture-timestamp` inserts the playback time into the active note editor.
+It is an editor command that remains available without a loaded episode, so the mobile toolbar can offer it.
+Capture itself requires a loaded episode and a non-empty **Capture timestamp format**.
+If either is missing, PodNotes shows a notice.
+
+The headset Media Session `previoustrack` action captures a timestamp with an episode-note fallback.
+The editor command does not use that fallback. See [Timestamps](/timestamps/) and [Mobile capture](/mobile/).
 
 ## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds
-These commands capture a linked start-end segment ending at the current playback time.
-When opened, the link seeks to the segment start and pauses playback at the segment end.
 
-See [timestamps](/timestamps/#capturing-segments) for more information on segment templates and behavior.
-
-On mobile, this command can be added to Obsidian's editor toolbar. PodNotes also
-registers the Media Session `previous track` action for headphone controls: when
-your headphones send that action, PodNotes captures the current timestamp. If a
-markdown editor is active, the timestamp is inserted at the cursor; otherwise it
-is appended to the current episode note. PodNotes does not capture timestamps on
-ordinary pause/play events, because that would create unwanted timestamps every
-time playback is paused.
+`podnotes:capture-segment-10s` and `podnotes:capture-segment-20s` insert a recent playback range into the active editor.
+They require a loaded episode and a non-empty timestamp format.
+A linked range plays from its start and pauses at its end. See [Segment capture](/timestamps/#capturing-segments).
 
 ## Increase playback rate
-This increases the current episode's playback speed by `0.1x`.
+
+`podnotes:increase-playback-rate` increases the loaded episode's speed by `0.1x`, up to `4x`.
 
 ## Decrease playback rate
-This decreases the current episode's playback speed by `0.1x`.
+
+`podnotes:decrease-playback-rate` decreases the loaded episode's speed by `0.1x`, down to `0.5x`.
 
 ## Reset playback rate
-This resets the current episode's playback speed to the default playback rate
-from PodNotes settings.
+
+`podnotes:reset-playback-rate` resets the loaded episode's speed to **Default Playback Rate**.
 
 ## Create episode note
-This will create a note for the currently playing episode.
 
-(This command was previously named "Create Podcast Note". The name was changed to
-distinguish it from the feed-level command below; existing hotkeys are unaffected.)
+`podnotes:create-podcast-note` creates or opens a note for the loaded episode.
+It requires a loaded episode, **Note creation file path**, and **Note creation template**.
+Its ID is unchanged from the older **Create Podcast Note** name, so existing hotkeys remain associated with it.
 
-See [templates](/templates/) for more information on note templates.
+See [Templates](/templates/) for the defaults and tag reference.
 
 ## Create podcast feed note
-This creates a note for a whole podcast (the feed as a whole), not a single
-episode. It does **not** require playing anything: running the command opens a
-picker of your saved podcasts, and choosing one creates (or opens) that podcast's
-note. You can also create a feed note from an episode's right-click menu
-("Create feed note").
 
-See [templates](/templates/#podcast-feed-notes) for the feed note template and
-its available tags.
+`podnotes:create-podcast-feed-note` opens a picker of saved podcasts, then creates or opens the selected feed note.
+It requires at least one saved feed, **Feed note file path**, and **Feed note template**.
+Playback is not required.
+
+The episode context menu also offers **Create feed note** or **Open feed note**.
+See [Feed note templates](/templates/#podcast-feed-notes).
 
 ## Copy universal episode link to clipboard
-This will copy the universal episode link to the clipboard.
 
-First, it checks for the episode on iTunes to get its ID.
-Then, it asks pod.link for an episode ID, after which it constructs the universal episode link and copies it to your clipboard.
-
-Episode links look like this: [https://pod.link/1138055739/episode/1732808e781cc64a30d7feba0467b63a](https://pod.link/1138055739/episode/1732808e781cc64a30d7feba0467b63a).
-
-They can be used to share the episode with others, no matter what podcast app they use.
+`podnotes:get-share-link-episode` copies a pod.link episode URL for the loaded episode.
+It looks up the show in Apple Podcasts, matching its feed URL before trying its name, then matches the episode through pod.link.
+A missing show or episode produces a notice. This is a share link for other podcast apps, rather than a PodNotes timestamp link.
 
 ## Transcribe current episode
 
-This command transcribes the currently playing audio episode and saves the
-result at the path configured in **Transcript settings**.
+`podnotes:podnotes-transcribe` transcribes the loaded audio episode into a note at **Transcript file path**.
+It is available for audio episodes, including local audio, and unavailable for video episodes.
+A missing API key does not hide the command. Running it explains which provider needs a key on this device.
 
-Plain Whisper transcription and OpenAI speaker diarization require an available
-OpenAI secret on the current device. Deepgram speaker diarization requires an
-available Deepgram secret instead. In **Settings -> PodNotes -> Transcript
-settings**, select an existing Obsidian secret or create one for the provider
-you use.
-
-The command remains available when a required secret is missing so PodNotes can
-tell you which provider needs to be configured. If a selected secret is not
-available on this device, open PodNotes settings and select or create it again.
+Plain transcription uses OpenAI. With **Speaker diarization** enabled, **Diarization provider** selects OpenAI or Deepgram.
+**OpenAI API key** and **Deepgram API key** are under **Transcripts** in PodNotes settings.
+An existing transcript file is kept rather than transcribed again.
+See [Transcripts](/transcripts/) for provider setup.
