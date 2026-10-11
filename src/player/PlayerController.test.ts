@@ -174,10 +174,11 @@ describe("restore", () => {
 		expect(host.saveSettings).not.toHaveBeenCalled();
 	});
 
-	test("again, after a sync, shows the synced selection", () => {
+	test("again, after a sync, shows the synced selection, even after a seek", () => {
 		saved(B, 300, 1800);
 		const { player, state } = setup();
 		player.restore(A);
+		player.seek(900);
 
 		player.restore(B);
 
@@ -188,6 +189,46 @@ describe("restore", () => {
 			duration: 1800,
 		});
 	});
+
+	const starts = [
+		["resume()", (player: PlayerController) => player.resume()],
+		["play()", (player: PlayerController) => player.play(A)],
+	] as const;
+
+	test.each(starts)(
+		"again, after an unrelated sync, %s starts where the user moved it",
+		(_, start) => {
+			saved(A, 600, 3600);
+			const { player, media, state } = setup();
+			player.restore(A);
+			player.seek(900);
+
+			player.restore(A);
+			expect(state()).toMatchObject({ status: "restored", currentTime: 900 });
+			start(player);
+			metadata(media());
+
+			expect(media().currentTime).toBe(900);
+		},
+	);
+
+	test.each(starts)(
+		"after a failed first play, %s starts at the progress a sync brought",
+		(_, start) => {
+			saved(A, 600, 3600);
+			const { player, media } = setup();
+			player.restore(A);
+			player.resume();
+			media().emit("error");
+
+			saved(A, 2400, 3600);
+			player.restore(A);
+			start(player);
+			metadata(media());
+
+			expect(media().currentTime).toBe(2400);
+		},
+	);
 
 	test("leaves loaded media alone", () => {
 		const { player, media, state } = setup();
