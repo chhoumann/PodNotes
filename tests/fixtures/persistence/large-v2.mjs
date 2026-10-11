@@ -6,8 +6,9 @@ import config from "../../../obsidian-e2e.config.mjs";
 export function createLargeV2Fixture(includeGuid = false) {
 	/** @type {{feed: import("../../../src/types/PodcastFeed").PodcastFeed, episodes: SavedEpisode[], guids: string[]}} */
 	const sample = JSON.parse(readFileSync("tests/fixtures/persistence/feed-sample.json", "utf8"));
+	// A file a released version wrote: it has no libraryId.
 	const data =
-		/** @type {import("../../../src/persistence/podNotesData").PersistedPodNotesDataV2} */ ({
+		/** @type {import("../../../src/persistence/podNotesData").PersistedPodNotesSettings & { schemaVersion: 2 }} */ ({
 			...structuredClone(config.defaultData),
 			schemaVersion: 2,
 		});

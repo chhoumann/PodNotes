@@ -42,11 +42,7 @@ export interface DecodedPodNotesData {
 	legacySecrets: CredentialValues;
 	/** Retired fields found in v2 must be scrubbed without importing their values. */
 	retiredPlaintextPresent: boolean;
-	/**
-	 * Unknown supported-schema root fields retained so a normal save does not erase them.
-	 * Also carries `libraryId`, the file's lineage: its string id, or "" for a library
-	 * started before ids, which sorts before every id.
-	 */
+	/** Unknown supported-schema root fields retained so a normal save does not erase them. */
 	unknownFields: UnknownRecord;
 }
 
@@ -65,7 +61,17 @@ export type PersistedPodNotesSettings = Omit<
 export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
 	UnknownRecord & {
 		schemaVersion: typeof PODNOTES_DATA_SCHEMA_VERSION;
+		/**
+		 * The library this file belongs to: the id the device that started it from nothing
+		 * gave it, or "" for a library started before ids, which sorts before every id.
+		 */
+		libraryId: string;
 	};
+
+/** A new library's `libraryId`. Ids sort by when their library started. */
+export function newLibraryId(): string {
+	return `${new Date().toISOString()} ${crypto.randomUUID()}`;
+}
 
 /**
  * Decode and validate plugin data before any store sees it.
@@ -76,13 +82,9 @@ export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
  * does not understand.
  */
 export function decodePodNotesData(value: unknown): DecodedPodNotesData {
-	// No data.json yet is a new install, which starts from the current defaults as a
-	// new library. Ids sort by when the library started.
+	// No data.json yet is a new install: a new library, from the current defaults.
 	if (value === null || value === undefined) {
-		value = {
-			...structuredClone(DEFAULT_SETTINGS),
-			libraryId: `${new Date().toISOString()} ${crypto.randomUUID()}`,
-		};
+		value = { ...structuredClone(DEFAULT_SETTINGS), libraryId: newLibraryId() };
 	}
 
 	if (!isPlainObject(value)) {
@@ -100,8 +102,6 @@ export function decodePodNotesData(value: unknown): DecodedPodNotesData {
 		Object.prototype.hasOwnProperty.call(value, key),
 	);
 	const unknownFields = copyUnknownRootFields(value);
-	const { libraryId } = unknownFields;
-	unknownFields.libraryId = typeof libraryId === "string" ? libraryId : "";
 
 	return {
 		settings,
@@ -132,6 +132,7 @@ export function encodePodNotesData(
 		...copyUnknownRootFields(unknownFields),
 		...validated,
 		schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+		libraryId: typeof unknownFields.libraryId === "string" ? unknownFields.libraryId : "",
 		currentEpisode: validated.currentEpisode
 			? encodeEpisode(validated.currentEpisode)
 			: undefined,

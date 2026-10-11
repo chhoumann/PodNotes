@@ -42,7 +42,7 @@ function makePlugin(
 		credentials: new CredentialRepository(storage),
 		isReady: true,
 		settings: structuredClone(DEFAULT_SETTINGS),
-		persistenceUnknownFields: { libraryId: "" },
+		persistenceUnknownFields: {},
 		loadData: vi.fn(async () => structuredClone(disk)),
 		saveData: async (data: unknown) => {
 			await saveData(data);
@@ -840,12 +840,10 @@ describe("a device that started before sync delivered its data.json", () => {
 	async function startDevice(data?: unknown) {
 		let disk = structuredClone(data);
 		const plugin = makePlugin();
-		Object.assign(plugin, {
-			loadData: vi.fn(async () => structuredClone(disk)),
-			saveData: vi.fn(async (next: unknown) => {
-				disk = JSON.parse(JSON.stringify(next));
-			}),
+		const saveData = vi.fn(async (next: unknown) => {
+			disk = JSON.parse(JSON.stringify(next));
 		});
+		Object.assign(plugin, { loadData: vi.fn(async () => structuredClone(disk)), saveData });
 		Object.assign(plugin.app.vault.adapter, {
 			exists: vi.fn(async () => disk !== undefined),
 			read: vi.fn(async () => dataFileText(disk)),
@@ -855,6 +853,7 @@ describe("a device that started before sync delivered its data.json", () => {
 		return {
 			plugin,
 			file: () => structuredClone(disk),
+			writes: () => saveData.mock.calls.length,
 			receive: async (file: unknown) => {
 				disk = structuredClone(file);
 				await plugin.onExternalSettingsChange();
@@ -885,7 +884,7 @@ describe("a device that started before sync delivered its data.json", () => {
 		await newDevice.receive(established.file());
 
 		expectBothLibraries(established, newDevice);
-		expect(newDevice.file()).toEqual(established.file());
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
 	});
 
 	it("keeps both libraries when the library reaches the new device first", async () => {
@@ -898,7 +897,7 @@ describe("a device that started before sync delivered its data.json", () => {
 		await established.receive(newDevice.file());
 
 		expectBothLibraries(established, newDevice);
-		expect(newDevice.file()).toEqual(established.file());
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
 	});
 
 	it("keeps the library when the file a new device wrote at install reaches it", async () => {
@@ -947,10 +946,13 @@ describe("a device that started before sync delivered its data.json", () => {
 		const [libraryFile, newDeviceFile] = [established.file(), newDevice.file()];
 		await established.receive(newDeviceFile);
 		await newDevice.receive(libraryFile);
+		const writes = [established.writes(), newDevice.writes()];
 		await newDevice.receive(established.file());
+		await established.receive(newDevice.file());
 
 		expectBothLibraries(established, newDevice);
-		expect(newDevice.file()).toEqual(established.file());
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
+		expect([established.writes(), newDevice.writes()]).toEqual(writes);
 	});
 
 	it("keeps the new device's podcast when Obsidian Sync key-merges the files on the library's device", async () => {
@@ -968,7 +970,7 @@ describe("a device that started before sync delivered its data.json", () => {
 		await newDevice.receive(established.file());
 
 		expectBothLibraries(established, newDevice);
-		expect(newDevice.file()).toEqual(established.file());
+		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
 	});
 
 	it("keeps the library when a device that could not read its file at start writes a new one", async () => {

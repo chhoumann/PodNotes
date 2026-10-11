@@ -418,7 +418,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				adoptReference: vi.fn(() => newerSecretId),
 			},
 			isReady: true,
-			persistenceUnknownFields: { libraryId: "" },
+			persistenceUnknownFields: {},
 			app: {
 				vault: {
 					adapter: {
@@ -500,7 +500,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			settings: structuredClone(DEFAULT_SETTINGS),
 			credentials: { storeValues: vi.fn(() => ({})) },
 			isReady: false,
-			persistenceUnknownFields: { libraryId: "" },
+			persistenceUnknownFields: {},
 			app: {
 				vault: {
 					adapter: {
@@ -584,7 +584,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				settings: structuredClone(disk),
 				credentials: { storeValues: vi.fn(() => ({})) },
 				isReady: true,
-				persistenceUnknownFields: { libraryId: "" },
+				persistenceUnknownFields: {},
 				app: {
 					vault: {
 						adapter: {

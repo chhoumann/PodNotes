@@ -332,10 +332,14 @@ describe("PodNotes data.json changed elsewhere", () => {
 	// PodNotes started with no data.json writes one at once: the file a new device has
 	// before the sync client delivers the library.
 	async function startAsNewDevice(plugin: PluginHandle): Promise<PodNotesData> {
+		// A write through the harness first, so it restores this file after the test.
 		await plugin.data<PodNotesData>().patch((data) => data);
 		await rm(await plugin.dataPath());
 		await plugin.reload(RELOAD_OPTIONS);
-		return plugin.data<PodNotesData>().read();
+		const file = await plugin.data<PodNotesData & { libraryId?: string }>().read();
+		expect(file.savedFeeds).toEqual({});
+		expect(file.libraryId).toMatch(/^\d{4}-/);
+		return file;
 	}
 
 	test("keeps its library when a new device's file replaces data.json", async () => {

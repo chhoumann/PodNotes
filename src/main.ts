@@ -37,6 +37,7 @@ import {
 	decodePodNotesData,
 	encodePodNotesData,
 	PODNOTES_DATA_SCHEMA_VERSION,
+	newLibraryId,
 	PodNotesDataError,
 	toDocument,
 	type PersistedPodNotesDataV2,
@@ -491,7 +492,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				this.settings = structuredClone(DEFAULT_SETTINGS);
 				// A new library: if the file goes away, this device's next save must not pass
 				// for a version of the one it could not read.
-				this.persistenceUnknownFields = decodePodNotesData(null).unknownFields;
+				this.persistenceUnknownFields = { libraryId: newLibraryId() };
 				this.refuseSaves(
 					"unreadable-data-file",
 					`PodNotes could not read ${this.dataFilePath()}, so it left the file unchanged and started with default settings. Nothing is saved until the file can be read again, or until you delete it and restart Obsidian.`,

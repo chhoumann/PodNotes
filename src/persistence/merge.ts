@@ -229,7 +229,7 @@ export function mergeDataFile<T>(base: T, local: T, disk: T): T {
 	const lineage = (doc: T) => (doc as UnknownRecord).libraryId as string;
 	if (lineage(base) === lineage(disk)) return threeWayMergeSettings(base, local, disk);
 
-	const empty = toDocument(structuredClone(DEFAULT_SETTINGS)) as T;
+	const empty = toDocument(DEFAULT_SETTINGS) as T;
 	const merged = threeWayMergeSettings(empty, local, disk) as UnknownRecord;
 	// Memory, not base: memory may already hold a library that started earlier.
 	merged.libraryId = [lineage(local), lineage(disk)].sort()[0];
