@@ -103,6 +103,7 @@ describe("parseApplePodcastsId", () => {
 		["https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110", "1545953110"],
 		["https://podcasts.apple.com/podcast/huberman-lab/id1545953110", "1545953110"],
 		["https://podcasts.apple.com/us/podcast/id1545953110", "1545953110"],
+		["https://podcasts.apple.com/us/podcast/id10/id1545953110", "1545953110"],
 		["https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110?uo=4", "1545953110"],
 		[
 			"https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110?i=1000650000000",

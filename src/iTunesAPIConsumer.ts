@@ -37,7 +37,7 @@ export async function lookupiTunesPodcast(id: string): Promise<PodcastFeed | nul
 
 /**
  * Extract the show id from an Apple Podcasts link: a `podcast` or `viewPodcast`
- * path with the id in an `id<digits>` segment or an `id` query parameter.
+ * path with the id in its last `id<digits>` segment or an `id` query parameter.
  */
 export function parseApplePodcastsId(input: string): string | null {
 	const url = checkStringIsUrl(input);
@@ -54,7 +54,10 @@ export function parseApplePodcastsId(input: string): string | null {
 		return null;
 	}
 	const id =
-		segments.find((segment) => /^id\d+$/.test(segment))?.slice(2) ?? url.searchParams.get("id");
+		segments
+			.filter((segment) => /^id\d+$/.test(segment))
+			.pop()
+			?.slice(2) ?? url.searchParams.get("id");
 	return id && /^\d+$/.test(id) ? id : null;
 }
 
