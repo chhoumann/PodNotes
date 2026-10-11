@@ -393,12 +393,19 @@ describe("timestamp template (#345)", () => {
 	);
 
 	it.each([
-		["no timestamp setting", listenerData, 0],
-		["only a timestamp offset", { ...listenerData, timestamp: { offset: 5 } }, 5],
-	])("keeps plain timestamps for older data with %s", (_case, data, offset) => {
+		["no timestamp setting", listenerData, 0, []],
+		["only a timestamp offset", { ...listenerData, timestamp: { offset: 5 } }, 5, []],
+		[
+			"a non-string template",
+			{ ...listenerData, timestamp: { template: 42, offset: 0 } },
+			0,
+			["timestamp.template: expected a string"],
+		],
+	])("keeps plain timestamps for older data with %s", (_case, data, offset, warnings) => {
 		const decoded = decodePodNotesData(data);
 
 		expect(decoded.sourceVersion).toBe(0);
 		expect(decoded.settings.timestamp).toEqual({ template: "- {{time}} ", offset });
+		expect(decoded.warnings).toEqual(warnings);
 	});
 });
