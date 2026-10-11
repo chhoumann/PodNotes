@@ -24,7 +24,12 @@
 		(entry) => !shouldHidePlayedEpisodes || !isEpisodeFinished(entry.episode, $playedEpisodes),
 	);
 
-	/** Episode keys repeat for same-titled podcasts or episodes, so a repeat gets a suffix. */
+	/**
+	 * Episode keys repeat for same-titled podcasts or episodes, so a repeat gets a
+	 * suffix. It starts with NUL, which feed text cannot contain (see episodeKey.ts),
+	 * so a suffixed key never equals another episode's key and rows stay put as the
+	 * list changes.
+	 */
 	function keyRows(entries: EpisodeListEntry[]): [string, EpisodeListEntry][] {
 		const keys = new Set<string>();
 		return entries.map((entry) => {

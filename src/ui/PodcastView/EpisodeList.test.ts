@@ -50,3 +50,19 @@ test("an episode that stays listed keeps its loaded artwork when an earlier one 
 
 	expect(screen.getByAltText("Second").style.opacity).toBe("1");
 });
+
+test("an episode titled like a repeated row keeps its row when the repeats leave", async () => {
+	const titledLikeRepeat = { ...rerun("https://media.test/3.mp3"), title: "Rerun#1" };
+	const view = render(EpisodeList, {
+		episodes: [
+			rerun("https://media.test/1.mp3"),
+			rerun("https://media.test/2.mp3"),
+			titledLikeRepeat,
+		],
+	});
+	const row = screen.getByText("Rerun#1").closest(".podcast-episode-item");
+
+	await view.rerender({ episodes: [rerun("https://media.test/2.mp3"), titledLikeRepeat] });
+
+	expect(screen.getByText("Rerun#1").closest(".podcast-episode-item")).toBe(row);
+});
