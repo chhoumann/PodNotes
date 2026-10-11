@@ -62,8 +62,8 @@ export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
 	UnknownRecord & {
 		schemaVersion: typeof PODNOTES_DATA_SCHEMA_VERSION;
 		/**
-		 * The library this file belongs to: the id the device that started it from nothing
-		 * gave it, or "" for a library started before ids, which sorts before every id.
+		 * The library this file belongs to: an id given when a device started it from
+		 * nothing, or "" for a library started before ids, which sorts before every id.
 		 */
 		libraryId: string;
 	};
@@ -132,8 +132,7 @@ export function encodePodNotesData(
 		...copyUnknownRootFields(unknownFields),
 		...validated,
 		schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
-		// Not a setting: it travels with the root fields that are not settings, so it is
-		// not a known key.
+		// Read from the unknown root fields, so it must stay out of KNOWN_TOP_LEVEL_KEYS.
 		libraryId: typeof unknownFields.libraryId === "string" ? unknownFields.libraryId : "",
 		currentEpisode: validated.currentEpisode
 			? encodeEpisode(validated.currentEpisode)
