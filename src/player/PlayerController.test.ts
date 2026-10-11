@@ -939,6 +939,65 @@ describe("errors", () => {
 
 		expect(media().currentTime).toBe(2000);
 	});
+
+	test.each([
+		[
+			"on the loaded episode",
+			(player: PlayerController, media: () => FakeMedia) => {
+				player.play(A);
+				metadata(media());
+				reach(media(), 610, 1000);
+				return player.play(A, { time: 2000 });
+			},
+			2000,
+		],
+		[
+			"on the restored episode",
+			(player: PlayerController) => {
+				player.restore(A);
+				return player.play(A, { time: 2000 });
+			},
+			2000,
+		],
+		[
+			"on another episode",
+			(player: PlayerController, media: () => FakeMedia) => {
+				player.play(A);
+				metadata(media());
+				return player.play(B, { time: 1500 });
+			},
+			1500,
+		],
+	])("resume() retries at a link's time %s after a media error", (_, link, time) => {
+		saved(A, 600, 3600);
+		saved(B, 300, 1800);
+		const { player, media } = setup();
+		expect(link(player, media)).toBe(true);
+		media().emit("error");
+
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(time);
+	});
+
+	test("resume() starts at the progress a sync brought during an error, after an earlier seek was saved", () => {
+		saved(A, 600, 3600);
+		const { player, media } = setup();
+		player.play(A);
+		metadata(media());
+		player.seek(630);
+		reach(media(), 700, 10_000);
+		reach(media(), 1800, 20_000);
+		media().emit("error");
+
+		saved(A, 3000, 3600);
+		player.restore(A);
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(3000);
+	});
 });
 
 describe("dispose", () => {
@@ -1080,13 +1139,14 @@ describe("video stage", () => {
 	);
 
 	/** VIDEO played to its end in a stage the popout then carried away, and the browser reloaded it. */
-	function finishedThenReset() {
+	function finishedThenReset(seekDuringPlay?: number) {
 		const context = setup();
 		const { player, doc, media } = context;
 		const stage = new FakeParent(doc);
 		player.play(VIDEO);
 		metadata(media(), 60);
 		player.videoStage(stage as unknown as HTMLElement);
+		if (seekDuringPlay !== undefined) player.seek(seekDuringPlay);
 		reach(media(), 60);
 		pausedByBrowser(media());
 		media().emit("ended");
@@ -1125,6 +1185,34 @@ describe("video stage", () => {
 		expect(media().currentTime).toBe(0);
 		expect(media().paused).toBe(false);
 		expect(state().status).toBe("playing");
+	});
+
+	test("a finished video sought during play restarts at the beginning after a reset", () => {
+		const { player, media, state } = finishedThenReset(30);
+
+		player.resume();
+		metadata(media(), 60);
+
+		expect(media().currentTime).toBe(0);
+		expect(media().paused).toBe(false);
+		expect(state().status).toBe("playing");
+	});
+
+	test("a new rendition of a finished episode starts at the beginning", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media(), 60);
+		reach(media(), 60);
+		pausedByBrowser(media());
+		media().emit("ended");
+		expect(state().status).toBe("ended");
+
+		player.play({ ...A, streamUrl: "https://cdn.example.com/A-reissued.mp3" });
+		metadata(media(), 60);
+
+		expect(media().src).toBe("https://cdn.example.com/A-reissued.mp3");
+		expect(media().currentTime).toBe(0);
+		expect(media().paused).toBe(false);
 	});
 
 	test("a seek in a finished video that a reset reloaded plays from there", () => {
