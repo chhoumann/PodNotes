@@ -7,7 +7,7 @@ import FeedDocumentParser, {
 	type TranscriptLink,
 } from "src/parser/feedDocumentParser";
 import { DANGEROUS_KEYS, isPlainObject } from "src/persistence/codecUtils";
-import { dateTimestamp, decodeDate } from "src/persistence/dateCodec";
+import { decodeDate, newestFirst } from "src/persistence/dateCodec";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { fetchTextWithTimeout } from "src/utility/networkRequest";
@@ -382,10 +382,7 @@ const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 /** The newest items by date, in feed order, so an oldest-first feed still keeps its latest episodes. */
 function keepNewestItems(doc: FeedDocument): FeedDocument {
 	if (doc.items.length <= MAX_ITEMS_PER_FEED) return doc;
-	const time = (item: ParsedEpisodeDocument) => dateTimestamp(item.episodeDate) ?? 0;
-	const kept = new Set(
-		[...doc.items].sort((a, b) => time(b) - time(a)).slice(0, MAX_ITEMS_PER_FEED),
-	);
+	const kept = new Set([...doc.items].sort(newestFirst).slice(0, MAX_ITEMS_PER_FEED));
 	return { ...doc, items: doc.items.filter((item) => kept.has(item)), complete: false };
 }
 

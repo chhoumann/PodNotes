@@ -1,4 +1,4 @@
-import { dateTimestamp } from "src/persistence/dateCodec";
+import { newestFirst } from "src/persistence/dateCodec";
 import type { FeedKey, FeedState } from "src/services/FeedRepository";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
@@ -12,9 +12,6 @@ export type Selection =
 	| { kind: "feed"; key: FeedKey }
 	| { kind: "playlist"; name: string }
 	| { kind: "played" };
-
-const newestFirst = (a: Episode, b: Episode) =>
-	(dateTimestamp(b.episodeDate) ?? 0) - (dateTimestamp(a.episodeDate) ?? 0);
 
 /** The newest `limit` episodes of each subscription, merged newest first. */
 export function selectLatestEpisodes(
