@@ -971,8 +971,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			this.plugin.feedUrls,
 		).savedFeeds;
 		const failedCandidate = structuredClone(merged);
-		const openAIReferenceChanged = merged.openAISecretId !== previous.openAISecretId;
-		if (openAIReferenceChanged) this.plugin.invalidateTranscriptionCredentialCache();
 		const concurrentStoreChanges = observePersistedStoreChanges();
 		this.plugin.settings = merged;
 		try {
@@ -992,7 +990,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				settingsValuesEqual(previousSettings, previous)
 					? previousSettings
 					: restored;
-			if (openAIReferenceChanged) this.plugin.invalidateTranscriptionCredentialCache();
 			try {
 				// A store event may have queued a newer merged snapshot while the first
 				// write was pending. Queue the rollback after it and wait for durability
@@ -1135,7 +1132,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		}
 
 		if (persistedId === previous) return { persistedId, saved: true };
-		if (key === "openAISecretId") this.plugin.invalidateTranscriptionCredentialCache();
 		this.plugin.settings[key] = persistedId;
 
 		try {
@@ -1143,7 +1139,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			return { persistedId, saved: true };
 		} catch (error) {
 			this.plugin.settings[key] = previous;
-			if (key === "openAISecretId") this.plugin.invalidateTranscriptionCredentialCache();
 			try {
 				await this.plugin.saveSettingsStrict();
 				new Notice(
