@@ -265,6 +265,19 @@ describe("API playback", () => {
 		expect(media().paused).toBe(false);
 	});
 
+	test("start() then stop() on loaded media leaves it paused", () => {
+		const { api, player, media } = playingAt(100);
+		player.pause();
+
+		api.start();
+		expect(api.isPlaying).toBe(true);
+		api.stop();
+		media().emit("play");
+
+		expect(api.isPlaying).toBe(false);
+		expect(media().paused).toBe(true);
+	});
+
 	test("a seek before anything loads reads back at once", () => {
 		const { api, player } = setup();
 		player.restore(feedEpisode);

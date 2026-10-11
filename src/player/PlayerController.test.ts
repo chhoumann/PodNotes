@@ -324,6 +324,54 @@ describe("pause", () => {
 	});
 });
 
+describe("consecutive intents on loaded media, with no media event between them", () => {
+	function pausedAfterMetadata() {
+		const context = setup();
+		context.player.play(A);
+		metadata(context.media());
+		context.player.pause();
+		return context;
+	}
+
+	test("resume() then pause() leaves it paused", () => {
+		const { player, media, state } = pausedAfterMetadata();
+
+		player.resume();
+		expect(state().status).toBe("playing");
+		player.pause();
+		media().emit("play");
+		media().emit("pause");
+
+		expect(media().paused).toBe(true);
+		expect(state().status).toBe("paused");
+	});
+
+	test("toggle() twice leaves it paused", () => {
+		const { player, media, state } = pausedAfterMetadata();
+
+		player.toggle();
+		player.toggle();
+		media().emit("play");
+
+		expect(media().paused).toBe(true);
+		expect(state().status).toBe("paused");
+	});
+
+	test("resume() then a seek past the end pauses short of the end without finishing", () => {
+		queue.set({ ...get(queue), episodes: [B] });
+		const { player, media, state } = pausedAfterMetadata();
+
+		player.resume();
+		player.seek(1e9);
+		media().emit("play");
+
+		expect(media().paused).toBe(true);
+		expect(media().currentTime).toBe(3599.75);
+		expect(state().status).toBe("paused");
+		expect(queued()).toEqual(["B"]);
+	});
+});
+
 describe("natural end", () => {
 	test("pausing near the end, then ending, marks played and advances the queue once", () => {
 		queue.set({ ...get(queue), episodes: [B, C] });
