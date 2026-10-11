@@ -132,6 +132,8 @@ export function encodePodNotesData(
 		...copyUnknownRootFields(unknownFields),
 		...validated,
 		schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+		// Not a setting: it travels with the root fields that are not settings, so it is
+		// not a known key.
 		libraryId: typeof unknownFields.libraryId === "string" ? unknownFields.libraryId : "",
 		currentEpisode: validated.currentEpisode
 			? encodeEpisode(validated.currentEpisode)

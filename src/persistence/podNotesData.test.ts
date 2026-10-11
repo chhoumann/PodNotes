@@ -107,7 +107,7 @@ describe("PodNotes data schema", () => {
 		"keeps the library id of a file that %s for the save to write back",
 		(_, libraryId, kept) => {
 			const file = JSON.parse(
-				JSON.stringify(encodePodNotesData(DEFAULT_SETTINGS, { libraryId })),
+				JSON.stringify({ ...encodePodNotesData(DEFAULT_SETTINGS), libraryId }),
 			);
 			const decoded = decodePodNotesData(file);
 

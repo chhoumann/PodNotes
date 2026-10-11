@@ -948,7 +948,6 @@ describe("a device that started before sync delivered its data.json", () => {
 		await newDevice.receive(libraryFile);
 		const writes = [established.writes(), newDevice.writes()];
 		await newDevice.receive(established.file());
-		await established.receive(newDevice.file());
 
 		expectBothLibraries(established, newDevice);
 		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
