@@ -4,6 +4,7 @@ import FeedDocumentParser, {
 	type ParsedEpisodeDocument,
 	type ParsedFeedDocument,
 	type ParsedFeedEpisodes,
+	type TranscriptLink,
 } from "src/parser/feedDocumentParser";
 import { DANGEROUS_KEYS, isPlainObject } from "src/persistence/codecUtils";
 import { dateTimestamp, decodeDate } from "src/persistence/dateCodec";
@@ -132,6 +133,20 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		const doc = await this.documentAt(url);
 		const feed = channelFeed(doc.channel, url);
 		return doc.items.map((item) => projectEpisode(item, feed));
+	}
+
+	/** Feed metadata that episodes do not carry, for one of a subscription's episodes. */
+	episodeMetadata(
+		key: FeedKey,
+		episode: Episode,
+	): { guid?: string; transcripts: TranscriptLink[] } | undefined {
+		const feed = this.subscriptions.get(key);
+		const item =
+			feed &&
+			this.sources
+				.get(feed.url)
+				?.doc?.items.find(({ streamUrl }) => streamUrl === episode.streamUrl);
+		return item && { guid: item.guid, transcripts: item.transcripts ?? [] };
 	}
 
 	clear(): void {

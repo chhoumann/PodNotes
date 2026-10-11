@@ -253,7 +253,7 @@ describe("feed journeys", () => {
 		);
 	});
 
-	test("#378 known failure J-EDGE-05: a feed episode without pubDate still appears in the episode list", async () => {
+	test("J-EDGE-05: a feed episode without pubDate still appears in the episode list (#378)", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const show: FixtureFeed = {
@@ -276,11 +276,7 @@ describe("feed journeys", () => {
 			timeoutMs: 15_000,
 			message: "the missing-date feed finished loading",
 		});
-		const captured = (await listedEpisodes(obsidian)).sort();
-		expectKnownFailure(378, captured, {
-			correct: (value) => expect(value).toEqual(["Dated Control", "Undated Episode"]),
-			reproduces: (value) => value.length === 1 && value[0] === "Dated Control",
-		});
+		expect(await listedEpisodes(obsidian)).toEqual(["Dated Control", "Undated Episode"]);
 	});
 
 	test("#358 known failure: a podcast without artwork still gets a card in the grid", async () => {

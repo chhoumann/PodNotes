@@ -66,6 +66,74 @@ describe("FeedDocumentParser", () => {
 		expect(parsed.episodes[0]).not.toHaveProperty("itemLink");
 	});
 
+	it("keeps an episode without a publication date", () => {
+		const undated = `<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Undated Podcast</title>
+    <item>
+      <title>Dated</title>
+      <enclosure url="https://media.example.com/dated.mp3"/>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Undated</title>
+      <enclosure url="https://media.example.com/undated.mp3"/>
+    </item>
+    <item>
+      <title>No audio</title>
+    </item>
+  </channel>
+</rss>`;
+
+		const { episodes } = new FeedDocumentParser().parseEpisodes(undated);
+
+		expect(episodes.map((episode) => episode.title)).toEqual(["Dated", "Undated"]);
+		expect(episodes[1]).not.toHaveProperty("episodeDate");
+	});
+
+	it("reads each episode's guid, chapters and transcripts", () => {
+		const podcasting20 = `<?xml version="1.0"?>
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Podcasting 2.0</title>
+    <item>
+      <title>With transcripts</title>
+      <enclosure url="https://media.example.com/one.mp3"/>
+      <guid isPermaLink="false">episode-one</guid>
+      <podcast:chapters url="https://media.example.com/one.json" type="application/json+chapters"/>
+      <podcast:transcript url="https://media.example.com/one.vtt" type="text/vtt" language="en" rel="captions"/>
+      <podcast:transcript url="https://media.example.com/one.srt" type="application/x-subrip"/>
+      <podcast:transcript type="text/html"/>
+    </item>
+    <item>
+      <title>Without</title>
+      <enclosure url="https://media.example.com/two.mp3"/>
+    </item>
+  </channel>
+</rss>`;
+
+		const [withTranscripts, without] = new FeedDocumentParser().parseEpisodes(
+			podcasting20,
+		).episodes;
+
+		expect(withTranscripts).toMatchObject({
+			guid: "episode-one",
+			chaptersUrl: "https://media.example.com/one.json",
+		});
+		expect(withTranscripts.transcripts).toEqual([
+			{
+				url: "https://media.example.com/one.vtt",
+				type: "text/vtt",
+				language: "en",
+				rel: "captions",
+			},
+			{ url: "https://media.example.com/one.srt", type: "application/x-subrip" },
+		]);
+		expect(without).not.toHaveProperty("transcripts");
+		expect(without).not.toHaveProperty("guid");
+	});
+
 	it("rejects a parser-generated malformed XML document", () => {
 		expect(() => new FeedDocumentParser().parseFeed("<rss><channel><title>broken")).toThrow(
 			"Invalid RSS feed",

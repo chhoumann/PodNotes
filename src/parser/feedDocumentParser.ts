@@ -21,6 +21,14 @@ export interface ParsedFeedDocument {
 	guid?: string;
 }
 
+/** A `podcast:transcript` link. */
+export interface TranscriptLink {
+	url: string;
+	type?: string;
+	language?: string;
+	rel?: string;
+}
+
 /** Transient episode metadata and purpose-explicit raw targets. */
 export interface ParsedEpisodeDocument {
 	title: string;
@@ -35,6 +43,7 @@ export interface ParsedEpisodeDocument {
 	duration?: number;
 	chaptersUrl?: string;
 	guid?: string;
+	transcripts?: TranscriptLink[];
 	mediaType: EpisodeMediaType;
 }
 
@@ -164,6 +173,19 @@ export default class FeedDocumentParser {
 		return "";
 	}
 
+	private findTranscripts(item: Element): TranscriptLink[] {
+		return Array.from(item.children).flatMap((child) => {
+			const url = child.getAttribute("url");
+			if (child.tagName.toLowerCase() !== "podcast:transcript" || !url) return [];
+			const transcript: TranscriptLink = { url };
+			for (const name of ["type", "language", "rel"] as const) {
+				const value = child.getAttribute(name);
+				if (value) transcript[name] = value;
+			}
+			return [transcript];
+		});
+	}
+
 	private parsePage(page: Document): ParsedEpisodeDocument[] {
 		return Array.from(page.querySelectorAll("item"))
 			.map((item) => this.parseItem(item))
@@ -173,15 +195,14 @@ export default class FeedDocumentParser {
 	private parseItem(item: Element): ParsedEpisodeDocument | null {
 		const titleEl = item.querySelector("title");
 		const streamUrlEl = item.querySelector("enclosure");
-		const pubDateEl = item.querySelector("pubDate");
-		if (!titleEl || !streamUrlEl || !pubDateEl) return null;
+		if (!titleEl || !streamUrlEl) return null;
 
 		const title = titleEl.textContent || "";
 		const streamUrl = streamUrlEl.getAttribute("url") || "";
 		const itemLink = item.querySelector("link")?.textContent || "";
 		const description = item.querySelector("description")?.textContent || "";
 		const content = item.querySelector("*|encoded")?.textContent || "";
-		const episodeDate = decodeDate(pubDateEl.textContent);
+		const episodeDate = decodeDate(item.querySelector("pubDate")?.textContent);
 		const artworkUrl = this.findImageElement(item)?.getAttribute("href") || "";
 		const itunesTitle = item.getElementsByTagName("itunes:title")[0]?.textContent || "";
 		const episodeNumber = parseEpisodeNumber(
@@ -194,6 +215,7 @@ export default class FeedDocumentParser {
 		const chaptersUrl =
 			item.getElementsByTagName("podcast:chapters")[0]?.getAttribute("url") || "";
 		const guid = this.findDirectChildText(item, ["guid"]);
+		const transcripts = this.findTranscripts(item);
 		const enclosureType = streamUrlEl.getAttribute("type");
 
 		return {
@@ -209,6 +231,7 @@ export default class FeedDocumentParser {
 			...(duration === undefined ? {} : { duration }),
 			...(chaptersUrl ? { chaptersUrl } : {}),
 			...(guid ? { guid } : {}),
+			...(transcripts.length ? { transcripts } : {}),
 			mediaType:
 				getMediaTypeFromContentType(enclosureType) ??
 				getUnambiguousMediaTypeFromPath(streamUrl) ??

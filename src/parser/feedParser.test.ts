@@ -151,7 +151,7 @@ const rssFeedWithInvalidItem = `<?xml version="1.0" encoding="UTF-8"?>
       <pubDate>Tue, 02 Jan 2024 00:00:00 GMT</pubDate>
     </item>
     <item>
-      <title>Invalid Episode - Missing pubDate</title>
+      <title>Undated Episode</title>
       <enclosure url="https://example.com/episode2.mp3"/>
     </item>
   </channel>
@@ -494,14 +494,17 @@ describe("FeedParser", () => {
 			]);
 		});
 
-		test("filters out invalid episodes missing required fields", async () => {
+		test("keeps an undated episode and drops one without an enclosure", async () => {
 			mockRequestWithTimeout.mockResolvedValueOnce(feedResponse(rssFeedWithInvalidItem));
 
 			const parser = new FeedParser();
 			const episodes = await parser.getEpisodes("https://example.com/feed.xml");
 
-			expect(episodes).toHaveLength(1);
-			expect(episodes[0].title).toBe("Valid Episode");
+			expect(episodes.map((episode) => episode.title)).toEqual([
+				"Valid Episode",
+				"Undated Episode",
+			]);
+			expect(episodes[1].episodeDate).toBeUndefined();
 		});
 
 		test("uses feed artwork when episode has no artwork", async () => {
