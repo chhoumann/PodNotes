@@ -1,6 +1,6 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import type { PluginHandle } from "obsidian-e2e";
-import { describe, expect, test } from "vitest";
+import { describe, expect, onTestFinished, test } from "vitest";
 import type { Episode } from "../../src/types/Episode";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
 import type { PodcastFeed } from "../../src/types/PodcastFeed";
@@ -18,6 +18,17 @@ import {
 	waitForPlaybackState,
 	waitForPodNotesReady,
 } from "./harness";
+import {
+	assertNoRuntimeErrors,
+	click,
+	closeSettings,
+	listedEpisodes,
+	openPodNotesSettings,
+	showPodNotes,
+	ui,
+} from "./journey/actions";
+import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
+import { seedLibrary, waitForLibrary } from "./journey/library";
 
 // Obsidian calls Plugin#onExternalSettingsChange when data.json is newer than
 // the plugin's last write: Obsidian Sync, iCloud, another instance on the vault,
@@ -383,6 +394,57 @@ describe("PodNotes data.json changed elsewhere", () => {
 			progress: 1234,
 			volume: 0.42,
 		});
+	});
+
+	test("shows both names when the library saved a podcast under an earlier name than a new device", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const current: FixtureFeed = {
+			title: "Current Show Name",
+			slug: "renamed-show",
+			artwork: true,
+			episodes: [{ title: "Renamed Show Episode", seconds: 6, pubDate: pubDate(0) }],
+		};
+		const earlier: FixtureFeed = { ...current, title: "Earlier Show Name" };
+		const server = await startFixtureServer([current]);
+		onTestFinished(() => server.stop());
+		onTestFinished(() => closeSettings(obsidian));
+		await seedLibrary(context, server, { subscriptions: [earlier] });
+		const library = await plugin.data<PodNotesData>().read();
+		const newDeviceFile = await startAsNewDevice(plugin);
+		newDeviceFile.savedFeeds = {
+			[current.title]: {
+				title: current.title,
+				url: server.feedUrl(current),
+				artworkUrl: server.artworkUrl(current),
+			},
+		};
+		await plugin.data<PodNotesData>().write(library);
+		await plugin.reload(RELOAD_OPTIONS);
+
+		await plugin.data<PodNotesData>().write(newDeviceFile);
+
+		const merged = await waitForLibrary(
+			plugin,
+			(saved) => saved.subscriptions.length === 2,
+			"both names of the podcast saved",
+		);
+		expect(merged.subscriptions.map((feed) => feed.url)).toEqual([
+			server.feedUrl(current),
+			server.feedUrl(current),
+		]);
+		await showPodNotes(obsidian);
+		for (const title of [earlier.title, current.title]) {
+			await click(obsidian, ui.podcastGridTab);
+			await click(obsidian, ui.podcastCard(title));
+			await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length > 0, {
+				timeoutMs: 15_000,
+				message: `the episodes of ${title}`,
+			});
+			expect(await listedEpisodes(obsidian)).toEqual(["Renamed Show Episode"]);
+		}
+		await openPodNotesSettings(obsidian);
+		await assertNoRuntimeErrors(obsidian);
 	});
 });
 
