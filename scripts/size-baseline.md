@@ -1,20 +1,21 @@
 # PERF0 byte and write-count baseline
 
-Measured on `origin/master` at `0d82581`, then on the PERF0 scripts with the
-same production artifact. Node 22.23.2, npm 10.9.8, Linux. The build uses
+Measured first on `origin/master` at `0d82581`, then refreshed after merging
+`origin/master` at `7476423`. The current numbers below use the latter
+production artifact. Node 22.23.2, npm 10.9.8, Linux. The build uses
 production Vite/Rolldown minification and includes injected Svelte CSS.
 
 `npm run build && npm run size` passes.
 
 ```text
-main.js raw: 306084 bytes; budget 330000 bytes; 23916 bytes remaining
-main.js gzip (level 9): 96810 bytes; budget 100000 bytes; 3190 bytes remaining
+main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
+main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
-Budgets use decimal bytes. The brief's 96,533-byte reference used a different
-gzip implementation. This report fixes the compressor instead of comparing
-compressed sizes across tools.
+Budgets use decimal bytes. The brief's 96,533-byte reference is unexplained.
+This report fixes the compressor instead of comparing compressed sizes across
+tools.
 
 Five independent reads and gzip operations produced the same values, with
 zero errors. Decompressing every result reproduced the original bundle.
@@ -27,8 +28,8 @@ The copy is valid JavaScript, and root `main.js` remains untouched.
 
 ```text
 $ npm run size -- .audit/inflated-main.js
-.audit/inflated-main.js raw: 439426 bytes; budget 330000 bytes; OVER by 109426 bytes
-.audit/inflated-main.js gzip (level 9): 197803 bytes; budget 100000 bytes; OVER by 97803 bytes
+.audit/inflated-main.js raw: 440473 bytes; budget 330000 bytes; OVER by 110473 bytes
+.audit/inflated-main.js gzip (level 9): 198189 bytes; budget 100000 bytes; OVER by 98189 bytes
 Exit status: 1
 ```
 
@@ -37,7 +38,7 @@ boundary, reject one additional raw byte, and reject missing or empty builds.
 
 ## Large v2 document
 
-Run `npm run size:data`. The frozen NPR fixture and workload are described in
+Run `npm run size:data`. The frozen NPR stress fixture and workload are described in
 [`tests/fixtures/persistence/README.md`](../tests/fixtures/persistence/README.md).
 It contains 50 feeds, 2,000 history entries, 200 distinct saved episodes,
 and 721 complete episode copies across downloads, Local files, playlists,
@@ -108,6 +109,11 @@ These counts cover this renderer's adapter writes to the exact PodNotes
 `data.json` path. They exclude startup before installation, external sync
 writers, and separate feed caches. Reloading the plugin invalidates a run.
 One earlier observation was discarded because the plugin instance changed.
+
+After the master merge, disabling PodNotes during a recording still permitted
+`report` and `stop`. Both returned incomplete counts with exit status 1.
+`stop` removed the recorder and restored the original adapter method.
+The isolated instance then stopped successfully.
 
 Obsidian's `writeJson` catches adapter failures. The recorder therefore wraps
 the adapter's exact-path write and observes its rejection directly, rather

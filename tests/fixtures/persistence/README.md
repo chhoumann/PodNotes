@@ -5,6 +5,8 @@
 content, dates, and enclosure URLs are retained. No media is downloaded.
 `feed-sample.json` freezes the legacy `FeedParser` projection. The fixture test
 compares that projection with the production parser.
+Long dashes use JSON escapes and XML character references outside CDATA to
+preserve parsed feed text while following the repository's character rule.
 
 `large-v2.mjs` expands the sample into a deterministic synthetic library.
 Subscriptions have distinct numbered names and URLs. Each subscription has

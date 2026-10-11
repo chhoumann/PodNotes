@@ -36,7 +36,9 @@ describe("bundle budget CLI", () => {
 	});
 
 	it("fails on absent or empty artifacts instead of reporting a small build", () => {
-		expect(check("empty.js", "").stderr).toContain("is empty");
+		const empty = check("empty.js", "");
+		expect(empty.status).toBe(1);
+		expect(empty.stderr).toContain("is empty");
 		const missing = spawnSync(process.execPath, [script, join(directory, "absent.js")], {
 			encoding: "utf8",
 		});

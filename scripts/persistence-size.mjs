@@ -114,28 +114,61 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 		assert(process.argv.length <= 3, "Usage: npm run size:data -- [additive-candidate.json]");
 		const fixture = createLargeV2Fixture();
 		const baseline = measureSnapshot(fixture);
-		const probe = createLargeV2Fixture(true);
-		assertAdditive(fixture, probe);
-		const guidBytes = measureSnapshot(probe);
 		const rows = baseline.fields.map(
 			(field) => `| ${field.name} | ${field.compact} | ${field.pretty} |`,
 		);
 		rows.push(
 			`| Framing and separators | ${baseline.framing.compact} | ${baseline.framing.pretty} |`,
 		);
-		let report = `## V2 persistence bytes\n\nSynthetic library from frozen NPR feed metadata. 50 feeds, 2000 history entries, 200 distinct saved episodes. JSON uses UTF-8 and two-space indentation, as Obsidian writes data.json.\n\n| Collection or setting | Compact bytes | data.json bytes |\n| --- | ---: | ---: |\n${rows.join("\n")}\n| Total | ${baseline.compact} | ${baseline.pretty} |\n\n${baseline.episodeCopies} episode copies; ${baseline.distinctEpisodes} distinct episodes. Identical repeated snapshots occupy ${baseline.repeatedSnapshotBytes} compact bytes. Description/content JSON strings occupy ${baseline.episodeTextBytes} bytes across all copies. These diagnostics overlap; they are not removable savings.\n\nThe 1500000-byte document goal is advisory; this report enforces no persistence budget. Gap: ${Math.max(0, baseline.pretty - 1_500_000)} bytes.\n\n`;
-		report += `Optional-field probe only: adding the real RSS guid as podnotesGuid to every episode copy adds ${guidBytes.compact - baseline.compact} compact bytes and ${guidBytes.pretty - baseline.pretty} data.json bytes. Of that, ${guidBytes.repeatedSnapshotBytes - baseline.repeatedSnapshotBytes} compact bytes occur on identical repeated snapshots. The baseline has no podnotesGuid fields.\n\n`;
-		if (process.argv[2]) {
-			const candidate = JSON.parse(readFileSync(process.argv[2], "utf8"));
-			assertAdditive(fixture, candidate);
-			const after = measureSnapshot(candidate);
-			const baselineFields = new Map(baseline.fields.map((field) => [field.name, field]));
-			const deltas = after.fields.map((field) => {
-				const before = baselineFields.get(field.name);
-				return `| ${field.name} | ${field.compact - (before?.compact ?? 0)} | ${field.pretty - (before?.pretty ?? 0)} |`;
-			});
-			report += `### Additive optional-field overhead\n\nExisting values, array order, and membership are unchanged.\n\n| Collection or setting | Added compact bytes | Added data.json bytes |\n| --- | ---: | ---: |\n${deltas.join("\n")}\n| Framing and separators | ${after.framing.compact - baseline.framing.compact} | ${after.framing.pretty - baseline.framing.pretty} |\n| Total | ${after.compact - baseline.compact} | ${after.pretty - baseline.pretty} |\n\n`;
-		}
+		let report = [
+			"## V2 persistence bytes",
+			"",
+			`Synthetic stress library from frozen NPR feed metadata. ${Object.keys(fixture.savedFeeds).length} feeds, ${Object.keys(fixture.playedEpisodes).length} history entries, ${baseline.distinctEpisodes} distinct saved episodes.`,
+			"JSON uses UTF-8 and two-space indentation, as Obsidian writes data.json.",
+			"",
+			"| Collection or setting | Compact bytes | data.json bytes |",
+			"| --- | ---: | ---: |",
+			...rows,
+			`| Total | ${baseline.compact} | ${baseline.pretty} |`,
+			"",
+			`${baseline.episodeCopies} episode copies; ${baseline.distinctEpisodes} distinct episodes.`,
+			`Identical repeated snapshots occupy ${baseline.repeatedSnapshotBytes} compact bytes.`,
+			`Description/content JSON strings occupy ${baseline.episodeTextBytes} bytes across all copies.`,
+			"These diagnostics overlap; they are not removable savings.",
+			"",
+			"The 1500000-byte document goal is advisory; this report enforces no persistence budget.",
+			`Gap: ${Math.max(0, baseline.pretty - 1_500_000)} bytes.`,
+			"",
+			"",
+		].join("\n");
+		const candidate = process.argv[2]
+			? JSON.parse(readFileSync(process.argv[2], "utf8"))
+			: createLargeV2Fixture(true);
+		assertAdditive(fixture, candidate);
+		const after = measureSnapshot(candidate);
+		const baselineFields = new Map(baseline.fields.map((field) => [field.name, field]));
+		const deltas = after.fields.map((field) => {
+			const before = baselineFields.get(field.name);
+			return `| ${field.name} | ${field.compact - (before?.compact ?? 0)} | ${field.pretty - (before?.pretty ?? 0)} |`;
+		});
+		if (!process.argv[2])
+			report +=
+				"Optional-field probe only: the candidate adds the real RSS guid as podnotesGuid to every episode copy. The baseline has no podnotesGuid fields.\n\n";
+		report += [
+			"### Additive optional-field overhead",
+			"",
+			"Existing values, array order, and membership are unchanged.",
+			"",
+			"| Collection or setting | Added compact bytes | Added data.json bytes |",
+			"| --- | ---: | ---: |",
+			...deltas,
+			`| Framing and separators | ${after.framing.compact - baseline.framing.compact} | ${after.framing.pretty - baseline.framing.pretty} |`,
+			`| Total | ${after.compact - baseline.compact} | ${after.pretty - baseline.pretty} |`,
+			"",
+			`Identical repeated snapshots occupied ${baseline.repeatedSnapshotBytes} compact bytes before optional fields. Their added compact bytes are ${after.repeatedSnapshotBytes - baseline.repeatedSnapshotBytes}. This diagnostic overlaps the collection deltas.`,
+			"",
+			"",
+		].join("\n");
 		console.log(report);
 		if (process.env.GITHUB_STEP_SUMMARY)
 			appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);

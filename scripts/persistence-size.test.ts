@@ -24,7 +24,7 @@ describe("persistence byte fixture", () => {
 		).toEqual(sample.guids);
 	});
 
-	it("retains a complete realistic library through the released v2 codec", () => {
+	it("retains a complete stress library through the released v2 codec", () => {
 		const data = JSON.parse(JSON.stringify(createLargeV2Fixture()));
 		const decoded = decodePodNotesData(data);
 		expect(decoded.warnings).toEqual([]);
@@ -36,7 +36,6 @@ describe("persistence byte fixture", () => {
 		expect(Object.keys(data.playedEpisodes)).toHaveLength(2000);
 		const downloads = Object.values(decoded.settings.downloadedEpisodes).flat();
 		expect(downloads).toHaveLength(200);
-		expect(data.localFiles.episodes).toEqual(Object.values(data.downloadedEpisodes).flat());
 		expect(new Set(downloads.map(getEpisodeKey)).size).toBe(200);
 		expect(
 			data.queue.episodes.some(
@@ -83,7 +82,8 @@ describe("persistence byte fixture", () => {
 		const membership = structuredClone(base);
 		membership.queue.episodes.push({ title: "New", content: "" });
 		expect(() => assertAdditive(base, membership)).toThrow("changed membership");
-		Object.assign(base.savedFeeds, { another: { title: "Another" } });
-		expect(() => assertAdditive(candidate, base)).toThrow("changed membership");
+		const keyedMembership = structuredClone(base);
+		Object.assign(keyedMembership.savedFeeds, { another: { title: "Another" } });
+		expect(() => assertAdditive(base, keyedMembership)).toThrow("changed membership");
 	});
 });

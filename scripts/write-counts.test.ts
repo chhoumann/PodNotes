@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { installWriteRecorder } from "./write-counts.mjs";
 
+const isolatedRecorder: typeof installWriteRecorder = new Function(
+	`return (${installWriteRecorder.toString()})`,
+)();
+
 describe("data.json write recorder", () => {
 	it("counts exact-path UTF-8 writes, preserves arguments and this, and restores the descriptor", async () => {
 		const calls: unknown[][] = [];
@@ -12,7 +16,7 @@ describe("data.json write recorder", () => {
 			},
 		};
 		const original = Object.getOwnPropertyDescriptor(adapter, "write");
-		const recorder = installWriteRecorder(adapter, "plugin/data.json");
+		const recorder = isolatedRecorder(adapter, "plugin/data.json");
 		expect(await adapter.write("other/data.json", "ignored")).toBe("written");
 		expect(await adapter.write("plugin/data.json", "雪", { mtime: 123 })).toBe("written");
 		expect(calls).toEqual([

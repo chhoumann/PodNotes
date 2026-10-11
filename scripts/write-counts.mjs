@@ -74,8 +74,8 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 		const code = `(() => {
 			const key = "__podnotesWriteRecorder";
 			const plugin = app.plugins.plugins.podnotes;
-			if (!plugin) throw new Error("PodNotes is not loaded.");
 			if (${JSON.stringify(action)} === "start") {
+				if (!plugin) throw new Error("PodNotes is not loaded.");
 				if (window[key]) throw new Error("A write recorder is already installed; stop it first.");
 				const path = plugin.manifest.dir + "/data.json";
 				window[key] = { plugin, control: (${installWriteRecorder.toString()})(app.vault.adapter, path) };

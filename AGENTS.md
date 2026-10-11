@@ -43,7 +43,7 @@ root symlinks for local Obsidian loading.
 - `npm run docs:build`: build the MkDocs documentation.
 - `npm run docs:deploy`: build docs and deploy `docs/site` to Cloudflare Pages.
 
-After `npm run build`, `npm run size` enforces 330,000 raw bytes and 100,000 gzip bytes at level 9 for root `main.js` inside the existing Test job. `npm run size:data` reports a synthetic v2 library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Always stop the recorder before stopping the instance; plugin reloads invalidate its counts.
+After `npm run build`, `npm run size` enforces 330,000 raw bytes and 100,000 gzip bytes at level 9 for root `main.js` inside the existing Test job. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 
 Before opening a PR or cutting a release, run the CI-equivalent checks locally:
 
