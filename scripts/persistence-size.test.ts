@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import FeedParser from "src/parser/feedParser";
 import FeedDocumentParser from "src/parser/feedDocumentParser";
@@ -9,6 +12,32 @@ import { createLargeV2Fixture } from "../tests/fixtures/persistence/large-v2.mjs
 import { assertAdditive, measureSnapshot } from "./persistence-size.mjs";
 
 describe("persistence byte fixture", () => {
+	it("reports partial-copy metadata as added bytes and a separate regrouping diagnostic", () => {
+		const candidate = JSON.parse(JSON.stringify(createLargeV2Fixture()));
+		candidate.downloadedEpisodes["Planet Money fixture 01"][0].probe = 1;
+		const directory = mkdtempSync(join(tmpdir(), "podnotes-partial-metadata-"));
+		try {
+			const path = join(directory, "candidate.json");
+			writeFileSync(path, JSON.stringify(candidate));
+			const result = spawnSync(
+				process.execPath,
+				[resolve("scripts/persistence-size.mjs"), path],
+				{
+					encoding: "utf8",
+					env: { ...process.env, GITHUB_STEP_SUMMARY: "" },
+				},
+			);
+			expect(result.status).toBe(0);
+			expect(result.stdout).toMatch(/\| Total \| 10 \| \d+ \|/);
+			expect(result.stdout).toContain("identical-snapshot diagnostic changed by -");
+			expect(result.stdout).toContain(
+				"This diagnostic is not an optional-field overhead measurement",
+			);
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
 	it("uses the production projection of the frozen real feed without dropping text", async () => {
 		const sample = JSON.parse(
 			readFileSync("tests/fixtures/persistence/feed-sample.json", "utf8"),

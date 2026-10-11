@@ -30,7 +30,9 @@ file, add the proposed fields to its persisted copies, and run
 `npm run size:data -- path/to/candidate.json`. The comparison rejects changes
 to existing values, array order, and collection membership. It reports added
 bytes by collection. Repeated snapshot bytes and text bytes overlap and are
-diagnostics, not additive totals or promised savings.
+diagnostics, not additive totals or promised savings. Exact-snapshot groups
+can split when metadata changes only one copy, so their byte delta can be
+negative. The added-field totals in the table remain separate.
 
 The default report also probes a hypothetical `podnotesGuid` field using the
 real RSS guids. It reports the added bytes on all copies and the portion on

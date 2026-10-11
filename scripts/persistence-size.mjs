@@ -165,7 +165,10 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 			`| Framing and separators | ${after.framing.compact - baseline.framing.compact} | ${after.framing.pretty - baseline.framing.pretty} |`,
 			`| Total | ${after.compact - baseline.compact} | ${after.pretty - baseline.pretty} |`,
 			"",
-			`Identical repeated snapshots occupied ${baseline.repeatedSnapshotBytes} compact bytes before optional fields. Their added compact bytes are ${after.repeatedSnapshotBytes - baseline.repeatedSnapshotBytes}. This diagnostic overlaps the collection deltas.`,
+			`Identical repeated snapshots occupied ${baseline.repeatedSnapshotBytes} compact bytes before optional fields.`,
+			`The identical-snapshot diagnostic changed by ${after.repeatedSnapshotBytes - baseline.repeatedSnapshotBytes} compact bytes.`,
+			"Grouping uses complete serialized content, so metadata on only some copies can shrink this diagnostic.",
+			"This diagnostic is not an optional-field overhead measurement. Added-field bytes are in the table above.",
 			"",
 			"",
 		].join("\n");
