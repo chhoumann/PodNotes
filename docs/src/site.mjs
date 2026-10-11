@@ -2,6 +2,8 @@
 // the LLM indexes list the same pages in the same order.
 import manifest from "../../manifest.json" with { type: "json" };
 
+export const title = "PodNotes";
+
 export const site = "https://podnotes.obsidian.guide";
 
 export const { description } = manifest;

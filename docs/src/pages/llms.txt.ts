@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { sidebarSections } from "../markdown";
-import { description, site } from "../site.mjs";
+import { description, site, title } from "../site.mjs";
 
 /** The llms.txt index (https://llmstxt.org): every page, linked as raw markdown. */
 export const GET: APIRoute = async () => {
@@ -11,7 +11,7 @@ export const GET: APIRoute = async () => {
 		].join("\n"),
 	);
 	const body = [
-		"# PodNotes",
+		`# ${title}`,
 		`> ${description}`,
 		`The full documentation in one file: ${site}/llms-full.txt`,
 		...sections,

@@ -9,10 +9,11 @@ export function pageMarkdown(entry: Doc): string {
 
 /** Docs pages grouped and ordered as in the sidebar. Ungrouped pages come first, under "Docs". */
 export async function sidebarSections(): Promise<{ label: string; pages: Doc[] }[]> {
-	const docs = new Map((await getCollection("docs")).map((entry) => [entry.id, entry]));
+	const unplaced = new Map((await getCollection("docs")).map((entry) => [entry.id, entry]));
 	const page = (slug: string): Doc => {
-		const entry = docs.get(slug);
-		if (!entry) throw new Error(`Sidebar slug "${slug}" has no docs page`);
+		const entry = unplaced.get(slug);
+		if (!entry) throw new Error(`Sidebar slug "${slug}" has no docs page, or appears twice`);
+		unplaced.delete(slug);
 		return entry;
 	};
 	const ungrouped = { label: "Docs", pages: [] as Doc[] };
@@ -26,6 +27,9 @@ export async function sidebarSections(): Promise<{ label: string; pages: Doc[] }
 		} else {
 			ungrouped.pages.push(page(item.slug));
 		}
+	}
+	if (unplaced.size > 0) {
+		throw new Error(`Docs pages missing from the sidebar: ${[...unplaced.keys()].join(", ")}`);
 	}
 	return sections;
 }

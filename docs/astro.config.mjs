@@ -2,14 +2,14 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLinksValidator from "starlight-links-validator";
-import { description, sidebar, site } from "./src/site.mjs";
+import { description, sidebar, site, title } from "./src/site.mjs";
 
 // https://astro.build/config
 export default defineConfig({
 	site,
 	integrations: [
 		starlight({
-			title: "PodNotes",
+			title,
 			description,
 			plugins: [starlightLinksValidator()],
 			social: [
