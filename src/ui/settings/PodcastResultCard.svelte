@@ -20,6 +20,9 @@
 	</div>
 	<div class="podcast-info">
 		<h3 class="podcast-title">{podcast.title}</h3>
+		{#if podcast.author}
+			<p class="podcast-author">{podcast.author}</p>
+		{/if}
 	</div>
 	<div class="podcast-actions">
 		{#if isSaved}
@@ -98,6 +101,15 @@
 		-webkit-line-clamp: 2;
 		line-clamp: 2;
 		-webkit-box-orient: vertical;
+	}
+
+	.podcast-author {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	/*

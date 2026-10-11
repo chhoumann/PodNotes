@@ -1,10 +1,18 @@
 <script lang="ts">
 	import { debounce, Notice } from "obsidian";
-	import { queryiTunesPodcasts } from "src/iTunesAPIConsumer";
+	import {
+		lookupiTunesPodcast,
+		parseApplePodcastsId,
+		queryiTunesPodcasts,
+	} from "src/iTunesAPIConsumer";
 	import FeedParser from "src/parser/feedParser";
 	import { plugin, savedFeeds } from "src/store";
 	import { get } from "svelte/store";
-	import { internPrivateFeed } from "src/services/privateFeeds";
+	import {
+		internPrivateFeed,
+		isSavedFeed,
+		resolveFeedUrlWithNotice,
+	} from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
 	import Text from "../obsidian/Text.svelte";
@@ -17,6 +25,8 @@
 	let searchQuery: string = "";
 	let isSearching: boolean = false;
 	let searchError: string = "";
+	// Responses can arrive out of order; only the latest input may change the grid.
+	let latestInput = 0;
 
 	let searchInput: HTMLInputElement;
 
@@ -52,9 +62,10 @@
 	}
 
 	const debouncedUpdate = debounce(
-		async ({ detail: { value } }: CustomEvent<{ value: string }>) => {
+		async (value: string, input: number) => {
 			searchQuery = value;
 			searchError = "";
+			const applePodcastsId = parseApplePodcastsId(value);
 			const customFeedUrl = checkStringIsUrl(value);
 
 			// Only treat the input as a feed URL when it is an http(s) URL, so
@@ -62,30 +73,56 @@
 			const isFeedUrl =
 				customFeedUrl?.protocol === "http:" || customFeedUrl?.protocol === "https:";
 
-			if (isFeedUrl && customFeedUrl) {
+			if (applePodcastsId) {
+				isSearching = true;
+				try {
+					const feed = await lookupiTunesPodcast(applePodcastsId);
+					if (input !== latestInput) return;
+					if (feed) {
+						searchResults = [feed];
+					} else {
+						searchResults = [];
+						searchError = "No public RSS feed found for this Apple Podcasts link.";
+						new Notice(searchError);
+					}
+				} catch {
+					if (input !== latestInput) return;
+					searchResults = [];
+					searchError = "Could not look up this Apple Podcasts link. Please try again.";
+					new Notice(searchError);
+				} finally {
+					if (input === latestInput) isSearching = false;
+				}
+			} else if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
 				try {
 					const feed = await new FeedParser().getFeed(customFeedUrl.href);
+					if (input !== latestInput) return;
 					searchResults = [feed];
 				} catch (e) {
+					if (input !== latestInput) return;
 					searchResults = [];
 					const msg = e instanceof Error ? e.message : String(e);
 					searchError = `Could not load feed: ${msg}`;
 					new Notice(searchError);
 				} finally {
-					isSearching = false;
+					if (input === latestInput) isSearching = false;
 				}
 			} else if (value.trim() === "") {
+				isSearching = false;
 				updateSearchResults();
 			} else {
 				isSearching = true;
 				try {
-					searchResults = await queryiTunesPodcasts(value);
+					const results = await queryiTunesPodcasts(value);
+					if (input !== latestInput) return;
+					searchResults = results;
 				} catch (e) {
+					if (input !== latestInput) return;
 					searchResults = [];
 					searchError = "Could not search podcasts. Please try again.";
 				} finally {
-					isSearching = false;
+					if (input === latestInput) isSearching = false;
 				}
 			}
 		},
@@ -93,11 +130,36 @@
 		true,
 	);
 
+	// Saved feeds are keyed by title. Only own keys count, so a show called
+	// "toString" is not mistaken for a saved one.
+	function savedFeedTitled(
+		feeds: Record<string, PodcastFeed>,
+		title: string,
+	): PodcastFeed | undefined {
+		return Object.prototype.hasOwnProperty.call(feeds, title) ? feeds[title] : undefined;
+	}
+
+	function isSavedResult(feeds: Record<string, PodcastFeed>, podcast: PodcastFeed): boolean {
+		const saved = savedFeedTitled(feeds, podcast.title);
+		return saved !== undefined && isSavedFeed(saved, podcast.url, get(plugin).feedUrls);
+	}
+
 	function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
+		const { podcast } = event.detail;
+		const { feedUrls } = get(plugin);
+		// A namesake must never replace a saved feed. A saved private feed whose
+		// URL is missing on this device cannot be compared, so say that instead.
+		const saved = savedFeedTitled($savedFeeds, podcast.title);
+		if (saved) {
+			if (isSavedFeed(saved, podcast.url, feedUrls)) return;
+			if (resolveFeedUrlWithNotice(saved, feedUrls) === null) return;
+			new Notice(`You already follow a podcast called ${podcast.title} from another feed.`);
+			return;
+		}
 		// A pasted private feed URL must never reach persisted settings: intern it
 		// into SecretStorage and save the placeholder + reference instead.
-		const podcast = internPrivateFeed(event.detail.podcast, get(plugin).feedUrls);
-		savedFeeds.update((feeds) => ({ ...feeds, [podcast.title]: podcast }));
+		const feed = internPrivateFeed(podcast, feedUrls);
+		savedFeeds.update((feeds) => ({ ...feeds, [feed.title]: feed }));
 		updateSearchResults();
 	}
 
@@ -124,7 +186,7 @@
 <div class="podcast-query-container" transition:fade={{ duration: 300 }}>
 	<Text
 		placeholder="Search or enter feed URL..."
-		on:change={debouncedUpdate}
+		on:change={(e) => debouncedUpdate(e.detail.value, ++latestInput)}
 		style={{
 			width: "100%",
 			"margin-bottom": "1rem",
@@ -147,8 +209,7 @@
 			<div role="listitem">
 				<PodcastResultCard
 					{podcast}
-					isSaved={typeof podcast.url === "string" &&
-						$savedFeeds[podcast.title]?.url === podcast.url}
+					isSaved={isSavedResult($savedFeeds, podcast)}
 					on:addPodcast={addPodcast}
 					on:removePodcast={removePodcast}
 				/>
