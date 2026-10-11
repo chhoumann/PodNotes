@@ -874,6 +874,26 @@ describe("dispose", () => {
 	});
 });
 
+describe("dropped elements", () => {
+	test("let go of their media when a video replaces the audio and on dispose", () => {
+		const { player, doc } = setup();
+		player.play(A);
+		const audio = doc.media;
+		metadata(audio);
+
+		player.play(VIDEO);
+		const video = doc.media;
+		metadata(video);
+		player.dispose();
+
+		for (const dropped of [audio, video]) {
+			expect(dropped.src).toBe("");
+			expect(dropped.readyState).toBe(0);
+			expect(dropped.paused).toBe(true);
+		}
+	});
+});
+
 describe("video stage", () => {
 	test("shows the video in a stage in the main window and keeps it hidden elsewhere", () => {
 		const { player, doc } = setup();
