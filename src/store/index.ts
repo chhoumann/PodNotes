@@ -280,6 +280,15 @@ export const queue = (() => {
 				return queue;
 			});
 		},
+		/** Puts the episode first, unless it is already queued. */
+		prepend: (episode: Episode) => {
+			update((queue) => {
+				if (isAlreadyQueued(queue.episodes, episode)) return queue;
+
+				queue.episodes = [episode, ...queue.episodes];
+				return queue;
+			});
+		},
 		playNext: () => {
 			// Auto-advance is part of queue automation (issue #108): when the user
 			// has turned the queue off, finishing an episode must not pull the next

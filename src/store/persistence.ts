@@ -107,6 +107,22 @@ const IMPORT_ROLLBACK_BINDINGS: PersistenceBinding[] = [
 	}),
 ];
 
+type PlayerSettings = Partial<Pick<IPodNotesSettings, "currentEpisode" | "defaultVolume">>;
+const playerSettingsRecorders = new Set<(written: PlayerSettings) => void>();
+
+/**
+ * The player writes the episode it selects and its volume into settings itself,
+ * not through a store. An import in progress records these writes to replay them.
+ */
+export function writePlayerSettings(
+	plugin: Pick<IPodNotes, "settings" | "saveSettings">,
+	written: PlayerSettings,
+): void {
+	Object.assign(plugin.settings, written);
+	for (const record of playerSettingsRecorders) record(structuredClone(written));
+	void plugin.saveSettings();
+}
+
 export interface PersistedStoreChangeReplay {
 	replayInto: (settings: IPodNotesSettings) => void;
 	dispose: () => void;
@@ -135,6 +151,9 @@ export function observePersistedStoreChanges(): PersistedStoreChangeReplay {
 			latestValues.set(binding, structuredClone(value));
 		});
 	});
+	const playerWrites: PlayerSettings = {};
+	const recordPlayerWrite = (written: PlayerSettings) => Object.assign(playerWrites, written);
+	playerSettingsRecorders.add(recordPlayerWrite);
 	let disposed = false;
 
 	return {
@@ -142,11 +161,13 @@ export function observePersistedStoreChanges(): PersistedStoreChangeReplay {
 			for (const [binding, value] of latestValues) {
 				binding.apply(settings, structuredClone(value));
 			}
+			Object.assign(settings, structuredClone(playerWrites));
 		},
 		dispose() {
 			if (disposed) return;
 			disposed = true;
 			for (const unsubscribe of unsubscribers) unsubscribe();
+			playerSettingsRecorders.delete(recordPlayerWrite);
 			latestValues.clear();
 		},
 	};
