@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render } from "@testing-library/svelte";
+import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -51,6 +52,7 @@ describe("PodcastQueryGrid", () => {
 		plugin.set({ feedUrls: {} } as PodNotes);
 		savedFeeds.set({});
 		fetchJsonMock.mockReset();
+		vi.restoreAllMocks();
 	});
 
 	test("shows a feed once when search lists it under several shows", async () => {
@@ -112,6 +114,29 @@ describe("PodcastQueryGrid", () => {
 
 		expect(queryByRole("status")).toBeNull();
 		expect(queryAllByRole("listitem")).toHaveLength(0);
+	});
+
+	test("keeps a newer search when an older Apple Podcasts lookup answers last", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const lookup = deferred<unknown>();
+		const search = deferred<unknown>();
+		fetchJsonMock.mockReturnValueOnce(lookup.promise).mockReturnValueOnce(search.promise);
+
+		const { findByRole, queryByRole, type } = renderGrid();
+		type("https://podcasts.apple.com/us/podcast/apple-news-today/id1473872585");
+		await settle();
+		type("apple news");
+		await settle();
+		search.resolve(searchAppleNews);
+		await findByRole("button", { name: "Add Apple News In Conversation podcast" });
+		lookup.resolve(lookupAppleNewsToday);
+		await settle();
+
+		expect(
+			queryByRole("button", { name: "Add Apple News In Conversation podcast" }),
+		).toBeInTheDocument();
+		expect(queryByRole("alert")).toBeNull();
+		expect(notice).not.toHaveBeenCalled();
 	});
 
 	test("adds the RSS feed behind a pasted Apple Podcasts show link", async () => {
