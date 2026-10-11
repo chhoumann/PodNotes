@@ -78,7 +78,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	currentEpisode: undefined,
 
 	timestamp: {
-		template: "- {{time}} ",
+		template: "- {{linktime}} ",
 		offset: 0,
 	},
 

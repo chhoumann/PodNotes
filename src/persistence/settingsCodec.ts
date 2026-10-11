@@ -131,17 +131,18 @@ function decodeSecretId(
 	return "";
 }
 
+/**
+ * The timestamp template before `{{linktime}}` became the default (#345).
+ * PodNotes always writes the template, so data without one is older or
+ * hand-edited and keeps the template it ran with.
+ */
+const LEGACY_TIMESTAMP_TEMPLATE = "- {{time}} ";
+
 function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettings["timestamp"] {
 	const record = optionalRecord(value, warnings, "timestamp");
 	return {
 		...copySafeObject(record),
-		template: readString(
-			record,
-			"template",
-			DEFAULT_SETTINGS.timestamp.template,
-			warnings,
-			"timestamp",
-		),
+		template: readString(record, "template", LEGACY_TIMESTAMP_TEMPLATE, warnings, "timestamp"),
 		offset: readFiniteNumber(
 			record,
 			"offset",

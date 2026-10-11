@@ -72,7 +72,8 @@ export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
  * does not understand.
  */
 export function decodePodNotesData(value: unknown): DecodedPodNotesData {
-	if (value === null || value === undefined) value = {};
+	// No data.json yet is a new install, which starts from the current defaults.
+	if (value === null || value === undefined) value = structuredClone(DEFAULT_SETTINGS);
 
 	if (!isPlainObject(value)) {
 		throw new PodNotesDataError(
