@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import searchAppleNews from "../tests/fixtures/itunes/search-apple-news.json";
 import { fetchJsonWithTimeout, NetworkError } from "./utility/networkRequest";
 import { queryiTunesPodcasts } from "./iTunesAPIConsumer";
 
@@ -9,42 +10,54 @@ vi.mock("./utility/networkRequest", async (importOriginal) => {
 
 const fetchJsonMock = vi.mocked(fetchJsonWithTimeout);
 
+function requestedUrl(): URL {
+	return new URL(fetchJsonMock.mock.calls[0][0]);
+}
+
+beforeEach(() => {
+	fetchJsonMock.mockReset();
+	vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => vi.restoreAllMocks());
+
 describe("queryiTunesPodcasts", () => {
-	beforeEach(() => {
-		fetchJsonMock.mockReset();
-		vi.spyOn(console, "error").mockImplementation(() => {});
+	it("asks for 20 shows through a bounded request", async () => {
+		fetchJsonMock.mockResolvedValue(searchAppleNews);
+
+		await queryiTunesPodcasts("apple news");
+
+		const url = requestedUrl();
+		expect(url.origin + url.pathname).toBe("https://itunes.apple.com/search");
+		expect(url.searchParams.get("term")).toBe("apple news");
+		expect(url.searchParams.get("limit")).toBe("20");
+		expect(fetchJsonMock).toHaveBeenCalledWith(expect.any(String), {
+			timeoutMs: 15_000,
+			maxResponseBytes: 2 * 1024 * 1024,
+			acceptedStatuses: [200],
+		});
 	});
 
-	afterEach(() => vi.restoreAllMocks());
+	it("maps shows to feeds and drops shows without a public RSS feed", async () => {
+		// The first result, Apple News Today, is Apple-hosted and has no feedUrl.
+		fetchJsonMock.mockResolvedValue(searchAppleNews);
 
-	it("uses a bounded request and projects search results", async () => {
-		fetchJsonMock.mockResolvedValue({
-			results: [
-				{
-					collectionName: "Example Show",
-					feedUrl: "https://feeds.example.com/show.xml",
-					artworkUrl100: "https://images.example.com/show.jpg",
-					collectionId: "123",
-				},
-			],
-		});
-
-		await expect(queryiTunesPodcasts("example & show")).resolves.toEqual([
+		await expect(queryiTunesPodcasts("apple news")).resolves.toEqual([
 			{
-				title: "Example Show",
-				url: "https://feeds.example.com/show.xml",
-				artworkUrl: "https://images.example.com/show.jpg",
-				collectionId: "123",
+				title: "Apple News In Conversation",
+				url: "https://apple.news/podcast/apple_news_in_conversation",
+				artworkUrl:
+					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/21/e5/93/21e59350-3d63-8dfb-f8a1-c762f85e069c/mza_13661945558824532647.jpg/100x100bb.jpg",
+				collectionId: "1577591053",
+			},
+			{
+				title: "Apple Quarterly Earnings Call",
+				url: "https://rss.art19.com/apple-quarterly-earnings-call",
+				artworkUrl:
+					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/72/23/72/72237247-8b65-6174-8aa2-0a3691352b02/mza_5761462598177267980.jpeg/100x100bb.jpg",
+				collectionId: "74942331",
 			},
 		]);
-		expect(fetchJsonMock).toHaveBeenCalledWith(
-			expect.stringMatching(/^https:\/\/itunes\.apple\.com\/search\?/),
-			{
-				timeoutMs: 15_000,
-				maxResponseBytes: 2 * 1024 * 1024,
-				acceptedStatuses: [200],
-			},
-		);
 	});
 
 	it("turns an invalid response shape into a redacted boundary error", async () => {
@@ -57,7 +70,7 @@ describe("queryiTunesPodcasts", () => {
 		expect((error as NetworkError).code).toBe("invalid-response");
 		expect(String(error)).not.toContain(marker);
 		expect(console.error).toHaveBeenCalledWith(
-			"iTunes search failed.",
+			"iTunes request failed.",
 			"invalid-response",
 			undefined,
 		);
