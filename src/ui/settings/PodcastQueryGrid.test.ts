@@ -7,7 +7,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type PodNotes from "src/main";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import { plugin, savedFeeds } from "src/store";
-import { fetchJsonWithTimeout, fetchTextWithTimeout } from "src/utility/networkRequest";
+import {
+	fetchJsonWithTimeout,
+	fetchTextWithTimeout,
+	NetworkError,
+} from "src/utility/networkRequest";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import lookupAppleNewsToday from "../../../tests/fixtures/itunes/lookup-apple-news-today.json";
 import lookupHubermanLab from "../../../tests/fixtures/itunes/lookup-huberman-lab.json";
@@ -234,6 +238,23 @@ describe("PodcastQueryGrid", () => {
 
 		expect(await findByRole("alert")).toHaveTextContent(
 			"No public RSS feed found for this Apple Podcasts link.",
+		);
+	});
+
+	test("an Apple Podcasts link that cannot be looked up asks to try again", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		fetchJsonMock.mockRejectedValue(new NetworkError("timeout"));
+
+		const { findByRole } = paste(
+			"https://podcasts.apple.com/us/podcast/huberman-lab/id1545953110",
+		);
+
+		expect(await findByRole("alert")).toHaveTextContent(
+			"Could not look up this Apple Podcasts link. Please try again.",
+		);
+		expect(notice).toHaveBeenCalledWith(
+			"Could not look up this Apple Podcasts link. Please try again.",
 		);
 	});
 });

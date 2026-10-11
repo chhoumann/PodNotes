@@ -47,6 +47,18 @@ describe("queryiTunesPodcasts", () => {
 		});
 	});
 
+	it("sends the search term intact alongside the podcast filters", async () => {
+		fetchJsonMock.mockResolvedValue(searchAppleNews);
+
+		await queryiTunesPodcasts("Ça & va + bien");
+
+		const url = requestedUrl();
+		expect(url.searchParams.get("term")).toBe("Ça & va + bien");
+		expect(url.searchParams.get("media")).toBe("podcast");
+		expect(url.searchParams.get("kind")).toBe("podcast");
+		expect(url.searchParams.get("limit")).toBe("20");
+	});
+
 	it("maps shows to feeds and drops shows without a public RSS feed", async () => {
 		// The first result, Apple News Today, is Apple-hosted and has no feedUrl.
 		fetchJsonMock.mockResolvedValue(searchAppleNews);
