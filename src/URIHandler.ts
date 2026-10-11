@@ -1,15 +1,18 @@
-import { Notice } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
 import FeedParser from "./parser/feedParser";
 import { localFiles, plugin, savedFeeds, viewState } from "./store";
 import type { Episode } from "./types/Episode";
+import type { LocalEpisode } from "./types/LocalEpisode";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
 import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { episodeLinkTarget } from "./utility/episodeLinkTarget";
+import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
+import { getEpisodeMediaType, getUnambiguousMediaTypeFromPath } from "./utility/mediaType";
 import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
@@ -131,9 +134,9 @@ export default async function podNotesURIHandler(
 	}
 
 	// The path probe decides local-vs-feed routing; the episode itself is resolved by name.
-	const { vault } = get(plugin).app;
+	const { app } = get(plugin);
 	const localFile = candidateValues(url)
-		.map((path) => vault.getAbstractFileByPath(path))
+		.map((path) => app.vault.getAbstractFileByPath(path))
 		.find((file) => file !== null);
 
 	let episode: Episode | undefined;
@@ -147,7 +150,18 @@ export default async function podNotesURIHandler(
 		// The file the link names plays, even when a same-named file in another
 		// folder has since taken over the name's registration.
 		const named = findLocalEpisodeByCandidates(nameCandidates);
-		episode = named && ({ ...named, filePath: localFile.path } as Episode);
+		episode =
+			named &&
+			localFile instanceof TFile &&
+			(named as LocalEpisode).filePath !== localFile.path
+				? localEpisodeFromFile(
+						app,
+						localFile,
+						// Only the registration knows whether an mp4 or webm is audio or video.
+						getUnambiguousMediaTypeFromPath(localFile.path) ??
+							getEpisodeMediaType(named),
+					)
+				: named;
 	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
 		// a vault path whose file was moved/renamed. Resolve the episode by name from

@@ -4,9 +4,8 @@ import { get } from "svelte/store";
 import { VIEW_TYPE } from "./constants";
 import { downloadedEpisodes, playedEpisodes, viewState, plugin } from "./store";
 import type { EpisodeMediaType } from "./types/Episode";
-import type { LocalEpisode } from "./types/LocalEpisode";
 import { ViewState } from "./types/ViewState";
-import { createMediaUrlObjectFromFilePath } from "./utility/createMediaUrlObjectFromFilePath";
+import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 import { getMediaTypeFromPath, isAudioContainerExtension } from "./utility/mediaType";
 
 export default function getContextMenuHandler(app: App): EventRef {
@@ -43,17 +42,7 @@ function addPlayLocalFileItem(
 			.setIcon("play")
 			.setTitle(title)
 			.onClick(async () => {
-				const localEpisode: LocalEpisode = {
-					title: file.basename,
-					description: "",
-					content: "",
-					podcastName: "local file",
-					url: app.fileManager.generateMarkdownLink(file, ""),
-					streamUrl: createMediaUrlObjectFromFilePath(app.vault, file.path),
-					filePath: file.path,
-					episodeDate: new Date(file.stat.ctime),
-					mediaType,
-				};
+				const localEpisode = localEpisodeFromFile(app, file, mediaType);
 
 				// The Local Files playlist is mirrored from downloadedEpisodes
 				// (see localFiles.syncWithDownloaded), so this single write
