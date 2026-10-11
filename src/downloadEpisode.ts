@@ -121,7 +121,7 @@ function resolveDownloadTarget(
 	};
 }
 
-function registeredOwnerOfPath(episode: Episode, filePath: string): DownloadedEpisode | undefined {
+function ownRegistrationAt(episode: Episode, filePath: string): DownloadedEpisode | undefined {
 	const normalizedPath = normalizePath(filePath);
 	const registered = downloadedEpisodes.getEpisode(episode);
 	if (!registered || normalizePath(registered.filePath) !== normalizedPath) return undefined;
@@ -140,25 +140,15 @@ function registeredOwnerOfPath(episode: Episode, filePath: string): DownloadedEp
 	return owns ? registered : undefined;
 }
 
-// Fast-path variant: the path here is only the URL-extension guess, so a foreign
-// occupant is not a collision yet - the sniffed final path may differ.
-function ownedExistingDownload(episode: Episode, filePath: string): DownloadedEpisode | undefined {
+function reuseOwnRegistration(episode: Episode, filePath: string): "reused" | "free" | "foreign" {
 	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
-	if (!(existing instanceof TFile)) return undefined;
-	return registeredOwnerOfPath(episode, filePath);
-}
-
-// Resolved-destination variant: the final path is known, so a foreign occupant
-// is a hard collision.
-function reusableExistingDownload(
-	episode: Episode,
-	filePath: string,
-): DownloadedEpisode | undefined {
-	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
-	if (!(existing instanceof TFile)) return undefined;
-	const owner = registeredOwnerOfPath(episode, filePath);
-	if (!owner) throw downloadDestinationCollisionError(filePath);
-	return owner;
+	if (!(existing instanceof TFile)) return "free";
+	const own = ownRegistrationAt(episode, filePath);
+	if (!own) return "foreign";
+	downloadedEpisodes.addEpisode(episode, filePath, own.size, {
+		downloadedByPodNotes: own.downloadedByPodNotes,
+	});
+	return "reused";
 }
 
 // Download an episode to a vault file with bounded memory using the binary append
@@ -175,13 +165,8 @@ async function startDownloadEpisodeToDisk(
 	const urlExtension = getUrlExtension(episode.streamUrl);
 	if (urlExtension) {
 		const provisionalPath = safeDownloadFilePath(downloadPathTemplate, episode, urlExtension);
-		const cached = ownedExistingDownload(episode, provisionalPath);
-		if (cached) {
-			downloadedEpisodes.addEpisode(episode, provisionalPath, cached.size, {
-				downloadedByPodNotes: cached.downloadedByPodNotes,
-			});
-			return provisionalPath;
-		}
+		// A foreign occupant is not a collision yet - the sniffed final path may differ.
+		if (reuseOwnRegistration(episode, provisionalPath) === "reused") return provisionalPath;
 	}
 
 	let probe;
@@ -196,13 +181,9 @@ async function startDownloadEpisodeToDisk(
 		probe.firstChunk,
 		probe.contentType,
 	);
-	const existing = reusableExistingDownload(episode, filePath);
-	if (existing) {
-		downloadedEpisodes.addEpisode(episode, filePath, existing.size, {
-			downloadedByPodNotes: existing.downloadedByPodNotes,
-		});
-		return filePath;
-	}
+	const reuse = reuseOwnRegistration(episode, filePath);
+	if (reuse === "reused") return filePath;
+	if (reuse === "foreign") throw downloadDestinationCollisionError(filePath);
 
 	await ensureFolderExists(parentFolderPath(filePath));
 

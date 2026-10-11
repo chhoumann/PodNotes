@@ -757,7 +757,7 @@ describe("removeDownloadedEpisode", () => {
 	it("drops an unconfirmed entry whose file the vault has not indexed and leaves the file", async () => {
 		const vault = setupVault();
 		const episode = makeEpisode({ title: "Fixture Episode 2" });
-		const filePath = "Recordings/Fixture Episode 2.wav";
+		const filePath = ".recordings/Fixture Episode 2.wav";
 		vault.disk.add(filePath);
 		downloadedEpisodes.set({ Pod: [{ ...episode, filePath, size: 4 }] });
 

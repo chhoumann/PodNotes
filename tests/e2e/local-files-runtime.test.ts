@@ -107,14 +107,16 @@ describe("local files runtime", () => {
 		const kept = `E2E Adopted Recording ${stamp}`;
 		const discarded = `E2E Discarded Recording ${stamp}`;
 		const legacy = `E2E Legacy Recording ${stamp}`;
+		const unindexed = `E2E Unindexed Recording ${stamp}`;
 		const recordingPath = (title: string) => sandbox.path("Recordings", `${title}.wav`);
+		const unindexedPath = sandbox.path(".recordings", `${unindexed}.wav`);
 		const promptFor = (title: string) =>
 			`PodNotes cannot confirm that it downloaded "${recordingPath(title)}".`;
 		const inDownloads = (data: PodNotesData, podcastName: string, title: string) =>
 			data.downloadedEpisodes?.[podcastName]?.some((entry) => entry.title === title) ?? false;
 		const trashedFixtures = async () =>
 			(await listTrash(obsidian)).filter((path) => path.includes(String(stamp)));
-		const adoptedByAnOlderRelease = (title: string) => ({
+		const adoptedByAnOlderRelease = (title: string, filePath = recordingPath(title)) => ({
 			title,
 			description: `${title} description.`,
 			content: "",
@@ -126,7 +128,7 @@ describe("local files runtime", () => {
 			episodeDate: "2026-06-30T09:00:00.000Z",
 			duration: 1,
 			mediaType: "audio",
-			filePath: recordingPath(title),
+			filePath,
 			size: SILENT_WAV_SECOND_BYTES,
 		});
 
@@ -135,9 +137,21 @@ describe("local files runtime", () => {
 			await writeSilentWav(obsidian, recordingPath(title), 1);
 			await sandbox.waitForExists(`Recordings/${title}.wav`, WAIT_OPTS);
 		}
+		await sandbox.mkdir(".recordings");
+		await evalJsonAsync<boolean>(
+			obsidian,
+			`(async () => {
+				await app.vault.adapter.writeBinary(${JSON.stringify(unindexedPath)}, new ArrayBuffer(${SILENT_WAV_SECOND_BYTES}));
+				return true;
+			})()`,
+		);
 		await plugin.updateDataAndReload<Record<string, unknown>>((data) => {
 			data.downloadedEpisodes = {
-				[feed]: [adoptedByAnOlderRelease(kept), adoptedByAnOlderRelease(discarded)],
+				[feed]: [
+					adoptedByAnOlderRelease(kept),
+					adoptedByAnOlderRelease(discarded),
+					adoptedByAnOlderRelease(unindexed, unindexedPath),
+				],
 				"local file": [
 					{
 						title: legacy,
@@ -195,6 +209,13 @@ describe("local files runtime", () => {
 				WAIT_OPTS,
 			);
 
+			await clickInPodNotesView(obsidian, `[aria-label="More options for ${unindexed}"]`);
+			await clickMenuItem(obsidian, "Remove file");
+			await plugin.waitForData<PodNotesData>(
+				(data) => !inDownloads(data, feed, unindexed),
+				WAIT_OPTS,
+			);
+
 			const after = await evalJsonAsync<Record<string, boolean>>(
 				obsidian,
 				`(async () => {
@@ -204,6 +225,7 @@ describe("local files runtime", () => {
 						kept: await adapter.exists(${JSON.stringify(recordingPath(kept))}),
 						discarded: await adapter.exists(${JSON.stringify(recordingPath(discarded))}),
 						legacy: await adapter.exists(${JSON.stringify(recordingPath(legacy))}),
+						unindexed: await adapter.exists(${JSON.stringify(unindexedPath)}),
 					};
 				})()`,
 			);
@@ -212,6 +234,7 @@ describe("local files runtime", () => {
 				kept: true,
 				discarded: false,
 				legacy: true,
+				unindexed: true,
 				trashed: [`.trash/${discarded}.wav`],
 			});
 			expect(await obsidian.dev.runtimeErrors()).toEqual([]);
@@ -226,6 +249,9 @@ describe("local files runtime", () => {
 					}
 					for (const path of ${JSON.stringify(await trashedFixtures())}) {
 						await app.vault.adapter.remove(path);
+					}
+					if (await app.vault.adapter.exists(${JSON.stringify(unindexedPath)})) {
+						await app.vault.adapter.remove(${JSON.stringify(unindexedPath)});
 					}
 					return true;
 				})()`,
