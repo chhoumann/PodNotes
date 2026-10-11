@@ -447,6 +447,7 @@ export class PlayerController {
 		if (!session?.ready) return;
 		if (this.snapshot.status === "ended") {
 			this.session = null;
+			this.release();
 		} else {
 			session.ready = false;
 			session.pendingTime = this.snapshot.currentTime;
