@@ -234,6 +234,9 @@ export class DataFileWriter<Doc> {
 		}
 		// A missing file is not a request to reset everything.
 		if (!disk || this.unloaded) return;
+		if (this.failedWrite && jsonValuesEqual(disk, this.failedWrite.written)) {
+			this.settle(this.failedWrite.local, this.failedWrite.written);
+		}
 
 		const base = this.base;
 		if (base && jsonValuesEqual(disk, base)) return;
