@@ -112,8 +112,11 @@ read state.
 - **Stored state.** Read `data.json` on disk. `savedFeeds` is keyed by feed
   title. `playedEpisodes` is keyed by `<podcast>::<title>` and holds `time`,
   `duration` and `finished`. `queue`, `favorites` and `localFiles` hold
-  `.episodes`. `timestamp.template` holds the capture format. Saves land about
-  2 s after the change:
+  `.episodes`. `timestamp.template` holds the capture format. A change saves
+  within a moment. The position of a playing episode is a checkpoint, taken every
+  5 s and written at most every 10 s; pausing or hiding the window writes the
+  live position at once, and
+  `eval code='app.plugins.plugins.podnotes.flushSaves()'` writes the last checkpoint:
 
     ```bash
     jq '{feeds: (.savedFeeds | keys), current: .currentEpisode.title, played: .playedEpisodes}' .obsidian-e2e-vaults/*/.obsidian/plugins/podnotes/data.json
