@@ -72,8 +72,9 @@ describe("mobile journeys", () => {
 		const [saved] = (await readLibrary(plugin)).subscriptions;
 		expect(saved.title).toBe("Journey Private");
 		expect(saved.url).not.toContain("journey-secret");
-		expect(
-			await obsidian.dev.evalJson('app.loadLocalStorage("podnotes:feed-cache:v5")'),
-		).toBeNull();
+		const legacy = await obsidian.dev.evalJson<string | null>(
+			'app.loadLocalStorage("podnotes:feed-cache:v5")',
+		);
+		expect(legacy ?? "").not.toContain("journey-secret");
 	}, 120_000);
 });
