@@ -854,6 +854,28 @@ describe("video stage", () => {
 		expect(state().status).toBe("playing");
 	});
 
+	test.each(["before", "after"])(
+		"a reset that aborts a pending play (rejected %s the emptied event) plays on once the media is back",
+		async (order) => {
+			const { player, doc, media, state } = setup();
+			const stage = new FakeParent(doc);
+			player.play(VIDEO);
+			metadata(media());
+			player.videoStage(stage as unknown as HTMLElement);
+			expect(media().plays).toHaveLength(1);
+
+			stage.ownerDocument = {};
+			media().load();
+			if (order === "before") await flush();
+			media().emit("emptied");
+			await flush();
+			metadata(media());
+
+			expect(media().paused).toBe(false);
+			expect(state().status).toBe("playing");
+		},
+	);
+
 	test("a reset element saves no position until it holds media again", () => {
 		const { player, media, state, writes } = setup();
 		const written = writes(A);
