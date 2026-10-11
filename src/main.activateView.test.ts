@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PodNotes from "./main";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { VIEW_TYPE } from "./constants";
-import { Platform } from "obsidian";
+import { Notice, Platform } from "obsidian";
 import type { Episode } from "./types/Episode";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
@@ -438,6 +438,20 @@ describe("PodNotes onload wiring (#55)", () => {
 				Reflect.deleteProperty(navigator, "mediaSession");
 			}
 		}
+	});
+
+	it("takes its refusal Notice away on unload", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(undefined) });
+		vi.mocked(plugin.app.vault.adapter.read).mockResolvedValue("{ cut off");
+		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		await plugin.onExternalSettingsChange();
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+		const hide = vi.spyOn(Notice.prototype, "hide");
+
+		plugin.onunload();
+
+		expect(hide).toHaveBeenCalledTimes(1);
 	});
 
 	it("clears the previous-track Media Session handler on unload", async () => {

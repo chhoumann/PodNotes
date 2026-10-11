@@ -463,6 +463,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	override onunload() {
 		this.isUnloaded = true;
+		// The refusal ends with this instance; the next one reads the file itself.
+		this.refusalNotice?.hide();
 		void this.writer?.unload();
 		this.clearLayoutReadyRetry();
 		this.clearMediaSessionHandlers();
@@ -637,8 +639,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		refusal: "unreadable-data-file" | "older-data-file",
 		message: string,
 	): void {
-		// Closing refusals never lift; this one would.
-		if (this.writeRefusal === "window-unloading" || this.writeRefusal === "obsidian-closing") {
+		// Closing refusals never lift; this one would. An unloaded plugin shows nothing.
+		if (
+			this.isUnloaded ||
+			this.writeRefusal === "window-unloading" ||
+			this.writeRefusal === "obsidian-closing"
+		) {
 			return;
 		}
 		if (this.writeRefusal === refusal) return;
@@ -662,7 +668,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private dataFileAccess(): DataFileAccess<PersistedPodNotesDataV2> {
 		return {
 			read: async (base) => {
-				const data: unknown = await this.loadData().catch(() => undefined);
+				const data: unknown = await this.loadData();
 				const path = this.dataFilePath();
 				if (data == null) {
 					if (await this.dataFileHoldsNothing()) {
