@@ -618,10 +618,12 @@ describe("PodNotes persistence integration", () => {
 			synced.savedFeeds = {
 				Synced: { title: "Synced", url: "https://example.com/s.xml", artworkUrl: "" },
 			};
-			const disk = { text: JSON.stringify(synced, undefined, 2), full: true };
+			const disk = { text: JSON.stringify(synced, undefined, 2), full: true, denied: false };
 			Object.assign(plugin, {
+				// Obsidian's loadData resolves undefined for a file it cannot read or parse.
 				loadData: vi.fn(async () => {
 					try {
+						if (disk.denied) throw new Error("EACCES: permission denied");
 						return JSON.parse(disk.text);
 					} catch {
 						return undefined;
@@ -635,7 +637,10 @@ describe("PodNotes persistence integration", () => {
 			});
 			Object.assign(plugin.app.vault.adapter, {
 				exists: vi.fn().mockResolvedValue(true),
-				read: vi.fn(async () => disk.text),
+				read: vi.fn(async () => {
+					if (disk.denied) throw new Error("EACCES: permission denied");
+					return disk.text;
+				}),
 			});
 			return { plugin, disk };
 		}
@@ -652,7 +657,7 @@ describe("PodNotes persistence integration", () => {
 			expect(disk.text).toBe(cutShort);
 		});
 
-		it("writes memory over a file the failed write left empty, as over a missing one", async () => {
+		it("writes a file the failed write left empty again, with the feed another device added", async () => {
 			const { plugin, disk } = cutShortOnce(0);
 			plugin.settings.defaultVolume = 0.5;
 			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
@@ -661,7 +666,44 @@ describe("PodNotes persistence integration", () => {
 			plugin.settings.defaultVolume = 0.25;
 			await plugin.saveSettingsStrict();
 
+			expect(JSON.parse(disk.text)).toMatchObject({
+				schemaVersion: 2,
+				defaultVolume: 0.25,
+				savedFeeds: { Synced: { title: "Synced" } },
+			});
+			expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Synced"]);
+		});
+
+		it("saves again once a file it could not read is replaced by an empty one", async () => {
+			const { plugin, disk } = cutShortOnce();
+			disk.full = false;
+			disk.text = '{"schemaVersion": 2, "savedFeeds": {"Other device';
+			await plugin.onExternalSettingsChange();
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+
+			disk.text = "";
+			await plugin.onExternalSettingsChange();
+			plugin.settings.defaultVolume = 0.25;
+			await plugin.saveSettingsStrict();
+
 			expect(JSON.parse(disk.text)).toMatchObject({ schemaVersion: 2, defaultVolume: 0.25 });
+		});
+
+		it("stops saving with a Notice while reading the file fails, and saves again once it reads", async () => {
+			const { plugin, disk } = cutShortOnce();
+			disk.full = false;
+			disk.denied = true;
+			const before = disk.text;
+			await plugin.onExternalSettingsChange();
+			plugin.settings.defaultVolume = 0.25;
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			expect(disk.text).toBe(before);
+
+			disk.denied = false;
+			await plugin.onExternalSettingsChange();
+			await plugin.saveSettingsStrict();
+
+			expect(JSON.parse(disk.text)).toMatchObject({ defaultVolume: 0.25 });
 		});
 
 		it("never writes over a file another writer left unreadable", async () => {

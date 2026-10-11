@@ -188,8 +188,15 @@ export class DataFileWriter<Doc> {
 		const base = this.base;
 		// Captured after the read, so edits made while it was in flight are written too.
 		const local = this.file.local();
-		// With nothing loaded or nothing on disk there is nothing to merge with.
-		const toWrite = base && disk ? threeWayMergeSettings(base, local, disk) : local;
+		let toWrite = local;
+		if (disk && base) {
+			toWrite = threeWayMergeSettings(base, local, disk);
+		} else if (!disk && this.failedWrite) {
+			// A failed write that left nothing on disk held the changes made elsewhere:
+			// write them again, with the edits made here since.
+			const { local: before, written } = this.failedWrite;
+			toWrite = threeWayMergeSettings(before, local, written);
+		}
 		try {
 			await this.file.write(toWrite);
 		} catch (error) {

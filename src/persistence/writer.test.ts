@@ -269,6 +269,26 @@ describe("DataFileWriter saves", () => {
 		expect(state.memory).toEqual(state.disk);
 	});
 
+	it("writes a failed write's changes from elsewhere again when it left nothing on disk", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(async () => {
+			state.disk = null;
+			throw new Error("disk full");
+		});
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+		await expect(writer.save()).rejects.toThrow("disk full");
+
+		state.memory.defaultVolume = 0.25;
+		await writer.save();
+
+		expect(state.disk).toMatchObject({
+			defaultVolume: 0.25,
+			savedFeeds: { Synced: { title: "Synced" } },
+		});
+		expect(state.memory).toEqual(state.disk);
+	});
+
 	it("writes nothing over a file it cannot read, even after a failed write", async () => {
 		const { access, state, writer } = setup();
 		access.write.mockRejectedValueOnce(new Error("disk full"));

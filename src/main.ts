@@ -624,6 +624,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		await this.writer.onExternalChange();
 	}
 
+	/** The file can be taken as it is again: saves resume. */
+	private liftUnreadableRefusal(): void {
+		if (this.writeRefusal !== "unreadable-data-file") return;
+		this.writeRefusal = null;
+		this.refusalNotice?.hide();
+		this.refusalNotice = null;
+	}
+
 	/** No save until `refusal` lifts, if it does, with a Notice saying why. */
 	private refuseSaves(
 		refusal: "unreadable-data-file" | "older-data-file",
@@ -654,10 +662,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private dataFileAccess(): DataFileAccess<PersistedPodNotesDataV2> {
 		return {
 			read: async (base) => {
-				const data: unknown = await this.loadData();
+				const data: unknown = await this.loadData().catch(() => undefined);
 				const path = this.dataFilePath();
 				if (data == null) {
-					if (await this.dataFileHoldsNothing()) return null;
+					if (await this.dataFileHoldsNothing()) {
+						this.liftUnreadableRefusal();
+						return null;
+					}
 					this.refuseSaves(
 						"unreadable-data-file",
 						`PodNotes could not read ${path}, so it leaves the file unchanged and saves nothing until the file can be read again.`,
@@ -678,12 +689,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				if (!base && decoded.changed) {
 					throw new Error(`PodNotes could not read ${path} without repairing it`);
 				}
-				// The file reads again, as it is: saves resume.
-				if (this.writeRefusal === "unreadable-data-file") {
-					this.writeRefusal = null;
-					this.refusalNotice?.hide();
-					this.refusalNotice = null;
-				}
+				this.liftUnreadableRefusal();
 				const doc: Record<string, unknown> = toDocument(
 					decoded.settings,
 					decoded.unknownFields,
@@ -736,11 +742,18 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	// Every data.json write goes through here, so no path can write while writes are refused.
-	/** No data.json, or an empty one, as a write cut off on a full disk leaves: nothing to lose. */
+	/**
+	 * No data.json, or an empty one, as a write cut off on a full disk leaves: nothing
+	 * to lose. False when the file cannot be checked.
+	 */
 	private async dataFileHoldsNothing(): Promise<boolean> {
 		const path = this.dataFilePath();
 		const { adapter } = this.app.vault;
-		return !(await adapter.exists(path)) || (await adapter.read(path)) === "";
+		try {
+			return !(await adapter.exists(path)) || (await adapter.read(path)) === "";
+		} catch {
+			return false;
+		}
 	}
 
 	private async writeDataFile(data: unknown): Promise<void> {
