@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render } from "@testing-library/svelte";
+import { fireEvent, render, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -68,6 +68,16 @@ describe("PodcastQueryGrid", () => {
 		await findByRole("button", { name: "Add Planet Money Summer School podcast" });
 
 		expect(getAllByRole("button", { name: "Add Planet Money podcast" })).toHaveLength(1);
+	});
+
+	test("names each search result's author", async () => {
+		fetchJsonMock.mockResolvedValue(searchPlanetMoneyNamesake);
+
+		const { findAllByRole } = paste("planet money");
+		const [npr, namesake] = await findAllByRole("listitem");
+
+		expect(within(npr).getByText("NPR")).toBeInTheDocument();
+		expect(within(namesake).getByText("fert")).toBeInTheDocument();
 	});
 
 	test("adding a namesake keeps the saved podcast", async () => {

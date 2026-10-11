@@ -8,6 +8,7 @@ const APPLE_PODCASTS_HOSTS = new Set(["podcasts.apple.com", "itunes.apple.com"])
 
 interface iTunesResult {
 	collectionName: string;
+	artistName?: string;
 	feedUrl?: string;
 	artworkUrl100: string;
 	collectionId: number;
@@ -101,5 +102,6 @@ function toPodcastFeed(result: iTunesResult): PodcastFeed | null {
 		url: result.feedUrl,
 		artworkUrl: result.artworkUrl100,
 		collectionId: String(result.collectionId),
+		...(typeof result.artistName === "string" ? { author: result.artistName } : {}),
 	};
 }

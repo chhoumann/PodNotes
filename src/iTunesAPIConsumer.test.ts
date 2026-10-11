@@ -58,6 +58,7 @@ describe("queryiTunesPodcasts", () => {
 				artworkUrl:
 					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/21/e5/93/21e59350-3d63-8dfb-f8a1-c762f85e069c/mza_13661945558824532647.jpg/100x100bb.jpg",
 				collectionId: "1577591053",
+				author: "Apple News",
 			},
 			{
 				title: "Apple Quarterly Earnings Call",
@@ -65,6 +66,7 @@ describe("queryiTunesPodcasts", () => {
 				artworkUrl:
 					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/72/23/72/72237247-8b65-6174-8aa2-0a3691352b02/mza_5761462598177267980.jpeg/100x100bb.jpg",
 				collectionId: "74942331",
+				author: "Apple Inc.",
 			},
 		]);
 	});
@@ -150,6 +152,7 @@ describe("lookupiTunesPodcast", () => {
 			artworkUrl:
 				"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/100x100bb.jpg",
 			collectionId: "1545953110",
+			author: "Scicomm Media",
 		});
 		const url = requestedUrl();
 		expect(url.origin + url.pathname).toBe("https://itunes.apple.com/lookup");
