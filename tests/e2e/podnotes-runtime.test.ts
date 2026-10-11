@@ -1,3 +1,4 @@
+import { readFile, writeFile } from "node:fs/promises";
 import type { PluginHandle, SandboxApi } from "obsidian-e2e";
 import { describe, expect, test } from "vitest";
 import type DownloadedEpisode from "../../src/types/DownloadedEpisode";
@@ -711,6 +712,101 @@ describe("PodNotes runtime", () => {
 				})()`,
 			);
 			await obsidian.dev.resetDiagnostics().catch(() => undefined);
+		}
+	});
+
+	test("keeps data.json when Obsidian reloads while an episode plays", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(obsidian, sandbox);
+		const episode = createLocalEpisode("E2E Reload Episode", audioPath);
+		await seedRuntimeData(plugin, sandbox, episode);
+		await waitForPodNotesReady(obsidian);
+		await openPodNotesView(obsidian);
+		await invokePodNotesUri(obsidian, episode, 5);
+		await waitForPlaybackState(
+			obsidian,
+			(state) =>
+				state.hasPlayer &&
+				state.title === episode.title &&
+				state.isPlaying &&
+				(state.currentTime ?? 0) > 6,
+		);
+
+		// The old window keeps answering until the reload replaces it, so wait for a
+		// context without this marker.
+		await obsidian.dev.evalJson(
+			"(() => { window.__podnotesBeforeReload = true; return true; })()",
+		);
+		await obsidian.app.reload();
+		await obsidian.waitFor(
+			async () => {
+				try {
+					return await obsidian.dev.evalJson<boolean>(
+						`!window.__podnotesBeforeReload && Boolean(app.plugins.plugins.${PLUGIN_ID}?.api)`,
+					);
+				} catch {
+					return false;
+				}
+			},
+			{ ...WAIT_OPTS, message: "Obsidian did not finish reloading." },
+		);
+		await waitForPodNotesReady(obsidian);
+
+		const data = JSON.parse(await readFile(await plugin.dataPath(), "utf8")) as PodNotesData;
+		expect(data.currentEpisode?.title).toBe(episode.title);
+		expect(data.downloadedEpisodes?.[episode.podcastName]).toHaveLength(1);
+	});
+
+	test("leaves a data.json it cannot read unchanged and saves nothing", async () => {
+		const { obsidian, plugin } = getContext();
+		const original = await plugin.data<PodNotesData>().read();
+		const dataPath = await plugin.dataPath();
+
+		await plugin.disable();
+		// The harness snapshots data.json on its first write and restores that copy
+		// after the test, so write through it before truncating.
+		await plugin.data<PodNotesData>().write(original);
+		const text = await readFile(dataPath, "utf8");
+		const truncated = text.slice(0, Math.floor(text.length / 2));
+		await writeFile(dataPath, truncated);
+		try {
+			await plugin.enable();
+			await waitForPodNotesReady(obsidian);
+			const session = await evalJsonAsync<{ feeds: string[]; strictSave: string }>(
+				obsidian,
+				`(async () => {
+					const podnotes = app.plugins.plugins.${PLUGIN_ID};
+					podnotes.api.volume = 0.42;
+					await podnotes.saveSettings();
+					return {
+						feeds: Object.keys(podnotes.settings.savedFeeds),
+						strictSave: await podnotes.saveSettingsStrict().then(() => "saved", () => "refused"),
+					};
+				})()`,
+			);
+			await obsidian.sleep(500);
+
+			expect(await readFile(dataPath, "utf8")).toBe(truncated);
+			expect(session).toEqual({ feeds: [], strictSave: "refused" });
+			expect(await obsidian.dev.notices()).toContainEqual(
+				expect.objectContaining({
+					message: expect.stringContaining(
+						"PodNotes could not read .obsidian/plugins/podnotes/data.json",
+					),
+				}),
+			);
+		} finally {
+			await plugin.data<PodNotesData>().write(original);
+			await plugin.reload(RELOAD_OPTIONS);
+			await evalJsonAsync<boolean>(
+				obsidian,
+				`(() => {
+					for (const notice of document.querySelectorAll(".notice")) {
+						if (notice.textContent?.includes("PodNotes could not read")) notice.remove();
+					}
+					return true;
+				})()`,
+			);
 		}
 	});
 });
