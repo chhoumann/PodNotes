@@ -170,12 +170,12 @@ export class PlayerController {
 	/** Continues the current episode without selecting it. */
 	resume(): void {
 		const { status, episode, currentTime } = this.snapshot;
-		if (this.disposed || !episode) return;
+		if (this.disposed || !episode || status === "playing" || status === "loading") return;
 		this.endPreview();
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
 			this.load(episode, source, status === "ended" ? 0 : currentTime);
-		} else if (status === "paused" || status === "ended") {
+		} else {
 			if (status === "ended") this.moveTo(0);
 			this.start();
 		}
