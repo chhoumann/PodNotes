@@ -178,3 +178,10 @@ export function migrateSkipLength(value: unknown, fallback: number): number {
 	const n = typeof value === "number" ? value : Number(value);
 	return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
+
+/**
+ * The timestamp template before `{{linktime}}` became the default (#345).
+ * PodNotes always writes the template, so data without one is older or
+ * hand-edited and keeps the template it ran with.
+ */
+export const LEGACY_TIMESTAMP_TEMPLATE = "- {{time}} ";

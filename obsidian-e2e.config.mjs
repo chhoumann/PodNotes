@@ -42,7 +42,7 @@ export default {
 		skipBackwardLength: 15,
 		skipForwardLength: 15,
 		timestamp: {
-			template: "- {{time}} ",
+			template: "- {{linktime}} ",
 			offset: 0,
 		},
 		note: {

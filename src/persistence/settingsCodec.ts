@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from "src/constants";
 import {
+	LEGACY_TIMESTAMP_TEMPLATE,
 	migrateDownloadPath,
 	migrateFeedNoteSettings,
 	migrateNoteSettings,
@@ -135,13 +136,7 @@ function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettin
 	const record = optionalRecord(value, warnings, "timestamp");
 	return {
 		...copySafeObject(record),
-		template: readString(
-			record,
-			"template",
-			DEFAULT_SETTINGS.timestamp.template,
-			warnings,
-			"timestamp",
-		),
+		template: readString(record, "template", LEGACY_TIMESTAMP_TEMPLATE, warnings, "timestamp"),
 		offset: readFiniteNumber(
 			record,
 			"offset",
