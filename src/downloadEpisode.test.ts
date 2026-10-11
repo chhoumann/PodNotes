@@ -653,7 +653,7 @@ describe("removeDownloadedEpisode", () => {
 	const moveToTrash = () =>
 		fireEvent.click(screen.getByRole("button", { name: "Move to trash" }));
 	const dismissPrompt = () => {
-		const closeButton = document.querySelector(".modal-close-button");
+		const closeButton = document.querySelector(".modal-header-button");
 		if (!closeButton) throw new Error("The prompt has no close button.");
 		fireEvent.click(closeButton);
 	};

@@ -75,7 +75,7 @@ export class Modal {
 		this.titleEl = document.createElement("div");
 		this.contentEl = document.createElement("div");
 		const closeButtonEl = document.createElement("div");
-		closeButtonEl.className = "modal-close-button";
+		closeButtonEl.className = "modal-header-button";
 		closeButtonEl.addEventListener("click", () => this.close());
 		this.containerEl.append(closeButtonEl, this.titleEl, this.contentEl);
 	}

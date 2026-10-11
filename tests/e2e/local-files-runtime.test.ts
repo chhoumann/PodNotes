@@ -219,6 +219,11 @@ describe("local files runtime", () => {
 			await evalJsonAsync<boolean>(
 				obsidian,
 				`(async () => {
+					for (const modal of document.querySelectorAll(".modal-container")) {
+						if (modal.textContent.includes(${JSON.stringify(String(stamp))})) {
+							modal.querySelector(".modal-header-button")?.click();
+						}
+					}
 					for (const path of ${JSON.stringify(await trashedFixtures())}) {
 						await app.vault.adapter.remove(path);
 					}
