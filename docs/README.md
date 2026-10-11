@@ -15,6 +15,10 @@ plugin's dependencies.
   `public/_redirects`.
 - `astro.config.mjs` holds the Starlight config. The sidebar lives in
   `src/site.mjs`, which the LLM files below also read.
+- `scripts/legacy-fragments.mjs` runs after every build and fails it if a
+  heading fragment from the old MkDocs site (`legacy-fragments.json`) has no
+  target. When a heading's new id differs from the old one, add an empty
+  `<div id="old-id"></div>` before the heading, as `commands.md` does.
 - `public/` holds static assets served as-is. Images live in
   `public/resources/` and are referenced with site-absolute paths such as
   `/resources/podcast_grid.png`. The repo-root `README.md` uses the same
@@ -53,5 +57,5 @@ The build also writes these files:
 Cloudflare Pages builds this repo through its GitHub integration and publishes
 `docs/dist`, set by `pages_build_output_dir` in the repo-root `wrangler.jsonc`.
 `npm run docs:deploy` from the repo root builds and deploys with Wrangler
-instead. The Documentation GitHub workflow builds the docs on every pull
-request that changes them.
+instead. The `Docs` check in the Documentation GitHub workflow builds the docs
+on every pull request and push to master.

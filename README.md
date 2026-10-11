@@ -1,6 +1,6 @@
 # [PodNotes](https://podnotes.obsidian.guide)
 
-<img src="https://github.com/chhoumann/PodNotes/blob/master/docs/public/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
+<img src="docs/public/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
 
 <h3 align="center">You can find the documentation <a href="https://podnotes.obsidian.guide">here</a>.</h3>
 
