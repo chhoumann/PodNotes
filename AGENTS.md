@@ -170,6 +170,29 @@ per-worktree hash), including Xvfb on Linux, and never touches the `dev` vault
 or other worktrees. `start:e2e-obsidian` and `obsidian:e2e` also reap orphaned
 instances under the default profile root before launching.
 
+### Obsidian mobile (Android emulator)
+
+`scripts/omd.sh` drives the real Obsidian Android app through
+[obsidian-mobile-debug](https://github.com/chhoumann/obsidian-mobile-debug) at a
+pinned commit. It is Linux-only (KVM, a systemd user unit) and needs `uv` and `jq`.
+
+```bash
+npm run mobile:setup                # first run downloads about 8 GB (up to 35 min)
+npm run --silent mobile:verify      # build, deploy, smoke probe; JSON on stdout, exit 0/2/1
+npm run mobile:eval -- 'app.plugins.plugins.podnotes.manifest.version'
+npm run mobile:screenshot -- .obsidian-e2e-artifacts/mobile/player.png
+npm run mobile:logs -- --seconds 20
+npm run --silent mobile:download    # downloads the playing episode, reports native memory
+npm run mobile:stop
+```
+
+The host runs one emulator. The worktree that boots it owns it until its own
+`mobile:stop`, and every other worktree's mobile commands refuse until then, so
+always stop when done. Stop keeps the AVD and every device vault. Each worktree
+has its own device vault, seeded from `obsidian-e2e.config.mjs` `defaultData`
+only on first provision. Run long setup/download commands in an asynchronous
+terminal session and allow their documented timeout.
+
 ## Documentation
 Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
 with user-facing behavior changes, new commands, API changes, template syntax,
