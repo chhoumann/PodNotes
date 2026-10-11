@@ -614,6 +614,26 @@ describe("TranscriptionService", () => {
 			expect(fetchMock).toHaveBeenCalledTimes(3);
 		});
 
+		test("reads the current OpenAI key for each transcription", async () => {
+			whisperReturns("Hello.");
+			const plugin = createMockPlugin({ openAIKey: "first-key" });
+			const service = new TranscriptionService(plugin) as unknown as {
+				transcribeEpisode: (episode: Episode) => Promise<void>;
+			};
+
+			await service.transcribeEpisode(mockEpisode);
+			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
+				kind === "openai" ? "second-key" : null,
+			);
+			await service.transcribeEpisode(mockEpisode);
+
+			const authorization = (call: number) =>
+				new Headers(fetchMock.mock.calls[call][1]?.headers).get("authorization");
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+			expect(authorization(0)).toBe("Bearer first-key");
+			expect(authorization(1)).toBe("Bearer second-key");
+		});
+
 		test.each(OPENAI_FAILURES)(
 			"OpenAI diarization %s shows the API error after three sends",
 			async (_name, respond, message) => {
