@@ -145,8 +145,16 @@ describe("PodNotes data.json changed elsewhere", () => {
 
 	test("keeps an edit made here that was not saved yet when another device's change lands", async () => {
 		const { obsidian, plugin } = getContext();
+		await setVolume(obsidian, 0.32);
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.32, WAIT_OPTS);
 
-		await setVolume(obsidian, 0.33);
+		// A change saves at once, but a playback checkpoint waits up to 10 s after the
+		// last save. This edit stands in for one.
+		await obsidian.dev.evalJson(`(() => {
+			const podnotes = app.plugins.plugins.${PLUGIN_ID};
+			podnotes.checkpoint(() => { podnotes.api.volume = 0.33; });
+			return true;
+		})()`);
 		await plugin.data<PodNotesData>().patch(addSyncedChanges);
 
 		await expect
