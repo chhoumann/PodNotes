@@ -213,6 +213,8 @@ describe("PodNotes onload wiring (#55)", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		// jsdom implements no media loading; unload releases the player's element.
+		vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
 	});
 
 	afterEach(() => {
