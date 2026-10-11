@@ -266,6 +266,24 @@ describe("DataFileWriter saves", () => {
 		expect(state.disk).toEqual(doc());
 	});
 
+	it("keeps a removal made after a change reported elsewhere showed a failed write reached disk", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(async (next: Doc) => {
+			state.disk = structuredClone(next);
+			throw new Error("could not verify");
+		});
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+		await expect(writer.save()).rejects.toThrow("could not verify");
+
+		await writer.onExternalChange();
+		delete state.memory.savedFeeds.Synced;
+		await writer.save();
+
+		expect(state.memory.savedFeeds.Synced).toBeUndefined();
+		expect(state.disk!.savedFeeds.Synced).toBeUndefined();
+	});
+
 	it("keeps a change made elsewhere that a failed write carried to disk", async () => {
 		const { access, state, writer } = setup();
 		access.write.mockImplementationOnce(async (next: Doc) => {
