@@ -69,7 +69,13 @@ async function fetchPodcastFeeds(url: URL): Promise<PodcastFeed[]> {
 			throw new NetworkError("invalid-response");
 		}
 
-		return data.results.map(toPodcastFeed).filter((feed) => feed !== null);
+		// Search can list one feed under several shows; keep the best-ranked one.
+		const feeds = new Map<string, PodcastFeed>();
+		for (const result of data.results) {
+			const feed = toPodcastFeed(result);
+			if (feed && !feeds.has(feed.url)) feeds.set(feed.url, feed);
+		}
+		return [...feeds.values()];
 	} catch (error) {
 		// Keep diagnostics useful without copying a target, query, native error, or
 		// response body into the console. NetworkError messages and status values are

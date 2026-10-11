@@ -8,6 +8,7 @@ import { plugin, savedFeeds } from "src/store";
 import { fetchJsonWithTimeout } from "src/utility/networkRequest";
 import lookupAppleNewsToday from "../../../tests/fixtures/itunes/lookup-apple-news-today.json";
 import lookupHubermanLab from "../../../tests/fixtures/itunes/lookup-huberman-lab.json";
+import searchPlanetMoney from "../../../tests/fixtures/itunes/search-planet-money.json";
 import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
 
 vi.mock("src/utility/networkRequest", async (importOriginal) => {
@@ -30,6 +31,15 @@ describe("PodcastQueryGrid", () => {
 		plugin.set({ feedUrls: {} } as PodNotes);
 		savedFeeds.set({});
 		fetchJsonMock.mockReset();
+	});
+
+	test("shows a feed once when search lists it under several shows", async () => {
+		fetchJsonMock.mockResolvedValue(searchPlanetMoney);
+
+		const { findByRole, getAllByRole } = paste("planet money");
+		await findByRole("button", { name: "Add Planet Money Summer School podcast" });
+
+		expect(getAllByRole("button", { name: "Add Planet Money podcast" })).toHaveLength(1);
 	});
 
 	test("adds the RSS feed behind a pasted Apple Podcasts show link", async () => {

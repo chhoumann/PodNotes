@@ -3,6 +3,7 @@ import lookupAppleNewsToday from "../tests/fixtures/itunes/lookup-apple-news-tod
 import lookupHubermanLab from "../tests/fixtures/itunes/lookup-huberman-lab.json";
 import lookupUnknownId from "../tests/fixtures/itunes/lookup-unknown-id.json";
 import searchAppleNews from "../tests/fixtures/itunes/search-apple-news.json";
+import searchPlanetMoney from "../tests/fixtures/itunes/search-planet-money.json";
 import { fetchJsonWithTimeout, NetworkError } from "./utility/networkRequest";
 import {
 	lookupiTunesPodcast,
@@ -64,6 +65,19 @@ describe("queryiTunesPodcasts", () => {
 					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/72/23/72/72237247-8b65-6174-8aa2-0a3691352b02/mza_5761462598177267980.jpeg/100x100bb.jpg",
 				collectionId: "74942331",
 			},
+		]);
+	});
+
+	it("lists each feed once, under its best-ranked show", async () => {
+		// Planet Money's feed comes back as three shows: ranks 1, 4, and 5.
+		fetchJsonMock.mockResolvedValue(searchPlanetMoney);
+
+		const feeds = await queryiTunesPodcasts("planet money");
+
+		expect(feeds.map(({ collectionId, url }) => [collectionId, url])).toEqual([
+			["290783428", "https://feeds.npr.org/510289/podcast.xml"],
+			["1320118593", "https://feeds.npr.org/510325/podcast.xml"],
+			["1578892272", "https://feeds.npr.org/510362/podcast.xml"],
 		]);
 	});
 
