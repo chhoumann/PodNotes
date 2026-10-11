@@ -13,6 +13,9 @@ export interface PodcastFeed {
 	description?: string;
 	/** Channel <link> — the podcast's website/homepage (not the RSS url). */
 	link?: string;
-	/** <itunes:author> (falls back to <author> / <managingEditor>). */
+	/**
+	 * <itunes:author> (falls back to <author> / <managingEditor>), or the Apple
+	 * Podcasts artist name for feeds found through Apple Podcasts search or links.
+	 */
 	author?: string;
 }
