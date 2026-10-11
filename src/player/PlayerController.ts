@@ -347,10 +347,11 @@ export class PlayerController {
 		el.hidden = !staged;
 	}
 
+	/** play() unpauses the element at once, so the next intent can act on the new status. */
 	private start(): void {
 		const { status } = this.snapshot;
 		if (status === "playing" || status === "loading") return;
-		if (!this.holdsMedia()) this.setState({ status: "loading" });
+		this.setState({ status: this.holdsMedia() ? "playing" : "loading" });
 		this.playElement();
 	}
 
