@@ -10,6 +10,7 @@ import { fetchJsonWithTimeout } from "src/utility/networkRequest";
 import lookupAppleNewsToday from "../../../tests/fixtures/itunes/lookup-apple-news-today.json";
 import lookupHubermanLab from "../../../tests/fixtures/itunes/lookup-huberman-lab.json";
 import searchAppleNews from "../../../tests/fixtures/itunes/search-apple-news.json";
+import searchHubermanLab from "../../../tests/fixtures/itunes/search-huberman-lab.json";
 import searchPlanetMoney from "../../../tests/fixtures/itunes/search-planet-money.json";
 import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
 
@@ -74,7 +75,7 @@ describe("PodcastQueryGrid", () => {
 		await settle();
 		type("huberman lab");
 		await settle();
-		newer.resolve(lookupHubermanLab);
+		newer.resolve(searchHubermanLab);
 		await findByRole("button", { name: "Add Huberman Lab podcast" });
 		older.resolve(searchAppleNews);
 		await settle();
