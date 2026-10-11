@@ -1,6 +1,8 @@
+import { DEFAULT_SETTINGS } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import { isPlainObject, type UnknownRecord } from "./codecUtils";
+import { toDocument } from "./podNotesData";
 
 /**
  * Structural equality for JSON-like settings values. Key order does not matter;
@@ -175,11 +177,23 @@ export function threeWayMergeSettings<T>(
 	if (jsonValuesEqual(disk, base)) return structuredClone(local);
 	if (isAtomicPath(path)) return mergeWhole(base, local, disk);
 
-	if (isPlainObject(base) && isPlainObject(local) && isPlainObject(disk)) {
-		const keys = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(disk)]);
+	if (
+		(base === undefined || isPlainObject(base)) &&
+		isPlainObject(local) &&
+		isPlainObject(disk)
+	) {
+		const ancestor: UnknownRecord = base ?? {};
+		const keys = new Set([
+			...Object.keys(ancestor),
+			...Object.keys(local),
+			...Object.keys(disk),
+		]);
 		const merged: UnknownRecord = {};
 		for (const key of keys) {
-			const value = threeWayMergeSettings(base[key], local[key], disk[key], [...path, key]);
+			const value = threeWayMergeSettings(ancestor[key], local[key], disk[key], [
+				...path,
+				key,
+			]);
 			// JSON has no undefined: a merged-away key must be absent, or the
 			// written document never equals the same document read back.
 			if (value !== undefined) merged[key] = value;
@@ -200,6 +214,20 @@ export function threeWayMergeSettings<T>(
 
 	// Other arrays and primitives: both sides diverged, keep the in-memory edit.
 	return structuredClone(local);
+}
+
+export function mergeDataFile<T>(base: T, local: T, disk: T): T {
+	const libraryOf = (doc: T) => (doc as UnknownRecord).libraryId as string;
+	if (libraryOf(base) === libraryOf(disk)) return threeWayMergeSettings(base, local, disk);
+
+	const emptyLibrary = toDocument(DEFAULT_SETTINGS) as T;
+	const merged = threeWayMergeSettings(emptyLibrary, local, disk) as UnknownRecord;
+	merged.libraryId = startedFirst(libraryOf(local), libraryOf(disk));
+	return merged as T;
+}
+
+function startedFirst(library: string, other: string): string {
+	return library < other ? library : other;
 }
 
 /**
