@@ -7,7 +7,7 @@ import { API } from "./API/API";
 import { DEFAULT_SETTINGS } from "./constants";
 import { PlayerController } from "./player/PlayerController";
 import { localFiles, playedEpisodes, plugin, queue, viewState } from "./store";
-import type { Episode } from "./types/Episode";
+import type { Episode, EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import type { Playlist } from "./types/Playlist";
 import { ViewState } from "./types/ViewState";
@@ -76,15 +76,27 @@ function follow(markdownLink: string) {
 	return podNotesURIHandler(params as ObsidianProtocolData);
 }
 
-const clip = (folder: string): LocalEpisode => ({
+/** A vault file as "Play with PodNotes" registers it. */
+const clip = (folder: string, extension = "mp3", mediaType?: EpisodeMediaType): LocalEpisode => ({
 	title: "Clip",
-	streamUrl: `app://resource/${folder}/Clip.mp3`,
-	url: "",
+	streamUrl: `app://resource/${folder}/Clip.${extension}`,
+	url: `[[${folder}/Clip.${extension}]]`,
 	description: "",
 	content: "",
 	podcastName: "local file",
-	filePath: `${folder}/Clip.mp3`,
+	filePath: `${folder}/Clip.${extension}`,
+	mediaType,
 });
+
+function vaultFile(path: string): TFile {
+	const name = path.split("/").pop() ?? path;
+	return Object.assign(new TFile(), {
+		path,
+		extension: name.split(".").pop() ?? "",
+		basename: name.replace(/\.[^.]+$/, ""),
+		stat: { ctime: 0, mtime: 0, size: 1 },
+	});
+}
 
 /** The media's metadata arrives, after which the player is at its start position. */
 function metadata(duration = 3600) {
@@ -107,10 +119,11 @@ beforeEach(() => {
 		app: {
 			vault: {
 				getAbstractFileByPath: vi.fn((path: string) =>
-					vaultFiles.includes(path) ? Object.assign(new TFile(), { path }) : null,
+					vaultFiles.includes(path) ? vaultFile(path) : null,
 				),
 				getResourcePath: (file: TFile) => `app://resource/${file.path}`,
 			},
+			fileManager: { generateMarkdownLink: (file: TFile) => `[[${file.path}]]` },
 		},
 		checkpoint: (update: () => void) => update(),
 		saveSettings: vi.fn(() => Promise.resolve()),
@@ -609,19 +622,27 @@ describe("a timestamp link PodNotes wrote for the loaded episode", () => {
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 
-	test("plays the file it names after a same-named file in another folder replaced it", async () => {
-		vaultFiles = ["A/Clip.mp3", "B/Clip.mp3"];
-		loadedAt(clip("A"), 15);
+	test("plays the file it names, as that file, after a same-named file in another folder replaced it", async () => {
+		vaultFiles = ["A/Clip.mov", "B/Clip.mp3"];
+		loadedAt(clip("A", "mov", "video"), 15);
 		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
-		localFiles.set({ ...emptyLocalFiles, episodes: [clip("B")] });
-		loadedAt(clip("B"), 40);
+		const registered = clip("B", "mp3", "audio");
+		localFiles.set({ ...emptyLocalFiles, episodes: [registered] });
+		loadedAt(registered, 40);
 
 		await follow(written);
 		metadata();
 
-		expect(media().src).toBe("app://resource/A/Clip.mp3");
+		expect(state().episode).toMatchObject({
+			title: "Clip",
+			filePath: "A/Clip.mov",
+			url: "[[A/Clip.mov]]",
+			streamUrl: "app://resource/A/Clip.mov",
+		});
+		expect(state().mediaType).toBe("video");
+		expect(media().tagName).toBe("VIDEO");
+		expect(media().src).toBe("app://resource/A/Clip.mov");
 		expect(media().currentTime).toBe(15);
-		expect(state().episode).toMatchObject({ title: "Clip", filePath: "A/Clip.mp3" });
 	});
 });
 
