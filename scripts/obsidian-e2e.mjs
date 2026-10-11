@@ -213,7 +213,7 @@ async function runTests(args) {
 		interrupted ??= signal;
 		try {
 			// Vitest leads its own process group, so its fork workers stop with it.
-			// Only a SIGKILL of this wrapper, which cannot be forwarded, orphans it.
+			// A signal this wrapper does not handle, or SIGKILL, still orphans it.
 			if (child?.pid) process.kill(-child.pid, signal);
 		} catch {}
 	};
@@ -274,34 +274,50 @@ async function runTests(args) {
 	}
 }
 
-/**
- * @param {"screenshot" | "record" | "capture"} verb
- * @param {string[]} args
- */
-async function capture(verb, args) {
-	const connects = verb !== "capture" || CDP_CAPTURE_VERBS.includes(args[0]);
-	if (!connects) return runObsidianE2ECli(["capture", ...args]);
+/** @param {string} verb */
+function requireLinux(verb) {
 	if (!linux) {
 		throw new Error(`${verb} is Linux-only; on macOS use \`npx obsidian-e2e capture launch\`.`);
 	}
-	const instance = await defaultInstance();
-	if (verb === "capture") {
-		return runObsidianE2ECli(["capture", ...args], { env: await cdpEnv(instance) });
-	}
+}
+
+/** @param {string[]} args */
+async function captureUpstream(args) {
+	if (!CDP_CAPTURE_VERBS.includes(args[0])) return runObsidianE2ECli(["capture", ...args]);
+	requireLinux("capture");
+	return runObsidianE2ECli(["capture", ...args], { env: await cdpEnv(await defaultInstance()) });
+}
+
+/**
+ * @param {"screenshot" | "record"} verb
+ * @param {string[]} args
+ */
+async function capturePlayer(verb, args) {
+	requireLinux(verb);
 	const [output, separator, ...driver] = args;
-	const usable =
-		verb === "screenshot"
-			? output && args.length === 1
-			: output && (args.length === 1 || (separator === "--" && driver.length > 0));
-	if (!usable) {
+	/** @type {string[] | undefined} */
+	let captureArgs;
+	if (verb === "screenshot") {
+		if (output && args.length === 1) {
+			captureArgs = ["screenshot", output, "--selector", PLAYER_SELECTOR];
+		}
+	} else if (output && (args.length === 1 || (separator === "--" && driver.length > 0))) {
+		// Upstream rejects a take whose encoded duration drifts more than max(0.5 s,
+		// 2 frames) from wall clock; x11grab's lead-in frames stay under that at 30 fps.
+		const take = driver.length > 0 ? driver : ["sleep", "3"];
+		captureArgs = ["record", output, "--fps", "30", "--", ...take];
+	}
+	if (!captureArgs) {
 		throw new Error(
 			verb === "screenshot"
 				? "Usage: screenshot <out.png>"
 				: "Usage: record <out.mp4|out.webm> [-- <driver command...>]",
 		);
 	}
-	// `run`, not `start`: start reloads the plugin and resets what a driver set up.
-	const up = await runObsidianE2ECli(["run", "eval", "code=true"], runnerDeps);
+	const instance = await defaultInstance();
+	// `run` brings the instance up without reloading PodNotes, which `start` would
+	// do, so state a driver set up survives. `version` also records the app build.
+	const up = await runObsidianE2ECli(["run", "version"], runnerDeps);
 	if (up !== 0) return up;
 	const { stdout } = await execObsidian(
 		instance,
@@ -309,19 +325,6 @@ async function capture(verb, args) {
 	);
 	if (!stdout.trim().endsWith("=> true")) throw new Error("The PodNotes player did not open.");
 	await fsp.mkdir(path.dirname(path.resolve(output)), { recursive: true });
-	// Upstream rejects a take whose encoded duration drifts more than max(0.5 s,
-	// 2 frames) from wall clock; x11grab's lead-in frames stay under that at 30 fps.
-	const captureArgs =
-		verb === "screenshot"
-			? ["screenshot", output, "--selector", PLAYER_SELECTOR]
-			: [
-					"record",
-					output,
-					"--fps",
-					"30",
-					"--",
-					...(driver.length > 0 ? driver : ["sleep", "3"]),
-				];
 	return runObsidianE2ECli(["capture", ...captureArgs], { env: await cdpEnv(instance) });
 }
 
@@ -331,10 +334,11 @@ function main(argv) {
 	switch (verb) {
 		case "test":
 			return runTests(rest);
+		case "capture":
+			return captureUpstream(rest);
 		case "screenshot":
 		case "record":
-		case "capture":
-			return capture(verb, rest);
+			return capturePlayer(verb, rest);
 		case "start":
 			if (linux && rest.includes("--print-env")) return startPrintEnv(argv);
 	}

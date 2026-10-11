@@ -153,10 +153,12 @@ async function startFeed() {
 		child.stderr.setEncoding("utf8").on("data", (chunk) => (failure += chunk));
 		child.on("close", () => (exited = true));
 		try {
-			for (let i = 0; i < 50 && !exited && !(await feedIsUp()); i++) {
+			let up = false;
+			const deadline = Date.now() + 5000;
+			while (!(up = await feedIsUp()) && !exited && Date.now() < deadline) {
 				await new Promise((resolve) => setTimeout(resolve, 100));
 			}
-			if (!(await feedIsUp())) {
+			if (!up) {
 				child.kill();
 				throw new Error(failure.trim() || `The fixture feed did not come up at ${local}.`);
 			}
