@@ -141,8 +141,7 @@ function registeredOwnerOfPath(episode: Episode, filePath: string): DownloadedEp
 }
 
 // Fast-path variant: the path here is only the URL-extension guess, so a foreign
-// occupant is not a collision yet - the sniffed final path may differ. Returns the
-// registered entry only when this episode already owns the file.
+// occupant is not a collision yet - the sniffed final path may differ.
 function ownedExistingDownload(episode: Episode, filePath: string): DownloadedEpisode | undefined {
 	const existing = get(plugin).app.vault.getAbstractFileByPath(filePath);
 	if (!(existing instanceof TFile)) return undefined;
@@ -228,7 +227,7 @@ async function startDownloadEpisodeToDisk(
 		downloadedEpisodes.addEpisode(episode, filePath, total, { downloadedByPodNotes: true });
 		return filePath;
 	} finally {
-		if (!moved) await deleteEpisodeFile(tmpPath);
+		if (!moved) await deleteFileWrittenByPodNotes(tmpPath);
 	}
 }
 
@@ -362,26 +361,23 @@ export async function removeDownloadedEpisode(episode: Episode): Promise<void> {
 	const removed = downloadedEpisodes.removeEpisode(episode);
 	if (!removed || isLocalFile(removed)) return;
 	if (removed.downloadedByPodNotes) {
-		await deleteEpisodeFile(removed.filePath);
+		await deleteFileWrittenByPodNotes(removed.filePath);
 		return;
 	}
 
-	// The file may be the user's own. Trash only a file the vault index resolves,
-	// because deleteEpisodeFile's adapter fallback deletes a path the index misses
-	// permanently.
 	const { app } = get(plugin);
 	const file = app.vault.getAbstractFileByPath(removed.filePath);
 	if (!(file instanceof TFile) || !(await confirmTrashUnownedFile(app, file.path))) return;
 	try {
 		await app.fileManager.trashFile(file);
 	} catch (error) {
-		console.error(`Failed to delete downloaded file "${file.path}":`, error);
+		console.error(`Failed to trash "${file.path}":`, error);
 	}
 }
 
 // Best-effort: a missing/already-removed file is a no-op, and failures are logged
 // rather than thrown so removing a stale entry never breaks the calling UI flow.
-async function deleteEpisodeFile(filePath: string): Promise<void> {
+async function deleteFileWrittenByPodNotes(filePath: string): Promise<void> {
 	if (!filePath) return;
 
 	const { app } = get(plugin);

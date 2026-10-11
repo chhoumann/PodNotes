@@ -37,7 +37,6 @@ class ConfirmTrashUnownedFileModal extends Modal {
 	}
 }
 
-/** Resolves true only when the user chooses "Move to trash". */
 export function confirmTrashUnownedFile(app: App, filePath: string): Promise<boolean> {
 	return new Promise((resolve) =>
 		new ConfirmTrashUnownedFileModal(app, filePath, resolve).open(),

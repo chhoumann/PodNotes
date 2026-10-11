@@ -678,7 +678,6 @@ describe("removeDownloadedEpisode", () => {
 		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
 	}
 
-	// Plays a user who confirms whatever PodNotes asks, so a wrong prompt shows its effect.
 	async function removeConfirmingAnyPrompt(episode: Episode): Promise<{ asked: boolean }> {
 		let settled = false;
 		const removal = removeDownloadedEpisode(episode).finally(() => {
@@ -759,8 +758,6 @@ describe("removeDownloadedEpisode", () => {
 		const vault = setupVault();
 		const episode = makeEpisode({ title: "Fixture Episode 2" });
 		const filePath = "Recordings/Fixture Episode 2.wav";
-		// A case-only folder rename on a case-insensitive disk: the adapter still
-		// finds the old path, the vault index does not.
 		vault.disk.add(filePath);
 		downloadedEpisodes.set({ Pod: [{ ...episode, filePath, size: 4 }] });
 
