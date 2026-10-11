@@ -491,8 +491,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		try {
 			const data: unknown = await this.loadData();
 			// loadData resolves nullish both for a missing file and for one it could
-			// not read or parse, so tell them apart by whether the file exists.
-			if (data == null && (await this.app.vault.adapter.exists(this.dataFilePath()))) {
+			// not read or parse.
+			if (data == null && !(await this.dataFileHoldsNothing())) {
 				this.settings = structuredClone(DEFAULT_SETTINGS);
 				this.persistenceUnknownFields = {};
 				this.refuseSaves(
@@ -657,7 +657,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				const data: unknown = await this.loadData();
 				const path = this.dataFilePath();
 				if (data == null) {
-					if (!(await this.app.vault.adapter.exists(path))) return null;
+					if (await this.dataFileHoldsNothing()) return null;
 					this.refuseSaves(
 						"unreadable-data-file",
 						`PodNotes could not read ${path}, so it leaves the file unchanged and saves nothing until the file can be read again.`,
@@ -736,6 +736,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	// Every data.json write goes through here, so no path can write while writes are refused.
+	/** No data.json, or an empty one, as a write cut off on a full disk leaves: nothing to lose. */
+	private async dataFileHoldsNothing(): Promise<boolean> {
+		const path = this.dataFilePath();
+		const { adapter } = this.app.vault;
+		return !(await adapter.exists(path)) || (await adapter.read(path)) === "";
+	}
+
 	private async writeDataFile(data: unknown): Promise<void> {
 		if (this.writeRefusal) throw new Error(WRITE_REFUSALS[this.writeRefusal]);
 		const write = this.saveData(data);

@@ -255,6 +255,24 @@ describe("PodNotes persistence integration", () => {
 		);
 	});
 
+	it("starts on an empty data.json as on a new install", async () => {
+		const plugin = makePlugin(undefined, { dataFileExists: true });
+		let text = "";
+		Object.assign(plugin, {
+			loadData: vi.fn(async () => (text ? JSON.parse(text) : undefined)),
+			saveData: vi.fn(async (data: unknown) => {
+				text = JSON.stringify(data, undefined, 2);
+			}),
+		});
+		Object.assign(plugin.app.vault.adapter, { read: vi.fn(async () => text) });
+
+		await plugin.loadSettings();
+		plugin.settings.defaultVolume = 0.5;
+		await plugin.saveSettingsStrict();
+
+		expect(JSON.parse(text)).toMatchObject({ schemaVersion: 2, defaultVolume: 0.5 });
+	});
+
 	it("leaves a data.json it cannot read unchanged and refuses every save", async () => {
 		const saveData = vi.fn().mockResolvedValue(undefined);
 		const plugin = makePlugin(saveData, { dataFileExists: true });
@@ -594,7 +612,7 @@ describe("PodNotes persistence integration", () => {
 	});
 
 	describe("when a write is cut short, as on a full disk", () => {
-		function cutShortOnce() {
+		function cutShortOnce(keptBytes = 100) {
 			const plugin = makePlugin();
 			const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
 			synced.savedFeeds = {
@@ -611,7 +629,7 @@ describe("PodNotes persistence integration", () => {
 				}),
 				saveData: vi.fn(async (data: unknown) => {
 					const text = JSON.stringify(data, undefined, 2);
-					disk.text = disk.full ? text.slice(0, 100) : text;
+					disk.text = disk.full ? text.slice(0, keptBytes) : text;
 					disk.full = false;
 				}),
 			});
@@ -632,6 +650,18 @@ describe("PodNotes persistence integration", () => {
 			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 
 			expect(disk.text).toBe(cutShort);
+		});
+
+		it("writes memory over a file the failed write left empty, as over a missing one", async () => {
+			const { plugin, disk } = cutShortOnce(0);
+			plugin.settings.defaultVolume = 0.5;
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+			expect(disk.text).toBe("");
+
+			plugin.settings.defaultVolume = 0.25;
+			await plugin.saveSettingsStrict();
+
+			expect(JSON.parse(disk.text)).toMatchObject({ schemaVersion: 2, defaultVolume: 0.25 });
 		});
 
 		it("never writes over a file another writer left unreadable", async () => {
