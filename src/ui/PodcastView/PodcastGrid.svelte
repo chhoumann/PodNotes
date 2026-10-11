@@ -1,11 +1,12 @@
 <script lang="ts">
 	import type { Playlist } from "src/types/Playlist";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
+	import type { FeedKey } from "src/services/FeedRepository";
 	import PlaylistCard from "./PlaylistCard.svelte";
 	import PodcastGridCard from "./PodcastGridCard.svelte";
 	import { createEventDispatcher } from "svelte";
 
-	export let feeds: PodcastFeed[] = [];
+	export let feeds: [FeedKey, PodcastFeed][] = [];
 	export let playlists: Playlist[] = [];
 
 	const dispatch = createEventDispatcher();
@@ -25,8 +26,8 @@
 	{/if}
 
 	{#if feeds.length > 0}
-		{#each feeds as feed (feed.url)}
-			<PodcastGridCard {feed} on:clickPodcast />
+		{#each feeds as [key, feed] (key)}
+			<PodcastGridCard {key} {feed} on:clickPodcast />
 		{/each}
 	{:else}
 		<div>

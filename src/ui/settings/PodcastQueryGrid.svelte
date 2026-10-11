@@ -5,13 +5,13 @@
 		parseApplePodcastsId,
 		queryiTunesPodcasts,
 	} from "src/iTunesAPIConsumer";
-	import FeedParser from "src/parser/feedParser";
 	import { plugin, savedFeeds } from "src/store";
 	import { get } from "svelte/store";
 	import {
 		internPrivateFeed,
 		isSavedFeed,
-		resolveFeedUrlWithNotice,
+		notifyPrivateFeedUnavailable,
+		resolveFeedUrl,
 	} from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
@@ -20,8 +20,9 @@
 	import { onMount } from "svelte";
 	import { fade } from "svelte/transition";
 
-	let searchResults: PodcastFeed[] = [];
-	let gridSizeClass: string = "grid-3";
+	// Saved podcasts carry their savedFeeds key; search results have none.
+	let searchResults: [key: string | undefined, podcast: PodcastFeed][] = [];
+	const unsaved = (podcast: PodcastFeed): [undefined, PodcastFeed] => [undefined, podcast];
 	let searchQuery: string = "";
 	let isSearching: boolean = false;
 	let searchError: string = "";
@@ -39,25 +40,15 @@
 	});
 
 	$: {
-		if (searchResults.length % 3 === 0 || searchResults.length > 3) {
-			gridSizeClass = "grid-3";
-		} else if (searchResults.length % 2 === 0) {
-			gridSizeClass = "grid-2";
-		} else if (searchResults.length % 1 === 0) {
-			gridSizeClass = "grid-1";
-		}
-	}
-
-	$: {
 		if (searchQuery.trim() === "") {
-			searchResults = Object.values($savedFeeds);
+			searchResults = Object.entries($savedFeeds);
 		}
 	}
 
 	function updateSearchResults() {
 		if (searchQuery.trim() === "") {
 			// If search query is empty, show all saved podcasts
-			searchResults = Object.values($savedFeeds);
+			searchResults = Object.entries($savedFeeds);
 		}
 	}
 
@@ -79,7 +70,7 @@
 					const feed = await lookupiTunesPodcast(applePodcastsId);
 					if (input !== latestInput) return;
 					if (feed) {
-						searchResults = [feed];
+						searchResults = [unsaved(feed)];
 					} else {
 						searchResults = [];
 						searchError = "No public RSS feed found for this Apple Podcasts link.";
@@ -96,9 +87,9 @@
 			} else if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
 				try {
-					const feed = await new FeedParser().getFeed(customFeedUrl.href);
+					const feed = await get(plugin).feeds.channelAt({ url: customFeedUrl.href });
 					if (input !== latestInput) return;
-					searchResults = [feed];
+					searchResults = [unsaved(feed)];
 				} catch (e) {
 					if (input !== latestInput) return;
 					searchResults = [];
@@ -116,7 +107,7 @@
 				try {
 					const results = await queryiTunesPodcasts(value);
 					if (input !== latestInput) return;
-					searchResults = results;
+					searchResults = results.map(unsaved);
 				} catch (e) {
 					if (input !== latestInput) return;
 					searchResults = [];
@@ -152,7 +143,10 @@
 		const saved = savedFeedTitled($savedFeeds, podcast.title);
 		if (saved) {
 			if (isSavedFeed(saved, podcast.url, feedUrls)) return;
-			if (resolveFeedUrlWithNotice(saved, feedUrls) === null) return;
+			if (resolveFeedUrl(saved, feedUrls) === null) {
+				notifyPrivateFeedUnavailable(saved.title);
+				return;
+			}
 			new Notice(`You already follow a podcast called ${podcast.title} from another feed.`);
 			return;
 		}
@@ -163,12 +157,11 @@
 		updateSearchResults();
 	}
 
-	function removePodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
-		const { podcast } = event.detail;
+	function removePodcast(key: string) {
 		savedFeeds.update((feeds) => {
-			const removed = feeds[podcast.title];
+			const removed = feeds[key];
 			const newFeeds = { ...feeds };
-			delete newFeeds[podcast.title];
+			delete newFeeds[key];
 			// Identical private URLs dedupe to one secret ID, so delete only when no
 			// remaining feed still references it (the load-time sweep is the backstop).
 			const stillReferenced = Object.values(newFeeds).some(
@@ -205,13 +198,13 @@
 	{/if}
 
 	<div class="podcast-query-results" role="list" aria-label="Podcast search results">
-		{#each searchResults as podcast (podcast.url)}
+		{#each searchResults as [key, podcast] (key ?? podcast)}
 			<div role="listitem">
 				<PodcastResultCard
 					{podcast}
-					isSaved={isSavedResult($savedFeeds, podcast)}
+					isSaved={key !== undefined || isSavedResult($savedFeeds, podcast)}
 					on:addPodcast={addPodcast}
-					on:removePodcast={removePodcast}
+					on:removePodcast={() => removePodcast(key ?? podcast.title)}
 				/>
 			</div>
 		{/each}

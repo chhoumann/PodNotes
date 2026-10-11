@@ -1,11 +1,18 @@
 <script lang="ts">
 	export let text: string = "";
 	export let artworkUrl: string = "";
+
+	let failedArtworkUrl = "";
 </script>
 
 <div class="podcast-header">
-	{#if artworkUrl}
-		<img id="podcast-artwork" src={artworkUrl} alt={text} />
+	{#if artworkUrl && artworkUrl !== failedArtworkUrl}
+		<img
+			id="podcast-artwork"
+			src={artworkUrl}
+			alt={text}
+			on:error={() => (failedArtworkUrl = artworkUrl)}
+		/>
 	{/if}
 	<h2 class="podcast-heading">{text}</h2>
 </div>
