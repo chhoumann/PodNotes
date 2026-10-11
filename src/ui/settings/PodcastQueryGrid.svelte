@@ -22,7 +22,7 @@
 	let isSearching: boolean = false;
 	let searchError: string = "";
 	// Responses can arrive out of order; only the latest input may change the grid.
-	let latestRequest = 0;
+	let latestInput = 0;
 
 	let searchInput: HTMLInputElement;
 
@@ -58,8 +58,7 @@
 	}
 
 	const debouncedUpdate = debounce(
-		async ({ detail: { value } }: CustomEvent<{ value: string }>) => {
-			const request = latestRequest;
+		async (value: string, input: number) => {
 			searchQuery = value;
 			searchError = "";
 			const applePodcastsId = parseApplePodcastsId(value);
@@ -74,7 +73,7 @@
 				isSearching = true;
 				try {
 					const feed = await lookupiTunesPodcast(applePodcastsId);
-					if (request !== latestRequest) return;
+					if (input !== latestInput) return;
 					if (feed) {
 						searchResults = [feed];
 					} else {
@@ -83,27 +82,27 @@
 						new Notice(searchError);
 					}
 				} catch {
-					if (request !== latestRequest) return;
+					if (input !== latestInput) return;
 					searchResults = [];
 					searchError = "Could not look up this Apple Podcasts link. Please try again.";
 					new Notice(searchError);
 				} finally {
-					if (request === latestRequest) isSearching = false;
+					if (input === latestInput) isSearching = false;
 				}
 			} else if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
 				try {
 					const feed = await new FeedParser().getFeed(customFeedUrl.href);
-					if (request !== latestRequest) return;
+					if (input !== latestInput) return;
 					searchResults = [feed];
 				} catch (e) {
-					if (request !== latestRequest) return;
+					if (input !== latestInput) return;
 					searchResults = [];
 					const msg = e instanceof Error ? e.message : String(e);
 					searchError = `Could not load feed: ${msg}`;
 					new Notice(searchError);
 				} finally {
-					if (request === latestRequest) isSearching = false;
+					if (input === latestInput) isSearching = false;
 				}
 			} else if (value.trim() === "") {
 				isSearching = false;
@@ -112,26 +111,20 @@
 				isSearching = true;
 				try {
 					const results = await queryiTunesPodcasts(value);
-					if (request !== latestRequest) return;
+					if (input !== latestInput) return;
 					searchResults = results;
 				} catch (e) {
-					if (request !== latestRequest) return;
+					if (input !== latestInput) return;
 					searchResults = [];
 					searchError = "Could not search podcasts. Please try again.";
 				} finally {
-					if (request === latestRequest) isSearching = false;
+					if (input === latestInput) isSearching = false;
 				}
 			}
 		},
 		300,
 		true,
 	);
-
-	// Count the change before the debounce, so a response for the previous input is already stale.
-	function handleSearchChange(event: CustomEvent<{ value: string }>) {
-		latestRequest += 1;
-		debouncedUpdate(event);
-	}
 
 	function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
 		// A pasted private feed URL must never reach persisted settings: intern it
@@ -164,7 +157,7 @@
 <div class="podcast-query-container" transition:fade={{ duration: 300 }}>
 	<Text
 		placeholder="Search or enter feed URL..."
-		on:change={handleSearchChange}
+		on:change={(e) => debouncedUpdate(e.detail.value, ++latestInput)}
 		style={{
 			width: "100%",
 			"margin-bottom": "1rem",
