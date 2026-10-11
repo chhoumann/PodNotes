@@ -20,7 +20,7 @@ const episode: Episode = {
 };
 
 /** The view over a player whose state the test sets, recording the intents it receives. */
-function renderPlayer(patch: Partial<PlayerState> = {}) {
+function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) {
 	const state = writable<PlayerState>({
 		status: "playing",
 		episode,
@@ -45,7 +45,7 @@ function renderPlayer(patch: Partial<PlayerState> = {}) {
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() },
 		player,
 	} as never);
-	return { ...render(EpisodePlayer), state, player };
+	return { ...render(EpisodePlayer, { target }), state, player };
 }
 
 const labels = (container: HTMLElement) =>
@@ -156,6 +156,21 @@ describe("EpisodePlayer", () => {
 
 		expect(player.play).toHaveBeenCalledWith(queued);
 		expect(get(viewState)).toBe(ViewState.Player);
+	});
+
+	test("a video episode in a popout shows its artwork, since the video plays in the main window", async () => {
+		const popout = document.body.appendChild(document.createElement("iframe"));
+		const { container, player } = renderPlayer(
+			{ mediaType: "video", status: "paused" },
+			popout.contentDocument?.body,
+		);
+		await Promise.resolve();
+
+		expect(container.querySelector(".episode-video-container")).toBeNull();
+		expect(container.querySelector(".podcast-video-fullscreen")).toBeNull();
+		await fireEvent.click(container.querySelector(".hover-container") as HTMLElement);
+		expect(player.toggle).toHaveBeenCalledTimes(1);
+		popout.remove();
 	});
 
 	test("a video episode gives the player a stage for its video", async () => {

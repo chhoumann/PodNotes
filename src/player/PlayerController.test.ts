@@ -994,6 +994,18 @@ describe("video stage", () => {
 		expect(media().paused).toBe(true);
 	});
 
+	test("names the video after the episode it loads", () => {
+		const { player, media } = setup();
+		const next = episode("W", { streamUrl: "https://cdn.example.com/W.mp4", mediaType: "video" });
+
+		player.play(VIDEO);
+		expect(media().attributes.get("aria-label")).toBe("V");
+		player.play(next);
+
+		expect(media().tagName).toBe("VIDEO");
+		expect(media().attributes.get("aria-label")).toBe("W");
+	});
+
 	test("keeps audio hidden in the main window", () => {
 		const { player, doc } = setup();
 		player.play(A);
