@@ -32,7 +32,7 @@
 	},
 	"dependencies": {
 		"fuse.js": "^7.5.0",
-		"openai": "^7.25.0"
+		"openai": "^7.27.0"
 	},
 	"devDependencies": {
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
