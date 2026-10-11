@@ -1094,7 +1094,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private async saveSecretReference(
 		key: SecretReferenceKey,
-		selectedId: string,
+		selectedId: string | null,
 	): Promise<SecretReferenceSaveResult> {
 		const generation = ++this.credentialSaveGenerations[key];
 		const operation = this.enqueueSettingsMutation(() =>
@@ -1109,7 +1109,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private async persistSecretReference(
 		key: SecretReferenceKey,
-		selectedId: string,
+		selectedId: string | null,
 	): Promise<Omit<SecretReferenceSaveResult, "isLatest">> {
 		const previous = this.plugin.settings[key];
 		let persistedId: string;
@@ -1160,7 +1160,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private async handleSecretSelection(
 		key: SecretReferenceKey,
-		selectedId: string,
+		selectedId: string | null,
 		secret: Pick<SecretComponent, "setValue">,
 		onLatestSettled: () => void,
 	): Promise<void> {
