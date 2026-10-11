@@ -52,7 +52,7 @@ describe("persistence byte fixture", () => {
 			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
-		expect(await feeds.channelAt(sample.source.url)).toEqual(sample.feed);
+		expect(await feeds.channelAt({ url: sample.source.url })).toEqual(sample.feed);
 		expect(JSON.parse(JSON.stringify(await feeds.episodesAt(sample.source.url)))).toEqual(
 			sample.episodes,
 		);

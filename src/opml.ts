@@ -89,7 +89,7 @@ async function importOPML(opml: string): Promise<void> {
 		const podcasts: (PodcastFeed | null)[] = await Promise.all(
 			newPodcastsToAdd.map(async (feed) => {
 				try {
-					const result = await get(plugin).feeds.channelAt(feed.url);
+					const result = await get(plugin).feeds.channelAt({ url: feed.url });
 					completedImports++;
 					updateProgress();
 					return result;

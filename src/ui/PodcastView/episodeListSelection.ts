@@ -19,12 +19,11 @@ const newestFirst = (a: Episode, b: Episode) =>
 /** The newest `limit` episodes of each subscription, merged newest first. */
 export function selectLatestEpisodes(
 	feeds: ReadonlyMap<FeedKey, FeedState>,
-	keys: readonly FeedKey[],
 	limit: number,
 ): Episode[] {
 	const perFeed = sanitizeEpisodeListLimit(limit);
-	return keys
-		.flatMap((key) => [...(feeds.get(key)?.episodes ?? [])].sort(newestFirst).slice(0, perFeed))
+	return [...feeds.values()]
+		.flatMap(({ episodes }) => [...episodes].sort(newestFirst).slice(0, perFeed))
 		.sort(newestFirst);
 }
 

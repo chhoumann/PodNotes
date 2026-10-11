@@ -43,15 +43,13 @@ describe("selectLatestEpisodes", () => {
 	]);
 
 	test("takes the newest episodes of each saved podcast, up to the limit", () => {
-		expect(selectLatestEpisodes(feeds, ["Show A"], DEFAULT_EPISODE_LIST_LIMIT)).toHaveLength(
-			10,
-		);
-		expect(titles(selectLatestEpisodes(feeds, ["Show A"], 3))).toEqual([
+		expect(selectLatestEpisodes(feeds, DEFAULT_EPISODE_LIST_LIMIT)).toHaveLength(20);
+		expect(titles(selectLatestEpisodes(feeds, 2))).toEqual([
 			"Show A #25",
+			"Show B #25",
 			"Show A #24",
-			"Show A #23",
+			"Show B #24",
 		]);
-		expect(selectLatestEpisodes(feeds, ["Show A", "Show B"], 5)).toHaveLength(10);
 	});
 
 	test("ranks a feed by date before applying the limit", () => {
@@ -59,20 +57,11 @@ describe("selectLatestEpisodes", () => {
 			["Show A", feedState("Show A", episodes("Show A", 25, "oldest-first"))],
 		]);
 
-		expect(titles(selectLatestEpisodes(oldestFirst, ["Show A"], 2))).toEqual([
-			"Show A #25",
-			"Show A #24",
-		]);
+		expect(titles(selectLatestEpisodes(oldestFirst, 2))).toEqual(["Show A #25", "Show A #24"]);
 	});
 
 	test("an invalid limit falls back to the default", () => {
-		expect(selectLatestEpisodes(feeds, ["Show A"], 0)).toHaveLength(DEFAULT_EPISODE_LIST_LIMIT);
-	});
-
-	test("lists only podcasts that are still saved", () => {
-		expect(
-			new Set(selectLatestEpisodes(feeds, ["Show B"], 5).map((e) => e.podcastName)),
-		).toEqual(new Set(["Show B"]));
+		expect(selectLatestEpisodes(feeds, 0)).toHaveLength(2 * DEFAULT_EPISODE_LIST_LIMIT);
 	});
 });
 

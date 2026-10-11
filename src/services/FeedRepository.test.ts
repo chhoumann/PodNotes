@@ -318,7 +318,7 @@ describe("FeedRepository", () => {
 	test("a feed previewed and then added is cached without fetching it again", async () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Alpha: alpha });
-		const preview = t.repo.channelAt(beta.url);
+		const preview = t.repo.channelAt({ url: beta.url });
 		t.requests[0].respond.resolve(doc("Beta", [item(1)]));
 		await preview;
 
@@ -344,7 +344,7 @@ describe("FeedRepository", () => {
 		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1)]));
 		const save = vi.spyOn(t.storage, "saveLocalStorage");
 
-		const preview = t.repo.channelAt(beta.url);
+		const preview = t.repo.channelAt({ url: beta.url });
 		t.requests[1].respond.resolve(doc("Beta", [item(2)]));
 		await preview;
 
@@ -605,7 +605,7 @@ describe("FeedRepository", () => {
 
 	test("a pasted feed URL previews as a podcast", async () => {
 		const t = setup();
-		const preview = t.repo.channelAt(alpha.url);
+		const preview = t.repo.channelAt({ url: alpha.url });
 		t.requests[0].respond.resolve({
 			feed: {
 				title: "Alpha Channel",
@@ -656,6 +656,20 @@ describe("FeedRepository", () => {
 		t.requests[0].respond.reject(undefined);
 
 		await expect(episodes).rejects.toBeInstanceOf(Error);
+	});
+
+	test("a saved private feed's channel is read through its private URL", async () => {
+		const secretUrl = "https://private.test/feed.xml?auth=s3cret";
+		const privateFeed = { ...alpha, url: privateFeedPlaceholder("Private"), urlSecretId: "id" };
+		const t = setup({ resolveUrl: (feed) => (feed.urlSecretId ? secretUrl : null) });
+		t.repo.setSubscriptions({ Private: privateFeed });
+
+		const channel = t.repo.channelAt({ ...privateFeed });
+		t.requests[0].respond.resolve(doc("Private Channel", [item(1)]));
+
+		expect(await channel).toMatchObject({ title: "Private Channel", url: privateFeed.url });
+		expect(t.load).toHaveBeenCalledWith(secretUrl);
+		expect(t.titles("Private")).toEqual(["Episode 1"]);
 	});
 
 	test("a feed link that cannot load rejects", async () => {

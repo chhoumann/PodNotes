@@ -39,10 +39,13 @@ export type LoadMode = "cached" | "complete" | "network";
 
 export type FeedCacheStorage = Pick<App, "loadLocalStorage" | "saveLocalStorage">;
 
+/** Where a feed lives: its URL, or the placeholder and secret of a private feed. */
+export type FeedAddress = Pick<PodcastFeed, "url" | "urlSecretId">;
+
 export interface FeedRepositoryDeps {
 	load(url: string): Promise<ParsedFeedEpisodes>;
-	/** The URL to fetch a saved feed from, or null when its private URL is not on this device. */
-	resolveUrl(feed: PodcastFeed): string | null;
+	/** The URL to fetch a feed from, or null when its private URL is not on this device. */
+	resolveUrl(feed: FeedAddress): string | null;
 	storage: FeedCacheStorage;
 	cache(): { enabled: boolean; ttlHours: number };
 	now(): number;
@@ -112,15 +115,8 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		const requests: Promise<void>[] = [];
 		for (const key of keys) {
 			const feed = this.subscriptions.get(key);
-			if (!feed) continue;
-			const source = this.source(feed.url);
-			if (source.inflight) {
-				requests.push(source.inflight);
-			} else if (this.needsFetch(source.doc, mode)) {
-				const url = this.deps.resolveUrl(feed);
-				if (url === null) source.error = "unavailable";
-				else requests.push(this.fetch(feed.url, url));
-			}
+			const request = feed && this.request(feed, mode);
+			if (request) requests.push(request);
 		}
 		this.emit();
 		return Promise.allSettled(requests).then(() => undefined);
@@ -136,7 +132,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	 * since; the last copy stands in when the feed cannot be reached.
 	 */
 	async episodesAt(url: string): Promise<Episode[]> {
-		const doc = await this.documentAt(url, "network");
+		const doc = await this.documentAt({ url }, "network");
 		const feed = channelFeed(doc.channel, url);
 		return doc.items.map((item) => projectEpisode(item, feed));
 	}
@@ -155,9 +151,9 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		return item && { guid: item.guid, transcripts: item.transcripts ?? [] };
 	}
 
-	/** The feed at `url` as a podcast, to preview or subscribe to. */
-	async channelAt(url: string): Promise<PodcastFeed> {
-		return channelFeed((await this.documentAt(url, "complete")).channel, url);
+	/** The feed as a podcast, to preview, subscribe to or describe in a feed note. */
+	async channelAt(feed: FeedAddress): Promise<PodcastFeed> {
+		return channelFeed((await this.documentAt(feed, "cached")).channel, feed.url);
 	}
 
 	clear(): void {
@@ -168,18 +164,27 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		void this.ensureAll();
 	}
 
-	private async documentAt(url: string, mode: LoadMode): Promise<FeedDocument> {
+	private async documentAt(feed: FeedAddress, mode: LoadMode): Promise<FeedDocument> {
 		this.hydrate();
-		const source = this.source(url);
-		const request =
-			source.inflight ??
-			(this.needsFetch(source.doc, mode) ? this.fetch(url, url) : undefined);
-		const failure = await request?.then(
+		const source = this.source(feed.url);
+		const failure = await this.request(feed, mode)?.then(
 			() => undefined,
 			(error: unknown) => error,
 		);
 		if (source.doc) return source.doc;
 		throw failure instanceof Error ? failure : new Error("Could not load the feed");
+	}
+
+	/** Joins the feed's request in flight, or starts one when `mode` asks for it. */
+	private request(feed: FeedAddress, mode: LoadMode): Promise<void> | undefined {
+		const source = this.source(feed.url);
+		if (source.inflight || !this.needsFetch(source.doc, mode)) return source.inflight;
+		const url = this.deps.resolveUrl(feed);
+		if (url === null) {
+			source.error = "unavailable";
+			return undefined;
+		}
+		return this.fetch(feed.url, url);
 	}
 
 	private source(url: string): Source {

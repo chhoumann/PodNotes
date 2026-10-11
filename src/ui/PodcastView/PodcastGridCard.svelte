@@ -22,7 +22,7 @@
 	type="button"
 	class="podcast-card"
 	aria-label={feed.title}
-	on:click={() => dispatch("clickPodcast", { key, feed })}
+	on:click={() => dispatch("clickPodcast", { key })}
 >
 	{#if feed.artworkUrl && feed.artworkUrl !== failedArtworkUrl}
 		<img

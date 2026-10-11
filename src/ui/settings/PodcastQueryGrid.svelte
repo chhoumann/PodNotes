@@ -20,7 +20,9 @@
 	import { onMount } from "svelte";
 	import { fade } from "svelte/transition";
 
-	let searchResults: PodcastFeed[] = [];
+	// Saved podcasts carry their savedFeeds key; search results have none.
+	let searchResults: [key: string | undefined, podcast: PodcastFeed][] = [];
+	const unsaved = (podcast: PodcastFeed): [undefined, PodcastFeed] => [undefined, podcast];
 	let gridSizeClass: string = "grid-3";
 	let searchQuery: string = "";
 	let isSearching: boolean = false;
@@ -50,14 +52,14 @@
 
 	$: {
 		if (searchQuery.trim() === "") {
-			searchResults = Object.values($savedFeeds);
+			searchResults = Object.entries($savedFeeds);
 		}
 	}
 
 	function updateSearchResults() {
 		if (searchQuery.trim() === "") {
 			// If search query is empty, show all saved podcasts
-			searchResults = Object.values($savedFeeds);
+			searchResults = Object.entries($savedFeeds);
 		}
 	}
 
@@ -79,7 +81,7 @@
 					const feed = await lookupiTunesPodcast(applePodcastsId);
 					if (input !== latestInput) return;
 					if (feed) {
-						searchResults = [feed];
+						searchResults = [unsaved(feed)];
 					} else {
 						searchResults = [];
 						searchError = "No public RSS feed found for this Apple Podcasts link.";
@@ -96,9 +98,9 @@
 			} else if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
 				try {
-					const feed = await get(plugin).feeds.channelAt(customFeedUrl.href);
+					const feed = await get(plugin).feeds.channelAt({ url: customFeedUrl.href });
 					if (input !== latestInput) return;
-					searchResults = [feed];
+					searchResults = [unsaved(feed)];
 				} catch (e) {
 					if (input !== latestInput) return;
 					searchResults = [];
@@ -116,7 +118,7 @@
 				try {
 					const results = await queryiTunesPodcasts(value);
 					if (input !== latestInput) return;
-					searchResults = results;
+					searchResults = results.map(unsaved);
 				} catch (e) {
 					if (input !== latestInput) return;
 					searchResults = [];
@@ -137,15 +139,6 @@
 		title: string,
 	): PodcastFeed | undefined {
 		return Object.prototype.hasOwnProperty.call(feeds, title) ? feeds[title] : undefined;
-	}
-
-	// A saved row is the saved feed itself, so a shared URL or a key that differs
-	// from the title still finds its own entry.
-	function savedKey(
-		feeds: Record<string, PodcastFeed>,
-		podcast: PodcastFeed,
-	): string | undefined {
-		return Object.keys(feeds).find((key) => feeds[key] === podcast);
 	}
 
 	function isSavedResult(feeds: Record<string, PodcastFeed>, podcast: PodcastFeed): boolean {
@@ -216,15 +209,13 @@
 	{/if}
 
 	<div class="podcast-query-results" role="list" aria-label="Podcast search results">
-		{#each searchResults as podcast (podcast)}
+		{#each searchResults as [key, podcast] (key ?? podcast)}
 			<div role="listitem">
 				<PodcastResultCard
 					{podcast}
-					isSaved={savedKey($savedFeeds, podcast) !== undefined ||
-						isSavedResult($savedFeeds, podcast)}
+					isSaved={key !== undefined || isSavedResult($savedFeeds, podcast)}
 					on:addPodcast={addPodcast}
-					on:removePodcast={() =>
-						removePodcast(savedKey($savedFeeds, podcast) ?? podcast.title)}
+					on:removePodcast={() => removePodcast(key ?? podcast.title)}
 				/>
 			</div>
 		{/each}

@@ -7,7 +7,7 @@ import type { PodcastFeed } from "./types/PodcastFeed";
 // parse/validate/serialize logic: the feed repository would otherwise make real
 // network requests for every imported feed, and savedFeeds pulls in the whole store.
 const savedFeeds = writable<Record<string, PodcastFeed>>({});
-const defaultChannelAt = async (url: string) => ({
+const defaultChannelAt = async ({ url }: { url: string }) => ({
 	title: `Feed for ${url}`,
 	url,
 	artworkUrl: "",
@@ -122,7 +122,7 @@ describe("exportOPML (IE-02)", () => {
 
 		// The escaped attributes parse back to the original raw values.
 		expect(channelAt).toHaveBeenCalledTimes(1);
-		expect(channelAt).toHaveBeenCalledWith("https://x.test/feed?a=1&b=2");
+		expect(channelAt).toHaveBeenCalledWith({ url: "https://x.test/feed?a=1&b=2" });
 	});
 });
 
@@ -154,7 +154,7 @@ describe("importOPML (IE-01)", () => {
 		await importOPML(validOpml);
 
 		expect(channelAt).toHaveBeenCalledTimes(1);
-		expect(channelAt).toHaveBeenCalledWith("https://a.test/feed");
+		expect(channelAt).toHaveBeenCalledWith({ url: "https://a.test/feed" });
 	});
 
 	it("imports feeds whose xmlUrl attribute is lower/variant cased", async () => {
@@ -169,7 +169,7 @@ describe("importOPML (IE-01)", () => {
 
 		await importOPML(opml);
 
-		const urls = channelAt.mock.calls.map((c) => c[0]).sort();
+		const urls = channelAt.mock.calls.map(([feed]) => feed.url).sort();
 		expect(urls).toEqual([
 			"https://camel.test/feed",
 			"https://lower.test/feed",
@@ -189,7 +189,7 @@ describe("importOPML (IE-01)", () => {
 		await importOPML(opml);
 
 		expect(channelAt).toHaveBeenCalledTimes(1);
-		expect(channelAt).toHaveBeenCalledWith("https://good.test/feed");
+		expect(channelAt).toHaveBeenCalledWith({ url: "https://good.test/feed" });
 	});
 
 	it("does not re-fetch a feed whose url is already saved", async () => {
@@ -237,7 +237,7 @@ describe("importOPML (IE-01)", () => {
 	it("reports the saved count, not the fetched count, on duplicate titles", async () => {
 		// Two distinct URLs that resolve to the same feed title. Both fetch fine,
 		// but the title-keyed store can only hold one of them.
-		channelAt.mockImplementation(async (url: string) => ({
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Same Title",
 			url,
 			artworkUrl: "",
@@ -271,7 +271,7 @@ describe("importOPML (IE-01)", () => {
 				artworkUrl: "",
 			},
 		});
-		channelAt.mockImplementation(async (url: string) => ({
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Same Title",
 			url,
 			artworkUrl: "",
@@ -301,7 +301,7 @@ describe("importOPML (IE-01)", () => {
 		savedFeeds.set({
 			Old: { title: "Old", url: "https://old.test/feed", artworkUrl: "" },
 		});
-		channelAt.mockImplementation(async (url: string) => ({
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Shared",
 			url,
 			artworkUrl: "",

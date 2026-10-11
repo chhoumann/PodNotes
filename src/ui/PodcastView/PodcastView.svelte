@@ -83,7 +83,7 @@
 	}
 	$: headerPlaylist = selection.kind === "played" ? PLAYED_SETTINGS : selectedPlaylist;
 
-	$: latestEpisodes = selectLatestEpisodes($feeds, Object.keys($savedFeeds), $episodeListLimit);
+	$: latestEpisodes = selectLatestEpisodes($feeds, $episodeListLimit);
 	$: shownEpisodes = selectedFeed
 		? selectFeedEpisodes(selectedFeed, $downloadedEpisodes)
 		: (selectedPlaylist?.episodes ?? latestEpisodes);
