@@ -5,6 +5,7 @@ import {
 	type PluginReloadOptions,
 	createObsidianClient,
 	resolveObsidianEnvOptions,
+	type SandboxApi,
 } from "obsidian-e2e";
 import {
 	type VaultRunLock,
@@ -13,6 +14,8 @@ import {
 	createPluginHarness,
 } from "obsidian-e2e/vitest";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
+import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
+import type { LocalEpisode } from "../../src/types/LocalEpisode";
 
 export const PLUGIN_ID = "podnotes";
 export const VIEW_TYPE = "podcast_player_view";
@@ -336,4 +339,118 @@ export async function openPodNotesView(obsidian: ObsidianClient): Promise<void> 
 	if (!result.ok || result.count < 1 || result.activeViewType !== VIEW_TYPE) {
 		throw new Error(`Failed to open PodNotes view: ${JSON.stringify(result)}`);
 	}
+}
+
+export type PodNotesData = Partial<IPodNotesSettings> & {
+	schemaVersion?: number;
+	openAIApiKey?: string;
+	diarizationApiKey?: string;
+	legacyExtension?: { enabled: boolean };
+};
+
+export type PlaybackState = {
+	currentTime: number | null;
+	hasPlayer: boolean;
+	isPlaying: boolean;
+	title: string | null;
+};
+
+// The seeded file outlives a test, so each harness sandbox writes it once.
+const seededAudioPaths = new Set<string>();
+
+export async function seedAudio(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+	sandbox: SandboxApi,
+): Promise<string> {
+	const fileName = "podnotes-e2e-silence.wav";
+	const audioPath = sandbox.path(fileName);
+	if (seededAudioPaths.has(audioPath)) return audioPath;
+
+	await writeSilentWav(obsidian, audioPath, 600);
+	await sandbox.waitForExists(fileName, WAIT_OPTS);
+	seededAudioPaths.add(audioPath);
+
+	return audioPath;
+}
+
+export function createLocalEpisode(title: string, audioPath: string): LocalEpisode {
+	return {
+		title,
+		streamUrl: audioPath,
+		url: audioPath,
+		description: "",
+		content: "",
+		podcastName: "local file",
+		filePath: audioPath,
+	};
+}
+
+export async function invokePodNotesUri(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+	episode: LocalEpisode,
+	time: number,
+	endTime?: number,
+): Promise<void> {
+	const result = await evalJsonAsync<{ error?: string; ok: boolean }>(
+		obsidian,
+		`
+		(async () => {
+			const handler = (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers).get(${JSON.stringify(PLUGIN_ID)});
+			if (!handler) {
+				return { ok: false, error: "PodNotes protocol handler is not registered." };
+			}
+
+			await handler({
+				action: ${JSON.stringify(PLUGIN_ID)},
+				url: ${JSON.stringify(episode.filePath ?? episode.streamUrl)},
+				episodeName: ${JSON.stringify(episode.title)},
+				time: ${JSON.stringify(String(time))},
+				endTime: ${JSON.stringify(endTime === undefined ? undefined : String(endTime))},
+			});
+
+			return { ok: true };
+		})()
+	`,
+	);
+
+	if (!result.ok) {
+		throw new Error(result.error ?? "PodNotes URI handler failed.");
+	}
+}
+
+export async function waitForPlaybackState(
+	obsidian: {
+		dev: { evalJson: <T>(code: string) => Promise<T> };
+		sleep: (ms: number) => Promise<void>;
+	},
+	predicate: (state: PlaybackState) => boolean,
+): Promise<PlaybackState> {
+	const startedAt = Date.now();
+	let lastState: PlaybackState | null = null;
+
+	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
+		lastState = await getPlaybackState(obsidian);
+		if (predicate(lastState)) return lastState;
+		await obsidian.sleep(WAIT_OPTS.intervalMs);
+	}
+
+	throw new Error(
+		`Timed out waiting for playback state. Last state: ${JSON.stringify(lastState)}`,
+	);
+}
+
+export async function getPlaybackState(obsidian: {
+	dev: { evalJson: <T>(code: string) => Promise<T> };
+}): Promise<PlaybackState> {
+	return await obsidian.dev.evalJson<PlaybackState>(`
+		(() => {
+			const plugin = app.plugins.plugins.${PLUGIN_ID};
+			return {
+				currentTime: plugin?.api?.currentTime ?? null,
+				hasPlayer: Boolean(document.querySelector(".episode-player")),
+				isPlaying: Boolean(plugin?.api?.isPlaying),
+				title: plugin?.api?.podcast?.title ?? null,
+			};
+		})()
+	`);
 }
