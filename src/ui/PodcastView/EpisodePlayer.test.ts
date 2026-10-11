@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { fireEvent, render, waitFor } from "@testing-library/svelte";
 import { TFile } from "obsidian";
 import { get } from "svelte/store";

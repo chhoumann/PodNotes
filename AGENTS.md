@@ -55,10 +55,13 @@ npm run docs:build
 ```
 
 ## Testing
-Vitest runs in jsdom and aliases `obsidian` to `tests/mocks/obsidian.ts`.
-Prefer unit tests for pure utility, parser, store, API, and component behavior.
-Use Testing Library for Svelte component behavior instead of asserting on
-implementation details.
+Vitest runs in Node and aliases `obsidian` to `tests/mocks/obsidian.ts`. A test
+file that needs a DOM or loads Svelte code starts with
+`// @vitest-environment jsdom`; leave it off otherwise, because jsdom setup is
+the suite's largest cost. A Node test that loads Svelte code or reads `window`
+or `document` fails with that hint. Prefer unit tests for pure utility, parser,
+store, API, and component behavior. Use Testing Library for Svelte component
+behavior instead of asserting on implementation details.
 
 When a bug depends on real Obsidian runtime behavior, reproduce it in Obsidian
 before changing code and verify it there after the fix. Timestamp links, URI
