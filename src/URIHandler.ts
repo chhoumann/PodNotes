@@ -67,7 +67,7 @@ function parseSeconds(value: string): number {
 }
 
 // Two links opened in quick succession can load their feeds out of order, so a
-// link acts after loading only if no newer link that passed its checks has arrived since.
+// link acts after loading only if no newer link that fetched or played has arrived since.
 let latestRequest = 0;
 
 export default async function podNotesURIHandler(
@@ -128,6 +128,7 @@ export default async function podNotesURIHandler(
 			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
 
 	if (episodeIsLoaded) {
+		latestRequest++;
 		if (!player.play(loaded, playOptions)) return;
 		viewState.set(ViewState.Player);
 		await revealPlayer?.();
@@ -166,7 +167,7 @@ export default async function podNotesURIHandler(
 	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
 		// a vault path whose file was moved/renamed. Resolve the episode by name from
-		// the local-files store rather than handing the bare path to FeedParser (which
+		// the local-files store rather than fetching the bare path as a feed (which
 		// would fail and show a misleading "Could not load the podcast feed").
 		episode = findLocalEpisodeByCandidates(nameCandidates);
 	} else {
@@ -234,6 +235,7 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
+	latestRequest++;
 	if (!play(episode, playOptions)) return;
 	viewState.set(ViewState.Player);
 	await revealPlayer?.();

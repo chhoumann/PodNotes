@@ -521,6 +521,25 @@ describe("podNotesURIHandler", () => {
 		},
 	);
 
+	test("a link whose feed fails after a newer link to a local file shows no notice", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const local = clip("A");
+		localFiles.set({ ...emptyLocalFiles, episodes: [local] });
+		vaultFiles = [local.filePath ?? ""];
+		const older = deferred<Episode[]>();
+		mockEpisodesAt.mockReturnValueOnce(older.promise);
+
+		const opening = link({ episodeName: testEpisode.title, time: "5" });
+		await link({ url: local.filePath ?? "", episodeName: local.title, time: "15" });
+		older.reject(new Error("offline"));
+		await opening;
+
+		expect(notice).not.toHaveBeenCalled();
+		expect(state().episode).toMatchObject({ filePath: local.filePath });
+		vi.restoreAllMocks();
+	});
+
 	test("does not reject when feed parsing throws (no silent unhandled rejection)", async () => {
 		mockEpisodesAt.mockRejectedValue(new Error("network down"));
 
