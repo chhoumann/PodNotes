@@ -893,6 +893,20 @@ describe("errors", () => {
 		expect(media().currentTime).toBe(500);
 		expect(state().status).toBe("playing");
 	});
+
+	test("resume() starts at the progress a sync brought, whatever the user moved before the load", () => {
+		const { player, media } = setup();
+		player.restore(A);
+		player.seek(900);
+		player.play(B);
+		media().emit("error");
+
+		saved(B, 300, 1800);
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(300);
+	});
 });
 
 describe("dispose", () => {
