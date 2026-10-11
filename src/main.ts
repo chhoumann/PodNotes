@@ -713,12 +713,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private publishDocument(doc: PersistedPodNotesDataV2): void {
 		const decoded = decodePodNotesData(doc);
 		// In place, so code that holds plugin.settings across a save (an import) sees the
-		// merge. A sync leaves the player alone: a synced selection is the next startup's.
+		// merge.
 		const settings = this.settings as unknown as Record<string, unknown>;
 		for (const key of Object.keys(settings)) delete settings[key];
 		Object.assign(settings, decoded.settings);
 		this.persistenceUnknownFields = decoded.unknownFields;
 		this.setCollectionStores();
+		// Sync can land after startup. Nothing is loaded yet then, so the restored
+		// episode follows it; loaded media stays as it is.
+		this.player?.restore(this.settings.currentEpisode);
 	}
 
 	// Every data.json write goes through here, so no path can write while writes are refused.

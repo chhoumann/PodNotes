@@ -112,9 +112,13 @@ export class PlayerController {
 		this.placeElement();
 	}
 
-	/** Shows the selected episode at startup, paused at its saved position, without loading it. */
+	/**
+	 * Shows the selected episode paused at its saved position, without loading it: at
+	 * startup, and again after a sync while nothing is loaded. Loaded media stays.
+	 */
 	restore(episode: Episode | undefined): void {
-		if (!episode || this.snapshot.status !== "empty") return;
+		const { status } = this.snapshot;
+		if (!episode || (status !== "empty" && status !== "restored")) return;
 		this.setState({
 			status: "restored",
 			episode,
