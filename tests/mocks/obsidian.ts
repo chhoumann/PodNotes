@@ -42,6 +42,11 @@ export class TFolder {
 export class Notice {
 	constructor(public message?: string) {}
 
+	setMessage(message: string): this {
+		this.message = message;
+		return this;
+	}
+
 	hide(): void {}
 }
 

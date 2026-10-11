@@ -97,6 +97,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private pendingSave: IPodNotesSettings | null = null;
 	private pendingSaveWaiters: SaveWaiter[] = [];
 	private saveScheduled = false;
+	// tests/e2e/harness.ts awaits this to let in-flight saves finish before it restores data.json.
 	private saveChain: Promise<void> = Promise.resolve();
 	private persistenceUnknownFields: Record<string, unknown> = {};
 	private mediaSessionActions: MediaSessionActionName[] = [];

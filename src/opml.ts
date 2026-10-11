@@ -3,6 +3,7 @@ import FeedParser from "./parser/feedParser";
 import { plugin, savedFeeds } from "./store";
 import { internPrivateFeed, resolveFeedUrl } from "./services/privateFeeds";
 import type { PodcastFeed } from "./types/PodcastFeed";
+import { TimerNotice } from "./ui/TimerNotice";
 import { get } from "svelte/store";
 
 /**
@@ -21,57 +22,6 @@ function getAttributeCaseInsensitive(node: Element, name: string): string | null
 		}
 	}
 	return null;
-}
-
-function TimerNotice(heading: string, initialMessage: string) {
-	let currentMessage = initialMessage;
-	const startTime = Date.now();
-	let stopTime: number | undefined;
-	let intervalId: number | undefined;
-	const notice = new Notice(initialMessage, 0);
-
-	function formatMsg(message: string): string {
-		return `${heading} (${getTime()}):\n\n${message}`;
-	}
-
-	function update(message: string) {
-		currentMessage = message;
-		notice.setMessage(formatMsg(currentMessage));
-	}
-
-	function getTime(): string {
-		return formatTime(stopTime ? stopTime - startTime : Date.now() - startTime);
-	}
-
-	function clearTimer() {
-		if (intervalId !== undefined) {
-			window.clearInterval(intervalId);
-			intervalId = undefined;
-		}
-	}
-
-	intervalId = window.setInterval(() => {
-		notice.setMessage(formatMsg(currentMessage));
-	}, 1000);
-
-	return {
-		update,
-		hide: () => {
-			clearTimer();
-			notice.hide();
-		},
-		stop: () => {
-			stopTime = Date.now();
-			clearTimer();
-		},
-	};
-}
-
-function formatTime(ms: number): string {
-	const seconds = Math.floor(ms / 1000);
-	const minutes = Math.floor(seconds / 60);
-	const hours = Math.floor(minutes / 60);
-	return `${hours.toString().padStart(2, "0")}:${(minutes % 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
 async function importOPML(opml: string): Promise<void> {
@@ -192,7 +142,7 @@ async function importOPML(opml: string): Promise<void> {
 			);
 		}
 
-		window.setTimeout(() => notice.hide(), 5000);
+		window.setTimeout(() => notice.dispose(), 5000);
 	} catch (error) {
 		console.error("Error importing OPML:", error);
 		new Notice(

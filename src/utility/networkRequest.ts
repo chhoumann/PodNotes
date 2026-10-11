@@ -1,10 +1,10 @@
 import { requestUrl, type RequestUrlResponse } from "obsidian";
 import { assertFetchableUrl } from "./assertFetchableUrl";
 
-export const DEFAULT_NETWORK_TIMEOUT_MS = 30_000;
+const DEFAULT_NETWORK_TIMEOUT_MS = 30_000;
 export const MAX_NETWORK_TIMEOUT_MS = 2_147_483_647;
-export const DEFAULT_MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024;
-export const DEFAULT_MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
+const DEFAULT_MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024;
+const DEFAULT_MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 
 const ARRAY_BUFFER_BYTE_LENGTH_DESCRIPTOR = Object.getOwnPropertyDescriptor(
 	ArrayBuffer.prototype,

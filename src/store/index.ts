@@ -16,7 +16,6 @@ import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episode
 // Latest-Episodes projection and the offline downloads store are self-contained
 // leaf modules; re-export them here so consumers keep importing from one place.
 export {
-	podcastsUpdated,
 	savedFeeds,
 	episodeCache,
 	episodeListLimit,
@@ -402,15 +401,6 @@ export const localFiles = (() => {
 				) ?? episodes.find(matches);
 
 			return ep as LocalEpisode | undefined;
-		},
-		updateStreamUrl: (title: string, newUrl: string): void => {
-			store.update((playlist) => {
-				const idx = playlist.episodes.findIndex((ep) => ep.title === title);
-
-				if (idx !== -1) playlist.episodes[idx].streamUrl = newUrl;
-
-				return playlist;
-			});
 		},
 		// NOTE: the Local Files playlist is now a projection of downloadedEpisodes
 		// (see syncWithDownloaded). Add files by writing to downloadedEpisodes; a direct
