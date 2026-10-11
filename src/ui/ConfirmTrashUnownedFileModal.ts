@@ -1,4 +1,4 @@
-import { type App, Modal, Setting } from "obsidian";
+import { type App, ButtonComponent, Modal } from "obsidian";
 
 class ConfirmTrashUnownedFileModal extends Modal {
 	private filePath: string;
@@ -16,23 +16,19 @@ class ConfirmTrashUnownedFileModal extends Modal {
 			text: `PodNotes cannot confirm that it downloaded "${this.filePath}".`,
 		});
 
-		new Setting(this.contentEl)
-			.addButton((button) => {
-				button
-					.setButtonText("Keep file")
-					.setCta()
-					.onClick(() => this.close());
-				button.buttonEl.focus();
-			})
-			.addButton((button) =>
-				button
-					.setButtonText("Move to trash")
-					.setDestructive()
-					.onClick(() => {
-						this.moveToTrash = true;
-						this.close();
-					}),
-			);
+		const buttons = this.contentEl.createDiv({ cls: "modal-button-container" });
+		const keepFile = new ButtonComponent(buttons)
+			.setButtonText("Keep file")
+			.setCta()
+			.onClick(() => this.close());
+		new ButtonComponent(buttons)
+			.setButtonText("Move to trash")
+			.setDestructive()
+			.onClick(() => {
+				this.moveToTrash = true;
+				this.close();
+			});
+		keepFile.buttonEl.focus();
 	}
 
 	override onClose(): void {
