@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, screen } from "@testing-library/svelte";
 import { get } from "svelte/store";
 import { Notice, requestUrl, TFile } from "obsidian";
 import downloadEpisodeWithNotice, {
@@ -10,8 +11,11 @@ import downloadEpisodeWithNotice, {
 } from "./downloadEpisode";
 import { downloadedEpisodes, plugin } from "./store";
 import type PodNotes from "./main";
+import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
+
+type StoredDownload = DownloadedEpisode & { downloadedByPodNotes?: true };
 
 vi.mock("obsidian", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("obsidian")>();
@@ -645,46 +649,168 @@ describe("safeDownloadBasename (#183)", () => {
 });
 
 describe("removeDownloadedEpisode", () => {
-	it("trashes the indexed download through FileManager", async () => {
-		const vault = setupVault();
-		const episode = makeEpisode();
-		const filePath = "Podcasts/My Title.mp3";
+	const promptFor = (filePath: string) =>
+		`PodNotes cannot confirm that it downloaded "${filePath}".`;
+	const keepFile = () => fireEvent.click(screen.getByRole("button", { name: "Keep file" }));
+	const moveToTrash = () =>
+		fireEvent.click(screen.getByRole("button", { name: "Move to trash" }));
+	const dismissPrompt = () => {
+		const closeButton = document.querySelector(".modal-close-button");
+		if (!closeButton) throw new Error("The prompt has no close button.");
+		fireEvent.click(closeButton);
+	};
+
+	function putOnDisk(vault: ReturnType<typeof setupVault>, filePath: string): void {
 		vault.present.add(filePath);
 		vault.disk.add(filePath);
-		downloadedEpisodes.addEpisode(episode, filePath, 4);
+	}
 
-		await removeDownloadedEpisode(episode);
-
-		expect(vault.trashFile).toHaveBeenCalledOnce();
-		expect(vault.trashFile.mock.calls[0][0].path).toBe(filePath);
-		expect(vault.removeFile).not.toHaveBeenCalled();
-		expect(get(downloadedEpisodes)[episode.podcastName]).toEqual([]);
-	});
-
-	it("drops a local file from the offline set but leaves the user's file on disk", async () => {
-		const vault = setupVault();
-		const filePath = "Recordings/Interview.wav";
-		const localEpisode: LocalEpisode = {
-			title: "Interview",
-			description: "",
-			content: "",
-			podcastName: "local file",
-			url: "[[Recordings/Interview.wav]]",
-			streamUrl: "app://local/Recordings/Interview.wav",
-			filePath,
-			mediaType: "audio",
-		};
-		vault.present.add(filePath);
-		vault.disk.add(filePath);
-		downloadedEpisodes.set({ "local file": [{ ...localEpisode, filePath, size: 4 }] });
-
-		await removeDownloadedEpisode(localEpisode);
-
-		expect(get(downloadedEpisodes)["local file"]).toEqual([]);
+	function expectKeptOnDisk(vault: ReturnType<typeof setupVault>, filePath: string): void {
 		expect(vault.trashFile).not.toHaveBeenCalled();
 		expect(vault.removeFile).not.toHaveBeenCalled();
 		expect(vault.present.has(filePath)).toBe(true);
 		expect(vault.disk.has(filePath)).toBe(true);
+	}
+
+	function mockAudioResponse(): void {
+		requestUrlMock.mockResolvedValue({
+			status: 200,
+			headers: { "content-type": "audio/mpeg" },
+			arrayBuffer: bytes(0x49, 0x44, 0x33, 0x04),
+		} as unknown as Awaited<ReturnType<typeof requestUrl>>);
+	}
+
+	afterEach(() => {
+		document.body.replaceChildren();
+	});
+
+	it("trashes a file PodNotes downloaded without asking", async () => {
+		const vault = setupVault();
+		const episode = makeEpisode();
+		const filePath = "Podcasts/My Title.mp3";
+		putOnDisk(vault, filePath);
+		const owned: StoredDownload = { ...episode, filePath, size: 4, downloadedByPodNotes: true };
+		downloadedEpisodes.set({ Pod: [owned] });
+
+		await removeDownloadedEpisode(episode);
+
+		expect(screen.queryByText(promptFor(filePath))).toBeNull();
+		expect(vault.trashFile).toHaveBeenCalledOnce();
+		expect(vault.trashFile.mock.calls[0][0].path).toBe(filePath);
+		expect(vault.removeFile).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes).Pod).toEqual([]);
+	});
+
+	it.each([
+		["Keep file", keepFile, true],
+		["Move to trash", moveToTrash, false],
+		["a dismissal", dismissPrompt, true],
+	])(
+		"asks before trashing a feed file PodNotes cannot confirm it downloaded, answered with %s",
+		async (_answer, answer, keptOnDisk) => {
+			const vault = setupVault();
+			const episode = makeEpisode({
+				title: "Fixture Episode 2",
+				streamUrl: "https://example.com/episode-2.wav",
+			});
+			const filePath = "Recordings/Fixture Episode 2.wav";
+			putOnDisk(vault, filePath);
+			downloadedEpisodes.set({ Pod: [{ ...episode, filePath, size: 4 }] });
+
+			const removal = removeDownloadedEpisode(episode);
+			await vi.waitFor(() =>
+				expect({
+					asking: screen.queryByText(promptFor(filePath)) !== null,
+					onDisk: vault.present.has(filePath),
+				}).toEqual({ asking: true, onDisk: true }),
+			);
+			expect(screen.getByRole("button", { name: "Keep file" })).toHaveFocus();
+			answer();
+			await removal;
+
+			expect(screen.queryByText(promptFor(filePath))).toBeNull();
+			expect(get(downloadedEpisodes).Pod).toEqual([]);
+			expect(vault.present.has(filePath)).toBe(keptOnDisk);
+			expect(vault.trashFile).toHaveBeenCalledTimes(keptOnDisk ? 0 : 1);
+			expect(vault.removeFile).not.toHaveBeenCalled();
+		},
+	);
+
+	const interviewPath = "Recordings/Interview.wav";
+	const interview: LocalEpisode = {
+		title: "Interview",
+		description: "",
+		content: "",
+		podcastName: "local file",
+		url: `[[${interviewPath}]]`,
+		streamUrl: `app://local/${interviewPath}`,
+	};
+
+	it.each([
+		["without a media type", {}],
+		["as audio", { mediaType: "audio" }],
+		["as video", { mediaType: "video" }],
+	] as const)("drops a local file stored %s but leaves it on disk", async (_case, media) => {
+		const vault = setupVault();
+		putOnDisk(vault, interviewPath);
+		const stored = { ...interview, ...media, filePath: interviewPath, size: 4 };
+		downloadedEpisodes.set({ "local file": [stored] });
+
+		await removeDownloadedEpisode(stored);
+
+		expect(screen.queryByText(promptFor(interviewPath))).toBeNull();
+		expect(get(downloadedEpisodes)["local file"]).toEqual([]);
+		expectKeptOnDisk(vault, interviewPath);
+	});
+
+	it("drops a local file removed through an older snapshot without its path", async () => {
+		const vault = setupVault();
+		putOnDisk(vault, interviewPath);
+		downloadedEpisodes.set({
+			"local file": [{ ...interview, filePath: interviewPath, size: 4 }],
+		});
+
+		await removeDownloadedEpisode(interview);
+
+		expect(screen.queryByText(promptFor(interviewPath))).toBeNull();
+		expect(get(downloadedEpisodes)["local file"]).toEqual([]);
+		expectKeptOnDisk(vault, interviewPath);
+	});
+
+	it("trashes a file it downloaded itself without asking", async () => {
+		const vault = setupVault();
+		mockAudioResponse();
+		const episode = makeEpisode();
+		const filePath = "Podcasts/My Title.mp3";
+
+		await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+		expect(get(downloadedEpisodes).Pod).toEqual([
+			expect.objectContaining({ filePath, downloadedByPodNotes: true }),
+		]);
+		await removeDownloadedEpisode(episode);
+
+		expect(screen.queryByText(promptFor(filePath))).toBeNull();
+		expect(vault.trashFile).toHaveBeenCalledOnce();
+		expect(vault.present.has(filePath)).toBe(false);
+		expect(get(downloadedEpisodes).Pod).toEqual([]);
+	});
+
+	it.each([
+		["its URL extension", "https://example.com/ep.mp3"],
+		["its sniffed destination", "https://example.com/stream?id=42"],
+	])("keeps an earlier registration it reuses at %s unconfirmed", async (_case, streamUrl) => {
+		const vault = setupVault();
+		mockAudioResponse();
+		const episode = makeEpisode({ streamUrl });
+		const filePath = "Podcasts/My Title.mp3";
+		putOnDisk(vault, filePath);
+		const registered = { ...episode, filePath, size: 4 };
+		downloadedEpisodes.set({ Pod: [registered] });
+
+		await downloadEpisodeWithNotice(episode, "Podcasts/{{title}}");
+
+		expect(vault.writeBinary).not.toHaveBeenCalled();
+		expect(get(downloadedEpisodes).Pod).toEqual([registered]);
 	});
 });
 

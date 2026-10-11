@@ -4,6 +4,7 @@ import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 import {
 	createPodNotesE2EHarness,
 	evalJsonAsync,
+	openPodNotesView,
 	RELOAD_OPTIONS,
 	VIEW_TYPE,
 	WAIT_OPTS,
@@ -12,6 +13,8 @@ import {
 } from "./harness";
 
 type PodNotesData = Partial<IPodNotesSettings>;
+
+const SILENT_WAV_SECOND_BYTES = 44 + 8_000;
 
 const getContext = createPodNotesE2EHarness("local-files-runtime");
 
@@ -96,6 +99,134 @@ describe("local files runtime", () => {
 			);
 		}
 	}, 60_000);
+
+	test("asks before trashing a download PodNotes cannot confirm it made", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const stamp = Date.now();
+		const feed = `E2E Feed ${stamp}`;
+		const kept = `E2E Adopted Recording ${stamp}`;
+		const discarded = `E2E Discarded Recording ${stamp}`;
+		const legacy = `E2E Legacy Recording ${stamp}`;
+		const recordingPath = (title: string) => sandbox.path("Recordings", `${title}.wav`);
+		const promptFor = (title: string) =>
+			`PodNotes cannot confirm that it downloaded "${recordingPath(title)}".`;
+		const inDownloads = (data: PodNotesData, podcastName: string, title: string) =>
+			data.downloadedEpisodes?.[podcastName]?.some((entry) => entry.title === title) ?? false;
+		const trashedFixtures = async () =>
+			(await listTrash(obsidian)).filter((path) => path.includes(String(stamp)));
+		const adoptedByAnOlderRelease = (title: string) => ({
+			title,
+			description: `${title} description.`,
+			content: "",
+			podcastName: feed,
+			url: "https://example.com/e2e/feed.xml",
+			streamUrl: `https://example.com/e2e/${stamp}/${encodeURIComponent(title)}.wav`,
+			feedUrl: "https://example.com/e2e/feed.xml",
+			artworkUrl: "",
+			episodeDate: "2026-06-30T09:00:00.000Z",
+			duration: 1,
+			mediaType: "audio",
+			filePath: recordingPath(title),
+			size: SILENT_WAV_SECOND_BYTES,
+		});
+
+		await sandbox.mkdir("Recordings");
+		for (const title of [kept, discarded, legacy]) {
+			await writeSilentWav(obsidian, recordingPath(title), 1);
+			await sandbox.waitForExists(`Recordings/${title}.wav`, WAIT_OPTS);
+		}
+		await plugin.updateDataAndReload<Record<string, unknown>>((data) => {
+			data.downloadedEpisodes = {
+				[feed]: [adoptedByAnOlderRelease(kept), adoptedByAnOlderRelease(discarded)],
+				"local file": [
+					{
+						title: legacy,
+						description: "",
+						content: "",
+						podcastName: "local file",
+						url: `[[${recordingPath(legacy)}]]`,
+						streamUrl: `app://local/${recordingPath(legacy)}`,
+						episodeDate: "2022-11-01T00:00:00.000Z",
+						filePath: recordingPath(legacy),
+						size: SILENT_WAV_SECOND_BYTES,
+					},
+				],
+			};
+			data.playedEpisodes = {};
+		}, RELOAD_OPTIONS);
+		await waitForPodNotesReady(obsidian);
+		await openPodNotesView(obsidian);
+
+		try {
+			await clickInPodNotesView(obsidian, 'button[aria-label="Podcast grid"]');
+			await clickInPodNotesView(obsidian, 'button.playlist-card[aria-label="Local Files"]');
+
+			await clickInPodNotesView(obsidian, `[aria-label="More options for ${kept}"]`);
+			await clickMenuItem(obsidian, "Remove file");
+			expect(await removalPrompt(obsidian, recordingPath(kept))).toEqual({
+				prompt: promptFor(kept),
+				focused: "Keep file",
+				original: true,
+			});
+			await clickModalButton(obsidian, "Keep file");
+			await plugin.waitForData<PodNotesData>(
+				(data) => !inDownloads(data, feed, kept),
+				WAIT_OPTS,
+			);
+
+			await clickInPodNotesView(obsidian, `[aria-label="More options for ${discarded}"]`);
+			await clickMenuItem(obsidian, "Remove file");
+			expect(await removalPrompt(obsidian, recordingPath(discarded))).toEqual({
+				prompt: promptFor(discarded),
+				focused: "Keep file",
+				original: true,
+			});
+			await clickModalButton(obsidian, "Move to trash");
+			await sandbox.waitForMissing(`Recordings/${discarded}.wav`, WAIT_OPTS);
+			await plugin.waitForData<PodNotesData>(
+				(data) => !inDownloads(data, feed, discarded),
+				WAIT_OPTS,
+			);
+
+			await clickInPodNotesView(obsidian, `[aria-label="More options for ${legacy}"]`);
+			await clickMenuItem(obsidian, "Remove from Local Files");
+			await plugin.waitForData<PodNotesData>(
+				(data) => !inDownloads(data, "local file", legacy),
+				WAIT_OPTS,
+			);
+
+			const after = await evalJsonAsync<Record<string, boolean>>(
+				obsidian,
+				`(async () => {
+					const { adapter } = app.vault;
+					return {
+						prompt: Boolean(document.querySelector(".modal-container")),
+						kept: await adapter.exists(${JSON.stringify(recordingPath(kept))}),
+						discarded: await adapter.exists(${JSON.stringify(recordingPath(discarded))}),
+						legacy: await adapter.exists(${JSON.stringify(recordingPath(legacy))}),
+					};
+				})()`,
+			);
+			expect({ ...after, trashed: await trashedFixtures() }).toEqual({
+				prompt: false,
+				kept: true,
+				discarded: false,
+				legacy: true,
+				trashed: [`.trash/${discarded}.wav`],
+			});
+			expect(await obsidian.dev.runtimeErrors()).toEqual([]);
+		} finally {
+			await evalJsonAsync<boolean>(
+				obsidian,
+				`(async () => {
+					for (const path of ${JSON.stringify(await trashedFixtures())}) {
+						await app.vault.adapter.remove(path);
+					}
+					return true;
+				})()`,
+			);
+		}
+	}, 60_000);
 });
 
 async function listTrash(obsidian: ObsidianClient): Promise<string[]> {
@@ -106,6 +237,38 @@ async function listTrash(obsidian: ObsidianClient): Promise<string[]> {
 			return (await adapter.exists(".trash")) ? (await adapter.list(".trash")).files : [];
 		})()`,
 	);
+}
+
+async function removalPrompt(
+	obsidian: ObsidianClient,
+	path: string,
+): Promise<{ prompt: string | null; focused: string | null; original: boolean }> {
+	const original = `app.vault.adapter.exists(${JSON.stringify(path)})`;
+	await obsidian.waitFor(
+		() =>
+			evalJsonAsync<boolean>(
+				obsidian,
+				`(async () => Boolean(document.querySelector(".modal-container")) || !(await ${original}))()`,
+			),
+		{ ...WAIT_OPTS, message: `Removing ${path} neither asked nor removed it.` },
+	);
+	return evalJsonAsync(
+		obsidian,
+		`(async () => ({
+			prompt: document.querySelector(".modal-container .modal-content p")?.textContent ?? null,
+			focused: document.activeElement instanceof HTMLButtonElement ? document.activeElement.textContent : null,
+			original: await ${original},
+		}))()`,
+	);
+}
+
+async function clickModalButton(obsidian: ObsidianClient, label: string): Promise<void> {
+	const button = `Array.from(document.querySelectorAll(".modal-container button")).find((button) => button.textContent?.trim() === ${JSON.stringify(label)})`;
+	await obsidian.waitFor(() => obsidian.dev.evalJson<boolean>(`Boolean(${button})`), {
+		...WAIT_OPTS,
+		message: `Modal button "${label}" did not appear.`,
+	});
+	await evalJsonAsync<boolean>(obsidian, `(() => { ${button}.click(); return true; })()`);
 }
 
 async function setFileExplorerEnabled(
