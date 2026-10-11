@@ -14,7 +14,7 @@ are under `src/utility/`; Svelte UI lives under `src/ui/`; shared types live in
 
 Tests are colocated with source files as `*.test.ts` where practical. Shared
 test mocks live in `tests/mocks/`. User-facing documentation lives in `docs/`
-and is built with MkDocs.
+and is built with Astro Starlight.
 
 Generated plugin artifacts such as `main.js` and source maps are ignored by git
 and should not be hand-edited. Production builds write `main.js` at the repo
@@ -40,8 +40,8 @@ root symlinks for local Obsidian loading.
 - `npm run check:a11y`: run `svelte-check --fail-on-warnings`.
 - `npm run test`: run Svelte checks and the Vitest suite.
 - `npm run build`: type-check and produce the production plugin bundle.
-- `npm run docs:build`: build the MkDocs documentation.
-- `npm run docs:deploy`: build docs and deploy `docs/site` to Cloudflare Pages.
+- `npm run docs:build`: build the Starlight documentation and check its internal links.
+- `npm run docs:deploy`: build docs and deploy `docs/dist` to Cloudflare Pages.
 
 After `npm run build`, `npm run size` enforces 330,000 raw bytes and 100,000 gzip bytes at level 9 for root `main.js` inside the existing Test job. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 
@@ -194,12 +194,17 @@ only on first provision. Run long setup/download commands in an asynchronous
 terminal session and allow their documented timeout.
 
 ## Documentation
-Docs live in `docs/docs/` and are configured by `docs/mkdocs.yml`. Update docs
-with user-facing behavior changes, new commands, API changes, template syntax,
-transcript behavior, local-file behavior, or import/export changes.
+Docs are an Astro Starlight site in `docs/`, a standalone npm package with its
+own `package-lock.json`. Pages live in `docs/src/content/docs/`, images in
+`docs/public/resources/`, and the sidebar in `docs/src/site.mjs`. Every page
+sets `slug:` frontmatter to pin its URL, and the build fails without it. Update
+docs with user-facing behavior changes, new commands, API changes, template
+syntax, transcript behavior, local-file behavior, or import/export changes.
 
-Use `npm run docs:build` to validate docs locally. The Cloudflare Pages output
-directory is `docs/site`, configured in `wrangler.jsonc`.
+Use `npm run docs:build` to validate docs locally. It installs the docs
+dependencies and runs `astro build`, which fails on a broken internal link or
+anchor. Cloudflare Pages builds from `docs/` and publishes `docs/dist`, configured in
+`docs/wrangler.jsonc`. See `docs/README.md` for the docs project layout.
 
 ## Release Workflow
 Goal: publish each version from a tested, reviewed, and attested commit. Stop
