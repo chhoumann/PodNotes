@@ -90,7 +90,18 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	private readonly state = writable<ReadonlyMap<FeedKey, FeedState>>(new Map());
 	private hydrated = false;
 
-	constructor(private readonly deps: FeedRepositoryDeps) {}
+	constructor(private readonly deps: FeedRepositoryDeps) {
+		// Earlier versions' caches can hold private feed URLs, so they go as soon as
+		// PodNotes loads, not when a feed first loads (on mobile the view may stay closed).
+		try {
+			deps.storage.saveLocalStorage("podnotes:feed-cache:v5", null);
+			for (const version of [1, 2, 3, 4]) {
+				window.localStorage.removeItem(`podnotes:feed-cache:v${version}`);
+			}
+		} catch (error) {
+			console.warn("PodNotes: could not remove old feed caches", error);
+		}
+	}
 
 	subscribe(run: Subscriber<ReadonlyMap<FeedKey, FeedState>>): Unsubscriber {
 		return this.state.subscribe(run);
@@ -98,8 +109,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 
 	setSubscriptions(feeds: Record<FeedKey, PodcastFeed>): void {
 		const urls = new Set(Object.values(feeds).map((feed) => feed.url));
-		const changed =
-			urls.size !== this.urls.size || [...urls].some((url) => !this.urls.has(url));
+		const changed = [...urls].join() !== [...this.urls].join();
 		this.subscriptions = new Map(Object.entries(feeds));
 		this.urls = urls;
 		for (const url of this.sources.keys()) {
@@ -286,7 +296,6 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			if (this.deps.cache().enabled) {
 				cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
 			}
-			removeLegacyCaches(this.deps.storage);
 		} catch (error) {
 			console.warn("PodNotes: could not read the feed cache", error);
 		}
@@ -369,13 +378,6 @@ const CACHE_KEY = "podnotes:feed-cache:v6";
 // from cached documents on a warm start.
 const MAX_ITEMS_PER_FEED = 75;
 const MAX_CACHE_BYTES = 4 * 1024 * 1024;
-
-function removeLegacyCaches(storage: FeedCacheStorage): void {
-	storage.saveLocalStorage("podnotes:feed-cache:v5", null);
-	for (const version of [1, 2, 3, 4]) {
-		window.localStorage.removeItem(`podnotes:feed-cache:v${version}`);
-	}
-}
 
 /** The newest items by date, in feed order, so an oldest-first feed still keeps its latest episodes. */
 function keepNewestItems(doc: FeedDocument): FeedDocument {

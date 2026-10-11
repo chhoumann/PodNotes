@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createPodNotesE2EHarness } from "./harness";
+import { createPodNotesE2EHarness, RELOAD_OPTIONS } from "./harness";
 import {
 	click,
 	closePodNotes,
@@ -9,7 +9,7 @@ import {
 	ui,
 	waitUntilShown,
 } from "./journey/actions";
-import { playerLeafCount, seedLibrary } from "./journey/library";
+import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
 
 const getContext = createPodNotesE2EHarness("journey-mobile");
 
@@ -43,5 +43,37 @@ describe("mobile journeys", () => {
 			message: "the Local Files list",
 		});
 		expect(await shownText(obsidian)).toContain("No episodes found.");
+	}, 120_000);
+
+	test("J-EDGE-13 a private feed URL moved to SecretStorage on a mobile start leaves no copy in the old feed cache", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const secretUrl = "https://private.example.test/feed.xml?auth=journey-secret";
+		await seedLibrary(context, null);
+		await setMobileEmulation(obsidian, true);
+		await closePodNotes(obsidian);
+		const legacyCache = JSON.stringify({
+			[secretUrl]: {
+				updatedAt: Date.now(),
+				episodes: [{ title: "Private Episode", url: secretUrl, feedUrl: secretUrl }],
+			},
+		});
+		await obsidian.dev.evalJson(
+			`app.saveLocalStorage("podnotes:feed-cache:v5", ${JSON.stringify(legacyCache)}), true`,
+		);
+
+		await plugin.updateDataAndReload<Record<string, any>>((data) => {
+			data.savedFeeds = {
+				"Journey Private": { title: "Journey Private", url: secretUrl, artworkUrl: "" },
+			};
+		}, RELOAD_OPTIONS);
+
+		expect(await playerLeafCount(obsidian)).toBe(0);
+		const [saved] = (await readLibrary(plugin)).subscriptions;
+		expect(saved.title).toBe("Journey Private");
+		expect(saved.url).not.toContain("journey-secret");
+		expect(
+			await obsidian.dev.evalJson('app.loadLocalStorage("podnotes:feed-cache:v5")'),
+		).toBeNull();
 	}, 120_000);
 });

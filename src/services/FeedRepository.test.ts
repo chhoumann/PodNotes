@@ -619,21 +619,19 @@ describe("FeedRepository", () => {
 		expect(t.titles("Alpha")).toEqual(["Episode 1"]);
 	});
 
-	test("earlier caches stay when the feed cache cannot be read", async () => {
-		vi.spyOn(console, "warn").mockImplementation(() => {});
+	test("removes the caches of earlier versions as soon as it is created, before any feed loads", () => {
 		const storage = new MemoryStorage();
-		storage.saveLocalStorage("podnotes:feed-cache:v5", "{}");
+		storage.saveLocalStorage(
+			"podnotes:feed-cache:v5",
+			'{"https://private.test/feed.xml?auth=s3cret":{"updatedAt":1,"episodes":[]}}',
+		);
 		legacyStorage.set("podnotes:feed-cache:v4", "{}");
-		storage.loadLocalStorage = () => {
-			throw new Error("storage unavailable");
-		};
+
 		const t = setup({ storage });
-		t.repo.setSubscriptions({});
 
-		await t.repo.ensureAll();
-
-		expect(storage.values.has("podnotes:feed-cache:v5")).toBe(true);
-		expect([...legacyStorage.keys()]).toEqual(["podnotes:feed-cache:v4"]);
+		expect(storage.values.has("podnotes:feed-cache:v5")).toBe(false);
+		expect([...legacyStorage.keys()]).toEqual([]);
+		expect(t.load).not.toHaveBeenCalled();
 	});
 
 	test("a feed link's episodes are named after its channel and never cached", async () => {
