@@ -660,6 +660,32 @@ describe("removeDownloadedEpisode", () => {
 		expect(vault.removeFile).not.toHaveBeenCalled();
 		expect(get(downloadedEpisodes)[episode.podcastName]).toEqual([]);
 	});
+
+	it("drops a local file from the offline set but leaves the user's file on disk", async () => {
+		const vault = setupVault();
+		const filePath = "Recordings/Interview.wav";
+		const localEpisode: LocalEpisode = {
+			title: "Interview",
+			description: "",
+			content: "",
+			podcastName: "local file",
+			url: "[[Recordings/Interview.wav]]",
+			streamUrl: "app://local/Recordings/Interview.wav",
+			filePath,
+			mediaType: "audio",
+		};
+		vault.present.add(filePath);
+		vault.disk.add(filePath);
+		downloadedEpisodes.set({ "local file": [{ ...localEpisode, filePath, size: 4 }] });
+
+		await removeDownloadedEpisode(localEpisode);
+
+		expect(get(downloadedEpisodes)["local file"]).toEqual([]);
+		expect(vault.trashFile).not.toHaveBeenCalled();
+		expect(vault.removeFile).not.toHaveBeenCalled();
+		expect(vault.present.has(filePath)).toBe(true);
+		expect(vault.disk.has(filePath)).toBe(true);
+	});
 });
 
 describe("safeDownloadFilePath (#22)", () => {

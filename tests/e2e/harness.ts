@@ -72,6 +72,50 @@ export function evalJsonAsync<T>(obsidian: ObsidianClient, code: string): Promis
 	return obsidian.dev.evalJsonAsync<T>(code);
 }
 
+export async function writeSilentWav(
+	obsidian: ObsidianClient,
+	audioPath: string,
+	seconds: number,
+): Promise<void> {
+	await evalJsonAsync<boolean>(
+		obsidian,
+		`(async () => {
+			const sampleRate = 8_000;
+			const sampleCount = sampleRate * ${seconds};
+			const bytes = new Uint8Array(44 + sampleCount);
+			const view = new DataView(bytes.buffer);
+			const ascii = (offset, value) => {
+				for (let index = 0; index < value.length; index++) {
+					bytes[offset + index] = value.charCodeAt(index);
+				}
+			};
+
+			ascii(0, "RIFF");
+			view.setUint32(4, 36 + sampleCount, true);
+			ascii(8, "WAVE");
+			ascii(12, "fmt ");
+			view.setUint32(16, 16, true);
+			view.setUint16(20, 1, true);
+			view.setUint16(22, 1, true);
+			view.setUint32(24, sampleRate, true);
+			view.setUint32(28, sampleRate, true);
+			view.setUint16(32, 1, true);
+			view.setUint16(34, 8, true);
+			ascii(36, "data");
+			view.setUint32(40, sampleCount, true);
+			bytes.fill(128, 44);
+
+			const existing = app.vault.getAbstractFileByPath(${JSON.stringify(audioPath)});
+			if (existing) {
+				await app.vault.modifyBinary(existing, bytes.buffer);
+			} else {
+				await app.vault.createBinary(${JSON.stringify(audioPath)}, bytes.buffer);
+			}
+			return true;
+		})()`,
+	);
+}
+
 export async function waitForPodNotesReady(obsidian: ObsidianClient): Promise<void> {
 	await obsidian.waitFor(() => podNotesReady(obsidian), {
 		...WAIT_OPTS,
