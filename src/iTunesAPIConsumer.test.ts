@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import lookupAppleIncArtist from "../tests/fixtures/itunes/lookup-apple-inc-artist.json";
 import lookupAppleNewsToday from "../tests/fixtures/itunes/lookup-apple-news-today.json";
 import lookupHubermanLab from "../tests/fixtures/itunes/lookup-huberman-lab.json";
 import lookupUnknownId from "../tests/fixtures/itunes/lookup-unknown-id.json";
@@ -165,6 +166,12 @@ describe("lookupiTunesPodcast", () => {
 		fetchJsonMock.mockResolvedValue(lookupUnknownId);
 
 		await expect(lookupiTunesPodcast("1")).resolves.toBeNull();
+	});
+
+	it("returns null for an artist id instead of one of the artist's shows", async () => {
+		fetchJsonMock.mockResolvedValue(lookupAppleIncArtist);
+
+		await expect(lookupiTunesPodcast("706424103")).resolves.toBeNull();
 	});
 
 	it("returns null for a show without a public RSS feed", async () => {

@@ -31,8 +31,9 @@ export async function lookupiTunesPodcast(id: string): Promise<PodcastFeed | nul
 	const url = new URL("https://itunes.apple.com/lookup");
 	url.searchParams.append("id", id);
 	url.searchParams.append("entity", "podcast");
-	const [feed] = await fetchPodcastFeeds(url);
-	return feed ?? null;
+	// An artist id returns the artist's shows, none of which is the linked show.
+	const feeds = await fetchPodcastFeeds(url);
+	return feeds.find((feed) => feed.collectionId === id) ?? null;
 }
 
 /**
