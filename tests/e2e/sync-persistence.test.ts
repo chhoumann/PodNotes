@@ -193,11 +193,12 @@ describe("PodNotes data.json changed elsewhere", () => {
 		await expect
 			.poll(() => obsidian.dev.evalJson<Memory>(MEMORY), POLL)
 			.toMatchObject({ feed: true, queue: ["local file / E2E Sync Queued Episode"] });
+		// The selection follows the other device; what plays here stays.
 		expect(
 			await obsidian.dev.evalJson<string | null>(
 				`app.plugins.plugins.${PLUGIN_ID}.settings.currentEpisode?.title ?? null`,
 			),
-		).toBe(episode.title);
+		).toBe(queued.title);
 
 		const after = await waitForPlaybackState(
 			obsidian,
@@ -212,7 +213,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			WAIT_OPTS,
 		);
 		expect(disk.queue?.episodes.map((item) => item.title)).toEqual([queued.title]);
-		expect(disk.currentEpisode?.title).toBe(episode.title);
+		expect(disk.currentEpisode?.title).toBe(queued.title);
 	});
 
 	test("does not treat its own saves as external changes", async () => {

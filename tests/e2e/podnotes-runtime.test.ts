@@ -83,7 +83,6 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		await invokePodNotesUri(obsidian, episode, 240);
-		await stabilizeLoadedMedia(obsidian);
 
 		const state = await waitForPlaybackState(
 			obsidian,
@@ -91,15 +90,10 @@ describe("PodNotes runtime", () => {
 				value.hasPlayer &&
 				value.title === episode.title &&
 				value.isPlaying &&
-				value.currentTime === 240,
+				(value.currentTime ?? 0) > 240,
 		);
 
-		expect(state).toMatchObject({
-			currentTime: 240,
-			hasPlayer: true,
-			isPlaying: true,
-			title: episode.title,
-		});
+		expect(state.currentTime).toBeLessThan(244);
 	});
 
 	test("preserves zero-second timestamp URI links at runtime", async () => {
@@ -115,7 +109,6 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		await invokePodNotesUri(obsidian, episode, 0);
-		await stabilizeLoadedMedia(obsidian);
 
 		const state = await waitForPlaybackState(
 			obsidian,
@@ -123,15 +116,10 @@ describe("PodNotes runtime", () => {
 				value.hasPlayer &&
 				value.title === episode.title &&
 				value.isPlaying &&
-				value.currentTime === 0,
+				(value.currentTime ?? 0) > 0,
 		);
 
-		expect(state).toMatchObject({
-			currentTime: 0,
-			hasPlayer: true,
-			isPlaying: true,
-			title: episode.title,
-		});
+		expect(state.currentTime).toBeLessThan(4);
 	});
 
 	test("seeks immediately when the linked episode is already loaded", async () => {
@@ -145,30 +133,24 @@ describe("PodNotes runtime", () => {
 		});
 		await waitForPodNotesReady(obsidian);
 		await openPodNotesView(obsidian);
-		await setPlayback(obsidian, { currentTime: 999, paused: true });
-
-		await invokePodNotesUri(
+		await invokePodNotesUri(obsidian, episode, 30);
+		await waitForPlaybackState(
 			obsidian,
-			{
-				...episode,
-				filePath: "https://invalid.invalid/podnotes-e2e.xml",
-				streamUrl: "https://invalid.invalid/podnotes-e2e.xml",
-				url: "https://invalid.invalid/podnotes-e2e.xml",
-			},
-			12,
+			(value) => value.isPlaying && (value.currentTime ?? 0) > 30,
 		);
-		await dispatchAudioPlay(obsidian);
+
+		await invokePodNotesUri(obsidian, episode, 12);
 
 		const state = await waitForPlaybackState(
 			obsidian,
-			(value) => value.title === episode.title && value.isPlaying && value.currentTime === 12,
+			(value) =>
+				value.title === episode.title &&
+				value.isPlaying &&
+				(value.currentTime ?? 0) >= 12 &&
+				(value.currentTime ?? 0) < 16,
 		);
 
-		expect(state).toMatchObject({
-			currentTime: 12,
-			isPlaying: true,
-			title: episode.title,
-		});
+		expect(state.title).toBe(episode.title);
 		expect(await obsidian.dev.notices()).not.toContainEqual(
 			expect.objectContaining({ message: "Episode not found" }),
 		);
@@ -186,7 +168,7 @@ describe("PodNotes runtime", () => {
 		});
 		await waitForPodNotesReady(obsidian);
 		await openMarkdownFile(obsidian, notePath);
-		await setPlayback(obsidian, { currentTime: 125, paused: false });
+		await setPlayback(obsidian, { currentTime: 125, paused: true });
 
 		await obsidian.command(`${PLUGIN_ID}:capture-timestamp`).run();
 
@@ -215,7 +197,7 @@ describe("PodNotes runtime", () => {
 		});
 		await waitForPodNotesReady(obsidian);
 		await openMarkdownFile(obsidian, notePath);
-		await setPlayback(obsidian, { currentTime: 125, paused: false });
+		await setPlayback(obsidian, { currentTime: 125, paused: true });
 
 		await obsidian.command(`${PLUGIN_ID}:capture-segment-10s`).run();
 
@@ -252,9 +234,7 @@ describe("PodNotes runtime", () => {
 		await waitForPodNotesReady(obsidian);
 		await openPodNotesView(obsidian);
 
-		await invokePodNotesUri(obsidian, episode, 115, 125);
-		await openPodNotesView(obsidian);
-		await stabilizeLoadedMedia(obsidian);
+		await invokePodNotesUri(obsidian, episode, 115, 118);
 
 		await waitForPlaybackState(
 			obsidian,
@@ -262,19 +242,17 @@ describe("PodNotes runtime", () => {
 				value.hasPlayer &&
 				value.title === episode.title &&
 				value.isPlaying &&
-				value.currentTime === 115,
+				(value.currentTime ?? 0) > 115,
 		);
-
-		await dispatchAudioTimeUpdate(obsidian, 126);
 
 		const state = await waitForPlaybackState(
 			obsidian,
 			(value) =>
-				value.title === episode.title && !value.isPlaying && value.currentTime === 125,
+				value.title === episode.title && !value.isPlaying && value.currentTime === 118,
 		);
 
 		expect(state).toMatchObject({
-			currentTime: 125,
+			currentTime: 118,
 			isPlaying: false,
 			title: episode.title,
 		});
@@ -292,7 +270,7 @@ describe("PodNotes runtime", () => {
 		await waitForPodNotesReady(obsidian);
 		await openPodNotesView(obsidian);
 		await invokePodNotesUri(obsidian, episode, 0);
-		await stabilizeLoadedMedia(obsidian);
+		await waitForPlaybackState(obsidian, (value) => value.hasPlayer && value.isPlaying);
 		await waitForPlaybackRate(obsidian, 1.5);
 
 		await obsidian.command(`${PLUGIN_ID}:increase-playback-rate`).run();
@@ -308,6 +286,7 @@ describe("PodNotes runtime", () => {
 		expect(rate).toMatchObject({
 			api: 1.5,
 			audio: 1.5,
+			slider: "1.5",
 		});
 	});
 
@@ -325,7 +304,7 @@ describe("PodNotes runtime", () => {
 		try {
 			await waitForPodNotesReady(obsidian);
 			await openMarkdownFile(obsidian, notePath);
-			await setPlayback(obsidian, { currentTime: 95, paused: false });
+			await setPlayback(obsidian, { currentTime: 95, paused: true });
 
 			const action = await invokeRecordedMediaSessionAction(obsidian, "previoustrack");
 			expect(action).toMatchObject({
@@ -364,7 +343,7 @@ describe("PodNotes runtime", () => {
 		try {
 			await waitForPodNotesReady(obsidian);
 			await openPodNotesView(obsidian);
-			await setPlayback(obsidian, { currentTime: 185, paused: false });
+			await setPlayback(obsidian, { currentTime: 185, paused: true });
 
 			const noEditor = await obsidian.dev.evalJson<boolean>(`
 				!app.workspace.activeEditor?.editor
@@ -943,145 +922,6 @@ function episodeKey(episode: Episode): string {
 	return `${episode.podcastName}::${episode.title}`;
 }
 
-async function stabilizeLoadedMedia(obsidian: {
-	dev: { evalJson: <T>(code: string) => Promise<T> };
-	sleep: (ms: number) => Promise<void>;
-}): Promise<void> {
-	const startedAt = Date.now();
-	let lastError = "No PodNotes audio element found.";
-
-	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
-		const result = await obsidian.dev.evalJson<{
-			error?: string;
-			ok: boolean;
-		}>(`
-			(() => {
-				const audio = document.querySelector(".podcast-view audio");
-				if (!audio) {
-					return { ok: false, error: "No PodNotes audio element found." };
-				}
-				if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
-					return { ok: false, error: "PodNotes audio playback data is not ready yet." };
-				}
-				if (audio.paused) {
-					return { ok: false, error: "PodNotes audio playback has not started yet." };
-				}
-
-				audio.pause();
-				const currentTime = Math.round(
-					app.plugins.plugins.${PLUGIN_ID}?.api?.currentTime ?? audio.currentTime,
-				);
-				Object.defineProperty(audio, "currentTime", {
-					configurable: true,
-					value: currentTime,
-					writable: true,
-				});
-				Object.defineProperty(audio, "duration", {
-					configurable: true,
-					value: 3600,
-				});
-				Object.defineProperty(audio, "paused", {
-					configurable: true,
-					value: false,
-				});
-				audio.dispatchEvent(new Event("play"));
-				return { ok: true };
-			})()
-		`);
-
-		if (result.ok) return;
-
-		lastError = result.error ?? "Failed to stabilize loaded media.";
-		await obsidian.sleep(WAIT_OPTS.intervalMs);
-	}
-
-	throw new Error(lastError);
-}
-
-async function dispatchAudioPlay(obsidian: {
-	dev: { evalJson: <T>(code: string) => Promise<T> };
-	sleep: (ms: number) => Promise<void>;
-}): Promise<void> {
-	const startedAt = Date.now();
-	let lastError = "No PodNotes audio element found.";
-
-	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
-		const result = await obsidian.dev.evalJson<{ error?: string; ok: boolean }>(`
-			(() => {
-				const audio = document.querySelector(".podcast-view audio");
-				if (!audio) {
-					return { ok: false, error: "No PodNotes audio element found." };
-				}
-				if (audio.paused) {
-					return { ok: false, error: "PodNotes audio playback has not started yet." };
-				}
-				if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
-					return { ok: false, error: "PodNotes audio playback data is not ready yet." };
-				}
-
-				audio.pause();
-				const currentTime = Math.round(
-					app.plugins.plugins.${PLUGIN_ID}?.api?.currentTime ?? audio.currentTime,
-				);
-				Object.defineProperty(audio, "currentTime", {
-					configurable: true,
-					value: currentTime,
-					writable: true,
-				});
-				Object.defineProperty(audio, "paused", {
-					configurable: true,
-					value: false,
-				});
-				audio.dispatchEvent(new Event("play"));
-				return { ok: true };
-			})()
-		`);
-
-		if (result.ok) return;
-
-		lastError = result.error ?? "Failed to dispatch audio play.";
-		await obsidian.sleep(WAIT_OPTS.intervalMs);
-	}
-
-	throw new Error(lastError);
-}
-
-async function dispatchAudioTimeUpdate(
-	obsidian: {
-		dev: { evalJson: <T>(code: string) => Promise<T> };
-	},
-	currentTime?: number,
-): Promise<void> {
-	const result = await obsidian.dev.evalJson<{ error?: string; ok: boolean }>(`
-		(() => {
-			const audio = document.querySelector(".podcast-view audio");
-			if (!audio) {
-				return { ok: false, error: "No PodNotes audio element found." };
-			}
-
-			if (${JSON.stringify(currentTime)} !== undefined) {
-				Object.defineProperty(audio, "currentTime", {
-					configurable: true,
-					writable: true,
-					value: ${JSON.stringify(currentTime)},
-				});
-			}
-
-			Object.defineProperty(audio, "paused", {
-				configurable: true,
-				value: false,
-			});
-			audio.dispatchEvent(new Event("timeupdate"));
-
-			return { ok: true };
-		})()
-	`);
-
-	if (!result.ok) {
-		throw new Error(result.error ?? "Failed to dispatch audio timeupdate.");
-	}
-}
-
 async function setPlayback(
 	obsidian: { dev: { evalJson: <T>(code: string) => Promise<T> } },
 	{ currentTime, paused }: { currentTime: number; paused: boolean },
@@ -1112,37 +952,35 @@ async function setVolume(
 	`);
 }
 
+/** The rate as the API, the media element, the rate label and the rate slider show it. */
+type PlaybackRates = {
+	api: number | null;
+	audio: number | null;
+	label: string | null;
+	slider: string | null;
+};
+
 async function waitForPlaybackRate(
 	obsidian: {
 		dev: { evalJson: <T>(code: string) => Promise<T> };
 		sleep: (ms: number) => Promise<void>;
 	},
 	expected: number,
-): Promise<{ api: number | null; audio: number | null; label: string | null }> {
+): Promise<PlaybackRates> {
 	const startedAt = Date.now();
-	let lastRate: {
-		api: number | null;
-		audio: number | null;
-		label: string | null;
-	} = {
-		api: null,
-		audio: null,
-		label: null,
-	};
+	let lastRate: PlaybackRates = { api: null, audio: null, label: null, slider: null };
 
 	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
-		lastRate = await obsidian.dev.evalJson<{
-			api: number | null;
-			audio: number | null;
-			label: string | null;
-		}>(`
+		lastRate = await obsidian.dev.evalJson<PlaybackRates>(`
 			(() => {
-				const audio = document.querySelector(".podcast-view audio");
+				const audio = document.querySelector("audio.podnotes-media");
 				const label = document.querySelector(".playbackrate-container span");
+				const slider = document.querySelector(".playbackrate-container input");
 				return {
 					api: app.plugins.plugins.${PLUGIN_ID}?.api?.playbackRate ?? null,
 					audio: audio?.playbackRate ?? null,
 					label: label?.textContent ?? null,
+					slider: slider?.value ?? null,
 				};
 			})()
 		`);
@@ -1150,7 +988,8 @@ async function waitForPlaybackRate(
 		if (
 			lastRate.api === expected &&
 			lastRate.audio === expected &&
-			lastRate.label === `${expected}x`
+			lastRate.label === `${expected}x` &&
+			lastRate.slider === String(expected)
 		) {
 			return lastRate;
 		}

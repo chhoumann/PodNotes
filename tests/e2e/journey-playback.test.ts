@@ -1,5 +1,5 @@
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, expectKnownFailure, PLUGIN_ID } from "./harness";
+import { createPodNotesE2EHarness, PLUGIN_ID } from "./harness";
 import {
 	click,
 	closePodNotes,
@@ -186,7 +186,7 @@ describe("playback journeys", () => {
 	}, 60_000);
 
 	test.runIf(isolatedInstance)(
-		"#377 known failure J-PLAY-11: after restart the restored player keeps its saved position without autoplay",
+		"#377 J-PLAY-11: after restart the restored player keeps its saved position without autoplay",
 		async () => {
 			const context = getContext();
 			const { obsidian, plugin } = context;
@@ -225,29 +225,26 @@ describe("playback journeys", () => {
 
 			await showPodNotes(obsidian);
 			await click(obsidian, ui.playerTab);
+			const shown = await waitForPlayback(
+				obsidian,
+				(playback) => playback.seconds > 0,
+				"the player shows the restored episode",
+			);
+			expect(shown.episode).toEqual({ podcast: "Journey Playback", title: "Long Listen" });
+			expect(shown.seconds).toBeGreaterThanOrEqual(saved - 0.5);
+			expect(shown.seconds).toBeLessThanOrEqual(saved + 3);
+			const [first, later] = await playbackOver(obsidian, 1500);
+			expect(later.playing).toBe(false);
+			expect(later.media?.paused).toBe(true);
+			expect(later.seconds - first.seconds).toBe(0);
+
+			await click(obsidian, ui.playbackToggle);
 			const resumed = await waitForPlayback(
 				obsidian,
-				(playback) => playback.media !== null && playback.seconds > 0,
-				"the player loads the restored episode",
+				(playback) => playback.playing && playback.seconds > saved + 0.5,
+				"the restored episode resumes from its saved position",
 			);
-			expect(resumed.episode).toEqual({ podcast: "Journey Playback", title: "Long Listen" });
-			expect(resumed.seconds).toBeGreaterThanOrEqual(saved - 0.5);
-			expect(resumed.seconds).toBeLessThanOrEqual(saved + 3);
-			const [first, later] = await playbackOver(obsidian, 1500);
-			const captured = {
-				playing: later.playing,
-				mediaPaused: later.media?.paused,
-				advance: later.seconds - first.seconds,
-			};
-			expectKnownFailure(377, captured, {
-				correct: (value) => {
-					expect(value.playing).toBe(false);
-					expect(value.mediaPaused).toBe(true);
-					expect(value.advance).toBe(0);
-				},
-				reproduces: (value) =>
-					value.playing && value.mediaPaused === false && value.advance > 1,
-			});
+			expect(resumed.seconds).toBeLessThan(saved + 5);
 		},
 		120_000,
 	);

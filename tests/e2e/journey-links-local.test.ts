@@ -120,9 +120,7 @@ describe("link and local file journeys", () => {
 		const resumed = await waitForPlayback(
 			obsidian,
 			(playback) =>
-				playback.episode?.title === "Noted Episode" &&
-				playback.media !== null &&
-				playback.seconds > 0,
+				playback.episode?.title === "Noted Episode" && (playback.media?.seconds ?? 0) > 0,
 			"the Resume link reopens Noted Episode",
 		);
 		expect(resumed.seconds).toBeGreaterThanOrEqual(paused.seconds - 0.5);
@@ -142,7 +140,7 @@ describe("link and local file journeys", () => {
 			(playback) =>
 				playback.episode?.title === "Finished Episode" &&
 				playback.playing &&
-				playback.media !== null,
+				playback.media?.paused === false,
 			"the Resume link reopens Finished Episode",
 		);
 		expect(restarted.seconds).toBeLessThan(3);
@@ -191,9 +189,7 @@ describe("link and local file journeys", () => {
 		const playing = await waitForPlayback(
 			obsidian,
 			(playback) =>
-				playback.episode?.title === "Linked Episode" &&
-				playback.media !== null &&
-				playback.seconds > 0,
+				playback.episode?.title === "Linked Episode" && (playback.media?.seconds ?? 0) > 0,
 			"the linked episode loads",
 		);
 		expect(playing.episode).toEqual({ podcast: "Journey Links", title: "Linked Episode" });
