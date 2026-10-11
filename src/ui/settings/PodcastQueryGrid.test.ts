@@ -139,21 +139,23 @@ describe("PodcastQueryGrid", () => {
 		const search = deferred<unknown>();
 		fetchJsonMock.mockReturnValueOnce(lookup.promise).mockReturnValueOnce(search.promise);
 
-		const { findByRole, queryByRole, type } = renderGrid();
+		const { findByRole, getByRole, queryByRole, type } = renderGrid();
 		type("https://podcasts.apple.com/us/podcast/apple-news-today/id1473872585");
 		await settle();
 		type("apple news");
 		await settle();
-		search.resolve(searchAppleNews);
-		await findByRole("button", { name: "Add Apple News In Conversation podcast" });
 		lookup.resolve(lookupAppleNewsToday);
 		await settle();
 
+		expect(getByRole("status")).toHaveTextContent("Searching...");
+		expect(notice).not.toHaveBeenCalled();
+
+		search.resolve(searchAppleNews);
+
 		expect(
-			queryByRole("button", { name: "Add Apple News In Conversation podcast" }),
+			await findByRole("button", { name: "Add Apple News In Conversation podcast" }),
 		).toBeInTheDocument();
 		expect(queryByRole("alert")).toBeNull();
-		expect(notice).not.toHaveBeenCalled();
 	});
 
 	test("adds the RSS feed behind a pasted Apple Podcasts show link", async () => {
