@@ -259,6 +259,15 @@ workflow from `master`, so the PR still reports the old name. `Prepare release`
 also matches the `Test` workflow by its top-level `name:`, so renaming the
 workflow stops release planning without failing any check.
 
+The `Test`, `Documentation`, `PR Title`, and `Dependency Review` workflows have
+no `concurrency` block, so GitHub does not cancel their runs. Duplicate events
+on one PR head, such as a reopen or an edit right after a push, start duplicate
+runs of the required checks, and every run must finish. A cancelled run on the
+head turns the commit's check rollup to `FAILURE`. Do not add a `concurrency`
+group to these workflows. By default a group cancels a pending run when a newer
+run joins it, even with `cancel-in-progress: false`. Runs for a superseded head
+also finish. They cost CI minutes but block nothing.
+
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit
 from the PR on each, and re-running a published version verifies it and changes
