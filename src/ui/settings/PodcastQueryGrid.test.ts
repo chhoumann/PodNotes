@@ -112,6 +112,7 @@ describe("PodcastQueryGrid", () => {
 		const { findAllByRole, getByRole } = paste("planet money");
 		const [npr] = await findAllByRole("button", { name: "Add Planet Money podcast" });
 		await fireEvent.click(npr);
+		notice.mockClear();
 		await fireEvent.click(getByRole("button", { name: "Add Planet Money podcast" }));
 
 		expect(get(savedFeeds)["Planet Money"]).toMatchObject({
@@ -151,6 +152,20 @@ describe("PodcastQueryGrid", () => {
 
 		expect(getByRole("button", { name: "Remove Private Show podcast" })).toBeInTheDocument();
 		expect(queryByRole("button", { name: "Add Private Show podcast" })).toBeNull();
+	});
+
+	test("refusing a private namesake stores none of its URL", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { saved, secrets } = followPrivateShow();
+
+		const { findByRole } = paste("https://www.patreon.com/rss/show?auth=other-tier");
+		await fireEvent.click(await findByRole("button", { name: "Add Private Show podcast" }));
+
+		expect(notice).toHaveBeenCalledWith(
+			"You already follow a different podcast called Private Show.",
+		);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		expect(secrets.listSecrets()).toEqual([saved.urlSecretId]);
 	});
 
 	test("a followed private feed without its URL on this device asks to add it again", async () => {
