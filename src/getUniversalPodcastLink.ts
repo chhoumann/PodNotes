@@ -31,19 +31,18 @@ async function resolveCollectionId(
 	podcastName: string,
 	feedUrl: string | undefined,
 ): Promise<string | undefined> {
-	const feeds = get(savedFeeds);
+	const feeds = Object.values(get(savedFeeds));
 	const targetUrl = normalizeFeedUrl(feedUrl);
-	// Prefer a normalized feed-URL match above everything else (even the
-	// podcastName-keyed entry): duplicate or rehosted podcast titles mean a
-	// same-name entry can point at a different feed while another saved entry's
-	// URL actually matches the playing episode. Only when no URL match exists do
-	// we fall back to the name key, then a title match (Codex review #213).
+	// Several saved podcasts can share one URL, so the playing episode's own
+	// subscription (its URL and podcast name) comes first. A same-name entry that
+	// points at another feed loses to any entry with the episode's URL, since
+	// podcast titles repeat and feeds get rehosted (Codex review #213). Without a
+	// URL match, fall back to the saved podcast with the episode's name.
+	const sameFeed = feeds.filter((feed) => targetUrl && normalizeFeedUrl(feed.url) === targetUrl);
 	const savedFeed =
-		(targetUrl
-			? Object.values(feeds).find((feed) => normalizeFeedUrl(feed.url) === targetUrl)
-			: undefined) ??
-		feeds[podcastName] ??
-		Object.values(feeds).find((feed) => feed.title === podcastName);
+		sameFeed.find((feed) => feed.title === podcastName) ??
+		sameFeed[0] ??
+		feeds.find((feed) => feed.title === podcastName);
 
 	if (savedFeed?.collectionId) {
 		return savedFeed.collectionId;
