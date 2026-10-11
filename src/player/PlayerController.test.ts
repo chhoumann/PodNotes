@@ -447,6 +447,21 @@ describe("pause", () => {
 		expect(written).toEqual([]);
 	});
 
+	test("by the browser while loading still holds once the media is ready", async () => {
+		const { player, media, state, writes } = setup();
+		const written = writes(A);
+		player.play(A, { time: 30 });
+
+		media().pause();
+		media().emit("pause");
+		await flush();
+		metadata(media());
+
+		expect(state().status).toBe("paused");
+		expect(media().paused).toBe(true);
+		expect(written).toEqual([]);
+	});
+
 	test("saves the position at once", () => {
 		const { player, media, state, writes } = setup();
 		const written = writes(A);
