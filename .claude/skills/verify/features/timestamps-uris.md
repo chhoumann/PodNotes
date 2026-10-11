@@ -39,7 +39,7 @@ Preconditions:
 ## Gotchas
 
 - Capture commands are editor commands. The palette lists them only while a Markdown editor is focused, so click into the note first.
-- The default format `- {{time}} ` inserts plain text with no link. Set `{{linktime}}` before proving links.
+- The default format is `- {{linktime}} `. A vault whose `data.json` holds a `{{time}}` format inserts plain text with no link, so check `timestamp.template` before proving links.
 - Obsidian writes the note about 2 s after the edit. Read after a short wait, or read the editor with `CLI eval code='app.workspace.getLeavesOfType("markdown")[0].view.editor.getValue()'`.
 - A clicked link leaves the app through `xdg-open` and comes back through Obsidian's single-instance handoff, which the Linux bridge sets up. Never run `xdg-open` yourself: it reaches the system Obsidian profile.
 - `UI uri` decodes values with `decodeURIComponent`, as Obsidian does, so `+` stays a literal plus.
