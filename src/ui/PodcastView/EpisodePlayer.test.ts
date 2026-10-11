@@ -55,6 +55,8 @@ beforeEach(() => {
 		settings: {
 			defaultPlaybackRate: 1,
 		},
+		flushSaves: vi.fn(() => Promise.resolve()),
+		checkpoint: vi.fn((update: () => void) => update()),
 		api: {
 			skipBackward: vi.fn(),
 			skipForward: vi.fn(),
@@ -577,7 +579,7 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 	});
 
 	async function renderLoadedPlayer() {
-		const { container } = render(EpisodePlayer);
+		const { container, unmount } = render(EpisodePlayer);
 		await waitFor(() => {
 			expect(container.querySelector("audio")).not.toBeNull();
 		});
@@ -585,7 +587,7 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 		// loadedmetadata flips isLoading off and runs the restore, after which
 		// progress is allowed to persist.
 		await fireEvent.loadedMetadata(audio);
-		return audio;
+		return Object.assign(audio, { unmount });
 	}
 
 	test("saves position on timeupdate, throttling rapid updates", async () => {
@@ -616,6 +618,8 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 		currentTime.set(260);
 		await fireEvent.timeUpdate(audio);
 		expect(get(playedEpisodes)[episodeKey]?.time).toBe(260);
+		// Periodic positions are checkpoints, which data.json takes at most every 10 s.
+		expect(get(plugin).checkpoint).toHaveBeenCalledTimes(3);
 	});
 
 	test("saves the exact position immediately on pause, bypassing the throttle", async () => {
@@ -639,6 +643,16 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 		currentTime.set(137);
 		await fireEvent.pause(audio);
 		expect(get(playedEpisodes)[episodeKey]?.time).toBe(137);
+	});
+
+	test("saves the position when the player closes, at once rather than as a checkpoint", async () => {
+		const audio = await renderLoadedPlayer();
+		currentTime.set(42);
+
+		audio.unmount();
+
+		expect(get(playedEpisodes)[episodeKey]?.time).toBe(42);
+		expect(get(plugin).checkpoint).not.toHaveBeenCalled();
 	});
 
 	test("does not clobber the saved position before metadata has loaded", async () => {
@@ -757,6 +771,8 @@ describe("EpisodePlayer — persists playback position during playback (issue #3
 		try {
 			document.dispatchEvent(new Event("visibilitychange"));
 			expect(get(playedEpisodes)[episodeKey]?.time).toBe(222);
+			// Written now, not after the save delay: the OS may kill a backgrounded app.
+			expect(get(plugin).flushSaves).toHaveBeenCalledTimes(1);
 		} finally {
 			if (originalDescriptor) {
 				Object.defineProperty(document, "visibilityState", originalDescriptor);

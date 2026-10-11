@@ -1,14 +1,14 @@
-import { execFile, spawn } from "node:child_process";
-import fs from "node:fs";
-import { once } from "node:events";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { ObsidianClient } from "obsidian-e2e";
 import {
+	launchObsidianInstance,
 	loadRunnerConfig,
 	resolveInstanceOptions,
 	resolveProvisionOptions,
+	waitForInstanceReady,
 } from "obsidian-e2e/runner";
 import { PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../harness";
 
@@ -371,26 +371,28 @@ async function appProcess(obsidian: ObsidianClient): Promise<AppProcess> {
 }
 
 /**
- * Runner provisioning replaces the enabled-plugin list. Relaunch the same process
- * directly so the startup recorder stays first. Linux needs a fresh private Xvfb
- * display; macOS needs app.quit because closing its last window leaves it running.
+ * Runner provisioning replaces the enabled-plugin list. Relaunch without it so
+ * the startup recorder stays first. macOS needs app.quit because closing its last
+ * window leaves it running.
+ * `beforeClose` is renderer code that runs 50 ms before the window closes.
  */
 export async function restartObsidian(
 	obsidian: ObsidianClient,
 	whileClosed: () => Promise<void> = async () => {},
+	beforeClose = "",
 ): Promise<{ before: AppProcess; after: AppProcess }> {
 	await assertNoRuntimeErrors(obsidian);
 	const before = await appProcess(obsidian);
-	const launch = await obsidian.dev.evalJson<{ exe: string; argv: string[] }>(
-		'({ exe: window.electron.remote.app.getPath("exe"), argv: window.electron.remote.process.argv })',
-	);
+	const argv = await obsidian.dev.evalJson<string[]>("window.electron.remote.process.argv");
 	const instance = await isolatedInstance();
-	if (!launch.argv.includes(`--user-data-dir=${instance.userDataPath}`))
+	if (!argv.includes(`--user-data-dir=${instance.userDataPath}`))
 		throw new Error("Refusing to quit a different Obsidian profile.");
-	await obsidian.dev.evalJson(
+	const close =
 		process.platform === "darwin"
-			? "setTimeout(() => window.electron.remote.app.quit(), 50), true"
-			: "setTimeout(() => electronWindow.close(), 50), true",
+			? "window.electron.remote.app.quit()"
+			: "electronWindow.close()";
+	await obsidian.dev.evalJson(
+		`(() => { ${beforeClose}; setTimeout(() => ${close}, 50); return true; })()`,
 	);
 	await obsidian.waitFor(() => !processAlive(before.mainPid), {
 		timeoutMs: 30_000,
@@ -404,7 +406,8 @@ export async function restartObsidian(
 		failure = { error };
 	}
 	try {
-		await relaunchIsolatedApp(launch);
+		await launchObsidianInstance(instance);
+		await waitForInstanceReady(instance);
 		await obsidian.waitFor(
 			() =>
 				obsidian.dev
@@ -435,43 +438,6 @@ function processAlive(pid: number): boolean {
 		return true;
 	} catch {
 		return false;
-	}
-}
-
-async function relaunchIsolatedApp(launch: { exe: string; argv: string[] }): Promise<void> {
-	const instance = await isolatedInstance();
-	if (!launch.argv.includes(`--user-data-dir=${instance.userDataPath}`))
-		throw new Error("Refusing to relaunch a different Obsidian profile.");
-	const env: NodeJS.ProcessEnv = { ...process.env, HOME: instance.obsidianHome };
-	delete env.XDG_RUNTIME_DIR;
-	delete env.WAYLAND_DISPLAY;
-	delete env.WAYLAND_SOCKET;
-	if (process.platform === "linux") {
-		env.XDG_CONFIG_HOME = path.dirname(instance.userDataPath);
-		env.XDG_SESSION_TYPE = "x11";
-		env.OBSIDIAN_E2E_CAPTURE_XVFB = "1";
-	}
-	const log = fs.openSync(
-		path.join(instance.obsidianHome, "Library", "Logs", "obsidian.log"),
-		"a",
-	);
-	try {
-		const child =
-			process.platform === "linux"
-				? spawn(
-						"xvfb-run",
-						["-a", "-s", "-screen 0 3840x3200x24", launch.exe, ...launch.argv],
-						{ detached: true, stdio: ["ignore", log, log], env },
-					)
-				: spawn(launch.exe, launch.argv, {
-						detached: true,
-						stdio: ["ignore", log, log],
-						env,
-					});
-		await once(child, "spawn");
-		child.unref();
-	} finally {
-		fs.closeSync(log);
 	}
 }
 

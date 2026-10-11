@@ -15,7 +15,7 @@ import { bindStoresToSettings } from "src/store/persistence";
 import {
 	currentEpisode,
 	currentTime,
-	dedupeEpisodesByTitle,
+	dedupeEpisodesByKey,
 	downloadedEpisodes,
 	duration,
 	localFiles,
@@ -402,15 +402,20 @@ describe("reorderEpisodes", () => {
 	});
 });
 
-describe("dedupeEpisodesByTitle", () => {
+describe("dedupeEpisodesByKey", () => {
 	test("keeps the first occurrence and preserves order", () => {
-		const result = dedupeEpisodesByTitle([ep("A"), ep("B"), ep("A"), ep("C")]);
+		const result = dedupeEpisodesByKey([ep("A"), ep("B"), ep("A"), ep("C")]);
 		expect(result.map((e) => e.title)).toEqual(["A", "B", "C"]);
 	});
 
+	test("keeps same-titled episodes from different podcasts (#356)", () => {
+		const result = dedupeEpisodesByKey([ep("Trailer", "Pod A"), ep("Trailer", "Pod B")]);
+		expect(result.map((e) => e.podcastName)).toEqual(["Pod A", "Pod B"]);
+	});
+
 	test("handles empty / undefined input", () => {
-		expect(dedupeEpisodesByTitle([])).toEqual([]);
-		expect(dedupeEpisodesByTitle()).toEqual([]);
+		expect(dedupeEpisodesByKey([])).toEqual([]);
+		expect(dedupeEpisodesByKey()).toEqual([]);
 	});
 });
 
@@ -419,12 +424,27 @@ describe("queue store", () => {
 		queue.set({ ...QUEUE_SETTINGS, episodes: [] });
 	});
 
-	test("add dedupes episodes by title", () => {
+	test("add dedupes the same episode", () => {
 		queue.add(ep("A"));
 		queue.add(ep("A"));
 		queue.add(ep("B"));
 
 		expect(queueTitles()).toEqual(["A", "B"]);
+	});
+
+	test("add, set and remove keep same-titled episodes from different podcasts apart (#356)", () => {
+		queue.add(ep("Trailer", "Pod A"));
+		queue.add(ep("Trailer", "Pod B"));
+		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod A", "Pod B"]);
+
+		queue.set({
+			...QUEUE_SETTINGS,
+			episodes: [ep("Trailer", "Pod A"), ep("Trailer", "Pod B")],
+		});
+		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod A", "Pod B"]);
+
+		queue.remove(ep("Trailer", "Pod B"));
+		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod A"]);
 	});
 
 	test("set dedupes a persisted queue that already has duplicate titles", () => {
@@ -500,6 +520,24 @@ describe("queue store", () => {
 			currentEpisode.set(ep("B"), false);
 
 			expect(queueTitles()).toEqual(["A", "C"]);
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	test("playing an episode keeps a same-titled episode from another podcast queued (#356)", () => {
+		queue.set({
+			...QUEUE_SETTINGS,
+			episodes: [ep("Trailer", "Pod A"), ep("Trailer", "Pod B")],
+		});
+		currentEpisode.set(undefined as unknown as Episode, false);
+
+		const unsubscribe = subscribeQueueToCurrentEpisode();
+
+		try {
+			currentEpisode.set(ep("Trailer", "Pod A"), false);
+
+			expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod B"]);
 		} finally {
 			unsubscribe();
 		}

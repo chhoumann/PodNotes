@@ -1322,11 +1322,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			);
 
 		updateVisibility = () => {
-			providerSetting.settingEl.toggle(diarization.enabled);
-			deepgramSetting.settingEl.toggle(
-				diarization.enabled && diarization.provider === "deepgram",
-			);
-			speakerSetting.settingEl.toggle(diarization.enabled);
+			// Read through the plugin: a sync replaces the settings it holds.
+			const { enabled, provider } = this.plugin.settings.transcript.diarization;
+			providerSetting.settingEl.toggle(enabled);
+			deepgramSetting.settingEl.toggle(enabled && provider === "deepgram");
+			speakerSetting.settingEl.toggle(enabled);
 		};
 		updateVisibility();
 	}

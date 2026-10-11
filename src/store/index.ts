@@ -9,7 +9,7 @@ import type { LocalEpisode } from "src/types/LocalEpisode";
 import type { PlaybackSegment } from "src/types/PlaybackSegment";
 import { LOCAL_FILES_SETTINGS } from "src/constants";
 import { DEFAULT_PLAYBACK_RATE } from "src/utility/playbackRate";
-import { getEpisodeKey } from "src/utility/episodeKey";
+import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
 
 // `src/store` is the single import surface for the store layer. The saved-feed
@@ -201,19 +201,20 @@ export function reorderEpisodes(episodes: Episode[], from: number, to: number): 
 }
 
 /**
- * Returns the episodes with later duplicate titles removed, preserving order and
- * the first occurrence. The queue is title-identified everywhere, so this keeps
- * it title-unique regardless of how it was populated — including queues
- * persisted or synced before dedup-on-add existed.
+ * Returns the episodes with later duplicate episode keys removed, preserving
+ * order and the first occurrence. This keeps the queue unique regardless of how
+ * it was populated, including queues persisted or synced before dedup-on-add
+ * existed.
  */
-export function dedupeEpisodesByTitle(episodes: Episode[] = []): Episode[] {
+export function dedupeEpisodesByKey(episodes: Episode[] = []): Episode[] {
 	const seen = new Set<string>();
 	const result: Episode[] = [];
 
 	for (const episode of episodes) {
-		if (seen.has(episode.title)) continue;
+		const key = getEpisodeKey(episode);
+		if (seen.has(key)) continue;
 
-		seen.add(episode.title);
+		seen.add(key);
 		result.push(episode);
 	}
 
@@ -230,11 +231,11 @@ export const queue = (() => {
 	});
 	const { subscribe, update, set: setStore } = store;
 
-	// The queue identifies episodes by title everywhere (remove, played-cleanup,
-	// context menu). Keeping it title-unique on add makes those lookups — and the
-	// reorder index lookups below — unambiguous.
+	// The queue identifies episodes by getEpisodeKey everywhere (remove,
+	// played-cleanup, context menu, reorder). Keeping it unique on add makes those
+	// lookups unambiguous.
 	const isAlreadyQueued = (episodes: Episode[], episode: Episode) =>
-		episodes.some((e) => e.title === episode.title);
+		episodes.some((e) => isSameEpisode(e, episode));
 
 	function move(from: number, to: number) {
 		const { episodes } = get(store);
@@ -252,12 +253,12 @@ export const queue = (() => {
 	return {
 		subscribe,
 		update,
-		// Enforce the title-unique invariant on every set (load, import, sync),
-		// not just on incremental adds.
+		// Enforce the unique invariant on every set (load, import, sync), not just
+		// on incremental adds.
 		set: (playlist: Playlist) =>
 			setStore({
 				...playlist,
-				episodes: dedupeEpisodesByTitle(playlist.episodes),
+				episodes: dedupeEpisodesByKey(playlist.episodes),
 			}),
 		add: (episode: Episode) => {
 			update((queue) => {
@@ -269,7 +270,7 @@ export const queue = (() => {
 		},
 		remove: (episode: Episode) => {
 			update((queue) => {
-				queue.episodes = queue.episodes.filter((e) => e.title !== episode.title);
+				queue.episodes = queue.episodes.filter((e) => !isSameEpisode(e, episode));
 				return queue;
 			});
 		},
@@ -445,11 +446,11 @@ export function subscribeQueueToCurrentEpisode(): Unsubscriber {
 		if (!episode) return;
 
 		const { episodes } = get(queue);
-		const episodeIsInQueue = episodes.some((e) => e.title === episode.title);
+		const episodeIsInQueue = episodes.some((e) => isSameEpisode(e, episode));
 		if (!episodeIsInQueue) return;
 
 		queue.update((playlist) => {
-			playlist.episodes = playlist.episodes.filter((e) => e.title !== episode.title);
+			playlist.episodes = playlist.episodes.filter((e) => !isSameEpisode(e, episode));
 			return playlist;
 		});
 	});
@@ -460,9 +461,9 @@ function addEpisodeToQueue(episode: Episode) {
 	if (!autoQueueEnabled()) return;
 
 	queue.update((playlist) => {
-		// Keep the queue title-unique: a previously-played episode that is already
-		// queued stays in place rather than being re-prepended.
-		if (playlist.episodes.some((e) => e.title === episode.title)) {
+		// Keep the queue unique: a previously-played episode that is already queued
+		// stays in place rather than being re-prepended.
+		if (playlist.episodes.some((e) => isSameEpisode(e, episode))) {
 			return playlist;
 		}
 

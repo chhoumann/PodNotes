@@ -1,8 +1,8 @@
-# [PodNotes](https://chhoumann.github.io/PodNotes)
+# [PodNotes](https://podnotes.obsidian.guide)
 
-<img src="https://github.com/chhoumann/PodNotes/blob/master/docs/docs/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
+<img src="docs/public/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
 
-<h3 align="center">You can find the documentation <a href="https://chhoumann.github.io/PodNotes">here</a>.</h3>
+<h3 align="center">You can find the documentation <a href="https://podnotes.obsidian.guide">here</a>.</h3>
 
 ## Demo Video
 [![Demo video](https://img.youtube.com/vi/SGLfuN15uJY/0.jpg)](https://www.youtube.com/watch?v=SGLfuN15uJY)
@@ -15,7 +15,7 @@ Here are the features that will help you do that 👇.
 
 ## Features
 
-- Mobile friendly — works on iOS and Android, including offline playback of local files and downloads
+- Mobile friendly - works on iOS and Android, including offline playback of local files and downloads
 - Podcast player built into Obsidian, for both audio and video episodes
 - Add any publicly available podcast through search, or custom feeds by URL
 - Track played episodes & playback progress, with continuous resume
@@ -32,7 +32,7 @@ Here are the features that will help you do that 👇.
 
 **This plugin is in the Obsidian community plugin store. You can find it by searching in the store.**
 
-Other installation options can be found in the [documentation](https://chhoumann.github.io/PodNotes).
+Other installation options can be found in the [documentation](https://podnotes.obsidian.guide).
 
 ## Development
 
@@ -55,36 +55,36 @@ vault automatically.
 
 ### Demo
 
-![Demo](docs/docs/resources/demo.gif)
+![Demo](docs/public/resources/demo.gif)
 
 ### Podcast Grid
 
-![Podcast Grid](docs/docs/resources/podcast_grid.png)
+![Podcast Grid](docs/public/resources/podcast_grid.png)
 
 ### Episode List
 
-![Episode List](docs/docs/resources/episode_list.png)
+![Episode List](docs/public/resources/episode_list.png)
 
 ### Player
 
-![Player](docs/docs/resources/player.png)
+![Player](docs/public/resources/player.png)
 
 ### Episode notes (Bases-friendly)
 
-![Episode note](docs/docs/resources/podcast_note.png)
+![Episode note](docs/public/resources/podcast_note.png)
 
 ### Timestamps
 
-![Timestamps](docs/docs/resources/timestamps.png)
+![Timestamps](docs/public/resources/timestamps.png)
 
 ### Transcripts with speaker labels
 
-![Transcript with speaker labels](docs/docs/resources/transcript_diarization.png)
+![Transcript with speaker labels](docs/public/resources/transcript_diarization.png)
 
 ### Browse your library with Bases
 
-![Bases view of episode notes](docs/docs/resources/bases_view.png)
+![Bases view of episode notes](docs/public/resources/bases_view.png)
 
 ### Podcast search
 
-![Podcast Search](docs/docs/resources/podcast_search.png)
+![Podcast Search](docs/public/resources/podcast_search.png)

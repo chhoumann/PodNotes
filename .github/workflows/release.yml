@@ -47,9 +47,6 @@ jobs:
         npm run typecheck
         npm run test
         npm run docs:build
-      setup-python: true
-      python-version: "3.x"
-      docs-requirements: docs/requirements.txt
     secrets:
       # Optional: unset secrets resolve to '' and the notify job skips them.
       slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
