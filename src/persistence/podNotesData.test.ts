@@ -294,11 +294,11 @@ describe("PodNotes data schema", () => {
 		expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
 	});
 
-	it.each([[], "data", 42, true])("fails closed for malformed root %p", (value) => {
+	it.each([[[]], ["data"], [42], [true]])("fails closed for malformed root %o", (value) => {
 		expect(() => decodePodNotesData(value)).toThrowError(PodNotesDataError);
 	});
 
-	it.each([0, -1, 1.5, "1", null])("fails closed for invalid schema version %p", (version) => {
+	it.each([0, -1, 1.5, "1", null])("fails closed for invalid schema version %o", (version) => {
 		expect(() => decodePodNotesData({ schemaVersion: version })).toThrowError(
 			/invalid schemaVersion/,
 		);
@@ -308,5 +308,104 @@ describe("PodNotes data schema", () => {
 		expect(() => decodePodNotesData({ schemaVersion: 3 })).toThrowError(
 			/schema v3 requires a newer version/,
 		);
+	});
+});
+
+/** An existing listener's data.json, apart from the timestamp setting under test. */
+const listenerData = {
+	savedFeeds: {
+		"Test Podcast": {
+			title: "Test Podcast",
+			url: "https://example.com/feed.xml",
+			artworkUrl: "https://example.com/artwork.jpg",
+		},
+	},
+	podNotes: {},
+	defaultPlaybackRate: 1.5,
+	defaultVolume: 0.8,
+	hidePlayedEpisodes: false,
+	episodeListLimit: 10,
+	playedEpisodes: {
+		"Test Podcast::Episode 1": {
+			title: "Episode 1",
+			podcastName: "Test Podcast",
+			time: 1830,
+			duration: 3600,
+			finished: false,
+		},
+	},
+	favorites: {
+		icon: "lucide-star",
+		name: "Favorites",
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+		episodes: [],
+	},
+	queue: {
+		icon: "list-ordered",
+		name: "Queue",
+		shouldEpisodeRemoveAfterPlay: true,
+		shouldRepeat: false,
+		episodes: [],
+	},
+	autoQueue: true,
+	playlists: {},
+	skipBackwardLength: 15,
+	skipForwardLength: 30,
+	note: { path: "Podcasts/{{title}}.md", template: "# {{title}}\n\n{{description}}" },
+	download: { path: "Podcasts/{{podcast}}/{{title}}" },
+	downloadedEpisodes: {},
+	localFiles: {
+		icon: "folder",
+		name: "Local Files",
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+		episodes: [],
+	},
+};
+
+describe("timestamp template (#345)", () => {
+	it.each([null, undefined])("captures timestamps as links on a new install (%o)", (data) => {
+		const decoded = decodePodNotesData(data);
+
+		expect(decoded.settings.timestamp.template).toBe("- {{linktime}} ");
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.changed).toBe(true);
+	});
+
+	it.each(["- {{time}} ", "* {{time:mm:ss}} - "])(
+		"keeps the saved template %o through load and save",
+		(template) => {
+			const decoded = decodePodNotesData({
+				...listenerData,
+				schemaVersion: 2,
+				openAISecretId: "",
+				deepgramSecretId: "",
+				timestamp: { template, offset: 0 },
+			});
+			const persisted = encodePodNotesData(decoded.settings, decoded.unknownFields);
+
+			expect(decoded.warnings).toEqual([]);
+			expect(decoded.changed).toBe(false);
+			expect(decoded.settings.timestamp).toEqual({ template, offset: 0 });
+			expect(persisted.timestamp).toEqual({ template, offset: 0 });
+		},
+	);
+
+	it.each([
+		["no timestamp setting", listenerData, 0, []],
+		["only a timestamp offset", { ...listenerData, timestamp: { offset: 5 } }, 5, []],
+		[
+			"a non-string template",
+			{ ...listenerData, timestamp: { template: 42, offset: 0 } },
+			0,
+			["timestamp.template: expected a string"],
+		],
+	])("keeps plain timestamps for older data with %s", (_case, data, offset, warnings) => {
+		const decoded = decodePodNotesData(data);
+
+		expect(decoded.sourceVersion).toBe(0);
+		expect(decoded.settings.timestamp).toEqual({ template: "- {{time}} ", offset });
+		expect(decoded.warnings).toEqual(warnings);
 	});
 });

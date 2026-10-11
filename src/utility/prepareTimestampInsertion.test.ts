@@ -127,7 +127,7 @@ describe("prepareTimestampForInsertion", () => {
 		expect(result).toBe("[1:23](x) \\| note more");
 	});
 
-	it("leaves the default '- {{time}} ' style capture unchanged in a table", () => {
+	it("leaves a plain '- {{time}} ' capture unchanged in a table", () => {
 		const { getLine, lineCount } = fromLines(TABLE);
 		const result = prepareTimestampForInsertion("- 0:01:23 ", {
 			getLine,

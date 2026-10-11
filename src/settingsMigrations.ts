@@ -3,14 +3,12 @@ import { DIARIZATION_PROVIDERS, type DiarizationProviderId } from "./services/di
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
- * Settings migrations applied when settings are loaded from disk.
+ * Settings migrations that the persistence codec
+ * (`src/persistence/settingsCodec.ts`) applies while decoding `data.json`.
  *
- * These run in `PodNotes.loadSettings` after the persisted `data.json` is merged
- * over `DEFAULT_SETTINGS`. Changing a default alone is NOT enough for existing
- * users: the plugin persists the whole settings object, so anyone who has used
- * PodNotes already has the old value written to `data.json`, which overrides the
- * new default on load. A migration rewrites that stored value in memory so the
- * change actually reaches existing users (it is re-persisted on the next save).
+ * PodNotes persists the whole settings object, so a changed default reaches only
+ * new installs. Existing users keep their stored value unless a migration
+ * rewrites it, which we do only when the old stored value is broken.
  *
  * This module is pure (no Obsidian/UI dependencies) so the risky rewrite logic is
  * unit-testable.
@@ -108,9 +106,8 @@ type StoredTranscript = {
 /**
  * Backfill the transcript settings with the diarization defaults (issue #168).
  *
- * `loadSettings` replaces the whole persisted `transcript` object, so an existing
- * user who has `{ path, template }` saved would otherwise get an `undefined`
- * `transcript.diarization` and crash where the service reads it. This deep-merges
+ * An existing user who has only `{ path, template }` saved would otherwise get an
+ * `undefined` `transcript.diarization` and crash where the service reads it. This deep-merges
  * the new nested default while preserving any path/template the user configured,
  * and clamps a malformed/unknown provider back to the default so a hand-edited or
  * corrupted `data.json` can't select a provider that does not exist.
@@ -151,8 +148,7 @@ type StoredFeedNote = { path?: string | null; template?: string | null };
 
 /**
  * Backfill the feed-note settings so a partially-persisted `feedNote` is repaired
- * on load (issue ST-08). `loadSettings` shallow-merges the persisted object over
- * the default, so an old `data.json` holding only `{ path }` (or a hand-edited one
+ * on load (issue ST-08). An old `data.json` holding only `{ path }` (or a hand-edited one
  * with a `null` field) would leave `template` undefined and crash where
  * createFeedNote calls `template.replace(...)`. This coalesces any missing/null/
  * non-string field back to the default while preserving a deliberately empty
