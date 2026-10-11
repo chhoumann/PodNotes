@@ -168,7 +168,8 @@ Changing the current rate does not change that saved default.
 `stop()` pauses without resetting the position. `start()` on a finished episode starts it over.
 `skipBackward()` and `skipForward()` use **Skip backward length (s)** and **Skip forward length (s)**.
 Invalid skip lengths fall back to 15 seconds. Backward skips stop at zero.
-With a known duration, forward skips stop up to 0.25 seconds before the end without moving backward.
+With a known duration, a forward skip goes no further than 0.25 seconds before the end and never moves backward.
+Playback continues, so a playing episode finishes and the queue advances.
 
 `increasePlaybackRate()` and `decreasePlaybackRate()` adjust the current playback
 speed in `0.1x` steps. `resetPlaybackRate()` returns playback to the default

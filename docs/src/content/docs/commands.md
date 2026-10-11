@@ -37,7 +37,8 @@ It requires a loaded episode and works while paused. The default skip length is 
 ## Skip Forward
 
 `podnotes:skip-forward` seeks forward by **Skip forward length (s)**.
-When duration is known, a forward skip stops up to 0.25 seconds before the end without rewinding an episode already nearer its end.
+When duration is known, a forward skip goes no further than 0.25 seconds before the end and never rewinds an episode already nearer its end.
+Playback continues, so a playing episode finishes and the queue advances.
 It requires a loaded episode and works while paused. The default skip length is 15 seconds.
 
 ## Download Playing Episode
