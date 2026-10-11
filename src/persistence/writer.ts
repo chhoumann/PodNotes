@@ -177,9 +177,7 @@ export class DataFileWriter<Doc> {
 
 		this.lastSaveAt = this.clock.now();
 		const disk = await this.file.read(this.base);
-		if (this.failedWrite && disk && jsonValuesEqual(disk, this.failedWrite.written)) {
-			this.settle(this.failedWrite.local, this.failedWrite.written);
-		}
+		this.settleFailedWrite(disk);
 		const base = this.base;
 		// Captured after the read, so edits made while it was in flight are written too.
 		const local = this.file.local();
@@ -218,6 +216,13 @@ export class DataFileWriter<Doc> {
 		);
 	}
 
+	/** A failed write the file shows on disk after all: memory and base take it, once. */
+	private settleFailedWrite(disk: Doc | null): void {
+		if (!this.failedWrite || !disk || !jsonValuesEqual(disk, this.failedWrite.written)) return;
+		this.settle(this.failedWrite.local, this.failedWrite.written);
+		this.failedWrite = null;
+	}
+
 	private async applyExternalChange(): Promise<void> {
 		let disk: Doc | null;
 		try {
@@ -229,9 +234,7 @@ export class DataFileWriter<Doc> {
 		}
 		// A missing file is not a request to reset everything.
 		if (!disk || this.unloaded) return;
-		if (this.failedWrite && jsonValuesEqual(disk, this.failedWrite.written)) {
-			this.settle(this.failedWrite.local, this.failedWrite.written);
-		}
+		this.settleFailedWrite(disk);
 
 		const base = this.base;
 		if (base && jsonValuesEqual(disk, base)) return;
