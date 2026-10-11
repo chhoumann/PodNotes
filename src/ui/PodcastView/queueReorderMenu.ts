@@ -1,4 +1,5 @@
 import type { Episode } from "src/types/Episode";
+import { isSameEpisode } from "src/utility/episodeKey";
 import type { IconType } from "src/types/IconType";
 import { ViewState } from "src/types/ViewState";
 
@@ -26,7 +27,7 @@ export function buildQueueReorderMenuItems(
 ): QueueReorderMenuItem[] {
 	if (viewState !== ViewState.Player) return [];
 
-	const index = queueEpisodes.findIndex((e) => e.title === episode.title);
+	const index = queueEpisodes.findIndex((e) => isSameEpisode(e, episode));
 	if (index === -1 || queueEpisodes.length <= 1) return [];
 
 	const items: QueueReorderMenuItem[] = [];

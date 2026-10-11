@@ -18,7 +18,7 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
-import { isSameStoredEpisode } from "src/utility/episodeKey";
+import { isSameEpisode, isSameStoredEpisode } from "src/utility/episodeKey";
 import { isLocalFile } from "src/utility/isLocalFile";
 import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
@@ -191,12 +191,9 @@ export default function spawnEpisodeContextMenu(
 	}
 
 	if (!disabledMenuItems?.queue) {
-		// The queue identifies episodes by TITLE everywhere (queue.add dedupes and
-		// queue.remove filters by title; see src/store/index.ts), so this membership
-		// check and the reorder lookup below must match by title too. A composite-key
-		// check would offer "Add to Queue" for a same-titled episode from another
-		// podcast, but queue.add would then no-op (Codex review #214).
-		const episodeIsInQueue = get(queue).episodes.find((e) => e.title === episode.title);
+		// Match the queue's own identity (queue.add and queue.remove), so a same-titled
+		// episode from another podcast is offered "Add to Queue".
+		const episodeIsInQueue = get(queue).episodes.some((e) => isSameEpisode(e, episode));
 		menu.addItem((item) =>
 			item
 				.setIcon("list-ordered")
@@ -231,8 +228,8 @@ export default function spawnEpisodeContextMenu(
 							// Resolve the index live: the queue can shift (e.g. the
 							// episode ends and playNext advances it) between opening
 							// the menu and clicking.
-							const index = get(queue).episodes.findIndex(
-								(e) => e.title === episode.title,
+							const index = get(queue).episodes.findIndex((e) =>
+								isSameEpisode(e, episode),
 							);
 							if (index === -1) return;
 
