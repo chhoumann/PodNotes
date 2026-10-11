@@ -5,21 +5,25 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type PodNotes from "src/main";
+import { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import { plugin, savedFeeds } from "src/store";
-import { fetchJsonWithTimeout } from "src/utility/networkRequest";
+import { fetchJsonWithTimeout, fetchTextWithTimeout } from "src/utility/networkRequest";
+import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import lookupAppleNewsToday from "../../../tests/fixtures/itunes/lookup-apple-news-today.json";
 import lookupHubermanLab from "../../../tests/fixtures/itunes/lookup-huberman-lab.json";
 import searchAppleNews from "../../../tests/fixtures/itunes/search-apple-news.json";
 import searchHubermanLab from "../../../tests/fixtures/itunes/search-huberman-lab.json";
 import searchPlanetMoney from "../../../tests/fixtures/itunes/search-planet-money.json";
+import searchPlanetMoneyNamesake from "../../../tests/fixtures/itunes/search-planet-money-namesake.json";
 import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
 
 vi.mock("src/utility/networkRequest", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("src/utility/networkRequest")>();
-	return { ...actual, fetchJsonWithTimeout: vi.fn() };
+	return { ...actual, fetchJsonWithTimeout: vi.fn(), fetchTextWithTimeout: vi.fn() };
 });
 
 const fetchJsonMock = vi.mocked(fetchJsonWithTimeout);
+const fetchTextMock = vi.mocked(fetchTextWithTimeout);
 
 function renderGrid() {
 	const view = render(PodcastQueryGrid);
@@ -53,6 +57,7 @@ describe("PodcastQueryGrid", () => {
 		plugin.set({ feedUrls: {} } as PodNotes);
 		savedFeeds.set({});
 		fetchJsonMock.mockReset();
+		fetchTextMock.mockReset();
 		vi.restoreAllMocks();
 	});
 
@@ -63,6 +68,47 @@ describe("PodcastQueryGrid", () => {
 		await findByRole("button", { name: "Add Planet Money Summer School podcast" });
 
 		expect(getAllByRole("button", { name: "Add Planet Money podcast" })).toHaveLength(1);
+	});
+
+	test("adding a namesake keeps the saved podcast", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		fetchJsonMock.mockResolvedValue(searchPlanetMoneyNamesake);
+
+		const { findAllByRole, getByRole } = paste("planet money");
+		const [npr] = await findAllByRole("button", { name: "Add Planet Money podcast" });
+		await fireEvent.click(npr);
+		await fireEvent.click(getByRole("button", { name: "Add Planet Money podcast" }));
+
+		expect(get(savedFeeds)["Planet Money"]).toMatchObject({
+			url: "https://feeds.npr.org/510289/podcast.xml",
+			collectionId: "290783428",
+		});
+		expect(notice).toHaveBeenCalledWith(
+			"You already follow a different podcast called Planet Money.",
+		);
+	});
+
+	test("adding a saved private feed again keeps it as saved", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const feedUrls = new FeedUrlRepository(new obsidian.SecretStorage());
+		plugin.set({ feedUrls } as PodNotes);
+		const privateUrl = "https://www.patreon.com/rss/show?auth=se-cret";
+		const saved = {
+			title: "Private Show",
+			url: privateFeedPlaceholder("Private Show"),
+			urlSecretId: feedUrls.store(privateUrl),
+			artworkUrl: "",
+		};
+		savedFeeds.set({ "Private Show": saved });
+		fetchTextMock.mockResolvedValue(
+			"<rss><channel><title>Private Show</title></channel></rss>",
+		);
+
+		const { findByRole } = paste(privateUrl);
+		await fireEvent.click(await findByRole("button", { name: "Add Private Show podcast" }));
+
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		expect(notice).not.toHaveBeenCalled();
 	});
 
 	test("keeps the newest search when an older one answers last", async () => {
