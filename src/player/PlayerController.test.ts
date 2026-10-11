@@ -26,6 +26,7 @@ const C = episode("C");
 const VIDEO = episode("V", { streamUrl: "https://cdn.example.com/V.mp4", mediaType: "video" });
 
 let now = 0;
+const subscriptions: Array<() => void> = [];
 
 function setup(settings: Partial<IPodNotesSettings> = {}) {
 	const doc = new FakeDocument();
@@ -48,7 +49,7 @@ function setup(settings: Partial<IPodNotesSettings> = {}) {
 	const writes = (ep: Episode) => {
 		const seen: Array<{ time: number; finished: boolean; checkpoint: boolean }> = [];
 		let initial = true;
-		playedEpisodes.subscribe((played) => {
+		const unsubscribe = playedEpisodes.subscribe((played) => {
 			const record = played[getEpisodeKey(ep)];
 			if (!initial && record) {
 				seen.push({
@@ -59,6 +60,7 @@ function setup(settings: Partial<IPodNotesSettings> = {}) {
 			}
 		});
 		initial = false;
+		subscriptions.push(unsubscribe);
 		return seen;
 	};
 	return {
@@ -116,6 +118,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
 	vi.restoreAllMocks();
 });
 

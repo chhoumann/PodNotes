@@ -23,21 +23,21 @@
 	} from "src/utility/playbackRate";
 
 	const player = get(plugin).player;
-	const state = player.state;
+	const playerState = player.state;
 
 	// Hide the player's Queue list only when queue automation is off AND the queue
 	// is empty (issue #108), otherwise show it (default-on state or a non-empty
 	// manual queue).
 	$: showQueue = $plugin?.settings?.autoQueue !== false || $queue.episodes.length > 0;
 
-	$: episode = $state.episode as Episode;
+	$: episode = $playerState.episode as Episode;
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
 	$: titleCharCount = episode.title.length;
 	// The video plays in the main window, so a view in a popout shows the artwork.
-	$: showVideo = $state.mediaType === "video" && inMainWindow;
-	$: paused = $state.status !== "playing";
-	$: isLoading = $state.status === "loading";
-	$: loadError = $state.status === "error" ? "Could not load this episode's media." : null;
+	$: showVideo = $playerState.mediaType === "video" && inMainWindow;
+	$: paused = $playerState.status !== "playing";
+	$: isLoading = $playerState.status === "loading";
+	$: loadError = $playerState.status === "error" ? "Could not load this episode's media." : null;
 
 	let isHoveringArtwork: boolean = false;
 	let root: HTMLDivElement;
@@ -69,14 +69,14 @@
 		detail: { event, percent },
 	}: CustomEvent<{ event: MouseEvent | KeyboardEvent; percent?: number }>) {
 		if (typeof percent === "number") {
-			player.seek(percent * $state.duration);
+			player.seek(percent * $playerState.duration);
 			return;
 		}
 
 		if (event instanceof MouseEvent) {
 			const progressbar = event.currentTarget as HTMLDivElement;
 			const ratio = progressbar.offsetWidth ? event.offsetX / progressbar.offsetWidth : 0;
-			player.seek(ratio * $state.duration);
+			player.seek(ratio * $playerState.duration);
 		}
 	}
 
@@ -207,15 +207,15 @@
 	</h2>
 
 	<div class="status-container">
-		<span>{formatSeconds($state.currentTime, "HH:mm:ss")}</span>
+		<span>{formatSeconds($playerState.currentTime, "HH:mm:ss")}</span>
 		<Progressbar
 			on:click={onClickProgressbar}
-			value={$state.currentTime}
-			max={$state.duration}
+			value={$playerState.currentTime}
+			max={$playerState.duration}
 			ariaLabel="Seek within episode"
-			valueText={`${formatSeconds($state.currentTime, "HH:mm:ss")} of ${formatSeconds($state.duration, "HH:mm:ss")}`}
+			valueText={`${formatSeconds($playerState.currentTime, "HH:mm:ss")} of ${formatSeconds($playerState.duration, "HH:mm:ss")}`}
 		/>
-		<span>{formatSeconds(Math.max(0, $state.duration - $state.currentTime), "HH:mm:ss")}</span>
+		<span>{formatSeconds(Math.max(0, $playerState.duration - $playerState.currentTime), "HH:mm:ss")}</span>
 	</div>
 
 	<div class="controls-container">
@@ -235,19 +235,19 @@
 
 	<div class="slider-stack">
 		<div class="volume-container">
-			<span>Volume: {Math.round($state.volume * 100)}%</span>
+			<span>Volume: {Math.round($playerState.volume * 100)}%</span>
 			<Slider
 				on:change={(event) => player.setVolume(event.detail.value)}
-				value={$state.volume}
+				value={$playerState.volume}
 				limits={[0, 1, 0.05]}
 			/>
 		</div>
 
 		<div class="playbackrate-container">
-			<span>{$state.playbackRate}x</span>
+			<span>{$playerState.playbackRate}x</span>
 			<Slider
 				on:change={(event) => player.setPlaybackRate(event.detail.value)}
-				value={$state.playbackRate}
+				value={$playerState.playbackRate}
 				limits={[PLAYBACK_RATE_MIN, PLAYBACK_RATE_MAX, PLAYBACK_RATE_STEP]}
 			/>
 		</div>
@@ -256,7 +256,7 @@
 	<div class="lists-container">
 		<ChapterList
 			{chapters}
-			currentTime={$state.currentTime}
+			currentTime={$playerState.currentTime}
 			on:seek={(event) => player.seek(event.detail.time)}
 		/>
 

@@ -10,7 +10,7 @@ import {
 } from "src/utility/mediaType";
 
 /** What one load plays. `src` is empty when there is nothing to play, such as a missing vault file. */
-export interface MediaSource {
+export interface PlaybackSource {
 	src: string;
 	mediaType: EpisodeMediaType;
 }
@@ -28,7 +28,7 @@ export function selectSource(
 	episode: Episode,
 	downloaded: { [podcastName: string]: DownloadedEpisode[] },
 	vault: Vault,
-): MediaSource {
+): PlaybackSource {
 	const ownPath = (episode as Partial<DownloadedEpisode>).filePath;
 	if (ownPath) {
 		return {

@@ -8,7 +8,7 @@ import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
-import { selectSource, type MediaSource } from "./source";
+import { selectSource, type PlaybackSource } from "./source";
 
 export type PlayerStatus =
 	| "empty"
@@ -124,7 +124,7 @@ export class PlayerController {
 			episode,
 			mediaType: getEpisodeMediaType(episode),
 			currentTime: this.resumeTime(episode),
-			duration: this.savedProgress(episode)?.duration || episode.duration || 0,
+			duration: this.startDuration(episode),
 		});
 	}
 
@@ -276,9 +276,9 @@ export class PlayerController {
 		queue.remove(episode);
 	}
 
-	private load(episode: Episode, source: MediaSource, time: number, endTime?: number): void {
+	private load(episode: Episode, source: PlaybackSource, time: number, endTime?: number): void {
 		this.session = null;
-		const duration = this.savedProgress(episode)?.duration || episode.duration || 0;
+		const duration = this.startDuration(episode);
 		if (!source.src) {
 			this.release();
 			this.setState({
@@ -551,6 +551,11 @@ export class PlayerController {
 			return 0;
 		}
 		return saved.time;
+	}
+
+	/** The length shown until the metadata loads. */
+	private startDuration(episode: Episode): number {
+		return this.savedProgress(episode)?.duration || episode.duration || 0;
 	}
 
 	private setState(patch: Partial<PlayerState>): void {
