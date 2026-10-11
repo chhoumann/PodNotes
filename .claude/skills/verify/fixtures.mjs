@@ -3,6 +3,7 @@
 // local audio file.
 //
 //   node .claude/skills/verify/fixtures.mjs feed           start or reuse the feed server, print the feed URL
+//   node .claude/skills/verify/fixtures.mjs feed-b         same server, print a second feed whose episode titles repeat the first's
 //   node .claude/skills/verify/fixtures.mjs audio [path]   write a 60 s WAV into this worktree's vault
 //                                                          (default path: "Fixtures/Local Fixture.wav")
 //   node .claude/skills/verify/fixtures.mjs stop           stop the feed server
@@ -23,8 +24,10 @@ const port = 20000 + (crypto.createHash("sha256").update(root).digest().readUInt
 const host = "127.0.0.1.nip.io";
 const base = `http://${host}:${port}`;
 const feedUrl = `${base}/feed.xml`;
+const feedBUrl = `${base}/feed-b.xml`;
 const local = `http://127.0.0.1:${port}`;
 const FEED_TITLE = "PodNotes Fixture";
+const FEED_B_TITLE = "PodNotes Fixture B";
 
 function wav(seconds = 60) {
 	const rate = 8000;
@@ -51,26 +54,26 @@ function wav(seconds = 60) {
 	return buffer;
 }
 
-/** @param {number} audioBytes */
-function feedXml(audioBytes) {
+/** @param {number} audioBytes @param {string} title @param {string} prefix */
+function feedXml(audioBytes, title, prefix) {
 	/** @param {number} n @param {string} date */
 	const item = (n, date) => `
 		<item>
 			<title>Fixture Episode ${n}</title>
-			<guid isPermaLink="false">podnotes-fixture-${n}</guid>
+			<guid isPermaLink="false">podnotes-fixture${prefix}-${n}</guid>
 			<pubDate>${date}</pubDate>
 			<description>Fixture episode ${n} for PodNotes verification.</description>
-			<enclosure url="${base}/episode-${n}.wav" type="audio/wav" length="${audioBytes}"/>
+			<enclosure url="${base}${prefix}/episode-${n}.wav" type="audio/wav" length="${audioBytes}"/>
 			<itunes:duration>60</itunes:duration>
 		</item>`;
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
 	<channel>
-		<title>${FEED_TITLE}</title>
+		<title>${title}</title>
 		<link>${base}/</link>
 		<description>A local feed for PodNotes verification.</description>
 		<itunes:author>PodNotes</itunes:author>
-		<itunes:image href="${base}/artwork.svg"/>
+		<itunes:image href="${base}${prefix}/artwork.svg"/>
 		${item(2, "Sat, 10 Oct 2026 09:00:00 GMT")}
 		${item(1, "Fri, 09 Oct 2026 09:00:00 GMT")}
 	</channel>
@@ -78,19 +81,30 @@ function feedXml(audioBytes) {
 `;
 }
 
-const ARTWORK = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
-	<rect width="600" height="600" fill="#7c3aed"/>
-	<text x="300" y="320" font-family="sans-serif" font-size="64" fill="#fff" text-anchor="middle">${FEED_TITLE}</text>
+/** @param {string} title @param {string} color */
+const artwork = (
+	title,
+	color,
+) => `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+	<rect width="600" height="600" fill="${color}"/>
+	<text x="300" y="320" font-family="sans-serif" font-size="64" fill="#fff" text-anchor="middle">${title}</text>
 </svg>`;
 
 function serve() {
 	const audio = wav();
 	/** @type {Record<string, [string, Buffer]>} */
 	const routes = {
-		"/feed.xml": ["application/rss+xml", Buffer.from(feedXml(audio.length))],
-		"/artwork.svg": ["image/svg+xml", Buffer.from(ARTWORK)],
+		"/feed.xml": ["application/rss+xml", Buffer.from(feedXml(audio.length, FEED_TITLE, ""))],
+		"/artwork.svg": ["image/svg+xml", Buffer.from(artwork(FEED_TITLE, "#7c3aed"))],
 		"/episode-1.wav": ["audio/wav", audio],
 		"/episode-2.wav": ["audio/wav", audio],
+		"/feed-b.xml": [
+			"application/rss+xml",
+			Buffer.from(feedXml(audio.length, FEED_B_TITLE, "/b")),
+		],
+		"/b/artwork.svg": ["image/svg+xml", Buffer.from(artwork(FEED_B_TITLE, "#0f766e"))],
+		"/b/episode-1.wav": ["audio/wav", audio],
+		"/b/episode-2.wav": ["audio/wav", audio],
 	};
 	const server = http.createServer((request, response) => {
 		if (request.method === "POST" && request.url === "/__stop") {
@@ -135,14 +149,15 @@ function serve() {
 
 async function feedIsUp() {
 	try {
-		const response = await fetch(`${local}/feed.xml`, { signal: AbortSignal.timeout(1000) });
-		return response.ok && (await response.text()).includes(FEED_TITLE);
+		const response = await fetch(`${local}/feed-b.xml`, { signal: AbortSignal.timeout(1000) });
+		return response.ok && (await response.text()).includes(FEED_B_TITLE);
 	} catch {
 		return false;
 	}
 }
 
-async function startFeed() {
+/** @param {string} url */
+async function startFeed(url) {
 	if (!(await feedIsUp())) {
 		const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "serve"], {
 			detached: true,
@@ -170,7 +185,7 @@ async function startFeed() {
 	await dns.lookup(host).catch(() => {
 		console.error(`${host} does not resolve here; PodNotes needs DNS to reach this feed URL.`);
 	});
-	console.log(feedUrl);
+	console.log(url);
 }
 
 async function writeAudio(vaultRelativePath = "Fixtures/Local Fixture.wav") {
@@ -192,10 +207,11 @@ async function stopFeed() {
 const [verb, arg] = process.argv.slice(2);
 try {
 	if (verb === "serve") serve();
-	else if (verb === "feed") await startFeed();
+	else if (verb === "feed") await startFeed(feedUrl);
+	else if (verb === "feed-b") await startFeed(feedBUrl);
 	else if (verb === "audio") await writeAudio(arg);
 	else if (verb === "stop") await stopFeed();
-	else throw new Error("Usage: fixtures.mjs feed | audio [vault-relative path] | stop");
+	else throw new Error("Usage: fixtures.mjs feed | feed-b | audio [vault-relative path] | stop");
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));
 	process.exitCode = 1;

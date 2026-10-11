@@ -97,6 +97,8 @@ read state.
 - **Fixtures.** `node .claude/skills/verify/fixtures.mjs feed` serves the
   `PodNotes Fixture` podcast from 127.0.0.1 and prints its feed URL. It has
   `Fixture Episode 1` and `Fixture Episode 2`, 60 s WAV enclosures each.
+  `node .claude/skills/verify/fixtures.mjs feed-b` prints a second feed,
+  `PodNotes Fixture B`, whose episode titles repeat the first feed's.
   `node .claude/skills/verify/fixtures.mjs audio` writes
   `Fixtures/Local Fixture.wav` (60 s) into the vault.
 
@@ -172,7 +174,7 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `click`, `type`,
   `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
-- `.claude/skills/verify/fixtures.mjs` runs as `feed`, `audio [vault path]` or
-  `stop`. The feed URL uses `127.0.0.1.nip.io`, a public DNS name for
+- `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`,
+  `audio [vault path]` or `stop`. The feed URL uses `127.0.0.1.nip.io`, a public DNS name for
   127.0.0.1, because PodNotes refuses literal loopback hosts. Its port is fixed
   per worktree, so a saved feed survives a server restart.
