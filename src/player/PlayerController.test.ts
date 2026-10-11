@@ -286,6 +286,55 @@ describe("switching episodes (#353)", () => {
 	});
 });
 
+describe("a new load shows its own position and length until its metadata loads (#94)", () => {
+	test("after a switch away from a playing episode", () => {
+		saved(B, 300, 1800);
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		reach(media(), 42);
+
+		player.play(B);
+
+		expect(state()).toMatchObject({
+			status: "loading",
+			episode: B,
+			currentTime: 300,
+			duration: 1800,
+		});
+	});
+
+	test("after the queue advances at a natural end", () => {
+		const next = episode("N", { duration: 900 });
+		queue.set({ ...get(queue), episodes: [next] });
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media(), 60);
+		reach(media(), 60);
+		pausedByBrowser(media());
+
+		media().emit("ended");
+
+		expect(state()).toMatchObject({
+			status: "loading",
+			episode: next,
+			currentTime: 0,
+			duration: 900,
+		});
+	});
+
+	test("with no saved or feed length, zero", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		reach(media(), 42);
+
+		player.play(B);
+
+		expect(state()).toMatchObject({ currentTime: 0, duration: 0 });
+	});
+});
+
 describe("stale events", () => {
 	test("ignores events from an element a video replaced", () => {
 		const { player, doc, state } = setup();

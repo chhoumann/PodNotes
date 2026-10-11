@@ -91,23 +91,6 @@ describe("EpisodePlayer", () => {
 		expect(container.querySelector(".podcast-artwork-isloading-overlay")).toBeNull();
 	});
 
-	test("shows the next episode's own progress, not the last one's end (#94)", async () => {
-		const { container, state } = renderPlayer({ currentTime: 3600, duration: 3600 });
-		expect(barWidth(container)).toBe("100%");
-
-		state.update((s) => ({
-			...s,
-			status: "loading",
-			episode: { ...episode, title: "Next" },
-			currentTime: 0,
-			duration: 0,
-		}));
-		await Promise.resolve();
-
-		expect(barWidth(container)).toBe("0%");
-		expect(labels(container)).toEqual(["00:00:00", "00:00:00"]);
-	});
-
 	test("clicking the artwork toggles playback", async () => {
 		const { container, player } = renderPlayer();
 
