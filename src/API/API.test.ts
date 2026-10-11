@@ -295,6 +295,33 @@ describe("API playback", () => {
 
 		expect(api.currentTime).toBe(100);
 	});
+
+	test("ignores an undefined seek before the metadata loads", () => {
+		const { api, player, media } = setup();
+		player.play(feedEpisode, { time: 115 });
+
+		api.currentTime = undefined as unknown as number;
+		media().duration = 3600;
+		media().emit("loadedmetadata");
+
+		expect(api.currentTime).toBe(115);
+		expect(media().currentTime).toBe(115);
+	});
+
+	test("ignores an undefined seek during a segment, which still stops at its end", () => {
+		const { api, player, media } = setup();
+		player.play(feedEpisode, { time: 115, endTime: 125 });
+		media().duration = 3600;
+		media().emit("loadedmetadata");
+
+		api.currentTime = undefined as unknown as number;
+		media().currentTime = 126;
+		media().emit("timeupdate");
+
+		expect(media().currentTime).toBe(125);
+		expect(media().paused).toBe(true);
+		expect(get(playedEpisodes)["Feed Podcast::Feed Episode"]).toBeUndefined();
+	});
 });
 
 describe("API volume (AP-07)", () => {
