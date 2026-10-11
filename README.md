@@ -36,7 +36,7 @@ Other installation options can be found in the [documentation](https://podnotes.
 
 ## Development
 
-- `npm run test` runs the accessibility checks and the jsdom/unit test suite.
+- `npm run test` runs the accessibility checks and the unit test suite.
 - `npm run build` type-checks and bundles the plugin.
 - `npm run test:e2e` builds the plugin, then runs the local Obsidian-backed E2E suite.
 
