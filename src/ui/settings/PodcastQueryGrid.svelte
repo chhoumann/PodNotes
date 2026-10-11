@@ -8,7 +8,11 @@
 	import FeedParser from "src/parser/feedParser";
 	import { plugin, savedFeeds } from "src/store";
 	import { get } from "svelte/store";
-	import { internPrivateFeed, resolveFeedUrl } from "src/services/privateFeeds";
+	import {
+		internPrivateFeed,
+		isSavedFeed,
+		resolveFeedUrlWithNotice,
+	} from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
 	import Text from "../obsidian/Text.svelte";
@@ -126,14 +130,31 @@
 		true,
 	);
 
+	// Saved feeds are keyed by title. Only own keys count, so a show called
+	// "toString" is not mistaken for a saved one.
+	function savedFeedTitled(
+		feeds: Record<string, PodcastFeed>,
+		title: string,
+	): PodcastFeed | undefined {
+		return Object.prototype.hasOwnProperty.call(feeds, title) ? feeds[title] : undefined;
+	}
+
+	function isSavedResult(feeds: Record<string, PodcastFeed>, podcast: PodcastFeed): boolean {
+		const saved = savedFeedTitled(feeds, podcast.title);
+		return saved !== undefined && isSavedFeed(saved, podcast.url, get(plugin).feedUrls);
+	}
+
 	function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
 		const { podcast } = event.detail;
 		const { feedUrls } = get(plugin);
-		// Saved feeds are keyed by title, so a namesake must never replace a saved
-		// feed. A saved private feed holds a placeholder URL, hence the resolve.
-		const saved = $savedFeeds[podcast.title];
+		// A namesake must never replace a saved feed. A saved private feed whose
+		// URL is missing on this device cannot be compared, so say that instead.
+		const saved = savedFeedTitled($savedFeeds, podcast.title);
 		if (saved) {
-			if (resolveFeedUrl(saved, feedUrls) !== podcast.url) {
+			if (
+				!isSavedFeed(saved, podcast.url, feedUrls) &&
+				resolveFeedUrlWithNotice(saved, feedUrls) !== null
+			) {
 				new Notice(`You already follow a different podcast called ${podcast.title}.`);
 			}
 			return;
@@ -191,8 +212,7 @@
 			<div role="listitem">
 				<PodcastResultCard
 					{podcast}
-					isSaved={typeof podcast.url === "string" &&
-						$savedFeeds[podcast.title]?.url === podcast.url}
+					isSaved={isSavedResult($savedFeeds, podcast)}
 					on:addPodcast={addPodcast}
 					on:removePodcast={removePodcast}
 				/>

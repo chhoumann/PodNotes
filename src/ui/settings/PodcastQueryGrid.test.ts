@@ -56,6 +56,27 @@ function deferred<T>() {
 // Runs the debounced handler and every response already resolved.
 const settle = () => new Promise((resolve) => setTimeout(resolve));
 
+const PRIVATE_URL = "https://www.patreon.com/rss/show?auth=se-cret";
+
+// Follows "Private Show" through PRIVATE_URL. Pasting any URL loads its RSS,
+// whose author tells the pasted card apart from the saved one.
+function followPrivateShow() {
+	const secrets = new obsidian.SecretStorage();
+	const feedUrls = new FeedUrlRepository(secrets);
+	plugin.set({ feedUrls } as PodNotes);
+	const saved = {
+		title: "Private Show",
+		url: privateFeedPlaceholder("Private Show"),
+		urlSecretId: feedUrls.store(PRIVATE_URL),
+		artworkUrl: "",
+	};
+	savedFeeds.set({ "Private Show": saved });
+	fetchTextMock.mockResolvedValue(
+		"<rss><channel><title>Private Show</title><author>Patron Host</author></channel></rss>",
+	);
+	return { saved, secrets };
+}
+
 describe("PodcastQueryGrid", () => {
 	beforeEach(() => {
 		plugin.set({ feedUrls: {} } as PodNotes);
@@ -102,27 +123,54 @@ describe("PodcastQueryGrid", () => {
 		);
 	});
 
-	test("adding a saved private feed again keeps it as saved", async () => {
-		const notice = vi.spyOn(obsidian, "Notice");
-		const feedUrls = new FeedUrlRepository(new obsidian.SecretStorage());
-		plugin.set({ feedUrls } as PodNotes);
-		const privateUrl = "https://www.patreon.com/rss/show?auth=se-cret";
-		const saved = {
-			title: "Private Show",
-			url: privateFeedPlaceholder("Private Show"),
-			urlSecretId: feedUrls.store(privateUrl),
-			artworkUrl: "",
-		};
-		savedFeeds.set({ "Private Show": saved });
-		fetchTextMock.mockResolvedValue(
-			"<rss><channel><title>Private Show</title></channel></rss>",
-		);
+	test("adds a podcast titled like an Object property", async () => {
+		fetchTextMock.mockResolvedValue("<rss><channel><title>toString</title></channel></rss>");
 
-		const { findByRole } = paste(privateUrl);
+		const { findByRole } = paste("https://feeds.example.com/to-string.xml");
+		await fireEvent.click(await findByRole("button", { name: "Add toString podcast" }));
+
+		expect(Object.keys(get(savedFeeds))).toEqual(["toString"]);
+		expect(await findByRole("button", { name: "Remove toString podcast" })).toBeInTheDocument();
+	});
+
+	test("lists a followed private feed as saved", async () => {
+		followPrivateShow();
+
+		const { findByRole } = renderGrid();
+
+		expect(
+			await findByRole("button", { name: "Remove Private Show podcast" }),
+		).toBeInTheDocument();
+	});
+
+	test("shows a followed private feed as saved when its URL is pasted", async () => {
+		followPrivateShow();
+
+		const { findByText, getByRole, queryByRole } = paste(PRIVATE_URL);
+		await findByText("Patron Host");
+
+		expect(getByRole("button", { name: "Remove Private Show podcast" })).toBeInTheDocument();
+		expect(queryByRole("button", { name: "Add Private Show podcast" })).toBeNull();
+	});
+
+	test("a followed private feed without its URL on this device asks to add it again", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { saved } = followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		plugin.set({ feedUrls: new FeedUrlRepository(thisDevice) } as PodNotes);
+
+		const { findByRole } = paste(PRIVATE_URL);
 		await fireEvent.click(await findByRole("button", { name: "Add Private Show podcast" }));
 
+		expect(notice).toHaveBeenCalledWith(
+			'The private feed URL for "Private Show" is not available on this device. ' +
+				"Remove the feed and add it again with its private URL.",
+		);
+		expect(notice).not.toHaveBeenCalledWith(
+			"You already follow a different podcast called Private Show.",
+		);
 		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
-		expect(notice).not.toHaveBeenCalled();
+		expect(thisDevice.listSecrets()).toEqual([]);
 	});
 
 	test("keeps the newest search when an older one answers last", async () => {
