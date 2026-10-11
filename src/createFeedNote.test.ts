@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TFile } from "obsidian";
+import { SecretStorage, TFile } from "obsidian";
 import { plugin } from "./store";
 import createFeedNote from "./createFeedNote";
+import { FeedRepository } from "./services/FeedRepository";
+import { FeedUrlRepository } from "./services/FeedUrlRepository";
+import { resolveFeedUrl } from "./services/privateFeeds";
+import { privateFeedPlaceholder } from "./utility/privateFeedUrl";
+import { MemoryStorage, stubLegacyStorage } from "../tests/mocks/feeds";
 import type { PodcastFeed } from "./types/PodcastFeed";
 
 // A feed with every metadata field already populated, so createFeedNote's
@@ -78,6 +83,7 @@ beforeEach(() => {
 afterEach(() => {
 	plugin.set(undefined as never);
 	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
 
 describe("createFeedNote", () => {
@@ -140,6 +146,51 @@ describe("createFeedNote", () => {
 		expect(basename.endsWith(".md")).toBe(true);
 		expect(basename.length).toBeLessThanOrEqual(255);
 		expect(basename.length).toBeLessThan(400);
+	});
+
+	it.each([
+		["a saved podcast's", false],
+		["a private podcast's", true],
+	])("fills %s missing website from its feed", async (_, isPrivate) => {
+		const privateUrl = "https://example.com/feed.xml?auth=s3cret";
+		stubLegacyStorage();
+		const feedUrls = new FeedUrlRepository(new SecretStorage());
+		const saved: PodcastFeed = isPrivate
+			? {
+					title: fullFeed.title,
+					url: privateFeedPlaceholder(fullFeed.title),
+					urlSecretId: feedUrls.store(privateUrl),
+					artworkUrl: "",
+				}
+			: { title: fullFeed.title, url: fullFeed.url, artworkUrl: "" };
+		const load = vi.fn(async () => ({
+			feed: { title: "Channel", siteUrl: "https://example.com/show" },
+			episodes: [],
+		}));
+		const feeds = new FeedRepository({
+			load,
+			resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
+			storage: new MemoryStorage(),
+			cache: () => ({ enabled: false, ttlHours: 6 }),
+			now: Date.now,
+		});
+		feeds.setSubscriptions({ [saved.title]: saved });
+		plugin.update(
+			(current) =>
+				({
+					...current,
+					feeds,
+					settings: {
+						feedNote: { path: "PodNotes/Podcasts/{{podcast}}.md", template: "{{url}}" },
+					},
+				}) as never,
+		);
+		const { created } = setupVault({});
+
+		await createFeedNote({ ...saved });
+
+		expect(load).toHaveBeenCalledWith(isPrivate ? privateUrl : saved.url);
+		expect(created[0].content).toBe("https://example.com/show");
 	});
 
 	it("does nothing when no feed-note path/template is configured", async () => {

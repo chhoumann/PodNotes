@@ -9,7 +9,7 @@ const fuseOptions = {
 	keys: ["title"],
 };
 
-const fuseCache = new WeakMap<Episode[], { fuse: Fuse<Episode>; signature: string }>();
+const fuseCache = new WeakMap<readonly Episode[], { fuse: Fuse<Episode>; signature: string }>();
 
 // Fingerprint the searchable content of the list. The Fuse index is keyed by the
 // array reference, but the same reference can be mutated in place (an entry
@@ -20,11 +20,11 @@ const fuseCache = new WeakMap<Episode[], { fuse: Fuse<Episode>; signature: strin
 // order, so any content or ordering change rebuilds the index while an unchanged
 // list keeps reusing it across keystrokes. JSON framing keeps it collision-free
 // regardless of what the titles and URLs contain.
-function contentSignature(episodes: Episode[]): string {
+function contentSignature(episodes: readonly Episode[]): string {
 	return JSON.stringify(episodes.map((episode) => [episode.title, episode.streamUrl]));
 }
 
-function getFuse(episodes: Episode[]): Fuse<Episode> {
+function getFuse(episodes: readonly Episode[]): Fuse<Episode> {
 	const signature = contentSignature(episodes);
 	const cached = fuseCache.get(episodes);
 
@@ -38,7 +38,10 @@ function getFuse(episodes: Episode[]): Fuse<Episode> {
 	return newFuse;
 }
 
-export default function searchEpisodes(query: string, episodes: Episode[]): Episode[] {
+export default function searchEpisodes(
+	query: string,
+	episodes: readonly Episode[],
+): readonly Episode[] {
 	if (episodes.length === 0) return [];
 
 	// Trim before the empty check so a whitespace-only query restores the full

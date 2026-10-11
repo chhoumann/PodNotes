@@ -32,3 +32,8 @@ export function dateTimestamp(value: unknown): number | undefined {
 	}
 	return decodeDate(value)?.getTime();
 }
+
+/** Sorts episodes newest first; undated ones go last. */
+export function newestFirst(a: { episodeDate?: Date }, b: { episodeDate?: Date }): number {
+	return (dateTimestamp(b.episodeDate) ?? 0) - (dateTimestamp(a.episodeDate) ?? 0);
+}

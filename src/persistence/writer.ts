@@ -1,5 +1,5 @@
 import { toError } from "src/utility/toError";
-import { jsonValuesEqual, threeWayMergeSettings } from "./merge";
+import { jsonValuesEqual, mergeDataFile, threeWayMergeSettings } from "./merge";
 
 /** Timers of the main window. A popout's timers stop when the popout closes. */
 export interface Clock {
@@ -55,11 +55,6 @@ export class DataFileWriter<Doc> {
 		/** What PodNotes last loaded or wrote; null until a readable file was loaded. */
 		private base: Doc | null,
 	) {}
-
-	/** Whether a readable data.json has been loaded or written. */
-	get hasBase(): boolean {
-		return this.base !== null;
-	}
 
 	/**
 	 * Save after any save already running; changes made until it starts share it.
@@ -182,15 +177,13 @@ export class DataFileWriter<Doc> {
 
 		this.lastSaveAt = this.clock.now();
 		const disk = await this.file.read(this.base);
-		if (this.failedWrite && disk && jsonValuesEqual(disk, this.failedWrite.written)) {
-			this.settle(this.failedWrite.local, this.failedWrite.written);
-		}
+		this.settleFailedWrite(disk);
 		const base = this.base;
 		// Captured after the read, so edits made while it was in flight are written too.
 		const local = this.file.local();
 		let toWrite = local;
 		if (disk && base) {
-			toWrite = threeWayMergeSettings(base, local, disk);
+			toWrite = mergeDataFile(base, local, disk);
 		} else if (!disk && this.failedWrite) {
 			// A failed write that left nothing on disk held the changes made elsewhere:
 			// write them again, with the edits made here since.
@@ -223,6 +216,12 @@ export class DataFileWriter<Doc> {
 		);
 	}
 
+	private settleFailedWrite(disk: Doc | null): void {
+		if (!this.failedWrite || !disk || !jsonValuesEqual(disk, this.failedWrite.written)) return;
+		this.settle(this.failedWrite.local, this.failedWrite.written);
+		this.failedWrite = null;
+	}
+
 	private async applyExternalChange(): Promise<void> {
 		let disk: Doc | null;
 		try {
@@ -234,12 +233,13 @@ export class DataFileWriter<Doc> {
 		}
 		// A missing file is not a request to reset everything.
 		if (!disk || this.unloaded) return;
+		this.settleFailedWrite(disk);
 
 		const base = this.base;
 		if (base && jsonValuesEqual(disk, base)) return;
 
 		const local = this.file.local();
-		const merged = base ? threeWayMergeSettings(base, local, disk) : structuredClone(disk);
+		const merged = base ? mergeDataFile(base, local, disk) : structuredClone(disk);
 		this.base = disk;
 		if (!jsonValuesEqual(merged, local)) this.publish(merged);
 		if (jsonValuesEqual(merged, disk)) this.cancelTimer();

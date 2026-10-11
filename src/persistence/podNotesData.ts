@@ -61,7 +61,14 @@ export type PersistedPodNotesSettings = Omit<
 export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
 	UnknownRecord & {
 		schemaVersion: typeof PODNOTES_DATA_SCHEMA_VERSION;
+		libraryId: string;
 	};
+
+const LIBRARY_BEFORE_IDS = "";
+
+export function newLibraryId(): string {
+	return `${new Date().toISOString()} ${crypto.randomUUID()}`;
+}
 
 /**
  * Decode and validate plugin data before any store sees it.
@@ -72,8 +79,9 @@ export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
  * does not understand.
  */
 export function decodePodNotesData(value: unknown): DecodedPodNotesData {
-	// No data.json yet is a new install, which starts from the current defaults.
-	if (value === null || value === undefined) value = structuredClone(DEFAULT_SETTINGS);
+	if (value === null || value === undefined) {
+		value = { ...structuredClone(DEFAULT_SETTINGS), libraryId: newLibraryId() };
+	}
 
 	if (!isPlainObject(value)) {
 		throw new PodNotesDataError(
@@ -120,6 +128,10 @@ export function encodePodNotesData(
 		...copyUnknownRootFields(unknownFields),
 		...validated,
 		schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+		libraryId:
+			typeof unknownFields.libraryId === "string"
+				? unknownFields.libraryId
+				: LIBRARY_BEFORE_IDS,
 		currentEpisode: validated.currentEpisode
 			? encodeEpisode(validated.currentEpisode)
 			: undefined,
@@ -131,6 +143,13 @@ export function encodePodNotesData(
 			episodes.map((episode) => encodeEpisode(episode)),
 		),
 	};
+}
+
+export function toDocument(
+	settings: IPodNotesSettings,
+	unknownFields?: UnknownRecord,
+): PersistedPodNotesDataV2 {
+	return JSON.parse(JSON.stringify(encodePodNotesData(settings, unknownFields)));
 }
 
 function readSchemaVersion(root: UnknownRecord): PodNotesDataSchemaVersion {

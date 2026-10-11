@@ -249,6 +249,41 @@ describe("DataFileWriter saves", () => {
 		expect(state.disk).toEqual(doc());
 	});
 
+	it("keeps a rollback when the file a failed write reached is reported as changed", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(async (next: Doc) => {
+			state.disk = structuredClone(next);
+			throw new Error("could not verify");
+		});
+		state.memory.defaultVolume = 0.5;
+		await expect(writer.save()).rejects.toThrow("could not verify");
+
+		state.memory.defaultVolume = 1;
+		await writer.onExternalChange();
+		await writer.save();
+
+		expect(state.memory).toEqual(doc());
+		expect(state.disk).toEqual(doc());
+	});
+
+	it("keeps a removal made after a change reported elsewhere showed a failed write reached disk", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(async (next: Doc) => {
+			state.disk = structuredClone(next);
+			throw new Error("could not verify");
+		});
+		state.memory.defaultVolume = 0.5;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+		await expect(writer.save()).rejects.toThrow("could not verify");
+
+		await writer.onExternalChange();
+		delete state.memory.savedFeeds.Synced;
+		await writer.save();
+
+		expect(state.memory.savedFeeds.Synced).toBeUndefined();
+		expect(state.disk!.savedFeeds.Synced).toBeUndefined();
+	});
+
 	it("keeps a change made elsewhere that a failed write carried to disk", async () => {
 		const { access, state, writer } = setup();
 		access.write.mockImplementationOnce(async (next: Doc) => {
@@ -360,7 +395,6 @@ describe("DataFileWriter changes made elsewhere", () => {
 		await writer.onExternalChange();
 
 		expect(state.memory.savedFeeds.Synced).toEqual({ title: "Synced" });
-		expect(writer.hasBase).toBe(true);
 		expect(clock.pending()).toBe(0);
 		expect(state.writes).toHaveLength(0);
 	});
@@ -415,7 +449,8 @@ describe("DataFileWriter changes made elsewhere", () => {
 		await writer.onExternalChange();
 
 		expect(file.state.memory).toEqual(file.state.disk);
-		expect(writer.hasBase).toBe(true);
+		await writer.save();
+		expect(file.access.write).not.toHaveBeenCalled();
 	});
 });
 
