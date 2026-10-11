@@ -172,9 +172,9 @@ export class PlayerController {
 		const { status, episode, currentTime } = this.snapshot;
 		if (this.disposed || !episode) return;
 		this.endPreview();
-		if (status === "restored" || status === "error") {
+		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
-			this.load(episode, source, currentTime);
+			this.load(episode, source, status === "ended" ? 0 : currentTime);
 		} else if (status === "paused" || status === "ended") {
 			if (status === "ended") this.moveTo(0);
 			this.start();
@@ -373,19 +373,17 @@ export class PlayerController {
 	 */
 	private moveTo(time: number): boolean {
 		const session = this.session;
+		const { duration, status: was } = this.snapshot;
+		const status = was === "ended" ? "paused" : was;
 		if (!this.holdsMedia()) {
 			if (session) session.pendingTime = time;
-			this.setState({ currentTime: time });
+			this.setState({ currentTime: time, status });
 			return true;
 		}
 
-		const { duration, status } = this.snapshot;
 		const pastEnd = duration > 0 && time >= duration;
 		this.el.currentTime = pastEnd ? Math.max(0, duration - END_MARGIN_S) : time;
-		this.setState({
-			currentTime: this.el.currentTime,
-			status: status === "ended" ? "paused" : status,
-		});
+		this.setState({ currentTime: this.el.currentTime, status });
 		if (pastEnd && status === "playing") {
 			this.el.pause();
 			this.settlePaused();
@@ -424,14 +422,19 @@ export class PlayerController {
 	/**
 	 * The element dropped its media without a load from us. Moving a media element
 	 * to another window's document reloads it, which a video stage in a popout does.
-	 * Start again where it was, playing if it played, back in the main window.
+	 * Start again where it was, playing if it played, back in the main window. A
+	 * finished episode stays finished: its session ends, and resume() loads it again.
 	 */
 	private onEmptied(): void {
 		const session = this.session;
 		if (!session?.ready) return;
-		session.ready = false;
-		session.pendingTime = this.snapshot.currentTime;
-		if (this.snapshot.status === "playing") this.setState({ status: "loading" });
+		if (this.snapshot.status === "ended") {
+			this.session = null;
+		} else {
+			session.ready = false;
+			session.pendingTime = this.snapshot.currentTime;
+			if (this.snapshot.status === "playing") this.setState({ status: "loading" });
+		}
 		this.placeElement();
 	}
 

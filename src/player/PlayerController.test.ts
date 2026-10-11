@@ -918,6 +918,18 @@ describe("video stage", () => {
 		expect(state().status).toBe("playing");
 	});
 
+	test("a seek in a finished video that a reset reloaded plays from there", () => {
+		const { player, media, state } = finishedThenReset();
+
+		player.seek(30);
+		expect(state()).toMatchObject({ status: "paused", currentTime: 30 });
+		player.resume();
+		metadata(media(), 60);
+
+		expect(media().currentTime).toBe(30);
+		expect(media().paused).toBe(false);
+	});
+
 	test("a reset element saves no position until it holds media again", () => {
 		const { player, media, state, writes } = setup();
 		const written = writes(A);
