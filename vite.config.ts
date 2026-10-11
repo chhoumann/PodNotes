@@ -65,7 +65,9 @@ export default defineConfig(({ mode }) => {
 			alias: {
 				src: path.resolve(rootDir, "src"),
 			},
-			conditions: ["browser"],
+			// Setting conditions replaces Vite's defaults, so the dev/prod condition
+			// must be listed or esm-env reads process.env.NODE_ENV at runtime instead.
+			conditions: ["browser", "development|production"],
 		},
 		build: {
 			lib: {

@@ -221,6 +221,22 @@ describe("PodNotes persistence integration", () => {
 		);
 	});
 
+	it("writes timestamp links as the capture default on a new install", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(null) });
+
+		await plugin.loadSettings();
+
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData).toHaveBeenCalledWith(
+			expect.objectContaining({
+				schemaVersion: 2,
+				timestamp: { template: "- {{linktime}} ", offset: 0 },
+			}),
+		);
+	});
+
 	it("does not rewrite data that is already schema v2", async () => {
 		const saveData = vi.fn().mockResolvedValue(undefined);
 		const plugin = makePlugin(saveData);
