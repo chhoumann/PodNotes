@@ -1,8 +1,9 @@
-import { TFile } from "obsidian";
+import { TFile, type ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import podNotesURIHandler from "./URIHandler";
+import { API } from "./API/API";
 import { DEFAULT_SETTINGS } from "./constants";
 import { PlayerController } from "./player/PlayerController";
 import { localFiles, playedEpisodes, plugin, queue, viewState } from "./store";
@@ -63,6 +64,27 @@ function link(params: Record<string, string>, revealPlayer?: () => void) {
 		revealPlayer,
 	);
 }
+
+/** Follows a Markdown link PodNotes wrote, as Obsidian decodes it: each value with decodeURIComponent. */
+function follow(markdownLink: string) {
+	const href = markdownLink.slice(markdownLink.indexOf("](") + 2, -1);
+	const params: Record<string, string> = { action: "podnotes" };
+	for (const pair of new URL(href).search.slice(1).split("&")) {
+		const [key, value] = pair.split("=");
+		params[key] = decodeURIComponent(value);
+	}
+	return podNotesURIHandler(params as ObsidianProtocolData);
+}
+
+const clip = (folder: string): LocalEpisode => ({
+	title: "Clip",
+	streamUrl: `app://resource/${folder}/Clip.mp3`,
+	url: "",
+	description: "",
+	content: "",
+	podcastName: "local file",
+	filePath: `${folder}/Clip.mp3`,
+});
 
 /** The media's metadata arrives, after which the player is at its start position. */
 function metadata(duration = 3600) {
@@ -558,5 +580,32 @@ describe("podNotesURIHandler", () => {
 
 		expect(state().episode).toMatchObject({ title: "A+B" });
 		expect(media().currentTime).toBe(20);
+	});
+});
+
+describe("a timestamp link PodNotes wrote for the loaded episode", () => {
+	test("seeks a feed episode without fetching its feed", async () => {
+		loadedAt(testEpisode, 754);
+		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
+		player.seek(10);
+
+		await follow(written);
+
+		expect(media().currentTime).toBe(754);
+		expect(media().src).toBe(testEpisode.streamUrl);
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
+	});
+
+	test("seeks a local file without fetching a feed", async () => {
+		vaultFiles = ["A/Clip.mp3"];
+		loadedAt(clip("A"), 15);
+		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
+		player.seek(40);
+
+		await follow(written);
+
+		expect(media().currentTime).toBe(15);
+		expect(media().src).toBe("app://resource/A/Clip.mp3");
+		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
 });

@@ -2,10 +2,10 @@ import type { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
 import type { IAPI } from "./IAPI";
 import { TFile } from "obsidian";
-import { downloadedEpisodes, plugin } from "src/store";
+import { plugin } from "src/store";
 import { get } from "svelte/store";
 import encodePodnotesURI from "src/utility/encodePodnotesURI";
-import { isLocalFile } from "src/utility/isLocalFile";
+import { episodeLinkTarget } from "src/utility/episodeLinkTarget";
 import { formatPodcastSegment, normalizePodcastSegmentTimes } from "src/utility/podcastSegment";
 import {
 	adjustPlaybackRate,
@@ -13,7 +13,6 @@ import {
 	PLAYBACK_RATE_STEP,
 } from "src/utility/playbackRate";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
-import type DownloadedEpisode from "src/types/DownloadedEpisode";
 
 // Default used when a persisted/configured skip length is missing or invalid
 // (e.g. a cleared settings field serialized to null/NaN). Mirrors
@@ -91,15 +90,15 @@ export class API implements IAPI {
 
 		if (!linkify) return time;
 
-		const feedUrl = this.getEpisodeLinkTarget();
+		const target = episodeLinkTarget(this.podcast);
 
-		if (!feedUrl || feedUrl === "") {
+		if (!target) {
 			// Considered handling this as an error case, but I think
 			// it's better UX to just show the time rather than getting an error.
 			return time;
 		}
 
-		const url = encodePodnotesURI(this.podcast.title, feedUrl, adjustedTime);
+		const url = encodePodnotesURI(this.podcast.title, target, adjustedTime);
 
 		return `[${time}](${url.href})`;
 	}
@@ -121,15 +120,15 @@ export class API implements IAPI {
 
 		if (!linkify || !segmentTimes) return segment;
 
-		const feedUrl = this.getEpisodeLinkTarget();
+		const target = episodeLinkTarget(this.podcast);
 
-		if (!feedUrl || feedUrl === "") {
+		if (!target) {
 			return segment;
 		}
 
 		const url = encodePodnotesURI(
 			this.podcast.title,
-			feedUrl,
+			target,
 			segmentTimes.startTime,
 			segmentTimes.endTime,
 		);
@@ -154,14 +153,6 @@ export class API implements IAPI {
 		}
 
 		return await pluginInstance.app.vault.read(transcriptFile);
-	}
-
-	private getEpisodeLinkTarget(): string | undefined {
-		if (!isLocalFile(this.podcast)) return this.podcast.feedUrl;
-		return (
-			(this.podcast as Partial<DownloadedEpisode>).filePath ??
-			downloadedEpisodes.getEpisode(this.podcast)?.filePath
-		);
 	}
 
 	start(): void {

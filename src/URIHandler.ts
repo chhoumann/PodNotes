@@ -2,15 +2,14 @@ import { Notice } from "obsidian";
 import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
 import FeedParser from "./parser/feedParser";
-import { downloadedEpisodes, localFiles, plugin, savedFeeds, viewState } from "./store";
-import type DownloadedEpisode from "./types/DownloadedEpisode";
+import { localFiles, plugin, savedFeeds, viewState } from "./store";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
 import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
-import { isLocalFile } from "./utility/isLocalFile";
+import { episodeLinkTarget } from "./utility/episodeLinkTarget";
 import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
@@ -107,12 +106,7 @@ export default async function podNotesURIHandler(
 	const loaded = get(player.state).episode;
 	// A link to the loaded episode names its feed, or its file for a local file, so a
 	// same-titled episode of another show is not taken for it.
-	const loadedLinkTarget =
-		loaded &&
-		(isLocalFile(loaded)
-			? ((loaded as Partial<DownloadedEpisode>).filePath ??
-				downloadedEpisodes.getEpisode(loaded)?.filePath)
-			: loaded.feedUrl);
+	const loadedLinkTarget = loaded && episodeLinkTarget(loaded);
 	// Membership (not ordered selection) is correct here: there is only one loaded episode, and
 	// keeping the legacy candidate lets a legacy '+'-as-space link to the loaded episode resume
 	// without a feed round-trip. The only cost is a rare false-positive - a current-format link to
