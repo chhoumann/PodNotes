@@ -5,6 +5,7 @@ import {
 	isPrivateFeedPlaceholder,
 	privateFeedPlaceholder,
 } from "src/utility/privateFeedUrl";
+import type { FeedAddress } from "./FeedRepository";
 import type { FeedUrlRepository } from "./FeedUrlRepository";
 
 /**
@@ -55,10 +56,7 @@ export function internPrivateFeed(
  * from SecretStorage; null means the secret is not available on this device
  * (SecretStorage is device-local) and the caller must not fetch.
  */
-export function resolveFeedUrl(
-	feed: Pick<PodcastFeed, "url" | "urlSecretId">,
-	feedUrls: FeedUrlRepository,
-): string | null {
+export function resolveFeedUrl(feed: FeedAddress, feedUrls: FeedUrlRepository): string | null {
 	if (feed.urlSecretId) {
 		return feedUrls.resolve(feed.urlSecretId);
 	}

@@ -118,7 +118,6 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			const request = feed && this.request(feed, mode);
 			if (request) requests.push(request);
 		}
-		this.emit();
 		return Promise.allSettled(requests).then(() => undefined);
 	}
 
@@ -182,6 +181,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		const url = this.deps.resolveUrl(feed);
 		if (url === null) {
 			source.error = "unavailable";
+			this.emit();
 			return undefined;
 		}
 		return this.fetch(feed.url, url);
@@ -285,10 +285,10 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		removeLegacyCaches(this.deps.storage);
 		if (!this.deps.cache().enabled) return;
 		const cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
-		for (const [url, doc] of cached) {
-			if (this.urls.has(url)) this.source(url).doc = doc;
-		}
-		if (cached.some(([url]) => !this.urls.has(url))) this.persist();
+		const kept = cached.filter(([url]) => this.urls.has(url));
+		for (const [url, doc] of kept) this.source(url).doc = doc;
+		if (kept.length < cached.length) this.persist();
+		if (kept.length) this.emit();
 	}
 
 	/** Writes only subscribed feeds, so a removed one leaves the cache with the next write. */
