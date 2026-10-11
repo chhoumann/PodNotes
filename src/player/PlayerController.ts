@@ -267,7 +267,7 @@ export class PlayerController {
 		this.requests++;
 		this.disposed = true;
 		this.session = null;
-		this.el.pause();
+		this.release();
 		this.el.remove();
 	}
 
@@ -280,8 +280,7 @@ export class PlayerController {
 		this.session = null;
 		const duration = this.savedProgress(episode)?.duration || episode.duration || 0;
 		if (!source.src) {
-			this.el.removeAttribute("src");
-			this.el.load();
+			this.release();
 			this.setState({
 				status: "error",
 				episode,
@@ -293,6 +292,7 @@ export class PlayerController {
 		}
 
 		if (this.el.tagName.toLowerCase() !== source.mediaType) {
+			this.release();
 			this.el.remove();
 			this.el = this.createElement(source.mediaType);
 			this.placeElement();
@@ -316,6 +316,12 @@ export class PlayerController {
 		this.el.src = source.src;
 		// In the intent's own call, so a mobile user's tap still counts as the gesture.
 		this.playElement();
+	}
+
+	/** Stops the element and lets go of its media, which a removed element would keep. */
+	private release(): void {
+		this.el.removeAttribute("src");
+		this.el.load();
 	}
 
 	private createElement(kind: EpisodeMediaType): HTMLMediaElement {
