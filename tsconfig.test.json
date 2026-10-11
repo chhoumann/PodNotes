@@ -21,6 +21,7 @@
 		"tests/**/*.svelte",
 		"scripts/**/*.ts",
 		"scripts/**/*.mjs",
+		".claude/skills/verify/**/*.mjs",
 		"*.ts",
 		"*.mjs"
 	]
