@@ -43,6 +43,8 @@ root symlinks for local Obsidian loading.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 - `npm run docs:deploy`: build docs and deploy `docs/dist` to Cloudflare Pages.
 
+After `npm run build`, `npm run size` enforces 330,000 raw bytes and 100,000 gzip bytes at level 9 for root `main.js` inside the existing Test job. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
+
 Before opening a PR or cutting a release, run the CI-equivalent checks locally:
 
 ```bash
@@ -168,6 +170,29 @@ per-worktree hash), including Xvfb on Linux, and never touches the `dev` vault
 or other worktrees. `start:e2e-obsidian` and `obsidian:e2e` also reap orphaned
 instances under the default profile root before launching.
 
+### Obsidian mobile (Android emulator)
+
+`scripts/omd.sh` drives the real Obsidian Android app through
+[obsidian-mobile-debug](https://github.com/chhoumann/obsidian-mobile-debug) at a
+pinned commit. It is Linux-only (KVM, a systemd user unit) and needs `uv` and `jq`.
+
+```bash
+npm run mobile:setup                # first run downloads about 8 GB (up to 35 min)
+npm run --silent mobile:verify      # build, deploy, smoke probe; JSON on stdout, exit 0/2/1
+npm run mobile:eval -- 'app.plugins.plugins.podnotes.manifest.version'
+npm run mobile:screenshot -- .obsidian-e2e-artifacts/mobile/player.png
+npm run mobile:logs -- --seconds 20
+npm run --silent mobile:download    # downloads the playing episode, reports native memory
+npm run mobile:stop
+```
+
+The host runs one emulator. The worktree that boots it owns it until its own
+`mobile:stop`, and every other worktree's mobile commands refuse until then, so
+always stop when done. Stop keeps the AVD and every device vault. Each worktree
+has its own device vault, seeded from `obsidian-e2e.config.mjs` `defaultData`
+only on first provision. Run long setup/download commands in an asynchronous
+terminal session and allow their documented timeout.
+
 ## Documentation
 Docs are an Astro Starlight site in `docs/`, a standalone npm package with its
 own `package-lock.json`. Pages live in `docs/src/content/docs/`, images in
@@ -178,8 +203,8 @@ syntax, transcript behavior, local-file behavior, or import/export changes.
 
 Use `npm run docs:build` to validate docs locally. It installs the docs
 dependencies and runs `astro build`, which fails on a broken internal link or
-anchor. The Cloudflare Pages output directory is `docs/dist`, configured in
-`wrangler.jsonc`. See `docs/README.md` for the docs project layout.
+anchor. Cloudflare Pages builds from `docs/` and publishes `docs/dist`, configured in
+`docs/wrangler.jsonc`. See `docs/README.md` for the docs project layout.
 
 ## Release Workflow
 Goal: publish each version from a tested, reviewed, and attested commit. Stop
