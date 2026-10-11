@@ -17,11 +17,16 @@ function memorySecretStorage(initial: Record<string, string> = {}) {
 
 function makePlugin(
 	saveData: (data: unknown) => Promise<void> = vi.fn().mockResolvedValue(undefined),
+	{ dataFileExists = false } = {},
 ): PodNotes {
 	const { storage } = memorySecretStorage();
 	const plugin = Object.create(PodNotes.prototype) as PodNotes;
 	Object.assign(plugin, {
-		app: { secretStorage: storage },
+		app: {
+			secretStorage: storage,
+			vault: { adapter: { exists: vi.fn().mockResolvedValue(dataFileExists) } },
+		},
+		manifest: { dir: ".obsidian/plugins/podnotes" },
 		credentials: new CredentialRepository(storage),
 		isReady: true,
 		settings: structuredClone(DEFAULT_SETTINGS),
@@ -235,6 +240,59 @@ describe("PodNotes persistence integration", () => {
 				timestamp: { template: "- {{linktime}} ", offset: 0 },
 			}),
 		);
+	});
+
+	it("leaves a data.json it cannot read unchanged and refuses every save", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		const privateFeedUrl = "podnotes-feed-url-00000000-0000-4000-8000-000000000000";
+		const { storage, values } = memorySecretStorage({
+			[privateFeedUrl]: "https://user:token@example.com/feed.xml",
+		});
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			loadData: vi.fn().mockResolvedValue(undefined),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await plugin.loadSettings();
+		await plugin.saveSettings();
+
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
+		expect(saveData).not.toHaveBeenCalled();
+		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
+		expect(values.get(privateFeedUrl)).toBe("https://user:token@example.com/feed.xml");
+	});
+
+	it("starts no write once the window unloads and rejects the queued strict save", async () => {
+		const resolvers: Array<() => void> = [];
+		const saveData = vi.fn(() => new Promise<void>((resolve) => resolvers.push(resolve)));
+		const plugin = makePlugin(saveData);
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		void plugin.saveSettings();
+		await vi.waitFor(() => expect(saveData).toHaveBeenCalledTimes(1));
+		const queued = plugin.saveSettingsStrict();
+		Object.assign(plugin, { writeRefusal: "unloading" });
+		const late = plugin.saveSettingsStrict();
+		resolvers[0]();
+
+		await expect(queued).rejects.toThrow("unloading");
+		await expect(late).rejects.toThrow("unloading");
+		expect(saveData).toHaveBeenCalledTimes(1);
+	});
+
+	it("starts no migration write once the window unloads", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		Object.assign(plugin, {
+			loadData: vi.fn().mockResolvedValue({ defaultVolume: 0.4 }),
+			writeRefusal: "unloading",
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await expect(plugin.loadSettings()).rejects.toThrow("unloading");
+		expect(saveData).not.toHaveBeenCalled();
 	});
 
 	it("does not rewrite data that is already schema v2", async () => {
