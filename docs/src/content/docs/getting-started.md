@@ -43,7 +43,13 @@ The episode starts, and the view switches to the player.
 2. Place the cursor where you want the timestamp.
 3. Run **PodNotes: Capture Timestamp** from the command palette.
 
-PodNotes inserts the playback time as a link, such as `- [00:12:41](obsidian://podnotes?...)`. Select the link later to play the episode from that moment.
+PodNotes inserts the playback time as a link:
+
+```md
+- [00:12:41](obsidian://podnotes?...)
+```
+
+Select the link later to play the episode from that moment.
 
 ## Create an episode note
 

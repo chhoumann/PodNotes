@@ -16,7 +16,7 @@ views:
       property: note.status
       direction: ASC
     columnSize:
-      file.name: 420
-      note.podcast: 180
+      file.name: 400
+      note.podcast: 210
       note.status: 100
       note.rating: 70

@@ -96,7 +96,7 @@ views:
 ```
 ````
 
-![A Bases table of five episode notes with podcast, status, and rating columns, grouped into finished, listening, and next](/screenshots/bases.webp)
+![A Bases table of five episode notes, grouped by status into finished, listening, and next](/screenshots/bases.webp)
 
 The same lines also work as the content of a `.base` file, such as `PodNotes/Episodes.base`. If your template has no `type` property, filter on a property or tag that it sets.
 

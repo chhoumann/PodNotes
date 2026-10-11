@@ -1,5 +1,6 @@
 // Labels each cell of a table with three or more columns with its column
 // header, so phones can show each row as a stacked entry (see custom.css).
+// Settings tables also get fixed columns, so each one lines up with the next.
 const escapeAttribute = (text) => text.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
 
 export function withStackedTables(html) {
@@ -17,6 +18,7 @@ export function withStackedTables(html) {
 			);
 			return `<tr>${labeled}</tr>`;
 		});
-		return `<table${attributes} class="stack">${body}</table>`;
+		const settings = headers.join("|") === "Setting|Default|What it does" ? " settings" : "";
+		return `<table${attributes} class="stack${settings}">${body}</table>`;
 	});
 }

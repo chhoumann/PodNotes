@@ -2,6 +2,7 @@
 title: FAQ
 slug: faq
 description: Short answers about finding the player, adding podcasts, timestamps, sync, and transcription, with links to the full guides.
+next: false
 ---
 
 Find short answers to the questions PodNotes users ask most. Each answer links to the page that covers the topic in full.

@@ -43,7 +43,7 @@ A download path must tell episodes apart. Without `{{title}}`, the setting shows
 
 The `{{title}}` and `{{podcast}}` path tags remove these characters:
 
-```text
+```text wrap
 \ , # % & / { } * < > $ ' " : @ ‣ | ? [ ]
 ```
 
@@ -196,13 +196,13 @@ Date tags accept these Moment-style tokens:
 
 | Part | Tokens |
 | --- | --- |
-| Year | `YYYY`, `YY` |
-| Month | `MMMM`, `MMM`, `MM`, `Mo`, `M` |
-| Day of month | `Do`, `DD`, `D` |
-| Weekday | `dddd`, `ddd` |
-| Hour | `HH`, `H`, `hh`, `h` |
-| Minute | `mm`, `m` |
-| Second | `ss`, `s` |
-| AM or PM | `A`, `a` |
+| Year | `YYYY`,&nbsp;`YY` |
+| Month | `MMMM`,&nbsp;`MMM`,&nbsp;`MM`,&nbsp;`Mo`,&nbsp;`M` |
+| Day of month | `Do`,&nbsp;`DD`,&nbsp;`D` |
+| Weekday | `dddd`,&nbsp;`ddd` |
+| Hour | `HH`,&nbsp;`H`,&nbsp;`hh`,&nbsp;`h` |
+| Minute | `mm`,&nbsp;`m` |
+| Second | `ss`,&nbsp;`s` |
+| AM or PM | `A`,&nbsp;`a` |
 
 Month and weekday names and ordinals are in English. Dates use the device's time zone. Square brackets keep text as it is, as in `{{currentDate:[Captured] YYYY-MM-DD}}`. Other Moment tokens are not supported.

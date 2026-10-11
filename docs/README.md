@@ -20,8 +20,9 @@ plugin's dependencies.
   `src/site.mjs`, which the LLM files below also read. `src/styles/custom.css`
   holds the theme.
 - `src/components/MarkdownContent.astro` post-processes every page:
-  `src/screenshots.mjs` gives each screenshot its size and its dark twin, and
-  `src/tables.mjs` labels table cells so wide tables stack on phones.
+  `src/screenshots.mjs` gives each screenshot its size, its dark twin, and its
+  phone crop, and `src/tables.mjs` labels table cells so wide tables stack on
+  phones.
 - `scripts/legacy-fragments.mjs` runs after every build and fails it if a
   heading fragment the site has published (`legacy-fragments.json`) has no
   target. When a heading's new id differs from the old one, start the heading
@@ -43,7 +44,9 @@ It builds a vault from `screenshots/` (the notes, a Bases file, the PodNotes
 settings in `seed.json`, and the Minimal theme), opens it in a private Obsidian
 capture instance at 2x, adds the podcast feeds through Settings, plays the
 episodes, creates notes and captures timestamps with PodNotes' own commands, and
-writes each shot as `<name>.webp` and `<name>-dark.webp`, plus the README demo
+writes each shot as `<name>.webp` and `<name>-dark.webp`, with a
+`<name>-phone.webp` crop where the desktop shot is unreadable on a phone, plus
+the README demo
 GIFs and the social preview `og.png`. It needs network access for the feeds,
 their artwork, and the theme. The episodes in `seed.json` must still be among
 each feed's latest episodes. If one has left, pick a newer one and update its
@@ -51,7 +54,7 @@ notes in `screenshots/notes/`.
 
 To show a screenshot on a page, write
 `![What it shows](/screenshots/<name>.webp)`. The site adds the size, lazy
-loading, and the dark twin.
+loading, the dark twin, and the phone crop if there is one.
 
 ## Commands
 

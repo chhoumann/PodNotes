@@ -78,6 +78,8 @@ other than the home page.
 - [ ] Each screenshot has a light file and a `-dark` file. The site shows the
       one that matches the reader's theme.
 - [ ] The crop shows the part that matters and enough context to find it.
+- [ ] A shot whose text is unreadable at 390 px wide gets a `-phone` crop
+      captured in Obsidian's phone layout. The site shows it on narrow screens.
 - [ ] Alt text says what the screenshot shows in under 150 characters.
 
 ## Before you merge

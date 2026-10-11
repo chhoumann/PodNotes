@@ -96,11 +96,11 @@ Time tags accept these tokens:
 
 | Part | Tokens | Meaning |
 | --- | --- | --- |
-| Hours | `H`, `HH` | Total elapsed hours, unpadded or padded to at least two digits. |
-| Twelve-hour clock | `h`, `hh` | Hour on a twelve-hour clock, unpadded or padded. |
-| Minutes | `m`, `mm` | Minute within the hour, unpadded or padded. |
-| Seconds | `s`, `ss` | Second within the minute, unpadded or padded. |
-| AM or PM | `A`, `a` | Uppercase or lowercase clock label. |
+| Hours | `H`,&nbsp;`HH` | Total elapsed hours, unpadded or padded to at least two digits. |
+| Twelve-hour clock | `h`,&nbsp;`hh` | Hour on a twelve-hour clock, unpadded or padded. |
+| Minutes | `m`,&nbsp;`mm` | Minute within the hour, unpadded or padded. |
+| Seconds | `s`,&nbsp;`ss` | Second within the minute, unpadded or padded. |
+| AM or PM | `A`,&nbsp;`a` | Uppercase or lowercase clock label. |
 
 A backslash makes the next character literal. `{{time:H\h mm\m ss\s}}` inserts `0h 12m 41s`. Square brackets do not mark literal text in time tags. [Date tags](/templates/#date-formats) use a different set of tokens.
 
@@ -108,7 +108,7 @@ A backslash makes the next character literal. `{{time:H\h mm\m ss\s}}` inserts `
 
 Timestamp links and resume links open `obsidian://podnotes`. A captured link looks like this:
 
-```text
+```text wrap
 obsidian://podnotes?episodeName=The%20Home%20Depot&url=https%3A%2F%2Ffeeds.transistor.fm%2Facquired&time=761
 ```
 

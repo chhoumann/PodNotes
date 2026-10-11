@@ -43,8 +43,9 @@ const PHONE = { width: 390, height: 844 };
 const SIDEBAR = 430;
 const PLAYER = '.workspace-leaf-content[data-type="podcast_player_view"]';
 const ROOT = ".workspace-split.mod-root";
-// Linux draws scrollbars that macOS hides until you scroll.
-const CAPTURE_CSS = "::-webkit-scrollbar { display: none; }";
+// Linux draws scrollbars that macOS hides until you scroll, and window buttons
+// that belong to the operating system, not to Obsidian.
+const CAPTURE_CSS = "::-webkit-scrollbar, .titlebar-button-container { display: none; }";
 const CROP_CSS = `${CAPTURE_CSS} .status-bar { display: none; }`;
 
 async function writeJson(file, value) {
@@ -233,9 +234,11 @@ async function main() {
 			const view = app.workspace.getLeavesOfType("markdown")[0].view.contentEl;
 			const column = view.querySelector(".cm-sizer").getBoundingClientRect();
 			const lines = [...view.querySelectorAll(".inline-title, .metadata-container, .cm-line, .callout")];
-			const top = (${fromLine})(lines).getBoundingClientRect().top - 20;
-			const bottom = (${toLine})(lines).getBoundingClientRect().bottom + 20;
-			return { x: column.x - 28, y: top, width: column.width + 56, height: bottom - top };
+			const top = Math.max(0, (${fromLine})(lines).getBoundingClientRect().top - 20);
+			const bottom = Math.min(innerHeight, (${toLine})(lines).getBoundingClientRect().bottom + 20);
+			const left = Math.max(0, column.x - 16);
+			const right = Math.min(innerWidth, column.right + 16);
+			return { x: left, y: top, width: right - left, height: bottom - top };
 		})()`,
 	});
 
@@ -409,7 +412,7 @@ async function main() {
 		await shoot(
 			"add-podcast",
 			{ kind: "rect", expression: SEARCH_SECTION },
-			{ css: CAPTURE_CSS },
+			{ css: `${CAPTURE_CSS} ${FIRST_FOUR_RESULTS}` },
 		);
 		const { playlist } = seed;
 		await run(`const form = document.querySelector(".modal.mod-settings .add-playlist-container");
@@ -511,33 +514,36 @@ async function main() {
 		);
 		await click('.podcast-view [aria-label^="Player"]');
 		await settle(1500);
-		await shoot("hero", { kind: "viewport" }, { css: CAPTURE_CSS });
-		// The social preview: the top of the light hero at 1200x630.
-		await sharp(path.join(profileRoot, "hero-light.png"))
-			.resize(1200, 630, { fit: "cover", position: "top" })
-			.png({ compressionLevel: 9, palette: true })
-			.toFile(path.join(outDir, "og.png"));
-		await shoot(
-			"episode-note",
-			noteCrop(
-				`(lines) => lines.find((el) => el.matches(".inline-title"))`,
-				`(lines) => lines.find((el) => el.matches(".callout"))`,
-			),
-		);
 		const scrollNote = (line) =>
 			run(`const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
 				const view = editor.cm;
 				const index = [...Array(editor.lineCount()).keys()].find((i) => editor.getLine(i) === ${JSON.stringify(line)}) ?? 0;
 				view.scrollDOM.scrollTop = ${JSON.stringify(line)} ? view.lineBlockAt(view.state.doc.line(index + 1).from).top - 40 : 0;
 				return true;`);
-		await scrollNote("## Notes");
-		await shoot(
-			"timestamps",
-			noteCrop(
-				`(lines) => lines.find((el) => el.textContent.trim() === "Notes")`,
-				`(lines) => lines.filter((el) => el.matches(".cm-line") && el.textContent.trim()).at(-1)`,
-			),
+		const showProperties = (open) =>
+			run(`const box = app.workspace.getLeavesOfType("markdown")[0].view.contentEl.querySelector(".metadata-container");
+				if (box.classList.contains("is-collapsed") === ${open}) box.querySelector(".metadata-properties-heading").click();
+				await new Promise((r) => setTimeout(r, 300));
+				return true;`);
+		const episodeNote = noteCrop(
+			`(lines) => lines.find((el) => el.matches(".inline-title"))`,
+			`(lines) => lines.find((el) => el.matches(".callout"))`,
 		);
+		const notesSection = noteCrop(
+			`(lines) => lines.find((el) => el.textContent.trim() === "Notes")`,
+			`(lines) => lines.filter((el) => el.matches(".cm-line") && el.textContent.trim()).at(-1)`,
+		);
+		await shoot("episode-note", episodeNote);
+		// The hero folds the properties away so the captured timestamps sit mid-window.
+		await showProperties(false);
+		await shoot("hero", { kind: "viewport" }, { css: CAPTURE_CSS });
+		// The social preview: the top of the light hero at 1200x630.
+		await sharp(path.join(profileRoot, "hero-light.png"))
+			.resize(1200, 630, { fit: "cover", position: "top" })
+			.png({ compressionLevel: 9, palette: true })
+			.toFile(path.join(outDir, "og.png"));
+		await scrollNote("## Notes");
+		await shoot("timestamps", notesSection);
 		await scrollNote("");
 		await shoot("player", cropTo(PLAYER, ".controls-container", 1, 20));
 		const heroNote = notePaths.get(hero);
@@ -578,7 +584,8 @@ async function main() {
 				const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
 				const rows = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')];
 				const last = rows.at(-1).getBoundingClientRect();
-				return { x: box.x, y: box.y, width: Math.min(box.width, last.right - box.x + 24), height: last.bottom + 32 - box.y };
+				const right = Math.max(...rows.flatMap((row) => [...row.children].map((cell) => cell.getBoundingClientRect().right)));
+				return { x: box.x, y: box.y, width: Math.min(box.width, right - box.x + 24), height: last.bottom + 32 - box.y };
 			})()`,
 		});
 		// Obsidian's mobile layout at phone size. The switch reloads the window, so
@@ -597,10 +604,47 @@ async function main() {
 			hideSecretWarning: true,
 			css: CAPTURE_CSS,
 		});
+		const phone = { css: CAPTURE_CSS, size: PHONE };
+		await run(`app.setting.open(); app.setting.openTabById("podnotes"); return true;`);
+		await fill(search, seed.search);
+		await waitFor(
+			`document.querySelectorAll(".podcast-query-results > *").length >= 4`,
+			"search results",
+		);
+		await settle(2500);
+		await shoot(
+			"add-podcast-phone",
+			{ kind: "rect", expression: SEARCH_SECTION },
+			{ ...phone, css: `${CAPTURE_CSS} ${FIRST_FOUR_RESULTS}` },
+		);
+		await run(`app.setting.close(); return true;`);
 		await run(`app.workspace.leftSplit.collapse();
 			app.workspace.rightSplit.collapse();
-			await app.workspace.getLeaf(false).openFile(app.vault.getAbstractFileByPath(${JSON.stringify(notePaths.get(hero))}));
-			const editor = app.workspace.activeEditor.editor;
+			await app.workspace.getLeaf(false).openFile(app.vault.getAbstractFileByPath("PodNotes/Episodes.base"));
+			return true;`);
+		await settle(2000);
+		await shoot(
+			"bases-phone",
+			{
+				kind: "rect",
+				expression: `(() => {
+					const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
+					const last = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')].at(-1).getBoundingClientRect();
+					return { x: box.x, y: box.y, width: box.width, height: Math.min(innerHeight, last.bottom + 24) - box.y };
+				})()`,
+			},
+			phone,
+		);
+		await run(`await app.workspace.getLeaf(false).openFile(app.vault.getAbstractFileByPath(${JSON.stringify(notePaths.get(hero))}));
+			return true;`);
+		await settle(1000);
+		await showProperties(true);
+		await scrollNote("");
+		await shoot("episode-note-phone", episodeNote, phone);
+		await showProperties(false);
+		await scrollNote("## Notes");
+		await shoot("timestamps-phone", notesSection, phone);
+		await run(`const editor = app.workspace.activeEditor.editor;
 			const last = [...Array(editor.lineCount()).keys()].findLast((i) => /^- \\[\\d/.test(editor.getLine(i)));
 			editor.focus();
 			editor.setCursor(last, editor.getLine(last).length);
@@ -618,7 +662,7 @@ async function main() {
 					return { x: 0, y: top, width: innerWidth, height: innerHeight - top };
 				})()`,
 			},
-			{ css: CAPTURE_CSS, size: PHONE, clean: false },
+			{ css: `${CAPTURE_CSS} .cm-cursorLayer { display: none; }`, size: PHONE, clean: false },
 		);
 		await run(`app.commands.executeCommandById("podnotes:podnotes-show-leaf"); return true;`);
 		await settle(2000);
@@ -644,16 +688,23 @@ async function main() {
 	}
 }
 
-// The Search Podcasts heading and the first two rows of results.
+// Shows only the first four search results, so the settings card ends with them.
+const FIRST_FOUR_RESULTS = ".podcast-query-results > :nth-child(n + 5) { display: none; }";
+
+// The settings card that holds Search Podcasts, its field, and the results.
 const SEARCH_SECTION = `(() => {
 	const tab = document.querySelector(".modal.mod-settings .vertical-tab-content");
 	const name = [...tab.querySelectorAll(".setting-item-heading .setting-item-name")].find((n) => n.textContent.trim() === "Search Podcasts");
-	const top = name.closest(".setting-item").getBoundingClientRect().y - 8;
-	const container = tab.querySelector(".podcast-query-container").getBoundingClientRect();
-	const results = [...tab.querySelectorAll(".podcast-query-results > *")].map((el) => el.getBoundingClientRect());
-	const next = results[4]?.top ?? Infinity;
-	const bottom = Math.min(Math.max(...results.slice(0, 4).map((r) => r.bottom)) + 24, next - 2);
-	return { x: container.x - 24, y: top, width: container.width + 48, height: bottom - top };
+	const heading = name.closest(".setting-item").getBoundingClientRect();
+	const container = tab.querySelector(".podcast-query-container");
+	let card = container.parentElement;
+	while (card !== tab && getComputedStyle(card).backgroundColor === "rgba(0, 0, 0, 0)") card = card.parentElement;
+	const box = (card === tab ? container : card).getBoundingClientRect();
+	const pad = Math.max(12, heading.top - box.top);
+	const rows = [...container.querySelectorAll(".podcast-query-results > *")].filter((el) => el.getClientRects().length > 0);
+	const bottom = Math.min(box.bottom, Math.max(...rows.map((el) => el.getBoundingClientRect().bottom)) + pad);
+	const top = card === tab ? heading.top - pad : box.top;
+	return { x: box.x, y: top, width: box.width, height: bottom - top };
 })()`;
 
 await main();
