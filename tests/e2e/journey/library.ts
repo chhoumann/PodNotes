@@ -333,6 +333,16 @@ export async function feedCacheHolds(
 	return cached?.includes(JSON.stringify(episodeTitle)) ?? false;
 }
 
+/** Backdate every feed cache entry, as if it were saved `ms` milliseconds earlier. */
+export async function ageFeedCache(obsidian: ObsidianClient, ms: number): Promise<void> {
+	await obsidian.dev.evalJson(`(() => {
+		const cache = JSON.parse(app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}));
+		for (const entry of Object.values(cache)) entry.updatedAt -= ${ms};
+		app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, JSON.stringify(cache));
+		return true;
+	})()`);
+}
+
 function decodeLibrary(data: Json): SavedLibrary {
 	if (data.schemaVersion !== 2) {
 		throw new Error(

@@ -61,6 +61,7 @@ export const ui = {
 		"Latest Episodes",
 	),
 	episodeLoading: byCss("episode list loading", `${PLAYER_VIEW} .episode-list-loading`),
+	refreshEpisodes: byCss("Refresh episodes", `${PLAYER_VIEW} [aria-label="Refresh episodes"]`),
 	playbackToggle: byCss(
 		"on-screen playback toggle",
 		`${PLAYER_VIEW} .episode-player button[aria-label="Toggle playback"]`,
@@ -94,6 +95,11 @@ export const ui = {
 		byCss(
 			`Add ${title}`,
 			`.modal.mod-settings button[aria-label=${q(`Add ${title} podcast`)}]`,
+		),
+	removePodcast: (title: string) =>
+		byCss(
+			`Remove ${title}`,
+			`.modal.mod-settings button[aria-label=${q(`Remove ${title} podcast`)}]`,
 		),
 	podcastViewport: byCss("PodNotes view", PLAYER_VIEW),
 } as const;
