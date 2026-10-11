@@ -8,6 +8,7 @@
 //   node .claude/skills/verify/fixtures.mjs stop           stop the feed server
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import dns from "node:dns/promises";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -15,15 +16,16 @@ import { fileURLToPath } from "node:url";
 import { loadRunnerConfig, resolveProvisionOptions } from "obsidian-e2e/runner";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
-const pidFile = path.join(root, ".obsidian-e2e-artifacts", "fixture-feed.pid");
 // Stable per worktree, so a feed saved in the vault keeps working across restarts.
 const port = 20000 + (crypto.createHash("sha256").update(root).digest().readUInt16BE(0) % 20000);
-// PodNotes refuses literal loopback hosts, so the URL uses a public DNS name for 127.0.0.1.
-const base = `http://127.0.0.1.nip.io:${port}`;
+// assertFetchableUrl refuses literal loopback hosts, so the URL uses nip.io, a
+// public DNS name for 127.0.0.1.
+const host = "127.0.0.1.nip.io";
+const base = `http://${host}:${port}`;
 const feedUrl = `${base}/feed.xml`;
+const local = `http://127.0.0.1:${port}`;
 const FEED_TITLE = "PodNotes Fixture";
 
-/** A mono 8 kHz 16-bit tone, small enough to serve and long enough to seek in. */
 function wav(seconds = 60) {
 	const rate = 8000;
 	const samples = rate * seconds;
@@ -49,7 +51,9 @@ function wav(seconds = 60) {
 	return buffer;
 }
 
+/** @param {number} audioBytes */
 function feedXml(audioBytes) {
+	/** @param {number} n @param {string} date */
 	const item = (n, date) => `
 		<item>
 			<title>Fixture Episode ${n}</title>
@@ -81,6 +85,7 @@ const ARTWORK = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600
 
 function serve() {
 	const audio = wav();
+	/** @type {Record<string, [string, Buffer]>} */
 	const routes = {
 		"/feed.xml": ["application/rss+xml", Buffer.from(feedXml(audio.length))],
 		"/artwork.svg": ["image/svg+xml", Buffer.from(ARTWORK)],
@@ -88,13 +93,18 @@ function serve() {
 		"/episode-2.wav": ["audio/wav", audio],
 	};
 	const server = http.createServer((request, response) => {
-		const route = routes[/** @type {keyof typeof routes} */ (request.url ?? "")];
+		if (request.method === "POST" && request.url === "/__stop") {
+			server.close();
+			response.end(() => process.exit(0));
+			return;
+		}
+		const route = routes[request.url ?? ""];
 		if (!route) {
 			response.writeHead(404).end();
 			return;
 		}
 		const [type, body] = route;
-		// The player seeks with Range requests.
+		// The player seeks with Range requests, so serve 206 partial content.
 		const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range ?? "");
 		if (!range) {
 			response.writeHead(200, {
@@ -116,16 +126,16 @@ function serve() {
 		});
 		response.end(body.subarray(start, end + 1));
 	});
-	server.listen(port, "127.0.0.1", () => fs.writeFileSync(pidFile, String(process.pid)));
-	process.on("SIGTERM", () => {
-		fs.rmSync(pidFile, { force: true });
-		process.exit(0);
+	server.on("error", (error) => {
+		console.error(`The fixture feed cannot listen on 127.0.0.1:${port}: ${error.message}`);
+		process.exit(1);
 	});
+	server.listen(port, "127.0.0.1");
 }
 
 async function feedIsUp() {
 	try {
-		const response = await fetch(feedUrl);
+		const response = await fetch(`${local}/feed.xml`, { signal: AbortSignal.timeout(1000) });
 		return response.ok && (await response.text()).includes(FEED_TITLE);
 	} catch {
 		return false;
@@ -134,16 +144,26 @@ async function feedIsUp() {
 
 async function startFeed() {
 	if (!(await feedIsUp())) {
-		fs.mkdirSync(path.dirname(pidFile), { recursive: true });
-		spawn(process.execPath, [fileURLToPath(import.meta.url), "serve"], {
+		const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "serve"], {
 			detached: true,
-			stdio: "ignore",
-		}).unref();
-		for (let i = 0; i < 50 && !(await feedIsUp()); i++) {
+			stdio: ["ignore", "ignore", "pipe"],
+		});
+		let failure = "";
+		let exited = false;
+		child.stderr.setEncoding("utf8").on("data", (chunk) => (failure += chunk));
+		child.on("close", () => (exited = true));
+		for (let i = 0; i < 50 && !exited && !(await feedIsUp()); i++) {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 		}
-		if (!(await feedIsUp())) throw new Error(`The fixture feed did not come up at ${feedUrl}.`);
+		if (!(await feedIsUp())) {
+			throw new Error(failure.trim() || `The fixture feed did not come up at ${local}.`);
+		}
+		child.stderr.destroy();
+		child.unref();
 	}
+	await dns.lookup(host).catch(() => {
+		console.error(`${host} does not resolve here; PodNotes needs DNS to reach this feed URL.`);
+	});
 	console.log(feedUrl);
 }
 
@@ -156,20 +176,21 @@ async function writeAudio(vaultRelativePath = "Fixtures/Local Fixture.wav") {
 	console.log(file);
 }
 
-function stopFeed() {
-	if (!fs.existsSync(pidFile)) return;
-	try {
-		process.kill(Number(fs.readFileSync(pidFile, "utf8")), "SIGTERM");
-	} catch {}
-	fs.rmSync(pidFile, { force: true });
+async function stopFeed() {
+	await fetch(`${local}/__stop`, {
+		method: "POST",
+		signal: AbortSignal.timeout(1000),
+	}).catch(() => {});
 }
 
 const [verb, arg] = process.argv.slice(2);
-if (verb === "serve") serve();
-else if (verb === "feed") await startFeed();
-else if (verb === "audio") await writeAudio(arg);
-else if (verb === "stop") stopFeed();
-else {
-	console.error("Usage: fixtures.mjs feed | audio [vault-relative path] | stop");
+try {
+	if (verb === "serve") serve();
+	else if (verb === "feed") await startFeed();
+	else if (verb === "audio") await writeAudio(arg);
+	else if (verb === "stop") await stopFeed();
+	else throw new Error("Usage: fixtures.mjs feed | audio [vault-relative path] | stop");
+} catch (error) {
+	console.error(error instanceof Error ? error.message : String(error));
 	process.exitCode = 1;
 }

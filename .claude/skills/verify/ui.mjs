@@ -5,46 +5,79 @@
 //   node .claude/skills/verify/ui.mjs click '<css>' [--text <substring>] [--right] [--timeout <ms>]
 //   node .claude/skills/verify/ui.mjs type '<css>' '<text>'    click, then insert at the cursor
 //   node .claude/skills/verify/ui.mjs fill '<css>' '<text>'    click, select all, then replace
-//   node .claude/skills/verify/ui.mjs key <Enter|Escape|Tab|ArrowDown|ArrowUp|Backspace|Ctrl+<key>>
+//   node .claude/skills/verify/ui.mjs key <Enter|Escape|Tab|ArrowDown|ArrowUp|Backspace|<char>|Ctrl+<char>>
 //   node .claude/skills/verify/ui.mjs wait '<css>' [--text <substring>] [--timeout <ms>]
 //   node .claude/skills/verify/ui.mjs uri 'obsidian://podnotes?...'
 //
-// Every verb but `key` waits (default 10 s) until exactly one visible element
-// matches the selector and --text filter, then acts on it.
-import { execFileSync } from "node:child_process";
+// `click`, `type`, `fill` and `wait` wait up to 10 s until exactly one visible
+// element matches the selector and --text filter, so they never act on a list
+// still loading or on the wrong match. `key` and `uri` do not wait.
 import { fileURLToPath } from "node:url";
+import {
+	cliSocketExists,
+	execObsidian,
+	loadRunnerConfig,
+	obsidianCommandArgs,
+	resolveInstanceOptions,
+	resolveProvisionOptions,
+} from "obsidian-e2e/runner";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
-const bridge = fileURLToPath(new URL("../../../scripts/obsidian-e2e.mjs", import.meta.url));
-const KEYS = {
-	Enter: [13, "\r"],
-	Escape: [27],
-	Tab: [9],
-	Backspace: [8],
-	ArrowDown: [40],
-	ArrowUp: [38],
-};
+// Linux Obsidian's CLI socket follows $XDG_RUNTIME_DIR when it is set; this
+// instance's socket is in its private HOME (see scripts/obsidian-e2e.mjs).
+if (process.platform === "linux") delete process.env.XDG_RUNTIME_DIR;
+const config = await loadRunnerConfig(root);
+const instance = resolveInstanceOptions(
+	resolveProvisionOptions({}, config, root),
+	{},
+	config,
+	root,
+);
+const CALL_TIMEOUT_MS = 15000;
+/** @type {Map<string, [number, string?]>} */
+const KEYS = new Map([
+	["Enter", [13, "\r"]],
+	["Escape", [27]],
+	["Tab", [9]],
+	["Backspace", [8]],
+	["ArrowDown", [40]],
+	["ArrowUp", [38]],
+]);
 
 /** @param {string[]} args */
-function obsidian(args) {
-	return execFileSync(process.execPath, [bridge, "run", ...args], {
-		cwd: root,
-		encoding: "utf8",
-	}).trim();
+async function obsidian(args) {
+	if (!(await cliSocketExists(instance))) {
+		throw new Error(
+			"This worktree's Obsidian instance is not running: npm run start:e2e-obsidian",
+		);
+	}
+	const started = Date.now();
+	const { stdout } = await execObsidian(
+		instance,
+		obsidianCommandArgs(instance.vaultName, args),
+		{},
+		{ timeout: CALL_TIMEOUT_MS },
+	);
+	// The CLI exits 0 with no output when the timeout kills it, so only the clock tells.
+	if (Date.now() - started >= CALL_TIMEOUT_MS) {
+		throw new Error(`obsidian ${args[0]} did not answer within ${CALL_TIMEOUT_MS} ms.`);
+	}
+	return stdout.trim();
 }
 
 /** @param {string} method @param {object} params */
-function cdp(method, params) {
-	const output = obsidian(["dev:cdp", `method=${method}`, `params=${JSON.stringify(params)}`]);
+async function cdp(method, params) {
+	const output = await obsidian([
+		"dev:cdp",
+		`method=${method}`,
+		`params=${JSON.stringify(params)}`,
+	]);
 	if (output.startsWith("Error")) throw new Error(`${method}: ${output}`);
 }
 
-/**
- * Center of the single visible element matching css and text, scrolled into view.
- * @param {string} css @param {string | undefined} text
- */
-function locate(css, text) {
-	const output = obsidian([
+/** @param {string} css @param {string | undefined} text */
+async function locate(css, text) {
+	const output = await obsidian([
 		"eval",
 		`code=(() => {
 			const matches = [...document.querySelectorAll(${JSON.stringify(css)})].filter((el) => {
@@ -61,15 +94,11 @@ function locate(css, text) {
 	return JSON.parse(output.slice(3));
 }
 
-/**
- * Wait until exactly one visible element matches, so a click never lands on a
- * list that is still loading or on the wrong one of several matches.
- * @param {string} css @param {string | undefined} text
- */
+/** @param {string} css @param {string | undefined} text */
 async function find(css, text) {
 	const deadline = Date.now() + timeoutMs;
 	for (;;) {
-		const found = locate(css, text);
+		const found = await locate(css, text);
 		if (found.count === 1) return found;
 		if (Date.now() > deadline) {
 			throw new Error(
@@ -83,24 +112,32 @@ async function find(css, text) {
 /** @param {string} css @param {string | undefined} text @param {"left" | "right"} button */
 async function click(css, text, button) {
 	const { x, y } = await find(css, text);
-	cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+	await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
 	for (const type of ["mousePressed", "mouseReleased"]) {
-		cdp("Input.dispatchMouseEvent", { type, x, y, button, clickCount: 1 });
+		await cdp("Input.dispatchMouseEvent", { type, x, y, button, clickCount: 1 });
 	}
 }
 
 /** @param {string} combo */
-function key(combo) {
+async function key(combo) {
 	const parts = combo.split("+");
 	const name = parts.pop() ?? "";
-	const modifiers = parts.includes("Ctrl") ? 2 : 0;
-	const [code, text] = KEYS[/** @type {keyof typeof KEYS} */ (name)] ?? [
+	if (parts.some((part) => part !== "Ctrl")) {
+		throw new Error(`Unsupported modifier in ${combo}; only Ctrl is supported.`);
+	}
+	if (!KEYS.has(name) && name.length !== 1) {
+		throw new Error(
+			`Unknown key ${name}; use a single character or ${[...KEYS.keys()].join(", ")}.`,
+		);
+	}
+	const modifiers = parts.length > 0 ? 2 : 0;
+	const [code, text] = KEYS.get(name) ?? [
 		name.toUpperCase().charCodeAt(0),
 		modifiers ? undefined : name,
 	];
 	const event = { key: name, windowsVirtualKeyCode: code, modifiers, ...(text ? { text } : {}) };
-	cdp("Input.dispatchKeyEvent", { type: "keyDown", ...event });
-	cdp("Input.dispatchKeyEvent", { type: "keyUp", ...event });
+	await cdp("Input.dispatchKeyEvent", { type: "keyDown", ...event });
+	await cdp("Input.dispatchKeyEvent", { type: "keyUp", ...event });
 }
 
 /**
@@ -108,7 +145,7 @@ function key(combo) {
  * hands it over: parse it like Obsidian does and pass the result to OBS_ACT.
  * @param {string} uri
  */
-function openUri(uri) {
+async function openUri(uri) {
 	if (!uri.startsWith("obsidian://")) throw new Error(`Not an obsidian:// URI: ${uri}`);
 	let rest = uri.slice("obsidian://".length);
 	/** @type {Record<string, string>} */
@@ -127,7 +164,10 @@ function openUri(uri) {
 				split === -1 ? "true" : decodeURIComponent(pair.slice(split + 1));
 	}
 	data.action = action.replace(/\/+$/, "");
-	const output = obsidian(["eval", `code=window.OBS_ACT(${JSON.stringify(data)}), "delivered"`]);
+	const output = await obsidian([
+		"eval",
+		`code=window.OBS_ACT(${JSON.stringify(data)}), "delivered"`,
+	]);
 	if (!output.endsWith("=> delivered")) throw new Error(output);
 }
 
@@ -145,11 +185,11 @@ try {
 		await click(target, text, rest.includes("--right") ? "right" : "left");
 	else if ((verb === "type" || verb === "fill") && target && rest[0] !== undefined) {
 		await click(target, undefined, "left");
-		if (verb === "fill") key("Ctrl+a");
-		cdp("Input.insertText", { text: rest[0] });
-	} else if (verb === "key" && target) key(target);
+		if (verb === "fill") await key("Ctrl+a");
+		await cdp("Input.insertText", { text: rest[0] });
+	} else if (verb === "key" && target) await key(target);
 	else if (verb === "wait" && target) await find(target, text);
-	else if (verb === "uri" && target) openUri(target);
+	else if (verb === "uri" && target) await openUri(target);
 	else
 		throw new Error(
 			"Usage: ui.mjs click|type|fill|key|wait|uri ... (see the header of this file)",
