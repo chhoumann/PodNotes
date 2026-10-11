@@ -13,8 +13,12 @@ import type { FeedUrlRepository } from "./FeedUrlRepository";
  * Ingress (subscribe, OPML import, settings import, load-time migration)
  * interns a credential-bearing URL into SecretStorage and persists only a
  * placeholder. Egress (`resolveFeedUrl`) turns a saved feed back into a
- * fetchable URL immediately before retrieval and nowhere else - callers keep
- * the resolved value confined to the fetch call and never persist or log it.
+ * fetchable URL immediately before retrieval - callers keep the resolved
+ * value confined to the fetch call and never persist or log it. Outside a
+ * fetch, a secret is resolved only to compare it with a URL already in hand
+ * (`isSavedFeed`, which returns just the answer) or to check that it exists
+ * on this device. OPML export is the one deliberate exception: the user asks
+ * for a file that carries the real feed URLs.
  */
 
 /**
@@ -56,6 +60,15 @@ export function resolveFeedUrl(feed: PodcastFeed, feedUrls: FeedUrlRepository): 
 		return feedUrls.resolve(feed.urlSecretId);
 	}
 	return isPrivateFeedPlaceholder(feed.url) ? null : feed.url;
+}
+
+/**
+ * Whether `url` is the saved feed's URL. A private feed matches both its
+ * placeholder and the URL the placeholder stands for, so the same feed reads
+ * as saved whether it is listed from settings or pasted again.
+ */
+export function isSavedFeed(saved: PodcastFeed, url: string, feedUrls: FeedUrlRepository): boolean {
+	return saved.url === url || resolveFeedUrl(saved, feedUrls) === url;
 }
 
 /** resolveFeedUrl plus the standard user-facing failure Notice. */

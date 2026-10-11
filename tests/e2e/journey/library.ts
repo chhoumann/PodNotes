@@ -1,0 +1,489 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { ObsidianClient, PluginHandle, SandboxApi } from "obsidian-e2e";
+import e2eConfig from "../../../obsidian-e2e.config.mjs";
+import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE } from "../harness";
+import { dismissNotices, setMobileEmulation } from "./actions";
+import type { FixtureEpisode, FixtureFeed, FixtureServer } from "./fixtures";
+
+export type EpisodeRef = Readonly<{ podcast: string; title: string }>;
+
+export type PlaybackObservation = Readonly<{
+	episode: EpisodeRef | null;
+	playing: boolean;
+	seconds: number;
+	duration: number | null;
+	media: Readonly<{ src: string; paused: boolean; seconds: number }> | null;
+}>;
+
+export type SavedProgress = Readonly<{ seconds: number; duration: number; finished: boolean }>;
+
+export type SavedLibrary = Readonly<{
+	subscriptions: ReadonlyArray<Readonly<{ title: string; url: string }>>;
+	currentEpisode: EpisodeRef | null;
+	queue: readonly string[];
+	playlists: Readonly<Record<string, readonly string[]>>;
+	localFiles: ReadonlyArray<Readonly<{ title: string; filePath: string }>>;
+	downloads: ReadonlyArray<Readonly<{ podcast: string; title: string; filePath: string }>>;
+	skipBackwardSeconds: number;
+	progress(episode: EpisodeRef): SavedProgress | undefined;
+}>;
+
+export type StoredEpisode = Readonly<
+	Record<string, unknown> & { title: string; podcastName: string }
+>;
+
+export type LibrarySeed = Readonly<{
+	subscriptions?: readonly FixtureFeed[];
+	current?: StoredEpisode;
+	queue?: readonly StoredEpisode[];
+	playlists?: ReadonlyArray<{
+		name: string;
+		removeAfterPlay: boolean;
+		episodes: readonly StoredEpisode[];
+	}>;
+	progress?: ReadonlyArray<{
+		episode: StoredEpisode;
+		seconds: number;
+		duration: number;
+		finished: boolean;
+	}>;
+	openAISecretId?: string;
+}>;
+
+type JourneyContext = Readonly<{
+	obsidian: ObsidianClient;
+	plugin: PluginHandle;
+	sandbox: SandboxApi;
+}>;
+type Json = Record<string, any>;
+
+const FEED_CACHE_KEY = "podnotes:feed-cache:v5";
+
+type JourneySnapshot = Readonly<{
+	cache: unknown;
+	layout: Record<string, unknown>;
+	recentFiles: readonly string[];
+	mobile: boolean;
+	size: [number, number];
+	workspaceFiles: ReadonlyArray<{ path: string; bytes: Buffer | null }>;
+}>;
+
+const snapshots = new WeakMap<ObsidianClient, JourneySnapshot>();
+
+type ErrorRecorder = Readonly<{
+	id: string;
+	directory: string;
+	configPath: string;
+	configBytes: Buffer | null;
+	enabled: readonly string[];
+}>;
+
+const recorders = new WeakMap<ObsidianClient, ErrorRecorder>();
+
+export async function installJourneyErrorRecorder(obsidian: ObsidianClient): Promise<void> {
+	const vault = await obsidian.vaultPath();
+	const id = `podnotes-e2e-errors-${process.pid}`;
+	const directory = path.join(vault, ".obsidian", "plugins", id);
+	const configPath = path.join(vault, ".obsidian", "community-plugins.json");
+	const configBytes = await fs.readFile(configPath).catch((error: NodeJS.ErrnoException) => {
+		if (error.code !== "ENOENT") throw error;
+		return null;
+	});
+	const enabled = await obsidian.dev.evalJson<string[]>("[...app.plugins.enabledPlugins]");
+	await fs.mkdir(directory);
+	recorders.set(obsidian, { id, directory, configPath, configBytes, enabled });
+	await fs.writeFile(
+		path.join(directory, "manifest.json"),
+		JSON.stringify({
+			id,
+			name: "PodNotes E2E error recorder",
+			version: "1.0.0",
+			minAppVersion: "1.13.0",
+			description: "Capture uncaught errors before PodNotes starts.",
+			author: "PodNotes tests",
+		}),
+	);
+	// Obsidian initializes plugins before its CLI error buffer. Load this recorder first.
+	await fs.writeFile(
+		path.join(directory, "main.js"),
+		`
+		module.exports = class extends require("obsidian").Plugin {
+			onload() {
+				window.__podnotesJourneyEarlyErrors = [];
+				window.__podnotesJourneyRecorderBeforePodNotes = !this.app.plugins.plugins.podnotes?.api;
+				this.registerDomEvent(window, "error", (event) => window.__podnotesJourneyEarlyErrors.push({ source: "error", message: event.message }));
+				this.registerDomEvent(window, "unhandledrejection", (event) => window.__podnotesJourneyEarlyErrors.push({ source: "unhandledrejection", message: String(event.reason) }));
+			}
+			onunload() {
+				delete window.__podnotesJourneyEarlyErrors;
+				delete window.__podnotesJourneyRecorderBeforePodNotes;
+			}
+		};
+	`,
+	);
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		await app.plugins.loadManifests();
+		await app.plugins.enablePlugin(${JSON.stringify(id)});
+		app.plugins.enabledPlugins = new Set(${JSON.stringify([id, ...enabled])});
+		await app.plugins.saveConfig();
+		return true;
+	})()`);
+}
+
+export async function removeJourneyErrorRecorder(obsidian: ObsidianClient): Promise<void> {
+	const recorder = recorders.get(obsidian);
+	if (!recorder) return;
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		await app.plugins.disablePlugin(${JSON.stringify(recorder.id)});
+		app.plugins.enabledPlugins = new Set(${JSON.stringify(recorder.enabled)});
+		app.plugins.requestSaveConfig.cancel();
+		await app.plugins.saveConfig();
+		app.plugins.requestSaveConfig.cancel();
+		await app.vault.adapter.promise;
+		return true;
+	})()`);
+	if (recorder.configBytes === null) await fs.rm(recorder.configPath, { force: true });
+	else await fs.writeFile(recorder.configPath, recorder.configBytes);
+	await fs.rm(recorder.directory, { recursive: true });
+	await obsidian.dev.evalJsonAsync(
+		"(async () => { await app.plugins.loadManifests(); return true; })()",
+	);
+	recorders.delete(obsidian);
+}
+export async function snapshotJourneyState(obsidian: ObsidianClient): Promise<void> {
+	if (snapshots.has(obsidian)) throw new Error("Journey state was not restored.");
+	const runtime = await obsidian.dev.evalJson<Omit<JourneySnapshot, "workspaceFiles">>(`({
+		cache: app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}),
+		layout: app.workspace.getLayout(),
+		recentFiles: app.workspace.recentFileTracker.serialize(),
+		mobile: app.isMobile,
+		size: electronWindow.getSize(),
+	})`);
+	const vault = await obsidian.vaultPath();
+	const workspaceFiles = await Promise.all(
+		["workspace.json", "workspace-mobile.json"].map(async (name) => {
+			const filePath = path.join(vault, ".obsidian", name);
+			const bytes = await fs.readFile(filePath).catch((error: NodeJS.ErrnoException) => {
+				if (error.code !== "ENOENT") throw error;
+				return null;
+			});
+			return { path: filePath, bytes };
+		}),
+	);
+	snapshots.set(obsidian, { ...runtime, workspaceFiles });
+}
+
+export function hasJourneySnapshot(obsidian: ObsidianClient): boolean {
+	return snapshots.has(obsidian);
+}
+
+export async function restoreJourneyCache(obsidian: ObsidianClient): Promise<void> {
+	const snapshot = snapshots.get(obsidian);
+	if (!snapshot) return;
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		await app.plugins.disablePluginAndSave(${JSON.stringify(PLUGIN_ID)});
+		await app.plugins.saveConfig();
+		return true;
+	})()`);
+	await obsidian.dev.evalJson("window.__podnotesJourneyCacheReload = true");
+	await obsidian.exec("reload");
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev
+				.evalJson<boolean>(
+					"!window.__podnotesJourneyCacheReload && app.workspace.layoutReady && !app.plugins.plugins.podnotes",
+				)
+				.catch(() => false),
+		{ timeoutMs: 30_000, intervalMs: 200, message: "the disabled plugin's renderer to reload" },
+	);
+	await obsidian.dev.evalJson(
+		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, ${JSON.stringify(snapshot.cache)}), true`,
+	);
+}
+
+export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise<void> {
+	const snapshot = snapshots.get(obsidian);
+	if (!snapshot) return;
+	const failures: unknown[] = [];
+	try {
+		const mobile = await obsidian.dev.evalJson<boolean>("app.isMobile");
+		if (mobile !== snapshot.mobile) await setMobileEmulation(obsidian, snapshot.mobile);
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			await app.workspace.changeLayout(${JSON.stringify(snapshot.layout)});
+			app.workspace.recentFileTracker.load(${JSON.stringify(snapshot.recentFiles)});
+			electronWindow.setSize(${snapshot.size[0]}, ${snapshot.size[1]});
+			app.workspace.requestSaveLayout.cancel();
+			await app.workspace.saveLayout();
+			app.workspace.requestSaveLayout.cancel();
+			await app.vault.adapter.promise;
+			return true;
+		})()`);
+	} catch (error) {
+		failures.push(error);
+	}
+	const restored = await Promise.allSettled(
+		snapshot.workspaceFiles.map(async (file) => {
+			if (file.bytes === null) await fs.rm(file.path, { force: true });
+			else await fs.writeFile(file.path, file.bytes);
+		}),
+	);
+	snapshots.delete(obsidian);
+	for (const result of restored) {
+		if (result.status === "rejected") failures.push(result.reason);
+	}
+	if (failures.length) throw new AggregateError(failures, "Workspace could not be restored.");
+}
+
+export function storedEpisode(
+	server: FixtureServer,
+	feed: FixtureFeed,
+	episode: FixtureEpisode,
+): StoredEpisode {
+	return {
+		title: episode.title,
+		podcastName: feed.title,
+		streamUrl: server.mediaUrl(feed, episode),
+		url: "",
+		feedUrl: server.feedUrl(feed),
+		description: episode.description ?? "",
+		content: "",
+		artworkUrl: feed.artwork ? server.artworkUrl(feed) : "",
+		episodeDate: episode.pubDate ? new Date(episode.pubDate).toISOString() : "",
+		mediaType: "audio",
+	};
+}
+
+export function episodeRef(feed: FixtureFeed, episode: FixtureEpisode): EpisodeRef {
+	return { podcast: feed.title, title: episode.title };
+}
+
+export async function seedLibrary(
+	{ obsidian, plugin, sandbox }: JourneyContext,
+	server: FixtureServer | null,
+	seed: LibrarySeed = {},
+): Promise<void> {
+	await snapshotJourneyState(obsidian);
+	await obsidian.dev.evalJson(
+		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
+	);
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		await app.workspace.detachLeavesOfType(${JSON.stringify(VIEW_TYPE)});
+		return true;
+	})()`);
+
+	await plugin.updateDataAndReload<Json>((data) => {
+		for (const key of Object.keys(data)) delete data[key];
+		Object.assign(data, structuredClone(e2eConfig.defaultData));
+		data.note.path = sandbox.path("PodNotes/{{podcast}}/{{title}}.md");
+		data.feedNote.path = sandbox.path("PodNotes/Podcasts/{{podcast}}.md");
+		data.download.path = sandbox.path("Downloads/{{podcast}}/{{title}}");
+		data.transcript.path = sandbox.path("Transcripts/{{podcast}}/{{title}}.md");
+		data.savedFeeds = Object.fromEntries(
+			(seed.subscriptions ?? []).map((feed) => {
+				if (!server) throw new Error("Subscriptions need a fixture server.");
+				return [
+					feed.title,
+					{
+						title: feed.title,
+						url: server.feedUrl(feed),
+						artworkUrl: feed.artwork ? server.artworkUrl(feed) : "",
+					},
+				];
+			}),
+		);
+		if (seed.current) data.currentEpisode = seed.current;
+		data.queue.episodes = seed.queue ?? [];
+		data.playlists = Object.fromEntries(
+			(seed.playlists ?? []).map((playlist) => [
+				playlist.name,
+				{
+					icon: "list-music",
+					name: playlist.name,
+					episodes: playlist.episodes,
+					shouldEpisodeRemoveAfterPlay: playlist.removeAfterPlay,
+					shouldRepeat: false,
+				},
+			]),
+		);
+		data.playedEpisodes = Object.fromEntries(
+			(seed.progress ?? []).map(({ episode, seconds, duration, finished }) => [
+				`${episode.podcastName}::${episode.title}`,
+				{
+					title: episode.title,
+					podcastName: episode.podcastName,
+					time: seconds,
+					duration,
+					finished,
+				},
+			]),
+		);
+		if (seed.openAISecretId) data.openAISecretId = seed.openAISecretId;
+	}, RELOAD_OPTIONS);
+	await dismissNotices(obsidian);
+}
+
+export async function feedCacheHolds(
+	obsidian: ObsidianClient,
+	episodeTitle: string,
+): Promise<boolean> {
+	const cached = await obsidian.dev.evalJson<string | null>(
+		`app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)})`,
+	);
+	return cached?.includes(JSON.stringify(episodeTitle)) ?? false;
+}
+
+function decodeLibrary(data: Json): SavedLibrary {
+	if (data.schemaVersion !== 2) {
+		throw new Error(
+			`data.json schema ${String(data.schemaVersion)} is not the v2 these journeys read.`,
+		);
+	}
+	const titles = (episodes: Json[] | undefined) =>
+		(episodes ?? []).map((episode) => String(episode.title));
+	const played = Object.values<Json>(data.playedEpisodes ?? {});
+	return {
+		subscriptions: Object.values<Json>(data.savedFeeds ?? {}).map((feed) => ({
+			title: String(feed.title),
+			url: String(feed.url),
+		})),
+		currentEpisode: data.currentEpisode
+			? {
+					podcast: String(data.currentEpisode.podcastName),
+					title: String(data.currentEpisode.title),
+				}
+			: null,
+		queue: titles(data.queue?.episodes),
+		playlists: Object.fromEntries(
+			Object.values<Json>(data.playlists ?? {}).map((playlist) => [
+				String(playlist.name),
+				titles(playlist.episodes),
+			]),
+		),
+		localFiles: (data.localFiles?.episodes ?? []).map((episode: Json) => ({
+			title: String(episode.title),
+			filePath: String(episode.filePath),
+		})),
+		downloads: Object.entries<Json[]>(data.downloadedEpisodes ?? {}).flatMap(
+			([podcast, episodes]) =>
+				episodes.map((episode) => ({
+					podcast,
+					title: String(episode.title),
+					filePath: String(episode.filePath),
+				})),
+		),
+		skipBackwardSeconds: Number(data.skipBackwardLength),
+		progress: ({ podcast, title }) => {
+			const record = played.find(
+				(entry) => entry.podcastName === podcast && entry.title === title,
+			);
+			return record
+				? {
+						seconds: Number(record.time),
+						duration: Number(record.duration),
+						finished: record.finished === true,
+					}
+				: undefined;
+		},
+	};
+}
+
+export async function readLibrary(plugin: PluginHandle): Promise<SavedLibrary> {
+	return decodeLibrary(await plugin.data<Json>().read());
+}
+
+export async function waitForLibrary(
+	plugin: PluginHandle,
+	predicate: (library: SavedLibrary) => boolean,
+	message: string,
+	timeoutMs = 15_000,
+): Promise<SavedLibrary> {
+	let last: SavedLibrary | undefined;
+	try {
+		await plugin.waitForData<Json>((data) => predicate((last = decodeLibrary(data))), {
+			timeoutMs,
+			intervalMs: 200,
+		});
+	} catch (error) {
+		throw new Error(`${message} (data.json never matched): ${String(error)}`);
+	}
+	return last as SavedLibrary;
+}
+
+export async function observePlayback(obsidian: ObsidianClient): Promise<PlaybackObservation> {
+	return await obsidian.dev.evalJson<PlaybackObservation>(`(() => {
+		const api = app.plugins.plugins.${PLUGIN_ID}.api;
+		const media = document.querySelector('.workspace-leaf-content[data-type="${VIEW_TYPE}"] .episode-player :is(audio, video)');
+		const episode = api.podcast;
+		return {
+			episode: episode ? { podcast: episode.podcastName, title: episode.title } : null,
+			playing: api.isPlaying,
+			seconds: api.currentTime,
+			duration: Number.isFinite(api.length) ? api.length : null,
+			media: media ? { src: media.currentSrc, paused: media.paused, seconds: media.currentTime } : null,
+		};
+	})()`);
+}
+
+export async function waitForPlayback(
+	obsidian: ObsidianClient,
+	predicate: (playback: PlaybackObservation) => boolean,
+	message: string,
+	timeoutMs = 15_000,
+): Promise<PlaybackObservation> {
+	let last: PlaybackObservation | undefined;
+	try {
+		return await obsidian.waitFor(
+			async () => {
+				last = await observePlayback(obsidian);
+				return predicate(last) ? last : false;
+			},
+			{ timeoutMs, intervalMs: 100 },
+		);
+	} catch (error) {
+		const cause = (error as { causeError?: unknown }).causeError;
+		throw new Error(
+			`${message}; last playback ${JSON.stringify(last)}: ${String(error)}${cause ? ` (last read failed: ${String(cause)})` : ""}`,
+		);
+	}
+}
+
+export async function playbackOver(
+	obsidian: ObsidianClient,
+	gapMs: number,
+): Promise<[PlaybackObservation, PlaybackObservation]> {
+	const first = await observePlayback(obsidian);
+	await obsidian.sleep(gapMs);
+	return [first, await observePlayback(obsidian)];
+}
+
+export async function readVaultBytes(obsidian: ObsidianClient, filePath: string): Promise<Buffer> {
+	return await fs.readFile(path.join(await obsidian.vaultPath(), filePath));
+}
+
+export async function readVaultText(obsidian: ObsidianClient, filePath: string): Promise<string> {
+	return (await readVaultBytes(obsidian, filePath)).toString("utf8");
+}
+
+export async function writeVaultFile(
+	obsidian: ObsidianClient,
+	filePath: string,
+	contents: Buffer | string,
+): Promise<void> {
+	const absolute = path.join(await obsidian.vaultPath(), filePath);
+	await fs.mkdir(path.dirname(absolute), { recursive: true });
+	await fs.writeFile(absolute, contents);
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(
+				`Boolean(app.vault.getAbstractFileByPath(${JSON.stringify(filePath)}))`,
+			),
+		{ timeoutMs: 10_000, intervalMs: 100, message: `${filePath} indexed by Obsidian` },
+	);
+}
+
+export async function playerLeafCount(obsidian: ObsidianClient): Promise<number> {
+	return await obsidian.dev.evalJson<number>(
+		`app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length`,
+	);
+}

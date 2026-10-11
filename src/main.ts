@@ -16,10 +16,10 @@ import {
 } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import { registerCommands } from "src/commands";
-import { Notice, Platform, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
+import { normalizePath, Notice, Platform, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
-import { VIEW_TYPE } from "src/constants";
+import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
@@ -94,6 +94,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private isUnloaded = false;
 	private podcastViewMountEnabled = true;
 	private isReady = false;
+	// Why data.json must not be written, or null while writes are allowed. Set when the
+	// file exists but could not be read (a sync client's half-written copy, or one a
+	// reload cut off), and when the window starts unloading or Obsidian quits: a write
+	// started then is cut off after it truncates the file, which leaves data.json empty.
+	private writeRefusal: string | null = null;
+	// The data.json write in progress, settled either way, or null. Writes never overlap.
+	private writeInFlight: Promise<void> | null = null;
 	private pendingSave: IPodNotesSettings | null = null;
 	private pendingSaveWaiters: SaveWaiter[] = [];
 	private saveScheduled = false;
@@ -105,6 +112,18 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	override async onload() {
 		this.isUnloaded = false;
 		this.podcastViewMountEnabled = !this.isMobileRuntime();
+		this.registerDomEvent(window, "pagehide", () => {
+			this.writeRefusal = "PodNotes does not start a save while the window unloads.";
+		});
+		// Obsidian closes the window once its quit tasks settle, so start no write after
+		// quit and let a write in flight finish first. A reload fires no quit; pagehide
+		// covers it. A rejected quit task would stall the close until Obsidian forces it.
+		this.registerEvent(
+			this.app.workspace.on("quit", (tasks) => {
+				this.writeRefusal = "PodNotes does not start a save while Obsidian closes.";
+				if (this.writeInFlight) tasks.addPromise(this.writeInFlight);
+			}),
+		);
 		plugin.set(this);
 		this.credentials = new CredentialRepository(this.app.secretStorage);
 		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
@@ -439,7 +458,24 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	async loadSettings() {
 		try {
-			const decoded = decodePodNotesData(await this.loadData());
+			const data: unknown = await this.loadData();
+			// loadData resolves nullish both for a missing file and for one it could
+			// not read or parse, so tell them apart by whether the file exists.
+			if (data == null && (await this.app.vault.adapter.exists(this.dataFilePath()))) {
+				this.writeRefusal = "PodNotes does not save over a data.json it could not read.";
+				this.settings = structuredClone(DEFAULT_SETTINGS);
+				this.persistenceUnknownFields = {};
+				new Notice(
+					`PodNotes could not read ${this.dataFilePath()}, so it left the file unchanged and started with default settings. Nothing is saved until you restore or delete that file and restart Obsidian.`,
+					0,
+				);
+				console.error(
+					`PodNotes could not read ${this.dataFilePath()} and will not save over it`,
+				);
+				return;
+			}
+
+			const decoded = decodePodNotesData(data);
 			let settings = decoded.settings;
 			this.credentials ??= new CredentialRepository(this.app.secretStorage);
 
@@ -458,7 +494,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 							? this.credentials.storeValues(decoded.legacySecrets)
 							: {};
 					settings = { ...settings, ...references };
-					await this.saveData(encodePodNotesData(settings, decoded.unknownFields));
+					await this.writeDataFile(encodePodNotesData(settings, decoded.unknownFields));
 				} catch (error) {
 					throw new PodNotesSchemaMigrationError(
 						error,
@@ -491,7 +527,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					feedMigration.replacements,
 				);
 				evictCachedFeedUrls([...feedMigration.replacements.keys()]);
-				await this.saveData(encodePodNotesData(settings, decoded.unknownFields));
+				await this.writeDataFile(encodePodNotesData(settings, decoded.unknownFields));
 				const count = feedMigration.replacements.size;
 				new Notice(
 					`Moved ${count} private feed ${count === 1 ? "URL" : "URLs"} into Obsidian SecretStorage.`,
@@ -539,6 +575,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private requestSettingsSave(): Promise<void> {
 		if (!this.isReady) return Promise.resolve();
+		if (this.writeRefusal) {
+			const refused = Promise.reject<void>(new Error(this.writeRefusal));
+			void refused.catch(() => undefined);
+			return refused;
+		}
 
 		try {
 			this.pendingSave = this.cloneSettings();
@@ -575,7 +616,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				this.pendingSaveWaiters = [];
 
 				try {
-					await this.saveData(
+					await this.writeDataFile(
 						encodePodNotesData(snapshot, this.persistenceUnknownFields),
 					);
 					for (const waiter of waiters) waiter.resolve();
@@ -590,6 +631,22 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// already decided to exit.
 			this.saveScheduled = false;
 		}
+	}
+
+	// Every data.json write goes through here, so no path can write while writes are refused.
+	private async writeDataFile(data: unknown): Promise<void> {
+		if (this.writeRefusal) throw new Error(this.writeRefusal);
+		const write = this.saveData(data);
+		this.writeInFlight = write.catch(() => undefined);
+		try {
+			await write;
+		} finally {
+			this.writeInFlight = null;
+		}
+	}
+
+	private dataFilePath(): string {
+		return normalizePath(`${this.manifest.dir}/data.json`);
 	}
 
 	private cloneSettings(): IPodNotesSettings {

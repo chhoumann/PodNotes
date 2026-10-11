@@ -26,7 +26,12 @@ export const downloadedEpisodes = (() => {
 		 * collision), or `undefined` otherwise. The caller surfaces a Notice — this
 		 * store stays pure (no UI/side effects), per the PR #211/#212 layering (#LF-06).
 		 */
-		addEpisode: (episode: Episode, filePath: string, size: number): string | undefined => {
+		addEpisode: (
+			episode: Episode,
+			filePath: string,
+			size: number,
+			{ downloadedByPodNotes }: { downloadedByPodNotes?: true } = {},
+		): string | undefined => {
 			let replacedFilePath: string | undefined;
 
 			update((downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] }) => {
@@ -44,13 +49,9 @@ export const downloadedEpisodes = (() => {
 					if (existingFilePath && existingFilePath !== filePath) {
 						replacedFilePath = existingFilePath;
 					}
-					podcastEpisodes[idx] = { ...episode, filePath, size };
+					podcastEpisodes[idx] = { ...episode, filePath, size, downloadedByPodNotes };
 				} else {
-					podcastEpisodes.push({
-						...episode,
-						filePath,
-						size,
-					});
+					podcastEpisodes.push({ ...episode, filePath, size, downloadedByPodNotes });
 				}
 
 				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
@@ -59,13 +60,8 @@ export const downloadedEpisodes = (() => {
 
 			return replacedFilePath;
 		},
-		/**
-		 * Drops an episode from the offline set and returns the vault path of the
-		 * file it backed (or `undefined` if it wasn't tracked). Pure state only: the
-		 * caller deletes the returned file (see `removeDownloadedEpisode`).
-		 */
-		removeEpisode: (episode: Episode): string | undefined => {
-			let removedFilePath: string | undefined;
+		removeEpisode: (episode: Episode): DownloadedEpisode | undefined => {
+			let removed: DownloadedEpisode | undefined;
 
 			update((downloadedEpisodes) => {
 				const podcastEpisodes = downloadedEpisodes[episode.podcastName] || [];
@@ -76,14 +72,13 @@ export const downloadedEpisodes = (() => {
 					return downloadedEpisodes;
 				}
 
-				removedFilePath = podcastEpisodes[index].filePath;
-				podcastEpisodes.splice(index, 1);
+				[removed] = podcastEpisodes.splice(index, 1);
 
 				downloadedEpisodes[episode.podcastName] = podcastEpisodes;
 				return downloadedEpisodes;
 			});
 
-			return removedFilePath;
+			return removed;
 		},
 		getEpisode: (episode: Episode) => {
 			return get(store)[episode.podcastName]?.find((e) => e.title === episode.title);

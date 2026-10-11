@@ -8,10 +8,6 @@ on:
 permissions:
   pull-requests: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   validate:
     name: Validate PR title

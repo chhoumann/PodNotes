@@ -3,9 +3,16 @@ import { fileURLToPath } from "node:url";
 import {
 	type ObsidianClient,
 	type PluginReloadOptions,
+	createObsidianClient,
 	resolveObsidianEnvOptions,
 } from "obsidian-e2e";
-import { createPluginHarness } from "obsidian-e2e/vitest";
+import {
+	type VaultRunLock,
+	acquireVaultRunLock,
+	clearVaultRunLockMarker,
+	createPluginHarness,
+} from "obsidian-e2e/vitest";
+import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 
 export const PLUGIN_ID = "podnotes";
 export const VIEW_TYPE = "podcast_player_view";
@@ -37,9 +44,112 @@ export const RELOAD_OPTIONS: PluginReloadOptions = {
  * Canonical `OBSIDIAN_E2E_*` env is emitted by the shared runner; the legacy
  * `PODNOTES_E2E_*` aliases remain a fallback during the migration.
  */
-export const createPodNotesE2EHarness = createPluginHarness({
+export function createPodNotesE2EHarness(testName: string) {
+	const suiteClient = createObsidianClient(
+		resolveObsidianEnvOptions({ legacyPrefix: "PODNOTES" }),
+	);
+	let lock: VaultRunLock | undefined;
+	let wasEnabled = false;
+	let runtimeFailure: unknown;
+	// Own the lock before shared setup reloads the plugin and can open a player leaf.
+	beforeAll(async () => {
+		lock = await acquireVaultRunLock({
+			vaultName: suiteClient.vaultName,
+			vaultPath: await suiteClient.vaultPath(),
+			timeoutMs: 60_000,
+		});
+		await lock.publishMarker(suiteClient);
+		wasEnabled = await suiteClient.plugin(PLUGIN_ID).isEnabled();
+		await (await import("./journey/library")).snapshotJourneyState(suiteClient);
+		await (await import("./journey/library")).installJourneyErrorRecorder(suiteClient);
+	}, 90_000);
+	afterAll(async () => {
+		try {
+			const library = await import("./journey/library");
+			if (library.hasJourneySnapshot(suiteClient)) {
+				await library.restoreJourneyCache(suiteClient);
+				await suiteClient.plugin(PLUGIN_ID).enable();
+				await waitForPodNotesReady(suiteClient);
+				await suiteClient.dev.evalJsonAsync(
+					"(async () => { await app.plugins.saveConfig(); return true; })()",
+				);
+				await library.restoreJourneyWorkspace(suiteClient);
+				if (!wasEnabled) {
+					await suiteClient.dev.evalJsonAsync(
+						`(async () => { await app.plugins.disablePluginAndSave(${JSON.stringify(PLUGIN_ID)}); await app.plugins.saveConfig(); return true; })()`,
+					);
+				}
+			}
+			await (await import("./journey/actions")).assertNoRuntimeErrors(suiteClient);
+		} finally {
+			if (lock) {
+				try {
+					await (
+						await import("./journey/library")
+					).removeJourneyErrorRecorder(suiteClient);
+				} finally {
+					try {
+						await clearVaultRunLockMarker(suiteClient);
+					} finally {
+						await lock.release();
+					}
+				}
+			}
+		}
+	}, 60_000);
+	afterEach(async () => {
+		try {
+			if ((await import("./journey/library")).hasJourneySnapshot(getContext().obsidian)) {
+				await getContext().obsidian.dev.evalJsonAsync(
+					"(async () => { await app.plugins.saveConfig(); return true; })()",
+				);
+			}
+			await (
+				await import("./journey/library")
+			).restoreJourneyWorkspace(getContext().obsidian);
+			await (await import("./journey/actions")).assertNoRuntimeErrors(getContext().obsidian);
+		} catch (error) {
+			if (runtimeFailure)
+				throw new AggregateError(
+					[runtimeFailure, error],
+					"Runtime and workspace restoration failed.",
+				);
+			throw error;
+		}
+		if (runtimeFailure) throw runtimeFailure;
+	});
+	const getContext = createSharedHarness(testName);
+	beforeAll(async () =>
+		(await import("./journey/actions")).assertNoRuntimeErrors(getContext().obsidian),
+	);
+	afterEach(async () => {
+		const { obsidian } = getContext();
+		if ((await import("./journey/library")).hasJourneySnapshot(obsidian)) {
+			try {
+				await (await import("./journey/actions")).assertNoRuntimeErrors(obsidian);
+			} catch (error) {
+				runtimeFailure = error;
+			}
+		}
+	});
+	// The shared harness rolls back only files a test wrote through the client, so
+	// data.json is snapshotted up front for tests that change settings through the UI.
+	beforeEach(async () => {
+		await (await import("./journey/actions")).assertNoRuntimeErrors(getContext().obsidian);
+		runtimeFailure = undefined;
+		await getContext().obsidian.dev.evalJson("window.__podnotesJourneyEarlyErrors = [], true");
+		await getContext().obsidian.exec("dev:errors", { clear: true });
+		await getContext()
+			.plugin.data()
+			.patch(() => undefined);
+	});
+	return getContext;
+}
+
+const createSharedHarness = createPluginHarness({
 	...resolveObsidianEnvOptions({ legacyPrefix: "PODNOTES" }),
 	pluginId: PLUGIN_ID,
+	sharedVaultLock: false,
 	reload: {
 		readyCommandId: RELOAD_OPTIONS.readyOptions?.commandId,
 		timeoutMs: 30_000,
@@ -54,6 +164,11 @@ export const createPodNotesE2EHarness = createPluginHarness({
 	beforeDataRestore: async (obsidian) => {
 		await detachPodNotesViews(obsidian);
 		await flushPodNotesSaves(obsidian);
+		const library = await import("./journey/library");
+		if (library.hasJourneySnapshot(obsidian)) {
+			// Reload while disabled so old feed requests cannot write over the restored cache.
+			await library.restoreJourneyCache(obsidian);
+		}
 	},
 	symlinkArtifacts: ["main.js", "manifest.json"],
 	// Module-relative, not process.cwd(): the factory otherwise compares dev-vault
@@ -70,6 +185,50 @@ export const createPodNotesE2EHarness = createPluginHarness({
  */
 export function evalJsonAsync<T>(obsidian: ObsidianClient, code: string): Promise<T> {
 	return obsidian.dev.evalJsonAsync<T>(code);
+}
+
+export async function writeSilentWav(
+	obsidian: ObsidianClient,
+	audioPath: string,
+	seconds: number,
+): Promise<void> {
+	await evalJsonAsync<boolean>(
+		obsidian,
+		`(async () => {
+			const sampleRate = 8_000;
+			const sampleCount = sampleRate * ${seconds};
+			const bytes = new Uint8Array(44 + sampleCount);
+			const view = new DataView(bytes.buffer);
+			const ascii = (offset, value) => {
+				for (let index = 0; index < value.length; index++) {
+					bytes[offset + index] = value.charCodeAt(index);
+				}
+			};
+
+			ascii(0, "RIFF");
+			view.setUint32(4, 36 + sampleCount, true);
+			ascii(8, "WAVE");
+			ascii(12, "fmt ");
+			view.setUint32(16, 16, true);
+			view.setUint16(20, 1, true);
+			view.setUint16(22, 1, true);
+			view.setUint32(24, sampleRate, true);
+			view.setUint32(28, sampleRate, true);
+			view.setUint16(32, 1, true);
+			view.setUint16(34, 8, true);
+			ascii(36, "data");
+			view.setUint32(40, sampleCount, true);
+			bytes.fill(128, 44);
+
+			const existing = app.vault.getAbstractFileByPath(${JSON.stringify(audioPath)});
+			if (existing) {
+				await app.vault.modifyBinary(existing, bytes.buffer);
+			} else {
+				await app.vault.createBinary(${JSON.stringify(audioPath)}, bytes.buffer);
+			}
+			return true;
+		})()`,
+	);
 }
 
 export async function waitForPodNotesReady(obsidian: ObsidianClient): Promise<void> {
@@ -124,6 +283,25 @@ async function flushPodNotesSaves(obsidian: ObsidianClient): Promise<void> {
 		})()
 	`,
 	);
+}
+
+export function expectKnownFailure<T>(
+	issue: number,
+	captured: T,
+	known: { correct: (value: T) => void; reproduces: (value: T) => boolean },
+): void {
+	let failure: unknown;
+	try {
+		known.correct(captured);
+	} catch (error) {
+		failure = error;
+	}
+	if (failure === undefined) {
+		throw new Error(
+			`#${issue} no longer reproduces: remove its known-failure marker. Captured ${JSON.stringify(captured)}`,
+		);
+	}
+	if (!known.reproduces(captured)) throw failure;
 }
 
 export async function openPodNotesView(obsidian: ObsidianClient): Promise<void> {
