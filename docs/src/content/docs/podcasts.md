@@ -1,3 +1,8 @@
+---
+title: Podcasts
+slug: podcasts
+---
+
 ## Adding podcasts
 You can add podcasts by searching for them in the podcast search box in settings.
 This searches the iTunes podcast repository.
