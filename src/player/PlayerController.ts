@@ -87,7 +87,7 @@ export class PlayerController {
 	private snapshot: PlayerState;
 	private el: HTMLMediaElement;
 	private session: Session | null = null;
-	/** The user moved the position since the last load: a new load starts there, not at the saved progress. */
+	/** The user moved the position and it is not saved yet: a new load starts there, not at the saved progress. */
 	private moved = false;
 	private stage: HTMLElement | null = null;
 	/** Advanced by every intent that makes a deferred play stale. */
@@ -157,6 +157,7 @@ export class PlayerController {
 			session.segmentEnd = endTime ?? null;
 			session.preview = endTime !== undefined;
 			if (time === undefined && status === "ended") this.moveTo(0);
+			if (time !== undefined) this.moved = true;
 			if (time === undefined || this.moveTo(time)) this.start();
 			return true;
 		}
@@ -172,6 +173,7 @@ export class PlayerController {
 		}
 		const resumeAt = sameEpisode ? this.restartTime(episode) : this.resumeTime(episode);
 		this.load(episode, source, time ?? resumeAt, endTime);
+		this.moved = time !== undefined;
 		return true;
 	}
 
@@ -537,6 +539,7 @@ export class PlayerController {
 		if (!session || !this.holdsMedia() || session.preview || this.disposed || !episode) return;
 		const time = this.el.currentTime;
 		playedEpisodes.setEpisodeTime(episode, time, duration, duration > 0 && time >= duration);
+		this.moved = false;
 	}
 
 	/** The composite key's record, else a legacy title-only record that does not name another podcast. */
