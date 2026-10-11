@@ -608,4 +608,39 @@ describe("a timestamp link PodNotes wrote for the loaded episode", () => {
 		expect(media().src).toBe("app://resource/A/Clip.mp3");
 		expect(mockGetEpisodes).not.toHaveBeenCalled();
 	});
+
+	test("plays the file it names after a same-named file in another folder replaced it", async () => {
+		vaultFiles = ["A/Clip.mp3", "B/Clip.mp3"];
+		loadedAt(clip("A"), 15);
+		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
+		localFiles.set({ ...emptyLocalFiles, episodes: [clip("B")] });
+		loadedAt(clip("B"), 40);
+
+		await follow(written);
+		metadata();
+
+		expect(media().src).toBe("app://resource/A/Clip.mp3");
+		expect(media().currentTime).toBe(15);
+		expect(state().episode).toMatchObject({ title: "Clip", filePath: "A/Clip.mp3" });
+	});
+});
+
+describe("links that arrive while another link loads its feed", () => {
+	test("a link refused before its fetch leaves the earlier one to play", async () => {
+		let resolveFeed!: (episodes: Episode[]) => void;
+		mockGetEpisodes.mockReturnValue(
+			new Promise<Episode[]>((resolve) => {
+				resolveFeed = resolve;
+			}),
+		);
+
+		const pending = link({ time: "240" });
+		await link({ url: "http://localhost/feed.xml", time: "5" });
+		await link({ url: "podnotes-private-feed:Unknown%20Feed", time: "5" });
+		resolveFeed([testEpisode]);
+		await pending;
+
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
+		expect(media().src).toBe(testEpisode.streamUrl);
+	});
 });
