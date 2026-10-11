@@ -59,7 +59,8 @@ describe("local files runtime", () => {
 			await clickInPodNotesView(obsidian, 'button[aria-label="Podcast grid"]');
 			await clickInPodNotesView(obsidian, 'button.playlist-card[aria-label="Local Files"]');
 			await clickInPodNotesView(obsidian, `[aria-label="More options for ${title}"]`);
-			await clickMenuItem(obsidian, "Remove file");
+			const removalMenu = await clickMenuItem(obsidian, "Remove from Local Files");
+			expect(removalMenu).not.toContain("Remove file");
 			await plugin.waitForData<PodNotesData>(
 				(data) => !inDownloads(data) && !inLocalFiles(data),
 				WAIT_OPTS,

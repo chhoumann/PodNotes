@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { Menu } from "obsidian";
+import { Menu, MenuItem } from "obsidian";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-import { playedEpisodes, playlists, queue } from "src/store";
+import { downloadedEpisodes, playedEpisodes, playlists, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
 
 const episode: Episode = {
@@ -37,6 +37,7 @@ beforeEach(() => {
 	});
 	playlists.set({});
 	playedEpisodes.set({});
+	downloadedEpisodes.set({});
 });
 
 describe("spawnEpisodeContextMenu anchoring (CM-general)", () => {
@@ -64,5 +65,32 @@ describe("spawnEpisodeContextMenu anchoring (CM-general)", () => {
 
 		atMouse.mockRestore();
 		atPos.mockRestore();
+	});
+});
+
+describe("spawnEpisodeContextMenu removal item", () => {
+	function downloadItemTitles(target: Episode) {
+		const setTitle = vi.spyOn(MenuItem.prototype, "setTitle");
+		spawnEpisodeContextMenu(target, { x: 0, y: 0 }, { ...allDisabled, download: false });
+		const titles = setTitle.mock.calls.map(([title]) => title);
+		setTitle.mockRestore();
+		return titles;
+	}
+
+	test("offers to remove a tracked local file from Local Files", () => {
+		const localFile = { ...episode, title: "Interview", podcastName: "local file" };
+		downloadedEpisodes.set({
+			"local file": [{ ...localFile, filePath: "Recordings/Interview.wav", size: 4 }],
+		});
+
+		expect(downloadItemTitles(localFile)).toEqual(["Remove from Local Files"]);
+	});
+
+	test("offers to remove the file of a downloaded feed episode", () => {
+		downloadedEpisodes.set({
+			Podcast: [{ ...episode, filePath: "Podcasts/Episode.mp3", size: 4 }],
+		});
+
+		expect(downloadItemTitles(episode)).toEqual(["Remove file"]);
 	});
 });

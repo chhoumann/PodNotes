@@ -351,15 +351,9 @@ export function safeDownloadFilePath(
 	return enforceMaxPathLength(`${basename}.${extension}`, `.${extension}`);
 }
 
-/**
- * Remove a downloaded episode: drop it from the offline set and delete its
- * backing vault file. This composes the pure store removal with the file I/O so
- * callers can't do one without the other (and leak files); the download store
- * stays free of vault side effects.
- */
 export async function removeDownloadedEpisode(episode: Episode): Promise<void> {
 	const removedFilePath = downloadedEpisodes.removeEpisode(episode);
-	if (removedFilePath) {
+	if (removedFilePath && !isLocalFile(episode)) {
 		await deleteEpisodeFile(removedFilePath);
 	}
 }
