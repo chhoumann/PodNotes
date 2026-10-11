@@ -294,11 +294,11 @@ describe("PodNotes data schema", () => {
 		expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
 	});
 
-	it.each([[], "data", 42, true])("fails closed for malformed root %p", (value) => {
+	it.each([[[]], ["data"], [42], [true]])("fails closed for malformed root %o", (value) => {
 		expect(() => decodePodNotesData(value)).toThrowError(PodNotesDataError);
 	});
 
-	it.each([0, -1, 1.5, "1", null])("fails closed for invalid schema version %p", (version) => {
+	it.each([0, -1, 1.5, "1", null])("fails closed for invalid schema version %o", (version) => {
 		expect(() => decodePodNotesData({ schemaVersion: version })).toThrowError(
 			/invalid schemaVersion/,
 		);
