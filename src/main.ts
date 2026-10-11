@@ -38,6 +38,7 @@ import {
 	encodePodNotesData,
 	PODNOTES_DATA_SCHEMA_VERSION,
 	PodNotesDataError,
+	toDocument,
 	type PersistedPodNotesDataV2,
 } from "./persistence/podNotesData";
 import { jsonValuesEqual, restoreDropped } from "./persistence/merge";
@@ -85,14 +86,6 @@ function holdsData(text: string, data: unknown): boolean {
 	} catch {
 		return false;
 	}
-}
-
-/** data.json as plain JSON: what the merge compares and what saveData writes. */
-function toDocument(
-	settings: IPodNotesSettings,
-	unknownFields: Record<string, unknown>,
-): PersistedPodNotesDataV2 {
-	return JSON.parse(JSON.stringify(encodePodNotesData(settings, unknownFields)));
 }
 
 class PodNotesSchemaMigrationError extends Error {
@@ -496,7 +489,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// not read or parse.
 			if (data == null && !(await this.dataFileHoldsNothing())) {
 				this.settings = structuredClone(DEFAULT_SETTINGS);
-				this.persistenceUnknownFields = {};
+				// A new library: if the file goes away, this device's next save must not pass
+				// for a version of the one it could not read.
+				this.persistenceUnknownFields = decodePodNotesData(null).unknownFields;
 				this.refuseSaves(
 					"unreadable-data-file",
 					`PodNotes could not read ${this.dataFilePath()}, so it left the file unchanged and started with default settings. Nothing is saved until the file can be read again, or until you delete it and restart Obsidian.`,

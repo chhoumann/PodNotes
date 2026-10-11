@@ -1,6 +1,8 @@
+import { DEFAULT_SETTINGS } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import { isPlainObject, type UnknownRecord } from "./codecUtils";
+import { toDocument } from "./podNotesData";
 
 /**
  * Structural equality for JSON-like settings values. Key order does not matter;
@@ -160,7 +162,7 @@ function threeWayMergeEpisodeList(
  * - If disk is unchanged from base, take local (preserves in-memory edits).
  * - If both changed a `currentEpisode`, a progress record, a saved feed or a note
  *   mapping, take local whole.
- * - If both changed the same plain object, recurse per key.
+ * - If both changed, or both added, the same plain object, recurse per key.
  * - Episode lists merge by episode key.
  * - Other irreducible array/leaf conflicts prefer local.
  */
@@ -175,11 +177,23 @@ export function threeWayMergeSettings<T>(
 	if (jsonValuesEqual(disk, base)) return structuredClone(local);
 	if (isAtomicPath(path)) return mergeWhole(base, local, disk);
 
-	if (isPlainObject(base) && isPlainObject(local) && isPlainObject(disk)) {
-		const keys = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(disk)]);
+	if (
+		(base === undefined || isPlainObject(base)) &&
+		isPlainObject(local) &&
+		isPlainObject(disk)
+	) {
+		const ancestor: UnknownRecord = base ?? {};
+		const keys = new Set([
+			...Object.keys(ancestor),
+			...Object.keys(local),
+			...Object.keys(disk),
+		]);
 		const merged: UnknownRecord = {};
 		for (const key of keys) {
-			const value = threeWayMergeSettings(base[key], local[key], disk[key], [...path, key]);
+			const value = threeWayMergeSettings(ancestor[key], local[key], disk[key], [
+				...path,
+				key,
+			]);
 			// JSON has no undefined: a merged-away key must be absent, or the
 			// written document never equals the same document read back.
 			if (value !== undefined) merged[key] = value;
@@ -200,6 +214,26 @@ export function threeWayMergeSettings<T>(
 
 	// Other arrays and primitives: both sides diverged, keep the in-memory edit.
 	return structuredClone(local);
+}
+
+/**
+ * Memory `local` merged with the file `disk`, given `base`, the file this device
+ * last loaded or wrote. A file whose `libraryId` differs from base's is another
+ * library, started on a device that never saw this one's file: the two merge from
+ * the empty library, so every entry of both survives, a preference one side left
+ * at its default takes the other's, and a real conflict keeps this device's. The
+ * result keeps the `libraryId` of the library started first, so that library's
+ * devices go on merging three ways.
+ */
+export function mergeDataFile<T>(base: T, local: T, disk: T): T {
+	const lineage = (doc: T) => (doc as UnknownRecord).libraryId as string;
+	if (lineage(base) === lineage(disk)) return threeWayMergeSettings(base, local, disk);
+
+	const empty = toDocument(structuredClone(DEFAULT_SETTINGS)) as T;
+	const merged = threeWayMergeSettings(empty, local, disk) as UnknownRecord;
+	// Memory, not base: memory may already hold a library that started earlier.
+	merged.libraryId = [lineage(local), lineage(disk)].sort()[0];
+	return merged as T;
 }
 
 /**

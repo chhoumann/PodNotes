@@ -377,7 +377,6 @@ describe("DataFileWriter changes made elsewhere", () => {
 		await writer.onExternalChange();
 
 		expect(state.memory.savedFeeds.Synced).toEqual({ title: "Synced" });
-		expect(writer.hasBase).toBe(true);
 		expect(clock.pending()).toBe(0);
 		expect(state.writes).toHaveLength(0);
 	});
@@ -432,7 +431,8 @@ describe("DataFileWriter changes made elsewhere", () => {
 		await writer.onExternalChange();
 
 		expect(file.state.memory).toEqual(file.state.disk);
-		expect(writer.hasBase).toBe(true);
+		await writer.save();
+		expect(file.access.write).not.toHaveBeenCalled();
 	});
 });
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
@@ -78,6 +78,44 @@ describe("PodNotes data schema", () => {
 		expect(DEFAULT_SETTINGS.savedFeeds).toEqual({});
 		expect(second.settings.queue.episodes).toEqual([]);
 	});
+
+	it("gives each new install its own library id, sorting after earlier installs and every unmarked library", () => {
+		vi.spyOn(crypto, "randomUUID")
+			.mockReturnValueOnce("ffffffff-ffff-4fff-bfff-ffffffffffff")
+			.mockReturnValue("00000000-0000-4000-8000-000000000000");
+		vi.setSystemTime(new Date("2026-10-11T09:00:00.000Z"));
+		const [earlier, sameInstant] = [decodePodNotesData(null), decodePodNotesData(undefined)];
+		vi.setSystemTime(new Date("2026-10-11T10:00:00.000Z"));
+		const later = decodePodNotesData(null);
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+		const [earlierId, sameInstantId, laterId] = [earlier, sameInstant, later].map(
+			({ unknownFields }) => unknownFields.libraryId,
+		);
+
+		expect([earlierId, sameInstantId, laterId]).toEqual(Array(3).fill(expect.any(String)));
+		expect(sameInstantId).not.toBe(earlierId);
+		expect(["", earlierId, laterId].sort()).toEqual(["", earlierId, laterId]);
+		expect(encodePodNotesData(later.settings, later.unknownFields).libraryId).toBe(laterId);
+	});
+
+	it.each([
+		["names none", undefined, ""],
+		["names one that is not text", 7, ""],
+		["names one", "2026-10-11T09:00:00.000Z 0b9d", "2026-10-11T09:00:00.000Z 0b9d"],
+	])(
+		"keeps the library id of a file that %s for the save to write back",
+		(_, libraryId, kept) => {
+			const file = JSON.parse(
+				JSON.stringify(encodePodNotesData(DEFAULT_SETTINGS, { libraryId })),
+			);
+			const decoded = decodePodNotesData(file);
+
+			expect(encodePodNotesData(decoded.settings, decoded.unknownFields).libraryId).toBe(
+				kept,
+			);
+		},
+	);
 
 	it("round-trips every persisted episode container with canonical dates", () => {
 		const settings = settingsWithEveryEpisodeContainer();

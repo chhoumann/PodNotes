@@ -1,5 +1,5 @@
 import { toError } from "src/utility/toError";
-import { jsonValuesEqual, threeWayMergeSettings } from "./merge";
+import { jsonValuesEqual, mergeDataFile, threeWayMergeSettings } from "./merge";
 
 /** Timers of the main window. A popout's timers stop when the popout closes. */
 export interface Clock {
@@ -55,11 +55,6 @@ export class DataFileWriter<Doc> {
 		/** What PodNotes last loaded or wrote; null until a readable file was loaded. */
 		private base: Doc | null,
 	) {}
-
-	/** Whether a readable data.json has been loaded or written. */
-	get hasBase(): boolean {
-		return this.base !== null;
-	}
 
 	/**
 	 * Save after any save already running; changes made until it starts share it.
@@ -190,7 +185,7 @@ export class DataFileWriter<Doc> {
 		const local = this.file.local();
 		let toWrite = local;
 		if (disk && base) {
-			toWrite = threeWayMergeSettings(base, local, disk);
+			toWrite = mergeDataFile(base, local, disk);
 		} else if (!disk && this.failedWrite) {
 			// A failed write that left nothing on disk held the changes made elsewhere:
 			// write them again, with the edits made here since.
@@ -242,7 +237,7 @@ export class DataFileWriter<Doc> {
 		if (base && jsonValuesEqual(disk, base)) return;
 
 		const local = this.file.local();
-		const merged = base ? threeWayMergeSettings(base, local, disk) : structuredClone(disk);
+		const merged = base ? mergeDataFile(base, local, disk) : structuredClone(disk);
 		this.base = disk;
 		if (!jsonValuesEqual(merged, local)) this.publish(merged);
 		if (jsonValuesEqual(merged, disk)) this.cancelTimer();

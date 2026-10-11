@@ -42,7 +42,11 @@ export interface DecodedPodNotesData {
 	legacySecrets: CredentialValues;
 	/** Retired fields found in v2 must be scrubbed without importing their values. */
 	retiredPlaintextPresent: boolean;
-	/** Unknown supported-schema root fields retained so a normal save does not erase them. */
+	/**
+	 * Unknown supported-schema root fields retained so a normal save does not erase them.
+	 * Also carries `libraryId`, the file's lineage: its string id, or "" for a library
+	 * started before ids, which sorts before every id.
+	 */
 	unknownFields: UnknownRecord;
 }
 
@@ -72,8 +76,14 @@ export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
  * does not understand.
  */
 export function decodePodNotesData(value: unknown): DecodedPodNotesData {
-	// No data.json yet is a new install, which starts from the current defaults.
-	if (value === null || value === undefined) value = structuredClone(DEFAULT_SETTINGS);
+	// No data.json yet is a new install, which starts from the current defaults as a
+	// new library. Ids sort by when the library started.
+	if (value === null || value === undefined) {
+		value = {
+			...structuredClone(DEFAULT_SETTINGS),
+			libraryId: `${new Date().toISOString()} ${crypto.randomUUID()}`,
+		};
+	}
 
 	if (!isPlainObject(value)) {
 		throw new PodNotesDataError(
@@ -90,6 +100,8 @@ export function decodePodNotesData(value: unknown): DecodedPodNotesData {
 		Object.prototype.hasOwnProperty.call(value, key),
 	);
 	const unknownFields = copyUnknownRootFields(value);
+	const { libraryId } = unknownFields;
+	unknownFields.libraryId = typeof libraryId === "string" ? libraryId : "";
 
 	return {
 		settings,
@@ -131,6 +143,14 @@ export function encodePodNotesData(
 			episodes.map((episode) => encodeEpisode(episode)),
 		),
 	};
+}
+
+/** data.json as plain JSON: what the merge compares and what saveData writes. */
+export function toDocument(
+	settings: IPodNotesSettings,
+	unknownFields?: UnknownRecord,
+): PersistedPodNotesDataV2 {
+	return JSON.parse(JSON.stringify(encodePodNotesData(settings, unknownFields)));
 }
 
 function readSchemaVersion(root: UnknownRecord): PodNotesDataSchemaVersion {

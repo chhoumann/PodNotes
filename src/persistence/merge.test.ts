@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS } from "src/constants";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { PersistedEpisode, PersistedPlaylist } from "./episodeCodec";
-import { jsonValuesEqual, restoreDropped, threeWayMergeSettings } from "./merge";
+import { jsonValuesEqual, mergeDataFile, restoreDropped, threeWayMergeSettings } from "./merge";
 import { encodePodNotesData, type PersistedPodNotesDataV2 } from "./podNotesData";
 
 type Data = PersistedPodNotesDataV2;
@@ -482,6 +482,85 @@ describe("threeWayMergeSettings", () => {
 		const merged = threeWayMergeSettings(base, local, disk);
 		expect(merged.queue.episodes).toEqual(disk.queue.episodes);
 		expect(merged.playedEpisodes).toEqual(local.playedEpisodes);
+	});
+});
+
+describe("mergeDataFile", () => {
+	const earlierId = "2026-10-11T09:00:00.000Z 0b9d";
+	const laterId = "2026-10-11T10:00:00.000Z 41c7";
+
+	/** A library started on its own device: one podcast, its progress and a queued episode. */
+	function library(podcastName: string, libraryId: string): Data {
+		const doc: Data = JSON.parse(
+			JSON.stringify(encodePodNotesData(structuredClone(DEFAULT_SETTINGS), { libraryId })),
+		);
+		doc.savedFeeds = { [podcastName]: feed(podcastName) };
+		doc.playedEpisodes = {
+			[`${podcastName}::Ep 1`]: { ...played("Ep 1", 10), podcastName },
+		};
+		doc.queue.episodes = [episode("Ep 1", podcastName)];
+		return doc;
+	}
+
+	it.each([
+		["a library started before ids", ""],
+		["a library with an id", earlierId],
+	])("takes a podcast another device of %s removed", (_, libraryId) => {
+		const base = { ...data(), libraryId };
+		const disk = structuredClone(base);
+		delete disk.savedFeeds["Pod A"];
+
+		expect(mergeDataFile(base, structuredClone(base), disk).savedFeeds).toEqual({});
+	});
+
+	it("keeps every entry of two libraries that meet, whichever device merges", () => {
+		const started = library("Pod A", "");
+		started.defaultPlaybackRate = 1.5;
+		const joined = library("Pod B", earlierId);
+
+		for (const [local, disk] of [
+			[started, joined],
+			[joined, started],
+		]) {
+			const merged = mergeDataFile(local, structuredClone(local), disk);
+			expect(Object.keys(merged.savedFeeds).sort()).toEqual(["Pod A", "Pod B"]);
+			expect(Object.keys(merged.playedEpisodes).sort()).toEqual([
+				"Pod A::Ep 1",
+				"Pod B::Ep 1",
+			]);
+			expect(merged.queue.episodes.map((entry) => entry.podcastName).sort()).toEqual([
+				"Pod A",
+				"Pod B",
+			]);
+			expect(merged.defaultPlaybackRate).toBe(1.5);
+		}
+	});
+
+	it("keeps the lineage of the library started first", () => {
+		const unmarked = library("Pod A", "");
+		const earlier = library("Pod B", earlierId);
+		const later = library("Pod C", laterId);
+
+		expect(mergeDataFile(unmarked, unmarked, earlier).libraryId).toBe("");
+		expect(mergeDataFile(earlier, earlier, unmarked).libraryId).toBe("");
+		expect(mergeDataFile(later, later, earlier).libraryId).toBe(earlierId);
+		expect(mergeDataFile(earlier, earlier, later).libraryId).toBe(earlierId);
+		// Memory took the unmarked library and has not saved it yet: base is the file it read.
+		expect(mergeDataFile(earlier, { ...earlier, libraryId: "" }, later).libraryId).toBe("");
+	});
+
+	it("keeps the episodes of a playlist both libraries created under one name", () => {
+		const started = library("Pod A", "");
+		const joined = library("Pod B", earlierId);
+		started.playlists = { "Road Trip": playlist("Road Trip", [episode("Ep 1", "Pod A")]) };
+		joined.playlists = { "Road Trip": playlist("Road Trip", [episode("Ep 1", "Pod B")]) };
+
+		const merged = mergeDataFile(started, structuredClone(started), joined);
+
+		expect(merged.playlists["Road Trip"].episodes.map((entry) => entry.podcastName)).toEqual([
+			"Pod A",
+			"Pod B",
+		]);
 	});
 });
 

@@ -60,7 +60,7 @@ describe("persistence byte fixture", () => {
 		expect(decoded.changed).toBe(false);
 		expect(
 			JSON.parse(JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields))),
-		).toEqual(data);
+		).toEqual({ ...data, libraryId: "" });
 		expect(Object.keys(data.savedFeeds)).toHaveLength(50);
 		expect(Object.keys(data.playedEpisodes)).toHaveLength(2000);
 		const downloads = Object.values(decoded.settings.downloadedEpisodes).flat();
