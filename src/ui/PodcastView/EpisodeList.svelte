@@ -30,7 +30,7 @@
 		return entries.map((entry) => {
 			const key = getEpisodeKey(entry.episode);
 			let row = key;
-			for (let repeat = 1; keys.has(row); repeat++) row = `${key}#${repeat}`;
+			for (let repeat = 1; keys.has(row); repeat++) row = `${key}\u0000${repeat}`;
 			keys.add(row);
 			return [row, entry];
 		});
