@@ -95,7 +95,8 @@
 		{#if visibleEntries.length === 0 && !isLoading}
 			<p>No episodes found.</p>
 		{/if}
-		{#each visibleEntries as entry, index (getEpisodeKey(entry.episode) ?? `${entry.episode.title}-${entry.episode.episodeDate ?? ""}-${index}`)}
+		<!-- Episode keys repeat for same-titled podcasts or episodes; the index keeps row keys unique. -->
+		{#each visibleEntries as entry, index (`${getEpisodeKey(entry.episode)}:${index}`)}
 			<EpisodeListItem
 				episode={entry.episode}
 				episodeFinished={isEpisodeFinished(entry.episode, $playedEpisodes)}
