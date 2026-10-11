@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
+import { get } from "svelte/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Notice, type SecretStorage } from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import { encodePodNotesData } from "./persistence/podNotesData";
+import { PlayerController } from "./player/PlayerController";
 import { downloadedEpisodes, localFiles } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
@@ -367,6 +369,42 @@ describe("PodNotes persistence integration", () => {
 		await plugin.onExternalSettingsChange();
 
 		expect(plugin.settings.playedEpisodes["Pod::A"].time).toBe(99);
+	});
+
+	it("shows the progress a sync brings for the restored episode, without loading it", async () => {
+		const plugin = makePlugin(vi.fn().mockResolvedValue(undefined));
+		const episode = {
+			title: "A",
+			streamUrl: "https://pod.example.com/a.mp3",
+			url: "",
+			description: "",
+			content: "",
+			podcastName: "Pod",
+		};
+		plugin.settings.currentEpisode = episode;
+		plugin.settings.playedEpisodes = {
+			"Pod::A": { title: "A", podcastName: "Pod", time: 600, duration: 3600, finished: false },
+		};
+		attachDataFileWriter(plugin);
+		(plugin as unknown as { setCollectionStores(): void }).setCollectionStores();
+		plugin.player = new PlayerController(document, plugin);
+		plugin.player.restore(plugin.settings.currentEpisode);
+		const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+		synced.playedEpisodes["Pod::A"].time = 2400;
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(synced) });
+
+		try {
+			await plugin.onExternalSettingsChange();
+
+			expect(get(plugin.player.state)).toMatchObject({
+				status: "restored",
+				episode: { title: "A" },
+				currentTime: 2400,
+			});
+			expect(document.querySelector(".podnotes-media")?.getAttribute("src")).toBeNull();
+		} finally {
+			plugin.player.dispose();
+		}
 	});
 
 	describe("once a data.json it could not read at startup becomes readable", () => {

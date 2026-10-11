@@ -154,6 +154,50 @@ describe("restore", () => {
 
 		expect(state()).toMatchObject({ currentTime: 0, duration: 1800 });
 	});
+
+	test("again, after a sync, shows the synced progress and resumes from it", () => {
+		saved(A, 600, 3600);
+		const { player, host, media, state } = setup();
+		player.restore(A);
+
+		saved(A, 2400, 3600);
+		player.restore(A);
+		expect(state()).toMatchObject({ status: "restored", episode: A, currentTime: 2400 });
+		expect(media().src).toBe("");
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(2400);
+		expect(host.saveSettings).not.toHaveBeenCalled();
+	});
+
+	test("again, after a sync, shows the synced selection", () => {
+		saved(B, 300, 1800);
+		const { player, state } = setup();
+		player.restore(A);
+
+		player.restore(B);
+
+		expect(state()).toMatchObject({
+			status: "restored",
+			episode: B,
+			currentTime: 300,
+			duration: 1800,
+		});
+	});
+
+	test("leaves loaded media alone", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		reach(media(), 40);
+
+		player.restore(B);
+
+		expect(state()).toMatchObject({ status: "playing", episode: A, currentTime: 40 });
+		expect(media().src).toBe(A.streamUrl);
+		expect(media().paused).toBe(false);
+	});
 });
 
 describe("switching episodes (#353)", () => {
