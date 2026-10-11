@@ -18,8 +18,7 @@ import { episodeLinkTarget } from "./episodeLinkTarget";
  * address it, so a template degrades to an empty value rather than a broken link.
  */
 export default function buildEpisodeResumeLink(episode: Episode): string {
-	const target =
-		episodeLinkTarget(episode) ?? downloadedEpisodes.getEpisode(episode)?.filePath;
+	const target = episodeLinkTarget(episode) ?? downloadedEpisodes.getEpisode(episode)?.filePath;
 
 	// URIHandler rejects an empty episodeName, so without a title there is no
 	// working link to emit — degrade to "" rather than a dead link (UR-03).

@@ -215,7 +215,12 @@
 			ariaLabel="Seek within episode"
 			valueText={`${formatSeconds($playerState.currentTime, "HH:mm:ss")} of ${formatSeconds($playerState.duration, "HH:mm:ss")}`}
 		/>
-		<span>{formatSeconds(Math.max(0, $playerState.duration - $playerState.currentTime), "HH:mm:ss")}</span>
+		<span
+			>{formatSeconds(
+				Math.max(0, $playerState.duration - $playerState.currentTime),
+				"HH:mm:ss",
+			)}</span
+		>
 	</div>
 
 	<div class="controls-container">

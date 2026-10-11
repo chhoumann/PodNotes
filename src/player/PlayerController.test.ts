@@ -1068,7 +1068,10 @@ describe("video stage", () => {
 
 	test("names the video after the episode it loads", () => {
 		const { player, media } = setup();
-		const next = episode("W", { streamUrl: "https://cdn.example.com/W.mp4", mediaType: "video" });
+		const next = episode("W", {
+			streamUrl: "https://cdn.example.com/W.mp4",
+			mediaType: "video",
+		});
 
 		player.play(VIDEO);
 		expect(media().attributes.get("aria-label")).toBe("V");

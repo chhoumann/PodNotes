@@ -383,7 +383,13 @@ describe("PodNotes persistence integration", () => {
 		};
 		plugin.settings.currentEpisode = episode;
 		plugin.settings.playedEpisodes = {
-			"Pod::A": { title: "A", podcastName: "Pod", time: 600, duration: 3600, finished: false },
+			"Pod::A": {
+				title: "A",
+				podcastName: "Pod",
+				time: 600,
+				duration: 3600,
+				finished: false,
+			},
 		};
 		attachDataFileWriter(plugin);
 		(plugin as unknown as { setCollectionStores(): void }).setCollectionStores();
