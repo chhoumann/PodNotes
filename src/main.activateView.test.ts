@@ -559,7 +559,7 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(checkCommand(commands, "start-playing")).toBe(true);
 	});
 
-	it("saves the playing position on unload, before the writer stops", async () => {
+	it("saves the playing position on unload, before the store bindings are disposed", async () => {
 		vi.spyOn(HTMLMediaElement.prototype, "play").mockReturnValue(new Promise(() => {}));
 		vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
 		const { plugin } = await loadPlugin(savedData);

@@ -444,7 +444,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isUnloaded = true;
 		// The refusal ends with this instance; the next one reads the file itself.
 		this.refusalNotice?.hide();
-		// Before the writer unloads, so the position it saves is written.
+		// Before the store bindings are disposed, so the position it saves reaches the writer.
 		this.player?.dispose();
 		void this.writer?.unload();
 		this.clearLayoutReadyRetry();
