@@ -81,7 +81,7 @@ export default async function getUniversalPodcastLink(api: IAPI) {
 			acceptedStatuses: [200],
 		});
 
-		const targetTitle = itunesTitle ?? title;
+		const targetTitle = itunesTitle || title;
 
 		if (!Array.isArray(data?.episodes)) {
 			throw new NetworkError("invalid-response");

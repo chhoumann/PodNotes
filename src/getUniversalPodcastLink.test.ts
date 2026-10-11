@@ -219,6 +219,23 @@ describe("getUniversalPodcastLink", () => {
 		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/333/episode/ep-123");
 	});
 
+	test("an episode without an iTunes title asks pod.link for its own title", async () => {
+		savedFeeds.set({
+			"Example Show": {
+				title: "Example Show",
+				url: "https://feeds.example.com/rss",
+				artworkUrl: "",
+				collectionId: "555",
+			},
+		});
+
+		await getUniversalPodcastLink({
+			podcast: { ...podcast, itunesTitle: "" },
+		} as unknown as IAPI);
+
+		expect(writeTextMock).toHaveBeenCalledWith("https://pod.link/555/episode/ep-123");
+	});
+
 	test("falls back to a tolerant iTunes match when no saved collectionId exists", async () => {
 		queryiTunesMock.mockResolvedValue([
 			{
