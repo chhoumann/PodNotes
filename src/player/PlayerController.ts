@@ -69,8 +69,8 @@ const END_MARGIN_S = 0.25;
 /** The media element's class, wherever it is. */
 export const MEDIA_CLASS = "podnotes-media";
 
-const isTime = (value: number | undefined) =>
-	value === undefined || (Number.isFinite(value) && value >= 0);
+const isTime = (value: number) => Number.isFinite(value) && value >= 0;
+const isOptionalTime = (value: number | undefined) => value === undefined || isTime(value);
 const finiteOr0 = (value: number) => (Number.isFinite(value) ? value : 0);
 
 /**
@@ -130,7 +130,7 @@ export class PlayerController {
 	 * position and queues it first when the queue is automatic.
 	 */
 	play(episode: Episode, { time, endTime }: PlayOptions = {}): boolean {
-		if (this.disposed || !isTime(time) || !isTime(endTime)) return false;
+		if (this.disposed || !isOptionalTime(time) || !isOptionalTime(endTime)) return false;
 		if (endTime !== undefined && (time === undefined || endTime <= time)) return false;
 		this.requests++;
 
