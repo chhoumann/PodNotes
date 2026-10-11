@@ -120,3 +120,8 @@ export function isSameStoredEpisode(
 	}
 	return !entry.podcastName && !!current.title && entry.title === current.title;
 }
+
+/** Whether two episodes share one key: the identity the queue uses. */
+export function isSameEpisode(a: Episode, b: Episode): boolean {
+	return getEpisodeKey(a) === getEpisodeKey(b);
+}
