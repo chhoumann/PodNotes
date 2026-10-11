@@ -998,12 +998,15 @@ describe("errors", () => {
 		expect(media().currentTime).toBe(2000);
 	});
 
-	test("a position moved on the restored episode survives a failed first play", () => {
+	test.each([
+		["resume()", (player: PlayerController) => player.resume()],
+		["play()", (player: PlayerController) => void player.play(A)],
+	])("a position moved on the restored episode survives a failed first %s", (_, start) => {
 		saved(A, 600, 3600);
 		const { player, media, state } = setup();
 		player.restore(A);
 		player.seek(900);
-		player.resume();
+		start(player);
 		media().emit("error");
 		expect(state()).toMatchObject({ status: "error", currentTime: 900 });
 

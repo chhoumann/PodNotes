@@ -173,7 +173,7 @@ export class PlayerController {
 		}
 		const resumeAt = sameEpisode ? this.restartTime(episode) : this.resumeTime(episode);
 		this.load(episode, source, time ?? resumeAt, endTime);
-		this.moved = time !== undefined;
+		this.moved = time !== undefined || (sameEpisode && this.moved);
 		return true;
 	}
 
@@ -285,7 +285,6 @@ export class PlayerController {
 
 	private load(episode: Episode, source: PlaybackSource, time: number, endTime?: number): void {
 		this.session = null;
-		this.moved = false;
 		const duration = this.startDuration(episode);
 		if (!source.src) {
 			this.release();
