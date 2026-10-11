@@ -190,6 +190,8 @@ const OPEN_PLAYER = `(async () => {
 	return false;
 })()`;
 const CDP_CAPTURE_VERBS = ["prepare", "screenshot", "type", "record"];
+/** @type {NodeJS.Signals[]} */
+const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"];
 
 async function defaultInstance() {
 	const cwd = process.cwd();
@@ -211,11 +213,11 @@ async function runTests(args) {
 		interrupted ??= signal;
 		try {
 			// Vitest leads its own process group, so its fork workers stop with it.
+			// Only a SIGKILL of this wrapper, which cannot be forwarded, orphans it.
 			if (child?.pid) process.kill(-child.pid, signal);
 		} catch {}
 	};
-	process.on("SIGINT", onSignal);
-	process.on("SIGTERM", onSignal);
+	for (const signal of FORWARDED_SIGNALS) process.on(signal, onSignal);
 	try {
 		if (instance) {
 			const deps = linuxDeps(async (target) => {
@@ -266,8 +268,7 @@ async function runTests(args) {
 		}
 		return 0;
 	} finally {
-		process.off("SIGINT", onSignal);
-		process.off("SIGTERM", onSignal);
+		for (const signal of FORWARDED_SIGNALS) process.off(signal, onSignal);
 		await fsp.rm(results, { force: true });
 		if (launched) await runObsidianE2ECli(["stop"], runnerDeps);
 	}
@@ -278,9 +279,8 @@ async function runTests(args) {
  * @param {string[]} args
  */
 async function capture(verb, args) {
-	if (verb === "capture" && !CDP_CAPTURE_VERBS.includes(args[0])) {
-		return runObsidianE2ECli(["capture", ...args]);
-	}
+	const connects = verb !== "capture" || CDP_CAPTURE_VERBS.includes(args[0]);
+	if (!connects) return runObsidianE2ECli(["capture", ...args]);
 	if (!linux) {
 		throw new Error(`${verb} is Linux-only; on macOS use \`npx obsidian-e2e capture launch\`.`);
 	}
@@ -300,7 +300,8 @@ async function capture(verb, args) {
 				: "Usage: record <out.mp4|out.webm> [-- <driver command...>]",
 		);
 	}
-	const up = await runObsidianE2ECli(["run"], runnerDeps);
+	// `run`, not `start`: start reloads the plugin and resets what a driver set up.
+	const up = await runObsidianE2ECli(["run", "eval", "code=true"], runnerDeps);
 	if (up !== 0) return up;
 	const { stdout } = await execObsidian(
 		instance,

@@ -152,14 +152,18 @@ async function startFeed() {
 		let exited = false;
 		child.stderr.setEncoding("utf8").on("data", (chunk) => (failure += chunk));
 		child.on("close", () => (exited = true));
-		for (let i = 0; i < 50 && !exited && !(await feedIsUp()); i++) {
-			await new Promise((resolve) => setTimeout(resolve, 100));
+		try {
+			for (let i = 0; i < 50 && !exited && !(await feedIsUp()); i++) {
+				await new Promise((resolve) => setTimeout(resolve, 100));
+			}
+			if (!(await feedIsUp())) {
+				child.kill();
+				throw new Error(failure.trim() || `The fixture feed did not come up at ${local}.`);
+			}
+		} finally {
+			child.stderr.destroy();
+			child.unref();
 		}
-		if (!(await feedIsUp())) {
-			throw new Error(failure.trim() || `The fixture feed did not come up at ${local}.`);
-		}
-		child.stderr.destroy();
-		child.unref();
 	}
 	await dns.lookup(host).catch(() => {
 		console.error(`${host} does not resolve here; PodNotes needs DNS to reach this feed URL.`);
