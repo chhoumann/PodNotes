@@ -1,4 +1,4 @@
-import { afterAll, afterEach } from "vitest";
+import { afterAll, beforeEach } from "vitest";
 
 if (typeof window !== "undefined") {
 	await import("./vitest.setup.dom");
@@ -17,12 +17,20 @@ if (typeof window !== "undefined") {
 			configurable: true,
 			get: function read() {
 				if (firstRead) return undefined;
-				const error = new Error(
+				// The formatter reads `window` once per printed object, so find the
+				// reader from a one-frame stack and build the full error only for ours.
+				const stackTraceLimit = Error.stackTraceLimit;
+				Error.stackTraceLimit = 1;
+				const reader: { stack?: string } = {};
+				Error.captureStackTrace(reader, read);
+				Error.stackTraceLimit = stackTraceLimit;
+				if (/[\\/]node_modules[\\/]@?vitest[\\/]/.test(reader.stack ?? "")) {
+					return undefined;
+				}
+				firstRead = new Error(
 					`This test reads \`${name}\`; add \`// @vitest-environment jsdom\` to its file.`,
 				);
-				Error.captureStackTrace(error, read);
-				const reader = error.stack?.split("\n")[1] ?? "";
-				if (!/[\\/]node_modules[\\/]@?vitest[\\/]/.test(reader)) firstRead = error;
+				Error.captureStackTrace(firstRead, read);
 				return undefined;
 			},
 		});
@@ -32,6 +40,8 @@ if (typeof window !== "undefined") {
 		firstRead = undefined;
 		if (read) throw read;
 	};
-	afterEach(failOnRead);
+	// Finish hooks run after the test's own afterEach and onTestFinished
+	// callbacks, so a read there fails the test that made it.
+	beforeEach(({ onTestFinished }) => onTestFinished(failOnRead));
 	afterAll(failOnRead);
 }
