@@ -1,3 +1,8 @@
+---
+title: Import & Export
+slug: import_export
+---
+
 In the settings panel, you will find functionality to import and export podcasts.
 This feature lets you import your saved podcasts from other apps, e.g. Pocket Casts.
 Similarly, you can also export your podcasts from PodNotes to such apps.
@@ -17,13 +22,13 @@ To import podcasts, follow these steps:
 You can export your saved feeds to `opml` format.
 First designate a file path to save to (or use the default), and click _Export_.
 
-## Settings & templates
+## <span id="settings-templates"></span>Settings & templates
 
 Under the **Settings & templates** heading, you can move your PodNotes
 configuration between vaults or back it up. This covers your preferences,
 note/timestamp/transcript templates, file paths, saved feeds, and playlists.
 
-![Settings & templates import/export](resources/settings_import_export.png)
+![Settings & templates import/export](/resources/settings_import_export.png)
 
 Playback progress, downloaded-episode bookkeeping, the currently playing
 episode, and the episode-to-note mapping are **not** included, because they are

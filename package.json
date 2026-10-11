@@ -26,9 +26,9 @@
 		"record:e2e-obsidian": "node scripts/obsidian-e2e.mjs record",
 		"capture:e2e-obsidian": "node scripts/obsidian-e2e.mjs capture",
 		"check:a11y": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --fail-on-warnings",
-		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
-		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/site --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs wrangler.jsonc docs/mkdocs.yml"
+		"docs:build": "npm ci --prefix docs && npm run build --prefix docs",
+		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/dist --project-name podnotes --branch master",
+		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/markdown.ts docs/src/site.mjs docs/src/pages docs/scripts docs/legacy-fragments.json docs/tsconfig.json"
 	},
 	"dependencies": {
 		"fuse.js": "^7.5.0",

@@ -57,7 +57,7 @@ updates:
         # Release-pipeline pin bumps change how releases are cut, so they stay in their own PR.
         exclude-patterns:
           - "chhoumann/obsidian-plugin-workflows*"
-  - package-ecosystem: "pip"
+  - package-ecosystem: "npm"
     directory: "/docs"
     schedule:
       interval: "weekly"
@@ -68,14 +68,14 @@ updates:
       prefix: "docs"
       include: "scope"
     groups:
-      pip-minor-patch:
+      docs-minor-patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
           - "minor"
           - "patch"
-      pip-security:
+      docs-security:
         applies-to: security-updates
         patterns:
           - "*"

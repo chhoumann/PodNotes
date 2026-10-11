@@ -1,0 +1,15 @@
+---
+import Default from "@astrojs/starlight/components/PageTitle.astro";
+
+const { legacyTitleId } = Astro.locals.starlightRoute.entry.data;
+---
+
+{
+	legacyTitleId ? (
+		<div id={legacyTitleId}>
+			<Default />
+		</div>
+	) : (
+		<Default />
+	)
+}
