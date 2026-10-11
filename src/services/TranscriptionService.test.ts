@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, test, vi, beforeEach } from "vitest";
 import { Notice } from "obsidian";
 import { TranscriptionService } from "./TranscriptionService";

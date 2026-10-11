@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, test, vi, beforeEach } from "vitest";
 import FeedParser from "./feedParser";
 import type { FeedDocumentSource } from "./feedDocumentSource";

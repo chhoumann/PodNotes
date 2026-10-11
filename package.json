@@ -28,7 +28,7 @@
 		"check:a11y": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --fail-on-warnings",
 		"docs:build": "mkdocs build -f docs/mkdocs.yml -d site",
 		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/site --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts obsidian-e2e.config.mjs wrangler.jsonc docs/mkdocs.yml"
+		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs wrangler.jsonc docs/mkdocs.yml"
 	},
 	"dependencies": {
 		"fuse.js": "^7.5.0",
@@ -38,7 +38,7 @@
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@testing-library/jest-dom": "^7.0.1",
 		"@testing-library/svelte": "^5.4.2",
-		"@types/node": "^22.20.4",
+		"@types/node": "^22.20.5",
 		"eslint-plugin-obsidianmd": "^0.4.2",
 		"jsdom": "^30.1.1",
 		"obsidian": "1.13.1",
@@ -49,7 +49,7 @@
 		"svelte-check": "^4.7.6",
 		"typescript": "6.0.3",
 		"vite": "^8.3.2",
-		"vitest": "^4.1.11",
+		"vitest": "^5.0.3",
 		"wrangler": "4.149.0"
 	},
 	"overrides": {

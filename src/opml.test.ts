@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { get, writable } from "svelte/store";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { PodcastFeed } from "./types/PodcastFeed";
