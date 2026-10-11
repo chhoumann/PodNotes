@@ -7,7 +7,7 @@ PodNotes supports local media files. You can right-click any audio or video file
 
 In the podcast grid, you will see a playlist with a folder icon. This is a playlist of every episode you have available offline: both local media files you have played with `Play with PodNotes` and episodes you have downloaded. Removing a downloaded file also removes it from this playlist.
 
-`Remove from Local Files` removes a local media file from the playlist and keeps the file in your vault. `Remove file` moves a downloaded episode's file to the trash. If PodNotes cannot confirm that it downloaded the file itself, which is the case for downloads made with an older PodNotes version, it asks first. `Keep file` removes the episode from the playlist and leaves the file where it is.
+`Remove from Local Files` removes a local media file from the playlist and keeps the file in your vault. `Remove file` moves a downloaded episode's file to the trash. If PodNotes cannot confirm that it downloaded the file itself, which is the case for downloads made with an older PodNotes version, it asks first. `Keep file` removes the episode from the playlist and leaves the file where it is. `Remove file` and `Delete file` both follow Obsidian's **Files and links > Deleted files** setting, so the file moves to the system trash or the vault's `.trash` folder, or is deleted permanently.
 
 PodNotes will attempt to treat all local files as podcast episodes. This means all standard features are available, such as timestamps, note creation, and persisting playback time. Any exceptions will be added here.
 
