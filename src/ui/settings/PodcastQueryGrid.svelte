@@ -21,6 +21,8 @@
 	let searchQuery: string = "";
 	let isSearching: boolean = false;
 	let searchError: string = "";
+	// Responses can arrive out of order; only the latest input may change the grid.
+	let latestRequest = 0;
 
 	let searchInput: HTMLInputElement;
 
@@ -57,6 +59,7 @@
 
 	const debouncedUpdate = debounce(
 		async ({ detail: { value } }: CustomEvent<{ value: string }>) => {
+			const request = ++latestRequest;
 			searchQuery = value;
 			searchError = "";
 			const applePodcastsId = parseApplePodcastsId(value);
@@ -71,6 +74,7 @@
 				isSearching = true;
 				try {
 					const feed = await lookupiTunesPodcast(applePodcastsId);
+					if (request !== latestRequest) return;
 					if (feed) {
 						searchResults = [feed];
 					} else {
@@ -79,36 +83,43 @@
 						new Notice(searchError);
 					}
 				} catch {
+					if (request !== latestRequest) return;
 					searchResults = [];
 					searchError = "Could not look up this Apple Podcasts link. Please try again.";
 					new Notice(searchError);
 				} finally {
-					isSearching = false;
+					if (request === latestRequest) isSearching = false;
 				}
 			} else if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
 				try {
 					const feed = await new FeedParser().getFeed(customFeedUrl.href);
+					if (request !== latestRequest) return;
 					searchResults = [feed];
 				} catch (e) {
+					if (request !== latestRequest) return;
 					searchResults = [];
 					const msg = e instanceof Error ? e.message : String(e);
 					searchError = `Could not load feed: ${msg}`;
 					new Notice(searchError);
 				} finally {
-					isSearching = false;
+					if (request === latestRequest) isSearching = false;
 				}
 			} else if (value.trim() === "") {
+				isSearching = false;
 				updateSearchResults();
 			} else {
 				isSearching = true;
 				try {
-					searchResults = await queryiTunesPodcasts(value);
+					const results = await queryiTunesPodcasts(value);
+					if (request !== latestRequest) return;
+					searchResults = results;
 				} catch (e) {
+					if (request !== latestRequest) return;
 					searchResults = [];
 					searchError = "Could not search podcasts. Please try again.";
 				} finally {
-					isSearching = false;
+					if (request === latestRequest) isSearching = false;
 				}
 			}
 		},
