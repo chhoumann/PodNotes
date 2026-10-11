@@ -567,8 +567,9 @@ describe("FeedRepository", () => {
 		{ enabled: false, failing: "saveLocalStorage" },
 		{ enabled: true, failing: "removeItem" },
 		{ enabled: false, failing: "removeItem" },
+		{ enabled: true, failing: "loadLocalStorage" },
 	])(
-		"a feed loads when earlier caches cannot be removed (cache on: $enabled, $failing throws)",
+		"a feed loads when its storage throws (cache on: $enabled, $failing throws)",
 		async ({ enabled, failing }) => {
 			vi.spyOn(console, "warn").mockImplementation(() => {});
 			const fail = () => {
@@ -576,6 +577,7 @@ describe("FeedRepository", () => {
 			};
 			const storage = new MemoryStorage();
 			if (failing === "saveLocalStorage") storage.saveLocalStorage = fail;
+			else if (failing === "loadLocalStorage") storage.loadLocalStorage = fail;
 			else vi.stubGlobal("window", { localStorage: { removeItem: fail } });
 			const t = setup({ storage, enabled });
 

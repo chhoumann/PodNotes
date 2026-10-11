@@ -158,7 +158,6 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	clear(): void {
 		for (const source of this.sources.values()) source.doc = undefined;
 		this.deps.storage.saveLocalStorage(CACHE_KEY, null);
-		removeLegacyCaches(this.deps.storage);
 		this.emit();
 		void this.ensureAll();
 	}
@@ -282,9 +281,15 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	private hydrate(): void {
 		if (this.hydrated) return;
 		this.hydrated = true;
-		removeLegacyCaches(this.deps.storage);
-		if (!this.deps.cache().enabled) return;
-		const cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
+		let cached: [string, FeedDocument][] = [];
+		try {
+			removeLegacyCaches(this.deps.storage);
+			if (this.deps.cache().enabled) {
+				cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
+			}
+		} catch (error) {
+			console.warn("PodNotes: could not read the feed cache", error);
+		}
 		const kept = cached.filter(([url]) => this.urls.has(url));
 		for (const [url, doc] of kept) this.source(url).doc = doc;
 		if (kept.length < cached.length) this.persist();
@@ -366,13 +371,9 @@ const MAX_ITEMS_PER_FEED = 75;
 const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 
 function removeLegacyCaches(storage: FeedCacheStorage): void {
-	try {
-		storage.saveLocalStorage("podnotes:feed-cache:v5", null);
-		for (const version of [1, 2, 3, 4]) {
-			window.localStorage.removeItem(`podnotes:feed-cache:v${version}`);
-		}
-	} catch (error) {
-		console.warn("PodNotes: could not remove old feed caches", error);
+	storage.saveLocalStorage("podnotes:feed-cache:v5", null);
+	for (const version of [1, 2, 3, 4]) {
+		window.localStorage.removeItem(`podnotes:feed-cache:v${version}`);
 	}
 }
 
