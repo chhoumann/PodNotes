@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TFile } from "obsidian";
-import { plugin } from "./store";
+import { plugin, savedFeeds } from "./store";
 import createFeedNote from "./createFeedNote";
+import { FeedRepository } from "./services/FeedRepository";
+import { MemoryStorage } from "../tests/mocks/feeds";
 import type { PodcastFeed } from "./types/PodcastFeed";
 
 // A feed with every metadata field already populated, so createFeedNote's
@@ -140,6 +142,44 @@ describe("createFeedNote", () => {
 		expect(basename.endsWith(".md")).toBe(true);
 		expect(basename.length).toBeLessThanOrEqual(255);
 		expect(basename.length).toBeLessThan(400);
+	});
+
+	it("fills a saved podcast's missing website from its feed", async () => {
+		const saved: PodcastFeed = {
+			title: "My Show: A Podcast",
+			url: fullFeed.url,
+			artworkUrl: "",
+		};
+		const load = vi.fn(async () => ({
+			feed: { title: "Channel", siteUrl: "https://example.com/show" },
+			episodes: [],
+		}));
+		const feeds = new FeedRepository({
+			load,
+			resolveUrl: (feed) => feed.url,
+			storage: new MemoryStorage(),
+			cache: () => ({ enabled: false, ttlHours: 6 }),
+			now: Date.now,
+		});
+		savedFeeds.set({ [saved.title]: saved });
+		feeds.setSubscriptions({ [saved.title]: saved });
+		plugin.update(
+			(current) =>
+				({
+					...current,
+					feeds,
+					settings: {
+						feedNote: { path: "PodNotes/Podcasts/{{podcast}}.md", template: "{{url}}" },
+					},
+				}) as never,
+		);
+		const { created } = setupVault({});
+
+		await createFeedNote(saved);
+
+		expect(load).toHaveBeenCalledWith(saved.url);
+		expect(created[0].content).toBe("https://example.com/show");
+		savedFeeds.set({});
 	});
 
 	it("does nothing when no feed-note path/template is configured", async () => {

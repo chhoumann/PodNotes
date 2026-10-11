@@ -149,6 +149,11 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		return item && { guid: item.guid, transcripts: item.transcripts ?? [] };
 	}
 
+	/** The feed at `url` as a podcast, to preview or subscribe to. */
+	async channelAt(url: string): Promise<PodcastFeed> {
+		return channelFeed((await this.documentAt(url)).channel, url);
+	}
+
 	clear(): void {
 		for (const source of this.sources.values()) source.doc = undefined;
 		this.deps.storage.saveLocalStorage(CACHE_KEY, null);

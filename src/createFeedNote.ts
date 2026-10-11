@@ -2,12 +2,11 @@ import { Notice, TFile } from "obsidian";
 import { FeedFilePathTemplateEngine, FeedNoteTemplateEngine } from "./TemplateEngine";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { get } from "svelte/store";
-import { plugin } from "./store";
+import { plugin, savedFeeds } from "./store";
 import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
-import FeedParser from "./parser/feedParser";
-import { resolveFeedUrl } from "./services/privateFeeds";
+import { isPrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 
 /**
  * Resolve the on-disk path of a feed's note from the feed-note path template.
@@ -85,11 +84,10 @@ async function enrichFeed(feed: PodcastFeed): Promise<PodcastFeed> {
 	if (!needsEnrichment || !feed.url) {
 		return feed;
 	}
-	const feedUrl = resolveFeedUrl(feed, get(plugin).feedUrls);
-	if (feedUrl === null) return feed;
 
 	try {
-		const parsed = await new FeedParser(feed).getFeed(feedUrl);
+		const parsed = await readFeedMetadata(feed);
+		if (!parsed) return feed;
 
 		// Keep the saved title/url/artwork; only backfill the new metadata fields
 		// so the computed basename can never change mid-flight. Use `||` (not `??`)
@@ -105,6 +103,27 @@ async function enrichFeed(feed: PodcastFeed): Promise<PodcastFeed> {
 		console.error("PodNotes: failed to enrich feed metadata", error);
 		return feed;
 	}
+}
+
+/** A saved podcast's cached channel, or the channel at another feed's URL. */
+async function readFeedMetadata(
+	feed: PodcastFeed,
+): Promise<Pick<PodcastFeed, "description" | "link" | "author"> | undefined> {
+	const { feeds } = get(plugin);
+	const saved = get(savedFeeds);
+	const key = Object.keys(saved).find((candidate) => saved[candidate] === feed);
+	if (key === undefined) {
+		return isPrivateFeedPlaceholder(feed.url) ? undefined : feeds.channelAt(feed.url);
+	}
+	await feeds.load([key], "cached");
+	const channel = get(feeds).get(key)?.channel;
+	return (
+		channel && {
+			description: channel.description,
+			link: channel.siteUrl,
+			author: channel.author,
+		}
+	);
 }
 
 async function createFileIfNotExists(

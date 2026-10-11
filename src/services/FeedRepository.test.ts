@@ -517,6 +517,43 @@ describe("FeedRepository", () => {
 		expect(t.feed("Alpha")?.episodes[0].podcastName).toBe("Alpha");
 	});
 
+	test("episodes fall back to the podcast's artwork and URL", async () => {
+		const t = setup();
+		const own = item(1, {
+			artworkUrl: "https://media.test/1.jpg",
+			itemLink: "https://alpha.test/1",
+		});
+		await loaded(t, { Alpha: alpha }, doc("Alpha", [own, item(2)]));
+
+		expect(t.feed("Alpha")?.episodes).toEqual([
+			expect.objectContaining({ artworkUrl: own.artworkUrl, url: own.itemLink }),
+			expect.objectContaining({ artworkUrl: alpha.artworkUrl, url: alpha.url }),
+		]);
+	});
+
+	test("a pasted feed URL previews as a podcast", async () => {
+		const t = setup();
+		const preview = t.repo.channelAt(alpha.url);
+		t.requests[0].respond.resolve({
+			feed: {
+				title: "Alpha Channel",
+				siteUrl: "https://alpha.test",
+				description: "About Alpha",
+				author: "Host",
+			},
+			episodes: [],
+		});
+
+		expect(await preview).toEqual({
+			title: "Alpha Channel",
+			url: alpha.url,
+			artworkUrl: "",
+			link: "https://alpha.test",
+			description: "About Alpha",
+			author: "Host",
+		});
+	});
+
 	test("a feed link that cannot load rejects", async () => {
 		const t = setup();
 		const episodes = t.repo.episodesAt(alpha.url);

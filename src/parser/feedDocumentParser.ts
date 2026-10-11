@@ -69,21 +69,12 @@ function isParserErrorDocument(document: Document): boolean {
 
 /** Pure XML parsing boundary with no network or Obsidian dependency. */
 export default class FeedDocumentParser {
-	parseFeed(xml: string): ParsedFeedDocument {
-		return this.extractFeed(this.parseXml(xml));
-	}
-
 	parseEpisodes(xml: string): ParsedFeedEpisodes {
 		const document = this.parseXml(xml);
 		return {
 			feed: this.extractFeed(document),
 			episodes: this.parsePage(document),
 		};
-	}
-
-	/** Parse only item records when the legacy facade already has matching feed metadata. */
-	parseEpisodeItems(xml: string): ParsedEpisodeDocument[] {
-		return this.parsePage(this.parseXml(xml));
 	}
 
 	private parseXml(xml: string): Document {

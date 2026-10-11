@@ -5,7 +5,6 @@
 		parseApplePodcastsId,
 		queryiTunesPodcasts,
 	} from "src/iTunesAPIConsumer";
-	import FeedParser from "src/parser/feedParser";
 	import { plugin, savedFeeds } from "src/store";
 	import { get } from "svelte/store";
 	import {
@@ -96,7 +95,7 @@
 			} else if (isFeedUrl && customFeedUrl) {
 				isSearching = true;
 				try {
-					const feed = await new FeedParser().getFeed(customFeedUrl.href);
+					const feed = await get(plugin).feeds.channelAt(customFeedUrl.href);
 					if (input !== latestInput) return;
 					searchResults = [feed];
 				} catch (e) {
