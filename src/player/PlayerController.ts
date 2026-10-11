@@ -180,7 +180,9 @@ export class PlayerController {
 	/** Continues the current episode without selecting it. */
 	resume(): void {
 		const { status, episode } = this.snapshot;
-		if (this.disposed || !episode || status === "playing" || status === "loading") return;
+		if (this.disposed || !episode) return;
+		this.requests++;
+		if (status === "playing" || status === "loading") return;
 		this.endPreview();
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
@@ -212,6 +214,7 @@ export class PlayerController {
 	 */
 	seek(time: number): boolean {
 		if (this.disposed || !this.snapshot.episode || !isTime(time)) return false;
+		this.requests++;
 		this.endPreview();
 		this.moved = true;
 		this.moveTo(time);
@@ -242,7 +245,7 @@ export class PlayerController {
 
 	/**
 	 * For a play that waits on something first, such as a feed fetch. The returned
-	 * function plays only if no newer play, pause or queue advance happened since.
+	 * function plays only if no newer play, resume, pause, seek or queue advance happened since.
 	 */
 	deferPlay(): (episode: Episode, options?: PlayOptions) => boolean {
 		const request = ++this.requests;
