@@ -1,51 +1,53 @@
 ---
 title: Getting started
 slug: getting-started
-description: Install PodNotes, add a podcast, play an episode, and save your first timestamp and episode note.
+description: Install PodNotes, add a podcast, play an episode, and save your first timestamp and episode note in about five minutes.
 ---
 
-Let's play one podcast episode and save a link to a moment in it.
+In about five minutes you will have a podcast playing in Obsidian, a timestamp in a note that jumps back to that moment, and a note for the episode.
 
 ## Install PodNotes
 
-1. Open Obsidian settings and choose **Community plugins**.
-2. Turn off restricted mode if it is enabled.
-3. Browse for **PodNotes**, install it, and enable it.
-4. Run **PodNotes: Show player** from the command palette.
+1. In Obsidian, open **Settings → Community plugins**.
+2. If **Restricted mode** is on, turn it off.
+3. Select **Browse**, search for **PodNotes**, and select **Install**.
+4. Select **Enable**.
 
-The PodNotes view opens. On a phone, use the same command or the **Show PodNotes** ribbon action.
+On a computer, the PodNotes view opens in the right sidebar. To open it at any time, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select **Show PodNotes** in the ribbon. On a phone, the view stays closed until you open it this way.
 
 ## Add a podcast
 
-1. Open PodNotes settings and find **Search Podcasts**.
-2. Enter a show name, its RSS feed URL, or its Apple Podcasts show link.
-3. Choose **Add** on the matching result.
+1. Open **Settings → PodNotes**.
+2. Under **Search Podcasts**, type a show's name. You can also paste its RSS feed URL or its Apple Podcasts link.
+3. Select **Add** on the show you want.
 
-The result changes to **Remove**. Your podcast is now saved.
-If a show is missing, try its publisher's RSS URL. See the [supported podcast FAQ](/faq/#which-podcasts-can-i-add) for source limits.
+![PodNotes settings with Search Podcasts results for "planet money" and an Add button on each show](/screenshots/add-podcast.webp)
+
+The button changes to **Remove**, and the show appears in the PodNotes view. If a show does not appear, see [Which podcasts can I add?](/faq/#which-podcasts-can-i-add)
 
 ## Play an episode
 
-1. Run **PodNotes: Show player** again.
-2. Choose the saved podcast.
-3. Select an episode to play it.
+1. In the PodNotes view, select the show's artwork. If you see an episode list or the player instead, select the grid button at the top first.
+2. Select an episode.
 
-The player loads the episode and its playback time advances.
+The episode starts, and the view switches to the player.
 
 ## Capture a timestamp
 
-1. Create or open a Markdown note in edit mode.
-2. Place the cursor where you want the timestamp.
-3. Run **PodNotes: Capture Timestamp**.
+1. Open a note in editing view and place the cursor where you want the timestamp.
+2. Run **PodNotes: Capture Timestamp** from the command palette.
 
-On a new install, a clickable timestamp appears. Opening that link plays the episode at the captured time.
-If your saved format produces plain text, see [Timestamp settings](/timestamps/#settings).
-Phone users can add a [mobile toolbar button](/mobile/#add-a-capture-button-to-the-editor-toolbar).
+PodNotes inserts the playback time as a link, such as `- [00:12:41](obsidian://podnotes?...)`. Select the link later to play the episode from that moment.
 
 ## Create an episode note
 
 1. With the episode still loaded, run **PodNotes: Create episode note**.
-2. Write your notes in the file that opens.
+2. Write in the note that opens.
 
-PodNotes fills the note with the episode's metadata and a resume link.
-The defaults work without a custom template. See [Templates](/templates/) when you want to change the note's path or content.
+PodNotes creates the note in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback.
+
+## Next steps
+
+- [Capture timestamps](/timestamps/) from a hotkey, a phone toolbar, or a headset.
+- [Create episode notes](/notes/) with your own template, and browse them with Bases.
+- [Use PodNotes on your phone](/mobile/).

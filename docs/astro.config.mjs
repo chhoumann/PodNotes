@@ -44,6 +44,7 @@ export default defineConfig({
 			],
 			sidebar,
 			components: {
+				Hero: "./src/components/Hero.astro",
 				MarkdownContent: "./src/components/MarkdownContent.astro",
 				PageTitle: "./src/components/PageTitle.astro",
 			},
