@@ -8,15 +8,18 @@ on:
 permissions:
   pull-requests: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   validate:
     name: Validate PR title
     runs-on: ubuntu-latest
     steps:
+      - name: Record probe event
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "action=$EVENT_ACTION head=$EVENT_SHA"
+          sleep 45
       # Read the title from the API: a re-run reuses the original event payload.
       # The planner ignores the "!" breaking marker, so the pattern rejects it.
       - name: Lint PR title

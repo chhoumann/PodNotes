@@ -1,14 +1,10 @@
 name: Dependency Review
 on:
   pull_request:
-    branches: [master]
+    branches: [master, ci/ci1-concurrency-probe-base]
 
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
 
 jobs:
   dependency-review:
