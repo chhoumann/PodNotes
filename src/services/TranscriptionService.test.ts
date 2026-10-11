@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi, beforeEach } from "vitest";
 import { Notice } from "obsidian";
-import { OPENAI_FAILURES } from "../../tests/mocks/openaiFailures";
+import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
 import { TranscriptionService } from "./TranscriptionService";
 import type { Episode } from "src/types/Episode";
 import type PodNotes from "src/main";
@@ -612,6 +612,65 @@ describe("TranscriptionService", () => {
 				"Transcription failed: Transcription failed: all 1 audio chunk(s) failed or returned no text.",
 			);
 			expect(fetchMock).toHaveBeenCalledTimes(3);
+		});
+
+		test("Whisper waits out the server's Retry-After and recovers", async () => {
+			vi.useFakeTimers();
+			try {
+				const sentAt: number[] = [];
+				fetchMock.mockImplementation(async () => {
+					sentAt.push(Date.now());
+					return Date.now() - sentAt[0] < 4000
+						? rateLimited({ "retry-after": "4" })
+						: Response.json({ text: "Recovered." });
+				});
+				const plugin = createMockPlugin();
+
+				const pending = transcribe(plugin);
+				await vi.runAllTimersAsync();
+				await pending;
+
+				expect(sentAt.map((time) => time - sentAt[0])).toEqual([0, 4000]);
+				expect(plugin.app.vault.create).toHaveBeenCalledOnce();
+				expect(vi.mocked(plugin.app.vault.create).mock.calls[0][1]).toContain("Recovered.");
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		test("unloading while Whisper waits out a Retry-After cancels the run", async () => {
+			vi.useFakeTimers();
+			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+			try {
+				fetchMock.mockImplementation(async () => rateLimited({ "retry-after": "30" }));
+				const plugin = createMockPlugin();
+				const service = new TranscriptionService(plugin);
+				let settled = false;
+				const pending = (
+					service as unknown as {
+						transcribeEpisode: (episode: Episode) => Promise<void>;
+					}
+				)
+					.transcribeEpisode(mockEpisode)
+					.finally(() => {
+						settled = true;
+					});
+				await vi.advanceTimersByTimeAsync(29_000);
+				expect(fetchMock).toHaveBeenCalledOnce();
+
+				const messagesBeforeDispose = setMessage.mock.calls.length;
+				service.dispose();
+				await vi.advanceTimersByTimeAsync(0);
+
+				expect(settled).toBe(true);
+				await pending;
+				expect(fetchMock).toHaveBeenCalledOnce();
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+				expect(setMessage).toHaveBeenCalledTimes(messagesBeforeDispose);
+			} finally {
+				setMessage.mockRestore();
+				vi.useRealTimers();
+			}
 		});
 
 		test("reads the current OpenAI key for each transcription", async () => {

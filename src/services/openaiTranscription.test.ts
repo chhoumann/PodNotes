@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OPENAI_FAILURES } from "../../tests/mocks/openaiFailures";
-import { createTranscription } from "./openaiTranscription";
+import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
+import { createTranscription, retryDelayMs } from "./openaiTranscription";
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -111,6 +111,41 @@ describe("createTranscription", () => {
 			expect(fetchMock).toHaveBeenCalledOnce();
 		},
 	);
+
+	it("keeps the openai SDK's message for a 429 with retry headers", async () => {
+		fetchMock.mockImplementation(async () =>
+			rateLimited({ "retry-after": "4", "retry-after-ms": "4000" }),
+		);
+
+		await expect(send()).rejects.toHaveProperty(
+			"message",
+			"429 Rate limit reached for requests.",
+		);
+	});
+
+	it.each<[name: string, headers: Record<string, string>, delayMs: number]>([
+		["retry-after-ms", { "retry-after-ms": "1500" }, 1500],
+		["retry-after seconds", { "retry-after": "4" }, 4000],
+		["retry-after HTTP date", { "retry-after": "Thu, 01 Jan 2026 00:00:04 GMT" }, 4000],
+		["both headers", { "retry-after-ms": "1500", "retry-after": "4" }, 1500],
+		["retry-after over 60 s", { "retry-after": "61" }, 1234],
+		["negative retry-after-ms", { "retry-after-ms": "-5" }, 1234],
+		[
+			"negative retry-after-ms with retry-after",
+			{ "retry-after-ms": "-5", "retry-after": "4" },
+			1234,
+		],
+		["unparseable retry-after", { "retry-after": "soon" }, 1234],
+		["no retry header", {}, 1234],
+		["retry-after zero", { "retry-after": "0" }, 0],
+	])("%s gives the same retry delay as openai-node", async (_name, headers, delayMs) => {
+		vi.useFakeTimers({ now: new Date("2026-01-01T00:00:00Z") });
+		fetchMock.mockImplementation(async () => rateLimited(headers));
+
+		const error = await send().catch((caught: unknown) => caught);
+
+		expect(retryDelayMs(error, 1234)).toBe(delayMs);
+	});
 
 	it("times out a stalled request after 10 minutes", async () => {
 		vi.useFakeTimers();

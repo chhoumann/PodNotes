@@ -8,7 +8,7 @@ import type { Episode } from "src/types/Episode";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 import { TimerNotice } from "src/ui/TimerNotice";
 import { createChunkFiles, getMimeType } from "./audioChunker";
-import { createTranscription } from "./openaiTranscription";
+import { createTranscription, retryDelayMs } from "./openaiTranscription";
 import {
 	type DiarizationAudio,
 	type DiarizationProviderId,
@@ -348,7 +348,7 @@ export class TranscriptionService {
 							completedChunks++;
 							updateProgress();
 						} else {
-							await this.waitForRetry(1000 * retries);
+							await this.waitForRetry(retryDelayMs(error, 1000 * retries));
 						}
 					}
 				}

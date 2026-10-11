@@ -1,5 +1,6 @@
 const TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions";
 const REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_SERVER_RETRY_DELAY_MS = 60 * 1000;
 
 export async function createTranscription(
 	apiKey: string,
@@ -40,13 +41,39 @@ export async function createTranscription(
 		}
 
 		if (!response.ok) {
-			throw new Error(`${response.status} ${errorDetail(text) || "status code (no body)"}`);
+			throw new OpenAIStatusError(
+				`${response.status} ${errorDetail(text) || "status code (no body)"}`,
+				serverRetryDelayMs(response.headers),
+			);
 		}
 		return JSON.parse(text);
 	} finally {
 		window.clearTimeout(timeout);
 		signal.removeEventListener("abort", forwardAbort);
 	}
+}
+
+export function retryDelayMs(error: unknown, fallbackMs: number): number {
+	return (error instanceof OpenAIStatusError ? error.retryAfterMs : undefined) ?? fallbackMs;
+}
+
+class OpenAIStatusError extends Error {
+	constructor(
+		message: string,
+		readonly retryAfterMs: number | undefined,
+	) {
+		super(message);
+	}
+}
+
+function serverRetryDelayMs(headers: Headers): number | undefined {
+	let delayMs = parseFloat(headers.get("retry-after-ms") ?? "");
+	const retryAfter = headers.get("retry-after");
+	if (Number.isNaN(delayMs) && retryAfter) {
+		const seconds = parseFloat(retryAfter);
+		delayMs = Number.isNaN(seconds) ? Date.parse(retryAfter) - Date.now() : seconds * 1000;
+	}
+	return delayMs >= 0 && delayMs <= MAX_SERVER_RETRY_DELAY_MS ? delayMs : undefined;
 }
 
 // Mirrors openai-node's makeStatusError and APIError.makeMessage, so failure

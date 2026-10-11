@@ -1,5 +1,5 @@
 import { toError } from "../../utility/toError";
-import { createTranscription } from "../openaiTranscription";
+import { createTranscription, retryDelayMs } from "../openaiTranscription";
 import { type DiarizedSegment, OPENAI_DIARIZE_MODEL } from "./types";
 import { parseOpenAIDiarizedSegments } from "./segments";
 
@@ -76,7 +76,7 @@ export async function diarizeWithOpenAI(opts: {
 					});
 					break;
 				}
-				await waitForRetry(1000 * attempt, signal);
+				await waitForRetry(retryDelayMs(error, 1000 * attempt), signal);
 			}
 		}
 	}

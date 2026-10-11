@@ -39,3 +39,16 @@ export const OPENAI_FAILURES: [name: string, respond: () => Promise<Response>, m
 		],
 		["network", () => Promise.reject(new TypeError("Failed to fetch")), "Connection error."],
 	];
+
+export const rateLimited = (headers: Record<string, string>) =>
+	Response.json(
+		{
+			error: {
+				message: "Rate limit reached for requests.",
+				type: "requests",
+				param: null,
+				code: "rate_limit_exceeded",
+			},
+		},
+		{ status: 429, headers },
+	);

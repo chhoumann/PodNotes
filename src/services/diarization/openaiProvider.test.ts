@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { rateLimited } from "../../../tests/mocks/openaiFailures";
 import { diarizeWithOpenAI } from "./openaiProvider";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -19,6 +20,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	fetchMock.mockReset();
 });
@@ -92,6 +94,60 @@ describe("diarizeWithOpenAI (#168)", () => {
 				"OpenAI diarization failed for every chunk: 401 Incorrect API key provided: sk-test.",
 			),
 		);
+	});
+
+	it("waits out the server's Retry-After and recovers the chunk", async () => {
+		vi.useFakeTimers();
+		const sentAt: number[] = [];
+		fetchMock.mockImplementation(async () => {
+			sentAt.push(Date.now());
+			return Date.now() - sentAt[0] < 4000
+				? rateLimited({ "retry-after": "4" })
+				: diarized("A", "Recovered.")();
+		});
+
+		const outcome = diarizeWithOpenAI({
+			apiKey: "sk-test",
+			chunkFiles: [chunk("a.mp3")],
+			maxRetries: 3,
+			onProgress: () => {},
+			signal: new AbortController().signal,
+		}).catch((error: unknown) => error);
+		await vi.runAllTimersAsync();
+
+		expect(sentAt.map((time) => time - sentAt[0])).toEqual([0, 4000]);
+		expect(await outcome).toEqual([{ speaker: "A", text: "Recovered.", start: 0, end: 1 }]);
+	});
+
+	it("aborts while waiting out the server's Retry-After", async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const abortReason = new Error("plugin unloaded");
+		fetchMock.mockImplementation(async () => rateLimited({ "retry-after": "30" }));
+
+		let outcome: unknown = "pending";
+		void diarizeWithOpenAI({
+			apiKey: "sk-test",
+			chunkFiles: [chunk("a.mp3")],
+			maxRetries: 3,
+			onProgress: () => {},
+			signal: controller.signal,
+		}).then(
+			() => {
+				outcome = "resolved";
+			},
+			(error: unknown) => {
+				outcome = error;
+			},
+		);
+		await vi.advanceTimersByTimeAsync(29_000);
+		expect(fetchMock).toHaveBeenCalledOnce();
+
+		controller.abort(abortReason);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(outcome).toBe(abortReason);
+		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
 	it("aborts an in-flight request without retrying or logging a failure", async () => {
