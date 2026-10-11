@@ -981,6 +981,38 @@ describe("errors", () => {
 		expect(media().currentTime).toBe(time);
 	});
 
+	test("a link's time on the loaded episode survives a retry that fails too", () => {
+		saved(A, 600, 3600);
+		const { player, media } = setup();
+		player.play(A);
+		metadata(media());
+		reach(media(), 610, 1000);
+		player.play(A, { time: 2000 });
+		media().emit("error");
+		player.resume();
+		media().emit("error");
+
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(2000);
+	});
+
+	test("a position moved on the restored episode survives a failed first play", () => {
+		saved(A, 600, 3600);
+		const { player, media, state } = setup();
+		player.restore(A);
+		player.seek(900);
+		player.resume();
+		media().emit("error");
+		expect(state()).toMatchObject({ status: "error", currentTime: 900 });
+
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(900);
+	});
+
 	test("resume() starts at the progress a sync brought during an error, after an earlier seek was saved", () => {
 		saved(A, 600, 3600);
 		const { player, media } = setup();
