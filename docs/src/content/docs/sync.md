@@ -11,6 +11,7 @@ Using the same library on several devices depends on the files your vault sync s
 
 PodNotes stores preferences and library state in `.obsidian/plugins/podnotes/data.json`.
 If you use a different Obsidian configuration folder, the path starts with that folder instead of `.obsidian`.
+A `libraryId` in `data.json` records which library the file belongs to.
 
 The file contains the following data:
 
@@ -30,11 +31,19 @@ The **Default Playback Rate** preference is saved. Saved progress provides a res
 
 ## Changes on two devices
 
-Before each save, PodNotes reads `data.json` and compares it with the last loaded or saved copy and this device's changes.
+Before each save, PodNotes reads `data.json`.
+For files from the same library, it compares the file with the last loaded or saved copy and this device's changes.
 It merges changes to different entries, including subscriptions, progress, playlists, and preferences.
 
 For example, one device can add a podcast while another updates its playback progress.
 Once the subscription reaches the second device's `data.json`, its next save keeps both changes.
+
+When `data.json` files identify different libraries, PodNotes combines their podcasts, progress records, and playlists.
+This includes a new device that starts PodNotes before its synced data arrives.
+A setting changed from its default in only one library keeps that library's value.
+The combined file keeps the identity of the library that started first.
+If a podcast has different names in the two libraries, both names appear.
+
 When Obsidian reports a synced file change, PodNotes updates its library without a restart.
 Sync does not switch an episode already loaded in the player or seek to another device's position.
 The loaded episode stays current on this device.
@@ -55,7 +64,6 @@ A change that arrives between the read and write can still be overwritten.
 Sync can also see a partly written file because PodNotes writes `data.json` in place.
 An older PodNotes version on another device can overwrite the whole file.
 Keep PodNotes updated on every device and let sync finish before switching devices.
-On a new device, keep PodNotes disabled until sync delivers `data.json`. Then enable it.
 
 ## When PodNotes saves
 
