@@ -9,12 +9,16 @@ Download episodes to listen offline, and play audio and video files from your va
 ## Download an episode
 
 To download the episode in the player, run **PodNotes: Download Playing Episode**.
-To download any other episode, right-click it or select its **More options** button, the three-dot button. Then select **Download**.
+
+To download any other episode:
+
+1. Right-click the episode, or select its three-dot **More options** button.
+2. Select **Download**.
 
 A notice shows the progress. PodNotes saves the file in your vault at **Episode download path**, `PodNotes/{{podcast}}/{{title}}` by default, and adds the file extension.
 The episode then appears in the **Local Files** playlist and plays from the file.
 
-Keep `{{title}}` in **Episode download path**. Without it, two episodes can resolve to the same file, and the second download fails. [Template tags](/templates/#file-path) lists the tags a path accepts.
+Keep `{{title}}` in **Episode download path**. Without it, two episodes can resolve to the same file, and the second download fails. [Template tags](/templates/#file-path-tags) lists the tags a path accepts.
 
 Offline playback needs the file on the device you listen on. If you sync your vault, see [Downloads on another device](/sync/#downloads-on-another-device).
 

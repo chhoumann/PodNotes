@@ -37,7 +37,9 @@ other than the home page.
 - [ ] Task headings start with a verb ("Add a podcast"). Concept headings are
       noun phrases ("Episode identity"). No heading starts with an -ing word,
       and no level is skipped.
-- [ ] A how-to page fits in about two screens at 1440x900. Lookup tables go at
+- [ ] A how-to page covers one feature. Each task on it fits in about one
+      screen at 1440x900, and the page stays under about four screens before any
+      reference section. Split a page that grows past that. Lookup tables go at
       the end of the page under a heading that says so, or on a reference page.
 - [ ] A procedure is a numbered list with one action per step. Each step names
       the place before the action: "In **Settings → PodNotes**, select

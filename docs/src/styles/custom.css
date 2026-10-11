@@ -139,6 +139,9 @@ starlight-toc a {
 	border-radius: 0.75rem;
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -12px rgb(0 0 0 / 0.25);
 }
+.sl-markdown-content img.screenshot.narrow {
+	max-width: min(100%, 21rem);
+}
 
 /* ---------------------------------------------------------------------------
  * Landing page (the only page with a hero)

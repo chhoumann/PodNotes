@@ -51,7 +51,7 @@ Moves back by **Skip backward length (s)**, 15 seconds by default. It never move
 
 ## Skip Forward
 
-Moves forward by **Skip forward length (s)**, 15 seconds by default. It stops 0.25 seconds before the end, so a skip never ends the episode.
+Moves forward by **Skip forward length (s)**, 15 seconds by default. When the duration is known, a forward skip stops 0.25 seconds before the end.
 
 ## Increase playback rate
 
@@ -67,7 +67,7 @@ Sets the speed to **Default Playback Rate**.
 
 ## Reorder Queue
 
-Opens the **Reorder Queue** window. Each episode has buttons to move it to the top, up, down, or to the bottom, and to remove it from the queue. See [Reorder the queue](/podcasts/#reorder-the-queue).
+Opens the **Reorder Queue** window. Each episode has buttons to move it to the top, up, down, or to the bottom, and to remove it from the queue. See [Reorder the queue](/playlists/#reorder-the-queue).
 
 ## Download Playing Episode
 
@@ -83,7 +83,7 @@ Obsidian lists the command only while a note is open in an editor. It does not n
 
 Inserts a link to the last 10 or 20 seconds of playback at the cursor. The link plays from the start of the range and pauses at its end.
 Obsidian lists these commands only while a note is open in an editor, an episode is loaded, and **Capture timestamp format** is set. To add them to the mobile toolbar, see [Add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
-Early in an episode, PodNotes shows a notice to play more first. See [Capture timestamps](/timestamps/#capturing-segments).
+Early in an episode, PodNotes shows a notice to play more first. See [Capture a range](/timestamps/#capture-a-range).
 
 ## Create episode note
 

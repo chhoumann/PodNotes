@@ -10,24 +10,28 @@ In about five minutes you will have a podcast playing in Obsidian, a timestamp i
 
 1. In Obsidian, open **Settings → Community plugins**.
 2. If **Restricted mode** is on, turn it off.
-3. Select **Browse**, search for PodNotes, and select **Install**.
-4. Select **Enable**.
+3. Select **Browse**.
+4. Search for PodNotes.
+5. Select **Install**.
+6. Select **Enable**.
 
-On a computer, the PodNotes view opens in the right sidebar. To open it again later, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select **Show PodNotes** in the ribbon. On a phone, see [Open the player](/mobile/#enable-podnotes-and-open-the-player).
+On a computer, the PodNotes view opens in the right sidebar. To open it again later, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select **Show PodNotes** in the ribbon. On a phone, see [Open the player](/mobile/#open-the-player).
 
 ## Add a podcast
 
 1. Open **Settings → PodNotes**.
-2. Under **Search Podcasts**, type a show's name. Results appear as you type. You can also paste the show's RSS feed URL or its Apple Podcasts link.
+2. Under **Search Podcasts**, type a show's name. Results appear as you type.
 3. Select **Add** on the show you want.
 
 ![PodNotes settings with Search Podcasts results for "the daily", each with an Add button](/screenshots/add-podcast.webp)
 
-The button changes to **Remove**, and the show appears in the PodNotes view. If a show does not appear, see [Which podcasts can I add?](/faq/#which-podcasts-can-i-add)
+The button changes to **Remove**, and the show appears in the PodNotes view.
+
+You can also paste the show's RSS feed URL or its Apple Podcasts link into the search box. One result then appears, with an **Add** button. If a show does not appear, see [Which podcasts can I add?](/faq/#which-podcasts-can-i-add)
 
 ## Play an episode
 
-1. If the PodNotes view shows an episode list or the player, select the grid button, the first of the three buttons at the top of the view.
+1. At the top of the PodNotes view, select **Podcast grid**.
 2. Select the show's artwork.
 3. Select an episode.
 
@@ -35,8 +39,9 @@ The episode starts, and the view switches to the player.
 
 ## Capture a timestamp
 
-1. Open a note in editing view and place the cursor where you want the timestamp.
-2. Run **PodNotes: Capture Timestamp** from the command palette.
+1. Open a note in editing view.
+2. Place the cursor where you want the timestamp.
+3. Run **PodNotes: Capture Timestamp** from the command palette.
 
 PodNotes inserts the playback time as a link, such as `- [00:12:41](obsidian://podnotes?...)`. Select the link later to play the episode from that moment.
 
@@ -51,11 +56,12 @@ PodNotes creates the note in `PodNotes/<podcast>/` with the episode's date, a li
 
 To try a beta version before it reaches **Community plugins**, install PodNotes with BRAT:
 
-1. Install and turn on the [BRAT](obsidian://show-plugin?id=obsidian42-brat) plugin.
-2. Run **BRAT: Plugins: Add a beta plugin for testing (with or without version)**.
-3. Enter `chhoumann/PodNotes`.
-4. Select **Add plugin**.
-5. If PodNotes is not turned on afterwards, turn it on in **Settings → Community plugins**.
+1. Install the [BRAT](obsidian://show-plugin?id=obsidian42-brat) plugin.
+2. In **Settings → Community plugins**, turn on BRAT.
+3. Run **BRAT: Plugins: Add a beta plugin for testing (with or without version)**.
+4. Enter `chhoumann/PodNotes`.
+5. Select **Add plugin**.
+6. If PodNotes is not turned on afterwards, turn it on in **Settings → Community plugins**.
 
 To install a release by hand:
 

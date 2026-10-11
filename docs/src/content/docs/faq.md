@@ -42,13 +42,12 @@ A show that exists only inside Spotify or another app has no feed to add. If the
 
 Yes, if your provider gives you a personal RSS URL. Paste the whole URL into **Search Podcasts**.
 PodNotes cannot sign in to providers that require a browser login.
-When the URL contains a password or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#secrets-on-each-device).
+When the URL contains a password or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
 
 ### Can I annotate my own audio or video?
 
-Yes. In the file explorer, right-click a media file and select **Play with PodNotes**. On a phone, long-press the file.
-You can then capture timestamps and create an episode note as with any episode.
-For MP4 and WebM files, select **Play as audio with PodNotes** or **Play as video with PodNotes**. See [Downloads and local files](/local_files/).
+Yes. Play an audio or video file from your vault in PodNotes, then capture timestamps and create an episode note as with any episode.
+See [Play your own audio and video](/local_files/#play-your-own-audio-and-video) for the steps and the file types PodNotes plays.
 
 ## Notes and timestamps
 
@@ -60,14 +59,14 @@ In **Settings → PodNotes**, change `{{time}}` to `{{linktime}}` in **Capture t
 
 ### Can I take notes on an episode I listen to in another app?
 
-Yes. Add the podcast to PodNotes, find the episode in the podcast's episode list, and select **Create Note** from the episode's menu. The episode does not have to play.
+Yes. Add the podcast to PodNotes, then create the note from the episode's menu. The episode does not have to play. See [Create a note for another episode](/notes/#create-a-note-for-another-episode).
 Timestamps come from the PodNotes player, so to capture them, play the episode in PodNotes.
-For notes about a whole show, use a feed note. See [Create episode notes](/notes/).
+For notes about a whole show, use a feed note. See [Create a feed note for a podcast](/notes/#create-a-feed-note-for-a-podcast).
 
 ### Do headset buttons control PodNotes?
 
-One button does. When your headset sends the previous-track action, PodNotes captures a timestamp into the open note, or into the episode note if no note is open. This works on a phone or a computer, but not every headset sends that action.
-PodNotes adds no other headset actions, so play, pause, and skip depend on your device. See [Capture with a headset](/mobile/#capture-with-a-headset).
+One button does. When your headset sends the previous-track action, PodNotes captures a timestamp. If a note is open in an editor, the timestamp goes in at the cursor. If no note is open in an editor, it goes at the end of the episode note.
+This works on a phone or a computer, but not every headset sends that action. PodNotes adds no other headset actions, so play, pause, and skip depend on your device. See [Capture with a headset](/mobile/#capture-with-a-headset).
 
 ## Devices and sync
 
@@ -81,12 +80,12 @@ See [Downloads on another device](/sync/#downloads-on-another-device).
 
 Your notes and timestamps stay.
 Timestamp links point at the feed and the episode, so they stream the episode again while the feed still lists it.
-Links to your own media files need the file. See [Removed downloads and existing links](/sync/#removal-and-existing-links).
+Links to your own media files need the file. See [Removed downloads and existing links](/sync/#removed-downloads-and-existing-links).
 
 ### Does playback progress sync between devices?
 
 Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`.
-PodNotes does not merge changes from two devices. Use one device at a time, because one device can overwrite the other's changes.
+PodNotes does not merge changes from two devices, so one device can overwrite the other's changes. Use one device at a time. When you switch, let sync finish, then restart Obsidian or turn PodNotes off and on before you use it. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
 API keys and protected private feeds stay on each device. See [Sync between devices](/sync/).
 
 ## Transcription
@@ -95,4 +94,4 @@ API keys and protected private feeds stay on each device. See [Sync between devi
 
 PodNotes is free, but transcription uses your own OpenAI or Deepgram account, and the provider bills you for API use.
 Plain transcripts use OpenAI Whisper. **Speaker diarization** uses OpenAI or Deepgram.
-PodNotes transcribes the audio itself. It does not import transcripts from Apple Podcasts or from a feed. See [Transcribe episodes](/transcripts/#cost).
+PodNotes transcribes the audio itself. It does not import transcripts from Apple Podcasts or from a feed. See [What transcription costs](/transcripts/#what-transcription-costs).

@@ -630,8 +630,9 @@ async function main() {
 			{
 				kind: "rect",
 				expression: `(() => {
+					const drawer = document.querySelector(".podcast-view").closest(".workspace-drawer, .workspace-split").getBoundingClientRect();
 					const controls = document.querySelector(".podcast-view .controls-container").getBoundingClientRect();
-					return { x: 0, y: 0, width: innerWidth, height: controls.bottom + 24 };
+					return { x: drawer.x, y: drawer.y, width: drawer.width, height: controls.bottom + 24 - drawer.y };
 				})()`,
 			},
 			{ css: CAPTURE_CSS, size: PHONE },

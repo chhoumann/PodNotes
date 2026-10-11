@@ -12,7 +12,7 @@ head:
     content: PodNotes, a podcast player for Obsidian
 hero:
   title: Take notes on podcasts without leaving Obsidian
-  tagline: PodNotes plays podcasts beside your notes. Capture a timestamp that links back to the moment you heard it, and get a note for every episode.
+  tagline: PodNotes plays podcasts beside your notes. Capture a timestamp that links back to the moment you heard it, and create a note for any episode.
   actions:
     - text: Get started
       link: /getting-started/

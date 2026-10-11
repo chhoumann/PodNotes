@@ -47,7 +47,7 @@ The `{{title}}` and `{{podcast}}` path tags remove these characters:
 \ , # % & / { } * < > $ ' " : @ ‣ | ? [ ]
 ```
 
-They also turn control characters into spaces, collapse runs of whitespace, trim the ends, and remove leading and trailing dots. Dots inside a name stay. Date values are not cleaned, so a date format that contains `:` can produce a file name that the system rejects.
+They also turn control characters into spaces, collapse runs of whitespace, trim the ends, and remove leading and trailing dots. Dots inside a name stay. PodNotes does not clean date values, so a date format that contains `:` can produce a file name that the system rejects.
 
 PodNotes shortens a long folder or file name to fit file system limits, and keeps the extension.
 
@@ -74,17 +74,17 @@ PodNotes shortens a long folder or file name to fit file system limits, and keep
 
 `{{date}}` and `{{currentDate}}` accept a [date format](#date-formats). `{{episodeNumber:000}}` pads to three digits. Any other argument gives the number without padding.
 
-The episode number comes from `<itunes:episode>` when the feed has a valid one. Otherwise PodNotes reads a number at the start of the title, such as `#12`, `Ep. 12`, `Episode 12`, or `12: Interview`. A year at the start of a title, as in `2024: A year in review`, can be read as an episode number.
+The episode number comes from `<itunes:episode>` when the feed has a valid one. Otherwise PodNotes reads a number at the start of the title, such as `#12`, `Ep. 12`, `Episode 12`, or `12: Interview`. PodNotes can read a year at the start of a title, as in `2024: A year in review`, as an episode number.
 
 `{{description}}`, `{{content}}`, and `{{chapters}}` accept a prefix for every line, as in `{{description:> }}`. Descriptions and content keep ordinary Markdown formatting, links, and image alt text. PodNotes removes media elements, escapes Markdown embeds, and turns `dataview` and `dataviewjs` code blocks into `text` code blocks.
 
-URLs from a feed are percent-encoded where they contain whitespace, control characters, quotes, backticks, brackets, parentheses, angle brackets, or backslashes. A local file's `{{url}}` stays a vault link. `{{artwork}}` and `{{stream}}` accept only public HTTP or HTTPS addresses without a user name or password. A device-only address, or a private or local IP address, gives an empty value.
+PodNotes percent-encodes URLs from a feed where they contain whitespace, control characters, quotes, backticks, brackets, parentheses, angle brackets, or backslashes. A local file's `{{url}}` stays a vault link. `{{artwork}}` and `{{stream}}` accept only public HTTP or HTTPS addresses without a user name or password. A device-only address, or a private or local IP address, gives an empty value.
 
 ### Duration and chapters
 
 With no argument, `{{duration}}` gives `4:05` for an episode under an hour and `1:02:03` for longer ones. `{{duration:minutes}}` gives whole minutes, and `{{duration:seconds}}` gives seconds. Any other argument is a [time format](/timestamps/#time-formats), as in `{{duration:HH:mm:ss}}`. An episode restored from an older version can lack a duration until you open it from its feed again.
 
-`{{chapters}}` reads the chapters file from the feed's Podcasting 2.0 `<podcast:chapters>` tag. Each visible chapter becomes a line such as `- 0:00 Chapter title`, sorted by start time, with the title as plain text. Chapters marked `toc: false` are left out. A failed request or an empty chapters file gives an empty value.
+`{{chapters}}` reads the chapters file from the feed's Podcasting 2.0 `<podcast:chapters>` tag. Each visible chapter becomes a line such as `- 0:00 Chapter title`, sorted by start time, with the title as plain text. PodNotes leaves out chapters marked `toc: false`. A failed request or an empty chapters file gives an empty value.
 
 ### <span id="linking-an-episode-to-its-podcast-feed-note"></span>Feed link tags
 
@@ -126,7 +126,7 @@ favorite: false
 {{description}}
 ```
 
-Its properties work with Obsidian Bases. `status`, `rating`, and `favorite` are yours to fill in. To build a table of episode notes, see [Browse your notes with Bases](/notes/#browse-your-notes-with-bases).
+Its properties work with Obsidian Bases. You fill in `status`, `rating`, and `favorite`. To build a table of episode notes, see [Browse your notes with Bases](/notes/#browse-your-notes-with-bases).
 
 The title and the URL are in the body, not the properties. An escaped title can contain backslashes, and a vault link can contain quotes, so either value can break a quoted property. The quoted `{{podcastlink}}` is safe as long as **Feed note file path** has no quotes or backslashes.
 

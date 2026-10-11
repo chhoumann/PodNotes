@@ -27,8 +27,10 @@ export async function withScreenshots(html) {
 	return html.replace(screenshotImg, (tag, src) => {
 		const alt = tag.match(/\balt="([^"]*)"/)?.[1] ?? "";
 		const { width, height } = sizes.get(src);
+		// Sidebar-width shots display smaller, so they do not tower over the text.
+		const kind = width <= 480 ? "screenshot narrow" : "screenshot";
 		const img = (file, hidden) =>
-			`<img src="${file}" alt="${alt}" width="${width}" height="${height}" loading="lazy" decoding="async" class="screenshot${hidden ? ` ${hidden}` : ""}">`;
+			`<img src="${file}" alt="${alt}" width="${width}" height="${height}" loading="lazy" decoding="async" class="${kind}${hidden ? ` ${hidden}` : ""}">`;
 		if (!existsSync(publicDir + darkTwin(src))) return img(src, "");
 		return img(src, "dark:sl-hidden") + img(darkTwin(src), "light:sl-hidden");
 	});

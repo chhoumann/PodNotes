@@ -4,27 +4,23 @@ slug: mobile
 description: Open the player, capture timestamps from the editor toolbar or a headset, and listen offline on iOS and Android.
 ---
 
-On a phone, PodNotes works as it does on a computer, except that you open the player yourself and capture timestamps from the editor toolbar or a headset.
+Listen and capture timestamps on your phone. You open the player yourself, and besides the command palette, you can capture from the editor toolbar or a headset.
 To install PodNotes, follow [Install PodNotes](/getting-started/#install-podnotes). The steps are the same on a phone.
 
 ## <span id="enable-podnotes-and-open-the-player"></span>Open the player
 
-On a phone, PodNotes does not open the player when Obsidian starts. Open it yourself:
+On a phone, the player stays closed when Obsidian starts.
 
 1. Pull down on a note to open the command palette.
 2. Run **PodNotes: Show player**.
 
-You can also select **Show PodNotes** in the menu of the navigation bar at the bottom of the screen.
-The player opens in the right sidebar. To bring it back after you close it, run the command again.
+You can also select **Show PodNotes** in the menu of the navigation bar at the bottom of the screen. The player opens in the right sidebar. To return to your note, tap outside the sidebar.
 
 ![The PodNotes player in Obsidian's right sidebar on a phone, with episode artwork, title, progress, and skip buttons](/screenshots/mobile-player.webp)
 
-To add your first podcast, see [Add and play podcasts](/podcasts/).
-Most PodNotes commands appear only after you load an episode. A paused episode counts. [Commands](/commands/) lists when each one is available.
+To add your first podcast, see [Add and play podcasts](/podcasts/). Most commands appear only after you load an episode. See [Commands](/commands/).
 
 ## Add a capture button to the editor toolbar
-
-Obsidian lists **PodNotes: Capture Timestamp** only while a note is open in an editor. It lists **PodNotes: Capture Last 10 Seconds** and **PodNotes: Capture Last 20 Seconds** only while a note is open in an editor, an episode is loaded, and **Capture timestamp format** is set.
 
 ### Set up the button once
 
@@ -34,41 +30,38 @@ Obsidian lists **PodNotes: Capture Timestamp** only while a note is open in an e
 4. Under **Manage toolbar options**, select **Add a command...**.
 5. Find and select **PodNotes: Capture Timestamp**.
 
-To add a range button, repeat steps 4 and 5 with **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**.
+To add a range button, repeat steps 4 and 5 with **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**. Obsidian lists them only while [the range commands are available](/commands/#capture-last-10-seconds--capture-last-20-seconds).
 
 ### Capture from the toolbar
 
 1. In PodNotes, play an episode.
-2. In a note in editing view, place the cursor where the timestamp goes.
-3. In the editor toolbar, select the clock button.
+2. Tap outside the sidebar to return to your note.
+3. In editing view, place the cursor where the timestamp goes.
+4. In the editor toolbar, select the clock button.
 
 ![A note on a phone with three captured timestamp links and the editor toolbar, whose first button is the clock that captures a timestamp](/screenshots/mobile-toolbar.webp)
 
-PodNotes inserts a timestamp link at the cursor. If no episode is loaded, the button shows a notice instead.
-If your timestamps come out as plain text, set **Capture timestamp format** in **Settings → PodNotes** to `- {{linktime}}` with a space at the end. [Make timestamps clickable](/timestamps/#make-timestamps-clickable) explains the fix.
+PodNotes inserts a timestamp link at the cursor, or shows a notice when no episode is loaded. If your timestamps come out as plain text, see [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ## Capture with a headset
 
-While an episode plays, press the headset button that sends the previous-track action. PodNotes captures a timestamp:
+While an episode plays, press the headset button that sends the previous-track action. This works on a computer too.
 
 - If a note is open in an editor, the timestamp goes in at the cursor.
-- If no note is open, the timestamp goes at the end of the episode's note. PodNotes creates the note if it does not exist, as long as **Note creation file path** and **Note creation template** are set.
-
-Headset capture works on a phone or a computer, but not every headset sends the previous-track action. Play and pause do not capture a timestamp.
+- If no note is open in an editor, the timestamp goes at the end of the episode's note. PodNotes creates that note if needed, as long as **Note creation file path** and **Note creation template** are set.
 
 ## Download an episode
 
-Download episodes while you are online, and wait for the notice that says each download succeeded.
-On a phone, open an episode's menu with its **More options** button, the three-dot button. [Download an episode](/local_files/#download-an-episode) has the steps and explains where the file goes.
+Download episodes while you are online, and wait for the notice that says each download succeeded. On a phone, the episode menu opens from the three-dot **More options** button. See [Download an episode](/local_files/#download-an-episode).
 
 ## Play your own audio and video
 
-On a phone, long-press a media file in the file explorer instead of right-clicking it.
-[Play your own audio and video](/local_files/#play-your-own-audio-and-video) has the steps and lists the file types PodNotes plays.
+Long-press a media file in the file explorer, where a computer uses a right-click. See [Play your own audio and video](/local_files/#play-your-own-audio-and-video).
 
 ## <span id="known-limits-and-verified-devices"></span>Limits on phones
 
-- Playback depends on the codecs your phone supports. A file that plays on a computer can fail on a phone.
-- Headset gestures vary. Which press sends previous track depends on the headset and the phone, and some send none.
-- API keys stay on each device, so add them on your phone too. A protected private feed works on one device at a time. See [API keys and private feeds on each device](/sync/#secrets-on-each-device).
-- A download made on another device plays only after its media file has synced to this one. See [Downloads on another device](/sync/#downloads-on-another-device).
+- PodNotes does not merge changes from two devices. Use one device at a time. When you switch, let sync finish, then restart Obsidian or turn PodNotes off and on before you use it. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
+- A file that plays on a computer can fail on a phone that lacks its codec.
+- Which headset press sends previous track depends on the headset and the phone, and some headsets send none.
+- API keys stay on each device, so add them on your phone too. A protected private feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
+- A download made on another device plays only after its media file syncs to this one. See [Downloads on another device](/sync/#downloads-on-another-device).
