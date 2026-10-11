@@ -23,18 +23,17 @@
 	$: visibleEntries = listEntries.filter(
 		(entry) => !shouldHidePlayedEpisodes || !isEpisodeFinished(entry.episode, $playedEpisodes),
 	);
-	$: rowKeys = keyRows(visibleEntries);
 
 	/** Episode keys repeat for same-titled podcasts or episodes, so a repeat gets a suffix. */
-	function keyRows(entries: EpisodeListEntry[]): string[] {
+	function keyRows(entries: EpisodeListEntry[]): [string, EpisodeListEntry][] {
 		const keys = new Set<string>();
-		for (const { episode } of entries) {
-			const key = getEpisodeKey(episode);
+		return entries.map((entry) => {
+			const key = getEpisodeKey(entry.episode);
 			let row = key;
 			for (let repeat = 1; keys.has(row); repeat++) row = `${key}#${repeat}`;
 			keys.add(row);
-		}
-		return [...keys];
+			return [row, entry];
+		});
 	}
 
 	const dispatch = createEventDispatcher();
@@ -108,7 +107,7 @@
 		{#if visibleEntries.length === 0 && !isLoading}
 			<p>No episodes found.</p>
 		{/if}
-		{#each visibleEntries as entry, index (rowKeys[index])}
+		{#each keyRows(visibleEntries) as [key, entry] (key)}
 			<EpisodeListItem
 				episode={entry.episode}
 				episodeFinished={isEpisodeFinished(entry.episode, $playedEpisodes)}

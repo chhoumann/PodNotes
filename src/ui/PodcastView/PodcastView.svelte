@@ -290,18 +290,17 @@
 			on:search={handleSearch}
 		>
 			<svelte:fragment slot="header">
-				{#if selectedFeed}
+				{#if selectedFeed || headerPlaylist}
 					<button type="button" class="go-back" on:click={showLatestEpisodes}>
 						<Icon icon={"arrow-left"} size={20} clickable={false} /> Latest Episodes
 					</button>
+				{/if}
+				{#if selectedFeed}
 					<EpisodeListHeader
 						text={selectedFeed.feed.title}
 						artworkUrl={selectedFeed.feed.artworkUrl}
 					/>
 				{:else if headerPlaylist}
-					<button type="button" class="go-back" on:click={showLatestEpisodes}>
-						<Icon icon={"arrow-left"} size={20} clickable={false} /> Latest Episodes
-					</button>
 					<div class="playlist-header-icon">
 						<Icon icon={headerPlaylist.icon} size={40} clickable={false} />
 					</div>
