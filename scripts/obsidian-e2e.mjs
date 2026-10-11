@@ -1,20 +1,8 @@
-// Temporary bridge in front of the obsidian-e2e instance runner (0.12), which
-// only launches Obsidian on macOS. On macOS the runner verbs behave exactly like
-// the upstream bin. On Linux this adds a headless launch, a private CLI socket per
-// instance, Linux version-guard sources and a CDP port for `capture`. Delete each
-// Linux piece once upstream ships the change in its row:
-//
-//   launchLinux                     launchObsidianInstance grows a Linux branch
-//                                   (xvfb-run without DISPLAY, --no-sandbox)
-//   delete XDG_RUNTIME_DIR,         the runner's obsidianEnv and --print-env
-//   startPrintEnv                   isolate the Linux CLI socket
-//   versionSources,                 Linux version sources upstream, or an exported
-//   guardWarmInstance               guardWarmInstance
-//   cdpEnv                          launch with --remote-debugging-port=0 and print
-//                                   OBSIDIAN_E2E_CDP_PORT from start --print-env
-//
-// `test` (zero-test guard, leak-free teardown) and the PodNotes capture presets
-// stay until upstream grows equivalents.
+// The repo's e2e command. `test` runs tests/e2e against this worktree's isolated
+// Obsidian instance, `screenshot` and `record` capture the PodNotes player,
+// `capture` is upstream `obsidian-e2e capture` against the instance, and
+// provision, start, stop and run go to the obsidian-e2e instance runner (0.12).
+// On macOS the runner verbs behave exactly like the upstream bin.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
@@ -26,8 +14,9 @@ import {
 	assertObsidianMeetsMinAppVersion,
 	ensureObsidianInstance,
 	ensureSecureDir,
-	isInstanceReady,
+	execObsidian,
 	loadRunnerConfig,
+	obsidianCommandArgs,
 	readInstanceMarker,
 	resolveInstanceOptions,
 	resolveProvisionOptions,
@@ -35,25 +24,26 @@ import {
 } from "obsidian-e2e/runner";
 
 /** @typedef {import("obsidian-e2e/runner").CliDependencies} CliDependencies */
+/** @typedef {import("obsidian-e2e/runner").InstanceOptions} InstanceOptions */
 /** @typedef {import("obsidian-e2e/runner").LaunchTarget} LaunchTarget */
 
 const linux = process.platform === "linux";
-const VITEST = fileURLToPath(new URL("../node_modules/.bin/vitest", import.meta.url));
-const PLAYER_SELECTOR = '.workspace-leaf-content[data-type="podcast_player_view"]';
-// Opens the player through its command, then waits until the view has the same
-// non-zero box on two consecutive checks, so a capture never races the sidebar.
-const OPEN_PLAYER = `(async () => {
-	app.commands.executeCommandById("podnotes:podnotes-show-leaf");
-	let last = "";
-	for (let i = 0; i < 100; i++) {
-		await new Promise((resolve) => setTimeout(resolve, 100));
-		const rect = document.querySelector(${JSON.stringify(PLAYER_SELECTOR)})?.getBoundingClientRect();
-		const box = rect && rect.width > 0 && rect.height > 0 ? JSON.stringify(rect) : "";
-		if (box && box === last) return true;
-		last = box;
-	}
-	throw new Error("The PodNotes player did not open.");
-})()`;
+
+// The runner only launches Obsidian on macOS. This block is the Linux support;
+// delete each piece once upstream ships the change in its row:
+//
+//   launchLinux                     launchObsidianInstance grows a Linux branch
+//                                   (xvfb-run without DISPLAY, --no-sandbox)
+//   delete XDG_RUNTIME_DIR,         the runner's obsidianEnv and --print-env
+//   startPrintEnv                   isolate the Linux CLI socket
+//   versionSources,                 Linux version sources upstream, or an exported
+//   guardWarmInstance               guardWarmInstance
+//   cdpEnv                          launch with --remote-debugging-port=0 and print
+//                                   OBSIDIAN_E2E_CDP_PORT from start --print-env
+//   record --fps 30 (in capture)    upstream fixes the x11 record start estimate
+//
+// `test` (zero-test guard, leak-free teardown) and the PodNotes capture presets
+// stay until upstream grows equivalents.
 
 // Linux Obsidian and its CLI client put the socket in $XDG_RUNTIME_DIR when it
 // is set, so every instance would share one socket. Without it both fall back
@@ -136,32 +126,27 @@ async function guardWarmInstance(options, deps = {}) {
 	}
 }
 
-/** @type {CliDependencies} */
-const runnerDeps = linux
-	? {
-			ensureObsidianInstance: (options, config, deps) =>
-				ensureObsidianInstance(options, config, {
-					...deps,
-					...versionSources(options.obsidianApp),
-					launchObsidianInstance: launchLinux,
-				}),
-			guardWarmInstance,
-		}
-	: {};
-
-/** This worktree's default instance, resolved exactly like the runner verbs resolve it. */
-async function defaultInstance() {
-	const cwd = process.cwd();
-	const config = await loadRunnerConfig(cwd);
-	return resolveInstanceOptions(resolveProvisionOptions({}, config, cwd), {}, config, cwd);
+/**
+ * @param {(target: LaunchTarget) => Promise<void>} launch
+ * @returns {CliDependencies}
+ */
+function linuxDeps(launch) {
+	return {
+		ensureObsidianInstance: (options, config, deps) =>
+			ensureObsidianInstance(options, config, {
+				...deps,
+				...versionSources(options.obsidianApp),
+				launchObsidianInstance: launch,
+			}),
+		guardWarmInstance,
+	};
 }
 
-/** Env for upstream `capture` that targets this worktree's instance. */
-async function cdpEnv() {
-	const { userDataPath } = await defaultInstance();
+/** @param {InstanceOptions} instance */
+async function cdpEnv(instance) {
 	try {
 		const [port] = (
-			await fsp.readFile(path.join(userDataPath, "DevToolsActivePort"), "utf8")
+			await fsp.readFile(path.join(instance.userDataPath, "DevToolsActivePort"), "utf8")
 		).split("\n");
 		return { ...process.env, OBSIDIAN_E2E_CDP_PORT: port };
 	} catch {
@@ -186,31 +171,62 @@ async function startPrintEnv(argv) {
 	return code;
 }
 
-/**
- * Run tests/e2e against this worktree's instance. On Linux the instance is
- * started (or reused and reloaded) first, and stopped afterwards only when this
- * run launched it.
- * @param {string[]} args Vitest arguments.
- */
+const runnerDeps = linux ? linuxDeps(launchLinux) : {};
+
+const VITEST = fileURLToPath(new URL("../node_modules/.bin/vitest", import.meta.url));
+const PLAYER_SELECTOR = '.workspace-leaf-content[data-type="podcast_player_view"]';
+// Waits for the same non-zero box on two consecutive checks, so a capture never
+// races the sidebar opening.
+const OPEN_PLAYER = `(async () => {
+	if (!app.commands.executeCommandById("podnotes:podnotes-show-leaf")) return false;
+	let last = "";
+	for (let i = 0; i < 100; i++) {
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		const rect = document.querySelector(${JSON.stringify(PLAYER_SELECTOR)})?.getBoundingClientRect();
+		const box = rect && rect.width > 0 && rect.height > 0 ? JSON.stringify(rect) : "";
+		if (box && box === last) return true;
+		last = box;
+	}
+	return false;
+})()`;
+const CDP_CAPTURE_VERBS = ["prepare", "screenshot", "type", "record"];
+
+async function defaultInstance() {
+	const cwd = process.cwd();
+	const config = await loadRunnerConfig(cwd);
+	return resolveInstanceOptions(resolveProvisionOptions({}, config, cwd), {}, config, cwd);
+}
+
+/** @param {string[]} args Vitest arguments. */
 async function runTests(args) {
 	const instance = linux ? await defaultInstance() : undefined;
-	const wasRunning = !instance || (await isInstanceReady(instance));
 	const results = path.join(os.tmpdir(), `podnotes-e2e-${process.pid}.json`);
+	let launched = false;
+	/** @type {import("node:child_process").ChildProcess | undefined} */
+	let child;
 	/** @type {NodeJS.Signals | undefined} */
 	let interrupted;
 	/** @param {NodeJS.Signals} signal */
 	const onSignal = (signal) => {
 		interrupted ??= signal;
+		try {
+			// Vitest leads its own process group, so its fork workers stop with it.
+			if (child?.pid) process.kill(-child.pid, signal);
+		} catch {}
 	};
 	process.on("SIGINT", onSignal);
 	process.on("SIGTERM", onSignal);
 	try {
 		if (instance) {
-			const started = await runObsidianE2ECli(["start"], runnerDeps);
+			const deps = linuxDeps(async (target) => {
+				launched = true;
+				await launchLinux(target);
+			});
+			const started = await runObsidianE2ECli(["start"], deps);
 			if (started !== 0) return started;
 		}
 		if (interrupted) return 128 + os.constants.signals[interrupted];
-		const child = spawn(
+		child = spawn(
 			VITEST,
 			[
 				"run",
@@ -224,6 +240,7 @@ async function runTests(args) {
 				...args,
 			],
 			{
+				detached: true,
 				stdio: "inherit",
 				env: instance
 					? {
@@ -236,7 +253,8 @@ async function runTests(args) {
 			},
 		);
 		const [code, signal] = await once(child, "close");
-		if (signal) return 128 + os.constants.signals[/** @type {NodeJS.Signals} */ (signal)];
+		const stoppedBy = interrupted ?? signal;
+		if (stoppedBy) return 128 + os.constants.signals[/** @type {NodeJS.Signals} */ (stoppedBy)];
 		if (code !== 0) return code;
 		// Vitest exits 0 when a filter matches no test.
 		const { numPassedTests, numFailedTests } = JSON.parse(await fsp.readFile(results, "utf8"));
@@ -251,21 +269,25 @@ async function runTests(args) {
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
 		await fsp.rm(results, { force: true });
-		if (!wasRunning) await runObsidianE2ECli(["stop"], runnerDeps);
+		if (launched) await runObsidianE2ECli(["stop"], runnerDeps);
 	}
 }
 
 /**
- * `screenshot <out.png>` and `record <out.mp4|webm> [-- driver...]` capture the
- * PodNotes player; `capture ...` is upstream `capture` against this instance.
  * @param {"screenshot" | "record" | "capture"} verb
  * @param {string[]} args
  */
 async function capture(verb, args) {
+	if (verb === "capture" && !CDP_CAPTURE_VERBS.includes(args[0])) {
+		return runObsidianE2ECli(["capture", ...args]);
+	}
 	if (!linux) {
 		throw new Error(`${verb} is Linux-only; on macOS use \`npx obsidian-e2e capture launch\`.`);
 	}
-	if (verb === "capture") return runObsidianE2ECli(["capture", ...args], { env: await cdpEnv() });
+	const instance = await defaultInstance();
+	if (verb === "capture") {
+		return runObsidianE2ECli(["capture", ...args], { env: await cdpEnv(instance) });
+	}
 	const [output, separator, ...driver] = args;
 	const usable =
 		verb === "screenshot"
@@ -278,11 +300,16 @@ async function capture(verb, args) {
 				: "Usage: record <out.mp4|out.webm> [-- <driver command...>]",
 		);
 	}
-	const opened = await runObsidianE2ECli(["run", "eval", `code=${OPEN_PLAYER}`], runnerDeps);
-	if (opened !== 0) return opened;
+	const up = await runObsidianE2ECli(["run"], runnerDeps);
+	if (up !== 0) return up;
+	const { stdout } = await execObsidian(
+		instance,
+		obsidianCommandArgs(instance.vaultName, ["eval", `code=${OPEN_PLAYER}`]),
+	);
+	if (!stdout.trim().endsWith("=> true")) throw new Error("The PodNotes player did not open.");
 	await fsp.mkdir(path.dirname(path.resolve(output)), { recursive: true });
-	// x11 takes start a few encoder frames before upstream's start estimate and
-	// are rejected once that exceeds 0.5 s; at 30 fps those frames stay well under.
+	// Upstream rejects a take whose encoded duration drifts more than max(0.5 s,
+	// 2 frames) from wall clock; x11grab's lead-in frames stay under that at 30 fps.
 	const captureArgs =
 		verb === "screenshot"
 			? ["screenshot", output, "--selector", PLAYER_SELECTOR]
@@ -294,7 +321,7 @@ async function capture(verb, args) {
 					"--",
 					...(driver.length > 0 ? driver : ["sleep", "3"]),
 				];
-	return runObsidianE2ECli(["capture", ...captureArgs], { env: await cdpEnv() });
+	return runObsidianE2ECli(["capture", ...captureArgs], { env: await cdpEnv(instance) });
 }
 
 /** @param {string[]} argv */
