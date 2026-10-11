@@ -1092,6 +1092,12 @@ describe("video stage", () => {
 		expect(state()).toMatchObject({ status: "loading", episode: B });
 	});
 
+	test("a finished video that a reset reloads lets go of its media", () => {
+		const { media } = finishedThenReset();
+
+		expect(media().src).toBe("");
+	});
+
 	test("resume() starts a finished video that a reset reloaded over", () => {
 		const { player, media, state } = finishedThenReset();
 
