@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Notice } from "obsidian";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TimerNotice } from "./TimerNotice";

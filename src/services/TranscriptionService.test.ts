@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, test, vi, beforeEach } from "vitest";
 import { Notice } from "obsidian";
 import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";

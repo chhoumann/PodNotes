@@ -48,6 +48,8 @@ const EDGE_FAILURES: typeof OPENAI_FAILURES = [
 
 beforeEach(() => {
 	vi.stubGlobal("fetch", fetchMock);
+	// In Obsidian's renderer `window` is the global object; the code under test uses its timers.
+	vi.stubGlobal("window", globalThis);
 });
 
 afterEach(() => {

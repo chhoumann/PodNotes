@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SecretStorage } from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";

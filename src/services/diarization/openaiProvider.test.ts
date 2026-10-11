@@ -17,6 +17,8 @@ const sentForm = (call: number) => fetchMock.mock.calls[call][1]?.body as FormDa
 
 beforeEach(() => {
 	vi.stubGlobal("fetch", fetchMock);
+	// In Obsidian's renderer `window` is the global object; the code under test uses its timers.
+	vi.stubGlobal("window", globalThis);
 });
 
 afterEach(() => {

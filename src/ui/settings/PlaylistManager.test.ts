@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { fireEvent, render } from "@testing-library/svelte";
 import { get } from "svelte/store";
 import * as obsidian from "obsidian";
