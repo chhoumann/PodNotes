@@ -85,11 +85,16 @@ function resolveResumeTime(episode: Episode): number {
 	return isFinished ? 0 : played.time;
 }
 
+// Two links opened in quick succession can load their feeds out of order, so a
+// link acts after loading only if no newer link has arrived since.
+let latestRequest = 0;
+
 export default async function podNotesURIHandler(
 	{ url, episodeName, time, endTime, end, to }: PodNotesProtocolData,
 	api: IAPI,
 	revealPlayer?: RevealPodNotesPlayer,
 ) {
+	const request = ++latestRequest;
 	if (!url || !episodeName) {
 		new Notice("URL and episode name are required to play an episode");
 		return;
@@ -209,6 +214,7 @@ export default async function podNotesURIHandler(
 		let episodes: readonly Episode[];
 		if (placeholderKey !== null) {
 			await feeds.load([placeholderKey], "complete");
+			if (request !== latestRequest) return;
 			const state = get(feeds).get(placeholderKey);
 			if (!state?.channel) {
 				new Notice(
@@ -235,11 +241,13 @@ export default async function podNotesURIHandler(
 				// pre-existing and out of scope.
 				episodes = await feeds.episodesAt(url);
 			} catch (error) {
+				if (request !== latestRequest) return;
 				// A fetch/parse failure is distinct from a genuine title miss; surface it.
 				console.error(error);
 				new Notice("Could not load the podcast feed");
 				return;
 			}
+			if (request !== latestRequest) return;
 		}
 		episode = findEpisodeByCandidates(episodes, nameCandidates);
 	}

@@ -1,3 +1,4 @@
+import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -18,6 +19,7 @@ import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import type { Playlist } from "./types/Playlist";
 import { ViewState } from "./types/ViewState";
+import { deferred } from "../tests/mocks/feeds";
 
 const mockEpisodesAt = vi.fn();
 const testFeedUrl = "https://pod.example.com/feed.xml";
@@ -569,6 +571,44 @@ describe("podNotesURIHandler", () => {
 
 		expect(get(currentEpisode)).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
+	test("a link whose feed loads after a newer link's changes nothing", async () => {
+		const older = deferred<Episode[]>();
+		const newer = deferred<Episode[]>();
+		mockEpisodesAt.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+		const open = (episodeName: string) =>
+			podNotesURIHandler(
+				{ action: "podnotes", url: testFeedUrl, episodeName, time: "5" },
+				api as never,
+			);
+
+		const opening = [open(testEpisode.title), open(plusEpisode.title)];
+		newer.resolve([testEpisode, plusEpisode]);
+		older.resolve([testEpisode, plusEpisode]);
+		await Promise.all(opening);
+
+		expect(get(currentEpisode)).toMatchObject({ title: plusEpisode.title });
+		expect(get(requestedPlaybackTime)?.episodeKey).toBe(`Test Podcast::${plusEpisode.title}`);
+	});
+
+	test("a link whose feed fails after a newer link's shows no notice", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const older = deferred<Episode[]>();
+		mockEpisodesAt.mockReturnValueOnce(older.promise).mockResolvedValueOnce([plusEpisode]);
+		const open = (episodeName: string) =>
+			podNotesURIHandler(
+				{ action: "podnotes", url: testFeedUrl, episodeName, time: "5" },
+				api as never,
+			);
+
+		const opening = open(testEpisode.title);
+		await open(plusEpisode.title);
+		older.reject(new Error("offline"));
+		await opening;
+
+		expect(notice).not.toHaveBeenCalled();
+		expect(get(currentEpisode)).toMatchObject({ title: plusEpisode.title });
 	});
 
 	test("does not reject when feed parsing throws (no silent unhandled rejection)", async () => {
