@@ -133,7 +133,7 @@ describe("PodcastQueryGrid", () => {
 		expect(queryAllByRole("listitem")).toHaveLength(0);
 	});
 
-	test("keeps a newer search when an older Apple Podcasts lookup answers last", async () => {
+	test("keeps searching when an older Apple Podcasts lookup answers during a newer search", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		const lookup = deferred<unknown>();
 		const search = deferred<unknown>();
