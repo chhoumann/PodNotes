@@ -312,6 +312,7 @@ export class PlayerController {
 			currentTime: time,
 			duration,
 		});
+		this.el.setAttribute("aria-label", episode.title);
 		this.el.src = source.src;
 		// In the intent's own call, so a mobile user's tap still counts as the gesture.
 		this.playElement();

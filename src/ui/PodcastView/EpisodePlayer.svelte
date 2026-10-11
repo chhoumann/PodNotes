@@ -3,6 +3,7 @@
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { fetchChapters } from "src/utility/fetchChapters";
 	import { get } from "svelte/store";
+	import { onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
@@ -32,12 +33,15 @@
 	$: episode = $state.episode as Episode;
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
 	$: titleCharCount = episode.title.length;
-	$: isVideoEpisode = $state.mediaType === "video";
+	// The video plays in the main window, so a view in a popout shows the artwork.
+	$: showVideo = $state.mediaType === "video" && inMainWindow;
 	$: paused = $state.status !== "playing";
 	$: isLoading = $state.status === "loading";
 	$: loadError = $state.status === "error" ? "Could not load this episode's media." : null;
 
 	let isHoveringArtwork: boolean = false;
+	let root: HTMLDivElement;
+	let inMainWindow = true;
 	let videoContainer: HTMLDivElement | undefined;
 	let chapters: Chapter[] = [];
 	let lastChaptersUrl: string | undefined = undefined;
@@ -54,6 +58,12 @@
 			if (chaptersUrl === lastChaptersUrl) chapters = c;
 		});
 	}
+
+	onMount(() => {
+		const follow = () => (inMainWindow = root.ownerDocument === document);
+		follow();
+		return root.onWindowMigrated?.(follow);
+	});
 
 	function onClickProgressbar({
 		detail: { event, percent },
@@ -110,8 +120,8 @@
 	}
 </script>
 
-<div class="episode-player">
-	{#if isVideoEpisode}
+<div class="episode-player" bind:this={root}>
+	{#if showVideo}
 		<div class="episode-video-container" use:player.videoStage bind:this={videoContainer}>
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
