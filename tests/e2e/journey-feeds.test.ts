@@ -1,5 +1,5 @@
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, expectKnownFailure, RELOAD_OPTIONS } from "./harness";
+import { createPodNotesE2EHarness, RELOAD_OPTIONS } from "./harness";
 import {
 	chooseFile,
 	click,
@@ -279,9 +279,9 @@ describe("feed journeys", () => {
 		expect(await listedEpisodes(obsidian)).toEqual(["Dated Control", "Undated Episode"]);
 	});
 
-	test("#358 known failure: a podcast without artwork still gets a card in the grid", async () => {
+	test("a podcast without artwork still gets a card in the grid (#358)", async () => {
 		const context = getContext();
-		const { obsidian, plugin } = context;
+		const { obsidian } = context;
 		const control = feed("Journey Artwork Control", "control", ["Control Episode"]);
 		const artless = feed("Journey No Artwork", "artless", ["Artless Episode"], false);
 		await seedLibrary(context, await serve(control, artless), {
@@ -291,21 +291,14 @@ describe("feed journeys", () => {
 		await showPodNotes(obsidian);
 		await waitUntilShown(obsidian, ui.podcastCard("Journey Artwork Control"));
 		await obsidian.sleep(1000);
-		const captured = {
-			subscribed: (await readLibrary(plugin)).subscriptions
-				.map((entry) => entry.title)
-				.sort(),
-			controlCard: await isShown(obsidian, ui.podcastCard("Journey Artwork Control")),
-			artlessCard: await isShown(obsidian, ui.podcastCard("Journey No Artwork")),
-		};
 
-		expectKnownFailure(358, captured, {
-			correct: (value) => expect(value.artlessCard).toBe(true),
-			reproduces: (value) =>
-				value.controlCard &&
-				!value.artlessCard &&
-				value.subscribed.join() === "Journey Artwork Control,Journey No Artwork",
+		expect(await isShown(obsidian, ui.podcastCard("Journey No Artwork"))).toBe(true);
+		await click(obsidian, ui.podcastCard("Journey No Artwork"));
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 1, {
+			timeoutMs: 15_000,
+			message: "the artless podcast's episodes",
 		});
+		expect(await listedEpisodes(obsidian)).toEqual(["Artless Episode"]);
 	});
 
 	test("the Episode list tab shows episodes that loaded while the grid was open (#375)", async () => {

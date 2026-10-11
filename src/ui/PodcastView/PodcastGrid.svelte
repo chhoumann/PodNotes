@@ -26,7 +26,7 @@
 	{/if}
 
 	{#if feeds.length > 0}
-		{#each feeds as [key, feed] (feed.url)}
+		{#each feeds as [key, feed] (key)}
 			<PodcastGridCard {key} {feed} on:clickPodcast />
 		{/each}
 	{:else}

@@ -134,6 +134,36 @@ describe("PodcastQueryGrid", () => {
 		expect(await findByRole("button", { name: "Remove toString podcast" })).toBeInTheDocument();
 	});
 
+	test("two saved podcasts sharing a feed URL each have a Remove for only themselves", async () => {
+		const shared = {
+			title: "Shared",
+			url: "https://feeds.example.com/shared.xml",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ Shared: shared, "Shared Alias": { ...shared, title: "Shared Alias" } });
+
+		const { findByRole } = renderGrid();
+		await fireEvent.click(await findByRole("button", { name: "Remove Shared Alias podcast" }));
+
+		expect(Object.keys(get(savedFeeds))).toEqual(["Shared"]);
+		expect(await findByRole("button", { name: "Remove Shared podcast" })).toBeInTheDocument();
+	});
+
+	test("Remove deletes the saved podcast under its own key", async () => {
+		savedFeeds.set({
+			"Old Name": {
+				title: "New Name",
+				url: "https://feeds.example.com/renamed.xml",
+				artworkUrl: "",
+			},
+		});
+
+		const { findByRole } = renderGrid();
+		await fireEvent.click(await findByRole("button", { name: "Remove New Name podcast" }));
+
+		expect(get(savedFeeds)).toEqual({});
+	});
+
 	test("lists a followed private feed as saved", async () => {
 		followPrivateShow();
 

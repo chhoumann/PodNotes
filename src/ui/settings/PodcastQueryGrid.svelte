@@ -139,6 +139,15 @@
 		return Object.prototype.hasOwnProperty.call(feeds, title) ? feeds[title] : undefined;
 	}
 
+	// A saved row is the saved feed itself, so a shared URL or a key that differs
+	// from the title still finds its own entry.
+	function savedKey(
+		feeds: Record<string, PodcastFeed>,
+		podcast: PodcastFeed,
+	): string | undefined {
+		return Object.keys(feeds).find((key) => feeds[key] === podcast);
+	}
+
 	function isSavedResult(feeds: Record<string, PodcastFeed>, podcast: PodcastFeed): boolean {
 		const saved = savedFeedTitled(feeds, podcast.title);
 		return saved !== undefined && isSavedFeed(saved, podcast.url, get(plugin).feedUrls);
@@ -163,12 +172,11 @@
 		updateSearchResults();
 	}
 
-	function removePodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
-		const { podcast } = event.detail;
+	function removePodcast(key: string) {
 		savedFeeds.update((feeds) => {
-			const removed = feeds[podcast.title];
+			const removed = feeds[key];
 			const newFeeds = { ...feeds };
-			delete newFeeds[podcast.title];
+			delete newFeeds[key];
 			// Identical private URLs dedupe to one secret ID, so delete only when no
 			// remaining feed still references it (the load-time sweep is the backstop).
 			const stillReferenced = Object.values(newFeeds).some(
@@ -205,13 +213,15 @@
 	{/if}
 
 	<div class="podcast-query-results" role="list" aria-label="Podcast search results">
-		{#each searchResults as podcast (podcast.url)}
+		{#each searchResults as podcast (podcast)}
 			<div role="listitem">
 				<PodcastResultCard
 					{podcast}
-					isSaved={isSavedResult($savedFeeds, podcast)}
+					isSaved={savedKey($savedFeeds, podcast) !== undefined ||
+						isSavedResult($savedFeeds, podcast)}
 					on:addPodcast={addPodcast}
-					on:removePodcast={removePodcast}
+					on:removePodcast={() =>
+						removePodcast(savedKey($savedFeeds, podcast) ?? podcast.title)}
 				/>
 			</div>
 		{/each}
