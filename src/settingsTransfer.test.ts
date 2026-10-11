@@ -152,6 +152,33 @@ describe("serializeSettings", () => {
 		expect(exported.timestamp).toEqual(settings.timestamp);
 	});
 
+	it("leaves this vault's files behind but keeps the rest of the library", () => {
+		const episode = (podcastName: string, title: string) => ({
+			title,
+			streamUrl: `app://local/vault/${title}.mp3`,
+			url: "",
+			description: "",
+			content: "",
+			podcastName,
+		});
+		const memo = { ...episode("local file", "Memo"), filePath: "Audio/Memo.mp3" };
+		const show = episode("Show", "Ep 1");
+		const settings = makeSettings({
+			localFiles: { ...DEFAULT_SETTINGS.localFiles, episodes: [memo] },
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [memo, show] },
+			favorites: { ...DEFAULT_SETTINGS.favorites, episodes: [memo] },
+			playlists: { Mix: { ...DEFAULT_SETTINGS.queue, name: "Mix", episodes: [show, memo] } },
+		});
+
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+
+		expect(exported).not.toHaveProperty("localFiles");
+		expect(JSON.stringify(exported)).not.toContain("Memo");
+		expect(exported.queue?.episodes.map(({ title }) => title)).toEqual(["Ep 1"]);
+		expect(exported.favorites?.episodes).toEqual([]);
+		expect(exported.playlists?.Mix.episodes.map(({ title }) => title)).toEqual(["Ep 1"]);
+	});
+
 	it("encodes dates inside exported playlists as canonical text", () => {
 		const date = new Date("2024-03-01T10:05:03.000Z");
 		const settings = makeSettings({
