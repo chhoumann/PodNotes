@@ -103,6 +103,7 @@ Older links using `+` for spaces are also tried during title and local-path look
 
 Feed targets must use a public HTTP or HTTPS URL. A protected private-feed placeholder resolves only through a saved subscription and its device-local secret.
 Local targets need a registered episode and a media file. See [Sync and devices](/sync/#removal-and-existing-links).
+When the vault path in `url` exists, that file plays, even if a same-named file in another folder took over its registration.
 
 A link plays the loaded episode without a feed lookup only when its `url` names that episode's feed, or its file for a local file.
 Episode lookup first tries the title, ignoring case and surrounding whitespace.

@@ -86,6 +86,8 @@ You can still add, remove, and reorder episodes in the queue manually from the e
 ## Player
 An episode keeps playing while you browse podcasts, change settings, or close the PodNotes view.
 When Obsidian starts, the player shows the last episode paused at its saved position. Nothing plays until you press play.
+If a sync brings newer progress or another episode before then, the player shows that instead.
+A video plays in the main Obsidian window. When the PodNotes view is in a separate window, it shows the episode artwork.
 
 Clicking on the episode image will toggle episode playback.
 
