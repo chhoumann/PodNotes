@@ -19,6 +19,7 @@ import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isSameStoredEpisode } from "src/utility/episodeKey";
+import { isLocalFile } from "src/utility/isLocalFile";
 import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 interface DisabledMenuItems {
@@ -86,11 +87,12 @@ export default function spawnEpisodeContextMenu(
 
 	if (!disabledMenuItems?.download) {
 		const isDownloaded = downloadedEpisodes.isEpisodeDownloaded(episode);
+		const removeTitle = isLocalFile(episode) ? "Remove from Local Files" : "Remove file";
 
 		menu.addItem((item) =>
 			item
 				.setIcon(isDownloaded ? "cross" : "download")
-				.setTitle(isDownloaded ? "Remove file" : "Download")
+				.setTitle(isDownloaded ? removeTitle : "Download")
 				.onClick(() => {
 					if (isDownloaded) {
 						void removeDownloadedEpisode(episode);

@@ -179,7 +179,13 @@ export function decodeDownloadedEpisodes(
 					? entry.size
 					: 0;
 			if (size !== entry.size) warn(warnings, `${path}.size`, "value was normalized");
-			return [{ ...decoded, filePath: entry.filePath, size }];
+
+			const download: DownloadedEpisode = { ...decoded, filePath: entry.filePath, size };
+			if ("downloadedByPodNotes" in entry && entry.downloadedByPodNotes !== true) {
+				delete download.downloadedByPodNotes;
+				warn(warnings, `${path}.downloadedByPodNotes`, "value was normalized");
+			}
+			return [download];
 		});
 	}
 	return downloads;

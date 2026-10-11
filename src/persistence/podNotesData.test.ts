@@ -266,6 +266,42 @@ describe("PodNotes data schema", () => {
 		expect(decoded.settings.downloadedEpisodes["Old Podcast"][0].size).toBe(0);
 	});
 
+	const storedDownload = (downloadedByPodNotes: unknown) => ({
+		...episode("Downloaded"),
+		episodeDate: episodeDate.toISOString(),
+		filePath: "Podcasts/downloaded.mp3",
+		size: 42,
+		downloadedByPodNotes,
+	});
+
+	it("keeps a download PodNotes recorded as its own through load and save", () => {
+		const decoded = decodePodNotesData({
+			downloadedEpisodes: { "Test Podcast": [storedDownload(true)] },
+		});
+		const persisted = encodePodNotesData(decoded.settings, decoded.unknownFields);
+
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.settings.downloadedEpisodes["Test Podcast"][0]).toMatchObject({
+			downloadedByPodNotes: true,
+		});
+		expect(persisted.downloadedEpisodes["Test Podcast"][0]).toMatchObject({
+			downloadedByPodNotes: true,
+		});
+	});
+
+	it.each([["true"], [1], [false]])("does not trust download ownership stored as %o", (value) => {
+		const decoded = decodePodNotesData({
+			downloadedEpisodes: { "Test Podcast": [storedDownload(value)] },
+		});
+
+		expect(decoded.settings.downloadedEpisodes["Test Podcast"][0]).not.toHaveProperty(
+			"downloadedByPodNotes",
+		);
+		expect(decoded.warnings).toEqual([
+			"downloadedEpisodes.Test Podcast[0].downloadedByPodNotes: value was normalized",
+		]);
+	});
+
 	it("preserves safe unknown root and nested fields across a schema upgrade", () => {
 		const decoded = decodePodNotesData({
 			schemaVersion: 1,
