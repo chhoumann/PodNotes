@@ -331,6 +331,9 @@ describe("PodcastView integration flow", () => {
 	});
 
 	describe("a refresh that answers after the user moved on", () => {
+		// The refresh handler resumes after its load settles, a few promise hops after
+		// the banner clears; one macrotask lets it finish before the list is read.
+		const settled = () => new Promise((resolve) => setTimeout(resolve));
 		const alphaEpisode = episode("Alpha One", testFeed, "2024-03-01T00:00:00.000Z");
 		const betaEpisode = episode("Beta One", secondFeed, "2024-02-01T00:00:00.000Z");
 		let refresh: ReturnType<typeof deferred<ParsedFeedEpisodes>>;
@@ -357,6 +360,7 @@ describe("PodcastView integration flow", () => {
 			refresh.resolve(feedDocument(testFeed.title, [alphaEpisode]));
 
 			await waitFor(() => expect(screen.queryByText("Updating 1 feed")).toBeNull());
+			await settled();
 			expect(listed()).toEqual([betaEpisode.title]);
 			expect(screen.getAllByText(secondFeed.title).length).toBeGreaterThan(0);
 		});
@@ -367,6 +371,7 @@ describe("PodcastView integration flow", () => {
 			refresh.resolve(feedDocument(testFeed.title, [alphaEpisode]));
 
 			await waitFor(() => expect(screen.queryByText(/Updating/)).toBeNull());
+			await settled();
 			expect(listed()).toEqual([alphaEpisode.title, betaEpisode.title]);
 		});
 	});
