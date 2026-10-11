@@ -876,6 +876,48 @@ describe("video stage", () => {
 		},
 	);
 
+	/** VIDEO played to its end in a stage the popout then carried away, and the browser reloaded it. */
+	function finishedThenReset() {
+		const context = setup();
+		const { player, doc, media } = context;
+		const stage = new FakeParent(doc);
+		player.play(VIDEO);
+		metadata(media(), 60);
+		player.videoStage(stage as unknown as HTMLElement);
+		reach(media(), 60);
+		pausedByBrowser(media());
+		media().emit("ended");
+
+		stage.ownerDocument = {};
+		media().load();
+		media().emit("emptied");
+		metadata(media(), 60);
+		return context;
+	}
+
+	test("a finished video that a reset reloads stays finished", () => {
+		const { player, state } = finishedThenReset();
+
+		player.save();
+		player.play(B);
+
+		expect(progress(VIDEO)).toMatchObject({ time: 60, duration: 60, finished: true });
+		expect(queued()).toEqual([]);
+		expect(state()).toMatchObject({ status: "loading", episode: B });
+	});
+
+	test("resume() starts a finished video that a reset reloaded over", () => {
+		const { player, media, state } = finishedThenReset();
+
+		player.resume();
+		metadata(media(), 60);
+
+		expect(media().src).toBe(VIDEO.streamUrl);
+		expect(media().currentTime).toBe(0);
+		expect(media().paused).toBe(false);
+		expect(state().status).toBe("playing");
+	});
+
 	test("a reset element saves no position until it holds media again", () => {
 		const { player, media, state, writes } = setup();
 		const written = writes(A);
