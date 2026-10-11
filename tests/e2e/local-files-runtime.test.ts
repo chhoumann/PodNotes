@@ -195,7 +195,7 @@ describe("local files runtime", () => {
 				focused: "Keep file",
 				original: true,
 			});
-			await clickModalButton(obsidian, "Move to trash");
+			await clickModalButton(obsidian, "Delete file");
 			await sandbox.waitForMissing(`Recordings/${discarded}.wav`, WAIT_OPTS);
 			await plugin.waitForData<PodNotesData>(
 				(data) => !inDownloads(data, feed, discarded),

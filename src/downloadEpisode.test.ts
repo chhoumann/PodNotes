@@ -650,8 +650,7 @@ describe("removeDownloadedEpisode", () => {
 	const promptFor = (filePath: string) =>
 		`PodNotes cannot confirm that it downloaded "${filePath}".`;
 	const keepFile = () => fireEvent.click(screen.getByRole("button", { name: "Keep file" }));
-	const moveToTrash = () =>
-		fireEvent.click(screen.getByRole("button", { name: "Move to trash" }));
+	const deleteFile = () => fireEvent.click(screen.getByRole("button", { name: "Delete file" }));
 	const dismissPrompt = () => {
 		const closeButton = document.querySelector(".modal-header-button");
 		if (!closeButton) throw new Error("The prompt has no close button.");
@@ -686,7 +685,7 @@ describe("removeDownloadedEpisode", () => {
 		let asked = false;
 		await vi.waitFor(() => {
 			if (settled) return;
-			moveToTrash();
+			deleteFile();
 			asked = true;
 		});
 		await removal;
@@ -721,7 +720,7 @@ describe("removeDownloadedEpisode", () => {
 
 	it.each([
 		["Keep file", keepFile, true],
-		["Move to trash", moveToTrash, false],
+		["Delete file", deleteFile, false],
 		["a dismissal", dismissPrompt, true],
 	])(
 		"asks before trashing a feed file PodNotes cannot confirm it downloaded, answered with %s",
@@ -798,7 +797,7 @@ describe("removeDownloadedEpisode", () => {
 		const removal = removeDownloadedEpisode(episode);
 		await vi.waitFor(() => expect(screen.getByText(promptFor(filePath))).toBeTruthy());
 		vault.present.delete(filePath);
-		moveToTrash();
+		deleteFile();
 		await removal;
 
 		expect({

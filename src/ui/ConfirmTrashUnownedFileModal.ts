@@ -22,7 +22,7 @@ class ConfirmTrashUnownedFileModal extends Modal {
 			.setCta()
 			.onClick(() => this.close());
 		new ButtonComponent(buttons)
-			.setButtonText("Move to trash")
+			.setButtonText("Delete file")
 			.setDestructive()
 			.onClick(() => {
 				this.moveToTrash = true;
