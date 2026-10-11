@@ -11,9 +11,8 @@ export interface Clock {
 /** How the writer reaches data.json and the in-memory state, as plain JSON documents. */
 export interface DataFileAccess<Doc> {
 	/**
-	 * The file now, or null when it does not exist or holds only the start of a write
-	 * that failed. Rejects when it cannot be read. Entries that had to be dropped to
-	 * read it are reported as `base` has them.
+	 * The file now, or null when it does not exist. Rejects when it cannot be read.
+	 * Entries that had to be dropped to read it are reported as `base` has them.
 	 */
 	read(base: Doc | null): Promise<Doc | null>;
 	write(doc: Doc): Promise<void>;
@@ -23,10 +22,9 @@ export interface DataFileAccess<Doc> {
 	publish(doc: Doc): void;
 }
 
-const SAVE_DELAY_MS = 1000;
-// Each save rewrites the whole file, and progress changes every few seconds during
-// playback, so a requested save starts at least this long after the last one.
-const MIN_SAVE_INTERVAL_MS = 10_000;
+// Each save rewrites the whole file, and playback progress changes every few
+// seconds, so a progress checkpoint starts at least this long after the last save.
+const CHECKPOINT_INTERVAL_MS = 10_000;
 
 /**
  * Writes data.json without clobbering changes another device synced in. Every
@@ -40,10 +38,13 @@ const MIN_SAVE_INTERVAL_MS = 10_000;
  */
 export class DataFileWriter<Doc> {
 	private chain: Promise<void> | null = null;
+	/** A checkpoint waiting for its interval. */
 	private timer: number | null = null;
+	/** A save is queued and has not started, so later changes are written by it. */
+	private saveQueued = false;
 	private unloaded = false;
-	private closed = false;
 	private publishing = false;
+	private checkpointing = false;
 	private lastSaveAt = Number.NEGATIVE_INFINITY;
 	/** A write that failed, and the memory it was made from. It may have reached disk anyway. */
 	private failedWrite: { local: Doc; written: Doc } | null = null;
@@ -60,32 +61,42 @@ export class DataFileWriter<Doc> {
 		return this.base !== null;
 	}
 
-	/** Save a moment after the latest burst of changes. */
+	/**
+	 * Save after any save already running; changes made until it starts share it.
+	 * Inside `checkpoint`, wait for the checkpoint interval instead.
+	 */
 	request(): void {
 		// Publishing sets stores, whose bindings ask for a save of what is already on disk.
-		if (this.publishing || this.closed) return;
-		this.timer ??= this.clock.setTimeout(
-			() => {
-				this.timer = null;
-				void this.saveLogged(true);
-			},
-			Math.max(SAVE_DELAY_MS, this.lastSaveAt + MIN_SAVE_INTERVAL_MS - this.clock.now()),
-		);
+		if (this.publishing) return;
+		if (this.checkpointing) {
+			this.scheduleCheckpoint();
+			return;
+		}
+		this.cancelTimer();
+		if (!this.saveQueued) void this.saveLogged();
+	}
+
+	/** Saves asked for while `update` runs are playback progress checkpoints. */
+	checkpoint(update: () => void): void {
+		this.checkpointing = true;
+		try {
+			update();
+		} finally {
+			this.checkpointing = false;
+		}
 	}
 
 	/** Write what is not saved yet now. Resolves once queued work is done; never rejects. */
 	flush(): Promise<void> {
-		if (!this.closed && (this.timer !== null || this.failedWrite || this.hasUnsavedEdits())) {
+		if (this.timer !== null || this.failedWrite || this.hasUnsavedEdits()) {
 			this.cancelTimer();
-			void this.saveLogged();
+			if (!this.saveQueued) void this.saveLogged();
 		}
 		return (this.chain ?? Promise.resolve()).catch(() => undefined);
 	}
 
 	/** Save now. Rejects when the save fails. */
 	save(): Promise<void> {
-		if (this.closed)
-			return Promise.reject(new Error("PodNotes stopped saving while Obsidian closes."));
 		this.cancelTimer();
 		return this.enqueue(() => this.persist()).catch((error: unknown) => {
 			throw toError(error, "PodNotes could not save its settings.");
@@ -98,20 +109,9 @@ export class DataFileWriter<Doc> {
 	 * on top, the same way a save merges.
 	 */
 	onExternalChange(): Promise<void> {
-		if (this.closed) return Promise.resolve();
 		return this.enqueue(() => this.applyExternalChange()).catch((error: unknown) => {
 			console.error("PodNotes: failed to apply data.json changed elsewhere", error);
 		});
-	}
-
-	/**
-	 * Obsidian closes the window once its quit tasks settle. Write what is pending,
-	 * then start nothing more. Null when there is nothing to wait for.
-	 */
-	close(): Promise<void> | null {
-		const done = this.flush();
-		this.closed = true;
-		return this.chain ? done : null;
 	}
 
 	/** The next instance reads the file itself; the flushed save still merges with disk. */
@@ -120,17 +120,32 @@ export class DataFileWriter<Doc> {
 		return this.flush();
 	}
 
-	private saveLogged(requested = false): Promise<void> {
+	private saveLogged(checkpoint = false): Promise<void> {
+		if (!checkpoint) this.saveQueued = true;
 		return this.enqueue(async () => {
-			// A save that started while this one waited in line restarts the wait.
-			if (requested && this.clock.now() < this.lastSaveAt + MIN_SAVE_INTERVAL_MS) {
-				this.request();
-				return;
+			if (checkpoint) {
+				// A save that started while this one waited in line restarts the wait.
+				if (this.clock.now() < this.lastSaveAt + CHECKPOINT_INTERVAL_MS) {
+					this.scheduleCheckpoint();
+					return;
+				}
+			} else {
+				this.saveQueued = false;
 			}
 			await this.persist();
 		}).catch((error: unknown) => {
 			console.error("PodNotes: failed to save settings", error);
 		});
+	}
+
+	private scheduleCheckpoint(): void {
+		this.timer ??= this.clock.setTimeout(
+			() => {
+				this.timer = null;
+				void this.saveLogged(true);
+			},
+			Math.max(0, this.lastSaveAt + CHECKPOINT_INTERVAL_MS - this.clock.now()),
+		);
 	}
 
 	private hasUnsavedEdits(): boolean {
@@ -166,8 +181,7 @@ export class DataFileWriter<Doc> {
 		if (this.base && !this.failedWrite && !this.hasUnsavedEdits()) return;
 
 		this.lastSaveAt = this.clock.now();
-		// With the file cut short by a failed write, what that write was writing stands in.
-		const disk = (await this.file.read(this.base)) ?? this.failedWrite?.written ?? null;
+		const disk = await this.file.read(this.base);
 		if (this.failedWrite && disk && jsonValuesEqual(disk, this.failedWrite.written)) {
 			this.settle(this.failedWrite.local, this.failedWrite.written);
 		}

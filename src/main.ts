@@ -58,10 +58,15 @@ type MediaSessionActionName =
 	| "seekto"
 	| "skipad";
 
-type WriteRefusal = "unreadable-data-file" | "window-unloading" | "obsidian-closing";
+type WriteRefusal =
+	| "unreadable-data-file"
+	| "older-data-file"
+	| "window-unloading"
+	| "obsidian-closing";
 
 const WRITE_REFUSALS: Record<WriteRefusal, string> = {
 	"unreadable-data-file": "PodNotes does not save over a data.json it could not read.",
+	"older-data-file": "PodNotes does not save over a data.json from an older version.",
 	"window-unloading": "PodNotes does not start a save while the window unloads.",
 	"obsidian-closing": "PodNotes does not start a save while Obsidian closes.",
 };
@@ -125,17 +130,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private isReady = false;
 	// Why data.json must not be written, or null while writes are allowed. Set when the
 	// file exists but could not be read (a sync client's half-written copy, or one a
-	// reload cut off), and when the window starts unloading or Obsidian quits: a write
-	// started then is cut off after it truncates the file, which leaves data.json empty.
+	// reload cut off), when an older version's copy replaced it, and when the window
+	// starts unloading or Obsidian quits: a write started then is cut off after it
+	// truncates the file, which leaves data.json empty.
 	private writeRefusal: WriteRefusal | null = null;
 	// The data.json write in progress, settled either way, or null. Writes never overlap.
 	private writeInFlight: Promise<void> | null = null;
-	// What the last write was writing when it left data.json cut short, as a full disk
-	// does. Null once a write succeeds.
-	private incompleteWrite: string | null = null;
 	// Every save after load, and every change synced in from elsewhere, goes through it.
 	private writer: DataFileWriter<PersistedPodNotesDataV2> | null = null;
-	private unreadableNotice: Notice | null = null;
+	private refusalNotice: Notice | null = null;
 	private persistenceUnknownFields: Record<string, unknown> = {};
 	private mediaSessionActions: MediaSessionActionName[] = [];
 
@@ -145,17 +148,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.registerDomEvent(window, "pagehide", () => {
 			this.writeRefusal = "window-unloading";
 		});
-		// Obsidian closes the window once its quit tasks settle, so write what is pending,
-		// let a write in flight finish, and start nothing after. A reload fires no quit;
-		// pagehide covers it. A rejected quit task would stall the close until Obsidian forces it.
+		// Obsidian closes the window once its quit tasks settle, so start no write after
+		// quit and let a write in flight finish first. A reload fires no quit; pagehide
+		// covers it. A rejected quit task would stall the close until Obsidian forces it.
 		this.registerEvent(
 			this.app.workspace.on("quit", (tasks) => {
-				if (this.writer) {
-					const saving = this.writer.close();
-					if (saving) tasks.addPromise(saving);
-					return;
-				}
-				// Still loading: only a migration write can be in flight.
 				this.writeRefusal = "obsidian-closing";
 				if (this.writeInFlight) tasks.addPromise(this.writeInFlight);
 			}),
@@ -496,12 +493,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// loadData resolves nullish both for a missing file and for one it could
 			// not read or parse, so tell them apart by whether the file exists.
 			if (data == null && (await this.app.vault.adapter.exists(this.dataFilePath()))) {
-				this.writeRefusal = "unreadable-data-file";
 				this.settings = structuredClone(DEFAULT_SETTINGS);
 				this.persistenceUnknownFields = {};
-				this.unreadableNotice = new Notice(
+				this.refuseSaves(
+					"unreadable-data-file",
 					`PodNotes could not read ${this.dataFilePath()}, so it left the file unchanged and started with default settings. Nothing is saved until the file can be read again, or until you delete it and restart Obsidian.`,
-					0,
 				);
 				console.error(
 					`PodNotes could not read ${this.dataFilePath()} and will not save over it`,
@@ -610,7 +606,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.writer.save();
 	}
 
-	/** Write a requested save now. Never rejects. */
+	/** Store changes made in `update` are playback progress: they save at most every 10 s. */
+	checkpoint(update: () => void): void {
+		if (this.writer) this.writer.checkpoint(update);
+		else update();
+	}
+
+	/** Write what is not saved yet now. Never rejects. */
 	flushSaves(): Promise<void> {
 		// A refused write would only fail again.
 		if (this.writeRefusal) return Promise.resolve();
@@ -623,9 +625,19 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// The data.json this session could not read at load has become readable.
 		if (this.writeRefusal === "unreadable-data-file" && this.writer.hasBase) {
 			this.writeRefusal = null;
-			this.unreadableNotice?.hide();
-			this.unreadableNotice = null;
+			this.refusalNotice?.hide();
+			this.refusalNotice = null;
 		}
+	}
+
+	/** No save until `refusal` lifts, if it does, with a Notice saying why. */
+	private refuseSaves(
+		refusal: "unreadable-data-file" | "older-data-file",
+		message: string,
+	): void {
+		this.writeRefusal = refusal;
+		this.refusalNotice?.hide();
+		this.refusalNotice = new Notice(message, 0);
 	}
 
 	private createWriter(clock: Clock): DataFileWriter<PersistedPodNotesDataV2> {
@@ -644,16 +656,27 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return {
 			read: async (base) => {
 				const data: unknown = await this.loadData();
+				const path = this.dataFilePath();
 				if (data == null) {
-					const path = this.dataFilePath();
 					if (!(await this.app.vault.adapter.exists(path))) return null;
-					// Only the start of this device's failed write: what it was writing replaces it.
-					if (this.incompleteWrite?.startsWith(await this.app.vault.adapter.read(path))) {
-						return null;
-					}
 					throw new Error(`PodNotes could not read ${path}`);
 				}
 				const decoded = decodePodNotesData(data);
+				// Only startup moves an older file's API keys into SecretStorage; a save now
+				// would drop them.
+				if (decoded.sourceVersion !== PODNOTES_DATA_SCHEMA_VERSION) {
+					if (this.writeRefusal !== "older-data-file") {
+						this.refuseSaves(
+							"older-data-file",
+							`${path} was replaced by a copy from an older version of PodNotes, likely synced from another device. PodNotes saves nothing until you restart Obsidian, which updates the file and keeps its API keys.`,
+						);
+					}
+					throw new Error(WRITE_REFUSALS["older-data-file"]);
+				}
+				// With nothing loaded, an entry the codec drops has nothing to be kept from.
+				if (!base && decoded.changed) {
+					throw new Error(`PodNotes could not read ${path} without repairing it`);
+				}
 				const doc: Record<string, unknown> = toDocument(
 					decoded.settings,
 					decoded.unknownFields,
@@ -718,11 +741,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// saveData resolves even when the write failed (Obsidian's writeJson swallows the
 		// error), so read the file back.
 		const text = await this.app.vault.adapter.read(this.dataFilePath()).catch(() => null);
-		this.incompleteWrite = null;
-		if (text !== null && holdsData(text, data)) return;
-		const expected = JSON.stringify(data, undefined, 2);
-		if (text !== null && expected.startsWith(text)) this.incompleteWrite = expected;
-		throw new Error(`PodNotes could not write ${this.dataFilePath()}.`);
+		if (text === null || !holdsData(text, data)) {
+			throw new Error(`PodNotes could not write ${this.dataFilePath()}.`);
+		}
 	}
 
 	private dataFilePath(): string {

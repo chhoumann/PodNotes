@@ -269,9 +269,9 @@
 	// the episode restarted from 0 on reopen.
 	//
 	// Persist periodically while audio plays (throttled) and immediately when it
-	// pauses. data.json is written at most every 10 s, so an abrupt kill loses at
-	// most that plus SAVE_POSITION_THROTTLE_MS of progress; hiding the window
-	// writes at once.
+	// pauses, is hidden or closes. The periodic position is a checkpoint, which
+	// data.json takes at most every 10 s, so an abrupt kill loses at most that plus
+	// SAVE_POSITION_THROTTLE_MS of progress.
 	const SAVE_POSITION_THROTTLE_MS = 5000;
 	let lastPositionSaveMs = Number.NEGATIVE_INFINITY;
 
@@ -300,7 +300,7 @@
 		if (now - lastPositionSaveMs < SAVE_POSITION_THROTTLE_MS) return;
 
 		lastPositionSaveMs = now;
-		persistPlaybackPosition();
+		$plugin.checkpoint(persistPlaybackPosition);
 	}
 
 	function shouldSuppressSegmentProgressPersistence(): boolean {
@@ -429,6 +429,7 @@
 	});
 
 	onDestroy(() => {
+		// Not a checkpoint: closing the player, in a popout too, saves its position at once.
 		persistPlaybackPosition();
 		isPaused.set(true);
 	});

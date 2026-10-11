@@ -396,6 +396,7 @@ describe("PodNotesSettingsTab settings import", () => {
 		};
 		let disk = {
 			...structuredClone(DEFAULT_SETTINGS),
+			schemaVersion: 2,
 			openAISecretId: previousSecretId,
 		};
 		let saveCall = 0;
@@ -482,7 +483,7 @@ describe("PodNotesSettingsTab settings import", () => {
 
 	it("keeps an ABA hide-played store update when the matching import fails", async () => {
 		const firstWrite = deferred();
-		let disk = structuredClone(DEFAULT_SETTINGS);
+		let disk = { ...structuredClone(DEFAULT_SETTINGS), schemaVersion: 2 };
 		let saveCall = 0;
 		const saveData = vi.fn((snapshot: unknown) => {
 			saveCall++;
@@ -575,6 +576,7 @@ describe("PodNotesSettingsTab settings import", () => {
 		function setup(saveData: (snapshot: unknown) => Promise<void>) {
 			let disk: Record<string, unknown> = structuredClone({
 				...DEFAULT_SETTINGS,
+				schemaVersion: 2,
 				savedFeeds: { Before: feed("Before") },
 			});
 			const plugin = Object.create(PodNotes.prototype) as PodNotes;

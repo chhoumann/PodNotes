@@ -351,6 +351,94 @@ describe("PodNotes persistence integration", () => {
 		expect(plugin.settings.playedEpisodes["Pod::A"].time).toBe(99);
 	});
 
+	describe("once a data.json it could not read at startup becomes readable", () => {
+		async function startUnreadable(saveData: (data: unknown) => Promise<void>) {
+			const plugin = makePlugin(saveData, { dataFileExists: true });
+			Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(undefined) });
+			vi.spyOn(console, "error").mockImplementation(() => undefined);
+			vi.spyOn(console, "warn").mockImplementation(() => undefined);
+			await plugin.loadSettings();
+			attachDataFileWriter(plugin);
+			const readable = JSON.parse(JSON.stringify(encodePodNotesData(DEFAULT_SETTINGS)));
+			readable.savedFeeds = {
+				Recovered: { title: "Recovered", url: "https://example.com/r.xml", artworkUrl: "" },
+			};
+			return { plugin, readable };
+		}
+
+		it("takes it and saves again", async () => {
+			const saveData = vi.fn().mockResolvedValue(undefined);
+			const { plugin, readable } = await startUnreadable(saveData);
+			Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(readable) });
+
+			await plugin.onExternalSettingsChange();
+			await plugin.saveSettingsStrict();
+
+			expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Recovered"]);
+		});
+
+		it("keeps refusing saves when reading it would drop a record", async () => {
+			const saveData = vi.fn().mockResolvedValue(undefined);
+			const { plugin, readable } = await startUnreadable(saveData);
+			readable.queue.episodes = [{ title: 388, description: 1, content: 2 }];
+			Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(readable) });
+
+			await plugin.onExternalSettingsChange();
+
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
+			expect(saveData).not.toHaveBeenCalled();
+			expect(plugin.settings.savedFeeds).toEqual({});
+		});
+	});
+
+	it("never saves over a data.json an older version synced in, so its API keys survive", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		const { storage, values } = memorySecretStorage();
+		const older = {
+			...JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
+			schemaVersion: 1,
+			openAIApiKey: "sk-test-older-device",
+			diarizationApiKey: "dg-test-older-device",
+		};
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			loadData: vi.fn().mockResolvedValue(older),
+		});
+		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+		await plugin.onExternalSettingsChange();
+		plugin.settings.defaultVolume = 0.5;
+
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/older version/);
+		expect(saveData).not.toHaveBeenCalled();
+		expect(values.size).toBe(0);
+	});
+
+	it("saves an unrelated edit when a synced queue entry's podcast name is not text", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		const queued = {
+			title: "A",
+			podcastName: "Pod",
+			streamUrl: "https://example.com/a.mp3",
+			url: "",
+			description: "",
+			content: "",
+		};
+		plugin.settings.queue.episodes = [queued];
+		attachDataFileWriter(plugin);
+		const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+		synced.queue.episodes = [{ ...queued, podcastName: 388 }];
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(synced) });
+
+		await plugin.onExternalSettingsChange();
+		plugin.settings.defaultVolume = 0.5;
+		await plugin.saveSettingsStrict();
+
+		expect(saveData.mock.lastCall?.[0].defaultVolume).toBe(0.5);
+	});
+
 	it("rebuilds Local Files from the download entry the merge kept", async () => {
 		const download = (streamUrl: string, filePath: string, size: number) => ({
 			title: "Ep",
@@ -534,18 +622,27 @@ describe("PodNotes persistence integration", () => {
 			return { plugin, disk };
 		}
 
-		it("rewrites the file with what that write merged in", async () => {
+		it("never writes over the file it cut short, even to finish its own write", async () => {
 			const { plugin, disk } = cutShortOnce();
 			plugin.settings.defaultVolume = 0.5;
 			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+			const cutShort = disk.text;
 
 			plugin.settings.defaultVolume = 0.25;
-			await plugin.saveSettingsStrict();
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 
-			expect(JSON.parse(disk.text)).toMatchObject({
-				defaultVolume: 0.25,
-				savedFeeds: { Synced: { title: "Synced" } },
-			});
+			expect(disk.text).toBe(cutShort);
+		});
+
+		it("never writes over a file another writer left unreadable", async () => {
+			const { plugin, disk } = cutShortOnce();
+			disk.full = false;
+			disk.text = '{"schemaVersion": 2, "savedFeeds": {"Other device';
+
+			plugin.settings.defaultVolume = 0.25;
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
+
+			expect(disk.text).toBe('{"schemaVersion": 2, "savedFeeds": {"Other device');
 		});
 
 		it("never writes over a file a newer PodNotes wrote since", async () => {

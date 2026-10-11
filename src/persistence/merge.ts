@@ -35,8 +35,13 @@ export function jsonValuesEqual(a: unknown, b: unknown): boolean {
 
 type EpisodeEntry = UnknownRecord & { title: string };
 
+/** An entry that has an episode key: its title, and its podcast name if any, are text. */
 function isEpisodeEntry(value: unknown): value is EpisodeEntry {
-	return isPlainObject(value) && typeof value.title === "string";
+	return (
+		isPlainObject(value) &&
+		typeof value.title === "string" &&
+		(value.podcastName === undefined || typeof value.podcastName === "string")
+	);
 }
 
 /** The identity played state and downloads use, so same-titled episodes of two podcasts stay apart. */
@@ -231,12 +236,12 @@ export function restoreDropped<T>(base: T, disk: T, raw: unknown, path: readonly
 		const kept = new Set(disk.map(episodeEntryKey));
 		const rawList: unknown[] = Array.isArray(raw) ? raw : [];
 		const rawKeys = new Set(rawList.filter(isEpisodeEntry).map(episodeEntryKey));
-		// An episode dropped for lacking a title has no key: any missing one may be it.
-		const droppedUntitled =
-			!Array.isArray(raw) || rawList.some((item) => !isEpisodeEntry(item));
+		// An entry the codec dropped or repaired for its title or podcast name has no
+		// key: any missing one may be it.
+		const droppedUnkeyed = !Array.isArray(raw) || rawList.some((item) => !isEpisodeEntry(item));
 		const dropped = base.filter((entry) => {
 			const key = episodeEntryKey(entry);
-			return !kept.has(key) && (rawKeys.has(key) || droppedUntitled);
+			return !kept.has(key) && (rawKeys.has(key) || droppedUnkeyed);
 		});
 		return [...disk, ...structuredClone(dropped)] as T;
 	}
