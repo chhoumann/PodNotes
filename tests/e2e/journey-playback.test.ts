@@ -383,6 +383,48 @@ describe("playback journeys", () => {
 		expect(other.seconds).toBeLessThan(14);
 	});
 
+	test("Start playing while a slow link to another show loads keeps playing the paused episode", async () => {
+		const context = getContext();
+		const { obsidian, plugin, sandbox } = context;
+		const server = await serve(FEED, OTHER_SHOW);
+		await seedLibrary(context, server, { subscriptions: [FEED, OTHER_SHOW] });
+		await playFromList(LONG);
+		await click(obsidian, ui.playbackToggle);
+		await waitForPlayback(
+			obsidian,
+			(playback) => !playback.playing && playback.media?.paused === true,
+			"paused",
+		);
+
+		server.delayFeed(OTHER_SHOW, 3000);
+		const otherFeedPath = new URL(server.feedUrl(OTHER_SHOW)).pathname;
+		const notePath = sandbox.path("Slow other show link.md");
+		await writeVaultFile(
+			obsidian,
+			notePath,
+			`[00:00:10](obsidian://podnotes?episodeName=${encodeURIComponent(LONG.title)}&url=${encodeURIComponent(server.feedUrl(OTHER_SHOW))}&time=10)\n`,
+		);
+		await openInReadingView(obsidian, notePath);
+		const requestsBefore = server.requests().filter((path) => path === otherFeedPath).length;
+		await click(obsidian, ui.readingLink("00:00:10"));
+		await obsidian.waitFor(
+			() =>
+				server.requests().filter((path) => path === otherFeedPath).length > requestsBefore,
+			{ timeoutMs: 10_000, intervalMs: 50, message: "the link's feed request to arrive" },
+		);
+		await runCommand(obsidian, `${PLUGIN_ID}:start-playing`);
+		await expectAdvancing("resumed while the link's feed loads");
+
+		await obsidian.sleep(4000);
+		const after = await expectAdvancing("after the link's feed arrived");
+		expect(after.episode).toEqual(episodeRef(FEED, LONG));
+		expect(after.media?.src).toBe(server.mediaUrl(FEED, LONG));
+		await obsidian.dev.evalJsonAsync(
+			`(async () => { await app.plugins.plugins.${PLUGIN_ID}.flushSaves(); return true; })()`,
+		);
+		expect((await readLibrary(plugin)).currentEpisode).toEqual(episodeRef(FEED, LONG));
+	}, 60_000);
+
 	test("a data.json change from another device during playback does not seek, reload, or advance the queue", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;

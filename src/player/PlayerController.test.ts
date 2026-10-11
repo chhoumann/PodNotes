@@ -838,6 +838,60 @@ describe("selection", () => {
 	});
 });
 
+describe("legacy title-only progress (PB-06)", () => {
+	function savedUnderTitle(ep: Episode, podcastName: string, time: number) {
+		playedEpisodes.update((played) => ({
+			...played,
+			[ep.title]: { title: ep.title, podcastName, time, duration: 3600, finished: false },
+		}));
+	}
+
+	const starts = [
+		[
+			"restore() then resume()",
+			(player: PlayerController) => {
+				player.restore(A);
+				player.resume();
+			},
+		],
+		["play()", (player: PlayerController) => void player.play(A)],
+	] as const;
+
+	test.each(starts)("another show's same-titled record is ignored by %s", (_, start) => {
+		savedUnderTitle(A, "A Different Podcast", 1800);
+		const { player, media, state } = setup();
+
+		start(player);
+		expect(state().currentTime).toBe(0);
+		metadata(media());
+
+		expect(media().currentTime).toBe(0);
+	});
+
+	test.each(starts)("a record without a podcast name resumes the episode by %s", (_, start) => {
+		savedUnderTitle(A, "", 900);
+		const { player, media, state } = setup();
+
+		start(player);
+		expect(state().currentTime).toBe(900);
+		metadata(media());
+
+		expect(media().currentTime).toBe(900);
+	});
+
+	test("the episode's own record wins over a title-only one", () => {
+		savedUnderTitle(A, "", 900);
+		saved(A, 1200, 3600);
+		const { player, media } = setup();
+
+		player.restore(A);
+		player.resume();
+		metadata(media());
+
+		expect(media().currentTime).toBe(1200);
+	});
+});
+
 describe("deferPlay", () => {
 	test("plays only when nothing newer happened", () => {
 		const { player, state } = setup();
@@ -853,6 +907,26 @@ describe("deferPlay", () => {
 		expect(paused(C)).toBe(false);
 
 		expect(state().episode).toBe(B);
+	});
+
+	test.each([
+		["resume()", (player: PlayerController) => player.resume()],
+		["toggle()", (player: PlayerController) => player.toggle()],
+		["seek()", (player: PlayerController) => void player.seek(30)],
+		["pause()", (player: PlayerController) => player.pause()],
+		["play()", (player: PlayerController) => void player.play(A)],
+	])("a %s of the paused episode while it waits makes it stale", (_, intent) => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		player.pause();
+		const link = player.deferPlay();
+
+		intent(player);
+
+		expect(link(B)).toBe(false);
+		expect(state().episode).toBe(A);
+		expect(media().src).toBe(A.streamUrl);
 	});
 
 	test("a queue advance makes it stale", () => {
