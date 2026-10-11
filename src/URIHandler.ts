@@ -137,8 +137,7 @@ export default async function podNotesURIHandler(
 		.find((file) => file !== null);
 
 	let episode: Episode | undefined;
-	// Taken before resolving the episode: a play the user starts meanwhile wins.
-	const play = player.deferPlay();
+	let play = player.play.bind(player);
 
 	// A private-feed placeholder always routes to placeholder resolution (the
 	// final branch): a vault file literally named like a placeholder must not
@@ -188,6 +187,9 @@ export default async function podNotesURIHandler(
 			return;
 		}
 
+		// Taken once the link passed every check, so a refused link cancels nothing,
+		// and a play the user starts during the fetch wins.
+		play = player.deferPlay();
 		try {
 			// Fetch with the raw url (current-format links are correct as-is); only the title gets
 			// the legacy-candidate treatment. A '+' in a legacy feed URL is pre-existing and out of
