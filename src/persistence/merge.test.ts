@@ -489,7 +489,6 @@ describe("mergeDataFile", () => {
 	const earlierId = "2026-10-11T09:00:00.000Z 0b9d";
 	const laterId = "2026-10-11T10:00:00.000Z 41c7";
 
-	/** A library started on its own device: one podcast, its progress and a queued episode. */
 	function library(podcastName: string, libraryId: string): Data {
 		const doc: Data = JSON.parse(
 			JSON.stringify(encodePodNotesData(structuredClone(DEFAULT_SETTINGS), { libraryId })),
@@ -545,8 +544,15 @@ describe("mergeDataFile", () => {
 		expect(mergeDataFile(earlier, earlier, unmarked).libraryId).toBe("");
 		expect(mergeDataFile(later, later, earlier).libraryId).toBe(earlierId);
 		expect(mergeDataFile(earlier, earlier, later).libraryId).toBe(earlierId);
-		// Memory took the unmarked library and has not saved it yet: base is the file it read.
-		expect(mergeDataFile(earlier, { ...earlier, libraryId: "" }, later).libraryId).toBe("");
+	});
+
+	it("keeps the earlier library memory joined but has not saved yet when another arrives", () => {
+		const earlier = library("Pod B", earlierId);
+		const joinedUnmarked = { ...earlier, libraryId: "" };
+
+		expect(mergeDataFile(earlier, joinedUnmarked, library("Pod C", laterId)).libraryId).toBe(
+			"",
+		);
 	});
 
 	it("keeps the episodes of a playlist both libraries created under one name", () => {

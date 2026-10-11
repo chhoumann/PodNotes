@@ -490,8 +490,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// not read or parse.
 			if (data == null && !(await this.dataFileHoldsNothing())) {
 				this.settings = structuredClone(DEFAULT_SETTINGS);
-				// A new library: if the file goes away, this device's next save must not pass
-				// for a version of the one it could not read.
 				this.persistenceUnknownFields = { libraryId: newLibraryId() };
 				this.refuseSaves(
 					"unreadable-data-file",

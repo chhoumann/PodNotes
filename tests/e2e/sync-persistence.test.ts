@@ -329,8 +329,6 @@ describe("PodNotes data.json changed elsewhere", () => {
 		}
 	});
 
-	// PodNotes started with no data.json writes one at once: the file a new device has
-	// before the sync client delivers the library.
 	async function startAsNewDevice(plugin: PluginHandle): Promise<PodNotesData> {
 		// A write through the harness first, so it restores this file after the test.
 		await plugin.data<PodNotesData>().patch((data) => data);

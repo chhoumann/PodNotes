@@ -61,14 +61,11 @@ export type PersistedPodNotesSettings = Omit<
 export type PersistedPodNotesDataV2 = PersistedPodNotesSettings &
 	UnknownRecord & {
 		schemaVersion: typeof PODNOTES_DATA_SCHEMA_VERSION;
-		/**
-		 * The library this file belongs to: an id given when a device started it from
-		 * nothing, or "" for a library started before ids, which sorts before every id.
-		 */
 		libraryId: string;
 	};
 
-/** A new library's `libraryId`. Ids sort by when their library started. */
+const LIBRARY_BEFORE_IDS = "";
+
 export function newLibraryId(): string {
 	return `${new Date().toISOString()} ${crypto.randomUUID()}`;
 }
@@ -82,7 +79,6 @@ export function newLibraryId(): string {
  * does not understand.
  */
 export function decodePodNotesData(value: unknown): DecodedPodNotesData {
-	// No data.json yet is a new install: a new library, from the current defaults.
 	if (value === null || value === undefined) {
 		value = { ...structuredClone(DEFAULT_SETTINGS), libraryId: newLibraryId() };
 	}
@@ -132,8 +128,10 @@ export function encodePodNotesData(
 		...copyUnknownRootFields(unknownFields),
 		...validated,
 		schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
-		// Read from the unknown root fields, so it must stay out of KNOWN_TOP_LEVEL_KEYS.
-		libraryId: typeof unknownFields.libraryId === "string" ? unknownFields.libraryId : "",
+		libraryId:
+			typeof unknownFields.libraryId === "string"
+				? unknownFields.libraryId
+				: LIBRARY_BEFORE_IDS,
 		currentEpisode: validated.currentEpisode
 			? encodeEpisode(validated.currentEpisode)
 			: undefined,
@@ -147,7 +145,6 @@ export function encodePodNotesData(
 	};
 }
 
-/** data.json as plain JSON: what the merge compares and what saveData writes. */
 export function toDocument(
 	settings: IPodNotesSettings,
 	unknownFields?: UnknownRecord,

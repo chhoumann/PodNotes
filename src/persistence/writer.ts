@@ -216,7 +216,6 @@ export class DataFileWriter<Doc> {
 		);
 	}
 
-	/** A failed write the file shows on disk after all: memory and base take it, once. */
 	private settleFailedWrite(disk: Doc | null): void {
 		if (!this.failedWrite || !disk || !jsonValuesEqual(disk, this.failedWrite.written)) return;
 		this.settle(this.failedWrite.local, this.failedWrite.written);

@@ -162,7 +162,7 @@ function threeWayMergeEpisodeList(
  * - If disk is unchanged from base, take local (preserves in-memory edits).
  * - If both changed a `currentEpisode`, a progress record, a saved feed or a note
  *   mapping, take local whole.
- * - If both changed, or both added, the same plain object, recurse per key.
+ * - If both changed the same plain object, recurse per key.
  * - Episode lists merge by episode key.
  * - Other irreducible array/leaf conflicts prefer local.
  */
@@ -216,24 +216,18 @@ export function threeWayMergeSettings<T>(
 	return structuredClone(local);
 }
 
-/**
- * Memory `local` merged with the file `disk`, given `base`, the file this device
- * last loaded or wrote. A file whose `libraryId` differs from base's is another
- * library, started on a device that never saw this one's file: the two merge from
- * the empty library, so every entry of both survives, a preference one side left
- * at its default takes the other's, and a real conflict keeps this device's. The
- * result keeps the `libraryId` of the library started first, so that library's
- * devices go on merging three ways.
- */
 export function mergeDataFile<T>(base: T, local: T, disk: T): T {
-	const lineage = (doc: T) => (doc as UnknownRecord).libraryId as string;
-	if (lineage(base) === lineage(disk)) return threeWayMergeSettings(base, local, disk);
+	const libraryOf = (doc: T) => (doc as UnknownRecord).libraryId as string;
+	if (libraryOf(base) === libraryOf(disk)) return threeWayMergeSettings(base, local, disk);
 
-	const empty = toDocument(DEFAULT_SETTINGS) as T;
-	const merged = threeWayMergeSettings(empty, local, disk) as UnknownRecord;
-	// Memory, not base: memory may already hold a library that started earlier.
-	merged.libraryId = [lineage(local), lineage(disk)].sort()[0];
+	const emptyLibrary = toDocument(DEFAULT_SETTINGS) as T;
+	const merged = threeWayMergeSettings(emptyLibrary, local, disk) as UnknownRecord;
+	merged.libraryId = startedFirst(libraryOf(local), libraryOf(disk));
 	return merged as T;
+}
+
+function startedFirst(library: string, other: string): string {
+	return library < other ? library : other;
 }
 
 /**

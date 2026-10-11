@@ -836,7 +836,6 @@ describe("a device that started before sync delivered its data.json", () => {
 		),
 	);
 
-	/** PodNotes on its own vault, whose data.json a sync client replaces with another device's. */
 	async function startDevice(data?: unknown) {
 		let disk = structuredClone(data);
 		const plugin = makePlugin();
