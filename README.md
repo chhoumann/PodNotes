@@ -1,90 +1,53 @@
-# [PodNotes](https://podnotes.obsidian.guide)
+<h1 align="center">PodNotes</h1>
 
-<img src="docs/public/resources/podcast_grid_big.png" alt="Podcast grid" align="center">
+<p align="center">
+  <b>Take notes on podcasts without leaving Obsidian.</b><br>
+  Listen beside your notes, capture timestamps that link back to the moment, and get a note for every episode.
+</p>
 
-<h3 align="center">You can find the documentation <a href="https://podnotes.obsidian.guide">here</a>.</h3>
+<p align="center">
+  <a href="https://obsidian.md/plugins?id=podnotes">Install</a>&nbsp;·
+  <a href="https://podnotes.obsidian.guide">Documentation</a>&nbsp;·
+  <a href="https://podnotes.obsidian.guide/getting-started/">Getting started</a>&nbsp;·
+  <a href="https://github.com/chhoumann/PodNotes/releases">Release notes</a>
+</p>
 
-## Demo Video
-[![Demo video](https://img.youtube.com/vi/SGLfuN15uJY/0.jpg)](https://www.youtube.com/watch?v=SGLfuN15uJY)
+<p align="center">
+  <a href="https://podnotes.obsidian.guide">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/public/screenshots/demo-dark.gif">
+      <img src="docs/public/screenshots/demo.gif" width="880" alt="An episode plays in the PodNotes player while the command palette runs PodNotes: Capture Timestamp, which inserts a timestamp link into the episode note, followed by a typed note">
+    </picture>
+  </a>
+</p>
 
----
+## What you can do
 
-The one goal for PodNotes is to make it easier to write notes on podcasts.
+- **Listen beside your notes.** Search Apple Podcasts or paste any RSS feed, then play audio and video with speed control, a queue, and playlists.
+- **Capture the moment.** One command inserts a timestamp link, such as `00:12:41`, into your note. Select it later to play from that second.
+- **Get a note for every episode.** A template fills in the show, date, description, and a link that resumes playback. Browse the notes with Bases.
+- **Take it with you.** PodNotes works on iOS and Android. Download episodes for offline listening, or play your own audio and video files.
+- **Transcribe episodes** with your own OpenAI or Deepgram API key, with optional speaker labels.
+- **Build your own workflows** with the commands, the JavaScript API, and QuickAdd.
 
-Here are the features that will help you do that 👇.
+## Get started
 
-## Features
+1. **Install PodNotes.** In Obsidian, open **Settings → Community plugins**, select **Browse**, search for **PodNotes**, then select **Install** and **Enable**.
+2. **Add a podcast.** In **Settings → PodNotes**, search for a show or paste its RSS feed URL, then select **Add**.
+3. **Capture a moment.** Run **PodNotes: Show player** and play an episode. In a note, run **PodNotes: Capture Timestamp**.
 
-- Mobile friendly - works on iOS and Android, including offline playback of local files and downloads
-- Podcast player built into Obsidian, for both audio and video episodes
-- Add any publicly available podcast through search, or custom feeds by URL
-- Track played episodes & playback progress, with continuous resume
-- Create podcast notes from templates with rich metadata about episodes
-- Bases-friendly default notes you can sort, filter, and group with [Obsidian Bases](https://help.obsidian.md/bases)
-- Create a feed note for an entire podcast that every episode note links back to
-- Capture timestamps & link directly to the time in the episode
-- Transcribe episodes, with optional speaker labels (diarization)
-- Download episodes for offline playback
-- Support for non-podcast local audio and video files
-- API that can be used by plugins like [QuickAdd](https://github.com/chhoumann/QuickAdd) or [Templater](https://github.com/silentvoid13/Templater) for custom workflows
+[Getting started](https://podnotes.obsidian.guide/getting-started/) walks through each step.
 
-## Installation
+## Learn more
 
-**This plugin is in the Obsidian community plugin store. You can find it by searching in the store.**
+- [Use PodNotes on your phone](https://podnotes.obsidian.guide/mobile/)
+- [Capture timestamps](https://podnotes.obsidian.guide/timestamps/)
+- [Create episode notes](https://podnotes.obsidian.guide/notes/)
+- [Sync between devices](https://podnotes.obsidian.guide/sync/)
+- [FAQ](https://podnotes.obsidian.guide/faq/)
 
-Other installation options can be found in the [documentation](https://podnotes.obsidian.guide).
+## Help and contributing
 
-## Development
+To report a bug or suggest an idea, [open an issue](https://github.com/chhoumann/PodNotes/issues). To work on PodNotes itself, read [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- `npm run test` runs the accessibility checks and the unit test suite.
-- `npm run build` type-checks and bundles the plugin.
-- `npm run test:e2e` builds the plugin, then runs the local Obsidian-backed E2E suite.
-
-The E2E suite is local-only. It depends on Obsidian being installed, the
-`obsidian` CLI being available on `PATH`, and the target vault being open and
-reachable. The default target vault is `dev`; override it with
-`PODNOTES_E2E_VAULT` when needed. Failed E2E runs may write artifacts to
-`.obsidian-e2e-artifacts/`.
-
-Before running E2E, make sure the target vault's
-`.obsidian/plugins/podnotes/main.js` and `manifest.json` symlinks point at this
-checkout. The tests intentionally fail during preflight instead of relinking the
-vault automatically.
-
-## Screenshots
-
-### Demo
-
-![Demo](docs/public/resources/demo.gif)
-
-### Podcast Grid
-
-![Podcast Grid](docs/public/resources/podcast_grid.png)
-
-### Episode List
-
-![Episode List](docs/public/resources/episode_list.png)
-
-### Player
-
-![Player](docs/public/resources/player.png)
-
-### Episode notes (Bases-friendly)
-
-![Episode note](docs/public/resources/podcast_note.png)
-
-### Timestamps
-
-![Timestamps](docs/public/resources/timestamps.png)
-
-### Transcripts with speaker labels
-
-![Transcript with speaker labels](docs/public/resources/transcript_diarization.png)
-
-### Browse your library with Bases
-
-![Bases view of episode notes](docs/public/resources/bases_view.png)
-
-### Podcast search
-
-![Podcast Search](docs/public/resources/podcast_search.png)
+PodNotes is free and open source under the [MIT license](LICENSE). If it helps you, you can [support its development](https://www.buymeacoffee.com/chhoumann).
