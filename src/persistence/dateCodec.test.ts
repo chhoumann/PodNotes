@@ -19,8 +19,8 @@ describe("dateCodec", () => {
 		expect(encodeDate("2024-03-01T11:05:03+01:00")).toBe(iso);
 	});
 
-	it.each([undefined, null, "", "   ", "not-a-date", 1_709_290_000_000, {}, []])(
-		"rejects invalid or unsupported input %p without throwing",
+	it.each([[undefined], [null], [""], ["   "], ["not-a-date"], [1_709_290_000_000], [{}], [[]]])(
+		"rejects invalid or unsupported input %o without throwing",
 		(value) => {
 			expect(decodeDate(value)).toBeUndefined();
 			expect(encodeDate(value)).toBeUndefined();

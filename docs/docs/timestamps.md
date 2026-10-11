@@ -7,6 +7,8 @@ With the default `{{linktime}}` format, each captured timestamp becomes a clicka
 
 ![Notes with clickable timestamp links](resources/timestamps.png)
 
+If you used PodNotes before this default, it keeps your saved format. Set `Capture timestamp format` to `- {{linktime}}` followed by a space to get clickable links.
+
 ## Settings
 For timestamps, you can use the following format strings:
 

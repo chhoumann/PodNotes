@@ -21,7 +21,7 @@ describe("formatDate", () => {
 	});
 
 	it.each([undefined, null, "", "not-a-date", new Date("invalid")])(
-		"returns an empty value for invalid input %p",
+		"returns an empty value for invalid input %o",
 		(value) => {
 			expect(formatDate(value, "YYYY-MM-DD")).toBe("");
 		},
