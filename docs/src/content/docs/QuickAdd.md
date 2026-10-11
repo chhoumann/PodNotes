@@ -93,8 +93,8 @@ QuickAdd fills in the episode's fields. The script does not set `guest`, so Quic
 The `fileName` variable is the episode title without the characters a file name cannot hold.
 For the other fields of `api.podcast`, see [`podcast`](/api/#podcast).
 
-PodNotes does not know about notes that QuickAdd creates.
-The episode menu's **Open Note**, **PodNotes: Create episode note**, and headset capture look for the note at **Note creation file path** instead.
+PodNotes finds an episode note only at **Note creation file path**, or by the episode title in that folder.
+**Open Note**, **PodNotes: Create episode note**, and headset capture do not find a note that QuickAdd saves anywhere else.
 QuickAdd's [Macros](https://quickadd.obsidian.guide/docs/Choices/MacroChoice/) and [User Scripts](https://quickadd.obsidian.guide/docs/UserScripts/) docs describe the Macro Builder in full.
 
 ## Send a transcript to an AI prompt

@@ -9,7 +9,7 @@ Download episodes to listen offline, and play audio and video files from your va
 ## Download an episode
 
 To download the episode in the player, run **PodNotes: Download Playing Episode**.
-To download any other episode, right-click it or select its ⋮ button, then select **Download**.
+To download any other episode, right-click it or select its **More options** button, the three-dot button. Then select **Download**.
 
 A notice shows the progress. PodNotes saves the file in your vault at **Episode download path**, `PodNotes/{{podcast}}/{{title}}` by default, and adds the file extension.
 The episode then appears in the **Local Files** playlist and plays from the file.
@@ -33,13 +33,13 @@ The **Local Files** playlist in the podcast grid lists every episode you have of
 
 ## Remove a download or a local file
 
-1. Right-click the episode or select its ⋮ button.
+1. Right-click the episode or select its **More options** button.
 2. Select **Remove file** for a download, or **Remove from Local Files** for your own file.
 
-**Remove from Local Files** keeps your file in the vault. **Remove file** removes the episode from **Local Files** and deletes its file.
-Where a deleted file goes depends on Obsidian's **Deleted files** setting in **Settings → Files and links**.
+**Remove from Local Files** keeps your file in the vault. **Remove file** removes the episode from **Local Files** and moves its file to the trash.
+Where a trashed file goes depends on Obsidian's **Deleted files** setting in **Settings → Files and links**. If that setting deletes files permanently, so does PodNotes.
 
-If PodNotes cannot confirm that it downloaded a file, as with downloads from older versions, it asks first. Select **Keep file** to leave the file in your vault, or **Delete file** to delete it.
+If PodNotes cannot confirm that it downloaded a file, as with downloads from older versions, it asks first. Select **Keep file** to leave the file in your vault, or **Delete file** to move it to the trash. Either way, the episode leaves **Local Files**.
 
 Your notes and timestamp links stay. See [What happens to notes and links when I remove a download?](/faq/#what-happens-to-notes-and-links-when-i-remove-a-download)
 

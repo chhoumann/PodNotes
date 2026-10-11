@@ -6,12 +6,12 @@ description: Insert the current playback time into a note as a link that plays t
 
 Capture a timestamp while you listen, and PodNotes inserts the playback time at your cursor as a link back to that moment in the episode.
 
-![An episode note with properties, a Resume in PodNotes link, and three timestamp links, each followed by a note](/screenshots/episode-note.webp)
+![The Notes section of an episode note with three captured timestamp links, each followed by a note](/screenshots/timestamps.webp)
 
 ## <span id="capturing-timestamps"></span>Capture a timestamp
 
 1. Play an episode in PodNotes. You can pause it before you capture.
-2. Open a note and place the cursor where you want the timestamp.
+2. Open a note in editing view and place the cursor where you want the timestamp.
 3. Run **PodNotes: Capture Timestamp** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
 PodNotes inserts a list item with a link such as `00:12:41`, followed by a space for your note. If you selected text, the capture replaces it. Select the link later to open the player and play the episode from that moment.
@@ -24,7 +24,7 @@ You can run the same capture without opening the command palette:
 
 - **Hotkey.** In **Settings → Hotkeys**, search for **PodNotes: Capture Timestamp** and assign a shortcut.
 - **Phone toolbar.** Add the command to the mobile editor toolbar, as described in [Add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
-- **Headset.** Press your headset's previous-track button. When no note is open for editing, PodNotes adds the timestamp to the end of the episode note. See [Capture with a headset](/mobile/#capture-with-a-headset).
+- **Headset.** On a phone or a computer, press the headset button that sends the previous-track action. Not every headset sends it. When no note is open for editing, PodNotes adds the timestamp to the end of the episode note. See [Capture with a headset](/mobile/#capture-with-a-headset).
 
 ## <span id="capturing-segments"></span>Capture a range
 
@@ -32,14 +32,14 @@ To mark a passage instead of a moment, run **PodNotes: Capture Last 10 Seconds**
 
 Select a range link to play that passage. Playback pauses at the end of the range. A range is a link to two times in the episode. PodNotes does not cut an audio clip.
 
-The range commands appear in the command palette only while an episode is loaded. They use your **Capture timestamp format**, with each time tag replaced by its range tag, as described in [Timestamp tags](#timestamp-tags).
+Obsidian lists the range commands only while a note is open in an editor, an episode is loaded, and **Capture timestamp format** is set. They use that format, with each time tag replaced by its range tag, as described in [Timestamp tags](#timestamp-tags).
 
 ## Make timestamps clickable
 
-If your captures come out as plain text, such as `00:12:41` with no link, your format uses `{{time}}`. Installs from before PodNotes 2.21.0 keep that old default, `- {{time}} `.
+If your captures come out as plain text, such as `00:12:41` with no link, your format uses `{{time}}`. Installs from before PodNotes 2.21.0 keep that old default, `- {{time}}` with a space at the end.
 
 1. Open **Settings → PodNotes**.
-2. Under **Episode notes**, set **Capture timestamp format** to `- {{linktime}} `, including the final space.
+2. Under **Episode notes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end.
 
 New captures are links. Timestamps that you captured before stay plain text.
 

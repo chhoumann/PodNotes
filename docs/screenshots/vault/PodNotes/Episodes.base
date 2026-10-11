@@ -7,7 +7,6 @@ views:
     order:
       - file.name
       - note.podcast
-      - note.date
       - note.status
       - note.rating
     sort:
@@ -17,8 +16,7 @@ views:
       property: note.status
       direction: ASC
     columnSize:
-      file.name: 400
-      note.podcast: 200
-      note.date: 150
-      note.status: 110
-      note.rating: 80
+      file.name: 420
+      note.podcast: 180
+      note.status: 100
+      note.rating: 70

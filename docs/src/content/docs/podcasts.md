@@ -9,15 +9,17 @@ Add podcasts to PodNotes, find their episodes, and control what plays next.
 ## <span id="adding-podcasts"></span>Add a podcast
 
 1. Open **Settings → PodNotes**.
-2. Under **Search Podcasts**, type a podcast's name in the search box, such as `planet money`.
+2. Under **Search Podcasts**, type a podcast's name in the search box, such as `the daily`. Results appear as you type.
 3. Next to the podcast, select **Add**.
 
-![Search Podcasts in PodNotes settings with results for "planet money", each with an Add or Remove button](/screenshots/add-podcast.webp)
+![Search Podcasts in PodNotes settings with results for "the daily", each with an Add button](/screenshots/add-podcast.webp)
 
 The search box also accepts a link:
 
 - An RSS feed URL that starts with `https://` or `http://`, such as `https://feeds.npr.org/510289/podcast.xml`.
 - An Apple Podcasts show link, such as `https://podcasts.apple.com/us/podcast/planet-money/id290783428`. PodNotes looks up the show's RSS feed.
+
+After you paste a link, PodNotes shows the podcast as one result with an **Add** button.
 
 Search uses the Apple Podcasts directory and shows up to 20 podcasts. If a show is missing, paste its RSS feed URL instead. [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) explains what works.
 For a paid or members-only feed, see [Can I use a private feed?](/faq/#can-i-use-a-private-feed)
@@ -32,7 +34,9 @@ Removing a podcast leaves its episode notes, downloads, and playlist entries in 
 
 ## <span id="episode-list"></span>Browse episodes
 
-PodNotes opens on the podcast grid. The playlists come first, then one tile per podcast.
+To open the PodNotes view, run **PodNotes: Show player** from the command palette, or select **Show PodNotes** in the ribbon. If the view shows an episode list or the player, select the grid button, the first of the three buttons at the top of the view.
+
+The podcast grid shows the playlists first, then one tile per podcast.
 
 ![The podcast grid with the Queue, Favorites, Local Files, and Played playlists above podcast artwork tiles](/screenshots/podcast-grid.webp)
 
@@ -40,20 +44,15 @@ PodNotes opens on the podcast grid. The playlists come first, then one tile per 
 - To see a playlist's episodes, select the playlist.
 - To see the newest episodes of every podcast in one list, select the list button in the top bar. From a podcast's or a playlist's list, select **Latest Episodes** at the top.
 
-![Latest Episodes with the search box, the played toggle, the refresh button, and episodes with their dates](/screenshots/episode-list.webp)
+Above each list, **Search episodes** filters it as you type, and the refresh button fetches new episodes. Except in **Played**, the eye button hides or shows played episodes. Played episodes are struck through.
 
-Above each list, **Search episodes** filters it as you type. The eye button hides or shows played episodes, and the refresh button fetches new episodes. Played episodes are struck through.
-
-### <span id="how-many-latest-episodes-are-shown"></span>Show more latest episodes
-
-By default, **Latest Episodes** shows the 10 newest episodes of each podcast, and its search covers only those. To reach further back, raise **Latest episodes per podcast** in **Settings → PodNotes**, up to 75.
-A podcast's own list always shows all of its episodes.
+<span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast by default, and up to 75 when you raise **Latest episodes per podcast** in **Settings → PodNotes**.
 
 ## <span id="player"></span>Play an episode
 
 Select an episode to play it. The player opens and resumes where you stopped last time. To return to the player from a list, select the play button in the top bar.
 
-![The player with episode artwork, the progress bar, skip buttons, volume and speed sliders, and the queue](/screenshots/player.webp)
+![The player with episode artwork, the episode title, the progress bar, and the skip buttons](/screenshots/player.webp)
 
 - Select the artwork to play or pause. A video episode shows the video instead.
 - Select a point on the progress bar to jump there. The left time is your position and the right time is what remains.
@@ -67,7 +66,7 @@ Select an episode to play it. The player opens and resumes where you stopped las
 The **Queue** list under the player shows what plays next, top first. When an episode ends, the top episode in the queue starts.
 When you switch to another episode, PodNotes puts the one you left at the top of the queue.
 
-To add an episode yourself, right-click it or select its ⋮ button, then select **Add to Queue**. It goes to the bottom of the queue.
+To add an episode yourself, right-click it or select its **More options** button, the three-dot button. Then select **Add to Queue**. The episode goes to the bottom of the queue.
 
 ### <span id="reordering-the-queue"></span>Reorder the queue
 
@@ -83,7 +82,7 @@ While the queue is empty, its tile and its list in the player are hidden.
 
 ## <span id="playlists"></span>Collect episodes in playlists
 
-The podcast grid shows three more built-in playlists:
+Besides the queue, the podcast grid shows three built-in playlists:
 
 - **Favorites** holds the episodes you add with **Add to Favorites**.
 - **Local Files** holds your downloads and your own media files. See [Downloads and local files](/local_files/).
@@ -96,11 +95,19 @@ To make your own playlist:
 3. In **Playlist name**, type a name, such as `Commute`.
 4. Select **Add**.
 
-To add an episode, open its menu and select **Add to Commute**. To delete a playlist, select its trash button under **Playlists**, then select the check button within two seconds.
+To add an episode, open its menu and select **Add to Commute**. To see the playlist, select it in the podcast grid. Its list has the same search, played, and refresh buttons as every episode list.
+
+![The Commute playlist with five episodes, below the search box and the played and refresh buttons](/screenshots/episode-list.webp)
+
+To delete a playlist:
+
+1. Open **Settings → PodNotes**.
+2. Under **Playlists**, select the playlist's trash button.
+3. Within two seconds, select the check button.
 
 ## <span id="context-menu"></span>Episode menu reference
 
-To open an episode's menu, right-click the episode or select its ⋮ button. The menu shows these items in this order:
+To open an episode's menu, right-click the episode or select its **More options** button. The menu shows these items in this order:
 
 | Item | What it does |
 | --- | --- |

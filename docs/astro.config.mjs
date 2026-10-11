@@ -23,6 +23,7 @@ export default defineConfig({
 				baseUrl: "https://github.com/chhoumann/PodNotes/edit/master/docs/",
 			},
 			customCss: ["./src/styles/custom.css"],
+			expressiveCode: { styleOverrides: { borderRadius: "0.5rem" } },
 			head: [
 				{
 					tag: "link",

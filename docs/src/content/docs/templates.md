@@ -35,7 +35,7 @@ These rules apply to every template:
 | **Transcript file path** | `transcripts/{{podcast}}/{{title}}.md` |
 | **Episode download path** | `PodNotes/{{podcast}}/{{title}}` |
 
-PodNotes adds `.md` to note and transcript paths when it is missing. A download path gets the media file's extension, and PodNotes removes any extension you type at its end.
+PodNotes adds `.md` to a note path when it is missing. A transcript path keeps the extension you type, so end it with `.md`. A download path gets the media file's extension, and PodNotes removes any extension you type at its end.
 
 A download path must tell episodes apart. Without `{{title}}`, the setting shows a warning. When a file for another episode already exists at the path, the download fails and does not overwrite it.
 
@@ -49,7 +49,7 @@ The `{{title}}` and `{{podcast}}` path tags remove these characters:
 
 They also turn control characters into spaces, collapse runs of whitespace, trim the ends, and remove leading and trailing dots. Dots inside a name stay. Date values are not cleaned, so a date format that contains `:` can produce a file name that the system rejects.
 
-Each folder and file name is cut to 255 units, keeping the extension. The unit is a UTF-16 code unit on Windows, macOS, and iOS, and a UTF-8 byte on Linux and Android. The full path has no separate limit.
+PodNotes shortens a long folder or file name to fit file system limits, and keeps the extension.
 
 ## <span id="note-template"></span>Episode note tags
 

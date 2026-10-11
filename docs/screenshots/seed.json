@@ -16,14 +16,16 @@
 		"https://feeds.simplecast.com/6HKOhNgS",
 		"https://api.substack.com/feed/podcast/10845.rss"
 	],
-	"search": "planet money",
+	"search": "the daily",
+	"settings": {
+		"episodeListLimit": 25
+	},
 	"noteTemplate": "---\ntype: podcastEpisode\npodcast: \"{{podcastlink}}\"\ndate: {{date:YYYY-MM-DD}}\nduration: \"{{duration}}\"\ntags:\n  - podcastEpisode\nstatus:\nrating:\n---\n![|96]({{artwork}})\n\n[Resume in PodNotes]({{episodelink}})\n\n> [!summary]- Episode description\n{{description:> }}\n\n## Notes\n\n",
 	"episodes": [
 		{
-			"podcast": "Acquired",
-			"title": "The Home Depot",
-			"status": "finished",
-			"rating": 4
+			"podcast": "Cortex",
+			"title": "183: Scouting Indie Games for a Living, with Lucy James",
+			"status": "next"
 		},
 		{
 			"podcast": "Planet Money",
@@ -33,9 +35,10 @@
 			"rating": 4
 		},
 		{
-			"podcast": "Cortex",
-			"title": "183: Scouting Indie Games for a Living, with Lucy James",
-			"status": "next"
+			"podcast": "Acquired",
+			"title": "The Home Depot",
+			"status": "finished",
+			"rating": 4
 		},
 		{
 			"podcast": "Radiolab",
@@ -55,6 +58,25 @@
 	],
 	"feedNotes": [
 		"Planet Money",
-		"The Knowledge Project"
-	]
+		"The Knowledge Project",
+		"Acquired",
+		"Radiolab",
+		"Cortex"
+	],
+	"playlist": {
+		"name": "Commute",
+		"icon": "headphones",
+		"episodes": [
+			"A 4-Track Mind",
+			"Doves Type",
+			"Ferrari",
+			"Grass Apes",
+			"The Rocky Statue"
+		]
+	},
+	"maxTitleLength": 24,
+	"demo": {
+		"at": 698,
+		"note": "A perfect cube, and why the case took years."
+	}
 }

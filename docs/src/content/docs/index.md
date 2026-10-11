@@ -1,7 +1,7 @@
 ---
 title: PodNotes
 slug: index
-description: PodNotes is a podcast player for Obsidian. Listen beside your notes, capture timestamp links, and create a note for every episode.
+description: A podcast player for Obsidian that plays beside your notes, captures timestamp links, and creates a note for every episode.
 template: splash
 editUrl: false
 prev: false
@@ -25,27 +25,27 @@ hero:
 
 ## <span id="features"></span><span id="screenshots"></span><span id="demo"></span>What you can do
 
-- <span id="podcast-search"></span><span id="podcast-grid"></span><span id="episode-list"></span><span id="player"></span>[Listen beside your notes](/podcasts/)
+- <span id="podcast-search"></span><span id="podcast-grid"></span><span id="episode-list"></span><span id="player"></span>[Add and play podcasts](/podcasts/)
   Search Apple Podcasts or paste any RSS feed. Play audio and video with speed control, a queue, and playlists.
-- <span id="timestamps"></span>[Capture the moment](/timestamps/)
+- <span id="timestamps"></span>[Capture timestamps](/timestamps/)
   One command inserts a timestamp link into your note. Select it later to play from that second.
-- <span id="episode-notes"></span><span id="browse-your-library-with-bases"></span>[Get a note for every episode](/notes/)
+- <span id="episode-notes"></span><span id="browse-your-library-with-bases"></span>[Create episode notes](/notes/)
   A template fills in the show, date, description, and a link that resumes playback. Browse the notes with Bases.
-- [Take it with you](/mobile/)
+- [Use PodNotes on your phone](/mobile/)
   PodNotes works on iOS and Android. Download episodes for offline listening, or play your own audio and video files.
 - <span id="transcripts-with-speaker-labels"></span>[Transcribe episodes](/transcripts/)
   Turn an episode into a transcript note with your own OpenAI or Deepgram key, with optional speaker labels.
-- [Build your own workflows](/api/)
+- [Automate with the API](/api/)
   Use the commands, the JavaScript API, and QuickAdd to capture and write notes your way.
 
 ## <span id="installation"></span><span id="installation-with-brat"></span><span id="manual-installation"></span>Start in three steps
 
-1. **Install PodNotes.** In **Settings → Community plugins**, select **Browse**, search for PodNotes, then select **Install** and **Enable**.
+1. **Install PodNotes.** In **Settings → Community plugins**, turn off **Restricted mode** if it is on. Select **Browse**, search for PodNotes, then select **Install** and **Enable**.
 2. **Add a podcast.** In **Settings → PodNotes**, search for a show or paste its RSS feed URL, then select **Add**.
 3. **Capture a moment.** Run **PodNotes: Show player** and play an episode. In a note, run **PodNotes: Capture Timestamp**.
 
-[Getting started](/getting-started/) walks through each step. To install a beta version or install by hand, see the [FAQ](/faq/).
+[Getting started](/getting-started/) walks through each step. To install a beta version or install by hand, see [Other ways to install](/getting-started/#other-ways-to-install).
 
 ## Free and open source
 
-PodNotes is MIT licensed, and everything it writes is Markdown in your vault. [Read the FAQ](/faq/), [learn what syncs between devices](/sync/), or [report a problem on GitHub](https://github.com/chhoumann/PodNotes/issues).
+PodNotes is MIT licensed, and your notes are Markdown files in your vault. [Read the FAQ](/faq/), [learn what syncs between devices](/sync/), or [report a problem on GitHub](https://github.com/chhoumann/PodNotes/issues).

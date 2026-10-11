@@ -66,7 +66,7 @@ Your playback progress and downloads stay.
 
 PodNotes imports files from **Export settings**, files from older PodNotes versions, and a copy of `data.json`.
 If a newer PodNotes version wrote the file in a newer format, PodNotes rejects it and asks you to update.
-If an episode is loaded when you import, a new **Default Playback Rate** applies from the next episode you load.
+An import also sets the current speed and volume to the imported **Default Playback Rate** and **Default Volume**.
 
 ### API keys in a settings file
 

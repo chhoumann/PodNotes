@@ -61,7 +61,7 @@ The labeled text fills `{{transcript}}` in **Transcript template**, so you do no
 
 Under **Transcripts** in **Settings → PodNotes**, two settings shape the note:
 
-- **Transcript file path** sets where the note goes. The default is `transcripts/{{podcast}}/{{title}}.md`.
+- **Transcript file path** sets where the note goes. The default is `transcripts/{{podcast}}/{{title}}.md`. Keep `.md` at the end, because PodNotes does not add it to a transcript path.
 - **Transcript template** sets the content. `{{transcript}}` is the transcript text. The default adds the title, the podcast, and the date above it.
 
 [Transcript and timestamp tags](/templates/#transcript-and-timestamp-templates) lists every tag and the default template.
@@ -81,18 +81,16 @@ These cases stop a transcription or change its result:
 
 - PodNotes transcribes audio episodes only. For a video episode, the command is missing.
 - When the provider's key is not available on this device, PodNotes shows a notice that asks you to select or create it in the transcript settings. Select the key as described in [Set up an OpenAI key](#setting-up), or under **Deepgram API key** for Deepgram.
-- When a transcript note already exists at the path, PodNotes shows "You've already transcribed this episode" and does nothing else. To transcribe again, delete the note first.
+- When a transcript note already exists at the path, PodNotes shows a notice that you already transcribed the episode, with the note's path, and does nothing else. To transcribe again, delete the note first.
 - In a transcript without speaker labels, a part of the audio that fails three times leaves the marker `[Error transcribing chunk N]`, and the note keeps the rest of the text. To retry, delete the note and run the command again.
 - Transcripts have no timestamps, so a line of the transcript does not link to its moment in the episode.
 
 ## How API keys are stored
 
-PodNotes keeps your API keys in Obsidian's secret storage, not in its own files. Its `data.json` holds only the name of each secret, in `openAISecretId` and `deepgramSecretId`. Obsidian encrypts its secret storage on disk with your operating system's encryption.
+PodNotes keeps your API keys in Obsidian's secret storage on this device, not in its own files.
+Only the name of each key syncs in `data.json`, so select the key again on each device.
 
-When you select a secret that you created for something else, PodNotes copies its value into a secret of its own for that provider. The OpenAI setting can therefore never read your Deepgram key or another plugin's secret, and the Deepgram setting can never read your OpenAI key. Other plugins in the vault share the same secret storage, so they can read PodNotes' secrets.
+Older versions of PodNotes kept the keys as plain text in `data.json`. On the first start after you upgrade, PodNotes moves them to secret storage and removes the plain-text copies.
+If the move fails, PodNotes leaves `data.json` unchanged and shows a notice that stays until you close it. PodNotes does not finish loading until the move succeeds. Restart PodNotes to try again.
 
-Secret values stay on the device where you entered them. When `data.json` syncs to another device, the name of the secret goes with it but its value does not. That is why each device needs its own selection. A settings export leaves the keys out unless you turn on **Include API keys**, which writes them to the export file as plain text.
-
-Versions of PodNotes before secret storage kept the keys in `data.json`. On the first start after an upgrade, PodNotes moves those keys into secret storage, checks them, and removes the plain text copies. If the move fails, PodNotes leaves `data.json` unchanged and shows a notice that stays until you close it. Restart PodNotes to try again.
-
-The move cannot erase copies that already exist in backups, Obsidian Sync version history, file system snapshots, or old settings exports. If a key may have reached a device or backup that you do not trust, replace the key at the provider and delete old export files that you no longer need.
+The move cannot erase copies in backups, sync version history, or old settings exports. If a key may have leaked, replace it at the provider.

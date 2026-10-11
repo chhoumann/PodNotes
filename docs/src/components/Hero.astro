@@ -1,15 +1,19 @@
 ---
 // The landing page hero: the pitch and actions from the page's `hero`
-// frontmatter, then the captured hero screenshot in light and dark.
+// frontmatter, then the captured hero screenshot in light and dark. Phones get
+// the player in Obsidian's mobile layout, which stays readable at that width.
 import { LinkButton } from "@astrojs/starlight/components";
 import { darkTwin, screenshotSize } from "../screenshots.mjs";
 
 const { data } = Astro.locals.starlightRoute.entry;
 const { title = data.title, tagline, actions = [] } = data.hero ?? {};
 const shot = "/screenshots/hero.webp";
+const phoneShot = "/screenshots/mobile-player.webp";
 const size = await screenshotSize(shot);
+const phoneSize = await screenshotSize(phoneShot);
+const phone = "(max-width: 50rem)";
 const alt =
-	"Obsidian with an episode note open, its captured timestamp links, and the PodNotes player in the sidebar playing the episode";
+	"The PodNotes player in Obsidian playing an episode, beside the episode's note with its captured timestamp links";
 ---
 
 <div class="hero">
@@ -31,8 +35,14 @@ const alt =
 		</div>
 	</div>
 	<div class="shot">
-		<img src={shot} {alt} {...size} class="dark:sl-hidden" fetchpriority="high" />
-		<img src={darkTwin(shot)} {alt} {...size} class="light:sl-hidden" fetchpriority="high" />
+		<picture class="dark:sl-hidden">
+			<source media={phone} srcset={phoneShot} {...phoneSize} />
+			<img src={shot} {alt} {...size} fetchpriority="high" />
+		</picture>
+		<picture class="light:sl-hidden">
+			<source media={phone} srcset={darkTwin(phoneShot)} {...phoneSize} />
+			<img src={darkTwin(shot)} {alt} {...size} fetchpriority="high" />
+		</picture>
 	</div>
 </div>
 
@@ -42,8 +52,8 @@ const alt =
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: clamp(2rem, 5vw, 3.5rem);
-			padding-block: clamp(2rem, 6vw, 4.5rem) 1rem;
+			gap: clamp(1.75rem, 4vw, 2.5rem);
+			padding-block: clamp(1.5rem, 4vw, 3rem) 0.5rem;
 			text-align: center;
 		}
 		.copy {
@@ -86,13 +96,20 @@ const alt =
 			width: 100%;
 		}
 		.shot img {
+			display: block;
 			width: 100%;
+			margin-inline: auto;
 			height: auto;
 			border-radius: 0.875rem;
 			border: 1px solid var(--sl-color-hairline-light);
 			box-shadow:
 				0 1px 2px rgb(0 0 0 / 0.08),
 				0 24px 64px -24px rgb(0 0 0 / 0.35);
+		}
+		@media (max-width: 50rem) {
+			.shot img {
+				width: min(100%, 24rem);
+			}
 		}
 	}
 </style>

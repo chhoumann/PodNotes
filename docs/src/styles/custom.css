@@ -71,6 +71,9 @@
 	border: 1px solid color-mix(in srgb, var(--sl-color-gray-5) 80%, var(--sl-color-bg));
 	border-radius: 0.375rem;
 	padding: 0.125rem 0.3125rem;
+	/* A chip that wraps keeps its border and rounding on both lines. */
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
 }
 :root[data-theme='light'] .sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
 	background-color: color-mix(in srgb, var(--sl-color-gray-6) 70%, var(--sl-color-bg));
@@ -131,6 +134,7 @@ starlight-toc a {
 	text-align: center;
 }
 .sl-markdown-content img.screenshot {
+	margin-inline: auto;
 	border: 1px solid var(--sl-color-hairline);
 	border-radius: 0.75rem;
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -12px rgb(0 0 0 / 0.25);
@@ -224,4 +228,56 @@ starlight-toc a {
 [data-has-hero] .sl-markdown-content ol > li strong:first-child {
 	display: block;
 	color: var(--sl-color-white);
+}
+
+/* Headings on the landing page are not deep-link targets worth an icon. */
+[data-has-hero] .sl-markdown-content .sl-anchor-link {
+	display: none;
+}
+
+/* The landing page has no sidebar menu, so phones show the theme switcher in
+ * the header instead. */
+@media (max-width: 49.99rem) {
+	html:not([data-has-sidebar]) .header .right-group {
+		display: flex;
+	}
+	html:not([data-has-sidebar]) .header .social-icons {
+		display: none;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Reference tables on phones
+ * ------------------------------------------------------------------------ */
+
+/* Tables with three or more columns (labeled by src/tables.mjs) become one
+ * stacked entry per row, so no column hides off the edge. */
+@media (max-width: 40rem) {
+	.sl-markdown-content table.stack,
+	.sl-markdown-content table.stack tbody,
+	.sl-markdown-content table.stack tr,
+	.sl-markdown-content table.stack td {
+		display: block;
+		width: auto;
+	}
+	.sl-markdown-content table.stack thead {
+		display: none;
+	}
+	.sl-markdown-content table.stack tr {
+		padding-block: 0.75rem;
+		border-bottom: 1px solid var(--sl-color-hairline);
+	}
+	.sl-markdown-content table.stack td {
+		border: 0;
+		padding: 0.125rem 0;
+		overflow-wrap: anywhere;
+	}
+	.sl-markdown-content table.stack td:first-child {
+		font-weight: 600;
+		color: var(--sl-color-white);
+	}
+	.sl-markdown-content table.stack td:not(:first-child)::before {
+		content: attr(data-label) ": ";
+		color: var(--sl-color-gray-3);
+	}
 }

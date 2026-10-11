@@ -4,7 +4,7 @@ slug: commands
 description: Every PodNotes command with its command palette name, its ID, and when it is available.
 ---
 
-The command palette lists each PodNotes command with the **PodNotes:** prefix, but only while its condition below holds.
+Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only while its condition below holds. The same rule applies in the command palette and when you add a command to the mobile toolbar.
 
 | Command | ID | Available when |
 | --- | --- | --- |
@@ -76,23 +76,24 @@ If another episode's file already exists at that path, the download fails. See [
 
 ## Capture Timestamp
 
-Inserts a timestamp at the cursor, formatted by **Capture timestamp format**. The default format, `- {{linktime}} `, makes a list item with a timestamp link.
-The command stays available without a loaded episode, so you can add it to the mobile toolbar. Without an episode or with an empty format, it shows a notice. See [Capture timestamps](/timestamps/).
+Inserts a timestamp at the cursor, formatted by **Capture timestamp format**. The default format is `- {{linktime}}` with a space at the end. It makes a list item with a timestamp link.
+Obsidian lists the command only while a note is open in an editor. It does not need a loaded episode, so you can add it to the mobile toolbar before you play anything. Without an episode or with an empty format, it shows a notice. See [Capture timestamps](/timestamps/).
 
 ## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds
 
 Inserts a link to the last 10 or 20 seconds of playback at the cursor. The link plays from the start of the range and pauses at its end.
+Obsidian lists these commands only while a note is open in an editor, an episode is loaded, and **Capture timestamp format** is set. To add them to the mobile toolbar, see [Add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
 Early in an episode, PodNotes shows a notice to play more first. See [Capture timestamps](/timestamps/#capturing-segments).
 
 ## Create episode note
 
 Creates a note for the loaded episode from **Note creation template** at **Note creation file path**, or opens the note if it exists.
-The ID keeps the command's former name, **Create Podcast Note**. See [Create episode notes](/notes/).
+The ID keeps the command's former name, Create Podcast Note. See [Create episode notes](/notes/).
 
 ## Create podcast feed note
 
 Opens a list of the podcasts you follow, with the playing episode's podcast first. Creates a note for the podcast you select, or opens the note if it exists.
-No episode needs to be loaded. See [Template tags](/templates/#podcast-feed-notes).
+No episode needs to be loaded. See [Create a feed note for a podcast](/notes/#create-a-feed-note-for-a-podcast).
 
 ## Copy universal episode link to clipboard
 

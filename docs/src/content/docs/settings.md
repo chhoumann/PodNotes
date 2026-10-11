@@ -31,7 +31,7 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Capture timestamp format** | `- {{linktime}} ` with a trailing space | Sets the text each capture inserts. A preview below the field shows the result for the loaded episode. See [Capture timestamps](/timestamps/). |
+| **Capture timestamp format** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. A preview below the field shows the result for the loaded episode. See [Capture timestamps](/timestamps/). |
 | **Timestamp offset (s)** | 0 | Subtracts this many seconds from each capture, to make up for reaction time. |
 | **Note creation file path** | `PodNotes/{{podcast}}/{{title}}.md` | Sets where PodNotes creates episode notes. See [Create episode notes](/notes/). |
 | **Note creation template** | [The default episode note template](/templates/#note-template) | Sets the content of a new episode note. |
@@ -63,7 +63,7 @@ A short text under the heading lists the tags a feed note accepts.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Import OPML** | None | **Import** opens a file picker. PodNotes follows the podcasts in the `.opml` file you choose. See [Import and export](/import_export/#importing). |
+| **Import OPML** | None | **Import** opens a file picker. PodNotes adds the podcasts in the `.opml` file you choose. See [Import and export](/import_export/#importing). |
 | **Export OPML** | `PodNotes_Export.opml` | **Export** saves the podcasts you follow to an OPML file with this name in your vault. See [Import and export](/import_export/#exporting). |
 
 ## Preferences & templates
@@ -81,9 +81,9 @@ The last three settings appear only when **Speaker diarization** is on. **Deepgr
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **OpenAI API key** | None | Selects the Obsidian secret that holds your OpenAI API key, or creates one. See [Transcribe episodes](/transcripts/#setting-up). |
-| **Transcript file path** | `transcripts/{{podcast}}/{{title}}.md` | Sets where PodNotes saves transcripts. |
-| **Transcript template** | [The default transcript template](/transcripts/#transcript-template) | Sets the content of a new transcript note. |
+| **Transcript file path** | `transcripts/{{podcast}}/{{title}}.md` | Sets where PodNotes saves transcripts. Keep `.md` at the end, because PodNotes does not add it. |
+| **Transcript template** | [The default transcript template](/templates/#transcript-and-timestamp-templates) | Sets the content of a new transcript note. |
 | **Speaker diarization** | Off | Labels transcript segments by speaker. See [Speaker diarization](/transcripts/#speaker-diarization). |
 | **Diarization provider** | **OpenAI (gpt-4o-transcribe-diarize)** | Chooses OpenAI, which uses your OpenAI API key, or **Deepgram**, which needs its own key and keeps speaker labels consistent across the episode. |
 | **Deepgram API key** | None | Selects the Obsidian secret that holds your Deepgram API key, or creates one. |
-| **Speaker label format** | `**{{speaker}}:** ` with a trailing space | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker label. See [Speaker label format](/transcripts/#speaker-label-format). |
+| **Speaker label format** | `**{{speaker}}:**` with a space at the end | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker label. See [Speaker label format](/transcripts/#speaker-label-format). |

@@ -17,24 +17,13 @@ On a phone, the player stays closed until you open it. See [Use PodNotes on your
 ### Why are some commands missing?
 
 Most commands appear only while an episode is loaded. A paused episode counts.
-**PodNotes: Capture Timestamp** needs an open note, and **PodNotes: Reorder Queue** needs at least two episodes in the queue.
+**PodNotes: Capture Timestamp** needs a note open in an editor, and **PodNotes: Reorder Queue** needs at least two episodes in the queue.
 **PodNotes: Show player** is always available. [Commands](/commands/) lists what each command needs.
 
 ### How do I install a beta version or install manually?
 
-To install with BRAT:
-
-1. Install and turn on the [BRAT](obsidian://show-plugin?id=obsidian42-brat) plugin.
-2. Run **BRAT: Plugins: Add a beta plugin for testing (with or without version)**.
-3. Enter `chhoumann/PodNotes` and select **Add plugin**.
-4. If PodNotes is not turned on afterwards, turn it on in **Settings → Community plugins**.
-
-To install manually:
-
-1. From the [latest release](https://github.com/chhoumann/PodNotes/releases/latest), download `main.js` and `manifest.json`.
-2. In your vault, put both files in `.obsidian/plugins/podnotes/`. Create the folder if it does not exist.
-3. In **Settings → Community plugins**, reload the list of installed plugins.
-4. Turn on PodNotes.
+Install a beta version with the BRAT plugin, or copy a release's files into your vault by hand.
+[Other ways to install](/getting-started/#other-ways-to-install) has the steps for both.
 
 ## Podcasts and feeds
 
@@ -66,7 +55,7 @@ For MP4 and WebM files, select **Play as audio with PodNotes** or **Play as vide
 ### Why are my timestamps plain text?
 
 Your **Capture timestamp format** uses `{{time}}`, which inserts plain text.
-Installs set up before PodNotes 2.21.0 keep the old default, `- {{time}} `. New installs use `- {{linktime}} `, which inserts a link that plays the episode from that moment.
+Installs set up before PodNotes 2.21.0 keep the old default, which uses `{{time}}`. New installs use `{{linktime}}`, which inserts a link that plays the episode from that moment.
 In **Settings → PodNotes**, change `{{time}}` to `{{linktime}}` in **Capture timestamp format**. See [Capture timestamps](/timestamps/).
 
 ### Can I take notes on an episode I listen to in another app?
@@ -77,7 +66,7 @@ For notes about a whole show, use a feed note. See [Create episode notes](/notes
 
 ### Do headset buttons control PodNotes?
 
-One button does. The previous-track action captures a timestamp into the open note, or into the episode note if no note is open.
+One button does. When your headset sends the previous-track action, PodNotes captures a timestamp into the open note, or into the episode note if no note is open. This works on a phone or a computer, but not every headset sends that action.
 PodNotes adds no other headset actions, so play, pause, and skip depend on your device. See [Capture with a headset](/mobile/#capture-with-a-headset).
 
 ## Devices and sync

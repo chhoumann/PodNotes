@@ -6,7 +6,7 @@ description: Create a note for an episode or a whole podcast, choose where notes
 
 Create a note for the episode you are listening to, with the episode's details and a link that resumes playback, and keep your timestamps in it.
 
-![An episode note with properties, artwork, a Resume in PodNotes link, a collapsed episode description, and three timestamp notes](/screenshots/episode-note.webp)
+![The top of an episode note with its title, properties, artwork, a Resume in PodNotes link, and a collapsed episode description](/screenshots/episode-note.webp)
 
 ## Create a note for the current episode
 
@@ -15,7 +15,7 @@ Create a note for the episode you are listening to, with the episode's details a
 
 PodNotes creates the note and opens it. With the default settings, the note for the Acquired episode "The Home Depot" is `PodNotes/Acquired/The Home Depot.md`. To add timestamps while you listen, see [Capture timestamps](/timestamps/).
 
-The command appears only while an episode is loaded. To create a note for an episode you are not playing, right-click it in an episode list, or select its ⋮ button, then select **Create Note**. The [episode menu reference](/podcasts/#context-menu) lists the other items.
+The command appears only while an episode is loaded. To create a note for an episode you are not playing, right-click it in an episode list, or select its **More options** button, the three-dot button. Then select **Create Note**. The [episode menu reference](/podcasts/#context-menu) lists the other items.
 
 ## Open an existing note
 
@@ -37,7 +37,9 @@ The default episode note template sets its `podcast` property to `{{podcastlink}
 1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, edit **Note creation file path**.
 
-The default is `PodNotes/{{podcast}}/{{title}}.md`. For a folder per publication year, use `Podcasts/{{date:YYYY}}/{{podcast}} - {{title}}.md`. After you edit the path, a preview shows the result for one of your episodes. [File path tags](/templates/#file-path) lists every tag a path accepts.
+The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts` folder with a subfolder per podcast, use `Podcasts/{{podcast}}/{{title}}.md`. For a folder per publication year, use `Podcasts/{{date:YYYY}}/{{podcast}} - {{title}}.md`. After you edit the path, a preview shows the result for one of your episodes. [File path tags](/templates/#file-path) lists every tag a path accepts.
+
+Existing notes stay where they are. PodNotes looks for an episode's note at the new path, so it can create a second note for an episode that already has one. To avoid that, move your existing notes to match the new path.
 
 Feed notes use **Feed note file path** under **Feed notes**.
 
