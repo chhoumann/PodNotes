@@ -59,7 +59,7 @@ afterEach(() => {
 });
 
 describe("createTranscription", () => {
-	it("posts the fields in order as multipart form data with only the bearer key", async () => {
+	it("posts multipart form data that parses back to the same fields and file bytes", async () => {
 		fetchMock.mockImplementation(async () => Response.json({ text: "Hi." }));
 		const bytes = new Uint8Array(70_000).map((_, i) => (i * 31) % 256);
 		const file = new File([bytes], "episode.mp3", { type: "audio/mp3" });
@@ -82,8 +82,9 @@ describe("createTranscription", () => {
 		expect(Object.fromEntries(new Headers(init?.headers))).toEqual({
 			authorization: "Bearer sk-test",
 		});
-		expect(init?.body).toBeInstanceOf(FormData);
-		const form = init?.body as FormData;
+		const encoded = new Response(init?.body);
+		expect(encoded.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/);
+		const form = await encoded.formData();
 		expect([...form.keys()]).toEqual(["model", "file", "response_format", "chunking_strategy"]);
 		expect(form.get("model")).toBe("gpt-4o-transcribe-diarize");
 		expect(form.get("response_format")).toBe("diarized_json");
