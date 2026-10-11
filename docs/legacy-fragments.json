@@ -1,0 +1,85 @@
+{
+	"/QuickAdd/": ["quickadd", "timestamp-capture", "add-podcast-note"],
+	"/api/": [
+		"api",
+		"podcast",
+		"transcript",
+		"gettranscriptepisode-episode",
+		"quickadd-ai-prompt-example",
+		"getpodcasttimeformattedformat-string-linkify-boolean-offsetseconds-number",
+		"getpodcastsegmentformattedformat-string-starttime-number-endtime-number-linkify-boolean",
+		"playbackrate",
+		"playback-controls"
+	],
+	"/commands/": [
+		"show-player",
+		"play-podcast",
+		"stop-podcast",
+		"toggle-playback",
+		"skip-backward",
+		"skip-forward",
+		"download-playing-episode",
+		"capture-timestamp",
+		"capture-last-10-seconds-capture-last-20-seconds",
+		"increase-playback-rate",
+		"decrease-playback-rate",
+		"reset-playback-rate",
+		"create-episode-note",
+		"create-podcast-feed-note",
+		"copy-universal-episode-link-to-clipboard",
+		"transcribe-current-episode"
+	],
+	"/import_export/": [
+		"importing",
+		"exporting",
+		"settings-templates",
+		"exporting-settings",
+		"importing-settings"
+	],
+	"/": [
+		"podnotes",
+		"features",
+		"installation",
+		"installation-with-brat",
+		"manual-installation",
+		"screenshots",
+		"demo",
+		"podcast-grid",
+		"episode-list",
+		"player",
+		"episode-notes",
+		"timestamps",
+		"transcripts-with-speaker-labels",
+		"browse-your-library-with-bases",
+		"podcast-search"
+	],
+	"/podcasts/": [
+		"adding-podcasts",
+		"playlists",
+		"episode-list",
+		"how-many-latest-episodes-are-shown",
+		"context-menu",
+		"reordering-the-queue",
+		"turning-off-the-queue",
+		"player"
+	],
+	"/templates/": [
+		"file-path",
+		"note-template",
+		"linking-an-episode-to-its-podcast-feed-note",
+		"using-the-default-template-with-bases",
+		"podcast-feed-notes"
+	],
+	"/timestamps/": ["settings", "capturing-timestamps", "capturing-segments"],
+	"/transcripts/": [
+		"transcripts",
+		"setting-up",
+		"how-api-keys-are-stored",
+		"creating-a-transcript",
+		"transcript-template",
+		"speaker-diarization",
+		"enabling-it",
+		"speaker-label-format",
+		"cost"
+	]
+}

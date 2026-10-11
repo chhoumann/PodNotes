@@ -6,6 +6,8 @@ head:
     content: PodNotes
 ---
 
+<div id="podnotes"></div>
+
 The one goal for PodNotes is to make it easier to write notes on podcasts.
 
 Here are the features that will help you do that 👇.

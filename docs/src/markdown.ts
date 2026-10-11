@@ -3,8 +3,11 @@ import { sidebar } from "./site.mjs";
 
 type Doc = CollectionEntry<"docs">;
 
+/** Empty `<div id>` anchors that keep old MkDocs fragments working (see scripts/legacy-fragments.mjs). */
+const legacyAnchor = /^<div id="[^"]+"><\/div>\n\n/gm;
+
 export function pageMarkdown(entry: Doc): string {
-	return `# ${entry.data.title}\n\n${entry.body ?? ""}`;
+	return `# ${entry.data.title}\n\n${(entry.body ?? "").replace(legacyAnchor, "")}`;
 }
 
 /** Docs pages grouped and ordered as in the sidebar. Ungrouped pages come first, under "Docs". */

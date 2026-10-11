@@ -3,6 +3,8 @@ title: Transcripts
 slug: transcripts
 ---
 
+<div id="transcripts"></div>
+
 PodNotes can create transcript notes from podcast episodes. Plain transcription
 uses OpenAI's Whisper model, while optional speaker diarization can use OpenAI
 or Deepgram.

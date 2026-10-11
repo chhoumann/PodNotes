@@ -4,7 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "astro dev",
-		"build": "astro build",
+		"build": "astro build && node scripts/legacy-fragments.mjs check",
 		"preview": "astro preview"
 	},
 	"dependencies": {

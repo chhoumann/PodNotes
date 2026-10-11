@@ -3,6 +3,8 @@ title: API
 slug: api
 ---
 
+<div id="api"></div>
+
 ```js
 export interface IAPI {
 	readonly podcast: Episode;

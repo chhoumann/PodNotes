@@ -3,6 +3,8 @@ title: QuickAdd
 slug: QuickAdd
 ---
 
+<div id="quickadd"></div>
+
 I have made some QuickAdd macros & actions that might be helpful to others.
 
 Both of these are seen in the demo:
