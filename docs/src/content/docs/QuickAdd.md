@@ -1,9 +1,8 @@
 ---
 title: QuickAdd
 slug: QuickAdd
+legacyTitleId: quickadd
 ---
-
-<div id="quickadd"></div>
 
 I have made some QuickAdd macros & actions that might be helpful to others.
 

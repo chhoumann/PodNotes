@@ -4,9 +4,8 @@ slug: index
 head:
   - tag: title
     content: PodNotes
+legacyTitleId: podnotes
 ---
-
-<div id="podnotes"></div>
 
 The one goal for PodNotes is to make it easier to write notes on podcasts.
 

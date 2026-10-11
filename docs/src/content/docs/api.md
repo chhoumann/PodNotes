@@ -1,9 +1,8 @@
 ---
 title: API
 slug: api
+legacyTitleId: api
 ---
-
-<div id="api"></div>
 
 ```js
 export interface IAPI {

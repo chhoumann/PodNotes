@@ -17,8 +17,9 @@ plugin's dependencies.
   `src/site.mjs`, which the LLM files below also read.
 - `scripts/legacy-fragments.mjs` runs after every build and fails it if a
   heading fragment from the old MkDocs site (`legacy-fragments.json`) has no
-  target. When a heading's new id differs from the old one, add an empty
-  `<div id="old-id"></div>` before the heading, as `commands.md` does.
+  target. When a heading's new id differs from the old one, start the heading
+  with an empty `<span id="old-id"></span>`, as `commands.md` does. For an old
+  page-title id, set `legacyTitleId:` in the frontmatter instead.
 - `public/` holds static assets served as-is. Images live in
   `public/resources/` and are referenced with site-absolute paths such as
   `/resources/podcast_grid.png`. The repo-root `README.md` uses the same

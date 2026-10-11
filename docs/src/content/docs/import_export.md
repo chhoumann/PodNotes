@@ -22,9 +22,7 @@ To import podcasts, follow these steps:
 You can export your saved feeds to `opml` format.
 First designate a file path to save to (or use the default), and click _Export_.
 
-<div id="settings-templates"></div>
-
-## Settings & templates
+## <span id="settings-templates"></span>Settings & templates
 
 Under the **Settings & templates** heading, you can move your PodNotes
 configuration between vaults or back it up. This covers your preferences,

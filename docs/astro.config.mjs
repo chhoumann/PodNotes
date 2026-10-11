@@ -32,6 +32,7 @@ export default defineConfig({
 				},
 			],
 			sidebar,
+			components: { PageTitle: "./src/components/PageTitle.astro" },
 		}),
 	],
 });

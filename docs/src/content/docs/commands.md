@@ -37,9 +37,7 @@ This will capture the current timestamp of the currently playing episode.
 
 See [timestamps](/timestamps/) for more information on timestamp templates.
 
-<div id="capture-last-10-seconds-capture-last-20-seconds"></div>
-
-## Capture Last 10 Seconds / Capture Last 20 Seconds
+## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds
 These commands capture a linked start-end segment ending at the current playback time.
 When opened, the link seeks to the segment start and pauses playback at the segment end.
 
