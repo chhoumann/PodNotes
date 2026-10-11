@@ -211,13 +211,13 @@ export default async function podNotesURIHandler(
 		// the resolved URL still passes the network fetchability gate.
 		const feeds = get(plugin).feeds;
 		const placeholderKey = parsePrivateFeedPlaceholder(url);
-		let episodes: readonly Episode[];
 		if (placeholderKey !== null) {
 			// Fetch even a fresh feed so the link finds an episode published since.
 			await feeds.load([placeholderKey], "network");
 			if (request !== latestRequest) return;
 			const state = get(feeds).get(placeholderKey);
-			if (!state?.channel) {
+			episode = findEpisodeByCandidates(state?.episodes ?? [], nameCandidates);
+			if (!episode && (!state?.channel || state.error === "unavailable")) {
 				new Notice(
 					state?.error === "network"
 						? "Could not load the podcast feed"
@@ -225,7 +225,6 @@ export default async function podNotesURIHandler(
 				);
 				return;
 			}
-			episodes = state.episodes;
 		} else {
 			// The url here came straight from an untrusted obsidian://podnotes deep link
 			// (an attacker can put one behind <a href> on a web page), so a single click
@@ -236,6 +235,7 @@ export default async function podNotesURIHandler(
 				return;
 			}
 
+			let episodes: Episode[];
 			try {
 				// Fetch with the raw url (current-format links are correct as-is); only the
 				// title gets the legacy-candidate treatment. A '+' in a legacy feed URL is
@@ -249,8 +249,8 @@ export default async function podNotesURIHandler(
 				return;
 			}
 			if (request !== latestRequest) return;
+			episode = findEpisodeByCandidates(episodes, nameCandidates);
 		}
-		episode = findEpisodeByCandidates(episodes, nameCandidates);
 	}
 
 	if (!episode) {

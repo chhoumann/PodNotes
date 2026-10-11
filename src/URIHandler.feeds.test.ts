@@ -84,7 +84,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 			app: { vault: { getAbstractFileByPath: () => null } },
 			feeds,
 		} as never);
-		return { feeds, patron };
+		return { feeds, feedUrls, patron };
 	}
 	const publicFeed: PodcastFeed = { title: "Test Podcast", url: testFeedUrl, artworkUrl: "" };
 	const open = (url: string, episodeName: string) =>
@@ -134,6 +134,36 @@ describe("podNotesURIHandler with saved feeds", () => {
 		await open(privateLink, first.title);
 
 		expect(notice.mock.calls).toEqual([["Could not load the podcast feed"]]);
+		expect(get(currentEpisode)).toBeUndefined();
+	});
+
+	/** "Patron Show" loaded once with `first`, then its URL left this device. */
+	async function lostPrivateUrl() {
+		const { feeds, feedUrls, patron } = follow();
+		load.mockResolvedValue(feedDocument("Patron Show", [first]));
+		await feeds.ensureAll();
+		feedUrls.delete(patron.urlSecretId ?? "");
+		load.mockClear();
+	}
+
+	test("a private feed link plays from the last copy of the feed when its URL left this device", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		await lostPrivateUrl();
+
+		await open(privateLink, first.title);
+
+		expect(load).not.toHaveBeenCalled();
+		expect(notice).not.toHaveBeenCalled();
+		expect(get(currentEpisode)).toMatchObject({ title: first.title });
+	});
+
+	test("a private feed link to an episode the last copy lacks says the feed is not available", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		await lostPrivateUrl();
+
+		await open(privateLink, second.title);
+
+		expect(notice.mock.calls).toEqual([[PRIVATE_LINK_NOTICE]]);
 		expect(get(currentEpisode)).toBeUndefined();
 	});
 
