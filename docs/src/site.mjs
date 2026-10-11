@@ -10,6 +10,10 @@ export const { description } = manifest;
 
 export const sidebar = [
 	{ label: "Home", slug: "index" },
+	{ label: "Getting started", slug: "getting-started" },
+	{ label: "Mobile", slug: "mobile" },
+	{ label: "FAQ", slug: "faq" },
+	{ label: "Sync and devices", slug: "sync" },
 	{ label: "Commands", slug: "commands" },
 	{ label: "Podcasts", slug: "podcasts" },
 	{ label: "Local files", slug: "local_files" },
