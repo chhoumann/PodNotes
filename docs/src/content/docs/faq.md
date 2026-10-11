@@ -94,6 +94,11 @@ See [Transcripts](/transcripts/).
 ## Does playback progress sync between devices?
 
 Saved progress, subscriptions, playlists, templates, and preferences can travel with PodNotes' `data.json` when your sync service includes plugin data.
-PodNotes has no separate sync account or live playback handoff. Two devices can overwrite each other's changes.
+PodNotes merges changes from other devices before saving and updates its library when Obsidian reports a synced file change.
+If both devices change the same progress record or feed, the device saving keeps its own version of that entry.
+Periodic playback checkpoints write at most once every 10 seconds. Pausing or hiding or closing the player requests a save at once.
+Sync does not switch an episode already loaded in the player or seek to another device's position.
+Changes that arrive during a write can still be overwritten. Keep PodNotes updated on every device and let sync finish before switching.
 API key values and protected private-feed URLs remain local to each device.
-See [Sync and devices](/sync/) before switching between devices.
+If PodNotes stops saving and shows a notice, follow [Restore saving after a notice](/sync/#restore-saving-after-a-notice).
+See [Sync and devices](/sync/) for conflict and download limits.
