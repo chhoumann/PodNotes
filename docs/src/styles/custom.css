@@ -1,0 +1,137 @@
+/* PodNotes theme for Starlight, shared with the QuickAdd docs. */
+
+/* Inter, self-hosted and subset to Latin (see public/fonts/LICENSE.txt). */
+@font-face {
+	font-family: InterVariable;
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url('/fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+	font-family: InterVariable;
+	font-style: italic;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url('/fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
+:root {
+	--sl-font:
+		'InterVariable', system-ui, -apple-system, 'Segoe UI', Roboto,
+		Ubuntu, Cantarell, 'Noto Sans', sans-serif, 'Apple Color Emoji',
+		'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+	--sl-font-mono:
+		'JetBrains Mono', 'SF Mono', Monaco, Consolas, 'Liberation Mono',
+		'Courier New', monospace;
+}
+
+/* Obsidian-ish purple-blue accent (dark mode). */
+:root {
+	--sl-color-accent-low: #2a2360;
+	--sl-color-accent: #6b5cef;
+	--sl-color-accent-high: #c9c1fb;
+}
+
+/* Light mode accent - darker shade for AA contrast. */
+:root[data-theme='light'] {
+	--sl-color-accent-low: #e6e3fd;
+	--sl-color-accent: #5a4aec;
+	--sl-color-accent-high: #38288a;
+}
+
+/* ---------------------------------------------------------------------------
+ * Typography rhythm
+ * ------------------------------------------------------------------------ */
+
+/* Tighter tracking on large headings; Inter wants it at display sizes. */
+.sl-markdown-content :is(h1, h2):not(:where(.not-content *)),
+.content-panel h1 {
+	letter-spacing: -0.02em;
+}
+.sl-markdown-content :is(h3, h4):not(:where(.not-content *)) {
+	letter-spacing: -0.01em;
+}
+
+/* Generous whitespace between top-level sections keeps long reference pages
+ * scannable. */
+.sl-markdown-content h2:not(:where(.not-content *)) {
+	margin-top: 2em;
+}
+
+/* ---------------------------------------------------------------------------
+ * Inline code
+ * ------------------------------------------------------------------------ */
+
+/* Quieter chips: softer fill, hairline border, rounded. The default solid
+ * gray-5 block is loud enough to shred reading flow on token-dense pages.
+ * Scoped to inline code only, so Starlight's pre>code reset stays untouched. */
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+	background-color: color-mix(in srgb, var(--sl-color-gray-5) 55%, var(--sl-color-bg));
+	border: 1px solid color-mix(in srgb, var(--sl-color-gray-5) 80%, var(--sl-color-bg));
+	border-radius: 0.375rem;
+	padding: 0.125rem 0.3125rem;
+}
+:root[data-theme='light'] .sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+	background-color: color-mix(in srgb, var(--sl-color-gray-6) 70%, var(--sl-color-bg));
+	border-color: var(--sl-color-gray-5);
+}
+
+/* Code inside headings at full heading size reads as shouting (and giant
+ * mono chips dominated the old token pages). Scale it down and let the
+ * human-language part of the heading lead. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) code {
+	font-size: 0.8em;
+	font-weight: 500;
+	padding: 0.1em 0.4em;
+	vertical-align: baseline;
+}
+
+/* Code blocks: match the chip radius. */
+.sl-markdown-content pre:not(:where(.not-content *)) {
+	border-radius: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tables
+ * ------------------------------------------------------------------------ */
+
+/* Calmer header row + slightly muted rules so token tables read as rows of
+ * facts, not grids of boxes. */
+.sl-markdown-content th:not(:where(.not-content *)) {
+	color: var(--sl-color-gray-2);
+	font-size: var(--sl-text-sm);
+	border-bottom: 1px solid var(--sl-color-gray-4);
+}
+.sl-markdown-content td:not(:where(.not-content *)) {
+	border-bottom: 1px solid color-mix(in srgb, var(--sl-color-gray-5) 60%, var(--sl-color-bg));
+}
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+	padding-block: 0.625rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Right-hand "On this page" list
+ * ------------------------------------------------------------------------ */
+
+/* Keep long task-style entries readable: a touch smaller with room to
+ * breathe. */
+starlight-toc a {
+	line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------------------
+ * Screenshots
+ * ------------------------------------------------------------------------ */
+
+/* Captured screenshots (see src/screenshots.mjs) sit in a quiet frame and
+ * center when they are narrower than the column. Never set `display` here:
+ * the light/dark twins rely on Starlight's sl-hidden utilities. */
+.sl-markdown-content p:has(> img.screenshot) {
+	text-align: center;
+}
+.sl-markdown-content img.screenshot {
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.75rem;
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -12px rgb(0 0 0 / 0.25);
+}

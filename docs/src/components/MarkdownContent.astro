@@ -1,0 +1,8 @@
+---
+import Default from "@astrojs/starlight/components/MarkdownContent.astro";
+import { withScreenshots } from "../screenshots.mjs";
+
+const html = await withScreenshots(await Astro.slots.render("default"));
+---
+
+<Default><Fragment set:html={html} /></Default>

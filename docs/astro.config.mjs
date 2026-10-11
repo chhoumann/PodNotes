@@ -2,7 +2,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLinksValidator from "starlight-links-validator";
-import { description, sidebar, site, title } from "./src/site.mjs";
+import { description, repository, sidebar, site, title } from "./src/site.mjs";
 
 // https://astro.build/config
 export default defineConfig({
@@ -16,23 +16,37 @@ export default defineConfig({
 				{
 					icon: "github",
 					label: "GitHub",
-					href: "https://github.com/chhoumann/PodNotes",
+					href: repository,
 				},
 			],
 			editLink: {
 				baseUrl: "https://github.com/chhoumann/PodNotes/edit/master/docs/",
 			},
+			customCss: ["./src/styles/custom.css"],
 			head: [
 				{
-					tag: "meta",
+					tag: "link",
 					attrs: {
-						property: "og:image",
-						content: `${site}/resources/podcast_grid.png`,
+						rel: "preload",
+						href: "/fonts/InterVariable.woff2",
+						as: "font",
+						type: "font/woff2",
+						crossorigin: "",
 					},
 				},
+				{
+					tag: "meta",
+					attrs: { property: "og:image", content: `${site}/screenshots/og.png` },
+				},
+				{ tag: "meta", attrs: { property: "og:image:width", content: "1200" } },
+				{ tag: "meta", attrs: { property: "og:image:height", content: "630" } },
+				{ tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
 			],
 			sidebar,
-			components: { PageTitle: "./src/components/PageTitle.astro" },
+			components: {
+				MarkdownContent: "./src/components/MarkdownContent.astro",
+				PageTitle: "./src/components/PageTitle.astro",
+			},
 		}),
 	],
 });
