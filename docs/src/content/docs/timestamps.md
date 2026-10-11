@@ -1,51 +1,108 @@
 ---
 title: Timestamps
 slug: timestamps
+description: Timestamp and segment tags, supported time formats, capture behavior, and PodNotes URI parameters.
 ---
 
-Timestamps can be created with the `Capture Timestamp` Obsidian command.
-
-This will make PodNotes capture the current playback time to the active note, in the format given in the plugin settings.
-PodNotes can also capture recent playback segments with the `Capture Last 10 Seconds` and `Capture Last 20 Seconds` commands.
-
-With the default `{{linktime}}` format, each captured timestamp becomes a clickable link that reopens the episode at that exact moment. If the feed later rearranges the episode title (for example moving a guest name), the link still resolves as long as the new title keeps the same distinctive words:
+**PodNotes: Capture Timestamp** inserts the current episode's playback time into an active Markdown editor.
+New installs use `- {{linktime}} `, including a final space, so captures are clickable links.
+Existing saved formats remain unchanged.
 
 ![Notes with clickable timestamp links](/resources/timestamps.png)
 
-If you used PodNotes before this default, it keeps your saved format. Set `Capture timestamp format` to `- {{linktime}}` followed by a space to get clickable links.
-
 ## Settings
-For timestamps, you can use the following format strings:
 
-- `{{time}}`: The current playback time. Default format is `HH:mm:ss`.
-- `{{linktime}}`: The current playback time, formatted as a link to the current episode. Default format is `HH:mm:ss`.
-- `{{segment}}`: A start-end range for a captured segment. Default format is `HH:mm:ss`.
-- `{{linksegment}}`: A start-end range, formatted as a link that opens the current episode at the segment start and pauses at the segment end. Default format is `HH:mm:ss`.
+**Capture timestamp format** is the template used by timestamp and segment capture.
+**Timestamp offset (s)** subtracts a non-negative whole number of seconds from the playback time, with a minimum result of zero.
+Its default is `0`. Blank or invalid setting input becomes `0`.
+The offset also shifts the end of a recent segment capture.
 
-These allow for custom formatting.
-By using `{{time:format}}`, `{{linktime:format}}`, `{{segment:format}}`, or `{{linksegment:format}}`, you can specify a custom [Moment.js](https://momentjs.com) format.
+The timestamp template supports four tags:
 
-For example, you might use `{{time:H\h mm\m ss\s}}` to get the time in the format `0h 20m 37s`.
+| Tag | Value |
+| --- | --- |
+| `{{time}}` | Playback time as plain text. |
+| `{{linktime}}` | Playback time as a Markdown episode link. |
+| `{{segment}}` | Captured start and end times as plain text. |
+| `{{linksegment}}` | Captured start and end times as a Markdown episode link. |
+
+Each tag defaults to `HH:mm:ss` and accepts a custom format after a colon, such as `{{linktime:m:ss}}`.
+During an ordinary timestamp capture, the segment tags produce a single time rather than a range.
+A missing link target produces plain text instead of a link.
+
+### Time formats
+
+Time tags use the following tokens, rather than the full Moment.js format language:
+
+| Part | Tokens | Meaning |
+| --- | --- | --- |
+| Hours | `H`, `HH` | Total elapsed hours, unpadded or padded to at least two digits. |
+| Twelve-hour clock | `h`, `hh` | Hour on a twelve-hour clock, unpadded or padded. |
+| Minutes | `m`, `mm` | Minute within the hour, unpadded or padded. |
+| Seconds | `s`, `ss` | Second within the minute, unpadded or padded. |
+| AM or PM | `A`, `a` | Uppercase or lowercase clock label. |
+
+A backslash escapes a literal character. `{{time:H\h mm\m ss\s}}` can render `0h 20m 37s`.
+Square-bracket literal escaping is not supported for time tags.
+[Date tags](/templates/#date-formats) use a separate formatter.
 
 ## Capturing timestamps
-You can use the `Capture Timestamp` command by using the `PodNotes: Capture Timestamp` command in the command palette.
 
-The timestamp is inserted at your cursor. When the cursor is inside a markdown table cell, the captured text stays on that row: any pipes are escaped and newlines are collapsed to spaces so the table is not broken.
+Capture needs a loaded episode, a non-empty **Capture timestamp format**, and an active editor.
+The episode can be paused. A missing episode or format produces this notice:
 
-**On desktop**, it is possible to bind this command to a hotkey, which makes it faster to use while writing.
-You can bind hotkeys in the `Hotkeys` tab of the Obsidian settings.
+> Play an episode and set a Capture timestamp format in settings to capture a timestamp.
 
-**On mobile**, you can bind the `Capture Timestamp` command to a button in the editor toolbar.
-That is the toolbar which appears when you are editing text on mobile devices.
+The command inserts at the cursor and replaces selected text.
+In a Markdown table, pipes are escaped and newlines become spaces so the capture stays inside the cell.
 
-You can set this up by going to the `Mobile` tab of the Obsidian settings.
-When there, you can add the `PodNotes: Capture Timestamp` command to the editor toolbar. If it hasn't already been added as an option, it is either under `More toolbar options`, or you can add it manully by entering `PodNotes: Capture Timestamp` in the `Add global command` field.
+Obsidian's **Hotkeys** settings can assign a shortcut to **PodNotes: Capture Timestamp**.
+The mobile editor toolbar can include the same command. See [Add a capture button](/mobile/#add-a-capture-button-to-the-editor-toolbar).
 
-You can change the order of the buttons in the editor toolbar by dragging them up and down. The further up they are, the more to the left they will be.
+The headset Media Session `previoustrack` action also captures a timestamp.
+It uses the active editor, or appends to the episode note when no editor is active.
+See [Headset capture](/mobile/#capture-with-a-headset) for its requirements and device limits.
 
 ## Capturing segments
-You can use the `PodNotes: Capture Last 10 Seconds` and `PodNotes: Capture Last 20 Seconds` commands to insert a link for the recent playback range ending at the current playback time.
 
-Segment capture uses the same timestamp template setting. If your template uses `{{time}}` or `{{linktime}}`, PodNotes automatically uses the segment equivalent for these commands, so the default `- {{linktime}}` template inserts a linked range such as `00:01:55-00:02:05`.
+**PodNotes: Capture Last 10 Seconds** and **PodNotes: Capture Last 20 Seconds** insert a recent playback range.
+The range ends at the current playback time minus **Timestamp offset (s)**.
+Its start is 10 or 20 seconds earlier, with both ends bounded at zero.
+A zero-length range produces the notice "Play more of the episode before capturing a segment".
 
-Clicking a segment link reopens the episode, seeks to the segment start, starts playback, and pauses when the segment end is reached. Segment links do not extract or save separate audio clips, so they work without ffmpeg or other external dependencies.
+Segment commands use **Capture timestamp format**.
+A template containing `{{segment}}` or `{{linksegment}}` is used as a range template.
+Otherwise, `{{time}}` becomes `{{segment}}` and `{{linktime}}` becomes `{{linksegment}}`.
+A template without either kind of tag falls back to `- {{linksegment}}`.
+The default template therefore produces a linked range such as `00:01:55-00:02:05`.
+
+Opening a segment link seeks to its start, plays the episode, and pauses at its end.
+Segment capture does not extract an audio clip or create a separate media file.
+
+## PodNotes URI
+
+Timestamp and resume links use the `obsidian://podnotes` handler.
+The handler accepts these query parameters:
+
+| Parameter | Required | Meaning |
+| --- | --- | --- |
+| `url` | Yes | Podcast feed URL, vault media path, or protected private-feed placeholder. |
+| `episodeName` | Yes | Episode title. |
+| `time` | No | Start time parsed as a non-negative finite number of seconds. |
+| `endTime` | No | Segment end parsed as a finite number of seconds greater than `time`. Requires a start time. |
+| `end` | No | Accepted alias of `endTime`. |
+| `to` | No | Accepted alias of `endTime`, after `end` in precedence. |
+
+An omitted or empty `time` resumes from saved progress.
+An unplayed or finished episode starts at zero.
+`endTime` takes precedence over `end`, which takes precedence over `to`.
+
+Query values are percent-encoded. Current links encode spaces as `%20` and literal plus signs as `%2B`.
+Older links using `+` for spaces are also tried during title and local-path lookup.
+
+Feed targets must use a public HTTP or HTTPS URL. A protected private-feed placeholder resolves only through a saved subscription and its device-local secret.
+Local targets need a registered episode and a media file. See [Sync and devices](/sync/#removal-and-existing-links).
+
+Episode lookup first tries the title, ignoring case and surrounding whitespace.
+Its fallback requires a unique match with the same normalized word set, ignoring punctuation, word order, and leading zeros in numeric words.
+Different words or episode numbers can prevent a match. Timestamp links do not guarantee recovery after every feed title change.

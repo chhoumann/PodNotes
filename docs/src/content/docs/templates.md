@@ -1,70 +1,124 @@
 ---
 title: Templates
 slug: templates
+description: Template tags, formats, defaults, and escaping rules for episode notes, feed notes, downloads, and transcripts.
 ---
 
-PodNotes can create notes from templates. These templates can contain certain syntax, which will be expanded to metadata about the podcast episode you are listening to.
+PodNotes expands `{{tag}}` placeholders into episode or feed metadata.
+**Note creation file path** and **Note creation template** control episode notes.
+**Feed note file path** and **Feed note template** control feed notes.
+These settings are under **Episode notes** and **Feed notes** in PodNotes settings.
 
-To use templates, you can use the `Create episode note` Obsidian command (previously named `Create podcast note`).
-This requires you to have defined a template for both the file path and note text.
-
-PodNotes ships a sensible default for both, so the command works out of the box on a fresh install. The default note template uses structured frontmatter properties that [Obsidian Bases](https://help.obsidian.md/bases) can sort, filter, and group on (see [Using the default template with Bases](#using-the-default-template-with-bases) below). You can customize either template under PodNotes settings at any time, and your customizations are always preserved across updates.
-
-PodNotes can also create a note for a whole podcast (the feed). See [Podcast feed notes](#podcast-feed-notes) below.
+Tag names are case-insensitive. `{{currentDate}}` and `{{currentdate}}` are equivalent.
+An unknown tag remains unchanged and produces a notice, with a suggested tag when one is found.
+An empty argument, such as `{{date:}}`, uses the tag's default.
+Everything after the first colon is one argument, including commas.
 
 ## File path
-This template will be used to create the file path for the note. You can use the following syntax:
 
-- `{{title}}`: The title of the podcast episode. You can add a format, e.g. `{{title:_}}` to replace spaces with underscores.
-- `{{podcast}}`: The name of the podcast. You can add a format, e.g. `{{podcast:_}}` to replace spaces with underscores.
-- `{{date}}`: The publish date of the podcast episode. Please note that this is not always available, and will be empty if it is not.
-	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
-- `{{currentDate}}`: The current date (when the note is created), as opposed to `{{date}}` (the episode publish date). Supports the same format argument, e.g. `{{currentDate:YYYY-MM-DD}}`.
-- `{{episodeNumber}}`: The episode number (see the [note template](#note-template) section for how it is sourced). Use an all-zeros width to zero-pad for sortable file names, e.g. `{{episodeNumber:000}}` → `042`. Empty when the number is unknown.
+Episode note paths, **Transcript file path**, and **Episode download path** support the following tags:
 
-`{{title}}` and `{{podcast}}` are sanitized so they are safe to use in a file path: the following characters are removed: `\ , # % & / { } * < > $ ' " : @ ‣ | ?`. `{{episodeNumber}}` is always file-safe. `{{date}}` and `{{currentDate}}` are inserted as-is, so when using them in a path, avoid format strings that contain path-illegal characters (e.g. `{{currentDate:HH:mm}}`).
+| Tag | Value | Optional argument |
+| --- | --- | --- |
+| `{{title}}` | Episode title, sanitized for a file name. | Replaces whitespace, as in `{{title:_}}`. |
+| `{{podcast}}` | Podcast name, sanitized for a file name. | Replaces whitespace, as in `{{podcast:_}}`. |
+| `{{date}}` | Episode publication date, or empty when unavailable. | [Date format](#date-formats), default `YYYY-MM-DD`. |
+| `{{currentDate}}` | Date when the template is expanded. | [Date format](#date-formats), default `YYYY-MM-DD`. |
+| `{{episodeNumber}}` | Feed episode number, or a number inferred from the title. | All-zero width, as in `{{episodeNumber:000}}` for `042`. |
 
-New notes are always created at the current sanitized path. When opening an existing note, PodNotes also checks the older filename sanitizer (used through 2.16, which stripped dots) and, if needed, a unique same-folder title match. Notes created before that sanitizer change, or after a feed retitles an episode, stay linked to the player.
+The default episode note path is `PodNotes/{{podcast}}/{{title}}.md`.
+PodNotes adds `.md` if needed. Each folder and file name is capped at 255 units.
+The limit uses UTF-16 code units on Windows, macOS, and iOS, and UTF-8 bytes on Linux and Android.
+Long names are truncated, preserving the file extension. The complete path has no separate length cap.
+The default download path is `PodNotes/{{podcast}}/{{title}}`.
+Downloads add the detected media extension automatically and remove a trailing extension from the template.
+A download path needs to distinguish episodes. `{{title}}` supplies that distinction in the default.
+An existing file belonging to another episode causes a download error rather than an overwrite.
+
+The `title` and `podcast` path tags remove these characters:
+
+```text
+\ , # % & / { } * < > $ ' " : @ ‣ | ? [ ]
+```
+
+They replace control characters with spaces, collapse whitespace, trim surrounding whitespace, and remove leading and trailing dots.
+Dots inside a name remain. Date values are not sanitized for paths, so a format containing `:` can produce an invalid file name.
+`{{duration}}` is not registered in path templates, including download paths.
+
+Existing episode note lookup checks the current path, the older sanitizer that removed dots, and a unique title match in the expected folder.
+That fallback does not guarantee a match after a title change, a note move, or a path-template change.
 
 ## Note template
-This template will be used to create the note text. You can use the following syntax:
 
-- `{{title}}`: The title of the podcast episode.
-- `{{safeTitle}}`: The title of the podcast episode, but with all special characters removed (like `{{title}}` in file path templates).
-- `{{description}}`: The description of the podcast episode.
-	-  You can use `{{description:> }}` to prepend each new line with a `>` (to put the entire description in a blockquote).
-- `{{content}}`: The content of the podcast episode from `<content:encoded>`. Show notes will sometimes land here.
-	-  You can use `{{content:> }}` to prepend each new line with a `>` (to put the entire content in a blockquote).
-- `{{podcast}}`: The name of the podcast.
-- `{{url}}`: The URL of the podcast episode. For a local-file episode this is a link to the file rather than a web URL. Tag values are inserted verbatim, so when you place one in a quoted YAML property (e.g. `url: "{{url}}"`) it stays valid for well-formed feed URLs and ordinary file names (a URL or file name containing a literal `"` would need escaping).
-- `{{stream}}`: The direct URL of the episode's media file - the RSS `<enclosure>` URL for podcast feeds, or the underlying media source for Pocket Casts and local-file episodes. Handy for embedding the raw audio/video or linking to the source. An empty string is used in the rare case no media URL is available. Available in episode note templates only.
-- `{{date}}`: The publish date of the podcast episode.
-	- You can use `{{date:format}}` to specify a custom [Moment.js](https://momentjs.com) format. E.g. `{{date:YYYY-MM-DD}}`.
-- `{{currentDate}}`: The current date - i.e. when the note is created - as opposed to `{{date}}`, which is the episode's publish date. Useful for a "captured on" metadata field.
-	- Supports the same format argument, e.g. `{{currentDate:YYYY-MM-DD}}`.
-- `{{episodeNumber}}`: The episode number. PodNotes uses the feed's `<itunes:episode>` tag when present. If it is missing or not a number, PodNotes makes a **best-effort** guess from the start of the episode title - a leading marker (`#12 ...`, `Ep 12 ...`, `Ep. 12 ...`, `Ep #12 ...`, `Episode 12 ...`, `E12 ...`) or a leading number followed by a separator (`12: ...`, `12 - ...`, `12. ...`, `12) ...`). This guess can be wrong for titles that simply begin with an unrelated number (e.g. `2024: A Year in Review`), so for feeds without `<itunes:episode>` treat it as approximate. The tag is empty when no number can be determined.
-	- You can zero-pad with an all-zeros width, e.g. `{{episodeNumber:000}}` → `042` (handy for sortable file names). Any other argument is ignored and the bare number is returned.
-- `{{duration}}`: The episode's duration, from the feed's `<itunes:duration>` tag. Empty when the feed doesn't provide one. Not available in file-path/download-path templates - even though `{{duration:seconds}}`/`{{duration:minutes}}` would be file-safe, the tag is excluded from path templates entirely so the default colon-containing clock output can't accidentally end up in a file name. Note: an episode that was already the *current* episode before you upgraded PodNotes may show an empty duration until you re-open it from its feed (older saved episodes predate this field).
-	- With no argument it renders a human clock: `4:05` (under an hour) or `1:02:03` (an hour or more).
-	- `{{duration:minutes}}` → total whole minutes (e.g. `62`); `{{duration:seconds}}` → total seconds (e.g. `3723`).
-	- Any other argument is treated as a clock format using the tokens `H`/`HH`, `h`/`hh`, `m`/`mm`, `s`/`ss`, `A`/`a` - e.g. `{{duration:HH:mm:ss}}` → `01:02:03`. (Unlike `{{date}}`, `[literal]` bracket escaping is not supported here.)
-- `{{chapters}}`: A Markdown list of the episode's chapters, using Podcasting 2.0 `<podcast:chapters>` data when the feed provides an HTTP(S) chapters URL. Each line renders as `- 0:00 Chapter title`, sorted by start time. Hidden chapters (`toc: false`) are skipped, and chapter titles are inserted as escaped plain text. Empty when the episode has no chapters URL, the chapters request fails, or the chapters file contains no visible chapters.
-	- You can use `{{chapters:> }}` to prepend each rendered chapter line with `>` (to put the chapter list in a blockquote).
-- `{{artwork}}`: The URL of the podcast artwork. If no artwork is found, an empty string will be used.
-- `{{episodelink}}`: A clickable `obsidian://podnotes` link that reopens this episode in the PodNotes player and **resumes from where you left off** (or starts at the beginning if you have never played it, or have already finished it). The resume position is resolved when you click the link - not baked in when the note is created - so the link always jumps to your latest position. Put it in your template to get a "back to the episode" link on every note, e.g. `[▶️ Resume in PodNotes]({{episodelink}})`. The value is the bare URL, so wrap it in your own Markdown link text. It is empty when the episode has no feed URL or local file path to address it by. See [issue #35](https://github.com/chhoumann/PodNotes/issues/35).
+Episode note templates support the following tags:
+
+| Tag | Value |
+| --- | --- |
+| `{{title}}` | Episode title as escaped Markdown text on one line. |
+| `{{safeTitle}}` | Episode title sanitized as a file name. |
+| `{{podcast}}` | Podcast name sanitized as a file name. |
+| `{{description}}` | Episode description converted from HTML to Markdown. |
+| `{{content}}` | Episode content from `<content:encoded>`, converted to Markdown. |
+| `{{url}}` | Episode URL, or the vault link for a local file. |
+| `{{stream}}` | Public HTTP or HTTPS media URL without embedded credentials. Empty for a local resource URL or a refused target. |
+| `{{date}}` | Episode publication date, or empty when unavailable. |
+| `{{currentDate}}` | Date when the note template is expanded. |
+| `{{episodeNumber}}` | Episode number, or empty when unknown. |
+| `{{duration}}` | Episode duration from `<itunes:duration>`, or empty when unavailable. |
+| `{{chapters}}` | Markdown chapter list, or empty when no visible chapters are available. |
+| `{{artwork}}` | Episode artwork URL, or empty when unavailable or refused. |
+| `{{episodelink}}` | Bare `obsidian://podnotes` URL that resumes this episode. Empty without a feed URL or local file path. |
+
+`{{date}}` and `{{currentDate}}` accept [date formats](#date-formats).
+`{{episodeNumber:000}}` pads to three digits. Any argument other than an all-zero width returns the unpadded number.
+
+Episode numbers come from `<itunes:episode>` when valid. Otherwise PodNotes tries a leading title marker such as `#12`, `Ep. 12`, or `Episode 12`.
+A leading number followed by a separator, such as `12: Interview`, can also match.
+This inference can mistake a year such as `2024: A year in review` for an episode number.
+
+Description, content, and chapter tags accept a line prefix, as in `{{description:> }}`.
+Descriptions and content keep ordinary Markdown formatting and links.
+Media elements are removed, Markdown embeds are escaped, and executable Dataview fences become plain text fences.
+Image alt text remains.
+
+Feed-controlled URLs percent-encode whitespace, control characters, quotes, backticks, brackets, parentheses, angle brackets, and backslashes.
+A genuine local-file `{{url}}` remains a vault link without that encoding.
+Artwork and stream tags accept public HTTP or HTTPS targets without embedded credentials.
+Device-local resource URLs and literal private-network targets produce an empty value.
+
+### Duration and chapters
+
+With no argument, `{{duration}}` renders `4:05` below an hour or `1:02:03` at or above an hour.
+`{{duration:minutes}}` returns total whole minutes. `{{duration:seconds}}` returns total seconds.
+Other arguments use the [time tokens](/timestamps/#time-formats), such as `{{duration:HH:mm:ss}}`.
+
+A restored episode from an older version can lack duration until it is opened from its feed again.
+
+`{{chapters}}` uses the feed's Podcasting 2.0 `<podcast:chapters>` URL.
+Each visible chapter renders as `- 0:00 Chapter title`, sorted by start time, with the title escaped as plain text.
+Hidden chapters with `toc: false` are omitted. A failed request or empty chapter file produces an empty value.
 
 ### Linking an episode to its podcast (feed) note
-In an episode note, `{{url}}` and `{{artwork}}` always describe the **episode**. To reference the parent podcast (feed), use these additional tags:
 
-- `{{episodeurl}}` / `{{episodeartwork}}`: Explicit aliases of `{{url}}` / `{{artwork}}` (the episode's own URL and artwork). Use these when you also use the feed tags below and want to be unambiguous.
-- `{{feedurl}}`: The podcast's RSS feed URL.
-- `{{feedartwork}}`: The podcast's (feed) artwork. Falls back to the episode artwork if the feed isn't saved.
-- `{{podcastlink}}`: A ready-made wikilink to the podcast's [feed note](#podcast-feed-notes). It points at the same file the feed note is created at, so episodes and the feed note link up automatically. When the feed-note path has a folder it is path-qualified (e.g. `[[PodNotes/Podcasts/My Show|My Show]]`) so it can't resolve to an unrelated note that shares the basename; otherwise it's a plain `[[My Show]]`. (Avoid putting a `{{date}}` in the feed-note path, since the episode side can't reproduce the feed note's creation date.)
+The following episode note tags refer to the episode or its parent feed explicitly:
+
+| Tag | Value |
+| --- | --- |
+| `{{episodeurl}}` | Alias of `{{url}}`. |
+| `{{episodeartwork}}` | Alias of `{{artwork}}`. |
+| `{{feedurl}}` | Feed URL, or a placeholder for a protected private feed. Empty when no feed URL is stored. |
+| `{{feedartwork}}` | Saved feed artwork, with episode artwork as the fallback when absent. |
+| `{{podcastlink}}` | Wikilink derived from **Feed note file path**. |
+
+With the default feed path, `{{podcastlink}}` produces `[[PodNotes/Podcasts/My Show|My Show]]`.
+A path without a folder produces `[[My Show]]`. The link uses the same name-length limits as the feed note.
+A date in the feed path can make this link depend on the expansion date rather than the date the feed note was created.
 
 ### Using the default template with Bases
-PodNotes ships this default episode note template, which links each episode back to its feed note and exposes structured frontmatter properties for [Obsidian Bases](https://help.obsidian.md/bases):
 
-```
+The default episode note has properties that [Obsidian Bases](https://help.obsidian.md/bases) can filter, sort, and group:
+
+```markdown
 ---
 type: podcastEpisode
 podcast: "{{podcastlink}}"
@@ -86,15 +140,12 @@ favorite: false
 {{description}}
 ```
 
-The frontmatter is built so it stays **valid YAML** for every episode, because only values that can never contain a YAML-hostile character go into it:
+The title and URLs remain in the body. An escaped title can contain backslashes, and a vault link can contain quotes.
+Either can break a quoted YAML value.
+The quoted podcast link assumes an ordinary feed-note path without literal quotes or backslashes.
+`status`, `rating`, and `favorite` are user-editable properties.
 
-- The full episode title goes in the body as the `# {{title}}` heading, where YAML rules don't apply (a raw title can contain `"` or `:`, which would break a frontmatter scalar).
-- `{{podcastlink}}` is quoted so its leading `[[` isn't read as a YAML flow sequence, and the linked name is sanitized. (If you customize *Feed note file path* to a folder containing a literal `"` or `\`, that character flows into the link verbatim - keep the feed-note path to ordinary path characters.)
-- `{{url}}` and `{{artwork}}` are kept in the **body** (a bare link and a Markdown image), not in the frontmatter. Tag values are inserted verbatim, and for a local-file episode `{{url}}` is a vault link whose name can contain a `"`; keeping it out of a quoted scalar means an awkward URL or file name can never break the note's properties. If your episodes all come from feeds (so `{{url}}` is always a well-formed web URL), you can add `url: "{{url}}"` back to the frontmatter.
-- `date:` is a bare `YYYY-MM-DD` (or empty/null when the feed has no publish date).
-- `status`, `rating`, and `favorite` are left for you to fill in - they give Bases columns to sort and filter on (e.g. mark an episode `favorite: true`, or set `status` to `to-listen`/`listening`/`listened`).
-
-A starter Bases view (save as e.g. `Podcast Episodes.base`) that lists every episode note, grouped by listening status, with a column for each property:
+A `.base` file with this configuration lists episode notes by listening status:
 
 ```yaml
 filters:
@@ -115,28 +166,65 @@ views:
       direction: ASC
 ```
 
-Open the base in Obsidian to sort, filter, or add views from the view options. Because `note.podcast` resolves to the linked [feed note](#podcast-feed-notes), you can also group by show or pivot from a feed note to all of its episodes.
-
 ![Bases view of episode notes, grouped by listening status](/resources/bases_view.png)
 
 ## Podcast feed notes
-A *feed note* is a single parent note for an entire podcast (the feed), which episode notes can link to (great for [Obsidian Bases](https://help.obsidian.md/bases) / Dataview rollups).
 
-Create one with the `Create podcast feed note` command (pick a saved podcast - no playback needed) or from an episode's right-click menu. Configure the feed note **file path** and **template** under PodNotes settings → *Podcast feed note settings*. PodNotes ships sensible Bases-friendly defaults.
+A feed note represents a whole podcast.
+**PodNotes: Create podcast feed note** opens a picker of saved podcasts without requiring playback.
+The episode context menu also has **Create feed note** or **Open feed note**.
+
+The default path is `PodNotes/Podcasts/{{podcast}}.md`.
+Feed paths support `{{title}}`, `{{podcast}}`, and `{{date}}`.
+Both name tags are sanitized and accept a whitespace replacement argument.
+Here, `{{date}}` is the current date, with a default format of `YYYY-MM-DD`.
+
+Feed note content supports these tags:
+
+| Tag | Value |
+| --- | --- |
+| `{{title}}` | Feed title as escaped Markdown text on one line. |
+| `{{safeTitle}}` | Feed title sanitized as a file name. |
+| `{{podcast}}` | Feed title sanitized as a file name. |
+| `{{url}}` | Feed website from `<link>`, or empty when absent. |
+| `{{feedurl}}` | Feed RSS URL, or a protected private-feed placeholder. |
+| `{{artwork}}` | Feed artwork URL. Empty when absent or refused. |
+| `{{feedartwork}}` | Alias of `{{artwork}}`. |
+| `{{author}}` | Feed author from `<itunes:author>` as escaped Markdown text. |
+| `{{description}}` | Feed description converted to Markdown. Accepts a line prefix. |
+| `{{date}}` | Current date. Accepts a [date format](#date-formats). |
+
+`{{currentDate}}` is not registered for feed notes or feed paths.
+The title, author, description, URL, and artwork rules match their episode-note counterparts.
 
 ![A podcast feed note](/resources/feed_note.png)
 
-In a feed note, `{{url}}` and `{{artwork}}` describe the **feed** (the note's subject). Available tags:
+## Transcript and timestamp templates
 
-- `{{title}}`: The podcast's name.
-- `{{podcast}}` / `{{safeTitle}}`: The podcast's name, formatted safely for file paths/links (special characters removed).
-- `{{url}}`: The podcast's website (from the feed's `<link>`). May be empty if the feed has no website.
-- `{{feedurl}}`: The podcast's RSS feed URL.
-- `{{artwork}}` / `{{feedartwork}}`: The URL of the podcast artwork.
-- `{{author}}`: The podcast author (`<itunes:author>`), if present.
-- `{{description}}`: The podcast's description. Supports the `{{description:> }}` prepend syntax, like episode notes.
-- `{{date}}`: The current date (when the note is created). Supports `{{date:format}}`. (In feed notes, `{{date}}` already returns the current date, so `{{currentDate}}` is not registered here - use `{{date}}`.)
+Transcript note content supports `{{title}}`, `{{podcast}}`, `{{date}}`, `{{currentDate}}`, `{{episodeNumber}}`, `{{duration}}`, `{{transcript}}`, `{{description}}`, `{{url}}`, and `{{artwork}}`.
+Its title and podcast tags use the file-name sanitizer and accept a whitespace replacement argument.
+The other shared tags use the formats and URL rules described above. `{{transcript}}` contains the generated transcript text.
+Episode-only tags such as `{{stream}}`, `{{chapters}}`, and `{{episodelink}}` are not registered in transcript content.
 
-The file path template supports `{{title}}`/`{{podcast}}` (with the optional `{{podcast:_}}` whitespace-replacement format) and `{{date}}`.
+**Speaker label format** supports `{{speaker}}` for each diarized turn.
+The [transcript guide](/transcripts/) covers provider setup.
+The [timestamp reference](/timestamps/) lists the four timestamp tags.
 
-The default feed note path is `PodNotes/Podcasts/{{podcast}}.md`, so an episode's `{{podcastlink}}` (`[[Podcast Name]]`) resolves to it automatically.
+## Date formats
+
+Date tags use this subset of Moment-style tokens:
+
+| Part | Tokens |
+| --- | --- |
+| Year | `YYYY`, `YY` |
+| Month | `MMMM`, `MMM`, `MM`, `Mo`, `M` |
+| Day of month | `Do`, `DD`, `D` |
+| Weekday | `dddd`, `ddd` |
+| Hour | `HH`, `H`, `hh`, `h` |
+| Minute | `mm`, `m` |
+| Second | `ss`, `s` |
+| AM or PM | `A`, `a` |
+
+Names and ordinals use English. Dates use the device's local time zone.
+Square brackets preserve literal text, as in `{{currentDate:[Captured] YYYY-MM-DD}}`.
+Other Moment tokens are not supported.
