@@ -1,23 +1,19 @@
 // The repo's e2e command. `test` runs tests/e2e against this worktree's isolated
 // Obsidian instance, `screenshot` and `record` capture the PodNotes player,
 // `capture` is upstream `obsidian-e2e capture` against the instance, and
-// provision, start, stop and run go to the obsidian-e2e instance runner (0.12).
-// On macOS the runner verbs behave exactly like the upstream bin.
+// provision, start, stop and run go to the obsidian-e2e instance runner.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-	assertObsidianMeetsMinAppVersion,
 	ensureObsidianInstance,
-	ensureSecureDir,
 	execObsidian,
+	launchObsidianInstance,
 	loadRunnerConfig,
 	obsidianCommandArgs,
-	readInstanceMarker,
 	resolveInstanceOptions,
 	resolveProvisionOptions,
 	runObsidianE2ECli,
@@ -25,122 +21,8 @@ import {
 
 /** @typedef {import("obsidian-e2e/runner").CliDependencies} CliDependencies */
 /** @typedef {import("obsidian-e2e/runner").InstanceOptions} InstanceOptions */
-/** @typedef {import("obsidian-e2e/runner").LaunchTarget} LaunchTarget */
 
 const linux = process.platform === "linux";
-
-// The runner only launches Obsidian on macOS. This block is the Linux support;
-// delete each piece once upstream ships the change in its row:
-//
-//   launchLinux                     launchObsidianInstance grows a Linux branch
-//                                   (xvfb-run without DISPLAY, --no-sandbox)
-//   delete XDG_RUNTIME_DIR,         the runner's obsidianEnv and --print-env
-//   startPrintEnv                   isolate the Linux CLI socket
-//   versionSources,                 Linux version sources upstream, or an exported
-//   guardWarmInstance               guardWarmInstance
-//   cdpEnv                          launch with --remote-debugging-port=0 and print
-//                                   OBSIDIAN_E2E_CDP_PORT from start --print-env
-//   record --fps 30 (in capture)    upstream fixes the x11 record start estimate
-//
-// `test` (zero-test guard, leak-free teardown) and the PodNotes capture presets
-// stay until upstream grows equivalents.
-
-// Linux Obsidian and its CLI client put the socket in $XDG_RUNTIME_DIR when it
-// is set, so every instance would share one socket. Without it both fall back
-// to $HOME, which the runner already makes private per instance.
-if (linux) delete process.env.XDG_RUNTIME_DIR;
-
-/** @param {string} obsidianApp */
-function linuxExecutable(obsidianApp) {
-	return path.isAbsolute(obsidianApp) ? obsidianApp : "/opt/Obsidian/obsidian";
-}
-
-/** @param {string} obsidianApp */
-function versionSources(obsidianApp) {
-	return {
-		bundledAsarCandidates: [
-			path.join(path.dirname(linuxExecutable(obsidianApp)), "resources", "obsidian.asar"),
-		],
-		obsidianConfigDir: path.join(os.userInfo().homedir, ".config", "obsidian"),
-	};
-}
-
-/** @param {LaunchTarget} target */
-async function launchLinux(target) {
-	await ensureSecureDir(target.profileRoot);
-	await ensureSecureDir(target.instancePath);
-	/** @type {NodeJS.ProcessEnv} */
-	const env = {
-		...process.env,
-		HOME: target.obsidianHome,
-		// A clicked obsidian:// link relaunches Obsidian through xdg-open without
-		// --user-data-dir. With this default profile it finds this instance's
-		// single-instance lock and hands the URL over instead of starting a second app.
-		XDG_CONFIG_HOME: path.dirname(target.userDataPath),
-		XDG_SESSION_TYPE: "x11",
-		// Marks the display as private, so `capture record` picks x11grab.
-		OBSIDIAN_E2E_CAPTURE_XVFB: "1",
-	};
-	delete env.WAYLAND_DISPLAY;
-	delete env.WAYLAND_SOCKET;
-	const log = fs.openSync(path.join(target.obsidianHome, "Library", "Logs", "obsidian.log"), "a");
-	try {
-		const child = spawn(
-			"xvfb-run",
-			[
-				"-a",
-				"-s",
-				"-screen 0 3840x3200x24",
-				linuxExecutable(target.obsidianApp),
-				"--no-sandbox",
-				"--remote-debugging-port=0",
-				`--user-data-dir=${target.userDataPath}`,
-				"--password-store=basic",
-			],
-			{ detached: true, stdio: ["ignore", log, log], env },
-		);
-		await once(child, "spawn");
-		child.unref();
-	} finally {
-		fs.closeSync(log);
-	}
-}
-
-/** @type {NonNullable<CliDependencies["guardWarmInstance"]>} */
-async function guardWarmInstance(options, deps = {}) {
-	if (options.skipVersionGuard) return;
-	const marker = await readInstanceMarker(options.instancePath);
-	const { appVersion } = await assertObsidianMeetsMinAppVersion({
-		worktreePath: options.worktreePath,
-		...versionSources(options.obsidianApp),
-	});
-	if (marker?.appVersion && marker.appVersion !== appVersion) {
-		throw new Error(
-			`Refusing to reuse the warm Obsidian instance for ${options.vaultName}: it was launched against app version ${marker.appVersion}, but the resolved app version is now ${appVersion}. Stop it and let the next run relaunch it: npm run stop:e2e-obsidian`,
-		);
-	}
-	if (!marker?.appVersion) {
-		deps.log?.(
-			"Reusing a warm Obsidian instance with no recorded app version; a mid-session Obsidian update cannot be detected until it is relaunched.",
-		);
-	}
-}
-
-/**
- * @param {(target: LaunchTarget) => Promise<void>} launch
- * @returns {CliDependencies}
- */
-function linuxDeps(launch) {
-	return {
-		ensureObsidianInstance: (options, config, deps) =>
-			ensureObsidianInstance(options, config, {
-				...deps,
-				...versionSources(options.obsidianApp),
-				launchObsidianInstance: launch,
-			}),
-		guardWarmInstance,
-	};
-}
 
 /** @param {InstanceOptions} instance */
 async function cdpEnv(instance) {
@@ -155,23 +37,6 @@ async function cdpEnv(instance) {
 		);
 	}
 }
-
-/** @param {string[]} argv */
-async function startPrintEnv(argv) {
-	let printed = "";
-	const code = await runObsidianE2ECli(argv, {
-		...runnerDeps,
-		stdout: (text) => {
-			printed += text;
-			process.stdout.write(text);
-		},
-	});
-	const home = /^export OBSIDIAN_E2E_OBSIDIAN_HOME=(.+)$/m.exec(printed)?.[1];
-	if (code === 0 && home) process.stdout.write(`export XDG_RUNTIME_DIR=${home}\n`);
-	return code;
-}
-
-const runnerDeps = linux ? linuxDeps(launchLinux) : {};
 
 const VITEST = fileURLToPath(new URL("../node_modules/.bin/vitest", import.meta.url));
 const PLAYER_SELECTOR = '.workspace-leaf-content[data-type="podcast_player_view"]';
@@ -220,10 +85,17 @@ async function runTests(args) {
 	for (const signal of FORWARDED_SIGNALS) process.on(signal, onSignal);
 	try {
 		if (instance) {
-			const deps = linuxDeps(async (target) => {
-				launched = true;
-				await launchLinux(target);
-			});
+			/** @type {CliDependencies} */
+			const deps = {
+				ensureObsidianInstance: (options, config, ensureDeps) =>
+					ensureObsidianInstance(options, config, {
+						...ensureDeps,
+						launchObsidianInstance: async (target, exec) => {
+							launched = true;
+							await launchObsidianInstance(target, exec);
+						},
+					}),
+			};
 			const started = await runObsidianE2ECli(["start"], deps);
 			if (started !== 0) return started;
 		}
@@ -270,7 +142,7 @@ async function runTests(args) {
 	} finally {
 		for (const signal of FORWARDED_SIGNALS) process.off(signal, onSignal);
 		await fsp.rm(results, { force: true });
-		if (launched) await runObsidianE2ECli(["stop"], runnerDeps);
+		if (launched) await runObsidianE2ECli(["stop"]);
 	}
 }
 
@@ -317,7 +189,7 @@ async function capturePlayer(verb, args) {
 	const instance = await defaultInstance();
 	// `run` brings the instance up without reloading PodNotes, which `start` would
 	// do, so state a driver set up survives. `version` also records the app build.
-	const up = await runObsidianE2ECli(["run", "version"], runnerDeps);
+	const up = await runObsidianE2ECli(["run", "version"]);
 	if (up !== 0) return up;
 	const { stdout } = await execObsidian(
 		instance,
@@ -339,10 +211,8 @@ function main(argv) {
 		case "screenshot":
 		case "record":
 			return capturePlayer(verb, rest);
-		case "start":
-			if (linux && rest.includes("--print-env")) return startPrintEnv(argv);
 	}
-	return runObsidianE2ECli(argv, runnerDeps);
+	return runObsidianE2ECli(argv);
 }
 
 // Same exit guard as the upstream bin: capture and signal exits must not hang on
