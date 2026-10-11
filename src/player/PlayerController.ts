@@ -459,8 +459,10 @@ export class PlayerController {
 		if (this.holdsMedia() && !this.el.paused) this.setState({ status: "playing" });
 	}
 
+	/** A reset pauses without this event (see onEmptied), so a pause while loading is a real one. */
 	private onPause(): void {
-		if (this.snapshot.status === "playing" && this.el.paused) this.settlePaused();
+		const { status } = this.snapshot;
+		if ((status === "playing" || status === "loading") && this.el.paused) this.settlePaused();
 	}
 
 	private onTimeUpdate(): void {
