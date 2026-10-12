@@ -1,10 +1,39 @@
-import { vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 import type PodNotes from "src/main";
 import type { TranscriptLink } from "src/parser/feedDocumentParser";
 import type { Episode } from "src/types/Episode";
 
-/** What each Notice opened with, oldest first. Empty it before each test. */
+/** What each Notice opened with, oldest first. */
 export const noticeMessages: string[] = [];
+
+/** Stand-ins for the audio download, OpenAI (through `fetch`) and Deepgram. */
+export const getEpisodeAudioBufferMock = vi.fn();
+export const fetchMock = vi.fn<typeof fetch>();
+export const diarizeWithDeepgramMock = vi.fn();
+
+/**
+ * Resets the mocks above and `noticeMessages` before each test of the calling file,
+ * and stubs `fetch` with `fetchMock`. The file still mocks `../downloadEpisode` and
+ * `./diarization` with these handles, because `vi.mock` applies only to its own file.
+ */
+export function installTranscriptionMocks(): void {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		noticeMessages.length = 0;
+		fetchMock.mockReset();
+		vi.stubGlobal("fetch", fetchMock);
+		diarizeWithDeepgramMock.mockReset();
+		getEpisodeAudioBufferMock.mockResolvedValue({
+			buffer: new ArrayBuffer(1024),
+			extension: "mp3",
+			basename: "episode",
+		});
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+}
 
 /** The `obsidian` module whose Notice records its opening message in `noticeMessages`. */
 export function recordingNotices(obsidian: typeof import("obsidian")): typeof import("obsidian") {

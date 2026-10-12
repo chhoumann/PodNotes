@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, test, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { Notice } from "obsidian";
 import { deferred } from "../../tests/mocks/feeds";
 import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
 import {
 	createMockPlugin,
+	diarizeWithDeepgramMock,
+	fetchMock,
+	getEpisodeAudioBufferMock,
+	installTranscriptionMocks,
 	mockEpisode,
 	noticeMessages,
 } from "../../tests/mocks/transcriptionService";
@@ -16,10 +20,6 @@ vi.mock("obsidian", async (importOriginal) => {
 	const { recordingNotices } = await import("../../tests/mocks/transcriptionService");
 	return recordingNotices(await importOriginal<typeof import("obsidian")>());
 });
-
-const getEpisodeAudioBufferMock = vi.fn();
-const fetchMock = vi.fn<typeof fetch>();
-const diarizeWithDeepgramMock = vi.hoisted(() => vi.fn());
 
 async function settlesAfterMicrotasks(promise: Promise<unknown>): Promise<boolean> {
 	let settled = false;
@@ -36,17 +36,18 @@ async function settlesAfterMicrotasks(promise: Promise<unknown>): Promise<boolea
 	return settled;
 }
 
-vi.mock("../downloadEpisode", () => ({
-	getEpisodeAudioBuffer: (...args: unknown[]) => getEpisodeAudioBufferMock(...args),
+vi.mock("../downloadEpisode", async () => ({
+	getEpisodeAudioBuffer: (await import("../../tests/mocks/transcriptionService"))
+		.getEpisodeAudioBufferMock,
 }));
 
-vi.mock("./diarization", async () => {
-	const actual = await vi.importActual<typeof import("./diarization")>("./diarization");
-	return {
-		...actual,
-		diarizeWithDeepgram: diarizeWithDeepgramMock,
-	};
-});
+vi.mock("./diarization", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./diarization")>()),
+	diarizeWithDeepgram: (await import("../../tests/mocks/transcriptionService"))
+		.diarizeWithDeepgramMock,
+}));
+
+installTranscriptionMocks();
 
 type AudioJob = { episode: Episode; source: { kind: "audio" } };
 const audioJob: AudioJob = { episode: mockEpisode, source: { kind: "audio" } };
@@ -57,23 +58,6 @@ const whisperReturns = (text: string) =>
 const sentFile = (init?: RequestInit) => (init?.body as FormData | undefined)?.get("file") as File;
 
 describe("TranscriptionService", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		noticeMessages.length = 0;
-		fetchMock.mockReset();
-		vi.stubGlobal("fetch", fetchMock);
-		diarizeWithDeepgramMock.mockReset();
-		getEpisodeAudioBufferMock.mockResolvedValue({
-			buffer: new ArrayBuffer(1024),
-			extension: "mp3",
-			basename: "episode",
-		});
-	});
-
-	afterEach(() => {
-		vi.unstubAllGlobals();
-	});
-
 	describe("transcribeCurrentEpisode validation", () => {
 		test("shows notice when no API key is configured", async () => {
 			const mockPlugin = createMockPlugin({ openAIKey: "" });
