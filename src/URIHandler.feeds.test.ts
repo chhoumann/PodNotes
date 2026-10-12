@@ -9,10 +9,9 @@ import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { resolveFeedUrl } from "./services/privateFeeds";
 import { DEFAULT_SETTINGS } from "./constants";
 import { PlayerController } from "./player/PlayerController";
-import { plugin, savedFeeds, viewState } from "./store";
+import { plugin, savedFeeds } from "./store";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
-import { ViewState } from "./types/ViewState";
 import { privateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { deferred, feedDocument, MemoryStorage, stubLegacyStorage } from "../tests/mocks/feeds";
 import { FakeDocument } from "../tests/mocks/fakeMedia";
@@ -30,6 +29,7 @@ const testEpisode: Episode = {
 };
 
 let player: PlayerController;
+let reveal = vi.fn();
 const playing = () => get(player.state).episode;
 
 function resetStores() {
@@ -39,7 +39,7 @@ function resetStores() {
 		checkpoint: (update) => update(),
 		saveSettings: () => Promise.resolve(),
 	});
-	viewState.set(ViewState.PodcastGrid);
+	reveal = vi.fn();
 	savedFeeds.set({});
 }
 
@@ -94,7 +94,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 	}
 	const publicFeed: PodcastFeed = { title: "Test Podcast", url: testFeedUrl, artworkUrl: "" };
 	const open = (url: string, episodeName: string) =>
-		podNotesURIHandler({ action: "podnotes", url, episodeName, time: "5" });
+		podNotesURIHandler({ action: "podnotes", url, episodeName, time: "5" }, reveal);
 	const privateLink = privateFeedPlaceholder("Patron Show");
 
 	afterEach(() => {
@@ -114,7 +114,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 			title: second.title,
 			podcastName: "Patron Show",
 		});
-		expect(get(viewState)).toBe(ViewState.Player);
+		expect(reveal).toHaveBeenCalledTimes(1);
 	});
 
 	test.each([

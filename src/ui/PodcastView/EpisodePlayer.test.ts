@@ -5,9 +5,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "src/constants";
 import type { PlayerState } from "src/player/PlayerController";
-import { plugin, queue, viewState } from "src/store";
+import { plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
-import { ViewState } from "src/types/ViewState";
 import EpisodePlayer from "./EpisodePlayer.svelte";
 
 const episode: Episode = {
@@ -55,7 +54,6 @@ const barWidth = (container: HTMLElement) =>
 
 beforeEach(() => {
 	queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: [] });
-	viewState.set(ViewState.Player);
 });
 
 describe("EpisodePlayer", () => {
@@ -132,13 +130,11 @@ describe("EpisodePlayer", () => {
 	test("clicking a queued episode plays it", async () => {
 		const queued = { ...episode, title: "Queued Episode" };
 		queue.set({ ...get(queue), episodes: [queued] });
-		viewState.set(ViewState.EpisodeList);
 		const { player } = renderPlayer();
 
 		await fireEvent.click(screen.getByText("Queued Episode"));
 
 		expect(player.play).toHaveBeenCalledWith(queued);
-		expect(get(viewState)).toBe(ViewState.Player);
 	});
 
 	test("a video episode in a popout shows its artwork, since the video plays in the main window", async () => {

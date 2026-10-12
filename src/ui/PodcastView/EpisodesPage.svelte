@@ -164,6 +164,7 @@
 						playlists: true,
 					},
 			getPlayedEpisodeKey(entry),
+			page.kind === "queue",
 		);
 	}
 

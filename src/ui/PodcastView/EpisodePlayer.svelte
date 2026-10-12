@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { plugin, queue, viewState } from "src/store";
+	import { plugin, queue } from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { fetchChapters } from "src/utility/fetchChapters";
 	import { get } from "svelte/store";
@@ -14,7 +14,6 @@
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import type { Episode } from "src/types/Episode";
 	import type { Chapter } from "src/types/Chapter";
-	import { ViewState } from "src/types/ViewState";
 	import Image from "../common/Image.svelte";
 	import {
 		PLAYBACK_RATE_MAX,
@@ -105,7 +104,7 @@
 	function handleContextMenuEpisode({
 		detail: { event, episode },
 	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(episode, event);
+		spawnEpisodeContextMenu(episode, event, undefined, undefined, true);
 	}
 
 	function handleContextMenuEpisodeImage(event: MouseEvent) {
@@ -117,7 +116,6 @@
 
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
 		player.play(event.detail.episode);
-		viewState.set(ViewState.Player);
 	}
 </script>
 

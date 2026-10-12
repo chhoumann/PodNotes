@@ -5,7 +5,7 @@ import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
-import { localFiles, savedFeeds } from "src/store";
+import { favorites, localFiles, queue, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
 import {
 	installResizeObserver,
@@ -48,6 +48,8 @@ afterEach(() => {
 	dispose();
 	savedFeeds.set({});
 	localFiles.set(structuredClone(DEFAULT_SETTINGS.localFiles));
+	queue.set(structuredClone(DEFAULT_SETTINGS.queue));
+	favorites.set(structuredClone(DEFAULT_SETTINGS.favorites));
 	vi.restoreAllMocks();
 });
 
@@ -118,6 +120,32 @@ describe("navigation", () => {
 		resize(0);
 		await tick();
 		expect(view).toHaveClass("is-wide");
+	});
+});
+
+describe("pages", () => {
+	test("an episode's menu can move it in the queue on the Queue page only", async () => {
+		const second = { ...episode, title: "Episode 2" };
+		queue.add(episode);
+		queue.add(second);
+		Object.assign(services.app, { vault: { getAbstractFileByPath: () => null } });
+		const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
+		const menuOf = async (title: string) => {
+			titles.mockClear();
+			await fireEvent.contextMenu(screen.getByText(title));
+			return titles.mock.calls.map(([shown]) => shown);
+		};
+		renderView();
+
+		await fireEvent.click(button(/^Queue/));
+		expect(await menuOf("Episode 2")).toContain("Move up in queue");
+
+		await fireEvent.click(button("Back to Library"));
+		await fireEvent.click(button(/^Playlists/));
+		await fireEvent.click(button("Favorites"));
+		favorites.update((playlist) => ({ ...playlist, episodes: [second] }));
+		await tick();
+		expect(await menuOf("Episode 2")).not.toContain("Move up in queue");
 	});
 });
 

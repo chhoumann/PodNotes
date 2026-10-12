@@ -3,7 +3,6 @@ import type PodNotes from "src/main";
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import type { Playlist } from "src/types/Playlist";
-import { ViewState } from "src/types/ViewState";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import { LOCAL_FILES_SETTINGS } from "src/constants";
@@ -355,18 +354,3 @@ export const localFiles = (() => {
 })();
 
 export const playlists = recordStore<Playlist>();
-
-export const podcastView = writable<HTMLDivElement>();
-export const viewState = (() => {
-	const store = writable<ViewState>(ViewState.PodcastGrid);
-	const { subscribe, set } = store;
-
-	return {
-		subscribe,
-		set: (newState: ViewState) => {
-			set(newState);
-
-			get(podcastView)?.scrollIntoView();
-		},
-	};
-})();
