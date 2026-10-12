@@ -542,7 +542,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			if (feedMigration.settings !== settings) {
 				settings = feedMigration.settings;
 				await this.writeDataFile(encodePodNotesData(settings, decoded.unknownFields));
-				new Notice("Moved private feed URLs out of data.json.");
+				if (feedMigration.failed.length === 0) {
+					new Notice("Moved private feed URLs out of data.json.");
+				}
 			}
 			if (feedMigration.failed.length > 0) {
 				new Notice(

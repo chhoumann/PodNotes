@@ -223,11 +223,15 @@ describe("protectPrivateFeeds", () => {
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
 			throw new Error("locked");
 		});
-		const unprotected = settings({
-			savedFeeds: { Patreon: feed({ title: "Patreon", url: PRIVATE_URL }) },
-		});
-		const { failed, settings: result } = protectPrivateFeeds(unprotected, feedUrls);
+		const { failed, settings: result } = protectPrivateFeeds(
+			settings({
+				savedFeeds: { Patreon: feed({ title: "Patreon", url: PRIVATE_URL }) },
+				queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode("Ep 2", PRIVATE_URL)] },
+			}),
+			feedUrls,
+		);
 		expect(failed).toEqual(["Patreon"]);
-		expect(result).toBe(unprotected);
+		expect(result.savedFeeds.Patreon.url).toBe(PRIVATE_URL);
+		expect(result.queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Patreon");
 	});
 });
