@@ -34,14 +34,24 @@ root symlinks for local Obsidian loading.
 ## Common Commands
 - `npm install`: install dependencies for local development.
 - `npm run dev`: watch-mode development build via Vite.
-- `npm run typecheck`: run `tsc --noEmit`.
+- `npm run typecheck`: run TypeScript 7's native `tsc --noEmit` for source and test projects.
 - `npm run lint`: run oxlint against TypeScript sources (includes the obsidianmd guideline rules via jsPlugins).
 - `npm run format:check`: run the configured oxfmt check (`npm run format` to write).
-- `npm run check:a11y`: run `svelte-check --fail-on-warnings`.
+- `npm run check:a11y`: run TypeScript 6's `svelte-check --fail-on-warnings` for source and test projects.
 - `npm run test`: run Svelte checks and the Vitest suite.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 - `npm run docs:deploy`: build docs and deploy `docs/dist` to Cloudflare Pages.
+
+`@typescript/native` aliases TypeScript 7. `typecheck` calls its compiler by
+path because npm can link the shared `tsc` command to either compiler after an
+incremental install. Keep `typescript` on version 6 for Svelte checking and the
+TypeScript ESLint packages loaded by oxlint's Obsidian rules. These still use
+the JavaScript API. Source and tests must pass both the native TypeScript 7
+checks and the TypeScript 6 Svelte checks.
+Svelte checking stays on TypeScript 6 until the native checker preserves
+syntax diagnostics and reports compiler failures. See
+[issue #405](https://github.com/chhoumann/PodNotes/issues/405).
 
 After `npm run build`, `npm run size` enforces 330,000 raw bytes and 100,000 gzip bytes at level 9 for root `main.js` inside the existing Test job. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 

@@ -15,7 +15,12 @@ export function installWriteRecorder(adapter, dataPath) {
 		completedBytes: 0,
 		lastCompletedBytes: 0,
 	};
-	/** @type {typeof adapter.write} @this {typeof adapter} */
+	/**
+	 * @param {string} path
+	 * @param {string} contents
+	 * @param {unknown[]} rest
+	 * @this {typeof adapter}
+	 */
 	function wrapped(path, contents, ...rest) {
 		if (path !== dataPath) return original.call(this, path, contents, ...rest);
 		const bytes = new TextEncoder().encode(contents).byteLength;
