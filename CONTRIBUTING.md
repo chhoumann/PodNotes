@@ -4,10 +4,10 @@ Thanks for helping. This guide covers how to build PodNotes, run its checks, tes
 
 ## Set up
 
-PodNotes uses npm and the Node version in `.nvmrc` (Node 22). Switch to it first, for example with `nvm use` or `fnm use`. npm refuses to install with another version.
+PodNotes uses npm and the Node version in `.nvmrc` (Node 22). Switch to it first, for example with `nvm install` or `fnm use --install-if-missing`, which also install it if needed. npm refuses to install on a Node version before 22.22.2 or after 22.x. `npm ci` installs the exact versions in `package-lock.json`.
 
 ```
-npm install
+npm ci
 npm run build
 ```
 
@@ -17,7 +17,7 @@ npm run build
 
 PodNotes tests against the Obsidian desktop app: `Obsidian.app` on macOS, and the `.deb` or tarball install at `/opt/Obsidian` on Linux. A Linux machine without a display also needs `xvfb` and `xauth`. The Flatpak and Snap builds do not work.
 
-The test tools drive Obsidian through its command line client, so set that up once. In Obsidian, open **Settings → General**, turn on **Command line interface** under **Advanced**, then select **Set up CLI to work in the terminal**. On Linux, this puts the client in `~/.local/bin`, which must come before `/usr/bin` on your `PATH`.
+The test tools drive Obsidian through its command line client, so set that up once. In Obsidian, open **Settings → General** and turn on **Command line interface** under **Advanced**. In the dialog that opens, select **Register**. If the setting is already on, turn it off and on again to open the dialog. On Linux, this puts the client in `~/.local/bin`, which must come before `/usr/bin` on your `PATH`.
 
 ```
 npm run start:e2e-obsidian
@@ -59,7 +59,7 @@ npm run test:e2e
 npm run stop:e2e-obsidian
 ```
 
-The runner does not support Windows, so check your change by hand there. [AGENTS.md](AGENTS.md#obsidian-runtime-workflow) explains how to drive the app by hand and how to stop leftover instances.
+The runner does not support Windows, so check your change by hand there. [AGENTS.md](AGENTS.md#isolated-worktree-instance-macos-and-linux) shows how to send commands to the isolated Obsidian and how to stop leftover instances.
 
 ## Change the docs
 
@@ -70,7 +70,7 @@ Screenshots come from `node docs/scripts/screenshots.mjs`, which captures them f
 ## Open a pull request
 
 - Title the pull request in the Conventional Commits style, such as `fix: keep the queue order after a restart`. The type is one of `feat`, `fix`, `perf`, `docs`, `style`, `refactor`, `test`, `build`, `ci`, `chore`, or `revert`. The title becomes the commit on `master`, and the release notes are generated from it.
-- Mark a breaking change with a `BREAKING CHANGE:` footer in the squash commit body. The title check rejects `!` in the title.
+- Mark a breaking change with a `BREAKING CHANGE:` footer in your commit message, which GitHub copies into the squash commit body, and say so under **Release impact**. The title check rejects the `!` breaking marker, as in `feat!:`.
 - Fill in the template: what changed for users, how you verified it (commands, Obsidian version, and platform), and any settings, storage, API, or URI impact. Link the issue it fixes, as in `Fixes #123`.
 - Add a screenshot or a short recording for a visible change.
 - Keep the pull request to one change.
