@@ -30,7 +30,9 @@ export function parseTranscript(
 			return parseHtml(source);
 		case "text":
 			// A sign-in or error page served in place of the transcript.
-			return source.trimStart().startsWith("<") ? undefined : untimed(paragraphsOf(source));
+			return /^<(!doctype|html|\?xml)\b/i.test(source.trimStart())
+				? undefined
+				: untimed(paragraphsOf(source));
 	}
 }
 

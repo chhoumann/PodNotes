@@ -155,6 +155,13 @@ describe("parseTranscript", () => {
 		});
 	});
 
+	test("text that opens with a cue in angle brackets is a transcript", () => {
+		expect(parseTranscript("text", "<music> Welcome back.\n\nToday: feeds.")).toEqual({
+			kind: "untimed",
+			paragraphs: ["<music> Welcome back.", "Today: feeds."],
+		});
+	});
+
 	test.each([
 		["json", "<html>Not a transcript</html>"],
 		["json", '{"version":"1.0.0"}'],
@@ -164,6 +171,7 @@ describe("parseTranscript", () => {
 		["text", " \n\n\t\n"],
 		["text", "<!DOCTYPE html>\n<html><body><p>Sign in</p></body></html>"],
 		["text", "\n  <html><body>Sign in to read the transcript</body></html>"],
+		["text", '<?xml version="1.0"?>\n<Error><Code>AccessDenied</Code></Error>'],
 	] as const)("%s that cannot be read gives nothing: %j", (format, text) => {
 		expect(parseTranscript(format, text)).toBeUndefined();
 	});
