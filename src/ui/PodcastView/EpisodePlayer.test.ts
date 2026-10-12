@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
+import { MenuItem } from "obsidian";
 import { get, writable } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -7,6 +8,7 @@ import { DEFAULT_SETTINGS } from "src/constants";
 import type { PlayerState } from "src/player/PlayerController";
 import { plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
+import WithServices from "../../../tests/mocks/WithServices.svelte";
 import EpisodePlayer from "./EpisodePlayer.svelte";
 
 const episode: Episode = {
@@ -39,12 +41,16 @@ function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) 
 		setPlaybackRate: vi.fn(),
 		videoStage: vi.fn(() => ({ destroy: vi.fn() })),
 	};
-	plugin.set({
+	const services = {
 		settings: structuredClone(DEFAULT_SETTINGS),
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() },
 		player,
-	} as never);
-	return { ...render(EpisodePlayer, { target }), state, player };
+	} as never;
+	return {
+		...render(WithServices, { target, props: { services, component: EpisodePlayer } }),
+		state,
+		player,
+	};
 }
 
 const labels = (container: HTMLElement) =>
@@ -135,6 +141,24 @@ describe("EpisodePlayer", () => {
 		await fireEvent.click(screen.getByText("Queued Episode"));
 
 		expect(player.play).toHaveBeenCalledWith(queued);
+	});
+
+	test("a queued episode's menu can move it in the queue", async () => {
+		const first = { ...episode, title: "First Queued" };
+		const second = { ...episode, title: "Second Queued" };
+		queue.set({ ...get(queue), episodes: [first, second] });
+		plugin.set({
+			app: { vault: { getAbstractFileByPath: () => null } },
+			settings: structuredClone(DEFAULT_SETTINGS),
+		} as never);
+		const titles = vi.spyOn(MenuItem.prototype, "setTitle");
+		renderPlayer();
+
+		await fireEvent.contextMenu(screen.getByText("Second Queued"));
+
+		expect(titles.mock.calls.map(([title]) => title)).toContain("Move up in queue");
+		plugin.set(undefined as never);
+		titles.mockRestore();
 	});
 
 	test("a video episode in a popout shows its artwork, since the video plays in the main window", async () => {

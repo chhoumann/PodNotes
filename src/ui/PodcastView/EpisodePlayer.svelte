@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { plugin, queue } from "src/store";
+	import { queue } from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { fetchChapters } from "src/utility/fetchChapters";
-	import { get } from "svelte/store";
 	import { onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
@@ -15,40 +14,43 @@
 	import type { Episode } from "src/types/Episode";
 	import type { Chapter } from "src/types/Chapter";
 	import Image from "../common/Image.svelte";
+	import { useServices } from "./context";
 	import {
 		PLAYBACK_RATE_MAX,
 		PLAYBACK_RATE_MIN,
 		PLAYBACK_RATE_STEP,
 	} from "src/utility/playbackRate";
 
-	const player = get(plugin).player;
+	const { player, api, settings } = useServices();
 	const playerState = player.state;
+
+	let isHoveringArtwork = $state(false);
+	let root: HTMLDivElement;
+	let inMainWindow = $state(true);
+	let videoContainer: HTMLDivElement | undefined = $state();
+	let chapters: Chapter[] = $state([]);
+	let lastChaptersUrl: string | undefined = undefined;
 
 	// Hide the player's Queue list only when queue automation is off AND the queue
 	// is empty (issue #108), otherwise show it (default-on state or a non-empty
 	// manual queue).
-	$: showQueue = $plugin?.settings?.autoQueue !== false || $queue.episodes.length > 0;
+	const showQueue = $derived(settings.autoQueue !== false || $queue.episodes.length > 0);
 
-	$: episode = $playerState.episode as Episode;
+	const episode = $derived($playerState.episode as Episode);
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
-	$: titleCharCount = episode.title.length;
+	const titleCharCount = $derived(episode.title.length);
 	// The video plays in the main window, so a view in a popout shows the artwork.
-	$: showVideo = $playerState.mediaType === "video" && inMainWindow;
-	$: paused = $playerState.status !== "playing";
-	$: isLoading = $playerState.status === "loading";
-	$: loadError = $playerState.status === "error" ? "Could not load this episode's media." : null;
-	$: remaining = Math.max(0, $playerState.duration - $playerState.currentTime);
-
-	let isHoveringArtwork: boolean = false;
-	let root: HTMLDivElement;
-	let inMainWindow = true;
-	let videoContainer: HTMLDivElement | undefined;
-	let chapters: Chapter[] = [];
-	let lastChaptersUrl: string | undefined = undefined;
+	const showVideo = $derived($playerState.mediaType === "video" && inMainWindow);
+	const paused = $derived($playerState.status !== "playing");
+	const isLoading = $derived($playerState.status === "loading");
+	const loadError = $derived(
+		$playerState.status === "error" ? "Could not load this episode's media." : null,
+	);
+	const remaining = $derived(Math.max(0, $playerState.duration - $playerState.currentTime));
 
 	// Clear the previous episode's chapters at once so they never flash against the
 	// next one, and drop a fetch that a newer episode superseded.
-	$: loadChapters(episode.chaptersUrl);
+	$effect.pre(() => loadChapters(episode.chaptersUrl));
 	function loadChapters(chaptersUrl: string | undefined) {
 		if (chaptersUrl === lastChaptersUrl) return;
 		lastChaptersUrl = chaptersUrl;
@@ -136,8 +138,8 @@
 					type="button"
 					class="podcast-video-overlay"
 					class:visible={paused}
-					on:click={() => player.toggle()}
-					on:contextmenu={handleContextMenuEpisodeImage}
+					onclick={() => player.toggle()}
+					oncontextmenu={handleContextMenuEpisodeImage}
 					aria-label="Toggle playback"
 				>
 					<Icon icon={paused ? "play" : "pause"} clickable={false} />
@@ -147,7 +149,7 @@
 			<button
 				type="button"
 				class="podcast-video-fullscreen"
-				on:click={enterFullscreen}
+				onclick={enterFullscreen}
 				aria-label="Enter fullscreen"
 			>
 				<Icon icon="maximize" clickable={false} />
@@ -158,10 +160,10 @@
 			<button
 				type="button"
 				class="hover-container"
-				on:click={() => player.toggle()}
-				on:contextmenu={handleContextMenuEpisodeImage}
-				on:mouseenter={() => (isHoveringArtwork = true)}
-				on:mouseleave={() => (isHoveringArtwork = false)}
+				onclick={() => player.toggle()}
+				oncontextmenu={handleContextMenuEpisodeImage}
+				onmouseenter={() => (isHoveringArtwork = true)}
+				onmouseleave={() => (isHoveringArtwork = false)}
 				aria-label="Toggle playback"
 			>
 				<Image
@@ -221,13 +223,13 @@
 		<Button
 			icon="skip-back"
 			tooltip="Skip backward"
-			on:click={$plugin.api.skipBackward.bind($plugin.api)}
+			on:click={() => api.skipBackward()}
 			class="player-control-button"
 		/>
 		<Button
 			icon="skip-forward"
 			tooltip="Skip forward"
-			on:click={$plugin.api.skipForward.bind($plugin.api)}
+			on:click={() => api.skipForward()}
 			class="player-control-button"
 		/>
 	</div>
