@@ -44,6 +44,30 @@ describe("parseTranscript", () => {
 		);
 	});
 
+	test.each([
+		["vtt", "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n"],
+		["srt", "1\n00:00:01,000 --> 00:00:02,000\n"],
+	] as const)("%s: angle brackets that open no tag stay as written", (format, header) => {
+		const cue = (text: string) => cuesOf(parseTranscript(format, `${header}${text}\n`))[0].text;
+
+		expect(cue("a < b and c > d")).toBe("a < b and c > d");
+		expect(cue("x <3 y")).toBe("x <3 y");
+	});
+
+	test.each([
+		["unmatched <", `${"<".repeat(64_000)}word`],
+		["unclosed voice tags", `${"<v ".repeat(64_000)}word`],
+	])("a 64,000-character cue of %s stays text and parses in linear time", (_, text) => {
+		const vtt = `WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n${text}\n`;
+
+		const started = performance.now();
+		const parsed = parseTranscript("vtt", vtt);
+		const elapsed = performance.now() - started;
+
+		expect(cuesOf(parsed)).toEqual([{ start: 1, end: 2, text }]);
+		expect(elapsed).toBeLessThan(50);
+	});
+
 	test("Build Your SaaS VTT: a voice names the speaker of the untagged cues after it", () => {
 		const cues = cuesOf(parseTranscript("vtt", transcriptFixture("build-your-saas.vtt")));
 

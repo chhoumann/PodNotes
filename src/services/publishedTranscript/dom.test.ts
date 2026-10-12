@@ -60,6 +60,38 @@ describe("parseTranscript HTML", () => {
 	});
 });
 
+describe("cue markup in every timed format", () => {
+	const said = "&lt;script&gt;alert(1)&lt;/script&gt; said <i>Eve</i>";
+
+	test.each([
+		[
+			"vtt",
+			`WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v Eve>${said} <script src=x\n`,
+			{
+				start: 1,
+				end: 2,
+				speaker: "Eve",
+				text: "<script>alert(1)</script> said Eve <script src=x",
+			},
+		],
+		[
+			"srt",
+			`1\n00:00:01,000 --> 00:00:02,000\n${said} <script src=x\n`,
+			{ start: 1, end: 2, text: "<script>alert(1)</script> said Eve <script src=x" },
+		],
+		[
+			"html",
+			`<cite>Eve</cite><time>0:01</time><p>${said}</p>`,
+			{ start: 1, speaker: "Eve", text: "<script>alert(1)</script> said Eve" },
+		],
+	] as const)(
+		"%s: tags are dropped, an unclosed one stays text, and entities decode once to text",
+		(format, source, cue) => {
+			expect(parseTranscript(format, source)).toEqual({ kind: "timed", cues: [cue] });
+		},
+	);
+});
+
 describe("choosePublishedTranscript on real feeds", () => {
 	test.each([
 		["build-your-saas.xml", "https://share.transistor.fm/s/9c22a01c/transcription.vtt", "vtt"],
