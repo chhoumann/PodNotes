@@ -8,6 +8,13 @@ export interface Clock {
 	now(): number;
 }
 
+export class WriteRefusedError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "WriteRefusedError";
+	}
+}
+
 /** How the writer reaches data.json and the in-memory state, as plain JSON documents. */
 export interface DataFileAccess<Doc> {
 	/**
@@ -54,6 +61,7 @@ export class DataFileWriter<Doc> {
 		private readonly clock: Clock,
 		/** What PodNotes last loaded or wrote; null until a readable file was loaded. */
 		private base: Doc | null,
+		private readonly onWriteFailed: () => void = () => {},
 	) {}
 
 	/**
@@ -134,6 +142,7 @@ export class DataFileWriter<Doc> {
 	}
 
 	private scheduleCheckpoint(): void {
+		if (this.unloaded) return;
 		this.timer ??= this.clock.setTimeout(
 			() => {
 				this.timer = null;
@@ -193,7 +202,10 @@ export class DataFileWriter<Doc> {
 		try {
 			await this.file.write(toWrite);
 		} catch (error) {
+			if (error instanceof WriteRefusedError) throw error;
+			if (!this.failedWrite) this.onWriteFailed();
 			this.failedWrite = { local, written: toWrite };
+			this.scheduleCheckpoint();
 			throw error;
 		}
 		this.failedWrite = null;
