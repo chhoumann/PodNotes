@@ -59,12 +59,11 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 			(match: string, tagId: string, params: string) => {
 				const tagValue = tags[tagId.toLowerCase()];
 				if (tagValue === null || tagValue === undefined) {
-					const tagIds = Object.keys(tags);
-					const similarTags = fuzzySearch(tagId, tagIds, false);
+					const [similarTag] = fuzzySearch(tagId, Object.keys(tags), (tag) => tag, false);
 
 					new Notice(
 						`Tag ${tagId} is invalid.${
-							similarTags.length > 0 ? ` Did you mean ${tagIds[similarTags[0]]}?` : ""
+							similarTag === undefined ? "" : ` Did you mean ${similarTag}?`
 						}`,
 					);
 					return match;

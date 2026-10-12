@@ -1,7 +1,7 @@
-/*
- * Ported from Fuse.js v7.5.0 (https://github.com/krisk/Fuse), Copyright Kiro Risk,
- * Apache License 2.0. Ported rather than rewritten so that search results rank
- * exactly as they did with Fuse.
+/*!
+ * Fuzzy search ported from Fuse.js v7.5.0 (https://github.com/krisk/Fuse).
+ * Copyright (c) Kiro Risk. Licensed under the Apache License 2.0
+ * (https://www.apache.org/licenses/LICENSE-2.0), copied in fuzzySearch.LICENSE.
  */
 
 const THRESHOLD = 0.4;
@@ -15,25 +15,26 @@ interface Chunk {
 	location: number;
 }
 
-/** Indices of the texts that match the query, best match first. */
-export function fuzzySearch(
+export function fuzzySearch<T>(
 	query: string,
-	texts: readonly string[],
+	items: readonly T[],
+	text: (item: T) => string,
 	findAllMatches: boolean,
-): number[] {
-	if (!query.trim()) return texts.map((_, index) => index);
+): T[] {
+	if (!query.trim()) return [...items];
 
 	const pattern = query.toLowerCase();
 	const chunks = createChunks(pattern);
-	const matches: { index: number; score: number }[] = [];
-	texts.forEach((text, index) => {
-		if (!text.trim()) return;
-		const score = matchScore(text.toLowerCase(), pattern, chunks, findAllMatches);
-		if (score === undefined) return;
-		const fieldNorm = Math.round(1000 / Math.pow(text.match(TOKEN)?.length ?? 1, 0.5)) / 1000;
-		matches.push({ index, score: Math.pow(score || Number.EPSILON, fieldNorm) });
-	});
-	return matches.sort((a, b) => a.score - b.score).map(({ index }) => index);
+	const matches: { item: T; score: number }[] = [];
+	for (const item of items) {
+		const value = text(item);
+		if (!value.trim()) continue;
+		const score = matchScore(value.toLowerCase(), pattern, chunks, findAllMatches);
+		if (score === undefined) continue;
+		const fieldNorm = Math.round(1000 / Math.pow(value.match(TOKEN)?.length ?? 1, 0.5)) / 1000;
+		matches.push({ item, score: Math.pow(score || Number.EPSILON, fieldNorm) });
+	}
+	return matches.sort((a, b) => a.score - b.score).map(({ item }) => item);
 }
 
 function createChunks(pattern: string): Chunk[] {

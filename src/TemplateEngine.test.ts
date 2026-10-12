@@ -209,7 +209,7 @@ describe("empty tag arguments (NT-05/CH-09)", () => {
 	});
 });
 
-describe("unknown tags", () => {
+describe("unknown tags (suggestions match fuse.js 7.5.0)", () => {
 	beforeEach(() => {
 		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
 	});
@@ -218,7 +218,6 @@ describe("unknown tags", () => {
 		vi.restoreAllMocks();
 	});
 
-	// Expected suggestions are fuse.js 7.5.0 output for the options PodNotes used.
 	it("leaves a misspelled tag as typed and suggests the closest tag", () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 
