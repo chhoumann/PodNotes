@@ -1,0 +1,428 @@
+/* PodNotes theme for Starlight, shared with the QuickAdd docs. */
+
+/* Inter, self-hosted and subset to Latin (see public/fonts/LICENSE.txt). */
+@font-face {
+	font-family: InterVariable;
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url('/fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+	font-family: InterVariable;
+	font-style: italic;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url('/fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
+:root {
+	--sl-font:
+		'InterVariable', system-ui, -apple-system, 'Segoe UI', Roboto,
+		Ubuntu, Cantarell, 'Noto Sans', sans-serif, 'Apple Color Emoji',
+		'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+	--sl-font-mono:
+		'JetBrains Mono', 'SF Mono', Monaco, Consolas, 'Liberation Mono',
+		'Courier New', monospace;
+}
+
+/* Obsidian-ish purple-blue accent (dark mode). */
+:root {
+	--sl-color-accent-low: #2a2360;
+	--sl-color-accent: #6b5cef;
+	--sl-color-accent-high: #c9c1fb;
+}
+
+/* Light mode accent - darker shade for AA contrast. */
+:root[data-theme='light'] {
+	--sl-color-accent-low: #e6e3fd;
+	--sl-color-accent: #5a4aec;
+	--sl-color-accent-high: #38288a;
+}
+
+/* ---------------------------------------------------------------------------
+ * Typography rhythm
+ * ------------------------------------------------------------------------ */
+
+/* Tighter tracking on large headings; Inter wants it at display sizes. */
+.sl-markdown-content :is(h1, h2):not(:where(.not-content *)),
+.content-panel h1 {
+	letter-spacing: -0.02em;
+}
+.sl-markdown-content :is(h3, h4):not(:where(.not-content *)) {
+	letter-spacing: -0.01em;
+}
+
+/* Generous whitespace between top-level sections keeps long reference pages
+ * scannable. */
+.sl-markdown-content h2:not(:where(.not-content *)) {
+	margin-top: 2em;
+}
+
+/* ---------------------------------------------------------------------------
+ * Inline code
+ * ------------------------------------------------------------------------ */
+
+/* Quieter chips: softer fill, hairline border, rounded. The default solid
+ * gray-5 block is loud enough to shred reading flow on token-dense pages.
+ * Scoped to inline code only, so Starlight's pre>code reset stays untouched. */
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+	background-color: color-mix(in srgb, var(--sl-color-gray-5) 55%, var(--sl-color-bg));
+	border: 1px solid color-mix(in srgb, var(--sl-color-gray-5) 80%, var(--sl-color-bg));
+	border-radius: 0.375rem;
+	padding: 0.125rem 0.3125rem;
+	/* A chip that wraps keeps its border and rounding on both lines. */
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
+}
+:root[data-theme='light'] .sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+	background-color: color-mix(in srgb, var(--sl-color-gray-6) 70%, var(--sl-color-bg));
+	border-color: var(--sl-color-gray-5);
+}
+
+/* Short chips (marked by MarkdownContent.astro) stay on one line. */
+.sl-markdown-content code.short {
+	white-space: nowrap;
+}
+
+/* Code inside headings at full heading size reads as shouting (and giant
+ * mono chips dominated the old token pages). Scale it down and let the
+ * human-language part of the heading lead. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) code {
+	font-size: 0.8em;
+	font-weight: 500;
+	padding: 0.1em 0.4em;
+	vertical-align: baseline;
+}
+
+/* Code blocks: match the chip radius. */
+.sl-markdown-content pre:not(:where(.not-content *)) {
+	border-radius: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tables
+ * ------------------------------------------------------------------------ */
+
+/* Calmer header row + slightly muted rules so token tables read as rows of
+ * facts, not grids of boxes. */
+.sl-markdown-content th:not(:where(.not-content *)) {
+	color: var(--sl-color-gray-2);
+	font-size: var(--sl-text-sm);
+	border-bottom: 1px solid var(--sl-color-gray-4);
+}
+.sl-markdown-content td:not(:where(.not-content *)) {
+	border-bottom: 1px solid color-mix(in srgb, var(--sl-color-gray-5) 60%, var(--sl-color-bg));
+}
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+	padding-block: 0.625rem;
+}
+
+/* Every table spans the column on wider screens, where they all fit. */
+@media (min-width: 50rem) {
+	.sl-markdown-content table {
+		display: table;
+		width: 100%;
+	}
+	.sl-markdown-content table.settings {
+		table-layout: fixed;
+	}
+	.sl-markdown-content table.settings th:nth-child(1) {
+		width: 28%;
+	}
+	.sl-markdown-content table.settings th:nth-child(2) {
+		width: 31%;
+	}
+	.sl-markdown-content table.settings td code {
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Headings
+ * ------------------------------------------------------------------------ */
+
+/* A group heading directly above its first question gets a rule, so the two
+ * do not read as a repeated heading. */
+.sl-markdown-content .sl-heading-wrapper.level-h2:has(+ .level-h3) {
+	padding-bottom: 0.5rem;
+	border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+.sl-anchor-link {
+	margin-inline-start: 0.25em;
+}
+.sl-anchor-link:focus-visible {
+	outline-offset: 2px;
+}
+
+/* Touch screens cannot hover, so the link icons would show on every heading. */
+@media (hover: none) {
+	.sl-markdown-content .sl-anchor-link {
+		display: none;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Header and sidebar
+ * ------------------------------------------------------------------------ */
+
+/* Links that leave the site say so. */
+.sidebar-content ul a[href^="http"]::after {
+	content: "↗";
+	margin-inline-start: 0.25em;
+	color: var(--sl-color-gray-3);
+}
+
+/* Starlight's phone menu button is a white disc, which glares in dark mode. */
+:root[data-theme="dark"] .sl-menu-button:not(:has(~ :popover-open)) {
+	background-color: var(--sl-color-gray-5);
+	color: var(--sl-color-white);
+}
+
+/* ---------------------------------------------------------------------------
+ * Right-hand "On this page" list
+ * ------------------------------------------------------------------------ */
+
+/* Keep long task-style entries readable: a touch smaller with room to
+ * breathe. */
+starlight-toc a {
+	line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------------------
+ * Screenshots
+ * ------------------------------------------------------------------------ */
+
+/* Captured screenshots (see src/screenshots.mjs) sit in a quiet frame and
+ * center when they are narrower than the column. Never set `display` here:
+ * the light/dark twins rely on Starlight's sl-hidden utilities. */
+.sl-markdown-content p:has(img.screenshot) {
+	text-align: center;
+}
+.sl-markdown-content img.screenshot {
+	margin-inline: auto;
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.75rem;
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -12px rgb(0 0 0 / 0.25);
+}
+.sl-markdown-content img.screenshot.narrow {
+	max-width: min(100%, 21rem);
+}
+
+/* ---------------------------------------------------------------------------
+ * Landing page (the only page with a hero)
+ * ------------------------------------------------------------------------ */
+
+[data-has-hero] .sl-markdown-content {
+	max-width: 72rem;
+	margin-inline: auto;
+}
+[data-has-hero] .sl-markdown-content h2 {
+	margin-top: 3.5rem;
+}
+
+/* "What you can do": each list item is a card, and its link covers the card. */
+[data-has-hero] .sl-markdown-content ul:first-of-type {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+	gap: 1rem;
+	padding: 0;
+	margin-top: 1.5rem;
+	list-style: none;
+}
+[data-has-hero] .sl-markdown-content ul:first-of-type > li {
+	position: relative;
+	margin: 0;
+	padding: 1.25rem 1.375rem;
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.75rem;
+	background: var(--sl-color-bg-nav);
+	color: var(--sl-color-gray-2);
+	line-height: 1.55;
+	transition: border-color 0.15s ease;
+}
+[data-has-hero] .sl-markdown-content ul:first-of-type > li:hover {
+	border-color: var(--sl-color-accent);
+}
+[data-has-hero] .sl-markdown-content ul:first-of-type > li > a {
+	display: block;
+	margin-bottom: 0.375rem;
+	font-size: var(--sl-text-lg);
+	font-weight: 600;
+	/* The accent color marks the title as a link, also on touch screens. */
+	color: var(--sl-color-text-accent);
+	text-decoration: none;
+}
+[data-has-hero] .sl-markdown-content ul:first-of-type > li > a::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+}
+[data-has-hero] .sl-markdown-content ul:first-of-type > li > a:focus-visible {
+	outline: none;
+}
+[data-has-hero] .sl-markdown-content ul:first-of-type > li:has(> a:focus-visible) {
+	outline: 2px solid var(--sl-color-accent);
+	outline-offset: 2px;
+}
+
+/* "Start in three steps": a numbered strip. */
+[data-has-hero] .sl-markdown-content ol {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	gap: 1.5rem;
+	padding: 0;
+	margin-top: 1.5rem;
+	list-style: none;
+	counter-reset: step;
+}
+[data-has-hero] .sl-markdown-content ol > li {
+	counter-increment: step;
+	margin: 0;
+	color: var(--sl-color-gray-2);
+	line-height: 1.55;
+}
+[data-has-hero] .sl-markdown-content ol > li::before {
+	content: counter(step);
+	display: grid;
+	place-items: center;
+	width: 2rem;
+	height: 2rem;
+	margin-bottom: 0.75rem;
+	border-radius: 999px;
+	background: var(--sl-color-accent-low);
+	color: var(--sl-color-text-accent);
+	font-weight: 600;
+}
+[data-has-hero] .sl-markdown-content ol > li strong:first-child {
+	display: block;
+	color: var(--sl-color-white);
+}
+
+/* The first section keeps the same gap below the hero as the others. */
+[data-has-hero] .sl-markdown-content > :first-child {
+	margin-top: 3.5rem;
+}
+
+/* Headings on the landing page are not deep-link targets worth an icon. */
+[data-has-hero] .sl-markdown-content .sl-anchor-link {
+	display: none;
+}
+
+/* The landing page has no sidebar menu, so phones show the theme switcher in
+ * the header instead. */
+@media (max-width: 49.99rem) {
+	html:not([data-has-sidebar]) .header .right-group {
+		display: flex;
+	}
+	html:not([data-has-sidebar]) .header .social-icons {
+		display: none;
+	}
+	html:not([data-has-sidebar]) .header > div:has(> site-search) {
+		margin-inline-start: auto;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Reference tables on phones
+ * ------------------------------------------------------------------------ */
+
+/* Tables with three or more columns (labeled by src/tables.mjs) become one
+ * stacked entry per row, so no column hides off the edge. */
+@media (max-width: 40rem) {
+	.sl-markdown-content table.stack,
+	.sl-markdown-content table.stack tbody,
+	.sl-markdown-content table.stack tr,
+	.sl-markdown-content table.stack td {
+		display: block;
+		width: auto;
+	}
+	.sl-markdown-content table.stack thead {
+		display: none;
+	}
+	.sl-markdown-content table.stack tr {
+		padding-block: 0.75rem;
+		border-bottom: 1px solid var(--sl-color-hairline);
+	}
+	.sl-markdown-content table.stack td {
+		border: 0;
+		padding: 0.125rem 0;
+		overflow-wrap: anywhere;
+	}
+	.sl-markdown-content table.stack td + td {
+		margin-top: 0.25rem;
+	}
+	.sl-markdown-content table.stack tbody tr:first-child {
+		padding-top: 0;
+	}
+	.sl-markdown-content table.stack td:first-child {
+		font-weight: 600;
+		color: var(--sl-color-white);
+	}
+	.sl-markdown-content table.stack td:not(:first-child)::before {
+		content: attr(data-label) ": ";
+		color: var(--sl-color-gray-3);
+	}
+
+	/* Two-column tables keep their rows full width, each label beside the
+	 * first line of its value, and paths wrap inside one box instead of running
+	 * off the edge. */
+	.sl-markdown-content table:not(.stack) {
+		display: table;
+		width: 100%;
+	}
+	.sl-markdown-content td {
+		vertical-align: top;
+	}
+	.sl-markdown-content td code:not(.short) {
+		display: inline-block;
+		max-width: 100%;
+		overflow-wrap: anywhere;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Line breaks
+ * ------------------------------------------------------------------------ */
+
+/* Headings break into even lines instead of leaving one word behind. Section
+ * headings sit inline in Starlight's wrapper, which owns their lines. */
+.sl-markdown-content .sl-heading-wrapper,
+h1#_top {
+	text-wrap: balance;
+}
+
+/* Code in headings shrinks on narrow screens so a method name fits one line. */
+@media (max-width: 50rem) {
+	.sl-markdown-content :is(h2, h3) code {
+		font-size: 0.65em;
+	}
+}
+
+/* On wide screens, command IDs and label lists stay on one line. */
+@media (min-width: 50rem) {
+	.sl-markdown-content td[data-label="ID"] code,
+	.sl-markdown-content td[data-label="Labels"] {
+		white-space: nowrap;
+	}
+}
+
+/* The landing page's prose keeps a readable line length under the wide hero. */
+[data-has-hero] .sl-markdown-content > p {
+	max-width: 45rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Brand
+ * ------------------------------------------------------------------------ */
+
+/* The mark and the name read as one lockup. */
+.site-title {
+	gap: 0.625rem;
+}
+.site-title img {
+	height: 2rem;
+}
