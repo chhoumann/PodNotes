@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import checkStringIsUrl from "src/utility/checkStringIsUrl";
 import { ownRecord } from "src/utility/ownRecord";
 import {
 	isCredentialBearingUrl,
@@ -81,11 +82,7 @@ export function isSavedFeed(saved: PodcastFeed, url: string, feedUrls: FeedUrlRe
 
 /** `url` as the URL parser serializes it, or as given when it is not a URL. */
 function canonicalUrl(url: string): string {
-	try {
-		return new URL(url).href;
-	} catch {
-		return url;
-	}
+	return checkStringIsUrl(url)?.href ?? url;
 }
 
 /** Tells the user that a saved private feed's URL is not on this device. */
