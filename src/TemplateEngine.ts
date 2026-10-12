@@ -1,4 +1,3 @@
-import Fuse from "fuse.js";
 import { htmlToMarkdown, Notice } from "obsidian";
 import { plugin } from "src/store";
 import { get } from "svelte/store";
@@ -8,6 +7,7 @@ import getUrlExtension from "./utility/getUrlExtension";
 import { formatDate } from "./utility/formatDate";
 import { formatDuration } from "./utility/formatDuration";
 import { formatEpisodeNumber } from "./utility/formatEpisodeNumber";
+import { fuzzySearch } from "./utility/fuzzySearch";
 import { parseEpisodeNumberFromTitle } from "./utility/parseEpisodeNumber";
 import buildEpisodeResumeLink from "./utility/buildEpisodeResumeLink";
 import addExtension from "./utility/addExtension";
@@ -59,18 +59,12 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 			(match: string, tagId: string, params: string) => {
 				const tagValue = tags[tagId.toLowerCase()];
 				if (tagValue === null || tagValue === undefined) {
-					const fuse = new Fuse(Object.keys(tags), {
-						shouldSort: true,
-						findAllMatches: false,
-						threshold: 0.4,
-						isCaseSensitive: false,
-					});
-
-					const similarTag = fuse.search(tagId);
+					const tagIds = Object.keys(tags);
+					const similarTags = fuzzySearch(tagId, tagIds, false);
 
 					new Notice(
 						`Tag ${tagId} is invalid.${
-							similarTag.length > 0 ? ` Did you mean ${similarTag[0].item}?` : ""
+							similarTags.length > 0 ? ` Did you mean ${tagIds[similarTags[0]]}?` : ""
 						}`,
 					);
 					return match;
