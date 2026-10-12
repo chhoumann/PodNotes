@@ -25,4 +25,22 @@ describe("stripCssComments", () => {
 			".a {  color: red; }",
 		);
 	});
+
+	it("keeps strings after a license notice that contains a quote", () => {
+		expect(
+			stripCssComments("/*! author's notice */ .a::after { content: '/* literal */'; }"),
+		).toBe("/*! author's notice */ .a::after { content: '/* literal */'; }");
+	});
+
+	it("keeps a string that continues across a CRLF line break", () => {
+		expect(stripCssComments('.a::after { content: "one \\\r\ntwo /* literal */"; }')).toBe(
+			'.a::after { content: "one \\\r\ntwo /* literal */"; }',
+		);
+	});
+
+	it("keeps a license notice that contains a comment opener whole", () => {
+		expect(stripCssComments("/*! notice /* inner */ .a { color: red; } /* gone */")).toBe(
+			"/*! notice /* inner */ .a { color: red; } ",
+		);
+	});
 });
