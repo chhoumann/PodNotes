@@ -1,6 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import type { PluginHandle } from "obsidian-e2e";
-import { describe, expect, test } from "vitest";
+import { describe, expect, onTestFinished, test } from "vitest";
 import type { Episode } from "../../src/types/Episode";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
 import type { PodcastFeed } from "../../src/types/PodcastFeed";
@@ -18,6 +18,17 @@ import {
 	waitForPlaybackState,
 	waitForPodNotesReady,
 } from "./harness";
+import {
+	assertNoRuntimeErrors,
+	click,
+	closeSettings,
+	listedEpisodes,
+	openPodNotesSettings,
+	showPodNotes,
+	ui,
+} from "./journey/actions";
+import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
+import { seedLibrary, waitForLibrary } from "./journey/library";
 
 // Obsidian calls Plugin#onExternalSettingsChange when data.json is newer than
 // the plugin's last write: Obsidian Sync, iCloud, another instance on the vault,
@@ -127,7 +138,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			.poll(
 				() =>
 					obsidian.dev.evalJson<boolean>(
-						`Boolean(document.querySelector('.podcast-view .pn_image_container img[alt="Synced Feed"]'))`,
+						`Boolean(document.querySelector('.podcast-view .podcast-card[aria-label="Synced Feed"]'))`,
 					),
 				POLL,
 			)
@@ -327,6 +338,113 @@ describe("PodNotes data.json changed elsewhere", () => {
 				return true;
 			})()`);
 		}
+	});
+
+	async function startAsNewDevice(plugin: PluginHandle): Promise<PodNotesData> {
+		// A write through the harness first, so it restores this file after the test.
+		await plugin.data<PodNotesData>().patch((data) => data);
+		await rm(await plugin.dataPath());
+		await plugin.reload(RELOAD_OPTIONS);
+		const file = await plugin.data<PodNotesData & { libraryId?: string }>().read();
+		expect(file.savedFeeds).toEqual({});
+		expect(file.libraryId).toMatch(/^\d{4}-/);
+		return file;
+	}
+
+	test("keeps its library when a new device's file replaces data.json", async () => {
+		const { obsidian, plugin } = getContext();
+		const library = await plugin.data<PodNotesData>().read();
+		addSyncedChanges(library);
+		const newDeviceFile = await startAsNewDevice(plugin);
+		await plugin.data<PodNotesData>().write(library);
+		await plugin.reload(RELOAD_OPTIONS);
+
+		await plugin.data<PodNotesData>().write(newDeviceFile);
+
+		const disk = await plugin.waitForData<PodNotesData>(
+			(data) => Boolean(data.savedFeeds?.[SYNCED_FEED.title]),
+			WAIT_OPTS,
+		);
+		expect(disk.playedEpisodes?.["Synced Podcast::Synced Episode"]).toEqual(SYNCED_PROGRESS);
+		expect(await obsidian.dev.evalJson<Memory>(MEMORY)).toMatchObject({
+			feed: true,
+			playlist: true,
+			progress: 1234,
+		});
+	});
+
+	test("keeps a new device's change when the library replaces its data.json", async () => {
+		const { obsidian, plugin } = getContext();
+		const library = await plugin.data<PodNotesData>().read();
+		addSyncedChanges(library);
+		await startAsNewDevice(plugin);
+		await setVolume(obsidian, 0.42);
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.42, WAIT_OPTS);
+
+		await plugin.data<PodNotesData>().write(library);
+
+		const disk = await plugin.waitForData<PodNotesData>(
+			(data) => data.defaultVolume === 0.42 && Boolean(data.savedFeeds?.[SYNCED_FEED.title]),
+			WAIT_OPTS,
+		);
+		expect(disk.playedEpisodes?.["Synced Podcast::Synced Episode"]).toEqual(SYNCED_PROGRESS);
+		expect(await obsidian.dev.evalJson<Memory>(MEMORY)).toMatchObject({
+			feed: true,
+			playlist: true,
+			progress: 1234,
+			volume: 0.42,
+		});
+	});
+
+	test("shows both names when the library saved a podcast under an earlier name than a new device", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const current: FixtureFeed = {
+			title: "Current Show Name",
+			slug: "renamed-show",
+			artwork: true,
+			episodes: [{ title: "Renamed Show Episode", seconds: 6, pubDate: pubDate(0) }],
+		};
+		const earlier: FixtureFeed = { ...current, title: "Earlier Show Name" };
+		const server = await startFixtureServer([current]);
+		onTestFinished(() => server.stop());
+		onTestFinished(() => closeSettings(obsidian));
+		await seedLibrary(context, server, { subscriptions: [earlier] });
+		const library = await plugin.data<PodNotesData>().read();
+		const newDeviceFile = await startAsNewDevice(plugin);
+		newDeviceFile.savedFeeds = {
+			[current.title]: {
+				title: current.title,
+				url: server.feedUrl(current),
+				artworkUrl: server.artworkUrl(current),
+			},
+		};
+		await plugin.data<PodNotesData>().write(library);
+		await plugin.reload(RELOAD_OPTIONS);
+
+		await plugin.data<PodNotesData>().write(newDeviceFile);
+
+		const merged = await waitForLibrary(
+			plugin,
+			(saved) => saved.subscriptions.length === 2,
+			"both names of the podcast saved",
+		);
+		expect(merged.subscriptions.map((feed) => feed.url)).toEqual([
+			server.feedUrl(current),
+			server.feedUrl(current),
+		]);
+		await showPodNotes(obsidian);
+		for (const title of [earlier.title, current.title]) {
+			await click(obsidian, ui.podcastGridTab);
+			await click(obsidian, ui.podcastCard(title));
+			await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length > 0, {
+				timeoutMs: 15_000,
+				message: `the episodes of ${title}`,
+			});
+			expect(await listedEpisodes(obsidian)).toEqual(["Renamed Show Episode"]);
+		}
+		await openPodNotesSettings(obsidian);
+		await assertNoRuntimeErrors(obsidian);
 	});
 });
 

@@ -56,7 +56,7 @@ See [Play your own audio and video](/local_files/#play-your-own-audio-and-video)
 
 Your **Capture timestamp format** uses `{{time}}`, which inserts plain text.
 Installs set up before PodNotes 2.21.0 keep the old default, which uses `{{time}}`. New installs use `{{linktime}}`, which inserts a link that plays the episode from that moment.
-In **Settings → PodNotes**, change `{{time}}` to `{{linktime}}` in **Capture timestamp format**. See [Capture timestamps](/timestamps/).
+In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed URL or local file to link to. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ### Can I take notes on an episode I listen to in another app?
 

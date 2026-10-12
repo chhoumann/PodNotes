@@ -30,7 +30,7 @@ hero:
 - <span id="timestamps"></span>[Capture timestamps](/timestamps/)
   One command inserts a timestamp link into your note. Select it later to play from that second.
 - <span id="episode-notes"></span><span id="browse-your-library-with-bases"></span>[Create episode notes](/notes/)
-  A template fills in the show, date, description, and a link that resumes playback. Browse the notes with Bases.
+  A template fills in the show, date, description, and a link that resumes playback. Browse them as a table with Obsidian Bases.
 - [Use PodNotes on your phone](/mobile/)
   PodNotes works on iOS and Android. Download episodes for offline listening, or play your own audio and video files.
 - <span id="transcripts-with-speaker-labels"></span>[Transcribe episodes](/transcripts/)
@@ -42,7 +42,7 @@ hero:
 
 1. **Install PodNotes.** In **Settings → Community plugins**, turn off **Restricted mode** if it is on. Select **Browse**, search for PodNotes, then select **Install** and **Enable**.
 2. **Add a podcast.** In **Settings → PodNotes**, search for a show or paste its RSS feed URL, then select **Add**.
-3. **Capture a moment.** Run **PodNotes: Show player** and play an episode. In a note, run **PodNotes: Capture Timestamp**.
+3. **Capture a moment.** Run **PodNotes: Show player** and select an episode to play it. In a note, run **PodNotes: Capture Timestamp**.
 
 [Getting started](/getting-started/) walks through each step. To install a beta version or install by hand, see [Other ways to install](/getting-started/#other-ways-to-install).
 

@@ -49,7 +49,7 @@ PodNotes inserts the playback time as a link:
 - [00:12:41](obsidian://podnotes?...)
 ```
 
-Select the link, in editing or reading view, to play the episode from that moment.
+Select the link, in Live Preview or reading view, to play the episode from that moment.
 
 ## Create an episode note
 

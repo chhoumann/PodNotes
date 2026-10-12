@@ -29,7 +29,7 @@ Preconditions:
 
 - **Open from the ribbon.** Run `UI click '.side-dock-ribbon-action[aria-label="Show PodNotes"]'`. `.workspace-leaf-content[data-type="podcast_player_view"]` is visible.
 - **Open from the palette.** Run `UI key Ctrl+p`, `UI type .prompt-input 'Show player'`, `UI click .suggestion-item --text 'Show player'`. The same view is revealed, with no second PodNotes leaf (`CLI eval code='app.workspace.getLeavesOfType("podcast_player_view").length'` is `=> 1`).
-- **Play an episode.** Run `UI click '.podcast-view [aria-label="Podcast grid"]'`, `UI click '.podcast-view .pn_image_container:has(img[alt="PodNotes Fixture"])'`, `UI click '.podcast-view .podcast-episode-item' --text 'Fixture Episode 1'`. The `Player` tab is selected, the title reads `Fixture Episode 1`, and after a few seconds `api.isPlaying` is true and `api.currentTime` grows.
+- **Play an episode.** Run `UI click '.podcast-view [aria-label="Podcast grid"]'`, `UI click '.podcast-view .podcast-card[aria-label="PodNotes Fixture"]'`, `UI click '.podcast-view .podcast-episode-item' --text 'Fixture Episode 1'`. The `Player` tab is selected, the title reads `Fixture Episode 1`, and after a few seconds `api.isPlaying` is true and `api.currentTime` grows.
 - **Toggle.** Run `UI click '.podcast-view [aria-label="Toggle playback"]'`. `api.isPlaying` flips and `api.currentTime` stops advancing.
 - **Skip.** Run `UI click '.podcast-view .controls-container > :last-child button'` (forward) or `'.podcast-view .controls-container > :first-child button'` (backward). `api.currentTime` moves by 15 s, clamped to the episode.
 - **Seek.** Run `UI click '.podcast-view [aria-label="Seek within episode"]'`. It clicks the bar's center, so `api.currentTime` lands near 30 s of the 60 s fixture.
