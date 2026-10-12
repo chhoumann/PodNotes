@@ -5,7 +5,7 @@ import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
-import { favorites, localFiles, queue, savedFeeds } from "src/store";
+import { favorites, localFiles, plugin, queue, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
 import {
 	installResizeObserver,
@@ -216,7 +216,7 @@ describe("mini player", () => {
 		expect(button("Play")).toBeInTheDocument();
 	});
 
-	test("Timestamp names the note it added to", async () => {
+	test("Timestamp names the note it added to, or says why it added nothing", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		services.player.restore(episode);
 		renderView();
@@ -226,9 +226,38 @@ describe("mini player", () => {
 		services.captureTimestamp.mockResolvedValueOnce("Episode 1 Launch");
 		await fireEvent.click(button("Capture timestamp"));
 		await tick();
-
-		expect(services.captureTimestamp).toHaveBeenCalledTimes(2);
 		expect(notice.mock.calls).toEqual([["Timestamp added to Episode 1 Launch"]]);
+
+		const host = get(plugin);
+		host.settings.note.path = "";
+		plugin.set(host);
+		services.captureTimestamp.mockResolvedValueOnce(null);
+		await fireEvent.click(button("Capture timestamp"));
+		await tick();
+
+		expect(services.captureTimestamp).toHaveBeenCalledTimes(3);
+		expect(notice.mock.calls).toEqual([
+			["Timestamp added to Episode 1 Launch"],
+			["Set an episode note path and template to capture timestamps"],
+		]);
+	});
+
+	test("tells the minutes left, and nothing once none are left", async () => {
+		renderView();
+		playing();
+		await tick();
+		const nowPlaying = () => screen.getByRole("button", { name: /^Open player/ });
+		doc.media.currentTime = 3000;
+		doc.media.emit("timeupdate");
+		await tick();
+		expect(nowPlaying()).toHaveTextContent(`${feed.title} · 10 min left`);
+
+		doc.media.currentTime = 3600;
+		doc.media.emit("timeupdate");
+		await tick();
+
+		expect(nowPlaying()).not.toHaveTextContent("left");
+		expect(nowPlaying()).toHaveTextContent(new RegExp(`${feed.title}$`));
 	});
 });
 

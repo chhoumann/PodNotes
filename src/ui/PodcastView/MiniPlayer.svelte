@@ -6,7 +6,7 @@
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
-	const { player, navigation, captureTimestamp } = useServices();
+	const { player, navigation, settings, captureTimestamp } = useServices();
 	const playerState = player.state;
 
 	const episode = $derived($playerState.episode);
@@ -17,6 +17,7 @@
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
 	const remaining = $derived(Math.max(0, duration - elapsed));
 	const percent = $derived(duration > 0 ? (elapsed / duration) * 100 : 0);
+	const left = $derived(remaining > 0 ? ` · ${minutes(remaining)} left` : "");
 	let failedArtworkUrl = $state("");
 	const id = $props.id();
 
@@ -32,6 +33,14 @@
 	async function capture() {
 		const note = await captureTimestamp();
 		if (note) new Notice(`Timestamp added to ${note}`);
+		// A failed write has said so. An episode note that is not set up has not.
+		else if (
+			!$settings.note.path ||
+			!$settings.note.template ||
+			!$settings.timestamp.template
+		) {
+			new Notice("Set an episode note path and template to capture timestamps");
+		}
 	}
 </script>
 
@@ -65,7 +74,7 @@
 			<span class="pn-mini-txt">
 				<span class="pn-mini-t">{episode.title}</span>
 				<span class="pn-mini-s">
-					{episode.podcastName}{duration > 0 ? ` · ${minutes(remaining)} left` : ""}
+					{episode.podcastName}{left}
 				</span>
 			</span>
 		</button>
@@ -91,7 +100,7 @@
 		{/if}
 		<button
 			type="button"
-			class="pn-iconbtn"
+			class="pn-iconbtn pn-mini-toggle"
 			aria-label={playing ? "Pause" : "Play"}
 			title={playing ? "Pause" : "Play"}
 			onclick={() => player.toggle()}
@@ -243,6 +252,10 @@
 
 	.pn-mini .pn-mini-capture {
 		color: var(--text-accent);
+	}
+
+	.pn-mini-toggle :global(svg) {
+		fill: currentColor;
 	}
 
 	.is-wide .pn-btn {
