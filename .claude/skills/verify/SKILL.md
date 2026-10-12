@@ -154,8 +154,8 @@ npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/player/flow.mp4 -- .obsid
 npm run capture:e2e-obsidian -- sheet .obsidian-e2e-artifacts/player/flow.mp4 .obsidian-e2e-artifacts/player/flow-sheet.png
 ```
 
-`screenshot` and `record` open the player first and fail without capturing
-when it does not open. `record` then records the window while the driver runs.
+`screenshot` and `record` reveal the PodNotes view first and fail without
+capturing when it does not open. `record` then records the window while the driver runs.
 The driver is an executable script of `ui.mjs` and `obsidian:e2e` calls with short
 `sleep`s between steps. A driver that exits non-zero discards the take.
 Without a driver, `record` takes 3 s.

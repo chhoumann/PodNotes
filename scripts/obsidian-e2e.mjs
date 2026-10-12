@@ -1,5 +1,5 @@
 // The repo's e2e command. `test` runs tests/e2e against this worktree's isolated
-// Obsidian instance, `screenshot` and `record` capture the PodNotes player,
+// Obsidian instance, `screenshot` and `record` capture the PodNotes view,
 // `capture` is upstream `obsidian-e2e capture` against the instance, and
 // provision, start, stop and run go to the obsidian-e2e instance runner.
 import { spawn } from "node:child_process";
@@ -182,7 +182,7 @@ async function capturePlayer(verb, args) {
 		instance,
 		obsidianCommandArgs(instance.vaultName, ["eval", `code=${OPEN_PLAYER}`]),
 	);
-	if (!stdout.trim().endsWith("=> true")) throw new Error("The PodNotes player did not open.");
+	if (!stdout.trim().endsWith("=> true")) throw new Error("The PodNotes view did not open.");
 	await fsp.mkdir(path.dirname(path.resolve(output)), { recursive: true });
 	return runObsidianE2ECli(["capture", ...captureArgs], { env: await cdpEnv(instance) });
 }
