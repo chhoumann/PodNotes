@@ -1013,6 +1013,12 @@ describe("deferPlay", () => {
 });
 
 describe("volume and rate", () => {
+	const levels = (media: FakeMedia) => ({
+		volume: media.volume,
+		playbackRate: media.playbackRate,
+		defaultPlaybackRate: media.defaultPlaybackRate,
+	});
+
 	test("volume is clamped and saved as the default volume", () => {
 		const { player, host, media, state } = setup({ defaultVolume: 0.5 });
 
@@ -1025,14 +1031,145 @@ describe("volume and rate", () => {
 		expect(host.saveSettings).toHaveBeenCalledTimes(1);
 	});
 
-	test("the rate survives a new load", () => {
-		const { player, media } = setup();
-		player.setPlaybackRate(1.7);
+	test("a new episode starts at the default speed as it is now, at the player's volume", () => {
+		const { player, host, media, state } = setup();
+		host.settings.defaultVolume = 0.4;
+		host.settings.defaultPlaybackRate = 1.8;
 
 		player.play(A);
 		metadata(media());
 
-		expect(media().playbackRate).toBe(1.7);
+		expect(levels(media())).toEqual({
+			volume: 1,
+			playbackRate: 1.8,
+			defaultPlaybackRate: 1.8,
+		});
+		expect(state()).toMatchObject({ volume: 1, playbackRate: 1.8 });
+	});
+
+	test("a live speed lasts for its episode, and the volume carries over to the next", () => {
+		const { player, host, media, state } = setup({
+			defaultVolume: 0.4,
+			defaultPlaybackRate: 1.8,
+		});
+		player.play(A);
+		metadata(media());
+
+		player.setVolume(0.7);
+		player.setPlaybackRate(1.3);
+		player.pause();
+		player.resume();
+		player.play(A);
+		expect(levels(media())).toEqual({
+			volume: 0.7,
+			playbackRate: 1.3,
+			defaultPlaybackRate: 1.3,
+		});
+
+		player.play(B);
+		metadata(media());
+		expect(levels(media())).toEqual({
+			volume: 0.7,
+			playbackRate: 1.8,
+			defaultPlaybackRate: 1.8,
+		});
+		expect(state()).toMatchObject({ volume: 0.7, playbackRate: 1.8 });
+		expect(host.settings).toMatchObject({ defaultVolume: 0.7, defaultPlaybackRate: 1.8 });
+	});
+
+	test("a level set before the first play of a restored episode survives the load", () => {
+		const { player, media, state } = setup({ defaultPlaybackRate: 1.8 });
+		player.restore(A);
+		player.setVolume(0.5);
+		player.setPlaybackRate(2.3);
+
+		player.resume();
+
+		expect(levels(media())).toEqual({
+			volume: 0.5,
+			playbackRate: 2.3,
+			defaultPlaybackRate: 2.3,
+		});
+		expect(state()).toMatchObject({ status: "loading", volume: 0.5, playbackRate: 2.3 });
+	});
+
+	test.each([
+		[
+			"resume() after an error",
+			(player: PlayerController, media: () => FakeMedia) => {
+				media().emit("error");
+				player.resume();
+			},
+		],
+		[
+			"play() of its new media, such as a finished download,",
+			(player: PlayerController) =>
+				player.play({ ...A, streamUrl: "https://cdn.example.com/A-v2.mp3" }),
+		],
+	])("%s reloads the episode at its live levels", (_, reload) => {
+		const { player, host, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		player.setVolume(0.7);
+		player.setPlaybackRate(1.3);
+		host.settings.defaultPlaybackRate = 1.8;
+
+		reload(player, media);
+
+		expect(state().status).toBe("loading");
+		expect(levels(media())).toEqual({
+			volume: 0.7,
+			playbackRate: 1.3,
+			defaultPlaybackRate: 1.3,
+		});
+	});
+
+	test("the queue's next episode starts at the default speed and the live volume", () => {
+		const { player, media } = setup({ defaultVolume: 0.4, defaultPlaybackRate: 1.8 });
+		queue.set({ ...get(queue), episodes: [B] });
+		player.play(A);
+		metadata(media());
+		player.setVolume(0.7);
+		player.setPlaybackRate(1.3);
+
+		media().emit("ended");
+
+		expect(media().src).toBe(B.streamUrl);
+		expect(levels(media())).toEqual({
+			volume: 0.7,
+			playbackRate: 1.8,
+			defaultPlaybackRate: 1.8,
+		});
+	});
+
+	test("a popout's reload of the video keeps the live levels", () => {
+		const { player, doc, media } = setup({ defaultVolume: 0.4, defaultPlaybackRate: 1.8 });
+		const stage = new FakeParent(doc);
+		player.play(VIDEO);
+		metadata(media());
+		player.videoStage(stage as unknown as HTMLElement);
+		player.setVolume(0.7);
+		player.setPlaybackRate(1.3);
+
+		stage.ownerDocument = {};
+		media().load();
+		media().emit("emptied");
+		metadata(media());
+
+		expect(levels(media())).toEqual({
+			volume: 0.7,
+			playbackRate: 1.3,
+			defaultPlaybackRate: 1.3,
+		});
+	});
+
+	test("a default speed out of range loads like it does at startup", () => {
+		const { player, host, media } = setup();
+		host.settings.defaultPlaybackRate = 9;
+
+		player.play(A);
+
+		expect(levels(media())).toEqual({ volume: 1, playbackRate: 4, defaultPlaybackRate: 4 });
 	});
 });
 
@@ -1362,6 +1499,17 @@ describe("video stage", () => {
 		expect(media().currentTime).toBe(0);
 		expect(media().paused).toBe(false);
 		expect(state().status).toBe("playing");
+	});
+
+	test("resume() of a finished video that a reset reloaded keeps its live speed", () => {
+		const { player, host, media, state } = finishedThenReset();
+		player.setPlaybackRate(1.3);
+		host.settings.defaultPlaybackRate = 1.8;
+
+		player.resume();
+
+		expect(state().status).toBe("loading");
+		expect(media().playbackRate).toBe(1.3);
 	});
 
 	test("a finished video sought during play restarts at the beginning after a reset", () => {
