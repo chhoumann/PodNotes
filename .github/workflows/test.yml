@@ -10,21 +10,9 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: ${{ matrix.name }}
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Lint and format
-            run: npm run lint && npm run format:check
-          - name: Build and sizes
-            run: npm run build && npm run size && npm run size:data
-          - name: Unit tests
-            run: npm run test
-          - name: Tooling tests
-            run: npm run test:tooling
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,17 +25,15 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
-      - name: ${{ matrix.name }}
-        run: ${{ matrix.run }}
-
-  # A skipped required check counts as passing.
-  test:
-    name: Test
-    needs: check
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require every check to pass
-        run: test "$RESULT" = success
-        env:
-          RESULT: ${{ needs.check.result }}
+      - name: Lint
+        run: npm run lint
+      - name: Format check
+        run: npm run format:check
+      - name: Type check and build
+        run: npm run build
+      - name: Bundle and persistence sizes
+        run: npm run size && npm run size:data
+      - name: Run tests
+        run: npm run test
+      - name: Check tooling failures
+        run: npm run test:tooling
