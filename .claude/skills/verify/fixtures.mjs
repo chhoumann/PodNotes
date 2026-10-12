@@ -121,7 +121,7 @@ function transcriptsFeedXml(audioBytes) {
 		<link>${base}/</link>
 		<description>A local feed whose episodes publish transcripts.</description>
 		<itunes:author>PodNotes</itunes:author>
-		<itunes:image href="${base}/artwork.svg"/>
+		<itunes:image href="${base}/t/artwork.svg"/>
 		${item(1, "VTT Episode", link(`${base}/t/buzzcast.html`, "text/html") + link("t/podnews.vtt", "text/vtt"))}
 		${item(2, "SRT Episode", link(`${base}/t/build-your-saas.srt`, "application/x-subrip"))}
 		${item(3, "JSON Episode", link(`${base}/t/build-your-saas.json`, "application/json"))}
@@ -151,6 +151,7 @@ function serve() {
 		"/b/episode-1.wav": ["audio/wav", audio],
 		"/b/episode-2.wav": ["audio/wav", audio],
 		"/transcripts.xml": ["application/rss+xml", Buffer.from(transcriptsFeedXml(audio.length))],
+		"/t/artwork.svg": ["image/svg+xml", Buffer.from(artwork("Transcripts", "#b45309"))],
 		"/t/buzzcast.html": ["text/html; charset=utf-8", transcript("buzzcast.html")],
 		"/t/podnews.vtt": ["text/vtt; charset=utf-8", transcript("podnews-2026-10-05.vtt")],
 		"/t/build-your-saas.srt": ["application/x-subrip", transcript("build-your-saas.srt")],
