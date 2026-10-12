@@ -92,6 +92,8 @@ export default defineConfig(({ mode }) => {
 					codeSplitting: false,
 					exports: "auto",
 					banner,
+					// Nothing bundles main.js again, so pure annotations are dead bytes.
+					comments: { annotation: false },
 					// Vite 8 dropped the esbuild transform (and with it
 					// esbuild.drop), so prod minification and console
 					// stripping both move to rolldown's oxc minifier.
