@@ -85,8 +85,11 @@ function parseHtml(source: string): ParsedTranscript | undefined {
 	const cues = Array.from(body.querySelectorAll("time")).flatMap((time): TranscriptCue[] => {
 		const start =
 			parseClock(time.getAttribute("datetime") ?? "") ?? parseClock(time.textContent ?? "");
-		const words = time.nextElementSibling;
-		const text = words?.tagName === "P" ? collapseWhitespace(words.textContent ?? "") : "";
+		const words: string[] = [];
+		for (let p = time.nextElementSibling; p?.tagName === "P"; p = p.nextElementSibling) {
+			words.push(p.textContent ?? "");
+		}
+		const text = collapseWhitespace(words.join(" "));
 		if (start === undefined || !text) return [];
 		const cite = time.previousElementSibling;
 		const speaker = cite?.tagName === "CITE" ? collapseWhitespace(cite.textContent ?? "") : "";

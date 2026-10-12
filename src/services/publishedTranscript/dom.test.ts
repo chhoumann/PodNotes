@@ -23,6 +23,22 @@ describe("parseTranscript HTML", () => {
 		});
 	});
 
+	test("a turn's text is every p after its time, up to the next element that is not a p", () => {
+		expect(
+			parseTranscript(
+				"html",
+				"<cite>Alban</cite><time>0:00</time><p>One.</p><p>Two.</p>" +
+					"<cite>Kevin</cite><time>0:05</time><p>Three.</p>",
+			),
+		).toEqual({
+			kind: "timed",
+			cues: [
+				{ start: 0, speaker: "Alban", text: "One. Two." },
+				{ start: 5, speaker: "Kevin", text: "Three." },
+			],
+		});
+	});
+
 	test("a page without times is untimed, one paragraph per p", () => {
 		const untimed = buzzcast.replace(/<time>[^<]*<\/time>/g, "");
 
