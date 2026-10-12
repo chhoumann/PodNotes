@@ -13,7 +13,7 @@ import {
 } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
-import { currentEpisode, currentTime, downloadedEpisodes, plugin } from "./store";
+import { downloadedEpisodes, plugin } from "./store";
 import { DEFAULT_SETTINGS } from "./constants";
 
 // The illegal-character sanitizer is private; exercise it through
@@ -139,8 +139,6 @@ describe("DownloadPathTemplateEngine extension stripping (#DL-04)", () => {
 
 describe("TimestampTemplateEngine segment tags", () => {
 	beforeEach(() => {
-		currentEpisode.set(demoEpisode);
-		currentTime.set(125);
 		downloadedEpisodes.set({});
 		plugin.set({
 			settings: {

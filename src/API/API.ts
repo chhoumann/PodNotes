@@ -2,20 +2,10 @@ import type { Episode } from "src/types/Episode";
 import { formatSeconds } from "src/utility/formatSeconds";
 import type { IAPI } from "./IAPI";
 import { TFile } from "obsidian";
-import {
-	currentEpisode,
-	currentTime,
-	downloadedEpisodes,
-	duration,
-	isPaused,
-	activePlaybackSegment,
-	playbackRate as playbackRateStore,
-	plugin,
-	volume as volumeStore,
-} from "src/store";
+import { plugin } from "src/store";
 import { get } from "svelte/store";
 import encodePodnotesURI from "src/utility/encodePodnotesURI";
-import { isLocalFile } from "src/utility/isLocalFile";
+import { episodeLinkTarget } from "src/utility/episodeLinkTarget";
 import { formatPodcastSegment, normalizePodcastSegmentTimes } from "src/utility/podcastSegment";
 import {
 	adjustPlaybackRate,
@@ -32,17 +22,17 @@ const DEFAULT_SKIP_LENGTH = 15;
 const normalizeSkipLength = (length: number): number =>
 	Number.isFinite(length) && length > 0 ? length : DEFAULT_SKIP_LENGTH;
 
-// A non-finite volume (e.g. api.volume = NaN) must never poison the player, which
-// two-way binds the store onto the media element. Fall back to the current value
-// (itself clamped) so a bad write is a no-op rather than corrupting playback.
-const clampVolume = (value: number, fallback = 1): number => {
-	const safeFallback = Number.isFinite(fallback) ? Math.min(1, Math.max(0, fallback)) : 1;
-	return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : safeFallback;
-};
-
 export class API implements IAPI {
+	private get player() {
+		return get(plugin).player;
+	}
+
+	private get state() {
+		return get(this.player.state);
+	}
+
 	public get podcast(): Episode {
-		return get(currentEpisode);
+		return this.state.episode as Episode;
 	}
 
 	public get transcript(): Promise<string | null> {
@@ -50,36 +40,37 @@ export class API implements IAPI {
 	}
 
 	public get length(): number {
-		return get(duration);
+		return this.state.duration;
 	}
 
 	public get currentTime(): number {
-		return get(currentTime);
+		return this.state.currentTime;
 	}
 
 	public set currentTime(value: number) {
-		activePlaybackSegment.set(null);
-		currentTime.update((_) => value);
+		this.player.seek(value);
 	}
 
+	/** True while loading too: it plays once the media is ready, and Stop can cancel that. */
 	public get isPlaying(): boolean {
-		return !get(isPaused);
+		const { status } = this.state;
+		return status === "playing" || status === "loading";
 	}
 
 	public get volume(): number {
-		return get(volumeStore);
+		return this.state.volume;
 	}
 
 	public set volume(value: number) {
-		volumeStore.set(clampVolume(value, get(volumeStore)));
+		this.player.setVolume(value);
 	}
 
 	public get playbackRate(): number {
-		return get(playbackRateStore);
+		return this.state.playbackRate;
 	}
 
 	public set playbackRate(value: number) {
-		playbackRateStore.set(normalizePlaybackRate(value, this.defaultPlaybackRate));
+		this.player.setPlaybackRate(value);
 	}
 
 	/**
@@ -99,15 +90,15 @@ export class API implements IAPI {
 
 		if (!linkify) return time;
 
-		const feedUrl = this.getEpisodeLinkTarget();
+		const target = episodeLinkTarget(this.podcast);
 
-		if (!feedUrl || feedUrl === "") {
+		if (!target) {
 			// Considered handling this as an error case, but I think
 			// it's better UX to just show the time rather than getting an error.
 			return time;
 		}
 
-		const url = encodePodnotesURI(this.podcast.title, feedUrl, adjustedTime);
+		const url = encodePodnotesURI(this.podcast.title, target, adjustedTime);
 
 		return `[${time}](${url.href})`;
 	}
@@ -129,15 +120,15 @@ export class API implements IAPI {
 
 		if (!linkify || !segmentTimes) return segment;
 
-		const feedUrl = this.getEpisodeLinkTarget();
+		const target = episodeLinkTarget(this.podcast);
 
-		if (!feedUrl || feedUrl === "") {
+		if (!target) {
 			return segment;
 		}
 
 		const url = encodePodnotesURI(
 			this.podcast.title,
-			feedUrl,
+			target,
 			segmentTimes.startTime,
 			segmentTimes.endTime,
 		);
@@ -164,23 +155,16 @@ export class API implements IAPI {
 		return await pluginInstance.app.vault.read(transcriptFile);
 	}
 
-	private getEpisodeLinkTarget(): string | undefined {
-		const epIsLocal = isLocalFile(this.podcast);
-		return !epIsLocal
-			? this.podcast.feedUrl
-			: downloadedEpisodes.getEpisode(this.podcast)?.filePath;
-	}
-
 	start(): void {
-		isPaused.update((_) => false);
+		this.player.resume();
 	}
 
 	stop(): void {
-		isPaused.update((_) => true);
+		this.player.pause();
 	}
 
 	togglePlayback(): void {
-		isPaused.update((isPaused) => !isPaused);
+		this.player.toggle();
 	}
 
 	skipBackward(): void {
@@ -194,21 +178,21 @@ export class API implements IAPI {
 		const skipForwardLen = normalizeSkipLength(get(plugin).settings.skipForwardLength);
 		const target = this.currentTime + skipForwardLen;
 		const dur = this.length;
-		// Clamp just short of the end so an over-skip lands at the end instead of
-		// firing 'ended' and auto-advancing the queue. Never let the clamp move the
-		// position BACKWARD: when already within the last 0.25s, a forward skip must
-		// not rewind, so keep at least the current time (PB-02 / Codex review #213).
-		// With an unknown/zero duration (metadata not loaded) leave it unclamped.
+		// An over-skip lands 0.25s short of the end, so a playing episode finishes and
+		// the queue advances; a seek to the end itself would pause. Never let the clamp
+		// move the position BACKWARD: when already within the last 0.25s, a forward
+		// skip must not rewind, so keep at least the current time (PB-02 / Codex review
+		// #213). With an unknown/zero duration (metadata not loaded) leave it unclamped.
 		this.currentTime =
 			dur > 0 ? Math.max(this.currentTime, Math.min(target, dur - 0.25)) : target;
 	}
 
 	increasePlaybackRate(): void {
-		playbackRateStore.update((rate) => adjustPlaybackRate(rate, PLAYBACK_RATE_STEP));
+		this.playbackRate = adjustPlaybackRate(this.playbackRate, PLAYBACK_RATE_STEP);
 	}
 
 	decreasePlaybackRate(): void {
-		playbackRateStore.update((rate) => adjustPlaybackRate(rate, -PLAYBACK_RATE_STEP));
+		this.playbackRate = adjustPlaybackRate(this.playbackRate, -PLAYBACK_RATE_STEP);
 	}
 
 	resetPlaybackRate(): void {

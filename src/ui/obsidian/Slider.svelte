@@ -48,6 +48,15 @@
 		currentLimits: [min: number, max: number] | [min: number, max: number, step: number],
 		currentStyles: CSSObject,
 	) {
+		// Limits first: a range input snaps its value to the step from its minimum,
+		// so the default step of 1 would turn a rate of 1 into 1.5 once min is 0.5.
+		if (currentLimits) {
+			if (currentLimits.length === 2) {
+				sldr.setLimits(currentLimits[0], currentLimits[1], 1);
+			} else {
+				sldr.setLimits(currentLimits[0], currentLimits[1], currentLimits[2]);
+			}
+		}
 		const sliderValue =
 			typeof sldr.getValue === "function" ? sldr.getValue() : Number(sldr.sliderEl?.value);
 
@@ -55,13 +64,6 @@
 			isProgrammaticUpdate = true;
 			sldr.setValue(currentValue);
 			isProgrammaticUpdate = false;
-		}
-		if (currentLimits) {
-			if (currentLimits.length === 2) {
-				sldr.setLimits(currentLimits[0], currentLimits[1], 1);
-			} else {
-				sldr.setLimits(currentLimits[0], currentLimits[1], currentLimits[2]);
-			}
 		}
 		if (currentStyles) {
 			sldr.sliderEl.setAttr("style", extractStylesFromObj(currentStyles));

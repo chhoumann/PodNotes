@@ -1,20 +1,15 @@
-import { TFile } from "obsidian";
+import { TFile, type Vault } from "obsidian";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { API } from "./API";
-import {
-	activePlaybackSegment,
-	currentEpisode,
-	currentTime,
-	downloadedEpisodes,
-	duration,
-	playbackRate,
-	plugin,
-	volume,
-} from "src/store";
+import { DEFAULT_SETTINGS } from "src/constants";
+import { PlayerController } from "src/player/PlayerController";
+import { downloadedEpisodes, playedEpisodes, plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
+import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { LocalEpisode } from "src/types/LocalEpisode";
+import { FakeDocument } from "../../tests/mocks/fakeMedia";
 
 const feedEpisode: Episode = {
 	title: "Feed Episode",
@@ -36,30 +31,45 @@ const localEpisode: LocalEpisode = {
 	filePath: "Audio/Local Episode.mp3",
 };
 
+function setup(settings: Partial<IPodNotesSettings> = {}, vault: Partial<Vault> = {}) {
+	const doc = new FakeDocument();
+	const host = {
+		settings: { ...structuredClone(DEFAULT_SETTINGS), defaultPlaybackRate: 1.8, ...settings },
+		app: { vault: vault as Vault },
+		checkpoint: (update: () => void) => update(),
+		saveSettings: vi.fn(() => Promise.resolve()),
+	};
+	const player = new PlayerController(doc.asPlayerDocument(), host);
+	plugin.set({ ...host, player } as never);
+	return { api: new API(), player, media: () => doc.media };
+}
+
+/** Plays the feed episode from `time`, with its metadata loaded. */
+function playingAt(time: number, duration = 3600, settings: Partial<IPodNotesSettings> = {}) {
+	const context = setup(settings);
+	context.player.play(feedEpisode, { time });
+	context.media().duration = duration;
+	context.media().emit("loadedmetadata");
+	return context;
+}
+
 beforeEach(() => {
-	currentEpisode.update(() => undefined as unknown as Episode);
-	currentTime.set(0);
-	activePlaybackSegment.set(null);
 	downloadedEpisodes.set({});
-	playbackRate.set(1);
-	plugin.set({
-		settings: {
-			defaultPlaybackRate: 1.8,
-		},
-	} as never);
+	playedEpisodes.set({});
+	queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: [] });
 });
 
 describe("API.getPodcastSegmentFormatted", () => {
 	test("formats a plain segment range", () => {
-		currentEpisode.set(feedEpisode);
-		const api = new API();
+		const { api, player } = setup();
+		player.restore(feedEpisode);
 
 		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 115, 125)).toBe("00:01:55-00:02:05");
 	});
 
 	test("links feed episodes with start and end times", () => {
-		currentEpisode.set(feedEpisode);
-		const api = new API();
+		const { api, player } = setup();
+		player.restore(feedEpisode);
 
 		const rendered = api.getPodcastSegmentFormatted("HH:mm:ss", 115, 125, true);
 
@@ -69,18 +79,14 @@ describe("API.getPodcastSegmentFormatted", () => {
 		expect(rendered).toContain("url=https%3A%2F%2Fpod.example.com%2Ffeed.xml");
 	});
 
-	test("links downloaded local episodes by file path", () => {
-		currentEpisode.set(localEpisode);
+	test("links a local episode by the file it plays, not a later same-named one", () => {
+		const { api, player } = setup();
+		player.restore(localEpisode);
 		downloadedEpisodes.set({
 			[localEpisode.podcastName]: [
-				{
-					...localEpisode,
-					filePath: "Audio/Local Episode.mp3",
-					size: 1,
-				},
+				{ ...localEpisode, filePath: "Other/Local Episode.mp3", size: 1 },
 			],
 		});
-		const api = new API();
 
 		const rendered = api.getPodcastSegmentFormatted("HH:mm:ss", 1, 2, true);
 
@@ -89,9 +95,23 @@ describe("API.getPodcastSegmentFormatted", () => {
 		expect(rendered).toContain("endTime=2");
 	});
 
+	test("links a local episode without a path by its registered file", () => {
+		const { api, player } = setup();
+		player.restore({ ...localEpisode, filePath: undefined } as Episode);
+		downloadedEpisodes.set({
+			[localEpisode.podcastName]: [
+				{ ...localEpisode, filePath: "Audio/Local Episode.mp3", size: 1 },
+			],
+		});
+
+		expect(api.getPodcastTimeFormatted("HH:mm:ss", true)).toContain(
+			"url=Audio%2FLocal%20Episode.mp3",
+		);
+	});
+
 	test("does not link invalid segment ranges", () => {
-		currentEpisode.set(feedEpisode);
-		const api = new API();
+		const { api, player } = setup();
+		player.restore(feedEpisode);
 
 		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 125, 125, true)).toBe(
 			"00:02:05-00:02:05",
@@ -104,36 +124,37 @@ describe("API.getPodcastSegmentFormatted", () => {
 		);
 	});
 
-	test("seeking through the public API clears an active playback segment", () => {
-		currentEpisode.set(feedEpisode);
-		activePlaybackSegment.set({
-			episodeKey: `${feedEpisode.podcastName}::${feedEpisode.title}`,
-			startTime: 115,
-			endTime: 125,
-		});
-		const api = new API();
+	test("seeking through the public API ends a segment link's stop", () => {
+		const { api, player, media } = setup();
+		player.play(feedEpisode, { time: 115, endTime: 125 });
+		media().duration = 3600;
+		media().emit("loadedmetadata");
 
 		api.currentTime = 500;
+		media().currentTime = 600;
+		media().emit("timeupdate");
 
-		expect(api.currentTime).toBe(500);
-		expect(get(activePlaybackSegment)).toBeNull();
+		expect(api.currentTime).toBe(600);
+		expect(media().paused).toBe(false);
+		expect(get(playedEpisodes)["Feed Podcast::Feed Episode"]?.time).toBe(600);
 	});
 });
 
 describe("API playback rate controls", () => {
 	test("increases and decreases the runtime playback rate in tenth steps", () => {
-		const api = new API();
+		const { api, media } = setup({ defaultPlaybackRate: 1 });
 
 		api.increasePlaybackRate();
-		expect(get(playbackRate)).toBe(1.1);
+		expect(api.playbackRate).toBe(1.1);
 
 		api.decreasePlaybackRate();
 		api.decreasePlaybackRate();
-		expect(get(playbackRate)).toBe(0.9);
+		expect(api.playbackRate).toBe(0.9);
+		expect(media().playbackRate).toBe(0.9);
 	});
 
 	test("clamps playback rate changes to the player-supported range", () => {
-		const api = new API();
+		const { api } = setup();
 
 		api.playbackRate = 3.95;
 		api.increasePlaybackRate();
@@ -145,7 +166,7 @@ describe("API playback rate controls", () => {
 	});
 
 	test("resets playback rate to the configured default", () => {
-		const api = new API();
+		const { api } = setup();
 
 		api.playbackRate = 2.5;
 		api.resetPlaybackRate();
@@ -155,46 +176,31 @@ describe("API playback rate controls", () => {
 });
 
 describe("API skip controls (PB-02)", () => {
-	beforeEach(() => {
-		duration.set(0);
-		plugin.set({
-			settings: {
-				defaultPlaybackRate: 1,
-				skipBackwardLength: 15,
-				skipForwardLength: 30,
-			},
-		} as never);
-	});
+	const lengths = { skipBackwardLength: 15, skipForwardLength: 30 };
 
 	test("skips backward and forward by the configured lengths", () => {
-		currentTime.set(100);
-		const api = new API();
+		const { api, media } = playingAt(100, 3600, lengths);
 
 		api.skipBackward();
 		expect(api.currentTime).toBe(85);
 
 		api.skipForward();
 		expect(api.currentTime).toBe(115);
+		expect(media().currentTime).toBe(115);
 	});
 
 	test("never seeks before 0 when skipping backward past the start", () => {
-		currentTime.set(5);
-		const api = new API();
+		const { api } = playingAt(5, 3600, lengths);
 
 		api.skipBackward();
 		expect(api.currentTime).toBe(0);
 	});
 
 	test("falls back to a 15s default when a skip length is NaN/invalid", () => {
-		currentTime.set(100);
-		plugin.set({
-			settings: {
-				defaultPlaybackRate: 1,
-				skipBackwardLength: Number.NaN,
-				skipForwardLength: undefined,
-			},
-		} as never);
-		const api = new API();
+		const { api } = playingAt(100, 3600, {
+			skipBackwardLength: Number.NaN,
+			skipForwardLength: undefined as unknown as number,
+		});
 
 		api.skipBackward();
 		expect(api.currentTime).toBe(85);
@@ -203,20 +209,17 @@ describe("API skip controls (PB-02)", () => {
 		expect(api.currentTime).toBe(100);
 	});
 
-	test("clamps a forward skip just short of the end so it doesn't auto-advance", () => {
-		currentTime.set(100);
-		duration.set(110);
-		const api = new API();
+	test("clamps a forward skip just short of the end and keeps playing", () => {
+		const { api, media } = playingAt(100, 110, lengths);
 
 		api.skipForward();
 		// 100 + 30 = 130, clamped to duration - 0.25.
 		expect(api.currentTime).toBe(109.75);
+		expect(media().paused).toBe(false);
 	});
 
 	test("does not rewind on a forward skip when already within the last 0.25s (#213)", () => {
-		currentTime.set(9.9);
-		duration.set(10);
-		const api = new API();
+		const { api } = playingAt(9.9, 10, lengths);
 
 		api.skipForward();
 		// The end-clamp (dur - 0.25 = 9.75) must never move a forward skip backward.
@@ -224,30 +227,142 @@ describe("API skip controls (PB-02)", () => {
 	});
 
 	test("leaves the forward target unclamped when duration is unknown", () => {
-		currentTime.set(100);
-		duration.set(0);
-		const api = new API();
+		const { api, player } = setup(lengths);
+		player.restore(feedEpisode);
+		api.currentTime = 100;
 
 		api.skipForward();
 		expect(api.currentTime).toBe(130);
 	});
 });
 
+describe("API playback", () => {
+	test("start resumes the restored episode, stop pauses it, and toggle flips it", () => {
+		playedEpisodes.set({
+			"Feed Podcast::Feed Episode": {
+				title: feedEpisode.title,
+				podcastName: feedEpisode.podcastName,
+				time: 42,
+				duration: 3600,
+				finished: false,
+			},
+		});
+		const { api, player, media } = setup();
+		player.restore(feedEpisode);
+		expect(api.isPlaying).toBe(false);
+		expect(api.length).toBe(3600);
+
+		api.start();
+		expect(api.isPlaying).toBe(true);
+		expect(media().src).toBe(feedEpisode.streamUrl);
+
+		api.stop();
+		expect(api.isPlaying).toBe(false);
+		expect(media().paused).toBe(true);
+
+		api.togglePlayback();
+		expect(api.isPlaying).toBe(true);
+		expect(media().paused).toBe(false);
+	});
+
+	test("start() then stop() on loaded media leaves it paused", () => {
+		const { api, player, media } = playingAt(100);
+		player.pause();
+
+		api.start();
+		expect(api.isPlaying).toBe(true);
+		api.stop();
+		media().emit("play");
+
+		expect(api.isPlaying).toBe(false);
+		expect(media().paused).toBe(true);
+	});
+
+	test("a seek before anything loads reads back at once", () => {
+		const { api, player } = setup();
+		player.restore(feedEpisode);
+
+		api.currentTime = 125;
+
+		expect(api.currentTime).toBe(125);
+	});
+
+	test("ignores a seek to a time that is not a number of seconds", () => {
+		const { api } = playingAt(100);
+
+		api.currentTime = Number.NaN;
+		api.currentTime = -5;
+
+		expect(api.currentTime).toBe(100);
+	});
+
+	test("start() while a segment plays leaves its stop in place", () => {
+		playedEpisodes.set({
+			"Feed Podcast::Feed Episode": {
+				title: feedEpisode.title,
+				podcastName: feedEpisode.podcastName,
+				time: 1000,
+				duration: 3600,
+				finished: false,
+			},
+		});
+		const { api, player, media } = setup();
+		player.play(feedEpisode, { time: 100, endTime: 125 });
+		media().duration = 3600;
+		media().emit("loadedmetadata");
+
+		api.start();
+		media().currentTime = 130;
+		media().emit("timeupdate");
+
+		expect(media().currentTime).toBe(125);
+		expect(media().paused).toBe(true);
+		expect(get(playedEpisodes)["Feed Podcast::Feed Episode"]?.time).toBe(1000);
+	});
+
+	test("ignores an undefined seek before the metadata loads", () => {
+		const { api, player, media } = setup();
+		player.play(feedEpisode, { time: 115 });
+
+		api.currentTime = undefined as unknown as number;
+		media().duration = 3600;
+		media().emit("loadedmetadata");
+
+		expect(api.currentTime).toBe(115);
+		expect(media().currentTime).toBe(115);
+	});
+
+	test("ignores an undefined seek during a segment, which still stops at its end", () => {
+		const { api, player, media } = setup();
+		player.play(feedEpisode, { time: 115, endTime: 125 });
+		media().duration = 3600;
+		media().emit("loadedmetadata");
+
+		api.currentTime = undefined as unknown as number;
+		media().currentTime = 126;
+		media().emit("timeupdate");
+
+		expect(media().currentTime).toBe(125);
+		expect(media().paused).toBe(true);
+		expect(get(playedEpisodes)["Feed Podcast::Feed Episode"]).toBeUndefined();
+	});
+});
+
 describe("API volume (AP-07)", () => {
 	test("clamps volume into [0, 1]", () => {
-		volume.set(0.5);
-		const api = new API();
+		const { api, media } = setup();
 
 		api.volume = 2;
 		expect(api.volume).toBe(1);
 
 		api.volume = -1;
 		expect(api.volume).toBe(0);
+		expect(media().volume).toBe(0);
 	});
 
 	test("ignores a non-finite volume (keeps the current value) instead of poisoning it to NaN", () => {
-		volume.set(0.6);
-		const api = new API();
+		const { api } = setup();
+		api.volume = 0.6;
 
 		api.volume = Number.NaN;
 		expect(api.volume).toBe(0.6);
@@ -261,36 +376,28 @@ describe("API transcript access", () => {
 			Object.prototype.hasOwnProperty.call(files, path) ? createTFile(path) : null,
 		);
 		const read = vi.fn(async (file: TFile) => files[file.path] ?? "");
-
-		plugin.set({
-			settings: {
-				defaultPlaybackRate: 1.8,
+		const { api, player } = setup(
+			{
 				transcript: {
+					...DEFAULT_SETTINGS.transcript,
 					path: "Transcripts/{{podcast}}/{{title}}.md",
 				},
 			},
-			app: {
-				vault: {
-					getAbstractFileByPath,
-					read,
-				},
-			},
-		} as never);
+			{ getAbstractFileByPath, read } as unknown as Partial<Vault>,
+		);
 
-		return { getAbstractFileByPath, read };
+		return { api, player, getAbstractFileByPath, read };
 	}
 
 	test("returns null when no episode is loaded", async () => {
-		setTranscriptVault({});
-		const api = new API();
+		const { api } = setTranscriptVault({});
 
 		await expect(api.getTranscript()).resolves.toBeNull();
 	});
 
 	test("returns null when the current episode has no generated transcript file", async () => {
-		currentEpisode.set(feedEpisode);
-		const { getAbstractFileByPath, read } = setTranscriptVault({});
-		const api = new API();
+		const { api, player, getAbstractFileByPath, read } = setTranscriptVault({});
+		player.restore(feedEpisode);
 
 		await expect(api.getTranscript()).resolves.toBeNull();
 
@@ -301,12 +408,11 @@ describe("API transcript access", () => {
 	});
 
 	test("reads the generated transcript note for the current episode", async () => {
-		currentEpisode.set(feedEpisode);
 		const transcript = "# Feed Episode\n\nTranscript body for AI macros.";
-		const { read } = setTranscriptVault({
+		const { api, player, read } = setTranscriptVault({
 			"Transcripts/Feed Podcast/Feed Episode.md": transcript,
 		});
-		const api = new API();
+		player.restore(feedEpisode);
 
 		await expect(api.getTranscript()).resolves.toBe(transcript);
 		await expect(api.transcript).resolves.toBe(transcript);
@@ -319,12 +425,11 @@ describe("API transcript access", () => {
 	});
 
 	test("reads the generated transcript note for an explicit episode", async () => {
-		currentEpisode.set(feedEpisode);
 		const transcript = "Local episode transcript";
-		const { getAbstractFileByPath } = setTranscriptVault({
+		const { api, player, getAbstractFileByPath } = setTranscriptVault({
 			"Transcripts/local file/Local Episode.md": transcript,
 		});
-		const api = new API();
+		player.restore(feedEpisode);
 
 		await expect(api.getTranscript(localEpisode)).resolves.toBe(transcript);
 

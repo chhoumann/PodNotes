@@ -161,11 +161,12 @@ const createSharedHarness = createPluginHarness({
 	// Beyond plugin-loaded and the ready command, PodNotes is only usable once its
 	// public API is attached and its protocol handler is registered.
 	waitUntilReady: podNotesReady,
-	// PodNotes persists asynchronously and keeps live player views; both must
-	// settle before the settings file is rolled back, so they run while the
-	// plugin is still enabled.
+	// PodNotes persists asynchronously, keeps live player views, and plays on with
+	// them closed; all must settle before the settings file is rolled back, so they
+	// run while the plugin is still enabled.
 	beforeDataRestore: async (obsidian) => {
 		await detachPodNotesViews(obsidian);
+		await stopPodNotesPlayback(obsidian);
 		await flushPodNotesSaves(obsidian);
 		const library = await import("./journey/library");
 		if (library.hasJourneySnapshot(obsidian)) {
@@ -259,6 +260,13 @@ async function detachPodNotesViews(obsidian: ObsidianClient): Promise<void> {
 			return true;
 		})()
 	`,
+	);
+}
+
+// Playing on would save a checkpoint over the rolled-back file.
+async function stopPodNotesPlayback(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJson(
+		`(() => { app.plugins.plugins.${PLUGIN_ID}?.api?.stop(); return true; })()`,
 	);
 }
 

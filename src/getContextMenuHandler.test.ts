@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TFile } from "obsidian";
 import { get } from "svelte/store";
 import getContextMenuHandler from "./getContextMenuHandler";
-import { VIEW_TYPE } from "./constants";
-import { currentEpisode, downloadedEpisodes, viewState } from "./store";
+import { DEFAULT_SETTINGS, VIEW_TYPE } from "./constants";
+import { PlayerController } from "./player/PlayerController";
+import { downloadedEpisodes, playedEpisodes, plugin, viewState } from "./store";
 import { ViewState } from "./types/ViewState";
+import { FakeDocument } from "../tests/mocks/fakeMedia";
 
 // `tsc` resolves `obsidian` to the real typings while Vitest aliases it to
 // tests/mocks/obsidian.ts. Build a TFile (so `file instanceof TFile` holds in
@@ -77,6 +79,10 @@ function setupWorkspace(openLeaves: unknown[]) {
 	return { workspace, newLeaf };
 }
 
+let doc: FakeDocument;
+let player: PlayerController;
+const playing = () => get(player.state).episode;
+
 function makeApp(workspace: unknown, file: TFile) {
 	const vault = {
 		getAbstractFileByPath: vi.fn((path: string) => (path ? audioFile(path) : file)),
@@ -84,6 +90,15 @@ function makeApp(workspace: unknown, file: TFile) {
 	};
 	// createMediaUrlObjectFromFilePath reads the global `app`.
 	(globalThis as { app?: unknown }).app = { vault };
+	const host = {
+		settings: structuredClone(DEFAULT_SETTINGS),
+		app: { vault },
+		checkpoint: (update: () => void) => update(),
+		saveSettings: vi.fn(() => Promise.resolve()),
+	};
+	doc = new FakeDocument();
+	player = new PlayerController(doc.asPlayerDocument(), host as never);
+	plugin.set({ ...host, player, enablePodcastViewMount: vi.fn() } as never);
 	return {
 		workspace,
 		vault,
@@ -114,17 +129,18 @@ async function playFile(
 
 afterEach(() => {
 	(globalThis as { app?: unknown }).app = undefined;
+	plugin.set(undefined as never);
 	vi.restoreAllMocks();
 });
 
 beforeEach(() => {
-	currentEpisode.set(undefined as never);
 	downloadedEpisodes.set({});
+	playedEpisodes.set({});
 	viewState.set(ViewState.PodcastGrid);
 });
 
 describe("getContextMenuHandler — Play with PodNotes", () => {
-	it("offers the item for audio files and sets it as the current episode", async () => {
+	it("offers the item for audio files and plays the file", async () => {
 		const file = audioFile("Audio/tone.mp3");
 		const { workspace } = setupWorkspace([{}]);
 		const app = makeApp(workspace, file);
@@ -133,12 +149,14 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 
 		const play = menu.items.find((i) => i.title === "Play with PodNotes");
 		expect(play?.icon).toBe("play");
-		expect(get(currentEpisode)).toMatchObject({
+		expect(playing()).toMatchObject({
 			title: "tone",
 			podcastName: "local file",
 			filePath: "Audio/tone.mp3",
 			streamUrl: "app://resource/Audio/tone.mp3?1",
 		});
+		expect(doc.media.src).toBe("app://resource/Audio/tone.mp3?1");
+		expect(doc.media.paused).toBe(false);
 		expect(get(viewState)).toBe(ViewState.Player);
 	});
 
@@ -153,13 +171,14 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 			"Play as audio with PodNotes",
 			"Play as video with PodNotes",
 		]);
-		expect(get(currentEpisode)).toMatchObject({
+		expect(playing()).toMatchObject({
 			title: "lecture",
 			podcastName: "local file",
 			filePath: "Videos/lecture.mp4",
 			mediaType: "video",
 			streamUrl: "app://resource/Videos/lecture.mp4?1",
 		});
+		expect(doc.media.tagName).toBe("VIDEO");
 		expect(get(viewState)).toBe(ViewState.Player);
 	});
 
@@ -177,11 +196,12 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 			mediaType: "audio",
 			streamUrl: "app://resource/Audio/lecture.mp4?1",
 		});
-		expect(get(currentEpisode)).toMatchObject({
+		expect(playing()).toMatchObject({
 			title: "lecture",
 			filePath: "Audio/lecture.mp4",
 			mediaType: "audio",
 		});
+		expect(doc.media.tagName).toBe("AUDIO");
 		expect(get(viewState)).toBe(ViewState.Player);
 	});
 
@@ -201,11 +221,12 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 			mediaType: "video",
 			streamUrl: "app://resource/Videos/lecture.mp4?1",
 		});
-		expect(get(currentEpisode)).toMatchObject({
+		expect(playing()).toMatchObject({
 			title: "lecture",
 			filePath: "Videos/lecture.mp4",
 			mediaType: "video",
 		});
+		expect(doc.media.src).toBe("app://resource/Videos/lecture.mp4?1");
 	});
 
 	it("does not offer the item for non-media files", () => {

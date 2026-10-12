@@ -1,15 +1,13 @@
+import type { QueueMove } from "src/store";
 import type { Episode } from "src/types/Episode";
 import { isSameEpisode } from "src/utility/episodeKey";
 import type { IconType } from "src/types/IconType";
 import { ViewState } from "src/types/ViewState";
 
-type QueueMoveKind = "top" | "up" | "down" | "bottom";
-
 export interface QueueReorderMenuItem {
 	icon: IconType;
 	title: string;
-	kind: QueueMoveKind;
-	index: number;
+	kind: QueueMove;
 }
 
 /**
@@ -39,13 +37,11 @@ export function buildQueueReorderMenuItems(
 			icon: "chevrons-up",
 			title: "Move to top of queue",
 			kind: "top",
-			index,
 		});
 		items.push({
 			icon: "chevron-up",
 			title: "Move up in queue",
 			kind: "up",
-			index,
 		});
 	}
 
@@ -54,13 +50,11 @@ export function buildQueueReorderMenuItems(
 			icon: "chevron-down",
 			title: "Move down in queue",
 			kind: "down",
-			index,
 		});
 		items.push({
 			icon: "chevrons-down",
 			title: "Move to bottom of queue",
 			kind: "bottom",
-			index,
 		});
 	}
 
