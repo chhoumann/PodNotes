@@ -737,6 +737,7 @@ describe("links that arrive while another link loads its feed", () => {
 		const pending = link({ time: "240" });
 		await link({ url: "http://localhost/feed.xml", time: "5" });
 		await link({ url: "podnotes-private-feed:Unknown%20Feed", time: "5" });
+		await link({ url: "Notes/moved.mp3", episodeName: "Nothing by this name", time: "5" });
 		resolveFeed([testEpisode]);
 		await pending;
 

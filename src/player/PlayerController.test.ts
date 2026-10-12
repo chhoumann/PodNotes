@@ -989,10 +989,25 @@ describe("deferPlay", () => {
 		metadata(media());
 		const later = player.deferPlay();
 
+		media().ended = true;
 		pausedByBrowser(media());
 		media().emit("ended");
 
 		expect(later(C)).toBe(false);
+		expect(state().episode).toBe(B);
+	});
+
+	test("the browser's pause after a segment stops leaves it to play", () => {
+		const { player, media, state } = setup();
+		player.play(A, { time: 100, endTime: 125 });
+		metadata(media());
+		const link = player.deferPlay();
+
+		reach(media(), 126);
+		expect(state().status).toBe("paused");
+		media().emit("pause");
+
+		expect(link(B)).toBe(true);
 		expect(state().episode).toBe(B);
 	});
 });
