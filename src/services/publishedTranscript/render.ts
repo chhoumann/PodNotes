@@ -69,7 +69,8 @@ function continues(paragraph: TranscriptParagraph, cue: TranscriptCue): boolean 
 /**
  * Splits written text into pieces of at most MAX_PARAGRAPH_LENGTH characters at
  * the last space that fits. A piece without a space ends at the last character
- * that fits, stepping over each escape as a pair so no piece ends in a lone `\`.
+ * that fits, stepping over each escape and each surrogate pair whole, so no
+ * piece ends in a lone `\` or half a character.
  */
 function splitParagraph(text: string): string[] {
 	const pieces: string[] = [];
@@ -81,10 +82,10 @@ function splitParagraph(text: string): string[] {
 			rest = rest.slice(space + 1);
 			continue;
 		}
+		const width = (at: number) =>
+			rest[at] === "\\" || (rest.codePointAt(at) ?? 0) > 0xffff ? 2 : 1;
 		let end = 0;
-		while (end + (rest[end] === "\\" ? 2 : 1) <= MAX_PARAGRAPH_LENGTH) {
-			end += rest[end] === "\\" ? 2 : 1;
-		}
+		while (end + width(end) <= MAX_PARAGRAPH_LENGTH) end += width(end);
 		pieces.push(rest.slice(0, end));
 		rest = rest.slice(end);
 	}

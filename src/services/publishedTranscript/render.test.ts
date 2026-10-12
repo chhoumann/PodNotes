@@ -186,6 +186,21 @@ describe("paragraph length", () => {
 		expect(paragraphs.join("")).toBe(escapeTranscriptText(text));
 	});
 
+	test("a run without spaces never splits a character in two", () => {
+		const text = `a${"😀".repeat(MAX_PARAGRAPH_LENGTH)}`;
+		const paragraphs = renderTranscriptBody(
+			{ kind: "untimed", paragraphs: [text] },
+			options,
+		).split("\n\n");
+
+		expect(paragraphs.length).toBeGreaterThan(1);
+		for (const paragraph of paragraphs) {
+			expect(paragraph.length).toBeLessThanOrEqual(MAX_PARAGRAPH_LENGTH);
+			expect(paragraph).not.toMatch(/[\uD800-\uDFFF]/u);
+		}
+		expect(paragraphs.join("")).toBe(text);
+	});
+
 	test("an untimed paragraph splits at word boundaries", () => {
 		const long = words(1500);
 		const paragraphs = renderTranscriptBody(
