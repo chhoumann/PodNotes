@@ -52,7 +52,7 @@ The **Queue** list under the player has none of these controls.
 
 ### When a feed cannot be reached
 
-When you open a podcast or refresh its list and PodNotes cannot fetch the feed, for example offline, the list shows the first of these that has episodes:
+When PodNotes tries to fetch a podcast's feed as you open the podcast or refresh its list, and the fetch fails, for example offline, PodNotes uses the first of these that has episodes:
 
 1. The podcast's downloaded episodes.
 2. The episodes PodNotes loaded for the podcast since Obsidian started.
