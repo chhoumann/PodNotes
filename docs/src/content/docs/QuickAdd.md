@@ -123,7 +123,11 @@ Do this once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/
 4. Under **Providers**, select **OpenAI** or **Gemini**.
 5. On the provider's page, set **API key**. It links a secret from **Settings → Keychain**.
 
-For another provider, select **Add provider** under **Providers**. On the provider's card, set **API key**, then select **Connect**.
+For another provider:
+
+1. Under **Providers**, select **Add provider**.
+2. On the provider's card, set **API key**.
+3. Select **Connect**.
 
 ### Build the prompt
 
