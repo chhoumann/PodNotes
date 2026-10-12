@@ -67,6 +67,26 @@ describe("DataFileWriter saves", () => {
 		expect(clock.pending()).toBe(0);
 	});
 
+	it("retries a failed write at the checkpoint interval and stops after recovery", async () => {
+		const { access, clock, state, writer } = setup();
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+		state.memory.defaultVolume = 0.5;
+		await expect(writer.save()).rejects.toThrow("disk full");
+
+		clock.advance(10_000);
+		clock.runAll();
+		await vi.waitFor(() => expect(state.disk?.defaultVolume).toBe(0.5));
+		expect(access.write).toHaveBeenCalledTimes(2);
+		expect(clock.delays).toEqual([10_000]);
+
+		clock.advance(30_000);
+		clock.runAll();
+		await writer.flush();
+		expect(state.disk).toEqual({ ...doc(), defaultVolume: 0.5 });
+		expect(access.write).toHaveBeenCalledTimes(2);
+		expect(clock.pending()).toBe(0);
+	});
+
 	it("saves a change made during a save right after it", async () => {
 		const { access, state, writer } = setup();
 		let finishWrite = () => {};
