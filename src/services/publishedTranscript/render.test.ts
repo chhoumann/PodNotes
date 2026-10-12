@@ -74,6 +74,19 @@ describe("renderTranscriptBody", () => {
 			),
 		).toBe("00:00:01 **\\<b>Eve\\</b>:** !\\[\\[x]]");
 	});
+
+	test("an entity the feed escaped stays literal and a prose & stays plain", () => {
+		const vtt =
+			"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nFable &amp; Folly wrote &amp;lt;b&amp;gt; and &amp;#39;\n";
+
+		expect(
+			renderTranscriptBody(parseTranscript("vtt", vtt)!, {
+				episode,
+				speakerTemplate: "",
+				timestamp: timestampStyle("{{time}}"),
+			}),
+		).toBe("00:00:01 Fable & Folly wrote \\&lt;b\\&gt; and \\&\\#39;");
+	});
 });
 
 describe("timestampStyle", () => {
