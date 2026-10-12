@@ -1,7 +1,7 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 	"plugins": ["typescript", "unicorn", "oxc", "import"],
-	"jsPlugins": ["eslint-plugin-obsidianmd"],
+	"jsPlugins": ["eslint-plugin-obsidianmd", "svelte-policy/oxlint"],
 	"categories": {
 		"correctness": "error"
 	},
@@ -43,6 +43,7 @@
 				"obsidianmd/no-global-this": "error",
 				"obsidianmd/settings-tab/no-manual-html-headings": "error",
 				"obsidianmd/commands/no-plugin-name-in-command-name": "error",
+				"svelte-policy/no-svelte-internal": "error",
 				"no-restricted-globals": [
 					"error",
 					{

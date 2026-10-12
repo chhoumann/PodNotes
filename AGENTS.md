@@ -35,11 +35,12 @@ root symlinks for local Obsidian loading.
 - `npm ci`: install the locked dependencies for local development.
 - `npm run dev`: watch-mode development build via Vite.
 - `npm run typecheck`: run TypeScript 7's native `tsc --noEmit` for source and test projects.
-- `npm run lint`: run oxlint against TypeScript sources and tooling scripts (includes the obsidianmd guideline rules via jsPlugins).
+- `npm run lint`: run oxlint against TypeScript sources and tooling scripts (includes the obsidianmd guideline rules and the `svelte-policy` internals guard via jsPlugins), then the `svelte-policy` component checker, configured by `svelte-policy.json`.
 - `npm run format:check`: run the configured oxfmt check (`npm run format` to write).
 - `npm run check:a11y`: patch svelte-check if needed, run `lint:tsconfig`, then run `svelte-check --tsgo-experimental-api --fail-on-warnings` for source and test projects.
 - `npm run lint:tsconfig`: fail with TS18003 when `tsconfig.json` or `tsconfig.test.json` matches no files, using the native compiler without type checking.
 - `npm run test`: run Svelte checks and the application Vitest suite.
+- `npm run test:unit`: run the application Vitest suite without the Svelte checks.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
@@ -65,7 +66,7 @@ a tsconfig matches no files, which `lint:tsconfig` catches.
 `tests/tooling/svelteCheck.test.ts` runs the real `check:a11y` in temporary
 workspaces and requires it to fail on each of these cases.
 
-After `npm run build`, `npm run size` enforces 330,000 raw bytes and 100,000 gzip bytes at level 9 for root `main.js` inside the existing Test job. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
+After `npm run build`, `npm run size` enforces 330,000 raw bytes and 100,000 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 
 Before opening a PR or cutting a release, run the CI-equivalent checks locally:
 
