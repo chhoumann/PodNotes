@@ -5,29 +5,37 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness, PLUGIN_ID } from "./harness";
 import {
 	click,
+	closePodNotes,
 	closeSettings,
 	isShown,
 	listedEpisodes,
 	notices,
 	openPodNotesSettings,
+	reloadObsidian,
 	restartObsidian,
 	runCommand,
+	setMobileEmulation,
 	shownText,
 	showPodNotes,
 	typeInto,
 	ui,
 } from "./journey/actions";
 import {
+	deepgramRequests,
 	type FixtureEpisode,
 	type FixtureFeed,
 	type FixtureServer,
+	installDeepgramTripwire,
 	installOpenAIStub,
 	pubDate,
+	removeDeepgramTripwire,
 	removeOpenAIStub,
 	startFixtureServer,
 	transcriptionUploads,
 } from "./journey/fixtures";
 import {
+	clearFeedCache,
+	playerLeafCount,
 	readVaultBytes,
 	readVaultText,
 	seedLibrary,
@@ -38,6 +46,15 @@ import {
 
 const getContext = createPodNotesE2EHarness("journey-resilience");
 const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
+
+/** Every key path in a JSON value, so a test can tell whether data.json gained a field. */
+function keyPaths(value: unknown, prefix = ""): string[] {
+	if (typeof value !== "object" || value === null) return [];
+	return Object.entries(value).flatMap(([key, child]) => {
+		const keyPath = Array.isArray(value) ? `${prefix}[]` : `${prefix}.${key}`;
+		return [keyPath, ...keyPaths(child, keyPath)];
+	});
+}
 
 async function serve(...feeds: FixtureFeed[]): Promise<FixtureServer> {
 	const server = await startFixtureServer(feeds);
@@ -285,5 +302,165 @@ describe("resilience journeys", () => {
 				`app.plugins.plugins.${PLUGIN_ID}.api.transcript`,
 			),
 		).toBe(transcript);
+	}, 60_000);
+
+	test("J-TR-03 transcribing an episode whose feed publishes a transcript needs no API key and no audio", async () => {
+		const context = getContext();
+		const { obsidian, plugin, sandbox } = context;
+		const podnewsVtt = await fs.readFile(
+			path.resolve("tests/fixtures/transcripts/podnews-2026-10-05.vtt"),
+			"utf8",
+		);
+		const captioned: FixtureEpisode = {
+			title: "Captioned Episode",
+			seconds: 4,
+			pubDate: pubDate(0),
+			transcripts: [
+				{ path: "1.html", type: "text/html", absolute: true, body: "<p>Not this one.</p>" },
+				{ path: "1.vtt", type: "text/vtt", body: podnewsVtt },
+			],
+		};
+		const show: FixtureFeed = {
+			title: "Journey Captions",
+			slug: "captions",
+			artwork: true,
+			episodes: [captioned],
+		};
+		const server = await serve(show);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, captioned),
+		});
+		await setMobileEmulation(obsidian, true);
+		await closePodNotes(obsidian);
+		await clearFeedCache(obsidian);
+		await obsidian.dev.evalJsonAsync(
+			"(async () => { await app.workspace.saveLayout(); return true; })()",
+		);
+		await reloadObsidian(obsidian);
+		expect(await playerLeafCount(obsidian)).toBe(0);
+		await installOpenAIStub(obsidian, "OpenAI must not be called.");
+		onTestFinished(() => removeOpenAIStub(obsidian));
+		await installDeepgramTripwire(obsidian);
+		onTestFinished(() => removeDeepgramTripwire(obsidian));
+		const savedBefore = await plugin.data<Record<string, unknown>>().read();
+		const requestsBefore = server.requests().length;
+
+		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+		await sandbox.waitForExists("Transcripts/Journey Captions/Captioned Episode.md", {
+			timeoutMs: 30_000,
+		});
+		await obsidian.waitFor(
+			async () =>
+				(await notices(obsidian)).some((notice) =>
+					notice.endsWith("Saved the transcript the feed publishes."),
+				),
+			{ timeoutMs: 10_000, intervalMs: 100, message: "the published transcript notice" },
+		);
+
+		const transcript = await readVaultText(
+			obsidian,
+			sandbox.path("Transcripts/Journey Captions/Captioned Episode.md"),
+		);
+		const link = `obsidian://podnotes?episodeName=Captioned%20Episode&url=${encodeURIComponent(server.feedUrl(show))}&time=0.48`;
+		expect(transcript.replace(/^Date: .+$/m, "Date: <date>")).toBe(
+			"# Captioned Episode\n\nPodcast: Journey Captions\nDate: <date>\n\n" +
+				`[00:00:00](${link}) From Potsdam in Brandenburg, Germany, the latest from podnews.net with Soundstack. The audio fiction podcast network Fable & Folly is to close at the end of the year. The network blames a change in podcast advertising for its closure, but the network says that the shows you love aren't going away, they're just headed to new homes. Through the end of the year, the company is helping producers migrate their shows and connect with new hosting and advertising partners. After we revealed that Apple Podcasts has dropped country-specific`,
+		);
+		expect(
+			await obsidian.dev.evalJsonAsync<string | null>(
+				`app.plugins.plugins.${PLUGIN_ID}.api.transcript`,
+			),
+		).toBe(transcript);
+		const requests = server.requests().slice(requestsBefore);
+		expect(requests).toContain("/captions/feed.xml");
+		expect(requests.indexOf("/captions/1.vtt")).toBeGreaterThan(
+			requests.indexOf("/captions/feed.xml"),
+		);
+		expect(server.requests()).not.toContain("/captions/1.html");
+		expect(server.requests().filter((request) => request.endsWith(".wav"))).toEqual([]);
+		expect(await transcriptionUploads(obsidian)).toEqual([]);
+		expect(await deepgramRequests(obsidian)).toEqual([]);
+		const savedPaths = new Set(keyPaths(savedBefore));
+		expect(
+			keyPaths(await plugin.data<Record<string, unknown>>().read()).filter(
+				(keyPath) => !savedPaths.has(keyPath),
+			),
+		).toEqual([]);
+	}, 120_000);
+
+	test("J-TR-04 a published transcript that fails offers the paid transcription, which runs only on request", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const spoken: FixtureEpisode = {
+			title: "Spoken Episode",
+			seconds: 4,
+			pubDate: pubDate(0),
+			transcripts: [{ path: "1.vtt", type: "text/vtt" }],
+		};
+		const show: FixtureFeed = {
+			title: "Journey Missing Captions",
+			slug: "missing-captions",
+			artwork: true,
+			episodes: [spoken],
+		};
+		const server = await serve(show);
+		const secretId = "podnotes-openai-api-key-434343";
+		const previousSecret = await obsidian.dev.evalJson<string | null>(
+			`app.secretStorage.getSecret(${JSON.stringify(secretId)})`,
+		);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(
+				previousSecret === null
+					? `app.secretStorage.deleteSecret(${JSON.stringify(secretId)}), true`
+					: `app.secretStorage.setSecret(${JSON.stringify(secretId)}, ${JSON.stringify(previousSecret)}), true`,
+			),
+		);
+		await obsidian.dev.evalJson(
+			`app.secretStorage.setSecret(${JSON.stringify(secretId)}, "sk-journey-test"), true`,
+		);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, spoken),
+			openAISecretId: secretId,
+		});
+		await installOpenAIStub(obsidian, "Paid transcript opens here. It closes here.");
+		onTestFinished(() => removeOpenAIStub(obsidian));
+		const notePath = "Transcripts/Journey Missing Captions/Spoken Episode.md";
+
+		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+		await obsidian.waitFor(
+			async () =>
+				(await notices(obsidian)).some((notice) =>
+					notice.endsWith(
+						'The published transcript could not be fetched: Network response returned HTTP 404. Run "Transcribe current episode from audio" to transcribe it with OpenAI instead, which uses your API credit.',
+					),
+				),
+			{
+				timeoutMs: 30_000,
+				intervalMs: 100,
+				message: "the failed published transcript notice",
+			},
+		);
+
+		expect(server.requests()).toContain("/missing-captions/1.vtt");
+		expect(server.requests().filter((request) => request.endsWith(".wav"))).toEqual([]);
+		expect(await transcriptionUploads(obsidian)).toEqual([]);
+		expect(await sandbox.exists(notePath)).toBe(false);
+
+		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe-audio`);
+		await sandbox.waitForExists(notePath, { timeoutMs: 30_000 });
+
+		expect(await readVaultText(obsidian, sandbox.path(notePath))).toMatch(
+			/^# Spoken Episode\n\nPodcast: Journey Missing Captions\nDate: .+\n\nPaid transcript opens here\.\n\nIt closes here\.$/,
+		);
+		const uploads = await transcriptionUploads(obsidian);
+		expect(uploads).toHaveLength(1);
+		expect(uploads[0]).toMatchObject({
+			authorization: "Bearer sk-journey-test",
+			sha256: createHash("sha256").update(server.audio(show, spoken)).digest("hex"),
+		});
+		expect(server.requests()).toContain("/missing-captions/1.wav");
+		expect(server.requests().filter((request) => request.endsWith(".vtt"))).toHaveLength(1);
 	}, 60_000);
 });

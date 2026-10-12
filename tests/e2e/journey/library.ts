@@ -264,9 +264,7 @@ export async function seedLibrary(
 	seed: LibrarySeed = {},
 ): Promise<void> {
 	await snapshotJourneyState(obsidian);
-	await obsidian.dev.evalJson(
-		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
-	);
+	await clearFeedCache(obsidian);
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		await app.workspace.detachLeavesOfType(${JSON.stringify(VIEW_TYPE)});
 		return true;
@@ -321,6 +319,12 @@ export async function seedLibrary(
 		if (seed.openAISecretId) data.openAISecretId = seed.openAISecretId;
 	}, RELOAD_OPTIONS);
 	await dismissNotices(obsidian);
+}
+
+export async function clearFeedCache(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJson(
+		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
+	);
 }
 
 export async function feedCacheHolds(
