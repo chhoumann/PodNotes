@@ -17,7 +17,8 @@
 		"size:data": "node scripts/persistence-size.mjs",
 		"count:writes": "node scripts/write-counts.mjs",
 		"typecheck": "node node_modules/@typescript/native/bin/tsc --project tsconfig.json --noEmit && node node_modules/@typescript/native/bin/tsc --project tsconfig.test.json --noEmit",
-		"lint": "oxlint --deny-warnings src tests/e2e scripts .claude/skills/verify",
+		"lint": "oxlint --deny-warnings src tests/e2e tests/tooling scripts patches .claude/skills/verify",
+		"lint:tsconfig": "node node_modules/@typescript/native/bin/tsc --project tsconfig.json --noEmit --noCheck && node node_modules/@typescript/native/bin/tsc --project tsconfig.test.json --noEmit --noCheck",
 		"format:check": "npm run format -- --check",
 		"test": "npm run check:a11y && vitest --configLoader bundle",
 		"test:e2e": "npm run build && node scripts/obsidian-e2e.mjs test",
@@ -35,10 +36,12 @@
 		"mobile:logs": "bash scripts/omd.sh logs",
 		"mobile:screenshot": "bash scripts/omd.sh screenshot",
 		"mobile:stop": "bash scripts/omd.sh stop",
-		"check:a11y": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --fail-on-warnings",
+		"postinstall": "node patches/svelte-check.mjs",
+		"check:a11y": "node patches/svelte-check.mjs && npm run lint:tsconfig && svelte-check --tsconfig ./tsconfig.json --tsgo-experimental-api --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --tsgo-experimental-api --fail-on-warnings",
 		"docs:build": "npm ci --prefix docs && npm run build --prefix docs",
 		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/dist --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs docs/wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/markdown.ts docs/src/site.mjs docs/src/pages docs/scripts docs/legacy-fragments.json docs/tsconfig.json"
+		"format": "oxfmt src tests scripts patches .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs docs/wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/markdown.ts docs/src/site.mjs docs/src/pages docs/scripts docs/legacy-fragments.json docs/tsconfig.json",
+		"test:tooling": "vitest run --config tests/tooling/vitest.config.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
@@ -54,7 +57,7 @@
 		"oxlint": "^1.86.0",
 		"postcss": "^8.5.28",
 		"svelte": "^5.57.1",
-		"svelte-check": "^4.7.6",
+		"svelte-check": "4.7.6",
 		"typescript": "6.0.3",
 		"vite": "^8.3.2",
 		"vitest": "^5.0.3",
