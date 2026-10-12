@@ -3,7 +3,8 @@
 // place of the paid transcription APIs.
 //
 //   node .claude/skills/verify/net.mjs watch     start a fresh log; answer OpenAI and Deepgram locally
-//   node .claude/skills/verify/net.mjs log       print each request as JSON, oldest first
+//   node .claude/skills/verify/net.mjs log       print each request as JSON, oldest first; a path only
+//                                                for the fixture server, OpenAI and Deepgram
 //   node .claude/skills/verify/net.mjs unwatch   restore fetch and requestUrl
 //
 // PodNotes sends OpenAI uploads through window.fetch and everything else
@@ -29,6 +30,7 @@ const instance = resolveInstanceOptions(
 );
 const CALL_TIMEOUT_MS = 15000;
 const FIXTURE_TRANSCRIPTION = "This text came from the fixture provider.";
+const PATH_HOSTS = ["127.0.0.1.nip.io", "api.openai.com", "api.deepgram.com"];
 
 /** @param {string} code */
 async function evaluate(code) {
@@ -60,10 +62,12 @@ const WATCH = `(() => {
 		return "reset";
 	}
 	const entries = [];
-	const withoutQuery = (url) => {
+	// Other hosts log only their origin, because a private feed's path can hold its token.
+	const pathHosts = new Set(${JSON.stringify(PATH_HOSTS)});
+	const logged = (url) => {
 		try {
 			const parsed = new URL(url);
-			return parsed.origin + parsed.pathname;
+			return pathHosts.has(parsed.hostname) ? parsed.origin + parsed.pathname : parsed.origin;
 		} catch {
 			return "(unparsable URL)";
 		}
@@ -75,10 +79,10 @@ const WATCH = `(() => {
 		const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 		if (url.startsWith("https://api.openai.com/")) {
 			const file = init?.body instanceof FormData ? init.body.get("file") : null;
-			entries.push({ via: "fetch", method, url: withoutQuery(url), answeredBy: "fixture provider", uploadBytes: file instanceof Blob ? file.size : 0 });
+			entries.push({ via: "fetch", method, url: logged(url), answeredBy: "fixture provider", uploadBytes: file instanceof Blob ? file.size : 0 });
 			return new Response(JSON.stringify({ text, segments: [{ speaker: "A", text, start: 0, end: 1 }] }), { status: 200, headers: { "content-type": "application/json" } });
 		}
-		entries.push({ via: "fetch", method, url: withoutQuery(url) });
+		entries.push({ via: "fetch", method, url: logged(url) });
 		return originalFetch.call(this, input, init);
 	};
 	const ipc = window.electron.ipcRenderer;
@@ -87,12 +91,12 @@ const WATCH = `(() => {
 		if (channel === "request-url" && typeof request?.url === "string") {
 			const method = (request.method ?? "GET").toUpperCase();
 			if (request.url.startsWith("https://api.deepgram.com/")) {
-				entries.push({ via: "requestUrl", method, url: withoutQuery(request.url), answeredBy: "fixture provider", uploadBytes: request.body?.byteLength ?? 0 });
+				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", uploadBytes: request.body?.byteLength ?? 0 });
 				const body = new TextEncoder().encode(JSON.stringify({ results: { utterances: [{ speaker: 0, transcript: text, start: 0, end: 1 }] } })).buffer;
 				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
 				return;
 			}
-			entries.push({ via: "requestUrl", method, url: withoutQuery(request.url) });
+			entries.push({ via: "requestUrl", method, url: logged(request.url) });
 		}
 		return originalSend.call(ipc, channel, replyChannel, request, ...rest);
 	};
