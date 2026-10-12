@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Scope } from "obsidian";
+	import { tick } from "svelte";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import EpisodePlayer from "./EpisodePlayer.svelte";
@@ -7,18 +8,52 @@
 	let { viewRoot }: { viewRoot: HTMLElement } = $props();
 	const { app, navigation } = useServices();
 
+	let section: HTMLElement | undefined = $state();
+
 	// Obsidian's keymap gives Escape to the newest scope, so a menu or modal opened
-	// over the player closes first. Escape typed elsewhere, as in an editor, stays there.
+	// over the player closes first. It keeps one stack per window and pushes onto the
+	// active window's, so the scope follows the view's window: on mount, on each focus
+	// of that window, and when the view moves to another one. Escape typed elsewhere,
+	// as in an editor, stays there.
 	$effect(() => {
 		const scope = new Scope(app.scope);
-		scope.register(null, "Escape", () => {
-			if (!viewRoot.contains(viewRoot.ownerDocument.activeElement)) return true;
-			navigation.collapse();
+		scope.register(null, "Escape", (evt) => {
+			const target = evt.target as Node | null;
+			if (target !== viewRoot.ownerDocument.body && !viewRoot.contains(target)) return true;
+			void collapse();
 			return false;
 		});
-		app.keymap.pushScope(scope);
-		return () => app.keymap.popScope(scope);
+		// Obsidian's own focus listener runs first and makes the window active.
+		const push = () => {
+			if (activeWindow !== viewRoot.win) return;
+			app.keymap.popScope(scope);
+			app.keymap.pushScope(scope);
+		};
+		let win = viewRoot.win;
+		win.addEventListener("focus", push);
+		push();
+		const stopFollowing = viewRoot.onWindowMigrated((next) => {
+			win.removeEventListener("focus", push);
+			app.keymap.popScope(scope);
+			win = next;
+			win.addEventListener("focus", push);
+			push();
+		});
+		return () => {
+			stopFollowing();
+			win.removeEventListener("focus", push);
+			app.keymap.popScope(scope);
+		};
 	});
+
+	/** A keyboard user who collapses the player lands on the mini player that opens it again. */
+	async function collapse() {
+		const hadFocus = !!section?.contains(viewRoot.ownerDocument.activeElement);
+		navigation.collapse();
+		if (!hadFocus) return;
+		await tick();
+		viewRoot.querySelector<HTMLElement>(".pn-mini-open")?.focus();
+	}
 
 	/** Takes focus unless the player opened while the user works elsewhere, as when a link plays. */
 	function focusFromView(button: HTMLButtonElement) {
@@ -29,14 +64,14 @@
 	}
 </script>
 
-<section class="pn-player" aria-label="Player">
+<section class="pn-player" aria-label="Player" bind:this={section}>
 	<header class="pn-np-head">
 		<button
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Collapse player"
 			title="Collapse player"
-			onclick={() => navigation.collapse()}
+			onclick={collapse}
 			{@attach icon("chevron-down")}
 			{@attach focusFromView}
 		></button>

@@ -22,6 +22,8 @@ interface KeymapEventHandler {
 }
 
 export class Scope {
+	/** The window whose stack the scope is on, as Obsidian records it. */
+	win: Window | null = null;
 	private handlers: KeymapEventHandler[] = [];
 
 	constructor(private readonly parent?: Scope) {}
@@ -36,36 +38,56 @@ export class Scope {
 		this.handlers = this.handlers.filter((registered) => registered !== handler);
 	}
 
-	/** As Obsidian: a handler that returns false takes the key, else the parent scope gets it. */
-	handleKey(evt: KeyboardEvent): false | undefined {
+	/** As Obsidian: the first handler for the key decides, else the parent scope does. */
+	handleKey(evt: KeyboardEvent): unknown {
 		for (const { key, func } of this.handlers) {
-			if ((key === null || key === evt.key) && func(evt, {}) === false) {
-				evt.preventDefault();
-				return false;
-			}
+			if (key !== null && key !== evt.key) continue;
+			const result = func(evt, {});
+			if (result !== undefined || key !== null) return result;
 		}
 		return this.parent?.handleKey(evt);
 	}
 }
 
-/** Obsidian's scope stack: the scope pushed last gets every key first. */
+interface WindowStack {
+	scope: Scope;
+	prevScopes: Scope[];
+}
+
+/** Obsidian's scope stacks: one per window, and the active window's top scope gets every key. */
 export class Keymap {
-	private scopes: Scope[] = [];
+	private readonly stacks = new WeakMap<Window, WindowStack>();
 
 	constructor(private readonly root: Scope) {}
 
+	private stackOf(win: Window): WindowStack {
+		let stack = this.stacks.get(win);
+		if (!stack) this.stacks.set(win, (stack = { scope: this.root, prevScopes: [] }));
+		return stack;
+	}
+
 	pushScope(scope: Scope): void {
-		this.popScope(scope);
-		this.scopes.push(scope);
+		const stack = this.stackOf(activeWindow);
+		if (stack.scope === scope) return;
+		stack.prevScopes.push(stack.scope);
+		stack.scope = scope;
+		scope.win = activeWindow;
 	}
 
 	popScope(scope: Scope): void {
-		this.scopes = this.scopes.filter((pushed) => pushed !== scope);
+		if (scope === this.root || !scope.win) return;
+		const stack = this.stackOf(scope.win);
+		if (stack.scope === scope) stack.scope = stack.prevScopes.pop() ?? this.root;
+		else stack.prevScopes = stack.prevScopes.filter((pushed) => pushed !== scope);
+		scope.win = null;
 	}
 
-	/** Test only: Obsidian runs this for every keydown in the window. */
+	/** Test only: Obsidian runs this for every keydown in each of its windows. */
 	dispatch(evt: KeyboardEvent): void {
-		(this.scopes[this.scopes.length - 1] ?? this.root).handleKey(evt);
+		if (this.stackOf(activeWindow).scope.handleKey(evt) === false) {
+			evt.preventDefault();
+			evt.stopPropagation();
+		}
 	}
 }
 

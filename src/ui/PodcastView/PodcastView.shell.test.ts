@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { tick } from "svelte";
 import { get } from "svelte/store";
@@ -14,6 +14,7 @@ import {
 import { createTestServices, type TestServices } from "../../../tests/mocks/services";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
+import { openPopout } from "../../../tests/mocks/popout";
 import PodcastView from "./PodcastView.svelte";
 
 const feed = {
@@ -239,11 +240,32 @@ describe("full player", () => {
 		expect(screen.getByRole("heading", { name: "Queue" })).toBeInTheDocument();
 	});
 
+	test("collapsing it puts focus that was in it on the mini player, and takes no other focus", async () => {
+		services.player.restore(episode);
+		renderView();
+		await tick();
+		expect(document.activeElement).toBe(document.body);
+
+		await fireEvent.click(button(`Open player: ${episode.title}`));
+		await fireEvent.click(button("Collapse player"));
+		await tick();
+		expect(document.activeElement).toBe(button(`Open player: ${episode.title}`));
+
+		const note = document.body.appendChild(document.createElement("textarea"));
+		note.focus();
+		services.navigation.expand();
+		await tick();
+		await fireEvent.click(button("Collapse player"));
+		await tick();
+		expect(document.activeElement).toBe(note);
+		note.remove();
+	});
+
 	describe("Escape", () => {
 		const dispatch = (event: KeyboardEvent) =>
 			(services.app.keymap as unknown as FakeKeymap).dispatch(event);
-		const escape = () =>
-			fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+		const escape = (target = document.activeElement ?? document.body) =>
+			fireEvent.keyDown(target, { key: "Escape" });
 
 		beforeEach(() => document.addEventListener("keydown", dispatch));
 		afterEach(() => document.removeEventListener("keydown", dispatch));
@@ -265,8 +287,6 @@ describe("full player", () => {
 			await escape();
 			expect(services.navigation.current.expanded).toBe(false);
 			expect(screen.queryByRole("region", { name: "Player" })).toBeNull();
-
-			button(`Open player: ${episode.title}`).focus();
 			expect(await escape()).toBe(true);
 		});
 
@@ -283,6 +303,42 @@ describe("full player", () => {
 
 			expect(await escape()).toBe(true);
 			expect(services.navigation.current.expanded).toBe(true);
+			note.remove();
+		});
+
+		test("from outside the view passes through, even with focus left in the player", async () => {
+			const note = document.body.appendChild(document.createElement("textarea"));
+			renderView();
+			playing();
+			await tick();
+			await fireEvent.click(button(`Open player: ${episode.title}`));
+			expect(document.activeElement).toBe(button("Collapse player"));
+
+			expect(await escape(note)).toBe(true);
+			expect(services.navigation.current.expanded).toBe(true);
+			note.remove();
+		});
+
+		test("follows the player to a popout window, and Escape in the main window passes it by", async () => {
+			const popout = openPopout();
+			popout.win.document.addEventListener("keydown", dispatch);
+			const note = document.body.appendChild(document.createElement("textarea"));
+			const { container } = renderView();
+			playing();
+			await tick();
+			await fireEvent.click(button(`Open player: ${episode.title}`));
+
+			popout.moveIn(container);
+			expect(await escape(note)).toBe(true);
+			expect(services.navigation.current.expanded).toBe(true);
+
+			popout.focus();
+			const collapseButton = within(container).getByRole("button", {
+				name: "Collapse player",
+			});
+			collapseButton.focus();
+			expect(await escape(collapseButton)).toBe(false);
+			expect(services.navigation.current.expanded).toBe(false);
 			note.remove();
 		});
 	});

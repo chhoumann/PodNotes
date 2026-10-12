@@ -58,6 +58,12 @@ if (typeof (globalThis as { activeDocument?: unknown }).activeDocument === "unde
 	});
 }
 
+// Obsidian points `activeWindow` at the focused window. Tests that open a second
+// window set it as Obsidian's focus listeners would.
+if (typeof (globalThis as { activeWindow?: unknown }).activeWindow === "undefined") {
+	(globalThis as { activeWindow?: Window }).activeWindow = window;
+}
+
 // Obsidian gives every node its window and lets an element follow a move to a
 // popout. jsdom has one window and no popouts.
 if (!("win" in Node.prototype)) {
