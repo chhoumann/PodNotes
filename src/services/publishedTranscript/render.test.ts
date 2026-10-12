@@ -96,6 +96,8 @@ describe("timestampStyle", () => {
 		["{{linksegment}}", { format: "HH:mm:ss", linkify: true }],
 		["{{time:H:mm}} {{linktime:mm:ss}}", { format: "H:mm", linkify: false }],
 		["{{linktime:}}", { format: "HH:mm:ss", linkify: true }],
+		["{{linktime: H:mm}}", { format: " H:mm", linkify: true }],
+		["{{time: }}", { format: " ", linkify: false }],
 		["> ", { format: "HH:mm:ss", linkify: false }],
 		["{{ linktime }}", { format: "HH:mm:ss", linkify: false }],
 		["{{ linktime:mm:ss }} {{time:H:mm}}", { format: "H:mm", linkify: false }],

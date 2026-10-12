@@ -13,8 +13,9 @@ export interface TimestampStyle {
 	readonly linkify: boolean;
 }
 
-// TemplateEngine renders a tag only when its name fills the braces, so `{{ linktime }}` is no tag.
-const TIME_TAG = /\{\{(link)?(?:time|segment)(?::\s*(.*?))?\}\}/i;
+// As in TemplateEngine, a tag's name fills the braces, so `{{ linktime }}` is no tag, and
+// everything after the colon, spaces included, is its format.
+const TIME_TAG = /\{\{(link)?(?:time|segment)(?::(.*?))?\}\}/i;
 
 export function timestampStyle(timestampTemplate: string): TimestampStyle {
 	const tag = TIME_TAG.exec(timestampTemplate);
