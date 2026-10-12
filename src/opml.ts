@@ -1,6 +1,6 @@
 import { type App, Notice } from "obsidian";
 import { plugin, savedFeeds } from "./store";
-import { internPrivateFeed, resolveFeedUrl } from "./services/privateFeeds";
+import { internPrivateFeed, isSavedFeed, resolveFeedUrl } from "./services/privateFeeds";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { TimerNotice } from "./ui/TimerNotice";
 import { get } from "svelte/store";
@@ -13,14 +13,8 @@ import { get } from "svelte/store";
  */
 function getAttributeCaseInsensitive(node: Element, name: string): string | null {
 	const target = name.toLowerCase();
-	for (let i = 0; i < node.attributes.length; i++) {
-		const attr = node.attributes.item(i);
-		if (attr && attr.name.toLowerCase() === target) {
-			const value = attr.value?.trim();
-			return value ? value : null;
-		}
-	}
-	return null;
+	const attr = Array.from(node.attributes).find((attr) => attr.name.toLowerCase() === target);
+	return attr?.value.trim() || null;
 }
 
 async function importOPML(opml: string): Promise<void> {
@@ -39,31 +33,21 @@ async function importOPML(opml: string): Promise<void> {
 		// Select on the always-lowercase tag and the camelCase-safe `text` attr;
 		// the xmlUrl attribute is read case-insensitively below so feeds written
 		// with a lowercase/variant casing (e.g. `xmlurl`) aren't silently dropped.
-		const podcastEntryNodes = dom.querySelectorAll("outline[text]");
 		const incompletePodcastsToAdd: Pick<PodcastFeed, "title" | "url">[] = [];
-		for (let i = 0; i < podcastEntryNodes.length; i++) {
-			const node = podcastEntryNodes.item(i);
-
-			const text = node.getAttribute("text");
-			const xmlUrl = getAttributeCaseInsensitive(node, "xmlUrl");
-			if (!text || !xmlUrl) {
-				continue;
-			}
-
-			incompletePodcastsToAdd.push({
-				title: text,
-				url: xmlUrl,
-			});
+		for (const node of Array.from(dom.querySelectorAll("outline[text]"))) {
+			const title = node.getAttribute("text");
+			const url = getAttributeCaseInsensitive(node, "xmlUrl");
+			if (title && url) incompletePodcastsToAdd.push({ title, url });
 		}
 
 		if (incompletePodcastsToAdd.length === 0) {
 			throw new Error("No valid podcast entries found in OPML");
 		}
 
-		const existingSavedFeeds = get(savedFeeds);
+		const existingSavedFeeds = Object.values(get(savedFeeds));
+		const { feeds, feedUrls } = get(plugin);
 		const newPodcastsToAdd = incompletePodcastsToAdd.filter(
-			(pod) =>
-				!Object.values(existingSavedFeeds).some((savedPod) => savedPod.url === pod.url),
+			(pod) => !existingSavedFeeds.some((saved) => isSavedFeed(saved, pod.url, feedUrls)),
 		);
 
 		const notice = TimerNotice("Importing podcasts", "Preparing to import...");
@@ -89,15 +73,13 @@ async function importOPML(opml: string): Promise<void> {
 		const podcasts: (PodcastFeed | null)[] = await Promise.all(
 			newPodcastsToAdd.map(async (feed) => {
 				try {
-					const result = await get(plugin).feeds.channelAt({ url: feed.url });
-					completedImports++;
-					updateProgress();
-					return result;
+					return await feeds.channelAt({ url: feed.url });
 				} catch (error) {
 					console.error(`Failed to fetch feed for ${feed.title}: ${error}`);
+					return null;
+				} finally {
 					completedImports++;
 					updateProgress();
-					return null;
 				}
 			}),
 		);
@@ -110,14 +92,16 @@ async function importOPML(opml: string): Promise<void> {
 		// from an earlier import in this batch or a previously saved feed) are
 		// dropped. Count what is actually written so the summary doesn't over-report.
 		let savedCount = 0;
-		savedFeeds.update((feeds) => {
+		savedFeeds.update((saved) => {
 			for (const pod of validPodcasts) {
-				if (feeds[pod.title]) continue;
+				// A saved private feed whose URL is not on this device takes the listed URL.
+				if (saved[pod.title] && resolveFeedUrl(saved[pod.title], feedUrls) !== null)
+					continue;
 				// Imported private URLs go straight to SecretStorage, never data.json.
-				feeds[pod.title] = internPrivateFeed(structuredClone(pod), get(plugin).feedUrls);
+				saved[pod.title] = internPrivateFeed(structuredClone(pod), feedUrls);
 				savedCount++;
 			}
-			return feeds;
+			return saved;
 		});
 
 		// Feeds skipped before fetching because their URL was already subscribed.
@@ -135,10 +119,7 @@ async function importOPML(opml: string): Promise<void> {
 		if (validPodcasts.length !== newPodcastsToAdd.length) {
 			const failedImports = newPodcastsToAdd.length - validPodcasts.length;
 			console.error(`Failed to import ${failedImports} podcasts.`);
-			new Notice(
-				`Failed to import ${failedImports} podcasts. Check console for details.`,
-				10000,
-			);
+			new Notice(`Failed to import ${failedImports} podcasts.`, 10000);
 		}
 
 		window.setTimeout(() => notice.dispose(), 5000);
@@ -152,11 +133,6 @@ async function importOPML(opml: string): Promise<void> {
 }
 
 async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_Export.opml") {
-	const header = `<?xml version="1.0" encoding="utf-8" standalone="no"?>`;
-	const opml = (child: string) => `<opml version="1.0">${child}</opml>`;
-	const head = (child: string) => `<head>${child}</head>`;
-	const title = "<title>PodNotes Feeds</title>";
-	const body = (child: string) => `<body>${child}</body>`;
 	// Escape every interpolated attribute value so titles/URLs containing &, <,
 	// >, or " produce well-formed XML that round-trips back through importOPML.
 	// `&` must run first so the entities written by the later replaces are not
@@ -177,10 +153,8 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 		if (feed.urlSecretId && url) exportedPrivateFeeds += 1;
 		return `<outline text="${escAttr(feed.title)}" type="rss" xmlUrl="${escAttr(url)}" />`;
 	};
-	const feedsOutline = (_feeds: PodcastFeed[]) =>
-		`<outline text="feeds">${feeds.map(feedOutline).join("")}</outline>`;
-
-	const doc = header + opml(`${head(title)}\n${body(feedsOutline(feeds))}`);
+	const doc = `<?xml version="1.0" encoding="utf-8" standalone="no"?><opml version="1.0"><head><title>PodNotes Feeds</title></head>
+<body><outline text="feeds">${feeds.map(feedOutline).join("")}</outline></body></opml>`;
 
 	try {
 		await app.vault.create(filePath, doc);
@@ -193,16 +167,9 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 			);
 		}
 	} catch (error) {
-		if (error instanceof Error) {
-			if (error.message.includes("Folder does not exist")) {
-				new Notice("Unable to create export file: Folder does not exist.");
-			} else {
-				new Notice(`Unable to create podcast export file:\n\n${error.message}`);
-			}
-		} else {
-			new Notice("An unexpected error occurred during export.");
-		}
-
+		new Notice(
+			`Unable to create podcast export file:\n\n${error instanceof Error ? error.message : "Unknown error"}`,
+		);
 		console.error(error);
 	}
 }

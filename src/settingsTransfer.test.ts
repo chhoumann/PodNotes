@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./constants";
 import {
-	EXCLUDED_KEYS,
+	VAULT_LOCAL_KEYS,
 	SETTINGS_EXPORT_TYPE,
 	SETTINGS_EXPORT_VERSION,
 	describeSecrets,
@@ -87,7 +87,7 @@ describe("serializeSettings", () => {
 
 		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
 
-		for (const key of EXCLUDED_KEYS) {
+		for (const key of VAULT_LOCAL_KEYS) {
 			expect(exported).not.toHaveProperty(key as string);
 		}
 	});
@@ -150,6 +150,84 @@ describe("serializeSettings", () => {
 		expect(exported.note).toEqual(settings.note);
 		expect(exported.savedFeeds).toEqual(settings.savedFeeds);
 		expect(exported.timestamp).toEqual(settings.timestamp);
+	});
+
+	it("leaves this vault's files behind but keeps the rest of the library", () => {
+		const episode = (podcastName: string, title: string, streamUrl: string) => ({
+			title,
+			streamUrl,
+			url: "",
+			description: "",
+			content: "",
+			podcastName,
+		});
+		const memo = {
+			...episode("local file", "Memo", "app://local/vault/Audio/Memo.mp3"),
+			filePath: "Audio/Memo.mp3",
+		};
+		const show = episode("Show", "Ep 1", "https://media.example/ep1.mp3");
+		const settings = makeSettings({
+			localFiles: { ...DEFAULT_SETTINGS.localFiles, episodes: [memo] },
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [memo, show] },
+			favorites: { ...DEFAULT_SETTINGS.favorites, episodes: [memo] },
+			playlists: { Mix: { ...DEFAULT_SETTINGS.queue, name: "Mix", episodes: [show, memo] } },
+		});
+
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+
+		expect(exported).not.toHaveProperty("localFiles");
+		expect(JSON.stringify(exported)).not.toContain("Memo");
+		expect(exported.queue?.episodes.map(({ title }) => title)).toEqual(["Ep 1"]);
+		expect(exported.favorites?.episodes).toEqual([]);
+		expect(exported.playlists?.Mix.episodes.map(({ title }) => title)).toEqual(["Ep 1"]);
+	});
+
+	it("carries no vault path in a playlist's current episode or in progress records", () => {
+		const memo = {
+			title: "Memo",
+			streamUrl: "app://local/vault/Audio/Memo.mp3",
+			url: "[[Audio/Memo.mp3]]",
+			description: "",
+			content: "",
+			podcastName: "local file",
+			filePath: "Audio/Memo.mp3",
+		};
+		const progress = {
+			title: "Memo",
+			podcastName: "local file",
+			time: 3,
+			duration: 9,
+			finished: false,
+		};
+		const settings = makeSettings({
+			queue: { ...DEFAULT_SETTINGS.queue, currentEpisode: memo },
+			favorites: { ...DEFAULT_SETTINGS.favorites, currentEpisode: memo },
+			playlists: { Mix: { ...DEFAULT_SETTINGS.queue, name: "Mix", currentEpisode: memo } },
+			playedEpisodes: { "local file::Memo": { ...progress, ...memo } as never },
+		});
+
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const imported = parseImport(JSON.stringify(settings));
+
+		for (const transferred of [exported, imported.ok ? imported.settings : {}]) {
+			expect(JSON.stringify(transferred)).not.toContain("Audio/Memo.mp3");
+			expect(transferred.playedEpisodes).toEqual({ "local file::Memo": progress });
+		}
+	});
+
+	it("carries playback progress", () => {
+		const progress = {
+			title: "Ep 1",
+			podcastName: "Show",
+			time: 30,
+			duration: 60,
+			finished: false,
+		};
+		const settings = makeSettings({ playedEpisodes: { "Show::Ep 1": progress } });
+
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+
+		expect(exported.playedEpisodes).toEqual({ "Show::Ep 1": progress });
 	});
 
 	it("encodes dates inside exported playlists as canonical text", () => {
@@ -243,7 +321,7 @@ describe("parseImport", () => {
 		if (result.ok) {
 			expect(result.meta.fromEnvelope).toBe(false);
 			expect(result.settings.defaultVolume).toBe(0.3);
-			for (const key of EXCLUDED_KEYS) {
+			for (const key of VAULT_LOCAL_KEYS) {
 				expect(result.settings).not.toHaveProperty(key as string);
 			}
 		}
@@ -461,7 +539,7 @@ describe("parseImport", () => {
 });
 
 describe("mergeImportedSettings", () => {
-	it("overrides preferences while preserving excluded runtime state", () => {
+	it("overrides preferences while preserving this vault's progress", () => {
 		const current = makeSettings({
 			defaultVolume: 1,
 			playedEpisodes: {
@@ -473,6 +551,29 @@ describe("mergeImportedSettings", () => {
 
 		expect(merged.defaultVolume).toBe(0.25);
 		expect(merged.playedEpisodes).toEqual(current.playedEpisodes);
+	});
+
+	it("adds imported progress without overwriting this vault's", () => {
+		const played = (title: string, time: number) => ({
+			title,
+			podcastName: "Show",
+			time,
+			duration: 60,
+			finished: false,
+		});
+		const current = makeSettings({ playedEpisodes: { "Show::Ep 1": played("Ep 1", 10) } });
+
+		const merged = mergeImportedSettings(current, {
+			playedEpisodes: {
+				"Show::Ep 1": played("Ep 1", 50),
+				"Show::Ep 2": played("Ep 2", 20),
+			},
+		});
+
+		expect(merged.playedEpisodes).toEqual({
+			"Show::Ep 1": played("Ep 1", 10),
+			"Show::Ep 2": played("Ep 2", 20),
+		});
 	});
 
 	it("backfills partial nested objects from defaults so no field is blanked", () => {
