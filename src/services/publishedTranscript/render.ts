@@ -90,10 +90,13 @@ export function renderTranscriptBody(
 /**
  * The escaped characters start HTML and Templater (`<`), embeds and links (`[`),
  * code and Dataview queries (`` ` `` and `~`), tags (`#`), comments (`%`),
- * math (`$`) and entities (`&lt;`, which the parser has already decoded once).
- * Escaping `\` too stops a backslash in the text from cancelling the escape
- * after it.
+ * math (`$`), block IDs (`^`) and entities (`&lt;`, which the parser has
+ * already decoded once). Escaping `\` too stops a backslash in the text from
+ * cancelling the escape after it. Each colon after a colon is escaped as well,
+ * because Dataview reads any `::` in the raw text as an inline field.
  */
 export function escapeTranscriptText(text: string): string {
-	return collapseWhitespace(text).replace(/[\\`<[#%$~]|&(?=#?[a-z0-9]+;)/gi, "\\$&");
+	return collapseWhitespace(text)
+		.replace(/[\\`<[#%$~^]|&(?=#?[a-z0-9]+;)/gi, "\\$&")
+		.replace(/:(?=:)/g, ":\\");
 }
