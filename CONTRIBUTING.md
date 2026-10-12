@@ -17,11 +17,13 @@ npm run build
 
 PodNotes tests against the Obsidian desktop app: `Obsidian.app` on macOS, and the `.deb` or tarball install at `/opt/Obsidian` on Linux. A Linux machine without a display also needs `xvfb` and `xauth`. The Flatpak and Snap builds do not work.
 
+The test tools drive Obsidian through its command line client, so set that up once. In Obsidian, open **Settings → General**, turn on **Command line interface** under **Advanced**, then select **Set up CLI to work in the terminal**. On Linux, this puts the client in `~/.local/bin`, which must come before `/usr/bin` on your `PATH`.
+
 ```
 npm run start:e2e-obsidian
 ```
 
-This starts an isolated Obsidian with its own vault that loads this checkout's build. `npm run stop:e2e-obsidian` stops it.
+This starts an isolated Obsidian with its own vault that loads this checkout's build. After a rebuild, run it again to reload PodNotes. `npm run stop:e2e-obsidian` stops it.
 
 To use your own test vault instead, link `main.js` and `manifest.json` from the repository root into the vault's `.obsidian/plugins/podnotes/` folder. After each rebuild, turn PodNotes off and on in **Settings → Community plugins**. Use a vault you do not mind breaking.
 
@@ -47,10 +49,11 @@ Tests sit next to the code as `*.test.ts`. A test file that needs a DOM starts w
 
 Behavior such as playback, timestamp links, downloads, local files, and settings migrations depends on Obsidian itself. Check it in a real Obsidian before you open a pull request.
 
-The end-to-end suite in `tests/e2e` runs against the isolated Obsidian. On Linux, `npm run test:e2e` starts it and stops it afterwards. On macOS, start it first:
+The end-to-end suite in `tests/e2e` runs against the isolated Obsidian. On Linux, `npm run test:e2e` starts it, or reuses the one already running. It stops the instance afterwards only if it started it. On macOS, start it first:
 
 ```
-eval "$(npm run --silent start:e2e-obsidian -- --print-env)"
+eval "$(npm run --silent \
+  start:e2e-obsidian -- --print-env)"
 npm run test:e2e
 npm run stop:e2e-obsidian
 ```
