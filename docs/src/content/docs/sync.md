@@ -72,7 +72,7 @@ Add the key on every device where you transcribe. See [Transcribe episodes](/tra
 
 PodNotes also moves a private feed URL into secret storage when the URL contains a user name, a password, or a query parameter such as `auth`, `token`, or `key`.
 The synced subscription then holds a placeholder.
-On another device, PodNotes cannot fetch that feed or open its timestamp links, and it asks you to remove the feed and add it again with its private URL.
+On another device, PodNotes cannot fetch that feed or open its timestamp links. When it tries to fetch the feed, it asks you to remove the feed and add it again with its private URL.
 Adding it again stores a new reference. When that reference syncs back, the first device loses access instead.
 A protected private feed works on one device at a time.
 

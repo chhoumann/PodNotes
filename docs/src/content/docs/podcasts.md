@@ -40,7 +40,7 @@ The view then lists that podcast's or playlist's episodes. **Queue** is the exce
 
 To return to the last list you saw, select **Episode list**, the second button at the top of the view. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
 
-Above each list, **Search episodes** filters it. In **Latest Episodes** and a podcast's list, **Refresh episodes** fetches new episodes. In a playlist, it does nothing. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
+Above each list, **Search episodes** filters it. In **Latest Episodes** and a podcast's list, **Refresh episodes** fetches new episodes. In **Played**, it fetches the podcasts that have played episodes. In other playlists, it does nothing. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
 
 <span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
 
@@ -67,7 +67,7 @@ To open an episode's menu, right-click the episode or select its **More options*
 | --- | --- |
 | **Play** | Plays the episode. |
 | **Mark as Played** or **Mark as Unplayed** | Changes whether the episode counts as played. |
-| **Download**, **Remove file**, or **Remove from Local Files** | Downloads the episode, or removes the download or your own file. See [Downloads and local files](/local_files/). |
+| **Download**, **Remove file**, or **Remove from Local Files** | Downloads the episode. **Remove file** deletes a download to the trash, and **Remove from Local Files** removes your own file from the list and keeps the file. See [Downloads and local files](/local_files/). |
 | **Create Note** or **Open Note** | Creates or opens the episode note. See [Create episode notes](/notes/). |
 | **Create feed note** or **Open feed note** | Creates or opens the note for the whole podcast. |
 | **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites** or removes it. |

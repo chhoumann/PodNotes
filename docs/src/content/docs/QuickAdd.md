@@ -30,10 +30,11 @@ A Capture choice, with no macro, writes a timestamp link and your comment on a n
    ````
 
 7. Play an episode in PodNotes.
-8. Open the note you want to write in, in editing view, and place the cursor where the timestamp goes.
-9. Run **QuickAdd: Run**.
-10. Select `Podcast timestamp`.
-11. Type your comment.
+8. Open the note you want to write in, in editing view.
+9. Place the cursor where the timestamp goes.
+10. Run **QuickAdd: Run**.
+11. Select `Podcast timestamp`.
+12. Type your comment.
 
 The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument. To capture 5 seconds earlier, the script's `return` line becomes:
 
@@ -108,9 +109,31 @@ PodNotes finds an episode note only at **Note creation file path**, or by the ep
 
 ## Send a transcript to an AI prompt
 
-This macro returns a prompt with the current episode's transcript, for QuickAdd's AI Assistant. It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first.
+This macro returns a prompt with the current episode's transcript, for QuickAdd's AI Assistant. It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first. Set up the AI Assistant's provider and key as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe.
 
-1. In a visible folder of your vault, save the script from [QuickAdd AI prompt example](/api/#quickadd-ai-prompt-example) as `scripts/podnotes-transcript-prompt.js`.
+1. In a visible folder of your vault, create `scripts/podnotes-transcript-prompt.js`:
+
+   ```js
+   module.exports = async (params) => {
+   	const podnotes = params.app.plugins.plugins.podnotes?.api;
+   	if (!podnotes) throw new Error("PodNotes is not enabled.");
+
+   	const transcript = await podnotes.transcript;
+   	if (!transcript) {
+   		throw new Error(
+   			"Generate a transcript for the current PodNotes episode first.",
+   		);
+   	}
+
+   	const prompt = `Summarize this podcast transcript in five bullet points.
+
+   Transcript:
+   ${transcript}`;
+
+   	return prompt;
+   };
+   ```
+
 2. In **Settings → QuickAdd**, select **New choice**.
 3. Select **Macro**.
 4. Set **Name** to `Transcript prompt`.

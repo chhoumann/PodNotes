@@ -42,7 +42,7 @@ The providers differ in these ways:
 
 ### <span id="speaker-label-format"></span>Change the speaker label format
 
-**Speaker label format** sets the text before each turn. The default, `**{{speaker}}:**` with a space at the end, starts a turn with **A:** in bold. For **Speaker A:**, use `**Speaker {{speaker}}:**`, also with a space at the end. The labeled text fills `{{transcript}}`, so **Transcript template** needs no change.
+**Speaker label format** under **Transcripts**, which appears when **Speaker diarization** is on, sets the text before each turn. The default, `**{{speaker}}:**` with a space at the end, starts a turn with **A:** in bold. For **Speaker A:**, use `**Speaker {{speaker}}:**`, also with a space at the end. With Deepgram, the labels are numbers, as in **Speaker 1:**. The labeled text fills `{{transcript}}`, so **Transcript template** needs no change.
 
 ## <span id="transcript-template"></span>Change where transcripts go and what they contain
 

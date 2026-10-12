@@ -126,29 +126,7 @@ const transcript = await api.getTranscript();
 
 ### QuickAdd AI prompt example
 
-This QuickAdd user script returns a prompt that contains the current episode's transcript note.
-[Send a transcript to an AI prompt](/QuickAdd/#send-a-transcript-to-an-ai-prompt) shows how to use it in a QuickAdd macro.
-
-```js
-module.exports = async (params) => {
-	const podnotes = params.app.plugins.plugins.podnotes?.api;
-	if (!podnotes) throw new Error("PodNotes is not enabled.");
-
-	const transcript = await podnotes.transcript;
-	if (!transcript) {
-		throw new Error(
-			"Generate a transcript for the current PodNotes episode first.",
-		);
-	}
-
-	const prompt = `Summarize this podcast transcript in five bullet points.
-
-Transcript:
-${transcript}`;
-
-	return prompt;
-};
-```
+[Send a transcript to an AI prompt](/QuickAdd/#send-a-transcript-to-an-ai-prompt) has a QuickAdd user script that returns a prompt with the current episode's transcript.
 
 ## <span id="getpodcasttimeformattedformat-string-linkify-boolean-offsetseconds-number"></span>`getPodcastTimeFormatted()`
 
