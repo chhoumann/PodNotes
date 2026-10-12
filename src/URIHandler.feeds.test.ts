@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 describe("podNotesURIHandler with saved feeds", () => {
-	const SECRET_URL = "https://patron.example.com/feed.xml?auth=s3cret";
+	const SECRET_URL = "https://patron.example.com/PATH_SENTINEL/feed.xml?auth=QUERY_SENTINEL";
 	const PRIVATE_LINK_NOTICE =
 		"This link points to a private feed that is not available on this device.";
 	const patronEpisode = (title: string): Episode => ({
@@ -115,6 +115,37 @@ describe("podNotesURIHandler with saved feeds", () => {
 			podcastName: "Patron Show",
 		});
 		expect(get(viewState)).toBe(ViewState.Player);
+	});
+
+	test("a link to a private feed by its secret URL plays the subscription's episode, which keeps the secret out", async () => {
+		follow();
+		const linkless = { ...second, url: "" };
+		load.mockResolvedValue(feedDocument("Patron Show", [first, linkless]));
+
+		await open(SECRET_URL, linkless.title);
+
+		expect(playing()).toMatchObject({
+			title: linkless.title,
+			podcastName: "Patron Show",
+			url: privateLink,
+			feedUrl: privateLink,
+		});
+		expect(JSON.stringify(playing())).not.toMatch(/PATH_SENTINEL|QUERY_SENTINEL/);
+	});
+
+	test("a link to the playing private episode by its secret URL seeks it without loading the feed", async () => {
+		const { feeds } = follow();
+		load.mockResolvedValue(feedDocument("Patron Show", [first]));
+		await feeds.ensureAll();
+		const [subscribed] = get(feeds).get("Patron Show")?.episodes ?? [];
+		player.play(subscribed);
+		load.mockClear();
+
+		await open(SECRET_URL, first.title);
+
+		expect(load).not.toHaveBeenCalled();
+		expect(get(player.state).currentTime).toBe(5);
+		expect(playing()).toMatchObject({ title: first.title, feedUrl: privateLink });
 	});
 
 	test.each([
