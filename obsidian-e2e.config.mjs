@@ -1,13 +1,5 @@
 // Config for the obsidian-e2e instance runner, read from the worktree root.
 // Schema: the runner's README ("Instance Runner (CLI)").
-//
-// `defaultData` seeds a freshly provisioned vault's data.json. It mirrors
-// DEFAULT_SETTINGS in src/constants.ts (plus the `schemaVersion: 2` persistence
-// marker PodNotes writes alongside its settings) so a new vault loads with clean
-// PodNotes state and the current on-disk schema. `currentEpisode` is omitted:
-// DEFAULT_SETTINGS sets it to `undefined`, which JSON cannot represent and
-// PodNotes treats as absent. Keep this in sync with constants.ts -
-// scripts/e2e-config.test.ts fails if it drifts from DEFAULT_SETTINGS.
 import os from "node:os";
 import path from "node:path";
 
@@ -33,6 +25,13 @@ export default {
 	// "injected"), so there is no styles.css artifact - only the manifest and the
 	// compiled bundle are symlinked into the vault.
 	pluginArtifacts: ["manifest.json", "main.js"],
+	// `defaultData` seeds a freshly provisioned vault's data.json. It mirrors
+	// DEFAULT_SETTINGS in src/constants.ts (plus the `schemaVersion: 2` persistence
+	// marker PodNotes writes alongside its settings) so a new vault loads with clean
+	// PodNotes state and the current on-disk schema. `currentEpisode` is omitted:
+	// DEFAULT_SETTINGS sets it to `undefined`, which JSON cannot represent and
+	// PodNotes treats as absent. Keep this in sync with constants.ts -
+	// scripts/e2e-config.test.ts fails if it drifts from DEFAULT_SETTINGS.
 	defaultData: {
 		schemaVersion: 2,
 		savedFeeds: {},

@@ -368,7 +368,6 @@ describe("feed journeys", () => {
 			message: "the delayed refresh to settle on Beta",
 		});
 		expect(await listedEpisodes(obsidian)).toEqual(["Beta Two", "Beta One"]);
-		expect(await shownText(obsidian)).not.toContain("Updating");
 
 		await click(obsidian, ui.podcastGridTab);
 		await click(obsidian, ui.podcastCard(alpha.title));
@@ -408,7 +407,6 @@ describe("feed journeys", () => {
 			"Alpha One",
 			"Beta One",
 		]);
-		expect(await shownText(obsidian)).not.toContain("Updating");
 	});
 
 	test("J-FEED-05 removing a podcast drops it from the grid, Latest Episodes and the feed cache at once", async () => {

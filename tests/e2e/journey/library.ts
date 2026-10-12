@@ -531,12 +531,11 @@ export async function playbackOver(
 	const second = await obsidian.waitFor(
 		async () => {
 			const current = await observePlayback(obsidian);
-			if (first.playing)
-				return current.seconds >= first.seconds + gapMs / 1000 ? current : false;
 			if (
-				current.playing ||
-				current.seconds !== first.seconds ||
-				current.media?.seconds !== first.media?.seconds
+				!first.playing &&
+				(current.playing ||
+					current.seconds !== first.seconds ||
+					current.media?.seconds !== first.media?.seconds)
 			)
 				return current;
 			return Date.now() >= until ? current : false;

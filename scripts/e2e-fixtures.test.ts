@@ -30,3 +30,22 @@ it("holds a real feed response until release and serves a later refresh independ
 		await server.stop();
 	}
 });
+
+it("releases a held feed when its connection closes before the response finishes", async () => {
+	const feed = { title: "Aborted feed", slug: "aborted", artwork: false, episodes: [] };
+	const server = await startFixtureServer([feed]);
+	const release = server.holdFeed(feed);
+	const url = new URL(server.feedUrl(feed));
+	url.hostname = "127.0.0.1";
+	const request = http.get(url);
+	request.on("error", () => {});
+	try {
+		await expect.poll(() => server.requests().length).toBe(1);
+		request.destroy();
+		await server.stop();
+		await release();
+	} finally {
+		request.destroy();
+		await server.stop();
+	}
+});

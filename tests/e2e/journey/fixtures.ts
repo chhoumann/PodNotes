@@ -55,6 +55,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 			serveRange(request, response, route.type, route.body, route.cache === true);
 		if (held) {
 			response.once("finish", held.complete);
+			response.once("close", held.complete);
 			void held.ready.then(serve);
 		} else serve();
 	});
