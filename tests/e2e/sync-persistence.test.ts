@@ -89,9 +89,14 @@ function addSyncedChanges(data: PodNotesData): void {
 	};
 }
 
-function setVolume(obsidian: Parameters<typeof evalJsonAsync>[0], volume: number) {
+function saveDefaultVolume(obsidian: Parameters<typeof evalJsonAsync>[0], volume: number) {
 	return obsidian.dev.evalJson(
-		`(() => { app.plugins.plugins.${PLUGIN_ID}.api.volume = ${volume}; return true; })()`,
+		`(() => {
+			const podnotes = app.plugins.plugins.${PLUGIN_ID};
+			podnotes.settings.defaultVolume = ${volume};
+			void podnotes.saveSettings();
+			return true;
+		})()`,
 	);
 }
 
@@ -144,7 +149,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			)
 			.toBe(true);
 
-		await setVolume(obsidian, 0.42);
+		await saveDefaultVolume(obsidian, 0.42);
 		const disk = await plugin.waitForData<PodNotesData>(
 			(data) => data.defaultVolume === 0.42,
 			WAIT_OPTS,
@@ -156,14 +161,17 @@ describe("PodNotes data.json changed elsewhere", () => {
 
 	test("keeps an edit made here that was not saved yet when another device's change lands", async () => {
 		const { obsidian, plugin } = getContext();
-		await setVolume(obsidian, 0.32);
+		await saveDefaultVolume(obsidian, 0.32);
 		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.32, WAIT_OPTS);
 
 		// A change saves at once, but a playback checkpoint waits up to 10 s after the
 		// last save. This edit stands in for one.
 		await obsidian.dev.evalJson(`(() => {
 			const podnotes = app.plugins.plugins.${PLUGIN_ID};
-			podnotes.checkpoint(() => { podnotes.api.volume = 0.33; });
+			podnotes.checkpoint(() => {
+				podnotes.settings.defaultVolume = 0.33;
+				void podnotes.saveSettings();
+			});
 			return true;
 		})()`);
 		await plugin.data<PodNotesData>().patch(addSyncedChanges);
@@ -243,7 +251,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			return true;
 		})()`);
 
-		await setVolume(obsidian, 0.55);
+		await saveDefaultVolume(obsidian, 0.55);
 		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.55, WAIT_OPTS);
 		// Obsidian debounces its file watcher; give it well past that to call in.
 		await obsidian.sleep(2_500);
@@ -270,7 +278,8 @@ describe("PodNotes data.json changed elsewhere", () => {
 				podnotes.loadData = () => held.then(read);
 				try {
 					await app.vault.adapter.write(path, JSON.stringify(data));
-					podnotes.api.volume = 0.27;
+					podnotes.settings.defaultVolume = 0.27;
+					void podnotes.saveSettings();
 					void podnotes.onExternalSettingsChange?.();
 					await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
 					release();
@@ -323,7 +332,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 					POLL,
 				)
 				.toBe(false);
-			await setVolume(obsidian, 0.61);
+			await saveDefaultVolume(obsidian, 0.61);
 			const disk = await plugin.waitForData<PodNotesData>(
 				(data) => data.defaultVolume === 0.61,
 				WAIT_OPTS,
@@ -379,7 +388,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 		const library = await plugin.data<PodNotesData>().read();
 		addSyncedChanges(library);
 		await startAsNewDevice(plugin);
-		await setVolume(obsidian, 0.42);
+		await saveDefaultVolume(obsidian, 0.42);
 		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.42, WAIT_OPTS);
 
 		await plugin.data<PodNotesData>().write(library);

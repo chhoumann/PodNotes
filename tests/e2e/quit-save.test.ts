@@ -25,7 +25,11 @@ test.runIf(isolatedInstance)(
 				// Read by this process while Obsidian is gone.
 				onDisk = JSON.parse(await readFile(dataPath, "utf8")) as PodNotesData;
 			},
-			`app.plugins.plugins.${PLUGIN_ID}.api.volume = 0.392`,
+			`(() => {
+				const podnotes = app.plugins.plugins.${PLUGIN_ID};
+				podnotes.settings.defaultVolume = 0.392;
+				void podnotes.saveSettings();
+			})()`,
 		);
 
 		expect(onDisk?.defaultVolume).toBe(0.392);

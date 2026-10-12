@@ -65,13 +65,24 @@ const SAVE_POSITION_THROTTLE_MS = 5000;
 /** HTMLMediaElement.HAVE_NOTHING: the element holds no media. */
 const HAVE_NOTHING = 0;
 /** A seek at or past the end stops this far short of it, so a seek never finishes an episode. */
-const END_MARGIN_S = 0.25;
+export const END_MARGIN_S = 0.25;
 /** The media element's class, wherever it is. */
 export const MEDIA_CLASS = "podnotes-media";
 
 const isTime = (value: number) => Number.isFinite(value) && value >= 0;
 const isOptionalTime = (value: number | undefined) => value === undefined || isTime(value);
 const finiteOr0 = (value: number) => (Number.isFinite(value) ? value : 0);
+const clampVolume = (volume: number) => Math.min(1, Math.max(0, volume));
+
+function defaultLevels({
+	defaultPlaybackRate,
+	defaultVolume,
+}: IPodNotesSettings): Pick<PlayerState, "playbackRate" | "volume"> {
+	return {
+		playbackRate: normalizePlaybackRate(defaultPlaybackRate),
+		volume: Number.isFinite(defaultVolume) ? clampVolume(defaultVolume) : 1,
+	};
+}
 
 /**
  * Owns the one media element, in the main window, from plugin load to unload.
@@ -98,15 +109,13 @@ export class PlayerController {
 		private readonly doc: PlayerDocument,
 		private readonly plugin: PlayerHost,
 	) {
-		const { defaultPlaybackRate, defaultVolume } = plugin.settings;
 		this.snapshot = {
 			status: "empty",
 			episode: undefined,
 			mediaType: "audio",
 			currentTime: 0,
 			duration: 0,
-			playbackRate: normalizePlaybackRate(defaultPlaybackRate),
-			volume: Number.isFinite(defaultVolume) ? Math.min(1, Math.max(0, defaultVolume)) : 1,
+			...defaultLevels(plugin.settings),
 		};
 		this.store = writable(this.snapshot);
 		this.state = { subscribe: this.store.subscribe };
@@ -224,18 +233,17 @@ export class PlayerController {
 	setPlaybackRate(rate: number): void {
 		if (this.disposed) return;
 		const playbackRate = normalizePlaybackRate(rate, this.plugin.settings.defaultPlaybackRate);
-		// A new load resets the rate to the default rate.
+		// The browser's own reload of the element, as in a popout's video stage, resets
+		// the rate to the element's default rate.
 		this.el.playbackRate = this.el.defaultPlaybackRate = playbackRate;
 		this.setState({ playbackRate });
 	}
 
-	/** The live volume is the saved default volume. */
 	setVolume(volume: number): void {
 		if (this.disposed || !Number.isFinite(volume)) return;
-		const clamped = Math.min(1, Math.max(0, volume));
+		const clamped = clampVolume(volume);
 		this.el.volume = clamped;
 		this.setState({ volume: clamped });
-		writePlayerSettings(this.plugin, { defaultVolume: clamped });
 	}
 
 	/** Saves the position now rather than at the next checkpoint. */
@@ -315,12 +323,16 @@ export class PlayerController {
 			preview: endTime !== undefined,
 			lastCheckpoint: Number.NEGATIVE_INFINITY,
 		};
+		const levels = defaultLevels(this.plugin.settings);
+		this.el.playbackRate = this.el.defaultPlaybackRate = levels.playbackRate;
+		this.el.volume = levels.volume;
 		this.setState({
 			status: "loading",
 			episode,
 			mediaType: source.mediaType,
 			currentTime: time,
 			duration,
+			...levels,
 		});
 		this.el.setAttribute("aria-label", episode.title);
 		this.el.src = source.src;

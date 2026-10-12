@@ -31,15 +31,25 @@ function deferred<T = void>() {
 }
 
 describe("PodNotesSettingsTab settings import", () => {
-	it("sets the live playback rate when importing a new default", async () => {
+	it("starts the next episode at imported defaults, leaving the playing one as it is", async () => {
+		const episode = (title: string): Episode => ({
+			title,
+			streamUrl: `https://pod.example.com/${title}.mp3`,
+			url: "",
+			description: "",
+			content: "",
+			podcastName: "Show",
+		});
 		const plugin = {
 			settings: structuredClone(DEFAULT_SETTINGS),
+			app: { vault: {} },
 			credentials: { storeValues: vi.fn(() => ({})) },
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
 		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(tab, "update").mockImplementation(() => {});
+		plugin.player.play(episode("A"));
 
 		await (
 			tab as unknown as {
@@ -47,10 +57,12 @@ describe("PodNotesSettingsTab settings import", () => {
 					imported: Partial<typeof DEFAULT_SETTINGS>,
 				) => Promise<void>;
 			}
-		).applyImportedSettings({ defaultPlaybackRate: 2.3 });
+		).applyImportedSettings({ defaultPlaybackRate: 2.3, defaultVolume: 0.4 });
 
-		expect(plugin.settings.defaultPlaybackRate).toBe(2.3);
-		expect(get(plugin.player.state).playbackRate).toBe(2.3);
+		expect(plugin.settings).toMatchObject({ defaultPlaybackRate: 2.3, defaultVolume: 0.4 });
+		expect(get(plugin.player.state)).toMatchObject({ playbackRate: 1, volume: 1 });
+		plugin.player.play(episode("B"));
+		expect(get(plugin.player.state)).toMatchObject({ playbackRate: 2.3, volume: 0.4 });
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
 	});
 
@@ -549,22 +561,21 @@ describe("PodNotesSettingsTab settings import", () => {
 			await vi.waitFor(() => expect(saveData).toHaveBeenCalledTimes(1));
 
 			hidePlayedEpisodes.set(true);
-			plugin.player.setVolume(0.4);
 			episodeListLimit.set(20);
-			// Current playback speed is runtime state, not the persisted default.
-			plugin.player.setPlaybackRate(2.5);
 			plugin.player.play(selected);
+			plugin.player.setVolume(0.4);
+			plugin.player.setPlaybackRate(2.5);
 			firstWrite.reject(new Error("first import write failed"));
 			await importing;
 
 			expect(get(hidePlayedEpisodes)).toBe(true);
 			expect(plugin.settings.hidePlayedEpisodes).toBe(true);
 			expect(disk.hidePlayedEpisodes).toBe(true);
-			expect(plugin.settings.defaultVolume).toBe(0.4);
-			expect(disk.defaultVolume).toBe(0.4);
 			expect(plugin.settings.episodeListLimit).toBe(20);
 			expect(disk.episodeListLimit).toBe(20);
-			expect(get(plugin.player.state).playbackRate).toBe(2.5);
+			expect(get(plugin.player.state)).toMatchObject({ volume: 0.4, playbackRate: 2.5 });
+			expect(plugin.settings.defaultVolume).toBe(DEFAULT_SETTINGS.defaultVolume);
+			expect(disk.defaultVolume).toBe(DEFAULT_SETTINGS.defaultVolume);
 			expect(plugin.settings.defaultPlaybackRate).toBe(DEFAULT_SETTINGS.defaultPlaybackRate);
 			expect(disk.defaultPlaybackRate).toBe(DEFAULT_SETTINGS.defaultPlaybackRate);
 			expect(plugin.settings.currentEpisode).toMatchObject({ title: selected.title });
