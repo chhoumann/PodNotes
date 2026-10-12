@@ -1,0 +1,23 @@
+---
+import Default from "@astrojs/starlight/components/MarkdownContent.astro";
+import { withScreenshots } from "../screenshots.mjs";
+import { withStackedTables } from "../tables.mjs";
+
+// Short inline code, such as `12: Interview`, never splits across two lines.
+const withShortCode = (html: string) =>
+	html.replace(/<code dir="auto">(?=[^<]{1,24}<\/code>)/g, '<code dir="auto" class="short">');
+
+// Longer inline code, such as a path or a URL, may break after a slash, so it
+// wraps in whole pieces.
+const withPathBreaks = (html: string) =>
+	html.replace(
+		/<code dir="auto">([^<]*)<\/code>/g,
+		(code, text: string) => `<code dir="auto">${text.replace(/\/+/g, "$&<wbr>")}</code>`,
+	);
+
+const html = withPathBreaks(
+	withShortCode(withStackedTables(await withScreenshots(await Astro.slots.render("default")))),
+);
+---
+
+<Default><Fragment set:html={html} /></Default>

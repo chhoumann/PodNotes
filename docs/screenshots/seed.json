@@ -1,0 +1,82 @@
+{
+	"vaultName": "Notes",
+	"theme": {
+		"name": "Minimal",
+		"repo": "kepano/obsidian-minimal",
+		"version": "9.1.4"
+	},
+	"feeds": [
+		"https://feeds.simplecast.com/BqbsxVfO",
+		"https://feeds.npr.org/510289/podcast.xml",
+		"https://feeds.simplecast.com/EmVW7VGp",
+		"https://feeds.megaphone.fm/FSMI7575968096",
+		"https://feeds.transistor.fm/acquired",
+		"https://relay.fm/cortex/feed",
+		"https://feeds.simplecast.com/Y8lFbOT4",
+		"https://feeds.simplecast.com/6HKOhNgS",
+		"https://api.substack.com/feed/podcast/10845.rss"
+	],
+	"search": "the daily",
+	"settings": {
+		"episodeListLimit": 25
+	},
+	"noteTemplate": "---\ntype: podcastEpisode\npodcast: \"{{podcastlink}}\"\ndate: {{date:YYYY-MM-DD}}\nduration: \"{{duration}}\"\ntags:\n  - podcastEpisode\nstatus:\nrating:\n---\n![|96]({{artwork}})\n\n[Resume in PodNotes]({{episodelink}})\n\n> [!summary]- Episode description\n{{description:> }}\n\n## Notes\n\n",
+	"episodes": [
+		{
+			"podcast": "Cortex",
+			"title": "183: Scouting Indie Games for a Living, with Lucy James",
+			"status": "next"
+		},
+		{
+			"podcast": "Planet Money",
+			"title": "The Domino’s Pizza Tracker Theory of Everything",
+			"notes": "pizza-tracker.md",
+			"status": "finished",
+			"rating": 4
+		},
+		{
+			"podcast": "Acquired",
+			"title": "The Home Depot",
+			"status": "finished",
+			"rating": 4
+		},
+		{
+			"podcast": "Radiolab",
+			"title": "Math Vs Machine",
+			"notes": "math-vs-machine.md",
+			"status": "next"
+		},
+		{
+			"podcast": "The Knowledge Project",
+			"title": "The 12 Years that Changed Steve Jobs",
+			"notes": "steve-jobs.md",
+			"status": "listening",
+			"rating": 5,
+			"playAt": 640,
+			"playbackRate": 1.5
+		}
+	],
+	"feedNotes": [
+		"Planet Money",
+		"The Knowledge Project",
+		"Acquired",
+		"Radiolab",
+		"Cortex"
+	],
+	"playlist": {
+		"name": "Commute",
+		"icon": "headphones",
+		"episodes": [
+			"A 4-Track Mind",
+			"Doves Type",
+			"Ferrari",
+			"Grass Apes",
+			"The Rocky Statue"
+		]
+	},
+	"maxTitleLength": 24,
+	"demo": {
+		"at": 698,
+		"note": "A perfect cube, and why the case took years."
+	}
+}

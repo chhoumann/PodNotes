@@ -1,12 +1,16 @@
-// Keeps every heading fragment of the retired MkDocs site working, so old
-// section links such as /commands/#show-player still land on their section.
+// Keeps every heading fragment the site has published working, so old section
+// links such as /commands/#show-player still land on their section.
+// legacy-fragments.json lists the retired MkDocs site's ids plus the Starlight
+// ids published before the docs overhaul. Add an id here when a heading that
+// users may have linked to changes.
 //
 //   node scripts/legacy-fragments.mjs check [dist]
 //     Fails if a page in dist lacks an id listed in legacy-fragments.json.
 //     Runs after every `npm run build`.
 //   node scripts/legacy-fragments.mjs extract <mkdocs-site-dir>
-//     Rewrites legacy-fragments.json from a MkDocs build. It was generated from
-//     master at f7b9874 (the last MkDocs commit) with:
+//     Rewrites legacy-fragments.json from a MkDocs build, dropping the ids
+//     added by hand. The MkDocs ids came from master at f7b9874 (the last
+//     MkDocs commit) with:
 //       git archive f7b9874 docs | tar -x -C <dir>
 //       uvx --from mkdocs==1.6.1 --with mkdocs-material==9.7.7 \
 //         mkdocs build -f <dir>/docs/mkdocs.yml -d site

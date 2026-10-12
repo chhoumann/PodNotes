@@ -1,0 +1,116 @@
+---
+// The landing page hero: the pitch and actions from the page's `hero`
+// frontmatter, then the captured hero screenshot in light and dark. Phones get
+// the note in Obsidian's mobile layout, which stays readable at that width.
+// Both twins load lazily, so the browser fetches only the one the theme shows.
+import { LinkButton } from "@astrojs/starlight/components";
+import { darkTwin, screenshotSize } from "../screenshots.mjs";
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero ?? {};
+const shot = "/screenshots/hero.webp";
+const phoneShot = "/screenshots/hero-phone.webp";
+const size = await screenshotSize(shot);
+const phoneSize = await screenshotSize(phoneShot);
+const phone = "(max-width: 50rem)";
+const alt =
+	"An episode note in Obsidian with timestamp links captured while the episode plays in PodNotes";
+---
+
+<div class="hero">
+	<div class="copy">
+		<p class="eyebrow">A podcast player for Obsidian</p>
+		<h1 id="_top" data-page-title>
+			{data.legacyTitleId && <span id={data.legacyTitleId} />}
+			<Fragment set:html={title} />
+		</h1>
+		{tagline && <p class="tagline" set:html={tagline} />}
+		<div class="actions">
+			{
+				actions.map(({ attrs, icon, link: href, text, variant }) => (
+					<LinkButton {href} {variant} icon={icon?.name} {...attrs}>
+						{text}
+					</LinkButton>
+				))
+			}
+		</div>
+	</div>
+	<div class="shot">
+		<picture class="dark:sl-hidden">
+			<source media={phone} srcset={phoneShot} {...phoneSize} />
+			<img src={shot} {alt} {...size} loading="lazy" />
+		</picture>
+		<picture class="light:sl-hidden">
+			<source media={phone} srcset={darkTwin(phoneShot)} {...phoneSize} />
+			<img src={darkTwin(shot)} {alt} {...size} loading="lazy" />
+		</picture>
+	</div>
+</div>
+
+<style>
+	@layer starlight.core {
+		.hero {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: clamp(1.75rem, 3vw, 2.25rem);
+			padding-block: clamp(1.5rem, 3vw, 2rem) 0.5rem;
+			text-align: center;
+		}
+		.copy {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 1rem;
+			max-width: 46rem;
+		}
+		.eyebrow {
+			font-size: var(--sl-text-sm);
+			font-weight: 600;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+			color: var(--sl-color-text-accent);
+		}
+		h1 {
+			font-size: clamp(var(--sl-text-3xl), calc(1rem + 3vw), var(--sl-text-5xl));
+			line-height: 1.1;
+			letter-spacing: -0.025em;
+			font-weight: 650;
+			color: var(--sl-color-white);
+			text-wrap: balance;
+		}
+		.tagline {
+			font-size: clamp(var(--sl-text-base), calc(0.5rem + 1.2vw), var(--sl-text-xl));
+			line-height: 1.5;
+			color: var(--sl-color-gray-2);
+			max-width: 42rem;
+			text-wrap: pretty;
+		}
+		.actions {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: center;
+			gap: 0.75rem 1.25rem;
+			margin-top: 0.5rem;
+		}
+		.shot {
+			width: 100%;
+		}
+		.shot img {
+			display: block;
+			width: 100%;
+			margin-inline: auto;
+			height: auto;
+			border-radius: 0.875rem;
+			border: 1px solid var(--sl-color-hairline-light);
+			box-shadow:
+				0 1px 2px rgb(0 0 0 / 0.08),
+				0 24px 64px -24px rgb(0 0 0 / 0.35);
+		}
+		@media (max-width: 50rem) {
+			.shot img {
+				width: min(100%, 24rem);
+			}
+		}
+	}
+</style>
