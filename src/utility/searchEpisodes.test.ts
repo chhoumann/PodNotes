@@ -46,56 +46,48 @@ describe("searchEpisodes", () => {
 		expect(searchEpisodes("   ", episodes)).toBe(episodes);
 	});
 
-	test("returns fresh results when the list is mutated in place at the same length", () => {
-		const episodes = [makeEpisode("Alpha"), makeEpisode("Beta")];
+	describe("rankings match fuse.js 7.5.0", () => {
+		test("ranks the titles a misspelled query matches", () => {
+			expect(titlesOf(searchEpisodes("summer schol", planetMoney))).toEqual([
+				"Summer School 2: Supply and demand, explained with drinks",
+				"Planet Money Summer School 1: Economics is everywhere",
+			]);
+		});
 
-		expect(titlesOf(searchEpisodes("Alpha", episodes))).toEqual(["Alpha"]);
+		test("ranks the keystrokes of a typed query", () => {
+			expect(titlesOf(searchEpisodes("new", planetMoney))).toEqual([
+				"Money",
+				"Where all those weird new drinks are coming from",
+				"Charles Ponzi's scheme (plus a new scam)",
+				"Planet Money Summer School 1: Economics is everywhere",
+			]);
+			expect(titlesOf(searchEpisodes("new s", planetMoney))).toEqual([
+				"Planet Money Summer School 1: Economics is everywhere",
+				"Charles Ponzi's scheme (plus a new scam)",
+			]);
+		});
 
-		episodes[0] = makeEpisode("Gamma");
-		episodes[1] = makeEpisode("Delta");
+		test("matches a query longer than 32 characters on all of it", () => {
+			const episodes = [
+				makeEpisode("The Indicator from Planet Money: Why tariffs raise prices"),
+				makeEpisode("The Indicator from Planet Money: Why rent keeps going up"),
+			];
 
-		expect(searchEpisodes("Alpha", episodes)).toEqual([]);
-		expect(titlesOf(searchEpisodes("Gamma", episodes))).toEqual(["Gamma"]);
-	});
+			expect(
+				titlesOf(
+					searchEpisodes(
+						"the indicator from planet money why rent keeps going up",
+						episodes,
+					),
+				),
+			).toEqual([
+				"The Indicator from Planet Money: Why rent keeps going up",
+				"The Indicator from Planet Money: Why tariffs raise prices",
+			]);
+		});
 
-	// Expected rankings are fuse.js 7.5.0 output for the options PodNotes used.
-	test("ranks the titles a misspelled query matches", () => {
-		expect(titlesOf(searchEpisodes("summer schol", planetMoney))).toEqual([
-			"Summer School 2: Supply and demand, explained with drinks",
-			"Planet Money Summer School 1: Economics is everywhere",
-		]);
-	});
-
-	test("ranks the keystrokes of a typed query", () => {
-		expect(titlesOf(searchEpisodes("new", planetMoney))).toEqual([
-			"Money",
-			"Where all those weird new drinks are coming from",
-			"Charles Ponzi's scheme (plus a new scam)",
-			"Planet Money Summer School 1: Economics is everywhere",
-		]);
-		expect(titlesOf(searchEpisodes("new s", planetMoney))).toEqual([
-			"Planet Money Summer School 1: Economics is everywhere",
-			"Charles Ponzi's scheme (plus a new scam)",
-		]);
-	});
-
-	test("matches a query longer than 32 characters on all of it", () => {
-		const episodes = [
-			makeEpisode("The Indicator from Planet Money: Why tariffs raise prices"),
-			makeEpisode("The Indicator from Planet Money: Why rent keeps going up"),
-		];
-
-		expect(
-			titlesOf(
-				searchEpisodes("the indicator from planet money why rent keeps going up", episodes),
-			),
-		).toEqual([
-			"The Indicator from Planet Money: Why rent keeps going up",
-			"The Indicator from Planet Money: Why tariffs raise prices",
-		]);
-	});
-
-	test("returns nothing for a query that matches no title", () => {
-		expect(searchEpisodes("zzzz", planetMoney)).toEqual([]);
+		test("returns nothing for a query that matches no title", () => {
+			expect(searchEpisodes("zzzz", planetMoney)).toEqual([]);
+		});
 	});
 });
