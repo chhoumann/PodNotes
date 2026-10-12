@@ -53,7 +53,8 @@ The end-to-end suite in `tests/e2e` runs against the isolated Obsidian. On Linux
 
 ```
 eval "$(npm run --silent \
-  start:e2e-obsidian -- --print-env)"
+  start:e2e-obsidian \
+  -- --print-env)"
 npm run test:e2e
 npm run stop:e2e-obsidian
 ```
