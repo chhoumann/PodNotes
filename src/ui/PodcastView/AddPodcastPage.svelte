@@ -6,18 +6,24 @@
 </script>
 
 {#if firstRun}
-	<div class="pn-empty">
-		<span class="pn-empty-mark" {@attach icon("podcast")}></span>
-		<h1>Add your first podcast</h1>
+	<!-- Top-aligned: the results list under the field, which must not move while the user types. -->
+	<div class="pn-first-col">
+		<div class="pn-empty">
+			<span class="pn-empty-mark" {@attach icon("podcast")}></span>
+			<h1>Add your first podcast</h1>
+		</div>
+		<PodcastQueryGrid />
 	</div>
-{/if}
-<!-- The search fades in and out with the block it is in. A block of its own keeps
-     that fade local to it, so it never lingers over the page that replaces it. -->
-{#if true}
+{:else}
 	<PodcastQueryGrid />
 {/if}
 
 <style>
+	.pn-first-col {
+		max-width: 360px;
+		margin: 0 auto;
+	}
+
 	.pn-empty {
 		display: flex;
 		flex-direction: column;

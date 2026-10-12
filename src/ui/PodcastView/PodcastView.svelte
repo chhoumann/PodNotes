@@ -370,6 +370,11 @@
 		overflow: visible;
 	}
 
+	/* The page's scroller insets the page, so the grid lines up with its heading. */
+	.pn-scroll :global(.podcast-grid) {
+		padding: 0;
+	}
+
 	.podcast-view :global {
 		.pn-h2 {
 			margin: var(--size-4-5) 0 var(--size-4-2);

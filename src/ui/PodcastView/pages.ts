@@ -30,7 +30,7 @@ export interface RootItem {
 /** The rail, top to bottom. The rail shows `add` as its search button. */
 export const ROOTS: readonly RootItem[] = [
 	{ kind: "add", icon: "search", label: "Add podcast" },
-	{ kind: "library", icon: "grid", label: "Podcasts" },
+	{ kind: "library", icon: "layout-grid", label: "Podcasts" },
 	{ kind: "latest", icon: "inbox", label: "Latest episodes" },
 	{ kind: "queue", icon: "list-end", label: "Queue" },
 	{ kind: "playlists", icon: "list-music", label: "Playlists" },
