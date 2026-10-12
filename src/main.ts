@@ -1,5 +1,4 @@
 import {
-	currentEpisode,
 	downloadedEpisodes,
 	episodeListLimit,
 	favorites,
@@ -9,10 +8,7 @@ import {
 	queue,
 	savedFeeds,
 	hidePlayedEpisodes,
-	playbackRate,
 	plugin,
-	volume,
-	subscribeQueueToCurrentEpisode,
 } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import { registerCommands } from "src/commands";
@@ -31,8 +27,8 @@ import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
-import { get, type Unsubscriber } from "svelte/store";
-import { normalizePlaybackRate } from "./utility/playbackRate";
+import type { Unsubscriber } from "svelte/store";
+import { PlayerController } from "./player/PlayerController";
 import {
 	decodePodNotesData,
 	encodePodNotesData,
@@ -109,15 +105,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public override app!: PartialAppExtension;
 	public credentials!: CredentialRepository;
 	public feedUrls!: FeedUrlRepository;
+	public player!: PlayerController;
 	public feeds!: FeedRepository;
 
 	private views = new Set<MainView>();
 
-	// Store subscriptions tied to the plugin lifetime: settings persistence and
-	// queue automation. Disposed together in onunload.
+	// Store subscriptions tied to the plugin lifetime. Disposed together in onunload.
 	private storeUnsubscribers: Unsubscriber[] = [];
 	private transcriptionService?: TranscriptionService;
-	private volumeUnsubscribe?: Unsubscriber;
 	private localFilesMirrorUnsubscribe?: Unsubscriber;
 
 	private maxLayoutReadyAttempts = 10;
@@ -156,12 +151,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				if (this.writeInFlight) tasks.addPromise(this.writeInFlight);
 			}),
 		);
-		// A phone can kill the app once it is in the background, with no event first.
-		// The main window's document: the app, not a popout, goes to the background.
-		const mainDocument = window.document;
-		this.registerDomEvent(mainDocument, "visibilitychange", () => {
-			if (mainDocument.visibilityState === "hidden") void this.flushSaves();
-		});
 		plugin.set(this);
 		this.credentials = new CredentialRepository(this.app.secretStorage);
 		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
@@ -177,19 +166,23 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.writer = this.createWriter(MAIN_WINDOW_CLOCK);
 
 		this.setCollectionStores();
-		if (this.settings.currentEpisode) {
-			currentEpisode.set(this.settings.currentEpisode);
-		}
-		volume.set(Math.min(1, Math.max(0, this.settings.defaultVolume ?? 1)));
-		playbackRate.set(normalizePlaybackRate(this.settings.defaultPlaybackRate));
+		// The media lives in the main window, so playback outlasts the view and popouts.
+		const mainDocument = window.document;
+		this.player = new PlayerController(mainDocument, this);
+		this.player.restore(this.settings.currentEpisode);
+		// A phone can kill the app once it is in the background, with no event first.
+		// The main window's document: the app, not a popout, goes to the background.
+		this.registerDomEvent(mainDocument, "visibilitychange", () => {
+			if (mainDocument.visibilityState !== "hidden") return;
+			this.player.save();
+			void this.flushSaves();
+		});
 
-		// Mirror every store-backed slice of state into settings, wire the queue
-		// automation that drops the now-playing episode from the up-next queue, and
-		// keep the feed repository's subscriptions current. All are store
-		// subscriptions tied to the plugin lifetime; onunload disposes them.
+		// Mirror every store-backed slice of state into settings, and keep the feed
+		// repository's subscriptions current. The subscriptions are tied to the plugin
+		// lifetime; onunload disposes them.
 		this.storeUnsubscribers.push(
 			bindStoresToSettings(this),
-			subscribeQueueToCurrentEpisode(),
 			savedFeeds.subscribe((feeds) => this.feeds.setSubscriptions(feeds)),
 		);
 
@@ -202,21 +195,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		);
 
 		this.api = new API();
-		this.volumeUnsubscribe = volume.subscribe((value) => {
-			const clamped = Math.min(1, Math.max(0, value));
-
-			if (clamped !== value) {
-				volume.set(clamped);
-				return;
-			}
-
-			if (clamped === this.settings.defaultVolume) {
-				return;
-			}
-
-			this.settings.defaultVolume = clamped;
-			void this.saveSettings();
-		});
 
 		// All user-facing commands live in src/commands.ts; this keeps onload
 		// focused on lifecycle wiring (stores, view, ribbon, protocol, media session).
@@ -251,7 +229,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
 		this.registerObsidianProtocolHandler("podnotes", (action) =>
-			podNotesURIHandler(action, this.api, () => this.activateView()),
+			podNotesURIHandler(action, () => this.activateView()),
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
@@ -476,12 +454,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isUnloaded = true;
 		// The refusal ends with this instance; the next one reads the file itself.
 		this.refusalNotice?.hide();
+		// Before the store bindings are disposed, so the position it saves reaches the writer.
+		this.player?.dispose();
 		void this.writer?.unload();
 		this.clearLayoutReadyRetry();
 		this.clearMediaSessionHandlers();
 		for (const unsubscribe of this.storeUnsubscribers) unsubscribe();
 		this.storeUnsubscribers = [];
-		this.volumeUnsubscribe?.();
 		this.localFilesMirrorUnsubscribe?.();
 		this.transcriptionService?.dispose();
 		this.transcriptionService = undefined;
@@ -726,9 +705,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		};
 	}
 
-	// In place, so code that holds plugin.settings across a save (an import) sees the
-	// merge. Never through currentEpisode.set: it saves the outgoing episode's position
-	// from the live player and queues that episode. A sync leaves what is playing alone.
 	/** The stores of the persisted collections, from settings. The player's state is not one. */
 	private setCollectionStores(): void {
 		// Before downloads: their mirror rebuilds Local Files from this store's playlist.
@@ -745,16 +721,16 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private publishDocument(doc: PersistedPodNotesDataV2): void {
 		const decoded = decodePodNotesData(doc);
+		// In place, so code that holds plugin.settings across a save (an import) sees the
+		// merge.
 		const settings = this.settings as unknown as Record<string, unknown>;
 		for (const key of Object.keys(settings)) delete settings[key];
 		Object.assign(settings, decoded.settings);
 		this.persistenceUnknownFields = decoded.unknownFields;
 		this.setCollectionStores();
-		// Memory keeps naming the episode loaded here, and the next save writes it. With
-		// nothing loaded, the synced episode loads, as it would at startup.
-		const loaded = get(currentEpisode);
-		if (loaded) this.settings.currentEpisode = loaded;
-		else if (this.settings.currentEpisode) currentEpisode.set(this.settings.currentEpisode);
+		// A sync can land after startup, before anything loads. The restored episode
+		// follows it, and loaded media stays as it is.
+		this.player?.restore(this.settings.currentEpisode);
 	}
 
 	// Every data.json write goes through here, so no path can write while writes are refused.

@@ -49,16 +49,6 @@ describe("local files runtime", () => {
 				(data) => inDownloads(data) && inLocalFiles(data),
 				WAIT_OPTS,
 			);
-			// Until #355 keeps the player's <audio> mounted, leaving the player before
-			// play() settles rejects it, and Svelte's bind:paused rethrows the rejection.
-			await obsidian.waitFor(
-				() =>
-					obsidian.dev.evalJson<boolean>(
-						`(app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0]?.view.containerEl.querySelector("audio")?.currentTime ?? 0) > 0`,
-					),
-				{ ...WAIT_OPTS, message: `${title} did not start playing.` },
-			);
-
 			await clickInPodNotesView(obsidian, 'button[aria-label="Podcast grid"]');
 			await clickInPodNotesView(obsidian, 'button.playlist-card[aria-label="Local Files"]');
 			await clickInPodNotesView(obsidian, `[aria-label="More options for ${title}"]`);

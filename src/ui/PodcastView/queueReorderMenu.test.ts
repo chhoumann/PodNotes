@@ -36,7 +36,7 @@ describe("buildQueueReorderMenuItems", () => {
 		expect(buildQueueReorderMenuItems(ViewState.Player, [ep("A")], ep("A"))).toEqual([]);
 	});
 
-	test("a middle item offers all four moves with its index", () => {
+	test("a middle item offers all four moves", () => {
 		const items = buildQueueReorderMenuItems(ViewState.Player, queueEpisodes, ep("B"));
 
 		expect(titles(items)).toEqual([
@@ -46,20 +46,17 @@ describe("buildQueueReorderMenuItems", () => {
 			"Move to bottom of queue",
 		]);
 		expect(items.map((i) => i.kind)).toEqual(["top", "up", "down", "bottom"]);
-		expect(items.every((i) => i.index === 1)).toBe(true);
 	});
 
 	test("the first item omits the upward moves", () => {
 		const items = buildQueueReorderMenuItems(ViewState.Player, queueEpisodes, ep("A"));
 
 		expect(items.map((i) => i.kind)).toEqual(["down", "bottom"]);
-		expect(items.every((i) => i.index === 0)).toBe(true);
 	});
 
 	test("the last item omits the downward moves", () => {
 		const items = buildQueueReorderMenuItems(ViewState.Player, queueEpisodes, ep("C"));
 
 		expect(items.map((i) => i.kind)).toEqual(["top", "up"]);
-		expect(items.every((i) => i.index === 2)).toBe(true);
 	});
 });

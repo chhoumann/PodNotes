@@ -423,7 +423,7 @@ export async function waitForLibrary(
 export async function observePlayback(obsidian: ObsidianClient): Promise<PlaybackObservation> {
 	return await obsidian.dev.evalJson<PlaybackObservation>(`(() => {
 		const api = app.plugins.plugins.${PLUGIN_ID}.api;
-		const media = document.querySelector('.workspace-leaf-content[data-type="${VIEW_TYPE}"] .episode-player :is(audio, video)');
+		const media = document.querySelector("audio.podnotes-media, video.podnotes-media");
 		const episode = api.podcast;
 		return {
 			episode: episode ? { podcast: episode.podcastName, title: episode.title } : null,

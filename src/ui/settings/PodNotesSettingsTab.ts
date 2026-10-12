@@ -24,13 +24,11 @@ import {
 	favorites,
 	hidePlayedEpisodes,
 	localFiles,
-	playbackRate,
 	playlists,
 	plugin,
 	queue,
 	sanitizeEpisodeListLimit,
 	savedFeeds,
-	volume,
 } from "src/store/index";
 import { DEFAULT_EPISODE_LIST_LIMIT, MAX_EPISODE_LIST_LIMIT } from "src/constants";
 import type { Episode } from "src/types/Episode";
@@ -45,7 +43,6 @@ import {
 	parseImport,
 	serializeSettings,
 } from "src/settingsTransfer";
-import { normalizePlaybackRate } from "src/utility/playbackRate";
 import { DEFAULT_SPEAKER_TEMPLATE, type DiarizationProviderId } from "src/services/diarization";
 import type { CredentialKind, CredentialValues } from "src/types/Credentials";
 import { observePersistedStoreChanges } from "src/store/persistence";
@@ -1023,9 +1020,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const sanitizedLimit = sanitizeEpisodeListLimit(merged.episodeListLimit);
 		merged.episodeListLimit = sanitizedLimit;
 		episodeListLimit.set(sanitizedLimit);
-		const importedVolume = Number.isFinite(merged.defaultVolume) ? merged.defaultVolume : 1;
-		volume.set(Math.min(1, Math.max(0, importedVolume)));
-		playbackRate.set(normalizePlaybackRate(merged.defaultPlaybackRate));
+		this.plugin.player.setVolume(
+			Number.isFinite(merged.defaultVolume) ? merged.defaultVolume : 1,
+		);
+		this.plugin.player.setPlaybackRate(merged.defaultPlaybackRate);
 
 		try {
 			// Store setters can canonicalize or deduplicate their slices. Await one

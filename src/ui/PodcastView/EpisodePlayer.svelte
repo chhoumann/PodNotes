@@ -1,23 +1,9 @@
 <script lang="ts">
-	import {
-		duration,
-		currentTime,
-		currentEpisode,
-		isPaused,
-		plugin,
-		volume,
-		playedEpisodes,
-		queue,
-		playlists,
-		viewState,
-		downloadedEpisodes,
-		playbackRate,
-		requestedPlaybackTime,
-		activePlaybackSegment,
-	} from "src/store";
+	import { plugin, queue, viewState } from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { fetchChapters } from "src/utility/fetchChapters";
-	import { onDestroy, onMount } from "svelte";
+	import { get } from "svelte/store";
+	import { onMount } from "svelte";
 	import Icon from "../obsidian/Icon.svelte";
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
@@ -26,413 +12,95 @@
 	import ChapterList from "./ChapterList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
-	import type { Episode, EpisodeMediaType } from "src/types/Episode";
+	import type { Episode } from "src/types/Episode";
 	import type { Chapter } from "src/types/Chapter";
 	import { ViewState } from "src/types/ViewState";
-	import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 	import Image from "../common/Image.svelte";
-	import { episodeMatchesKey, getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
 	import {
-		normalizePlaybackRate,
 		PLAYBACK_RATE_MAX,
 		PLAYBACK_RATE_MIN,
 		PLAYBACK_RATE_STEP,
 	} from "src/utility/playbackRate";
-	import {
-		getEpisodeMediaType,
-		getEpisodeMediaTypeWithContainerHint,
-		isSameMediaSource,
-	} from "src/utility/mediaType";
-	import type DownloadedEpisode from "src/types/DownloadedEpisode";
 
-	const clampVolume = (value: number): number => Math.min(1, Math.max(0, value));
+	const player = get(plugin).player;
+	const playerState = player.state;
 
 	// Hide the player's Queue list only when queue automation is off AND the queue
-	// is empty (issue #108) — otherwise show it (default-on state or a non-empty
+	// is empty (issue #108), otherwise show it (default-on state or a non-empty
 	// manual queue).
 	$: showQueue = $plugin?.settings?.autoQueue !== false || $queue.episodes.length > 0;
 
+	$: episode = $playerState.episode as Episode;
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
-	$: titleCharCount = $currentEpisode?.title?.length ?? 0;
-	type MediaSource = { mediaType: EpisodeMediaType; src: string };
-	let mediaSource: MediaSource = getMediaSource($currentEpisode);
-	$: mediaSource = getMediaSource($currentEpisode, $downloadedEpisodes);
-	$: playerMediaType = mediaSource.mediaType;
-	$: isVideoEpisode = playerMediaType === "video";
+	$: titleCharCount = episode.title.length;
+	// The video plays in the main window, so a view in a popout shows the artwork.
+	$: showVideo = $playerState.mediaType === "video" && inMainWindow;
+	$: paused = $playerState.status !== "playing";
+	$: isLoading = $playerState.status === "loading";
+	$: loadError = $playerState.status === "error" ? "Could not load this episode's media." : null;
+	$: remaining = Math.max(0, $playerState.duration - $playerState.currentTime);
 
 	let isHoveringArtwork: boolean = false;
-	let isLoading: boolean = true;
-	let loadError: string | null = null;
-	// Distinct from isLoading (a display flag): gates persistence so it stays
-	// closed when media fails to load, since a failed load clears the spinner
-	// without restoring the saved position. Only a real metadata load opens it.
-	let playbackRestored: boolean = false;
-	let playerVolume: number = 1;
-	let mediaElement: HTMLMediaElement | null = null;
-	let playerElement: HTMLDivElement;
-	// The currentEpisode subscription fires synchronously on subscribe with the
-	// already-loaded episode; that first fire must not wipe a restored position
-	// (or flash 0) on the initial mount. Only genuine in-player switches reset.
-	let hasSeenFirstEpisodeFire: boolean = false;
+	let root: HTMLDivElement;
+	let inMainWindow = true;
+	let videoContainer: HTMLDivElement | undefined;
 	let chapters: Chapter[] = [];
 	let lastChaptersUrl: string | undefined = undefined;
-	let segmentStopTimeWithoutProgressSave: number | null = null;
 
-	function togglePlayback() {
-		isPaused.update((value) => !value);
+	// Clear the previous episode's chapters at once so they never flash against the
+	// next one, and drop a fetch that a newer episode superseded.
+	$: loadChapters(episode.chaptersUrl);
+	function loadChapters(chaptersUrl: string | undefined) {
+		if (chaptersUrl === lastChaptersUrl) return;
+		lastChaptersUrl = chaptersUrl;
+		chapters = [];
+		if (!chaptersUrl) return;
+		void fetchChapters(chaptersUrl).then((c) => {
+			if (chaptersUrl === lastChaptersUrl) chapters = c;
+		});
 	}
+
+	onMount(() => {
+		const follow = () => (inMainWindow = root.ownerDocument === document);
+		follow();
+		return root.onWindowMigrated?.(follow);
+	});
 
 	function onClickProgressbar({
 		detail: { event, percent },
 	}: CustomEvent<{ event: MouseEvent | KeyboardEvent; percent?: number }>) {
 		if (typeof percent === "number") {
-			seekPlaybackTo(percent * $duration);
+			player.seek(percent * $playerState.duration);
 			return;
 		}
 
 		if (event instanceof MouseEvent) {
 			const progressbar = event.currentTarget as HTMLDivElement;
 			const ratio = progressbar.offsetWidth ? event.offsetX / progressbar.offsetWidth : 0;
-			seekPlaybackTo(ratio * $duration);
+			player.seek(ratio * $playerState.duration);
 		}
-	}
-
-	function removeEpisodeFromPlaylists() {
-		// Match by composite identity so a same-titled episode from another podcast
-		// is not removed, while a LEGACY entry saved without podcastName still
-		// matches by title (isSameStoredEpisode handles both — plain composite-key
-		// matching would skip those legacy entries on finish).
-		playlists.update((lists) => {
-			Object.values(lists).forEach((playlist) => {
-				playlist.episodes = playlist.episodes.filter(
-					(ep) => !isSameStoredEpisode(ep, $currentEpisode),
-				);
-			});
-
-			return lists;
-		});
-
-		// The finished episode is usually already gone from the queue
-		// (subscribeQueueToCurrentEpisode drops it when it became current), so this is
-		// otherwise a no-op.
-		queue.remove($currentEpisode);
-	}
-
-	function onEpisodeEnded() {
-		const activeSegment = $activePlaybackSegment;
-		if (activeSegment && episodeMatchesKey($currentEpisode, activeSegment.episodeKey)) {
-			const stopTime =
-				Number.isFinite($duration) && $duration > 0
-					? Math.min(activeSegment.endTime, $duration)
-					: $currentTime;
-			currentTime.set(stopTime);
-			segmentStopTimeWithoutProgressSave = stopTime;
-			activePlaybackSegment.set(null);
-			isPaused.set(true);
-			return;
-		}
-
-		playedEpisodes.markAsPlayed($currentEpisode);
-		removeEpisodeFromPlaylists();
-
-		queue.playNext();
-	}
-
-	function onPlaybackRateChange(event: CustomEvent<{ value: number }>) {
-		playbackRate.set(normalizePlaybackRate(event.detail.value));
-	}
-
-	function onVolumeChange(event: CustomEvent<{ value: number }>) {
-		const newVolume = clampVolume(event.detail.value);
-
-		volume.set(newVolume);
-	}
-
-	function onChapterSeek(event: CustomEvent<{ time: number }>) {
-		seekPlaybackTo(event.detail.time);
 	}
 
 	function enterFullscreen() {
 		// Prefer fullscreening the container so the custom overlay/controls stay
-		// usable; fall back to the bare <video> element on iOS Safari/WKWebView,
+		// usable; fall back to the bare video element on iOS Safari/WKWebView,
 		// where requestFullscreen on a div is unsupported and only the media
 		// element itself can go fullscreen.
-		const container = mediaElement?.closest(".episode-video-container") as HTMLElement | null;
-		if (container?.requestFullscreen) {
-			void container.requestFullscreen();
+		if (videoContainer?.requestFullscreen) {
+			void videoContainer.requestFullscreen();
 			return;
 		}
 
-		const video = mediaElement as
-			| (HTMLMediaElement & { webkitEnterFullscreen?: () => void })
-			| null;
+		const video = videoContainer?.querySelector("video") as
+			| (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
+			| null
+			| undefined;
 		if (video?.requestFullscreen) {
 			void video.requestFullscreen();
 		} else if (video?.webkitEnterFullscreen) {
 			video.webkitEnterFullscreen();
 		}
 	}
-
-	function seekPlaybackTo(time: number) {
-		activePlaybackSegment.set(null);
-		segmentStopTimeWithoutProgressSave = null;
-		currentTime.set(time);
-	}
-
-	function onMetadataLoaded() {
-		isLoading = false;
-		loadError = null;
-		playbackRestored = true;
-
-		restorePlaybackTime();
-	}
-
-	// A blocked, dead, or unreachable media URL never fires loadedmetadata, so
-	// without this the loading overlay spins forever (found while gating all
-	// outbound requests: a refused stream URL looked identical to a slow one).
-	function onMediaError() {
-		isLoading = false;
-		loadError = "Could not load this episode's media.";
-	}
-
-	function restorePlaybackTime() {
-		const playedEps = $playedEpisodes;
-		const currentEp = $currentEpisode;
-		const requestedPlayback = $requestedPlaybackTime;
-
-		if (!currentEp) {
-			currentTime.set(0);
-			isPaused.set(false);
-			return;
-		}
-
-		if (requestedPlayback !== null) {
-			requestedPlaybackTime.set(null);
-			activePlaybackSegment.set(null);
-			segmentStopTimeWithoutProgressSave = null;
-			if (!episodeMatchesKey(currentEp, requestedPlayback.episodeKey)) {
-				restoreSavedPlaybackTime(currentEp, playedEps);
-				return;
-			}
-
-			currentTime.set(requestedPlayback.time);
-			activePlaybackSegment.set(
-				requestedPlayback.endTime === undefined
-					? null
-					: {
-							episodeKey: requestedPlayback.episodeKey,
-							startTime: requestedPlayback.time,
-							endTime: requestedPlayback.endTime,
-						},
-			);
-			isPaused.set(false);
-			return;
-		}
-
-		activePlaybackSegment.set(null);
-		segmentStopTimeWithoutProgressSave = null;
-		restoreSavedPlaybackTime(currentEp, playedEps);
-	}
-
-	function restoreSavedPlaybackTime(currentEp: Episode, playedEps: typeof $playedEpisodes) {
-		const key = getEpisodeKey(currentEp);
-
-		// Check composite key first, then fall back to the title-only key for
-		// backwards compat — but only accept the legacy title-only entry when its
-		// stored podcastName is absent or matches the current episode, so a
-		// same-titled episode from another podcast can't resume at the wrong
-		// position (mirrors isSamePlayedEpisode's alias logic).
-		const titleOnlyData = playedEps[currentEp.title];
-		const titleOnlyMatches =
-			!!titleOnlyData &&
-			(!titleOnlyData.podcastName ||
-				!currentEp.podcastName ||
-				titleOnlyData.podcastName === currentEp.podcastName);
-		const playedData =
-			(key && playedEps[key]) || (titleOnlyMatches ? titleOnlyData : undefined);
-
-		if (playedData?.time) {
-			currentTime.set(playedData.time);
-		} else {
-			currentTime.set(0);
-		}
-
-		isPaused.set(false);
-	}
-
-	// Persist playback position during playback (issue #33).
-	//
-	// Previously the position was written only on teardown — the player's
-	// onDestroy, an episode switch (currentEpisode.set), or the episode
-	// finishing. On mobile the OS kills the backgrounded process without firing
-	// onDestroy, so every second listened since the last teardown was lost and
-	// the episode restarted from 0 on reopen.
-	//
-	// Persist periodically while audio plays (throttled) and immediately when it
-	// pauses, is hidden or closes. The periodic position is a checkpoint, which
-	// data.json takes at most every 10 s, so an abrupt kill loses at most that plus
-	// SAVE_POSITION_THROTTLE_MS of progress.
-	const SAVE_POSITION_THROTTLE_MS = 5000;
-	let lastPositionSaveMs = Number.NEGATIVE_INFINITY;
-
-	function persistPlaybackPosition() {
-		// Never persist before metadata has loaded and the saved position has been
-		// restored (onMetadataLoaded), including the failed-load path where the
-		// spinner clears but no restore ran — writing the pre-restore 0 would
-		// clobber the stored position we resume from.
-		if (!playbackRestored || !$currentEpisode) return;
-		if (shouldSuppressSegmentProgressPersistence()) return;
-
-		playedEpisodes.setEpisodeTime(
-			$currentEpisode,
-			$currentTime,
-			$duration,
-			// A zero/unknown duration is never "finished" — guard against the brief
-			// 0/0 window after an episode switch (issue #94) marking it played at 0:00.
-			$duration > 0 && $currentTime === $duration,
-		);
-	}
-
-	function onTimeUpdate(event: Event) {
-		if (stopActivePlaybackSegmentIfEnded(event)) return;
-
-		const now = Date.now();
-		if (now - lastPositionSaveMs < SAVE_POSITION_THROTTLE_MS) return;
-
-		lastPositionSaveMs = now;
-		$plugin.checkpoint(persistPlaybackPosition);
-	}
-
-	function shouldSuppressSegmentProgressPersistence(): boolean {
-		const activeSegment = $activePlaybackSegment;
-		if (activeSegment && episodeMatchesKey($currentEpisode, activeSegment.episodeKey)) {
-			return true;
-		}
-
-		if (segmentStopTimeWithoutProgressSave === null) return false;
-		if ($currentTime === segmentStopTimeWithoutProgressSave) return true;
-
-		segmentStopTimeWithoutProgressSave = null;
-		return false;
-	}
-
-	function stopActivePlaybackSegmentIfEnded(event: Event): boolean {
-		const activeSegment = $activePlaybackSegment;
-		if (!activeSegment) return false;
-
-		if (!episodeMatchesKey($currentEpisode, activeSegment.episodeKey)) {
-			activePlaybackSegment.set(null);
-			return false;
-		}
-
-		if ($currentTime < activeSegment.endTime) return false;
-
-		const media = event.currentTarget as HTMLMediaElement | null;
-		if (media) {
-			media.currentTime = activeSegment.endTime;
-		}
-		currentTime.set(activeSegment.endTime);
-		segmentStopTimeWithoutProgressSave = activeSegment.endTime;
-		activePlaybackSegment.set(null);
-		isPaused.set(true);
-		return true;
-	}
-
-	function onPause() {
-		// An explicit stop is the moment the user is most likely to leave the app,
-		// so capture the exact position immediately rather than waiting for the
-		// next throttled tick.
-		persistPlaybackPosition();
-	}
-
-	onMount(() => {
-		const unsubCurrentEpisode = currentEpisode.subscribe((episode) => {
-			// Re-arm the load guard and throttle for the incoming episode. isLoading
-			// is cleared once on the first loadedmetadata and this component instance
-			// is reused across in-player switches (no {#key} around <EpisodePlayer/>),
-			// so without this it would stay false — letting a pause/timeupdate during
-			// the src swap persist the new episode under its key with the old/zero
-			// time and clobber its saved resume position (issue #33).
-			isLoading = true;
-			loadError = null;
-			playbackRestored = false;
-			lastPositionSaveMs = Number.NEGATIVE_INFINITY;
-			segmentStopTimeWithoutProgressSave = null;
-
-			// Clear the outgoing episode's progress the instant the episode changes
-			// so the player never renders its full/last position against the
-			// incoming episode while the new media's metadata loads (issue #94).
-			// Finishing an episode auto-advances by calling currentEpisode.set (see
-			// queue.playNext), which swaps the title/artwork immediately — but
-			// $currentTime/$duration keep the finished episode's end values until
-			// the next episode's loadedmetadata fires. Without this reset the
-			// progress bar stays pinned at 100% and the timestamps show the
-			// previous episode's end for the whole (network-bound) metadata fetch.
-			// onMetadataLoaded → restorePlaybackTime sets the real position, and
-			// the playbackRestored guard keeps this reset from being persisted.
-			if (hasSeenFirstEpisodeFire) {
-				currentTime.set(0);
-				duration.set(0);
-			}
-			hasSeenFirstEpisodeFire = true;
-
-			// Fetch chapters when episode changes. Clear the previous episode's
-			// chapters immediately so they never flash against the incoming
-			// episode while the new fetch is in flight, and drop superseded /
-			// out-of-order fetch results by checking the request is still latest.
-			const chaptersUrl = episode?.chaptersUrl;
-			if (chaptersUrl && chaptersUrl !== lastChaptersUrl) {
-				lastChaptersUrl = chaptersUrl;
-				chapters = [];
-				const requestedUrl = chaptersUrl;
-				fetchChapters(requestedUrl).then((c) => {
-					if (requestedUrl === lastChaptersUrl) {
-						chapters = c;
-					}
-				});
-			} else if (!chaptersUrl) {
-				lastChaptersUrl = undefined;
-				chapters = [];
-			}
-		});
-
-		const unsubVolume = volume.subscribe((value) => {
-			playerVolume = clampVolume(value);
-		});
-
-		// Backgrounding the app (mobile home button / app switch) or hiding the
-		// window is the last reliable moment before the OS may suspend or kill the
-		// process. It fires no pause event when audio keeps playing, and the next
-		// throttled tick may never arrive, so save the position on hide (issue #33).
-		// The player's own document: in a popout, that is the window being hidden.
-		let playerDocument = playerElement.ownerDocument;
-		const onVisibilityChange = () => {
-			if (playerDocument.visibilityState === "hidden") {
-				persistPlaybackPosition();
-				void $plugin.flushSaves();
-			}
-		};
-		playerDocument.addEventListener("visibilitychange", onVisibilityChange);
-		// Moving the leaf to another window keeps this component mounted.
-		const stopFollowingWindow = playerElement.onWindowMigrated?.(() => {
-			playerDocument.removeEventListener("visibilitychange", onVisibilityChange);
-			playerDocument = playerElement.ownerDocument;
-			playerDocument.addEventListener("visibilitychange", onVisibilityChange);
-		});
-
-		return () => {
-			unsubCurrentEpisode();
-			unsubVolume();
-			playerDocument.removeEventListener("visibilitychange", onVisibilityChange);
-			stopFollowingWindow?.();
-		};
-	});
-
-	onDestroy(() => {
-		// Not a checkpoint: closing the player, in a popout too, saves its position at once.
-		persistPlaybackPosition();
-		isPaused.set(true);
-	});
 
 	function handleContextMenuEpisode({
 		detail: { event, episode },
@@ -441,105 +109,21 @@
 	}
 
 	function handleContextMenuEpisodeImage(event: MouseEvent) {
-		spawnEpisodeContextMenu($currentEpisode, event, {
+		spawnEpisodeContextMenu(episode, event, {
 			play: true,
 			markPlayed: true,
 		});
 	}
 
 	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
-		const { episode } = event.detail;
-		currentEpisode.set(episode);
-
+		player.play(event.detail.episode);
 		viewState.set(ViewState.Player);
-	}
-
-	function getMediaSource(
-		episode: Episode | undefined,
-		downloaded: typeof $downloadedEpisodes = {},
-	): MediaSource {
-		if (!episode) return { src: "", mediaType: "audio" };
-
-		const downloadedEpisode = findDownloadedEpisode(episode, downloaded);
-		if (shouldUseDownloadedEpisode(episode, downloadedEpisode)) {
-			return {
-				src: createMediaUrlObjectFromFilePath(
-					$plugin.app.vault,
-					downloadedEpisode.filePath,
-				),
-				mediaType: getDownloadedEpisodeMediaType(episode, downloadedEpisode),
-			};
-		}
-
-		return {
-			src: episode.streamUrl,
-			mediaType: getEpisodeMediaType(episode),
-		};
-	}
-
-	function findDownloadedEpisode(
-		episode: Episode,
-		downloaded: typeof $downloadedEpisodes,
-	): DownloadedEpisode | undefined {
-		return downloaded[episode.podcastName]?.find(
-			(downloadedEpisode) => downloadedEpisode.title === episode.title,
-		);
-	}
-
-	function shouldUseDownloadedEpisode(
-		episode: Episode,
-		downloadedEpisode: DownloadedEpisode | undefined,
-	): downloadedEpisode is DownloadedEpisode {
-		if (!downloadedEpisode?.filePath) return false;
-
-		const downloadedMediaType = getDownloadedEpisodeMediaType(episode, downloadedEpisode);
-		if (episode.mediaType && downloadedMediaType !== episode.mediaType) {
-			return false;
-		}
-
-		if (episode.podcastName === "local file") {
-			const filePath = (episode as Partial<DownloadedEpisode>).filePath;
-			return !filePath || downloadedEpisode.filePath === filePath;
-		}
-
-		return isSameMediaSource(downloadedEpisode.streamUrl, episode.streamUrl);
-	}
-
-	function getDownloadedEpisodeMediaType(
-		episode: Episode,
-		downloadedEpisode: DownloadedEpisode,
-	): EpisodeMediaType {
-		return getEpisodeMediaTypeWithContainerHint(downloadedEpisode, episode.mediaType);
-	}
-
-	$: if (mediaElement && mediaElement.playbackRate !== $playbackRate) {
-		mediaElement.playbackRate = $playbackRate;
 	}
 </script>
 
-<div class="episode-player" bind:this={playerElement}>
-	{#if isVideoEpisode}
-		<div class="episode-video-container">
-			<!-- svelte-ignore a11y_media_has_caption -->
-			<video
-				class="podcast-video"
-				bind:this={mediaElement}
-				src={mediaSource.src}
-				bind:duration={$duration}
-				bind:currentTime={$currentTime}
-				bind:paused={$isPaused}
-				bind:volume={playerVolume}
-				on:ended={onEpisodeEnded}
-				on:loadedmetadata={onMetadataLoaded}
-				on:error={onMediaError}
-				on:timeupdate={onTimeUpdate}
-				on:pause={onPause}
-				on:play|preventDefault
-				aria-label={$currentEpisode.title}
-				playsinline
-				autoplay={true}
-			></video>
-
+<div class="episode-player" bind:this={root}>
+	{#if showVideo}
+		<div class="episode-video-container" use:player.videoStage bind:this={videoContainer}>
 			{#if isLoading}
 				<div class="podcast-artwork-isloading-overlay">
 					<Loading />
@@ -553,12 +137,12 @@
 				<button
 					type="button"
 					class="podcast-video-overlay"
-					class:visible={$isPaused}
-					on:click={togglePlayback}
+					class:visible={paused}
+					on:click={() => player.toggle()}
 					on:contextmenu={handleContextMenuEpisodeImage}
 					aria-label="Toggle playback"
 				>
-					<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
+					<Icon icon={paused ? "play" : "pause"} clickable={false} />
 				</button>
 			{/if}
 
@@ -576,7 +160,7 @@
 			<button
 				type="button"
 				class="hover-container"
-				on:click={togglePlayback}
+				on:click={() => player.toggle()}
 				on:contextmenu={handleContextMenuEpisodeImage}
 				on:mouseenter={() => (isHoveringArtwork = true)}
 				on:mouseleave={() => (isHoveringArtwork = false)}
@@ -584,14 +168,14 @@
 			>
 				<Image
 					class="podcast-artwork"
-					src={$currentEpisode.artworkUrl ?? ""}
-					alt={$currentEpisode.title}
-					opacity={isHoveringArtwork || $isPaused ? 0.5 : 1}
+					src={episode.artworkUrl ?? ""}
+					alt={episode.title}
+					opacity={isHoveringArtwork || paused ? 0.5 : 1}
 				>
 					<svelte:fragment slot="fallback">
 						<div
 							class={"podcast-artwork-placeholder" +
-								(isHoveringArtwork || $isPaused ? " opacity-50" : "")}
+								(isHoveringArtwork || paused ? " opacity-50" : "")}
 						>
 							<Icon icon="image" size={150} clickable={false} />
 						</div>
@@ -610,9 +194,9 @@
 				{:else}
 					<div
 						class="podcast-artwork-overlay"
-						class:visible={isHoveringArtwork || $isPaused}
+						class:visible={isHoveringArtwork || paused}
 					>
-						<Icon icon={$isPaused ? "play" : "pause"} clickable={false} />
+						<Icon icon={paused ? "play" : "pause"} clickable={false} />
 					</div>
 				{/if}
 			</button>
@@ -620,37 +204,19 @@
 	{/if}
 
 	<h2 class="podcast-title" style="--title-char-count: {titleCharCount}">
-		{$currentEpisode.title}
+		{episode.title}
 	</h2>
 
-	{#if !isVideoEpisode}
-		<audio
-			bind:this={mediaElement}
-			src={mediaSource.src}
-			bind:duration={$duration}
-			bind:currentTime={$currentTime}
-			bind:paused={$isPaused}
-			bind:volume={playerVolume}
-			on:ended={onEpisodeEnded}
-			on:loadedmetadata={onMetadataLoaded}
-			on:error={onMediaError}
-			on:timeupdate={onTimeUpdate}
-			on:pause={onPause}
-			on:play|preventDefault
-			autoplay={true}
-		></audio>
-	{/if}
-
 	<div class="status-container">
-		<span>{formatSeconds($currentTime, "HH:mm:ss")}</span>
+		<span>{formatSeconds($playerState.currentTime, "HH:mm:ss")}</span>
 		<Progressbar
 			on:click={onClickProgressbar}
-			value={$currentTime}
-			max={$duration}
+			value={$playerState.currentTime}
+			max={$playerState.duration}
 			ariaLabel="Seek within episode"
-			valueText={`${formatSeconds($currentTime, "HH:mm:ss")} of ${formatSeconds($duration, "HH:mm:ss")}`}
+			valueText={`${formatSeconds($playerState.currentTime, "HH:mm:ss")} of ${formatSeconds($playerState.duration, "HH:mm:ss")}`}
 		/>
-		<span>{formatSeconds($duration - $currentTime, "HH:mm:ss")}</span>
+		<span>{formatSeconds(remaining, "HH:mm:ss")}</span>
 	</div>
 
 	<div class="controls-container">
@@ -670,22 +236,30 @@
 
 	<div class="slider-stack">
 		<div class="volume-container">
-			<span>Volume: {Math.round(playerVolume * 100)}%</span>
-			<Slider on:change={onVolumeChange} value={playerVolume} limits={[0, 1, 0.05]} />
+			<span>Volume: {Math.round($playerState.volume * 100)}%</span>
+			<Slider
+				on:change={(event) => player.setVolume(event.detail.value)}
+				value={$playerState.volume}
+				limits={[0, 1, 0.05]}
+			/>
 		</div>
 
 		<div class="playbackrate-container">
-			<span>{$playbackRate}x</span>
+			<span>{$playerState.playbackRate}x</span>
 			<Slider
-				on:change={onPlaybackRateChange}
-				value={$playbackRate}
+				on:change={(event) => player.setPlaybackRate(event.detail.value)}
+				value={$playerState.playbackRate}
 				limits={[PLAYBACK_RATE_MIN, PLAYBACK_RATE_MAX, PLAYBACK_RATE_STEP]}
 			/>
 		</div>
 	</div>
 
 	<div class="lists-container">
-		<ChapterList {chapters} currentTime={$currentTime} on:seek={onChapterSeek} />
+		<ChapterList
+			{chapters}
+			currentTime={$playerState.currentTime}
+			on:seek={(event) => player.seek(event.detail.time)}
+		/>
 
 		{#if showQueue}
 			<EpisodeList
@@ -733,7 +307,7 @@
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 	}
 
-	.podcast-video {
+	.episode-video-container :global(video) {
 		width: 100%;
 		height: 100%;
 		display: block;
@@ -782,6 +356,7 @@
 		width: 100%;
 		height: 100%;
 		position: absolute;
+		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;

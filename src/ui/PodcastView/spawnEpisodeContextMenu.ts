@@ -3,7 +3,6 @@ import createPodcastNote, { getPodcastNote, openPodcastNote } from "src/createPo
 import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
 import downloadEpisodeWithProgessNotice, { removeDownloadedEpisode } from "src/downloadEpisode";
 import {
-	currentEpisode,
 	downloadedEpisodes,
 	favorites,
 	playedEpisodes,
@@ -55,7 +54,7 @@ export default function spawnEpisodeContextMenu(
 				.setIcon("play")
 				.setTitle("Play")
 				.onClick(() => {
-					currentEpisode.set(episode);
+					get(plugin).player.play(episode);
 					viewState.set(ViewState.Player);
 				}),
 		);
@@ -224,30 +223,7 @@ export default function spawnEpisodeContextMenu(
 					item
 						.setIcon(reorderItem.icon)
 						.setTitle(reorderItem.title)
-						.onClick(() => {
-							// Resolve the index live: the queue can shift (e.g. the
-							// episode ends and playNext advances it) between opening
-							// the menu and clicking.
-							const index = get(queue).episodes.findIndex((e) =>
-								isSameEpisode(e, episode),
-							);
-							if (index === -1) return;
-
-							switch (reorderItem.kind) {
-								case "top":
-									queue.moveToTop(index);
-									break;
-								case "up":
-									queue.moveUp(index);
-									break;
-								case "down":
-									queue.moveDown(index);
-									break;
-								case "bottom":
-									queue.moveToBottom(index);
-									break;
-							}
-						}),
+						.onClick(() => queue.move(episode, reorderItem.kind)),
 				);
 			}
 		}
