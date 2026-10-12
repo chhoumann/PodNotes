@@ -63,8 +63,7 @@
 			<span class="pn-mini-txt">
 				<span class="pn-mini-t">{episode.title}</span>
 				<span class="pn-mini-s">
-					{episode.podcastName}{#if duration > 0}
-						· {minutes(remaining)} left{/if}
+					{episode.podcastName}{duration > 0 ? ` · ${minutes(remaining)} left` : ""}
 				</span>
 			</span>
 		</button>

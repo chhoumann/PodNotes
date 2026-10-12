@@ -198,8 +198,17 @@
 		line-height: var(--line-height-tight);
 	}
 
+	/* The shell lays out the whole view, edge to edge. */
+	:global(.view-content:has(> .podcast-view)) {
+		padding: 0;
+	}
+
+	/* A sidebar is secondary-colored. The mini player stands out from the page above it. */
 	:global(.mod-sidedock) .podcast-view {
 		--pn-bg: var(--background-secondary);
+	}
+
+	:global(.mod-sidedock) .podcast-view.is-compact {
 		--pn-surface: var(--background-primary);
 	}
 
@@ -477,6 +486,8 @@
 		}
 
 		.pn-navitem .flair {
+			padding: 0;
+			background: none;
 			color: var(--text-muted);
 			font-size: var(--font-ui-smaller);
 			font-variant-numeric: tabular-nums;

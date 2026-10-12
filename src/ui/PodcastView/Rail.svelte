@@ -56,6 +56,7 @@
 	.pn-railsearch {
 		display: flex;
 		align-items: center;
+		justify-content: flex-start;
 		gap: var(--size-4-2);
 		flex: none;
 		width: 100%;
