@@ -5,6 +5,7 @@ import { localFiles, plugin, savedFeeds, viewState } from "./store";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
+import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { episodeLinkTarget } from "./utility/episodeLinkTarget";
@@ -180,11 +181,16 @@ export default async function podNotesURIHandler(
 		const feeds = get(plugin).feeds;
 		const placeholderKey = parsePrivateFeedPlaceholder(url);
 		if (placeholderKey !== null) {
-			// A link to a feed this device does not have is refused without cancelling an
-			// earlier link; for a feed it has, a newer link or play wins.
-			const known = Object.prototype.hasOwnProperty.call(get(savedFeeds), placeholderKey);
-			const request = known ? ++latestRequest : latestRequest;
-			if (known) play = player.deferPlay();
+			// Only a feed whose URL is on this device is fetched, and a newer link or play
+			// wins over that fetch. Any other link is decided from the feed's last copy
+			// without a fetch: it claims a turn only when it plays, so a refused one
+			// cancels nothing.
+			const saved = get(savedFeeds);
+			const fetches =
+				Object.prototype.hasOwnProperty.call(saved, placeholderKey) &&
+				resolveFeedUrl(saved[placeholderKey], get(plugin).feedUrls) !== null;
+			const request = fetches ? ++latestRequest : latestRequest;
+			if (fetches) play = player.deferPlay();
 			// Fetch even a fresh feed so the link finds an episode published since.
 			await feeds.load([placeholderKey], "network");
 			if (request !== latestRequest) return;
