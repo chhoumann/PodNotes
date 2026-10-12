@@ -381,10 +381,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				slider
 					.setLimits(0, 1, 0.05)
 					.setValue(this.plugin.settings.defaultVolume)
-					.onChange((value) => {
-						this.plugin.settings.defaultVolume = value;
-						void this.plugin.saveSettings();
-					}),
+					.onChange((value) => this.plugin.player.setVolume(value)),
 			);
 	}
 
@@ -985,6 +982,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		}
 		concurrentStoreChanges.dispose();
 
+		// Re-hydrate the live stores so the running UI and the persistence
+		// bindings reflect the import. Keys without a store (templates, paths,
+		// skip lengths, feed cache) are applied via `merged` above.
 		savedFeeds.set(merged.savedFeeds);
 		playlists.set(merged.playlists);
 		favorites.set(merged.favorites);
@@ -993,6 +993,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		playedEpisodes.update((live) => ({ ...progress, ...live }));
 		hidePlayedEpisodes.set(merged.hidePlayedEpisodes);
 		episodeListLimit.set(merged.episodeListLimit);
+		this.plugin.player.setVolume(merged.defaultVolume);
 
 		try {
 			// Store setters can canonicalize or deduplicate their slices. Await one

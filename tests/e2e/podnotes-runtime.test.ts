@@ -432,50 +432,52 @@ describe("PodNotes runtime", () => {
 		}
 	});
 
-	test("a new load starts at the default volume and speed, and live changes stay with the episode", async () => {
+	test("a level set before a restored episode plays survives it, and the next episode starts at the default speed", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
 		const audioPath = await seedAudio(obsidian, sandbox);
-		const episode = createLocalEpisode("E2E Default Levels Episode", audioPath);
+		const restored = createLocalEpisode("E2E Restored Levels Episode", audioPath);
+		const next = createLocalEpisode("E2E Next Levels Episode", audioPath);
 
-		await seedRuntimeData(plugin, sandbox, episode, { currentEpisode: episode });
+		await seedRuntimeData(plugin, sandbox, next, {
+			currentEpisode: restored,
+			defaultPlaybackRate: 1.8,
+		});
 		await waitForPodNotesReady(obsidian);
 		await openPodNotesView(obsidian);
-		await evalJsonAsync<boolean>(
-			obsidian,
-			`(async () => {
-				const podnotes = app.plugins.plugins.${PLUGIN_ID};
-				podnotes.settings.defaultVolume = 0.4;
-				podnotes.settings.defaultPlaybackRate = 1.8;
-				await podnotes.saveSettings();
-				return true;
-			})()`,
-		);
-
-		await invokePodNotesUri(obsidian, episode, 0);
+		await setVolume(obsidian, 0.5);
+		await obsidian.dev.evalJson(`(() => {
+			const api = app.plugins.plugins.${PLUGIN_ID}.api;
+			api.playbackRate = 2.3;
+			api.start();
+			return true;
+		})()`);
 		await waitForPlaybackState(
 			obsidian,
-			(state) => state.isPlaying && (state.currentTime ?? 0) > 0,
+			(state) =>
+				state.title === restored.title && state.isPlaying && (state.currentTime ?? 0) > 0,
 		);
-		expect(await getLevels(obsidian)).toEqual({ api: [0.4, 1.8], audio: [0.4, 1.8] });
+		expect(await getLevels(obsidian)).toEqual({ api: [0.5, 2.3], audio: [0.5, 2.3] });
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.5, WAIT_OPTS);
 
-		await setVolume(obsidian, 0.7);
-		await obsidian.dev.evalJson(
-			`(() => { app.plugins.plugins.${PLUGIN_ID}.api.playbackRate = 1.3; return true; })()`,
-		);
-		await setPlayback(obsidian, { currentTime: 10, paused: true });
-		await setPlayback(obsidian, { currentTime: 10, paused: false });
-		await waitForPlaybackState(obsidian, (state) => state.isPlaying);
-		expect(await getLevels(obsidian)).toEqual({ api: [0.7, 1.3], audio: [0.7, 1.3] });
-
-		await evalJsonAsync(
+		await invokePodNotesUri(obsidian, next, 0);
+		await waitForPlaybackState(
 			obsidian,
-			`app.plugins.plugins.${PLUGIN_ID}.saveSettingsStrict().then(() => true)`,
+			(state) =>
+				state.title === next.title && state.isPlaying && (state.currentTime ?? 0) > 0,
 		);
-		const data = await plugin.data<PodNotesData>().read();
-		expect(data).toMatchObject({ defaultVolume: 0.4, defaultPlaybackRate: 1.8 });
+		expect(await getLevels(obsidian)).toEqual({ api: [0.5, 1.8], audio: [0.5, 1.8] });
+
+		await plugin.disable();
+		await plugin.enable();
+		await waitForPodNotesReady(obsidian);
+		expect(await getVolume(obsidian)).toBe(0.5);
+		expect(await plugin.data<PodNotesData>().read()).toMatchObject({
+			defaultVolume: 0.5,
+			defaultPlaybackRate: 1.8,
+		});
 	});
 
-	test("keeps a live volume change off the default volume", async () => {
+	test("persists API volume changes and clamps out-of-range values", async () => {
 		const { obsidian, plugin } = getContext();
 
 		await plugin.updateDataAndReload<PodNotesData>((data) => {
@@ -484,15 +486,17 @@ describe("PodNotes runtime", () => {
 		await waitForPodNotesReady(obsidian);
 
 		await setVolume(obsidian, 0.42);
-		await evalJsonAsync(
-			obsidian,
-			`app.plugins.plugins.${PLUGIN_ID}.saveSettingsStrict().then(() => true)`,
-		);
-		expect(await getVolume(obsidian)).toBe(0.42);
-		expect((await plugin.data<PodNotesData>().read()).defaultVolume).toBe(1);
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.42, WAIT_OPTS);
 
 		await setVolume(obsidian, 1.5);
-		expect(await getVolume(obsidian)).toBe(1);
+		const data = await plugin.waitForData<PodNotesData>(
+			(value) => value.defaultVolume === 1,
+			WAIT_OPTS,
+		);
+		const runtimeVolume = await getVolume(obsidian);
+
+		expect(data.defaultVolume).toBe(1);
+		expect(runtimeVolume).toBe(1);
 	});
 
 	test("migrates legacy dates and credentials before runtime hydration", async () => {
@@ -572,7 +576,7 @@ describe("PodNotes runtime", () => {
 		);
 		expect(note).toContain("date: 2024-03-01");
 
-		await saveDefaultVolume(obsidian, 0.42);
+		await setVolume(obsidian, 0.42);
 		const persisted = await plugin.waitForData<PodNotesData>(
 			(data) => data.schemaVersion === 2 && data.defaultVolume === 0.42,
 			WAIT_OPTS,
@@ -847,7 +851,7 @@ describe("PodNotes runtime", () => {
 				obsidian,
 				`(async () => {
 					const podnotes = app.plugins.plugins.${PLUGIN_ID};
-					podnotes.settings.defaultVolume = 0.42;
+					podnotes.api.volume = 0.42;
 					await podnotes.saveSettings();
 					return {
 						feeds: Object.keys(podnotes.settings.savedFeeds),
@@ -1050,20 +1054,6 @@ async function setVolume(
 	await obsidian.dev.evalJson(`
 		(() => {
 			app.plugins.plugins.${PLUGIN_ID}.api.volume = ${JSON.stringify(value)};
-			return true;
-		})()
-	`);
-}
-
-async function saveDefaultVolume(
-	obsidian: { dev: { evalJson: <T>(code: string) => Promise<T> } },
-	value: number,
-): Promise<void> {
-	await obsidian.dev.evalJson(`
-		(() => {
-			const podnotes = app.plugins.plugins.${PLUGIN_ID};
-			podnotes.settings.defaultVolume = ${JSON.stringify(value)};
-			void podnotes.saveSettings();
 			return true;
 		})()
 	`);

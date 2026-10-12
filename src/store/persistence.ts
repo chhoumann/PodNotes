@@ -97,9 +97,13 @@ const IMPORT_ROLLBACK_BINDINGS: PersistenceBinding[] = [
 	}),
 ];
 
-type PlayerSettings = Partial<Pick<IPodNotesSettings, "currentEpisode">>;
+type PlayerSettings = Partial<Pick<IPodNotesSettings, "currentEpisode" | "defaultVolume">>;
 const playerSettingsRecorders = new Set<(written: PlayerSettings) => void>();
 
+/**
+ * The player writes the episode it selects and its volume into settings itself,
+ * not through a store. An import in progress records these writes to replay them.
+ */
 export function writePlayerSettings(
 	plugin: Pick<IPodNotes, "settings" | "saveSettings">,
 	written: PlayerSettings,
@@ -120,6 +124,10 @@ export interface PersistedStoreChangeReplay {
  * snapshots and solves the ABA case where the new value already equals the import
  * candidate, so the normal persistence binding intentionally performs no settings
  * write.
+ *
+ * The live playback rate is deliberately absent. It is the current episode's
+ * transient speed, while defaultPlaybackRate is a preference changed directly
+ * by the settings tab. The tab locks its controls while an import is pending.
  */
 export function observePersistedStoreChanges(): PersistedStoreChangeReplay {
 	const latestValues = new Map<PersistenceBinding, unknown>();
