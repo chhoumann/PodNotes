@@ -11,6 +11,7 @@ import { FeedSuggestModal, orderFeedsByCurrent } from "src/ui/FeedSuggestModal";
 import downloadEpisodeWithNotice from "src/downloadEpisode";
 import getUniversalPodcastLink from "src/getUniversalPodcastLink";
 import { getEpisodeMediaType } from "src/utility/mediaType";
+import { TRANSCRIBE_FROM_AUDIO_COMMAND } from "src/services/TranscriptionService";
 import type PodNotes from "src/main";
 
 /**
@@ -316,23 +317,37 @@ export function registerCommands(plugin: PodNotes): void {
 		},
 	});
 
+	// Don't gate the transcribe commands on the API key: keep them offered
+	// whenever an audio episode is loaded so running one without a key shows the
+	// service's context-aware "set your API key" Notice instead of the command
+	// silently vanishing with no explanation (TR-02).
+	const canTranscribe = () =>
+		!!plugin.api.podcast && getEpisodeMediaType(plugin.api.podcast) === "audio";
+
 	plugin.addCommand({
 		id: "podnotes-transcribe",
 		name: "Transcribe current episode",
 		checkCallback: (checking) => {
-			// Don't gate availability on the API key: keep the command offered
-			// whenever an audio episode is loaded so running it without a key shows
-			// the service's context-aware "set your API key" Notice instead of the
-			// command silently vanishing with no explanation (TR-02).
-			const canTranscribe =
-				!!plugin.api.podcast && getEpisodeMediaType(plugin.api.podcast) === "audio";
-
 			if (checking) {
-				return canTranscribe;
+				return canTranscribe();
 			}
 
-			if (canTranscribe) {
+			if (canTranscribe()) {
 				void plugin.getTranscriptionService().transcribeCurrentEpisode();
+			}
+		},
+	});
+
+	plugin.addCommand({
+		id: "podnotes-transcribe-audio",
+		name: TRANSCRIBE_FROM_AUDIO_COMMAND,
+		checkCallback: (checking) => {
+			if (checking) {
+				return canTranscribe();
+			}
+
+			if (canTranscribe()) {
+				plugin.getTranscriptionService().transcribeCurrentEpisodeFromAudio();
 			}
 		},
 	});
