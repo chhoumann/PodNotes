@@ -182,6 +182,39 @@ describe("serializeSettings", () => {
 		expect(exported.playlists?.Mix.episodes.map(({ title }) => title)).toEqual(["Ep 1"]);
 	});
 
+	it("carries no vault path in a playlist's current episode or in progress records", () => {
+		const memo = {
+			title: "Memo",
+			streamUrl: "app://local/vault/Audio/Memo.mp3",
+			url: "[[Audio/Memo.mp3]]",
+			description: "",
+			content: "",
+			podcastName: "local file",
+			filePath: "Audio/Memo.mp3",
+		};
+		const progress = {
+			title: "Memo",
+			podcastName: "local file",
+			time: 3,
+			duration: 9,
+			finished: false,
+		};
+		const settings = makeSettings({
+			queue: { ...DEFAULT_SETTINGS.queue, currentEpisode: memo },
+			favorites: { ...DEFAULT_SETTINGS.favorites, currentEpisode: memo },
+			playlists: { Mix: { ...DEFAULT_SETTINGS.queue, name: "Mix", currentEpisode: memo } },
+			playedEpisodes: { "local file::Memo": { ...progress, ...memo } as never },
+		});
+
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const imported = parseImport(JSON.stringify(settings));
+
+		for (const transferred of [exported, imported.ok ? imported.settings : {}]) {
+			expect(JSON.stringify(transferred)).not.toContain("Audio/Memo.mp3");
+			expect(transferred.playedEpisodes).toEqual({ "local file::Memo": progress });
+		}
+	});
+
 	it("carries playback progress", () => {
 		const progress = {
 			title: "Ep 1",

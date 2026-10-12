@@ -83,17 +83,21 @@ function setup(
 			JSON.stringify(contents),
 		);
 		const dialog = within(document.body.lastElementChild as HTMLElement);
+		const click = () => dialog.getByRole("button", { name: "Import" }).click();
 		return {
 			message: dialog.getByRole("heading").nextElementSibling?.textContent ?? "",
+			click,
 			async confirm() {
-				dialog.getByRole("button", { name: "Import" }).click();
+				click();
 				await vi.waitFor(() =>
 					expect(notice).toHaveBeenCalledWith("Imported PodNotes settings."),
 				);
 			},
 		};
 	}
-	return { disk: () => disk as unknown as IPodNotesSettings, chooseFile };
+	const sync = (change: Partial<IPodNotesSettings>) =>
+		Object.assign(disk, structuredClone(change));
+	return { plugin, notice, sync, disk: () => disk as unknown as IPodNotesSettings, chooseFile };
 }
 
 describe("importing a settings file", () => {
@@ -115,6 +119,58 @@ describe("importing a settings file", () => {
 		expect(JSON.stringify(disk())).not.toContain("s3cret");
 		expect(disk().savedFeeds.Private.url).toBe("podnotes-private-feed:Private");
 		expect(disk().queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Private");
+	});
+
+	it("protects a private feed that another device synced while the import was saving", async () => {
+		const { disk, sync, chooseFile } = setup();
+		sync({
+			savedFeeds: { Synced: { title: "Synced", url: privateUrl, artworkUrl: "" } },
+			queue: {
+				...DEFAULT_SETTINGS.queue,
+				episodes: [episode("Synced", "Ep", privateUrl) as never],
+			},
+		});
+
+		await chooseFile({
+			...structuredClone(DEFAULT_SETTINGS),
+			schemaVersion: 2,
+			defaultVolume: 0.5,
+		}).confirm();
+
+		expect(JSON.stringify(disk())).not.toContain("s3cret");
+		expect(disk().savedFeeds.Synced.url).toBe("podnotes-private-feed:Synced");
+		expect(disk().queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Synced");
+	});
+
+	it("refuses an import whose private feed URL SecretStorage cannot keep", async () => {
+		const { plugin, notice, disk, chooseFile } = setup();
+		const before = { settings: plugin.settings, disk: JSON.stringify(disk()) };
+		const setSecret = vi
+			.spyOn(obsidian.SecretStorage.prototype, "setSecret")
+			.mockImplementation(() => {
+				throw new Error("locked");
+			});
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		onTestFinished(() => {
+			setSecret.mockRestore();
+			consoleError.mockRestore();
+		});
+
+		chooseFile({
+			...structuredClone(DEFAULT_SETTINGS),
+			schemaVersion: 2,
+			savedFeeds: { Private: { title: "Private", url: privateUrl, artworkUrl: "" } },
+		}).click();
+
+		await vi.waitFor(() =>
+			expect(notice).toHaveBeenCalledWith(
+				"Could not finish importing secrets into Obsidian SecretStorage. Existing settings were kept, and retrying is safe.",
+				10000,
+			),
+		);
+		expect(notice).not.toHaveBeenCalledWith("Imported PodNotes settings.");
+		expect(plugin.settings).toBe(before.settings);
+		expect(JSON.stringify(disk())).toBe(before.disk);
 	});
 
 	it("never writes a private feed URL that an older build left in the imported file", async () => {

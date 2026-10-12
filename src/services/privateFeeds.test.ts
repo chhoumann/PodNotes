@@ -207,6 +207,51 @@ describe("protectPrivateFeeds", () => {
 		expect(safe.savedFeeds.Patreon).toEqual(saved);
 	});
 
+	it("replaces the feed URL in an episode that has no feedUrl", () => {
+		const { feedUrls } = repository();
+		const linkOnly: Partial<ReturnType<typeof episode>> = {
+			...episode("Ep 2", ""),
+			url: PRIVATE_URL,
+		};
+		delete linkOnly.feedUrl;
+		const { settings: safe } = protectPrivateFeeds(
+			settings({
+				savedFeeds: { Patreon: feed({ title: "Patreon", url: PRIVATE_URL }) },
+				queue: { ...DEFAULT_SETTINGS.queue, episodes: [linkOnly as never] },
+			}),
+			feedUrls,
+		);
+		expect(JSON.stringify(safe)).not.toContain("se-cret");
+		expect(safe.queue.episodes[0].url).toBe("podnotes-private-feed:Patreon");
+	});
+
+	it("names a feed saved under another key by that key in its episodes", () => {
+		const { feedUrls } = repository();
+		const id = feedUrls.store(PRIVATE_URL);
+		const aliased = { ...episode("Ep 2", PRIVATE_URL), podcastName: "Channel Title" };
+		const queue = { ...DEFAULT_SETTINGS.queue, episodes: [aliased] };
+		const raw = protectPrivateFeeds(
+			settings({
+				savedFeeds: { "Saved Key": feed({ title: "Channel Title", url: PRIVATE_URL }) },
+				queue,
+			}),
+			feedUrls,
+		).settings;
+		const placeholder = "podnotes-private-feed:Saved%20Key";
+		const protectedHere = feed({ title: "Channel Title", url: placeholder, urlSecretId: id });
+		const strandedHere = feed({ title: "Channel Title", url: placeholder });
+
+		expect(raw.savedFeeds["Saved Key"].url).toBe(placeholder);
+		expect(raw.queue.episodes[0].feedUrl).toBe(placeholder);
+		for (const saved of [protectedHere, strandedHere]) {
+			const repaired = protectPrivateFeeds(
+				settings({ savedFeeds: { "Saved Key": saved }, queue }),
+				feedUrls,
+			).settings;
+			expect(repaired.queue.episodes[0].feedUrl).toBe(placeholder);
+		}
+	});
+
 	it("keeps an episode's own link even when it carries a token", () => {
 		const { feedUrls } = repository();
 		const link = "https://cdn.example/post?token=abc";
