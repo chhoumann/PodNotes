@@ -1,119 +1,107 @@
 ---
 title: Commands
 slug: commands
-description: Current PodNotes command names, IDs, availability requirements, and effects.
+description: Every PodNotes command with its command palette name, its ID, and when it is available.
 ---
 
-The command palette prefixes these names with **PodNotes:**.
-Most playback commands appear only after an episode is loaded. A loaded episode can be paused.
-Each command's full ID is listed below for workflow plugins.
+Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only while its condition below holds. The same rule applies in the command palette and when you add a command to the mobile toolbar.
+
+| Command | ID | Available when |
+| --- | --- | --- |
+| [Show player](#show-player) | `podnotes:podnotes-show-leaf` | Always |
+| [Play Podcast](#play-podcast) | `podnotes:start-playing` | An episode is loaded and paused |
+| [Stop Podcast](#stop-podcast) | `podnotes:stop-playing` | An episode is playing |
+| [Toggle playback](#toggle-playback) | `podnotes:podnotes-toggle-playback` | An episode is loaded |
+| [Skip Backward](#skip-backward) | `podnotes:skip-backward` | An episode is loaded |
+| [Skip Forward](#skip-forward) | `podnotes:skip-forward` | An episode is loaded |
+| [Increase playback rate](#increase-playback-rate) | `podnotes:increase-playback-rate` | An episode is loaded |
+| [Decrease playback rate](#decrease-playback-rate) | `podnotes:decrease-playback-rate` | An episode is loaded |
+| [Reset playback rate](#reset-playback-rate) | `podnotes:reset-playback-rate` | An episode is loaded |
+| [Reorder Queue](#reorder-queue) | `podnotes:reorder-queue` | The queue has two or more episodes |
+| [Download Playing Episode](#download-playing-episode) | `podnotes:download-playing-episode` | An episode is loaded |
+| [Capture Timestamp](#capture-timestamp) | `podnotes:capture-timestamp` | A note is open in an editor |
+| [Capture Last 10 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-10s` | A note is open in an editor, an episode is loaded, and **Capture timestamp format** is set |
+| [Capture Last 20 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-20s` | A note is open in an editor, an episode is loaded, and **Capture timestamp format** is set |
+| [Create episode note](#create-episode-note) | `podnotes:create-podcast-note` | An episode is loaded, and **Note creation file path** and **Note creation template** are set |
+| [Create podcast feed note](#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You follow at least one podcast, and **Feed note file path** and **Feed note template** are set |
+| [Copy universal episode link to clipboard](#copy-universal-episode-link-to-clipboard) | `podnotes:get-share-link-episode` | An episode is loaded |
+| [Transcribe current episode](#transcribe-current-episode) | `podnotes:podnotes-transcribe` | An audio episode is loaded |
+
+A paused episode counts as loaded. Hotkeys and workflow plugins use the ID.
 
 ## Show player
 
-`podnotes:podnotes-show-leaf` opens the PodNotes view or reveals its existing pane.
-It is always available. If no pane exists, it creates one in the right sidebar.
-The podcast ribbon action **Show PodNotes** opens the same view.
+Opens the player in the right sidebar, or reveals it when it is already open. The **Show PodNotes** ribbon action does the same.
 
 ## Play Podcast
 
-`podnotes:start-playing` starts playback of a loaded, paused episode.
-It is available when an episode is loaded and PodNotes is paused.
+Starts the loaded episode.
 
 ## Stop Podcast
 
-`podnotes:stop-playing` pauses the loaded episode and keeps its position.
-It is available when PodNotes is playing.
+Pauses the episode and keeps its position.
 
 ## Toggle playback
 
-`podnotes:podnotes-toggle-playback` switches the loaded episode between playing and paused.
-It requires a loaded episode.
+Plays the loaded episode when it is paused, and pauses it when it is playing.
 
 ## Skip Backward
 
-`podnotes:skip-backward` seeks backward by **Skip backward length (s)**, with a minimum position of zero.
-It requires a loaded episode and works while paused. The default skip length is 15 seconds.
+Moves back by **Skip backward length (s)**, 15 seconds by default. It never moves before the start.
 
 ## Skip Forward
 
-`podnotes:skip-forward` seeks forward by **Skip forward length (s)**.
-When duration is known, a forward skip goes no further than 0.25 seconds before the end and never rewinds an episode already nearer its end.
-Playback continues, so a playing episode finishes and the queue advances.
-It requires a loaded episode and works while paused. The default skip length is 15 seconds.
-
-## Download Playing Episode
-
-`podnotes:download-playing-episode` downloads the loaded episode. Playback does not need to be running.
-**Episode download path** controls the vault destination and defaults to `PodNotes/{{podcast}}/{{title}}`.
-The media extension is added automatically.
-
-A path that distinguishes episodes, such as one containing `{{title}}`, avoids file collisions.
-A collision with another episode's file causes an error rather than an overwrite.
-See [Path templates](/templates/#file-path) and [Downloads and sync](/sync/#downloads-on-another-device).
-
-## Reorder Queue
-
-`podnotes:reorder-queue` opens a queue editor with controls to move and remove episodes.
-It appears when the queue contains at least two episodes. The saved order is the play order.
-
-## Capture Timestamp
-
-`podnotes:capture-timestamp` inserts the playback time into the active note editor.
-It is an editor command that remains available without a loaded episode, so the mobile toolbar can offer it.
-Capture itself requires a loaded episode and a non-empty **Capture timestamp format**.
-If either is missing, PodNotes shows a notice.
-
-The headset Media Session `previoustrack` action captures a timestamp with an episode-note fallback.
-The editor command does not use that fallback. See [Timestamps](/timestamps/) and [Mobile capture](/mobile/).
-
-## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds
-
-`podnotes:capture-segment-10s` and `podnotes:capture-segment-20s` insert a recent playback range into the active editor.
-They require a loaded episode and a non-empty timestamp format.
-A linked range plays from its start and pauses at its end. See [Segment capture](/timestamps/#capturing-segments).
+Moves forward by **Skip forward length (s)**, 15 seconds by default. When the duration is known, a forward skip stops 0.25 seconds before the end.
 
 ## Increase playback rate
 
-`podnotes:increase-playback-rate` increases the loaded episode's speed by `0.1x`, up to `4x`.
+Raises the speed by 0.1x, up to 4x.
 
 ## Decrease playback rate
 
-`podnotes:decrease-playback-rate` decreases the loaded episode's speed by `0.1x`, down to `0.5x`.
+Lowers the speed by 0.1x, down to 0.5x.
 
 ## Reset playback rate
 
-`podnotes:reset-playback-rate` resets the loaded episode's speed to **Default Playback Rate**.
+Sets the speed to **Default Playback Rate**.
+
+## Reorder Queue
+
+Opens the **Reorder Queue** window. Each episode has buttons to move it to the top, up, down, or to the bottom, and to remove it from the queue. See [Reorder the queue](/playlists/#reorder-the-queue).
+
+## Download Playing Episode
+
+Downloads the loaded episode to **Episode download path**, `PodNotes/{{podcast}}/{{title}}` by default. PodNotes adds the file extension.
+If another episode's file already exists at that path, the download fails. See [Download an episode](/local_files/#download-an-episode).
+
+## Capture Timestamp
+
+Inserts a timestamp at the cursor, formatted by **Capture timestamp format**. The default format is `- {{linktime}}` with a space at the end. It makes a list item with a timestamp link.
+Obsidian lists the command only while a note is open in an editor. It does not need a loaded episode, so you can add it to the mobile toolbar before you play anything. Without an episode or with an empty format, it shows a notice. See [Capture timestamps](/timestamps/).
+
+## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds
+
+Inserts the last 10 or 20 seconds of playback at the cursor as a range, in the style of **Capture timestamp format**. With the default format, the range is a link that plays from the start of the range and pauses at its end.
+Obsidian lists these commands only while a note is open in an editor, an episode is loaded, and **Capture timestamp format** is set. To add them to the mobile toolbar, see [Add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
+Early in an episode, PodNotes shows a notice to play more first. See [Capture a range](/timestamps/#capture-a-range).
 
 ## Create episode note
 
-`podnotes:create-podcast-note` creates or opens a note for the loaded episode.
-It requires a loaded episode, **Note creation file path**, and **Note creation template**.
-Its ID is unchanged from the older **Create Podcast Note** name, so existing hotkeys remain associated with it.
-
-See [Templates](/templates/) for the defaults and tag reference.
+Creates a note for the loaded episode from **Note creation template** at **Note creation file path**, or opens the note if it exists.
+The ID keeps the command's former name, Create Podcast Note. See [Create episode notes](/notes/).
 
 ## Create podcast feed note
 
-`podnotes:create-podcast-feed-note` opens a picker of saved podcasts, then creates or opens the selected feed note.
-It requires at least one saved feed, **Feed note file path**, and **Feed note template**.
-Playback is not required.
-
-The episode context menu also offers **Create feed note** or **Open feed note**.
-See [Feed note templates](/templates/#podcast-feed-notes).
+Opens a list of the podcasts you follow, with the playing episode's podcast first. Creates a note for the podcast you select, or opens the note if it exists.
+No episode needs to be loaded. See [Create a feed note for a podcast](/notes/#create-a-feed-note-for-a-podcast).
 
 ## Copy universal episode link to clipboard
 
-`podnotes:get-share-link-episode` copies a pod.link episode URL for the loaded episode.
-It looks up the show in Apple Podcasts, matching its feed URL before trying its name, then matches the episode through pod.link.
-A missing show or episode produces a notice. This is a share link for other podcast apps, rather than a PodNotes timestamp link.
+Copies a pod.link URL for the loaded episode, to share with people who use other podcast apps. It is not a PodNotes timestamp link.
+PodNotes finds the show in the Apple Podcasts directory. If the show or the episode is not there, it shows a notice instead.
 
 ## Transcribe current episode
 
-`podnotes:podnotes-transcribe` transcribes the loaded audio episode into a note at **Transcript file path**.
-It is available for audio episodes, including local audio, and unavailable for video episodes.
-A missing API key does not hide the command. Running it explains which provider needs a key on this device.
-
-Plain transcription uses OpenAI. With **Speaker diarization** enabled, **Diarization provider** selects OpenAI or Deepgram.
-**OpenAI API key** and **Deepgram API key** are under **Transcripts** in PodNotes settings.
-An existing transcript file is kept rather than transcribed again.
-See [Transcripts](/transcripts/) for provider setup.
+Transcribes the loaded episode and saves the transcript at **Transcript file path**. It works for podcast episodes and local audio, but not for video.
+If the transcript file already exists, PodNotes keeps it and does not transcribe again.
+Without an API key for the selected provider, it shows a notice that names the key to add. See [Transcribe episodes](/transcripts/).

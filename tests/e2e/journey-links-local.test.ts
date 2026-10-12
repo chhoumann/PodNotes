@@ -3,7 +3,9 @@ import { createPodNotesE2EHarness, PLUGIN_ID, RELOAD_OPTIONS } from "./harness";
 import {
 	click,
 	closePodNotes,
+	dismissNotices,
 	listedEpisodes,
+	notices,
 	openInReadingView,
 	revealInFileExplorer,
 	runCommand,
@@ -21,6 +23,7 @@ import {
 } from "./journey/fixtures";
 import {
 	episodeRef,
+	observePlayback,
 	playbackOver,
 	playerLeafCount,
 	readLibrary,
@@ -257,5 +260,47 @@ describe("link and local file journeys", () => {
 			message: "the Local Files list",
 		});
 		expect(await listedEpisodes(obsidian)).toEqual(["Local Journey"]);
+	});
+	test("a timestamp link to a moved vault file plays the one file with its name, and refuses when two share it", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		await seedLibrary(context, null);
+		const title = `Twin-${sandbox.root.split("/").pop()}`;
+		const fileName = `${title}.wav`;
+		const movedPath = sandbox.path("Moved/A", fileName);
+		await writeVaultFile(obsidian, movedPath, wav(30));
+		const notePath = sandbox.path("Moved link.md");
+		const linkedPath = encodeURIComponent(sandbox.path("Missing", fileName));
+		await writeVaultFile(
+			obsidian,
+			notePath,
+			`[Moved audio](obsidian://podnotes?episodeName=${encodeURIComponent(title)}&url=${linkedPath}&time=2)\n`,
+		);
+
+		await openInReadingView(obsidian, notePath);
+		await click(obsidian, ui.readingLink("Moved audio"));
+		const playing = await waitForPlayback(
+			obsidian,
+			(playback) => playback.episode?.title === title && (playback.media?.seconds ?? 0) > 0,
+			"the moved file playing",
+		);
+		expect(decodeURIComponent(playing.media?.src ?? "")).toContain(movedPath);
+		expect(playing.seconds).toBeGreaterThanOrEqual(2);
+
+		await runCommand(obsidian, `${PLUGIN_ID}:stop-playing`);
+		await writeVaultFile(obsidian, sandbox.path("Moved/B", fileName), wav(30));
+		await dismissNotices(obsidian);
+		await openInReadingView(obsidian, notePath);
+		await click(obsidian, ui.readingLink("Moved audio"));
+		await obsidian.waitFor(
+			async () =>
+				(await notices(obsidian)).includes(
+					`More than one vault file is named "${fileName}". Update the link with the correct path.`,
+				),
+			{ timeoutMs: 10_000, message: "the ambiguous file notice" },
+		);
+		const refused = await observePlayback(obsidian);
+		expect(refused.playing).toBe(false);
+		expect(decodeURIComponent(refused.media?.src ?? "")).toContain(movedPath);
 	});
 });

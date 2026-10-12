@@ -5,6 +5,7 @@ import type { App } from "obsidian";
 import * as obsidian from "obsidian";
 
 import { DEFAULT_SETTINGS } from "src/constants";
+import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import PodNotes from "src/main";
 import { PlayerController } from "src/player/PlayerController";
 import { episodeListLimit, hidePlayedEpisodes, savedFeeds } from "src/store";
@@ -87,6 +88,54 @@ describe("PodNotesSettingsTab settings import", () => {
 			10000,
 		);
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
+	});
+
+	it("puts back a feed named __proto__ when an import that removed it fails", async () => {
+		const showFeed = {
+			title: "__proto__",
+			url: "https://example.com/feed.xml",
+			artworkUrl: "",
+		};
+		const laterFeed = { title: "Later", url: "https://example.com/later.xml", artworkUrl: "" };
+		const previous = decodePodNotesData(
+			JSON.parse(
+				JSON.stringify({
+					schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+					libraryId: "library",
+					savedFeeds: Object.fromEntries([["__proto__", showFeed]]),
+				}),
+			),
+		).settings;
+		const plugin = {
+			settings: previous,
+			credentials: { storeValues: vi.fn(() => ({})) },
+			feedUrls: { resolve: vi.fn(() => null) },
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+			saveSettingsStrict: vi
+				.fn()
+				.mockImplementationOnce(() => {
+					plugin.settings.savedFeeds.Later = laterFeed;
+					return Promise.reject(new Error("disk full"));
+				})
+				.mockResolvedValueOnce(undefined),
+		} as unknown as PodNotes;
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
+		vi.spyOn(tab, "update").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await (
+			tab as unknown as {
+				applyImportedSettings: (
+					imported: Partial<typeof DEFAULT_SETTINGS>,
+				) => Promise<void>;
+			}
+		).applyImportedSettings({ savedFeeds: {} });
+
+		expect(Object.keys(plugin.settings.savedFeeds).sort()).toEqual(["Later", "__proto__"]);
+		expect(plugin.settings.savedFeeds.Later).toEqual(laterFeed);
+		expect(plugin.settings.savedFeeds["__proto__"]).toEqual(showFeed);
+		expect(plugin.settings.savedFeeds.toString).toBeUndefined();
+		expect(({} as { url?: string }).url).toBeUndefined();
 	});
 
 	it("locks ordinary settings controls until an import and its lane drain finish", async () => {

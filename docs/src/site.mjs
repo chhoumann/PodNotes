@@ -8,29 +8,61 @@ export const site = "https://podnotes.obsidian.guide";
 
 export const { description } = manifest;
 
+export const repository = "https://github.com/chhoumann/PodNotes";
+
 export const sidebar = [
-	{ label: "Home", slug: "index" },
-	{ label: "Getting started", slug: "getting-started" },
-	{ label: "Mobile", slug: "mobile" },
-	{ label: "FAQ", slug: "faq" },
-	{ label: "Sync and devices", slug: "sync" },
-	{ label: "Commands", slug: "commands" },
-	{ label: "Podcasts", slug: "podcasts" },
-	{ label: "Local files", slug: "local_files" },
-	{ label: "Import & Export", slug: "import_export" },
-	{ label: "Transcripts", slug: "transcripts" },
 	{
-		label: "Notes",
+		label: "Start here",
 		items: [
-			{ label: "Timestamps", slug: "timestamps" },
-			{ label: "Templates", slug: "templates" },
+			{ label: "Overview", slug: "index" },
+			{ label: "Getting started", slug: "getting-started" },
+			{ label: "Use PodNotes on your phone", slug: "mobile" },
 		],
 	},
 	{
-		label: "Advanced",
+		label: "Listen",
 		items: [
+			{ label: "Add and play podcasts", slug: "podcasts" },
+			{ label: "Use the queue and playlists", slug: "playlists" },
+			{ label: "Downloads and local files", slug: "local_files" },
+			{ label: "Transcribe episodes", slug: "transcripts" },
+		],
+	},
+	{
+		label: "Take notes",
+		items: [
+			{ label: "Capture timestamps", slug: "timestamps" },
+			{ label: "Create episode notes", slug: "notes" },
+		],
+	},
+	{
+		label: "Your library",
+		items: [
+			{ label: "Sync between devices", slug: "sync" },
+			{ label: "Import and export", slug: "import_export" },
+		],
+	},
+	{
+		label: "Automate",
+		items: [
+			{ label: "Use with QuickAdd", slug: "QuickAdd" },
 			{ label: "API", slug: "api" },
-			{ label: "Usage with QuickAdd", slug: "QuickAdd" },
+		],
+	},
+	{
+		label: "Reference",
+		items: [
+			{ label: "Commands", slug: "commands" },
+			{ label: "Settings", slug: "settings" },
+			{ label: "Template tags", slug: "templates" },
+		],
+	},
+	{
+		label: "Help",
+		items: [
+			{ label: "FAQ", slug: "faq" },
+			{ label: "Report a problem", link: `${repository}/issues` },
+			{ label: "Release notes", link: `${repository}/releases` },
 		],
 	},
 ];

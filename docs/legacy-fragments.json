@@ -1,41 +1,4 @@
 {
-	"/QuickAdd/": ["quickadd", "timestamp-capture", "add-podcast-note"],
-	"/api/": [
-		"api",
-		"podcast",
-		"transcript",
-		"gettranscriptepisode-episode",
-		"quickadd-ai-prompt-example",
-		"getpodcasttimeformattedformat-string-linkify-boolean-offsetseconds-number",
-		"getpodcastsegmentformattedformat-string-starttime-number-endtime-number-linkify-boolean",
-		"playbackrate",
-		"playback-controls"
-	],
-	"/commands/": [
-		"show-player",
-		"play-podcast",
-		"stop-podcast",
-		"toggle-playback",
-		"skip-backward",
-		"skip-forward",
-		"download-playing-episode",
-		"capture-timestamp",
-		"capture-last-10-seconds-capture-last-20-seconds",
-		"increase-playback-rate",
-		"decrease-playback-rate",
-		"reset-playback-rate",
-		"create-episode-note",
-		"create-podcast-feed-note",
-		"copy-universal-episode-link-to-clipboard",
-		"transcribe-current-episode"
-	],
-	"/import_export/": [
-		"importing",
-		"exporting",
-		"settings-templates",
-		"exporting-settings",
-		"importing-settings"
-	],
 	"/": [
 		"podnotes",
 		"features",
@@ -53,6 +16,76 @@
 		"browse-your-library-with-bases",
 		"podcast-search"
 	],
+	"/QuickAdd/": ["quickadd", "timestamp-capture", "add-podcast-note"],
+	"/api/": [
+		"api",
+		"podcast",
+		"transcript",
+		"gettranscriptepisode-episode",
+		"quickadd-ai-prompt-example",
+		"getpodcasttimeformattedformat-string-linkify-boolean-offsetseconds-number",
+		"getpodcastsegmentformattedformat-string-starttime-number-endtime-number-linkify-boolean",
+		"playbackrate",
+		"playback-controls",
+		"isplaying",
+		"length",
+		"currenttime",
+		"volume"
+	],
+	"/commands/": [
+		"show-player",
+		"play-podcast",
+		"stop-podcast",
+		"toggle-playback",
+		"skip-backward",
+		"skip-forward",
+		"download-playing-episode",
+		"capture-timestamp",
+		"capture-last-10-seconds-capture-last-20-seconds",
+		"increase-playback-rate",
+		"decrease-playback-rate",
+		"reset-playback-rate",
+		"create-episode-note",
+		"create-podcast-feed-note",
+		"copy-universal-episode-link-to-clipboard",
+		"transcribe-current-episode",
+		"reorder-queue",
+		"capture-last-10-seconds--capture-last-20-seconds"
+	],
+	"/faq/": [
+		"where-is-the-player",
+		"why-are-some-commands-missing",
+		"which-podcasts-can-i-add",
+		"can-i-add-spotify-exclusives-or-youtube-links",
+		"can-i-use-a-private-feed",
+		"do-downloads-sync-with-my-vault",
+		"what-happens-to-notes-and-links-when-i-remove-a-download",
+		"can-i-annotate-my-own-audio-or-video",
+		"does-transcription-cost-money",
+		"does-playback-progress-sync-between-devices"
+	],
+	"/getting-started/": [
+		"install-podnotes",
+		"add-a-podcast",
+		"play-an-episode",
+		"capture-a-timestamp",
+		"create-an-episode-note"
+	],
+	"/import_export/": [
+		"importing",
+		"exporting",
+		"settings-templates",
+		"exporting-settings",
+		"importing-settings",
+		"settings--templates"
+	],
+	"/mobile/": [
+		"enable-podnotes-and-open-the-player",
+		"add-a-capture-button-to-the-editor-toolbar",
+		"capture-with-a-headset",
+		"download-an-episode",
+		"known-limits-and-verified-devices"
+	],
 	"/podcasts/": [
 		"adding-podcasts",
 		"playlists",
@@ -61,16 +94,34 @@
 		"context-menu",
 		"reordering-the-queue",
 		"turning-off-the-queue",
-		"player"
+		"player",
+		"when-a-feed-cannot-be-reached"
+	],
+	"/sync/": [
+		"plugin-data-and-notes",
+		"changes-on-two-devices",
+		"secrets-on-each-device",
+		"downloads-on-another-device",
+		"removal-and-existing-links",
+		"unreadable-plugin-data"
 	],
 	"/templates/": [
 		"file-path",
 		"note-template",
 		"linking-an-episode-to-its-podcast-feed-note",
 		"using-the-default-template-with-bases",
-		"podcast-feed-notes"
+		"podcast-feed-notes",
+		"duration-and-chapters",
+		"transcript-and-timestamp-templates",
+		"date-formats"
 	],
-	"/timestamps/": ["settings", "capturing-timestamps", "capturing-segments"],
+	"/timestamps/": [
+		"settings",
+		"capturing-timestamps",
+		"capturing-segments",
+		"time-formats",
+		"podnotes-uri"
+	],
 	"/transcripts/": [
 		"transcripts",
 		"setting-up",

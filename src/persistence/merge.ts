@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeKey } from "src/utility/episodeKey";
+import { ownRecord } from "src/utility/ownRecord";
 import { isPlainObject, type UnknownRecord } from "./codecUtils";
 import { toDocument } from "./podNotesData";
 
@@ -33,6 +34,10 @@ export function jsonValuesEqual(a: unknown, b: unknown): boolean {
 	}
 
 	return false;
+}
+
+function ownValue(record: UnknownRecord, key: string): unknown {
+	return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
 }
 
 type EpisodeEntry = UnknownRecord & { title: string };
@@ -188,12 +193,14 @@ export function threeWayMergeSettings<T>(
 			...Object.keys(local),
 			...Object.keys(disk),
 		]);
-		const merged: UnknownRecord = {};
+		const merged = ownRecord<unknown>();
 		for (const key of keys) {
-			const value = threeWayMergeSettings(ancestor[key], local[key], disk[key], [
-				...path,
-				key,
-			]);
+			const value = threeWayMergeSettings(
+				ownValue(ancestor, key),
+				ownValue(local, key),
+				ownValue(disk, key),
+				[...path, key],
+			);
 			// JSON has no undefined: a merged-away key must be absent, or the
 			// written document never equals the same document read back.
 			if (value !== undefined) merged[key] = value;
@@ -243,11 +250,14 @@ export function restoreDropped<T>(base: T, disk: T, raw: unknown, path: readonly
 	if (isPlainObject(base) && isPlainObject(disk)) {
 		// Not an object: the codec replaced the whole value, so every entry was dropped.
 		const rawEntries = isPlainObject(raw) ? raw : {};
-		const restored: UnknownRecord = { ...disk };
+		const restored = ownRecord(disk);
 		for (const [key, value] of Object.entries(base)) {
-			if (key in disk) {
-				restored[key] = restoreDropped(value, disk[key], rawEntries[key], [...path, key]);
-			} else if (!isPlainObject(raw) || key in raw) {
+			if (Object.prototype.hasOwnProperty.call(disk, key)) {
+				restored[key] = restoreDropped(value, disk[key], ownValue(rawEntries, key), [
+					...path,
+					key,
+				]);
+			} else if (!isPlainObject(raw) || Object.prototype.hasOwnProperty.call(raw, key)) {
 				restored[key] = structuredClone(value);
 			}
 		}

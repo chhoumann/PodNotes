@@ -613,3 +613,113 @@ describe("restoreDropped", () => {
 		expect(restoreDropped(base.queue, disk.queue, raw.queue, ["queue"])).toEqual(disk.queue);
 	});
 });
+
+describe("entries named like Object.prototype members", () => {
+	const names = ["toString", "__proto__", "constructor", "hasOwnProperty"];
+	const entryOf: Record<string, (name: string) => unknown> = {
+		savedFeeds: (name) => feed(name),
+		playedEpisodes: (name) => ({ ...played("Ep 1", 10), podcastName: name }),
+		podNotes: (name) => ({ episodeName: "Ep 1", filePath: `${name}.md`, podcastFeedKey: name }),
+		playlists: (name) => playlist(name, [episode("Ep 1", name)]),
+		downloadedEpisodes: (name) => [
+			{ ...episode("Ep 1", name), filePath: `${name}/Ep 1.mp3`, size: 1 },
+		],
+	};
+	const cases = Object.keys(entryOf).flatMap((map) => names.map((name) => [map, name]));
+
+	function reread<T>(doc: T): T {
+		return JSON.parse(JSON.stringify(doc));
+	}
+
+	function withEntry(doc: Data, map: string, name: string): Data {
+		Object.defineProperty(doc[map], name, {
+			value: entryOf[map](name),
+			enumerable: true,
+			writable: true,
+			configurable: true,
+		});
+		return reread(doc);
+	}
+
+	function entriesOf(doc: Data, map: string): Record<string, unknown> {
+		return reread(doc)[map] as Record<string, unknown>;
+	}
+
+	it.each(cases)("keeps a %s entry named %s that the other device added", (map, name) => {
+		const base = data();
+		const local = withEntry(reread(base), map, "Other");
+		const disk = withEntry(reread(base), map, name);
+
+		const merged = entriesOf(mergeDataFile(base, local, disk), map);
+
+		expect(Object.keys(merged)).toEqual(expect.arrayContaining([name, "Other"]));
+		expect(merged[name]).toEqual(entryOf[map](name));
+	});
+
+	it.each(cases)("leaves out a %s entry named %s that the other device removed", (map, name) => {
+		const base = withEntry(data(), map, name);
+		const local = withEntry(reread(base), map, "Other");
+		const disk = reread(base);
+		delete (disk[map] as Record<string, unknown>)[name];
+
+		const merged = entriesOf(mergeDataFile(base, local, disk), map);
+
+		expect(Object.keys(merged)).toContain("Other");
+		expect(Object.keys(merged)).not.toContain(name);
+	});
+
+	it("keeps every feed of two libraries that meet, whichever device merges", () => {
+		const started = withEntry(
+			withEntry(data(), "savedFeeds", "toString"),
+			"savedFeeds",
+			"constructor",
+		);
+		started.libraryId = "";
+		const joined = withEntry(
+			withEntry(data(), "savedFeeds", "__proto__"),
+			"savedFeeds",
+			"hasOwnProperty",
+		);
+		joined.libraryId = "2026-10-11T09:00:00.000Z 0b9d";
+
+		for (const [local, disk] of [
+			[started, joined],
+			[joined, started],
+		]) {
+			const merged = entriesOf(
+				mergeDataFile(local, reread(local), reread(disk)),
+				"savedFeeds",
+			);
+			expect(Object.keys(merged).sort()).toEqual(["Pod A", ...names].sort());
+			expect(merged["__proto__"]).toEqual(feed("__proto__"));
+		}
+	});
+
+	it.each(names)("does not bring back a feed named %s the other device removed", (name) => {
+		const base = withEntry(data(), "savedFeeds", name);
+		const disk = reread(base);
+		delete (disk.savedFeeds as Record<string, unknown>)[name];
+
+		const restored = restoreDropped(base.savedFeeds, disk.savedFeeds, reread(disk).savedFeeds, [
+			"savedFeeds",
+		]);
+
+		expect(reread(restored)).toEqual({ "Pod A": feed("Pod A") });
+		expect(Object.keys(restored)).toEqual(["Pod A"]);
+	});
+
+	it.each(names)("puts back a download list named %s that the codec dropped", (name) => {
+		const base = withEntry(data(), "downloadedEpisodes", name);
+		const disk = reread(base);
+		delete (disk.downloadedEpisodes as Record<string, unknown>)[name];
+		const raw = reread(base).downloadedEpisodes as Record<string, unknown>;
+		Object.defineProperty(raw, name, { value: "not a list", enumerable: true });
+
+		const restored = restoreDropped(base.downloadedEpisodes, disk.downloadedEpisodes, raw, [
+			"downloadedEpisodes",
+		]);
+
+		expect(Object.keys(restored)).toContain(name);
+		expect(reread(restored)[name]).toEqual(entryOf.downloadedEpisodes(name));
+	});
+});
