@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SecretStorage } from "obsidian";
+import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "src/constants";
 import {
 	decodePodNotesData,
@@ -9,7 +10,12 @@ import {
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { FeedUrlRepository } from "./FeedUrlRepository";
-import { internPrivateFeed, protectPrivateFeeds, resolveFeedUrl } from "./privateFeeds";
+import {
+	internPrivateFeed,
+	notifyPrivateFeedUnavailable,
+	protectPrivateFeeds,
+	resolveFeedUrl,
+} from "./privateFeeds";
 
 function repository(initial: Record<string, string> = {}) {
 	const values = new Map(Object.entries(initial));
@@ -28,6 +34,14 @@ function feed(overrides: Partial<PodcastFeed> = {}): PodcastFeed {
 }
 
 const PRIVATE_URL = "https://www.patreon.com/rss/show?auth=se-cret";
+
+it("reports a missing device address in one sentence without destructive recovery instructions", () => {
+	const notice = vi.spyOn(obsidian, "Notice");
+	notifyPrivateFeedUnavailable("My Show");
+	expect(notice).toHaveBeenCalledWith(
+		'The private feed address for "My Show" is not available on this device.',
+	);
+});
 
 describe("internPrivateFeed", () => {
 	it("moves a credential-bearing URL into SecretStorage and persists a placeholder", () => {

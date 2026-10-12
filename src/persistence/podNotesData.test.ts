@@ -60,6 +60,42 @@ function settingsWithEveryEpisodeContainer(): IPodNotesSettings {
 }
 
 describe("PodNotes data schema", () => {
+	it("protects private feed URLs in every episode container on the first encode without a device secret", () => {
+		const sentinel = "PRIV2_ENCODE_SENTINEL";
+		const rawUrl = `https://private.example/feed?auth=${sentinel}`;
+		const item = { ...episode("Private"), url: rawUrl, feedUrl: rawUrl };
+		const history = {
+			title: item.title,
+			podcastName: item.podcastName,
+			time: 12,
+			duration: 180,
+			finished: false,
+			episode: item,
+		};
+		const settings = {
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: item,
+			queue: playlist("Queue", item),
+			favorites: playlist("Favorites", item),
+			localFiles: playlist("Local files", { ...item, streamUrl: "audio.mp3" }),
+			playlists: { Custom: playlist("Custom", item) },
+			downloadedEpisodes: {
+				"Test Podcast": [{ ...item, filePath: "audio.mp3", size: 42 }],
+			},
+			playedEpisodes: { "Test Podcast::Private": history },
+		} satisfies IPodNotesSettings;
+		const before = structuredClone(settings);
+
+		const encoded = encodePodNotesData(settings);
+
+		expect(JSON.stringify(encoded)).not.toContain(sentinel);
+		expect(encoded.currentEpisode?.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
+		expect(encoded.queue.episodes[0].streamUrl).toBe(item.streamUrl);
+		expect(encoded.downloadedEpisodes["Test Podcast"][0].filePath).toBe("audio.mp3");
+		expect(encoded.playedEpisodes["Test Podcast::Private"].time).toBe(12);
+		expect(settings).toEqual(before);
+	});
+
 	it("loads fresh data as independent deep-cloned defaults", () => {
 		const first = decodePodNotesData(undefined);
 		const second = decodePodNotesData(null);

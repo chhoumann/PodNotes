@@ -197,6 +197,22 @@ describe("PodcastQueryGrid", () => {
 		expect(queryByRole("button", { name: "Add Private Show podcast" })).toBeNull();
 	});
 
+	test("a changed channel title still removes the existing private subscription by its saved key", async () => {
+		const { saved, secrets } = followPrivateShow();
+		fetchTextMock.mockResolvedValue(
+			"<rss><channel><title>Renamed Show</title><author>Patron Host</author></channel></rss>",
+		);
+
+		const { findByText, getByRole, queryByRole } = paste(PRIVATE_URL);
+		await findByText("Patron Host");
+
+		expect(queryByRole("button", { name: "Add Renamed Show podcast" })).toBeNull();
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		await fireEvent.click(getByRole("button", { name: "Remove Renamed Show podcast" }));
+		expect(get(savedFeeds)).toEqual({});
+		expect(secrets.getSecret(saved.urlSecretId)).toBeFalsy();
+	});
+
 	test("shows a private feed followed with an uppercase host as saved when its URL is pasted", async () => {
 		followPrivateShow(PRIVATE_URL.replace("www.patreon.com", "WWW.PATREON.COM"));
 
