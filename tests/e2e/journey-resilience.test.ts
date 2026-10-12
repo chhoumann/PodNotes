@@ -547,4 +547,87 @@ describe("resilience journeys", () => {
 		expect(note.reading).toContain("Normal text with a block marker ^v420-block");
 		expect(note.reading).toContain("v420-field:: injected value");
 	}, 60_000);
+
+	test("J-TR-06 a hostile cue cannot freeze its transcript note in Live Preview, also when Obsidian reopens it", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const hostile: FixtureEpisode = {
+			title: "Hostile Episode",
+			seconds: 4,
+			pubDate: pubDate(0),
+			transcripts: [
+				{
+					path: "1.vtt",
+					type: "text/vtt",
+					body: `WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n${"|".repeat(3_000)} ${"<".repeat(6_000)} survived\n`,
+				},
+			],
+		};
+		const show: FixtureFeed = {
+			title: "Journey Hostile Captions",
+			slug: "hostile-captions",
+			artwork: true,
+			episodes: [hostile],
+		};
+		const server = await serve(show);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, hostile),
+		});
+		const notePath = sandbox.path("Transcripts/Journey Hostile Captions/Hostile Episode.md");
+
+		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+		await sandbox.waitForExists("Transcripts/Journey Hostile Captions/Hostile Episode.md", {
+			timeoutMs: 30_000,
+		});
+		const opened = await obsidian.dev.evalJsonAsync<{
+			state: unknown;
+			stallMs: number;
+		}>(`(async () => {
+			const beat = { last: performance.now(), max: 0 };
+			const timer = setInterval(() => {
+				const now = performance.now();
+				beat.max = Math.max(beat.max, now - beat.last);
+				beat.last = now;
+			}, 10);
+			const leaf = app.workspace.getLeaf(true);
+			await leaf.openFile(app.vault.getAbstractFileByPath(${JSON.stringify(notePath)}), {
+				active: true,
+				state: { mode: "source", source: false },
+			});
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+			clearInterval(timer);
+			await app.workspace.saveLayout();
+			return { state: leaf.view.getState(), stallMs: beat.max };
+		})()`);
+
+		expect(opened.state).toMatchObject({ mode: "source", source: false });
+		expect(opened.stallMs).toBeLessThan(3000);
+
+		await reloadObsidian(obsidian);
+		const reopened = await obsidian.dev.evalJsonAsync<{
+			file?: string;
+			state: unknown;
+			longestTaskMs: number;
+		}>(`(async () => {
+			const tasks = await new Promise((resolve) => {
+				const observer = new PerformanceObserver((list) => {
+					observer.disconnect();
+					resolve(list.getEntries());
+				});
+				observer.observe({ type: "longtask", buffered: true });
+				setTimeout(() => resolve([]), 500);
+			});
+			const view = app.workspace.activeLeaf?.view;
+			return {
+				file: view?.file?.path,
+				state: view?.getState?.(),
+				longestTaskMs: Math.max(0, ...tasks.map((task) => task.duration)),
+			};
+		})()`);
+
+		expect(reopened.file).toBe(notePath);
+		expect(reopened.state).toMatchObject({ mode: "source", source: false });
+		expect(reopened.longestTaskMs).toBeLessThan(3000);
+	}, 90_000);
 });
