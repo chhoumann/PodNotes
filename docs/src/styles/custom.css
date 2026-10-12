@@ -251,7 +251,8 @@ starlight-toc a {
 	margin-bottom: 0.375rem;
 	font-size: var(--sl-text-lg);
 	font-weight: 600;
-	color: var(--sl-color-white);
+	/* The accent color marks the title as a link, also on touch screens. */
+	color: var(--sl-color-text-accent);
 	text-decoration: none;
 }
 [data-has-hero] .sl-markdown-content ul:first-of-type > li > a::after {
@@ -387,8 +388,9 @@ starlight-toc a {
  * Line breaks
  * ------------------------------------------------------------------------ */
 
-/* Headings break into even lines instead of leaving one word behind. */
-.sl-markdown-content :is(h2, h3),
+/* Headings break into even lines instead of leaving one word behind. Section
+ * headings sit inline in Starlight's wrapper, which owns their lines. */
+.sl-markdown-content .sl-heading-wrapper,
 h1#_top {
 	text-wrap: balance;
 }
@@ -411,4 +413,16 @@ h1#_top {
 /* The landing page's prose keeps a readable line length under the wide hero. */
 [data-has-hero] .sl-markdown-content > p {
 	max-width: 45rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Brand
+ * ------------------------------------------------------------------------ */
+
+/* The mark and the name read as one lockup. */
+.site-title {
+	gap: 0.625rem;
+}
+.site-title img {
+	height: 2rem;
 }

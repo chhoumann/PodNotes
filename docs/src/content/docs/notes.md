@@ -33,12 +33,12 @@ The default episode note template links each episode note to its feed note in th
 
 ## Change where notes go
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, edit **Note creation file path**.
 
 The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts` folder instead:
 
-- `Podcasts/{{title}}.md` puts every note in that folder.
+- `Podcasts/{{title}}.md` puts every note in that folder. Episodes with the same title from different podcasts then share one note.
 - `Podcasts/{{podcast}}/{{title}}.md` adds a subfolder per podcast.
 - `Podcasts/{{date:YYYY}}/{{podcast}} - {{title}}.md` adds a subfolder per publication year.
 
@@ -81,37 +81,37 @@ A note made with this template looks like this:
 
 ## Browse your notes with Bases
 
-[Obsidian Bases](https://obsidian.md/help/bases) shows notes as a table that you can filter, sort, and group. The default episode note template sets `type: podcastEpisode`, `podcast`, `date`, `tags`, and `favorite: false`, and leaves `status` and `rating` for you to fill in. To list your episode notes grouped by status, add this code block to a note:
+[Obsidian Bases](https://obsidian.md/help/bases) shows notes as a table that you can filter, sort, and group. The default episode note template sets `type: podcastEpisode`, `podcast`, `date`, `tags`, and `favorite: false`, and leaves `status` and `rating` for you to fill in. To list your episode notes grouped by status:
 
-````md
-```base
-filters:
-  and:
-    - 'type == "podcastEpisode"'
-views:
-  - type: table
-    name: Episodes
-    order:
-      - file.name
-      - note.podcast
-      - note.status
-      - note.rating
-    sort:
-      - property: note.date
-        direction: DESC
-    groupBy:
-      property: note.status
-      direction: ASC
-```
-````
+1. In the note where you want the table, insert this code block:
+
+   ````md
+   ```base
+   filters:
+     and:
+       - 'type == "podcastEpisode"'
+   views:
+     - type: table
+       name: Episodes
+       order:
+         - file.name
+         - note.podcast
+         - note.status
+         - note.rating
+       sort:
+         - property: note.date
+           direction: DESC
+       groupBy:
+         property: note.status
+         direction: ASC
+   ```
+   ````
 
 ![A Bases table of five episode notes, grouped by status into finished, listening, and next](/screenshots/bases.webp)
 
 The same lines also work as the content of a `.base` file, such as `PodNotes/Episodes.base`. If your template has no `type` property, filter on a property or tag that it sets.
 
 ## Limits of note creation
-
-These cases can surprise you:
 
 - **PodNotes: Create episode note** needs both **Note creation file path** and **Note creation template**. With either one empty, the command is missing and the episode menu shows "Please set a note path and template in the settings."
 - PodNotes finds an existing note by its path, or by a matching title in the same folder. After you rename or move a note, it can create a second note for the episode.

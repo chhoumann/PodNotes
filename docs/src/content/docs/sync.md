@@ -18,7 +18,7 @@ PodNotes has no sync service of its own, so your vault sync service, such as Obs
 | The current playback speed | Not at all. PodNotes does not save it. Only **Default Playback Rate** syncs. |
 
 For your library to sync, your sync service must include PodNotes' plugin folder, `.obsidian/plugins/podnotes/`.
-With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** in **Settings → Sync**. The second one syncs each plugin's files and settings, which hold your PodNotes library. Obsidian keeps these settings per device, so change them on each device. [Sync settings in Obsidian Help](https://obsidian.md/help/sync/settings) describes them.
+With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** in **Settings → Sync**. The second one syncs each plugin's files and settings, which hold your PodNotes library. Obsidian keeps these settings per device, so change them on each device. [Sync settings in Obsidian Help](https://obsidian.md/help/sync/settings) describes them.
 
 ## Use PodNotes on two devices
 
@@ -27,7 +27,7 @@ Use one device at a time, and let PodNotes load the synced library before you us
 1. On the device you are leaving, pause playback.
 2. Wait until your sync service finishes uploading.
 3. On the device you are switching to, open Obsidian and wait until sync finishes.
-4. Restart Obsidian, or turn PodNotes off and on again in **Settings → Community plugins**.
+4. Restart Obsidian, or turn PodNotes off and on again in **Settings → Community plugins**.
 
 Step 4 matters because PodNotes reads `data.json` only when it loads, which is usually as Obsidian starts and before sync finishes.
 Then use PodNotes on this device until you switch back.
@@ -72,7 +72,7 @@ Add the key on every device where you transcribe. See [Transcribe episodes](/tra
 
 PodNotes also moves a private feed URL into secret storage when the URL contains a user name, a password, or a query parameter such as `auth`, `token`, or `key`.
 The synced subscription then holds a placeholder.
-On another device, PodNotes cannot fetch that feed or open its timestamp links, and it asks you to remove the feed and add it again with its private URL.
+On another device, PodNotes cannot fetch that feed or open its timestamp links. When it tries to fetch the feed, it asks you to remove the feed and add it again with its private URL.
 Adding it again stores a new reference. When that reference syncs back, the first device loses access instead.
 A protected private feed works on one device at a time.
 

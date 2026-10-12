@@ -1,4 +1,5 @@
 import { Notice } from "obsidian";
+import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import {
 	isCredentialBearingUrl,
@@ -80,64 +81,68 @@ export function notifyPrivateFeedUnavailable(title: string): void {
 	);
 }
 
-export interface PrivateFeedMigration {
-	savedFeeds: Record<string, PodcastFeed>;
-	/** Old credential-bearing URL -> the placeholder that replaced it. */
-	replacements: Map<string, string>;
+export interface PrivateFeedProtection {
+	settings: IPodNotesSettings;
 	/** Feeds whose URL could NOT be protected (SecretStorage failure). */
 	failed: string[];
 }
 
-/**
- * Move every credential-bearing saved-feed URL into SecretStorage.
- * Best-effort per feed: one failing feed keeps its URL, is reported in
- * `failed`, and the rest still move.
- */
-export function migratePrivateFeedUrls(
-	savedFeeds: Record<string, PodcastFeed>,
+export function protectPrivateFeeds(
+	settings: IPodNotesSettings,
 	feedUrls: FeedUrlRepository,
-): PrivateFeedMigration {
-	const replacements = new Map<string, string>();
+): PrivateFeedProtection {
 	const failed: string[] = [];
-	const result: Record<string, PodcastFeed> = {};
-	for (const [key, feed] of Object.entries(savedFeeds)) {
+	const savedFeeds: Record<string, PodcastFeed> = {};
+	// A private feed's real URL maps to the placeholder naming its saved key,
+	// which links resolve by.
+	const byUrl = new Map<string, string>();
+	let moved = false;
+	for (const [key, feed] of Object.entries(settings.savedFeeds)) {
 		const interned = internPrivateFeed(feed, feedUrls, key);
-		if (interned !== feed) {
-			replacements.set(feed.url, interned.url);
-		} else if (isCredentialBearingUrl(feed.url)) {
-			failed.push(key);
+		if (interned !== feed) moved = true;
+		else if (isCredentialBearingUrl(feed.url)) failed.push(key);
+		if (isPrivateFeedPlaceholder(interned.url)) {
+			byUrl.set(feed.url, interned.url);
+			const url = interned.urlSecretId && feedUrls.resolve(interned.urlSecretId);
+			if (url) byUrl.set(url, interned.url);
 		}
-		result[key] = interned;
+		savedFeeds[key] = interned;
 	}
-	return { savedFeeds: result, replacements, failed };
+	// Snapshots stamp `feedUrl`, and an episode without a link of its own takes
+	// the feed URL as `url`. A private URL no saved feed matches still goes: its
+	// podcast's placeholder stands for it.
+	const placeholderFor = (url: string, episode: Record<string, unknown>) =>
+		byUrl.get(url) ??
+		(url === episode.feedUrl &&
+		typeof episode.podcastName === "string" &&
+		isCredentialBearingUrl(url)
+			? privateFeedPlaceholder(episode.podcastName)
+			: url);
+	return {
+		settings: scrubEpisodeUrls(moved ? { ...settings, savedFeeds } : settings, placeholderFor),
+		failed,
+	};
 }
 
-/**
- * Rewrite persisted Episode snapshots that still carry a migrated feed's old
- * credential-bearing URL (played history, queue, favorites, playlists, local
- * files, downloads, and the current episode all persist full episode objects
- * whose `url`/`feedUrl` were stamped at fetch time).
- */
-export function scrubMigratedEpisodeUrls<T>(value: T, replacements: Map<string, string>): T {
-	if (replacements.size === 0) return value;
-	if (Array.isArray(value)) {
-		return value.map((entry) => scrubMigratedEpisodeUrls(entry, replacements)) as T;
-	}
+/** Returns `value` itself when no URL changed, so callers can tell whether to save. */
+function scrubEpisodeUrls<T>(
+	value: T,
+	placeholderFor: (url: string, episode: Record<string, unknown>) => string,
+): T {
 	if (typeof value !== "object" || value === null) return value;
+	const isArray = Array.isArray(value);
 	// Decoded settings carry Date instances (episodeDate); recursing into one
 	// would flatten it into {}. Non-plain objects hold no episode URLs.
-	if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+	if (!isArray && Object.getPrototypeOf(value) !== Object.prototype) return value;
 
 	const record = value as Record<string, unknown>;
 	let changed = false;
-	const next: Record<string, unknown> = {};
+	const next = (isArray ? [] : {}) as Record<string, unknown>;
 	for (const [key, entry] of Object.entries(record)) {
-		let scrubbed: unknown;
-		if ((key === "url" || key === "feedUrl") && typeof entry === "string") {
-			scrubbed = replacements.get(entry) ?? entry;
-		} else {
-			scrubbed = scrubMigratedEpisodeUrls(entry, replacements);
-		}
+		const scrubbed =
+			(key === "url" || key === "feedUrl") && typeof entry === "string"
+				? placeholderFor(entry, record)
+				: scrubEpisodeUrls(entry, placeholderFor);
 		if (scrubbed !== entry) changed = true;
 		next[key] = scrubbed;
 	}

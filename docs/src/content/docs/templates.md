@@ -8,12 +8,14 @@ Look up every `{{tag}}` that PodNotes fills in when it creates a note, a downloa
 
 ## Tag rules
 
-These rules apply to every template:
+These rules apply to every template except **Speaker label format**:
 
 - Tag names ignore case. `{{currentDate}}` and `{{currentdate}}` are the same tag.
 - An unknown tag stays in the output as written, and PodNotes shows a notice that suggests a similar tag when it finds one.
 - Some tags take an argument after a colon, as in `{{date:YYYY}}`. Everything after the first colon is one argument, commas included.
 - An empty argument, as in `{{date:}}`, gives the tag's default.
+
+**Speaker label format** replaces only `{{speaker}}`, in any case and with spaces allowed inside the braces. It shows no notice for other tags. Without `{{speaker}}`, PodNotes puts the label, a colon, and a space before your text.
 
 ## <span id="file-path"></span>File path tags
 
@@ -205,4 +207,4 @@ Date tags accept these Moment-style tokens:
 | Second | `ss`,&nbsp;`s` |
 | AM or PM | `A`,&nbsp;`a` |
 
-Month and weekday names and ordinals are in English. Dates use the device's time zone. Square brackets keep text as it is, as in `{{currentDate:[Captured] YYYY-MM-DD}}`. Other Moment tokens are not supported.
+Month and weekday names and ordinals are in English. Dates use the device's time zone. Square brackets keep text as it is, as in `{{currentDate:[Captured] YYYY-MM-DD}}`. PodNotes does not support other Moment tokens.

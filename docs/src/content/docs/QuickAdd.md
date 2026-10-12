@@ -9,13 +9,13 @@ Build your own capture and note workflows with the [QuickAdd](https://quickadd.o
 
 ## <span id="timestamp-capture"></span>Capture a timestamp with a comment
 
-This Capture choice writes a timestamp link and your comment on a new line below the cursor:
+A Capture choice, with no macro, writes a timestamp link and your comment on a new line below the cursor:
 
 ```md
 - [00:12:41](obsidian://podnotes?...) Why tariffs raise prices
 ```
 
-1. In **Settings → QuickAdd**, select **New choice**.
+1. In **Settings → QuickAdd**, select **New choice**.
 2. Select **Capture**.
 3. Set **Name** to `Podcast timestamp`.
 4. Turn on **Capture to active file**.
@@ -30,17 +30,28 @@ This Capture choice writes a timestamp link and your comment on a new line below
    ````
 
 7. Play an episode in PodNotes.
-8. Open the note you want to write in.
-9. Run **QuickAdd: Run**.
-10. Select `Podcast timestamp`.
-11. Type your comment.
+8. Open the note you want to write in, in editing view.
+9. Place the cursor where the timestamp goes.
+10. Run **QuickAdd: Run**.
+11. Select `Podcast timestamp`.
+12. Type your comment.
 
-The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument, as in `getPodcastTimeFormatted("HH:mm:ss", true, 5)`. Without a loaded episode, the call fails with `No podcast loaded`.
+The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument. To capture 5 seconds earlier, the script's `return` line becomes:
+
+```js
+return podnotes.getPodcastTimeFormatted(
+	"HH:mm:ss",
+	true,
+	5,
+);
+```
+
+Without a loaded episode, the call fails with `No podcast loaded`.
 
 To run the capture from a hotkey:
 
-1. In **Settings → QuickAdd**, select **Command palette: Podcast timestamp**, the lightning icon next to the choice.
-2. In **Settings → Hotkeys**, assign a hotkey to **QuickAdd: Podcast timestamp**.
+1. In **Settings → QuickAdd**, select **Command palette: Podcast timestamp**, the lightning icon next to the choice.
+2. In **Settings → Hotkeys**, assign a hotkey to **QuickAdd: Podcast timestamp**.
 
 QuickAdd's [Capture docs](https://quickadd.obsidian.guide/docs/Choices/CaptureChoice/) describe the other options.
 
@@ -79,7 +90,7 @@ This macro runs a user script that saves the loaded episode's fields as QuickAdd
    ## Notes
    ```
 
-3. In **Settings → QuickAdd**, select **New choice**.
+3. In **Settings → QuickAdd**, select **New choice**.
 4. Select **Macro**.
 5. Set **Name** to `Podcast episode note`.
 6. On the **Podcast episode note** page, under **Commands**, next to **User scripts**, select **Browse**.
@@ -98,5 +109,45 @@ PodNotes finds an episode note only at **Note creation file path**, or by the ep
 
 ## Send a transcript to an AI prompt
 
-To summarize an episode with QuickAdd's AI Assistant, use the script in [QuickAdd AI prompt example](/api/#quickadd-ai-prompt-example).
-It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first.
+This recipe has QuickAdd's AI Assistant summarize the current episode and write the summary into the note you have open. It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first.
+
+Before you start, set up the AI Assistant once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe: in **Settings → QuickAdd**, turn off **Disable AI & online features** under **AI & online**, then in **Configure AI Assistant**, set a **Prompt template folder** and link your provider's API key.
+
+1. In a visible folder of your vault, create `scripts/podnotes-transcript-prompt.js`:
+
+   ```js
+   module.exports = async (params) => {
+   	const podnotes = params.app.plugins.plugins.podnotes?.api;
+   	if (!podnotes) throw new Error("PodNotes is not enabled.");
+
+   	const transcript = await podnotes.transcript;
+   	if (!transcript) {
+   		throw new Error(
+   			"Generate a transcript for the current PodNotes episode first.",
+   		);
+   	}
+
+   	return [
+   		"Summarize this podcast transcript in five bullet points.",
+   		"",
+   		"Transcript:",
+   		transcript,
+   	].join("\n");
+   };
+   ```
+
+2. In **Settings → QuickAdd**, select **New choice**.
+3. Select **Macro**.
+4. Set **Name** to `Transcript prompt`.
+5. On the **Transcript prompt** page, under **Commands**, next to **User scripts**, select **Browse**.
+6. Select `scripts/podnotes-transcript-prompt.js`.
+7. In your prompt template folder, create a note named `Summarize transcript` that contains `{{MACRO:Transcript prompt}}`. QuickAdd runs the macro and puts its prompt there.
+8. In **Settings → QuickAdd**, select **New choice**, then **Macro**, and set **Name** to `Summarize episode`.
+9. On the **Summarize episode** page, add an **AI Assistant** command.
+10. In that command's settings, set **Prompt template** to `Summarize transcript`.
+11. Add a **Capture** command after it.
+12. In the Capture's settings, turn on **Capture to active file** and set **Capture format** to `{{VALUE:output}}`.
+13. Load the episode, and open the note for the summary in editing view.
+14. Run **QuickAdd: Run**, then select `Summarize episode`.
+
+The AI Assistant puts the model's answer in `{{VALUE:output}}`, which only the later commands of the same macro can read. QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe the model and output settings.

@@ -31,7 +31,7 @@ Install a beta version with the BRAT plugin, or copy a release's files into your
 ### Which podcasts can I add?
 
 Any podcast with an RSS feed.
-In **Settings → PodNotes**, under **Search Podcasts**, search the Apple Podcasts directory by name, or paste an RSS feed URL or an Apple Podcasts show link.
+In **Settings → PodNotes**, under **Search Podcasts**, search the Apple Podcasts directory by name, or paste an RSS feed URL or an Apple Podcasts show link.
 A show missing from search can still work if you paste its RSS feed URL. See [Add and play podcasts](/podcasts/).
 
 ### Can I add Spotify exclusives or YouTube links?
@@ -43,7 +43,7 @@ A show that exists only inside Spotify or another app has no feed to add. If the
 
 Yes, if your provider gives you a personal RSS URL. Paste the whole URL into **Search Podcasts**.
 PodNotes cannot sign in to providers that require a browser login.
-When the URL contains a password or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
+When the URL contains a user name, a password, or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device). Importing a settings file also leaves these feeds without their URL, as [Import your settings](/import_export/#import-your-settings) explains.
 
 ### Can I annotate my own audio or video?
 
@@ -56,7 +56,7 @@ See [Play your own audio and video](/local_files/#play-your-own-audio-and-video)
 
 Your **Capture timestamp format** uses `{{time}}`, which inserts plain text.
 Installs set up before PodNotes 2.21.0 keep the old default, which uses `{{time}}`. New installs use `{{linktime}}`, which inserts a link that plays the episode from that moment.
-In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed URL or local file to link to. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
+In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed URL or local file to link to. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ### Can I take notes on an episode I listen to in another app?
 
@@ -81,7 +81,7 @@ See [Downloads on another device](/sync/#downloads-on-another-device).
 
 Your notes and timestamps stay.
 Timestamp links point at the feed and the episode, so they stream the episode again while the feed still lists it.
-Links to your own media files need the file. See [Removed downloads and existing links](/sync/#removed-downloads-and-existing-links).
+Links to your own media files need the file and its entry in **Local Files**. After **Remove from Local Files**, select **Play with PodNotes** on the file again to restore its links. See [Removed downloads and existing links](/sync/#removed-downloads-and-existing-links).
 
 ### Does playback progress sync between devices?
 

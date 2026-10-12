@@ -8,11 +8,11 @@ Add podcasts to PodNotes, find their episodes, and play them.
 
 ## <span id="adding-podcasts"></span>Add a podcast
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Search Podcasts**, type a podcast's name, such as `the daily`. Results appear as you type.
 3. Next to the podcast, select **Add**.
 
-Search uses the Apple Podcasts directory. To add a show by its feed instead:
+Search uses the Apple Podcasts directory. To add a show by its address instead:
 
 1. Copy its RSS feed URL or its Apple Podcasts show link. An RSS feed URL looks like `https://feeds.npr.org/510289/podcast.xml`.
 2. Paste it into **Search Podcasts**.
@@ -22,7 +22,7 @@ See [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) and [Can I use a
 
 ## Remove a podcast
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Search Podcasts**, clear the search box. It lists the podcasts you follow.
 3. Next to the podcast, select **Remove**.
 
@@ -40,13 +40,19 @@ The view then lists that podcast's or playlist's episodes. **Queue** is the exce
 
 To return to the last list you saw, select **Episode list**, the second button at the top of the view. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
 
-Above each list, **Search episodes** filters it, and **Refresh episodes** fetches new episodes. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
+Above each list:
 
-<span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
+- **Search episodes** filters the list.
+- **Refresh episodes** fetches new episodes in **Latest Episodes** and a podcast's list. In **Played**, it fetches the podcasts that have played episodes. In other playlists, it does nothing.
+- **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
+
+<span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
 
 ## <span id="player"></span>Play an episode
 
-Select an episode to play it. The player resumes where you stopped last time. To return to the player from a list, select **Player**, the third button at the top of the view.
+1. In an episode list, select an episode.
+
+The player opens and resumes where you stopped last time. To return to the player from a list, select **Player**, the third button at the top of the view.
 
 ![The player with episode artwork, the episode title, the progress bar, and the skip buttons](/screenshots/player.webp)
 
@@ -57,7 +63,7 @@ Select an episode to play it. The player resumes where you stopped last time. To
 
 ## <span id="playlists"></span><span id="reordering-the-queue"></span><span id="turning-off-the-queue"></span>Queue and playlists
 
-The queue decides what plays next, and playlists collect episodes you want to keep together. [Use the queue and playlists](/playlists/) shows how to add, reorder, and remove episodes in both.
+The queue decides what plays next, and playlists collect episodes you want to keep together. [Use the queue and playlists](/playlists/) shows how to add and remove episodes, reorder the queue, and make your own playlists.
 
 ## <span id="context-menu"></span>Episode menu reference
 
@@ -67,7 +73,7 @@ To open an episode's menu, right-click the episode or select its **More options*
 | --- | --- |
 | **Play** | Plays the episode. |
 | **Mark as Played** or **Mark as Unplayed** | Changes whether the episode counts as played. |
-| **Download**, **Remove file**, or **Remove from Local Files** | Downloads the episode, or removes the download or your own file. See [Downloads and local files](/local_files/). |
+| **Download**, **Remove file**, or **Remove from Local Files** | Downloads the episode. **Remove file** deletes a download to the trash, and **Remove from Local Files** removes your own file from the list and keeps the file. See [Downloads and local files](/local_files/). |
 | **Create Note** or **Open Note** | Creates or opens the episode note. See [Create episode notes](/notes/). |
 | **Create feed note** or **Open feed note** | Creates or opens the note for the whole podcast. |
 | **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites** or removes it. |

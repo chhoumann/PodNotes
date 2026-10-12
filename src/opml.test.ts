@@ -212,6 +212,49 @@ describe("importOPML (IE-01)", () => {
 		expect(Object.keys(get(savedFeeds))).toEqual(["Existing"]);
 	});
 
+	it("skips a saved private feed listed by its real url instead of saving it again", async () => {
+		const privateUrl = "https://private.test/feed?auth=s3cret";
+		feedUrlSecrets.clear();
+		feedUrlSecrets.set("podnotes-feed-url", privateUrl);
+		const saved = {
+			title: "Private",
+			url: "podnotes-private-feed:Private",
+			urlSecretId: "podnotes-feed-url",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ Private: saved });
+
+		await importOPML(
+			`<opml><body><outline text="Private" xmlUrl="${privateUrl}" /></body></opml>`,
+		);
+
+		expect(channelAt).not.toHaveBeenCalled();
+		expect(get(savedFeeds)).toEqual({ Private: saved });
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcasts"))).toBe(true);
+	});
+
+	it("gives a saved private feed whose URL is not on this device the listed URL", async () => {
+		const privateUrl = "https://private.test/feed?auth=s3cret";
+		feedUrlSecrets.clear();
+		savedFeeds.set({
+			Private: { title: "Private", url: "podnotes-private-feed:Private", artworkUrl: "" },
+		});
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
+			title: "Private",
+			url,
+			artworkUrl: "",
+		}));
+
+		await importOPML(
+			`<opml><body><outline text="Private" xmlUrl="${privateUrl}" /></body></opml>`,
+		);
+
+		const revived = get(savedFeeds).Private;
+		expect(Object.keys(get(savedFeeds))).toEqual(["Private"]);
+		expect(revived.url).toBe("podnotes-private-feed:Private");
+		expect(feedUrlSecrets.get(revived.urlSecretId as string)).toBe(privateUrl);
+	});
+
 	it("never renders 'NaN%' when every feed is already subscribed", async () => {
 		savedFeeds.set({
 			Existing: {

@@ -126,29 +126,7 @@ const transcript = await api.getTranscript();
 
 ### QuickAdd AI prompt example
 
-This QuickAdd user script returns a prompt that contains the current episode's transcript note.
-Add it to a QuickAdd macro, then insert its result with `{{MACRO:<macro name>}}`, for example in a prompt template for QuickAdd's AI Assistant.
-
-```js
-module.exports = async (params) => {
-	const podnotes = params.app.plugins.plugins.podnotes?.api;
-	if (!podnotes) throw new Error("PodNotes is not enabled.");
-
-	const transcript = await podnotes.transcript;
-	if (!transcript) {
-		throw new Error(
-			"Generate a transcript for the current PodNotes episode first.",
-		);
-	}
-
-	const prompt = `Summarize this podcast transcript in five bullet points.
-
-Transcript:
-${transcript}`;
-
-	return prompt;
-};
-```
+[Send a transcript to an AI prompt](/QuickAdd/#send-a-transcript-to-an-ai-prompt) has a QuickAdd user script that returns a prompt with the current episode's transcript.
 
 ## <span id="getpodcasttimeformattedformat-string-linkify-boolean-offsetseconds-number"></span>`getPodcastTimeFormatted()`
 
@@ -156,7 +134,7 @@ ${transcript}`;
 getPodcastTimeFormatted(format: string, linkify?: boolean, offsetSeconds?: number): string
 ```
 
-Returns the current playback time, formatted with the [time tokens](/timestamps/#time-formats).
+Returns the current playback time, formatted with the [time tokens](/timestamps/#time-formats). `api.getPodcastTimeFormatted("HH:mm:ss", true)` returns a link such as `[00:12:41](obsidian://podnotes?...)`.
 
 - `linkify` defaults to `false`. With `true`, the result is a Markdown link that opens PodNotes at that time. Without a feed URL or a local file path to link to, the result stays plain text.
 - `offsetSeconds` defaults to `0`. PodNotes subtracts it before formatting and linking, and never goes below zero.
