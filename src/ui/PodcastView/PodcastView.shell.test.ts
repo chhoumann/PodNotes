@@ -5,7 +5,15 @@ import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
-import { favorites, localFiles, plugin, queue, savedFeeds } from "src/store";
+import {
+	favorites,
+	localFiles,
+	playedEpisodes,
+	playlists,
+	plugin,
+	queue,
+	savedFeeds,
+} from "src/store";
 import type { Episode } from "src/types/Episode";
 import {
 	installResizeObserver,
@@ -51,6 +59,8 @@ afterEach(() => {
 	localFiles.set(structuredClone(DEFAULT_SETTINGS.localFiles));
 	queue.set(structuredClone(DEFAULT_SETTINGS.queue));
 	favorites.set(structuredClone(DEFAULT_SETTINGS.favorites));
+	playlists.set({});
+	playedEpisodes.set({});
 	vi.restoreAllMocks();
 });
 
@@ -190,12 +200,28 @@ describe("first run", () => {
 		expect(screen.getByRole("heading", { name: "Podcasts" })).toBeInTheDocument();
 	});
 
-	test("a library of local files only is no first run", () => {
+	test.each([
+		["a queued episode", () => queue.add(episode)],
+		["a favorite", () => favorites.update((list) => ({ ...list, episodes: [episode] }))],
+		[
+			"a local file",
+			() =>
+				localFiles.set({
+					...structuredClone(DEFAULT_SETTINGS.localFiles),
+					episodes: [{ ...episode, podcastName: "local file" }],
+				}),
+		],
+		[
+			"a custom playlist",
+			() =>
+				playlists.set({
+					Walks: { ...structuredClone(DEFAULT_SETTINGS.favorites), name: "Walks" },
+				}),
+		],
+		["a finished episode", () => playedEpisodes.markAsPlayed(episode)],
+	])("a library of only %s is no first run", (_source, add) => {
 		savedFeeds.set({});
-		localFiles.set({
-			...structuredClone(DEFAULT_SETTINGS.localFiles),
-			episodes: [{ ...episode, podcastName: "local file" }],
-		});
+		add();
 		renderView();
 
 		expect(screen.queryByRole("heading", { name: "Add your first podcast" })).toBeNull();
