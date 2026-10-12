@@ -48,7 +48,7 @@ describe("Navigation", () => {
 		expect(navigation.current.page).toEqual({ kind: "library" });
 	});
 
-	test("every navigation collapses the full player", () => {
+	test("every navigation by the user collapses the full player", () => {
 		const navigation = new Navigation();
 		const steps = [
 			() => navigation.go({ kind: "latest" }),
@@ -57,8 +57,6 @@ describe("Navigation", () => {
 			() => navigation.back(),
 			() => navigation.goRoot("played"),
 			() => navigation.goRoot("played"),
-			() => navigation.restore({ kind: "feed", key: "Show" }),
-			() => navigation.restore({ kind: "feed", key: "Show" }),
 		];
 
 		for (const step of steps) {
@@ -66,6 +64,26 @@ describe("Navigation", () => {
 			step();
 			expect(navigation.current.expanded).toBe(false);
 		}
+	});
+
+	test("restoring the saved page leaves the full player as it is", () => {
+		const navigation = new Navigation();
+		navigation.go({ kind: "latest" });
+		navigation.expand();
+
+		navigation.restore({ kind: "feed", key: "Show" });
+		expect(navigation.current).toEqual({
+			page: { kind: "feed", key: "Show" },
+			stack: [],
+			expanded: true,
+			scrollTop: 0,
+		});
+		navigation.restore({ kind: "feed", key: "Show" });
+		expect(navigation.current.expanded).toBe(true);
+
+		navigation.collapse();
+		navigation.restore({ kind: "queue" });
+		expect(navigation.current.expanded).toBe(false);
 	});
 
 	test("a step that changes nothing emits nothing", () => {

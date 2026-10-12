@@ -36,7 +36,7 @@ import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
-import type { Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
 import { bindMediaSession } from "./player/mediaSession";
 import {
@@ -310,9 +310,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		}
 	}
 
-	/** Reveals the view with the full player open. Works while no view exists. */
+	/**
+	 * Reveals the view, with the full player open when an episode is loaded. Works
+	 * while no view exists.
+	 */
 	async showPlayer(): Promise<void> {
-		this.navigation.expand();
+		if (get(this.player.state).status !== "empty") this.navigation.expand();
 		await this.activateView();
 	}
 

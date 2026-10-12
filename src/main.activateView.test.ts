@@ -5,6 +5,7 @@ import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { VIEW_TYPE } from "./constants";
 import { Notice, Platform, type WorkspaceLeaf } from "obsidian";
 import type { Episode } from "./types/Episode";
+import { MainView } from "./ui/PodcastView";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
 // surface the view. The bug was that the command was gated on the leaf NOT
@@ -426,24 +427,6 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(hide).toHaveBeenCalledTimes(1);
 	});
 
-	it("Show player opens the full player, and the ribbon icon only reveals the view", async () => {
-		const { commands, ribbonCalls, activateSpy, plugin } = await loadPlugin();
-
-		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
-		expect(showCmd).toBeDefined();
-		(showCmd!.callback as () => void)();
-		expect(activateSpy).toHaveBeenCalledTimes(1);
-		expect(plugin.navigation.current.expanded).toBe(true);
-
-		plugin.navigation.collapse();
-		const ribbon = ribbonCalls.find((r) => r.title === "Show PodNotes");
-		expect(ribbon).toBeDefined();
-		expect(ribbon?.icon).toBe("podcast");
-		ribbon?.handler(new MouseEvent("click"));
-		expect(activateSpy).toHaveBeenCalledTimes(2);
-		expect(plugin.navigation.current.expanded).toBe(false);
-	});
-
 	const savedEpisode: Episode = {
 		title: "Saved Episode",
 		streamUrl: "https://example.com/saved.mp3",
@@ -470,6 +453,51 @@ describe("PodNotes onload wiring (#55)", () => {
 		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => boolean)(true);
 	const runCommand = (commands: Array<Record<string, unknown>>, id: string) =>
 		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => void)(false);
+
+	it("Show player opens the full player while an episode is loaded, and the ribbon icon only reveals the view", async () => {
+		const { commands, ribbonCalls, activateSpy, plugin } = await loadPlugin();
+		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
+		expect(showCmd).toBeDefined();
+
+		(showCmd!.callback as () => void)();
+		expect(activateSpy).toHaveBeenCalledTimes(1);
+		expect(plugin.navigation.current.expanded).toBe(false);
+		plugin.player.restore(savedEpisode);
+		expect(plugin.navigation.current.expanded).toBe(false);
+
+		(showCmd!.callback as () => void)();
+		expect(activateSpy).toHaveBeenCalledTimes(2);
+		expect(plugin.navigation.current.expanded).toBe(true);
+
+		plugin.navigation.collapse();
+		const ribbon = ribbonCalls.find((r) => r.title === "Show PodNotes");
+		expect(ribbon).toBeDefined();
+		expect(ribbon?.icon).toBe("podcast");
+		ribbon?.handler(new MouseEvent("click"));
+		expect(activateSpy).toHaveBeenCalledTimes(3);
+		expect(plugin.navigation.current.expanded).toBe(false);
+	});
+
+	it("keeps the full player open when revealing the view loads it from the saved workspace", async () => {
+		const { plugin, activateSpy } = await loadPlugin(savedData);
+		activateSpy.mockRestore();
+		const leaf = { setViewState: vi.fn() };
+		const view = new MainView(leaf as unknown as WorkspaceLeaf, plugin);
+		// Obsidian 1.14 holds a leaf in a collapsed sidebar deferred. Revealing it
+		// creates the view and hands it the state saved in the workspace.
+		Object.assign(plugin.app.workspace, {
+			getLeavesOfType: vi.fn(() => [leaf]),
+			revealLeaf: vi.fn(() => view.setState({ page: { kind: "queue" } }, { history: false })),
+		});
+
+		await plugin.showPlayer();
+
+		expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+		expect(plugin.navigation.current).toMatchObject({
+			page: { kind: "queue" },
+			expanded: true,
+		});
+	});
 
 	it("captures a timestamp into the active note and names that note", async () => {
 		const { plugin } = await loadPlugin(savedData);

@@ -20,7 +20,8 @@ export interface NavState {
 /**
  * Where the view is, for the whole plugin: the view renders it, and commands,
  * links and menus open the full player through it, even while no view exists.
- * Every navigation collapses the full player, and a change to nothing emits nothing.
+ * Every navigation by the user collapses the full player, and a change to nothing
+ * emits nothing.
  */
 export class Navigation implements Readable<NavState> {
 	private readonly state = writable<NavState>({
@@ -73,15 +74,23 @@ export class Navigation implements Readable<NavState> {
 		if (this.current.expanded) this.state.update((state) => ({ ...state, expanded: false }));
 	}
 
-	/** Shows the page saved in the workspace. Back then leads to its parent. */
+	/**
+	 * Shows the page saved in the workspace. Back then leads to its parent. The full
+	 * player stays as it is: Obsidian restores a deferred view as Show player reveals it.
+	 */
 	restore(page: Page): void {
-		const { page: from, stack } = this.current;
-		if (samePage(from, page) && stack.length === 0) return this.collapse();
-		this.show(page, [], 0);
+		const { page: from, stack, expanded } = this.current;
+		if (samePage(from, page) && stack.length === 0) return;
+		this.show(page, [], 0, expanded);
 	}
 
-	private show(page: Page, stack: readonly StackEntry[], scrollTop: number): void {
+	private show(
+		page: Page,
+		stack: readonly StackEntry[],
+		scrollTop: number,
+		expanded = false,
+	): void {
 		this.liveScrollTop = scrollTop;
-		this.state.set({ page, stack, expanded: false, scrollTop });
+		this.state.set({ page, stack, expanded, scrollTop });
 	}
 }
