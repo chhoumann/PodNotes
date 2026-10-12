@@ -37,10 +37,13 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - "version-update:semver-major"
-      # TypeScript 7 is not yet supported by the current Svelte and lint toolchain.
+      # svelte-check and the lint toolchain still load the TypeScript JavaScript API.
       - dependency-name: "typescript"
         update-types:
           - "version-update:semver-major"
+      # patches/svelte-check.mjs patches exactly this version and fails on any other.
+      # Upgrade it by hand to a release that includes the fix, and delete the patch.
+      - dependency-name: "svelte-check"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
