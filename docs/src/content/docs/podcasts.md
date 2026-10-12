@@ -50,6 +50,16 @@ The **Queue** list under the player has none of these controls.
 
 <span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
 
+### When a feed cannot be reached
+
+When PodNotes tries to fetch a podcast's feed as you open the podcast or refresh its list, and the fetch fails, for example offline, PodNotes uses the first of these that has episodes:
+
+1. The podcast's downloaded episodes.
+2. The episodes PodNotes loaded for the podcast since Obsidian started.
+3. The cached copy of the feed, if **Cache podcast feeds** is on and the copy is younger than **Cache duration (hours)**.
+
+If none of them has episodes, the list is empty, and a notice asks you to check your connection and try again.
+
 ## <span id="player"></span>Play an episode
 
 1. In an episode list, select an episode.
