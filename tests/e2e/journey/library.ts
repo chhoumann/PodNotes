@@ -531,15 +531,18 @@ export async function playbackOver(
 	gapMs: number,
 ): Promise<[PlaybackObservation, PlaybackObservation]> {
 	const first = await observePlayback(obsidian);
+	if (first.playing) {
+		await obsidian.sleep(gapMs);
+		return [first, await observePlayback(obsidian)];
+	}
 	const until = Date.now() + gapMs;
 	const second = await obsidian.waitFor(
 		async () => {
 			const current = await observePlayback(obsidian);
 			if (
-				!first.playing &&
-				(current.playing ||
-					current.seconds !== first.seconds ||
-					current.media?.seconds !== first.media?.seconds)
+				current.playing ||
+				current.seconds !== first.seconds ||
+				current.media?.seconds !== first.media?.seconds
 			)
 				return current;
 			return Date.now() >= until ? current : false;
@@ -547,10 +550,9 @@ export async function playbackOver(
 		{ timeoutMs: gapMs + 15_000, intervalMs: 100, message: "playback observation" },
 	);
 	if (
-		!first.playing &&
-		(second.playing ||
-			second.seconds !== first.seconds ||
-			second.media?.seconds !== first.media?.seconds)
+		second.playing ||
+		second.seconds !== first.seconds ||
+		second.media?.seconds !== first.media?.seconds
 	)
 		throw new Error(`Paused playback changed during observation: ${JSON.stringify(second)}`);
 	return [first, second];
