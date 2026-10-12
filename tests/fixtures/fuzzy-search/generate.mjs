@@ -1,12 +1,15 @@
 // Records fuse.js 7.5.0 results for the two searches src/utility/fuzzySearch.ts
 // ported from it, with the options PodNotes passed to Fuse. fuse.js is not a
-// dependency, so fetch it to regenerate:
-//   npm pack fuse.js@7.5.0 && tar xzf fuse.js-7.5.0.tgz
-//   node tests/fixtures/fuzzy-search/generate.mjs package/dist/fuse.mjs tests/fixtures/fuzzy-search/fuse-7.5.0.json
+// dependency, so fetch it to regenerate, from the repository root:
+//   (cd /tmp && npm pack fuse.js@7.5.0 && tar xzf fuse.js-7.5.0.tgz)
+//   node tests/fixtures/fuzzy-search/generate.mjs /tmp/package/dist/fuse.mjs tests/fixtures/fuzzy-search/fuse-7.5.0.json
+//   npx oxfmt tests/fixtures/fuzzy-search
 import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const [fusePath, out] = process.argv.slice(2);
-const { default: Fuse } = await import(fusePath);
+const { default: Fuse } = await import(pathToFileURL(path.resolve(fusePath)).href);
 
 let seed = 20261012;
 const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
@@ -41,6 +44,7 @@ const titles = [
 	"The Indicator from Planet Money: the economics of tariffs",
 	"The Indicator from Planet Money: the economics of rent control in big cities",
 	"The Indicator from Planet Money: the economics of everything",
+	"the economics of rent control",
 ];
 const SHARED_PREFIX = "The Indicator from Planet Money: the economics of";
 const tags =
@@ -64,7 +68,7 @@ function typo(text, edits) {
 	return s;
 }
 
-function queriesFor(corpus, count) {
+function queriesFor(corpus, count, extra = []) {
 	const long = corpus.filter((text) => text.length > 64);
 	const queries = new Set(
 		[
@@ -82,15 +86,7 @@ function queriesFor(corpus, count) {
 			...long,
 			...long.map((text) => typo(text, 2)),
 			...long.map((text) => typo(text.toUpperCase(), 4)),
-			...(corpus === titles
-				? [
-						SHARED_PREFIX,
-						`${SHARED_PREFIX} rent`,
-						typo(SHARED_PREFIX, 2),
-						SHARED_PREFIX.toUpperCase(),
-						"the indicator from planet money the economics of everything explained",
-					]
-				: []),
+			...extra,
 		].filter((q) => !LONE_SURROGATE.test(q)),
 	);
 	while (queries.size < count) {
@@ -131,10 +127,13 @@ const record = {
 	tagOptions,
 	titles,
 	tags,
-	titleQueries: queriesFor(titles, 150).map((q) => [
-		q,
-		episodeFuse.search(q).map((r) => r.refIndex),
-	]),
+	titleQueries: queriesFor(titles, 150, [
+		SHARED_PREFIX,
+		`${SHARED_PREFIX} rent`,
+		typo(SHARED_PREFIX, 2),
+		SHARED_PREFIX.toUpperCase(),
+		"the indicator from planet money the economics of everything explained",
+	]).map((q) => [q, episodeFuse.search(q).map((r) => r.refIndex)]),
 	tagQueries: queriesFor(tags, 80).map((q) => [q, tagFuse.search(q).map((r) => r.refIndex)]),
 };
 fs.writeFileSync(out, JSON.stringify(record));

@@ -41,7 +41,8 @@
 		"Money money money money money",
 		"The Indicator from Planet Money: the economics of tariffs",
 		"The Indicator from Planet Money: the economics of rent control in big cities",
-		"The Indicator from Planet Money: the economics of everything"
+		"The Indicator from Planet Money: the economics of everything",
+		"the economics of rent control"
 	],
 	"tags": [
 		"artwork",
@@ -75,10 +76,10 @@
 		["new s", [5, 1]],
 		["summer schol", [6, 5]],
 		["zzzz", []],
-		["rent", [16, 15, 17, 14, 18, 19, 20]],
+		["rent", [16, 15, 17, 14, 28, 18, 19, 20]],
 		["RATES", [18, 19, 20, 22]],
 		["  money ", [7, 24, 5]],
-		["économie", [9]],
+		["économie", [28, 9]],
 		["📈", [10]],
 		["(part", [18, 19, 20]],
 		["a", [21, 1, 5, 23, 4, 18, 19, 20, 2, 3, 17, 25, 27, 10, 0, 11, 9, 26, 12, 13, 6, 8, 22]],
@@ -97,190 +98,205 @@
 		],
 		[
 			"The Indicator from Planet Money: the economics of rent control in big cities",
-			[26, 25, 27, 12, 13, 4]
+			[26, 25, 27, 12, 13, 4, 28]
 		],
-		["#501 – DHH: Future of Progrmaming, AI, Ruby on Railsx Productivity & Parenting", [8]],
+		["#501 – DHH:F uture of rogramming, AI, Ruby on Rails, Productivity & Parenting", [8]],
 		[
-			"The Indicator fromP lanet Money: te economics of everything, explained in ten minutes about tariffs and the trade deficit",
+			"The Indicator from Planet Money: the economic sof everythingv, explained in ten minutes about tariffs and the trade deficit",
 			[12, 13, 27, 4, 25, 26]
 		],
 		[
-			"The Indicator from Planet Money: the economics o feverything, evxplained in ten minutes about housing and why rent keeps going up",
-			[13, 12, 27, 26, 4, 25]
-		],
-		[
-			"How the Fed sets interest rates and why it matters for your mortgage, your savings acount, and the price ofoeggs",
-			[22]
-		],
-		[
-			"The Indicator from Planet Money:t he reconomics of rent control in big cities",
-			[26, 4, 25, 27, 12, 13]
-		],
-		["#501 – DlH: FUTURE OF PROGRAMMING,AI, RUBY ON RAILS, PRODUCTIVITY & PRAENTING", [8]],
-		[
-			"THE cNDICATOR FROM PLANET MONEY: THE ECOvNOMICS OF EVERYTHING, EXPLIANED IN TEN MINUTES ABOUT TARIFFS AND THE TADE DEFICIT",
-			[12, 13, 27, 25, 26, 4]
-		],
-		[
-			"THE INDICATOR FROM PLANET MONEY: THE ECONOMICS OsF EVERYTHING, EXPLAINED Ip TEN MINUTES ABOUT HOUSING ANDWHY RENT KEEPS GOING U",
+			"The Indicator from Planet Money: the economics of everything, explained in ten minutes about housng and why rent keeps goong up",
 			[13, 12, 27, 25, 26, 4]
 		],
 		[
-			"HOW THE FED SETS INTEREST RATE SAND WH IT MATTER SFOR YOUR rMORTGAGE, YOUR SAVINGS ACCOUNT, AND THE PRICE OF EGGS",
+			"How the Fed sets interest rates and why it mattres for ryour mortgage, your savings account, and the price of eggs",
 			[22]
 		],
 		[
-			"THE INDCATOR FROM PLANET MONEY: THE ECOOMICS OF RENT CONTROL IN BIbG ICTIES",
+			"The Indicator from Planet Money: he economics of rent control in bigc ities",
+			[26, 27, 12, 4, 13, 25]
+		],
+		["#5c1 – DlH: FUTURE OF PROGvRAMMING, AI, RUBY ON RAILS, PRODUCTIVITY & PARENTIGN", [8]],
+		[
+			"THE INDICATOR FROM PLANET MONEY: THE ECONOMICsS OF EVERYTHING, EXPLANIED IN TEN MINUTES ABOUT TARIFFS AND THE TADE DEFICI",
+			[12, 13, 27, 25, 26, 4]
+		],
+		[
+			"THE INDICATOR FROM PLANET MONEY: THE ECONOMCS OF EVERYTHING, EXPLAIrNED INpTEN MINUTES ABOUT HOUSING AND HY RENT KEEPS GOING UP",
+			[13, 12, 27, 4, 25, 26]
+		],
+		[
+			"HOW THE FED SETS INTEREST RATE SAND WHY IT MATTESR FOR YOUR MORTGAGE, YOUR SAVINGS ACCOUNT, AND THE PbRIC EOF EGGS",
+			[22]
+		],
+		[
+			"THE INDCATOR FROM PLANT MONEY: THE ECOOMICS OF RENTxCONTROL IN BIG CITIES",
 			[26, 4, 25, 27, 12, 13]
 		],
 		["The Indicator from Planet Money: the economics of", [25, 27, 26, 12, 13, 4]],
 		["The Indicator from Planet Money: the economics of rent", [26, 25, 27, 12, 13, 4]],
-		["The Indicator rom Planet Money: thx economics of", [25, 27, 26, 12, 13, 4]],
+		["The Indicator fro mPlanet Money: xhe economics of", [25, 27, 26, 12, 13, 4]],
 		["THE INDICATOR FROM PLANET MONEY: THE ECONOMICS OF", [25, 27, 26, 12, 13, 4]],
 		[
 			"the indicator from planet money the economics of everything explained",
 			[12, 13, 27, 26, 4, 25]
 		],
-		["pth", [4, 25, 27, 26, 12, 13, 22]],
+		["ptr", []],
 		["s are", [2]],
-		["A", [21, 1, 5, 23, 4, 18, 19, 20, 2, 3, 17, 25, 27, 10, 0, 11, 9, 26, 12, 13, 6, 8, 22]],
+		[
+			"e",
+			[
+				15, 16, 7, 10, 17, 9, 4, 28, 18, 19, 20, 23, 24, 14, 2, 25, 27, 11, 5, 1, 26, 6, 12,
+				13, 0, 22, 8, 3
+			]
+		],
 		["d we all ", [0, 2]],
 		["zro", []],
-		["rles Ponzi's schem", [1]],
+		["re all those weird ne", [2]],
 		["Y A", [6, 14, 24, 2]],
 		[" Ponzi's scheme plu", [1]],
 		["p. 7 — 東京 market rep", [10]],
 		["part", [18, 19, 20]],
-		["theenconomic", []],
-		["omikt of tariff", []],
+		["Monyn: the e", []],
+		["ontrkltin big citie", []],
 		["eird new drinks", [2]],
-		["xplained ", [17, 5, 6]],
+		["part 1/3]", [18, 19, 20]],
 		["l those weivd ", [2]],
-		[" MONEMYONE", [24]],
-		["MON", [7, 24, 5, 4, 17, 25, 27, 11, 26, 3, 12, 13]],
-		["om Plane tMoney: the e", [25, 27, 26, 12, 13]],
+		["T MONEYT:HE EC", []],
+		["MON", [7, 24, 5, 4, 17, 25, 27, 11, 28, 26, 3, 12, 13]],
+		["nomics o frent contro", [28]],
 		["ity & Parentin", []],
-		[
-			"e",
-			[
-				15, 16, 7, 10, 17, 9, 4, 18, 19, 20, 23, 24, 14, 2, 25, 27, 11, 5, 1, 26, 6, 12, 13,
-				0, 22, 8, 3
-			]
-		],
-		[" QR(", []],
+		["v", [23]],
+		["A", [21, 1, 5, 23, 4, 18, 19, 20, 2, 3, 17, 25, 27, 10, 0, 11, 9, 26, 12, 13, 6, 8, 22]],
+		["TRO", [17, 28]],
 		["t kh", [14]],
 		["rent keeps going up", [14]],
 		["Indicator from Plan", [4, 25, 27, 26, 12, 13]],
-		["y", [7, 14, 24, 5, 3, 4, 6, 25, 27, 26, 12, 13, 22]],
-		["re Sc hoo", [6]],
-		[" MAILBA", [23]],
+		[
+			"t",
+			[
+				15, 16, 4, 28, 25, 27, 26, 17, 18, 19, 20, 12, 13, 14, 5, 23, 11, 2, 22, 10, 0, 8,
+				9, 3
+			]
+		],
+		[" Mo", [24, 7, 5, 4, 17, 25, 27, 26, 3, 12, 13]],
+		[" MONEY ", [24, 7, 5, 4, 25, 27, 26, 12, 13]],
 		["uri", [3]],
 		["efunds right now", [0]],
 		["jv", []],
 		[
 			"R",
 			[
-				15, 16, 17, 14, 18, 19, 20, 1, 2, 6, 4, 23, 10, 25, 27, 3, 5, 26, 9, 8, 11, 12, 13,
-				0, 22
+				15, 16, 17, 14, 18, 19, 20, 1, 2, 6, 4, 23, 28, 10, 25, 27, 3, 5, 26, 9, 8, 11, 12,
+				13, 0, 22
 			]
 		],
 		["ney: thefe", [25, 27, 26, 12, 13]],
 		["s [part 3/3", [20, 18, 19]],
-		["Ren", [15, 16, 17, 14, 18, 19, 20, 2]],
-		[" p", [1, 3, 4, 25, 27, 26, 8, 12, 13]],
-		["ij", []],
+		["Ren", [15, 16, 17, 14, 28, 18, 19, 20, 2]],
+		["s of everythi", []],
+		["art 2/3] ", [19, 18, 20]],
+		[" Q&A: iistener malbag", [23]],
 		["about", []],
 		["ter", [18, 19, 20, 22, 2, 6]],
-		["c", [1, 17, 4, 6, 25, 27, 9, 26, 12, 5, 13, 3, 11, 2]],
-		["nt ", [17, 14, 15, 16, 18, 19, 20, 5]],
+		[
+			"n",
+			[
+				7, 15, 16, 18, 19, 20, 17, 24, 11, 4, 14, 5, 28, 25, 27, 3, 1, 23, 26, 12, 13, 0, 2,
+				9, 6, 22, 8
+			]
+		],
+		[
+			"r",
+			[
+				15, 16, 17, 14, 18, 19, 20, 1, 2, 6, 4, 23, 28, 10, 25, 27, 3, 5, 26, 9, 8, 11, 12,
+				13, 0, 22
+			]
+		],
+		["in", [18, 19, 20, 4, 25, 27, 26, 17, 14, 12, 13, 0, 11, 2, 22, 8]],
 		["uo", []],
-		["I", [18, 19, 20, 23, 4, 9, 25, 27, 11, 26, 17, 1, 14, 12, 13, 2, 0, 3, 22, 5, 8]],
-		["mioc fr", []],
-		["Intemrset rate", [18, 19, 20, 22]],
-		[" (ra", [18, 19, 20]],
-		["wxscm)", []],
-		[" coming ", [14, 2]],
-		[
-			"t",
-			[15, 16, 4, 25, 27, 26, 17, 18, 19, 20, 12, 13, 14, 5, 23, 11, 2, 22, 10, 0, 8, 9, 3]
-		],
-		["ONOMIE OF ", [9]],
-		[" in tenm inute", []],
-		[" 3/3] (ra", [20, 18, 19]],
-		[" 2/3]", [19, 18, 20]],
-		["nterest ratis [part 1/3] (", [18, 19, 20]],
-		["ERYTHNG ", []],
-		["EST RATES [PART 3/3", [20, 18, 19]],
-		["laneot ", [5, 4, 25, 27, 26, 12, 13]],
-		[" gCONTlROL", [17]],
-		[" of everythi", []],
-		["RODUCTIVITYK& P", []],
-		["ag ", [23]],
-		["pply and demand, expla", [6]],
-		["terest rates [part", [18, 19, 20]],
-		["rfrom Planet Money: the e", [25, 27, 26, 12, 13]],
-		["YTHIGN, EX", []],
-		[" tarmiff refund", [0]],
-		["d egici", []],
-		["ne", [7, 24, 5, 23, 17, 4, 2, 25, 27, 1, 26, 12, 13]],
-		[
-			"Fed sets interest rates axd why it matters for your mortgage, your savings account, and the price of egg",
-			[22]
-		],
+		["nomics of mpariffs", []],
+		["taiff refunds rgh", [0]],
+		["y money money om", [24]],
+		["from Planet M", [4, 25, 27, 26, 12, 13, 5]],
+		[" (RATES)", [18, 19, 20]],
+		["r mailb", [23]],
+		["Why rent keeps gringm u", [14]],
+		["tener mailbag #42", [23]],
+		["rt 2/3] (", [19, 18, 20]],
+		["martes [par", [18, 19, 20]],
+		["fé crème an", [9]],
+		["cco", [17, 28]],
+		["yw", []],
+		["ea", [11]],
+		["yetn", []],
+		["cont", [17, 28]],
+		["lbag #42", [23]],
+		["us episode:\ttabs gnd ", [11]],
+		["ET MONEY: THE ECON", [25, 27, 26, 12, 13]],
+		["t 3/3] (ra", [20, 18, 19]],
+		["gRe", [15, 16, 17, 14, 18, 19, 20, 2]],
+		["G TARIFF RNFUNDS RIG", [0]],
+		["be ", [0, 4, 28, 23, 25, 27, 2, 9, 26, 12, 13, 22]],
+		[" THE ÉCONOMIE O", [28, 9]],
+		["f", [4, 28, 3, 9, 25, 27, 8, 22, 26, 12, 13, 0]],
+		["ARIFF REFUNDS RIGHT ", [0]],
+		["zi's s", [1]],
 		["rat", [18, 19, 20, 22]],
-		["UR SAVINGS ACCOUNT, AN", []],
-		["big i", []],
+		["R MAILBAG #4", [23]],
+		["vert", []],
 		["OCI", [3]],
 		[
 			"T",
-			[15, 16, 4, 25, 27, 26, 17, 18, 19, 20, 12, 13, 14, 5, 23, 11, 2, 22, 10, 0, 8, 9, 3]
+			[
+				15, 16, 4, 28, 25, 27, 26, 17, 18, 19, 20, 12, 13, 14, 5, 23, 11, 2, 22, 10, 0, 8,
+				9, 3
+			]
 		],
 		["he cndcicator from Pl", [4, 25, 27, 26, 12, 13]],
 		["rt", [18, 19, 20, 10]],
 		[" the Fed ests interehst r", [22]],
-		["crème and the économie o", [9]],
-		[" r", [14, 18, 19, 20, 10, 0, 22, 8]],
+		["京 market report 📈", [10]],
+		["rea", [15, 16, 17, 11, 14, 18, 19, 20, 2]],
 		["e (luss ", []],
 		["a newu scam)", [1]],
 		["onomis is ever", [5]],
-		[" e:\ttab", [11]],
-		["ers for your mortgage, your savings account, an", []],
+		["  econo", [28]],
+		["istener mailba", [23]],
 		["w s", [1, 6, 22]],
 		["Inndicator from Plnet", [4, 25, 27, 26, 12, 13]],
 		["fr", [4, 25, 27, 26, 12, 13]],
-		["ur mortgage, your savin", []],
+		["ener mailbag #4", [23]],
+		["ce ", [4, 28, 23, 25, 27, 2, 9, 26, 12, 13, 22]],
 		["ls, Productivity & Pare", []],
-		[" 1: ECONOMCIS", []],
-		["ECINOMIS", []],
+		[" 1: ECONOMCIS", [28]],
+		["ECINOMIS", [28]],
 		["schecme (plus a new scaom", [1]],
 		["Indicator from Planet ", [4, 25, 27, 26, 12, 13]],
 		["eme ", [1, 2]],
 		["MO", [7, 24, 5, 4, 25, 27, 26, 12, 13]],
 		[" School 2: Supply", [6]],
-		["sand why it matters for your mortgage, your saving", [22]],
+		[": listener ma", [23]],
 		["oney", [7, 24, 5, 4, 25, 27, 26, 12, 13]],
 		["z, explaine", [17]],
 		["sode 12: Café crème and the économie of crê", [9]],
-		["t, and the price", []],
-		["trg u1", []],
-		["olc1: Economics i", [5]],
+		["ilbag ", [23]],
+		["trg u2", []],
+		["olc1: Economics i", [28, 5]],
 		[" SFROM PLANET MONEY: THE ECONOMICS OF", [25, 27, 26, 12, 13]],
 		["epot", []],
 		[" 3/3(] ra", []],
+		["count, and the p", []],
 		["LUS A NEW SCAM", [1]],
 		["your", [3]],
 		["ONNA PAY FOR YO", [3]],
-		["xplained in t", []],
+		["eeps go", [14]],
 		["Cmharelss ", [1]],
-		["Reabt", [15, 16, 17]],
+		[" CONTROL, ebaplkined (a", [17]],
 		["cat", [4, 25, 27, 26, 12, 13]],
 		["xxr", []],
-		["ictadr from Planet Mone", [4, 25, 27, 26, 12, 13]],
-		["ey: the econo", [25, 27, 26, 12, 13]],
-		["ONE", [7, 24, 5, 4, 17, 11, 25, 27, 26, 9, 12, 13]],
-		[" (rat", [18, 19, 20]],
-		["vrmywhre", []],
-		[" of tari", []]
+		[" eocdomics of rent cont", [28]]
 	],
 	"tagQueries": [
 		["new", []],
@@ -294,6 +310,13 @@
 		["📈", []],
 		["(part", [0]],
 		["a", [0, 1, 5, 18, 2, 23, 7, 12, 16, 17, 20, 8, 4]],
+		["it", [22, 18]],
+		["TIO", [7, 6, 21, 22, 0, 1, 15, 18, 12]],
+		["K", [14, 15, 0, 9, 12, 17, 8]],
+		["tli", [17, 14, 15, 21, 22, 7, 18, 9]],
+		["ame", [5, 18, 21, 19, 20, 15, 14]],
+		["gm", [19, 14]],
+		["itl", [22, 18, 17]],
 		["deur", [11, 7, 13, 8]],
 		["eprciuti", []],
 		["dca", [16, 17, 5, 12, 8]],
@@ -355,13 +378,6 @@
 		["rtwork", [0, 12, 8]],
 		["k", [14, 15, 0, 9, 12, 17, 8]],
 		["n", [3, 14, 15, 23, 4, 19, 7, 10, 9, 17, 6]],
-		["O", [3, 16, 17, 0, 1, 8, 9, 10, 11, 7, 12, 6]],
-		["stbr", [20]],
-		["TREAM", [20, 23]],
-		["lhrt", []],
-		["gment", [19, 14]],
-		["ters", [2]],
-		["ep", [8, 9, 10, 11]],
-		["grtwor", [0, 12, 8]]
+		["O", [3, 16, 17, 0, 1, 8, 9, 10, 11, 7, 12, 6]]
 	]
 }
