@@ -119,11 +119,15 @@ Do this once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/
 
 1. In **Settings → QuickAdd**, under **AI & online**, turn off **Disable AI & online features**.
 2. Under **AI & online**, select **AI Assistant**.
-3. Set **Prompt template folder**, for example to `Prompts`.
-4. Under **Providers**, select **Add provider**.
-5. Pick your provider.
-6. Select your provider in the **Providers** list.
-7. Set **API key**.
+3. Under **Defaults**, set **Prompt template folder**, for example to `Prompts`.
+4. Under **Providers**, select **OpenAI** or **Gemini**.
+5. On the provider's page, set **API key**. It links a secret from **Settings → Keychain**.
+
+For another provider:
+
+1. Under **Providers**, select **Add provider**.
+2. On the provider's card, set **API key**.
+3. Select **Connect**.
 
 ### Build the prompt
 
@@ -166,16 +170,17 @@ Do this once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/
 5. Select **Configure AI Assistant**, the gear icon next to it.
 6. Turn on **Prompt template**.
 7. In the **Prompt template** field, enter `Summarize transcript.md`.
-8. Select **Save**.
-9. In the command bar, select **Capture**. QuickAdd adds **Untitled Capture Choice** after the AI Assistant.
-10. Select **Configure Untitled Capture Choice**, the gear icon next to it.
-11. Turn on **Capture to active file**.
-12. Set **Write position** to **New line below cursor**.
-13. Set **Capture format** to `{{VALUE:output}}`.
-14. Load the episode in PodNotes.
-15. Open the note for the summary in editing view.
-16. Place the cursor where the summary goes.
-17. Run **QuickAdd: Run**.
-18. Select **Summarize episode**.
+8. Set **Model** to one of your provider's models.
+9. Select **Save**.
+10. In the command bar, select **Capture**. QuickAdd adds **Untitled Capture Choice** after the AI Assistant.
+11. Select **Configure Untitled Capture Choice**, the gear icon next to it.
+12. Turn on **Capture to active file**.
+13. Set **Write position** to **New line below cursor**.
+14. Set **Capture format** to `{{VALUE:output}}`.
+15. Load the episode in PodNotes.
+16. Open the note for the summary in editing view.
+17. Place the cursor where the summary goes.
+18. Run **QuickAdd: Run**.
+19. Select **Summarize episode**.
 
 The AI Assistant puts the model's answer in `{{VALUE:output}}`, which only the later commands of the same macro can read. QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe the model and output settings.
