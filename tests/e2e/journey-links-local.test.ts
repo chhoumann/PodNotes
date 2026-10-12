@@ -263,7 +263,7 @@ describe("link and local file journeys", () => {
 		await obsidian.plugin("file-explorer").enable({ filter: "core" });
 		const queuedPath = sandbox.path("Queued Journey.wav");
 		const leadPath = sandbox.path("Lead Journey.wav");
-		const movedPath = sandbox.path("Moved", "Queued Journey.wav");
+		const movedPath = sandbox.path("Queue moved", "Queued Journey.wav");
 		await writeVaultFile(obsidian, queuedPath, wav(30));
 		await writeVaultFile(obsidian, leadPath, wav(6));
 
@@ -288,7 +288,7 @@ describe("link and local file journeys", () => {
 		);
 
 		await obsidian.dev.evalJsonAsync(`(async () => {
-			await app.vault.createFolder(${JSON.stringify(sandbox.path("Moved"))});
+			await app.vault.createFolder(${JSON.stringify(sandbox.path("Queue moved"))});
 			await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${JSON.stringify(queuedPath)}), ${JSON.stringify(movedPath)});
 			return true;
 		})()`);
@@ -308,6 +308,47 @@ describe("link and local file journeys", () => {
 				),
 			"Local Files holding the moved path",
 		);
+	});
+
+	test("a playing local file plays on under its new name from where it was moved to", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		await seedLibrary(context, null);
+		await obsidian.plugin("file-explorer").enable({ filter: "core" });
+		const audioPath = sandbox.path("Playing Journey.wav");
+		const movedPath = sandbox.path("Renamed", "Renamed Journey.wav");
+		await writeVaultFile(obsidian, audioPath, wav(30));
+
+		await revealInFileExplorer(obsidian, audioPath);
+		await click(obsidian, ui.fileExplorerItem(audioPath), { button: "right" });
+		await click(obsidian, ui.menuItem("Play with PodNotes"));
+		const before = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === "Playing Journey" &&
+				playback.playing &&
+				(playback.media?.seconds ?? 0) > 1,
+			"the local file playing",
+		);
+
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			await app.vault.createFolder(${JSON.stringify(sandbox.path("Renamed"))});
+			await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${JSON.stringify(audioPath)}), ${JSON.stringify(movedPath)});
+			return true;
+		})()`);
+
+		const after = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === "Renamed Journey" &&
+				decodeURIComponent(playback.media?.src ?? "").includes(movedPath) &&
+				playback.playing &&
+				playback.media?.paused === false &&
+				(playback.media?.seconds ?? 0) >= before.seconds,
+			"the moved file playing on under its new name",
+		);
+		expect(after.episode).toEqual({ podcast: "local file", title: "Renamed Journey" });
+		expect(after.seconds).toBeGreaterThanOrEqual(before.seconds);
 	});
 
 	test("a timestamp link to a vault file outside Local Files plays it from the link's time", async () => {

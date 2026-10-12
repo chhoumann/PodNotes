@@ -897,7 +897,7 @@ describe("relocate", () => {
 		reach(media(), 42);
 		queue.set({ ...get(queue), episodes: [B] });
 
-		player.relocate(moved);
+		player.relocate("A/Clip.mp3", moved);
 
 		expect(media().src).toBe("app://resource/B/Clip.mp3");
 		expect(state()).toMatchObject({ status: "loading", episode: NEW, currentTime: 42 });
@@ -917,7 +917,7 @@ describe("relocate", () => {
 		reach(media(), 42);
 		player.pause();
 
-		player.relocate(moved);
+		player.relocate("A/Clip.mp3", moved);
 		metadata(media());
 
 		expect(media().src).toBe("app://resource/B/Clip.mp3");
@@ -934,7 +934,7 @@ describe("relocate", () => {
 		pausedByBrowser(media());
 		media().emit("ended");
 
-		player.relocate(moved);
+		player.relocate("A/Clip.mp3", moved);
 
 		expect(state()).toMatchObject({ status: "ended", episode: NEW });
 		expect(media().src).toBe("");
@@ -946,6 +946,42 @@ describe("relocate", () => {
 		expect(state().status).toBe("playing");
 	});
 
+	test("reloads a feed episode playing its downloaded copy from the copy's new path and plays on at its position", () => {
+		const { player, media, state } = setupWithFiles();
+		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Downloads/A.mp3", size: 1 }] });
+		player.play(A);
+		metadata(media());
+		reach(media(), 42);
+		expect(media().src).toBe("app://resource/Downloads/A.mp3");
+
+		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Archive/A.mp3", size: 1 }] });
+		player.relocate("Downloads/A.mp3", (ep) => ep);
+
+		expect(media().src).toBe("app://resource/Archive/A.mp3");
+		expect(state()).toMatchObject({ status: "loading", episode: A, currentTime: 42 });
+		metadata(media());
+		expect(media().currentTime).toBe(42);
+		expect(media().paused).toBe(false);
+		expect(state()).toMatchObject({ status: "playing", episode: A, currentTime: 42 });
+	});
+
+	test("keeps streaming a feed episode whose download appeared after it loaded and then moved", () => {
+		const { player, media, state } = setupWithFiles();
+		player.play(A);
+		metadata(media());
+		reach(media(), 42);
+		const before = state();
+		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Downloads/A.mp3", size: 1 }] });
+
+		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Archive/A.mp3", size: 1 }] });
+		player.relocate("Downloads/A.mp3", (ep) => ep);
+
+		expect(state()).toBe(before);
+		expect(media().src).toBe(A.streamUrl);
+		expect(media().currentTime).toBe(42);
+		expect(media().paused).toBe(false);
+	});
+
 	test("changes nothing when the shown episode did not move", () => {
 		const { player, media, state } = setupWithFiles();
 		player.play(A);
@@ -953,7 +989,7 @@ describe("relocate", () => {
 		reach(media(), 42);
 		const before = state();
 
-		player.relocate(moved);
+		player.relocate("A/Clip.mp3", moved);
 
 		expect(state()).toBe(before);
 		expect(media().src).toBe(A.streamUrl);

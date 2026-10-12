@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import { selectSource } from "./player/source";
-import { downloadedEpisodes, localFiles, playedEpisodes, queue } from "./store";
+import { downloadedEpisodes, favorites, localFiles, playedEpisodes, queue } from "./store";
 import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
@@ -183,6 +183,41 @@ describe("a vault file PodNotes tracks that is renamed or moved", () => {
 		expect(get(playedEpisodes)).not.toHaveProperty(["local file::Clip One"]);
 	});
 
+	it.each(["local file", ""])(
+		"moves the local file's legacy title-only progress (podcast %j) to its new name and keeps another podcast's",
+		async (podcastName) => {
+			const clip = registered("Fixtures/Clip One.wav");
+			vaultPaths = ["Fixtures/Clip One.wav"];
+			const progress = { duration: 600, finished: false };
+			const otherShow = {
+				title: "Clip One",
+				podcastName: "Other Show",
+				time: 7,
+				...progress,
+			};
+			await loadPlugin({
+				schemaVersion: 2,
+				downloadedEpisodes: { "local file": [{ ...clip, size: 960_044 }] },
+				playedEpisodes: {
+					"Clip One": { title: "Clip One", podcastName, time: 42, ...progress },
+					"Other Show::Clip One": otherShow,
+				},
+			});
+
+			move("Fixtures/Clip One.wav", "Fixtures/Intro.wav");
+
+			expect(get(playedEpisodes)).toEqual({
+				"local file::Intro": {
+					title: "Intro",
+					podcastName: "local file",
+					time: 42,
+					...progress,
+				},
+				"Other Show::Clip One": otherShow,
+			});
+		},
+	);
+
 	it("keeps a download's episode and takes its new path", async () => {
 		const download: DownloadedEpisode = {
 			title: "Ep 1",
@@ -249,6 +284,29 @@ describe("a vault file PodNotes tracks that is renamed or moved", () => {
 			'A local file named "Clip One" was already tracked at "Fixtures/Clip One.wav". It has been replaced by "Archive/Clip One.wav".',
 		);
 	});
+
+	it.each([
+		["with it listed first", ["Fixtures/Clip One.wav", "Fixtures/Lead.wav"]],
+		["with it listed second", ["Fixtures/Lead.wav", "Fixtures/Clip One.wav"]],
+	])(
+		"takes over the queue and favorites entries of the tracked file whose name it takes, %s",
+		async (_, paths) => {
+			const listed = paths.map((path) => registered(path));
+			vaultPaths = ["Fixtures/Clip One.wav", "Fixtures/Lead.wav"];
+			await loadPlugin({
+				schemaVersion: 2,
+				queue: { ...DEFAULT_SETTINGS.queue, episodes: listed },
+				favorites: { ...DEFAULT_SETTINGS.favorites, episodes: listed },
+				downloadedEpisodes: { "local file": listed.map((e) => ({ ...e, size: 1 })) },
+			});
+
+			move("Fixtures/Lead.wav", "Archive/Clip One.wav");
+
+			const entry = { title: "Clip One", filePath: "Archive/Clip One.wav" };
+			expect(get(queue).episodes).toMatchObject([entry]);
+			expect(get(favorites).episodes).toMatchObject([entry]);
+		},
+	);
 });
 
 describe("a vault file PodNotes does not track that is renamed", () => {

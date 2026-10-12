@@ -8,6 +8,7 @@ import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { Episode } from "./types/Episode";
 import type { Playlist } from "./types/Playlist";
 import { getEpisodeKey } from "./utility/episodeKey";
+import { getPlayedEpisodeAliasKeys } from "./utility/episodeStatus";
 import { isLocalFile } from "./utility/isLocalFile";
 import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 import { getEpisodeMediaType } from "./utility/mediaType";
@@ -38,27 +39,31 @@ function followRename(plugin: PodNotes, file: TFile, oldPath: string): void {
 			...localEpisodeFromFile(plugin.app, file, getEpisodeMediaType(episode)),
 		};
 	};
+	/**
+	 * `list` with its entries moved, or `list` itself when none moved. Play with PodNotes
+	 * keeps one local file per name, so a file renamed to a tracked file's name takes over
+	 * the entries for that name, which go to `displaced`.
+	 */
+	const movedList = <T extends Episode>(list: T[], displaced: T[] = []): T[] => {
+		const next = mapItems(list, moved);
+		if (next === list) return list;
+		const keys = new Set(
+			next.filter((e, i) => e !== list[i] && isLocalFile(e)).map((e) => getEpisodeKey(e)),
+		);
+		return next.filter((episode, i) => {
+			const taken = episode === list[i] && keys.has(getEpisodeKey(episode));
+			if (taken) displaced.push(episode);
+			return !taken;
+		});
+	};
 	const movedPlaylist = (playlist: Playlist): Playlist => {
-		const episodes = mapItems(playlist.episodes, moved);
+		const episodes = movedList(playlist.episodes);
 		return episodes === playlist.episodes ? playlist : { ...playlist, episodes };
 	};
 
 	const downloads = get(downloadedEpisodes);
 	const displaced: DownloadedEpisode[] = [];
-	const nextDownloads = mapValues(downloads, (list) => {
-		const next = mapItems(list, moved);
-		if (next === list) return list;
-		// Play with PodNotes keeps one local file per name, so a file renamed to a tracked
-		// file's name takes that name over.
-		const names = new Set(
-			next.filter((e, i) => e !== list[i] && isLocalFile(e)).map((e) => e.title),
-		);
-		return next.filter((episode, i) => {
-			const taken = episode === list[i] && names.has(episode.title);
-			if (taken) displaced.push(episode);
-			return !taken;
-		});
-	});
+	const nextDownloads = mapValues(downloads, (list) => movedList(list, displaced));
 	if (nextDownloads !== downloads) downloadedEpisodes.set(nextDownloads);
 	for (const { title, filePath } of displaced) {
 		if (filePath !== file.path) showReplacedLocalFileNotice(title, filePath, file.path);
@@ -80,7 +85,7 @@ function followRename(plugin: PodNotes, file: TFile, oldPath: string): void {
 	const nextCurrent = current && moved(current);
 	if (nextCurrent !== current) writePlayerSettings(plugin, { currentEpisode: nextCurrent });
 
-	plugin.player.relocate(moved);
+	plugin.player.relocate(oldPath, moved);
 
 	const [before] = localBefore;
 	if (before && before.title !== file.basename) moveProgress(before, file.basename);
@@ -90,11 +95,15 @@ function followRename(plugin: PodNotes, file: TFile, oldPath: string): void {
 function moveProgress(episode: Episode, title: string): void {
 	const record = playedEpisodes.get(episode);
 	if (!record) return;
-	const oldKey = getEpisodeKey(episode);
-	const newKey = getEpisodeKey({ ...episode, title });
 	playedEpisodes.update((played) => {
-		delete played[oldKey];
-		played[newKey] = { ...record, title };
+		for (const key of getPlayedEpisodeAliasKeys(played, episode, getEpisodeKey(episode))) {
+			delete played[key];
+		}
+		played[getEpisodeKey({ ...episode, title })] = {
+			...record,
+			title,
+			podcastName: episode.podcastName,
+		};
 		return played;
 	});
 }

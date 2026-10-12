@@ -175,8 +175,8 @@ export default async function podNotesURIHandler(
 		// The file the link names plays, registered or not, and as it is registered at its path.
 		const named = findLocalEpisodeByCandidates(nameCandidates);
 		episode =
-			[named, ...get(localFiles).episodes].find(
-				(candidate) => (candidate as LocalEpisode | undefined)?.filePath === localFile.path,
+			get(localFiles).episodes.find(
+				(candidate) => (candidate as LocalEpisode).filePath === localFile.path,
 			) ??
 			localEpisodeFromFile(
 				app,

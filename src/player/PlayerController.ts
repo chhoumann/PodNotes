@@ -53,6 +53,8 @@ export type PlayerDocument = Pick<Document, "createElement" | "body">;
 /** One load of one episode. A load replaces it. */
 interface Session {
 	src: string;
+	/** The vault file `src` plays, if it plays one. */
+	filePath?: string;
 	/** Where playback starts once the metadata loads. */
 	pendingTime: number;
 	/** The metadata loaded and the start position is set. */
@@ -135,22 +137,24 @@ export class PlayerController {
 	}
 
 	/**
-	 * Shows the episode `moved` maps the shown one to when its file moved, with the same
-	 * status, position and speed. Loaded media reloads from the new path, and a finished
-	 * episode's session ends. Not an intent: nothing is selected, queued or saved, and a
-	 * deferred play stays valid.
+	 * Follows a vault file that moved away from `from`: shows the episode `moved` maps
+	 * the shown one to, and media loaded from that file reloads from where it is now,
+	 * with the same status, position and speed. A finished episode's session ends. Not
+	 * an intent: nothing is selected, queued or saved, and a deferred play stays valid.
 	 */
-	relocate(moved: (episode: Episode) => Episode): void {
+	relocate(from: string, moved: (episode: Episode) => Episode): void {
 		const shown = this.snapshot.episode;
 		if (this.disposed || !shown) return;
 		const episode = moved(shown);
-		if (episode === shown) return;
+		const session = this.session?.filePath === from ? this.session : null;
+		if (episode === shown && !session) return;
 		this.setState(
 			this.holdsMedia() ? { episode, currentTime: this.el.currentTime } : { episode },
 		);
-		const session = this.session;
 		if (!session) return;
-		session.src = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault).src;
+		const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
+		session.src = source.src;
+		session.filePath = source.filePath;
 		this.el.setAttribute("aria-label", episode.title);
 		this.el.src = session.src;
 		// The element reports "emptied" only later, so the next intent would act on stale state.
@@ -351,6 +355,7 @@ export class PlayerController {
 		}
 		this.session = {
 			src: source.src,
+			filePath: source.filePath,
 			pendingTime: time,
 			ready: false,
 			segmentEnd: endTime ?? null,
