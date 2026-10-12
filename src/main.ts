@@ -15,7 +15,7 @@ import { registerCommands } from "src/commands";
 import { normalizePath, Notice, Platform, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
-import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
+import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
@@ -440,7 +440,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// loadData resolves nullish both for a missing file and for one it could
 			// not read or parse.
 			if (data == null && !(await this.dataFileHoldsNothing())) {
-				this.settings = structuredClone(DEFAULT_SETTINGS);
+				this.settings = decodePodNotesData(undefined).settings;
 				this.persistenceUnknownFields = { libraryId: newLibraryId() };
 				this.refuseSaves(
 					"unreadable-data-file",

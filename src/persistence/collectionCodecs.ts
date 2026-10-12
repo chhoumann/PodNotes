@@ -3,13 +3,13 @@ import type { Playlist } from "src/types/Playlist";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { PodNote } from "src/types/PodNotes";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
+import { ownRecord } from "src/utility/ownRecord";
 import {
 	copySafeObject,
 	isPlainObject,
 	readBoolean,
 	readNonNegativeNumber,
 	readString,
-	safeEntries,
 	setOptionalString,
 	warn,
 } from "./codecUtils";
@@ -21,11 +21,11 @@ export function decodeSavedFeeds(
 ): Record<string, PodcastFeed> {
 	if (!isPlainObject(value)) {
 		if (value !== undefined) warn(warnings, "savedFeeds", "expected an object");
-		return {};
+		return ownRecord();
 	}
 
-	const feeds: Record<string, PodcastFeed> = {};
-	for (const [key, candidate] of safeEntries(value, warnings, "savedFeeds")) {
+	const feeds = ownRecord<PodcastFeed>();
+	for (const [key, candidate] of Object.entries(value)) {
 		if (!isPlainObject(candidate)) {
 			warn(warnings, `savedFeeds.${key}`, "expected an object; feed was skipped");
 			continue;
@@ -53,11 +53,11 @@ export function decodeSavedFeeds(
 export function decodePodNotes(value: unknown, warnings: Set<string>): Record<string, PodNote> {
 	if (!isPlainObject(value)) {
 		if (value !== undefined) warn(warnings, "podNotes", "expected an object");
-		return {};
+		return ownRecord();
 	}
 
-	const notes: Record<string, PodNote> = {};
-	for (const [key, candidate] of safeEntries(value, warnings, "podNotes")) {
+	const notes = ownRecord<PodNote>();
+	for (const [key, candidate] of Object.entries(value)) {
 		if (!isPlainObject(candidate)) {
 			warn(warnings, `podNotes.${key}`, "expected an object; note mapping was skipped");
 			continue;
@@ -84,11 +84,11 @@ export function decodePlayedEpisodes(
 ): Record<string, PlayedEpisode> {
 	if (!isPlainObject(value)) {
 		if (value !== undefined) warn(warnings, "playedEpisodes", "expected an object");
-		return {};
+		return ownRecord();
 	}
 
-	const played: Record<string, PlayedEpisode> = {};
-	for (const [key, candidate] of safeEntries(value, warnings, "playedEpisodes")) {
+	const played = ownRecord<PlayedEpisode>();
+	for (const [key, candidate] of Object.entries(value)) {
 		if (!isPlainObject(candidate)) {
 			warn(warnings, `playedEpisodes.${key}`, "expected an object; progress was skipped");
 			continue;
@@ -120,11 +120,11 @@ export function decodePlayedEpisodes(
 export function decodePlaylists(value: unknown, warnings: Set<string>): Record<string, Playlist> {
 	if (!isPlainObject(value)) {
 		if (value !== undefined) warn(warnings, "playlists", "expected an object");
-		return {};
+		return ownRecord();
 	}
 
-	const playlists: Record<string, Playlist> = {};
-	for (const [key, candidate] of safeEntries(value, warnings, "playlists")) {
+	const playlists = ownRecord<Playlist>();
+	for (const [key, candidate] of Object.entries(value)) {
 		if (!isPlainObject(candidate)) {
 			warn(warnings, `playlists.${key}`, "expected an object; playlist was skipped");
 			continue;
@@ -151,11 +151,11 @@ export function decodeDownloadedEpisodes(
 ): Record<string, DownloadedEpisode[]> {
 	if (!isPlainObject(value)) {
 		if (value !== undefined) warn(warnings, "downloadedEpisodes", "expected an object");
-		return {};
+		return ownRecord();
 	}
 
-	const downloads: Record<string, DownloadedEpisode[]> = {};
-	for (const [podcastName, candidate] of safeEntries(value, warnings, "downloadedEpisodes")) {
+	const downloads = ownRecord<DownloadedEpisode[]>();
+	for (const [podcastName, candidate] of Object.entries(value)) {
 		if (!Array.isArray(candidate)) {
 			warn(
 				warnings,

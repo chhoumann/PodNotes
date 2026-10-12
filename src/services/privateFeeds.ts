@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { ownRecord } from "src/utility/ownRecord";
 import {
 	isCredentialBearingUrl,
 	isPrivateFeedPlaceholder,
@@ -92,7 +93,7 @@ export function protectPrivateFeeds(
 	feedUrls: FeedUrlRepository,
 ): PrivateFeedProtection {
 	const failed: string[] = [];
-	const savedFeeds: Record<string, PodcastFeed> = {};
+	const savedFeeds = ownRecord<PodcastFeed>();
 	// A private feed's real URL maps to the placeholder naming its saved key,
 	// which links resolve by.
 	const byUrl = new Map<string, string>();
@@ -131,13 +132,12 @@ function scrubEpisodeUrls<T>(
 ): T {
 	if (typeof value !== "object" || value === null) return value;
 	const isArray = Array.isArray(value);
-	// Decoded settings carry Date instances (episodeDate); recursing into one
-	// would flatten it into {}. Non-plain objects hold no episode URLs.
-	if (!isArray && Object.getPrototypeOf(value) !== Object.prototype) return value;
+	const prototype = Object.getPrototypeOf(value) as object | null;
+	if (!isArray && prototype !== Object.prototype && prototype !== null) return value;
 
 	const record = value as Record<string, unknown>;
 	let changed = false;
-	const next = (isArray ? [] : {}) as Record<string, unknown>;
+	const next = (isArray ? [] : Object.create(prototype)) as Record<string, unknown>;
 	for (const [key, entry] of Object.entries(record)) {
 		const scrubbed =
 			(key === "url" || key === "feedUrl") && typeof entry === "string"
