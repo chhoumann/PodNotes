@@ -75,6 +75,40 @@ describe("renderTranscriptBody", () => {
 		).toBe("00:00:01 **\\<b>Eve\\</b>:** !\\[\\[x]]");
 	});
 
+	test("block IDs and Dataview fields in feed text and speakers stay prose", () => {
+		const options = { episode, speakerTemplate: "", timestamp: timestampStyle("{{time}}") };
+
+		expect(
+			renderTranscriptBody(
+				{
+					kind: "timed",
+					cues: [
+						{
+							start: 1,
+							speaker: "host:: Eve ^v420-speaker",
+							text: "Said ^v420-cue and v420-field:: injected value",
+						},
+					],
+				},
+				options,
+			),
+		).toBe(
+			"00:00:01 **host:\\: Eve \\^v420-speaker:** Said \\^v420-cue and v420-field:\\: injected value",
+		);
+		expect(
+			renderTranscriptBody(
+				{
+					kind: "untimed",
+					paragraphs: [
+						"Normal text with a block marker ^v420-block",
+						"v420-field:: injected value",
+					],
+				},
+				options,
+			),
+		).toBe("Normal text with a block marker \\^v420-block\n\nv420-field:\\: injected value");
+	});
+
 	test("an entity the feed escaped stays literal and a prose & stays plain", () => {
 		const vtt =
 			"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nFable &amp; Folly wrote &amp;lt;b&amp;gt; and &amp;#39;\n";
@@ -199,6 +233,12 @@ describe("escapeTranscriptText", () => {
 			),
 		).toBe(
 			"!\\[\\[x]] \\<img src=x> \\`= this.file\\` \\~\\~\\~dataviewjs \\#tag \\$5 and \\$10 \\%\\%c\\%\\% C:\\\\path",
+		);
+	});
+
+	test("escapes every ^ and every colon after a colon, and keeps a single colon", () => {
+		expect(escapeTranscriptText("a:: b a:::b at 10:30, 2^10")).toBe(
+			"a:\\: b a:\\:\\:b at 10:30, 2\\^10",
 		);
 	});
 
