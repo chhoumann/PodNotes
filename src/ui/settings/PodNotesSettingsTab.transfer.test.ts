@@ -114,6 +114,28 @@ describe("importing a settings file", () => {
 		expect(disk().queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Private");
 	});
 
+	it("never writes a private feed URL that an older build left in the imported file", async () => {
+		const { disk, chooseFile } = setup();
+		const leaked = episode("Private", "Private Episode", privateUrl);
+
+		await chooseFile({
+			...structuredClone(DEFAULT_SETTINGS),
+			schemaVersion: 2,
+			savedFeeds: {
+				Private: {
+					title: "Private",
+					url: "podnotes-private-feed:Private",
+					urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000000",
+					artworkUrl: "",
+				},
+			},
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [leaked] },
+		}).confirm();
+
+		expect(JSON.stringify(disk())).not.toContain("s3cret");
+		expect(disk().queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Private");
+	});
+
 	it("keeps this vault's local files and never brings another vault's", async () => {
 		const mine = { ...episode("local file", "Mine"), filePath: "Audio/Mine.mp3" };
 		const theirs = { ...episode("local file", "Theirs"), filePath: "Elsewhere/Theirs.mp3" };

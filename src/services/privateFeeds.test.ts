@@ -207,6 +207,17 @@ describe("protectPrivateFeeds", () => {
 		expect(safe.savedFeeds.Patreon).toEqual(saved);
 	});
 
+	it("keeps an episode's own link even when it carries a token", () => {
+		const { feedUrls } = repository();
+		const link = "https://cdn.example/post?token=abc";
+		const linked = { ...episode("Ep 2", "podnotes-private-feed:Patreon"), url: link };
+		const { settings: safe } = protectPrivateFeeds(
+			settings({ queue: { ...DEFAULT_SETTINGS.queue, episodes: [linked] } }),
+			feedUrls,
+		);
+		expect(safe.queue.episodes[0].url).toBe(link);
+	});
+
 	it("reports feeds whose URL could not be protected", () => {
 		const { api, feedUrls } = repository();
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
