@@ -26,6 +26,7 @@ import { createPodcastNoteFileIfNotExists, getPodcastNote } from "./createPodcas
 import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
+import getVaultRenameHandler from "./getVaultRenameHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
 import type { Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
@@ -218,6 +219,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
+		this.registerEvent(getVaultRenameHandler(this));
 		this.storeUnsubscribers.push(
 			bindMediaSession(this.player, {
 				mediaSession: window.navigator.mediaSession,

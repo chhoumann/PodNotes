@@ -167,19 +167,19 @@ export default async function podNotesURIHandler(
 	// shadow private links.
 	const isPlaceholderLink = isPrivateFeedPlaceholder(url);
 	if (!isPlaceholderLink && localFile) {
-		// The file the link names plays, even when a same-named file in another
-		// folder has since taken over the name's registration.
+		// The file the link names plays, registered or not, and as it is registered at its path.
 		const named = findLocalEpisodeByCandidates(nameCandidates);
 		episode =
-			named && (named as LocalEpisode).filePath !== localFile.path
-				? localEpisodeFromFile(
-						app,
-						localFile,
-						// A file does not record whether an mp4 or webm is audio or video, so it takes the registration's.
-						getUnambiguousMediaTypeFromPath(localFile.path) ??
-							getEpisodeMediaType(named),
-					)
-				: named;
+			[named, ...get(localFiles).episodes].find(
+				(candidate) => (candidate as LocalEpisode | undefined)?.filePath === localFile.path,
+			) ??
+			localEpisodeFromFile(
+				app,
+				localFile,
+				// A file does not record whether an mp4 or webm is audio or video, so it takes a same-named registration's.
+				getUnambiguousMediaTypeFromPath(localFile.path) ??
+					(named ? getEpisodeMediaType(named) : "audio"),
+			);
 	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		const { paths, name, files } = filesNamedLike(app.vault.getFiles(), candidateValues(url));
 		if (files.length !== 1) {

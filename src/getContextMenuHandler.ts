@@ -57,9 +57,7 @@ function addPlayLocalFileItem(
 					file.stat.size,
 				);
 				if (replacedFilePath) {
-					new Notice(
-						`A local file named "${file.basename}" was already tracked at "${replacedFilePath}". It has been replaced by "${file.path}".`,
-					);
+					showReplacedLocalFileNotice(file.basename, replacedFilePath, file.path);
 				}
 
 				// Re-enable replay for a finished local file. Look it up with
@@ -82,6 +80,17 @@ function addPlayLocalFileItem(
 				// surfaces with the just-selected episode.
 				await revealPodcastView(app);
 			}),
+	);
+}
+
+/** The local file at `filePath` took over the name `title` from the file at `replacedFilePath`. */
+export function showReplacedLocalFileNotice(
+	title: string,
+	replacedFilePath: string,
+	filePath: string,
+): void {
+	new Notice(
+		`A local file named "${title}" was already tracked at "${replacedFilePath}". It has been replaced by "${filePath}".`,
 	);
 }
 

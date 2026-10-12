@@ -769,6 +769,21 @@ describe("a link to a vault file at its path", () => {
 		expect(media().src).toBe("app://resource/A/Clip.mp4");
 		expect(media().currentTime).toBe(12);
 	});
+
+	test("plays the file as it is registered at that path under another name", async () => {
+		const intro: LocalEpisode = { ...clip("A", "mp4", "video"), title: "Intro" };
+		localFiles.set({ ...emptyLocalFiles, episodes: [intro] });
+		vaultFiles = ["A/Clip.mp4"];
+
+		await link({ url: "A/Clip.mp4", episodeName: "Clip", time: "12" });
+		metadata();
+
+		expect(state().episode).toEqual(intro);
+		expect(state().mediaType).toBe("video");
+		expect(media().tagName).toBe("VIDEO");
+		expect(media().src).toBe("app://resource/A/Clip.mp4");
+		expect(media().currentTime).toBe(12);
+	});
 });
 
 describe("a link to a vault file that is no longer at its path", () => {

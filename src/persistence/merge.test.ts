@@ -345,6 +345,41 @@ describe("threeWayMergeSettings", () => {
 		expect(merged.localFiles.episodes).toEqual([download("Ep 1", "U", "P1", 2)]);
 	});
 
+	it("keeps one entry at the new path when both devices applied the same rename of a local file", () => {
+		const localFile = (title: string, filePath: string, streamUrl: string) => ({
+			...episode(title, "local file"),
+			streamUrl,
+			filePath,
+			size: 1,
+		});
+		const progress = (title: string): PlayedEpisode => ({
+			title,
+			podcastName: "local file",
+			time: 42,
+			duration: 600,
+			finished: false,
+		});
+		const tracking = (doc: Data, title: string, streamUrl: string) => {
+			const filePath = `Fixtures/${title}.wav`;
+			doc.downloadedEpisodes = { "local file": [localFile(title, filePath, streamUrl)] };
+			doc.localFiles.episodes = [localFile(title, filePath, streamUrl)];
+			doc.playedEpisodes = { [`local file::${title}`]: progress(title) };
+			return doc;
+		};
+		const base = tracking(data(), "Clip One", "app://a/Clip One.wav");
+		const renamed = (streamUrl: string) => tracking(structuredClone(base), "Intro", streamUrl);
+		const local = renamed("app://a/Intro.wav");
+		const disk = renamed("app://b/Intro.wav");
+
+		const merged = threeWayMergeSettings(base, local, disk);
+
+		expect(merged.downloadedEpisodes["local file"]).toEqual(
+			local.downloadedEpisodes["local file"],
+		);
+		expect(merged.localFiles.episodes).toEqual(local.localFiles.episodes);
+		expect(merged.playedEpisodes).toEqual({ "local file::Intro": progress("Intro") });
+	});
+
 	it("never marks a file this device registered as one PodNotes downloaded because another device downloaded the episode", () => {
 		const base = data();
 		const local = structuredClone(base);

@@ -134,6 +134,29 @@ export class PlayerController {
 	}
 
 	/**
+	 * Shows the episode `moved` maps the shown one to when its file moved, with the same
+	 * status, position and speed. Loaded media reloads from the new path, and a finished
+	 * episode's session ends. Not an intent: nothing is selected, queued or saved, and a
+	 * deferred play stays valid.
+	 */
+	relocate(moved: (episode: Episode) => Episode): void {
+		const shown = this.snapshot.episode;
+		if (this.disposed || !shown) return;
+		const episode = moved(shown);
+		if (episode === shown) return;
+		this.setState(
+			this.holdsMedia() ? { episode, currentTime: this.el.currentTime } : { episode },
+		);
+		const session = this.session;
+		if (!session) return;
+		session.src = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault).src;
+		this.el.setAttribute("aria-label", episode.title);
+		this.el.src = session.src;
+		// The element reports "emptied" only later, so the next intent would act on stale state.
+		this.onEmptied();
+	}
+
+	/**
 	 * Selects and plays `episode`. Without a time it resumes where it was left, or
 	 * from the start once finished. Switching away from another episode saves its
 	 * position and queues it first when the queue is automatic.

@@ -256,6 +256,89 @@ describe("link and local file journeys", () => {
 		});
 		expect(await listedEpisodes(obsidian)).toEqual(["Local Journey"]);
 	});
+	test("a queued local file plays from where it was moved to when the queue reaches it", async () => {
+		const context = getContext();
+		const { obsidian, plugin, sandbox } = context;
+		await seedLibrary(context, null);
+		await obsidian.plugin("file-explorer").enable({ filter: "core" });
+		const queuedPath = sandbox.path("Queued Journey.wav");
+		const leadPath = sandbox.path("Lead Journey.wav");
+		const movedPath = sandbox.path("Moved", "Queued Journey.wav");
+		await writeVaultFile(obsidian, queuedPath, wav(30));
+		await writeVaultFile(obsidian, leadPath, wav(6));
+
+		for (const [path, title] of [
+			[queuedPath, "Queued Journey"],
+			[leadPath, "Lead Journey"],
+		]) {
+			await revealInFileExplorer(obsidian, path);
+			await click(obsidian, ui.fileExplorerItem(path), { button: "right" });
+			await click(obsidian, ui.menuItem("Play with PodNotes"));
+			await waitForPlayback(
+				obsidian,
+				(playback) =>
+					playback.episode?.title === title && (playback.media?.seconds ?? 0) > 0,
+				`${title} playing`,
+			);
+		}
+		await waitForLibrary(
+			plugin,
+			(library) => library.queue.includes("Queued Journey"),
+			"the switched-away file queued",
+		);
+
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			await app.vault.createFolder(${JSON.stringify(sandbox.path("Moved"))});
+			await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${JSON.stringify(queuedPath)}), ${JSON.stringify(movedPath)});
+			return true;
+		})()`);
+
+		const next = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === "Queued Journey" && (playback.media?.seconds ?? 0) > 0,
+			"the queue advancing to the moved file",
+		);
+		expect(decodeURIComponent(next.media?.src ?? "")).toContain(movedPath);
+		await waitForLibrary(
+			plugin,
+			(library) =>
+				library.localFiles.some(
+					(entry) => entry.title === "Queued Journey" && entry.filePath === movedPath,
+				),
+			"Local Files holding the moved path",
+		);
+	});
+
+	test("a timestamp link to a vault file outside Local Files plays it from the link's time", async () => {
+		const context = getContext();
+		const { obsidian, plugin, sandbox } = context;
+		await seedLibrary(context, null);
+		const audioPath = sandbox.path("Unlisted Journey.wav");
+		await writeVaultFile(obsidian, audioPath, wav(30));
+		const notePath = sandbox.path("Unlisted link.md");
+		await writeVaultFile(
+			obsidian,
+			notePath,
+			`[Unlisted audio](obsidian://podnotes?episodeName=Unlisted%20Journey&url=${encodeURIComponent(audioPath)}&time=12)\n`,
+		);
+
+		await openInReadingView(obsidian, notePath);
+		await click(obsidian, ui.readingLink("Unlisted audio"));
+		const playing = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === "Unlisted Journey" &&
+				(playback.media?.seconds ?? 0) > 0,
+			"the linked file playing",
+		);
+		expect(playing.episode).toEqual({ podcast: "local file", title: "Unlisted Journey" });
+		expect(decodeURIComponent(playing.media?.src ?? "")).toContain(audioPath);
+		expect(playing.seconds).toBeGreaterThanOrEqual(12);
+		expect(playing.seconds).toBeLessThanOrEqual(15);
+		expect((await readLibrary(plugin)).localFiles).toEqual([]);
+	});
+
 	test("a timestamp link to a moved vault file plays the one file with its name, and refuses when two share it", async () => {
 		const context = getContext();
 		const { obsidian, sandbox } = context;
