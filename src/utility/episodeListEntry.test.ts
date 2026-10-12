@@ -79,4 +79,39 @@ describe("episodeListEntry", () => {
 
 		expect(entries.map((entry) => entry.episode.title)).toEqual(["Newer", "Older", "Missing"]);
 	});
+	describe("a legacy record keyed by its title", () => {
+		const showA = episode("Shared episode", "Show A", "2024-02-01T00:00:00.000Z");
+		const showB = episode("Shared episode", "Show B", "2024-02-01T00:00:00.000Z");
+
+		test("resolves to its own podcast's episode when another podcast's same-titled one comes first", () => {
+			const entries = buildPlayedEpisodeListEntries(
+				{ "Shared episode": played("Shared episode", "Show A") },
+				[[showB, showA]],
+			);
+
+			expect(entries).toHaveLength(1);
+			expect(entries[0]).toMatchObject({ episode: showA, isAvailable: true });
+		});
+
+		test("stays unavailable when only another podcast has its title", () => {
+			const entries = buildPlayedEpisodeListEntries(
+				{ "Shared episode": played("Shared episode", "Show A") },
+				[[showB]],
+			);
+
+			expect(entries[0]).toMatchObject({
+				isAvailable: false,
+				episode: { title: "Shared episode", podcastName: "Show A" },
+			});
+		});
+
+		test("resolves by title when it names no podcast", () => {
+			const entries = buildPlayedEpisodeListEntries(
+				{ "Shared episode": played("Shared episode", "") },
+				[[showB]],
+			);
+
+			expect(entries[0]).toMatchObject({ episode: showB, isAvailable: true });
+		});
+	});
 });

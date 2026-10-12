@@ -1,6 +1,7 @@
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { Playlist } from "./types/Playlist";
 import { DEFAULT_SPEAKER_TEMPLATE } from "./services/diarization/segments";
+import { ownRecord } from "./utility/ownRecord";
 
 export const VIEW_TYPE = "podcast_player_view";
 
@@ -56,13 +57,13 @@ export const PLAYED_SETTINGS: PlaylistSettings = {
 };
 
 export const DEFAULT_SETTINGS: IPodNotesSettings = {
-	savedFeeds: {},
-	podNotes: {},
+	savedFeeds: ownRecord(),
+	podNotes: ownRecord(),
 	defaultPlaybackRate: 1,
 	defaultVolume: 1,
 	hidePlayedEpisodes: false,
 	episodeListLimit: DEFAULT_EPISODE_LIST_LIMIT,
-	playedEpisodes: {},
+	playedEpisodes: ownRecord(),
 	favorites: {
 		...FAVORITES_SETTINGS,
 		episodes: [],
@@ -72,7 +73,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		episodes: [],
 	},
 	autoQueue: true,
-	playlists: {},
+	playlists: ownRecord(),
 	skipBackwardLength: 15,
 	skipForwardLength: 15,
 	currentEpisode: undefined,
@@ -149,7 +150,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		// download writes junk and the second throws "File already exists" (#183).
 		path: "PodNotes/{{podcast}}/{{title}}",
 	},
-	downloadedEpisodes: {},
+	downloadedEpisodes: ownRecord(),
 	localFiles: {
 		...LOCAL_FILES_SETTINGS,
 		episodes: [],

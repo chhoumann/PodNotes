@@ -36,6 +36,7 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
+import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import { protectPrivateFeeds } from "src/services/privateFeeds";
 import {
 	describeSecrets,
@@ -169,8 +170,14 @@ function restoreFailedImportChanges(
 			currentHasKey === candidateHasKey &&
 			(!currentHasKey || settingsValuesEqual(current[key], candidate[key]))
 		) {
-			if (previousHasKey) restored[key] = structuredClone(previous[key]);
-			else delete restored[key];
+			if (previousHasKey) {
+				Object.defineProperty(restored, key, {
+					value: structuredClone(previous[key]),
+					enumerable: true,
+					writable: true,
+					configurable: true,
+				});
+			} else delete restored[key];
 			continue;
 		}
 
@@ -960,7 +967,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				settingsValuesEqual(restored, previous) &&
 				settingsValuesEqual(previousSettings, previous)
 					? previousSettings
-					: restored;
+					: decodePodNotesData({
+							...restored,
+							schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+						}).settings;
 			try {
 				// A store event may have queued a newer merged snapshot while the first
 				// write was pending. Queue the rollback after it and wait for durability

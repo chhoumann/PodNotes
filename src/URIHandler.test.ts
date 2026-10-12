@@ -1,5 +1,5 @@
 import * as obsidian from "obsidian";
-import { TFile, type ObsidianProtocolData } from "obsidian";
+import { TFile, TFolder, type ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -50,6 +50,7 @@ const emptyLocalFiles: Playlist = {
 let doc: FakeDocument;
 let player: PlayerController;
 let vaultFiles: string[] = [];
+let vaultFolders: string[] = [];
 
 const state = () => get(player.state);
 const media = () => doc.media;
@@ -88,6 +89,7 @@ function vaultFile(path: string): TFile {
 	const name = path.split("/").pop() ?? path;
 	return Object.assign(new TFile(), {
 		path,
+		name,
 		extension: name.split(".").pop() ?? "",
 		basename: name.replace(/\.[^.]+$/, ""),
 		stat: { ctime: 0, mtime: 0, size: 1 },
@@ -109,15 +111,19 @@ function loadedAt(episode: Episode, time: number) {
 
 beforeEach(() => {
 	vaultFiles = [];
+	vaultFolders = [];
 	doc = new FakeDocument();
 	const host = {
 		settings: structuredClone(DEFAULT_SETTINGS),
 		app: {
 			vault: {
-				getAbstractFileByPath: vi.fn((path: string) =>
-					vaultFiles.includes(path) ? vaultFile(path) : null,
-				),
+				getAbstractFileByPath: vi.fn((path: string) => {
+					if (vaultFiles.includes(path)) return vaultFile(path);
+					if (vaultFolders.includes(path)) return Object.assign(new TFolder(), { path });
+					return null;
+				}),
 				getResourcePath: (file: TFile) => `app://resource/${file.path}`,
+				getFiles: () => vaultFiles.map(vaultFile),
 			},
 			fileManager: { generateMarkdownLink: (file: TFile) => `[[${file.path}]]` },
 		},
@@ -305,11 +311,11 @@ describe("podNotesURIHandler", () => {
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
-	test("resolves a moved/renamed local file by name instead of routing to the feed parser (LF-08)", async () => {
+	test("plays a moved local file from where it is now instead of routing to the feed parser (LF-08)", async () => {
 		const localEpisode: LocalEpisode = {
 			title: "Local Note",
-			streamUrl: "Old/Local Note.mp3",
-			url: "Old/Local Note.mp3",
+			streamUrl: "app://resource/Old/Local Note.mp3",
+			url: "[[Old/Local Note.mp3]]",
 			description: "",
 			content: "",
 			podcastName: "local file",
@@ -318,10 +324,17 @@ describe("podNotesURIHandler", () => {
 		localFiles.set({ ...emptyLocalFiles, episodes: [localEpisode] });
 		// The file was moved: the recorded path no longer resolves to a file, and
 		// the url has no http(s) scheme, so it must be treated as a vault path.
+		vaultFiles = ["New/Local Note.mp3"];
 
 		await link({ url: "Old/Local Note.mp3", episodeName: "Local Note", time: "15" });
+		metadata();
 
-		expect(state()).toMatchObject({ episode: { title: "Local Note" }, currentTime: 15 });
+		expect(state().episode).toMatchObject({
+			title: "Local Note",
+			filePath: "New/Local Note.mp3",
+		});
+		expect(media().src).toBe("app://resource/New/Local Note.mp3");
+		expect(media().currentTime).toBe(15);
 		expect(get(viewState)).toBe(ViewState.Player);
 		// A schemeless path must never hit the feed parser.
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
@@ -722,6 +735,238 @@ describe("a timestamp link PodNotes wrote for the loaded episode", () => {
 		expect(media().tagName).toBe("VIDEO");
 		expect(media().src).toBe("app://resource/A/Clip.mov");
 		expect(media().currentTime).toBe(15);
+	});
+});
+
+describe("a link to a vault file that is no longer at its path", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	test("plays the one vault file with that name, even when another file is registered for it", async () => {
+		localFiles.set({ ...emptyLocalFiles, episodes: [clip("B")] });
+		vaultFiles = ["C/Clip.mp3"];
+
+		await link({ url: "A/Clip.mp3", episodeName: "Clip", time: "12" });
+		metadata();
+
+		expect(media().src).toBe("app://resource/C/Clip.mp3");
+		expect(media().currentTime).toBe(12);
+	});
+
+	test("shows a notice and plays nothing when several vault files have that name", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		localFiles.set({ ...emptyLocalFiles, episodes: [clip("B")] });
+		vaultFiles = ["B/Clip.mp3", "C/Clip.mp3"];
+
+		await link({ url: "A/Clip.mp3", episodeName: "Clip", time: "12" });
+
+		expect(notice).toHaveBeenCalledWith(
+			'More than one vault file is named "Clip.mp3". Update the link with the correct path.',
+		);
+		expect(state().episode).toBeUndefined();
+		expect(media().src).toBe("");
+		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+	});
+
+	test("shows a notice and plays nothing when no vault file has that name", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		localFiles.set({ ...emptyLocalFiles, episodes: [clip("A")] });
+		vaultFiles = ["B/Other.mp3"];
+
+		await link({ url: "A/Clip.mp3", episodeName: "Clip", time: "12" });
+
+		expect(notice).toHaveBeenCalledWith('No vault file is named "Clip.mp3".');
+		expect(state().episode).toBeUndefined();
+		expect(media().src).toBe("");
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
+	});
+
+	test("counts files named like the link's literal '+' before its legacy '+'-as-space form", async () => {
+		vaultFiles = ["New/A+B.mp3", "Other/A B.mp3"];
+
+		await link({ url: "Old/A+B.mp3", episodeName: "A+B", time: "20" });
+		metadata();
+
+		expect(media().src).toBe("app://resource/New/A+B.mp3");
+	});
+
+	test("does not fall back to the legacy '+'-as-space form when the literal name is ambiguous", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vaultFiles = ["X/A+B.mp3", "Y/A+B.mp3", "Z/A B.mp3"];
+
+		await link({ url: "Old/A+B.mp3", episodeName: "A+B", time: "20" });
+
+		expect(notice).toHaveBeenCalledWith(
+			'More than one vault file is named "A+B.mp3". Update the link with the correct path.',
+		);
+		expect(media().src).toBe("");
+	});
+
+	test("plays the loaded local file from where it moved to", async () => {
+		vaultFiles = ["A/Clip.mp3"];
+		loadedAt(clip("A"), 15);
+		vaultFiles = ["C/Clip.mp3"];
+
+		await link({ url: "A/Clip.mp3", episodeName: "Clip", time: "30" });
+		metadata();
+
+		expect(media().src).toBe("app://resource/C/Clip.mp3");
+		expect(media().currentTime).toBe(30);
+	});
+
+	test("plays the loaded local file from where it moved to when a folder took its path", async () => {
+		vaultFiles = ["A/Clip.mp3"];
+		loadedAt(clip("A"), 15);
+		vaultFiles = ["C/Clip.mp3"];
+		vaultFolders = ["A/Clip.mp3"];
+
+		await link({ url: "A/Clip.mp3", episodeName: "Clip", time: "30" });
+		metadata();
+
+		expect(media().src).toBe("app://resource/C/Clip.mp3");
+		expect(media().currentTime).toBe(30);
+	});
+
+	test("plays the file at the link's legacy '+'-as-space path, not the loaded '+' file that moved away", async () => {
+		const plusClip: LocalEpisode = {
+			title: "Clip+One",
+			streamUrl: "app://resource/A/Clip+One.mp3",
+			url: "[[A/Clip+One.mp3]]",
+			description: "",
+			content: "",
+			podcastName: "local file",
+			filePath: "A/Clip+One.mp3",
+		};
+		localFiles.set({ ...emptyLocalFiles, episodes: [plusClip] });
+		vaultFiles = ["A/Clip+One.mp3", "A/Clip One.mp3"];
+		loadedAt(plusClip, 15);
+		vaultFiles = ["C/Clip+One.mp3", "A/Clip One.mp3"];
+
+		await link({ url: "A/Clip+One.mp3", episodeName: "Clip+One", time: "30" });
+		metadata();
+
+		expect(media().src).toBe("app://resource/A/Clip One.mp3");
+		expect(media().currentTime).toBe(30);
+	});
+
+	test.each(["mp4", "webm"])(
+		"plays a moved .%s registered as video as video",
+		async (extension) => {
+			localFiles.set({ ...emptyLocalFiles, episodes: [clip("A", extension, "video")] });
+			vaultFiles = [`B/Clip.${extension}`];
+
+			await link({ url: `A/Clip.${extension}`, episodeName: "Clip", time: "12" });
+			metadata();
+
+			expect(state().mediaType).toBe("video");
+			expect(media().tagName).toBe("VIDEO");
+			expect(media().src).toBe(`app://resource/B/Clip.${extension}`);
+			expect(media().currentTime).toBe(12);
+		},
+	);
+
+	test.each(["mp4", "webm"])(
+		"plays a loaded .%s video from where it moved to as video",
+		async (extension) => {
+			vaultFiles = [`A/Clip.${extension}`];
+			loadedAt(clip("A", extension, "video"), 15);
+			vaultFiles = [`B/Clip.${extension}`];
+
+			await link({ url: `A/Clip.${extension}`, episodeName: "Clip", time: "30" });
+			metadata();
+
+			expect(state().mediaType).toBe("video");
+			expect(media().tagName).toBe("VIDEO");
+			expect(media().src).toBe(`app://resource/B/Clip.${extension}`);
+			expect(media().currentTime).toBe(30);
+		},
+	);
+
+	test("plays the moved file as it is registered at its new path", async () => {
+		localFiles.set({
+			...emptyLocalFiles,
+			episodes: [clip("A", "mp4", "video"), clip("B", "mp4", "audio")],
+		});
+		vaultFiles = ["B/Clip.mp4"];
+
+		await link({ url: "A/Clip.mp4", episodeName: "Clip", time: "12" });
+		metadata();
+
+		expect(state().mediaType).toBe("audio");
+		expect(media().tagName).toBe("AUDIO");
+		expect(media().src).toBe("app://resource/B/Clip.mp4");
+	});
+
+	test("does not take a media type from a same-titled file registered at another path", async () => {
+		localFiles.set({ ...emptyLocalFiles, episodes: [clip("X", "mp4", "video")] });
+		vaultFiles = ["B/Clip.mp4"];
+
+		await link({ url: "A/Clip.mp4", episodeName: "Clip", time: "12" });
+		metadata();
+
+		expect(state().mediaType).toBe("audio");
+		expect(media().tagName).toBe("AUDIO");
+		expect(media().src).toBe("app://resource/B/Clip.mp4");
+	});
+
+	test.each(["mp4", "webm"])(
+		"plays a moved .%s registered as video as video from a legacy link with '+' for its folder's space",
+		async (extension) => {
+			localFiles.set({
+				...emptyLocalFiles,
+				episodes: [clip("Old Folder", extension, "video")],
+			});
+			vaultFiles = [`New/Clip.${extension}`];
+
+			await link({ url: `Old+Folder/Clip.${extension}`, episodeName: "Clip", time: "12" });
+			metadata();
+
+			expect(state().mediaType).toBe("video");
+			expect(media().tagName).toBe("VIDEO");
+			expect(media().src).toBe(`app://resource/New/Clip.${extension}`);
+			expect(media().currentTime).toBe(12);
+		},
+	);
+
+	test.each(["mp4", "webm"])(
+		"plays a loaded .%s video from where it moved to as video from a legacy link with '+' for its folder's space",
+		async (extension) => {
+			vaultFiles = [`Old Folder/Clip.${extension}`];
+			loadedAt(clip("Old Folder", extension, "video"), 15);
+			vaultFiles = [`New/Clip.${extension}`];
+
+			await link({ url: `Old+Folder/Clip.${extension}`, episodeName: "Clip", time: "30" });
+			metadata();
+
+			expect(state().mediaType).toBe("video");
+			expect(media().tagName).toBe("VIDEO");
+			expect(media().src).toBe(`app://resource/New/Clip.${extension}`);
+			expect(media().currentTime).toBe(30);
+		},
+	);
+
+	test("does not take a media type from a file registered at the link's legacy path when that file has another name", async () => {
+		const legacyNamed: LocalEpisode = {
+			title: "A B",
+			streamUrl: "app://resource/Old Folder/A B.mp4",
+			url: "[[Old Folder/A B.mp4]]",
+			description: "",
+			content: "",
+			podcastName: "local file",
+			filePath: "Old Folder/A B.mp4",
+			mediaType: "video",
+		};
+		localFiles.set({ ...emptyLocalFiles, episodes: [legacyNamed] });
+		vaultFiles = ["New/A+B.mp4"];
+
+		await link({ url: "Old+Folder/A+B.mp4", episodeName: "A+B", time: "12" });
+		metadata();
+
+		expect(state().mediaType).toBe("audio");
+		expect(media().tagName).toBe("AUDIO");
+		expect(media().src).toBe("app://resource/New/A+B.mp4");
+		expect(media().currentTime).toBe(12);
 	});
 });
 

@@ -9,6 +9,7 @@ import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { episodeLinkTarget } from "./utility/episodeLinkTarget";
+import { isLocalFile } from "./utility/isLocalFile";
 import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 import { getEpisodeMediaType, getUnambiguousMediaTypeFromPath } from "./utility/mediaType";
 import { ViewState } from "./types/ViewState";
@@ -62,6 +63,23 @@ function findLocalEpisodeByCandidates(nameCandidates: string[]): Episode | undef
 	);
 }
 
+function filesNamedLike(
+	files: readonly TFile[],
+	paths: readonly string[],
+): { paths: string[]; name: string; files: TFile[] } {
+	const candidates = paths.map((path) => {
+		const name = path.slice(path.lastIndexOf("/") + 1);
+		return { path, name, files: files.filter((file) => file.name === name) };
+	});
+	const { name, files: named } =
+		candidates.find((candidate) => candidate.files.length > 0) ?? candidates[0];
+	return {
+		paths: candidates.filter((candidate) => candidate.name === name).map(({ path }) => path),
+		name,
+		files: named,
+	};
+}
+
 /** A number of seconds from a link, or NaN unless the whole value is one. */
 function parseSeconds(value: string): number {
 	return value.trim() === "" ? Number.NaN : Number(value);
@@ -109,13 +127,17 @@ export default async function podNotesURIHandler(
 	const player = get(plugin).player;
 	const playOptions = hasExplicitTime ? { time: requestedTime, endTime: requestedEndTime } : {};
 	const loaded = get(player.state).episode;
+	const { app } = get(plugin);
+	const localFile = candidateValues(url)
+		.map((path) => app.vault.getAbstractFileByPath(path))
+		.find((file) => file instanceof TFile);
 	// A link to the loaded episode names its feed, or its file for a local file, so a
 	// same-titled episode of another show is not taken for it.
 	const loadedLinkTarget = loaded && episodeLinkTarget(loaded);
 	// Membership (not ordered selection) is correct here: there is only one loaded episode, and
 	// keeping the legacy candidate lets a legacy '+'-as-space link to the loaded episode resume
 	// without a feed round-trip. The only cost is a rare false-positive - a current-format link to
-	// a "X+Y" episode while a distinct "X Y" twin is loaded resumes the loaded twin instead of
+	// a "X+Y" feed episode while a distinct "X Y" twin is loaded resumes the loaded twin instead of
 	// switching - which we accept over regressing the far more common same-episode legacy-link case.
 	// A retitled same-episode link (guest name moved) has the same token set.
 	// Sub-1.0 overlap is not enough here: "… Part 1" vs the loaded "… Part 2"
@@ -124,6 +146,7 @@ export default async function podNotesURIHandler(
 	const episodeIsLoaded =
 		!!loaded &&
 		!!loadedLinkTarget &&
+		(!isLocalFile(loaded) || localFile?.path === loadedLinkTarget) &&
 		candidateValues(url).includes(loadedLinkTarget) &&
 		(nameCandidates.includes(loaded.title) ||
 			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
@@ -135,12 +158,6 @@ export default async function podNotesURIHandler(
 		await revealPlayer?.();
 		return;
 	}
-
-	// The path probe decides local-vs-feed routing; the episode itself is resolved by name.
-	const { app } = get(plugin);
-	const localFile = candidateValues(url)
-		.map((path) => app.vault.getAbstractFileByPath(path))
-		.find((file) => file !== null);
 
 	let episode: Episode | undefined;
 	let play = player.play.bind(player);
@@ -154,9 +171,7 @@ export default async function podNotesURIHandler(
 		// folder has since taken over the name's registration.
 		const named = findLocalEpisodeByCandidates(nameCandidates);
 		episode =
-			named &&
-			localFile instanceof TFile &&
-			(named as LocalEpisode).filePath !== localFile.path
+			named && (named as LocalEpisode).filePath !== localFile.path
 				? localEpisodeFromFile(
 						app,
 						localFile,
@@ -166,11 +181,29 @@ export default async function podNotesURIHandler(
 					)
 				: named;
 	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
-		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
-		// a vault path whose file was moved/renamed. Resolve the episode by name from
-		// the local-files store rather than fetching the bare path as a feed (which
-		// would fail and show a misleading "Could not load the podcast feed").
-		episode = findLocalEpisodeByCandidates(nameCandidates);
+		const { paths, name, files } = filesNamedLike(app.vault.getFiles(), candidateValues(url));
+		if (files.length !== 1) {
+			new Notice(
+				files.length === 0
+					? `No vault file is named "${name}".`
+					: `More than one vault file is named "${name}". Update the link with the correct path.`,
+			);
+			return;
+		}
+		const [file] = files;
+		const { episodes: registered } = get(localFiles);
+		const original = paths.flatMap((path) =>
+			[loaded, ...registered].filter(
+				(candidate) => (candidate as LocalEpisode | undefined)?.filePath === path,
+			),
+		)[0];
+		episode =
+			registered.find((candidate) => (candidate as LocalEpisode).filePath === file.path) ??
+			localEpisodeFromFile(
+				app,
+				file,
+				getUnambiguousMediaTypeFromPath(file.path) ?? original?.mediaType ?? "audio",
+			);
 	} else {
 		// Links for a private feed carry the non-fetchable placeholder, not the
 		// secret URL. Resolution is local-only: the placeholder's feed name must

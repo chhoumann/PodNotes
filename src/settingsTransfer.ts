@@ -10,6 +10,7 @@ import {
 import type { CredentialValues } from "./types/Credentials";
 import type { Episode } from "./types/Episode";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
+import { ownRecord } from "./utility/ownRecord";
 import { isLocalFile } from "./utility/isLocalFile";
 
 /**
@@ -385,10 +386,9 @@ function normalizeSecrets(values: CredentialValues): CredentialValues {
 
 /** Drop any playlist entry that isn't a plain object with an `episodes` array. */
 function sanitizePlaylistMap(value: Record<string, unknown>): Record<string, unknown> {
-	const out: Record<string, unknown> = {};
+	const out = ownRecord<unknown>();
 
 	for (const [name, playlist] of Object.entries(value)) {
-		if (DANGEROUS_KEYS.has(name)) continue;
 		if (!isPlainObject(playlist)) continue;
 		if (!Array.isArray(playlist.episodes)) continue;
 		out[name] = playlist;

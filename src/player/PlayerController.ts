@@ -6,6 +6,7 @@ import type { Episode, EpisodeMediaType } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
+import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
 import { selectSource, type PlaybackSource } from "./source";
@@ -551,19 +552,8 @@ export class PlayerController {
 		this.moved = false;
 	}
 
-	/** The composite key's record, else a legacy title-only record that does not name another podcast. */
 	private savedProgress(episode: Episode): PlayedEpisode | undefined {
-		const played = get(playedEpisodes);
-		const legacy = played[episode.title];
-		return (
-			played[getEpisodeKey(episode)] ??
-			(legacy &&
-			(!legacy.podcastName ||
-				!episode.podcastName ||
-				legacy.podcastName === episode.podcastName)
-				? legacy
-				: undefined)
-		);
+		return getPlayedEpisode(get(playedEpisodes), episode);
 	}
 
 	/**
