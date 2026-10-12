@@ -10,16 +10,7 @@
 	import { layoutFor, observeWidth, restoreScroll, type Layout } from "./layout";
 	import LibraryPage from "./LibraryPage.svelte";
 	import MiniPlayer from "./MiniPlayer.svelte";
-	import {
-		activeRoot,
-		isRoot,
-		pageExists,
-		pageKey,
-		pageLabel,
-		parentOf,
-		rootItem,
-		type RootCounts,
-	} from "./pages";
+	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
 	import PlayerOverlay from "./PlayerOverlay.svelte";
 	import PlaylistsPage from "./PlaylistsPage.svelte";
 	import Rail from "./Rail.svelte";
@@ -53,26 +44,8 @@
 	const loaded = $derived($playerState.status !== "empty");
 	const overlaid = $derived(loaded && $navigation.expanded);
 
-	const previous = $derived(
-		$navigation.stack[$navigation.stack.length - 1]?.page ?? parentOf(page),
-	);
-	// The rail reaches every root in the wide layout, so a root there has no Back.
-	const backLabel = $derived(
-		previous && !(layout === "wide" && isRoot(page)) ? pageLabel(previous, $feeds) : undefined,
-	);
-	const headTitle = $derived(
-		layout === "wide" && isRoot(page)
-			? rootItem(page.kind).label
-			: page.kind === "library"
-				? pageLabel(page, $feeds)
-				: undefined,
-	);
-	// A podcast's page is headed by its artwork and title inside the list.
-	const pageTitle = $derived(
-		page.kind === "playlist" ||
-			(layout === "compact" && isRoot(page) && page.kind !== "library")
-			? pageLabel(page, $feeds)
-			: undefined,
+	const head = $derived(
+		headFor(page, layout, $navigation.stack[$navigation.stack.length - 1]?.page, $feeds),
 	);
 
 	onMount(() => savedFeeds.subscribe(() => void feeds.ensureAll()));
@@ -116,22 +89,22 @@
 			{/if}
 			<main class="pn-main">
 				<header class="pn-head">
-					{#if backLabel}
+					{#if head.back}
 						<button
 							type="button"
 							class="pn-back"
-							aria-label="Back to {backLabel}"
+							aria-label="Back to {head.back}"
 							onclick={() => navigation.back()}
 						>
 							<span class="pn-back-icon" {@attach icon("chevron-left")}></span>
-							<span class="pn-back-label">{backLabel}</span>
+							<span class="pn-back-label">{head.back}</span>
 						</button>
 					{/if}
-					{#if headTitle}
-						<h1 class="pn-head-title">{headTitle}</h1>
+					{#if head.title}
+						<h1 class="pn-head-title">{head.title}</h1>
 					{/if}
 					<span class="pn-spacer"></span>
-					{#if page.kind === "library" && layout === "compact"}
+					{#if head.libraryActions}
 						<button
 							type="button"
 							class="pn-iconbtn"
@@ -157,8 +130,8 @@
 						onscroll={(event) =>
 							navigation.rememberScroll(event.currentTarget.scrollTop)}
 					>
-						{#if pageTitle}
-							<div class="pn-title"><h1>{pageTitle}</h1></div>
+						{#if head.pageTitle}
+							<div class="pn-title"><h1>{head.pageTitle}</h1></div>
 						{/if}
 						{#if page.kind === "library"}
 							<LibraryPage {layout} {counts} />

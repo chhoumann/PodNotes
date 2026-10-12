@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { FeedState } from "src/services/FeedRepository";
-import { pageExists, pageLabel, parsePage } from "./pages";
+import { headFor, pageExists, pageLabel, parsePage, type Head, type Page } from "./pages";
+import type { Layout } from "./layout";
 
 const feeds = new Map([
 	[
@@ -51,4 +52,33 @@ test("a removed podcast or playlist no longer exists", () => {
 	expect(pageExists({ kind: "playlist", name: "Favorites" }, feeds, names)).toBe(true);
 	expect(pageExists({ kind: "playlist", name: "Walks" }, feeds, names)).toBe(false);
 	expect(pageExists({ kind: "played" }, feeds, names)).toBe(true);
+});
+
+describe("headFor", () => {
+	const latest: Page = { kind: "latest" };
+	const show: Page = { kind: "feed", key: "Show" };
+	const walks: Page = { kind: "playlist", name: "Walks" };
+
+	test.each<[Layout, Page, Page | undefined, Head]>([
+		["compact", { kind: "library" }, undefined, { title: "Library", libraryActions: true }],
+		["wide", { kind: "library" }, undefined, { title: "Podcasts", libraryActions: false }],
+		[
+			"compact",
+			latest,
+			undefined,
+			{ back: "Library", pageTitle: "Latest episodes", libraryActions: false },
+		],
+		["wide", latest, show, { title: "Latest episodes", libraryActions: false }],
+		["compact", show, latest, { back: "Latest episodes", libraryActions: false }],
+		["wide", show, undefined, { back: "Library", libraryActions: false }],
+		[
+			"compact",
+			walks,
+			undefined,
+			{ back: "Playlists", pageTitle: "Walks", libraryActions: false },
+		],
+		["wide", walks, show, { back: "The Show", pageTitle: "Walks", libraryActions: false }],
+	])("%s %j after %j", (layout, page, previous, head) => {
+		expect(headFor(page, layout, previous, feeds)).toEqual(head);
+	});
 });

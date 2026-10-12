@@ -1,5 +1,6 @@
 import type { FeedKey, FeedState } from "src/services/FeedRepository";
 import type { IconType } from "src/types/IconType";
+import type { Layout } from "./layout";
 
 /** A page the shell shows. Plain JSON, so it is also the view's workspace state. */
 export type Page =
@@ -72,6 +73,41 @@ export function pageLabel(page: Page, feeds: ReadonlyMap<FeedKey, FeedState>): s
 	if (page.kind === "playlist") return page.name;
 	if (page.kind === "library") return "Library";
 	return rootItem(page.kind).label;
+}
+
+/** What the shell's head, and the top of its page, show for a page. */
+export interface Head {
+	/** The Back button, named by the page it returns to. */
+	readonly back?: string;
+	readonly title?: string;
+	/** The title at the top of the page's scroller. */
+	readonly pageTitle?: string;
+	/** The compact Library's Add podcast and Settings buttons. */
+	readonly libraryActions: boolean;
+}
+
+/**
+ * The wide rail reaches and names every root, so a root there has no Back and
+ * its head takes the rail's name. A podcast's page is headed by its artwork and
+ * title inside the list. `previous` is the page the user came from, if any.
+ */
+export function headFor(
+	page: Page,
+	layout: Layout,
+	previous: Page | undefined,
+	feeds: ReadonlyMap<FeedKey, FeedState>,
+): Head {
+	if (layout === "wide" && isRoot(page)) {
+		return { title: rootItem(page.kind).label, libraryActions: false };
+	}
+	const back = previous ?? parentOf(page);
+	const label = pageLabel(page, feeds);
+	return {
+		back: back ? pageLabel(back, feeds) : undefined,
+		title: page.kind === "library" ? label : undefined,
+		pageTitle: page.kind === "library" || page.kind === "feed" ? undefined : label,
+		libraryActions: page.kind === "library",
+	};
 }
 
 /** The same page always gives the same key, so `{#key}` remounts on a page change only. */
