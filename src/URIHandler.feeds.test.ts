@@ -65,13 +65,13 @@ describe("podNotesURIHandler with saved feeds", () => {
 	const load = vi.fn<(url: string) => Promise<ParsedFeedEpisodes>>();
 
 	/** Subscribes to "Patron Show", whose URL is on this device only when `secretStored`. */
-	function follow(secretStored = true) {
+	function follow(secretStored = true, secretUrl = SECRET_URL) {
 		stubLegacyStorage();
 		const feedUrls = new FeedUrlRepository(new obsidian.SecretStorage());
 		const patron: PodcastFeed = {
 			title: "Patron Show",
 			url: privateFeedPlaceholder("Patron Show"),
-			urlSecretId: secretStored ? feedUrls.store(SECRET_URL) : "podnotes-feed-url-gone",
+			urlSecretId: secretStored ? feedUrls.store(secretUrl) : "podnotes-feed-url-gone",
 			artworkUrl: "",
 		};
 		const feeds = new FeedRepository({
@@ -146,6 +146,54 @@ describe("podNotesURIHandler with saved feeds", () => {
 		expect(load).not.toHaveBeenCalled();
 		expect(get(player.state).currentTime).toBe(5);
 		expect(playing()).toMatchObject({ title: first.title, feedUrl: privateLink });
+	});
+
+	const HTTP_SECRET_URL = SECRET_URL.replace("https:", "http:");
+
+	test.each([
+		[
+			"an uppercase host",
+			SECRET_URL,
+			SECRET_URL.replace("patron.example.com", "PATRON.EXAMPLE.COM"),
+		],
+		["an uppercase scheme", SECRET_URL, SECRET_URL.replace("https:", "HTTPS:")],
+		["https's default port", SECRET_URL, SECRET_URL.replace(".com/", ".com:443/")],
+		["http's default port", HTTP_SECRET_URL, HTTP_SECRET_URL.replace(".com/", ".com:80/")],
+	])(
+		"a link to a private feed by its secret URL with %s plays the subscription's episode",
+		async (_, secretUrl, link) => {
+			follow(true, secretUrl);
+			player.play(testEpisode);
+			const linkless = { ...first, url: "" };
+			load.mockResolvedValue(feedDocument("Patron Show", [linkless]));
+
+			await open(link, linkless.title);
+
+			expect(playing()).toMatchObject({
+				title: linkless.title,
+				podcastName: "Patron Show",
+				url: privateLink,
+				feedUrl: privateLink,
+			});
+			expect(JSON.stringify(playing())).not.toMatch(/PATH_SENTINEL|QUERY_SENTINEL/);
+			expect(load.mock.calls).toEqual([[secretUrl]]);
+		},
+	);
+
+	test.each([
+		["another path case", SECRET_URL.replace("feed.xml", "FEED.xml")],
+		["a trailing slash", SECRET_URL.replace("feed.xml", "feed.xml/")],
+		["another query", SECRET_URL.replace("QUERY_SENTINEL", "OTHER_SENTINEL")],
+		["http for https", HTTP_SECRET_URL],
+	])("a link with %s is not the private feed's secret URL", async (_, link) => {
+		follow();
+		player.play(testEpisode);
+		load.mockResolvedValue(feedDocument("Patron Show", [{ ...first, url: "" }]));
+
+		await open(link, first.title);
+
+		expect(load.mock.calls).toEqual([[link]]);
+		expect(playing()).toMatchObject({ title: first.title, feedUrl: link });
 	});
 
 	test.each([
