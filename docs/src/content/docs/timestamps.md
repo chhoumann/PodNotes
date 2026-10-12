@@ -46,7 +46,12 @@ New captures are links. Timestamps that you captured before stay plain text. If 
 
 ## Compensate for reaction time
 
-To capture a few seconds before you react, set **Timestamp offset (s)** under **Episode notes** to that whole number of seconds. With an offset of `5`, a capture at `00:12:46` inserts `00:12:41`, and ranges move back by the same amount. A capture never goes below `00:00:00`.
+To capture a few seconds before you react:
+
+1. Open **Settings → PodNotes**.
+2. Under **Episode notes**, set **Timestamp offset (s)** to that whole number of seconds.
+
+With an offset of `5`, a capture at `00:12:46` inserts `00:12:41`, and ranges move back by the same amount. A capture never goes below `00:00:00`.
 
 ## <span id="settings"></span>Change the format
 

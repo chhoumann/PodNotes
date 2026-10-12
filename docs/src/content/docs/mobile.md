@@ -59,7 +59,7 @@ Long-press a media file in the file explorer, where a computer uses a right-clic
 
 ## <span id="known-limits-and-verified-devices"></span>Limits on phones
 
-- PodNotes does not merge changes from two devices. Use one device at a time. When you switch, let sync finish, then restart Obsidian or turn PodNotes off and on before you use it. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
+- PodNotes does not merge changes from two devices, so use one device at a time. Before you switch, follow [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
 - A file that plays on a computer can fail on a phone that lacks its codec.
 - Which headset press sends previous track depends on the headset and the phone, and some headsets send none.
 - API keys stay on each device, so add them on your phone too. A protected private feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).

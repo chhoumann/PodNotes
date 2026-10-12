@@ -251,7 +251,8 @@ starlight-toc a {
 	margin-bottom: 0.375rem;
 	font-size: var(--sl-text-lg);
 	font-weight: 600;
-	color: var(--sl-color-white);
+	/* The accent color marks the title as a link, also on touch screens. */
+	color: var(--sl-color-text-accent);
 	text-decoration: none;
 }
 [data-has-hero] .sl-markdown-content ul:first-of-type > li > a::after {

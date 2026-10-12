@@ -38,7 +38,7 @@ The default episode note template links each episode note to its feed note in th
 
 The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts` folder instead:
 
-- `Podcasts/{{title}}.md` puts every note in that folder.
+- `Podcasts/{{title}}.md` puts every note in that folder. Episodes with the same title from different podcasts then share one note.
 - `Podcasts/{{podcast}}/{{title}}.md` adds a subfolder per podcast.
 - `Podcasts/{{date:YYYY}}/{{podcast}} - {{title}}.md` adds a subfolder per publication year.
 
@@ -110,8 +110,6 @@ views:
 The same lines also work as the content of a `.base` file, such as `PodNotes/Episodes.base`. If your template has no `type` property, filter on a property or tag that it sets.
 
 ## Limits of note creation
-
-These cases can surprise you:
 
 - **PodNotes: Create episode note** needs both **Note creation file path** and **Note creation template**. With either one empty, the command is missing and the episode menu shows "Please set a note path and template in the settings."
 - PodNotes finds an existing note by its path, or by a matching title in the same folder. After you rename or move a note, it can create a second note for the episode.

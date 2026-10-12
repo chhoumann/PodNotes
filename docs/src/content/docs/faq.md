@@ -43,7 +43,7 @@ A show that exists only inside Spotify or another app has no feed to add. If the
 
 Yes, if your provider gives you a personal RSS URL. Paste the whole URL into **Search Podcasts**.
 PodNotes cannot sign in to providers that require a browser login.
-When the URL contains a password or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
+When the URL contains a password or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device). Importing a settings file also leaves these feeds without their URL, as [Import your settings](/import_export/#import-your-settings) explains.
 
 ### Can I annotate my own audio or video?
 

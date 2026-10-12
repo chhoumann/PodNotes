@@ -8,7 +8,7 @@ The queue decides what plays next. Playlists collect episodes you want to keep t
 
 ## Manage the queue
 
-The **Queue** list under the player shows what plays next. When an episode ends, the top episode in the queue starts. When you switch episodes, PodNotes puts the one you left at the top of the queue.
+The **Queue** list under the player shows what plays next. With the automatic queue on, the default, the top episode in the queue starts when an episode ends, and the episode you switch away from goes to the top of the queue. To fill it only by hand, [turn off the automatic queue](#turn-off-the-automatic-queue).
 
 To add an episode to the bottom of the queue:
 
@@ -46,7 +46,7 @@ To add an episode to the playlist:
 1. Right-click the episode, or select its **More options** button.
 2. Select **Add to Commute**.
 
-The playlist appears in the podcast grid.
+The playlist appears in the podcast grid. Select it to see its episodes:
 
 ![The Commute playlist with five episodes, below the search box and the played and refresh buttons](/screenshots/episode-list.webp)
 

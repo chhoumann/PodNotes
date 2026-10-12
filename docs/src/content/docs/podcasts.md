@@ -12,7 +12,7 @@ Add podcasts to PodNotes, find their episodes, and play them.
 2. Under **Search Podcasts**, type a podcast's name, such as `the daily`. Results appear as you type.
 3. Next to the podcast, select **Add**.
 
-Search uses the Apple Podcasts directory. To add a show by its feed instead:
+Search uses the Apple Podcasts directory. To add a show by its address instead:
 
 1. Copy its RSS feed URL or its Apple Podcasts show link. An RSS feed URL looks like `https://feeds.npr.org/510289/podcast.xml`.
 2. Paste it into **Search Podcasts**.
@@ -40,7 +40,7 @@ The view then lists that podcast's or playlist's episodes. **Queue** is the exce
 
 To return to the last list you saw, select **Episode list**, the second button at the top of the view. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
 
-Above each list, **Search episodes** filters it. In **Latest Episodes** and a podcast's list, **Refresh episodes** fetches new episodes. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
+Above each list, **Search episodes** filters it. In **Latest Episodes** and a podcast's list, **Refresh episodes** fetches new episodes. In a playlist, it does nothing. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
 
 <span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
 

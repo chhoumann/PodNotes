@@ -9,7 +9,7 @@ Build your own capture and note workflows with the [QuickAdd](https://quickadd.o
 
 ## <span id="timestamp-capture"></span>Capture a timestamp with a comment
 
-This Capture choice writes a timestamp link and your comment on a new line below the cursor:
+A Capture choice, with no macro, writes a timestamp link and your comment on a new line below the cursor:
 
 ```md
 - [00:12:41](obsidian://podnotes?...) Why tariffs raise prices
@@ -30,12 +30,12 @@ This Capture choice writes a timestamp link and your comment on a new line below
    ````
 
 7. Play an episode in PodNotes.
-8. Open the note you want to write in.
+8. Open the note you want to write in, in editing view, and place the cursor where the timestamp goes.
 9. Run **QuickAdd: Run**.
 10. Select `Podcast timestamp`.
 11. Type your comment.
 
-The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument:
+The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument. To capture 5 seconds earlier, the script's `return` line becomes:
 
 ```js
 return podnotes.getPodcastTimeFormatted(
@@ -108,5 +108,12 @@ PodNotes finds an episode note only at **Note creation file path**, or by the ep
 
 ## Send a transcript to an AI prompt
 
-To summarize an episode with QuickAdd's AI Assistant, use the script in [QuickAdd AI prompt example](/api/#quickadd-ai-prompt-example).
-It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first.
+This macro returns a prompt with the current episode's transcript, for QuickAdd's AI Assistant. It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first.
+
+1. In a visible folder of your vault, save the script from [QuickAdd AI prompt example](/api/#quickadd-ai-prompt-example) as `scripts/podnotes-transcript-prompt.js`.
+2. In **Settings → QuickAdd**, select **New choice**.
+3. Select **Macro**.
+4. Set **Name** to `Transcript prompt`.
+5. On the **Transcript prompt** page, under **Commands**, next to **User scripts**, select **Browse**.
+6. Select `scripts/podnotes-transcript-prompt.js`.
+7. In a prompt template for QuickAdd's AI Assistant, insert `{{MACRO:Transcript prompt}}`. QuickAdd runs the macro and puts its prompt there.
