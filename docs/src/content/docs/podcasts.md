@@ -12,7 +12,13 @@ Add podcasts to PodNotes, find their episodes, and play them.
 2. Under **Search Podcasts**, type a podcast's name, such as `the daily`. Results appear as you type.
 3. Next to the podcast, select **Add**.
 
-Search uses the Apple Podcasts directory. You can also paste an RSS feed URL, such as `https://feeds.npr.org/510289/podcast.xml`, or an Apple Podcasts show link. PodNotes then shows one result with an **Add** button. See [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) and [Can I use a private feed?](/faq/#can-i-use-a-private-feed)
+Search uses the Apple Podcasts directory. To add a show by its feed instead:
+
+1. Copy its RSS feed URL, such as `https://feeds.npr.org/510289/podcast.xml`, or its Apple Podcasts show link.
+2. Paste it into **Search Podcasts**.
+3. Select **Add** on the one result that appears.
+
+See [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) and [Can I use a private feed?](/faq/#can-i-use-a-private-feed)
 
 ## Remove a podcast
 
@@ -25,14 +31,14 @@ PodNotes keeps the podcast's episode notes, downloads, and playlist entries.
 ## <span id="episode-list"></span>Browse episodes
 
 1. Run **PodNotes: Show player**, or select **Show PodNotes** in the ribbon.
-2. At the top of the PodNotes view, select **Podcast grid**.
+2. At the top of the PodNotes view, select **Podcast grid**, the first of the three buttons.
 3. Select a podcast's artwork, or select a playlist.
 
 ![The podcast grid with the Queue, Favorites, Local Files, and Played playlists above podcast artwork tiles](/screenshots/podcast-grid.webp)
 
 The view then lists that podcast's or playlist's episodes. **Queue** is the exception: when it holds episodes, it opens the player, which shows the **Queue** list.
 
-To return to the last list you saw, select **Episode list**. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
+To return to the last list you saw, select **Episode list**, the second button at the top of the view. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
 
 Above each list, **Search episodes** filters it, and **Refresh episodes** fetches new episodes. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
 
@@ -40,13 +46,13 @@ Above each list, **Search episodes** filters it, and **Refresh episodes** fetche
 
 ## <span id="player"></span>Play an episode
 
-Select an episode to play it. The player resumes where you stopped last time. To return to the player from a list, select **Player** at the top of the view.
+Select an episode to play it. The player resumes where you stopped last time. To return to the player from a list, select **Player**, the third button at the top of the view.
 
 ![The player with episode artwork, the episode title, the progress bar, and the skip buttons](/screenshots/player.webp)
 
 - Select the artwork to play or pause. Select a point on the progress bar to jump there.
 - The skip buttons jump 15 seconds. **Skip backward length (s)** and **Skip forward length (s)** change that.
-- The speed slider goes from 0.5x to 4x. Each time Obsidian starts, the speed resets to **Default Playback Rate**.
+- The speed slider, below the volume slider, goes from 0.5x to 4x. Each time Obsidian starts, the speed resets to **Default Playback Rate**.
 - **Chapters** lists the episode's chapters when it has them. Select a chapter to jump to it.
 
 ## <span id="playlists"></span><span id="reordering-the-queue"></span><span id="turning-off-the-queue"></span>Queue and playlists

@@ -188,11 +188,12 @@ async function main() {
 				css,
 			});
 			// The Xvfb pointer rests mid-screen and would leave a hover state, so park
-			// it over empty space: the desktop file explorer, or the phone's note title.
+			// it over empty space: the desktop file explorer, or the phone note's left
+			// margin, which the open sidebar leaves uncovered.
 			await client.call("Input.dispatchMouseEvent", {
 				type: "mouseMoved",
-				x: size === PHONE ? size.width / 2 : 130,
-				y: size === PHONE ? 120 : size.height - 80,
+				x: size === PHONE ? 8 : 130,
+				y: size === PHONE ? 160 : size.height - 80,
 			});
 			await run(
 				`document.querySelectorAll(".has-focus").forEach((el) => el.classList.remove("has-focus")); return true;`,
@@ -237,8 +238,11 @@ async function main() {
 			const header = leaf.containerEl.querySelector(".view-header").getBoundingClientRect();
 			const column = view.querySelector(".cm-sizer").getBoundingClientRect();
 			const lines = [...view.querySelectorAll(".inline-title, .metadata-container, .cm-line, .callout")];
-			const top = Math.max(pane.top, header.bottom, (${fromLine})(lines).getBoundingClientRect().top - 16);
-			const bottom = Math.min(pane.bottom, innerHeight, (${toLine})(lines).getBoundingClientRect().bottom + 12);
+			// On a phone the header floats over the note and casts a shadow, and the
+			// navigation bar sits over its bottom.
+			const navbar = document.querySelector(".mobile-navbar")?.getBoundingClientRect().top ?? innerHeight;
+			const top = Math.max(pane.top, header.bottom + 12, (${fromLine})(lines).getBoundingClientRect().top - 16);
+			const bottom = Math.min(pane.bottom, navbar - 12, (${toLine})(lines).getBoundingClientRect().bottom + 12);
 			const left = Math.max(pane.left, column.x - 16);
 			const right = Math.min(pane.right, column.right + 16);
 			return { x: left, y: top, width: right - left, height: bottom - top };
@@ -275,7 +279,9 @@ async function main() {
 			hideSecretWarning: true,
 			css: CAPTURE_CSS,
 		});
-		await run(`app.workspace.leftSplit.collapse();
+		// Both takes open the palette on the same list, not on the last take's command.
+		await run(`app.internalPlugins.getPluginById("command-palette").instance.recentCommands = [];
+			app.workspace.leftSplit.collapse();
 			app.workspace.rightSplit.setSize(360);
 			const leaf = app.workspace.getLeavesOfType("markdown")[0];
 			app.workspace.setActiveLeaf(leaf, { focus: true });
@@ -284,9 +290,11 @@ async function main() {
 			const last = lines.findLast((i) => /^- \\[\\d/.test(editor.getLine(i)));
 			editor.setCursor(last, editor.getLine(last).length);
 			editor.replaceSelection("\\n");
-			const heading = lines.find((i) => editor.getLine(i) === "## Notes");
+			// The note is too short to scroll its Notes heading to the top, so start at
+			// the artwork rather than part way through it.
+			const artwork = lines.find((i) => editor.getLine(i).startsWith("!["));
 			const view = editor.cm;
-			view.scrollDOM.scrollTop = view.lineBlockAt(view.state.doc.line(heading + 1).from).top - 24;
+			view.scrollDOM.scrollTop = view.lineBlockAt(view.state.doc.line(artwork + 1).from).top - 16;
 			${api}.currentTime = ${seed.demo.at};
 			return true;`);
 		await client.call("Input.dispatchMouseEvent", {
@@ -412,11 +420,23 @@ async function main() {
 			"search results",
 		);
 		await settle(2500);
+		// The search shares its settings card with the playlists and more, so the
+		// shot hides what follows it and the card ends below the results.
+		await run(`window.searchSectionRest = [];
+			const tab = document.querySelector(".modal.mod-settings .vertical-tab-content");
+			const card = (${SEARCH_CARD})(tab);
+			for (let node = tab.querySelector(".podcast-query-container"); node !== card; node = node.parentElement)
+				for (let next = node.nextElementSibling; next; next = next.nextElementSibling) {
+					next.style.display = "none";
+					searchSectionRest.push(next);
+				}
+			return true;`);
 		await shoot(
 			"add-podcast",
 			{ kind: "rect", expression: SEARCH_SECTION },
 			{ css: `${CAPTURE_CSS} ${FIRST_FOUR_RESULTS}` },
 		);
+		await run(`searchSectionRest.forEach((el) => (el.style.display = "")); return true;`);
 		const { playlist } = seed;
 		await run(`const form = document.querySelector(".modal.mod-settings .add-playlist-container");
 			const icon = form.querySelector("select");
@@ -699,20 +719,24 @@ async function main() {
 // Shows only the first four search results, so the settings card ends with them.
 const FIRST_FOUR_RESULTS = ".podcast-query-results > :nth-child(n + 5) { display: none; }";
 
-// The settings card that holds Search Podcasts, its field, and the results.
+// The settings card that holds Search Podcasts: the nearest box with a
+// background around the search.
+const SEARCH_CARD = `(tab) => {
+	let card = tab.querySelector(".podcast-query-container");
+	while (card.parentElement !== tab && getComputedStyle(card).backgroundColor === "rgba(0, 0, 0, 0)") card = card.parentElement;
+	return card;
+}`;
+
+// That card, with an even margin around it.
 const SEARCH_SECTION = `(() => {
 	const tab = document.querySelector(".modal.mod-settings .vertical-tab-content");
-	const name = [...tab.querySelectorAll(".setting-item-heading .setting-item-name")].find((n) => n.textContent.trim() === "Search Podcasts");
-	const heading = name.closest(".setting-item").getBoundingClientRect();
-	const container = tab.querySelector(".podcast-query-container");
-	let card = container.parentElement;
-	while (card !== tab && getComputedStyle(card).backgroundColor === "rgba(0, 0, 0, 0)") card = card.parentElement;
-	const box = (card === tab ? container : card).getBoundingClientRect();
-	const pad = Math.max(12, heading.top - box.top);
-	const rows = [...container.querySelectorAll(".podcast-query-results > *")].filter((el) => el.getClientRects().length > 0);
-	const bottom = Math.min(box.bottom, Math.max(...rows.map((el) => el.getBoundingClientRect().bottom)) + pad);
-	const top = card === tab ? heading.top - pad : box.top;
-	return { x: box.x, y: top, width: box.width, height: bottom - top };
+	const pane = tab.getBoundingClientRect();
+	const box = (${SEARCH_CARD})(tab).getBoundingClientRect();
+	const top = Math.max(pane.top, box.top - 16);
+	const bottom = Math.min(pane.bottom, box.bottom + 16);
+	const left = Math.max(pane.left, box.left - 16);
+	const right = Math.min(pane.right, box.right + 16);
+	return { x: left, y: top, width: right - left, height: bottom - top };
 })()`;
 
 await main();

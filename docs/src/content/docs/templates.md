@@ -74,7 +74,7 @@ PodNotes shortens a long folder or file name to fit file system limits, and keep
 
 `{{date}}` and `{{currentDate}}` accept a [date format](#date-formats). `{{episodeNumber:000}}` pads to three digits. Any other argument gives the number without padding.
 
-The episode number comes from `<itunes:episode>` when the feed has a valid one. Otherwise PodNotes reads a number at the start of the title, such as `#12`, `Ep. 12`, `Episode 12`, or `12: Interview`. PodNotes can read a year at the start of a title, as in `2024: A year in review`, as an episode number.
+The episode number comes from `<itunes:episode>` when the feed has a valid one. Otherwise PodNotes reads a number at the start of the title, such as `#12`, `Ep. 12`, `Episode 12`, or `12: Interview`. PodNotes can mistake a year at the start of a title, as in `2024: A year in review`, for episode number 2024.
 
 `{{description}}`, `{{content}}`, and `{{chapters}}` accept a prefix for every line, as in `{{description:> }}`. Descriptions and content keep ordinary Markdown formatting, links, and image alt text. PodNotes removes media elements, escapes Markdown embeds, and turns `dataview` and `dataviewjs` code blocks into `text` code blocks.
 
