@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in Settings, local files, episode notes. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
+description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in Settings, local files, episode notes, transcripts. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
 ---
 
 # Verify PodNotes in real Obsidian
@@ -170,6 +170,10 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
 
 ## Helpers
 
+- `.claude/skills/verify/net.mjs` runs as `watch`, `log` or `unwatch`. It logs
+  every `fetch` and `requestUrl` call PodNotes makes, without query strings,
+  and answers OpenAI and Deepgram with a fixture provider while it watches.
+
 - `.claude/skills/verify/ui.mjs` sends trusted input through
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,
   `type <css> <text>` (insert at the cursor), `fill <css> <text>` (replace),
@@ -177,7 +181,8 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `click`, `type`,
   `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
-- `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`,
-  `audio [vault path]` or `stop`. The feed URL uses `127.0.0.1.nip.io`, a public DNS name for
+- `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
+  `requests`, `audio [vault path]` or `stop`. `requests` prints the paths
+  PodNotes fetched from the server. The feed URL uses `127.0.0.1.nip.io`, a public DNS name for
   127.0.0.1, because PodNotes refuses literal loopback hosts. Its port is fixed
   per worktree, so a saved feed survives a server restart.
