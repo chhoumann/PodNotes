@@ -382,3 +382,33 @@ starlight-toc a {
 		overflow-wrap: anywhere;
 	}
 }
+
+/* ---------------------------------------------------------------------------
+ * Line breaks
+ * ------------------------------------------------------------------------ */
+
+/* Headings break into even lines instead of leaving one word behind. */
+.sl-markdown-content :is(h2, h3),
+h1#_top {
+	text-wrap: balance;
+}
+
+/* Code in headings shrinks on narrow screens so a method name fits one line. */
+@media (max-width: 50rem) {
+	.sl-markdown-content :is(h2, h3) code {
+		font-size: 0.65em;
+	}
+}
+
+/* On wide screens, command IDs and label lists stay on one line. */
+@media (min-width: 50rem) {
+	.sl-markdown-content td[data-label="ID"] code,
+	.sl-markdown-content td[data-label="Labels"] {
+		white-space: nowrap;
+	}
+}
+
+/* The landing page's prose keeps a readable line length under the wide hero. */
+[data-has-hero] .sl-markdown-content > p {
+	max-width: 45rem;
+}

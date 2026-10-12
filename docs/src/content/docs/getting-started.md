@@ -9,7 +9,7 @@ In about five minutes, you get a podcast playing in Obsidian, a timestamp in a n
 ## Install PodNotes
 
 1. In Obsidian, open **Settings → Community plugins**.
-2. If **Restricted mode** is on, turn it off.
+2. If you see **Exit Restricted mode**, select it.
 3. Select **Browse**.
 4. Search for PodNotes.
 5. Select **Install**.
@@ -37,11 +37,14 @@ You can also paste the show's RSS feed URL or its Apple Podcasts link into the s
 
 The episode starts, and the view switches to the player. Select the artwork in the player to pause or play.
 
+## Create an episode note
+
+With the episode still loaded, run **PodNotes: Create episode note** from the command palette. PodNotes creates the note, opens it, and puts it in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback. To change what a new note holds, see [Change what notes contain](/notes/#change-what-notes-contain).
+
 ## Capture a timestamp
 
-1. Open a note in editing view.
-2. Place the cursor where you want the timestamp.
-3. Run **PodNotes: Capture Timestamp** from the command palette.
+1. In the episode note, in editing view, place the cursor where you want the timestamp.
+2. Run **PodNotes: Capture Timestamp** from the command palette.
 
 PodNotes inserts the playback time as a link:
 
@@ -49,14 +52,7 @@ PodNotes inserts the playback time as a link:
 - [00:12:41](obsidian://podnotes?...)
 ```
 
-Select the link, in Live Preview or reading view, to play the episode from that moment.
-
-## Create an episode note
-
-1. With the episode still loaded, run **PodNotes: Create episode note**.
-2. Write in the note that opens.
-
-PodNotes creates the note in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback. To change what a new note holds, see [Change what notes contain](/notes/#change-what-notes-contain).
+Select the link, in Live Preview or reading view, to play the episode from that moment. Capture works the same in any note.
 
 ## Other ways to install
 

@@ -34,13 +34,13 @@ hero:
 - [Use PodNotes on your phone](/mobile/)
   PodNotes works on iOS and Android. Download episodes for offline listening, or play your own audio and video files.
 - <span id="transcripts-with-speaker-labels"></span>[Transcribe episodes](/transcripts/)
-  Turn an episode into a transcript note with your own OpenAI API key, or with a Deepgram key when you turn on speaker labels.
+  Turn an episode into a transcript note with your own OpenAI API key, or with a Deepgram key when you turn on speaker labels and choose Deepgram.
 - [Automate with the API](/api/)
   Use the commands, the JavaScript API, and QuickAdd to capture and write notes your way.
 
 ## <span id="installation"></span><span id="installation-with-brat"></span><span id="manual-installation"></span>Start in three steps
 
-1. **Install PodNotes.** In **Settings → Community plugins**, turn off **Restricted mode** if it is on. Select **Browse**, search for PodNotes, then select **Install** and **Enable**.
+1. **Install PodNotes.** In **Settings → Community plugins**, select **Exit Restricted mode** if you see it. Select **Browse**, search for PodNotes, then select **Install** and **Enable**.
 2. **Add a podcast.** In **Settings → PodNotes**, search for a show or paste its RSS feed URL, then select **Add**.
 3. **Capture a moment.** Run **PodNotes: Show player** and select an episode to play it. In a note, run **PodNotes: Capture Timestamp**.
 

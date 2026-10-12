@@ -48,7 +48,7 @@ After an import, PodNotes cannot fetch your protected private feeds, the ones wh
 
 The import replaces your preferences, templates, saved podcasts, and playlists, and keeps your playback progress and downloads. It also sets the current speed and volume to the imported **Default Playback Rate** and **Default Volume**.
 
-PodNotes also imports settings files from older versions and a copy of `data.json`. It rejects a file from a newer version and asks you to update.
+PodNotes also imports settings files from older versions and a copy of `data.json`. It rejects a file in a newer format than this version supports and asks you to update.
 
 ### API keys in a settings file
 

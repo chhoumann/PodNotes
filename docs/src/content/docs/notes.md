@@ -50,7 +50,7 @@ Feed notes and downloads have their own paths: **Feed note file path** under **F
 
 ## Change what notes contain
 
-**Note creation template** under **Episode notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This example replaces the [default template](/templates/#default-episode-note-template). It adds the episode's duration, shows the artwork at 96 pixels wide, folds the description into a callout, and keeps the `status` and `rating` properties for [Bases](#browse-your-notes-with-bases). It leaves out the title heading, the episode URL, and `favorite`:
+**Note creation template** under **Episode notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This example replaces the [default template](/templates/#default-episode-note-template). It adds the episode's duration, shows the artwork at 96 pixels wide, folds the description into a callout, and keeps the `status` and `rating` properties for [Bases](#browse-your-notes-with-bases). It leaves out the `# {{title}}` heading, the episode URL, and `favorite`. Obsidian still shows the file name as the note's title:
 
 ```md
 ---
