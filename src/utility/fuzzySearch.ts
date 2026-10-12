@@ -1,8 +1,9 @@
 /*!
  * Fuzzy search ported from Fuse.js v7.5.0 (https://github.com/krisk/Fuse).
  * Copyright (c) Kiro Risk. Licensed under the Apache License 2.0
- * (https://www.apache.org/licenses/LICENSE-2.0), copied in fuzzySearch.LICENSE.
+ * (https://www.apache.org/licenses/LICENSE-2.0).
  */
+// The full license text is in fuzzySearch.LICENSE.
 
 const THRESHOLD = 0.4;
 const DISTANCE = 100;
@@ -19,7 +20,7 @@ export function fuzzySearch<T>(
 	query: string,
 	items: readonly T[],
 	text: (item: T) => string,
-	findAllMatches: boolean,
+	{ findAllMatches }: { findAllMatches: boolean },
 ): T[] {
 	if (!query.trim()) return [...items];
 

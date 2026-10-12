@@ -9,5 +9,7 @@ export default function searchEpisodes(
 		return episodes;
 	}
 
-	return fuzzySearch(query, episodes, (episode) => episode.title, true);
+	return fuzzySearch(query, episodes, (episode) => episode.title, {
+		findAllMatches: true,
+	});
 }
