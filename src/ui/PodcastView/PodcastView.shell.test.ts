@@ -124,6 +124,32 @@ describe("navigation", () => {
 	});
 });
 
+describe("landmarks", () => {
+	// Obsidian shows the nearest `aria-label` as a tooltip wherever the pointer rests.
+	const labelledNonControls = () =>
+		[...document.querySelectorAll(".podcast-view [aria-label]")]
+			.filter((el) => !el.matches("button, input, select, textarea, a, [role]"))
+			.map((el) => el.outerHTML.slice(0, 80));
+
+	test("are named without an aria-label, which Obsidian would show as a tooltip", async () => {
+		const { resize } = renderView(820);
+		playing();
+		await tick();
+		expect(screen.getByRole("navigation", { name: "PodNotes" })).toBeInTheDocument();
+		expect(screen.getByRole("region", { name: "Now playing" })).toBeInTheDocument();
+		expect(labelledNonControls()).toEqual([]);
+
+		resize(320);
+		await tick();
+		expect(screen.getByRole("navigation", { name: "Lists" })).toBeInTheDocument();
+		expect(labelledNonControls()).toEqual([]);
+
+		await fireEvent.click(button(`Open player: ${episode.title}`));
+		expect(screen.getByRole("region", { name: "Player" })).toBeInTheDocument();
+		expect(labelledNonControls()).toEqual([]);
+	});
+});
+
 describe("pages", () => {
 	test("an episode's menu can move it in the queue on the Queue page only", async () => {
 		const second = { ...episode, title: "Episode 2" };

@@ -9,6 +9,7 @@
 	const { app, navigation } = useServices();
 
 	let section: HTMLElement | undefined = $state();
+	const id = $props.id();
 
 	// Obsidian's keymap gives Escape to the newest scope, so a menu or modal opened
 	// over the player closes first. It keeps one stack per window and pushes onto the
@@ -64,7 +65,8 @@
 	}
 </script>
 
-<section class="pn-player" aria-label="Player" bind:this={section}>
+<section class="pn-player" aria-labelledby="{id}-name" bind:this={section}>
+	<span id="{id}-name" hidden>Player</span>
 	<header class="pn-np-head">
 		<button
 			type="button"

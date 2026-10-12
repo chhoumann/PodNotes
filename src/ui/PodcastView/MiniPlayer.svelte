@@ -18,6 +18,7 @@
 	const remaining = $derived(Math.max(0, duration - elapsed));
 	const percent = $derived(duration > 0 ? (elapsed / duration) * 100 : 0);
 	let failedArtworkUrl = $state("");
+	const id = $props.id();
 
 	function clock(seconds: number): string {
 		return formatSeconds(seconds, seconds >= 3600 ? "H:mm:ss" : "m:ss");
@@ -35,7 +36,8 @@
 </script>
 
 {#if episode}
-	<section class="pn-mini" class:is-wide={layout === "wide"} aria-label="Now playing">
+	<section class="pn-mini" class:is-wide={layout === "wide"} aria-labelledby="{id}-name">
+		<span id="{id}-name" hidden>Now playing</span>
 		{#if layout === "compact"}
 			<div class="pn-mini-prog" aria-hidden="true">
 				<span style:width="{percent}%"></span>

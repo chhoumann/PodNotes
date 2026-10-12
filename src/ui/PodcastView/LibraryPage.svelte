@@ -8,10 +8,12 @@
 
 	let { layout, counts }: { layout: Layout; counts: RootCounts } = $props();
 	const { navigation } = useServices();
+	const id = $props.id();
 </script>
 
 {#if layout === "compact"}
-	<nav class="pn-nav" aria-label="Lists">
+	<nav class="pn-nav" aria-labelledby="{id}-name">
+		<span id="{id}-name" hidden>Lists</span>
 		{#each LIST_ROOTS as root (root.kind)}
 			<button
 				type="button"

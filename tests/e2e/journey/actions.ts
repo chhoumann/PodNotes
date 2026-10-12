@@ -58,9 +58,8 @@ export const ui = {
 			`Back to ${label}`,
 			`${PLAYER_VIEW} button.pn-back[aria-label=${q(`Back to ${label}`)}]`,
 		),
-	listRow: (label: string) =>
-		navItem(`Library row ${label}`, 'nav.pn-nav[aria-label="Lists"]', label),
-	rail: byCss("rail", `${PLAYER_VIEW} nav.pn-rail[aria-label="PodNotes"]`),
+	listRow: (label: string) => navItem(`Library row ${label}`, ".pn-scroll > nav.pn-nav", label),
+	rail: byCss("rail", `${PLAYER_VIEW} nav.pn-rail`),
 	railItem: (label: string) => navItem(`rail item ${label}`, "nav.pn-rail", label),
 	miniPlayer: byCss("mini player", `${PLAYER_VIEW} section.pn-mini`),
 	openPlayer: byCss("mini player", `${PLAYER_VIEW} section.pn-mini button.pn-mini-open`),

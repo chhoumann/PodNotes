@@ -6,9 +6,11 @@
 	let { counts, active }: { counts: RootCounts; active: RootKind } = $props();
 	const { navigation, openSettings } = useServices();
 	const add = rootItem("add");
+	const id = $props.id();
 </script>
 
-<nav class="pn-rail" aria-label="PodNotes">
+<nav class="pn-rail" aria-labelledby="{id}-name">
+	<span id="{id}-name" hidden>PodNotes</span>
 	<button type="button" class="pn-railsearch" onclick={() => navigation.goRoot("add")}>
 		<span class="pn-railsearch-icon" {@attach icon(add.icon)}></span>
 		<span>{add.label}</span>
