@@ -9,22 +9,44 @@ import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { FeedRepository } from "src/services/FeedRepository";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import { resolveFeedUrl } from "src/services/privateFeeds";
-import { hidePlayedEpisodes, playedEpisodes, plugin, savedFeeds, viewState } from "src/store";
+import { hidePlayedEpisodes, playedEpisodes, plugin, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { ViewState } from "src/types/ViewState";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
 import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 import { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
+import { Navigation } from "./Navigation";
 
 vi.mock("./EpisodePlayer.svelte", () => ({
 	default: EpisodePlayerStub,
 }));
 
 import PodcastView from "./PodcastView.svelte";
+
+/** The view, over the plugin `usePlugin` set. */
+function renderView() {
+	return render(PodcastView, {
+		props: {
+			services: {
+				app: new obsidian.App(),
+				api: {} as never,
+				player,
+				feeds: get(plugin).feeds,
+				navigation,
+				settings: structuredClone(DEFAULT_SETTINGS),
+				captureTimestamp: async () => null,
+				openSettings: () => {},
+			},
+		},
+	});
+}
+
+const back = () => fireEvent.click(screen.getByRole("button", { name: /^Back to / }));
+const openList = (name: string) =>
+	fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${name}`) }));
 
 const mockLoad = vi.fn<(url: string) => Promise<ParsedFeedEpisodes>>();
 
@@ -144,7 +166,7 @@ function resetStores() {
 	savedFeeds.set({});
 	hidePlayedEpisodes.set(false);
 	playedEpisodes.set({});
-	viewState.set(ViewState.PodcastGrid);
+	navigation = new Navigation();
 	player = new PlayerController(new FakeDocument().asPlayerDocument(), {
 		settings: structuredClone(DEFAULT_SETTINGS),
 		app: { vault: {} as never },
@@ -155,6 +177,7 @@ function resetStores() {
 }
 
 let player: PlayerController;
+let navigation: Navigation;
 const playingEpisode = () => get(player.state).episode;
 
 const listed = () =>
@@ -215,7 +238,7 @@ describe("PodcastView integration flow", () => {
 			},
 		});
 
-		render(PodcastView);
+		renderView();
 
 		const feedImage = await screen.findByAltText(testFeed.title);
 		await fireEvent.click(feedImage);
@@ -224,7 +247,7 @@ describe("PodcastView integration flow", () => {
 		await fireEvent.click(episodeNode);
 
 		expect(playingEpisode()).toMatchObject({ title: testEpisode.title });
-		expect(get(viewState)).toBe(ViewState.Player);
+		expect(navigation.current.expanded).toBe(true);
 
 		const current = playingEpisode();
 		expect(current).toBeDefined();
@@ -249,9 +272,9 @@ describe("PodcastView integration flow", () => {
 		);
 		usePlugin();
 		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
-		viewState.set(ViewState.EpisodeList);
+		navigation.goRoot("latest");
 
-		render(PodcastView);
+		renderView();
 
 		await screen.findByText("Fetching episodes...");
 
@@ -269,7 +292,7 @@ describe("PodcastView integration flow", () => {
 		);
 	});
 
-	test("opens a global played episodes view from the podcast grid", async () => {
+	test("opens a global played episodes view from the library", async () => {
 		const playedEpisode = episode("Already Finished", testFeed, "2023-01-15T00:00:00.000Z");
 		respondByUrl({ [testFeed.url]: [testEpisode, playedEpisode] });
 		hidePlayedEpisodes.set(true);
@@ -284,10 +307,9 @@ describe("PodcastView integration flow", () => {
 		});
 		usePlugin();
 
-		render(PodcastView);
+		renderView();
 
-		const playedCard = await screen.findByLabelText("Played");
-		await fireEvent.click(playedCard);
+		await openList("Played");
 
 		expect(await screen.findByText("Already Finished")).toBeInTheDocument();
 		expect(screen.getByText("Played")).toBeInTheDocument();
@@ -308,29 +330,29 @@ describe("PodcastView integration flow", () => {
 		});
 		usePlugin();
 
-		render(PodcastView);
+		renderView();
 
-		const playedCard = await screen.findByLabelText("Played");
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
-		await fireEvent.click(playedCard);
+		await openList("Played");
 		expect(await screen.findByText("Already Finished")).toBeInTheDocument();
 
 		mockLoad.mockReturnValueOnce(refresh.promise);
 		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
-		await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
+		await back();
+		await openList("Latest episodes");
 		refresh.resolve(feedDocument(testFeed.title, [testEpisode]));
 
 		await waitFor(() => expect(listed()).toEqual([testEpisode.title]));
-		expect(screen.getByText("Latest Episodes")).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Latest episodes" })).toBeInTheDocument();
 	});
 
-	test("the Episode list tab shows episodes that loaded while the grid was open (#375)", async () => {
+	test("Latest episodes shows episodes that loaded while the library was open (#375)", async () => {
 		usePlugin();
 
-		render(PodcastView);
+		renderView();
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		await screen.findByAltText(testFeed.title);
-		await fireEvent.click(screen.getByRole("button", { name: /episode list/i }));
+		await openList("Latest episodes");
 
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
 	});
@@ -347,7 +369,7 @@ describe("PodcastView integration flow", () => {
 			respondByUrl({ [testFeed.url]: [alphaEpisode], [secondFeed.url]: [betaEpisode] });
 			savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 			usePlugin();
-			render(PodcastView);
+			renderView();
 			await fireEvent.click(await screen.findByAltText(testFeed.title));
 			expect(await screen.findByText(alphaEpisode.title)).toBeInTheDocument();
 			refresh = deferred<ParsedFeedEpisodes>();
@@ -358,7 +380,7 @@ describe("PodcastView integration flow", () => {
 		});
 
 		test("never lists it under the podcast opened since, and the banner clears", async () => {
-			await fireEvent.click(screen.getByRole("button", { name: /podcast grid/i }));
+			await back();
 			await fireEvent.click(await screen.findByAltText(secondFeed.title));
 			expect(screen.getByText("Updating 1 feed")).toBeInTheDocument();
 
@@ -370,8 +392,9 @@ describe("PodcastView integration flow", () => {
 			expect(screen.getAllByText(secondFeed.title).length).toBeGreaterThan(0);
 		});
 
-		test("lists every podcast when the user went back to Latest Episodes", async () => {
-			await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
+		test("lists every podcast when the user went on to Latest episodes", async () => {
+			await back();
+			await openList("Latest episodes");
 
 			refresh.resolve(feedDocument(testFeed.title, [alphaEpisode]));
 
@@ -384,7 +407,7 @@ describe("PodcastView integration flow", () => {
 	test("an open podcast that is removed falls back to Latest Episodes", async () => {
 		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 		usePlugin();
-		render(PodcastView);
+		renderView();
 		await fireEvent.click(await screen.findByAltText(secondFeed.title));
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(2));
 
@@ -400,7 +423,7 @@ describe("PodcastView integration flow", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		const failure = `Could not load episodes for ${testFeed.title}. Check your connection and try again.`;
 		usePlugin();
-		render(PodcastView);
+		renderView();
 		await fireEvent.click(await screen.findByAltText(testFeed.title));
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
 
@@ -411,7 +434,7 @@ describe("PodcastView integration flow", () => {
 		expect(notice).not.toHaveBeenCalledWith(failure);
 
 		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
-		await fireEvent.click(screen.getByRole("button", { name: /podcast grid/i }));
+		await back();
 		await fireEvent.click(await screen.findByAltText(secondFeed.title));
 		await waitFor(() =>
 			expect(notice).toHaveBeenCalledWith(
@@ -431,7 +454,7 @@ describe("PodcastView integration flow", () => {
 		};
 		savedFeeds.set({ [testFeed.title]: testFeed, [patron.title]: patron });
 		usePlugin();
-		render(PodcastView);
+		renderView();
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(notice).not.toHaveBeenCalled();
 
@@ -452,9 +475,9 @@ describe("PodcastView integration flow", () => {
 		const betaEpisode = episode("Beta One", secondFeed, "2024-02-01T00:00:00.000Z");
 		respondByUrl({ [testFeed.url]: [testEpisode], [secondFeed.url]: [betaEpisode] });
 		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
-		viewState.set(ViewState.EpisodeList);
+		navigation.goRoot("latest");
 		usePlugin();
-		render(PodcastView);
+		renderView();
 		await waitFor(() => expect(listed()).toEqual([betaEpisode.title, testEpisode.title]));
 
 		savedFeeds.set({ [testFeed.title]: testFeed });
@@ -474,7 +497,7 @@ describe("issue #174 feed cache cap regression", () => {
 	});
 
 	test("opening a show bypasses the truncated cache and loads older episodes", async () => {
-		render(PodcastView);
+		renderView();
 
 		const feedImage = await screen.findByAltText(testFeed.title);
 		expect(mockLoad).not.toHaveBeenCalled();
@@ -497,11 +520,11 @@ describe("issue #174 feed cache cap regression", () => {
 			},
 		});
 
-		render(PodcastView);
+		renderView();
 
-		const playedCard = await screen.findByLabelText("Played");
+		await screen.findByAltText(testFeed.title);
 		expect(mockLoad).not.toHaveBeenCalled();
-		await fireEvent.click(playedCard);
+		await openList("Played");
 
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText("Played")).toBeInTheDocument();
@@ -510,13 +533,13 @@ describe("issue #174 feed cache cap regression", () => {
 
 		await fireEvent.click(screen.getByText(oldEpisode.title));
 		expect(playingEpisode()).toMatchObject({ title: oldEpisode.title });
-		expect(get(viewState)).toBe(ViewState.Player);
+		expect(navigation.current.expanded).toBe(true);
 	});
 
 	test("latest episodes background fetch still uses the truncated cache", async () => {
-		viewState.set(ViewState.EpisodeList);
+		navigation.goRoot("latest");
 
-		render(PodcastView);
+		renderView();
 
 		expect(await screen.findByText(createNumberedEpisode(622).title)).toBeInTheDocument();
 		expect(mockLoad).not.toHaveBeenCalled();
@@ -524,7 +547,7 @@ describe("issue #174 feed cache cap regression", () => {
 	});
 
 	test("reopening a show reuses the full feed without refetching", async () => {
-		render(PodcastView);
+		renderView();
 
 		const feedImage = await screen.findByAltText(testFeed.title);
 		await fireEvent.click(feedImage);
@@ -532,8 +555,8 @@ describe("issue #174 feed cache cap regression", () => {
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 
-		await fireEvent.click(screen.getByRole("button", { name: /podcast grid/i }));
-		expect(get(viewState)).toBe(ViewState.PodcastGrid);
+		await back();
+		expect(navigation.current.page).toEqual({ kind: "library" });
 
 		await fireEvent.click(await screen.findByAltText(testFeed.title));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
@@ -544,7 +567,7 @@ describe("issue #174 feed cache cap regression", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		mockLoad.mockRejectedValue(new Error("network unavailable"));
 
-		render(PodcastView);
+		renderView();
 
 		const feedImage = await screen.findByAltText(testFeed.title);
 		await fireEvent.click(feedImage);
@@ -570,10 +593,9 @@ describe("issue #174 feed cache cap regression", () => {
 		});
 		usePlugin({}, true);
 
-		render(PodcastView);
+		renderView();
 
-		const playedCard = await screen.findByLabelText("Played");
-		await fireEvent.click(playedCard);
+		await openList("Played");
 
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 		expect(mockLoad.mock.calls).toEqual([[testFeed.url]]);
@@ -591,16 +613,15 @@ describe("issue #174 feed cache cap regression", () => {
 			},
 		});
 
-		render(PodcastView);
+		renderView();
 
-		const playedCard = await screen.findByLabelText("Played");
-		await fireEvent.click(playedCard);
+		await openList("Played");
 
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 
-		await fireEvent.click(screen.getByRole("button", { name: /latest episodes/i }));
-		await fireEvent.click(playedCard);
+		await back();
+		await openList("Played");
 
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 		expect(mockLoad).toHaveBeenCalledTimes(1);

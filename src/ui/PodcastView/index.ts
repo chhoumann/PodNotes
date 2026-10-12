@@ -2,6 +2,7 @@ import { ItemView } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
 import { VIEW_TYPE } from "../../constants";
+import type { ShellServices } from "./context";
 import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
 
@@ -42,7 +43,22 @@ export class MainView extends ItemView {
 
 		this.podcastView = mount(PodcastView, {
 			target: this.contentEl,
+			props: { services: this.services() },
 		});
+	}
+
+	private services(): ShellServices {
+		const { plugin } = this;
+		return {
+			app: this.app,
+			api: plugin.api,
+			player: plugin.player,
+			feeds: plugin.feeds,
+			navigation: plugin.navigation,
+			settings: plugin.settings,
+			captureTimestamp: () => plugin.captureTimestampToEditorOrNote(),
+			openSettings: () => plugin.openSettingsTab(),
+		};
 	}
 
 	protected override async onClose(): Promise<void> {

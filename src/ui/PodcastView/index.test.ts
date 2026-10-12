@@ -12,9 +12,11 @@ vi.mock("svelte", () => svelte);
 vi.mock("./PodcastView.svelte", () => ({ default: {} }));
 
 import { MainView } from ".";
+import { Navigation } from "./Navigation";
 
 function createView({ shouldMount }: { shouldMount: boolean }) {
 	const plugin = {
+		navigation: new Navigation(),
 		shouldMountPodcastView: vi.fn(() => shouldMount),
 		unregisterPodcastView: vi.fn(),
 	} as unknown as IPodNotes;
@@ -48,18 +50,19 @@ describe("MainView mobile startup mounting", () => {
 	});
 
 	it("mounts the Svelte UI when the plugin allows the view to wake", async () => {
-		const { contentEl, view } = createView({ shouldMount: true });
+		const { contentEl, plugin, view } = createView({ shouldMount: true });
 
 		await openView(view);
 
 		expect(svelte.mount).toHaveBeenCalledTimes(1);
 		expect(svelte.mount).toHaveBeenCalledWith(expect.anything(), {
 			target: contentEl,
+			props: { services: expect.objectContaining({ navigation: plugin.navigation }) },
 		});
 	});
 
 	it("mountPodcastView wakes a dormant restored view exactly once", () => {
-		const { contentEl, view } = createView({ shouldMount: false });
+		const { contentEl, plugin, view } = createView({ shouldMount: false });
 
 		view.mountPodcastView();
 		view.mountPodcastView();
@@ -67,6 +70,7 @@ describe("MainView mobile startup mounting", () => {
 		expect(svelte.mount).toHaveBeenCalledTimes(1);
 		expect(svelte.mount).toHaveBeenCalledWith(expect.anything(), {
 			target: contentEl,
+			props: { services: expect.objectContaining({ navigation: plugin.navigation }) },
 		});
 	});
 

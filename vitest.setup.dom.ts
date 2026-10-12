@@ -74,6 +74,15 @@ if (!("onWindowMigrated" in HTMLElement.prototype)) {
 		() => () => {};
 }
 
+// jsdom has no layout, so nothing resizes. tests/mocks/resizeObserver.ts reports widths.
+if (!("ResizeObserver" in window)) {
+	(window as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+		observe() {}
+		unobserve() {}
+		disconnect() {}
+	};
+}
+
 if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};
 }
