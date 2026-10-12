@@ -41,7 +41,7 @@ const PLAYER_SELECTOR = '.workspace-leaf-content[data-type="podcast_player_view"
 // Waits for the same non-zero box on two consecutive checks, so a capture never
 // races the sidebar opening.
 const OPEN_PLAYER = `(async () => {
-	if (!app.commands.executeCommandById("podnotes:podnotes-show-leaf")) return false;
+	await app.plugins.plugins.podnotes.activateView();
 	let last = "";
 	for (let i = 0; i < 100; i++) {
 		await new Promise((resolve) => setTimeout(resolve, 100));

@@ -82,7 +82,7 @@ read state.
   to 10 s for exactly one visible match. `key` and `uri` do not wait:
 
     ```bash
-    node .claude/skills/verify/ui.mjs click '.podcast-view [aria-label="Podcast grid"]'
+    node .claude/skills/verify/ui.mjs click '.podcast-view button.pn-navitem' --text 'Latest episodes'
     node .claude/skills/verify/ui.mjs click '.podcast-view .podcast-episode-item' --text 'Fixture Episode 1'
     node .claude/skills/verify/ui.mjs click '.nav-file-title[data-path="Fixtures/Local Fixture.wav"]' --right
     node .claude/skills/verify/ui.mjs fill 'input[placeholder="Search or enter feed URL..."]' "$FEED"

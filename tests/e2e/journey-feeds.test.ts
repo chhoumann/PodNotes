@@ -9,6 +9,8 @@ import {
 	listedEpisodes,
 	notices,
 	openPodNotesSettings,
+	showLibrary,
+	showList,
 	shownText,
 	showPodNotes,
 	typeInto,
@@ -134,7 +136,7 @@ describe("feed journeys", () => {
 		});
 		expect(await listedEpisodes(obsidian)).toEqual(titles);
 
-		await click(obsidian, ui.backToLatestEpisodes);
+		await showList(obsidian, "Latest episodes");
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 10, {
 			timeoutMs: 15_000,
 			message: "Latest Episodes capped at the default limit of 10",
@@ -241,7 +243,7 @@ describe("feed journeys", () => {
 		expect((await observePlayback(obsidian)).media?.src).toBe(
 			server.mediaUrl(sparse, sparse.episodes[0]),
 		);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard("Journey Empty"));
 		await obsidian.waitFor(async () => !(await isShown(obsidian, ui.episodeLoading)), {
 			timeoutMs: 15_000,
@@ -302,7 +304,7 @@ describe("feed journeys", () => {
 		expect(await listedEpisodes(obsidian)).toEqual(["Artless Episode"]);
 	});
 
-	test("the Episode list tab shows episodes that loaded while the grid was open (#375)", async () => {
+	test("Latest episodes shows episodes that loaded while the Library was open (#375)", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const show = feed("Journey Latest", "latest", ["Latest Two", "Latest One"]);
@@ -314,10 +316,10 @@ describe("feed journeys", () => {
 			timeoutMs: 15_000,
 			message: "the feed loaded while the grid shows",
 		});
-		await click(obsidian, ui.episodeListTab);
+		await showList(obsidian, "Latest episodes");
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
 			timeoutMs: 15_000,
-			message: "the Episode list tab to render its loaded episodes",
+			message: "Latest episodes to render its loaded episodes",
 		});
 
 		expect(await listedEpisodes(obsidian)).toEqual(["Latest Two", "Latest One"]);
@@ -349,7 +351,7 @@ describe("feed journeys", () => {
 				message: "Alpha's refresh request to arrive",
 			},
 		);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(beta.title));
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
 			timeoutMs: 15_000,
@@ -369,7 +371,7 @@ describe("feed journeys", () => {
 		});
 		expect(await listedEpisodes(obsidian)).toEqual(["Beta Two", "Beta One"]);
 
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(alpha.title));
 		release = server.holdFeed(alpha);
 		cachedBefore = await feedCachedAt(obsidian, server.feedUrl(alpha));
@@ -382,7 +384,7 @@ describe("feed journeys", () => {
 				message: "Alpha's second refresh request to arrive",
 			},
 		);
-		await click(obsidian, ui.backToLatestEpisodes);
+		await showList(obsidian, "Latest episodes");
 		await release();
 		await obsidian.waitFor(
 			async () => (await feedCachedAt(obsidian, server.feedUrl(alpha))) > cachedBefore,
@@ -418,7 +420,7 @@ describe("feed journeys", () => {
 
 		await showPodNotes(obsidian);
 		await click(obsidian, ui.podcastCard(keep.title));
-		await click(obsidian, ui.backToLatestEpisodes);
+		await showList(obsidian, "Latest episodes");
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
 			timeoutMs: 15_000,
 			message: "both podcasts in Latest Episodes",
@@ -436,7 +438,7 @@ describe("feed journeys", () => {
 
 		expect(await listedEpisodes(obsidian)).toEqual(["Keep One"]);
 		expect(await feedCacheHolds(obsidian, "Drop One")).toBe(false);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		expect(await isShown(obsidian, ui.podcastCard(keep.title))).toBe(true);
 		expect(await isShown(obsidian, ui.podcastCard(drop.title))).toBe(false);
 	});
@@ -455,7 +457,7 @@ describe("feed journeys", () => {
 
 		await showPodNotes(obsidian);
 		for (const title of ["Journey Shared Alias", show.title]) {
-			await click(obsidian, ui.podcastGridTab);
+			await showLibrary(obsidian);
 			await click(obsidian, ui.podcastCard(title));
 			await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 1, {
 				timeoutMs: 15_000,
@@ -476,7 +478,7 @@ describe("feed journeys", () => {
 		expect((await readLibrary(plugin)).subscriptions.map((entry) => entry.title)).toEqual([
 			show.title,
 		]);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		expect(await isShown(obsidian, ui.podcastCard("Journey Shared Alias"))).toBe(false);
 		await click(obsidian, ui.podcastCard(show.title));
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 1, {
@@ -552,7 +554,7 @@ describe("feed journeys", () => {
 			),
 		).toBe(true);
 		await showPodNotes(obsidian);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await waitUntilShown(obsidian, ui.podcastCard("__proto__"));
 	});
 });

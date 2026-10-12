@@ -9,6 +9,8 @@ import {
 	openInReadingView,
 	revealInFileExplorer,
 	runCommand,
+	showLibrary,
+	showList,
 	showPodNotes,
 	ui,
 	waitUntilShown,
@@ -102,7 +104,7 @@ describe("link and local file journeys", () => {
 			`\n[Resume in PodNotes](obsidian://podnotes?episodeName=Noted%20Episode&url=${feedParam})\n`,
 		);
 
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard("Journey Notes"));
 		await click(obsidian, ui.episode("Other Episode"));
 		await waitForPlayback(
@@ -248,8 +250,7 @@ describe("link and local file journeys", () => {
 		await plugin.reload(RELOAD_OPTIONS);
 		expect((await readLibrary(plugin)).localFiles).toEqual([registered]);
 		await showPodNotes(obsidian);
-		await click(obsidian, ui.podcastGridTab);
-		await click(obsidian, ui.playlistCard("Local Files"));
+		await showList(obsidian, "Local files");
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length > 0, {
 			timeoutMs: 10_000,
 			message: "the Local Files list",
