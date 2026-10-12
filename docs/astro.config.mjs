@@ -2,7 +2,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLinksValidator from "starlight-links-validator";
-import { description, sidebar, site, title } from "./src/site.mjs";
+import { description, repository, sidebar, site, title } from "./src/site.mjs";
 
 // https://astro.build/config
 export default defineConfig({
@@ -11,28 +11,67 @@ export default defineConfig({
 		starlight({
 			title,
 			description,
+			logo: { src: "./public/brand/podnotes-mark.svg", alt: "" },
 			plugins: [starlightLinksValidator()],
 			social: [
 				{
 					icon: "github",
 					label: "GitHub",
-					href: "https://github.com/chhoumann/PodNotes",
+					href: repository,
 				},
 			],
 			editLink: {
 				baseUrl: "https://github.com/chhoumann/PodNotes/edit/master/docs/",
 			},
+			customCss: ["./src/styles/custom.css"],
+			expressiveCode: {
+				defaultProps: { wrap: true },
+				styleOverrides: { borderRadius: "0.5rem" },
+			},
 			head: [
 				{
-					tag: "meta",
+					tag: "link",
 					attrs: {
-						property: "og:image",
-						content: `${site}/resources/podcast_grid.png`,
+						rel: "icon",
+						type: "image/png",
+						sizes: "32x32",
+						href: "/favicon-32.png",
 					},
 				},
+				{
+					tag: "link",
+					attrs: {
+						rel: "icon",
+						type: "image/png",
+						sizes: "16x16",
+						href: "/favicon-16.png",
+					},
+				},
+				{ tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
+				{
+					tag: "link",
+					attrs: {
+						rel: "preload",
+						href: "/fonts/InterVariable.woff2",
+						as: "font",
+						type: "font/woff2",
+						crossorigin: "",
+					},
+				},
+				{
+					tag: "meta",
+					attrs: { property: "og:image", content: `${site}/screenshots/og.png` },
+				},
+				{ tag: "meta", attrs: { property: "og:image:width", content: "1200" } },
+				{ tag: "meta", attrs: { property: "og:image:height", content: "630" } },
+				{ tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
 			],
 			sidebar,
-			components: { PageTitle: "./src/components/PageTitle.astro" },
+			components: {
+				Hero: "./src/components/Hero.astro",
+				MarkdownContent: "./src/components/MarkdownContent.astro",
+				PageTitle: "./src/components/PageTitle.astro",
+			},
 		}),
 	],
 });

@@ -355,7 +355,7 @@ describe("PodNotes data schema", () => {
 		expect((persisted.queue as Record<string, unknown>).futurePlaylistField).toBe("kept");
 	});
 
-	it("removes prototype-pollution keys", () => {
+	it("removes a root __proto__ key and keeps a playlist named constructor", () => {
 		const raw = JSON.parse(
 			'{"schemaVersion":1,"__proto__":{"polluted":true},"playlists":{"constructor":{"episodes":[]}}}',
 		) as Record<string, unknown>;
@@ -363,9 +363,97 @@ describe("PodNotes data schema", () => {
 		const persisted = encodePodNotesData(decoded.settings, decoded.unknownFields);
 
 		expect(decoded.unknownFields).not.toHaveProperty("__proto__");
-		expect(decoded.settings.playlists).toEqual({});
-		expect(persisted).not.toHaveProperty("__proto__");
+		expect(Object.keys(decoded.settings.playlists)).toEqual(["constructor"]);
+		expect(Object.keys(JSON.parse(JSON.stringify(persisted)))).not.toContain("__proto__");
 		expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+	});
+
+	describe("entries named like Object.prototype members", () => {
+		const names = ["toString", "__proto__", "constructor", "hasOwnProperty"];
+		const maps = [
+			"savedFeeds",
+			"podNotes",
+			"playedEpisodes",
+			"playlists",
+			"downloadedEpisodes",
+		] as const;
+
+		function library(entryNames: readonly string[]): unknown {
+			const entries = (value: (name: string) => unknown) =>
+				Object.fromEntries(entryNames.map((name) => [name, value(name)]));
+			return JSON.parse(
+				JSON.stringify({
+					schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+					libraryId: "library",
+					savedFeeds: entries((name) => ({
+						title: name,
+						url: `https://example.com/${name}.xml`,
+						artworkUrl: "",
+					})),
+					podNotes: entries((name) => ({
+						episodeName: "Ep",
+						filePath: `Notes/${name}.md`,
+						podcastFeedKey: name,
+					})),
+					playedEpisodes: entries((name) => ({
+						title: "Ep",
+						podcastName: name,
+						time: 5,
+						duration: 10,
+						finished: false,
+					})),
+					playlists: entries((name) => ({
+						name,
+						icon: "list",
+						episodes: [],
+						shouldEpisodeRemoveAfterPlay: false,
+						shouldRepeat: false,
+					})),
+					downloadedEpisodes: entries((name) => [
+						{
+							title: "Ep",
+							podcastName: name,
+							streamUrl: `https://example.com/${name}.mp3`,
+							url: "",
+							description: "",
+							content: "",
+							filePath: `${name}/Ep.mp3`,
+							size: 1,
+						},
+					]),
+				}),
+			);
+		}
+
+		it("keeps every entry across a save and a reload", () => {
+			const loaded = decodePodNotesData(library(names));
+			const saved = JSON.stringify(encodePodNotesData(loaded.settings, loaded.unknownFields));
+			const reloaded = decodePodNotesData(JSON.parse(saved));
+
+			expect(loaded.warnings).toEqual([]);
+			for (const map of maps) {
+				expect(Object.keys(reloaded.settings[map]).sort()).toEqual([...names].sort());
+			}
+			expect(reloaded.settings.savedFeeds["__proto__"].url).toBe(
+				"https://example.com/__proto__.xml",
+			);
+			const [download] = reloaded.settings.downloadedEpisodes[names[0]];
+			expect(download.filePath).toBe(`${names[0]}/Ep.mp3`);
+			expect(
+				JSON.stringify(encodePodNotesData(reloaded.settings, reloaded.unknownFields)),
+			).toBe(saved);
+			expect(({} as { url?: string }).url).toBeUndefined();
+		});
+
+		it("finds nothing under a name the library does not have", () => {
+			const { settings } = decodePodNotesData(library([]));
+
+			for (const map of maps) {
+				for (const name of [...names, "valueOf"]) {
+					expect(settings[map][name], `${map}.${name}`).toBeUndefined();
+				}
+			}
+		});
 	});
 
 	it.each([[[]], ["data"], [42], [true]])("fails closed for malformed root %o", (value) => {

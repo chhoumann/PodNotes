@@ -9,22 +9,23 @@ export interface PlayedEpisodeRecord {
 	episode: PlayedEpisode;
 }
 
+export function podcastNamesAgree(podcastName: string, otherPodcastName: string): boolean {
+	return !podcastName || !otherPodcastName || podcastName === otherPodcastName;
+}
+
 export function getPlayedEpisode(
 	playedEpisodes: PlayedEpisodeMap,
 	episode: Episode | null | undefined,
 ): PlayedEpisode | undefined {
 	if (!episode) return undefined;
 
-	const key = getEpisodeKey(episode);
-	if (key && playedEpisodes[key]) {
-		return playedEpisodes[key];
-	}
-
-	if (episode.title && playedEpisodes[episode.title]) {
-		return playedEpisodes[episode.title];
-	}
-
-	return undefined;
+	const own = (key: string) =>
+		Object.prototype.hasOwnProperty.call(playedEpisodes, key) ? playedEpisodes[key] : undefined;
+	const legacy = own(episode.title);
+	return (
+		own(getEpisodeKey(episode)) ??
+		(legacy && podcastNamesAgree(legacy.podcastName, episode.podcastName) ? legacy : undefined)
+	);
 }
 
 export function isEpisodeFinished(

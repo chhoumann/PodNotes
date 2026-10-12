@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SecretStorage } from "obsidian";
 import { DEFAULT_SETTINGS } from "src/constants";
+import {
+	decodePodNotesData,
+	encodePodNotesData,
+	PODNOTES_DATA_SCHEMA_VERSION,
+} from "src/persistence/podNotesData";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { FeedUrlRepository } from "./FeedUrlRepository";
@@ -176,6 +181,39 @@ describe("protectPrivateFeeds", () => {
 		expect(safe.queue.episodes[0].streamUrl).toBe("https://cdn.example/Ep 2.mp3");
 		expect(safe.queue.episodes[0].episodeDate).toEqual(queued.episodeDate);
 		expect(safe.downloadedEpisodes.Patreon[0].feedUrl).toBe("podnotes-private-feed:Patreon");
+	});
+
+	it("replaces the moved URL in a loaded library's downloads and playlists under any name", () => {
+		const { feedUrls } = repository();
+		const queued = episode("Ep 2", PRIVATE_URL);
+		const { settings: loaded } = decodePodNotesData(
+			JSON.parse(
+				JSON.stringify({
+					schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+					libraryId: "library",
+					savedFeeds: { toString: feed({ title: "toString", url: PRIVATE_URL }) },
+					playlists: {
+						constructor: {
+							...DEFAULT_SETTINGS.queue,
+							name: "constructor",
+							episodes: [queued],
+						},
+					},
+					downloadedEpisodes: {
+						toString: [{ ...queued, filePath: "Ep 2.mp3", size: 1 }],
+					},
+				}),
+			),
+		);
+
+		const { settings: safe } = protectPrivateFeeds(loaded, feedUrls);
+		const [download] = Object.values(safe.downloadedEpisodes)[0];
+		const [listed] = Object.values(safe.playlists)[0].episodes;
+
+		expect(JSON.stringify(encodePodNotesData(safe))).not.toContain("se-cret");
+		expect(download.feedUrl).toBe("podnotes-private-feed:toString");
+		expect(download.episodeDate).toEqual(queued.episodeDate);
+		expect(listed.feedUrl).toBe("podnotes-private-feed:toString");
 	});
 
 	it("is idempotent: a second run over protected settings changes nothing", () => {
