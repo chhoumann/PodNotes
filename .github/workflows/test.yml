@@ -1,3 +1,4 @@
+# CI3 baseline timing control.
 name: Test
 on:
   workflow_dispatch:
