@@ -14,7 +14,7 @@ Add podcasts to PodNotes, find their episodes, and play them.
 
 Search uses the Apple Podcasts directory. To add a show by its feed instead:
 
-1. Copy its RSS feed URL, such as `https://feeds.npr.org/510289/podcast.xml`, or its Apple Podcasts show link.
+1. Copy its RSS feed URL or its Apple Podcasts show link. An RSS feed URL looks like `https://feeds.npr.org/510289/podcast.xml`.
 2. Paste it into **Search Podcasts**.
 3. Select **Add** on the one result that appears.
 
@@ -34,7 +34,7 @@ PodNotes keeps the podcast's episode notes, downloads, and playlist entries.
 2. At the top of the PodNotes view, select **Podcast grid**, the first of the three buttons.
 3. Select a podcast's artwork, or select a playlist.
 
-![The podcast grid with the Queue, Favorites, Local Files, and Played playlists above podcast artwork tiles](/screenshots/podcast-grid.webp)
+![The podcast grid with the Queue, Favorites, Local Files, Played, and Commute playlists beside podcast artwork tiles](/screenshots/podcast-grid.webp)
 
 The view then lists that podcast's or playlist's episodes. **Queue** is the exception: when it holds episodes, it opens the player, which shows the **Queue** list.
 
@@ -50,7 +50,7 @@ Select an episode to play it. The player resumes where you stopped last time. To
 
 ![The player with episode artwork, the episode title, the progress bar, and the skip buttons](/screenshots/player.webp)
 
-- Select the artwork to play or pause. Select a point on the progress bar to jump there.
+- Select the artwork to play or pause. Select a point on the progress bar to jump there. The time on the left is how far you are, and the time on the right is how much is left.
 - The skip buttons jump 15 seconds. **Skip backward length (s)** and **Skip forward length (s)** change that.
 - The speed slider, below the volume slider, goes from 0.5x to 4x. Each time Obsidian starts, the speed resets to **Default Playback Rate**.
 - **Chapters** lists the episode's chapters when it has them. Select a chapter to jump to it.

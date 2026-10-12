@@ -56,7 +56,7 @@ Select the link, in Live Preview or reading view, to play the episode from that 
 1. With the episode still loaded, run **PodNotes: Create episode note**.
 2. Write in the note that opens.
 
-PodNotes creates the note in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback.
+PodNotes creates the note in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback. To change what a new note holds, see [Change what notes contain](/notes/#change-what-notes-contain).
 
 ## Other ways to install
 

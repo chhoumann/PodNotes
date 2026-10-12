@@ -7,8 +7,16 @@ import { withStackedTables } from "../tables.mjs";
 const withShortCode = (html: string) =>
 	html.replace(/<code dir="auto">(?=[^<]{1,24}<\/code>)/g, '<code dir="auto" class="short">');
 
-const html = withShortCode(
-	withStackedTables(await withScreenshots(await Astro.slots.render("default"))),
+// Longer inline code, such as a path or a URL, may break after a slash, so it
+// wraps in whole pieces.
+const withPathBreaks = (html: string) =>
+	html.replace(
+		/<code dir="auto">([^<]*)<\/code>/g,
+		(code, text: string) => `<code dir="auto">${text.replace(/\/+/g, "$&<wbr>")}</code>`,
+	);
+
+const html = withPathBreaks(
+	withShortCode(withStackedTables(await withScreenshots(await Astro.slots.render("default")))),
 );
 ---
 

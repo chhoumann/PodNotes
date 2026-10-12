@@ -27,7 +27,7 @@ To add your first podcast, see [Add and play podcasts](/podcasts/). Most command
 1. Open a note in editing view. Obsidian lists the capture command only while a note is open in an editor.
 2. In **Settings → Interface**, select **Configure mobile toolbar**.
 3. Under **Manage toolbar options**, select **Add a command...**.
-4. Find and select **PodNotes: Capture Timestamp**.
+4. Find and select **PodNotes: Capture Timestamp**. Its button shows a clock.
 
 To add a range button, play an episode in PodNotes first. You can pause it. Then repeat steps 3 and 4 with **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**. Obsidian lists them only while [the range commands are available](/commands/#capture-last-10-seconds--capture-last-20-seconds).
 
