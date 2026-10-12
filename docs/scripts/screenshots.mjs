@@ -37,7 +37,7 @@ const vaultPath = path.join(repoDir, ".obsidian-e2e-vaults", "docs-screenshots",
 const profileRoot = path.join(os.tmpdir(), "podnotes-docs-capture");
 const cdpPort = 9400 + Math.floor(Math.random() * 400);
 const WINDOW = { width: 1440, height: 1000 };
-const DEMO_WINDOW = { width: 1200, height: 750 };
+const DEMO_WINDOW = { width: 1200, height: 900 };
 const PHONE = { width: 390, height: 844 };
 // Wide enough that the artwork, title, and progress lead the player.
 const SIDEBAR = 430;
@@ -192,8 +192,8 @@ async function main() {
 			// margin, which the open sidebar leaves uncovered.
 			await client.call("Input.dispatchMouseEvent", {
 				type: "mouseMoved",
-				x: size === PHONE ? 8 : 130,
-				y: size === PHONE ? 160 : size.height - 80,
+				x: size.width === PHONE.width ? 8 : 130,
+				y: size.width === PHONE.width ? 160 : size.height - 80,
 			});
 			await run(
 				`document.querySelectorAll(".has-focus").forEach((el) => el.classList.remove("has-focus")); return true;`,
@@ -653,7 +653,12 @@ async function main() {
 		await settle(1000);
 		await showProperties(true);
 		await scrollNote("");
-		await shoot("episode-note-phone", episodeNote, phone);
+		// The properties, artwork, and callout need a taller phone to clear the
+		// navigation bar.
+		await shoot("episode-note-phone", episodeNote, {
+			...phone,
+			size: { ...PHONE, height: 932 },
+		});
 		await showProperties(false);
 		await scrollNote("## Notes");
 		await shoot("timestamps-phone", notesSection, phone);

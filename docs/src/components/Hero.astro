@@ -2,6 +2,7 @@
 // The landing page hero: the pitch and actions from the page's `hero`
 // frontmatter, then the captured hero screenshot in light and dark. Phones get
 // the note in Obsidian's mobile layout, which stays readable at that width.
+// Both twins load lazily, so the browser fetches only the one the theme shows.
 import { LinkButton } from "@astrojs/starlight/components";
 import { darkTwin, screenshotSize } from "../screenshots.mjs";
 
@@ -37,11 +38,11 @@ const alt =
 	<div class="shot">
 		<picture class="dark:sl-hidden">
 			<source media={phone} srcset={phoneShot} {...phoneSize} />
-			<img src={shot} {alt} {...size} fetchpriority="high" />
+			<img src={shot} {alt} {...size} loading="lazy" />
 		</picture>
 		<picture class="light:sl-hidden">
 			<source media={phone} srcset={darkTwin(phoneShot)} {...phoneSize} />
-			<img src={darkTwin(shot)} {alt} {...size} fetchpriority="high" />
+			<img src={darkTwin(shot)} {alt} {...size} loading="lazy" />
 		</picture>
 	</div>
 </div>
