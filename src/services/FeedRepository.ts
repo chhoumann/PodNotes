@@ -160,6 +160,25 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		return item && { guid: item.guid, transcripts: item.transcripts ?? [] };
 	}
 
+	/**
+	 * A URL from one of the subscription's feed items, made absolute: as is when it
+	 * has a scheme, else resolved against the feed's URL, which is the secret one
+	 * for a private feed. Without its fragment. Hand it to the network boundary
+	 * only: never store, log or show it.
+	 */
+	itemUrl(key: FeedKey, reference: string): string | undefined {
+		const [target] = reference.split("#", 1);
+		if (/^[a-z][a-z\d+.-]*:/i.test(target)) return target;
+		const feed = this.subscriptions.get(key);
+		const base = feed && this.deps.resolveUrl(feed);
+		if (!base) return undefined;
+		try {
+			return new URL(target, base).href;
+		} catch {
+			return undefined;
+		}
+	}
+
 	/** The feed as a podcast, to preview, subscribe to or describe in a feed note. */
 	async channelAt(feed: FeedAddress): Promise<PodcastFeed> {
 		return channelFeed((await this.documentAt(feed, "cached")).channel, feed.url);

@@ -751,4 +751,41 @@ describe("FeedRepository", () => {
 
 		await expect(episodes).rejects.toThrow("offline");
 	});
+
+	test("an item URL resolves against the feed's URL, absolute ones stay as they are, and fragments go", () => {
+		const t = setup();
+		t.repo.setSubscriptions({ Alpha: { ...alpha, url: "https://alpha.test/show/feed.xml" } });
+
+		expect(t.repo.itemUrl("Alpha", "t.vtt")).toBe("https://alpha.test/show/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "../t.vtt")).toBe("https://alpha.test/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "/t.vtt")).toBe("https://alpha.test/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "t.vtt#cue-3")).toBe("https://alpha.test/show/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "https://cdn.test/a b.vtt?v=2")).toBe(
+			"https://cdn.test/a b.vtt?v=2",
+		);
+		expect(t.repo.itemUrl("Alpha", "https://cdn.test/t.vtt#cue-3")).toBe(
+			"https://cdn.test/t.vtt",
+		);
+	});
+
+	test("a private feed's item URL resolves against the secret URL only resolveUrl knows", () => {
+		const secretUrl = "https://private.test/s3cret/feed.xml?auth=s3cret";
+		const placeholder = privateFeedPlaceholder("Private");
+		const t = setup({ resolveUrl: (feed) => (feed.url === placeholder ? secretUrl : null) });
+		t.repo.setSubscriptions({ Private: { ...alpha, url: placeholder, urlSecretId: "id" } });
+
+		expect(t.repo.itemUrl("Private", "t.vtt")).toBe("https://private.test/s3cret/t.vtt");
+		expect(t.repo.itemUrl("Private", "/t.vtt")).toBe("https://private.test/t.vtt");
+	});
+
+	test("a relative item URL has no address when the private feed's URL is not on this device", () => {
+		const t = setup({ resolveUrl: () => null });
+		t.repo.setSubscriptions({
+			Private: { ...alpha, url: privateFeedPlaceholder("Private"), urlSecretId: "id" },
+		});
+
+		expect(t.repo.itemUrl("Private", "t.vtt")).toBeUndefined();
+		expect(t.repo.itemUrl("Unsubscribed", "t.vtt")).toBeUndefined();
+		expect(t.repo.itemUrl("Private", "https://cdn.test/t.vtt")).toBe("https://cdn.test/t.vtt");
+	});
 });
