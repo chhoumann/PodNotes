@@ -14,8 +14,65 @@ export class SecretStorage {
 	}
 }
 
+export type KeymapEventListener = (evt: KeyboardEvent, ctx: unknown) => false | unknown;
+
+interface KeymapEventHandler {
+	key: string | null;
+	func: KeymapEventListener;
+}
+
+export class Scope {
+	private handlers: KeymapEventHandler[] = [];
+
+	constructor(private readonly parent?: Scope) {}
+
+	register(_modifiers: string[] | null, key: string | null, func: KeymapEventListener) {
+		const handler = { key, func };
+		this.handlers.push(handler);
+		return handler;
+	}
+
+	unregister(handler: KeymapEventHandler): void {
+		this.handlers = this.handlers.filter((registered) => registered !== handler);
+	}
+
+	/** As Obsidian: a handler that returns false takes the key, else the parent scope gets it. */
+	handleKey(evt: KeyboardEvent): false | undefined {
+		for (const { key, func } of this.handlers) {
+			if ((key === null || key === evt.key) && func(evt, {}) === false) {
+				evt.preventDefault();
+				return false;
+			}
+		}
+		return this.parent?.handleKey(evt);
+	}
+}
+
+/** Obsidian's scope stack: the scope pushed last gets every key first. */
+export class Keymap {
+	private scopes: Scope[] = [];
+
+	constructor(private readonly root: Scope) {}
+
+	pushScope(scope: Scope): void {
+		this.popScope(scope);
+		this.scopes.push(scope);
+	}
+
+	popScope(scope: Scope): void {
+		this.scopes = this.scopes.filter((pushed) => pushed !== scope);
+	}
+
+	/** Test only: Obsidian runs this for every keydown in the window. */
+	dispatch(evt: KeyboardEvent): void {
+		(this.scopes[this.scopes.length - 1] ?? this.root).handleKey(evt);
+	}
+}
+
 export class App {
 	secretStorage = new SecretStorage();
+	scope = new Scope();
+	keymap = new Keymap(this.scope);
 }
 export class Plugin {}
 export class Component {

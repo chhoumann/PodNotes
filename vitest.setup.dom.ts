@@ -58,6 +58,22 @@ if (typeof (globalThis as { activeDocument?: unknown }).activeDocument === "unde
 	});
 }
 
+// Obsidian gives every node its window and lets an element follow a move to a
+// popout. jsdom has one window and no popouts.
+if (!("win" in Node.prototype)) {
+	Object.defineProperty(Node.prototype, "win", {
+		configurable: true,
+		get(this: Node) {
+			return this.ownerDocument?.defaultView ?? window;
+		},
+	});
+}
+
+if (!("onWindowMigrated" in HTMLElement.prototype)) {
+	(HTMLElement.prototype as unknown as { onWindowMigrated: () => () => void }).onWindowMigrated =
+		() => () => {};
+}
+
 if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};
 }
