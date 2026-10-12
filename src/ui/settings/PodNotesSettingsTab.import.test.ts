@@ -184,10 +184,7 @@ describe("PodNotesSettingsTab settings import", () => {
 
 		expect(plugin.settings).toBe(previous);
 		expect(plugin.saveSettingsStrict).not.toHaveBeenCalled();
-		expect(notice).toHaveBeenCalledWith(
-			expect.stringContaining("retrying will safely reuse"),
-			10000,
-		);
+		expect(notice).toHaveBeenCalledWith(expect.stringContaining("retrying is safe"), 10000);
 	});
 
 	it("restores previous secret references when the settings save fails", async () => {

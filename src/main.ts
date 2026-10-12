@@ -677,8 +677,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					throw new Error(`PodNotes could not read ${path} without repairing it`);
 				}
 				this.liftUnreadableRefusal();
+				// A private feed synced here raw is protected before it can be merged and written.
 				const doc: Record<string, unknown> = toDocument(
-					decoded.settings,
+					protectPrivateFeeds(decoded.settings, this.feedUrls).settings,
 					decoded.unknownFields,
 				);
 				// An entry the codec dropped while repairing a value (an invalid episode, a

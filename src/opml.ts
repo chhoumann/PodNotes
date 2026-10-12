@@ -167,16 +167,9 @@ async function exportOPML(app: App, feeds: PodcastFeed[], filePath = "PodNotes_E
 			);
 		}
 	} catch (error) {
-		if (error instanceof Error) {
-			if (error.message.includes("Folder does not exist")) {
-				new Notice("Unable to create export file: Folder does not exist.");
-			} else {
-				new Notice(`Unable to create podcast export file:\n\n${error.message}`);
-			}
-		} else {
-			new Notice("An unexpected error occurred during export.");
-		}
-
+		new Notice(
+			`Unable to create podcast export file:\n\n${error instanceof Error ? error.message : "Unknown error"}`,
+		);
 		console.error(error);
 	}
 }

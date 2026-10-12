@@ -93,23 +93,42 @@ export function protectPrivateFeeds(
 ): PrivateFeedProtection {
 	const failed: string[] = [];
 	const savedFeeds: Record<string, PodcastFeed> = {};
+	// A private feed's real URL maps to the placeholder naming its saved key,
+	// which links resolve by.
+	const byUrl = new Map<string, string>();
 	let moved = false;
 	for (const [key, feed] of Object.entries(settings.savedFeeds)) {
 		const interned = internPrivateFeed(feed, feedUrls, key);
 		if (interned !== feed) moved = true;
 		else if (isCredentialBearingUrl(feed.url)) failed.push(key);
+		if (isPrivateFeedPlaceholder(interned.url)) {
+			byUrl.set(feed.url, interned.url);
+			const url = interned.urlSecretId && feedUrls.resolve(interned.urlSecretId);
+			if (url) byUrl.set(url, interned.url);
+		}
 		savedFeeds[key] = interned;
 	}
-	return { settings: scrubEpisodeUrls(moved ? { ...settings, savedFeeds } : settings), failed };
+	// Snapshots stamp `feedUrl`, and an episode without a link of its own takes
+	// the feed URL as `url`. A private URL no saved feed matches still goes: its
+	// podcast's placeholder stands for it.
+	const placeholderFor = (url: string, episode: Record<string, unknown>) =>
+		byUrl.get(url) ??
+		(url === episode.feedUrl &&
+		typeof episode.podcastName === "string" &&
+		isCredentialBearingUrl(url)
+			? privateFeedPlaceholder(episode.podcastName)
+			: url);
+	return {
+		settings: scrubEpisodeUrls(moved ? { ...settings, savedFeeds } : settings, placeholderFor),
+		failed,
+	};
 }
 
-/**
- * Episode snapshots stamp their feed's URL, and an episode without a link of
- * its own takes the feed URL as `url` too. A private one becomes its podcast's
- * placeholder, whether or not this device holds the secret. Returns `value`
- * itself when nothing changed, so callers can tell whether to save.
- */
-function scrubEpisodeUrls<T>(value: T): T {
+/** Returns `value` itself when no URL changed, so callers can tell whether to save. */
+function scrubEpisodeUrls<T>(
+	value: T,
+	placeholderFor: (url: string, episode: Record<string, unknown>) => string,
+): T {
 	if (typeof value !== "object" || value === null) return value;
 	const isArray = Array.isArray(value);
 	// Decoded settings carry Date instances (episodeDate); recursing into one
@@ -121,13 +140,9 @@ function scrubEpisodeUrls<T>(value: T): T {
 	const next = (isArray ? [] : {}) as Record<string, unknown>;
 	for (const [key, entry] of Object.entries(record)) {
 		const scrubbed =
-			(key === "url" || key === "feedUrl") &&
-			typeof entry === "string" &&
-			entry === record.feedUrl &&
-			typeof record.podcastName === "string" &&
-			isCredentialBearingUrl(entry)
-				? privateFeedPlaceholder(record.podcastName)
-				: scrubEpisodeUrls(entry);
+			(key === "url" || key === "feedUrl") && typeof entry === "string"
+				? placeholderFor(entry, record)
+				: scrubEpisodeUrls(entry, placeholderFor);
 		if (scrubbed !== entry) changed = true;
 		next[key] = scrubbed;
 	}

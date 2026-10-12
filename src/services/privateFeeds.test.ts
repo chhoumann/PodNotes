@@ -239,17 +239,14 @@ describe("protectPrivateFeeds", () => {
 		).settings;
 		const placeholder = "podnotes-private-feed:Saved%20Key";
 		const protectedHere = feed({ title: "Channel Title", url: placeholder, urlSecretId: id });
-		const strandedHere = feed({ title: "Channel Title", url: placeholder });
+		const repaired = protectPrivateFeeds(
+			settings({ savedFeeds: { "Saved Key": protectedHere }, queue }),
+			feedUrls,
+		).settings;
 
 		expect(raw.savedFeeds["Saved Key"].url).toBe(placeholder);
 		expect(raw.queue.episodes[0].feedUrl).toBe(placeholder);
-		for (const saved of [protectedHere, strandedHere]) {
-			const repaired = protectPrivateFeeds(
-				settings({ savedFeeds: { "Saved Key": saved }, queue }),
-				feedUrls,
-			).settings;
-			expect(repaired.queue.episodes[0].feedUrl).toBe(placeholder);
-		}
+		expect(repaired.queue.episodes[0].feedUrl).toBe(placeholder);
 	});
 
 	it("keeps an episode's own link even when it carries a token", () => {

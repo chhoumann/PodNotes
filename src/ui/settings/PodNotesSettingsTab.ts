@@ -854,13 +854,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					: `Exported PodNotes settings to "${fileName}".`,
 			);
 		} catch (error) {
-			if (error instanceof Error && error.message.includes("Folder does not exist")) {
-				new Notice("Unable to create export file: folder does not exist.");
-			} else {
-				new Notice(
-					`Unable to export settings:\n\n${error instanceof Error ? error.message : "Unknown error"}`,
-				);
-			}
+			new Notice(
+				`Unable to export settings:\n\n${error instanceof Error ? error.message : "Unknown error"}`,
+			);
 			console.error("PodNotes: failed to export settings", error);
 		}
 	}
@@ -925,24 +921,25 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	): Promise<ImportMutationResult> {
 		const previousSettings = this.plugin.settings;
 		const previous = structuredClone(previousSettings);
-		let secretReferences: Partial<IPodNotesSettings> = {};
+		let merged: IPodNotesSettings;
 		try {
-			secretReferences = this.plugin.credentials.storeValues(secrets);
+			const secretReferences = this.plugin.credentials.storeValues(secrets);
+			// A raw data.json import can carry credential-bearing feed URLs; intern
+			// them BEFORE the strict persist below so the secret never reaches disk.
+			const protection = protectPrivateFeeds(
+				mergeImportedSettings(previous, { ...imported, ...secretReferences }),
+				this.plugin.feedUrls,
+			);
+			if (protection.failed.length > 0) throw new Error();
+			merged = protection.settings;
 		} catch (error) {
 			new Notice(
-				"Could not finish importing API keys into Obsidian SecretStorage. Existing settings were kept, and retrying will safely reuse any PodNotes secrets already created.",
+				"Could not finish importing secrets into Obsidian SecretStorage. Existing settings were kept, and retrying is safe.",
 				10000,
 			);
-			console.error("PodNotes: failed to import credentials into SecretStorage", error);
+			console.error("PodNotes: failed to import secrets into SecretStorage", error);
 			return "failed";
 		}
-
-		// A raw data.json import can carry credential-bearing feed URLs; intern
-		// them BEFORE the strict persist below so the secret never reaches disk.
-		const merged = protectPrivateFeeds(
-			mergeImportedSettings(previous, { ...imported, ...secretReferences }),
-			this.plugin.feedUrls,
-		).settings;
 		const progress = merged.playedEpisodes;
 		const failedCandidate = structuredClone(merged);
 		const concurrentStoreChanges = observePersistedStoreChanges();

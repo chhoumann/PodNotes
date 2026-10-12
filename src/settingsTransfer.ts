@@ -119,22 +119,40 @@ function portable<T extends object>(settings: T): T {
 		);
 	}
 	for (const key of ["queue", "favorites"]) {
-		if (key in out) out[key] = withoutLocalFiles(out[key]);
+		if (key in out) out[key] = portablePlaylist(out[key]);
 	}
-	if (isPlainObject(out.playlists)) out.playlists = mapRecord(out.playlists, withoutLocalFiles);
+	if (isPlainObject(out.playlists)) out.playlists = mapRecord(out.playlists, portablePlaylist);
+	// Older versions kept whole episodes, local paths included, in progress records.
+	if (isPlainObject(out.playedEpisodes)) {
+		out.playedEpisodes = mapRecord(out.playedEpisodes, (record) =>
+			isPlainObject(record)
+				? {
+						title: record.title,
+						podcastName: record.podcastName,
+						time: record.time,
+						duration: record.duration,
+						finished: record.finished,
+					}
+				: record,
+		);
+	}
 	return out as T;
 }
 
-function withoutLocalFiles(playlist: unknown): unknown {
-	return isPlainObject(playlist) && Array.isArray(playlist.episodes)
-		? {
-				...playlist,
-				episodes: playlist.episodes.filter(
+/** A playlist without local files. Its current episode is dropped too: no player reads it. */
+function portablePlaylist(playlist: unknown): unknown {
+	if (!isPlainObject(playlist)) return playlist;
+	const { episodes } = playlist;
+	return {
+		...playlist,
+		currentEpisode: undefined,
+		episodes: Array.isArray(episodes)
+			? episodes.filter(
 					(episode) =>
 						!isPlainObject(episode) || !isLocalFile(episode as unknown as Episode),
-				),
-			}
-		: playlist;
+				)
+			: episodes,
+	};
 }
 
 export function serializeSettings(
