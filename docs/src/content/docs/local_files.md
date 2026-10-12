@@ -47,7 +47,7 @@ Where a trashed file goes depends on Obsidian's **Deleted files** setting in **S
 
 If PodNotes cannot confirm that it downloaded a file, as with downloads from older versions, it asks first. Select **Keep file** to leave the file in your vault, or **Delete file** to move it to the trash. Either way, the episode leaves **Local Files**.
 
-Your notes and timestamp links stay. Links to a download stream the episode from its feed again. Links to your own file stop working until you select **Play with PodNotes** on the file again. See [What happens to notes and links when I remove a download?](/faq/#what-happens-to-notes-and-links-when-i-remove-a-download)
+Your notes and timestamp links stay. Links to a download stream the episode from its feed again while the feed still lists it. Links to your own file stop working until you select **Play with PodNotes** on the file again. See [What happens to notes and links when I remove a download?](/faq/#what-happens-to-notes-and-links-when-i-remove-a-download)
 
 ## What works with local files
 
