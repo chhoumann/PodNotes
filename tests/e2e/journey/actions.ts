@@ -1,16 +1,14 @@
-import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { launchPodNotesInstance } from "../../../scripts/e2e-instance.mjs";
 import type { ObsidianClient } from "obsidian-e2e";
 import {
-	launchObsidianInstance,
 	loadRunnerConfig,
 	resolveInstanceOptions,
 	resolveProvisionOptions,
 	waitForInstanceReady,
 } from "obsidian-e2e/runner";
-import { PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../harness";
+import { PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../runtime";
 
 export async function assertNoRuntimeErrors(obsidian: ObsidianClient): Promise<void> {
 	const early = await obsidian.dev.evalJson<unknown[]>("window.__podnotesJourneyEarlyErrors");
@@ -354,20 +352,9 @@ async function isolatedInstance() {
 }
 
 async function appProcess(obsidian: ObsidianClient): Promise<AppProcess> {
-	const { userDataPath: dataDir } = await isolatedInstance();
-	const { stdout } = await promisify(execFile)("ps", ["-eo", "pid=,args="]);
-	const mains = stdout
-		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.includes(`--user-data-dir=${dataDir}`) && !line.includes("--type="))
-		.map((line) => line.split(/\s+/))
-		.filter(([, executable]) => /obsidian$/i.test(path.basename(executable ?? "")));
-	if (mains.length !== 1)
-		throw new Error(`Expected one Obsidian main process, found ${mains.length}.`);
-	return {
-		mainPid: Number(mains[0][0]),
-		rendererPid: await obsidian.dev.evalJson<number>("process.pid"),
-	};
+	return await obsidian.dev.evalJson<AppProcess>(
+		'({ mainPid: require("@electron/remote").process.pid, rendererPid: process.pid })',
+	);
 }
 
 /**
@@ -387,6 +374,7 @@ export async function restartObsidian(
 	const instance = await isolatedInstance();
 	if (!argv.includes(`--user-data-dir=${instance.userDataPath}`))
 		throw new Error("Refusing to quit a different Obsidian profile.");
+	await assertSingleWindow(obsidian);
 	const close =
 		process.platform === "darwin"
 			? "window.electron.remote.app.quit()"
@@ -406,7 +394,7 @@ export async function restartObsidian(
 		failure = { error };
 	}
 	try {
-		await launchObsidianInstance(instance);
+		await launchPodNotesInstance(instance);
 		await waitForInstanceReady(instance);
 		await obsidian.waitFor(
 			() =>
@@ -430,6 +418,16 @@ export async function restartObsidian(
 	}
 	if (failure) throw failure.error;
 	return { before, after: await appProcess(obsidian) };
+}
+
+export async function assertSingleWindow(obsidian: ObsidianClient): Promise<void> {
+	const windows = await obsidian.dev.evalJson<Array<{ id: number; url: string }>>(
+		'require("@electron/remote").BrowserWindow.getAllWindows().map(win => ({ id: win.id, url: win.webContents.getURL() }))',
+	);
+	if (windows.length !== 1)
+		throw new Error(
+			`Expected one Obsidian window; found ${JSON.stringify(windows)}. Close extra vault windows before testing.`,
+		);
 }
 
 function processAlive(pid: number): boolean {

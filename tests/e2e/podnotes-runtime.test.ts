@@ -14,12 +14,8 @@ import {
 	waitForPlaybackState,
 	evalJsonAsync,
 	openPodNotesView,
-	PLUGIN_ID,
-	RELOAD_OPTIONS,
-	VIEW_TYPE,
-	WAIT_OPTS,
-	waitForPodNotesReady,
 } from "./harness";
+import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("podnotes-runtime");
 
@@ -539,28 +535,49 @@ describe("PodNotes runtime", () => {
 			});
 			await waitForPodNotesReady(obsidian);
 
-			await obsidian.command(`${PLUGIN_ID}:create-podcast-note`).run();
+			// The command returns before openFile settles, so observe its completion
+			// before changing the Markdown view mode.
+			await obsidian.dev.evalJson(`(() => {
+				const prototype = Object.getPrototypeOf(app.workspace.getLeaf());
+				const original = prototype.openFile;
+				window.__podnotesNoteOpen = { prototype, original, done: false };
+				prototype.openFile = function(file, ...args) {
+					const opening = original.call(this, file, ...args);
+					if (file.path === ${JSON.stringify(notePath)}) {
+						void opening.then(
+							() => { window.__podnotesNoteOpen.done = true; },
+							(error) => { window.__podnotesNoteOpen.error = String(error); },
+						);
+					}
+					return opening;
+				};
+				return true;
+			})()`);
+			try {
+				await obsidian.command(`${PLUGIN_ID}:create-podcast-note`).run();
+				const opened = await obsidian.waitFor(
+					() =>
+						obsidian.dev.evalJson<{ error: string | null } | false>(`(() => {
+						const { done, error } = window.__podnotesNoteOpen;
+						return done || error ? { error: error ?? null } : false;
+					})()`),
+					{ ...WAIT_OPTS, message: `${notePath} to finish opening` },
+				);
+				if (opened.error) throw new Error(opened.error);
+			} finally {
+				await obsidian.dev.evalJson(`(() => {
+					const { prototype, original } = window.__podnotesNoteOpen;
+					prototype.openFile = original;
+					delete window.__podnotesNoteOpen;
+					return true;
+				})()`);
+			}
 			const content = await sandbox.waitForContent(
 				`template-escaping-${attack.id}.md`,
 				(value) => value.includes(attack.encoded),
 				WAIT_OPTS,
 			);
 			expect(content).toContain(attack.encoded);
-
-			// createPodcastNote opens the created file without blocking the Obsidian
-			// command callback. Wait for that exact leaf before switching it to
-			// preview mode. Creating a second leaf while the first open was still
-			// settling raced Obsidian's Markdown renderer and produced delayed
-			// `Cannot read properties of null (reading 'children')` runtime errors.
-			await obsidian.waitFor(
-				async () =>
-					await obsidian.dev.evalJson<boolean>(`
-						app.workspace.getLeavesOfType("markdown").some(
-							(leaf) => leaf.view?.file?.path === ${JSON.stringify(notePath)},
-						)
-					`),
-				WAIT_OPTS,
-			);
 
 			await evalJsonAsync<boolean>(
 				obsidian,

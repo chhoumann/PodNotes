@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, PLUGIN_ID } from "./harness";
+import { createPodNotesE2EHarness } from "./harness";
 import {
 	click,
 	closeSettings,
@@ -35,6 +35,7 @@ import {
 	waitForLibrary,
 	waitForPlayback,
 } from "./journey/library";
+import { PLUGIN_ID } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-resilience");
 const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
@@ -95,7 +96,13 @@ describe("resilience journeys", () => {
 				message: "Obsidian to notice the replaced data.json",
 			},
 		);
-		await obsidian.sleep(1000);
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					`Boolean(app.plugins.plugins.${PLUGIN_ID}.settings.savedFeeds["Journey Remote Feed"])`,
+				),
+			{ timeoutMs: 10_000, message: "the remote feed to reach the live settings" },
+		);
 
 		await openPodNotesSettings(obsidian);
 		await typeInto(obsidian, ui.settingControl("Skip backward length (s)", "input"), "42", {

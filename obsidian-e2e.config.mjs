@@ -8,7 +8,26 @@
 // DEFAULT_SETTINGS sets it to `undefined`, which JSON cannot represent and
 // PodNotes treats as absent. Keep this in sync with constants.ts -
 // scripts/e2e-config.test.ts fails if it drifts from DEFAULT_SETTINGS.
+import os from "node:os";
+import path from "node:path";
+
+const appName =
+	process.env.PODNOTES_OBSIDIAN_APP ??
+	(process.platform === "linux"
+		? path.join(os.homedir(), ".local/share/obsidian-versions/obsidian-1.14.4/obsidian")
+		: undefined);
+
 export default {
+	appName,
+	obsidianBin:
+		process.env.PODNOTES_OBSIDIAN_BIN ??
+		(process.platform === "linux" && appName
+			? path.join(path.dirname(appName), "obsidian-cli")
+			: undefined),
+	profileRoot:
+		process.platform === "linux"
+			? path.join(os.homedir(), ".cache", "podnotes-e2e")
+			: "/private/tmp/podnotes-obsidian-e2e",
 	pluginId: "podnotes",
 	// PodNotes injects its CSS into main.js (svelte compilerOptions css:
 	// "injected"), so there is no styles.css artifact - only the manifest and the

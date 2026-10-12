@@ -2,7 +2,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	type ObsidianClient,
-	type PluginReloadOptions,
 	createObsidianClient,
 	resolveObsidianEnvOptions,
 	type SandboxApi,
@@ -16,22 +15,24 @@ import {
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
-
-export const PLUGIN_ID = "podnotes";
-export const VIEW_TYPE = "podcast_player_view";
-// Reused by tests for sandbox content polling and the plugin-ready poll.
-export const WAIT_OPTS = { timeoutMs: 15_000, intervalMs: 200 };
-export const RELOAD_OPTIONS: PluginReloadOptions = {
-	waitUntilReady: true,
-	timeoutMs: 30_000,
-	readyOptions: {
-		// Plugin-ready sentinel: an always-registered command (plain unconditional
-		// callback). The old "hrpn"/Reload command was removed (it disabled and
-		// re-enabled the plugin, which Obsidian policy disallows).
-		commandId: `${PLUGIN_ID}:podnotes-show-leaf`,
-		...WAIT_OPTS,
-	},
-};
+import { FIXTURE_RESOLVER_RULES } from "../../scripts/e2e-instance.mjs";
+import { assertNoRuntimeErrors, assertSingleWindow } from "./journey/actions";
+import {
+	hasJourneySnapshot,
+	installJourneyErrorRecorder,
+	removeJourneyErrorRecorder,
+	restoreJourneyCache,
+	restoreJourneyWorkspace,
+	snapshotJourneyState,
+} from "./journey/library";
+import {
+	PLUGIN_ID,
+	podNotesReady,
+	RELOAD_OPTIONS,
+	VIEW_TYPE,
+	WAIT_OPTS,
+	waitForPodNotesReady,
+} from "./runtime";
 
 /**
  * Suite-scoped PodNotes E2E harness built on obsidian-e2e's shared
@@ -62,34 +63,39 @@ export function createPodNotesE2EHarness(testName: string) {
 			timeoutMs: 60_000,
 		});
 		await lock.publishMarker(suiteClient);
+		await assertSingleWindow(suiteClient);
+		const resolver = await suiteClient.dev.evalJson<string>(
+			'require("@electron/remote").app.commandLine.getSwitchValue("host-resolver-rules")',
+		);
+		if (resolver !== FIXTURE_RESOLVER_RULES)
+			throw new Error(
+				"The fixture host resolver is missing. Stop this worktree's instance, then run npm run start:e2e-obsidian.",
+			);
 		wasEnabled = await suiteClient.plugin(PLUGIN_ID).isEnabled();
-		await (await import("./journey/library")).snapshotJourneyState(suiteClient);
-		await (await import("./journey/library")).installJourneyErrorRecorder(suiteClient);
+		await snapshotJourneyState(suiteClient);
+		await installJourneyErrorRecorder(suiteClient);
 	}, 90_000);
 	afterAll(async () => {
 		try {
-			const library = await import("./journey/library");
-			if (library.hasJourneySnapshot(suiteClient)) {
-				await library.restoreJourneyCache(suiteClient);
+			if (hasJourneySnapshot(suiteClient)) {
+				await restoreJourneyCache(suiteClient);
 				await suiteClient.plugin(PLUGIN_ID).enable();
 				await waitForPodNotesReady(suiteClient);
 				await suiteClient.dev.evalJsonAsync(
 					"(async () => { await app.plugins.saveConfig(); return true; })()",
 				);
-				await library.restoreJourneyWorkspace(suiteClient);
+				await restoreJourneyWorkspace(suiteClient);
 				if (!wasEnabled) {
 					await suiteClient.dev.evalJsonAsync(
 						`(async () => { await app.plugins.disablePluginAndSave(${JSON.stringify(PLUGIN_ID)}); await app.plugins.saveConfig(); return true; })()`,
 					);
 				}
 			}
-			await (await import("./journey/actions")).assertNoRuntimeErrors(suiteClient);
+			await assertNoRuntimeErrors(suiteClient);
 		} finally {
 			if (lock) {
 				try {
-					await (
-						await import("./journey/library")
-					).removeJourneyErrorRecorder(suiteClient);
+					await removeJourneyErrorRecorder(suiteClient);
 				} finally {
 					try {
 						await clearVaultRunLockMarker(suiteClient);
@@ -102,15 +108,13 @@ export function createPodNotesE2EHarness(testName: string) {
 	}, 60_000);
 	afterEach(async () => {
 		try {
-			if ((await import("./journey/library")).hasJourneySnapshot(getContext().obsidian)) {
+			if (hasJourneySnapshot(getContext().obsidian)) {
 				await getContext().obsidian.dev.evalJsonAsync(
 					"(async () => { await app.plugins.saveConfig(); return true; })()",
 				);
 			}
-			await (
-				await import("./journey/library")
-			).restoreJourneyWorkspace(getContext().obsidian);
-			await (await import("./journey/actions")).assertNoRuntimeErrors(getContext().obsidian);
+			await restoreJourneyWorkspace(getContext().obsidian);
+			await assertNoRuntimeErrors(getContext().obsidian);
 		} catch (error) {
 			if (runtimeFailure)
 				throw new AggregateError(
@@ -122,14 +126,12 @@ export function createPodNotesE2EHarness(testName: string) {
 		if (runtimeFailure) throw runtimeFailure;
 	});
 	const getContext = createSharedHarness(testName);
-	beforeAll(async () =>
-		(await import("./journey/actions")).assertNoRuntimeErrors(getContext().obsidian),
-	);
+	beforeAll(async () => assertNoRuntimeErrors(getContext().obsidian));
 	afterEach(async () => {
 		const { obsidian } = getContext();
-		if ((await import("./journey/library")).hasJourneySnapshot(obsidian)) {
+		if (hasJourneySnapshot(obsidian)) {
 			try {
-				await (await import("./journey/actions")).assertNoRuntimeErrors(obsidian);
+				await assertNoRuntimeErrors(obsidian);
 			} catch (error) {
 				runtimeFailure = error;
 			}
@@ -138,7 +140,9 @@ export function createPodNotesE2EHarness(testName: string) {
 	// The shared harness rolls back only files a test wrote through the client, so
 	// data.json is snapshotted up front for tests that change settings through the UI.
 	beforeEach(async () => {
-		await (await import("./journey/actions")).assertNoRuntimeErrors(getContext().obsidian);
+		await assertSingleWindow(getContext().obsidian);
+		await snapshotJourneyState(getContext().obsidian);
+		await assertNoRuntimeErrors(getContext().obsidian);
 		runtimeFailure = undefined;
 		await getContext().obsidian.dev.evalJson("window.__podnotesJourneyEarlyErrors = [], true");
 		await getContext().obsidian.exec("dev:errors", { clear: true });
@@ -168,10 +172,9 @@ const createSharedHarness = createPluginHarness({
 		await detachPodNotesViews(obsidian);
 		await stopPodNotesPlayback(obsidian);
 		await flushPodNotesSaves(obsidian);
-		const library = await import("./journey/library");
-		if (library.hasJourneySnapshot(obsidian)) {
+		if (hasJourneySnapshot(obsidian)) {
 			// Reload while disabled so old feed requests cannot write over the restored cache.
-			await library.restoreJourneyCache(obsidian);
+			await restoreJourneyCache(obsidian);
 		}
 	},
 	symlinkArtifacts: ["main.js", "manifest.json"],
@@ -233,22 +236,6 @@ export async function writeSilentWav(
 			return true;
 		})()`,
 	);
-}
-
-export async function waitForPodNotesReady(obsidian: ObsidianClient): Promise<void> {
-	await obsidian.waitFor(() => podNotesReady(obsidian), {
-		...WAIT_OPTS,
-		message: "PodNotes plugin did not become ready.",
-	});
-}
-
-function podNotesReady(obsidian: ObsidianClient): Promise<boolean> {
-	return obsidian.dev.evalJson<boolean>(`
-		Boolean(
-			app.plugins.plugins.${PLUGIN_ID}?.api &&
-			(app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers)?.has(${JSON.stringify(PLUGIN_ID)})
-		)
-	`);
 }
 
 async function detachPodNotesViews(obsidian: ObsidianClient): Promise<void> {

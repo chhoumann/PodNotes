@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createPodNotesE2EHarness, RELOAD_OPTIONS } from "./harness";
+import { createPodNotesE2EHarness } from "./harness";
 import {
 	click,
 	closePodNotes,
@@ -10,6 +10,7 @@ import {
 	waitUntilShown,
 } from "./journey/actions";
 import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
+import { RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-mobile");
 
@@ -27,10 +28,15 @@ describe("mobile journeys", () => {
 			"(async () => { await app.workspace.saveLayout(); return true; })()",
 		);
 		await reloadObsidian(obsidian);
-		for (let check = 0; check < 5; check++) {
-			expect(await playerLeafCount(obsidian)).toBe(0);
-			await obsidian.sleep(300);
-		}
+		const deadline = Date.now() + 1500;
+		const leaves = await obsidian.waitFor(
+			async () => {
+				const count = await playerLeafCount(obsidian);
+				return count > 0 || Date.now() >= deadline ? { count } : false;
+			},
+			{ timeoutMs: 10_000, intervalMs: 100, message: "the mobile player to remain closed" },
+		);
+		expect(leaves.count).toBe(0);
 
 		await click(obsidian, ui.leftDrawerToggle);
 		await click(obsidian, ui.ribbonAction("Show PodNotes"));

@@ -1,5 +1,5 @@
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, PLUGIN_ID } from "./harness";
+import { createPodNotesE2EHarness } from "./harness";
 import {
 	click,
 	closePodNotes,
@@ -20,6 +20,7 @@ import {
 } from "./journey/fixtures";
 import {
 	episodeRef,
+	feedCachedAt,
 	observePlayback,
 	type PlaybackObservation,
 	playbackOver,
@@ -30,6 +31,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
+import { PLUGIN_ID } from "./runtime";
 
 const LONG: FixtureEpisode = { title: "Long Listen", seconds: 60, pubDate: pubDate(0) };
 const OPENER: FixtureEpisode = { title: "Short Opener", seconds: 6, pubDate: pubDate(1) };
@@ -119,7 +121,6 @@ describe("playback journeys", () => {
 			(playback) => !playback.playing && playback.media?.paused === true,
 			"paused",
 		);
-		await obsidian.sleep(500);
 		const [pausedAt, pausedLater] = await playbackOver(obsidian, 1500);
 		expect(pausedLater.seconds).toBe(pausedAt.seconds);
 		expect(pausedLater.media?.seconds).toBe(pausedAt.media?.seconds);
@@ -396,7 +397,8 @@ describe("playback journeys", () => {
 			"paused",
 		);
 
-		server.delayFeed(OTHER_SHOW, 3000);
+		const release = server.holdFeed(OTHER_SHOW);
+		const cachedBefore = await feedCachedAt(obsidian, server.feedUrl(OTHER_SHOW));
 		const otherFeedPath = new URL(server.feedUrl(OTHER_SHOW)).pathname;
 		const notePath = sandbox.path("Slow other show link.md");
 		await writeVaultFile(
@@ -415,7 +417,14 @@ describe("playback journeys", () => {
 		await runCommand(obsidian, `${PLUGIN_ID}:start-playing`);
 		await expectAdvancing("resumed while the link's feed loads");
 
-		await obsidian.sleep(4000);
+		await release();
+		await obsidian.waitFor(
+			async () => (await feedCachedAt(obsidian, server.feedUrl(OTHER_SHOW))) > cachedBefore,
+			{
+				timeoutMs: 15_000,
+				message: "the linked feed response to enter the cache",
+			},
+		);
 		const after = await expectAdvancing("after the link's feed arrived");
 		expect(after.episode).toEqual(episodeRef(FEED, LONG));
 		expect(after.media?.src).toBe(server.mediaUrl(FEED, LONG));
