@@ -13,6 +13,7 @@ import {
 	seedAudio,
 	waitForPlaybackState,
 	evalJsonAsync,
+	getPlaybackState,
 	openPodNotesView,
 } from "./harness";
 import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
@@ -364,6 +365,112 @@ describe("PodNotes runtime", () => {
 		} finally {
 			await restoreMediaSessionRecorder(obsidian);
 		}
+	});
+
+	test("the Media Session shows the episode, and each of its actions drives the player", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(obsidian, sandbox);
+		const episode = createLocalEpisode("E2E Media Session Episode", audioPath);
+
+		await seedRuntimeData(plugin, sandbox, episode, { currentEpisode: episode });
+		await installMediaSessionRecorder(obsidian);
+		try {
+			await waitForPodNotesReady(obsidian);
+			expect(await getMediaSession(obsidian)).toEqual({
+				actions: [...MEDIA_SESSION_ACTIONS].sort(),
+				metadata: { title: episode.title, artist: "local file", album: "PodNotes" },
+				playbackState: "none",
+				position: null,
+			});
+
+			await invokeRecordedMediaSessionAction(obsidian, "play");
+			await waitForPlaybackState(
+				obsidian,
+				(state) => state.isPlaying && (state.currentTime ?? 0) > 0,
+			);
+			const playing = await waitForMediaSession(
+				obsidian,
+				(session) => session.position !== null,
+			);
+			expect(playing).toMatchObject({
+				playbackState: "playing",
+				position: { duration: 600, playbackRate: 1 },
+			});
+
+			await invokeRecordedMediaSessionAction(obsidian, "pause");
+			await waitForPlaybackState(obsidian, (state) => !state.isPlaying);
+			await invokeRecordedMediaSessionAction(obsidian, "seekto", { seekTime: 100 });
+			expect(await getMediaSession(obsidian)).toMatchObject({
+				playbackState: "paused",
+				position: { duration: 600, position: 100 },
+			});
+
+			await invokeRecordedMediaSessionAction(obsidian, "seekforward", { seekOffset: 99 });
+			expect((await getPlaybackState(obsidian)).currentTime).toBe(115);
+			await invokeRecordedMediaSessionAction(obsidian, "seekbackward", { seekOffset: 99 });
+			expect((await getPlaybackState(obsidian)).currentTime).toBe(100);
+			await invokeRecordedMediaSessionAction(obsidian, "nexttrack");
+			expect((await getPlaybackState(obsidian)).currentTime).toBe(130);
+			await invokeRecordedMediaSessionAction(obsidian, "play");
+			await waitForPlaybackState(obsidian, (state) => state.isPlaying);
+
+			await plugin.disable();
+			expect(await getMediaSession(obsidian)).toEqual({
+				actions: [],
+				metadata: null,
+				playbackState: "none",
+				position: null,
+			});
+		} finally {
+			await restoreMediaSessionRecorder(obsidian);
+			await plugin.enable();
+			await waitForPodNotesReady(obsidian);
+		}
+	});
+
+	test("a level set before a restored episode plays survives it, and the next episode starts at the default speed", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(obsidian, sandbox);
+		const restored = createLocalEpisode("E2E Restored Levels Episode", audioPath);
+		const next = createLocalEpisode("E2E Next Levels Episode", audioPath);
+
+		await seedRuntimeData(plugin, sandbox, next, {
+			currentEpisode: restored,
+			defaultPlaybackRate: 1.8,
+		});
+		await waitForPodNotesReady(obsidian);
+		await openPodNotesView(obsidian);
+		await setVolume(obsidian, 0.5);
+		await obsidian.dev.evalJson(`(() => {
+			const api = app.plugins.plugins.${PLUGIN_ID}.api;
+			api.playbackRate = 2.3;
+			api.start();
+			return true;
+		})()`);
+		await waitForPlaybackState(
+			obsidian,
+			(state) =>
+				state.title === restored.title && state.isPlaying && (state.currentTime ?? 0) > 0,
+		);
+		expect(await getLevels(obsidian)).toEqual({ api: [0.5, 2.3], audio: [0.5, 2.3] });
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.5, WAIT_OPTS);
+
+		await invokePodNotesUri(obsidian, next, 0);
+		await waitForPlaybackState(
+			obsidian,
+			(state) =>
+				state.title === next.title && state.isPlaying && (state.currentTime ?? 0) > 0,
+		);
+		expect(await getLevels(obsidian)).toEqual({ api: [0.5, 1.8], audio: [0.5, 1.8] });
+
+		await plugin.disable();
+		await plugin.enable();
+		await waitForPodNotesReady(obsidian);
+		expect(await getVolume(obsidian)).toBe(0.5);
+		expect(await plugin.data<PodNotesData>().read()).toMatchObject({
+			defaultVolume: 0.5,
+			defaultPlaybackRate: 1.8,
+		});
 	});
 
 	test("persists API volume changes and clamps out-of-range values", async () => {
@@ -969,6 +1076,21 @@ async function setVolume(
 	`);
 }
 
+async function getLevels(obsidian: {
+	dev: { evalJson: <T>(code: string) => Promise<T> };
+}): Promise<{ api: [number, number]; audio: [number, number] | null }> {
+	return await obsidian.dev.evalJson(`
+		(() => {
+			const api = app.plugins.plugins.${PLUGIN_ID}.api;
+			const audio = document.querySelector("audio.podnotes-media");
+			return {
+				api: [api.volume, api.playbackRate],
+				audio: audio ? [audio.volume, audio.playbackRate] : null,
+			};
+		})()
+	`);
+}
+
 /** The rate as the API, the media element, the rate label and the rate slider show it. */
 type PlaybackRates = {
 	api: number | null;
@@ -1032,14 +1154,22 @@ async function installMediaSessionRecorder(
 			}
 
 			const original = mediaSession.setActionHandler.bind(mediaSession);
+			const originalPosition = mediaSession.setPositionState.bind(mediaSession);
 			const handlers = {};
 
 			globalThis.__podnotesMediaSessionHandlers = handlers;
+			globalThis.__podnotesMediaSessionPosition = null;
 			globalThis.__podnotesOriginalSetActionHandler = original;
+			globalThis.__podnotesOriginalSetPositionState = originalPosition;
 
 			mediaSession.setActionHandler = (action, handler) => {
 				const result = original(action, handler);
 				handlers[action] = handler;
+				return result;
+			};
+			mediaSession.setPositionState = (state) => {
+				const result = originalPosition(state);
+				globalThis.__podnotesMediaSessionPosition = state ?? null;
 				return result;
 			};
 
@@ -1064,11 +1194,17 @@ async function restoreMediaSessionRecorder(
 		`
 		(() => {
 			const original = globalThis.__podnotesOriginalSetActionHandler;
+			const originalPosition = globalThis.__podnotesOriginalSetPositionState;
 			if (navigator.mediaSession?.setActionHandler && original) {
 				navigator.mediaSession.setActionHandler = original;
 			}
+			if (navigator.mediaSession?.setPositionState && originalPosition) {
+				navigator.mediaSession.setPositionState = originalPosition;
+			}
 			delete globalThis.__podnotesMediaSessionHandlers;
+			delete globalThis.__podnotesMediaSessionPosition;
 			delete globalThis.__podnotesOriginalSetActionHandler;
+			delete globalThis.__podnotesOriginalSetPositionState;
 			return true;
 		})()
 	`,
@@ -1078,6 +1214,7 @@ async function restoreMediaSessionRecorder(
 async function invokeRecordedMediaSessionAction(
 	obsidian: Parameters<typeof evalJsonAsync>[0],
 	action: string,
+	details: { seekOffset?: number; seekTime?: number } = {},
 ): Promise<{ action: string; error?: string; ok: boolean }> {
 	return await evalJsonAsync(
 		obsidian,
@@ -1094,11 +1231,62 @@ async function invokeRecordedMediaSessionAction(
 				};
 			}
 
-			handler({ action: ${JSON.stringify(action)} });
+			handler({ ...${JSON.stringify(details)}, action: ${JSON.stringify(action)} });
 			return { action: ${JSON.stringify(action)}, ok: true };
 		})()
 	`,
 	);
+}
+
+const MEDIA_SESSION_ACTIONS = [
+	"nexttrack",
+	"pause",
+	"play",
+	"previoustrack",
+	"seekbackward",
+	"seekforward",
+	"seekto",
+];
+
+type MediaSessionView = {
+	actions: string[];
+	metadata: { title: string; artist: string; album: string } | null;
+	playbackState: string;
+	position: MediaPositionState | null;
+};
+
+async function getMediaSession(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+): Promise<MediaSessionView> {
+	return await evalJsonAsync(
+		obsidian,
+		`
+		(() => {
+			const { metadata, playbackState } = navigator.mediaSession;
+			const handlers = globalThis.__podnotesMediaSessionHandlers ?? {};
+			return {
+				actions: Object.keys(handlers).filter((action) => typeof handlers[action] === "function").sort(),
+				metadata: metadata && { title: metadata.title, artist: metadata.artist, album: metadata.album },
+				playbackState,
+				position: globalThis.__podnotesMediaSessionPosition ?? null,
+			};
+		})()
+	`,
+	);
+}
+
+async function waitForMediaSession(
+	obsidian: Parameters<typeof evalJsonAsync>[0] & { sleep: (ms: number) => Promise<void> },
+	predicate: (session: MediaSessionView) => boolean,
+): Promise<MediaSessionView> {
+	const startedAt = Date.now();
+	let last: MediaSessionView | null = null;
+	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
+		last = await getMediaSession(obsidian);
+		if (predicate(last)) return last;
+		await obsidian.sleep(WAIT_OPTS.intervalMs);
+	}
+	throw new Error(`Timed out waiting for the Media Session. Last: ${JSON.stringify(last)}`);
 }
 
 async function getVolume(obsidian: {
