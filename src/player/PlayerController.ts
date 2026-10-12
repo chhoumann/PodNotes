@@ -9,6 +9,7 @@ import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
+import { isPrivateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { selectSource, type PlaybackSource } from "./source";
 
 export type PlayerStatus =
@@ -178,6 +179,15 @@ export class PlayerController {
 			session.src === source.src &&
 			mediaType === source.mediaType
 		) {
+			// The loaded copy may carry a private feed's secret URL, as when it was opened
+			// before its feed was subscribed. The subscription's copy replaces it; a copy
+			// with the secret never replaces one without.
+			if (
+				isPrivateFeedPlaceholder(episode.feedUrl ?? "") &&
+				!isPrivateFeedPlaceholder(outgoing?.feedUrl ?? "")
+			) {
+				this.setState({ episode });
+			}
 			session.segmentEnd = endTime ?? null;
 			session.preview = endTime !== undefined;
 			if (time === undefined && status === "ended") this.moveTo(0);

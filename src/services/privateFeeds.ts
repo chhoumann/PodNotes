@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import checkStringIsUrl from "src/utility/checkStringIsUrl";
 import { ownRecord } from "src/utility/ownRecord";
 import {
 	isCredentialBearingUrl,
@@ -68,10 +69,20 @@ export function resolveFeedUrl(feed: FeedAddress, feedUrls: FeedUrlRepository): 
 /**
  * Whether `url` is the saved feed's URL. A private feed matches both its
  * placeholder and the URL the placeholder stands for, so the same feed reads
- * as saved whether it is listed from settings or pasted again.
+ * as saved whether it is listed from settings or pasted again. URLs compare as
+ * a request sends them: the scheme and host in any case, and with or without a
+ * default port, name the same feed; the path, query and trailing slash must match.
  */
 export function isSavedFeed(saved: PodcastFeed, url: string, feedUrls: FeedUrlRepository): boolean {
-	return saved.url === url || resolveFeedUrl(saved, feedUrls) === url;
+	const wanted = canonicalUrl(url);
+	if (canonicalUrl(saved.url) === wanted) return true;
+	const resolved = resolveFeedUrl(saved, feedUrls);
+	return resolved !== null && canonicalUrl(resolved) === wanted;
+}
+
+/** `url` as the URL parser serializes it, or as given when it is not a URL. */
+function canonicalUrl(url: string): string {
+	return checkStringIsUrl(url)?.href ?? url;
 }
 
 /** Tells the user that a saved private feed's URL is not on this device. */

@@ -7,6 +7,7 @@ import { downloadedEpisodes, playedEpisodes, playlists, queue } from "src/store"
 import type { Episode } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { getEpisodeKey } from "src/utility/episodeKey";
+import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { FakeDocument, FakeParent, type FakeMedia } from "../../tests/mocks/fakeMedia";
 import { PlayerController } from "./PlayerController";
 
@@ -835,6 +836,36 @@ describe("selection", () => {
 
 		reach(media(), 46, 7000);
 		expect(written.at(-1)).toEqual({ time: 46, finished: false, checkpoint: true });
+	});
+
+	const SECRET_FEED = "https://patron.example.com/PATH_SENTINEL/feed.xml?auth=QUERY_SENTINEL";
+	const secretA = episode("A", { url: SECRET_FEED, feedUrl: SECRET_FEED });
+	const privateA = episode("A", {
+		url: privateFeedPlaceholder("Show"),
+		feedUrl: privateFeedPlaceholder("Show"),
+	});
+
+	test.each([
+		["takes its private feed's placeholder over the loaded secret URL", secretA, privateA],
+		["never takes a secret URL over the loaded private feed's placeholder", privateA, secretA],
+	])("play() of the episode already playing %s, and keeps playing", (_, loaded, selected) => {
+		const { doc, player, media, state } = setup();
+		player.play(loaded);
+		metadata(media());
+		reach(media(), 42);
+
+		player.play(selected);
+
+		expect(state().episode).toBe(privateA);
+		expect(JSON.stringify(state().episode)).not.toMatch(/SENTINEL/);
+		expect(doc.created).toHaveLength(1);
+		expect(media()).toMatchObject({
+			src: secretA.streamUrl,
+			readyState: 1,
+			currentTime: 42,
+			paused: false,
+		});
+		expect(state()).toMatchObject({ status: "playing", currentTime: 42 });
 	});
 });
 
