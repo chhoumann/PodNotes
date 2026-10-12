@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, test } from "vitest";
+import FeedDocumentParser from "src/parser/feedDocumentParser";
 import { transcriptFixture } from "../../../tests/mocks/transcriptFixtures";
+import { choosePublishedTranscript } from "./index";
 import { parseTranscript } from "./parse";
 
 const buzzcast = transcriptFixture("buzzcast.html");
@@ -41,5 +43,21 @@ describe("parseTranscript HTML", () => {
 				"<body><div>First  part\nstill first\n\nSecond part</div></body>",
 			),
 		).toEqual({ kind: "untimed", paragraphs: ["First part still first", "Second part"] });
+	});
+});
+
+describe("choosePublishedTranscript on real feeds", () => {
+	test.each([
+		["build-your-saas.xml", "https://share.transistor.fm/s/9c22a01c/transcription.vtt", "vtt"],
+		["buzzcast.xml", "https://www.buzzsprout.com/231452/19932962/transcript.vtt", "vtt"],
+		["podcasting-2.0.xml", "https://mp3s.nashownotes.com/PC20-274-Captions.srt", "srt"],
+	])("%s links its %s", (feed, link, format) => {
+		const [first] = new FeedDocumentParser().parseEpisodes(transcriptFixture(feed)).episodes;
+
+		expect(choosePublishedTranscript("Show", first.transcripts)).toEqual({
+			key: "Show",
+			link,
+			format,
+		});
 	});
 });
