@@ -36,11 +36,11 @@ test("restores the explorer runtime state and exact persisted core-plugin config
 	const { obsidian, plugin } = getContext();
 	const corePath = path.join(await obsidian.vaultPath(), ".obsidian", "core-plugins.json");
 	const originalBytes = await readFile(corePath);
-	const before = Buffer.from(`\n${JSON.stringify(JSON.parse(originalBytes.toString()))}\n`);
-	expect(before).not.toEqual(originalBytes);
+	// Appending valid JSON whitespace always differs, even after an interrupted seed.
+	const seeded = Buffer.concat([originalBytes, Buffer.from("\n")]);
 	onTestFinished(() => writeFile(corePath, originalBytes));
 	await restoreJourneyWorkspace(obsidian);
-	await writeFile(corePath, before);
+	await writeFile(corePath, seeded);
 	await snapshotJourneyState(obsidian);
 	const enabled = await obsidian.dev.evalJson<boolean>(
 		'app.internalPlugins.getPluginById("file-explorer").enabled',
@@ -61,12 +61,13 @@ test("restores the explorer runtime state and exact persisted core-plugin config
 			'app.internalPlugins.getPluginById("file-explorer").enabled',
 		),
 	).toBe(!enabled);
-	expect(await readFile(corePath)).not.toEqual(before);
+	expect(await readFile(corePath)).not.toEqual(seeded);
 
 	await restoreJourneyCache(obsidian);
 	await plugin.enable();
 	await waitForPodNotesReady(obsidian);
-	expect(await readFile(corePath)).not.toEqual(before);
+	// The runtime save must not stand in for the exact-byte rollback.
+	expect(await readFile(corePath)).not.toEqual(seeded);
 	await restoreJourneyWorkspace(obsidian);
 
 	expect(
@@ -74,7 +75,7 @@ test("restores the explorer runtime state and exact persisted core-plugin config
 			'app.internalPlugins.getPluginById("file-explorer").enabled',
 		),
 	).toBe(enabled);
-	expect(await readFile(corePath)).toEqual(before);
+	expect(await readFile(corePath)).toEqual(seeded);
 });
 
 test("closes a leaked window and reports it during workspace rollback", async () => {

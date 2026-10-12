@@ -166,8 +166,11 @@ describe("resilience journeys", () => {
 				),
 			).toBe(true);
 
+			const loopbackFeed = new URL(server.feedUrl(show));
+			loopbackFeed.hostname = "127.0.0.1";
+			expect((await fetch(loopbackFeed)).status).toBe(200);
 			await server.stop();
-			await expect(fetch(server.feedUrl(show))).rejects.toThrow();
+			await expect(fetch(loopbackFeed)).rejects.toThrow();
 			const requestsWhileOnline = server.requests().length;
 
 			await restartObsidian(obsidian, async () => {
@@ -183,17 +186,27 @@ describe("resilience journeys", () => {
 			await showPodNotes(obsidian);
 			await click(obsidian, ui.podcastCard("Journey Offline"));
 			await obsidian.waitFor(
-				async () => (await listedEpisodes(obsidian)).includes("Offline Keeper"),
+				async () =>
+					(await listedEpisodes(obsidian)).includes("Offline Keeper") &&
+					!(await isShown(obsidian, ui.feedLoading)) &&
+					!(await isShown(obsidian, ui.episodeLoading)),
 				{
 					timeoutMs: 15_000,
-					message: "the downloaded episode listed offline",
+					message: "the downloaded episode listed offline after loading settles",
 				},
 			);
 			await click(obsidian, ui.backToLatestEpisodes);
-			await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
-				timeoutMs: 15_000,
-				message: "cached Latest Episodes offline",
-			});
+			await obsidian.waitFor(
+				async () =>
+					(await listedEpisodes(obsidian)).length === 2 &&
+					!(await isShown(obsidian, ui.backToLatestEpisodes)) &&
+					!(await isShown(obsidian, ui.feedLoading)) &&
+					!(await isShown(obsidian, ui.episodeLoading)),
+				{
+					timeoutMs: 15_000,
+					message: "cached Latest Episodes offline after loading settles",
+				},
+			);
 			expect(await listedEpisodes(obsidian)).toEqual(["Offline Keeper", "Offline Extra"]);
 
 			await click(obsidian, ui.episode("Offline Keeper"));

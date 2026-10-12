@@ -58,6 +58,7 @@ export const ui = {
 		`${PLAYER_VIEW} button.go-back`,
 		"Latest Episodes",
 	),
+	feedLoading: byCss("feed loading banner", `${PLAYER_VIEW} .feed-loading-banner`),
 	episodeLoading: byCss("episode list loading", `${PLAYER_VIEW} .episode-list-loading`),
 	refreshEpisodes: byCss("Refresh episodes", `${PLAYER_VIEW} [aria-label="Refresh episodes"]`),
 	playbackToggle: byCss(
