@@ -68,7 +68,23 @@ test("restores the explorer runtime state and exact persisted core-plugin config
 	await waitForPodNotesReady(obsidian);
 	// The runtime save must not stand in for the exact-byte rollback.
 	expect(await readFile(corePath)).not.toEqual(seeded);
+	await obsidian.dev.evalJson(
+		"app.internalPlugins.requestSaveConfig.cancel(), app.internalPlugins.requestSaveConfig(), true",
+	);
 	await restoreJourneyWorkspace(obsidian);
+	const deadline = Date.now() + 2500;
+	const restored = await obsidian.waitFor(
+		async () => {
+			const bytes = await readFile(corePath);
+			return !bytes.equals(seeded) || Date.now() >= deadline ? { bytes } : false;
+		},
+		{
+			timeoutMs: 10_000,
+			intervalMs: 100,
+			message: "exact bytes to survive pending core persistence",
+		},
+	);
+	expect(restored.bytes).toEqual(seeded);
 
 	expect(
 		await obsidian.dev.evalJson<boolean>(

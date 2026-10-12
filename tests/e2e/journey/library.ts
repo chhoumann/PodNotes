@@ -227,6 +227,9 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 			app.workspace.requestSaveLayout.cancel();
 			await app.workspace.saveLayout();
 			app.workspace.requestSaveLayout.cancel();
+			app.internalPlugins.requestSaveConfig.cancel();
+			await app.internalPlugins.saveConfig();
+			app.internalPlugins.requestSaveConfig.cancel();
 			await app.vault.adapter.promise;
 			return true;
 		})()`);
