@@ -89,11 +89,11 @@ describe("choosePublishedTranscript", () => {
 
 		expect(choosePublishedTranscript("Show", links)).toEqual({
 			key: "Show",
-			link: "first.vtt",
+			reference: "first.vtt",
 			format: "vtt",
 		});
 		expect(choosePublishedTranscript("Show", links.slice(0, 4))).toMatchObject({
-			link: "t.srt",
+			reference: "t.srt",
 			format: "srt",
 		});
 		expect(choosePublishedTranscript("Show", links.slice(0, 2))).toMatchObject({
@@ -119,7 +119,7 @@ describe("choosePublishedTranscript", () => {
 				{ url: "t.srt", type: ["application/srt"] },
 				{ url: "t.txt", type: " Text/Plain; charset=utf-8" },
 			]),
-		).toEqual({ key: "Show", link: "t.txt", format: "text" });
+		).toEqual({ key: "Show", reference: "t.txt", format: "text" });
 		expect(
 			choosePublishedTranscript("Show", { url: "t.vtt", type: "text/vtt" }),
 		).toBeUndefined();
@@ -132,7 +132,7 @@ describe("findPublishedTranscript", () => {
 
 		await expect(findPublishedTranscript(feeds, episodeOf(show))).resolves.toEqual({
 			key: "Show",
-			link: "t.vtt",
+			reference: "t.vtt",
 			format: "vtt",
 		});
 		expect(load).toHaveBeenCalledOnce();
@@ -148,7 +148,7 @@ describe("findPublishedTranscript", () => {
 		const { feeds, load } = repository([...newest, older], storage);
 
 		await expect(findPublishedTranscript(feeds, episodeOf(show, 1))).resolves.toMatchObject({
-			link: "t.vtt",
+			reference: "t.vtt",
 		});
 		expect(load).toHaveBeenCalledOnce();
 	});
@@ -175,7 +175,7 @@ describe("fetchPublishedTranscript", () => {
 
 		const transcript = await fetchPublishedTranscript(
 			feeds,
-			{ key: "Show", link: "transcripts/1.vtt", format: "vtt" },
+			{ key: "Show", reference: "transcripts/1.vtt", format: "vtt" },
 			signal,
 		);
 
@@ -198,7 +198,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
-				{ key: "Hidden", link: "1.vtt", format: "vtt" },
+				{ key: "Hidden", reference: "1.vtt", format: "vtt" },
 				signal,
 			),
 		).rejects.toThrow(
@@ -224,7 +224,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
-				{ key: "Show", link: "1.vtt", format: "vtt" },
+				{ key: "Show", reference: "1.vtt", format: "vtt" },
 				controller.signal,
 			),
 		).rejects.toBe(abort);
@@ -237,7 +237,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
-				{ key: "Show", link: "1.json", format: "json" },
+				{ key: "Show", reference: "1.json", format: "json" },
 				signal,
 			),
 		).rejects.toThrow(
@@ -249,7 +249,11 @@ describe("fetchPublishedTranscript", () => {
 		const { feeds } = repository([]);
 
 		await expect(
-			fetchPublishedTranscript(feeds, { key: "Gone", link: "1.vtt", format: "vtt" }, signal),
+			fetchPublishedTranscript(
+				feeds,
+				{ key: "Gone", reference: "1.vtt", format: "vtt" },
+				signal,
+			),
 		).rejects.toThrow(
 			new PublishedTranscriptError(
 				"The published transcript could not be fetched: its address is not valid.",

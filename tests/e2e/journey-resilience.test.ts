@@ -47,7 +47,6 @@ import {
 const getContext = createPodNotesE2EHarness("journey-resilience");
 const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
 
-/** Every key path in a JSON value, so a test can tell whether data.json gained a field. */
 function keyPaths(value: unknown, prefix = ""): string[] {
 	if (typeof value !== "object" || value === null) return [];
 	return Object.entries(value).flatMap(([key, child]) => {

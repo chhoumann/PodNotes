@@ -3,13 +3,10 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ObsidianClient } from "obsidian-e2e";
 
-/** A `podcast:transcript` the feed lists, served from the feed's folder. */
 export type FixtureTranscript = Readonly<{
-	/** Relative to the feed's folder, and the URL the feed lists unless `absolute`. */
 	path: string;
 	type: string;
 	absolute?: boolean;
-	/** Without a body the server answers 404. */
 	body?: string;
 }>;
 
@@ -319,7 +316,6 @@ export async function removeItunesStub(obsidian: ObsidianClient): Promise<void> 
 
 const DEEPGRAM_ORIGIN = "https://api.deepgram.com/";
 
-/** Record Deepgram requests and answer them with a 500, so none leaves the machine. */
 export async function installDeepgramTripwire(obsidian: ObsidianClient): Promise<void> {
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		if (window.__podnotesJourneyDeepgram) throw new Error("The Deepgram tripwire is already installed.");

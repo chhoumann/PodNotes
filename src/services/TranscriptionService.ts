@@ -59,7 +59,6 @@ export class TranscriptionService {
 		this.plugin = plugin;
 	}
 
-	/** The transcript the episode's feed publishes, or else a transcription of its audio. */
 	async transcribeCurrentEpisode(): Promise<void> {
 		if (this.disposed) return;
 		const episode = this.plugin.api.podcast;
@@ -87,7 +86,6 @@ export class TranscriptionService {
 		}
 	}
 
-	/** A transcription of the episode's audio by the configured provider, whatever its feed publishes. */
 	transcribeCurrentEpisodeFromAudio(): void {
 		if (this.disposed) return;
 		if (!this.hasRequiredKey()) {
@@ -266,7 +264,6 @@ export class TranscriptionService {
 		return { body, completion: warning ?? "Transcription completed and saved." };
 	}
 
-	/** Offers the paid transcription only to a user who has its key. */
 	private publishedTranscriptFailure(error: PublishedTranscriptError): string {
 		if (!this.hasRequiredKey()) return error.message;
 		const provider = this.needsDeepgram() ? "Deepgram" : "OpenAI";
@@ -351,7 +348,7 @@ export class TranscriptionService {
 				throw new Error("Missing Deepgram API key on this device.");
 			}
 			// Deepgram ingests the whole file in one request, so it needs no
-			// chunking — which is exactly why its speaker labels stay consistent
+			// chunking, which is exactly why its speaker labels stay consistent
 			// across the entire episode.
 			const segments = await this.waitForLifecycle(
 				diarizeWithDeepgram({
@@ -530,9 +527,6 @@ export class TranscriptionService {
 	private async saveTranscription(episode: Episode, transcriptBody: string): Promise<void> {
 		this.assertActive();
 		const transcriptPath = this.getTranscriptPath(episode);
-		// transcriptBody is already formatted (sentence reflow for Whisper, speaker
-		// turns for diarization, escaped timestamped paragraphs for a published
-		// transcript), so it is templated verbatim here.
 		const transcriptContent = TranscriptTemplateEngine(
 			this.plugin.settings.transcript.template,
 			episode,

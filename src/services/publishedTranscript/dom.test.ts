@@ -51,12 +51,12 @@ describe("choosePublishedTranscript on real feeds", () => {
 		["build-your-saas.xml", "https://share.transistor.fm/s/9c22a01c/transcription.vtt", "vtt"],
 		["buzzcast.xml", "https://www.buzzsprout.com/231452/19932962/transcript.vtt", "vtt"],
 		["podcasting-2.0.xml", "https://mp3s.nashownotes.com/PC20-274-Captions.srt", "srt"],
-	])("%s links its %s", (feed, link, format) => {
+	])("%s links its %s", (feed, reference, format) => {
 		const [first] = new FeedDocumentParser().parseEpisodes(transcriptFixture(feed)).episodes;
 
 		expect(choosePublishedTranscript("Show", first.transcripts)).toEqual({
 			key: "Show",
-			link,
+			reference,
 			format,
 		});
 	});

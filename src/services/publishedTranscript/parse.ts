@@ -1,9 +1,7 @@
 import { isPlainObject } from "src/persistence/codecUtils";
 
-/** The transcript formats of the podcast namespace that PodNotes reads. */
 export type TranscriptFormat = "vtt" | "srt" | "json" | "html" | "text";
 
-/** One timed piece of a transcript, in seconds from the start of the episode. */
 export interface TranscriptCue {
 	readonly start: number;
 	readonly end?: number;
@@ -17,10 +15,6 @@ export type ParsedTranscript =
 	| { readonly kind: "timed"; readonly cues: NonEmpty<TranscriptCue> }
 	| { readonly kind: "untimed"; readonly paragraphs: NonEmpty<string> };
 
-/**
- * The transcript in `text`, read as `format`. Undefined when nothing is
- * readable: the text is not in that format, or it has no words.
- */
 export function parseTranscript(
 	format: TranscriptFormat,
 	text: string,
@@ -39,7 +33,6 @@ export function parseTranscript(
 	}
 }
 
-/** Whitespace and control characters become one space, trimmed. */
 export function collapseWhitespace(text: string): string {
 	return text.replace(/[\s\p{Cc}]+/gu, " ").trim();
 }
@@ -47,11 +40,7 @@ export function collapseWhitespace(text: string): string {
 const TIMING_LINE = /^\s*(\S+)\s+-->\s+(\S+)/;
 const VOICE_TAG = /<v(?:\.[^\s>]*)?\s+([^>]*)>/;
 
-/**
- * VTT and SRT cues: blank-line separated blocks whose timing line holds `-->`.
- * Lines before it (a cue identifier or index) are skipped. A VTT voice names
- * the speaker until another voice does, because hosts tag only the changes.
- */
+/** A VTT voice names the speaker until another voice does, because hosts tag only the changes. */
 function parseCueBlocks(source: string): TranscriptCue[] {
 	const cues: TranscriptCue[] = [];
 	let speaker: string | undefined;
@@ -71,7 +60,6 @@ function parseCueBlocks(source: string): TranscriptCue[] {
 	return cues;
 }
 
-/** `{ segments: [{ speaker?, startTime, endTime?, body }] }`, times as numbers or numeric strings. */
 function parseJsonSegments(source: string): TranscriptCue[] {
 	let data: unknown;
 	try {
@@ -92,7 +80,6 @@ function parseJsonSegments(source: string): TranscriptCue[] {
 	});
 }
 
-/** Each `<time>` starts a cue: the `<cite>` before it names the speaker, the `<p>` after it holds the words. */
 function parseHtml(source: string): ParsedTranscript | undefined {
 	const body = new DOMParser().parseFromString(source, "text/html").body;
 	const cues = Array.from(body.querySelectorAll("time")).flatMap((time): TranscriptCue[] => {
@@ -121,7 +108,6 @@ function paragraphsOf(source: string): string[] {
 
 const CLOCK = /^(?:(\d+):)?(\d{1,2}):(\d{2})(?:[.,](\d+))?$/;
 
-/** `HH:MM:SS.mmm`, `MM:SS,mmm` or `H:MM:SS` in seconds. */
 function parseClock(text: string): number | undefined {
 	const clock = CLOCK.exec(text.trim());
 	if (!clock) return undefined;
@@ -150,7 +136,6 @@ const NAMED_ENTITIES = new Map([
 	["rlm", "\u200f"],
 ]);
 
-/** Cue text entities, decoded once. Anything else, a bare `&` included, stays as written. */
 function decodeEntities(text: string): string {
 	return text.replace(/&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi, (match, decimal, hex, name) => {
 		if (name) return NAMED_ENTITIES.get(name) ?? match;

@@ -15,7 +15,6 @@ export interface TimestampStyle {
 
 const TIME_TAG = /\{\{\s*(link)?(?:time|segment)\s*(?::\s*(.*?))?\}\}/i;
 
-/** The timestamp style the user's capture template asks for: its first time tag's format and whether it links. */
 export function timestampStyle(timestampTemplate: string): TimestampStyle {
 	const tag = TIME_TAG.exec(timestampTemplate);
 	return { format: tag?.[2] || "HH:mm:ss", linkify: tag?.[1] !== undefined };
@@ -28,18 +27,11 @@ export interface TranscriptParagraph {
 	readonly text: string;
 }
 
-/** A silence this long starts a new paragraph. */
 const PARAGRAPH_GAP_SECONDS = 5;
-/** A paragraph this long ends at its next sentence end. */
 const PARAGRAPH_SOFT_SECONDS = 30;
-/** A paragraph this long ends at its next cue. */
 const PARAGRAPH_HARD_SECONDS = 60;
 const ENDS_SENTENCE = /[.!?]["')\]]*$/;
 
-/**
- * Cues joined into readable paragraphs, in feed order. A cue is never split, and
- * a cue without a speaker continues the paragraph before it.
- */
 export function groupCues(cues: NonEmpty<TranscriptCue>): TranscriptParagraph[] {
 	const paragraphs: TranscriptParagraph[] = [];
 	for (const cue of cues) {
@@ -68,11 +60,6 @@ function continues(paragraph: TranscriptParagraph, cue: TranscriptCue): boolean 
 	);
 }
 
-/**
- * The note body for `{{transcript}}`: one paragraph per line with a blank line
- * between. A timed paragraph starts with its timestamp, in the feed's time with
- * no capture offset.
- */
 export function renderTranscriptBody(
 	transcript: ParsedTranscript,
 	options: { episode: Episode; speakerTemplate: string; timestamp: TimestampStyle },
@@ -99,10 +86,10 @@ export function renderTranscriptBody(
 }
 
 /**
- * Feed text as inert Markdown prose on one line. The escaped characters start
- * HTML and Templater (`<`), embeds and links (`[`), code and Dataview queries
- * (`` ` `` and `~`), tags (`#`), comments (`%`) and math (`$`). Escaping `\`
- * first keeps every escape reversible.
+ * The escaped characters start HTML and Templater (`<`), embeds and links (`[`),
+ * code and Dataview queries (`` ` `` and `~`), tags (`#`), comments (`%`) and
+ * math (`$`). Escaping `\` too stops a backslash in the text from cancelling the
+ * escape after it.
  */
 export function escapeTranscriptText(text: string): string {
 	return collapseWhitespace(text).replace(/[\\`<[#%$~]/g, "\\$&");

@@ -95,12 +95,7 @@ const artwork = (
 	<text x="300" y="320" font-family="sans-serif" font-size="64" fill="#fff" text-anchor="middle">${title}</text>
 </svg>`;
 
-/**
- * Each episode publishes its transcripts the way real hosts do. The VTT link is
- * relative to the feed URL and follows an HTML link, so selection and URL
- * resolution both show in the result.
- * @param {number} audioBytes
- */
+/** @param {number} audioBytes */
 function transcriptsFeedXml(audioBytes) {
 	/** @param {number} n @param {string} title @param {string} links */
 	const item = (n, title, links) => `
@@ -171,9 +166,8 @@ function serve() {
 			response.end(JSON.stringify(requests));
 			return;
 		}
-		// Only PodNotes uses the nip.io host; this script's own probes use 127.0.0.1.
-		if (request.headers.host?.startsWith(host))
-			requests.push(`${request.method} ${request.url}`);
+		const fromPodNotes = request.headers.host?.startsWith(host);
+		if (fromPodNotes) requests.push(`${request.method} ${request.url}`);
 		const route = routes[request.url ?? ""];
 		if (!route) {
 			response.writeHead(404).end();

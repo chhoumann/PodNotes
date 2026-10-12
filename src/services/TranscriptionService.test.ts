@@ -392,7 +392,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("does not write a file when the transcript is only whitespace", async () => {
-			// Multiple empty chunks join to " ", not "" — the trimmed-emptiness check
+			// Multiple empty chunks join to " ", not "", so the trimmed-emptiness check
 			// must still treat this as failure.
 			whisperReturns("   \n\t  ");
 			const plugin = createMockPlugin();
