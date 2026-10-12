@@ -46,6 +46,8 @@ Above each list:
 - **Refresh episodes** fetches new episodes in **Latest Episodes** and a podcast's list. In **Played**, it fetches the podcasts that have played episodes. In other playlists, it does nothing.
 - **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
 
+The **Queue** list under the player has none of these controls.
+
 <span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
 
 ## <span id="player"></span>Play an episode
@@ -78,5 +80,5 @@ To open an episode's menu, right-click the episode or select its **More options*
 | **Create feed note** or **Open feed note** | Creates or opens the note for the whole podcast. |
 | **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites** or removes it. |
 | **Add to Queue** or **Remove from Queue** | Adds the episode to the bottom of the queue or removes it. |
-| **Move to top of queue**, **Move up in queue**, **Move down in queue**, **Move to bottom of queue** | Moves the episode within the queue. Shown only in the player's **Queue** list. |
+| **Move to top of queue**, **Move up in queue**, **Move down in queue**, **Move to bottom of queue** | Moves the episode within the queue. Shown only in the player's **Queue** list when the queue has two or more episodes, and only the directions the episode can move in. |
 | **Add to** *playlist* or **Remove from** *playlist* | Adds the episode to that playlist or removes it. One item per playlist you made. |
