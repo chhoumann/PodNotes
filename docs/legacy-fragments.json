@@ -94,7 +94,8 @@
 		"context-menu",
 		"reordering-the-queue",
 		"turning-off-the-queue",
-		"player"
+		"player",
+		"when-a-feed-cannot-be-reached"
 	],
 	"/sync/": [
 		"plugin-data-and-notes",
