@@ -123,7 +123,7 @@ describe("FeedRepository", () => {
 		const first = t.repo.ensureAll();
 		const refresh = t.repo.load(["Alpha"], "network");
 		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
-		await Promise.all([first, refresh]);
+		await expect(Promise.all([first, refresh])).resolves.toEqual([true, true]);
 
 		expect(t.load).toHaveBeenCalledTimes(1);
 		expect(t.titles("Alpha")).toEqual(["Episode 1"]);
@@ -170,7 +170,7 @@ describe("FeedRepository", () => {
 		t.repo.setSubscriptions({ Alpha: alpha });
 		const loading = t.repo.ensureAll();
 		t.requests[0].respond.reject(new Error("offline"));
-		await loading;
+		await expect(loading).resolves.toBe(false);
 
 		expect(t.feed("Alpha")).toMatchObject({ status: "error", error: "network", episodes: [] });
 	});

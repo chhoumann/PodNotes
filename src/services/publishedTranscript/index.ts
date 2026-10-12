@@ -1,5 +1,5 @@
 import type { TranscriptLink } from "src/parser/feedDocumentParser";
-import type { FeedKey, FeedRepository, LoadMode } from "src/services/FeedRepository";
+import type { FeedKey, FeedRepository } from "src/services/FeedRepository";
 import type { Episode } from "src/types/Episode";
 import { NetworkError, fetchTextWithTimeout } from "src/utility/networkRequest";
 import { type ParsedTranscript, parseTranscript, type TranscriptFormat } from "./parse";
@@ -40,12 +40,14 @@ export async function findPublishedTranscript(
 	episode: Episode,
 ): Promise<PublishedTranscript | undefined> {
 	const key = episode.podcastName;
-	const metadata = async (mode: LoadMode) => {
-		await feeds.load([key], mode);
-		return feeds.episodeMetadata(key, episode);
-	};
-	// The cache keeps a long feed's newest items, so only an older episode waits for the whole feed.
-	const item = (await metadata("cached")) ?? (await metadata("complete"));
+	const loaded = await feeds.load([key], "cached");
+	let item = feeds.episodeMetadata(key, episode);
+	// The cache keeps a long feed's newest items, so only an older episode waits for the
+	// whole feed. A feed the first load failed to fetch is not asked twice.
+	if (!item && loaded) {
+		await feeds.load([key], "complete");
+		item = feeds.episodeMetadata(key, episode);
+	}
 	return choosePublishedTranscript(key, item?.transcripts);
 }
 

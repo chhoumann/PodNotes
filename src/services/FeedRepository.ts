@@ -119,8 +119,11 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		this.emit();
 	}
 
-	/** Resolves when every request it started or joined has settled. Never rejects. */
-	load(keys: Iterable<FeedKey>, mode: LoadMode): Promise<void> {
+	/**
+	 * Resolves when every request it started or joined has settled, to false when one
+	 * failed. Never rejects.
+	 */
+	load(keys: Iterable<FeedKey>, mode: LoadMode): Promise<boolean> {
 		this.hydrate();
 		const requests: Promise<void>[] = [];
 		for (const key of keys) {
@@ -128,10 +131,12 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			const request = feed && this.request(feed, mode);
 			if (request) requests.push(request);
 		}
-		return Promise.allSettled(requests).then(() => undefined);
+		return Promise.allSettled(requests).then((results) =>
+			results.every(({ status }) => status === "fulfilled"),
+		);
 	}
 
-	ensureAll(): Promise<void> {
+	ensureAll(): Promise<boolean> {
 		return this.load(this.subscriptions.keys(), "cached");
 	}
 

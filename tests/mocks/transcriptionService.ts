@@ -36,7 +36,7 @@ export function createMockPlugin(
 		existingTranscriptPath?: string | null;
 		transcripts?: TranscriptLink[];
 		feedUrl?: string;
-		loadFeed?: () => Promise<void>;
+		loadFeed?: () => Promise<boolean>;
 	} = {},
 ): PodNotes {
 	const {
@@ -45,7 +45,7 @@ export function createMockPlugin(
 		existingTranscriptPath = null,
 		transcripts,
 		feedUrl = "https://example.com/feed.xml",
-		loadFeed = async () => {},
+		loadFeed = async () => true,
 	} = overrides;
 
 	return {

@@ -240,7 +240,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("two runs during one feed lookup queue the episode once", async () => {
-			const lookup = deferred<void>();
+			const lookup = deferred<boolean>();
 			fetchTextMock.mockResolvedValue(VTT);
 			const plugin = createMockPlugin({
 				transcripts: published,
@@ -250,7 +250,7 @@ describe("TranscriptionService", () => {
 
 			const first = service.transcribeCurrentEpisode();
 			const second = service.transcribeCurrentEpisode();
-			lookup.resolve();
+			lookup.resolve(true);
 			await Promise.all([first, second]);
 			await finished(service, "Saved the transcript the feed publishes.");
 
@@ -264,7 +264,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("unloading during the feed lookup ends quietly", async () => {
-			const lookup = deferred<void>();
+			const lookup = deferred<boolean>();
 			const plugin = createMockPlugin({
 				transcripts: published,
 				loadFeed: () => lookup.promise,
@@ -273,7 +273,7 @@ describe("TranscriptionService", () => {
 
 			const pending = service.transcribeCurrentEpisode();
 			service.dispose();
-			lookup.resolve();
+			lookup.resolve(true);
 			await pending;
 
 			expect(noticeMessages).toEqual([]);

@@ -161,6 +161,29 @@ describe("findPublishedTranscript", () => {
 		expect(load).toHaveBeenCalledOnce();
 	});
 
+	test("asks an unreachable feed once and finds nothing", async () => {
+		const { feeds, load } = repository([]);
+		load.mockRejectedValue(new Error("offline"));
+
+		await expect(findPublishedTranscript(feeds, episodeOf(show))).resolves.toBeUndefined();
+		expect(load).toHaveBeenCalledOnce();
+	});
+
+	test("after a failed refetch, the next lookup refetches the cut feed for an older episode", async () => {
+		const storage = new MemoryStorage();
+		const newest = Array.from({ length: 75 }, (_, index) => item([], index + 2));
+		const older = item([{ url: "t.vtt", type: "text/vtt" }], 1);
+		await repository([...newest, older], storage).feeds.load(["Show"], "network");
+		const { feeds, load } = repository([...newest, older], storage);
+		load.mockRejectedValueOnce(new Error("offline"));
+
+		await expect(findPublishedTranscript(feeds, episodeOf(show, 1))).resolves.toBeUndefined();
+		await expect(findPublishedTranscript(feeds, episodeOf(show, 1))).resolves.toMatchObject({
+			reference: "t.vtt",
+		});
+		expect(load).toHaveBeenCalledTimes(2);
+	});
+
 	test("finds nothing for a local file or an episode of an unsubscribed feed", async () => {
 		const { feeds, load } = repository([item([{ url: "t.vtt", type: "text/vtt" }])]);
 
