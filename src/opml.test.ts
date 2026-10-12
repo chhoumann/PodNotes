@@ -37,6 +37,9 @@ vi.mock("./store", () => ({
 						feedUrlSecrets.set("podnotes-feed-url", url);
 						return "podnotes-feed-url";
 					},
+					attach: (id: string, url: string) => {
+						feedUrlSecrets.set(id, url);
+					},
 					delete: (id: string) => feedUrlSecrets.delete(id),
 				},
 			});
@@ -253,12 +256,16 @@ describe("importOPML (IE-01)", () => {
 		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcasts"))).toBe(true);
 	});
 
-	it("gives a saved private feed whose URL is not on this device the listed URL", async () => {
+	it("sets the listed private URL under the reference of a saved private feed missing on this device", async () => {
 		const privateUrl = "https://private.test/feed?auth=s3cret";
 		feedUrlSecrets.clear();
-		savedFeeds.set({
-			Private: { title: "Private", url: "podnotes-private-feed:Private", artworkUrl: "" },
-		});
+		const saved = {
+			title: "Private",
+			url: "podnotes-private-feed:Private",
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000001",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ Private: saved });
 		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Private",
 			url,
@@ -269,10 +276,34 @@ describe("importOPML (IE-01)", () => {
 			`<opml><body><outline text="Private" xmlUrl="${privateUrl}" /></body></opml>`,
 		);
 
-		const revived = get(savedFeeds).Private;
-		expect(Object.keys(get(savedFeeds))).toEqual(["Private"]);
-		expect(revived.url).toBe("podnotes-private-feed:Private");
-		expect(feedUrlSecrets.get(revived.urlSecretId as string)).toBe(privateUrl);
+		expect(get(savedFeeds)).toEqual({ Private: saved });
+		expect([...feedUrlSecrets]).toEqual([[saved.urlSecretId, privateUrl]]);
+	});
+
+	it("never replaces a saved private feed missing on this device with a public namesake", async () => {
+		feedUrlSecrets.clear();
+		const saved = {
+			title: "Private",
+			url: "podnotes-private-feed:Private",
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000001",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ Private: saved });
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
+			title: "Private",
+			url,
+			artworkUrl: "",
+		}));
+
+		await importOPML(
+			'<opml><body><outline text="Private" xmlUrl="https://public.test/feed" /></body></opml>',
+		);
+
+		expect(get(savedFeeds)).toEqual({ Private: saved });
+		expect(feedUrlSecrets.size).toBe(0);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
+			true,
+		);
 	});
 
 	it("never renders 'NaN%' when every feed is already subscribed", async () => {

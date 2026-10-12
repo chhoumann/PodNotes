@@ -305,6 +305,114 @@ describe("PodNotes persistence integration", () => {
 		expect(saveData).toHaveBeenCalledTimes(writes);
 	});
 
+	it("keeps every private feed secret data.json references, even where this version cannot read it", async () => {
+		const unknownFieldId = "podnotes-feed-url-00000000-0000-4000-8000-000000000001";
+		const droppedFeedId = "podnotes-feed-url-00000000-0000-4000-8000-000000000002";
+		const orphanId = "podnotes-feed-url-00000000-0000-4000-8000-000000000003";
+		const { storage, values } = memorySecretStorage({
+			[unknownFieldId]: "https://private.example/a.xml?auth=a",
+			[droppedFeedId]: "https://private.example/b.xml?auth=b",
+			[orphanId]: "https://private.example/c.xml?auth=c",
+		});
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			loadData: vi.fn().mockResolvedValue({
+				...encodePodNotesData(structuredClone(DEFAULT_SETTINGS), { libraryId: "library" }),
+				savedFeeds: [
+					{ title: "B", url: "podnotes-private-feed:B", urlSecretId: droppedFeedId },
+				],
+				futureFeeds: {
+					A: { url: "podnotes-private-feed:A", urlSecretId: ` ${unknownFieldId} ` },
+				},
+			}),
+		});
+		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+		await plugin.loadSettings();
+
+		expect(saveData).not.toHaveBeenCalled();
+		expect(values.get(unknownFieldId)).toBe("https://private.example/a.xml?auth=a");
+		expect(values.get(droppedFeedId)).toBe("https://private.example/b.xml?auth=b");
+		expect(values.get(orphanId)).toBe("");
+	});
+
+	it.each([
+		["2.20.0", "- {{time}} ", {}],
+		["2.21.1", "- {{linktime}} ", { downloadedByPodNotes: true }],
+	])("loads a %s library with a private feed unchanged", async (_version, template, download) => {
+		const id = "podnotes-feed-url-00000000-0000-4000-8000-000000000001";
+		const secretUrl = "https://private.example/feed.xml?auth=released";
+		const { storage, values } = memorySecretStorage({ [id]: secretUrl });
+		const episode = {
+			title: "Ep",
+			streamUrl: "https://media.example/ep.mp3?sig=media",
+			url: "podnotes-private-feed:Private",
+			description: "",
+			content: "",
+			podcastName: "Private",
+			episodeDate: "2026-01-01T00:00:00.000Z",
+			feedUrl: "podnotes-private-feed:Private",
+		};
+		const released = {
+			...JSON.parse(JSON.stringify(encodePodNotesData(structuredClone(DEFAULT_SETTINGS)))),
+			timestamp: { template, offset: 0 },
+			savedFeeds: {
+				Private: {
+					title: "Private",
+					url: "podnotes-private-feed:Private",
+					urlSecretId: id,
+					artworkUrl: "https://media.example/art.jpg?sig=art",
+				},
+				Public: {
+					title: "Public",
+					url: "https://feeds.example/public.xml",
+					artworkUrl: "",
+				},
+			},
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode] },
+			currentEpisode: episode,
+			downloadedEpisodes: {
+				Private: [
+					{ ...episode, filePath: "PodNotes/Private/Ep.mp3", size: 42, ...download },
+				],
+			},
+			playedEpisodes: {
+				"Private::Ep": {
+					title: "Ep",
+					podcastName: "Private",
+					time: 30,
+					duration: 60,
+					finished: false,
+				},
+			},
+		};
+		delete released.libraryId;
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			loadData: vi.fn().mockResolvedValue(structuredClone(released)),
+		});
+
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		plugin.settings.defaultVolume = 0.4;
+		await plugin.saveSettingsStrict();
+
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.calls[0][0]).toEqual({
+			...released,
+			defaultVolume: 0.4,
+			libraryId: "",
+		});
+		expect(values.get(id)).toBe(secretUrl);
+		expect(plugin.feedUrls.resolve(plugin.settings.savedFeeds.Private.urlSecretId ?? "")).toBe(
+			secretUrl,
+		);
+	});
+
 	it("starts on an empty data.json as on a new install", async () => {
 		const plugin = makePlugin(undefined, { dataFileExists: true });
 		let text = "";

@@ -60,7 +60,7 @@ function settingsWithEveryEpisodeContainer(): IPodNotesSettings {
 }
 
 describe("PodNotes data schema", () => {
-	it("protects private feed URLs in every episode container on the first encode without a device secret", () => {
+	it("puts no private feed address in data.json, from the first encode and without a device secret", () => {
 		const sentinel = "PRIV2_ENCODE_SENTINEL";
 		const rawUrl = `https://private.example/feed?auth=${sentinel}`;
 		const item = { ...episode("Private"), url: rawUrl, feedUrl: rawUrl };
@@ -84,11 +84,21 @@ describe("PodNotes data schema", () => {
 			},
 			playedEpisodes: { "Test Podcast::Private": history },
 		} satisfies IPodNotesSettings;
-		const before = structuredClone(settings);
+		settings.queue.episodes[0] = { ...item, sourceFeed: rawUrl } as Episode;
+		const unknownFields = { libraryId: "library", nextVersion: { lastEpisode: item } };
+		const before = structuredClone({ settings, unknownFields });
 
-		const encoded = encodePodNotesData(settings);
+		const encoded = encodePodNotesData(settings, unknownFields);
 
 		expect(JSON.stringify(encoded)).not.toContain(sentinel);
+		expect(encoded.queue.episodes[0].sourceFeed).toBe("podnotes-private-feed:Test%20Podcast");
+		expect(encoded.nextVersion).toEqual({
+			lastEpisode: {
+				...item,
+				url: "podnotes-private-feed:Test%20Podcast",
+				feedUrl: "podnotes-private-feed:Test%20Podcast",
+			},
+		});
 		expect(encoded.currentEpisode?.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
 		for (const list of [
 			encoded.queue,
@@ -107,7 +117,27 @@ describe("PodNotes data schema", () => {
 		expect(encoded.queue.episodes[0].streamUrl).toBe(item.streamUrl);
 		expect(encoded.downloadedEpisodes["Test Podcast"][0].filePath).toBe("audio.mp3");
 		expect(encoded.playedEpisodes["Test Podcast::Private"].time).toBe(12);
-		expect(settings).toEqual(before);
+		expect({ settings, unknownFields }).toEqual(before);
+	});
+
+	it("keeps signed media and an episode's own tokened link of a private feed's episode", () => {
+		const signed = {
+			...episode("Signed"),
+			streamUrl: "https://media.example/ep.mp3?sig=MEDIA&token=MEDIA",
+			url: "https://private.example/post?token=ARTICLE",
+			artworkUrl: "https://media.example/art.jpg?signature=ART",
+			chaptersUrl: "https://media.example/chapters.json?key=CHAPTERS",
+			feedUrl: "https://private.example/feed?auth=FEED",
+		};
+		const settings = { ...structuredClone(DEFAULT_SETTINGS), currentEpisode: signed };
+
+		const encoded = encodePodNotesData(settings);
+
+		expect(encoded.currentEpisode).toEqual({
+			...signed,
+			episodeDate: episodeDate.toISOString(),
+			feedUrl: "podnotes-private-feed:Test%20Podcast",
+		});
 	});
 
 	it("loads fresh data as independent deep-cloned defaults", () => {

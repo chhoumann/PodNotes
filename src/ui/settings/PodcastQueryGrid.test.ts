@@ -63,7 +63,19 @@ function usePlugin(feedUrls: FeedUrlRepository | object) {
 		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
-	plugin.set({ feedUrls, feeds } as unknown as PodNotes);
+	plugin.set({ app: new obsidian.App(), feedUrls, feeds } as unknown as PodNotes);
+}
+
+async function setFeedAddress(view: ReturnType<typeof renderGrid>, title: string, url: string) {
+	await fireEvent.click(
+		await view.findByRole("button", { name: `Set feed address for ${title}` }),
+	);
+	const dialog = within(document.body);
+	await fireEvent.input(dialog.getByRole("textbox", { name: "Feed address" }), {
+		target: { value: url },
+	});
+	await fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+	await settle();
 }
 
 // Runs the debounced handler and every response already resolved.
@@ -255,6 +267,45 @@ describe("PodcastQueryGrid", () => {
 		);
 		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
 		expect(thisDevice.listSecrets()).toEqual([]);
+	});
+
+	test("sets a synced private feed's address on this device under the reference data.json holds", async () => {
+		const { saved, secrets: firstDevice } = followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		usePlugin(new FeedUrlRepository(thisDevice));
+
+		const view = renderGrid();
+		await setFeedAddress(view, "Private Show", PRIVATE_URL);
+
+		expect(thisDevice.listSecrets()).toEqual([saved.urlSecretId]);
+		expect(thisDevice.getSecret(saved.urlSecretId)).toBe(PRIVATE_URL);
+		expect(firstDevice.getSecret(saved.urlSecretId)).toBe(PRIVATE_URL);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		expect(
+			view.queryByRole("button", { name: "Set feed address for Private Show" }),
+		).toBeNull();
+		expect(
+			view.getByRole("button", { name: "Remove Private Show podcast" }),
+		).toBeInTheDocument();
+	});
+
+	test("keeps the reference when the feed at the entered address cannot be loaded", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { saved } = followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		usePlugin(new FeedUrlRepository(thisDevice));
+		fetchTextMock.mockRejectedValue(new NetworkError("timeout"));
+
+		const view = renderGrid();
+		await setFeedAddress(view, "Private Show", PRIVATE_URL);
+
+		expect(notice).toHaveBeenCalledWith(expect.stringMatching(/^Could not load feed: /));
+		expect(thisDevice.listSecrets()).toEqual([]);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		expect(
+			view.getByRole("button", { name: "Set feed address for Private Show" }),
+		).toBeInTheDocument();
 	});
 
 	test("keeps the newest search when an older one answers last", async () => {
