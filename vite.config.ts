@@ -57,6 +57,13 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [
 			svelte({
+				// Injected styles ship inside main.js, so CSS comments would cost every
+				// user bytes. License notices (/*!) stay.
+				preprocess: {
+					style: ({ content }) => ({
+						code: content.replace(/\/\*(?!!)[\s\S]*?\*\//g, ""),
+					}),
+				},
 				compilerOptions: {
 					css: "injected",
 					// Svelte skips a style whose id is already in the document, and Obsidian
