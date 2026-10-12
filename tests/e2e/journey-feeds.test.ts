@@ -1,5 +1,5 @@
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, RELOAD_OPTIONS } from "./harness";
+import { createPodNotesE2EHarness } from "./harness";
 import {
 	chooseFile,
 	click,
@@ -27,6 +27,7 @@ import {
 } from "./journey/fixtures";
 import {
 	ageFeedCache,
+	feedCachedAt,
 	feedCacheHolds,
 	observePlayback,
 	readLibrary,
@@ -35,6 +36,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
+import { RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-feeds");
 
@@ -290,9 +292,8 @@ describe("feed journeys", () => {
 
 		await showPodNotes(obsidian);
 		await waitUntilShown(obsidian, ui.podcastCard("Journey Artwork Control"));
-		await obsidian.sleep(1000);
+		await waitUntilShown(obsidian, ui.podcastCard("Journey No Artwork"));
 
-		expect(await isShown(obsidian, ui.podcastCard("Journey No Artwork"))).toBe(true);
 		await click(obsidian, ui.podcastCard("Journey No Artwork"));
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 1, {
 			timeoutMs: 15_000,
@@ -314,7 +315,10 @@ describe("feed journeys", () => {
 			message: "the feed loaded while the grid shows",
 		});
 		await click(obsidian, ui.episodeListTab);
-		await obsidian.sleep(1000);
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
+			timeoutMs: 15_000,
+			message: "the Episode list tab to render its loaded episodes",
+		});
 
 		expect(await listedEpisodes(obsidian)).toEqual(["Latest Two", "Latest One"]);
 	});
@@ -333,23 +337,69 @@ describe("feed journeys", () => {
 			timeoutMs: 15_000,
 			message: "Alpha's episodes",
 		});
-		server.delayFeed(alpha, 3000);
+		let release = server.holdFeed(alpha);
+		let cachedBefore = await feedCachedAt(obsidian, server.feedUrl(alpha));
+		const alphaPath = new URL(server.feedUrl(alpha)).pathname;
+		let requestsBefore = server.requests().filter((path) => path === alphaPath).length;
 		await click(obsidian, ui.refreshEpisodes);
+		await obsidian.waitFor(
+			() => server.requests().filter((path) => path === alphaPath).length > requestsBefore,
+			{
+				timeoutMs: 10_000,
+				message: "Alpha's refresh request to arrive",
+			},
+		);
 		await click(obsidian, ui.podcastGridTab);
 		await click(obsidian, ui.podcastCard(beta.title));
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
 			timeoutMs: 15_000,
 			message: "Beta's episodes",
 		});
-		await obsidian.sleep(4000);
+		await release();
+		await obsidian.waitFor(
+			async () => (await feedCachedAt(obsidian, server.feedUrl(alpha))) > cachedBefore,
+			{
+				timeoutMs: 15_000,
+				message: "Alpha's delayed response to update the cache",
+			},
+		);
+		await obsidian.waitFor(async () => !(await shownText(obsidian)).includes("Updating"), {
+			timeoutMs: 15_000,
+			message: "the delayed refresh to settle on Beta",
+		});
 		expect(await listedEpisodes(obsidian)).toEqual(["Beta Two", "Beta One"]);
-		expect(await shownText(obsidian)).not.toContain("Updating");
 
 		await click(obsidian, ui.podcastGridTab);
 		await click(obsidian, ui.podcastCard(alpha.title));
+		release = server.holdFeed(alpha);
+		cachedBefore = await feedCachedAt(obsidian, server.feedUrl(alpha));
+		requestsBefore = server.requests().filter((path) => path === alphaPath).length;
 		await click(obsidian, ui.refreshEpisodes);
+		await obsidian.waitFor(
+			() => server.requests().filter((path) => path === alphaPath).length > requestsBefore,
+			{
+				timeoutMs: 10_000,
+				message: "Alpha's second refresh request to arrive",
+			},
+		);
 		await click(obsidian, ui.backToLatestEpisodes);
-		await obsidian.sleep(4000);
+		await release();
+		await obsidian.waitFor(
+			async () => (await feedCachedAt(obsidian, server.feedUrl(alpha))) > cachedBefore,
+			{
+				timeoutMs: 15_000,
+				message: "Alpha's second delayed response to update the cache",
+			},
+		);
+		await obsidian.waitFor(
+			async () =>
+				(await listedEpisodes(obsidian)).length === 4 &&
+				!(await shownText(obsidian)).includes("Updating"),
+			{
+				timeoutMs: 15_000,
+				message: "Latest Episodes after the delayed refresh",
+			},
+		);
 		// Both feeds publish on the same days, so Latest Episodes interleaves them.
 		expect(await listedEpisodes(obsidian)).toEqual([
 			"Alpha Two",
@@ -357,7 +407,6 @@ describe("feed journeys", () => {
 			"Alpha One",
 			"Beta One",
 		]);
-		expect(await shownText(obsidian)).not.toContain("Updating");
 	});
 
 	test("J-FEED-05 removing a podcast drops it from the grid, Latest Episodes and the feed cache at once", async () => {

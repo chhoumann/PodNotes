@@ -1,19 +1,37 @@
 // Config for the obsidian-e2e instance runner, read from the worktree root.
 // Schema: the runner's README ("Instance Runner (CLI)").
-//
-// `defaultData` seeds a freshly provisioned vault's data.json. It mirrors
-// DEFAULT_SETTINGS in src/constants.ts (plus the `schemaVersion: 2` persistence
-// marker PodNotes writes alongside its settings) so a new vault loads with clean
-// PodNotes state and the current on-disk schema. `currentEpisode` is omitted:
-// DEFAULT_SETTINGS sets it to `undefined`, which JSON cannot represent and
-// PodNotes treats as absent. Keep this in sync with constants.ts -
-// scripts/e2e-config.test.ts fails if it drifts from DEFAULT_SETTINGS.
+import os from "node:os";
+import path from "node:path";
+
+const appName =
+	process.env.PODNOTES_OBSIDIAN_APP ??
+	(process.platform === "linux"
+		? path.join(os.homedir(), ".local/share/obsidian-versions/obsidian-1.14.4/obsidian")
+		: undefined);
+
 export default {
+	appName,
+	obsidianBin:
+		process.env.PODNOTES_OBSIDIAN_BIN ??
+		(process.platform === "linux" && appName
+			? path.join(path.dirname(appName), "obsidian-cli")
+			: undefined),
+	profileRoot:
+		process.platform === "linux"
+			? path.join(os.homedir(), ".cache", "podnotes-e2e")
+			: "/private/tmp/podnotes-obsidian-e2e",
 	pluginId: "podnotes",
 	// PodNotes injects its CSS into main.js (svelte compilerOptions css:
 	// "injected"), so there is no styles.css artifact - only the manifest and the
 	// compiled bundle are symlinked into the vault.
 	pluginArtifacts: ["manifest.json", "main.js"],
+	// `defaultData` seeds a freshly provisioned vault's data.json. It mirrors
+	// DEFAULT_SETTINGS in src/constants.ts (plus the `schemaVersion: 2` persistence
+	// marker PodNotes writes alongside its settings) so a new vault loads with clean
+	// PodNotes state and the current on-disk schema. `currentEpisode` is omitted:
+	// DEFAULT_SETTINGS sets it to `undefined`, which JSON cannot represent and
+	// PodNotes treats as absent. Keep this in sync with constants.ts -
+	// scripts/e2e-config.test.ts fails if it drifts from DEFAULT_SETTINGS.
 	defaultData: {
 		schemaVersion: 2,
 		savedFeeds: {},

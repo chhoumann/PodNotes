@@ -1,5 +1,5 @@
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, PLUGIN_ID, RELOAD_OPTIONS } from "./harness";
+import { createPodNotesE2EHarness } from "./harness";
 import {
 	click,
 	closePodNotes,
@@ -34,6 +34,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
+import { PLUGIN_ID, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-links-local");
 
@@ -210,14 +211,8 @@ describe("link and local file journeys", () => {
 	test("J-LOCAL-01 Play with PodNotes on a vault audio file opens the player and keeps the file in Local Files", async () => {
 		const context = getContext();
 		const { obsidian, plugin, sandbox } = context;
-		const explorerWasEnabled = await obsidian.dev.evalJson<boolean>(
-			`app.internalPlugins.getPluginById("file-explorer")?.enabled === true`,
-		);
-		if (!explorerWasEnabled) {
-			await obsidian.plugin("file-explorer").enable({ filter: "core" });
-			onTestFinished(() => obsidian.plugin("file-explorer").disable({ filter: "core" }));
-		}
 		await seedLibrary(context, null);
+		await obsidian.plugin("file-explorer").enable({ filter: "core" });
 		const audioPath = sandbox.path("Local Journey.wav");
 		await writeVaultFile(obsidian, audioPath, wav(30));
 		await closePodNotes(obsidian);

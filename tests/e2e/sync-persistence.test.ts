@@ -10,13 +10,9 @@ import {
 	evalJsonAsync,
 	invokePodNotesUri,
 	openPodNotesView,
-	PLUGIN_ID,
 	type PodNotesData,
-	RELOAD_OPTIONS,
 	seedAudio,
-	WAIT_OPTS,
 	waitForPlaybackState,
-	waitForPodNotesReady,
 } from "./harness";
 import {
 	assertNoRuntimeErrors,
@@ -29,6 +25,7 @@ import {
 } from "./journey/actions";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import { seedLibrary, waitForLibrary } from "./journey/library";
+import { PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 // Obsidian calls Plugin#onExternalSettingsChange when data.json is newer than
 // the plugin's last write: Obsidian Sync, iCloud, another instance on the vault,

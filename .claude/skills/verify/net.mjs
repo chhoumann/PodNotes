@@ -19,6 +19,7 @@ import {
 	resolveInstanceOptions,
 	resolveProvisionOptions,
 } from "obsidian-e2e/runner";
+import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const config = await loadRunnerConfig(root);
@@ -30,7 +31,7 @@ const instance = resolveInstanceOptions(
 );
 const CALL_TIMEOUT_MS = 15000;
 const FIXTURE_TRANSCRIPTION = "This text came from the fixture provider.";
-const PATH_HOSTS = ["127.0.0.1.nip.io", "api.openai.com", "api.deepgram.com"];
+const PATH_HOSTS = [FIXTURE_HOST, "api.openai.com", "api.deepgram.com"];
 
 /** @param {string} code */
 async function evaluate(code) {

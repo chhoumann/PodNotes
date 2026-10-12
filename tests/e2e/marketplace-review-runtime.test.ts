@@ -2,15 +2,8 @@ import type { PluginHandle } from "obsidian-e2e";
 import { describe, expect, test } from "vitest";
 import type { Episode } from "../../src/types/Episode";
 import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
-import {
-	createPodNotesE2EHarness,
-	evalJsonAsync,
-	openPodNotesView,
-	PLUGIN_ID,
-	RELOAD_OPTIONS,
-	WAIT_OPTS,
-	waitForPodNotesReady,
-} from "./harness";
+import { createPodNotesE2EHarness, evalJsonAsync, openPodNotesView } from "./harness";
+import { PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 type PodNotesData = Partial<IPodNotesSettings>;
 

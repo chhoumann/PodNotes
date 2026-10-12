@@ -7,15 +7,11 @@ import {
 	getPlaybackState,
 	invokePodNotesUri,
 	openPodNotesView,
-	PLUGIN_ID,
 	type PodNotesData,
-	RELOAD_OPTIONS,
 	seedAudio,
-	VIEW_TYPE,
-	WAIT_OPTS,
 	waitForPlaybackState,
-	waitForPodNotesReady,
 } from "./harness";
+import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("player-popout-save");
 const EPISODE_TITLE = "E2E Popout Episode";

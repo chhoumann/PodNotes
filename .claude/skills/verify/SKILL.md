@@ -26,6 +26,20 @@ Ready when it prints `Obsidian instance launched for "podnotes-<worktree>"` (or
 npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins.podnotes.manifest.version'
 ```
 
+On Linux the instance runs Obsidian 1.14.4. To verify on the 1.13.x floor, stop
+the instance first, then prefix every command, `ui.mjs` included, with the
+older build:
+
+```bash
+npm run stop:e2e-obsidian
+PODNOTES_OBSIDIAN_APP=/opt/Obsidian/obsidian npm run start:e2e-obsidian
+PODNOTES_OBSIDIAN_APP=/opt/Obsidian/obsidian npm run obsidian:e2e -- version
+```
+
+`start:e2e-obsidian` and `obsidian:e2e` refuse an instance from a different build.
+Stop the instance to return to 1.14.4. AGENTS.md "Obsidian versions" covers
+installing 1.14.4.
+
 A fresh vault (`.obsidian-e2e-vaults/podnotes-<worktree>/`) has PodNotes'
 default settings and every core plugin off. Turn on what the user paths below
 need, once per vault:
@@ -52,9 +66,10 @@ npm run obsidian:e2e -- dev:errors
 npm run obsidian:e2e -- version
 ```
 
-Expect `vault` `podnotes-<worktree>`, `api` and `uri` true, and no PodNotes
-errors. If you rebuilt since the last `--reload`, the instance runs the old
-bundle: reload before trusting anything.
+Expect `vault` `podnotes-<worktree>`, `api` and `uri` true, no PodNotes
+errors, and `version` naming the build you selected. If you rebuilt since the
+last `--reload`, the instance runs the old bundle: reload before trusting
+anything.
 
 ## Drive
 
@@ -183,6 +198,8 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
   `requests`, `audio [vault path]` or `stop`. `requests` prints the paths
-  PodNotes fetched from the server. The feed URL uses `127.0.0.1.nip.io`, a public DNS name for
-  127.0.0.1, because PodNotes refuses literal loopback hosts. Its port is fixed
-  per worktree, so a saved feed survives a server restart.
+  PodNotes fetched from the server. The feed URL uses the host `podnotes.test`,
+  because PodNotes refuses literal loopback hosts. The instance maps it to
+  127.0.0.1 with Chromium's `--host-resolver-rules`, so it needs no DNS, and an
+  Obsidian started any other way cannot reach it. Its port is fixed per
+  worktree, so a saved feed survives a server restart.

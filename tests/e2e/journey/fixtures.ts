@@ -1,7 +1,7 @@
-import dns from "node:dns/promises";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ObsidianClient } from "obsidian-e2e";
+import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
 
 export type FixtureTranscript = Readonly<{
 	path: string;
@@ -32,13 +32,11 @@ export type FixtureServer = Readonly<{
 	mediaUrl(feed: FixtureFeed, episode: FixtureEpisode): string;
 	artworkUrl(feed: FixtureFeed): string;
 	audio(feed: FixtureFeed, episode: FixtureEpisode): Buffer;
-	/** Hold every later response to this feed's XML for `ms` milliseconds. */
-	delayFeed(feed: FixtureFeed, ms: number): void;
+	holdFeed(feed: FixtureFeed): () => Promise<void>;
 	requests(): readonly string[];
 	stop(): Promise<void>;
 }>;
 
-const HOST = "127.0.0.1.nip.io";
 const SAMPLE_RATE = 8000;
 
 export function pubDate(daysBefore: number): string {
@@ -46,15 +44,12 @@ export function pubDate(daysBefore: number): string {
 }
 
 export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise<FixtureServer> {
-	await dns.lookup(HOST).catch((error: Error) => {
-		throw new Error(
-			`${HOST} must resolve to 127.0.0.1 for the fixture feeds: ${error.message}`,
-		);
-	});
-
 	const requests: string[] = [];
 	const routes = new Map<string, { type: string; body: Buffer; cache?: boolean }>();
-	const delays = new Map<string, number>();
+	const holds = new Map<
+		string,
+		{ ready: Promise<void>; release: () => void; done: Promise<void>; complete: () => void }
+	>();
 	const server = http.createServer((request, response) => {
 		const path = request.url ?? "";
 		requests.push(path);
@@ -63,16 +58,20 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 			response.writeHead(404).end();
 			return;
 		}
-		setTimeout(
-			() => serveRange(request, response, route.type, route.body, route.cache === true),
-			delays.get(path) ?? 0,
-		);
+		const held = holds.get(path);
+		const serve = () =>
+			serveRange(request, response, route.type, route.body, route.cache === true);
+		if (held) {
+			response.once("finish", held.complete);
+			response.once("close", held.complete);
+			void held.ready.then(serve);
+		} else serve();
 	});
 	await new Promise<void>((resolve, reject) => {
 		server.once("error", reject);
 		server.listen(0, "127.0.0.1", resolve);
 	});
-	const origin = `http://${HOST}:${(server.address() as AddressInfo).port}`;
+	const origin = `http://${FIXTURE_HOST}:${(server.address() as AddressInfo).port}`;
 
 	const feedUrl = (feed: FixtureFeed) => `${origin}/${feed.slug}/feed.xml`;
 	const artworkUrl = (feed: FixtureFeed) => `${origin}/${feed.slug}/artwork.svg`;
@@ -132,10 +131,27 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		artworkUrl,
 		mediaUrl: (feed, episode) => `${origin}${mediaPath(feed, episode)}`,
 		audio,
-		delayFeed: (feed, ms) => delays.set(`/${feed.slug}/feed.xml`, ms),
+		holdFeed: (feed) => {
+			const path = `/${feed.slug}/feed.xml`;
+			let release!: () => void;
+			let complete!: () => void;
+			const ready = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const done = new Promise<void>((resolve) => {
+				complete = resolve;
+			});
+			holds.set(path, { ready, release, done, complete });
+			return async () => {
+				holds.delete(path);
+				release();
+				await done;
+			};
+		},
 		requests: () => [...requests],
 		stop: () =>
 			new Promise<void>((resolve) => {
+				for (const hold of holds.values()) hold.release();
 				server.close(() => resolve());
 				server.closeAllConnections();
 			}),

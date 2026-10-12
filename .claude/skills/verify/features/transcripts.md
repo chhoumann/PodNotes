@@ -25,7 +25,7 @@ from `Transcript template`, and opens.
 
 Preconditions:
 
-- `FEED=$(node .claude/skills/verify/fixtures.mjs transcripts)` prints `http://127.0.0.1.nip.io:<port>/transcripts.xml`. Add `PodNotes Transcripts` through Settings as [feeds.md](./feeds.md) describes. Its episodes are `VTT Episode` (an HTML link, then a relative VTT link), `SRT Episode`, `JSON Episode`, `Untranscribed Episode` and `Broken Transcript Episode` (its VTT returns 404).
+- `FEED=$(node .claude/skills/verify/fixtures.mjs transcripts)` prints `http://podnotes.test:<port>/transcripts.xml`. Add `PodNotes Transcripts` through Settings as [feeds.md](./feeds.md) describes. Its episodes are `VTT Episode` (an HTML link, then a relative VTT link), `SRT Episode`, `JSON Episode`, `Untranscribed Episode` and `Broken Transcript Episode` (its VTT returns 404).
 - No `transcripts/PodNotes Transcripts/` notes exist yet.
 - `NET=node .claude/skills/verify/net.mjs`. Run `$NET watch` before each command. While it watches, the fixture provider answers OpenAI and Deepgram, so nothing is charged even with a key set.
 
