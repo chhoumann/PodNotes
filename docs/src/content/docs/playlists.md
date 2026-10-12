@@ -45,16 +45,23 @@ To make your own playlist:
 3. In **Playlist name**, type a name, such as `Commute`.
 4. Select **Add**.
 
-To add an episode to the playlist:
+The playlist appears in the podcast grid. To add an episode to it:
 
 1. Right-click the episode, or select its **More options** button.
 2. Select **Add to Commute**.
 
-The playlist appears in the podcast grid. Select it to see its episodes:
+Select the playlist in the podcast grid to see its episodes:
 
 ![The Commute playlist with five episodes, below the search box and the played and refresh buttons](/screenshots/episode-list.webp)
 
-To delete a playlist:
+## Remove an episode from a list
+
+1. In the queue, **Favorites**, or a playlist, right-click the episode, or select its **More options** button.
+2. Select **Remove from Queue**, **Remove from Favorites**, or **Remove from** followed by the playlist's name.
+
+In the **PodNotes: Reorder Queue** list, **Remove from queue** next to an episode does the same.
+
+## Delete a playlist
 
 1. Open **Settings → PodNotes**.
 2. Under **Playlists**, select the playlist's **Delete playlist** button, the trash icon.

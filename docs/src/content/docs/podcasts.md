@@ -40,7 +40,11 @@ The view then lists that podcast's or playlist's episodes. **Queue** is the exce
 
 To return to the last list you saw, select **Episode list**, the second button at the top of the view. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
 
-Above each list, **Search episodes** filters it. In **Latest Episodes** and a podcast's list, **Refresh episodes** fetches new episodes. In **Played**, it fetches the podcasts that have played episodes. In other playlists, it does nothing. **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
+Above each list:
+
+- **Search episodes** filters the list.
+- **Refresh episodes** fetches new episodes in **Latest Episodes** and a podcast's list. In **Played**, it fetches the podcasts that have played episodes. In other playlists, it does nothing.
+- **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
 
 <span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
 
@@ -59,7 +63,7 @@ The player opens and resumes where you stopped last time. To return to the playe
 
 ## <span id="playlists"></span><span id="reordering-the-queue"></span><span id="turning-off-the-queue"></span>Queue and playlists
 
-The queue decides what plays next, and playlists collect episodes you want to keep together. [Use the queue and playlists](/playlists/) shows how to add, reorder, and remove episodes in both.
+The queue decides what plays next, and playlists collect episodes you want to keep together. [Use the queue and playlists](/playlists/) shows how to add and remove episodes, reorder the queue, and make your own playlists.
 
 ## <span id="context-menu"></span>Episode menu reference
 

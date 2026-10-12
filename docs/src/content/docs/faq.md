@@ -81,7 +81,7 @@ See [Downloads on another device](/sync/#downloads-on-another-device).
 
 Your notes and timestamps stay.
 Timestamp links point at the feed and the episode, so they stream the episode again while the feed still lists it.
-Links to your own media files need the file. See [Removed downloads and existing links](/sync/#removed-downloads-and-existing-links).
+Links to your own media files need the file and its entry in **Local Files**. After **Remove from Local Files**, select **Play with PodNotes** on the file again to restore its links. See [Removed downloads and existing links](/sync/#removed-downloads-and-existing-links).
 
 ### Does playback progress sync between devices?
 

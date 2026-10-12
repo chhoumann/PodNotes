@@ -127,12 +127,12 @@ Before you start, set up the AI Assistant once, as QuickAdd's [AI Assistant docs
    		);
    	}
 
-   	const prompt = `Summarize this podcast transcript in five bullet points.
-
-   Transcript:
-   ${transcript}`;
-
-   	return prompt;
+   	return [
+   		"Summarize this podcast transcript in five bullet points.",
+   		"",
+   		"Transcript:",
+   		transcript,
+   	].join("\n");
    };
    ```
 
