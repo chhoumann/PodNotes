@@ -1,6 +1,5 @@
 import type { FeedKey, FeedState } from "src/services/FeedRepository";
 import type { IconType } from "src/types/IconType";
-import type { Layout } from "./layout";
 
 /** A page the shell shows. Plain JSON, so it is also the view's workspace state. */
 export type Page =
@@ -63,16 +62,16 @@ export function parentOf(page: Page): Page | undefined {
 	return { kind: "library" };
 }
 
-/** A page's title, and its name on a Back button. Library reads "Library" in the compact head. */
-export function pageLabel(
-	page: Page,
-	layout: Layout,
-	feeds: ReadonlyMap<FeedKey, FeedState>,
-): string {
+export function rootItem(kind: RootKind): RootItem {
+	return ROOTS.find((item) => item.kind === kind)!;
+}
+
+/** A page's title, and its name on a Back button. The rail calls Library "Podcasts". */
+export function pageLabel(page: Page, feeds: ReadonlyMap<FeedKey, FeedState>): string {
 	if (page.kind === "feed") return feeds.get(page.key)?.feed.title ?? page.key;
 	if (page.kind === "playlist") return page.name;
-	if (page.kind === "library" && layout === "compact") return "Library";
-	return ROOTS.find(({ kind }) => kind === page.kind)!.label;
+	if (page.kind === "library") return "Library";
+	return rootItem(page.kind).label;
 }
 
 /** The same page always gives the same key, so `{#key}` remounts on a page change only. */

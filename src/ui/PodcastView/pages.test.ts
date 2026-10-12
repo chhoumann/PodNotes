@@ -38,11 +38,10 @@ describe("parsePage", () => {
 });
 
 test("a page labels itself by its podcast, its playlist or its root", () => {
-	expect(pageLabel({ kind: "feed", key: "Show" }, "compact", feeds)).toBe("The Show");
-	expect(pageLabel({ kind: "playlist", name: "Walks" }, "wide", feeds)).toBe("Walks");
-	expect(pageLabel({ kind: "library" }, "compact", feeds)).toBe("Library");
-	expect(pageLabel({ kind: "library" }, "wide", feeds)).toBe("Podcasts");
-	expect(pageLabel({ kind: "latest" }, "compact", feeds)).toBe("Latest episodes");
+	expect(pageLabel({ kind: "feed", key: "Show" }, feeds)).toBe("The Show");
+	expect(pageLabel({ kind: "playlist", name: "Walks" }, feeds)).toBe("Walks");
+	expect(pageLabel({ kind: "library" }, feeds)).toBe("Library");
+	expect(pageLabel({ kind: "latest" }, feeds)).toBe("Latest episodes");
 });
 
 test("a removed podcast or playlist no longer exists", () => {
