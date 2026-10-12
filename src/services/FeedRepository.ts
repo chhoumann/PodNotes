@@ -441,7 +441,10 @@ function decodeCache(raw: unknown): [string, FeedDocument][] {
 				typeof item.title === "string" &&
 				typeof item.streamUrl === "string",
 		);
-		for (const item of items) item.episodeDate = decodeDate(item.episodeDate);
+		for (const item of items) {
+			item.episodeDate = decodeDate(item.episodeDate);
+			item.transcripts = decodeTranscripts(item.transcripts);
+		}
 		return [
 			[
 				url,
@@ -454,4 +457,18 @@ function decodeCache(raw: unknown): [string, FeedDocument][] {
 			],
 		];
 	});
+}
+
+function decodeTranscripts(value: unknown): TranscriptLink[] | undefined {
+	return Array.isArray(value) ? value.filter(isTranscriptLink) : undefined;
+}
+
+function isTranscriptLink(value: unknown): value is TranscriptLink {
+	return (
+		isPlainObject(value) &&
+		typeof value.url === "string" &&
+		(["type", "language", "rel"] as const).every(
+			(name) => value[name] === undefined || typeof value[name] === "string",
+		)
+	);
 }

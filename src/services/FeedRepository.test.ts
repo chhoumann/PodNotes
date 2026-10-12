@@ -545,6 +545,48 @@ describe("FeedRepository", () => {
 		expect(({} as { updatedAt?: number }).updatedAt).toBeUndefined();
 	});
 
+	test("skips malformed cached transcript links and keeps their episodes", async () => {
+		const storage = new MemoryStorage();
+		storage.saveLocalStorage(
+			CACHE_KEY,
+			JSON.stringify({
+				[alpha.url]: {
+					updatedAt: Date.UTC(2026, 9, 11),
+					complete: true,
+					channel: { title: "Alpha" },
+					items: [
+						{
+							...item(1),
+							transcripts: [
+								null,
+								"t.vtt",
+								{ url: 7, type: "text/vtt" },
+								{ url: "t.srt", type: ["application/srt"] },
+								{ url: "t.json", type: "application/json", language: 5 },
+								{
+									url: "t.txt",
+									type: "text/plain; charset=utf-8",
+									rel: "captions",
+								},
+							],
+						},
+						{ ...item(2), transcripts: { url: "t.vtt", type: "text/vtt" } },
+					],
+				},
+			}),
+		);
+		const t = setup({ storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+		await t.repo.ensureAll();
+		const [first, second] = t.feed("Alpha")!.episodes;
+
+		expect(t.load).not.toHaveBeenCalled();
+		expect(t.repo.episodeMetadata("Alpha", first)?.transcripts).toEqual([
+			{ url: "t.txt", type: "text/plain; charset=utf-8", rel: "captions" },
+		]);
+		expect(t.repo.episodeMetadata("Alpha", second)?.transcripts).toEqual([]);
+	});
+
 	test.each([true, false])(
 		"removes the caches of earlier versions (cache on: %s)",
 		async (enabled) => {

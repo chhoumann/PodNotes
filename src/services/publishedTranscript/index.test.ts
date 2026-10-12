@@ -110,19 +110,12 @@ describe("choosePublishedTranscript", () => {
 		).toBeUndefined();
 	});
 
-	test("skips malformed cached entries and reads a type with parameters", () => {
+	test("reads a type with parameters", () => {
 		expect(
 			choosePublishedTranscript("Show", [
-				null,
-				"t.vtt",
-				{ url: 7, type: "text/vtt" },
-				{ url: "t.srt", type: ["application/srt"] },
 				{ url: "t.txt", type: " Text/Plain; charset=utf-8" },
 			]),
 		).toEqual({ key: "Show", reference: "t.txt", format: "text" });
-		expect(
-			choosePublishedTranscript("Show", { url: "t.vtt", type: "text/vtt" }),
-		).toBeUndefined();
 	});
 });
 

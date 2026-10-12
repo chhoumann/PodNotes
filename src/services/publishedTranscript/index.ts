@@ -1,4 +1,4 @@
-import { isPlainObject } from "src/persistence/codecUtils";
+import type { TranscriptLink } from "src/parser/feedDocumentParser";
 import type { FeedKey, FeedRepository, LoadMode } from "src/services/FeedRepository";
 import type { Episode } from "src/types/Episode";
 import { NetworkError, fetchTextWithTimeout } from "src/utility/networkRequest";
@@ -22,15 +22,14 @@ export interface PublishedTranscript {
 
 export function choosePublishedTranscript(
 	key: FeedKey,
-	links: unknown,
+	links: readonly TranscriptLink[] | undefined,
 ): PublishedTranscript | undefined {
 	let best: { rank: number; reference: string } | undefined;
-	for (const link of Array.isArray(links) ? links : []) {
-		if (!isPlainObject(link) || typeof link.url !== "string" || typeof link.type !== "string") {
-			continue;
-		}
-		const type = link.type.split(";")[0].trim().toLowerCase();
-		const rank = FORMATS_BY_PREFERENCE.findIndex(([, types]) => types.includes(type));
+	for (const link of links ?? []) {
+		const type = link.type?.split(";")[0].trim().toLowerCase();
+		const rank = FORMATS_BY_PREFERENCE.findIndex(
+			([, types]) => type !== undefined && types.includes(type),
+		);
 		if (rank >= 0 && (!best || rank < best.rank)) best = { rank, reference: link.url };
 	}
 	return best && { key, reference: best.reference, format: FORMATS_BY_PREFERENCE[best.rank][0] };
