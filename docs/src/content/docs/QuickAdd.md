@@ -33,7 +33,7 @@ A Capture choice, with no macro, writes a timestamp link and your comment on a n
 8. Open the note you want to write in, in editing view.
 9. Place the cursor where the timestamp goes.
 10. Run **QuickAdd: Run**.
-11. Select `Podcast timestamp`.
+11. Select **Podcast timestamp**.
 12. Type your comment.
 
 The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument. To capture 5 seconds earlier, the script's `return` line becomes:
@@ -101,7 +101,7 @@ This macro runs a user script that saves the loaded episode's fields as QuickAdd
 11. Set **File name** to `{{VALUE:fileName}}`.
 12. Load an episode in PodNotes. It can be paused.
 13. Run **QuickAdd: Run**.
-14. Select `Podcast episode note`.
+14. Select **Podcast episode note**.
 
 QuickAdd asks you for `guest`, which the script does not set. For the other episode fields, see [`podcast`](/api/#podcast).
 
@@ -148,6 +148,6 @@ Before you start, set up the AI Assistant once, as QuickAdd's [AI Assistant docs
 11. Add a **Capture** command after it.
 12. In the Capture's settings, turn on **Capture to active file** and set **Capture format** to `{{VALUE:output}}`.
 13. Load the episode, and open the note for the summary in editing view.
-14. Run **QuickAdd: Run**, then select `Summarize episode`.
+14. Run **QuickAdd: Run**, then select **Summarize episode**.
 
 The AI Assistant puts the model's answer in `{{VALUE:output}}`, which only the later commands of the same macro can read. QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe the model and output settings.
