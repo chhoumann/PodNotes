@@ -97,6 +97,8 @@ describe("timestampStyle", () => {
 		["{{time:H:mm}} {{linktime:mm:ss}}", { format: "H:mm", linkify: false }],
 		["{{linktime:}}", { format: "HH:mm:ss", linkify: true }],
 		["> ", { format: "HH:mm:ss", linkify: false }],
+		["{{ linktime }}", { format: "HH:mm:ss", linkify: false }],
+		["{{ linktime:mm:ss }} {{time:H:mm}}", { format: "H:mm", linkify: false }],
 	])("%j", (template, style) => {
 		expect(timestampStyle(template)).toEqual(style);
 	});
