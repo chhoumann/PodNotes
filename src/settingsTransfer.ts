@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS } from "./constants";
+import { DANGEROUS_KEYS, isPlainObject, mapRecord } from "./persistence/codecUtils";
 import {
 	decodePodNotesData,
 	encodePodNotesData,
@@ -7,7 +8,9 @@ import {
 	PodNotesDataError,
 } from "./persistence/podNotesData";
 import type { CredentialValues } from "./types/Credentials";
+import type { Episode } from "./types/Episode";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
+import { isLocalFile } from "./utility/isLocalFile";
 
 /**
  * Serialization for the "import/export settings & templates" feature (issue #162).
@@ -23,15 +26,15 @@ export const SETTINGS_EXPORT_TYPE = "podnotes-settings";
 export const SETTINGS_EXPORT_VERSION = 2;
 
 /**
- * Runtime / vault-specific state that must never travel between vaults: playback
- * progress, the episode->note path map, on-disk download bookkeeping, and the
- * currently-playing episode. These are excluded from export and dropped on
- * import (so a copied raw `data.json` still imports cleanly as "settings only").
+ * Vault-specific state that must never travel between vaults: the episode->note
+ * path map, on-disk download bookkeeping and the Local Files list mirrored from
+ * it, and the currently-playing episode. These are excluded from export and
+ * dropped on import (so a copied raw `data.json` still imports cleanly).
  */
 export const EXCLUDED_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"podNotes",
-	"playedEpisodes",
 	"downloadedEpisodes",
+	"localFiles",
 	"currentEpisode",
 ];
 
@@ -64,9 +67,6 @@ export function describeSecrets(secrets: CredentialValues): string[] {
 		.filter((key) => Boolean(secrets[key]?.trim()))
 		.map((key) => SECRET_KEY_LABELS[key]);
 }
-
-/** Keys that, if copied into the settings object, could pollute Object.prototype. */
-const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 /** Known top-level setting keys that are safe to import (excludes runtime state). */
 const IMPORTABLE_KEYS = new Set(
@@ -117,34 +117,43 @@ export type ParseResult =
 	| { ok: false; error: string };
 
 /**
+ * The part of a settings payload that travels between vaults. SecretStorage
+ * references are device-local: an imported urlSecretId is at best meaningless
+ * on this device, so a private feed keeps only its placeholder and is re-added
+ * on the target device. A local file's episode points into this vault.
+ */
+function portable<T extends object>(settings: T): T {
+	const out = { ...settings } as Record<string, unknown>;
+	if (isPlainObject(out.savedFeeds)) {
+		out.savedFeeds = mapRecord(out.savedFeeds, (feed) =>
+			isPlainObject(feed) ? { ...feed, urlSecretId: undefined } : feed,
+		);
+	}
+	for (const key of ["queue", "favorites"]) {
+		if (key in out) out[key] = withoutLocalFiles(out[key]);
+	}
+	if (isPlainObject(out.playlists)) out.playlists = mapRecord(out.playlists, withoutLocalFiles);
+	return out as T;
+}
+
+function withoutLocalFiles(playlist: unknown): unknown {
+	return isPlainObject(playlist) && Array.isArray(playlist.episodes)
+		? {
+				...playlist,
+				episodes: playlist.episodes.filter(
+					(episode) =>
+						!isPlainObject(episode) || !isLocalFile(episode as unknown as Episode),
+				),
+			}
+		: playlist;
+}
+
+/**
  * Build a versioned export envelope from the live settings, copying only
  * allow-listed keys by name (never spreading the whole object). Runtime state and
  * SecretStorage references are always excluded. Plaintext values appear only in
  * the separate payload explicitly passed by the caller.
  */
-/**
- * SecretStorage references are device-local capabilities and never transfer
- * data: an imported urlSecretId is at best meaningless on this device. The
- * private URL itself stays behind (placeholder) unless the source device
- * exports it another way; the feed is re-added on the target device.
- */
-function stripFeedUrlSecretReferences(savedFeeds: unknown): unknown {
-	if (typeof savedFeeds !== "object" || savedFeeds === null || Array.isArray(savedFeeds)) {
-		return savedFeeds;
-	}
-	const out: Record<string, unknown> = {};
-	for (const [key, feed] of Object.entries(savedFeeds)) {
-		if (typeof feed === "object" && feed !== null && !Array.isArray(feed)) {
-			const rest = { ...(feed as Record<string, unknown>) };
-			delete rest.urlSecretId;
-			out[key] = rest;
-		} else {
-			out[key] = feed;
-		}
-	}
-	return out;
-}
-
 export function serializeSettings(
 	settings: IPodNotesSettings,
 	opts: ExportOptions,
@@ -159,7 +168,6 @@ export function serializeSettings(
 		if (!IMPORTABLE_KEYS.has(key)) continue;
 		out[key] = persisted[key];
 	}
-	out.savedFeeds = stripFeedUrlSecretReferences(out.savedFeeds);
 	const secrets = normalizeSecrets(opts.secrets ?? {});
 
 	return {
@@ -167,7 +175,7 @@ export function serializeSettings(
 		version: SETTINGS_EXPORT_VERSION,
 		pluginVersion,
 		exportedAt: nowISO,
-		settings: out,
+		settings: portable(out),
 		...(Object.keys(secrets).length > 0 ? { secrets } : {}),
 	};
 }
@@ -246,12 +254,7 @@ export function parseImport(jsonText: string): ParseResult {
 		secrets = extractLegacySecrets(source);
 	}
 
-	const settings = sanitizeImportedSettings(source);
-	if ("savedFeeds" in settings) {
-		(settings as Record<string, unknown>).savedFeeds = stripFeedUrlSecretReferences(
-			settings.savedFeeds,
-		);
-	}
+	const settings = portable(sanitizeImportedSettings(source));
 
 	if (Object.keys(settings).length === 0 && Object.keys(secrets).length === 0) {
 		return {
@@ -283,7 +286,12 @@ export function mergeImportedSettings(
 	current: IPodNotesSettings,
 	imported: Partial<IPodNotesSettings>,
 ): IPodNotesSettings {
-	const merged: IPodNotesSettings = { ...current, ...imported };
+	const merged: IPodNotesSettings = {
+		...current,
+		...imported,
+		// Progress this vault already has wins; the import adds the rest.
+		playedEpisodes: { ...imported.playedEpisodes, ...current.playedEpisodes },
+	};
 
 	for (const key of NESTED_KEYS) {
 		merged[key] = {
@@ -318,7 +326,7 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 				defaultValue as Record<string, unknown>,
 				value as Record<string, unknown>,
 			);
-		} else if (key === "favorites" || key === "localFiles") {
+		} else if (key === "favorites") {
 			// Built-in playlist objects must carry an `episodes` array; consumers
 			// (PlaylistCard, context menu, removeEpisodeFromPlaylists) iterate it
 			// without guarding. Drop the key when it's malformed so the merge falls
@@ -411,8 +419,4 @@ function typeMatchesDefault(defaultValue: unknown, value: unknown): boolean {
 	if (Array.isArray(defaultValue)) return Array.isArray(value);
 	if (typeof defaultValue === "object") return isPlainObject(value);
 	return typeof value === typeof defaultValue;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -46,11 +46,7 @@ import { jsonValuesEqual, restoreDropped } from "./persistence/merge";
 import { type Clock, type DataFileAccess, DataFileWriter } from "./persistence/writer";
 import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
-import {
-	migratePrivateFeedUrls,
-	resolveFeedUrl,
-	scrubMigratedEpisodeUrls,
-} from "./services/privateFeeds";
+import { protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
 import { FeedRepository, loadFeed } from "./services/FeedRepository";
 
 type MediaSessionActionName =
@@ -563,14 +559,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// Best-effort: a failure keeps that feed's URL where it was, is
 			// reported, and never breaks loading.
 			this.feedUrls ??= new FeedUrlRepository(this.app.secretStorage);
-			const feedMigration = migratePrivateFeedUrls(settings.savedFeeds, this.feedUrls);
-			if (feedMigration.replacements.size > 0) {
-				settings = scrubMigratedEpisodeUrls(
-					{ ...settings, savedFeeds: feedMigration.savedFeeds },
-					feedMigration.replacements,
-				);
+			const feedMigration = protectPrivateFeeds(settings, this.feedUrls);
+			if (feedMigration.moved > 0) {
+				settings = feedMigration.settings;
 				await this.writeDataFile(encodePodNotesData(settings, decoded.unknownFields));
-				const count = feedMigration.replacements.size;
+				const count = feedMigration.moved;
 				new Notice(
 					`Moved ${count} private feed ${count === 1 ? "URL" : "URLs"} into Obsidian SecretStorage.`,
 				);

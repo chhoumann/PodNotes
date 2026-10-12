@@ -127,4 +127,47 @@ describe("importing a settings file", () => {
 		expect(get(localFiles).episodes.map(({ title }) => title)).toEqual(["Mine"]);
 		expect(disk().queue.episodes.map(({ title }) => title)).toEqual(["Their Episode"]);
 	});
+
+	it("brings progress for episodes this vault has not played and keeps its own", async () => {
+		const played = (title: string, time: number) => ({
+			title,
+			podcastName: "Show",
+			time,
+			duration: 60,
+			finished: false,
+		});
+		const { disk, chooseFile } = setup({
+			playedEpisodes: { "Show::Ep 1": played("Ep 1", 10) },
+		});
+
+		await chooseFile({
+			...structuredClone(DEFAULT_SETTINGS),
+			schemaVersion: 2,
+			playedEpisodes: {
+				"Show::Ep 1": played("Ep 1", 50),
+				"Show::Ep 2": played("Ep 2", 20),
+			},
+		}).confirm();
+
+		const expected = { "Show::Ep 1": played("Ep 1", 10), "Show::Ep 2": played("Ep 2", 20) };
+		expect(disk().playedEpisodes).toEqual(expected);
+		expect(get(playedEpisodes)).toEqual(expected);
+	});
+
+	it("names the queue and favorites it replaces before importing", () => {
+		const { chooseFile } = setup({
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode("Show", "Queued")] as never },
+			favorites: {
+				...DEFAULT_SETTINGS.favorites,
+				episodes: [episode("Show", "Loved")] as never,
+			},
+		});
+
+		const { message } = chooseFile({
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [] },
+			favorites: { ...DEFAULT_SETTINGS.favorites, episodes: [] },
+		});
+
+		expect(message).toContain("Also replaced: queue, favorites.");
+	});
 });

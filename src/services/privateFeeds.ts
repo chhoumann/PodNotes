@@ -1,4 +1,5 @@
 import { Notice } from "obsidian";
+import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import {
 	isCredentialBearingUrl,
@@ -80,48 +81,49 @@ export function notifyPrivateFeedUnavailable(title: string): void {
 	);
 }
 
-export interface PrivateFeedMigration {
-	savedFeeds: Record<string, PodcastFeed>;
-	/** Old credential-bearing URL -> the placeholder that replaced it. */
-	replacements: Map<string, string>;
+export interface PrivateFeedProtection {
+	settings: IPodNotesSettings;
+	/** How many saved feeds moved their URL into SecretStorage. */
+	moved: number;
 	/** Feeds whose URL could NOT be protected (SecretStorage failure). */
 	failed: string[];
 }
 
 /**
- * Move every credential-bearing saved-feed URL into SecretStorage.
- * Best-effort per feed: one failing feed keeps its URL, is reported in
- * `failed`, and the rest still move.
+ * Make settings safe to persist: move every credential-bearing saved-feed URL
+ * into SecretStorage, and replace the same URLs in persisted episode snapshots
+ * (played history, queue, favorites, playlists, local files, downloads, and
+ * the current episode all persist full episodes whose `url`/`feedUrl` were
+ * stamped at fetch time). Best-effort per feed: one failing feed keeps its
+ * URL, is reported in `failed`, and the rest still move.
  */
-export function migratePrivateFeedUrls(
-	savedFeeds: Record<string, PodcastFeed>,
+export function protectPrivateFeeds(
+	settings: IPodNotesSettings,
 	feedUrls: FeedUrlRepository,
-): PrivateFeedMigration {
+): PrivateFeedProtection {
 	const replacements = new Map<string, string>();
 	const failed: string[] = [];
-	const result: Record<string, PodcastFeed> = {};
-	for (const [key, feed] of Object.entries(savedFeeds)) {
+	const savedFeeds: Record<string, PodcastFeed> = {};
+	for (const [key, feed] of Object.entries(settings.savedFeeds)) {
 		const interned = internPrivateFeed(feed, feedUrls, key);
 		if (interned !== feed) {
 			replacements.set(feed.url, interned.url);
 		} else if (isCredentialBearingUrl(feed.url)) {
 			failed.push(key);
 		}
-		result[key] = interned;
+		savedFeeds[key] = interned;
 	}
-	return { savedFeeds: result, replacements, failed };
+	return {
+		settings: scrubEpisodeUrls({ ...settings, savedFeeds }, replacements),
+		moved: replacements.size,
+		failed,
+	};
 }
 
-/**
- * Rewrite persisted Episode snapshots that still carry a migrated feed's old
- * credential-bearing URL (played history, queue, favorites, playlists, local
- * files, downloads, and the current episode all persist full episode objects
- * whose `url`/`feedUrl` were stamped at fetch time).
- */
-export function scrubMigratedEpisodeUrls<T>(value: T, replacements: Map<string, string>): T {
+function scrubEpisodeUrls<T>(value: T, replacements: Map<string, string>): T {
 	if (replacements.size === 0) return value;
 	if (Array.isArray(value)) {
-		return value.map((entry) => scrubMigratedEpisodeUrls(entry, replacements)) as T;
+		return value.map((entry) => scrubEpisodeUrls(entry, replacements)) as T;
 	}
 	if (typeof value !== "object" || value === null) return value;
 	// Decoded settings carry Date instances (episodeDate); recursing into one
@@ -136,7 +138,7 @@ export function scrubMigratedEpisodeUrls<T>(value: T, replacements: Map<string, 
 		if ((key === "url" || key === "feedUrl") && typeof entry === "string") {
 			scrubbed = replacements.get(entry) ?? entry;
 		} else {
-			scrubbed = scrubMigratedEpisodeUrls(entry, replacements);
+			scrubbed = scrubEpisodeUrls(entry, replacements);
 		}
 		if (scrubbed !== entry) changed = true;
 		next[key] = scrubbed;

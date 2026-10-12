@@ -179,6 +179,21 @@ describe("serializeSettings", () => {
 		expect(exported.playlists?.Mix.episodes.map(({ title }) => title)).toEqual(["Ep 1"]);
 	});
 
+	it("carries playback progress", () => {
+		const progress = {
+			title: "Ep 1",
+			podcastName: "Show",
+			time: 30,
+			duration: 60,
+			finished: false,
+		};
+		const settings = makeSettings({ playedEpisodes: { "Show::Ep 1": progress } });
+
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+
+		expect(exported.playedEpisodes).toEqual({ "Show::Ep 1": progress });
+	});
+
 	it("encodes dates inside exported playlists as canonical text", () => {
 		const date = new Date("2024-03-01T10:05:03.000Z");
 		const settings = makeSettings({
@@ -500,6 +515,29 @@ describe("mergeImportedSettings", () => {
 
 		expect(merged.defaultVolume).toBe(0.25);
 		expect(merged.playedEpisodes).toEqual(current.playedEpisodes);
+	});
+
+	it("adds imported progress without overwriting this vault's", () => {
+		const played = (title: string, time: number) => ({
+			title,
+			podcastName: "Show",
+			time,
+			duration: 60,
+			finished: false,
+		});
+		const current = makeSettings({ playedEpisodes: { "Show::Ep 1": played("Ep 1", 10) } });
+
+		const merged = mergeImportedSettings(current, {
+			playedEpisodes: {
+				"Show::Ep 1": played("Ep 1", 50),
+				"Show::Ep 2": played("Ep 2", 20),
+			},
+		});
+
+		expect(merged.playedEpisodes).toEqual({
+			"Show::Ep 1": played("Ep 1", 10),
+			"Show::Ep 2": played("Ep 2", 20),
+		});
 	});
 
 	it("backfills partial nested objects from defaults so no field is blanked", () => {
