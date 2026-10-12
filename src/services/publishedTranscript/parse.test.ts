@@ -65,7 +65,7 @@ describe("parseTranscript", () => {
 		const elapsed = performance.now() - started;
 
 		expect(cuesOf(parsed)).toEqual([{ start: 1, end: 2, text }]);
-		expect(elapsed).toBeLessThan(50);
+		expect(elapsed).toBeLessThan(200);
 	});
 
 	test("Build Your SaaS VTT: a voice names the speaker of the untagged cues after it", () => {

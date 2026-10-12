@@ -41,7 +41,6 @@ export function collapseWhitespace(text: string): string {
 }
 
 const TIMING_LINE = /^\s*(\S+)\s+-->\s+(\S+)/;
-const VOICE_TAG = /<v(?:\.[^\s>]*)?\s+([^>]*)>/;
 
 /** A VTT voice names the speaker until another voice does, because hosts tag only the changes. */
 function parseCueBlocks(source: string): TranscriptCue[] {
@@ -52,15 +51,49 @@ function parseCueBlocks(source: string): TranscriptCue[] {
 		const timing = lines.findIndex((line) => line.includes("-->"));
 		const clocks = timing < 0 ? null : TIMING_LINE.exec(lines[timing]);
 		if (!clocks) continue;
-		const raw = lines.slice(timing + 1).join(" ");
-		const voice = VOICE_TAG.exec(raw);
-		if (voice) speaker = collapseWhitespace(decodeEntities(voice[1])) || undefined;
+		const { text, voice } = readCueText(lines.slice(timing + 1).join(" "));
+		if (voice !== undefined) speaker = voice || undefined;
 		const start = parseClock(clocks[1]);
-		const text = collapseWhitespace(decodeEntities(raw.replace(/<[^>]*>/g, "")));
 		if (start === undefined || !text) continue;
 		cues.push({ start, end: parseClock(clocks[2]), speaker, text });
 	}
 	return cues;
+}
+
+const TAG_START = /[a-z\d/]/i;
+
+/**
+ * Feeds write literal angle brackets in cue text, so a `<` opens a tag only
+ * before a letter, `/` or digit and only when a `>` closes it. Entities are
+ * decoded between tags, once, so markup a feed escaped stays text.
+ */
+function readCueText(raw: string): { text: string; voice?: string } {
+	let text = "";
+	let voice: string | undefined;
+	let from = 0;
+	let open = raw.indexOf("<");
+	while (open >= 0) {
+		if (!TAG_START.test(raw.charAt(open + 1))) {
+			open = raw.indexOf("<", open + 1);
+			continue;
+		}
+		const close = raw.indexOf(">", open);
+		if (close < 0) break;
+		text += decodeEntities(raw.slice(from, open));
+		voice ??= voiceOf(raw.slice(open + 1, close));
+		from = close + 1;
+		open = raw.indexOf("<", from);
+	}
+	return { text: collapseWhitespace(text + decodeEntities(raw.slice(from))), voice };
+}
+
+function voiceOf(tag: string): string | undefined {
+	const space = tag.search(/\s/);
+	if (space < 0) return undefined;
+	const name = tag.slice(0, space);
+	return name === "v" || name.startsWith("v.")
+		? collapseWhitespace(decodeEntities(tag.slice(space)))
+		: undefined;
 }
 
 function parseJsonSegments(source: string): TranscriptCue[] {
