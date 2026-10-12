@@ -7,12 +7,14 @@ import * as obsidian from "obsidian";
 
 import { DEFAULT_SETTINGS } from "src/constants";
 import PodNotes from "src/main";
+import { PlayerController } from "src/player/PlayerController";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import { favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { PodNotesSettingsTab } from "./PodNotesSettingsTab";
 import { attachDataFileWriter, dataFileText } from "../../../tests/mocks/dataFileWriter";
+import { FakeDocument } from "../../../tests/mocks/fakeMedia";
 
 const privateUrl = "https://private.example/feed.xml?auth=s3cret";
 
@@ -63,6 +65,7 @@ function setup(
 		},
 	});
 	attachDataFileWriter(plugin);
+	plugin.player = new PlayerController(new FakeDocument().asPlayerDocument(), plugin);
 	savedFeeds.set(settings.savedFeeds);
 	playedEpisodes.set(settings.playedEpisodes);
 	playlists.set(settings.playlists);

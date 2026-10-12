@@ -1,7 +1,6 @@
 <script lang="ts">
 	import PodcastGrid from "./PodcastGrid.svelte";
 	import {
-		currentEpisode,
 		savedFeeds,
 		episodeListLimit,
 		playlists,
@@ -47,6 +46,8 @@
 		type Selection,
 	} from "./episodeListSelection";
 
+	const player = get(plugin).player;
+	const playerState = player.state;
 	const feeds = get(plugin).feeds;
 	let selection: Selection = { kind: "latest" };
 	let currentSearchQuery: string = "";
@@ -183,7 +184,7 @@
 			return;
 		}
 
-		currentEpisode.set(episode);
+		player.play(episode);
 
 		viewState.set(ViewState.Player);
 	}
@@ -234,11 +235,7 @@
 
 		if (playlist.name === $queue.name && $queue.episodes.length > 0) {
 			selection = { kind: "latest" };
-			// Only need to set the current episode if there isn't any.
-			// The current episode _is_ the front of the queue.
-			if (!$currentEpisode) {
-				currentEpisode.set($queue.episodes[0]);
-			}
+			if ($playerState.status === "empty") player.play($queue.episodes[0]);
 
 			viewState.set(ViewState.Player);
 		} else {
@@ -252,7 +249,7 @@
 	<TopBar
 		bind:viewState={$viewState}
 		canShowEpisodeList={true}
-		canShowPlayer={!!$currentEpisode}
+		canShowPlayer={$playerState.status !== "empty"}
 	/>
 
 	{#if $viewState === ViewState.Player}

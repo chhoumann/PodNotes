@@ -1,24 +1,18 @@
 import * as obsidian from "obsidian";
+import { TFile, type ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import podNotesURIHandler from "./URIHandler";
-import {
-	currentEpisode,
-	currentTime,
-	duration,
-	isPaused,
-	activePlaybackSegment,
-	localFiles,
-	playedEpisodes,
-	plugin,
-	requestedPlaybackTime,
-	viewState,
-} from "./store";
-import type { Episode } from "./types/Episode";
+import { API } from "./API/API";
+import { DEFAULT_SETTINGS } from "./constants";
+import { PlayerController } from "./player/PlayerController";
+import { localFiles, playedEpisodes, plugin, queue, viewState } from "./store";
+import type { Episode, EpisodeMediaType } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import type { Playlist } from "./types/Playlist";
 import { ViewState } from "./types/ViewState";
+import { FakeDocument } from "../tests/mocks/fakeMedia";
 import { deferred } from "../tests/mocks/feeds";
 
 const mockEpisodesAt = vi.fn();
@@ -53,113 +47,144 @@ const emptyLocalFiles: Playlist = {
 	shouldRepeat: false,
 };
 
-function resetStores() {
-	currentEpisode.update(() => undefined as unknown as Episode);
-	currentTime.set(0);
-	duration.set(0);
-	isPaused.set(true);
-	activePlaybackSegment.set(null);
-	playedEpisodes.set({});
-	requestedPlaybackTime.set(null);
-	viewState.set(ViewState.PodcastGrid);
-	localFiles.set({ ...emptyLocalFiles, episodes: [] });
+let doc: FakeDocument;
+let player: PlayerController;
+let vaultFiles: string[] = [];
+
+const state = () => get(player.state);
+const media = () => doc.media;
+
+function link(params: Record<string, string>, revealPlayer?: () => void) {
+	return podNotesURIHandler(
+		{ action: "podnotes", url: testFeedUrl, episodeName: testEpisode.title, ...params },
+		revealPlayer,
+	);
 }
 
-const api = {
-	set currentTime(value: number) {
-		currentTime.set(value);
-	},
-};
+/** Follows a Markdown link PodNotes wrote, as Obsidian decodes it: each value with decodeURIComponent. */
+function follow(markdownLink: string) {
+	const href = markdownLink.slice(markdownLink.indexOf("](") + 2, -1);
+	const params: Record<string, string> = { action: "podnotes" };
+	for (const pair of new URL(href).search.slice(1).split("&")) {
+		const [key, value] = pair.split("=");
+		params[key] = decodeURIComponent(value);
+	}
+	return podNotesURIHandler(params as ObsidianProtocolData);
+}
 
-function setApp(getAbstractFileByPath: (path: string) => unknown) {
-	plugin.set({
-		app: { vault: { getAbstractFileByPath: vi.fn(getAbstractFileByPath) } },
-		feeds: { episodesAt: mockEpisodesAt },
-	} as never);
+/** A vault file as "Play with PodNotes" registers it. */
+const clip = (folder: string, extension = "mp3", mediaType?: EpisodeMediaType): LocalEpisode => ({
+	title: "Clip",
+	streamUrl: `app://resource/${folder}/Clip.${extension}`,
+	url: `[[${folder}/Clip.${extension}]]`,
+	description: "",
+	content: "",
+	podcastName: "local file",
+	filePath: `${folder}/Clip.${extension}`,
+	mediaType,
+});
+
+function vaultFile(path: string): TFile {
+	const name = path.split("/").pop() ?? path;
+	return Object.assign(new TFile(), {
+		path,
+		extension: name.split(".").pop() ?? "",
+		basename: name.replace(/\.[^.]+$/, ""),
+		stat: { ctime: 0, mtime: 0, size: 1 },
+	});
+}
+
+/** The media's metadata arrives, after which the player is at its start position. */
+function metadata(duration = 3600) {
+	media().duration = duration;
+	media().emit("loadedmetadata");
+}
+
+/** `episode` is loaded and paused at `time`. */
+function loadedAt(episode: Episode, time: number) {
+	player.play(episode, { time });
+	metadata();
+	player.pause();
 }
 
 beforeEach(() => {
-	resetStores();
+	vaultFiles = [];
+	doc = new FakeDocument();
+	const host = {
+		settings: structuredClone(DEFAULT_SETTINGS),
+		app: {
+			vault: {
+				getAbstractFileByPath: vi.fn((path: string) =>
+					vaultFiles.includes(path) ? vaultFile(path) : null,
+				),
+				getResourcePath: (file: TFile) => `app://resource/${file.path}`,
+			},
+			fileManager: { generateMarkdownLink: (file: TFile) => `[[${file.path}]]` },
+		},
+		checkpoint: (update: () => void) => update(),
+		saveSettings: vi.fn(() => Promise.resolve()),
+	};
+	player = new PlayerController(doc.asPlayerDocument(), host as never);
+	const feeds = {
+		episodesAt: mockEpisodesAt,
+		load: () => Promise.resolve(),
+		subscribe: (run: (feeds: Map<string, unknown>) => void) => (run(new Map()), () => {}),
+	};
+	plugin.set({ ...host, player, feeds } as never);
+	playedEpisodes.set({});
+	queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: [] });
+	viewState.set(ViewState.PodcastGrid);
+	localFiles.set({ ...emptyLocalFiles, episodes: [] });
 	mockEpisodesAt.mockResolvedValue([testEpisode]);
-	setApp(() => null);
 });
 
 afterEach(() => {
-	resetStores();
 	mockEpisodesAt.mockReset();
 	plugin.set(undefined as never);
 });
 
 describe("podNotesURIHandler", () => {
-	test("seeks and resumes when the linked episode is already visible", async () => {
-		currentEpisode.set(testEpisode);
-		viewState.set(ViewState.Player);
-		currentTime.set(3600);
-		isPaused.set(true);
+	test("seeks and plays the linked episode when it is already loaded", async () => {
+		loadedAt(testEpisode, 3000);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "120",
-			},
-			api as never,
-		);
+		await link({ time: "120" });
 
 		expect(get(viewState)).toBe(ViewState.Player);
-		expect(get(currentTime)).toBe(120);
-		expect(get(isPaused)).toBe(false);
-		expect(get(requestedPlaybackTime)).toBeNull();
+		expect(media().currentTime).toBe(120);
+		expect(media().paused).toBe(false);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
-	test("keeps the requested time for the player to apply after loading metadata", async () => {
+	test("plays a not-loaded episode at the requested time once its metadata loads", async () => {
 		playedEpisodes.markAsPlayed(testEpisode);
 		const revealPlayer = vi.fn();
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "240",
-			},
-			api as never,
-			revealPlayer,
-		);
+		await link({ time: "240" }, revealPlayer);
 
 		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(state()).toMatchObject({ status: "loading", episode: { title: testEpisode.title } });
 		expect(get(viewState)).toBe(ViewState.Player);
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 240,
-		});
-		expect(get(activePlaybackSegment)).toBeNull();
+		expect(revealPlayer).toHaveBeenCalledTimes(1);
+		metadata();
+		expect(media().currentTime).toBe(240);
 		expect(
 			get(playedEpisodes)[`${testEpisode.podcastName}::${testEpisode.title}`]?.finished,
 		).toBe(true);
-		expect(revealPlayer).toHaveBeenCalledTimes(1);
 	});
 
-	test("does not reveal the player when URI validation fails", async () => {
-		const revealPlayer = vi.fn();
+	test.each(["not-a-number", "12abc", " "])(
+		"does not play or reveal the player for the timestamp %j",
+		async (time) => {
+			const revealPlayer = vi.fn();
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "not-a-number",
-			},
-			api as never,
-			revealPlayer,
-		);
+			await link({ time }, revealPlayer);
 
-		expect(revealPlayer).not.toHaveBeenCalled();
-		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-	});
+			expect(revealPlayer).not.toHaveBeenCalled();
+			expect(state().episode).toBeUndefined();
+			expect(get(viewState)).toBe(ViewState.PodcastGrid);
+			expect(mockEpisodesAt).not.toHaveBeenCalled();
+		},
+	);
 
 	test.each([
 		"http://169.254.169.254/latest/meta-data/",
@@ -170,179 +195,89 @@ describe("podNotesURIHandler", () => {
 		async (url) => {
 			const revealPlayer = vi.fn();
 
-			await podNotesURIHandler(
-				{
-					action: "podnotes",
-					url,
-					episodeName: "Some Episode",
-				},
-				api as never,
-				revealPlayer,
-			);
+			await link({ url, episodeName: "Some Episode" }, revealPlayer);
 
 			// The attacker-controlled url is never handed to the feed parser.
 			expect(mockEpisodesAt).not.toHaveBeenCalled();
-			expect(get(currentEpisode)).toBeUndefined();
+			expect(state().episode).toBeUndefined();
 			expect(get(viewState)).toBe(ViewState.PodcastGrid);
 			expect(revealPlayer).not.toHaveBeenCalled();
 		},
 	);
 
-	test("keeps the requested segment end for the player to apply after loading metadata", async () => {
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "240",
-				endTime: "260",
-			},
-			api as never,
-		);
+	test("plays a not-loaded episode's segment and stops at its end", async () => {
+		await link({ time: "240", endTime: "260" });
+		metadata();
 
-		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
-		expect(get(viewState)).toBe(ViewState.Player);
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 240,
-			endTime: 260,
-		});
-		expect(get(activePlaybackSegment)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			startTime: 240,
-			endTime: 260,
-		});
+		expect(media().currentTime).toBe(240);
+		media().currentTime = 261;
+		media().emit("timeupdate");
+		expect(media().currentTime).toBe(260);
+		expect(media().paused).toBe(true);
 	});
 
-	test("seeks and arms a segment when the linked episode is already visible", async () => {
-		currentEpisode.set(testEpisode);
-		viewState.set(ViewState.Player);
-		currentTime.set(3600);
-		isPaused.set(true);
+	test("plays a segment of the already-loaded episode", async () => {
+		loadedAt(testEpisode, 3000);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "120",
-				endTime: "135",
-			},
-			api as never,
-		);
+		await link({ time: "120", endTime: "135" });
+		media().currentTime = 136;
+		media().emit("timeupdate");
 
-		expect(get(currentTime)).toBe(120);
-		expect(get(isPaused)).toBe(false);
-		expect(get(activePlaybackSegment)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			startTime: 120,
-			endTime: 135,
-		});
+		expect(media().currentTime).toBe(135);
+		expect(media().paused).toBe(true);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
-	test("normal timestamp links clear a stale active segment", async () => {
-		currentEpisode.set(testEpisode);
-		activePlaybackSegment.set({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			startTime: 10,
-			endTime: 20,
-		});
+	test("a plain timestamp link ends a running segment", async () => {
+		player.play(testEpisode, { time: 10, endTime: 20 });
+		metadata();
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "120",
-			},
-			api as never,
-		);
+		await link({ time: "120" });
+		media().currentTime = 130;
+		media().emit("timeupdate");
 
-		expect(get(activePlaybackSegment)).toBeNull();
+		expect(media().currentTime).toBe(130);
+		expect(media().paused).toBe(false);
 	});
 
 	test("switches to a non-loaded episode whose title contains a literal '+'", async () => {
 		mockEpisodesAt.mockResolvedValue([plusEpisode]);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				// Current-format link: Obsidian decodes %2B back to a literal '+'.
-				episodeName: "Episode 50: C++ Tips",
-				time: "300",
-			},
-			api as never,
-		);
+		// Current-format link: Obsidian decodes %2B back to a literal '+'.
+		await link({ episodeName: "Episode 50: C++ Tips", time: "300" });
+		metadata();
 
-		expect(get(currentEpisode)).toMatchObject({ title: "Episode 50: C++ Tips" });
+		expect(state().episode).toMatchObject({ title: "Episode 50: C++ Tips" });
 		expect(get(viewState)).toBe(ViewState.Player);
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${plusEpisode.podcastName}::${plusEpisode.title}`,
-			time: 300,
-		});
+		expect(media().currentTime).toBe(300);
 	});
 
 	test("resumes a paused, already-loaded episode whose title contains a literal '+'", async () => {
-		currentEpisode.set(plusEpisode);
-		viewState.set(ViewState.Player);
-		isPaused.set(true);
+		loadedAt(plusEpisode, 10);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: "Episode 50: C++ Tips",
-				time: "90",
-			},
-			api as never,
-		);
+		await link({ episodeName: "Episode 50: C++ Tips", time: "90" });
 
-		expect(get(currentTime)).toBe(90);
-		expect(get(isPaused)).toBe(false);
+		expect(media().currentTime).toBe(90);
+		expect(media().paused).toBe(false);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("resolves a legacy '+'-as-space link to a non-loaded episode", async () => {
-		mockEpisodesAt.mockResolvedValue([testEpisode]);
+		// Legacy link: spaces were encoded as '+'.
+		await link({ episodeName: "Finished+Episode", time: "60" });
+		metadata();
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				// Legacy link: spaces were encoded as '+'.
-				episodeName: "Finished+Episode",
-				time: "60",
-			},
-			api as never,
-		);
-
-		expect(get(currentEpisode)).toMatchObject({ title: "Finished Episode" });
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 60,
-		});
+		expect(state().episode).toMatchObject({ title: "Finished Episode" });
+		expect(media().currentTime).toBe(60);
 	});
 
 	test("resumes the loaded episode for a legacy '+'-as-space link without re-resolving", async () => {
-		currentEpisode.set(testEpisode);
-		viewState.set(ViewState.Player);
-		isPaused.set(true);
+		loadedAt(testEpisode, 10);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: "Finished+Episode",
-				time: "45",
-			},
-			api as never,
-		);
+		await link({ episodeName: "Finished+Episode", time: "45" });
 
-		expect(get(currentTime)).toBe(45);
-		expect(get(isPaused)).toBe(false);
+		expect(media().currentTime).toBe(45);
+		expect(media().paused).toBe(false);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
@@ -358,24 +293,15 @@ describe("podNotesURIHandler", () => {
 		};
 		localFiles.set({ ...emptyLocalFiles, episodes: [localEpisode] });
 		// Only the raw (current-format) path resolves to a file.
-		setApp((path) => (path === "Notes+/C++ Tips.mp3" ? {} : null));
+		vaultFiles = ["Notes+/C++ Tips.mp3"];
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: "Notes+/C++ Tips.mp3",
-				episodeName: "C++ Tips",
-				time: "30",
-			},
-			api as never,
-		);
+		await link({ url: "Notes+/C++ Tips.mp3", episodeName: "C++ Tips", time: "30" });
+		metadata();
 
-		expect(get(currentEpisode)).toMatchObject({ title: "C++ Tips" });
+		expect(state().episode).toMatchObject({ title: "C++ Tips" });
 		expect(get(viewState)).toBe(ViewState.Player);
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: "local file::C++ Tips",
-			time: 30,
-		});
+		expect(media().src).toBe("app://resource/Notes+/C++ Tips.mp3");
+		expect(media().currentTime).toBe(30);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
@@ -392,24 +318,11 @@ describe("podNotesURIHandler", () => {
 		localFiles.set({ ...emptyLocalFiles, episodes: [localEpisode] });
 		// The file was moved: the recorded path no longer resolves to a file, and
 		// the url has no http(s) scheme, so it must be treated as a vault path.
-		setApp(() => null);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: "Old/Local Note.mp3",
-				episodeName: "Local Note",
-				time: "15",
-			},
-			api as never,
-		);
+		await link({ url: "Old/Local Note.mp3", episodeName: "Local Note", time: "15" });
 
-		expect(get(currentEpisode)).toMatchObject({ title: "Local Note" });
+		expect(state()).toMatchObject({ episode: { title: "Local Note" }, currentTime: 15 });
 		expect(get(viewState)).toBe(ViewState.Player);
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: "local file::Local Note",
-			time: 15,
-		});
 		// A schemeless path must never hit the feed parser.
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
@@ -426,49 +339,30 @@ describe("podNotesURIHandler", () => {
 		};
 		mockEpisodesAt.mockResolvedValue([hubermanEpisode, testEpisode]);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName:
-					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
-				time: "2580",
-			},
-			api as never,
-		);
-
-		expect(get(currentEpisode)).toMatchObject({ title: currentTitle });
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `Huberman Lab::${currentTitle}`,
-			time: 2580,
+		await link({
+			episodeName:
+				"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+			time: "2580",
 		});
+		metadata();
+
+		expect(state().episode).toMatchObject({ title: currentTitle });
+		expect(media().currentTime).toBe(2580);
 	});
 
 	test("seeks the already-loaded episode when a timestamp uses the old title (#315)", async () => {
 		const currentTitle =
 			"Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination | Dr. Martha Beck";
-		const hubermanEpisode: Episode = {
-			...testEpisode,
-			title: currentTitle,
-			podcastName: "Huberman Lab",
-		};
-		currentEpisode.set(hubermanEpisode);
-		viewState.set(ViewState.Player);
-		isPaused.set(true);
+		loadedAt({ ...testEpisode, title: currentTitle, podcastName: "Huberman Lab" }, 10);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName:
-					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
-				time: "90",
-			},
-			api as never,
-		);
+		await link({
+			episodeName:
+				"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+			time: "90",
+		});
 
-		expect(get(currentTime)).toBe(90);
-		expect(get(isPaused)).toBe(false);
+		expect(media().currentTime).toBe(90);
+		expect(media().paused).toBe(false);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
@@ -486,71 +380,77 @@ describe("podNotesURIHandler", () => {
 			url: "https://pod.example.com/part2",
 			streamUrl: "https://pod.example.com/part2.mp3",
 		};
-		currentEpisode.set(part2);
-		viewState.set(ViewState.Player);
-		isPaused.set(true);
+		loadedAt(part2, 10);
 		mockEpisodesAt.mockResolvedValue([part1, part2]);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: part1.title,
-				time: "90",
-			},
-			api as never,
-		);
+		await link({ episodeName: part1.title, time: "90" });
+		metadata();
 
 		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
-		expect(get(currentEpisode)).toMatchObject({ title: part1.title });
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${part1.podcastName}::${part1.title}`,
-			time: 90,
-		});
+		expect(state().episode).toMatchObject({ title: part1.title });
+		expect(media().src).toBe(part1.streamUrl);
+		expect(media().currentTime).toBe(90);
+	});
+
+	test("does not take a same-titled episode of another show for the loaded one", async () => {
+		const trailerA: Episode = { ...testEpisode, title: "Trailer", podcastName: "Show A" };
+		const trailerB: Episode = {
+			...trailerA,
+			podcastName: "Show B",
+			feedUrl: "https://b.example.com/feed.xml",
+			streamUrl: "https://b.example.com/trailer.mp3",
+		};
+		loadedAt(trailerA, 10);
+		mockEpisodesAt.mockResolvedValue([trailerB]);
+
+		await link({ url: "https://b.example.com/feed.xml", episodeName: "Trailer", time: "5" });
+
+		expect(mockEpisodesAt).toHaveBeenCalledWith("https://b.example.com/feed.xml");
+		expect(state().episode).toMatchObject({ podcastName: "Show B" });
+		expect(media().src).toBe(trailerB.streamUrl);
+	});
+
+	test("does not play a feed episode that arrives after the user played another", async () => {
+		let resolveFeed!: (episodes: Episode[]) => void;
+		mockEpisodesAt.mockReturnValue(
+			new Promise<Episode[]>((resolve) => {
+				resolveFeed = resolve;
+			}),
+		);
+		const revealPlayer = vi.fn();
+		const other: Episode = { ...plusEpisode, title: "Other" };
+
+		const pending = link({ time: "240" }, revealPlayer);
+		player.play(other);
+		resolveFeed([testEpisode]);
+		await pending;
+
+		expect(state().episode).toBe(other);
+		expect(media().src).toBe(other.streamUrl);
+		expect(revealPlayer).not.toHaveBeenCalled();
 	});
 
 	test("does not pick a leftover similar episode when the linked title is gone (#315)", async () => {
-		mockEpisodesAt.mockResolvedValue([
-			{
-				...testEpisode,
-				title: "Weekly News Roundup Extra",
-			},
-		]);
+		mockEpisodesAt.mockResolvedValue([{ ...testEpisode, title: "Weekly News Roundup Extra" }]);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: "Weekly News Roundup",
-				time: "10",
-			},
-			api as never,
-		);
+		await link({ episodeName: "Weekly News Roundup", time: "10" });
 
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(state().episode).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 	});
 
 	test("does not treat a weakly similar feed title as a match (#315)", async () => {
 		mockEpisodesAt.mockResolvedValue([
-			{
-				...testEpisode,
-				title: "Optimize Testosterone & Estrogen | Dr. Kyle Gillett",
-			},
+			{ ...testEpisode, title: "Optimize Testosterone & Estrogen | Dr. Kyle Gillett" },
 		]);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName:
-					"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
-				time: "10",
-			},
-			api as never,
-		);
+		await link({
+			episodeName:
+				"Dr. Martha Beck: Access Your Best Self With Mind-Body Practices, Belief Testing & Imagination",
+			time: "10",
+		});
 
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(state().episode).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 	});
 
@@ -558,18 +458,10 @@ describe("podNotesURIHandler", () => {
 		mockEpisodesAt.mockResolvedValue([]);
 
 		await expect(
-			podNotesURIHandler(
-				{
-					action: "podnotes",
-					url: testFeedUrl,
-					episodeName: "Nonexistent Episode",
-					time: "10",
-				},
-				api as never,
-			),
+			link({ episodeName: "Nonexistent Episode", time: "10" }),
 		).resolves.toBeUndefined();
 
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(state().episode).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 	});
 
@@ -577,56 +469,86 @@ describe("podNotesURIHandler", () => {
 		const older = deferred<Episode[]>();
 		const newer = deferred<Episode[]>();
 		mockEpisodesAt.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
-		const open = (episodeName: string) =>
-			podNotesURIHandler(
-				{ action: "podnotes", url: testFeedUrl, episodeName, time: "5" },
-				api as never,
-			);
 
-		const opening = [open(testEpisode.title), open(plusEpisode.title)];
+		const opening = [
+			link({ episodeName: testEpisode.title, time: "5" }),
+			link({ episodeName: plusEpisode.title, time: "5" }),
+		];
 		newer.resolve([testEpisode, plusEpisode]);
 		older.resolve([testEpisode, plusEpisode]);
 		await Promise.all(opening);
 
-		expect(get(currentEpisode)).toMatchObject({ title: plusEpisode.title });
-		expect(get(requestedPlaybackTime)?.episodeKey).toBe(`Test Podcast::${plusEpisode.title}`);
+		expect(state().episode).toMatchObject({ title: plusEpisode.title });
+		expect(media().src).toBe(plusEpisode.streamUrl);
 	});
 
 	test("a link whose feed fails after a newer link's shows no notice", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		const older = deferred<Episode[]>();
 		mockEpisodesAt.mockReturnValueOnce(older.promise).mockResolvedValueOnce([plusEpisode]);
-		const open = (episodeName: string) =>
-			podNotesURIHandler(
-				{ action: "podnotes", url: testFeedUrl, episodeName, time: "5" },
-				api as never,
-			);
 
-		const opening = open(testEpisode.title);
-		await open(plusEpisode.title);
+		const opening = link({ episodeName: testEpisode.title, time: "5" });
+		await link({ episodeName: plusEpisode.title, time: "5" });
 		older.reject(new Error("offline"));
 		await opening;
 
 		expect(notice).not.toHaveBeenCalled();
-		expect(get(currentEpisode)).toMatchObject({ title: plusEpisode.title });
+		expect(state().episode).toMatchObject({ title: plusEpisode.title });
+		notice.mockRestore();
+	});
+
+	test.each([
+		[
+			"fails",
+			(older: ReturnType<typeof deferred<Episode[]>>) => older.reject(new Error("offline")),
+		],
+		["lacks the title", (older: ReturnType<typeof deferred<Episode[]>>) => older.resolve([])],
+	])(
+		"a link whose feed %s after a newer link to the loaded episode shows no notice",
+		async (_, settle) => {
+			const notice = vi.spyOn(obsidian, "Notice");
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			loadedAt(plusEpisode, 30);
+			const older = deferred<Episode[]>();
+			mockEpisodesAt.mockReturnValueOnce(older.promise);
+
+			const opening = link({ episodeName: testEpisode.title, time: "5" });
+			await link({ episodeName: plusEpisode.title, time: "15" });
+			settle(older);
+			await opening;
+
+			expect(notice).not.toHaveBeenCalled();
+			expect(state().episode).toMatchObject({ title: plusEpisode.title });
+			expect(media().currentTime).toBe(15);
+			vi.restoreAllMocks();
+		},
+	);
+
+	test("a link whose feed fails after a newer link to a local file shows no notice", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const local = clip("A");
+		localFiles.set({ ...emptyLocalFiles, episodes: [local] });
+		vaultFiles = [local.filePath ?? ""];
+		const older = deferred<Episode[]>();
+		mockEpisodesAt.mockReturnValueOnce(older.promise);
+
+		const opening = link({ episodeName: testEpisode.title, time: "5" });
+		await link({ url: local.filePath ?? "", episodeName: local.title, time: "15" });
+		older.reject(new Error("offline"));
+		await opening;
+
+		expect(notice).not.toHaveBeenCalled();
+		expect(state().episode).toMatchObject({ filePath: local.filePath });
+		vi.restoreAllMocks();
 	});
 
 	test("does not reject when feed parsing throws (no silent unhandled rejection)", async () => {
 		mockEpisodesAt.mockRejectedValue(new Error("network down"));
 
-		await expect(
-			podNotesURIHandler(
-				{
-					action: "podnotes",
-					url: testFeedUrl,
-					episodeName: "Anything",
-					time: "10",
-				},
-				api as never,
-			),
-		).resolves.toBeUndefined();
+		await expect(link({ episodeName: "Anything", time: "10" })).resolves.toBeUndefined();
 
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(state().episode).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
 	});
 
@@ -646,227 +568,86 @@ describe("podNotesURIHandler", () => {
 		// Space-twin first: an order-insensitive (membership) match would wrongly pick it.
 		mockEpisodesAt.mockResolvedValue([spaceVariant, plusVariant]);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: "A+B",
-				time: "75",
-			},
-			api as never,
-		);
+		await link({ episodeName: "A+B", time: "75" });
+		metadata();
 
-		expect(get(currentEpisode)).toMatchObject({ title: "A+B" });
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${plusVariant.podcastName}::A+B`,
-			time: 75,
-		});
+		expect(state().episode).toMatchObject({ title: "A+B" });
+		expect(media().currentTime).toBe(75);
 	});
 
 	test("reopens a non-loaded episode without a timestamp and resumes from the saved location (#35)", async () => {
 		playedEpisodes.setEpisodeTime(testEpisode, 321, 3600, false);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				// No `time`: the {{episodelink}} template tag omits it.
-			},
-			api as never,
-		);
+		// No `time`: the {{episodelink}} template tag omits it.
+		await link({});
+		metadata();
 
 		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
-		// The resume point is resolved from saved progress and armed explicitly, so
-		// the player seeks to 321s — and any stale pending request can't override it.
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 321,
-		});
-	});
-
-	test("a no-timestamp link overrides a stale pending seek for the same episode (#35)", async () => {
-		playedEpisodes.setEpisodeTime(testEpisode, 321, 3600, false);
-		// A previous timestamp link left a pending seek that has not been applied
-		// (metadata still loading). The resume link must win, not the stale 999.
-		requestedPlaybackTime.set({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 999,
-		});
-
-		await podNotesURIHandler(
-			{ action: "podnotes", url: testFeedUrl, episodeName: testEpisode.title },
-			api as never,
-		);
-
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 321,
-		});
+		expect(media().currentTime).toBe(321);
 	});
 
 	test("restarts a finished episode from the beginning for a no-timestamp link (#35)", async () => {
 		// A finished episode is stored at its end; resuming there would auto-advance.
-		playedEpisodes.markAsPlayed(testEpisode);
 		playedEpisodes.setEpisodeTime(testEpisode, 3600, 3600, true);
 
-		await podNotesURIHandler(
-			{ action: "podnotes", url: testFeedUrl, episodeName: testEpisode.title },
-			api as never,
-		);
+		await link({});
+		metadata();
 
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 0,
-		});
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
+		expect(media().currentTime).toBe(0);
 	});
 
 	test("restarts an already-loaded finished episode from the beginning for a no-timestamp link (#35)", async () => {
-		currentEpisode.set(testEpisode);
-		viewState.set(ViewState.PodcastGrid);
-		duration.set(180);
-		currentTime.set(180); // sitting at the very end
-		isPaused.set(true);
+		player.play(testEpisode);
+		metadata(180);
+		media().currentTime = 180;
+		media().paused = true;
+		media().emit("pause");
+		media().emit("ended");
 
-		await podNotesURIHandler(
-			{ action: "podnotes", url: testFeedUrl, episodeName: testEpisode.title },
-			api as never,
-		);
+		await link({});
 
 		expect(get(viewState)).toBe(ViewState.Player);
-		expect(get(currentTime)).toBe(0);
-		expect(get(isPaused)).toBe(false);
+		expect(media().currentTime).toBe(0);
+		expect(media().paused).toBe(false);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("surfaces the player and resumes the already-loaded episode without seeking when no timestamp is given (#35)", async () => {
-		currentEpisode.set(testEpisode);
-		viewState.set(ViewState.PodcastGrid);
-		currentTime.set(1234);
-		isPaused.set(true);
+		loadedAt(testEpisode, 1234);
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-			},
-			api as never,
-		);
+		await link({});
 
 		expect(get(viewState)).toBe(ViewState.Player);
-		// The live position is already the last played location — left untouched.
-		expect(get(currentTime)).toBe(1234);
-		expect(get(isPaused)).toBe(false);
-		expect(get(requestedPlaybackTime)).toBeNull();
+		// The live position is already the last played location: left untouched.
+		expect(media().currentTime).toBe(1234);
+		expect(media().paused).toBe(false);
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
 	test("treats an empty timestamp the same as an omitted one (resume, not error) (#35)", async () => {
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "",
-			},
-			api as never,
-		);
+		await link({ time: "" });
+		metadata();
 
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
-		// No saved progress for this episode → resume from the start.
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: `${testEpisode.podcastName}::${testEpisode.title}`,
-			time: 0,
-		});
+		// No saved progress for this episode: resume from the start.
+		expect(media().currentTime).toBe(0);
 	});
 
-	test("still rejects a present-but-non-numeric timestamp", async () => {
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "not-a-number",
-			},
-			api as never,
-		);
+	test.each([
+		["a segment end without a start timestamp", { endTime: "20" }],
+		["a segment end at the start timestamp", { time: "20", endTime: "20" }],
+		["a segment end with trailing text", { time: "10", endTime: "20s" }],
+		["a negative plain timestamp", { time: "-10" }],
+		["a negative segment start timestamp", { time: "-10", endTime: "5" }],
+	])("rejects %s", async (_, params) => {
+		await link(params);
 
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(state().episode).toBeUndefined();
 		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-		expect(mockEpisodesAt).not.toHaveBeenCalled();
-	});
-
-	test("rejects a segment end without a start timestamp", async () => {
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				endTime: "20",
-			},
-			api as never,
-		);
-
-		expect(get(currentEpisode)).toBeUndefined();
-		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-		expect(get(activePlaybackSegment)).toBeNull();
-		expect(mockEpisodesAt).not.toHaveBeenCalled();
-	});
-
-	test("rejects a segment end before the start timestamp", async () => {
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "20",
-				endTime: "20",
-			},
-			api as never,
-		);
-
-		expect(get(currentEpisode)).toBeUndefined();
-		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-		expect(get(activePlaybackSegment)).toBeNull();
-		expect(mockEpisodesAt).not.toHaveBeenCalled();
-	});
-
-	test("rejects a negative plain (non-segment) timestamp", async () => {
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "-10",
-			},
-			api as never,
-		);
-
-		expect(get(currentEpisode)).toBeUndefined();
-		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-		expect(mockEpisodesAt).not.toHaveBeenCalled();
-	});
-
-	test("rejects a negative segment start timestamp", async () => {
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: testFeedUrl,
-				episodeName: testEpisode.title,
-				time: "-10",
-				endTime: "5",
-			},
-			api as never,
-		);
-
-		expect(get(currentEpisode)).toBeUndefined();
-		expect(get(viewState)).toBe(ViewState.PodcastGrid);
-		expect(get(activePlaybackSegment)).toBeNull();
 		expect(mockEpisodesAt).not.toHaveBeenCalled();
 	});
 
@@ -884,22 +665,83 @@ describe("podNotesURIHandler", () => {
 			...emptyLocalFiles,
 			episodes: [makeLocal("A B"), makeLocal("A+B")],
 		});
-		setApp((path) => (path === "A+B.mp3" ? {} : null));
+		vaultFiles = ["A+B.mp3"];
 
-		await podNotesURIHandler(
-			{
-				action: "podnotes",
-				url: "A+B.mp3",
-				episodeName: "A+B",
-				time: "20",
-			},
-			api as never,
+		await link({ url: "A+B.mp3", episodeName: "A+B", time: "20" });
+		metadata();
+
+		expect(state().episode).toMatchObject({ title: "A+B" });
+		expect(media().currentTime).toBe(20);
+	});
+});
+
+describe("a timestamp link PodNotes wrote for the loaded episode", () => {
+	test("seeks a feed episode without fetching its feed", async () => {
+		loadedAt(testEpisode, 754);
+		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
+		player.seek(10);
+
+		await follow(written);
+
+		expect(media().currentTime).toBe(754);
+		expect(media().src).toBe(testEpisode.streamUrl);
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
+	});
+
+	test("seeks a local file without fetching a feed", async () => {
+		vaultFiles = ["A/Clip.mp3"];
+		loadedAt(clip("A"), 15);
+		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
+		player.seek(40);
+
+		await follow(written);
+
+		expect(media().currentTime).toBe(15);
+		expect(media().src).toBe("app://resource/A/Clip.mp3");
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
+	});
+
+	test("plays the file it names, as that file, after a same-named file in another folder replaced it", async () => {
+		vaultFiles = ["A/Clip.mov", "B/Clip.mp3"];
+		loadedAt(clip("A", "mov", "video"), 15);
+		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
+		const registered = clip("B", "mp3", "audio");
+		localFiles.set({ ...emptyLocalFiles, episodes: [registered] });
+		loadedAt(registered, 40);
+
+		await follow(written);
+		metadata();
+
+		expect(state().episode).toMatchObject({
+			title: "Clip",
+			filePath: "A/Clip.mov",
+			url: "[[A/Clip.mov]]",
+			streamUrl: "app://resource/A/Clip.mov",
+		});
+		expect(state().mediaType).toBe("video");
+		expect(media().tagName).toBe("VIDEO");
+		expect(media().src).toBe("app://resource/A/Clip.mov");
+		expect(media().currentTime).toBe(15);
+	});
+});
+
+describe("links that arrive while another link loads its feed", () => {
+	test("a link refused before its fetch leaves the earlier one to play", async () => {
+		let resolveFeed!: (episodes: Episode[]) => void;
+		mockEpisodesAt.mockReturnValue(
+			new Promise<Episode[]>((resolve) => {
+				resolveFeed = resolve;
+			}),
 		);
 
-		expect(get(currentEpisode)).toMatchObject({ title: "A+B" });
-		expect(get(requestedPlaybackTime)).toEqual({
-			episodeKey: "local file::A+B",
-			time: 20,
-		});
+		const pending = link({ time: "240" });
+		await link({ url: "http://localhost/feed.xml", time: "5" });
+		await link({ url: "podnotes-private-feed:Unknown%20Feed", time: "5" });
+		await link({ url: "Notes/moved.mp3", episodeName: "Nothing by this name", time: "5" });
+		resolveFeed([testEpisode]);
+		await pending;
+
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
+		expect(media().src).toBe(testEpisode.streamUrl);
 	});
 });

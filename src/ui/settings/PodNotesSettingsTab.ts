@@ -23,14 +23,12 @@ import {
 	episodeListLimit,
 	favorites,
 	hidePlayedEpisodes,
-	playbackRate,
 	playedEpisodes,
 	playlists,
 	plugin,
 	queue,
 	sanitizeEpisodeListLimit,
 	savedFeeds,
-	volume,
 } from "src/store/index";
 import { DEFAULT_EPISODE_LIST_LIMIT, MAX_EPISODE_LIST_LIMIT } from "src/constants";
 import type { Episode } from "src/types/Episode";
@@ -1001,8 +999,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		playedEpisodes.update((live) => ({ ...progress, ...live }));
 		hidePlayedEpisodes.set(merged.hidePlayedEpisodes);
 		episodeListLimit.set(merged.episodeListLimit);
-		volume.set(merged.defaultVolume);
-		playbackRate.set(merged.defaultPlaybackRate);
+		this.plugin.player.setVolume(merged.defaultVolume);
+		this.plugin.player.setPlaybackRate(merged.defaultPlaybackRate);
 
 		try {
 			// Store setters can canonicalize or deduplicate their slices. Await one

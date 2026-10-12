@@ -1,24 +1,16 @@
-import { Notice } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
-import type { IAPI } from "./API/IAPI";
-import {
-	currentEpisode,
-	currentTime,
-	duration,
-	isPaused,
-	activePlaybackSegment,
-	localFiles,
-	playedEpisodes,
-	plugin,
-	requestedPlaybackTime,
-	viewState,
-} from "./store";
+import { localFiles, plugin, savedFeeds, viewState } from "./store";
 import type { Episode } from "./types/Episode";
+import type { LocalEpisode } from "./types/LocalEpisode";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
+import { resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
-import { getEpisodeKey } from "./utility/episodeKey";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
+import { episodeLinkTarget } from "./utility/episodeLinkTarget";
+import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
+import { getEpisodeMediaType, getUnambiguousMediaTypeFromPath } from "./utility/mediaType";
 import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
@@ -70,44 +62,30 @@ function findLocalEpisodeByCandidates(nameCandidates: string[]): Episode | undef
 	);
 }
 
-/**
- * The time a no-timestamp link ({{episodelink}}, issue #35) should resume an
- * episode at: the last played location, or the start. A FINISHED episode is
- * stored at its end (time === duration); resuming there would immediately fire
- * the player's `ended` handler and auto-advance the queue, so we restart it from
- * the beginning instead — matching the issue's "the beginning if not played".
- */
-function resolveResumeTime(episode: Episode): number {
-	const played = playedEpisodes.get(episode);
-	if (!played) return 0;
-
-	const isFinished = played.finished || (played.duration > 0 && played.time >= played.duration);
-	return isFinished ? 0 : played.time;
+/** A number of seconds from a link, or NaN unless the whole value is one. */
+function parseSeconds(value: string): number {
+	return value.trim() === "" ? Number.NaN : Number(value);
 }
 
 // Two links opened in quick succession can load their feeds out of order, so a
-// link acts after loading only if no newer link has arrived since.
+// link acts after loading only if no newer link that fetched or played has arrived since.
 let latestRequest = 0;
 
 export default async function podNotesURIHandler(
 	{ url, episodeName, time, endTime, end, to }: PodNotesProtocolData,
-	api: IAPI,
 	revealPlayer?: RevealPodNotesPlayer,
 ) {
-	const request = ++latestRequest;
 	if (!url || !episodeName) {
 		new Notice("URL and episode name are required to play an episode");
 		return;
 	}
 
-	// A link may omit the timestamp ({{episodelink}}, issue #35). When it does we
-	// reopen the episode and resume from the last played location (resolved from
-	// saved progress below), or the start if it was never played or already
-	// finished — rather than seeking to a baked-in time.
+	// A link may omit the timestamp ({{episodelink}}, issue #35). The player then
+	// resumes the episode where it was left, or from the start once finished.
 	const hasExplicitTime = time !== undefined && time !== "";
 	let requestedTime = 0;
 	if (hasExplicitTime) {
-		requestedTime = parseFloat(time);
+		requestedTime = parseSeconds(time);
 		if (!Number.isFinite(requestedTime)) {
 			new Notice("Timestamp must be a valid number");
 			return;
@@ -128,74 +106,65 @@ export default async function podNotesURIHandler(
 	if (requestedEndTime === null) return;
 
 	const nameCandidates = candidateValues(episodeName);
-	const currentEp = get(currentEpisode);
+	const player = get(plugin).player;
+	const playOptions = hasExplicitTime ? { time: requestedTime, endTime: requestedEndTime } : {};
+	const loaded = get(player.state).episode;
+	// A link to the loaded episode names its feed, or its file for a local file, so a
+	// same-titled episode of another show is not taken for it.
+	const loadedLinkTarget = loaded && episodeLinkTarget(loaded);
 	// Membership (not ordered selection) is correct here: there is only one loaded episode, and
 	// keeping the legacy candidate lets a legacy '+'-as-space link to the loaded episode resume
-	// without a feed round-trip (and without currentEpisode.set re-enqueueing it). The only cost is
-	// a rare false-positive — a current-format link to a "X+Y" episode while a distinct "X Y" twin
-	// is loaded resumes the loaded twin instead of switching — which we accept over regressing the
-	// far more common same-episode legacy-link case.
+	// without a feed round-trip. The only cost is a rare false-positive - a current-format link to
+	// a "X+Y" episode while a distinct "X Y" twin is loaded resumes the loaded twin instead of
+	// switching - which we accept over regressing the far more common same-episode legacy-link case.
 	// A retitled same-episode link (guest name moved) has the same token set.
 	// Sub-1.0 overlap is not enough here: "… Part 1" vs the loaded "… Part 2"
 	// scores ~0.78, and with only one candidate the uniqueness guard is vacuous.
 	// Those links fall through to the feed lookup, which can still exact-match.
-	const episodeIsPlaying =
-		!!currentEp &&
-		(nameCandidates.includes(currentEp.title) ||
-			nameCandidates.some((name) => titleTokenSimilarity(name, currentEp.title) === 1));
-	const playerIsVisible = get(viewState) === ViewState.Player;
+	const episodeIsLoaded =
+		!!loaded &&
+		!!loadedLinkTarget &&
+		candidateValues(url).includes(loadedLinkTarget) &&
+		(nameCandidates.includes(loaded.title) ||
+			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
 
-	if (episodeIsPlaying) {
-		if (hasExplicitTime) {
-			const episodeKey = getEpisodeKey(currentEp);
-			requestedPlaybackTime.set({
-				episodeKey,
-				time: requestedTime,
-				endTime: requestedEndTime,
-			});
-			viewState.set(ViewState.Player);
-			api.currentTime = requestedTime;
-			setActivePlaybackSegment(episodeKey, requestedTime, requestedEndTime);
-			isPaused.set(false);
-			if (playerIsVisible) {
-				requestedPlaybackTime.set(null);
-			}
-
-			await revealPlayer?.();
-			return;
-		}
-
-		// No timestamp: the live position already is the last played location, so
-		// surface the player and resume playback without seeking — unless the
-		// episode already finished (live position at its end), in which case
-		// replaying would instantly fire `ended` and auto-advance, so restart it.
-		activePlaybackSegment.set(null);
+	if (episodeIsLoaded) {
+		latestRequest++;
+		if (!player.play(loaded, playOptions)) return;
 		viewState.set(ViewState.Player);
-		const liveTime = get(currentTime);
-		const liveDuration = get(duration);
-		if (liveDuration > 0 && liveTime >= liveDuration) {
-			api.currentTime = 0;
-		}
-		isPaused.set(false);
-
 		await revealPlayer?.();
 		return;
 	}
 
-	// The path probe only decides local-vs-feed routing; the episode itself is resolved by name.
-	const { vault } = get(plugin).app;
+	// The path probe decides local-vs-feed routing; the episode itself is resolved by name.
+	const { app } = get(plugin);
 	const localFile = candidateValues(url)
-		.map((path) => vault.getAbstractFileByPath(path))
+		.map((path) => app.vault.getAbstractFileByPath(path))
 		.find((file) => file !== null);
 
 	let episode: Episode | undefined;
+	let play = player.play.bind(player);
 
 	// A private-feed placeholder always routes to placeholder resolution (the
 	// final branch): a vault file literally named like a placeholder must not
 	// shadow private links.
 	const isPlaceholderLink = isPrivateFeedPlaceholder(url);
 	if (!isPlaceholderLink && localFile) {
-		episode = findLocalEpisodeByCandidates(nameCandidates);
+		// The file the link names plays, even when a same-named file in another
+		// folder has since taken over the name's registration.
+		const named = findLocalEpisodeByCandidates(nameCandidates);
+		episode =
+			named &&
+			localFile instanceof TFile &&
+			(named as LocalEpisode).filePath !== localFile.path
+				? localEpisodeFromFile(
+						app,
+						localFile,
+						// A file does not record whether an mp4 or webm is audio or video, so it takes the registration's.
+						getUnambiguousMediaTypeFromPath(localFile.path) ??
+							getEpisodeMediaType(named),
+					)
+				: named;
 	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
 		// The probe found no file, yet `url` has no http(s) scheme, so it can only be
 		// a vault path whose file was moved/renamed. Resolve the episode by name from
@@ -212,6 +181,16 @@ export default async function podNotesURIHandler(
 		const feeds = get(plugin).feeds;
 		const placeholderKey = parsePrivateFeedPlaceholder(url);
 		if (placeholderKey !== null) {
+			// Only a feed whose URL is on this device is fetched, and a newer link or play
+			// wins over that fetch. Any other link is decided from the feed's last copy
+			// without a fetch: it claims a turn only when it plays, so a refused one
+			// cancels nothing.
+			const saved = get(savedFeeds);
+			const fetches =
+				Object.prototype.hasOwnProperty.call(saved, placeholderKey) &&
+				resolveFeedUrl(saved[placeholderKey], get(plugin).feedUrls) !== null;
+			const request = fetches ? ++latestRequest : latestRequest;
+			if (fetches) play = player.deferPlay();
 			// Fetch even a fresh feed so the link finds an episode published since.
 			await feeds.load([placeholderKey], "network");
 			if (request !== latestRequest) return;
@@ -235,6 +214,10 @@ export default async function podNotesURIHandler(
 				return;
 			}
 
+			// Taken once the link passed every check, so a refused link cancels nothing,
+			// and a newer link or play wins.
+			const request = ++latestRequest;
+			play = player.deferPlay();
 			let episodes: Episode[];
 			try {
 				// Fetch with the raw url (current-format links are correct as-is); only the
@@ -258,22 +241,8 @@ export default async function podNotesURIHandler(
 		return;
 	}
 
-	// Always arm requestedPlaybackTime so the resume point is explicit. For a
-	// no-timestamp link (issue #35) we resolve it from saved progress here rather
-	// than relying on the player's restore-on-absence: that makes the seek
-	// deterministic and overrides any stale pending request from an earlier link
-	// to this same episode (which would otherwise win on metadata load).
-	requestedPlaybackTime.set({
-		episodeKey: getEpisodeKey(episode),
-		time: hasExplicitTime ? requestedTime : resolveResumeTime(episode),
-		endTime: hasExplicitTime ? requestedEndTime : undefined,
-	});
-	setActivePlaybackSegment(
-		getEpisodeKey(episode),
-		hasExplicitTime ? requestedTime : resolveResumeTime(episode),
-		hasExplicitTime ? requestedEndTime : undefined,
-	);
-	currentEpisode.set(episode);
+	latestRequest++;
+	if (!play(episode, playOptions)) return;
 	viewState.set(ViewState.Player);
 	await revealPlayer?.();
 }
@@ -295,7 +264,7 @@ function parseSegmentEndTime(
 		return null;
 	}
 
-	const parsed = parseFloat(rawEndTime);
+	const parsed = parseSeconds(rawEndTime);
 	if (!Number.isFinite(parsed)) {
 		new Notice("Segment end time must be a valid number");
 		return null;
@@ -307,20 +276,4 @@ function parseSegmentEndTime(
 	}
 
 	return parsed;
-}
-
-function setActivePlaybackSegment(
-	episodeKey: string,
-	startTime: number,
-	endTime: number | undefined,
-): void {
-	activePlaybackSegment.set(
-		endTime === undefined
-			? null
-			: {
-					episodeKey,
-					startTime,
-					endTime,
-				},
-	);
 }

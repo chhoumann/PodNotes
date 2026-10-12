@@ -92,9 +92,13 @@ If you would rather manage the queue yourself, turn off **Keep a queue of episod
 You can still add, remove, and reorder episodes in the queue manually from the episode context menu. While the queue is empty in this mode, its tile in the podcast grid and its list in the player are hidden.
 
 ## Player
-The player will automatically load and play the current episode.
+An episode keeps playing while you browse podcasts, change settings, or close the PodNotes view.
+When Obsidian starts, the player shows the last episode paused at its saved position. Nothing plays until you press play.
+If a sync brings newer progress or another episode before then, the player shows that instead.
+A position you already moved that episode to stays.
+A video plays in the main Obsidian window. When the PodNotes view is in a separate window, it shows the episode artwork.
 
-Clicking on the epsiode image will toggle episode playback.
+Clicking on the episode image will toggle episode playback.
 
 The player also features a progress bar, which you can use to seek to a specific time in the episode.
 You can also press the buttons on the player to skip backwards or forwards in the episode.
