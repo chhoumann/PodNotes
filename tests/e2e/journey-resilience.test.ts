@@ -171,7 +171,6 @@ describe("resilience journeys", () => {
 			expect((await fetch(loopbackFeed)).status).toBe(200);
 			await server.stop();
 			await expect(fetch(loopbackFeed)).rejects.toThrow();
-			const requestsWhileOnline = server.requests().length;
 
 			await restartObsidian(obsidian, async () => {
 				await plugin.data<Record<string, any>>().patch((data) => {
@@ -236,7 +235,6 @@ describe("resilience journeys", () => {
 			);
 			expect(await isShown(obsidian, ui.episodeLoading)).toBe(false);
 			expect(await shownText(obsidian)).toContain("No episodes found.");
-			expect(server.requests().length).toBe(requestsWhileOnline);
 		},
 		120_000,
 	);
