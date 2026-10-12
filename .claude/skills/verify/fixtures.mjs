@@ -9,19 +9,17 @@
 //   node .claude/skills/verify/fixtures.mjs stop           stop the feed server
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
-import dns from "node:dns/promises";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRunnerConfig, resolveProvisionOptions } from "obsidian-e2e/runner";
+import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 // Stable per worktree, so a feed saved in the vault keeps working across restarts.
 const port = 20000 + (crypto.createHash("sha256").update(root).digest().readUInt16BE(0) % 20000);
-// assertFetchableUrl refuses literal loopback hosts, so the URL uses nip.io, a
-// public DNS name for 127.0.0.1.
-const host = "127.0.0.1.nip.io";
+const host = FIXTURE_HOST;
 const base = `http://${host}:${port}`;
 const feedUrl = `${base}/feed.xml`;
 const feedBUrl = `${base}/feed-b.xml`;
@@ -182,9 +180,6 @@ async function startFeed(url) {
 			child.unref();
 		}
 	}
-	await dns.lookup(host).catch(() => {
-		console.error(`${host} does not resolve here; PodNotes needs DNS to reach this feed URL.`);
-	});
 	console.log(url);
 }
 

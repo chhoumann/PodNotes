@@ -22,7 +22,7 @@ remove it again from Settings.
 
 Preconditions:
 
-- `FEED=$(node .claude/skills/verify/fixtures.mjs feed)` prints `http://127.0.0.1.nip.io:<port>/feed.xml`.
+- `FEED=$(node .claude/skills/verify/fixtures.mjs feed)` prints `http://podnotes.test:<port>/feed.xml`.
 - `PodNotes Fixture` is not saved yet (`jq '.savedFeeds | keys' <data.json>` lacks it).
 
 - **Open Settings.** Run `CLI command id=app:open-settings` and `UI click '.modal.mod-settings .vertical-tab-nav-item' --text PodNotes`. The `Search Podcasts` heading and the search input are visible.
@@ -35,7 +35,7 @@ Preconditions:
 
 ## Gotchas
 
-- PodNotes refuses literal loopback and private hosts (`127.0.0.1`, `localhost`, `*.local`). The fixture URL uses `127.0.0.1.nip.io`, which needs working DNS. If it does not resolve, report the feed path as unreachable instead of editing `data.json`.
+- PodNotes refuses literal loopback and private hosts (`127.0.0.1`, `localhost`, `*.local`). The fixture URL uses `podnotes.test`, which this worktree's instance resolves to 127.0.0.1 through Chromium's host resolver rules. Start Obsidian through `start:e2e-obsidian` so the rule is present.
 - Escape inside a focused settings field does not close Settings. Click `.modal.mod-settings .modal-header-button`.
 - The search input debounces for 300 ms. Wait for the result card, not a fixed time.
 - The fixture port is fixed per worktree. A saved fixture feed keeps working after `fixtures.mjs stop` and `feed`, but not in another worktree.

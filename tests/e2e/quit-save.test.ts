@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "vitest";
-import { createPodNotesE2EHarness, PLUGIN_ID, type PodNotesData } from "./harness";
+import { createPodNotesE2EHarness, type PodNotesData } from "./harness";
 import { restartObsidian } from "./journey/actions";
+import { PLUGIN_ID } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("quit-save");
 const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);

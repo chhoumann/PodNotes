@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ObsidianClient, PluginHandle, SandboxApi } from "obsidian-e2e";
 import e2eConfig from "../../../obsidian-e2e.config.mjs";
-import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE } from "../harness";
-import { dismissNotices, setMobileEmulation } from "./actions";
+import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE } from "../runtime";
+import { assertSingleWindow, dismissNotices, setMobileEmulation } from "./actions";
 import type { FixtureEpisode, FixtureFeed, FixtureServer } from "./fixtures";
 
 export type EpisodeRef = Readonly<{ podcast: string; title: string }>;
@@ -66,6 +66,8 @@ type JourneySnapshot = Readonly<{
 	recentFiles: readonly string[];
 	mobile: boolean;
 	size: [number, number];
+	corePlugins: Record<string, boolean>;
+	coreConfig: Record<string, unknown>;
 	workspaceFiles: ReadonlyArray<{ path: string; bytes: Buffer | null }>;
 }>;
 
@@ -159,10 +161,12 @@ export async function snapshotJourneyState(obsidian: ObsidianClient): Promise<vo
 		recentFiles: app.workspace.recentFileTracker.serialize(),
 		mobile: app.isMobile,
 		size: electronWindow.getSize(),
+		corePlugins: Object.fromEntries(Object.entries(app.internalPlugins.plugins).map(([id, plugin]) => [id, plugin.enabled])),
+		coreConfig: structuredClone(app.internalPlugins.config),
 	})`);
 	const vault = await obsidian.vaultPath();
 	const workspaceFiles = await Promise.all(
-		["workspace.json", "workspace-mobile.json"].map(async (name) => {
+		["workspace.json", "workspace-mobile.json", "core-plugins.json"].map(async (name) => {
 			const filePath = path.join(vault, ".obsidian", name);
 			const bytes = await fs.readFile(filePath).catch((error: NodeJS.ErrnoException) => {
 				if (error.code !== "ENOENT") throw error;
@@ -181,9 +185,13 @@ export function hasJourneySnapshot(obsidian: ObsidianClient): boolean {
 export async function restoreJourneyCache(obsidian: ObsidianClient): Promise<void> {
 	const snapshot = snapshots.get(obsidian);
 	if (!snapshot) return;
+	await restoreCorePlugins(obsidian, snapshot);
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		await app.plugins.disablePluginAndSave(${JSON.stringify(PLUGIN_ID)});
+		app.plugins.requestSaveConfig.cancel();
 		await app.plugins.saveConfig();
+		app.plugins.requestSaveConfig.cancel();
+		await app.vault.adapter.promise;
 		return true;
 	})()`);
 	await obsidian.dev.evalJson("window.__podnotesJourneyCacheReload = true");
@@ -208,7 +216,10 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 	const failures: unknown[] = [];
 	try {
 		const mobile = await obsidian.dev.evalJson<boolean>("app.isMobile");
-		if (mobile !== snapshot.mobile) await setMobileEmulation(obsidian, snapshot.mobile);
+		if (mobile !== snapshot.mobile) {
+			await setMobileEmulation(obsidian, snapshot.mobile);
+			await restoreCorePlugins(obsidian, snapshot);
+		}
 		await obsidian.dev.evalJsonAsync(`(async () => {
 			await app.workspace.changeLayout(${JSON.stringify(snapshot.layout)});
 			app.workspace.recentFileTracker.load(${JSON.stringify(snapshot.recentFiles)});
@@ -216,9 +227,35 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 			app.workspace.requestSaveLayout.cancel();
 			await app.workspace.saveLayout();
 			app.workspace.requestSaveLayout.cancel();
+			app.internalPlugins.requestSaveConfig.cancel();
+			await app.internalPlugins.saveConfig();
+			app.internalPlugins.requestSaveConfig.cancel();
 			await app.vault.adapter.promise;
 			return true;
 		})()`);
+		const leaked = await obsidian.dev.evalJson<Array<{ id: number; url: string }>>(`(() => {
+			const remote = require("@electron/remote");
+			const current = remote.getCurrentWindow();
+			const extra = remote.BrowserWindow.getAllWindows().filter(win => win.id !== current.id);
+			const details = extra.map(win => ({ id: win.id, url: win.webContents.getURL() }));
+			for (const win of extra) win.close();
+			return details;
+		})()`);
+		if (leaked.length) {
+			await obsidian.waitFor(
+				async () => {
+					await assertSingleWindow(obsidian);
+					return true;
+				},
+				{
+					timeoutMs: 10_000,
+					message: `test-created windows to close: ${JSON.stringify(leaked)}`,
+				},
+			);
+			throw new Error(
+				`The test leaked Obsidian windows: ${JSON.stringify(leaked)}. They were closed.`,
+			);
+		}
 	} catch (error) {
 		failures.push(error);
 	}
@@ -232,7 +269,29 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 	for (const result of restored) {
 		if (result.status === "rejected") failures.push(result.reason);
 	}
-	if (failures.length) throw new AggregateError(failures, "Workspace could not be restored.");
+	if (failures.length === 1) throw failures[0];
+	if (failures.length > 1) throw new AggregateError(failures, "Workspace could not be restored.");
+}
+
+async function restoreCorePlugins(
+	obsidian: ObsidianClient,
+	snapshot: JourneySnapshot,
+): Promise<void> {
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		const manager = app.internalPlugins;
+		for (const [id, enabled] of Object.entries(${JSON.stringify(snapshot.corePlugins)})) {
+			const plugin = manager.getPluginById(id);
+			if (plugin.enabled === enabled) continue;
+			if (enabled) await plugin.enable(false);
+			else plugin.disable(false);
+		}
+		manager.requestSaveConfig.cancel();
+		manager.config = ${JSON.stringify(snapshot.coreConfig)};
+		await manager.saveConfig();
+		manager.requestSaveConfig.cancel();
+		await app.vault.adapter.promise;
+		return true;
+	})()`);
 }
 
 export function storedEpisode(
@@ -263,7 +322,6 @@ export async function seedLibrary(
 	server: FixtureServer | null,
 	seed: LibrarySeed = {},
 ): Promise<void> {
-	await snapshotJourneyState(obsidian);
 	await obsidian.dev.evalJson(
 		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
 	);
@@ -331,6 +389,12 @@ export async function feedCacheHolds(
 		`app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)})`,
 	);
 	return cached?.includes(JSON.stringify(episodeTitle)) ?? false;
+}
+
+export async function feedCachedAt(obsidian: ObsidianClient, feedUrl: string): Promise<number> {
+	return await obsidian.dev.evalJson<number>(
+		`JSON.parse(app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}) ?? "{}")[${JSON.stringify(feedUrl)}]?.updatedAt ?? 0`,
+	);
 }
 
 /** Backdate every feed cache entry, as if it were saved `ms` milliseconds earlier. */
@@ -463,8 +527,29 @@ export async function playbackOver(
 	gapMs: number,
 ): Promise<[PlaybackObservation, PlaybackObservation]> {
 	const first = await observePlayback(obsidian);
-	await obsidian.sleep(gapMs);
-	return [first, await observePlayback(obsidian)];
+	const until = Date.now() + gapMs;
+	const second = await obsidian.waitFor(
+		async () => {
+			const current = await observePlayback(obsidian);
+			if (
+				!first.playing &&
+				(current.playing ||
+					current.seconds !== first.seconds ||
+					current.media?.seconds !== first.media?.seconds)
+			)
+				return current;
+			return Date.now() >= until ? current : false;
+		},
+		{ timeoutMs: gapMs + 15_000, intervalMs: 100, message: "playback observation" },
+	);
+	if (
+		!first.playing &&
+		(second.playing ||
+			second.seconds !== first.seconds ||
+			second.media?.seconds !== first.media?.seconds)
+	)
+		throw new Error(`Paused playback changed during observation: ${JSON.stringify(second)}`);
+	return [first, second];
 }
 
 export async function readVaultBytes(obsidian: ObsidianClient, filePath: string): Promise<Buffer> {

@@ -9,17 +9,15 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-	ensureObsidianInstance,
 	execObsidian,
-	launchObsidianInstance,
 	loadRunnerConfig,
 	obsidianCommandArgs,
 	resolveInstanceOptions,
 	resolveProvisionOptions,
 	runObsidianE2ECli,
 } from "obsidian-e2e/runner";
+import { podNotesRunnerDependencies } from "./e2e-instance.mjs";
 
-/** @typedef {import("obsidian-e2e/runner").CliDependencies} CliDependencies */
 /** @typedef {import("obsidian-e2e/runner").InstanceOptions} InstanceOptions */
 
 const linux = process.platform === "linux";
@@ -66,7 +64,7 @@ async function defaultInstance() {
 
 /** @param {string[]} args Vitest arguments. */
 async function runTests(args) {
-	const instance = linux ? await defaultInstance() : undefined;
+	const instance = await defaultInstance();
 	const results = path.join(os.tmpdir(), `podnotes-e2e-${process.pid}.json`);
 	let launched = false;
 	/** @type {import("node:child_process").ChildProcess | undefined} */
@@ -84,21 +82,11 @@ async function runTests(args) {
 	};
 	for (const signal of FORWARDED_SIGNALS) process.on(signal, onSignal);
 	try {
-		if (instance) {
-			/** @type {CliDependencies} */
-			const deps = {
-				ensureObsidianInstance: (options, config, ensureDeps) =>
-					ensureObsidianInstance(options, config, {
-						...ensureDeps,
-						launchObsidianInstance: async (target, exec) => {
-							launched = true;
-							await launchObsidianInstance(target, exec);
-						},
-					}),
-			};
-			const started = await runObsidianE2ECli(["start"], deps);
-			if (started !== 0) return started;
-		}
+		const deps = podNotesRunnerDependencies(() => {
+			launched = true;
+		});
+		const started = await runObsidianE2ECli(["start"], deps);
+		if (started !== 0) return started;
 		if (interrupted) return 128 + os.constants.signals[interrupted];
 		child = spawn(
 			VITEST,
@@ -116,14 +104,13 @@ async function runTests(args) {
 			{
 				detached: true,
 				stdio: "inherit",
-				env: instance
-					? {
-							...process.env,
-							OBSIDIAN_E2E_VAULT: instance.vaultName,
-							OBSIDIAN_E2E_VAULT_PATH: instance.vaultPath,
-							OBSIDIAN_E2E_OBSIDIAN_HOME: instance.obsidianHome,
-						}
-					: process.env,
+				env: {
+					...process.env,
+					OBSIDIAN_BIN: instance.obsidianBin,
+					OBSIDIAN_E2E_VAULT: instance.vaultName,
+					OBSIDIAN_E2E_VAULT_PATH: instance.vaultPath,
+					OBSIDIAN_E2E_OBSIDIAN_HOME: instance.obsidianHome,
+				},
 			},
 		);
 		const [code, signal] = await once(child, "close");
@@ -189,7 +176,7 @@ async function capturePlayer(verb, args) {
 	const instance = await defaultInstance();
 	// `run` brings the instance up without reloading PodNotes, which `start` would
 	// do, so state a driver set up survives. `version` also records the app build.
-	const up = await runObsidianE2ECli(["run", "version"]);
+	const up = await runObsidianE2ECli(["run", "version"], podNotesRunnerDependencies());
 	if (up !== 0) return up;
 	const { stdout } = await execObsidian(
 		instance,
@@ -212,7 +199,7 @@ function main(argv) {
 		case "record":
 			return capturePlayer(verb, rest);
 	}
-	return runObsidianE2ECli(argv);
+	return runObsidianE2ECli(argv, verb === "stop" ? {} : podNotesRunnerDependencies());
 }
 
 // Same exit guard as the upstream bin: capture and signal exits must not hang on

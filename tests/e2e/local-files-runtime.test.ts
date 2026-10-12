@@ -5,12 +5,11 @@ import {
 	createPodNotesE2EHarness,
 	evalJsonAsync,
 	openPodNotesView,
-	RELOAD_OPTIONS,
-	VIEW_TYPE,
-	WAIT_OPTS,
-	waitForPodNotesReady,
 	writeSilentWav,
 } from "./harness";
+
+import { click, revealInFileExplorer, ui } from "./journey/actions";
+import { RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 type PodNotesData = Partial<IPodNotesSettings>;
 
@@ -19,49 +18,64 @@ const SILENT_WAV_SECOND_BYTES = 44 + 8_000;
 const getContext = createPodNotesE2EHarness("local-files-runtime");
 
 describe("local files runtime", () => {
-	test("removing a local file from Local Files keeps the user's file in the vault", async () => {
-		const { obsidian, plugin, sandbox } = getContext();
-		const title = `E2E Own Recording ${Date.now()}`;
-		const fileName = `${title}.wav`;
-		const audioPath = sandbox.path(fileName);
-		const inDownloads = (data: PodNotesData) =>
-			data.downloadedEpisodes?.["local file"]?.some(
-				(entry) => entry.filePath === audioPath,
-			) ?? false;
-		const inLocalFiles = (data: PodNotesData) =>
-			data.localFiles?.episodes.some((episode) => episode.title === title) ?? false;
-		const trashedFixture = async () =>
-			(await listTrash(obsidian)).filter((path) => path.includes(title));
+	test.each(["disabled", "enabled and open", "enabled and closed"] as const)(
+		"removing a local file from Local Files keeps the user's file in the vault (%s explorer)",
+		async (explorer) => {
+			const { obsidian, plugin, sandbox } = getContext();
+			const title = `E2E Own Recording ${Date.now()}`;
+			const fileName = `${title}.wav`;
+			const audioPath = sandbox.path(fileName);
+			const inDownloads = (data: PodNotesData) =>
+				data.downloadedEpisodes?.["local file"]?.some(
+					(entry) => entry.filePath === audioPath,
+				) ?? false;
+			const inLocalFiles = (data: PodNotesData) =>
+				data.localFiles?.episodes.some((episode) => episode.title === title) ?? false;
+			const trashedFixture = async () =>
+				(await listTrash(obsidian)).filter((path) => path.includes(title));
 
-		await plugin.updateDataAndReload<PodNotesData>((data) => {
-			data.downloadedEpisodes = {};
-			data.playedEpisodes = {};
-		}, RELOAD_OPTIONS);
-		await waitForPodNotesReady(obsidian);
-		await writeSilentWav(obsidian, audioPath, 60);
-		await sandbox.waitForExists(fileName, WAIT_OPTS);
-		const fileExplorerWasEnabled = await setFileExplorerEnabled(obsidian, true);
+			await plugin.updateDataAndReload<PodNotesData>((data) => {
+				data.downloadedEpisodes = {};
+				data.playedEpisodes = {};
+			}, RELOAD_OPTIONS);
+			await waitForPodNotesReady(obsidian);
+			await writeSilentWav(obsidian, audioPath, 60);
+			await sandbox.waitForExists(fileName, WAIT_OPTS);
+			if (explorer === "disabled")
+				await obsidian.plugin("file-explorer").disable({ filter: "core" });
+			else await obsidian.plugin("file-explorer").enable({ filter: "core" });
+			if (explorer === "enabled and open")
+				await obsidian.exec("command", { id: "file-explorer:open" });
+			else
+				await obsidian.dev.evalJsonAsync(
+					'(async () => { await app.workspace.detachLeavesOfType("file-explorer"); return true; })()',
+				);
+			await obsidian.plugin("file-explorer").enable({ filter: "core" });
 
-		try {
-			await openFileMenu(obsidian, audioPath);
-			await clickMenuItem(obsidian, "Play with PodNotes");
-			await plugin.waitForData<PodNotesData>(
-				(data) => inDownloads(data) && inLocalFiles(data),
-				WAIT_OPTS,
-			);
-			await clickInPodNotesView(obsidian, 'button[aria-label="Podcast grid"]');
-			await clickInPodNotesView(obsidian, 'button.playlist-card[aria-label="Local Files"]');
-			await clickInPodNotesView(obsidian, `[aria-label="More options for ${title}"]`);
-			const removalMenu = await clickMenuItem(obsidian, "Remove from Local Files");
-			expect(removalMenu).not.toContain("Remove file");
-			await plugin.waitForData<PodNotesData>(
-				(data) => !inDownloads(data) && !inLocalFiles(data),
-				WAIT_OPTS,
-			);
+			try {
+				await revealInFileExplorer(obsidian, audioPath);
+				await click(obsidian, ui.fileExplorerItem(audioPath), { button: "right" });
+				await clickMenuItem(obsidian, "Play with PodNotes");
+				await plugin.waitForData<PodNotesData>(
+					(data) => inDownloads(data) && inLocalFiles(data),
+					WAIT_OPTS,
+				);
+				await clickInPodNotesView(obsidian, 'button[aria-label="Podcast grid"]');
+				await clickInPodNotesView(
+					obsidian,
+					'button.playlist-card[aria-label="Local Files"]',
+				);
+				await clickInPodNotesView(obsidian, `[aria-label="More options for ${title}"]`);
+				const removalMenu = await clickMenuItem(obsidian, "Remove from Local Files");
+				expect(removalMenu).not.toContain("Remove file");
+				await plugin.waitForData<PodNotesData>(
+					(data) => !inDownloads(data) && !inLocalFiles(data),
+					WAIT_OPTS,
+				);
 
-			const after = await evalJsonAsync<{ listed: boolean; original: boolean }>(
-				obsidian,
-				`(async () => {
+				const after = await evalJsonAsync<{ listed: boolean; original: boolean }>(
+					obsidian,
+					`(async () => {
 					const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0]?.view;
 					return {
 						listed: Array.from(view?.containerEl.querySelectorAll(".episode-item-title") ?? [])
@@ -69,26 +83,27 @@ describe("local files runtime", () => {
 						original: await app.vault.adapter.exists(${JSON.stringify(audioPath)}),
 					};
 				})()`,
-			);
-			expect({ ...after, trashed: await trashedFixture() }).toEqual({
-				listed: false,
-				original: true,
-				trashed: [],
-			});
-			expect(await obsidian.dev.runtimeErrors()).toEqual([]);
-		} finally {
-			await setFileExplorerEnabled(obsidian, fileExplorerWasEnabled);
-			await evalJsonAsync<boolean>(
-				obsidian,
-				`(async () => {
+				);
+				expect({ ...after, trashed: await trashedFixture() }).toEqual({
+					listed: false,
+					original: true,
+					trashed: [],
+				});
+				expect(await obsidian.dev.runtimeErrors()).toEqual([]);
+			} finally {
+				await evalJsonAsync<boolean>(
+					obsidian,
+					`(async () => {
 					for (const path of ${JSON.stringify(await trashedFixture())}) {
 						await app.vault.adapter.remove(path);
 					}
 					return true;
 				})()`,
-			);
-		}
-	}, 60_000);
+				);
+			}
+		},
+		60_000,
+	);
 
 	test("asks before trashing a download PodNotes cannot confirm it made", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
@@ -290,58 +305,6 @@ async function clickModalButton(obsidian: ObsidianClient, label: string): Promis
 		message: `Modal button "${label}" did not appear.`,
 	});
 	await evalJsonAsync<boolean>(obsidian, `(() => { ${button}.click(); return true; })()`);
-}
-
-async function setFileExplorerEnabled(
-	obsidian: ObsidianClient,
-	enabled: boolean,
-): Promise<boolean> {
-	return evalJsonAsync<boolean>(
-		obsidian,
-		`(async () => {
-			const fileExplorer = app.internalPlugins.getPluginById("file-explorer");
-			const wasEnabled = fileExplorer.enabled;
-			if (${enabled} && !wasEnabled) await fileExplorer.enable(true);
-			if (${!enabled} && wasEnabled) fileExplorer.disable(true);
-			return wasEnabled;
-		})()`,
-	);
-}
-
-async function openFileMenu(obsidian: ObsidianClient, path: string): Promise<void> {
-	const selector = `.nav-file-title[data-path=${JSON.stringify(path)}]`;
-	await evalJsonAsync<boolean>(
-		obsidian,
-		`(async () => {
-			const leaf = app.workspace.getLeavesOfType("file-explorer")[0];
-			if (!leaf) throw new Error("File explorer is not open.");
-			await app.workspace.revealLeaf(leaf);
-			leaf.view.revealInFolder(app.vault.getAbstractFileByPath(${JSON.stringify(path)}));
-			return true;
-		})()`,
-	);
-	await obsidian.waitFor(
-		() =>
-			obsidian.dev.evalJson<boolean>(
-				`Boolean(document.querySelector(${JSON.stringify(selector)}))`,
-			),
-		{ ...WAIT_OPTS, message: `${path} is not shown in the file explorer.` },
-	);
-	await evalJsonAsync<boolean>(
-		obsidian,
-		`(() => {
-			const target = document.querySelector(${JSON.stringify(selector)});
-			const { left, top } = target.getBoundingClientRect();
-			target.dispatchEvent(new MouseEvent("contextmenu", {
-				bubbles: true,
-				cancelable: true,
-				button: 2,
-				clientX: left + 8,
-				clientY: top + 8,
-			}));
-			return true;
-		})()`,
-	);
 }
 
 async function clickMenuItem(obsidian: ObsidianClient, label: string): Promise<string[]> {

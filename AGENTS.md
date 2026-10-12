@@ -125,7 +125,11 @@ vault. They use the isolated instance below.
 by `obsidian-e2e.config.mjs`. Each worktree gets its own vault
 (`.obsidian-e2e-vaults/podnotes-<worktree>`, git-ignored, seeded with
 `DEFAULT_SETTINGS` on first provision), private `HOME`, CLI socket, and
-Obsidian process. The same commands work on both platforms:
+Obsidian process. `start`, `run`, `test:e2e`, and a test that restarts Obsidian
+all launch it through `scripts/e2e-instance.mjs`, which adds
+`--host-resolver-rules=MAP podnotes.test 127.0.0.1`. The fixture feeds live at
+`http://podnotes.test:<port>`, so they need no DNS. The same commands work on
+both platforms:
 
 ```bash
 npm run build                    # the vault links the root main.js
@@ -137,8 +141,9 @@ npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins
 
 | | macOS | Linux (headless) |
 | --- | --- | --- |
-| App | `Obsidian.app` via `open` | `/opt/Obsidian/obsidian`, under `xvfb-run` when `DISPLAY` is unset |
-| Profile | `/private/tmp/podnotes-obsidian-e2e/<vault>-<hash>/` | `/tmp/podnotes-obsidian-e2e/<vault>-<hash>/` |
+| App | `Obsidian.app` via `open` | `~/.local/share/obsidian-versions/obsidian-1.14.4/obsidian`, under `xvfb-run` when `DISPLAY` is unset |
+| CLI | `obsidian` on `PATH` | `obsidian-cli` next to the app |
+| Profile | `/private/tmp/podnotes-obsidian-e2e/<vault>-<hash>/` | `~/.cache/podnotes-e2e/<vault>-<hash>/` |
 | Evidence | `npx obsidian-e2e capture launch` (a separate instance) | the capture commands below, against this instance |
 
 - `obsidian:e2e` brings the instance up when needed. A warm instance is used as
@@ -151,17 +156,63 @@ npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins
   `export HOME="$OBSIDIAN_E2E_OBSIDIAN_HOME"`, the raw
   `obsidian vault="$OBSIDIAN_E2E_VAULT" ...` CLI reaches the instance. On Linux
   it does not, so use `npm run obsidian:e2e -- <command>`.
+- The CLI socket sits in the profile, and Linux limits its path to 107 bytes.
+  `start` fails before it launches anything when the path
+  does not fit.
+
+### Obsidian versions (Linux)
+The isolated instance runs Obsidian 1.14.4 by default. `manifest.json`
+`minAppVersion` is 1.13.0, so the suite must also pass on 1.13.x, which the
+`.deb` installs at `/opt/Obsidian`. Install 1.14.4 once, without root, from the
+official release asset, and check its SHA-256:
+
+```bash
+dir="$HOME/.local/share/obsidian-versions"
+mkdir -p "$dir"
+curl -fL -o "$dir/obsidian-1.14.4.tar.gz" \
+  https://github.com/obsidianmd/obsidian-releases/releases/download/v1.14.4/obsidian-1.14.4.tar.gz
+echo "e70b7cd63787e7f798a84fec453f5c446b91877bd3f612e8fb98e9b76cc81120  $dir/obsidian-1.14.4.tar.gz" | sha256sum -c -
+tar -xzf "$dir/obsidian-1.14.4.tar.gz" -C "$dir" && rm "$dir/obsidian-1.14.4.tar.gz"
+```
+
+The archive unpacks to `obsidian-1.14.4/`, with `obsidian` and `obsidian-cli`
+side by side. Two variables select another build:
+
+- `PODNOTES_OBSIDIAN_APP` is the Obsidian executable.
+- `PODNOTES_OBSIDIAN_BIN` is the CLI client. It defaults to the `obsidian-cli`
+  next to `PODNOTES_OBSIDIAN_APP`, so set it only when the client lives
+  elsewhere.
+
+Stop this worktree's instance before you switch builds. The runner refuses to
+reuse an instance that a different build launched, and its error calls that a
+mid-session update. Run the suite on 1.13.x with:
+
+```bash
+npm run stop:e2e-obsidian
+PODNOTES_OBSIDIAN_APP=/opt/Obsidian/obsidian npm run test:e2e
+```
+
+`test:e2e` stops the instance it launched, so the next command starts 1.14.4
+again. Any other command against a 1.13.x instance needs the same variable.
 
 ### E2E suite
 `npm run test:e2e` is the one command. Vitest arguments pass through
 (`npm run test:e2e -- -t "timestamp"`), every test is listed, and a filter that
 matches no test fails the run.
 
-- Linux: it builds, starts or reuses this worktree's instance, runs `tests/e2e`
-  against it, and stops the instance afterwards only if this run launched it.
-- macOS: it runs against whatever the environment selects, the shared `dev`
-  vault by default. For the isolated instance, export its env first:
-  `eval "$(npm run --silent start:e2e-obsidian -- --print-env)" && npm run test:e2e`.
+- On both platforms it builds, starts or reuses this worktree's isolated
+  instance, runs `tests/e2e` against it, and stops the instance afterwards only
+  if this run launched it. It never uses the shared `dev` vault.
+- The suite fails before any test runs when the instance lacks the
+  `podnotes.test` resolver rule. Stop the instance, then run
+  `npm run start:e2e-obsidian`.
+- The suite fails when Obsidian has more than one window open, because a second
+  vault window keeps Obsidian from quitting. Close it, or stop the instance,
+  before you rerun.
+- The harness snapshots the workspace, the core plugins with
+  `core-plugins.json`, and PodNotes' `data.json` before each test, and restores
+  them after it. A test can turn on a core plugin, such as the file explorer,
+  and leave its restore to the harness.
 - An interrupted run can leave test fixtures in the vault's `data.json`. Reset
   the vault with `npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults`.
 
@@ -192,8 +243,9 @@ npm run stop:e2e-obsidian -- --prune     # also reap instances whose worktree is
 
 `stop` matches only this worktree's `--user-data-dir` (it carries a
 per-worktree hash), including Xvfb on Linux, and never touches the `dev` vault
-or other worktrees. `start:e2e-obsidian` and `obsidian:e2e` also reap orphaned
-instances under the default profile root before launching.
+or other worktrees. Starting an instance never reaps other instances, so one
+worktree's launch never stops a process another session started. Only an
+explicit `stop --prune` reaps instances whose worktree is gone.
 
 ### Obsidian mobile (Android emulator)
 
