@@ -29,7 +29,8 @@ export function parseTranscript(
 		case "html":
 			return parseHtml(source);
 		case "text":
-			return untimed(paragraphsOf(source));
+			// A sign-in or error page served in place of the transcript.
+			return source.trimStart().startsWith("<") ? undefined : untimed(paragraphsOf(source));
 	}
 }
 
@@ -96,10 +97,11 @@ function parseHtml(source: string): ParsedTranscript | undefined {
 		return [{ start, speaker: speaker || undefined, text }];
 	});
 	if (cues.length > 0) return timed(cues);
-	const paragraphs = Array.from(body.querySelectorAll("p"), (p) =>
-		collapseWhitespace(p.textContent ?? ""),
-	).filter(Boolean);
-	return untimed(paragraphs.length > 0 ? paragraphs : paragraphsOf(body.textContent ?? ""));
+	return untimed(
+		Array.from(body.querySelectorAll("p"), (p) =>
+			collapseWhitespace(p.textContent ?? ""),
+		).filter(Boolean),
+	);
 }
 
 function paragraphsOf(source: string): string[] {

@@ -52,13 +52,11 @@ describe("parseTranscript HTML", () => {
 		});
 	});
 
-	test("a page without times or paragraphs is its text split on blank lines", () => {
-		expect(
-			parseTranscript(
-				"html",
-				"<body><div>First  part\nstill first\n\nSecond part</div></body>",
-			),
-		).toEqual({ kind: "untimed", paragraphs: ["First part still first", "Second part"] });
+	test.each([
+		"<html><body><div>Sign in</div></body></html>",
+		"<body><div>First  part\nstill first\n\nSecond part</div></body>",
+	])("a page without times or paragraphs cannot be read: %j", (html) => {
+		expect(parseTranscript("html", html)).toBeUndefined();
 	});
 });
 

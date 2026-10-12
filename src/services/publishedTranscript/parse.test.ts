@@ -162,6 +162,8 @@ describe("parseTranscript", () => {
 		["vtt", "WEBVTT\n\nNOTE no cues here\n"],
 		["srt", transcriptFixture("build-your-saas.txt")],
 		["text", " \n\n\t\n"],
+		["text", "<!DOCTYPE html>\n<html><body><p>Sign in</p></body></html>"],
+		["text", "\n  <html><body>Sign in to read the transcript</body></html>"],
 	] as const)("%s that cannot be read gives nothing: %j", (format, text) => {
 		expect(parseTranscript(format, text)).toBeUndefined();
 	});
