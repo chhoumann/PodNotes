@@ -1,47 +1,11 @@
 <script lang="ts">
 	import { queue } from "src/store";
-	import type { Episode } from "src/types/Episode";
-	import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
+	import { getEpisodeKey } from "src/utility/episodeKey";
 	import Icon from "./obsidian/Icon.svelte";
 
 	export let close: () => void = () => {};
 
 	$: episodes = $queue.episodes;
-
-	// Resolve the live index at click time rather than trusting the index captured
-	// at render, so it stays correct even if playback advances the queue while the
-	// modal is open.
-	function indexOf(episode: Episode): number {
-		return $queue.episodes.findIndex((e) => isSameEpisode(e, episode));
-	}
-
-	function moveToTop(episode: Episode) {
-		const index = indexOf(episode);
-		if (index > 0) queue.moveToTop(index);
-	}
-
-	function moveUp(episode: Episode) {
-		const index = indexOf(episode);
-		if (index > 0) queue.moveUp(index);
-	}
-
-	function moveDown(episode: Episode) {
-		const index = indexOf(episode);
-		if (index !== -1 && index < $queue.episodes.length - 1) {
-			queue.moveDown(index);
-		}
-	}
-
-	function moveToBottom(episode: Episode) {
-		const index = indexOf(episode);
-		if (index !== -1 && index < $queue.episodes.length - 1) {
-			queue.moveToBottom(index);
-		}
-	}
-
-	function removeFromQueue(episode: Episode) {
-		queue.remove(episode);
-	}
 </script>
 
 <div class="queue-reorder">
@@ -64,34 +28,34 @@
 							label="Move to top"
 							size={20}
 							disabled={index === 0}
-							on:click={() => moveToTop(episode)}
+							on:click={() => queue.move(episode, "top")}
 						/>
 						<Icon
 							icon="chevron-up"
 							label="Move up"
 							size={20}
 							disabled={index === 0}
-							on:click={() => moveUp(episode)}
+							on:click={() => queue.move(episode, "up")}
 						/>
 						<Icon
 							icon="chevron-down"
 							label="Move down"
 							size={20}
 							disabled={index === episodes.length - 1}
-							on:click={() => moveDown(episode)}
+							on:click={() => queue.move(episode, "down")}
 						/>
 						<Icon
 							icon="chevrons-down"
 							label="Move to bottom"
 							size={20}
 							disabled={index === episodes.length - 1}
-							on:click={() => moveToBottom(episode)}
+							on:click={() => queue.move(episode, "bottom")}
 						/>
 						<Icon
 							icon="x"
 							label="Remove from queue"
 							size={20}
-							on:click={() => removeFromQueue(episode)}
+							on:click={() => queue.remove(episode)}
 						/>
 					</div>
 				</li>

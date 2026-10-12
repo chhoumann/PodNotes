@@ -213,6 +213,8 @@ describe("PodNotes onload wiring (#55)", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		// jsdom implements no media loading; unload releases the player's element.
+		vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
 	});
 
 	afterEach(() => {
@@ -505,6 +507,76 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(ribbon?.icon).toBe("podcast");
 		ribbon?.handler(new MouseEvent("click"));
 		expect(activateSpy).toHaveBeenCalledTimes(2);
+	});
+
+	const savedEpisode: Episode = {
+		title: "Saved Episode",
+		streamUrl: "https://example.com/saved.mp3",
+		url: "https://example.com/saved",
+		description: "",
+		content: "",
+		podcastName: "Pod",
+	};
+	const savedData = {
+		schemaVersion: 2,
+		currentEpisode: savedEpisode,
+		playedEpisodes: {
+			"Pod::Saved Episode": {
+				title: "Saved Episode",
+				podcastName: "Pod",
+				time: 1234,
+				duration: 3600,
+				finished: false,
+			},
+		},
+	};
+	const media = () => document.querySelector("audio.podnotes-media") as HTMLAudioElement;
+	const checkCommand = (commands: Array<Record<string, unknown>>, id: string) =>
+		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => boolean)(true);
+	const runCommand = (commands: Array<Record<string, unknown>>, id: string) =>
+		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => void)(false);
+
+	it("restores the selected episode paused at its saved position, without loading it", async () => {
+		const { plugin } = await loadPlugin(savedData);
+
+		expect(plugin.api.podcast).toMatchObject({ title: "Saved Episode" });
+		expect(plugin.api.currentTime).toBe(1234);
+		expect(plugin.api.isPlaying).toBe(false);
+		expect(media().getAttribute("src")).toBeNull();
+	});
+
+	it("lets Stop cancel an episode that is still loading", async () => {
+		vi.spyOn(HTMLMediaElement.prototype, "play").mockReturnValue(new Promise(() => {}));
+		vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+		const { commands, plugin } = await loadPlugin(savedData);
+		expect(checkCommand(commands, "start-playing")).toBe(true);
+
+		runCommand(commands, "start-playing");
+		expect(media().getAttribute("src")).toBe(savedEpisode.streamUrl);
+		expect(checkCommand(commands, "stop-playing")).toBe(true);
+		runCommand(commands, "stop-playing");
+
+		expect(plugin.api.isPlaying).toBe(false);
+		expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+		expect(checkCommand(commands, "start-playing")).toBe(true);
+	});
+
+	it("saves the playing position on unload, before the store bindings are disposed", async () => {
+		vi.spyOn(HTMLMediaElement.prototype, "play").mockReturnValue(new Promise(() => {}));
+		vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+		const { plugin } = await loadPlugin(savedData);
+		plugin.api.start();
+		// jsdom loads no media; the browser would hold its metadata by now.
+		Object.defineProperty(media(), "readyState", { value: HTMLMediaElement.HAVE_METADATA });
+		media().dispatchEvent(new Event("loadedmetadata"));
+		media().currentTime = 1300;
+
+		plugin.onunload();
+
+		await vi.waitFor(() => {
+			const written = vi.mocked(plugin.saveData).mock.lastCall?.[0] as typeof savedData;
+			expect(written?.playedEpisodes["Pod::Saved Episode"]?.time).toBe(1300);
+		});
 	});
 
 	it("does not offer transcription for known video episodes", async () => {

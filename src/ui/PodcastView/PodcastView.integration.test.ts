@@ -9,20 +9,16 @@ import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { FeedRepository } from "src/services/FeedRepository";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import { resolveFeedUrl } from "src/services/privateFeeds";
-import {
-	currentEpisode,
-	hidePlayedEpisodes,
-	playedEpisodes,
-	plugin,
-	savedFeeds,
-	viewState,
-} from "src/store";
+import { hidePlayedEpisodes, playedEpisodes, plugin, savedFeeds, viewState } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ViewState } from "src/types/ViewState";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
 import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
+import { FakeDocument } from "../../../tests/mocks/fakeMedia";
+import { DEFAULT_SETTINGS } from "src/constants";
+import { PlayerController } from "src/player/PlayerController";
 
 vi.mock("./EpisodePlayer.svelte", () => ({
 	default: EpisodePlayerStub,
@@ -114,6 +110,7 @@ function usePlugin(fields: Record<string, unknown> = {}, cacheEnabled = false) {
 		settings: { feedCache: { enabled: cacheEnabled, ttlHours: 6 } },
 		...fields,
 		feeds,
+		player,
 	} as never);
 	return feeds;
 }
@@ -148,9 +145,17 @@ function resetStores() {
 	hidePlayedEpisodes.set(false);
 	playedEpisodes.set({});
 	viewState.set(ViewState.PodcastGrid);
-	currentEpisode.update(() => undefined as unknown as Episode);
+	player = new PlayerController(new FakeDocument().asPlayerDocument(), {
+		settings: structuredClone(DEFAULT_SETTINGS),
+		app: { vault: {} as never },
+		checkpoint: (update) => update(),
+		saveSettings: () => Promise.resolve(),
+	});
 	plugin.set(undefined as never);
 }
+
+let player: PlayerController;
+const playingEpisode = () => get(player.state).episode;
 
 const listed = () =>
 	Array.from(document.querySelectorAll(".episode-item-title"), (node) =>
@@ -218,10 +223,10 @@ describe("PodcastView integration flow", () => {
 		const episodeNode = await screen.findByText(testEpisode.title);
 		await fireEvent.click(episodeNode);
 
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(playingEpisode()).toMatchObject({ title: testEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 
-		const current = get(currentEpisode);
+		const current = playingEpisode();
 		expect(current).toBeDefined();
 		await createPodcastNote(current as Episode);
 
@@ -504,7 +509,7 @@ describe("issue #174 feed cache cap regression", () => {
 		expect(screen.queryByText("Unavailable in current feeds")).not.toBeInTheDocument();
 
 		await fireEvent.click(screen.getByText(oldEpisode.title));
-		expect(get(currentEpisode)).toMatchObject({ title: oldEpisode.title });
+		expect(playingEpisode()).toMatchObject({ title: oldEpisode.title });
 		expect(get(viewState)).toBe(ViewState.Player);
 	});
 

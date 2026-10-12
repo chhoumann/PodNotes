@@ -7,18 +7,15 @@ import type { ParsedFeedEpisodes } from "./parser/feedDocumentParser";
 import { FeedRepository } from "./services/FeedRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { resolveFeedUrl } from "./services/privateFeeds";
-import {
-	activePlaybackSegment,
-	currentEpisode,
-	plugin,
-	requestedPlaybackTime,
-	viewState,
-} from "./store";
+import { DEFAULT_SETTINGS } from "./constants";
+import { PlayerController } from "./player/PlayerController";
+import { plugin, savedFeeds, viewState } from "./store";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { ViewState } from "./types/ViewState";
 import { privateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { deferred, feedDocument, MemoryStorage, stubLegacyStorage } from "../tests/mocks/feeds";
+import { FakeDocument } from "../tests/mocks/fakeMedia";
 
 const testFeedUrl = "https://pod.example.com/feed.xml";
 
@@ -32,13 +29,18 @@ const testEpisode: Episode = {
 	feedUrl: testFeedUrl,
 };
 
-const api = {};
+let player: PlayerController;
+const playing = () => get(player.state).episode;
 
 function resetStores() {
-	currentEpisode.update(() => undefined as unknown as Episode);
-	activePlaybackSegment.set(null);
-	requestedPlaybackTime.set(null);
+	player = new PlayerController(new FakeDocument().asPlayerDocument(), {
+		settings: structuredClone(DEFAULT_SETTINGS),
+		app: { vault: {} as never },
+		checkpoint: (update) => update(),
+		saveSettings: () => Promise.resolve(),
+	});
 	viewState.set(ViewState.PodcastGrid);
+	savedFeeds.set({});
 }
 
 beforeEach(resetStores);
@@ -79,16 +81,20 @@ describe("podNotesURIHandler with saved feeds", () => {
 			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
-		feeds.setSubscriptions({ [patron.title]: patron, [testEpisode.podcastName]: publicFeed });
+		const subscriptions = { [patron.title]: patron, [testEpisode.podcastName]: publicFeed };
+		savedFeeds.set(subscriptions);
+		feeds.setSubscriptions(subscriptions);
 		plugin.set({
 			app: { vault: { getAbstractFileByPath: () => null } },
 			feeds,
+			feedUrls,
+			player,
 		} as never);
 		return { feeds, feedUrls, patron };
 	}
 	const publicFeed: PodcastFeed = { title: "Test Podcast", url: testFeedUrl, artworkUrl: "" };
 	const open = (url: string, episodeName: string) =>
-		podNotesURIHandler({ action: "podnotes", url, episodeName, time: "5" }, api as never);
+		podNotesURIHandler({ action: "podnotes", url, episodeName, time: "5" });
 	const privateLink = privateFeedPlaceholder("Patron Show");
 
 	afterEach(() => {
@@ -104,7 +110,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 		await open(privateLink, second.title);
 
 		expect(load).toHaveBeenCalledWith(SECRET_URL);
-		expect(get(currentEpisode)).toMatchObject({
+		expect(playing()).toMatchObject({
 			title: second.title,
 			podcastName: "Patron Show",
 		});
@@ -122,7 +128,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 
 		expect(notice.mock.calls).toEqual([[PRIVATE_LINK_NOTICE]]);
 		expect(load).not.toHaveBeenCalled();
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(playing()).toBeUndefined();
 	});
 
 	test("a private feed link that cannot load says so once", async () => {
@@ -134,7 +140,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 		await open(privateLink, first.title);
 
 		expect(notice.mock.calls).toEqual([["Could not load the podcast feed"]]);
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(playing()).toBeUndefined();
 	});
 
 	/** "Patron Show" loaded once with `first`, then its URL left this device. */
@@ -154,7 +160,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 
 		expect(load).not.toHaveBeenCalled();
 		expect(notice).not.toHaveBeenCalled();
-		expect(get(currentEpisode)).toMatchObject({ title: first.title });
+		expect(playing()).toMatchObject({ title: first.title });
 	});
 
 	test("a private feed link to an episode the last copy lacks says the feed is not available", async () => {
@@ -164,7 +170,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 		await open(privateLink, second.title);
 
 		expect(notice.mock.calls).toEqual([[PRIVATE_LINK_NOTICE]]);
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(playing()).toBeUndefined();
 	});
 
 	test("a private feed link to an episode the last copy lacks says the feed could not load when offline", async () => {
@@ -178,7 +184,48 @@ describe("podNotesURIHandler with saved feeds", () => {
 		await open(privateLink, second.title);
 
 		expect(notice.mock.calls).toEqual([["Could not load the podcast feed"]]);
-		expect(get(currentEpisode)).toBeUndefined();
+		expect(playing()).toBeUndefined();
+	});
+
+	test("a link to a saved private feed whose URL is not on this device leaves an earlier link to play", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		follow(false);
+		const earlier = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(earlier.promise);
+
+		const opening = open(testFeedUrl, testEpisode.title);
+		await open(privateLink, first.title);
+		earlier.resolve(feedDocument("Test Podcast", [testEpisode]));
+		await opening;
+
+		expect(notice.mock.calls).toEqual([[PRIVATE_LINK_NOTICE]]);
+		expect(playing()).toMatchObject({ title: testEpisode.title, podcastName: "Test Podcast" });
+	});
+
+	test("a play the user starts while a private feed link loads wins", async () => {
+		follow();
+		const fetching = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(fetching.promise);
+
+		const opening = open(privateLink, first.title);
+		player.play(testEpisode);
+		fetching.resolve(feedDocument("Patron Show", [first]));
+		await opening;
+
+		expect(playing()).toMatchObject({ title: testEpisode.title, podcastName: "Test Podcast" });
+	});
+
+	test("a link that plays from a private feed's last copy wins over an earlier link", async () => {
+		await lostPrivateUrl();
+		const earlier = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(earlier.promise);
+
+		const opening = open(testFeedUrl, testEpisode.title);
+		await open(privateLink, first.title);
+		earlier.resolve(feedDocument("Test Podcast", [testEpisode]));
+		await opening;
+
+		expect(playing()).toMatchObject({ title: first.title, podcastName: "Patron Show" });
 	});
 
 	test("a private feed link that loads after a newer link changes nothing", async () => {
@@ -196,7 +243,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 		older.resolve(feedDocument("Patron Show", [first]));
 		await opening;
 
-		expect(get(currentEpisode)).toMatchObject({ title: testEpisode.title });
+		expect(playing()).toMatchObject({ title: testEpisode.title });
 		expect(notice).not.toHaveBeenCalled();
 	});
 
@@ -213,7 +260,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 
 			await open(url, second.title);
 
-			expect(get(currentEpisode)).toMatchObject({ title: second.title });
+			expect(playing()).toMatchObject({ title: second.title });
 		},
 	);
 
@@ -232,7 +279,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 			await open(url, first.title);
 
 			expect(load).toHaveBeenCalledTimes(3);
-			expect(get(currentEpisode)).toMatchObject({ title: first.title });
+			expect(playing()).toMatchObject({ title: first.title });
 		},
 	);
 });

@@ -1,7 +1,7 @@
 import type { Episode } from "src/types/Episode";
 import { downloadedEpisodes } from "src/store";
 import encodePodnotesURI from "./encodePodnotesURI";
-import { isLocalFile } from "./isLocalFile";
+import { episodeLinkTarget } from "./episodeLinkTarget";
 
 /**
  * Build an `obsidian://podnotes` deep link that reopens `episode` in the PodNotes
@@ -18,10 +18,7 @@ import { isLocalFile } from "./isLocalFile";
  * address it, so a template degrades to an empty value rather than a broken link.
  */
 export default function buildEpisodeResumeLink(episode: Episode): string {
-	const downloadedPath = () => downloadedEpisodes.getEpisode(episode)?.filePath;
-	const target = isLocalFile(episode)
-		? (episode.filePath ?? downloadedPath())
-		: (episode.feedUrl ?? downloadedPath());
+	const target = episodeLinkTarget(episode) ?? downloadedEpisodes.getEpisode(episode)?.filePath;
 
 	// URIHandler rejects an empty episodeName, so without a title there is no
 	// working link to emit — degrade to "" rather than a dead link (UR-03).

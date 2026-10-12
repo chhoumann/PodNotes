@@ -6,10 +6,19 @@ import * as obsidian from "obsidian";
 
 import { DEFAULT_SETTINGS } from "src/constants";
 import PodNotes from "src/main";
-import { episodeListLimit, hidePlayedEpisodes, playbackRate, savedFeeds, volume } from "src/store";
+import { PlayerController } from "src/player/PlayerController";
+import { episodeListLimit, hidePlayedEpisodes, savedFeeds } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
+import type { Episode } from "src/types/Episode";
 import { PodNotesSettingsTab } from "./PodNotesSettingsTab";
 import { attachDataFileWriter, dataFileText } from "../../../tests/mocks/dataFileWriter";
+import { FakeDocument } from "../../../tests/mocks/fakeMedia";
+
+/** The player the import rehydrates, driving a fake media element. */
+function withPlayer(plugin: PodNotes): PodNotes {
+	plugin.player = new PlayerController(new FakeDocument().asPlayerDocument(), plugin);
+	return plugin;
+}
 
 function deferred<T = void>() {
 	let resolve!: (value: T | PromiseLike<T>) => void;
@@ -22,15 +31,14 @@ function deferred<T = void>() {
 }
 
 describe("PodNotesSettingsTab settings import", () => {
-	it("rehydrates the live playback-rate store when importing a new default", async () => {
-		playbackRate.set(1);
+	it("sets the live playback rate when importing a new default", async () => {
 		const plugin = {
 			settings: structuredClone(DEFAULT_SETTINGS),
 			credentials: { storeValues: vi.fn(() => ({})) },
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(tab, "update").mockImplementation(() => {});
 
 		await (
@@ -42,12 +50,11 @@ describe("PodNotesSettingsTab settings import", () => {
 		).applyImportedSettings({ defaultPlaybackRate: 2.3 });
 
 		expect(plugin.settings.defaultPlaybackRate).toBe(2.3);
-		expect(get(playbackRate)).toBe(2.3);
+		expect(get(plugin.player.state).playbackRate).toBe(2.3);
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
 	});
 
 	it("restores the previous settings and reports a strict save failure", async () => {
-		playbackRate.set(1);
 		const previous = structuredClone(DEFAULT_SETTINGS);
 		const failure = new Error("disk full");
 		const plugin = {
@@ -59,7 +66,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				.mockRejectedValueOnce(failure)
 				.mockResolvedValueOnce(undefined),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		const update = vi.spyOn(tab, "update").mockImplementation(() => {});
 		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -73,7 +80,7 @@ describe("PodNotesSettingsTab settings import", () => {
 		).applyImportedSettings({ defaultPlaybackRate: 2.3 });
 
 		expect(plugin.settings).toBe(previous);
-		expect(get(playbackRate)).toBe(1);
+		expect(get(plugin.player.state).playbackRate).toBe(1);
 		expect(update).not.toHaveBeenCalled();
 		expect(notice).toHaveBeenCalledWith(
 			"Could not import PodNotes settings. The failed import was rolled back without overwriting newer changes.",
@@ -93,7 +100,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				.mockImplementationOnce(() => firstSave.promise)
 				.mockResolvedValue(undefined),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		const enabledInput = tab.containerEl.createEl("input");
 		const disabledButton = tab.containerEl.createEl("button");
 		disabledButton.disabled = true;
@@ -114,7 +121,6 @@ describe("PodNotesSettingsTab settings import", () => {
 
 		expect(enabledInput.disabled).toBe(false);
 		expect(disabledButton.disabled).toBe(true);
-		playbackRate.set(DEFAULT_SETTINGS.defaultPlaybackRate);
 	});
 
 	it("stores imported secret values first and persists only their references", async () => {
@@ -129,7 +135,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(tab, "update").mockImplementation(() => {});
 
 		await (
@@ -163,7 +169,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -200,7 +206,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				.mockRejectedValueOnce(new Error("disk full"))
 				.mockResolvedValueOnce(undefined),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
 		await (
@@ -231,7 +237,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				.mockRejectedValueOnce(new Error("disk full"))
 				.mockResolvedValueOnce(undefined),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
 		const saved = await (
@@ -278,7 +284,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				return Promise.resolve();
 			}),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		let ui = "shared-a";
 		const secret = {
@@ -344,7 +350,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				return Promise.resolve();
 			}),
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		let ui = "shared-b";
 		const secret = {
@@ -432,7 +438,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			saveData,
 		});
 		attachDataFileWriter(plugin);
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(tab, "update").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		let ui = "shared-newer";
@@ -481,7 +487,15 @@ describe("PodNotesSettingsTab settings import", () => {
 		expect(ui).toBe(newerSecretId);
 	});
 
-	it("keeps an ABA hide-played store update when the matching import fails", async () => {
+	it("keeps ABA store and player updates when the matching import fails", async () => {
+		const selected: Episode = {
+			title: "Selected",
+			streamUrl: "https://pod.example.com/selected.mp3",
+			url: "",
+			description: "",
+			content: "",
+			podcastName: "Show",
+		};
 		const firstWrite = deferred();
 		let disk = { ...structuredClone(DEFAULT_SETTINGS), schemaVersion: 2 };
 		let saveCall = 0;
@@ -515,12 +529,10 @@ describe("PodNotesSettingsTab settings import", () => {
 		});
 		attachDataFileWriter(plugin);
 		hidePlayedEpisodes.set(false);
-		volume.set(DEFAULT_SETTINGS.defaultVolume);
 		episodeListLimit.set(DEFAULT_SETTINGS.episodeListLimit);
-		playbackRate.set(DEFAULT_SETTINGS.defaultPlaybackRate);
 		const unsubscribe = bindStoresToSettings(plugin);
 		Object.assign(plugin, { isReady: true });
-		const tab = new PodNotesSettingsTab({} as App, plugin);
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(tab, "update").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -540,10 +552,11 @@ describe("PodNotesSettingsTab settings import", () => {
 			await vi.waitFor(() => expect(saveData).toHaveBeenCalledTimes(1));
 
 			hidePlayedEpisodes.set(true);
-			volume.set(0.4);
+			plugin.player.setVolume(0.4);
 			episodeListLimit.set(20);
 			// Current playback speed is runtime state, not the persisted default.
-			playbackRate.set(2.5);
+			plugin.player.setPlaybackRate(2.5);
+			plugin.player.play(selected);
 			firstWrite.reject(new Error("first import write failed"));
 			await importing;
 
@@ -554,15 +567,15 @@ describe("PodNotesSettingsTab settings import", () => {
 			expect(disk.defaultVolume).toBe(0.4);
 			expect(plugin.settings.episodeListLimit).toBe(20);
 			expect(disk.episodeListLimit).toBe(20);
-			expect(get(playbackRate)).toBe(2.5);
+			expect(get(plugin.player.state).playbackRate).toBe(2.5);
 			expect(plugin.settings.defaultPlaybackRate).toBe(DEFAULT_SETTINGS.defaultPlaybackRate);
 			expect(disk.defaultPlaybackRate).toBe(DEFAULT_SETTINGS.defaultPlaybackRate);
+			expect(plugin.settings.currentEpisode).toMatchObject({ title: selected.title });
+			expect(disk.currentEpisode).toMatchObject({ title: selected.title });
 		} finally {
 			unsubscribe();
 			hidePlayedEpisodes.set(false);
-			volume.set(DEFAULT_SETTINGS.defaultVolume);
 			episodeListLimit.set(DEFAULT_SETTINGS.episodeListLimit);
-			playbackRate.set(DEFAULT_SETTINGS.defaultPlaybackRate);
 		}
 	});
 
@@ -604,7 +617,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			savedFeeds.set(plugin.settings.savedFeeds);
 			const unbind = bindStoresToSettings(plugin);
 			disk.savedFeeds = { Before: feed("Before"), Remote: feed("Remote") };
-			const tab = new PodNotesSettingsTab({} as App, plugin);
+			const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 			vi.spyOn(tab, "update").mockImplementation(() => {});
 			vi.spyOn(console, "error").mockImplementation(() => undefined);
 			const applyImport = (
@@ -663,7 +676,7 @@ describe("PodNotesSettingsTab settings import", () => {
 			credentials: { exportValues },
 			manifest: { version: "2.17.3" },
 		} as unknown as PodNotes;
-		const tab = new PodNotesSettingsTab(app, plugin);
+		const tab = new PodNotesSettingsTab(app, withPlayer(plugin));
 
 		await (
 			tab as unknown as {

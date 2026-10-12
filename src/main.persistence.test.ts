@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
+import { get } from "svelte/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Notice, type SecretStorage } from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import { encodePodNotesData } from "./persistence/podNotesData";
+import { PlayerController } from "./player/PlayerController";
 import { downloadedEpisodes, localFiles } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
 import { attachDataFileWriter, dataFileText } from "../tests/mocks/dataFileWriter";
+import { FakeDocument } from "../tests/mocks/fakeMedia";
 
 function memorySecretStorage(initial: Record<string, string> = {}) {
 	const values = new Map(Object.entries(initial));
@@ -367,6 +370,68 @@ describe("PodNotes persistence integration", () => {
 		await plugin.onExternalSettingsChange();
 
 		expect(plugin.settings.playedEpisodes["Pod::A"].time).toBe(99);
+	});
+
+	describe("while the selected episode is restored at 600 s", () => {
+		function restored() {
+			const plugin = makePlugin(vi.fn().mockResolvedValue(undefined));
+			plugin.settings.currentEpisode = {
+				title: "A",
+				streamUrl: "https://pod.example.com/a.mp3",
+				url: "",
+				description: "",
+				content: "",
+				podcastName: "Pod",
+			};
+			plugin.settings.playedEpisodes = {
+				"Pod::A": {
+					title: "A",
+					podcastName: "Pod",
+					time: 600,
+					duration: 3600,
+					finished: false,
+				},
+			};
+			attachDataFileWriter(plugin);
+			(plugin as unknown as { setCollectionStores(): void }).setCollectionStores();
+			const doc = new FakeDocument();
+			plugin.player = new PlayerController(doc.asPlayerDocument(), plugin);
+			plugin.player.restore(plugin.settings.currentEpisode);
+			const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+			Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(synced) });
+			return { plugin, doc, synced };
+		}
+
+		it("shows the progress a sync brings, without loading it", async () => {
+			const { plugin, doc, synced } = restored();
+			synced.playedEpisodes["Pod::A"].time = 2400;
+
+			await plugin.onExternalSettingsChange();
+
+			expect(get(plugin.player.state)).toMatchObject({
+				status: "restored",
+				episode: { title: "A" },
+				currentTime: 2400,
+			});
+			expect(doc.media.src).toBe("");
+			plugin.player.dispose();
+		});
+
+		it("keeps a position the user moved when a sync changes something else", async () => {
+			const { plugin, doc, synced } = restored();
+			plugin.player.seek(900);
+			synced.hidePlayedEpisodes = !plugin.settings.hidePlayedEpisodes;
+
+			await plugin.onExternalSettingsChange();
+			expect(plugin.settings.hidePlayedEpisodes).toBe(synced.hidePlayedEpisodes);
+			expect(get(plugin.player.state).currentTime).toBe(900);
+			plugin.player.resume();
+			doc.media.duration = 3600;
+			doc.media.emit("loadedmetadata");
+
+			expect(doc.media.currentTime).toBe(900);
+			plugin.player.dispose();
+		});
 	});
 
 	describe("once a data.json it could not read at startup becomes readable", () => {
