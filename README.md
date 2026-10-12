@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/brand/podnotes-mark.svg" width="88" height="88" alt="">
+</p>
+
 <h1 align="center">PodNotes</h1>
 
 <p align="center">
