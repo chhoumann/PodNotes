@@ -1,6 +1,7 @@
-import { get, writable } from "svelte/store";
+import { get } from "svelte/store";
 import type { Episode } from "src/types/Episode";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
+import { recordStore } from "./recordStore";
 
 /**
  * The authoritative set of offline-available episodes, keyed by podcast name.
@@ -8,7 +9,7 @@ import type DownloadedEpisode from "src/types/DownloadedEpisode";
  * Files playlist is a projection of this store (see `localFiles.syncWithDownloaded`).
  */
 export const downloadedEpisodes = (() => {
-	const store = writable<{ [podcastName: string]: DownloadedEpisode[] }>({});
+	const store = recordStore<DownloadedEpisode[]>();
 	const { subscribe, update, set } = store;
 
 	function isEpisodeDownloaded(episode: Episode): boolean {

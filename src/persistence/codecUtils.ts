@@ -1,3 +1,5 @@
+import { ownRecord } from "src/utility/ownRecord";
+
 export type UnknownRecord = Record<string, unknown>;
 
 export const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -155,30 +157,12 @@ export function copySafeObject(value: UnknownRecord): UnknownRecord {
 	return copy;
 }
 
-export function safeEntries(
-	value: UnknownRecord,
-	warnings: Set<string>,
-	path: string,
-): [string, unknown][] {
-	const entries: [string, unknown][] = [];
-	for (const [key, field] of Object.entries(value)) {
-		if (DANGEROUS_KEYS.has(key)) {
-			warn(warnings, `${path}.${key}`, "unsafe key was removed");
-			continue;
-		}
-		entries.push([key, field]);
-	}
-	return entries;
-}
-
 export function mapRecord<T, R>(
 	value: Record<string, T>,
 	mapper: (entry: T) => R,
 ): Record<string, R> {
-	const result: Record<string, R> = {};
-	for (const [key, entry] of Object.entries(value)) {
-		if (!DANGEROUS_KEYS.has(key)) result[key] = mapper(entry);
-	}
+	const result = ownRecord<R>();
+	for (const [key, entry] of Object.entries(value)) result[key] = mapper(entry);
 	return result;
 }
 
