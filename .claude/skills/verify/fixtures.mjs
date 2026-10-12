@@ -4,6 +4,8 @@
 //
 //   node .claude/skills/verify/fixtures.mjs feed           start or reuse the feed server, print the feed URL
 //   node .claude/skills/verify/fixtures.mjs feed-b         same server, print a second feed whose episode titles repeat the first's
+//   node .claude/skills/verify/fixtures.mjs transcripts    same server, print a feed whose episodes publish transcripts
+//   node .claude/skills/verify/fixtures.mjs requests       print the paths the server has answered, oldest first
 //   node .claude/skills/verify/fixtures.mjs audio [path]   write a 60 s WAV into this worktree's vault
 //                                                          (default path: "Fixtures/Local Fixture.wav")
 //   node .claude/skills/verify/fixtures.mjs stop           stop the feed server
@@ -25,9 +27,12 @@ const host = "127.0.0.1.nip.io";
 const base = `http://${host}:${port}`;
 const feedUrl = `${base}/feed.xml`;
 const feedBUrl = `${base}/feed-b.xml`;
+const transcriptsUrl = `${base}/transcripts.xml`;
 const local = `http://127.0.0.1:${port}`;
 const FEED_TITLE = "PodNotes Fixture";
 const FEED_B_TITLE = "PodNotes Fixture B";
+const TRANSCRIPTS_TITLE = "PodNotes Transcripts";
+const transcriptFixtures = path.join(root, "tests/fixtures/transcripts");
 
 function wav(seconds = 60) {
 	const rate = 8000;
@@ -90,6 +95,46 @@ const artwork = (
 	<text x="300" y="320" font-family="sans-serif" font-size="64" fill="#fff" text-anchor="middle">${title}</text>
 </svg>`;
 
+/**
+ * Each episode publishes its transcripts the way real hosts do. The VTT link is
+ * relative to the feed URL and follows an HTML link, so selection and URL
+ * resolution both show in the result.
+ * @param {number} audioBytes
+ */
+function transcriptsFeedXml(audioBytes) {
+	/** @param {number} n @param {string} title @param {string} links */
+	const item = (n, title, links) => `
+		<item>
+			<title>${title}</title>
+			<guid isPermaLink="false">podnotes-transcripts-${n}</guid>
+			<pubDate>${new Date(Date.UTC(2026, 9, 10 - n, 9)).toUTCString()}</pubDate>
+			<description>${title} for PodNotes verification.</description>
+			<enclosure url="${base}/t/episode-${n}.wav" type="audio/wav" length="${audioBytes}"/>
+			<itunes:duration>60</itunes:duration>${links}
+		</item>`;
+	const link = (/** @type {string} */ url, /** @type {string} */ type) =>
+		`\n\t\t\t<podcast:transcript url="${url}" type="${type}"/>`;
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+	<channel>
+		<title>${TRANSCRIPTS_TITLE}</title>
+		<link>${base}/</link>
+		<description>A local feed whose episodes publish transcripts.</description>
+		<itunes:author>PodNotes</itunes:author>
+		<itunes:image href="${base}/artwork.svg"/>
+		${item(1, "VTT Episode", link(`${base}/t/buzzcast.html`, "text/html") + link("t/podnews.vtt", "text/vtt"))}
+		${item(2, "SRT Episode", link(`${base}/t/build-your-saas.srt`, "application/x-subrip"))}
+		${item(3, "JSON Episode", link(`${base}/t/build-your-saas.json`, "application/json"))}
+		${item(4, "Untranscribed Episode", "")}
+		${item(5, "Broken Transcript Episode", link(`${base}/t/missing.vtt`, "text/vtt"))}
+	</channel>
+</rss>
+`;
+}
+
+/** @param {string} file */
+const transcript = (file) => fs.readFileSync(path.join(transcriptFixtures, file));
+
 function serve() {
 	const audio = wav();
 	/** @type {Record<string, [string, Buffer]>} */
@@ -105,13 +150,29 @@ function serve() {
 		"/b/artwork.svg": ["image/svg+xml", Buffer.from(artwork(FEED_B_TITLE, "#0f766e"))],
 		"/b/episode-1.wav": ["audio/wav", audio],
 		"/b/episode-2.wav": ["audio/wav", audio],
+		"/transcripts.xml": ["application/rss+xml", Buffer.from(transcriptsFeedXml(audio.length))],
+		"/t/buzzcast.html": ["text/html; charset=utf-8", transcript("buzzcast.html")],
+		"/t/podnews.vtt": ["text/vtt; charset=utf-8", transcript("podnews-2026-10-05.vtt")],
+		"/t/build-your-saas.srt": ["application/x-subrip", transcript("build-your-saas.srt")],
+		"/t/build-your-saas.json": ["application/json", transcript("build-your-saas.json")],
 	};
+	for (let n = 1; n <= 5; n++) routes[`/t/episode-${n}.wav`] = ["audio/wav", audio];
+	/** @type {string[]} */
+	const requests = [];
 	const server = http.createServer((request, response) => {
 		if (request.method === "POST" && request.url === "/__stop") {
 			server.close();
 			response.end(() => process.exit(0));
 			return;
 		}
+		if (request.url === "/__requests") {
+			response.writeHead(200, { "Content-Type": "application/json" });
+			response.end(JSON.stringify(requests));
+			return;
+		}
+		// Only PodNotes uses the nip.io host; this script's own probes use 127.0.0.1.
+		if (request.headers.host?.startsWith(host))
+			requests.push(`${request.method} ${request.url}`);
 		const route = routes[request.url ?? ""];
 		if (!route) {
 			response.writeHead(404).end();
@@ -149,8 +210,10 @@ function serve() {
 
 async function feedIsUp() {
 	try {
-		const response = await fetch(`${local}/feed-b.xml`, { signal: AbortSignal.timeout(1000) });
-		return response.ok && (await response.text()).includes(FEED_B_TITLE);
+		const response = await fetch(`${local}/transcripts.xml`, {
+			signal: AbortSignal.timeout(1000),
+		});
+		return response.ok && (await response.text()).includes(TRANSCRIPTS_TITLE);
 	} catch {
 		return false;
 	}
@@ -197,6 +260,11 @@ async function writeAudio(vaultRelativePath = "Fixtures/Local Fixture.wav") {
 	console.log(file);
 }
 
+async function printRequests() {
+	const response = await fetch(`${local}/__requests`, { signal: AbortSignal.timeout(1000) });
+	for (const line of /** @type {string[]} */ (await response.json())) console.log(line);
+}
+
 async function stopFeed() {
 	await fetch(`${local}/__stop`, {
 		method: "POST",
@@ -209,9 +277,14 @@ try {
 	if (verb === "serve") serve();
 	else if (verb === "feed") await startFeed(feedUrl);
 	else if (verb === "feed-b") await startFeed(feedBUrl);
+	else if (verb === "transcripts") await startFeed(transcriptsUrl);
+	else if (verb === "requests") await printRequests();
 	else if (verb === "audio") await writeAudio(arg);
 	else if (verb === "stop") await stopFeed();
-	else throw new Error("Usage: fixtures.mjs feed | feed-b | audio [vault-relative path] | stop");
+	else
+		throw new Error(
+			"Usage: fixtures.mjs feed | feed-b | transcripts | requests | audio [vault-relative path] | stop",
+		);
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));
 	process.exitCode = 1;
