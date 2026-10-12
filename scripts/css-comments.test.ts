@@ -2,45 +2,43 @@ import { describe, expect, it } from "vitest";
 import { stripCssComments } from "./css-comments";
 
 describe("stripCssComments", () => {
-	it("removes comments between and inside rules", () => {
+	it("removes comments between rules and declarations", () => {
 		expect(
 			stripCssComments("/* card */ .a { /* why */ color: red; }\n/*\n * block\n */.b{}"),
-		).toBe(" .a {  color: red; }\n.b{}");
+		).toBe(".a { color: red; }.b{}");
 	});
 
-	it("keeps license notices", () => {
+	it("keeps license notices, including one that contains a quote or a comment opener", () => {
 		expect(stripCssComments("/*! MIT notice */.a{}/* note */")).toBe("/*! MIT notice */.a{}");
+		expect(
+			stripCssComments(
+				"/*! author's notice /* inner */ .a::after { content: '/* literal */'; }",
+			),
+		).toBe("/*! author's notice /* inner */ .a::after { content: '/* literal */'; }");
 	});
 
 	it("keeps comment-like text inside quoted strings", () => {
-		expect(
-			stripCssComments(
-				`.a::after { content: "/* not a comment */"; } .b { content: '\\'/*'; }`,
-			),
-		).toBe(`.a::after { content: "/* not a comment */"; } .b { content: '\\'/*'; }`);
+		const css = `.a::after { content: "/* not a comment */"; } .b { content: '\\'/*'; } .c::after { content: "one \\\r\ntwo /* literal */"; }`;
+
+		expect(stripCssComments(css)).toBe(css);
+	});
+
+	it("keeps comment-like text inside an unquoted url()", () => {
+		const css = ".a { background-image: url(/a/*b*/c.png); }";
+
+		expect(stripCssComments(css)).toBe(css);
+	});
+
+	it("keeps comments that separate tokens inside values and selectors", () => {
+		const css =
+			"div/**/p { color: r/**/ed; width: 1/**/px; --tokens: one/**/two; } .x /* c */ .y {}";
+
+		expect(stripCssComments(css)).toBe(css);
 	});
 
 	it("removes a comment that contains a quote", () => {
 		expect(stripCssComments(".a { /* the modal's own buttons */ color: red; }")).toBe(
-			".a {  color: red; }",
-		);
-	});
-
-	it("keeps strings after a license notice that contains a quote", () => {
-		expect(
-			stripCssComments("/*! author's notice */ .a::after { content: '/* literal */'; }"),
-		).toBe("/*! author's notice */ .a::after { content: '/* literal */'; }");
-	});
-
-	it("keeps a string that continues across a CRLF line break", () => {
-		expect(stripCssComments('.a::after { content: "one \\\r\ntwo /* literal */"; }')).toBe(
-			'.a::after { content: "one \\\r\ntwo /* literal */"; }',
-		);
-	});
-
-	it("keeps a license notice that contains a comment opener whole", () => {
-		expect(stripCssComments("/*! notice /* inner */ .a { color: red; } /* gone */")).toBe(
-			"/*! notice /* inner */ .a { color: red; } ",
+			".a { color: red; }",
 		);
 	});
 });

@@ -1,11 +1,14 @@
-// A quoted string or a comment, whichever starts first, so comment-like text
-// inside strings and quotes inside comments are both left alone.
-const STRING_OR_COMMENT =
-	/("(?:[^"\\\r\n]|\\(?:\r\n|[\s\S]))*"|'(?:[^'\\\r\n]|\\(?:\r\n|[\s\S]))*')|\/\*[\s\S]*?\*\//g;
+import postcss from "postcss";
 
-/** Removes CSS comments, keeping license notices that start with `/*!`. */
+/**
+ * Removes comments that sit between rules and declarations, keeping license
+ * notices that start with `/*!`. Comments inside a selector or a value stay,
+ * because removing one there can join two tokens into one.
+ */
 export function stripCssComments(css: string): string {
-	return css.replace(STRING_OR_COMMENT, (match, quoted: string | undefined) =>
-		quoted !== undefined || match.startsWith("/*!") ? match : "",
-	);
+	const root = postcss.parse(css);
+	root.walkComments((comment) => {
+		if (!comment.text.startsWith("!")) comment.remove();
+	});
+	return root.toString();
 }
