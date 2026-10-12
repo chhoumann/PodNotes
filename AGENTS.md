@@ -35,7 +35,7 @@ root symlinks for local Obsidian loading.
 - `npm ci`: install the locked dependencies for local development.
 - `npm run dev`: watch-mode development build via Vite.
 - `npm run typecheck`: run TypeScript 7's native `tsc --noEmit` for source and test projects.
-- `npm run lint`: run oxlint against TypeScript sources and tooling scripts (includes the obsidianmd guideline rules via jsPlugins).
+- `npm run lint`: run oxlint against TypeScript sources and tooling scripts (includes the obsidianmd guideline rules and the `svelte-policy` internals guard via jsPlugins), then the `svelte-policy` component checker, configured by `svelte-policy.json`.
 - `npm run format:check`: run the configured oxfmt check (`npm run format` to write).
 - `npm run check:a11y`: patch svelte-check if needed, run `lint:tsconfig`, then run `svelte-check --tsgo-experimental-api --fail-on-warnings` for source and test projects.
 - `npm run lint:tsconfig`: fail with TS18003 when `tsconfig.json` or `tsconfig.test.json` matches no files, using the native compiler without type checking.
