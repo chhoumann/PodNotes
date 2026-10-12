@@ -89,6 +89,19 @@ if (!("ResizeObserver" in window)) {
 	};
 }
 
+// jsdom has no `inert`. Browsers reflect it to the attribute.
+if (!("inert" in HTMLElement.prototype)) {
+	Object.defineProperty(HTMLElement.prototype, "inert", {
+		configurable: true,
+		get(this: HTMLElement) {
+			return this.hasAttribute("inert");
+		},
+		set(this: HTMLElement, inert: boolean) {
+			this.toggleAttribute("inert", inert);
+		},
+	});
+}
+
 if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};
 }

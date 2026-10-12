@@ -51,6 +51,7 @@
 	);
 	const firstRun = $derived(libraryEmpty && page.kind === "library");
 	const loaded = $derived($playerState.status !== "empty");
+	const overlaid = $derived(loaded && $navigation.expanded);
 
 	const previous = $derived(
 		$navigation.stack[$navigation.stack.length - 1]?.page ?? parentOf(page),
@@ -95,7 +96,7 @@
 	})}
 >
 	{#if firstRun}
-		<div class="pn-first-run">
+		<div class="pn-first-run" inert={overlaid}>
 			<button
 				type="button"
 				class="pn-iconbtn pn-first-settings"
@@ -109,7 +110,7 @@
 			</div>
 		</div>
 	{:else}
-		<div class="pn-body" class:pn-split={layout === "wide"}>
+		<div class="pn-body" class:pn-split={layout === "wide"} inert={overlaid}>
 			{#if layout === "wide"}
 				<Rail {counts} active={activeRoot(page)} />
 			{/if}
@@ -173,10 +174,10 @@
 			</main>
 		</div>
 	{/if}
-	{#if loaded && !$navigation.expanded}
+	{#if loaded && !overlaid}
 		<MiniPlayer {layout} />
 	{/if}
-	{#if loaded && $navigation.expanded && root}
+	{#if overlaid && root}
 		<PlayerOverlay viewRoot={root} />
 	{/if}
 </div>

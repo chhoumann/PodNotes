@@ -240,6 +240,19 @@ describe("full player", () => {
 		expect(screen.getByRole("heading", { name: "Queue" })).toBeInTheDocument();
 	});
 
+	test("covers the page and the rail for the keyboard too, while it is open", async () => {
+		renderView(820);
+		playing();
+		await tick();
+		const covered = [button(/^Latest episodes/), screen.getByAltText(feed.title)];
+
+		await fireEvent.click(button(`Open player: ${episode.title}`));
+		for (const el of covered) expect(el.closest("[inert]")).not.toBeNull();
+
+		await fireEvent.click(button("Collapse player"));
+		for (const el of covered) expect(el.closest("[inert]")).toBeNull();
+	});
+
 	test("collapsing it puts focus that was in it on the mini player, and takes no other focus", async () => {
 		services.player.restore(episode);
 		renderView();
