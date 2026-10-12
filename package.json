@@ -17,7 +17,7 @@
 		"size:data": "node scripts/persistence-size.mjs",
 		"count:writes": "node scripts/write-counts.mjs",
 		"typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
-		"lint": "oxlint --deny-warnings src tests/e2e scripts .claude/skills/verify",
+		"lint": "oxlint --deny-warnings src tests/e2e scripts .claude/skills/verify && svelte-policy",
 		"format:check": "npm run format -- --check",
 		"test": "npm run check:a11y && vitest --configLoader bundle",
 		"test:e2e": "npm run build && node scripts/obsidian-e2e.mjs test",
@@ -38,7 +38,7 @@
 		"check:a11y": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --fail-on-warnings",
 		"docs:build": "npm ci --prefix docs && npm run build --prefix docs",
 		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/dist --project-name podnotes --branch master",
-		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs docs/wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/markdown.ts docs/src/site.mjs docs/src/pages docs/scripts docs/legacy-fragments.json docs/tsconfig.json"
+		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json svelte-policy.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs docs/wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/markdown.ts docs/src/site.mjs docs/src/pages docs/scripts docs/legacy-fragments.json docs/tsconfig.json"
 	},
 	"dependencies": {
 		"fuse.js": "^7.5.0"
@@ -56,6 +56,7 @@
 		"oxlint": "^1.86.0",
 		"svelte": "^5.57.1",
 		"svelte-check": "^4.7.6",
+		"svelte-policy": "file:vendor/svelte-policy-0.0.0.tgz",
 		"typescript": "6.0.3",
 		"vite": "^8.3.2",
 		"vitest": "^5.0.3",
