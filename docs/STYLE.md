@@ -17,7 +17,10 @@ other than the home page.
 - [ ] Each page has one job, named by its title. A page that does two jobs
       becomes two pages.
 - [ ] A procedure lives on one page. Other pages link to it instead of repeating
-      it.
+      it. Two exceptions: **Getting started** walks through the first install,
+      podcast, playback, timestamp, and note in one place, and the landing page
+      and the FAQ may give a one-line fix that links to the page that owns the
+      procedure.
 - [ ] URLs never break. Every page pins `slug:`. A moved page gets a 301 in
       `public/_redirects`. A renamed heading keeps its old id with an empty
       `<span id="old-id"></span>` (the build checks `legacy-fragments.json`).
@@ -35,8 +38,8 @@ other than the home page.
 - [ ] The common case comes first. Limits and edge cases come last, under a
       heading that names them.
 - [ ] Task headings start with a verb ("Add a podcast"). Concept headings are
-      noun phrases ("Episode identity"). No heading starts with an -ing word,
-      and no level is skipped.
+      noun phrases ("Episode identity"). FAQ entries are the reader's questions.
+      No heading starts with an -ing word, and no level is skipped.
 - [ ] A how-to page covers one feature. Each task on it fits in about one
       screen at 1440x900, and the page stays under about four screens before any
       reference section. Split a page that grows past that. Lookup tables go at

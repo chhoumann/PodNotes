@@ -109,7 +109,11 @@ It never calls a transcription provider. Run **PodNotes: Transcribe current epis
 The text is the whole note.
 If your **Transcript template** adds a title and date, the text includes them. A template of only `{{transcript}}` returns only the transcript.
 
-## `getTranscript(episode?: Episode)`
+## <span id="gettranscriptepisode-episode"></span>`getTranscript()`
+
+```ts
+getTranscript(episode?: Episode): Promise<string | null>
+```
 
 Reads the transcript note of `episode`, or of the current episode when you omit it.
 PodNotes finds the note at the **Transcript file path** rendered for that episode.
@@ -146,7 +150,11 @@ ${transcript}`;
 };
 ```
 
-## `getPodcastTimeFormatted(format: string, linkify?: boolean, offsetSeconds?: number)`
+## <span id="getpodcasttimeformattedformat-string-linkify-boolean-offsetseconds-number"></span>`getPodcastTimeFormatted()`
+
+```ts
+getPodcastTimeFormatted(format: string, linkify?: boolean, offsetSeconds?: number): string
+```
 
 Returns the current playback time, formatted with the [time tokens](/timestamps/#time-formats).
 
@@ -155,7 +163,16 @@ Returns the current playback time, formatted with the [time tokens](/timestamps/
 
 Throws `"No podcast loaded"` when no episode is loaded.
 
-## `getPodcastSegmentFormatted(format: string, startTime: number, endTime: number, linkify?: boolean)`
+## <span id="getpodcastsegmentformattedformat-string-starttime-number-endtime-number-linkify-boolean"></span>`getPodcastSegmentFormatted()`
+
+```ts
+getPodcastSegmentFormatted(
+	format: string,
+	startTime: number,
+	endTime: number,
+	linkify?: boolean,
+): string
+```
 
 Returns a `start-end` range, formatted with the [time tokens](/timestamps/#time-formats).
 

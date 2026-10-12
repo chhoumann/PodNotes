@@ -125,5 +125,5 @@ To recover:
 1. Replace `data.json` with a readable backup to keep your library, or delete it to start a new library.
 2. Restart Obsidian.
 
-If `data.json` comes from a newer version of PodNotes, PodNotes does not start, and its notice asks you to update.
+If `data.json` uses a data format that this version of PodNotes does not support, PodNotes does not start, and its notice asks you to update.
 Update PodNotes on every device that shares the vault.

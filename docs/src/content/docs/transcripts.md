@@ -2,10 +2,10 @@
 title: Transcribe episodes
 slug: transcripts
 legacyTitleId: transcripts
-description: Transcribe an episode into a note with your OpenAI or Deepgram key, add speaker labels, and see what it costs.
+description: Transcribe an episode into a note with your OpenAI key, add speaker labels with OpenAI or Deepgram, and see what it costs.
 ---
 
-Turn the audio of an episode into a transcript note, with speaker labels if you want them, using your own OpenAI or Deepgram account.
+Turn the audio of an episode into a transcript note with your own OpenAI account. Speaker labels can come from OpenAI or from a Deepgram account.
 
 ## <span id="setting-up"></span>Set up an OpenAI key
 
@@ -31,7 +31,7 @@ A notice shows the progress, and you can keep listening. When the transcript is 
 2. Under **Transcripts**, turn on **Speaker diarization**.
 3. In **Diarization provider**, select **OpenAI (gpt-4o-transcribe-diarize)** or **Deepgram**.
 4. If you selected **Deepgram**, create a key in the [Deepgram console](https://console.deepgram.com/).
-5. Under **Deepgram API key**, select or create a secret that holds the Deepgram key.
+5. If you selected **Deepgram**, under **Deepgram API key**, select or create a secret that holds the Deepgram key. With OpenAI, PodNotes uses your OpenAI key.
 
 The providers differ in these ways:
 
@@ -42,7 +42,7 @@ The providers differ in these ways:
 
 ### <span id="speaker-label-format"></span>Change the speaker label format
 
-**Speaker label format** sets the text before each turn. The default, `**{{speaker}}:** ` with a space at the end, starts a turn with **A:** in bold. For **Speaker A:**, use `**Speaker {{speaker}}:** `. The labeled text fills `{{transcript}}`, so **Transcript template** needs no change.
+**Speaker label format** sets the text before each turn. The default, `**{{speaker}}:**` with a space at the end, starts a turn with **A:** in bold. For **Speaker A:**, use `**Speaker {{speaker}}:**`, also with a space at the end. The labeled text fills `{{transcript}}`, so **Transcript template** needs no change.
 
 ## <span id="transcript-template"></span>Change where transcripts go and what they contain
 
@@ -65,6 +65,6 @@ These cases stop a transcription or change its result:
 - PodNotes sends long audio to OpenAI in parts of about 20 MB. In a transcript without speaker labels, a part that fails three times leaves the marker `[Error transcribing chunk N]`. To retry, delete the note and run the command again.
 - Transcripts have no timestamps, so a line does not link to its moment in the episode.
 
-## How API keys are stored
+## <span id="how-api-keys-are-stored"></span>API key storage
 
 PodNotes keeps your API keys in Obsidian's secret storage on each device, and only the name of each key syncs. On the first start after an upgrade from a version that kept plain-text keys in `data.json`, PodNotes moves them to secret storage and does not finish loading until the move succeeds. If it fails, restart PodNotes. The move cannot erase old copies in backups or settings exports, so replace a key at the provider if it may have leaked. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
