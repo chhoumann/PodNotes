@@ -138,6 +138,21 @@ describe("findPublishedTranscript", () => {
 		expect(load).toHaveBeenCalledOnce();
 	});
 
+	test("finds a newer episode in a cached feed cut to its newest items without fetching it", async () => {
+		const storage = new MemoryStorage();
+		const items = Array.from({ length: 76 }, (_, index) =>
+			item(index === 75 ? [{ url: "t.vtt", type: "text/vtt" }] : [], index + 1),
+		);
+		await repository(items, storage).feeds.load(["Show"], "network");
+
+		const { feeds, load } = repository(items, storage);
+
+		await expect(findPublishedTranscript(feeds, episodeOf(show, 76))).resolves.toMatchObject({
+			reference: "t.vtt",
+		});
+		expect(load).not.toHaveBeenCalled();
+	});
+
 	test("refetches a cached feed cut to its newest items to find an older episode", async () => {
 		const storage = new MemoryStorage();
 		const newest = Array.from({ length: 75 }, (_, index) => item([], index + 2));

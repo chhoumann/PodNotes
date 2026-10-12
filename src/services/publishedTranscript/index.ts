@@ -1,5 +1,5 @@
 import { isPlainObject } from "src/persistence/codecUtils";
-import type { FeedKey, FeedRepository } from "src/services/FeedRepository";
+import type { FeedKey, FeedRepository, LoadMode } from "src/services/FeedRepository";
 import type { Episode } from "src/types/Episode";
 import { NetworkError, fetchTextWithTimeout } from "src/utility/networkRequest";
 import { type ParsedTranscript, parseTranscript, type TranscriptFormat } from "./parse";
@@ -41,8 +41,13 @@ export async function findPublishedTranscript(
 	episode: Episode,
 ): Promise<PublishedTranscript | undefined> {
 	const key = episode.podcastName;
-	await feeds.load([key], "complete");
-	return choosePublishedTranscript(key, feeds.episodeMetadata(key, episode)?.transcripts);
+	const metadata = async (mode: LoadMode) => {
+		await feeds.load([key], mode);
+		return feeds.episodeMetadata(key, episode);
+	};
+	// The cache keeps a long feed's newest items, so only an older episode waits for the whole feed.
+	const item = (await metadata("cached")) ?? (await metadata("complete"));
+	return choosePublishedTranscript(key, item?.transcripts);
 }
 
 export class PublishedTranscriptError extends Error {

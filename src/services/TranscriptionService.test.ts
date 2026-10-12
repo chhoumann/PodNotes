@@ -794,7 +794,7 @@ describe("TranscriptionService", () => {
 			await service.transcribeCurrentEpisode();
 			await finished(service, "Saved the transcript the feed publishes.");
 
-			expect(plugin.feeds.load).toHaveBeenCalledWith(["Test Podcast"], "complete");
+			expect(plugin.feeds.load).toHaveBeenCalledExactlyOnceWith(["Test Podcast"], "cached");
 			expect(fetchTextMock).toHaveBeenCalledExactlyOnceWith(
 				"https://example.com/1.vtt",
 				expect.objectContaining({ acceptedStatuses: [200] }),
