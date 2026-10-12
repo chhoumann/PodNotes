@@ -18,7 +18,6 @@ import {
 	captureLaunchCommand,
 	captureScreenshot,
 	connectCapture,
-	evaluate,
 	prepareCapture,
 	prepareCaptureProfile,
 	typeText,
@@ -152,30 +151,62 @@ async function main() {
 	const { stop } = instance;
 	let { client } = instance;
 	const api = "app.plugins.plugins.podnotes.api";
-	/** Runs `body` as an async function in Obsidian and returns its value. */
-	const run = (body) => evaluate(client, `(async () => { ${body} })()`);
-	const waitFor = (expression, what, ms = 30_000) =>
-		run(`for (const end = Date.now() + ${ms}; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
-			const value = ${expression};
-			if (value) return value;
+	/**
+	 * Runs `body` as an async function in Obsidian and returns its value. The
+	 * body is fixed code: every value it needs arrives as the CDP call's
+	 * argument, `args`, so no value is ever written into code.
+	 */
+	async function run(body, args = {}) {
+		const { result } = await client.call("Runtime.evaluate", { expression: "globalThis" });
+		const reply = await client.call("Runtime.callFunctionOn", {
+			objectId: result.objectId,
+			functionDeclaration: `async function (args) { ${body} }`,
+			arguments: [{ value: args }],
+			awaitPromise: true,
+			returnByValue: true,
+		});
+		if (reply.exceptionDetails) {
+			const { exception, text } = reply.exceptionDetails;
+			throw new Error(exception?.description ?? text);
 		}
-		throw new Error(${JSON.stringify(`Timed out waiting for ${what}`)});`);
+		return reply.result.value;
+	}
+	/** Polls `expression`, which can read `args`, until it is truthy and returns it. */
+	const waitFor = (expression, what, args = {}) =>
+		run(
+			`for (const end = Date.now() + 30000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+				const value = ${expression};
+				if (value) return value;
+			}
+			throw new Error("Timed out waiting for " + args.waitingFor);`,
+			{ ...args, waitingFor: what },
+		);
 	const click = (selector, text) =>
-		run(`for (const end = Date.now() + 30000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
-			const match = [...document.querySelectorAll(${JSON.stringify(selector)})].find((el) =>
-				el.getClientRects().length > 0 && ${text === undefined ? "true" : `el.textContent.trim().includes(${JSON.stringify(text)})`});
-			if (match) { match.click(); return true; }
-		}
-		throw new Error(${JSON.stringify(`Nothing to click: ${selector} ${text ?? ""}`)});`);
+		run(
+			`for (const end = Date.now() + 30000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+				const match = [...document.querySelectorAll(args.selector)].find((el) =>
+					el.getClientRects().length > 0 && (args.text === undefined || el.textContent.trim().includes(args.text)));
+				if (match) { match.click(); return true; }
+			}
+			throw new Error("Nothing to click: " + args.selector + " " + (args.text ?? ""));`,
+			{ selector, text },
+		);
 	const fill = (selector, value) =>
-		run(`const input = document.querySelector(${JSON.stringify(selector)});
+		run(
+			`const input = document.querySelector(args.selector);
 			input.focus();
-			input.value = ${JSON.stringify(value)};
+			input.value = args.value;
 			input.dispatchEvent(new Event("input", { bubbles: true }));
-			return true;`);
+			return true;`,
+			{ selector, value },
+		);
 	const settle = (ms = 600) => new Promise((resolve) => setTimeout(resolve, ms));
 
-	/** Writes `<name>.webp` in light and `<name>-dark.webp` in dark. */
+	/**
+	 * Writes `<name>.webp` in light and `<name>-dark.webp` in dark. A rect target
+	 * is `{ kind: "rect", body, args }`: `body` returns `{ x, y, width, height }`
+	 * and reads its values from `args`.
+	 */
 	async function shoot(name, target, { css = CROP_CSS, size = WINDOW, clean = true } = {}) {
 		await fs.mkdir(outDir, { recursive: true });
 		for (const theme of ["light", "dark"]) {
@@ -204,7 +235,18 @@ async function main() {
 			);
 			await settle(400);
 			const png = path.join(profileRoot, `${name}-${theme}.png`);
-			await captureScreenshot(client, png, { target, clean });
+			// The capture measures the rect after its own clean-up, so it calls a
+			// closure that holds the values rather than code built from them.
+			if (target.kind === "rect")
+				await run(
+					`globalThis.captureRect = () => { ${target.body} }; return true;`,
+					target.args,
+				);
+			const capture =
+				target.kind === "rect"
+					? { kind: "rect", expression: "globalThis.captureRect()" }
+					: target;
+			await captureScreenshot(client, png, { target: capture, clean });
 			await sharp(png)
 				.webp({ quality: 86 })
 				.toFile(path.join(outDir, `${name}${theme === "dark" ? "-dark" : ""}.webp`));
@@ -218,21 +260,19 @@ async function main() {
 	 */
 	const cropTo = (selector, item, count, pad = 16) => ({
 		kind: "rect",
-		expression: `(() => {
-			const box = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
-			const items = [...document.querySelectorAll(${JSON.stringify(`${selector} ${item}`)})].filter((el) => el.getClientRects().length > 0);
-			const last = items[${count - 1}].getBoundingClientRect();
-			const next = items[${count}]?.getBoundingClientRect().top ?? Infinity;
-			const bottom = Math.min(last.bottom + ${pad}, next - 2, box.bottom);
-			return { x: box.x, y: box.y, width: box.width, height: bottom - box.y };
-		})()`,
+		body: `const box = document.querySelector(args.selector).getBoundingClientRect();
+			const items = [...document.querySelectorAll(args.items)].filter((el) => el.getClientRects().length > 0);
+			const last = items[args.count - 1].getBoundingClientRect();
+			const next = items[args.count]?.getBoundingClientRect().top ?? Infinity;
+			const bottom = Math.min(last.bottom + args.pad, next - 2, box.bottom);
+			return { x: box.x, y: box.y, width: box.width, height: bottom - box.y };`,
+		args: { selector, items: `${selector} ${item}`, count, pad },
 	});
 
 	/** A crop of the episode note's text column, between two of its lines. */
 	const noteCrop = (fromLine, toLine) => ({
 		kind: "rect",
-		expression: `(() => {
-			const leaf = app.workspace.getLeavesOfType("markdown")[0].view;
+		body: `const leaf = app.workspace.getLeavesOfType("markdown")[0].view;
 			const view = leaf.contentEl;
 			const pane = view.getBoundingClientRect();
 			const header = leaf.containerEl.querySelector(".view-header").getBoundingClientRect();
@@ -245,8 +285,7 @@ async function main() {
 			const bottom = Math.min(pane.bottom, navbar - 12, (${toLine})(lines).getBoundingClientRect().bottom + 12);
 			const left = Math.max(pane.left, column.x - 16);
 			const right = Math.min(pane.right, column.right + 16);
-			return { x: left, y: top, width: right - left, height: bottom - top };
-		})()`,
+			return { x: left, y: top, width: right - left, height: bottom - top };`,
 	});
 
 	// Picks episodes from Latest Episodes. On this capture host a selected
@@ -280,7 +319,8 @@ async function main() {
 			css: CAPTURE_CSS,
 		});
 		// Both takes open the palette on the same list, not on the last take's command.
-		await run(`app.internalPlugins.getPluginById("command-palette").instance.recentCommands = [];
+		await run(
+			`app.internalPlugins.getPluginById("command-palette").instance.recentCommands = [];
 			app.workspace.leftSplit.collapse();
 			app.workspace.rightSplit.setSize(360);
 			const leaf = app.workspace.getLeavesOfType("markdown")[0];
@@ -295,8 +335,10 @@ async function main() {
 			const artwork = lines.find((i) => editor.getLine(i).startsWith("!["));
 			const view = editor.cm;
 			view.scrollDOM.scrollTop = view.lineBlockAt(view.state.doc.line(artwork + 1).from).top - 16;
-			${api}.currentTime = ${seed.demo.at};
-			return true;`);
+			${api}.currentTime = args.at;
+			return true;`,
+			{ at: seed.demo.at },
+		);
 		await client.call("Input.dispatchMouseEvent", {
 			type: "mouseMoved",
 			x: 130,
@@ -325,12 +367,15 @@ async function main() {
 					});
 				}
 				await settle(900);
-				await run(`const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
-					for (const ch of ${JSON.stringify(seed.demo.note)}) {
+				await run(
+					`const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
+					for (const ch of args.note) {
 						editor.replaceSelection(ch);
 						await new Promise((r) => setTimeout(r, 45));
 					}
-					return true;`);
+					return true;`,
+					{ note: seed.demo.note },
+				);
 				await settle(2200);
 			},
 			{ fps: 24, backend: "screencast" },
@@ -344,14 +389,18 @@ async function main() {
 	// Properties first, while the editor and the file agree, then the notes
 	// through the editor with PodNotes' own capture command, then save.
 	async function writeNote(episode) {
-		await run(`await app.fileManager.processFrontMatter(app.workspace.getActiveFile(), (fm) => {
-				fm.status = ${JSON.stringify(episode.status)};
-				${episode.rating === undefined ? "" : `fm.rating = ${episode.rating};`}
+		await run(
+			`await app.fileManager.processFrontMatter(app.workspace.getActiveFile(), (fm) => {
+				fm.status = args.status;
+				if (args.rating !== undefined) fm.rating = args.rating;
 			});
-			return true;`);
+			return true;`,
+			{ status: episode.status, rating: episode.rating },
+		);
 		await waitFor(
-			`app.workspace.activeEditor?.editor?.getValue().includes(${JSON.stringify(`status: ${episode.status}`)})`,
+			`app.workspace.activeEditor?.editor?.getValue().includes(args.text)`,
 			`the properties of ${episode.title}`,
+			{ text: `status: ${episode.status}` },
 		);
 		if (!episode.notes) return;
 		const lines = (await fs.readFile(path.join(seedDir, "notes", episode.notes), "utf8"))
@@ -365,13 +414,19 @@ async function main() {
 				return true;`);
 			if (at) {
 				const seconds = Number(at[1]) * 3600 + Number(at[2]) * 60 + Number(at[3]);
-				await run(`${api}.currentTime = ${seconds};
+				await run(
+					`${api}.currentTime = args.seconds;
 					app.commands.executeCommandById("podnotes:capture-timestamp");
-					app.workspace.activeEditor.editor.replaceSelection(${JSON.stringify(`${at[4]}\n`)});
-					return true;`);
+					app.workspace.activeEditor.editor.replaceSelection(args.text);
+					return true;`,
+					{ seconds, text: `${at[4]}\n` },
+				);
 			} else {
 				await run(
-					`app.workspace.activeEditor.editor.replaceSelection(${JSON.stringify(`${line}\n`)}); return true;`,
+					`app.workspace.activeEditor.editor.replaceSelection(args.text); return true;`,
+					{
+						text: `${line}\n`,
+					},
 				);
 			}
 		}
@@ -397,10 +452,9 @@ async function main() {
 		// Add the feeds the way a user does: Settings, then Search Podcasts.
 		await run(`app.setting.open(); app.setting.openTabById("podnotes"); return true;`);
 		const search = 'input[placeholder="Search or enter feed URL..."]';
-		await waitFor(
-			`document.querySelector(${JSON.stringify(search)})`,
-			"the podcast search field",
-		);
+		await waitFor(`document.querySelector(args.selector)`, "the podcast search field", {
+			selector: search,
+		});
 		for (const feed of seed.feeds) {
 			await fill(search, feed);
 			const label = await waitFor(
@@ -410,8 +464,11 @@ async function main() {
 			await click(`[aria-label="${label}"]`);
 			const title = label.slice("Add ".length, -" podcast".length);
 			await waitFor(
-				`app.plugins.plugins.podnotes.settings.savedFeeds[${JSON.stringify(title)}]`,
+				`app.plugins.plugins.podnotes.settings.savedFeeds[args.title]`,
 				`${title} to save`,
+				{
+					title,
+				},
 			);
 		}
 		await fill(search, seed.search);
@@ -433,50 +490,59 @@ async function main() {
 			return true;`);
 		await shoot(
 			"add-podcast",
-			{ kind: "rect", expression: SEARCH_SECTION },
+			{ kind: "rect", body: SEARCH_SECTION },
 			{ css: `${CAPTURE_CSS} ${FIRST_FOUR_RESULTS}` },
 		);
 		await run(`searchSectionRest.forEach((el) => (el.style.display = "")); return true;`);
 		const { playlist } = seed;
-		await run(`const form = document.querySelector(".modal.mod-settings .add-playlist-container");
+		await run(
+			`const form = document.querySelector(".modal.mod-settings .add-playlist-container");
 			const icon = form.querySelector("select");
-			icon.value = ${JSON.stringify(playlist.icon)};
+			icon.value = args.icon;
 			icon.dispatchEvent(new Event("change", { bubbles: true }));
 			const name = form.querySelector('input[placeholder="Playlist name"]');
-			name.value = ${JSON.stringify(playlist.name)};
+			name.value = args.name;
 			name.dispatchEvent(new Event("input", { bubbles: true }));
-			return true;`);
+			return true;`,
+			{ icon: playlist.icon, name: playlist.name },
+		);
 		await click('[aria-label="Add playlist"]');
 		await waitFor(
-			`app.plugins.plugins.podnotes.settings.playlists[${JSON.stringify(playlist.name)}]`,
+			`app.plugins.plugins.podnotes.settings.playlists[args.name]`,
 			"the playlist",
+			{
+				name: playlist.name,
+			},
 		);
 		await run(`app.setting.close(); return true;`);
 
 		// Play each episode, write its note, and leave the last one playing.
 		await run(`app.commands.executeCommandById("podnotes:podnotes-show-leaf"); return true;`);
 		await waitFor(
-			`document.querySelector(${JSON.stringify(PLAYER)})?.getClientRects().length`,
+			`document.querySelector(args.selector)?.getClientRects().length`,
 			"the PodNotes view",
+			{
+				selector: PLAYER,
+			},
 		);
-		await run(`app.workspace.rightSplit.setSize(${SIDEBAR}); return true;`);
+		await run(`app.workspace.rightSplit.setSize(args.size); return true;`, { size: SIDEBAR });
 		const notePaths = new Map();
 		for (const episode of seed.episodes) {
 			await showLatest();
 			await fill('.podcast-view input[placeholder="Search episodes"]', episode.title);
 			await click(".podcast-view .podcast-episode-item", episode.title);
-			await waitFor(
-				`${api}.podcast?.title === ${JSON.stringify(episode.title)}`,
-				episode.title,
-			);
+			await waitFor(`${api}.podcast?.title === args.title`, episode.title, {
+				title: episode.title,
+			});
 			await waitFor(`${api}.length > 0`, `${episode.title} to load`);
 			const before = await run(`return app.workspace.getActiveFile()?.path ?? null;`);
 			await run(
 				`app.commands.executeCommandById("podnotes:create-podcast-note"); return true;`,
 			);
 			const note = await waitFor(
-				`(() => { const p = app.workspace.getActiveFile()?.path; return p && p !== ${JSON.stringify(before)} && p.startsWith("PodNotes/") ? p : null; })()`,
+				`(() => { const p = app.workspace.getActiveFile()?.path; return p && p !== args.before && p.startsWith("PodNotes/") ? p : null; })()`,
 				`the note for ${episode.title}`,
+				{ before },
 			);
 			notePaths.set(episode, note);
 			await writeNote(episode);
@@ -489,8 +555,11 @@ async function main() {
 			await fill(".prompt-input", podcast);
 			await click(".suggestion-item", podcast);
 			await waitFor(
-				`app.workspace.getActiveFile()?.path === ${JSON.stringify(`PodNotes/Podcasts/${podcast}.md`)}`,
+				`app.workspace.getActiveFile()?.path === args.path`,
 				`the feed note for ${podcast}`,
+				{
+					path: `PodNotes/Podcasts/${podcast}.md`,
+				},
 			);
 		}
 
@@ -506,10 +575,12 @@ async function main() {
 		}
 		await fill('.podcast-view input[placeholder="Search episodes"]', "");
 		await click('.podcast-view [aria-label^="Player"]');
-		const longTitles =
-			await run(`return [...document.querySelectorAll(".podcast-view .podcast-episode-row .episode-item-title")]
+		const longTitles = await run(
+			`return [...document.querySelectorAll(".podcast-view .podcast-episode-row .episode-item-title")]
 			.map((el) => el.textContent.trim())
-			.filter((title) => title.length > ${seed.maxTitleLength});`);
+			.filter((title) => title.length > args.max);`,
+			{ max: seed.maxTitleLength },
+		);
 		for (const title of longTitles) {
 			await click(
 				`.podcast-view [aria-label=${JSON.stringify(`More options for ${title}`)}]`,
@@ -518,7 +589,8 @@ async function main() {
 		}
 
 		const hero = seed.episodes.at(-1);
-		await run(`const file = app.vault.getAbstractFileByPath(${JSON.stringify(notePaths.get(hero))});
+		await run(
+			`const file = app.vault.getAbstractFileByPath(args.path);
 			const leaves = [];
 			app.workspace.iterateRootLeaves((leaf) => leaves.push(leaf));
 			await leaves[0].openFile(file);
@@ -527,27 +599,34 @@ async function main() {
 			const explorer = app.workspace.getLeavesOfType("file-explorer")[0];
 			await explorer.loadIfDeferred?.();
 			explorer.view.revealInFolder(file);
-			${api}.currentTime = ${hero.playAt};
-			${api}.playbackRate = ${hero.playbackRate};
+			${api}.currentTime = args.at;
+			${api}.playbackRate = args.rate;
 			if (!${api}.isPlaying) ${api}.start();
-			return true;`);
-		await waitFor(
-			`app.workspace.getActiveFile()?.path === ${JSON.stringify(notePaths.get(hero))}`,
-			"the hero note",
+			return true;`,
+			{ path: notePaths.get(hero), at: hero.playAt, rate: hero.playbackRate },
 		);
+		await waitFor(`app.workspace.getActiveFile()?.path === args.path`, "the hero note", {
+			path: notePaths.get(hero),
+		});
 		await click('.podcast-view [aria-label^="Player"]');
 		await settle(1500);
 		const scrollNote = (line) =>
-			run(`const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
+			run(
+				`const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
 				const view = editor.cm;
-				const index = [...Array(editor.lineCount()).keys()].find((i) => editor.getLine(i) === ${JSON.stringify(line)}) ?? 0;
-				view.scrollDOM.scrollTop = ${JSON.stringify(line)} ? view.lineBlockAt(view.state.doc.line(index + 1).from).top - 40 : 0;
-				return true;`);
+				const index = [...Array(editor.lineCount()).keys()].find((i) => editor.getLine(i) === args.line) ?? 0;
+				view.scrollDOM.scrollTop = args.line ? view.lineBlockAt(view.state.doc.line(index + 1).from).top - 40 : 0;
+				return true;`,
+				{ line },
+			);
 		const showProperties = (open) =>
-			run(`const box = app.workspace.getLeavesOfType("markdown")[0].view.contentEl.querySelector(".metadata-container");
-				if (box.classList.contains("is-collapsed") === ${open}) box.querySelector(".metadata-properties-heading").click();
+			run(
+				`const box = app.workspace.getLeavesOfType("markdown")[0].view.contentEl.querySelector(".metadata-container");
+				if (box.classList.contains("is-collapsed") === args.open) box.querySelector(".metadata-properties-heading").click();
 				await new Promise((r) => setTimeout(r, 300));
-				return true;`);
+				return true;`,
+				{ open },
+			);
 		const episodeNote = noteCrop(
 			`(lines) => lines.find((el) => el.matches(".inline-title"))`,
 			`(lines) => lines.find((el) => el.matches(".callout"))`,
@@ -570,23 +649,26 @@ async function main() {
 		await scrollNote("");
 		await shoot("player", cropTo(PLAYER, ".controls-container", 1, 20));
 		const heroNote = notePaths.get(hero);
-		const heroText = await run(`return app.vault.adapter.read(${JSON.stringify(heroNote)});`);
+		const heroText = await run(`return app.vault.adapter.read(args.path);`, { path: heroNote });
 		for (const theme of ["light", "dark"]) {
 			await recordDemo(theme);
-			await run(
-				`await app.vault.adapter.write(${JSON.stringify(heroNote)}, ${JSON.stringify(heroText)}); return true;`,
-			);
+			await run(`await app.vault.adapter.write(args.path, args.text); return true;`, {
+				path: heroNote,
+				text: heroText,
+			});
 			await settle(800);
 		}
 		await run(
-			`app.workspace.leftSplit.expand(); app.workspace.rightSplit.setSize(${SIDEBAR}); return true;`,
+			`app.workspace.leftSplit.expand(); app.workspace.rightSplit.setSize(args.size); return true;`,
+			{ size: SIDEBAR },
 		);
 
 		await click('.podcast-view [aria-label="Podcast grid"]');
 		await click(`.podcast-view [aria-label=${JSON.stringify(playlist.name)}]`);
 		await waitFor(
-			`document.querySelectorAll(".podcast-view .podcast-episode-item").length >= ${playlist.episodes.length}`,
+			`document.querySelectorAll(".podcast-view .podcast-episode-item").length >= args.count`,
 			"the playlist episodes",
+			{ count: playlist.episodes.length },
 		);
 		await settle(1500);
 		await shoot(
@@ -603,14 +685,12 @@ async function main() {
 		await settle(2000);
 		await shoot("bases", {
 			kind: "rect",
-			expression: `(() => {
-				const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
+			body: `const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
 				const rows = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')];
 				const top = rows[0].getBoundingClientRect().top - 12;
 				const last = rows.at(-1).getBoundingClientRect();
 				const right = Math.max(...rows.flatMap((row) => [...row.children].map((cell) => cell.getBoundingClientRect().right)));
-				return { x: box.x, y: top, width: Math.min(box.width, right - box.x + 24), height: last.bottom + 24 - top };
-			})()`,
+				return { x: box.x, y: top, width: Math.min(box.width, right - box.x + 24), height: last.bottom + 24 - top };`,
 		});
 		// Obsidian's mobile layout at phone size. The switch reloads the window, so
 		// pause first and reconnect after.
@@ -638,18 +718,18 @@ async function main() {
 			"bases-phone",
 			{
 				kind: "rect",
-				expression: `(() => {
-					const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
+				body: `const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
 					const rows = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')];
 					const top = rows[0].getBoundingClientRect().top - 12;
 					const last = rows.at(-1).getBoundingClientRect();
-					return { x: box.x, y: top, width: box.width, height: Math.min(innerHeight, last.bottom + 24) - top };
-				})()`,
+					return { x: box.x, y: top, width: box.width, height: Math.min(innerHeight, last.bottom + 24) - top };`,
 			},
 			phone,
 		);
-		await run(`await app.workspace.getLeaf(false).openFile(app.vault.getAbstractFileByPath(${JSON.stringify(notePaths.get(hero))}));
-			return true;`);
+		await run(
+			`await app.workspace.getLeaf(false).openFile(app.vault.getAbstractFileByPath(args.path)); return true;`,
+			{ path: notePaths.get(hero) },
+		);
 		await settle(1000);
 		await showProperties(true);
 		await scrollNote("");
@@ -684,11 +764,9 @@ async function main() {
 			"mobile-toolbar",
 			{
 				kind: "rect",
-				expression: `(() => {
-					const lines = [...app.workspace.getLeavesOfType("markdown")[0].view.contentEl.querySelectorAll(".cm-line")];
+				body: `const lines = [...app.workspace.getLeavesOfType("markdown")[0].view.contentEl.querySelectorAll(".cm-line")];
 					const top = lines.find((el) => el.textContent.trim() === "Notes").getBoundingClientRect().top - 16;
-					return { x: 0, y: top, width: innerWidth, height: innerHeight - top };
-				})()`,
+					return { x: 0, y: top, width: innerWidth, height: innerHeight - top };`,
 			},
 			{
 				css: `${CAPTURE_CSS} .cm-cursorLayer { display: none; } .cm-content { caret-color: transparent !important; }`,
@@ -699,18 +777,18 @@ async function main() {
 		await run(`app.commands.executeCommandById("podnotes:podnotes-show-leaf"); return true;`);
 		await settle(2000);
 		await click('.podcast-view [aria-label^="Player"]');
-		await run(`${api}.currentTime = ${hero.playAt}; ${api}.start(); return true;`);
+		await run(`${api}.currentTime = args.at; ${api}.start(); return true;`, {
+			at: hero.playAt,
+		});
 		await settle(1500);
 		await shoot(
 			"mobile-player",
 			{
 				kind: "rect",
-				expression: `(() => {
-					const drawer = document.querySelector(".podcast-view").closest(".workspace-drawer, .workspace-split").getBoundingClientRect();
+				body: `const drawer = document.querySelector(".podcast-view").closest(".workspace-drawer, .workspace-split").getBoundingClientRect();
 					const top = document.querySelector('.podcast-view [aria-label="Podcast grid"]').getBoundingClientRect().top - 16;
 					const controls = document.querySelector(".podcast-view .controls-container").getBoundingClientRect();
-					return { x: drawer.x, y: top, width: drawer.width, height: controls.bottom + 24 - top };
-				})()`,
+					return { x: drawer.x, y: top, width: drawer.width, height: controls.bottom + 24 - top };`,
 			},
 			{ css: CAPTURE_CSS, size: PHONE },
 		);
@@ -733,15 +811,13 @@ const SEARCH_CARD = `(tab) => {
 }`;
 
 // That card, with an even margin around it.
-const SEARCH_SECTION = `(() => {
-	const tab = document.querySelector(".modal.mod-settings .vertical-tab-content");
+const SEARCH_SECTION = `const tab = document.querySelector(".modal.mod-settings .vertical-tab-content");
 	const pane = tab.getBoundingClientRect();
 	const box = (${SEARCH_CARD})(tab).getBoundingClientRect();
 	const top = Math.max(pane.top, box.top - 16);
 	const bottom = Math.min(pane.bottom, box.bottom + 16);
 	const left = Math.max(pane.left, box.left - 16);
 	const right = Math.min(pane.right, box.right + 16);
-	return { x: left, y: top, width: right - left, height: bottom - top };
-})()`;
+	return { x: left, y: top, width: right - left, height: bottom - top };`;
 
 await main();
