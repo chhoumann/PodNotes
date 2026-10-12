@@ -770,7 +770,8 @@ async function main() {
 			},
 			{
 				css: `${CAPTURE_CSS} .cm-cursorLayer { display: none; } .cm-content { caret-color: transparent !important; }`,
-				size: PHONE,
+				// A shorter phone keeps the toolbar close under the note's last line.
+				size: { ...PHONE, height: 724 },
 				clean: false,
 			},
 		);

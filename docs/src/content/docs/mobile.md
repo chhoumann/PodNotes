@@ -25,7 +25,7 @@ To add your first podcast, see [Add and play podcasts](/podcasts/). Most command
 ### Set up the button once
 
 1. Open a note in editing view. Obsidian lists the capture command only while a note is open in an editor.
-2. In **Settings → Interface**, select **Configure mobile toolbar**.
+2. In **Settings → Interface**, select **Configure mobile toolbar**.
 3. Select **Add a command...** under **Manage toolbar options**.
 4. Find and select **PodNotes: Capture Timestamp**. Its button shows a clock.
 

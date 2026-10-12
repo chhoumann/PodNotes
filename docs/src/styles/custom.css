@@ -387,8 +387,9 @@ starlight-toc a {
  * Line breaks
  * ------------------------------------------------------------------------ */
 
-/* Headings break into even lines instead of leaving one word behind. */
-.sl-markdown-content :is(h2, h3),
+/* Headings break into even lines instead of leaving one word behind. Section
+ * headings sit inline in Starlight's wrapper, which owns their lines. */
+.sl-markdown-content .sl-heading-wrapper,
 h1#_top {
 	text-wrap: balance;
 }

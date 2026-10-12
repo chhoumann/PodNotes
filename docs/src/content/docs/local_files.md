@@ -41,7 +41,7 @@ The **Local Files** playlist in the podcast grid lists every episode you have of
 2. Select **Remove file** for a download, or **Remove from Local Files** for your own file.
 
 **Remove from Local Files** keeps your file in the vault. **Remove file** removes the episode from **Local Files** and moves its file to the trash.
-Where a trashed file goes depends on Obsidian's **Deleted files** setting in **Settings → Files and links**. If that setting deletes files permanently, so does PodNotes.
+Where a trashed file goes depends on Obsidian's **Deleted files** setting in **Settings → Files and links**. If that setting deletes files permanently, so does PodNotes.
 
 If PodNotes cannot confirm that it downloaded a file, as with downloads from older versions, it asks first. Select **Keep file** to leave the file in your vault, or **Delete file** to move it to the trash. Either way, the episode leaves **Local Files**.
 

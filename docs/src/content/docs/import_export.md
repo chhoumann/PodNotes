@@ -5,19 +5,19 @@ description: Import podcasts from OPML, export them to OPML, and back up or move
 ---
 
 Move your podcasts between PodNotes and other podcast apps with OPML files, and back up or move your PodNotes setup with a settings file.
-All of these controls are in **Settings → PodNotes**.
+All of these controls are in **Settings → PodNotes**.
 
 ## <span id="importing"></span>Import podcasts from OPML
 
 1. In your other podcast app, such as Pocket Casts, export your subscriptions as an OPML file.
-2. In **Settings → PodNotes**, under **Import/Export**, select **Import** next to **Import OPML**.
+2. In **Settings → PodNotes**, under **Import/Export**, select **Import** next to **Import OPML**.
 3. Select the `.opml` file.
 
 PodNotes fetches each feed and adds it to your podcasts, and a notice reports how many it saved and how many failed to load. It skips podcasts you already have, matched by feed URL or by title.
 
 ## <span id="exporting"></span>Export podcasts to OPML
 
-1. In **Settings → PodNotes**, under **Import/Export**, enter a file name next to **Export OPML**, or keep `PodNotes_Export.opml`.
+1. In **Settings → PodNotes**, under **Import/Export**, enter a file name next to **Export OPML**, or keep `PodNotes_Export.opml`.
 2. Select **Export**.
 
 PodNotes saves the file at the root of your vault. To save it in an existing folder, include the folder in the name, such as `Exports/PodNotes_Export.opml`. If the name is taken, the export fails, so choose another name.
@@ -30,7 +30,7 @@ A settings file copies your PodNotes setup to another vault, or keeps a backup o
 
 ### <span id="exporting-settings"></span>Export your settings
 
-1. In **Settings → PodNotes**, under **Preferences & templates**, enter a file name next to **Export settings**, or keep `PodNotes_Settings.json`.
+1. In **Settings → PodNotes**, under **Preferences & templates**, enter a file name next to **Export settings**, or keep `PodNotes_Settings.json`.
 2. To include your OpenAI and Deepgram API keys, turn on **Include API keys**. Read [API keys in a settings file](#api-keys-in-a-settings-file) first.
 3. Next to **Export settings**, select **Export**.
 
@@ -38,9 +38,9 @@ PodNotes saves the file in your vault and never overwrites an existing file. If 
 
 ### <span id="importing-settings"></span>Import your settings
 
-After an import, PodNotes cannot fetch your protected private feeds, the ones whose URL contains a user name, a password, or a token parameter such as `auth`. A settings file holds a placeholder instead of their URLs. The same holds for a backup or a copy of `data.json` that you restore into the same vault. Before you import, keep a copy of their private URLs.
+After an import, PodNotes cannot fetch your protected private feeds, the ones whose URL contains a user name, a password, or a token parameter such as `auth`. A settings file holds a placeholder instead of their URLs. The same holds when you import a backup or a copy of `data.json` with **Import settings**, even into the same vault. Before you import, keep a copy of their private URLs.
 
-1. In **Settings → PodNotes**, under **Preferences & templates**, select **Import** next to **Import settings**.
+1. In **Settings → PodNotes**, under **Preferences & templates**, select **Import** next to **Import settings**.
 2. Select the settings file.
 3. In **Import PodNotes settings?**, select **Import**.
 4. Under **Search Podcasts**, with the search box empty, select **Remove** next to each protected private feed.

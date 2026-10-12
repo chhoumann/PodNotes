@@ -20,11 +20,11 @@ To add an episode to the bottom of the queue:
 1. In the player's **Queue** list, right-click an episode, or select its **More options** button.
 2. Select **Move to top of queue**, **Move up in queue**, **Move down in queue**, or **Move to bottom of queue**.
 
-For a long queue, run **PodNotes: Reorder Queue**. It needs two or more episodes in the queue.
+For a long queue, run **PodNotes: Reorder Queue**. It opens a list where you move each episode up, down, to the top, or to the bottom, and it needs two or more episodes in the queue.
 
 ### Turn off the automatic queue
 
-To fill the queue only by hand, turn off **Keep a queue of episodes you switch away from** in **Settings → PodNotes**. PodNotes then stops adding the episode you leave, and stops starting the next one when an episode ends. While the queue is empty, PodNotes hides it.
+To control the queue only by hand, turn off **Keep a queue of episodes you switch away from** in **Settings → PodNotes**. PodNotes then stops adding the episode you leave, and when an episode ends, the next one in the queue does not start. With the setting off, the podcast grid hides **Queue** while the queue is empty.
 
 ## Collect episodes in playlists
 
@@ -36,7 +36,7 @@ The podcast grid also shows three built-in playlists:
 
 To make your own playlist:
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Playlists**, select an icon in the icon dropdown.
 3. In **Playlist name**, type a name, such as `Commute`.
 4. Select **Add**.
@@ -52,6 +52,6 @@ The playlist appears in the podcast grid.
 
 To delete a playlist:
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Playlists**, select the playlist's **Delete playlist** button, the trash icon.
 3. Within two seconds, select **Confirm deletion**, the check icon.

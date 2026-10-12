@@ -33,7 +33,7 @@ The default episode note template links each episode note to its feed note in th
 
 ## Change where notes go
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, edit **Note creation file path**.
 
 The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts` folder instead:

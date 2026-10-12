@@ -4,7 +4,7 @@ slug: settings
 description: Every PodNotes setting, in the order the settings tab shows it, with its default and what it does.
 ---
 
-Look up any PodNotes setting, its default, and what it does. The settings live in **Settings → PodNotes**, and the sections below follow the tab from top to bottom.
+Look up any PodNotes setting, its default, and what it does. The settings live in **Settings → PodNotes**, and the sections below follow the tab from top to bottom.
 
 ## Search Podcasts
 

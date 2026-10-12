@@ -15,7 +15,7 @@ This Capture choice writes a timestamp link and your comment on a new line below
 - [00:12:41](obsidian://podnotes?...) Why tariffs raise prices
 ```
 
-1. In **Settings → QuickAdd**, select **New choice**.
+1. In **Settings → QuickAdd**, select **New choice**.
 2. Select **Capture**.
 3. Set **Name** to `Podcast timestamp`.
 4. Turn on **Capture to active file**.
@@ -35,12 +35,22 @@ This Capture choice writes a timestamp link and your comment on a new line below
 10. Select `Podcast timestamp`.
 11. Type your comment.
 
-The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument, as in `getPodcastTimeFormatted("HH:mm:ss", true, 5)`. Without a loaded episode, the call fails with `No podcast loaded`.
+The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument:
+
+```js
+return podnotes.getPodcastTimeFormatted(
+	"HH:mm:ss",
+	true,
+	5,
+);
+```
+
+Without a loaded episode, the call fails with `No podcast loaded`.
 
 To run the capture from a hotkey:
 
-1. In **Settings → QuickAdd**, select **Command palette: Podcast timestamp**, the lightning icon next to the choice.
-2. In **Settings → Hotkeys**, assign a hotkey to **QuickAdd: Podcast timestamp**.
+1. In **Settings → QuickAdd**, select **Command palette: Podcast timestamp**, the lightning icon next to the choice.
+2. In **Settings → Hotkeys**, assign a hotkey to **QuickAdd: Podcast timestamp**.
 
 QuickAdd's [Capture docs](https://quickadd.obsidian.guide/docs/Choices/CaptureChoice/) describe the other options.
 
@@ -79,7 +89,7 @@ This macro runs a user script that saves the loaded episode's fields as QuickAdd
    ## Notes
    ```
 
-3. In **Settings → QuickAdd**, select **New choice**.
+3. In **Settings → QuickAdd**, select **New choice**.
 4. Select **Macro**.
 5. Set **Name** to `Podcast episode note`.
 6. On the **Podcast episode note** page, under **Commands**, next to **User scripts**, select **Browse**.

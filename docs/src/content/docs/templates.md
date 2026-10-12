@@ -205,4 +205,4 @@ Date tags accept these Moment-style tokens:
 | Second | `ss`,&nbsp;`s` |
 | AM or PM | `A`,&nbsp;`a` |
 
-Month and weekday names and ordinals are in English. Dates use the device's time zone. Square brackets keep text as it is, as in `{{currentDate:[Captured] YYYY-MM-DD}}`. Other Moment tokens are not supported.
+Month and weekday names and ordinals are in English. Dates use the device's time zone. Square brackets keep text as it is, as in `{{currentDate:[Captured] YYYY-MM-DD}}`. PodNotes does not support other Moment tokens.

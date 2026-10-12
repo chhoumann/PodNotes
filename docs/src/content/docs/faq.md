@@ -31,7 +31,7 @@ Install a beta version with the BRAT plugin, or copy a release's files into your
 ### Which podcasts can I add?
 
 Any podcast with an RSS feed.
-In **Settings → PodNotes**, under **Search Podcasts**, search the Apple Podcasts directory by name, or paste an RSS feed URL or an Apple Podcasts show link.
+In **Settings → PodNotes**, under **Search Podcasts**, search the Apple Podcasts directory by name, or paste an RSS feed URL or an Apple Podcasts show link.
 A show missing from search can still work if you paste its RSS feed URL. See [Add and play podcasts](/podcasts/).
 
 ### Can I add Spotify exclusives or YouTube links?
@@ -56,7 +56,7 @@ See [Play your own audio and video](/local_files/#play-your-own-audio-and-video)
 
 Your **Capture timestamp format** uses `{{time}}`, which inserts plain text.
 Installs set up before PodNotes 2.21.0 keep the old default, which uses `{{time}}`. New installs use `{{linktime}}`, which inserts a link that plays the episode from that moment.
-In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed URL or local file to link to. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
+In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed URL or local file to link to. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ### Can I take notes on an episode I listen to in another app?
 

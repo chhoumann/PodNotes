@@ -2,17 +2,17 @@
 title: Transcribe episodes
 slug: transcripts
 legacyTitleId: transcripts
-description: Transcribe an episode into a note with your OpenAI key, add speaker labels with OpenAI or Deepgram, and see what it costs.
+description: Transcribe an episode into a note with your own API key, add speaker labels, and see what it costs.
 ---
 
-Turn the audio of an episode into a transcript note with your own OpenAI account. Speaker labels can come from OpenAI or from a Deepgram account.
+Turn the audio of an episode into a transcript note with your own OpenAI or Deepgram account. Without speaker labels, PodNotes uses OpenAI. With speaker labels, you choose OpenAI or Deepgram, and Deepgram needs no OpenAI key.
 
 ## <span id="setting-up"></span>Set up an OpenAI key
 
 Without speaker labels, PodNotes sends the audio to OpenAI with your API key.
 
 1. Create a key on the [OpenAI API keys page](https://platform.openai.com/api-keys).
-2. In Obsidian, open **Settings → PodNotes**.
+2. In Obsidian, open **Settings → PodNotes**.
 3. Under **Transcripts**, select the secret picker next to **OpenAI API key**.
 4. Create a secret that holds your key, or select one that you saved before.
 
@@ -27,7 +27,7 @@ A notice shows the progress, and you can keep listening. When the transcript is 
 
 ## <span id="speaker-diarization"></span><span id="enabling-it"></span>Add speaker labels
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Transcripts**, turn on **Speaker diarization**.
 3. In **Diarization provider**, select **OpenAI (gpt-4o-transcribe-diarize)** or **Deepgram**.
 4. If you selected **Deepgram**, create a key in the [Deepgram console](https://console.deepgram.com/).

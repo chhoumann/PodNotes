@@ -21,7 +21,7 @@ PodNotes inserts a list item with a link such as `00:12:41`, followed by a space
 
 To capture from a hotkey:
 
-1. Open **Settings → Hotkeys**.
+1. Open **Settings → Hotkeys**.
 2. Search for **PodNotes: Capture Timestamp**.
 3. Assign a shortcut to it.
 
@@ -33,13 +33,13 @@ A headset button that sends the previous-track action also captures. If a note i
 
 To mark a passage instead of a moment, run **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**. PodNotes inserts a link to the range that ends at the current playback time, such as `00:12:31-00:12:41`. The link plays that passage and pauses at its end. It does not cut an audio clip.
 
-The range commands adapt **Capture timestamp format**, as [Timestamp tags](#timestamp-tags) describes. [Commands](/commands/#capture-last-10-seconds--capture-last-20-seconds) lists when they are available.
+The range commands insert a range in the style of your **Capture timestamp format**, as [Timestamp tags](#timestamp-tags) describes. [Commands](/commands/#capture-last-10-seconds--capture-last-20-seconds) lists when they are available.
 
 ## Make timestamps clickable
 
 If your captures come out as plain text with no link, your format most likely uses `{{time}}`, the default before PodNotes 2.21.0.
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end.
 
 New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the episode has no feed URL or local file to link to.
@@ -118,7 +118,7 @@ The handler accepts these query parameters:
 | --- | --- | --- |
 | `url` | Yes | Podcast feed URL, vault path of a local file, or the placeholder that stands for a private feed. |
 | `episodeName` | Yes | Episode title. |
-| `time` | No | Start time in seconds, zero or greater. Decimals are allowed. |
+| `time` | No | Start time in seconds, zero or greater. It can have decimals. |
 | `endTime` | No | End of a range in seconds, greater than `time`. Needs `time`. |
 | `end` | No | Alias of `endTime`. |
 | `to` | No | Alias of `endTime`. |
@@ -127,4 +127,4 @@ When a link has no `time`, or an empty one, the episode resumes from its saved p
 
 A feed `url` must be a public HTTP or HTTPS address. A private-feed placeholder resolves only through a saved podcast and the feed address stored on that device. A local `url` needs a registered episode and its media file.
 
-Query values are percent-encoded, and PodNotes also reads links from older versions that encode a space as `+`. The handler matches `episodeName` to an episode title regardless of case, and otherwise to the one title with the same words in any order and with any punctuation.
+PodNotes percent-encodes query values, and also reads links from older versions that encode a space as `+`. The handler matches `episodeName` to an episode title regardless of case, and otherwise to the one title with the same words in any order and with any punctuation.

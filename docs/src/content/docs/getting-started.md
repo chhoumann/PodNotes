@@ -8,7 +8,7 @@ In about five minutes, you get a podcast playing in Obsidian, a timestamp in a n
 
 ## Install PodNotes
 
-1. In Obsidian, open **Settings → Community plugins**.
+1. In Obsidian, open **Settings → Community plugins**.
 2. If you see **Exit Restricted mode**, select it.
 3. Select **Browse**.
 4. Search for PodNotes.
@@ -19,7 +19,7 @@ On a computer, the PodNotes view opens in the right sidebar. To open it again la
 
 ## Add a podcast
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Search Podcasts**, type a show's name. Results appear as you type.
 3. Select **Add** on the show you want.
 
@@ -59,17 +59,17 @@ Select the link, in Live Preview or reading view, to play the episode from that 
 To try a beta version before it reaches **Community plugins**, install PodNotes with BRAT:
 
 1. Install the [BRAT](obsidian://show-plugin?id=obsidian42-brat) plugin.
-2. In **Settings → Community plugins**, turn on BRAT.
+2. In **Settings → Community plugins**, turn on BRAT.
 3. Run **BRAT: Plugins: Add a beta plugin for testing (with or without version)**.
 4. Enter `chhoumann/PodNotes`.
 5. Select **Add plugin**.
-6. If PodNotes is not turned on afterwards, turn it on in **Settings → Community plugins**.
+6. If PodNotes is not turned on afterwards, turn it on in **Settings → Community plugins**.
 
 To install a release by hand:
 
 1. From the [latest release](https://github.com/chhoumann/PodNotes/releases/latest), download `main.js` and `manifest.json`.
 2. In your vault, put both files in `.obsidian/plugins/podnotes/`. Create the folder if it does not exist.
-3. In **Settings → Community plugins**, select **Reload plugins**.
+3. In **Settings → Community plugins**, select **Reload plugins**.
 4. Turn on PodNotes.
 
 ## Next steps
