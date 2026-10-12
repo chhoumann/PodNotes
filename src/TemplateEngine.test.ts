@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import * as obsidian from "obsidian";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	DownloadPathTemplateEngine,
@@ -205,6 +206,30 @@ describe("empty tag arguments (NT-05/CH-09)", () => {
 		};
 
 		expect(NoteTemplateEngine("{{date:YYYY-MM-DD}}", restoredEpisode)).toBe("2024-01-01");
+	});
+});
+
+describe("unknown tags (suggestions match fuse.js 7.5.0)", () => {
+	beforeEach(() => {
+		plugin.set({ settings: { feedNote: { path: "" }, savedFeeds: {} } } as never);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("leaves a misspelled tag as typed and suggests the closest tag", () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+
+		expect(NoteTemplateEngine("{{podcst}}", demoEpisode)).toBe("{{podcst}}");
+		expect(notice.mock.calls).toEqual([["Tag podcst is invalid. Did you mean podcast?"]]);
+	});
+
+	it("suggests nothing when no tag is close", () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+
+		expect(NoteTemplateEngine("{{xyzzy}}", demoEpisode)).toBe("{{xyzzy}}");
+		expect(notice.mock.calls).toEqual([["Tag xyzzy is invalid."]]);
 	});
 });
 
