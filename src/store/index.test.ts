@@ -1,5 +1,6 @@
-import { get } from "svelte/store";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import type { Vault } from "obsidian";
+import { get, type Writable } from "svelte/store";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { Episode } from "src/types/Episode";
 import type { IPodNotes } from "src/types/IPodNotes";
@@ -11,15 +12,18 @@ import {
 	MAX_EPISODE_LIST_LIMIT,
 	QUEUE_SETTINGS,
 } from "src/constants";
+import { selectSource } from "src/player/source";
 import { bindStoresToSettings } from "src/store/persistence";
 import {
 	dedupeEpisodesByKey,
 	downloadedEpisodes,
 	localFiles,
 	playedEpisodes,
+	playlists,
 	queue,
 	reorderEpisodes,
 	sanitizeEpisodeListLimit,
+	savedFeeds,
 } from "./index";
 
 const episode: Episode = {
@@ -548,5 +552,88 @@ describe("sanitizeEpisodeListLimit (issue #114)", () => {
 		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT)).toBe(MAX_EPISODE_LIST_LIMIT);
 		expect(sanitizeEpisodeListLimit(MAX_EPISODE_LIST_LIMIT + 1)).toBe(MAX_EPISODE_LIST_LIMIT);
 		expect(sanitizeEpisodeListLimit(10 ** 9)).toBe(MAX_EPISODE_LIST_LIMIT);
+	});
+});
+
+describe("stores keyed by a podcast, playlist or episode name", () => {
+	const names = ["toString", "__proto__", "constructor", "hasOwnProperty"];
+	const stores = [
+		["savedFeeds", savedFeeds],
+		["downloadedEpisodes", downloadedEpisodes],
+		["playedEpisodes", playedEpisodes],
+		["playlists", playlists],
+	] as unknown as [string, Writable<Record<string, unknown>>][];
+
+	afterEach(() => {
+		for (const field of ["time", "finished"]) {
+			delete (Object.prototype as Record<string, unknown>)[field];
+		}
+	});
+
+	test.each(stores)(
+		"%s keeps the names it is given, after a set and a replacing update, and finds no other",
+		(_, store) => {
+			store.set(Object.fromEntries(names.map((name) => [name, { name }])));
+			store.update((current) => ({ ...current, Other: { name: "Other" } }));
+
+			const current = get(store);
+			expect(Object.keys(current).sort()).toEqual([...names, "Other"].sort());
+			expect(current["__proto__"]).toEqual({ name: "__proto__" });
+			for (const absent of ["valueOf", "isPrototypeOf"]) {
+				expect(current[absent], absent).toBeUndefined();
+			}
+		},
+	);
+
+	test.each(names)("streams an episode of a podcast named %s that has no downloads", (name) => {
+		downloadedEpisodes.set({});
+		const of = { ...episode, podcastName: name };
+		const vault = { getAbstractFileByPath: () => null } as unknown as Vault;
+
+		expect(downloadedEpisodes.getEpisode(of)).toBeUndefined();
+		expect(downloadedEpisodes.isEpisodeDownloaded(of)).toBeFalsy();
+		expect(selectSource(of, get(downloadedEpisodes), vault).src).toBe(episode.streamUrl);
+	});
+
+	test.each(names)("downloads an episode of a podcast named %s", (name) => {
+		downloadedEpisodes.set({});
+		const of = { ...episode, podcastName: name };
+
+		downloadedEpisodes.addEpisode(of, `${name}/Shared title.mp3`, 1);
+
+		expect(downloadedEpisodes.getEpisode(of)?.filePath).toBe(`${name}/Shared title.mp3`);
+		expect(downloadedEpisodes.isEpisodeDownloaded(of)).toBe(true);
+		expect(Object.keys(get(downloadedEpisodes))).toEqual([name]);
+	});
+
+	test("marks an episode titled __proto__ played without touching other objects", () => {
+		playedEpisodes.set({});
+		const of = { ...episode, title: "__proto__", podcastName: "" };
+
+		playedEpisodes.markAsPlayed(of);
+
+		expect(playedEpisodes.get(of)?.finished).toBe(true);
+		expect(({} as { finished?: boolean }).finished).toBeUndefined();
+	});
+
+	test("marking one show's episode played leaves another show's same-titled legacy progress alone", () => {
+		const showA: PlayedEpisode = {
+			title: episode.title,
+			podcastName: "Show A",
+			time: 30,
+			duration: 60,
+			finished: false,
+		};
+		playedEpisodes.set({ [episode.title]: { ...showA } });
+		const showBEpisode = { ...episode, podcastName: "Show B" };
+
+		playedEpisodes.markAsPlayed(showBEpisode);
+
+		expect(get(playedEpisodes)[episode.title]).toEqual(showA);
+		expect(playedEpisodes.get({ ...episode, podcastName: "Show A" })).toEqual(showA);
+		expect(get(playedEpisodes)["Show B::Shared title"]).toMatchObject({
+			podcastName: "Show B",
+			finished: true,
+		});
 	});
 });
