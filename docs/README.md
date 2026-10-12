@@ -56,6 +56,17 @@ To show a screenshot on a page, write
 `![What it shows](/screenshots/<name>.webp)`. The site adds the size, lazy
 loading, the dark twin, and the phone crop if there is one.
 
+## Brand
+
+The PodNotes mark is `public/brand/podnotes-mark.svg`, drawn on a 16 px grid so
+the smallest favicon stays sharp. The header logo uses it directly. The
+favicons and the Apple touch icon are built from it. After you change the mark,
+run from the repo root:
+
+```sh
+node docs/scripts/brand.mjs
+```
+
 ## Commands
 
 ```sh

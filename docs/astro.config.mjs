@@ -11,6 +11,7 @@ export default defineConfig({
 		starlight({
 			title,
 			description,
+			logo: { src: "./public/brand/podnotes-mark.svg", alt: "" },
 			plugins: [starlightLinksValidator()],
 			social: [
 				{
@@ -28,6 +29,25 @@ export default defineConfig({
 				styleOverrides: { borderRadius: "0.5rem" },
 			},
 			head: [
+				{
+					tag: "link",
+					attrs: {
+						rel: "icon",
+						type: "image/png",
+						sizes: "32x32",
+						href: "/favicon-32.png",
+					},
+				},
+				{
+					tag: "link",
+					attrs: {
+						rel: "icon",
+						type: "image/png",
+						sizes: "16x16",
+						href: "/favicon-16.png",
+					},
+				},
+				{ tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
 				{
 					tag: "link",
 					attrs: {

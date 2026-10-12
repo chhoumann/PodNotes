@@ -414,3 +414,15 @@ h1#_top {
 [data-has-hero] .sl-markdown-content > p {
 	max-width: 45rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * Brand
+ * ------------------------------------------------------------------------ */
+
+/* The mark and the name read as one lockup. */
+.site-title {
+	gap: 0.625rem;
+}
+.site-title img {
+	height: 2rem;
+}
