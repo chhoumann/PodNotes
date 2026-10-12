@@ -23,7 +23,7 @@ import {
 	episodeListLimit,
 	favorites,
 	hidePlayedEpisodes,
-	localFiles,
+	playedEpisodes,
 	playlists,
 	plugin,
 	queue,
@@ -36,7 +36,7 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
-import { migratePrivateFeedUrls } from "src/services/privateFeeds";
+import { protectPrivateFeeds } from "src/services/privateFeeds";
 import {
 	describeSecrets,
 	mergeImportedSettings,
@@ -682,21 +682,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Import podcasts from an OPML file.")
 			.addButton((button) =>
 				button.setButtonText("Import").onClick(() => {
-					this.pickFile(
-						".opml",
-						async (contents) => {
-							try {
-								await importOPML(contents);
-							} catch (e) {
-								console.error("Error importing OPML:", e);
-								new Notice(
-									`Error importing OPML: ${e instanceof Error ? e.message : "Unknown error"}`,
-									10000,
-								);
-							}
-						},
-						{ tooLargeMessage: "That file is too large to be an OPML file." },
-					);
+					this.pickFile(".opml", importOPML, {
+						tooLargeMessage: "That file is too large to be an OPML file.",
+					});
 				}),
 			);
 
@@ -739,7 +727,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Import settings")
 			.setDesc(
-				"Import PodNotes preferences, templates, feeds, and playlists from a settings file. Playback progress and downloads are not affected.",
+				"Import PodNotes preferences, templates, feeds, playlists, and playback progress from a settings file.",
 			)
 			.addButton((button) =>
 				button.setButtonText("Import").onClick(() => {
@@ -763,7 +751,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Export settings")
-			.setDesc("Export PodNotes preferences, templates, feeds, and playlists.")
+			.setDesc(
+				"Export PodNotes preferences, templates, feeds, playlists, and playback progress.",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("Export file name")
@@ -864,13 +854,9 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					: `Exported PodNotes settings to "${fileName}".`,
 			);
 		} catch (error) {
-			if (error instanceof Error && error.message.includes("Folder does not exist")) {
-				new Notice("Unable to create export file: folder does not exist.");
-			} else {
-				new Notice(
-					`Unable to export settings:\n\n${error instanceof Error ? error.message : "Unknown error"}`,
-				);
-			}
+			new Notice(
+				`Unable to export settings:\n\n${error instanceof Error ? error.message : "Unknown error"}`,
+			);
 			console.error("PodNotes: failed to export settings", error);
 		}
 	}
@@ -882,27 +868,17 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			return;
 		}
 
-		// Warn about a collection only when the user CURRENTLY has data there AND
-		// the import carries that collection (so it will be replaced wholesale —
-		// including by an explicitly empty collection, which silently wiped feeds
-		// with no warning before). Keying off the imported data's contents alone
-		// missed exactly that data-loss case (SA-09).
-		const willReplace = (
-			key: keyof IPodNotesSettings,
-			current: Record<string, unknown> | undefined,
-		): boolean =>
-			Object.prototype.hasOwnProperty.call(result.settings, key) &&
-			Object.keys(current ?? {}).length > 0;
-
-		const sections: string[] = [];
-		if (willReplace("savedFeeds", this.plugin.settings.savedFeeds)) {
-			sections.push("podcast feeds");
-		}
-		if (willReplace("playlists", this.plugin.settings.playlists)) {
-			sections.push("playlists");
-		}
+		const { settings } = this.plugin;
+		const sections = Object.entries({
+			savedFeeds: settings.savedFeeds,
+			playlists: settings.playlists,
+			queue: settings.queue.episodes,
+			favorites: settings.favorites.episodes,
+		})
+			.filter(([key, current]) => key in result.settings && Object.keys(current).length > 0)
+			.map(([key]) => (key === "savedFeeds" ? "podcast feeds" : key));
 		sections.push(...describeSecrets(result.secrets));
-		const detail = sections.length ? ` This also replaces your ${sections.join(", ")}.` : "";
+		const detail = sections.length ? ` Also replaced: ${sections.join(", ")}.` : "";
 		const secretDetail =
 			Object.keys(result.secrets).length > 0
 				? " Existing Obsidian secrets are never overwritten; conflicts are saved under a new PodNotes name."
@@ -911,7 +887,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		new ConfirmModal(
 			this.app,
 			"Import PodNotes settings?",
-			`This overwrites your current PodNotes preferences and templates with the imported values.${detail}${secretDetail} Your playback progress and downloads are kept.`,
+			`This overwrites your current PodNotes preferences and templates with the imported values.${detail}${secretDetail} Your playback progress, downloads, and local files are kept.`,
 			"Import",
 			() => {
 				void this.applyImportedSettings(result.settings, result.secrets);
@@ -945,25 +921,26 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	): Promise<ImportMutationResult> {
 		const previousSettings = this.plugin.settings;
 		const previous = structuredClone(previousSettings);
-		let secretReferences: Partial<IPodNotesSettings> = {};
+		let merged: IPodNotesSettings;
 		try {
-			secretReferences = this.plugin.credentials.storeValues(secrets);
+			const secretReferences = this.plugin.credentials.storeValues(secrets);
+			// A raw data.json import can carry credential-bearing feed URLs; intern
+			// them BEFORE the strict persist below so the secret never reaches disk.
+			const protection = protectPrivateFeeds(
+				mergeImportedSettings(previous, { ...imported, ...secretReferences }),
+				this.plugin.feedUrls,
+			);
+			if (protection.failed.length > 0) throw new Error();
+			merged = protection.settings;
 		} catch (error) {
 			new Notice(
-				"Could not finish importing API keys into Obsidian SecretStorage. Existing settings were kept, and retrying will safely reuse any PodNotes secrets already created.",
+				"Could not finish importing secrets into Obsidian SecretStorage. Existing settings were kept, and retrying is safe.",
 				10000,
 			);
-			console.error("PodNotes: failed to import credentials into SecretStorage", error);
+			console.error("PodNotes: failed to import secrets into SecretStorage", error);
 			return "failed";
 		}
-
-		const merged = mergeImportedSettings(previous, { ...imported, ...secretReferences });
-		// A raw data.json import can carry credential-bearing feed URLs; intern
-		// them BEFORE the strict persist below so the secret never reaches disk.
-		merged.savedFeeds = migratePrivateFeedUrls(
-			merged.savedFeeds,
-			this.plugin.feedUrls,
-		).savedFeeds;
+		const progress = merged.playedEpisodes;
 		const failedCandidate = structuredClone(merged);
 		const concurrentStoreChanges = observePersistedStoreChanges();
 		this.plugin.settings = merged;
@@ -1015,14 +992,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		playlists.set(merged.playlists);
 		favorites.set(merged.favorites);
 		queue.set(merged.queue);
-		localFiles.set(merged.localFiles);
+		// The player may have saved a position since the merge: keep it, add the rest.
+		playedEpisodes.update((live) => ({ ...progress, ...live }));
 		hidePlayedEpisodes.set(merged.hidePlayedEpisodes);
-		const sanitizedLimit = sanitizeEpisodeListLimit(merged.episodeListLimit);
-		merged.episodeListLimit = sanitizedLimit;
-		episodeListLimit.set(sanitizedLimit);
-		this.plugin.player.setVolume(
-			Number.isFinite(merged.defaultVolume) ? merged.defaultVolume : 1,
-		);
+		episodeListLimit.set(merged.episodeListLimit);
+		this.plugin.player.setVolume(merged.defaultVolume);
 		this.plugin.player.setPlaybackRate(merged.defaultPlaybackRate);
 
 		try {
