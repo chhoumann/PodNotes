@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PodNotes from "./main";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { VIEW_TYPE } from "./constants";
-import { Notice, Platform } from "obsidian";
+import { Notice, Platform, type WorkspaceLeaf } from "obsidian";
 import type { Episode } from "./types/Episode";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
@@ -257,7 +257,6 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerDomEvent: vi.fn(),
 			writeRefusal: null,
 			writeInFlight: null,
-			mediaSessionActions: [],
 			storeUnsubscribers: [],
 			views: new Set(),
 			manifest: { dir: ".obsidian/plugins/podnotes" },
@@ -411,37 +410,6 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(commandIds.has("reset-playback-rate")).toBe(true);
 	});
 
-	it("registers a previous-track Media Session handler for headphone timestamp capture", async () => {
-		const originalMediaSession = Object.getOwnPropertyDescriptor(navigator, "mediaSession");
-		const calls: Array<{ action: string; hasHandler: boolean }> = [];
-
-		Object.defineProperty(navigator, "mediaSession", {
-			configurable: true,
-			value: {
-				setActionHandler: vi.fn((action: string, handler: (() => void) | null) => {
-					calls.push({
-						action,
-						hasHandler: typeof handler === "function",
-					});
-				}),
-			},
-		});
-
-		try {
-			await loadPlugin();
-			expect(calls).toContainEqual({
-				action: "previoustrack",
-				hasHandler: true,
-			});
-		} finally {
-			if (originalMediaSession) {
-				Object.defineProperty(navigator, "mediaSession", originalMediaSession);
-			} else {
-				Reflect.deleteProperty(navigator, "mediaSession");
-			}
-		}
-	});
-
 	it("takes its refusal Notice away on unload", async () => {
 		const { plugin } = await loadPlugin({ schemaVersion: 2 });
 		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(undefined) });
@@ -454,44 +422,6 @@ describe("PodNotes onload wiring (#55)", () => {
 		plugin.onunload();
 
 		expect(hide).toHaveBeenCalledTimes(1);
-	});
-
-	it("clears the previous-track Media Session handler on unload", async () => {
-		const originalMediaSession = Object.getOwnPropertyDescriptor(navigator, "mediaSession");
-		const calls: Array<{ action: string; hasHandler: boolean }> = [];
-
-		Object.defineProperty(navigator, "mediaSession", {
-			configurable: true,
-			value: {
-				setActionHandler: vi.fn((action: string, handler: (() => void) | null) => {
-					calls.push({
-						action,
-						hasHandler: typeof handler === "function",
-					});
-				}),
-			},
-		});
-
-		try {
-			const { plugin } = await loadPlugin();
-			plugin.onunload();
-			loaded.splice(loaded.indexOf(plugin), 1);
-
-			expect(calls).toContainEqual({
-				action: "previoustrack",
-				hasHandler: true,
-			});
-			expect(calls).toContainEqual({
-				action: "previoustrack",
-				hasHandler: false,
-			});
-		} finally {
-			if (originalMediaSession) {
-				Object.defineProperty(navigator, "mediaSession", originalMediaSession);
-			} else {
-				Reflect.deleteProperty(navigator, "mediaSession");
-			}
-		}
 	});
 
 	it("Show PodNotes command and ribbon icon both route to activateView", async () => {
@@ -577,6 +507,60 @@ describe("PodNotes onload wiring (#55)", () => {
 			const written = vi.mocked(plugin.saveData).mock.lastCall?.[0] as typeof savedData;
 			expect(written?.playedEpisodes["Pod::Saved Episode"]?.time).toBe(1300);
 		});
+	});
+
+	function recordMediaSession(target: { navigator: Navigator }) {
+		const calls: Array<{ action: string; hasHandler: boolean }> = [];
+		const original = Object.getOwnPropertyDescriptor(target.navigator, "mediaSession");
+		Object.defineProperty(target.navigator, "mediaSession", {
+			configurable: true,
+			value: {
+				setActionHandler: vi.fn((action: string, handler: (() => void) | null) => {
+					calls.push({ action, hasHandler: typeof handler === "function" });
+				}),
+				setPositionState: vi.fn(),
+			},
+		});
+		restoreMediaSessions.push(() => {
+			if (original) Object.defineProperty(target.navigator, "mediaSession", original);
+			else Reflect.deleteProperty(target.navigator, "mediaSession");
+		});
+		return calls;
+	}
+	const restoreMediaSessions: Array<() => void> = [];
+	afterEach(() => {
+		for (const restore of restoreMediaSessions.splice(0)) restore();
+		vi.unstubAllGlobals();
+	});
+
+	it("sets the headphone capture handler on the main window's Media Session once an episode is shown", async () => {
+		const calls = recordMediaSession(window);
+		const popout = { navigator: {} as Navigator };
+		const popoutCalls = recordMediaSession(popout);
+		vi.stubGlobal("activeWindow", popout);
+
+		const { plugin } = await loadPlugin(savedData);
+		const createView = vi.mocked(plugin.registerView).mock.calls[0][1];
+		createView({} as WorkspaceLeaf);
+		createView({} as WorkspaceLeaf);
+
+		expect(calls.filter(({ action }) => action === "previoustrack")).toEqual([
+			{ action: "previoustrack", hasHandler: true },
+		]);
+		expect(popoutCalls).toEqual([]);
+	});
+
+	it("clears the Media Session handlers on unload", async () => {
+		const calls = recordMediaSession(window);
+
+		const { plugin } = await loadPlugin(savedData);
+		plugin.onunload();
+		loaded.splice(loaded.indexOf(plugin), 1);
+
+		const set = calls.filter(({ hasHandler }) => hasHandler).map(({ action }) => action);
+		const cleared = calls.filter(({ hasHandler }) => !hasHandler).map(({ action }) => action);
+		expect(set).toContain("previoustrack");
+		expect(cleared.sort()).toEqual(set.sort());
 	});
 
 	it("does not offer transcription for known video episodes", async () => {
