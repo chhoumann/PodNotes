@@ -190,7 +190,9 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `type <css> <text>` (insert at the cursor), `fill <css> <text>` (replace),
   `key <Enter|Escape|Tab|ArrowUp|ArrowDown|Backspace|<char>|Ctrl+<char>>`,
   `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `click`, `type`,
-  `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. `key` and
+  `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. They also
+  wait until nothing covers the element's center, and fail with
+  `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`,
   `audio [vault path]` or `stop`. The feed URL uses the host `podnotes.test`,
