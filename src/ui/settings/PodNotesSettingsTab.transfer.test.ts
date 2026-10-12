@@ -29,8 +29,15 @@ function episode(podcastName: string, title: string, feedUrl?: string) {
 	};
 }
 
-/** A loaded plugin whose data.json is `disk()`, importing files through the confirm dialog. */
-function setup(current: Partial<IPodNotesSettings> = {}) {
+function played(title: string, time: number) {
+	return { title, podcastName: "Show", time, duration: 60, finished: false };
+}
+
+function setup(
+	current: Partial<IPodNotesSettings> = {},
+	beforeWrite: (write: number) => Promise<void> = async () => {},
+) {
+	let writes = 0;
 	const settings = { ...structuredClone(DEFAULT_SETTINGS), ...structuredClone(current) };
 	let disk: Record<string, unknown> = { ...structuredClone(settings), schemaVersion: 2 };
 	const plugin = Object.create(PodNotes.prototype) as PodNotes;
@@ -51,6 +58,7 @@ function setup(current: Partial<IPodNotesSettings> = {}) {
 		manifest: { dir: ".obsidian/plugins/podnotes" },
 		loadData: vi.fn(async () => structuredClone(disk)),
 		saveData: async (snapshot: Record<string, unknown>) => {
+			await beforeWrite(++writes);
 			disk = structuredClone(snapshot);
 		},
 	});
@@ -129,13 +137,6 @@ describe("importing a settings file", () => {
 	});
 
 	it("brings progress for episodes this vault has not played and keeps its own", async () => {
-		const played = (title: string, time: number) => ({
-			title,
-			podcastName: "Show",
-			time,
-			duration: 60,
-			finished: false,
-		});
 		const { disk, chooseFile } = setup({
 			playedEpisodes: { "Show::Ep 1": played("Ep 1", 10) },
 		});
@@ -152,6 +153,33 @@ describe("importing a settings file", () => {
 		const expected = { "Show::Ep 1": played("Ep 1", 10), "Show::Ep 2": played("Ep 2", 20) };
 		expect(disk().playedEpisodes).toEqual(expected);
 		expect(get(playedEpisodes)).toEqual(expected);
+	});
+
+	it("keeps imported progress when the player saves a position during the import", async () => {
+		let releaseFirstWrite = () => {};
+		const firstWrite = new Promise<void>((resolve) => (releaseFirstWrite = resolve));
+		let writing = false;
+		const { disk, chooseFile } = setup(
+			{ playedEpisodes: { "Show::Ep 1": played("Ep 1", 10) } },
+			async (write) => {
+				writing = true;
+				if (write === 1) await firstWrite;
+			},
+		);
+
+		const importing = chooseFile({
+			...structuredClone(DEFAULT_SETTINGS),
+			schemaVersion: 2,
+			playedEpisodes: { "Show::Ep 2": played("Ep 2", 20) },
+		}).confirm();
+		await vi.waitFor(() => expect(writing).toBe(true));
+		playedEpisodes.setEpisodeTime(episode("Show", "Ep 1") as never, 15, 60, false);
+		releaseFirstWrite();
+		await importing;
+
+		const expected = { "Show::Ep 1": played("Ep 1", 15), "Show::Ep 2": played("Ep 2", 20) };
+		expect(get(playedEpisodes)).toEqual(expected);
+		expect(disk().playedEpisodes).toEqual(expected);
 	});
 
 	it("names the queue and favorites it replaces before importing", () => {

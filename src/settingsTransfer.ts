@@ -25,13 +25,7 @@ import { isLocalFile } from "./utility/isLocalFile";
 export const SETTINGS_EXPORT_TYPE = "podnotes-settings";
 export const SETTINGS_EXPORT_VERSION = 2;
 
-/**
- * Vault-specific state that must never travel between vaults: the episode->note
- * path map, on-disk download bookkeeping and the Local Files list mirrored from
- * it, and the currently-playing episode. These are excluded from export and
- * dropped on import (so a copied raw `data.json` still imports cleanly).
- */
-export const EXCLUDED_KEYS: readonly (keyof IPodNotesSettings)[] = [
+export const VAULT_LOCAL_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"podNotes",
 	"downloadedEpisodes",
 	"localFiles",
@@ -68,11 +62,11 @@ export function describeSecrets(secrets: CredentialValues): string[] {
 		.map((key) => SECRET_KEY_LABELS[key]);
 }
 
-/** Known top-level setting keys that are safe to import (excludes runtime state). */
+/** Known top-level setting keys that are safe to import (excludes vault-local state). */
 const IMPORTABLE_KEYS = new Set(
 	Object.keys(DEFAULT_SETTINGS).filter(
 		(key) =>
-			!EXCLUDED_KEYS.includes(key as keyof IPodNotesSettings) &&
+			!VAULT_LOCAL_KEYS.includes(key as keyof IPodNotesSettings) &&
 			!SECRET_REFERENCE_KEYS.has(key as keyof IPodNotesSettings),
 	),
 );
@@ -116,14 +110,9 @@ export type ParseResult =
 	  }
 	| { ok: false; error: string };
 
-/**
- * The part of a settings payload that travels between vaults. SecretStorage
- * references are device-local: an imported urlSecretId is at best meaningless
- * on this device, so a private feed keeps only its placeholder and is re-added
- * on the target device. A local file's episode points into this vault.
- */
 function portable<T extends object>(settings: T): T {
 	const out = { ...settings } as Record<string, unknown>;
+	// SecretStorage is device-local: an imported urlSecretId is at best meaningless here.
 	if (isPlainObject(out.savedFeeds)) {
 		out.savedFeeds = mapRecord(out.savedFeeds, (feed) =>
 			isPlainObject(feed) ? { ...feed, urlSecretId: undefined } : feed,
@@ -148,12 +137,6 @@ function withoutLocalFiles(playlist: unknown): unknown {
 		: playlist;
 }
 
-/**
- * Build a versioned export envelope from the live settings, copying only
- * allow-listed keys by name (never spreading the whole object). Runtime state and
- * SecretStorage references are always excluded. Plaintext values appear only in
- * the separate payload explicitly passed by the caller.
- */
 export function serializeSettings(
 	settings: IPodNotesSettings,
 	opts: ExportOptions,
@@ -277,8 +260,8 @@ export function parseImport(jsonText: string): ParseResult {
 }
 
 /**
- * Merge validated imported settings over the current settings. Runtime state
- * (excluded keys) is untouched because it is never present in `imported`. Nested
+ * Merge validated imported settings over the current settings. Vault-local
+ * state is untouched because it is never present in `imported`. Nested
  * objects are backfilled from defaults so a partial/hand-edited file cannot blank
  * out fields the rest of the plugin assumes exist (e.g. `timestamp.template`).
  */
@@ -289,7 +272,6 @@ export function mergeImportedSettings(
 	const merged: IPodNotesSettings = {
 		...current,
 		...imported,
-		// Progress this vault already has wins; the import adds the rest.
 		playedEpisodes: { ...imported.playedEpisodes, ...current.playedEpisodes },
 	};
 

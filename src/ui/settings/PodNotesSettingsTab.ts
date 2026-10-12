@@ -45,7 +45,6 @@ import {
 	parseImport,
 	serializeSettings,
 } from "src/settingsTransfer";
-import { normalizePlaybackRate } from "src/utility/playbackRate";
 import { DEFAULT_SPEAKER_TEMPLATE, type DiarizationProviderId } from "src/services/diarization";
 import type { CredentialKind, CredentialValues } from "src/types/Credentials";
 import { observePersistedStoreChanges } from "src/store/persistence";
@@ -875,11 +874,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			return;
 		}
 
-		// Warn about a collection only when the user CURRENTLY has data there AND
-		// the import carries that collection (so it will be replaced wholesale -
-		// including by an explicitly empty collection, which silently wiped feeds
-		// with no warning before). Keying off the imported data's contents alone
-		// missed exactly that data-loss case (SA-09).
 		const { settings } = this.plugin;
 		const sections = Object.entries({
 			savedFeeds: settings.savedFeeds,
@@ -951,6 +945,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			mergeImportedSettings(previous, { ...imported, ...secretReferences }),
 			this.plugin.feedUrls,
 		).settings;
+		const progress = merged.playedEpisodes;
 		const failedCandidate = structuredClone(merged);
 		const concurrentStoreChanges = observePersistedStoreChanges();
 		this.plugin.settings = merged;
@@ -1002,14 +997,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		playlists.set(merged.playlists);
 		favorites.set(merged.favorites);
 		queue.set(merged.queue);
-		playedEpisodes.set(merged.playedEpisodes);
+		// The player may have saved a position since the merge: keep it, add the rest.
+		playedEpisodes.update((live) => ({ ...progress, ...live }));
 		hidePlayedEpisodes.set(merged.hidePlayedEpisodes);
-		const sanitizedLimit = sanitizeEpisodeListLimit(merged.episodeListLimit);
-		merged.episodeListLimit = sanitizedLimit;
-		episodeListLimit.set(sanitizedLimit);
-		const importedVolume = Number.isFinite(merged.defaultVolume) ? merged.defaultVolume : 1;
-		volume.set(Math.min(1, Math.max(0, importedVolume)));
-		playbackRate.set(normalizePlaybackRate(merged.defaultPlaybackRate));
+		episodeListLimit.set(merged.episodeListLimit);
+		volume.set(merged.defaultVolume);
+		playbackRate.set(merged.defaultPlaybackRate);
 
 		try {
 			// Store setters can canonicalize or deduplicate their slices. Await one

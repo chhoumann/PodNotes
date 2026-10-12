@@ -125,13 +125,9 @@ function episode(title: string, feedUrl: string) {
 }
 
 describe("protectPrivateFeeds", () => {
-	it("moves only credential-bearing feeds and reports the count", () => {
+	it("moves only credential-bearing feeds", () => {
 		const { feedUrls, values } = repository();
-		const {
-			settings: safe,
-			moved,
-			failed,
-		} = protectPrivateFeeds(
+		const { settings: safe, failed } = protectPrivateFeeds(
 			settings({
 				savedFeeds: {
 					Public: feed({ title: "Public" }),
@@ -142,7 +138,6 @@ describe("protectPrivateFeeds", () => {
 			feedUrls,
 		);
 
-		expect(moved).toBe(2);
 		expect(failed).toEqual([]);
 		expect(safe.savedFeeds.Public.url).toBe("https://feeds.example.com/rss");
 		expect(safe.savedFeeds.Patreon.url).toBe("podnotes-private-feed:Patreon");
@@ -189,9 +184,27 @@ describe("protectPrivateFeeds", () => {
 			settings({ savedFeeds: { Patreon: feed({ url: PRIVATE_URL }) } }),
 			feedUrls,
 		);
-		const second = protectPrivateFeeds(first.settings, feedUrls);
-		expect(second.moved).toBe(0);
-		expect(second.settings).toEqual(first.settings);
+		expect(protectPrivateFeeds(first.settings, feedUrls).settings).toBe(first.settings);
+	});
+
+	it("replaces a protected feed's URL that an earlier import left in episode snapshots", () => {
+		const { feedUrls } = repository();
+		const id = feedUrls.store(PRIVATE_URL);
+		const saved = feed({
+			title: "Patreon",
+			url: "podnotes-private-feed:Patreon",
+			urlSecretId: id,
+		});
+		const leaked = settings({
+			savedFeeds: { Patreon: saved },
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode("Ep 2", PRIVATE_URL)] },
+		});
+
+		const { settings: safe } = protectPrivateFeeds(leaked, feedUrls);
+
+		expect(JSON.stringify(safe)).not.toContain("se-cret");
+		expect(safe.queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Patreon");
+		expect(safe.savedFeeds.Patreon).toEqual(saved);
 	});
 
 	it("reports feeds whose URL could not be protected", () => {
@@ -199,11 +212,11 @@ describe("protectPrivateFeeds", () => {
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
 			throw new Error("locked");
 		});
-		const { failed, moved } = protectPrivateFeeds(
-			settings({ savedFeeds: { Patreon: feed({ title: "Patreon", url: PRIVATE_URL }) } }),
-			feedUrls,
-		);
+		const unprotected = settings({
+			savedFeeds: { Patreon: feed({ title: "Patreon", url: PRIVATE_URL }) },
+		});
+		const { failed, settings: result } = protectPrivateFeeds(unprotected, feedUrls);
 		expect(failed).toEqual(["Patreon"]);
-		expect(moved).toBe(0);
+		expect(result).toBe(unprotected);
 	});
 });

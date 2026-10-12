@@ -255,6 +255,52 @@ describe("PodNotes persistence integration", () => {
 		);
 	});
 
+	it("removes a private feed URL an earlier import left in data.json, then stops rewriting it", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		const id = "podnotes-feed-url-00000000-0000-4000-8000-000000000000";
+		const secretUrl = "https://private.example/feed.xml?auth=leaked";
+		const { storage } = memorySecretStorage({ [id]: secretUrl });
+		Object.assign(plugin, { app: { ...plugin.app, secretStorage: storage } });
+		await plugin.saveData(
+			encodePodNotesData({
+				...structuredClone(DEFAULT_SETTINGS),
+				savedFeeds: {
+					Private: {
+						title: "Private",
+						url: "podnotes-private-feed:Private",
+						urlSecretId: id,
+						artworkUrl: "",
+					},
+				},
+				queue: {
+					...DEFAULT_SETTINGS.queue,
+					episodes: [
+						{
+							title: "Ep",
+							streamUrl: "https://media.example/ep.mp3",
+							url: "",
+							description: "",
+							content: "",
+							podcastName: "Private",
+							feedUrl: secretUrl,
+						},
+					],
+				},
+			}),
+		);
+		saveData.mockClear();
+
+		await plugin.loadSettings();
+		const written = JSON.stringify(saveData.mock.calls.at(-1)?.[0]);
+		expect(written).toContain('"feedUrl":"podnotes-private-feed:Private"');
+		expect(written).not.toContain("auth=leaked");
+
+		const writes = saveData.mock.calls.length;
+		await plugin.loadSettings();
+		expect(saveData).toHaveBeenCalledTimes(writes);
+	});
+
 	it("starts on an empty data.json as on a new install", async () => {
 		const plugin = makePlugin(undefined, { dataFileExists: true });
 		let text = "";

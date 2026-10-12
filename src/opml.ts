@@ -94,7 +94,9 @@ async function importOPML(opml: string): Promise<void> {
 		let savedCount = 0;
 		savedFeeds.update((saved) => {
 			for (const pod of validPodcasts) {
-				if (saved[pod.title]) continue;
+				// A saved private feed whose URL is not on this device takes the listed URL.
+				if (saved[pod.title] && resolveFeedUrl(saved[pod.title], feedUrls) !== null)
+					continue;
 				// Imported private URLs go straight to SecretStorage, never data.json.
 				saved[pod.title] = internPrivateFeed(structuredClone(pod), feedUrls);
 				savedCount++;

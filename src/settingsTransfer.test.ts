@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./constants";
 import {
-	EXCLUDED_KEYS,
+	VAULT_LOCAL_KEYS,
 	SETTINGS_EXPORT_TYPE,
 	SETTINGS_EXPORT_VERSION,
 	describeSecrets,
@@ -87,7 +87,7 @@ describe("serializeSettings", () => {
 
 		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
 
-		for (const key of EXCLUDED_KEYS) {
+		for (const key of VAULT_LOCAL_KEYS) {
 			expect(exported).not.toHaveProperty(key as string);
 		}
 	});
@@ -153,16 +153,19 @@ describe("serializeSettings", () => {
 	});
 
 	it("leaves this vault's files behind but keeps the rest of the library", () => {
-		const episode = (podcastName: string, title: string) => ({
+		const episode = (podcastName: string, title: string, streamUrl: string) => ({
 			title,
-			streamUrl: `app://local/vault/${title}.mp3`,
+			streamUrl,
 			url: "",
 			description: "",
 			content: "",
 			podcastName,
 		});
-		const memo = { ...episode("local file", "Memo"), filePath: "Audio/Memo.mp3" };
-		const show = episode("Show", "Ep 1");
+		const memo = {
+			...episode("local file", "Memo", "app://local/vault/Audio/Memo.mp3"),
+			filePath: "Audio/Memo.mp3",
+		};
+		const show = episode("Show", "Ep 1", "https://media.example/ep1.mp3");
 		const settings = makeSettings({
 			localFiles: { ...DEFAULT_SETTINGS.localFiles, episodes: [memo] },
 			queue: { ...DEFAULT_SETTINGS.queue, episodes: [memo, show] },
@@ -285,7 +288,7 @@ describe("parseImport", () => {
 		if (result.ok) {
 			expect(result.meta.fromEnvelope).toBe(false);
 			expect(result.settings.defaultVolume).toBe(0.3);
-			for (const key of EXCLUDED_KEYS) {
+			for (const key of VAULT_LOCAL_KEYS) {
 				expect(result.settings).not.toHaveProperty(key as string);
 			}
 		}
@@ -503,7 +506,7 @@ describe("parseImport", () => {
 });
 
 describe("mergeImportedSettings", () => {
-	it("overrides preferences while preserving excluded runtime state", () => {
+	it("overrides preferences while preserving this vault's progress", () => {
 		const current = makeSettings({
 			defaultVolume: 1,
 			playedEpisodes: {

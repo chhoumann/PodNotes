@@ -560,13 +560,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// reported, and never breaks loading.
 			this.feedUrls ??= new FeedUrlRepository(this.app.secretStorage);
 			const feedMigration = protectPrivateFeeds(settings, this.feedUrls);
-			if (feedMigration.moved > 0) {
+			if (feedMigration.settings !== settings) {
 				settings = feedMigration.settings;
 				await this.writeDataFile(encodePodNotesData(settings, decoded.unknownFields));
-				const count = feedMigration.moved;
-				new Notice(
-					`Moved ${count} private feed ${count === 1 ? "URL" : "URLs"} into Obsidian SecretStorage.`,
-				);
+				new Notice("Moved private feed URLs into Obsidian SecretStorage.");
 			}
 			if (feedMigration.failed.length > 0) {
 				new Notice(

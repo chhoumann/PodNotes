@@ -83,20 +83,10 @@ export function notifyPrivateFeedUnavailable(title: string): void {
 
 export interface PrivateFeedProtection {
 	settings: IPodNotesSettings;
-	/** How many saved feeds moved their URL into SecretStorage. */
-	moved: number;
 	/** Feeds whose URL could NOT be protected (SecretStorage failure). */
 	failed: string[];
 }
 
-/**
- * Make settings safe to persist: move every credential-bearing saved-feed URL
- * into SecretStorage, and replace the same URLs in persisted episode snapshots
- * (played history, queue, favorites, playlists, local files, downloads, and
- * the current episode all persist full episodes whose `url`/`feedUrl` were
- * stamped at fetch time). Best-effort per feed: one failing feed keeps its
- * URL, is reported in `failed`, and the rest still move.
- */
 export function protectPrivateFeeds(
 	settings: IPodNotesSettings,
 	feedUrls: FeedUrlRepository,
@@ -104,36 +94,37 @@ export function protectPrivateFeeds(
 	const replacements = new Map<string, string>();
 	const failed: string[] = [];
 	const savedFeeds: Record<string, PodcastFeed> = {};
+	let moved = false;
 	for (const [key, feed] of Object.entries(settings.savedFeeds)) {
 		const interned = internPrivateFeed(feed, feedUrls, key);
 		if (interned !== feed) {
+			moved = true;
 			replacements.set(feed.url, interned.url);
 		} else if (isCredentialBearingUrl(feed.url)) {
 			failed.push(key);
 		}
+		// Also replace a protected feed's URL that an older import left in snapshots.
+		const url = interned.urlSecretId && feedUrls.resolve(interned.urlSecretId);
+		if (url) replacements.set(url, interned.url);
 		savedFeeds[key] = interned;
 	}
 	return {
-		settings: scrubEpisodeUrls({ ...settings, savedFeeds }, replacements),
-		moved: replacements.size,
+		settings: scrubEpisodeUrls(moved ? { ...settings, savedFeeds } : settings, replacements),
 		failed,
 	};
 }
 
+/** Returns `value` itself when no URL changed, so callers can tell whether to save. */
 function scrubEpisodeUrls<T>(value: T, replacements: Map<string, string>): T {
-	if (replacements.size === 0) return value;
-	if (Array.isArray(value)) {
-		return value.map((entry) => scrubEpisodeUrls(entry, replacements)) as T;
-	}
-	if (typeof value !== "object" || value === null) return value;
+	if (replacements.size === 0 || typeof value !== "object" || value === null) return value;
+	const isArray = Array.isArray(value);
 	// Decoded settings carry Date instances (episodeDate); recursing into one
 	// would flatten it into {}. Non-plain objects hold no episode URLs.
-	if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+	if (!isArray && Object.getPrototypeOf(value) !== Object.prototype) return value;
 
-	const record = value as Record<string, unknown>;
 	let changed = false;
-	const next: Record<string, unknown> = {};
-	for (const [key, entry] of Object.entries(record)) {
+	const next = (isArray ? [] : {}) as Record<string, unknown>;
+	for (const [key, entry] of Object.entries(value)) {
 		let scrubbed: unknown;
 		if ((key === "url" || key === "feedUrl") && typeof entry === "string") {
 			scrubbed = replacements.get(entry) ?? entry;
