@@ -202,6 +202,19 @@ describe("podNotesURIHandler with saved feeds", () => {
 		expect(playing()).toMatchObject({ title: testEpisode.title, podcastName: "Test Podcast" });
 	});
 
+	test("a play the user starts while a private feed link loads wins", async () => {
+		follow();
+		const fetching = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(fetching.promise);
+
+		const opening = open(privateLink, first.title);
+		player.play(testEpisode);
+		fetching.resolve(feedDocument("Patron Show", [first]));
+		await opening;
+
+		expect(playing()).toMatchObject({ title: testEpisode.title, podcastName: "Test Podcast" });
+	});
+
 	test("a link that plays from a private feed's last copy wins over an earlier link", async () => {
 		await lostPrivateUrl();
 		const earlier = deferred<ParsedFeedEpisodes>();
