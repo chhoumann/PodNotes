@@ -2,10 +2,10 @@
 title: Transcribe episodes
 slug: transcripts
 legacyTitleId: transcripts
-description: Transcribe an episode into a note with your OpenAI or Deepgram key, add speaker labels, and see what it costs.
+description: Transcribe an episode into a note with your OpenAI key, add speaker labels with OpenAI or Deepgram, and see what it costs.
 ---
 
-Turn the audio of an episode into a transcript note, with speaker labels if you want them, using your own OpenAI or Deepgram account.
+Turn the audio of an episode into a transcript note with your own OpenAI account. For speaker labels, use OpenAI, or a Deepgram account instead.
 
 ## <span id="setting-up"></span>Set up an OpenAI key
 

@@ -34,7 +34,7 @@ hero:
 - [Use PodNotes on your phone](/mobile/)
   PodNotes works on iOS and Android. Download episodes for offline listening, or play your own audio and video files.
 - <span id="transcripts-with-speaker-labels"></span>[Transcribe episodes](/transcripts/)
-  Turn an episode into a transcript note with your own OpenAI or Deepgram key, with optional speaker labels.
+  Turn an episode into a transcript note with your own OpenAI API key, or with a Deepgram key when you turn on speaker labels.
 - [Automate with the API](/api/)
   Use the commands, the JavaScript API, and QuickAdd to capture and write notes your way.
 
