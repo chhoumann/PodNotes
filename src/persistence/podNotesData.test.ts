@@ -90,6 +90,20 @@ describe("PodNotes data schema", () => {
 
 		expect(JSON.stringify(encoded)).not.toContain(sentinel);
 		expect(encoded.currentEpisode?.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
+		for (const list of [
+			encoded.queue,
+			encoded.favorites,
+			encoded.localFiles,
+			encoded.playlists.Custom,
+		]) {
+			expect(list.episodes).toHaveLength(1);
+			expect(list.episodes[0]).toMatchObject({
+				title: item.title,
+				url: "podnotes-private-feed:Test%20Podcast",
+				feedUrl: "podnotes-private-feed:Test%20Podcast",
+			});
+			expect(list.currentEpisode?.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
+		}
 		expect(encoded.queue.episodes[0].streamUrl).toBe(item.streamUrl);
 		expect(encoded.downloadedEpisodes["Test Podcast"][0].filePath).toBe("audio.mp3");
 		expect(encoded.playedEpisodes["Test Podcast::Private"].time).toBe(12);
