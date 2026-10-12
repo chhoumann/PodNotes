@@ -29,7 +29,7 @@ Preconditions:
 - **Load the feed.** Run `UI fill 'input[placeholder="Search or enter feed URL..."]' "$FEED"`. A card titled `PodNotes Fixture`, with purple artwork and an `Add` button labelled `Add PodNotes Fixture podcast`, appears within about 1 s.
 - **Add it.** Run `UI click '[aria-label="Add PodNotes Fixture podcast"]'`. The button becomes `Remove PodNotes Fixture podcast`, and after about 2 s `data.json` `savedFeeds["PodNotes Fixture"].url` equals `$FEED`.
 - **Close Settings.** Run `UI click '.modal.mod-settings .modal-header-button'`.
-- **Browse.** Run `CLI command id=podnotes:podnotes-show-leaf`, `UI click '.podcast-view [aria-label="Podcast grid"]'`, `UI click '.podcast-view .pn_image_container:has(img[alt="PodNotes Fixture"])'`. The header reads `PodNotes Fixture`, and the list shows `Fixture Episode 2` (`10 OCTOBER 2026`) above `Fixture Episode 1` (`09 OCTOBER 2026`).
+- **Browse.** Run `CLI command id=podnotes:podnotes-show-leaf`, `UI click '.podcast-view [aria-label="Podcast grid"]'`, `UI click '.podcast-view .podcast-card[aria-label="PodNotes Fixture"]'`. The header reads `PodNotes Fixture`, and the list shows `Fixture Episode 2` (`10 OCTOBER 2026`) above `Fixture Episode 1` (`09 OCTOBER 2026`).
 - **Remove it.** Reopen Settings > PodNotes with the search input empty, and run `UI click '[aria-label="Remove PodNotes Fixture podcast"]'`. `savedFeeds` no longer has it, and the grid shows `No saved podcasts.`.
 - **Proof.** Run `npm run capture:e2e-obsidian -- screenshot .obsidian-e2e-artifacts/feeds/settings.png --modal` with the result card showing, then `npm run screenshot:e2e-obsidian -- .obsidian-e2e-artifacts/feeds/episodes.png` on the episode list, and save the `savedFeeds` read.
 

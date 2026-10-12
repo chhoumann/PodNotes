@@ -1,8 +1,9 @@
 import { describe, expect, onTestFinished, test } from "vitest";
-import { createPodNotesE2EHarness, expectKnownFailure, RELOAD_OPTIONS } from "./harness";
+import { createPodNotesE2EHarness, RELOAD_OPTIONS } from "./harness";
 import {
 	chooseFile,
 	click,
+	closePodNotes,
 	closeSettings,
 	isShown,
 	listedEpisodes,
@@ -25,6 +26,7 @@ import {
 	startFixtureServer,
 } from "./journey/fixtures";
 import {
+	ageFeedCache,
 	feedCacheHolds,
 	observePlayback,
 	readLibrary,
@@ -251,7 +253,7 @@ describe("feed journeys", () => {
 		);
 	});
 
-	test("#378 known failure J-EDGE-05: a feed episode without pubDate still appears in the episode list", async () => {
+	test("J-EDGE-05: a feed episode without pubDate still appears in the episode list (#378)", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const show: FixtureFeed = {
@@ -274,16 +276,12 @@ describe("feed journeys", () => {
 			timeoutMs: 15_000,
 			message: "the missing-date feed finished loading",
 		});
-		const captured = (await listedEpisodes(obsidian)).sort();
-		expectKnownFailure(378, captured, {
-			correct: (value) => expect(value).toEqual(["Dated Control", "Undated Episode"]),
-			reproduces: (value) => value.length === 1 && value[0] === "Dated Control",
-		});
+		expect(await listedEpisodes(obsidian)).toEqual(["Dated Control", "Undated Episode"]);
 	});
 
-	test("#358 known failure: a podcast without artwork still gets a card in the grid", async () => {
+	test("a podcast without artwork still gets a card in the grid (#358)", async () => {
 		const context = getContext();
-		const { obsidian, plugin } = context;
+		const { obsidian } = context;
 		const control = feed("Journey Artwork Control", "control", ["Control Episode"]);
 		const artless = feed("Journey No Artwork", "artless", ["Artless Episode"], false);
 		await seedLibrary(context, await serve(control, artless), {
@@ -293,24 +291,17 @@ describe("feed journeys", () => {
 		await showPodNotes(obsidian);
 		await waitUntilShown(obsidian, ui.podcastCard("Journey Artwork Control"));
 		await obsidian.sleep(1000);
-		const captured = {
-			subscribed: (await readLibrary(plugin)).subscriptions
-				.map((entry) => entry.title)
-				.sort(),
-			controlCard: await isShown(obsidian, ui.podcastCard("Journey Artwork Control")),
-			artlessCard: await isShown(obsidian, ui.podcastCard("Journey No Artwork")),
-		};
 
-		expectKnownFailure(358, captured, {
-			correct: (value) => expect(value.artlessCard).toBe(true),
-			reproduces: (value) =>
-				value.controlCard &&
-				!value.artlessCard &&
-				value.subscribed.join() === "Journey Artwork Control,Journey No Artwork",
+		expect(await isShown(obsidian, ui.podcastCard("Journey No Artwork"))).toBe(true);
+		await click(obsidian, ui.podcastCard("Journey No Artwork"));
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 1, {
+			timeoutMs: 15_000,
+			message: "the artless podcast's episodes",
 		});
+		expect(await listedEpisodes(obsidian)).toEqual(["Artless Episode"]);
 	});
 
-	test("#375 known failure: the Episode list tab shows episodes that loaded while the grid was open", async () => {
+	test("the Episode list tab shows episodes that loaded while the grid was open (#375)", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const show = feed("Journey Latest", "latest", ["Latest Two", "Latest One"]);
@@ -324,14 +315,151 @@ describe("feed journeys", () => {
 		});
 		await click(obsidian, ui.episodeListTab);
 		await obsidian.sleep(1000);
-		const captured = {
-			listed: await listedEpisodes(obsidian),
-			emptyState: (await shownText(obsidian)).includes("No episodes found."),
-		};
 
-		expectKnownFailure(375, captured, {
-			correct: (value) => expect(value.listed).toEqual(["Latest Two", "Latest One"]),
-			reproduces: (value) => value.listed.length === 0 && value.emptyState,
+		expect(await listedEpisodes(obsidian)).toEqual(["Latest Two", "Latest One"]);
+	});
+
+	test("J-LIST-04 a refresh that returns after the user moved on never shows the old feed or sticks", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const alpha = feed("Journey Refresh Alpha", "refresh-alpha", ["Alpha Two", "Alpha One"]);
+		const beta = feed("Journey Refresh Beta", "refresh-beta", ["Beta Two", "Beta One"]);
+		const server = await serve(alpha, beta);
+		await seedLibrary(context, server, { subscriptions: [alpha, beta] });
+
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastCard(alpha.title));
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
+			timeoutMs: 15_000,
+			message: "Alpha's episodes",
 		});
+		server.delayFeed(alpha, 3000);
+		await click(obsidian, ui.refreshEpisodes);
+		await click(obsidian, ui.podcastGridTab);
+		await click(obsidian, ui.podcastCard(beta.title));
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
+			timeoutMs: 15_000,
+			message: "Beta's episodes",
+		});
+		await obsidian.sleep(4000);
+		expect(await listedEpisodes(obsidian)).toEqual(["Beta Two", "Beta One"]);
+		expect(await shownText(obsidian)).not.toContain("Updating");
+
+		await click(obsidian, ui.podcastGridTab);
+		await click(obsidian, ui.podcastCard(alpha.title));
+		await click(obsidian, ui.refreshEpisodes);
+		await click(obsidian, ui.backToLatestEpisodes);
+		await obsidian.sleep(4000);
+		// Both feeds publish on the same days, so Latest Episodes interleaves them.
+		expect(await listedEpisodes(obsidian)).toEqual([
+			"Alpha Two",
+			"Beta Two",
+			"Alpha One",
+			"Beta One",
+		]);
+		expect(await shownText(obsidian)).not.toContain("Updating");
+	});
+
+	test("J-FEED-05 removing a podcast drops it from the grid, Latest Episodes and the feed cache at once", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const keep = feed("Journey Keep", "keep", ["Keep One"]);
+		const drop = feed("Journey Drop", "drop", ["Drop One"]);
+		await seedLibrary(context, await serve(keep, drop), { subscriptions: [keep, drop] });
+
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastCard(keep.title));
+		await click(obsidian, ui.backToLatestEpisodes);
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
+			timeoutMs: 15_000,
+			message: "both podcasts in Latest Episodes",
+		});
+		expect(await feedCacheHolds(obsidian, "Drop One")).toBe(true);
+
+		await openPodNotesSettings(obsidian);
+		await click(obsidian, ui.removePodcast(drop.title));
+		await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 1,
+			"the removed podcast unsaved",
+		);
+		await closeSettings(obsidian);
+
+		expect(await listedEpisodes(obsidian)).toEqual(["Keep One"]);
+		expect(await feedCacheHolds(obsidian, "Drop One")).toBe(false);
+		await click(obsidian, ui.podcastGridTab);
+		expect(await isShown(obsidian, ui.podcastCard(keep.title))).toBe(true);
+		expect(await isShown(obsidian, ui.podcastCard(drop.title))).toBe(false);
+	});
+
+	test("two saved podcasts sharing one feed URL each keep their own card, episodes and Remove", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const show = feed("Journey Shared", "shared", ["Shared One"]);
+		await seedLibrary(context, await serve(show), { subscriptions: [show] });
+		await plugin.updateDataAndReload<Record<string, any>>((data) => {
+			data.savedFeeds["Journey Shared Alias"] = {
+				...data.savedFeeds[show.title],
+				title: "Journey Shared Alias",
+			};
+		}, RELOAD_OPTIONS);
+
+		await showPodNotes(obsidian);
+		for (const title of ["Journey Shared Alias", show.title]) {
+			await click(obsidian, ui.podcastGridTab);
+			await click(obsidian, ui.podcastCard(title));
+			await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 1, {
+				timeoutMs: 15_000,
+				message: `${title}'s episodes`,
+			});
+			expect(await listedEpisodes(obsidian)).toEqual(["Shared One"]);
+			expect(await shownText(obsidian)).toContain(title);
+		}
+
+		await openPodNotesSettings(obsidian);
+		await click(obsidian, ui.removePodcast("Journey Shared Alias"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 1,
+			"the alias unsaved",
+		);
+		await closeSettings(obsidian);
+		expect((await readLibrary(plugin)).subscriptions.map((entry) => entry.title)).toEqual([
+			show.title,
+		]);
+		await click(obsidian, ui.podcastGridTab);
+		expect(await isShown(obsidian, ui.podcastCard("Journey Shared Alias"))).toBe(false);
+		await click(obsidian, ui.podcastCard(show.title));
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 1, {
+			timeoutMs: 15_000,
+			message: "the remaining podcast's episodes",
+		});
+	});
+
+	test("J-EDGE-03 offline with a cache older than its TTL still lists the podcast's episodes", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const show = feed("Journey Stale", "stale", ["Stale Two", "Stale One"]);
+		const server = await serve(show);
+		await seedLibrary(context, server, { subscriptions: [show] });
+
+		await showPodNotes(obsidian);
+		await obsidian.waitFor(() => feedCacheHolds(obsidian, "Stale One"), {
+			timeoutMs: 15_000,
+			message: "the feed cached while online",
+		});
+		await server.stop();
+		await closePodNotes(obsidian);
+		await ageFeedCache(obsidian, 7 * 60 * 60 * 1000);
+		await plugin.reload(RELOAD_OPTIONS);
+
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastCard(show.title));
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
+			timeoutMs: 15_000,
+			message: "the stale cached episodes offline",
+		});
+		expect(await listedEpisodes(obsidian)).toEqual(["Stale Two", "Stale One"]);
+		expect(await notices(obsidian)).toEqual([]);
 	});
 });

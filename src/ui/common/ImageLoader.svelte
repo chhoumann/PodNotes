@@ -2,7 +2,6 @@
 	export let src: string;
 	export let alt: string;
 	export let fadeIn: boolean = false;
-	export let interactive: boolean = false;
 	export let width: string | number | undefined;
 	export let height: string | number | undefined;
 	export let aspectRatio: string | undefined = "1 / 1";
@@ -12,9 +11,6 @@
 	let _class: string = "";
 
 	import Image from "./Image.svelte";
-	import { createEventDispatcher } from "svelte";
-
-	const dispatcher = createEventDispatcher();
 
 	const toDimension = (value?: string | number) =>
 		typeof value === "number" ? `${value}px` : value;
@@ -30,15 +26,7 @@
 	style:height={resolvedHeight}
 	style:aspect-ratio={resolvedAspectRatio}
 >
-	<Image
-		{alt}
-		{src}
-		{fadeIn}
-		{interactive}
-		{loading}
-		on:click={(event) => dispatcher("click", { event })}
-		class={_class}
-	/>
+	<Image {alt} {src} {fadeIn} {loading} class={_class} />
 </div>
 
 <style>

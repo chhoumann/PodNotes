@@ -20,7 +20,6 @@ import {
 	TimestampTemplateEngine,
 } from "../../TemplateEngine";
 import {
-	episodeCache,
 	episodeListLimit,
 	favorites,
 	hidePlayedEpisodes,
@@ -39,7 +38,6 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
-import { clearFeedCache } from "src/services/FeedCacheService";
 import { migratePrivateFeedUrls } from "src/services/privateFeeds";
 import {
 	describeSecrets,
@@ -673,8 +671,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Remove stored feed data. PodNotes will refetch feeds as needed.")
 			.addButton((button) =>
 				button.setButtonText("Clear cache").onClick(() => {
-					clearFeedCache();
-					episodeCache.set({});
+					this.plugin.feeds.clear();
 					new Notice("Cleared cached podcast feeds.");
 				}),
 			);
@@ -1096,7 +1093,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private async saveSecretReference(
 		key: SecretReferenceKey,
-		selectedId: string,
+		selectedId: string | null,
 	): Promise<SecretReferenceSaveResult> {
 		const generation = ++this.credentialSaveGenerations[key];
 		const operation = this.enqueueSettingsMutation(() =>
@@ -1111,7 +1108,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private async persistSecretReference(
 		key: SecretReferenceKey,
-		selectedId: string,
+		selectedId: string | null,
 	): Promise<Omit<SecretReferenceSaveResult, "isLatest">> {
 		const previous = this.plugin.settings[key];
 		let persistedId: string;
@@ -1162,7 +1159,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private async handleSecretSelection(
 		key: SecretReferenceKey,
-		selectedId: string,
+		selectedId: string | null,
 		secret: Pick<SecretComponent, "setValue">,
 		onLatestSettled: () => void,
 	): Promise<void> {
@@ -1348,7 +1345,7 @@ function getRandomEpisode(): Episode {
 		feedUrl: "demo",
 	};
 
-	const feedEpisodes = Object.values(get(episodeCache));
+	const feedEpisodes = Array.from(get(get(plugin).feeds).values(), ({ episodes }) => episodes);
 	if (!feedEpisodes.length) return fallbackDemoObj;
 
 	const randomFeed = feedEpisodes[Math.floor(Math.random() * feedEpisodes.length)];
