@@ -56,7 +56,7 @@ Select the playlist in the podcast grid to see its episodes:
 
 ## Remove an episode from a list
 
-1. In the queue, **Favorites**, or a playlist, right-click the episode, or select its **More options** button.
+1. In the player's **Queue** list, in **Favorites**, or in a playlist, right-click the episode, or select its **More options** button.
 2. Select **Remove from Queue**, **Remove from Favorites**, or **Remove from** followed by the playlist's name.
 
 In the **PodNotes: Reorder Queue** list, **Remove from queue** next to an episode does the same.
@@ -66,3 +66,5 @@ In the **PodNotes: Reorder Queue** list, **Remove from queue** next to an episod
 1. Open **Settings → PodNotes**.
 2. Under **Playlists**, select the playlist's **Delete playlist** button, the trash icon.
 3. Within two seconds, select **Confirm deletion**, the check icon.
+
+The episodes stay in their podcasts and in your other lists.

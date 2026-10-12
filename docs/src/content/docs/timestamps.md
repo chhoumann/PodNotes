@@ -37,7 +37,7 @@ To mark a passage instead of a moment:
 2. In a note in editing view, place the cursor where the range goes.
 3. Run **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**.
 
-PodNotes inserts the range that ends at the current playback time, such as `00:12:31-00:12:41`. With the default **Capture timestamp format**, the range is a link that plays that passage and pauses at its end. It does not cut an audio clip.
+PodNotes inserts the range that ends at the current playback time, such as `00:12:31-00:12:41`. It does not cut an audio clip. With the default **Capture timestamp format**, the range is a link that plays that passage and pauses at its end. With a format that uses `{{time}}`, the range is plain text.
 
 The range commands insert a range in the style of your **Capture timestamp format**, as [Timestamp tags](#timestamp-tags) describes. [Commands](/commands/#capture-last-10-seconds--capture-last-20-seconds) lists when they are available.
 

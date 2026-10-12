@@ -7,6 +7,8 @@ description: Call the PodNotes API from QuickAdd to capture timestamps with comm
 
 Build your own capture and note workflows with the [QuickAdd](https://quickadd.obsidian.guide/docs/) plugin and the [PodNotes API](/api/), such as a comment next to each timestamp or a note template that asks you questions. PodNotes alone [captures timestamps](/timestamps/) and [creates episode notes](/notes/).
 
+Install and enable QuickAdd from **Settings → Community plugins** first.
+
 ## <span id="timestamp-capture"></span>Capture a timestamp with a comment
 
 A Capture choice, with no macro, writes a timestamp link and your comment on a new line below the cursor:
@@ -33,7 +35,7 @@ A Capture choice, with no macro, writes a timestamp link and your comment on a n
 8. Open the note you want to write in, in editing view.
 9. Place the cursor where the timestamp goes.
 10. Run **QuickAdd: Run**.
-11. Select `Podcast timestamp`.
+11. Select **Podcast timestamp**.
 12. Type your comment.
 
 The `js quickadd` [inline script](https://quickadd.obsidian.guide/docs/InlineScripts/) returns the playback time, and `true` makes it a link. For other formats, use the [time tokens](/timestamps/#time-formats). To subtract reaction time, pass seconds as a third argument. To capture 5 seconds earlier, the script's `return` line becomes:
@@ -59,7 +61,7 @@ QuickAdd's [Capture docs](https://quickadd.obsidian.guide/docs/Choices/CaptureCh
 
 This macro runs a user script that saves the loaded episode's fields as QuickAdd variables. A Template choice then fills your template with them and asks you for the rest.
 
-1. QuickAdd cannot read scripts in `.obsidian` or other hidden folders. In a visible folder of your vault, create `scripts/podnotes-episode.js`:
+1. QuickAdd cannot read scripts in `.obsidian` or other hidden folders. In a text editor, create `scripts/podnotes-episode.js` in a visible folder of your vault:
 
    ```js
    module.exports = async (params) => {
@@ -101,7 +103,7 @@ This macro runs a user script that saves the loaded episode's fields as QuickAdd
 11. Set **File name** to `{{VALUE:fileName}}`.
 12. Load an episode in PodNotes. It can be paused.
 13. Run **QuickAdd: Run**.
-14. Select `Podcast episode note`.
+14. Select **Podcast episode note**.
 
 QuickAdd asks you for `guest`, which the script does not set. For the other episode fields, see [`podcast`](/api/#podcast).
 
@@ -111,9 +113,21 @@ PodNotes finds an episode note only at **Note creation file path**, or by the ep
 
 This recipe has QuickAdd's AI Assistant summarize the current episode and write the summary into the note you have open. It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first.
 
-Before you start, set up the AI Assistant once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe: in **Settings → QuickAdd**, turn off **Disable AI & online features** under **AI & online**, then in **Configure AI Assistant**, set a **Prompt template folder** and link your provider's API key.
+### Set up the AI Assistant
 
-1. In a visible folder of your vault, create `scripts/podnotes-transcript-prompt.js`:
+Do this once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe:
+
+1. In **Settings → QuickAdd**, under **AI & online**, turn off **Disable AI & online features**.
+2. Under **AI & online**, select **AI Assistant**.
+3. Set **Prompt template folder**, for example to `Prompts`.
+4. Under **Providers**, select **Add provider**.
+5. Pick your provider.
+6. Select your provider in the **Providers** list.
+7. Set **API key**.
+
+### Build the prompt
+
+1. In a text editor, create `scripts/podnotes-transcript-prompt.js` in a visible folder of your vault:
 
    ```js
    module.exports = async (params) => {
@@ -136,18 +150,32 @@ Before you start, set up the AI Assistant once, as QuickAdd's [AI Assistant docs
    };
    ```
 
-2. In **Settings → QuickAdd**, select **New choice**.
+2. In **Settings → QuickAdd**, select **New choice**.
 3. Select **Macro**.
 4. Set **Name** to `Transcript prompt`.
 5. On the **Transcript prompt** page, under **Commands**, next to **User scripts**, select **Browse**.
 6. Select `scripts/podnotes-transcript-prompt.js`.
 7. In your prompt template folder, create a note named `Summarize transcript` that contains `{{MACRO:Transcript prompt}}`. QuickAdd runs the macro and puts its prompt there.
-8. In **Settings → QuickAdd**, select **New choice**, then **Macro**, and set **Name** to `Summarize episode`.
-9. On the **Summarize episode** page, add an **AI Assistant** command.
-10. In that command's settings, set **Prompt template** to `Summarize transcript`.
-11. Add a **Capture** command after it.
-12. In the Capture's settings, turn on **Capture to active file** and set **Capture format** to `{{VALUE:output}}`.
-13. Load the episode, and open the note for the summary in editing view.
-14. Run **QuickAdd: Run**, then select `Summarize episode`.
+
+### Write the summary into your note
+
+1. In **Settings → QuickAdd**, select **New choice**.
+2. Select **Macro**.
+3. Set **Name** to `Summarize episode`.
+4. On the **Summarize episode** page, select **Add AI Assistant command**, the robot icon in the command bar.
+5. Select **Configure AI Assistant**, the gear icon next to it.
+6. Turn on **Prompt template**.
+7. In the **Prompt template** field, enter `Summarize transcript.md`.
+8. Select **Save**.
+9. In the command bar, select **Capture**. QuickAdd adds **Untitled Capture Choice** after the AI Assistant.
+10. Select **Configure Untitled Capture Choice**, the gear icon next to it.
+11. Turn on **Capture to active file**.
+12. Set **Write position** to **New line below cursor**.
+13. Set **Capture format** to `{{VALUE:output}}`.
+14. Load the episode in PodNotes.
+15. Open the note for the summary in editing view.
+16. Place the cursor where the summary goes.
+17. Run **QuickAdd: Run**.
+18. Select **Summarize episode**.
 
 The AI Assistant puts the model's answer in `{{VALUE:output}}`, which only the later commands of the same macro can read. QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe the model and output settings.
