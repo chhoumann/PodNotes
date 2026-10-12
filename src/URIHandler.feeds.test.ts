@@ -148,6 +148,22 @@ describe("podNotesURIHandler with saved feeds", () => {
 		expect(playing()).toMatchObject({ title: first.title, feedUrl: privateLink });
 	});
 
+	test("a link to a private feed by its secret URL takes the secret out of the episode loaded from it before subscribing", async () => {
+		player.play({ ...first, url: SECRET_URL, feedUrl: SECRET_URL });
+		follow();
+		load.mockResolvedValue(feedDocument("Patron Show", [{ ...first, url: "" }]));
+
+		await open(SECRET_URL, first.title);
+
+		expect(playing()).toMatchObject({
+			title: first.title,
+			url: privateLink,
+			feedUrl: privateLink,
+		});
+		expect(JSON.stringify(playing())).not.toMatch(/PATH_SENTINEL|QUERY_SENTINEL/);
+		expect(get(player.state).currentTime).toBe(5);
+	});
+
 	const HTTP_SECRET_URL = SECRET_URL.replace("https:", "http:");
 
 	test.each([
