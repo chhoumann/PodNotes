@@ -22,9 +22,9 @@ jobs:
           - name: Build and sizes
             run: npm run build && npm run size && npm run size:data
           - name: Unit tests
-            run: npm run test
-          - name: Tooling tests
-            run: npm run test:tooling
+            run: npm run test:unit
+          - name: Svelte checks and tooling tests
+            run: npm run check:a11y && npm run test:tooling
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
