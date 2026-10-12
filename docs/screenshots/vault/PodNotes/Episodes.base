@@ -1,0 +1,22 @@
+filters:
+  and:
+    - 'type == "podcastEpisode"'
+views:
+  - type: table
+    name: Episodes
+    order:
+      - file.name
+      - note.podcast
+      - note.status
+      - note.rating
+    sort:
+      - property: note.date
+        direction: DESC
+    groupBy:
+      property: note.status
+      direction: ASC
+    columnSize:
+      file.name: 400
+      note.podcast: 210
+      note.status: 100
+      note.rating: 70

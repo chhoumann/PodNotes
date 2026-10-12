@@ -30,6 +30,7 @@ export default defineConfig({
 		include: [
 			"src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
 			"scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
+			"docs/src/**/*.{test,spec}.{js,mjs}",
 		],
 		globals: true,
 		// Files that need a DOM or load Svelte code opt in with

@@ -1,129 +1,73 @@
 ---
-title: Transcripts
+title: Transcribe episodes
 slug: transcripts
 legacyTitleId: transcripts
+description: Transcribe an episode into a note with your own API key, add speaker labels, and see what it costs.
 ---
 
-PodNotes can create transcript notes from podcast episodes. Plain transcription
-uses OpenAI's Whisper model, while optional speaker diarization can use OpenAI
-or Deepgram.
+Turn the audio of an episode into a transcript note with your own OpenAI or Deepgram account. Without speaker labels, PodNotes uses OpenAI. With speaker labels, you choose OpenAI or Deepgram, and Deepgram needs no OpenAI key.
 
-## Setting Up
+## <span id="setting-up"></span>Set up an OpenAI key
 
-Before you can use transcription, set up the following:
+Without speaker labels, PodNotes sends the audio to OpenAI with your API key.
 
-1. **OpenAI API key**: Create a key at [OpenAI's website](https://openai.com/).
-   In **Settings -> PodNotes -> Transcript settings**, use **OpenAI API key** to
-   select an existing Obsidian secret or create one. Plain Whisper transcription
-   and OpenAI diarization both use this secret.
+1. Create a key on the [OpenAI API keys page](https://platform.openai.com/api-keys).
+2. In Obsidian, open **Settings → PodNotes**.
+3. Under **Transcripts**, select the secret picker next to **OpenAI API key**.
+4. Create a secret that holds your key, or select one that you saved before.
 
-2. **Transcript file path**: Choose where transcript files are saved. You can
-   use placeholders such as `{{podcast}}` and `{{title}}` in the path.
+On each other device, select or create the secret again. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
 
-3. **Transcript template**: Customize how the transcript note is formatted.
+## <span id="creating-a-transcript"></span>Transcribe an episode
 
-### How API keys are stored
+1. Play an audio episode in PodNotes. You can pause it.
+2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-PodNotes uses Obsidian's native secret picker. The API key value is kept in
-Obsidian's vault-local secret storage; PodNotes stores only a provider-specific,
-PodNotes-owned secret name in its `data.json`, through the `openAISecretId` and
-`deepgramSecretId` references. If you explicitly select a shared Obsidian
-secret, PodNotes copies its value into a collision-safe name owned by the chosen
-provider. Persisted OpenAI references therefore cannot read Deepgram or foreign
-secrets, and persisted Deepgram references cannot read OpenAI or foreign
-secrets.
+A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
-PodNotes requires Obsidian 1.11.5 or newer because that release encrypts secret
-storage on disk using encryption provided by the operating system. Secret
-storage keeps keys out of PodNotes files and normal settings exports, but it is
-shared infrastructure rather than plugin isolation: other installed plugins can
-access the same vault-local secret collection.
+## <span id="speaker-diarization"></span><span id="enabling-it"></span>Add speaker labels
 
-Secret values are local to the current vault on the current device. A selected
-secret name can sync with the rest of the vault configuration while its value
-does not. If PodNotes says that a selected secret is unavailable on this device,
-open **Transcript settings** on that device and select or create the secret
-again.
+1. Open **Settings → PodNotes**.
+2. Under **Transcripts**, turn on **Speaker diarization**.
+3. In **Diarization provider**, select **OpenAI (gpt-4o-transcribe-diarize)** or **Deepgram**.
+4. If you selected **Deepgram**, create a key in the [Deepgram console](https://console.deepgram.com/).
+5. If you selected **Deepgram**, under **Deepgram API key**, select or create a secret that holds the Deepgram key. With OpenAI, PodNotes uses your OpenAI key.
 
-When upgrading from a version that stored API keys directly in `data.json`,
-PodNotes moves existing OpenAI and Deepgram keys into Obsidian's secret storage
-before rewriting the settings file. The plaintext fields are then removed. If
-that migration cannot be completed and verified, PodNotes leaves the existing
-settings file unchanged and shows a persistent notice so you can restart the
-plugin and retry.
+The providers differ in these ways:
 
-The migration cannot erase copies that already exist in backups, Obsidian Sync
-version history, filesystem snapshots, or old plaintext settings exports. If a
-key may have reached an untrusted device or backup, rotate it with the provider
-and remove any old export files you no longer need.
+| Provider | Key | Labels | Long episodes |
+| --- | --- | --- | --- |
+| OpenAI | Your OpenAI key | `A`, `B`, `C` | Sent in parts of about 20 MB. `A` in one part may be `B` in the next. |
+| Deepgram | A Deepgram key. No OpenAI key needed. | `1`, `2`, `3` | Sent in one request. Labels stay the same for the whole episode. |
 
-## Creating a Transcript
+### <span id="speaker-label-format"></span>Change the speaker label format
 
-To create a transcript:
+1. In **Settings → PodNotes**, under **Transcripts**, turn on **Speaker diarization**. **Speaker label format** appears below it.
+2. Set **Speaker label format**, for example to `**Speaker {{speaker}}:**` with a space at the end.
 
-1. Start playing the audio episode you want to transcribe.
-2. Run **PodNotes: Transcribe current episode** from the command palette.
-3. PodNotes fetches the currently playing episode's audio, reusing an existing
-   download when available. Plain Whisper and OpenAI diarization split large
-   audio into chunks; Deepgram diarization sends the episode in one request.
-4. When transcription finishes, PodNotes creates a note at the configured
-   transcript path.
+The format sets the text before each turn. The default, `**{{speaker}}:**` with a space at the end, starts a turn with **A:** in bold. With `**Speaker {{speaker}}:**`, a turn starts with **Speaker A:**. With Deepgram, the labels are numbers, as in **Speaker 1:**. The labeled text fills `{{transcript}}`, so **Transcript template** needs no change.
 
-The command always uses the currently playing episode's own audio, regardless
-of your episode download path setting. It remains available when a required
-secret is missing so it can tell you which provider must be configured on the
-current device.
+## <span id="transcript-template"></span>Change where transcripts go and what they contain
 
-Generated transcript notes are also available to workflow plugins through the
-[PodNotes API](/api/#transcript), so tools such as QuickAdd or Templater can
-read the text and send it to the AI provider configured in your own macro.
+**Transcript file path** under **Transcripts** sets where the note goes, `transcripts/{{podcast}}/{{title}}.md` by default. Keep `.md` at the end, because PodNotes does not add it. **Transcript template** sets the content, and `{{transcript}}` is the transcript text. [Transcript and timestamp tags](/templates/#transcript-and-timestamp-tags) lists every tag and the default template.
 
-## Transcript Template
+## <span id="cost"></span>What transcription costs
 
-The transcript template works similarly to the
-[note template](/templates/#note-template), with the additional
-`{{transcript}}` placeholder.
+PodNotes charges nothing. Your provider bills your account per minute of audio:
 
-## Speaker Diarization
+- [OpenAI API pricing](https://openai.com/api/pricing/) lists the rate for plain transcription (`whisper-1`) and for speaker labels (`gpt-4o-transcribe-diarize`).
+- [Deepgram pricing](https://deepgram.com/pricing) lists the rate for pre-recorded audio with speaker labels.
 
-By default, transcription uses OpenAI's Whisper model, which produces plain
-text with **no speaker labels**. Speaker diarization is an opt-in setting that
-labels each transcript segment by speaker:
+## Limits and error messages
 
-![Transcript with speaker labels](/resources/transcript_diarization.png)
+These cases stop a transcription or change its result:
 
-### Enabling it
+- PodNotes transcribes audio only. For a video episode, the command is missing.
+- When the provider's key is not on this device, a notice asks you to select or create it in the transcript settings.
+- When a transcript note already exists at the path, a notice gives its path and PodNotes does nothing else. To transcribe again, delete the note first.
+- PodNotes sends long audio to OpenAI in parts of about 20 MB. In a transcript without speaker labels, a part that fails three times leaves the marker `[Error transcribing chunk N]`. To retry, delete the note and run the command again.
+- Transcripts have no timestamps, so a line does not link to its moment in the episode.
 
-In the **Transcript settings** section, turn on **Speaker diarization** and choose a provider:
+## <span id="how-api-keys-are-stored"></span>API key storage
 
-![Speaker diarization settings](/resources/diarization_settings.png)
-
-- **OpenAI** (`gpt-4o-transcribe-diarize`) reuses the OpenAI secret selected
-  above. Because each request is capped at about 20 MB, a conservative margin
-  under OpenAI's 25 MB request cap, a long episode is diarized in independent
-  chunks. Speaker labels can therefore reset across chunk boundaries. A typical
-  episode fits in one request and keeps consistent labels.
-- **Deepgram** sends the whole episode in one request, so speaker labels remain
-  consistent throughout the episode. Create a separate key at
-  [deepgram.com](https://deepgram.com), then select an existing Obsidian secret
-  or create one under **Deepgram API key**. The Deepgram secret is used only for
-  Deepgram diarization and is local to the current vault and device.
-
-Diarization is off by default, so existing transcripts and the plain-Whisper workflow are unchanged unless you enable it.
-
-### Speaker label format
-
-The **Speaker label format** setting controls the prefix added before each speaker's turn. Use the `{{speaker}}` placeholder for the speaker's label:
-
-- OpenAI labels speakers `A`, `B`, `C`, …
-- Deepgram labels speakers `1`, `2`, `3`, …
-
-The default is `**{{speaker}}:** `, which renders as an `**A:**`-style bold
-prefix. To spell out the word "Speaker", use `**Speaker {{speaker}}:** `. To put
-each turn in a blockquote, use `> {{speaker}}: `.
-
-The labelled transcript replaces the usual `{{transcript}}` value in your [transcript template](#transcript-template), so you don't need to change your template to use diarization.
-
-### Cost
-
-Diarization providers bill per minute/hour of audio (separately from any plain-Whisper usage). As of mid-2026, OpenAI's diarize model is roughly $0.006 per minute, and Deepgram's diarized pre-recorded transcription is roughly $0.0068 per minute. Check each provider's current pricing before transcribing long back-catalogues.
+PodNotes keeps your API keys in Obsidian's secret storage on each device, and only the name of each key syncs. On the first start after an upgrade from a version that kept plain-text keys in `data.json`, PodNotes moves them to secret storage and does not finish loading until the move succeeds. If it fails, restart PodNotes. The move cannot erase old copies in backups or settings exports, so replace a key at the provider if it may have leaked. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
