@@ -1,8 +1,9 @@
 import { ItemView } from "obsidian";
-import type { WorkspaceLeaf } from "obsidian";
+import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
 import { VIEW_TYPE } from "../../constants";
 import type { ShellServices } from "./context";
+import { pageKey, parsePage } from "./pages";
 import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
 
@@ -15,6 +16,7 @@ export class MainView extends ItemView {
 	}
 
 	private podcastView: Record<string, unknown> | null = null;
+	private stopSavingPage = () => {};
 
 	override getViewType(): string {
 		return VIEW_TYPE;
@@ -28,7 +30,25 @@ export class MainView extends ItemView {
 		return "play-circle";
 	}
 
+	/** The page is the view's workspace state; the full player always starts collapsed. */
+	override getState(): Record<string, unknown> {
+		return { page: this.plugin.navigation.current.page };
+	}
+
+	override async setState(state: unknown, result: ViewStateResult): Promise<void> {
+		const page = parsePage((state as { page?: unknown } | null)?.page);
+		if (page) this.plugin.navigation.restore(page);
+		await super.setState(state, result);
+	}
+
 	protected override async onOpen(): Promise<void> {
+		let saved = pageKey(this.plugin.navigation.current.page);
+		this.stopSavingPage = this.plugin.navigation.subscribe(({ page }) => {
+			if (pageKey(page) === saved) return;
+			saved = pageKey(page);
+			this.app.workspace.requestSaveLayout();
+		});
+
 		if (!this.plugin.shouldMountPodcastView()) {
 			return;
 		}
@@ -62,6 +82,7 @@ export class MainView extends ItemView {
 	}
 
 	protected override async onClose(): Promise<void> {
+		this.stopSavingPage();
 		if (this.podcastView) {
 			await unmount(this.podcastView);
 			this.podcastView = null;

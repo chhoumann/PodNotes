@@ -261,6 +261,8 @@ describe("PodNotes onload wiring (#55)", () => {
 			views: new Set(),
 			manifest: { dir: ".obsidian/plugins/podnotes" },
 			app: {
+				loadLocalStorage: vi.fn(() => null),
+				saveLocalStorage: vi.fn(),
 				secretStorage: {
 					getSecret: vi.fn(() => null),
 					setSecret: vi.fn(),
@@ -424,19 +426,22 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(hide).toHaveBeenCalledTimes(1);
 	});
 
-	it("Show PodNotes command and ribbon icon both route to activateView", async () => {
-		const { commands, ribbonCalls, activateSpy } = await loadPlugin();
+	it("Show player opens the full player, and the ribbon icon only reveals the view", async () => {
+		const { commands, ribbonCalls, activateSpy, plugin } = await loadPlugin();
 
 		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
 		expect(showCmd).toBeDefined();
 		(showCmd!.callback as () => void)();
 		expect(activateSpy).toHaveBeenCalledTimes(1);
+		expect(plugin.navigation.current.expanded).toBe(true);
 
+		plugin.navigation.collapse();
 		const ribbon = ribbonCalls.find((r) => r.title === "Show PodNotes");
 		expect(ribbon).toBeDefined();
 		expect(ribbon?.icon).toBe("podcast");
 		ribbon?.handler(new MouseEvent("click"));
 		expect(activateSpy).toHaveBeenCalledTimes(2);
+		expect(plugin.navigation.current.expanded).toBe(false);
 	});
 
 	const savedEpisode: Episode = {
@@ -465,6 +470,22 @@ describe("PodNotes onload wiring (#55)", () => {
 		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => boolean)(true);
 	const runCommand = (commands: Array<Record<string, unknown>>, id: string) =>
 		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => void)(false);
+
+	it("captures a timestamp into the active note and names that note", async () => {
+		const { plugin } = await loadPlugin(savedData);
+		const editor = {
+			getCursor: () => ({ line: 0, ch: 0 }),
+			getLine: () => "",
+			lineCount: () => 1,
+			replaceSelection: vi.fn(),
+		};
+		Object.assign(plugin.app.workspace, {
+			activeEditor: { editor, file: { basename: "Daily note" } },
+		});
+
+		await expect(plugin.captureTimestampToEditorOrNote()).resolves.toBe("Daily note");
+		expect(editor.replaceSelection).toHaveBeenCalledWith(expect.stringContaining("00:20:34"));
+	});
 
 	it("restores the selected episode paused at its saved position, without loading it", async () => {
 		const { plugin } = await loadPlugin(savedData);

@@ -118,7 +118,13 @@ export const normalizePath = (path: string): string => {
 };
 
 export class WorkspaceLeaf {}
-export class ItemView {}
+export class ItemView {
+	getState(): Record<string, unknown> {
+		return {};
+	}
+
+	async setState(_state: unknown, _result: unknown): Promise<void> {}
+}
 
 export class Modal {
 	app: App;

@@ -96,6 +96,15 @@ describe("navigation", () => {
 		expect(button(/^Latest episodes/)).toHaveAttribute("aria-current", "page");
 	});
 
+	test("a saved page whose podcast is gone opens Latest episodes", async () => {
+		services.navigation.restore({ kind: "feed", key: "Gone" });
+		renderView();
+		await tick();
+
+		expect(services.navigation.current.page).toEqual({ kind: "latest" });
+		expect(screen.getByRole("heading", { name: "Latest episodes" })).toBeInTheDocument();
+	});
+
 	test("the view is compact below 560 px wide and has a rail from 560 px", async () => {
 		const { view, resize } = renderView(559);
 		expect(screen.queryByRole("navigation", { name: "PodNotes" })).toBeNull();
