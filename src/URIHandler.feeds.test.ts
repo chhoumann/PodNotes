@@ -9,7 +9,7 @@ import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { resolveFeedUrl } from "./services/privateFeeds";
 import { DEFAULT_SETTINGS } from "./constants";
 import { PlayerController } from "./player/PlayerController";
-import { plugin, viewState } from "./store";
+import { plugin, savedFeeds, viewState } from "./store";
 import type { Episode } from "./types/Episode";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { ViewState } from "./types/ViewState";
@@ -40,6 +40,7 @@ function resetStores() {
 		saveSettings: () => Promise.resolve(),
 	});
 	viewState.set(ViewState.PodcastGrid);
+	savedFeeds.set({});
 }
 
 beforeEach(resetStores);
@@ -80,10 +81,13 @@ describe("podNotesURIHandler with saved feeds", () => {
 			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
-		feeds.setSubscriptions({ [patron.title]: patron, [testEpisode.podcastName]: publicFeed });
+		const subscriptions = { [patron.title]: patron, [testEpisode.podcastName]: publicFeed };
+		savedFeeds.set(subscriptions);
+		feeds.setSubscriptions(subscriptions);
 		plugin.set({
 			app: { vault: { getAbstractFileByPath: () => null } },
 			feeds,
+			feedUrls,
 			player,
 		} as never);
 		return { feeds, feedUrls, patron };
@@ -181,6 +185,34 @@ describe("podNotesURIHandler with saved feeds", () => {
 
 		expect(notice.mock.calls).toEqual([["Could not load the podcast feed"]]);
 		expect(playing()).toBeUndefined();
+	});
+
+	test("a link to a saved private feed whose URL is not on this device leaves an earlier link to play", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		follow(false);
+		const earlier = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(earlier.promise);
+
+		const opening = open(testFeedUrl, testEpisode.title);
+		await open(privateLink, first.title);
+		earlier.resolve(feedDocument("Test Podcast", [testEpisode]));
+		await opening;
+
+		expect(notice.mock.calls).toEqual([[PRIVATE_LINK_NOTICE]]);
+		expect(playing()).toMatchObject({ title: testEpisode.title, podcastName: "Test Podcast" });
+	});
+
+	test("a link that plays from a private feed's last copy wins over an earlier link", async () => {
+		await lostPrivateUrl();
+		const earlier = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(earlier.promise);
+
+		const opening = open(testFeedUrl, testEpisode.title);
+		await open(privateLink, first.title);
+		earlier.resolve(feedDocument("Test Podcast", [testEpisode]));
+		await opening;
+
+		expect(playing()).toMatchObject({ title: first.title, podcastName: "Patron Show" });
 	});
 
 	test("a private feed link that loads after a newer link changes nothing", async () => {
