@@ -71,16 +71,16 @@ const settle = () => new Promise((resolve) => setTimeout(resolve));
 
 const PRIVATE_URL = "https://www.patreon.com/rss/show?auth=se-cret";
 
-// Follows "Private Show" through PRIVATE_URL. Pasting any URL loads its RSS,
+// Follows "Private Show" through `url`. Pasting any URL loads its RSS,
 // whose author tells the pasted card apart from the saved one.
-function followPrivateShow() {
+function followPrivateShow(url = PRIVATE_URL) {
 	const secrets = new obsidian.SecretStorage();
 	const feedUrls = new FeedUrlRepository(secrets);
 	usePlugin(feedUrls);
 	const saved = {
 		title: "Private Show",
 		url: privateFeedPlaceholder("Private Show"),
-		urlSecretId: feedUrls.store(PRIVATE_URL),
+		urlSecretId: feedUrls.store(url),
 		artworkUrl: "",
 	};
 	savedFeeds.set({ "Private Show": saved });
@@ -189,6 +189,16 @@ describe("PodcastQueryGrid", () => {
 
 	test("shows a followed private feed as saved when its URL is pasted", async () => {
 		followPrivateShow();
+
+		const { findByText, getByRole, queryByRole } = paste(PRIVATE_URL);
+		await findByText("Patron Host");
+
+		expect(getByRole("button", { name: "Remove Private Show podcast" })).toBeInTheDocument();
+		expect(queryByRole("button", { name: "Add Private Show podcast" })).toBeNull();
+	});
+
+	test("shows a private feed followed with an uppercase host as saved when its URL is pasted", async () => {
+		followPrivateShow(PRIVATE_URL.replace("www.patreon.com", "WWW.PATREON.COM"));
 
 		const { findByText, getByRole, queryByRole } = paste(PRIVATE_URL);
 		await findByText("Patron Host");
