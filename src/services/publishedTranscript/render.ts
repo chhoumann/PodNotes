@@ -1,12 +1,7 @@
 import type { Episode } from "src/types/Episode";
 import { DEFAULT_SPEAKER_TEMPLATE, formatSpeakerLabel } from "src/services/diarization/segments";
 import { formatEpisodeTimestamp } from "src/utility/formatEpisodeTimestamp";
-import {
-	collapseWhitespace,
-	type NonEmpty,
-	type ParsedTranscript,
-	type TranscriptCue,
-} from "./parse";
+import { collapseWhitespace, type ParsedTranscript, type TranscriptCue } from "./parse";
 
 export interface TimestampStyle {
 	readonly format: string;
@@ -34,7 +29,15 @@ const PARAGRAPH_SOFT_SECONDS = 30;
 const PARAGRAPH_HARD_SECONDS = 60;
 const ENDS_SENTENCE = /[.!?]["')\]]*$/;
 
-export function groupCues(cues: NonEmpty<TranscriptCue>): TranscriptParagraph[] {
+/**
+ * Live Preview and Source mode take time superlinear in a line's escapes and
+ * emphasis marks, and a note whose line takes minutes freezes Obsidian on every
+ * launch that reopens it. A paragraph of real feed text stays under 1,900
+ * characters, and a line of 4,000 escaped characters opens in under 0.7 s.
+ */
+export const MAX_PARAGRAPH_LENGTH = 4000;
+
+export function groupCues(cues: readonly TranscriptCue[]): TranscriptParagraph[] {
 	const paragraphs: TranscriptParagraph[] = [];
 	for (const cue of cues) {
 		const end = cue.end ?? cue.start;
@@ -58,8 +61,35 @@ function continues(paragraph: TranscriptParagraph, cue: TranscriptCue): boolean 
 		(cue.speaker === undefined || cue.speaker === paragraph.speaker) &&
 		cue.start - paragraph.end < PARAGRAPH_GAP_SECONDS &&
 		span < PARAGRAPH_HARD_SECONDS &&
-		!(span >= PARAGRAPH_SOFT_SECONDS && ENDS_SENTENCE.test(paragraph.text))
+		!(span >= PARAGRAPH_SOFT_SECONDS && ENDS_SENTENCE.test(paragraph.text)) &&
+		paragraph.text.length + 1 + cue.text.length <= MAX_PARAGRAPH_LENGTH
 	);
+}
+
+/**
+ * Splits written text into pieces of at most MAX_PARAGRAPH_LENGTH characters at
+ * the last space that fits. A piece without a space ends at the last character
+ * that fits, stepping over each escape as a pair so no piece ends in a lone `\`.
+ */
+function splitParagraph(text: string): string[] {
+	const pieces: string[] = [];
+	let rest = text;
+	while (rest.length > MAX_PARAGRAPH_LENGTH) {
+		const space = rest.lastIndexOf(" ", MAX_PARAGRAPH_LENGTH);
+		if (space > 0) {
+			pieces.push(rest.slice(0, space));
+			rest = rest.slice(space + 1);
+			continue;
+		}
+		let end = 0;
+		while (end + (rest[end] === "\\" ? 2 : 1) <= MAX_PARAGRAPH_LENGTH) {
+			end += rest[end] === "\\" ? 2 : 1;
+		}
+		pieces.push(rest.slice(0, end));
+		rest = rest.slice(end);
+	}
+	pieces.push(rest);
+	return pieces;
 }
 
 export function renderTranscriptBody(
@@ -67,11 +97,16 @@ export function renderTranscriptBody(
 	options: { episode: Episode; speakerTemplate: string; timestamp: TimestampStyle },
 ): string {
 	if (transcript.kind === "untimed") {
-		return transcript.paragraphs.map(escapeTranscriptText).join("\n\n");
+		return transcript.paragraphs
+			.flatMap((text) => splitParagraph(escapeTranscriptText(text)))
+			.join("\n\n");
 	}
 	const { episode, timestamp } = options;
 	const speakerTemplate = options.speakerTemplate || DEFAULT_SPEAKER_TEMPLATE;
-	return groupCues(transcript.cues)
+	const cues = transcript.cues.flatMap((cue) =>
+		splitParagraph(escapeTranscriptText(cue.text)).map((text) => ({ ...cue, text })),
+	);
+	return groupCues(cues)
 		.map(({ start, speaker, text }) => {
 			const time = formatEpisodeTimestamp(
 				episode,
@@ -82,7 +117,7 @@ export function renderTranscriptBody(
 			const label = speaker
 				? formatSpeakerLabel(speakerTemplate, escapeTranscriptText(speaker))
 				: "";
-			return `${time} ${label}${escapeTranscriptText(text)}`;
+			return `${time} ${label}${text}`;
 		})
 		.join("\n\n");
 }
@@ -90,13 +125,14 @@ export function renderTranscriptBody(
 /**
  * The escaped characters start HTML and Templater (`<`), embeds and links (`[`),
  * code and Dataview queries (`` ` `` and `~`), tags (`#`), comments (`%`),
- * math (`$`), block IDs (`^`) and entities (`&lt;`, which the parser has
- * already decoded once). Escaping `\` too stops a backslash in the text from
+ * math (`$`), block IDs (`^`), tables (`|`, whose runs Obsidian parses in time
+ * cubic in their length) and entities (`&lt;`, which the parser has already
+ * decoded once). Escaping `\` too stops a backslash in the text from
  * cancelling the escape after it. Each colon after a colon is escaped as well,
  * because Dataview reads any `::` in the raw text as an inline field.
  */
 export function escapeTranscriptText(text: string): string {
 	return collapseWhitespace(text)
-		.replace(/[\\`<[#%$~^]|&(?=#?[a-z0-9]+;)/gi, "\\$&")
+		.replace(/[\\`<[#%$~^|]|&(?=#?[a-z0-9]+;)/gi, "\\$&")
 		.replace(/:(?=:)/g, ":\\");
 }

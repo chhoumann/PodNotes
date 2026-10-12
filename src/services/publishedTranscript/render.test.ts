@@ -2,7 +2,13 @@ import { describe, expect, test } from "vitest";
 import type { Episode } from "src/types/Episode";
 import { transcriptFixture } from "../../../tests/mocks/transcriptFixtures";
 import { type NonEmpty, parseTranscript, type TranscriptCue } from "./parse";
-import { escapeTranscriptText, groupCues, renderTranscriptBody, timestampStyle } from "./render";
+import {
+	escapeTranscriptText,
+	groupCues,
+	MAX_PARAGRAPH_LENGTH,
+	renderTranscriptBody,
+	timestampStyle,
+} from "./render";
 
 const episode: Episode = {
 	title: "Pilot",
@@ -123,6 +129,79 @@ describe("renderTranscriptBody", () => {
 	});
 });
 
+describe("paragraph length", () => {
+	const options = { episode, speakerTemplate: "", timestamp: timestampStyle("{{time}}") };
+	const words = (count: number, from = 0) =>
+		Array.from({ length: count }, (_, index) => `word${from + index}`).join(" ");
+
+	test("a cue longer than the cap splits at word boundaries, each piece at the cue's time", () => {
+		const long = words(2000);
+		const paragraphs = renderTranscriptBody(
+			{
+				kind: "timed",
+				cues: [
+					{ start: 1, text: long },
+					{ start: 2, text: "Next." },
+				],
+			},
+			options,
+		).split("\n\n");
+
+		expect(paragraphs.length).toBeGreaterThan(2);
+		for (const paragraph of paragraphs) {
+			expect(paragraph.startsWith("00:00:01 word")).toBe(true);
+			expect(paragraph.length - "00:00:01 ".length).toBeLessThanOrEqual(MAX_PARAGRAPH_LENGTH);
+		}
+		expect(paragraphs.map((paragraph) => paragraph.slice("00:00:01 ".length)).join(" ")).toBe(
+			`${long} Next.`,
+		);
+	});
+
+	test("a cue that would pass the cap starts the next paragraph at its own time", () => {
+		const third = Math.floor(MAX_PARAGRAPH_LENGTH * 0.4);
+		const cues: NonEmpty<TranscriptCue> = [
+			{ start: 0, end: 1, speaker: "Eve", text: "a".repeat(third) },
+			{ start: 1, end: 2, speaker: "Eve", text: "b".repeat(third) },
+			{ start: 2, end: 3, speaker: "Eve", text: "c".repeat(third) },
+		];
+
+		expect(renderTranscriptBody({ kind: "timed", cues }, options)).toBe(
+			`00:00:00 **Eve:** ${"a".repeat(third)} ${"b".repeat(third)}\n\n` +
+				`00:00:02 **Eve:** ${"c".repeat(third)}`,
+		);
+	});
+
+	test("the cap counts written characters, and a run without spaces splits between escapes", () => {
+		const text = `a${"<".repeat(MAX_PARAGRAPH_LENGTH)}`;
+		const paragraphs = renderTranscriptBody(
+			{ kind: "untimed", paragraphs: [text] },
+			options,
+		).split("\n\n");
+
+		expect(paragraphs).toHaveLength(3);
+		for (const paragraph of paragraphs) {
+			expect(paragraph.length).toBeLessThanOrEqual(MAX_PARAGRAPH_LENGTH);
+			expect(paragraph).toMatch(/^a?(\\<)+$/);
+		}
+		expect(paragraphs.join("")).toBe(escapeTranscriptText(text));
+	});
+
+	test("an untimed paragraph splits at word boundaries", () => {
+		const long = words(1500);
+		const paragraphs = renderTranscriptBody(
+			{ kind: "untimed", paragraphs: [long, "Short."] },
+			options,
+		).split("\n\n");
+
+		expect(paragraphs.length).toBeGreaterThan(2);
+		expect(paragraphs.every((paragraph) => paragraph.length <= MAX_PARAGRAPH_LENGTH)).toBe(
+			true,
+		);
+		expect(paragraphs.slice(0, -1).join(" ")).toBe(long);
+		expect(paragraphs.at(-1)).toBe("Short.");
+	});
+});
+
 describe("timestampStyle", () => {
 	test.each([
 		["- {{linktime}} ", { format: "HH:mm:ss", linkify: true }],
@@ -233,6 +312,12 @@ describe("escapeTranscriptText", () => {
 			),
 		).toBe(
 			"!\\[\\[x]] \\<img src=x> \\`= this.file\\` \\~\\~\\~dataviewjs \\#tag \\$5 and \\$10 \\%\\%c\\%\\% C:\\\\path",
+		);
+	});
+
+	test("escapes table pipes", () => {
+		expect(escapeTranscriptText("| a | b |\n|---|---|")).toBe(
+			"\\| a \\| b \\| \\|---\\|---\\|",
 		);
 	});
 
