@@ -498,7 +498,10 @@ describe("podNotesURIHandler", () => {
 	});
 
 	test.each([
-		["fails", (older: ReturnType<typeof deferred<Episode[]>>) => older.reject(new Error("offline"))],
+		[
+			"fails",
+			(older: ReturnType<typeof deferred<Episode[]>>) => older.reject(new Error("offline")),
+		],
 		["lacks the title", (older: ReturnType<typeof deferred<Episode[]>>) => older.resolve([])],
 	])(
 		"a link whose feed %s after a newer link to the loaded episode shows no notice",
