@@ -9,6 +9,7 @@ import type { LocalEpisode } from "src/types/LocalEpisode";
 import { LOCAL_FILES_SETTINGS } from "src/constants";
 import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
+import { recordStore } from "./recordStore";
 
 // `src/store` is the single import surface for the store layer. The saved-feed
 // and offline downloads stores are self-contained leaf modules; re-export them
@@ -20,7 +21,7 @@ export const plugin = writable<PodNotes>();
 export const hidePlayedEpisodes = writable<boolean>(false);
 
 export const playedEpisodes = (() => {
-	const store = writable<{ [key: string]: PlayedEpisode }>({});
+	const store = recordStore<PlayedEpisode>();
 	const { subscribe, update, set } = store;
 
 	return {
@@ -353,7 +354,7 @@ export const localFiles = (() => {
 	};
 })();
 
-export const playlists = writable<{ [name: string]: Playlist }>({});
+export const playlists = recordStore<Playlist>();
 
 export const podcastView = writable<HTMLDivElement>();
 export const viewState = (() => {

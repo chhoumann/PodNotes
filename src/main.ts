@@ -15,7 +15,7 @@ import { registerCommands } from "src/commands";
 import { normalizePath, Notice, Platform, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
-import { DEFAULT_SETTINGS, VIEW_TYPE } from "src/constants";
+import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
@@ -29,6 +29,7 @@ import getContextMenuHandler from "./getContextMenuHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
 import type { Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
+import { bindMediaSession } from "./player/mediaSession";
 import {
 	decodePodNotesData,
 	encodePodNotesData,
@@ -44,17 +45,6 @@ import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
 import { FeedRepository, loadFeed } from "./services/FeedRepository";
-
-type MediaSessionActionName =
-	| "previoustrack"
-	| "play"
-	| "pause"
-	| "stop"
-	| "nexttrack"
-	| "seekbackward"
-	| "seekforward"
-	| "seekto"
-	| "skipad";
 
 type WriteRefusal =
 	| "unreadable-data-file"
@@ -130,7 +120,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private writer: DataFileWriter<PersistedPodNotesDataV2> | null = null;
 	private refusalNotice: Notice | null = null;
 	private persistenceUnknownFields: Record<string, unknown> = {};
-	private mediaSessionActions: MediaSessionActionName[] = [];
 
 	override async onload() {
 		this.isUnloaded = false;
@@ -229,7 +218,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
-		this.registerMediaSessionHandlers();
+		this.storeUnsubscribers.push(
+			bindMediaSession(this.player, {
+				mediaSession: window.navigator.mediaSession,
+				MediaMetadata: window.MediaMetadata,
+				captureTimestamp: () => void this.captureTimestampFromMediaSession(),
+				skipBackward: () => this.api.skipBackward(),
+				skipForward: () => this.api.skipForward(),
+			}),
+		);
 		this.isReady = true;
 	}
 
@@ -409,43 +406,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return await this.appendTimestampToEpisodeNote();
 	}
 
-	private registerMediaSessionHandlers(): void {
-		this.registerMediaSessionAction("previoustrack", () => {
-			void this.captureTimestampFromMediaSession();
-		});
-	}
-
-	private registerMediaSessionAction(action: MediaSessionActionName, handler: () => void): void {
-		const mediaSession = window.navigator?.mediaSession;
-		if (!mediaSession?.setActionHandler) {
-			return;
-		}
-
-		try {
-			mediaSession.setActionHandler(action, handler);
-			this.mediaSessionActions.push(action);
-		} catch (error) {
-			console.warn(`PodNotes: Media Session action "${action}" is not supported`, error);
-		}
-	}
-
-	private clearMediaSessionHandlers(): void {
-		const mediaSession = window.navigator?.mediaSession;
-		if (!mediaSession?.setActionHandler) {
-			return;
-		}
-
-		for (const action of this.mediaSessionActions) {
-			try {
-				mediaSession.setActionHandler(action, null);
-			} catch {
-				// Ignore unsupported cleanup paths; registration already guarded them.
-			}
-		}
-
-		this.mediaSessionActions = [];
-	}
-
 	override onunload() {
 		this.isUnloaded = true;
 		// The refusal ends with this instance; the next one reads the file itself.
@@ -454,7 +414,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.player?.dispose();
 		void this.writer?.unload();
 		this.clearLayoutReadyRetry();
-		this.clearMediaSessionHandlers();
 		for (const unsubscribe of this.storeUnsubscribers) unsubscribe();
 		this.storeUnsubscribers = [];
 		this.localFilesMirrorUnsubscribe?.();
@@ -481,7 +440,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// loadData resolves nullish both for a missing file and for one it could
 			// not read or parse.
 			if (data == null && !(await this.dataFileHoldsNothing())) {
-				this.settings = structuredClone(DEFAULT_SETTINGS);
+				this.settings = decodePodNotesData(undefined).settings;
 				this.persistenceUnknownFields = { libraryId: newLibraryId() };
 				this.refuseSaves(
 					"unreadable-data-file",

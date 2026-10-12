@@ -462,4 +462,48 @@ describe("feed journeys", () => {
 		expect(await listedEpisodes(obsidian)).toEqual(["Stale Two", "Stale One"]);
 		expect(await notices(obsidian)).toEqual([]);
 	});
+	test("podcasts titled toString and __proto__ download, queue, play and keep their names after a reload", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const toStringShow = feed("toString", "to-string", ["To String Episode"]);
+		const protoShow = feed("__proto__", "proto", ["Proto Episode"]);
+		const server = await serve(toStringShow, protoShow);
+		await seedLibrary(context, server, { subscriptions: [toStringShow, protoShow] });
+
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastCard("toString"));
+		await waitUntilShown(obsidian, ui.episode("To String Episode"));
+		await click(obsidian, ui.episode("To String Episode"), { button: "right" });
+		await click(obsidian, ui.menuItem("Download"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.downloads.some((entry) => entry.podcast === "toString"),
+			"the toString episode downloaded",
+		);
+		await click(obsidian, ui.episode("To String Episode"), { button: "right" });
+		await click(obsidian, ui.menuItem("Add to Queue"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.queue.includes("To String Episode"),
+			"the toString episode queued",
+		);
+		await click(obsidian, ui.episode("To String Episode"));
+		await waitForPlayback(
+			obsidian,
+			(playback) => playback.episode?.podcast === "toString" && playback.seconds > 0,
+			"the toString episode playing",
+		);
+
+		await plugin.reload(RELOAD_OPTIONS);
+		const saved = await plugin.data<{ savedFeeds: Record<string, unknown> }>().read();
+		expect(Object.keys(saved.savedFeeds).sort()).toEqual(["__proto__", "toString"]);
+		expect(
+			await obsidian.dev.evalJson<boolean>(
+				`Object.keys(app.plugins.plugins.podnotes.settings.savedFeeds).includes("__proto__") && ({}).url === undefined`,
+			),
+		).toBe(true);
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastGridTab);
+		await waitUntilShown(obsidian, ui.podcastCard("__proto__"));
+	});
 });

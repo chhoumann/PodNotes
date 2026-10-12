@@ -5,6 +5,7 @@ import type { App } from "obsidian";
 import * as obsidian from "obsidian";
 
 import { DEFAULT_SETTINGS } from "src/constants";
+import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import PodNotes from "src/main";
 import { PlayerController } from "src/player/PlayerController";
 import { episodeListLimit, hidePlayedEpisodes, savedFeeds } from "src/store";
@@ -31,15 +32,25 @@ function deferred<T = void>() {
 }
 
 describe("PodNotesSettingsTab settings import", () => {
-	it("sets the live playback rate when importing a new default", async () => {
+	it("applies an imported volume at once, and an imported speed from the next episode", async () => {
+		const episode = (title: string): Episode => ({
+			title,
+			streamUrl: `https://pod.example.com/${title}.mp3`,
+			url: "",
+			description: "",
+			content: "",
+			podcastName: "Show",
+		});
 		const plugin = {
 			settings: structuredClone(DEFAULT_SETTINGS),
+			app: { vault: {} },
 			credentials: { storeValues: vi.fn(() => ({})) },
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
 		} as unknown as PodNotes;
 		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
 		vi.spyOn(tab, "update").mockImplementation(() => {});
+		plugin.player.play(episode("A"));
 
 		await (
 			tab as unknown as {
@@ -47,10 +58,12 @@ describe("PodNotesSettingsTab settings import", () => {
 					imported: Partial<typeof DEFAULT_SETTINGS>,
 				) => Promise<void>;
 			}
-		).applyImportedSettings({ defaultPlaybackRate: 2.3 });
+		).applyImportedSettings({ defaultPlaybackRate: 2.3, defaultVolume: 0.4 });
 
-		expect(plugin.settings.defaultPlaybackRate).toBe(2.3);
-		expect(get(plugin.player.state).playbackRate).toBe(2.3);
+		expect(plugin.settings).toMatchObject({ defaultPlaybackRate: 2.3, defaultVolume: 0.4 });
+		expect(get(plugin.player.state)).toMatchObject({ playbackRate: 1, volume: 0.4 });
+		plugin.player.play(episode("B"));
+		expect(get(plugin.player.state)).toMatchObject({ playbackRate: 2.3, volume: 0.4 });
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
 	});
 
@@ -87,6 +100,54 @@ describe("PodNotesSettingsTab settings import", () => {
 			10000,
 		);
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
+	});
+
+	it("puts back a feed named __proto__ when an import that removed it fails", async () => {
+		const showFeed = {
+			title: "__proto__",
+			url: "https://example.com/feed.xml",
+			artworkUrl: "",
+		};
+		const laterFeed = { title: "Later", url: "https://example.com/later.xml", artworkUrl: "" };
+		const previous = decodePodNotesData(
+			JSON.parse(
+				JSON.stringify({
+					schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+					libraryId: "library",
+					savedFeeds: Object.fromEntries([["__proto__", showFeed]]),
+				}),
+			),
+		).settings;
+		const plugin = {
+			settings: previous,
+			credentials: { storeValues: vi.fn(() => ({})) },
+			feedUrls: { resolve: vi.fn(() => null) },
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+			saveSettingsStrict: vi
+				.fn()
+				.mockImplementationOnce(() => {
+					plugin.settings.savedFeeds.Later = laterFeed;
+					return Promise.reject(new Error("disk full"));
+				})
+				.mockResolvedValueOnce(undefined),
+		} as unknown as PodNotes;
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
+		vi.spyOn(tab, "update").mockImplementation(() => {});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await (
+			tab as unknown as {
+				applyImportedSettings: (
+					imported: Partial<typeof DEFAULT_SETTINGS>,
+				) => Promise<void>;
+			}
+		).applyImportedSettings({ savedFeeds: {} });
+
+		expect(Object.keys(plugin.settings.savedFeeds).sort()).toEqual(["Later", "__proto__"]);
+		expect(plugin.settings.savedFeeds.Later).toEqual(laterFeed);
+		expect(plugin.settings.savedFeeds["__proto__"]).toEqual(showFeed);
+		expect(plugin.settings.savedFeeds.toString).toBeUndefined();
+		expect(({} as { url?: string }).url).toBeUndefined();
 	});
 
 	it("locks ordinary settings controls until an import and its lane drain finish", async () => {
@@ -548,12 +609,12 @@ describe("PodNotesSettingsTab settings import", () => {
 			});
 			await vi.waitFor(() => expect(saveData).toHaveBeenCalledTimes(1));
 
+			plugin.player.play(selected);
 			hidePlayedEpisodes.set(true);
 			plugin.player.setVolume(0.4);
 			episodeListLimit.set(20);
 			// Current playback speed is runtime state, not the persisted default.
 			plugin.player.setPlaybackRate(2.5);
-			plugin.player.play(selected);
 			firstWrite.reject(new Error("first import write failed"));
 			await importing;
 

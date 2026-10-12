@@ -6,6 +6,7 @@ import type { Episode, EpisodeMediaType } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
+import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
 import { selectSource, type PlaybackSource } from "./source";
@@ -65,7 +66,7 @@ const SAVE_POSITION_THROTTLE_MS = 5000;
 /** HTMLMediaElement.HAVE_NOTHING: the element holds no media. */
 const HAVE_NOTHING = 0;
 /** A seek at or past the end stops this far short of it, so a seek never finishes an episode. */
-const END_MARGIN_S = 0.25;
+export const END_MARGIN_S = 0.25;
 /** The media element's class, wherever it is. */
 export const MEDIA_CLASS = "podnotes-media";
 
@@ -224,7 +225,8 @@ export class PlayerController {
 	setPlaybackRate(rate: number): void {
 		if (this.disposed) return;
 		const playbackRate = normalizePlaybackRate(rate, this.plugin.settings.defaultPlaybackRate);
-		// A new load resets the rate to the default rate.
+		// The browser's own reload of the element, as in a popout's video stage, resets
+		// the rate to the element's default rate.
 		this.el.playbackRate = this.el.defaultPlaybackRate = playbackRate;
 		this.setState({ playbackRate });
 	}
@@ -289,6 +291,12 @@ export class PlayerController {
 	private load(episode: Episode, source: PlaybackSource, time: number, endTime?: number): void {
 		this.session = null;
 		const duration = this.startDuration(episode);
+		const shown = this.snapshot.episode;
+		// Reloading the shown episode, as on its first play after a restart, keeps the user's speed.
+		const playbackRate =
+			shown && getEpisodeKey(shown) === getEpisodeKey(episode)
+				? this.snapshot.playbackRate
+				: normalizePlaybackRate(this.plugin.settings.defaultPlaybackRate);
 		if (!source.src) {
 			this.release();
 			this.setState({
@@ -297,6 +305,7 @@ export class PlayerController {
 				mediaType: source.mediaType,
 				currentTime: time,
 				duration,
+				playbackRate,
 			});
 			return;
 		}
@@ -315,12 +324,14 @@ export class PlayerController {
 			preview: endTime !== undefined,
 			lastCheckpoint: Number.NEGATIVE_INFINITY,
 		};
+		this.el.playbackRate = this.el.defaultPlaybackRate = playbackRate;
 		this.setState({
 			status: "loading",
 			episode,
 			mediaType: source.mediaType,
 			currentTime: time,
 			duration,
+			playbackRate,
 		});
 		this.el.setAttribute("aria-label", episode.title);
 		this.el.src = source.src;
@@ -551,19 +562,8 @@ export class PlayerController {
 		this.moved = false;
 	}
 
-	/** The composite key's record, else a legacy title-only record that does not name another podcast. */
 	private savedProgress(episode: Episode): PlayedEpisode | undefined {
-		const played = get(playedEpisodes);
-		const legacy = played[episode.title];
-		return (
-			played[getEpisodeKey(episode)] ??
-			(legacy &&
-			(!legacy.podcastName ||
-				!episode.podcastName ||
-				legacy.podcastName === episode.podcastName)
-				? legacy
-				: undefined)
-		);
+		return getPlayedEpisode(get(playedEpisodes), episode);
 	}
 
 	/**

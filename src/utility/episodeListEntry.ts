@@ -4,6 +4,7 @@ import { getEpisodeKey } from "src/utility/episodeKey";
 import {
 	getFinishedPlayedEpisodeRecords,
 	getPlayedEpisodeRecordKey,
+	podcastNamesAgree,
 	type PlayedEpisodeMap,
 } from "src/utility/episodeStatus";
 
@@ -70,11 +71,13 @@ function resolvePlayedEpisode(
 	playedEpisode: PlayedEpisode,
 	episodeLookup: Map<string, Episode>,
 ): Episode | undefined {
-	const lookupKeys = [key, getPlayedEpisodeRecordKey(playedEpisode), playedEpisode.title];
+	const lookupKeys = [getPlayedEpisodeRecordKey(playedEpisode), key, playedEpisode.title];
 
 	for (const lookupKey of lookupKeys) {
 		const episode = episodeLookup.get(lookupKey);
-		if (episode) return episode;
+		if (episode && podcastNamesAgree(playedEpisode.podcastName, episode.podcastName)) {
+			return episode;
+		}
 	}
 
 	return undefined;

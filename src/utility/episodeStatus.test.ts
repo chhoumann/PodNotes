@@ -50,6 +50,34 @@ describe("episodeStatus", () => {
 		expect(isEpisodeFinished(episode, playedEpisodes)).toBe(true);
 	});
 
+	test("does not take another podcast's legacy record for this episode", () => {
+		const playedEpisodes = {
+			[episode.title]: playedEpisode("Other Podcast", true),
+		};
+
+		expect(getPlayedEpisode(playedEpisodes, episode)).toBeUndefined();
+		expect(isEpisodeFinished(episode, playedEpisodes)).toBe(false);
+	});
+
+	test("takes a legacy record that names no podcast", () => {
+		const playedEpisodes = {
+			[episode.title]: playedEpisode("", true),
+		};
+
+		expect(isEpisodeFinished(episode, playedEpisodes)).toBe(true);
+	});
+
+	test.each(["toString", "__proto__", "constructor", "hasOwnProperty"])(
+		"finds no progress for an unplayed episode titled %s",
+		(title) => {
+			for (const podcastName of ["Design Podcast", ""]) {
+				const unplayed = { ...episode, title, podcastName };
+				expect(getPlayedEpisode({}, unplayed)).toBeUndefined();
+				expect(isEpisodeFinished(unplayed, {})).toBe(false);
+			}
+		},
+	);
+
 	test("lists only finished played records", () => {
 		const records = getFinishedPlayedEpisodeRecords({
 			finished: playedEpisode("Design Podcast", true),

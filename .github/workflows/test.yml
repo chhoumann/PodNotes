@@ -35,3 +35,5 @@ jobs:
         run: npm run size && npm run size:data
       - name: Run tests
         run: npm run test
+      - name: Check tooling failures
+        run: npm run test:tooling
