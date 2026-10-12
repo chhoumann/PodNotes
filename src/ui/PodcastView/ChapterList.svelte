@@ -49,7 +49,7 @@
 
 		{#if isExpanded}
 			<ul class="chapters" id={listId}>
-				{#each chapters as chapter, index}
+				{#each chapters as chapter, index (index)}
 					<li class:active={index === currentChapterIndex}>
 						<button
 							type="button"
