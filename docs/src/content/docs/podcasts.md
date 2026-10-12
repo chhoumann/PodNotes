@@ -46,7 +46,9 @@ Above each list, **Search episodes** filters it. In **Latest Episodes** and a po
 
 ## <span id="player"></span>Play an episode
 
-Select an episode to play it. The player resumes where you stopped last time. To return to the player from a list, select **Player**, the third button at the top of the view.
+1. In an episode list, select an episode.
+
+The player opens and resumes where you stopped last time. To return to the player from a list, select **Player**, the third button at the top of the view.
 
 ![The player with episode artwork, the episode title, the progress bar, and the skip buttons](/screenshots/player.webp)
 

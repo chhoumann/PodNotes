@@ -31,7 +31,13 @@ A headset button that sends the previous-track action also captures. If a note i
 
 ## <span id="capturing-segments"></span>Capture a range
 
-To mark a passage instead of a moment, run **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**. PodNotes inserts a link to the range that ends at the current playback time, such as `00:12:31-00:12:41`. The link plays that passage and pauses at its end. It does not cut an audio clip.
+To mark a passage instead of a moment:
+
+1. Play an episode in PodNotes.
+2. In a note in editing view, place the cursor where the range goes.
+3. Run **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**.
+
+PodNotes inserts the range that ends at the current playback time, such as `00:12:31-00:12:41`. With the default **Capture timestamp format**, the range is a link that plays that passage and pauses at its end. It does not cut an audio clip.
 
 The range commands insert a range in the style of your **Capture timestamp format**, as [Timestamp tags](#timestamp-tags) describes. [Commands](/commands/#capture-last-10-seconds--capture-last-20-seconds) lists when they are available.
 

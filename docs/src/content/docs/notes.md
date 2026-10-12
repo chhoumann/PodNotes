@@ -81,29 +81,31 @@ A note made with this template looks like this:
 
 ## Browse your notes with Bases
 
-[Obsidian Bases](https://obsidian.md/help/bases) shows notes as a table that you can filter, sort, and group. The default episode note template sets `type: podcastEpisode`, `podcast`, `date`, `tags`, and `favorite: false`, and leaves `status` and `rating` for you to fill in. To list your episode notes grouped by status, add this code block to a note:
+[Obsidian Bases](https://obsidian.md/help/bases) shows notes as a table that you can filter, sort, and group. The default episode note template sets `type: podcastEpisode`, `podcast`, `date`, `tags`, and `favorite: false`, and leaves `status` and `rating` for you to fill in. To list your episode notes grouped by status:
 
-````md
-```base
-filters:
-  and:
-    - 'type == "podcastEpisode"'
-views:
-  - type: table
-    name: Episodes
-    order:
-      - file.name
-      - note.podcast
-      - note.status
-      - note.rating
-    sort:
-      - property: note.date
-        direction: DESC
-    groupBy:
-      property: note.status
-      direction: ASC
-```
-````
+1. In the note where you want the table, insert this code block:
+
+   ````md
+   ```base
+   filters:
+     and:
+       - 'type == "podcastEpisode"'
+   views:
+     - type: table
+       name: Episodes
+       order:
+         - file.name
+         - note.podcast
+         - note.status
+         - note.rating
+       sort:
+         - property: note.date
+           direction: DESC
+       groupBy:
+         property: note.status
+         direction: ASC
+   ```
+   ````
 
 ![A Bases table of five episode notes, grouped by status into finished, listening, and next](/screenshots/bases.webp)
 

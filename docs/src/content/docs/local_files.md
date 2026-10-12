@@ -8,7 +8,9 @@ Download episodes to listen offline, and play audio and video files from your va
 
 ## Download an episode
 
-To download the episode in the player, run **PodNotes: Download Playing Episode**.
+To download the episode in the player:
+
+1. Run **PodNotes: Download Playing Episode**.
 
 To download any other episode:
 

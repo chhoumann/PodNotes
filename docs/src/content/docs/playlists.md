@@ -24,7 +24,11 @@ For a long queue, run **PodNotes: Reorder Queue**. It opens a list where you mov
 
 ### Turn off the automatic queue
 
-To control the queue only by hand, turn off **Keep a queue of episodes you switch away from** in **Settings → PodNotes**. PodNotes then stops adding the episode you leave, and when an episode ends, the next one in the queue does not start. With the setting off, the podcast grid hides **Queue** while the queue is empty.
+To control the queue only by hand:
+
+1. In **Settings → PodNotes**, turn off **Keep a queue of episodes you switch away from**.
+
+PodNotes then stops adding the episode you leave, and when an episode ends, the next one in the queue does not start. With the setting off, the podcast grid hides **Queue** while the queue is empty.
 
 ## Collect episodes in playlists
 

@@ -109,7 +109,9 @@ PodNotes finds an episode note only at **Note creation file path**, or by the ep
 
 ## Send a transcript to an AI prompt
 
-This macro returns a prompt with the current episode's transcript, for QuickAdd's AI Assistant. It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first. Set up the AI Assistant's provider and key as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe.
+This recipe has QuickAdd's AI Assistant summarize the current episode and write the summary into the note you have open. It reads the episode's transcript note, so [transcribe the episode](/transcripts/) first.
+
+Before you start, set up the AI Assistant once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe: in **Settings → QuickAdd**, turn off **Disable AI & online features** under **AI & online**, then in **Configure AI Assistant**, set a **Prompt template folder** and link your provider's API key.
 
 1. In a visible folder of your vault, create `scripts/podnotes-transcript-prompt.js`:
 
@@ -139,4 +141,13 @@ This macro returns a prompt with the current episode's transcript, for QuickAdd'
 4. Set **Name** to `Transcript prompt`.
 5. On the **Transcript prompt** page, under **Commands**, next to **User scripts**, select **Browse**.
 6. Select `scripts/podnotes-transcript-prompt.js`.
-7. In a prompt template for QuickAdd's AI Assistant, insert `{{MACRO:Transcript prompt}}`. QuickAdd runs the macro and puts its prompt there.
+7. In your prompt template folder, create a note named `Summarize transcript` that contains `{{MACRO:Transcript prompt}}`. QuickAdd runs the macro and puts its prompt there.
+8. In **Settings → QuickAdd**, select **New choice**, then **Macro**, and set **Name** to `Summarize episode`.
+9. On the **Summarize episode** page, add an **AI Assistant** command.
+10. In that command's settings, set **Prompt template** to `Summarize transcript`.
+11. Add a **Capture** command after it.
+12. In the Capture's settings, turn on **Capture to active file** and set **Capture format** to `{{VALUE:output}}`.
+13. Load the episode, and open the note for the summary in editing view.
+14. Run **QuickAdd: Run**, then select `Summarize episode`.
+
+The AI Assistant puts the model's answer in `{{VALUE:output}}`, which only the later commands of the same macro can read. QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe the model and output settings.
