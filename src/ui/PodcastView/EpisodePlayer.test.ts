@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { MenuItem } from "obsidian";
-import { get, writable } from "svelte/store";
+import { tick } from "svelte";
+import { derived, get, writable } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "src/constants";
@@ -42,7 +43,7 @@ function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) 
 		videoStage: vi.fn(() => ({ destroy: vi.fn() })),
 	};
 	const services = {
-		settings: structuredClone(DEFAULT_SETTINGS),
+		settings: derived(plugin, ($plugin) => $plugin.settings),
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() },
 		player,
 	} as never;
@@ -60,6 +61,7 @@ const barWidth = (container: HTMLElement) =>
 
 beforeEach(() => {
 	queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: [] });
+	plugin.set({ settings: structuredClone(DEFAULT_SETTINGS) } as never);
 });
 
 describe("EpisodePlayer", () => {
@@ -157,8 +159,23 @@ describe("EpisodePlayer", () => {
 		await fireEvent.contextMenu(screen.getByText("Second Queued"));
 
 		expect(titles.mock.calls.map(([title]) => title)).toContain("Move up in queue");
-		plugin.set(undefined as never);
 		titles.mockRestore();
+	});
+
+	test("an empty Queue follows queue automation as settings change or are imported (#108)", async () => {
+		const host = get(plugin);
+		renderPlayer();
+		expect(screen.getByRole("heading", { name: "Queue" })).toBeInTheDocument();
+
+		host.settings.autoQueue = false;
+		plugin.set(host);
+		await tick();
+		expect(screen.queryByRole("heading", { name: "Queue" })).toBeNull();
+
+		host.settings = { ...structuredClone(DEFAULT_SETTINGS), autoQueue: true };
+		plugin.set(host);
+		await tick();
+		expect(screen.getByRole("heading", { name: "Queue" })).toBeInTheDocument();
 	});
 
 	test("a video episode in a popout shows its artwork, since the video plays in the main window", async () => {

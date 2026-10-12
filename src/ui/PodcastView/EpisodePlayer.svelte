@@ -34,7 +34,7 @@
 	// Hide the player's Queue list only when queue automation is off AND the queue
 	// is empty (issue #108), otherwise show it (default-on state or a non-empty
 	// manual queue).
-	const showQueue = $derived(settings.autoQueue !== false || $queue.episodes.length > 0);
+	const showQueue = $derived($settings.autoQueue !== false || $queue.episodes.length > 0);
 
 	const episode = $derived($playerState.episode as Episode);
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).

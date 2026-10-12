@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceLeaf } from "obsidian";
+import type { Readable } from "svelte/store";
+import { plugin as pluginStore } from "src/store";
 import type { IPodNotes } from "../../types/IPodNotes";
+import type { IPodNotesSettings } from "../../types/IPodNotesSettings";
 
 const svelte = vi.hoisted(() => ({
 	mount: vi.fn(() => ({ component: "podcast-view" })),
@@ -73,6 +76,29 @@ describe("MainView mobile startup mounting", () => {
 			target: contentEl,
 			props: { services: expect.objectContaining({ navigation: plugin.navigation }) },
 		});
+	});
+
+	it("gives the view the plugin's settings, current through a toggle and an import", async () => {
+		const { plugin, view } = createView({ shouldMount: true });
+		const host = Object.assign(plugin, { settings: { autoQueue: true } as IPodNotesSettings });
+		pluginStore.set(host as never);
+		await openView(view);
+		const { settings } = (
+			svelte.mount.mock.calls[0] as unknown as [
+				unknown,
+				{ props: { services: { settings: Readable<IPodNotesSettings> } } },
+			]
+		)[1].props.services;
+		const seen: boolean[] = [];
+
+		const stop = settings.subscribe(({ autoQueue }) => seen.push(autoQueue));
+		host.settings.autoQueue = false;
+		pluginStore.set(host as never);
+		host.settings = { autoQueue: true } as IPodNotesSettings;
+		pluginStore.set(host as never);
+		stop();
+
+		expect(seen).toEqual([true, false, true]);
 	});
 
 	it("unmounts a mounted PodcastView", async () => {

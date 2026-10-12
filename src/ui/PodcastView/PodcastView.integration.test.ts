@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
-import { get } from "svelte/store";
+import { get, readable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import createPodcastNote from "src/createPodcastNote";
@@ -36,7 +36,7 @@ function renderView() {
 				player,
 				feeds: get(plugin).feeds,
 				navigation,
-				settings: structuredClone(DEFAULT_SETTINGS),
+				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},
 			},

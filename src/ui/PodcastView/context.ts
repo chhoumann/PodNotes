@@ -1,5 +1,6 @@
 import type { App } from "obsidian";
 import { createContext } from "svelte";
+import type { Readable } from "svelte/store";
 import type { IAPI } from "src/API/IAPI";
 import type { PlayerController } from "src/player/PlayerController";
 import type { FeedRepository } from "src/services/FeedRepository";
@@ -13,7 +14,8 @@ export interface ShellServices {
 	readonly player: PlayerController;
 	readonly feeds: FeedRepository;
 	readonly navigation: Navigation;
-	readonly settings: IPodNotesSettings;
+	/** Current through a settings toggle or an import, which replaces the object. */
+	readonly settings: Readable<IPodNotesSettings>;
 	/** Into the active note, else into the episode note. Resolves to that note's name, or null. */
 	captureTimestamp(): Promise<string | null>;
 	/** Opens Obsidian's settings at the PodNotes tab. */

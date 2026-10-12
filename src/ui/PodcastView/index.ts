@@ -6,6 +6,8 @@ import type { ShellServices } from "./context";
 import { pageKey, parsePage } from "./pages";
 import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
+import { derived } from "svelte/store";
+import { plugin as pluginStore } from "src/store";
 
 export class MainView extends ItemView {
 	constructor(
@@ -75,7 +77,7 @@ export class MainView extends ItemView {
 			player: plugin.player,
 			feeds: plugin.feeds,
 			navigation: plugin.navigation,
-			settings: plugin.settings,
+			settings: derived(pluginStore, ($plugin) => $plugin.settings),
 			captureTimestamp: () => plugin.captureTimestampToEditorOrNote(),
 			openSettings: () => plugin.openSettingsTab(),
 		};
