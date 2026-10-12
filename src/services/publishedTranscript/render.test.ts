@@ -98,6 +98,7 @@ describe("timestampStyle", () => {
 		["{{linktime:}}", { format: "HH:mm:ss", linkify: true }],
 		["{{linktime: H:mm}}", { format: " H:mm", linkify: true }],
 		["{{time: }}", { format: " ", linkify: false }],
+		["{{linktime:\nmm:ss}}", { format: "\nmm:ss", linkify: true }],
 		["> ", { format: "HH:mm:ss", linkify: false }],
 		["{{ linktime }}", { format: "HH:mm:ss", linkify: false }],
 		["{{ linktime:mm:ss }} {{time:H:mm}}", { format: "H:mm", linkify: false }],

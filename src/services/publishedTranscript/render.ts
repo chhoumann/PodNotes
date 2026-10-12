@@ -14,8 +14,8 @@ export interface TimestampStyle {
 }
 
 // As in TemplateEngine, a tag's name fills the braces, so `{{ linktime }}` is no tag, and
-// everything after the colon, spaces included, is its format.
-const TIME_TAG = /\{\{(link)?(?:time|segment)(?::(.*?))?\}\}/i;
+// everything after the colon, spaces and line breaks included, is its format.
+const TIME_TAG = /\{\{(link)?(?:time|segment)(?::(\s*.*?))?\}\}/i;
 
 export function timestampStyle(timestampTemplate: string): TimestampStyle {
 	const tag = TIME_TAG.exec(timestampTemplate);
