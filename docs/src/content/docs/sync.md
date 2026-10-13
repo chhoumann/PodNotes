@@ -28,10 +28,11 @@ PodNotes merges the changes your devices make, so you can switch devices without
 2. Note the time where you stopped.
 3. Wait until your sync service finishes uploading.
 4. On the device you are switching to, wait until sync finishes.
-5. If this device's player shows the episode at another time, move the progress bar to the time you noted. If it shows another episode, select your episode in its podcast's list instead. It plays from the synced time, so skip step 6.
-6. Play the episode.
+5. If this device's player shows another episode, select your episode in its podcast's list. It plays from the synced time, and you are done.
+6. If the player shows your episode at another time, move the progress bar to the time you noted.
+7. Play the episode.
 
-Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. If you move the position of an episode that you have not played since Obsidian started, and then play it, it plays from that position instead of the synced one. Other episodes start at their synced position when you play them.
+Step 6 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. The episode that the player shows when Obsidian starts is the exception. If you move its position and then play it, playback starts from the moved position, not the synced one. Other episodes start at their synced position when you play them.
 
 ## Changes on two devices
 
@@ -47,7 +48,7 @@ When two devices change the same setting or the same item before either sees the
 
 Episodes match by podcast name and title, so episodes with the same title from different podcasts stay apart.
 
-Sync never starts or pauses playback on this device. An episode you played since Obsidian started keeps this device's position while it stays in the player, as step 5 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains. Before you play anything after Obsidian starts, the player follows the episode and position that sync brings, unless you moved the position of that same episode.
+Sync never starts or pauses playback on this device. An episode you played since Obsidian started keeps this device's position while it stays in the player, as step 6 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains. Before you play anything after Obsidian starts, the player follows the episode and position that sync brings, unless you moved the position of that same episode.
 
 ### A device that starts before sync finishes
 

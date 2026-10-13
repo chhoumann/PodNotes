@@ -20,7 +20,7 @@ PodNotes cannot sign in to providers that require a browser login. If PodNotes c
 The podcast syncs to your other devices, but its address does not. On each other device, enter the address once:
 
 1. If the device already has PodNotes, update it before you use PodNotes there. An older PodNotes does not [merge changes](/sync/#changes-on-two-devices), so it can overwrite the library that sync brings.
-2. Let your sync service bring your vault to the device. It must include PodNotes' plugin folder, as [What syncs](/sync/#what-syncs) describes. With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync**.
+2. Let your sync service bring your vault to the device. It must include PodNotes' plugin folder, as [What syncs](/sync/#what-syncs) describes. With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** on every device.
 3. If PodNotes is not on the device after sync, install it. The podcast then appears on the device. Do not add it again from its address.
 4. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
 5. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item.
@@ -29,6 +29,14 @@ The podcast syncs to your other devices, but its address does not. On each other
 PodNotes stores the address on this device and loads the feed. From then on, the podcast and its timestamp links work on this device too.
 
 PodNotes does not check that the address belongs to the same show, so paste the address of that podcast. If you try to add the podcast again from its address instead, a notice says, for example, `The private feed address for "Members Show" is not available on this device.` Use **Set feed address** instead.
+
+## After you update to PodNotes 2.22.0
+
+PodNotes 2.22.0 recognizes the hosts in [Private feed hosts](#private-feed-hosts), for example a Supercast address such as `https://myshow.supercast.com/feed/abc123.rss`. The first time PodNotes 2.22.0 starts, it moves the address of each matching podcast out of `data.json` into secret storage and shows "Moved private feed URLs out of data.json." The podcast keeps working on that device.
+
+Update PodNotes on every device first. An older PodNotes cannot load these podcasts, and because it does not [merge changes](/sync/#changes-on-two-devices), it can overwrite the changes from your other devices. Then, on each other device, enter the address of each moved podcast once with [Set feed address](#use-a-private-feed-on-another-device).
+
+Notes and links that you created before the update keep the address in their text. Those links still play on every device, because they hold the address itself. PodNotes does not rewrite them.
 
 ## Which addresses PodNotes keeps private
 
@@ -39,14 +47,6 @@ PodNotes keeps a feed address private when it has any of these:
 - The private feed form of one of the hosts in [Private feed hosts](#private-feed-hosts).
 
 In these docs, a private feed is a feed with such an address. PodNotes does not recognize other addresses, even when they hold a token in the path, such as `https://example.com/feeds/a1b2c3/rss`, or when they use a provider's custom domain. Such an address stays in `data.json`, syncs to every device, and works there with no setup.
-
-## After you update to PodNotes 2.22.0
-
-PodNotes 2.22.0 recognizes the hosts in [Private feed hosts](#private-feed-hosts), for example a Supercast address such as `https://myshow.supercast.com/feed/abc123.rss`. The first time PodNotes 2.22.0 starts, it moves the address of each matching podcast out of `data.json` into secret storage and shows "Moved private feed URLs out of data.json." The podcast keeps working on that device.
-
-Update PodNotes on every device first. An older PodNotes cannot load these podcasts, and because it does not [merge changes](/sync/#changes-on-two-devices), it can overwrite the changes from your other devices. Then, on each other device, enter the address of each moved podcast once with [Set feed address](#use-a-private-feed-on-another-device).
-
-Notes and links that you created before the update keep the address in their text. Those links still play on every device, because they hold the address itself. PodNotes does not rewrite them.
 
 ## Private feeds in notes and links
 

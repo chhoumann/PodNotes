@@ -12,9 +12,13 @@ The write to `data.json` failed, for example because the disk is full or the fol
 
 PodNotes keeps your changes in memory and tries again every 10 seconds. The changes stay in memory while Obsidian stays open, even if the next notice says that PodNotes could not read the file. If you quit Obsidian before a save succeeds, the unsaved changes are lost.
 
-PodNotes shows the notice once and gives no sign when a save succeeds. To keep your changes safe, keep Obsidian open until you have fixed the cause. To check that saving works again, change any setting in **Settings → PodNotes**, wait about 10 seconds, and open `data.json` in a text editor. It should hold the new value and end with a closing `}`. If the notice appears again after a while, saving failed again after it had worked.
+PodNotes shows the notice once and gives no sign when a save succeeds. If the notice appears again after a while, saving failed again after it had worked.
 
-To fix the cause, free disk space, and check that PodNotes may write to its plugin folder, `.obsidian/plugins/podnotes/`.
+To fix the cause, free disk space, and check that PodNotes may write to its plugin folder, `.obsidian/plugins/podnotes/`. Keep Obsidian open until you have fixed it, so that your changes stay safe. Then check that saving works again:
+
+1. In **Settings → PodNotes**, change any setting, such as **Skip forward length (s)** to 20.
+2. Wait about 10 seconds.
+3. Open `data.json` in a text editor, as [Write a new data.json](#write-a-new-datajson) describes. It should hold the new value, such as `"skipForwardLength": 20`, and end with a closing `}`. If your editor checks JSON, it should report no errors.
 
 ## PodNotes could not read data.json
 
@@ -26,7 +30,7 @@ If the notice also says that PodNotes started with default settings, see [A read
 
 Your changes stay in memory. While you have unsaved changes, PodNotes reads the file again every 10 seconds. Without unsaved changes, it reads the file again when the file changes. When PodNotes can read the file again, the notice closes, and PodNotes saves your changes merged with the file. If you restart Obsidian before then, the changes in memory are lost.
 
-If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete, and waiting for sync is unlikely to help. Fix its cause, such as a full disk or a folder that does not allow writes. If the read notice stays, go to [Write a new data.json](#write-a-new-datajson).
+If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. Waiting for sync is unlikely to help then. Fix its cause, such as a full disk or a folder that does not allow writes. If the read notice stays, go to [Write a new data.json](#write-a-new-datajson).
 
 Otherwise, try these steps first:
 
@@ -37,15 +41,15 @@ If the notice still stays, go to [Write a new data.json](#write-a-new-datajson).
 
 #### Write a new data.json
 
-This is the last resort. It loses the changes that your other devices saved into the file since this device last read it.
+Use these steps only as a last resort. They lose the changes that your other devices saved into the file since this device last read it.
 
-Obsidian does not show its configuration folder. On a computer, use your system's file manager, with hidden files shown. On a phone, use a file manager app that can open the vault folder. Without such an app, a phone cannot do these steps, so keep Obsidian open while you get one, because a restart loses the changes in memory.
+Obsidian does not show its configuration folder. On a computer, use your system's file manager, with hidden files shown. On a phone, use a file manager app that can open the vault folder. Without such an app, a phone cannot do these steps. Keep Obsidian open while you get one, because a restart loses the changes in memory.
 
 1. While Obsidian is open, rename the file, for example to `data.json.broken`.
 2. In **Settings → PodNotes**, change any setting, such as **Skip forward length (s)** to 20, so that PodNotes has a change to save. You can set it back once your library is saved. Because no file is there now, PodNotes can write again. Within about 10 seconds, it tries to write a new `data.json` with your library from memory.
 3. Keep Obsidian open, and open the new `data.json` in a text editor.
 
-If the file holds the setting you changed in step 2, such as `"skipForwardLength": 20`, and ends with a closing `}`, PodNotes saved your library from memory, with your recent changes. Keep `data.json.broken` until you have checked your library on this device and your other devices, then delete it.
+Check that the file holds the setting you changed in step 2, such as `"skipForwardLength": 20`, and that it ends with a closing `}`, with no JSON errors if your editor checks them. If it does, PodNotes saved your library from memory, with your recent changes. Keep `data.json.broken` until you have checked your library on this device and your other devices, then delete it.
 
 If the file is missing or empty, the write failed. Keep Obsidian open, and fix the cause, such as a full disk or a folder that does not allow writes. PodNotes tries again every 10 seconds. It shows its save-failure notice on the first failed write, and does not show it again until a save succeeds.
 

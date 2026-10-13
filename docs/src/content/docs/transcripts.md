@@ -14,7 +14,7 @@ Turn an episode into a transcript note. When you added the podcast and its feed 
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key), or a Deepgram key for [speaker labels](#add-speaker-labels) with Deepgram.
+To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key). For [speaker labels](#add-speaker-labels) from Deepgram, set up a Deepgram key instead.
 
 A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
