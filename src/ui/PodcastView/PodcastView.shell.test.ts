@@ -5,14 +5,7 @@ import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
-import {
-	favorites,
-	localFiles,
-	playedEpisodes,
-	playlists,
-	queue,
-	savedFeeds,
-} from "src/store";
+import { favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
 import {
 	installResizeObserver,
