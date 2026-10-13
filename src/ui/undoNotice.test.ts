@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import * as obsidian from "obsidian";
 import { afterEach, expect, test, vi } from "vitest";
-import { noticeWithUndo } from "./undoNotice";
+import { dismissUndoNotices, noticeWithUndo } from "./undoNotice";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+	vi.useRealTimers();
+	vi.restoreAllMocks();
+});
 
 function shown() {
 	const notice = vi.spyOn(obsidian, "Notice");
@@ -38,4 +41,26 @@ test("Undo runs once and hides the notice", () => {
 
 	expect(undo).toHaveBeenCalledTimes(1);
 	expect(read().hidden).toBe(true);
+});
+
+test("dismissing hides each Undo notice still up, also one the pointer keeps past its seven seconds, and its Undo then does nothing", () => {
+	vi.useFakeTimers();
+	const notice = vi.spyOn(obsidian, "Notice");
+	const undo = vi.fn();
+	noticeWithUndo("Removed The Show", undo);
+	noticeWithUndo("Deleted Walks", undo);
+	const [[kept]] = notice.mock.calls;
+	// Obsidian still shows the first notice, as it does while the pointer rests on it.
+	const shownEl = document.body.appendChild(document.createElement("div"));
+	shownEl.append(kept as DocumentFragment);
+	vi.advanceTimersByTime(9000);
+
+	dismissUndoNotices();
+	shownEl.querySelector("button")!.click();
+	shownEl.remove();
+
+	expect(undo).not.toHaveBeenCalled();
+	expect(
+		notice.mock.instances.map((shown) => (shown as unknown as { hidden: boolean }).hidden),
+	).toEqual([true, false]);
 });

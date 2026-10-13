@@ -19,6 +19,7 @@ import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { Navigation } from "src/ui/PodcastView/Navigation";
+import { dismissUndoNotices } from "src/ui/undoNotice";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import type { IPodNotes } from "./types/IPodNotes";
 import type PartialAppExtension from "./global";
@@ -344,6 +345,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isUnloaded = true;
 		// The refusal ends with this instance; the next one reads the file itself.
 		this.refusalNotice?.hide();
+		dismissUndoNotices();
 		// Before the store bindings are disposed, so the position it saves reaches the writer.
 		this.player?.dispose();
 		void this.writer?.unload();
