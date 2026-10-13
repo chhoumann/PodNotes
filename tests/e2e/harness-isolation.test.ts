@@ -207,19 +207,34 @@ test("reports persistent Notices and waits for expiring Notices", async () => {
 	};
 	try {
 		await coverWith('new Notice("Probe needs a decision", 0).addButton("Dismiss", () => {})');
-		await expect(click(obsidian, probe)).rejects.toThrow(
-			'covered probe is behind a Notice that stays until it is dismissed: "Probe needs a decision"',
+		await expect(click(obsidian, probe, { timeoutMs: 300 })).rejects.toThrow(
+			'covered probe is covered by a Notice: "Probe needs a decision"',
 		);
 		await uncover();
 
 		await coverWith('new Notice("Persistent without buttons", 0)');
-		await expect(click(obsidian, probe)).rejects.toThrow(
-			'is behind a Notice that stays until it is dismissed: "Persistent without buttons"',
+		await expect(click(obsidian, probe, { timeoutMs: 300 })).rejects.toThrow(
+			'is covered by a Notice: "Persistent without buttons"',
 		);
 		await uncover();
 		await coverWith(
 			'new Notice("Expires despite its button", 1_000).addButton("Dismiss", () => {})',
 		);
+		await click(obsidian, probe);
+		expect(
+			await obsidian.dev.evalJson<string>(
+				'document.querySelector(".podnotes-e2e-probe").dataset.clicked',
+			),
+		).toBe("true");
+		await uncover();
+		await coverWith('window.__podnotesProbeNotice = new Notice("Progress until hidden", 0)');
+		await obsidian.dev.evalJson(`(() => {
+			setTimeout(() => {
+				window.__podnotesProbeNotice.hide();
+				delete window.__podnotesProbeNotice;
+			}, 500);
+			return true;
+		})()`);
 		await click(obsidian, probe);
 		expect(
 			await obsidian.dev.evalJson<string>(

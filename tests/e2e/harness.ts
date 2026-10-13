@@ -109,13 +109,13 @@ export function createPodNotesE2EHarness(testName: string) {
 					"(async () => { await app.plugins.saveConfig(); return true; })()",
 				);
 			},
-			() => restoreJourneyWorkspace(suiteClient),
 			async () => {
 				if (!snapshotted || wasEnabled) return;
 				await suiteClient.dev.evalJsonAsync(
 					`(async () => { await app.plugins.disablePluginAndSave(${jsLiteral(PLUGIN_ID)}); await app.plugins.saveConfig(); return true; })()`,
 				);
 			},
+			() => restoreJourneyWorkspace(suiteClient),
 			() => closeRuntimeEvidence(suiteClient),
 			async () => {
 				if (lock) await clearVaultRunLockMarker(suiteClient);

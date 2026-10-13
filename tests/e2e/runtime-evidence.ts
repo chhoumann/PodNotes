@@ -48,8 +48,10 @@ module.exports = class extends Plugin {
 		this.register(() => { Notice.prototype.setAutoHide = setAutoHide; });
 		// Obsidian creates its persistent keyring warning before community plugins load.
 		for (const notice of document.querySelectorAll(".notice")) {
-			if (notice.querySelector(".notice-message")?.textContent === "Secrets are stored without encryption because no secret store is available on this system.")
+			if (notice.querySelector(".notice-message")?.textContent === "Secrets are stored without encryption because no secret store is available on this system.") {
 				notice.dataset.podnotesE2ePersistent = "true";
+				notice.dataset.podnotesE2eKeyring = "true";
+			}
 		}
 		const record = (source, reason) => {
 			try {
@@ -240,7 +242,10 @@ async function removeStaleRecorders(
 			);
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		const stale = new Set(${jsLiteral(stale)});
-		for (const id of stale) await app.plugins.disablePlugin(id);
+		for (const id of stale) {
+			await app.plugins.disablePlugin(id);
+			localStorage.removeItem(id + ":journal-failure");
+		}
 		app.plugins.enabledPlugins = new Set([...app.plugins.enabledPlugins].filter((id) => !stale.has(id)));
 		app.plugins.requestSaveConfig.cancel();
 		await app.vault.adapter.promise;
@@ -264,9 +269,16 @@ async function removeStaleRecorders(
 
 async function isRecorderFolder(directory: string, id: string): Promise<boolean> {
 	const manifest = await readOptional(path.join(directory, "manifest.json"));
-	const identity =
-		manifest && parseJson<{ id?: unknown; name?: unknown }>(manifest.toString("utf8"));
-	if (identity) return identity.id === id && identity.name === RECORDER_NAME;
+	const identity = manifest === null ? undefined : parseJson(manifest.toString("utf8"));
+	if (identity !== undefined)
+		return (
+			typeof identity === "object" &&
+			identity !== null &&
+			"id" in identity &&
+			identity.id === id &&
+			"name" in identity &&
+			identity.name === RECORDER_NAME
+		);
 	// An install interrupted before it finished leaves no manifest or a prefix of its own.
 	const expected = Buffer.from(recorderManifest(id));
 	return (
@@ -291,12 +303,15 @@ function failureKey(id: string): string {
 }
 
 function journalMessage(line: string): unknown {
-	return parseJson<{ message?: unknown }>(line)?.message;
+	const entry = parseJson(line);
+	return typeof entry === "object" && entry !== null && "message" in entry
+		? entry.message
+		: undefined;
 }
 
-function parseJson<T>(text: string): T | undefined {
+function parseJson(text: string): unknown {
 	try {
-		return JSON.parse(text) as T;
+		return JSON.parse(text);
 	} catch {
 		return undefined;
 	}

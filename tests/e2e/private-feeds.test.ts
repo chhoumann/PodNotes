@@ -122,12 +122,15 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 	const dialog = ".modal-container:not(:has(.mod-settings))";
 	await typeInto(
 		obsidian,
-		{ name: "Feed address", elements: `[...document.querySelectorAll("${dialog} input")]` },
+		{
+			name: "Feed address",
+			elements: `[...document.querySelectorAll(${jsLiteral(`${dialog} input`)})]`,
+		},
 		address,
 	);
 	await click(obsidian, {
 		name: "Save",
-		elements: `[...document.querySelectorAll("${dialog} button")].filter((button) => button.textContent.trim() === "Save")`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${dialog} button`)})].filter((button) => button.textContent.trim() === "Save")`,
 	});
 	await obsidian.waitFor(async () => (await secret(saved.urlSecretId)) === address, {
 		timeoutMs: 10_000,

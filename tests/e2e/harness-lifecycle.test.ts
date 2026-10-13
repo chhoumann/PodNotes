@@ -302,37 +302,41 @@ test.each([
 	60_000,
 );
 
-test("recovers a recorder an interrupted run left, and restores a collapsed sidebar after opening it", async ({
-	signal,
-}) => {
-	const dir = await obsidianDir();
-	const stale = "podnotes-e2e-errors-1";
-	const unrelated = path.join(dir, "plugins", "podnotes-e2e-errors-notes");
-	const workspacePath = path.join(dir, "workspace.json");
-	const { before, original } = await withVaultLock(async () => ({
-		before: await pluginState(),
-		original: await fs.readFile(workspacePath),
-	}));
-	try {
-		const seeded = await withVaultLock(async () => {
-			await fs.mkdir(path.join(dir, "plugins", stale));
-			await fs.writeFile(
-				path.join(dir, "plugins", stale, "manifest.json"),
-				JSON.stringify({
-					id: stale,
-					name: "PodNotes E2E error recorder",
-					version: "1.0.0",
-					minAppVersion: "1.13.0",
-					description: "",
-					author: "PodNotes tests",
-				}),
-			);
-			await fs.writeFile(
-				path.join(dir, "plugins", stale, "main.js"),
-				'module.exports = class extends require("obsidian").Plugin {};',
-			);
-			await fs.mkdir(unrelated);
-			await obsidian.dev.evalJsonAsync(`(async () => {
+test.for([true, false])(
+	"recovers a stale recorder and collapsed sidebar with PodNotes initially enabled=%s",
+	{ timeout: 120_000 },
+	async (initiallyEnabled, { signal }) => {
+		const dir = await obsidianDir();
+		const stale = "podnotes-e2e-errors-1";
+		const unrelated = path.join(dir, "plugins", "podnotes-e2e-errors-notes");
+		let createdUnrelated = false;
+		const workspacePath = path.join(dir, "workspace.json");
+		const { before, original } = await withVaultLock(async () => ({
+			before: await pluginState(),
+			original: await fs.readFile(workspacePath),
+		}));
+		try {
+			const seeded = await withVaultLock(async () => {
+				await fs.mkdir(path.join(dir, "plugins", stale));
+				await fs.writeFile(
+					path.join(dir, "plugins", stale, "manifest.json"),
+					JSON.stringify({
+						id: stale,
+						name: "PodNotes E2E error recorder",
+						version: "1.0.0",
+						minAppVersion: "1.13.0",
+						description: "",
+						author: "PodNotes tests",
+					}),
+				);
+				await fs.writeFile(
+					path.join(dir, "plugins", stale, "main.js"),
+					'module.exports = class extends require("obsidian").Plugin {};',
+				);
+				await fs.mkdir(unrelated);
+				createdUnrelated = true;
+				await obsidian.dev.evalJsonAsync(`(async () => {
+				if (!${jsLiteral(initiallyEnabled)}) await app.plugins.disablePluginAndSave("podnotes");
 				await app.plugins.loadManifests();
 				await app.plugins.enablePlugin(${jsLiteral(stale)});
 				app.plugins.enabledPlugins = new Set([${jsLiteral(stale)}, ...app.plugins.enabledPlugins]);
@@ -347,36 +351,44 @@ test("recovers a recorder an interrupted run left, and restores a collapsed side
 				await app.vault.adapter.promise;
 				return true;
 			})()`);
-			return await fs.readFile(workspacePath);
-		});
-		const result = await runFixture("reused-vault", signal);
+				return await fs.readFile(workspacePath);
+			});
+			const result = await runFixture("reused-vault", signal);
 
-		expect(result).toMatchObject({ code: 0, error: "" });
-		expect(result.tests.map(({ status }) => status)).toEqual(["passed"]);
-		await withVaultLock(async () => {
-			const after = await pluginState();
-			expect(after.enabled).toEqual(before.enabled);
-			expect(after.recorders).toEqual([]);
-			expect(JSON.parse(String(after.config))).toEqual(JSON.parse(String(before.config)));
-			await expect(fs.stat(unrelated)).resolves.toBeTruthy();
-			expect(await fs.readFile(workspacePath)).toEqual(seeded);
-			expect(await obsidian.dev.evalJson<boolean>("app.workspace.leftSplit.collapsed")).toBe(
-				true,
-			);
-		});
-	} finally {
-		await withVaultLock(() =>
-			runAllSteps(
-				() =>
-					obsidian.dev.evalJsonAsync(`(async () => {
+			expect(result).toMatchObject({ code: 0, error: "" });
+			expect(result.tests.map(({ status }) => status)).toEqual(["passed"]);
+			await withVaultLock(async () => {
+				const after = await pluginState();
+				const expected = before.enabled.filter(
+					(id) => initiallyEnabled || id !== "podnotes",
+				);
+				expect(after.enabled).toEqual(expected);
+				expect(after.recorders).toEqual([]);
+				expect(JSON.parse(String(after.config))).toEqual(
+					JSON.parse(String(before.config)).filter(
+						(id: string) => initiallyEnabled || id !== "podnotes",
+					),
+				);
+				await expect(fs.stat(unrelated)).resolves.toBeTruthy();
+				expect(await fs.readFile(workspacePath)).toEqual(seeded);
+				expect(
+					await obsidian.dev.evalJson<boolean>("app.workspace.leftSplit.collapsed"),
+				).toBe(true);
+			});
+		} finally {
+			await withVaultLock(() =>
+				runAllSteps(
+					() =>
+						obsidian.dev.evalJsonAsync(`(async () => {
 						await app.plugins.disablePlugin(${jsLiteral(stale)});
+						if (${jsLiteral(before.enabled.includes("podnotes"))}) await app.plugins.enablePlugin("podnotes");
 						app.plugins.enabledPlugins = new Set(${jsLiteral(before.enabled)});
 						app.plugins.requestSaveConfig.cancel();
 						await app.vault.adapter.promise;
 						return true;
 					})()`),
-				() =>
-					obsidian.dev.evalJsonAsync(`(async () => {
+					() =>
+						obsidian.dev.evalJsonAsync(`(async () => {
 						await app.workspace.changeLayout(${jsLiteral(JSON.parse(original.toString("utf8")))});
 						app.workspace.requestSaveLayout.cancel();
 						await app.workspace.saveLayout();
@@ -384,19 +396,23 @@ test("recovers a recorder an interrupted run left, and restores a collapsed side
 						await app.vault.adapter.promise;
 						return true;
 					})()`),
-				() => fs.rm(path.join(dir, "plugins", stale), { recursive: true, force: true }),
-				() => fs.rm(unrelated, { recursive: true, force: true }),
-				async () => {
-					const config = path.join(dir, "community-plugins.json");
-					if (before.config === null) await fs.rm(config, { force: true });
-					else await fs.writeFile(config, before.config);
-				},
-				() => fs.writeFile(workspacePath, original),
-				() =>
-					obsidian.dev.evalJsonAsync(
-						"(async () => { await app.plugins.loadManifests(); return true; })()",
-					),
-			),
-		);
-	}
-}, 120_000);
+					() => fs.rm(path.join(dir, "plugins", stale), { recursive: true, force: true }),
+					async () => {
+						if (createdUnrelated)
+							await fs.rm(unrelated, { recursive: true, force: true });
+					},
+					async () => {
+						const config = path.join(dir, "community-plugins.json");
+						if (before.config === null) await fs.rm(config, { force: true });
+						else await fs.writeFile(config, before.config);
+					},
+					() => fs.writeFile(workspacePath, original),
+					() =>
+						obsidian.dev.evalJsonAsync(
+							"(async () => { await app.plugins.loadManifests(); return true; })()",
+						),
+				),
+			);
+		}
+	},
+);

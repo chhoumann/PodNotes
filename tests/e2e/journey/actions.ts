@@ -150,7 +150,8 @@ export const ui = {
 
 type Located =
 	| { state: "ready"; x: number; y: number }
-	| { state: "absent" | "hidden" | "ambiguous" | "covered" | "behind notice"; detail: string };
+	| { state: "behind notice"; detail: string; keyring: boolean }
+	| { state: "absent" | "hidden" | "ambiguous" | "covered"; detail: string };
 
 async function locate(obsidian: ObsidianClient, target: UiTarget): Promise<Located> {
 	return await obsidian.dev.evalJson<Located>(`(() => {
@@ -166,7 +167,7 @@ async function locate(obsidian: ObsidianClient, target: UiTarget): Promise<Locat
 		const hit = document.elementFromPoint(x, y);
 		const notice = hit?.closest(".notice");
 		if (notice?.dataset.podnotesE2ePersistent === "true" && !el.contains(hit))
-			return { state: "behind notice", detail: (notice.querySelector(".notice-message") ?? notice).textContent.trim() };
+			return { state: "behind notice", detail: (notice.querySelector(".notice-message") ?? notice).textContent.trim(), keyring: notice.dataset.podnotesE2eKeyring === "true" };
 		if (!hit || !el.contains(hit)) return { state: "covered", detail: hit ? hit.outerHTML.slice(0, 120) : "nothing" };
 		return { state: "ready", x, y };
 	})()`);
@@ -179,11 +180,13 @@ async function settledPoint(
 ): Promise<{ x: number; y: number }> {
 	let previous = "";
 	let last = "";
+	let coveringNotice: string | undefined;
 	const point = await obsidian
 		.waitFor(
 			async () => {
 				const sample = await locate(obsidian, target);
-				if (sample.state === "behind notice") return sample;
+				coveringNotice = sample.state === "behind notice" ? sample.detail : undefined;
+				if (sample.state === "behind notice" && sample.keyring) return sample;
 				const key = JSON.stringify(sample);
 				const settled = sample.state === "ready" && key === last;
 				previous = last;
@@ -193,12 +196,14 @@ async function settledPoint(
 			{ timeoutMs, intervalMs: 100, message: `${target.name} visible and still` },
 		)
 		.catch((error: Error) => {
-			error.message += ` Last samples: ${previous}, ${last}.`;
+			error.message += coveringNotice
+				? ` ${target.name} is covered by a Notice: "${coveringNotice}".`
+				: ` Last samples: ${previous}, ${last}.`;
 			throw error;
 		});
 	if (point.state !== "ready")
 		throw new Error(
-			`${target.name} is behind a Notice that stays until it is dismissed: "${point.detail}". Find what raised it; the test cannot click through it.`,
+			`${target.name} is behind Obsidian's persistent keyring Notice: "${point.detail}". Find what raised it; the test cannot click through it.`,
 		);
 	return point;
 }
