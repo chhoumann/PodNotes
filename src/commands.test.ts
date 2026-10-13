@@ -532,6 +532,29 @@ describe("Create episode note", () => {
 		expect(notes.size).toBe(0);
 	});
 
+	it("lists a long podcast's older episodes when a restart left only its newest cached", async () => {
+		vi.mocked(fetchTextWithTimeout).mockResolvedValue(rss(["Two", "One"]));
+		const pickers = watchPickers();
+		const { plugin, commands } = await loadPlugin(withFeed);
+		const newest = { title: "Two", streamUrl: "https://media.test/Two.mp3", description: "" };
+		vi.mocked(plugin.app.loadLocalStorage).mockReturnValue(
+			JSON.stringify({
+				[feed.url]: {
+					channel: { title: "Pod" },
+					items: [{ ...newest, content: "", mediaType: "audio" }],
+					complete: false,
+					updatedAt: Date.now(),
+				},
+			}),
+		);
+
+		command(commands)(false);
+		pickers.shown(0).choose("Pod");
+
+		await vi.waitFor(() => expect(pickers.open).toHaveBeenCalledTimes(2));
+		expect(pickers.shown(1).texts).toEqual(["Two", "One"]);
+	});
+
 	it("creates the loaded episode's note without a picker", async () => {
 		const pickers = watchPickers();
 		const { commands, read, opened } = await loadPlugin({

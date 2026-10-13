@@ -313,7 +313,8 @@ export function registerCommands(plugin: PodNotes): void {
 }
 
 async function pickEpisodeForNote(plugin: PodNotes, key: string, title: string): Promise<void> {
-	await plugin.feeds.load([key], "cached");
+	// The cache keeps a long feed's newest episodes, so only a complete feed lists them all.
+	await plugin.feeds.load([key], "complete");
 	const state = get(plugin.feeds).get(key);
 	const episodes = state?.episodes ?? [];
 	if (episodes.length === 0) {
