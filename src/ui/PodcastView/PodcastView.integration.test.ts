@@ -21,6 +21,7 @@ import { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
 import { Navigation } from "./Navigation";
+import { PodcastSearch } from "./podcastSearch";
 
 vi.mock("./EpisodePlayer.svelte", () => ({
 	default: EpisodePlayerStub,
@@ -46,6 +47,7 @@ function renderView() {
 					feeds,
 					feedUrls: new FeedUrlRepository(app.secretStorage),
 				}),
+				search: new PodcastSearch(feeds),
 				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},

@@ -12,6 +12,7 @@ import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import type { Playlist } from "src/types/Playlist";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { Navigation } from "./Navigation";
+import type { PodcastSearch } from "./podcastSearch";
 
 /** The user's library, as the view reads it, and the preference its lists toggle. */
 export interface Library {
@@ -36,6 +37,8 @@ export interface ShellServices {
 	readonly library: Library;
 	/** The only way the view changes the library. */
 	readonly actions: LibraryActions;
+	/** The Add podcast query, which outlives the page that shows it. */
+	readonly search: PodcastSearch;
 	/** Current through a settings toggle or an import, which replaces the object. */
 	readonly settings: Readable<IPodNotesSettings>;
 	/** Into the active note, else into the episode note. Resolves to that note's name, or null. */

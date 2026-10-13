@@ -239,10 +239,12 @@ describe("getUniversalPodcastLink", () => {
 	test("falls back to a tolerant iTunes match when no saved collectionId exists", async () => {
 		queryiTunesMock.mockResolvedValue([
 			{
-				title: "Unrelated title casing",
-				url: "https://feeds.example.com/rss/",
-				artworkUrl: "",
-				collectionId: "999",
+				feed: {
+					title: "Unrelated title casing",
+					url: "https://feeds.example.com/rss/",
+					artworkUrl: "",
+					collectionId: "999",
+				},
 			},
 		]);
 
@@ -257,17 +259,21 @@ describe("getUniversalPodcastLink", () => {
 			{
 				// A duplicate/rehosted show with the SAME title but a different feed,
 				// returned first by iTunes.
-				title: "Example Show",
-				url: "https://other.example.com/rss",
-				artworkUrl: "",
-				collectionId: "111",
+				feed: {
+					title: "Example Show",
+					url: "https://other.example.com/rss",
+					artworkUrl: "",
+					collectionId: "111",
+				},
 			},
 			{
 				// The real one, matched by normalized feed URL (trailing slash/case).
-				title: "Example Show (mirror)",
-				url: "https://feeds.example.com/rss/",
-				artworkUrl: "",
-				collectionId: "222",
+				feed: {
+					title: "Example Show (mirror)",
+					url: "https://feeds.example.com/rss/",
+					artworkUrl: "",
+					collectionId: "222",
+				},
 			},
 		]);
 

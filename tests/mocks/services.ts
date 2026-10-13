@@ -21,6 +21,7 @@ import {
 import type { Episode } from "src/types/Episode";
 import type { Library, ShellServices } from "src/ui/PodcastView/context";
 import { Navigation } from "src/ui/PodcastView/Navigation";
+import { PodcastSearch } from "src/ui/PodcastView/podcastSearch";
 import { FakeDocument } from "./fakeMedia";
 import { feedDocument, MemoryStorage } from "./feeds";
 
@@ -111,6 +112,7 @@ export function createTestServices(
 			feeds,
 			feedUrls: new FeedUrlRepository(app.secretStorage),
 		}),
+		search: new PodcastSearch(feeds),
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),

@@ -21,6 +21,7 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
+import { PodcastSearch } from "./podcastSearch";
 
 export class MainView extends ItemView {
 	constructor(
@@ -106,6 +107,7 @@ export class MainView extends ItemView {
 				feeds: plugin.feeds,
 				feedUrls: plugin.feedUrls,
 			}),
+			search: new PodcastSearch(plugin.feeds),
 			settings: derived(pluginStore, ($plugin) => $plugin.settings),
 			captureTimestamp: () => plugin.captureTimestampToEditorOrNote(),
 			openSettings: () => plugin.openSettingsTab(),
