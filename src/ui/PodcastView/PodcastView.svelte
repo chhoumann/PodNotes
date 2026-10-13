@@ -278,6 +278,15 @@
 		margin-left: var(--size-4-2);
 	}
 
+	/* A prompt's field takes the rest of its row, so a feed address shows whole. */
+	:global(.pn-prompt .setting-item-info) {
+		flex: none;
+	}
+
+	:global(.pn-prompt .setting-item-control input) {
+		width: 100%;
+	}
+
 	/* On a phone, Obsidian's navbar floats over the main area, and a mobile drawer
 	   fades the bottom of a leaf. Neither may cover the mini player. A tablet has no
 	   navbar. */

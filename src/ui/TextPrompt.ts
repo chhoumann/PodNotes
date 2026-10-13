@@ -32,6 +32,7 @@ class TextPromptModal extends Modal {
 
 	override onOpen(): void {
 		const { title, label, cta, placeholder = "", value = "" } = this.prompt;
+		this.modalEl.classList.add("pn-prompt");
 		this.titleEl.setText(title);
 		let input: HTMLInputElement | undefined;
 		const accept = () => {

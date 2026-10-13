@@ -219,18 +219,21 @@ export class MarkdownView {
 export class Modal {
 	app: App;
 	containerEl: HTMLElement;
+	modalEl: HTMLElement;
 	contentEl: HTMLElement;
 	titleEl: HTMLElement;
 
 	constructor(app: App) {
 		this.app = app;
 		this.containerEl = document.createElement("div");
+		this.modalEl = document.createElement("div");
 		this.titleEl = document.createElement("div");
 		this.contentEl = document.createElement("div");
 		const closeButtonEl = document.createElement("div");
 		closeButtonEl.className = "modal-header-button";
 		closeButtonEl.addEventListener("click", () => this.close());
-		this.containerEl.append(closeButtonEl, this.titleEl, this.contentEl);
+		this.modalEl.append(closeButtonEl, this.titleEl, this.contentEl);
+		this.containerEl.append(this.modalEl);
 	}
 
 	open(): void {
