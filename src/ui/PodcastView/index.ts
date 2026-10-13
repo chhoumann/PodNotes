@@ -32,7 +32,7 @@ export class MainView extends ItemView {
 		return "play-circle";
 	}
 
-	/** The page is the view's workspace state; the full player always starts collapsed. */
+	/** The page is the view's workspace state. Whether the full player is open is not saved. */
 	override getState(): Record<string, unknown> {
 		return { page: this.plugin.navigation.current.page };
 	}

@@ -8,7 +8,6 @@ import * as obsidian from "obsidian";
 import { tick } from "svelte";
 import type { Episode } from "./types/Episode";
 import { MainView } from "./ui/PodcastView";
-import { installResizeObserver } from "../tests/mocks/resizeObserver";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
 // surface the view. The bug was that the command was gated on the leaf NOT
@@ -482,20 +481,26 @@ describe("PodNotes onload wiring (#55)", () => {
 	});
 
 	it.each([
-		{ saved: { kind: "queue" }, shown: { kind: "queue" } },
-		{ saved: { kind: "feed", key: "Removed podcast" }, shown: { kind: "latest" } },
-		{ saved: { kind: "playlist", name: "Removed playlist" }, shown: { kind: "latest" } },
+		{ title: "keeps the saved Queue page", saved: { kind: "queue" }, shown: { kind: "queue" } },
+		{
+			title: "falls back to Latest episodes for a removed podcast",
+			saved: { kind: "feed", key: "Removed podcast" },
+			shown: { kind: "latest" },
+		},
+		{
+			title: "falls back to Latest episodes for a removed playlist",
+			saved: { kind: "playlist", name: "Removed playlist" },
+			shown: { kind: "latest" },
+		},
 	])(
-		"keeps the full player open when revealing the view restores the saved $saved.kind page",
+		"Show player on a deferred view $title with the full player open",
 		async ({ saved, shown }) => {
 			const { plugin, activateSpy } = await loadPlugin(savedData);
 			activateSpy.mockRestore();
-			const widths = installResizeObserver();
 			const leaf = { setViewState: vi.fn() };
 			const view = new MainView(leaf as unknown as WorkspaceLeaf, plugin);
 			onTestFinished(async () => {
 				await (view as unknown as { onClose(): Promise<void> }).onClose();
-				widths.uninstall();
 			});
 			const { scope, keymap } = new App();
 			Object.assign(plugin.app, { scope, keymap });
