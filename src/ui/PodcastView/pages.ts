@@ -87,9 +87,9 @@ export interface Head {
 	readonly flair?: string;
 	/**
 	 * The head's right edge: the compact Library's Add podcast and Settings, Refresh
-	 * all on the wide Library and Latest, or a podcast's menu.
+	 * all on the wide Library and Latest, a podcast's menu, or the queue's.
 	 */
-	readonly action?: "library" | "refresh-all" | "podcast";
+	readonly action?: "library" | "refresh-all" | "podcast" | "queue";
 	/** Add podcast's search field stands in the title's place. */
 	readonly search?: true;
 }
@@ -106,6 +106,7 @@ function actionOf({ kind }: Page, layout: Layout): Head["action"] {
 	if (kind === "library") return layout === "wide" ? "refresh-all" : "library";
 	if (kind === "latest") return "refresh-all";
 	if (kind === "feed") return "podcast";
+	if (kind === "queue") return "queue";
 	return undefined;
 }
 

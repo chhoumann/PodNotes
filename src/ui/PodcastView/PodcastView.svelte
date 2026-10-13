@@ -1,21 +1,22 @@
 <script lang="ts">
 	import { Platform } from "obsidian";
 	import { onMount } from "svelte";
-	import { createEpisodeListEntries } from "src/utility/episodeListEntry";
+
 	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
 	import { icon } from "../obsidian/icon";
 	import AddPodcastPage from "./AddPodcastPage.svelte";
 	import { provideServices, type ShellServices } from "./context";
-	import EpisodeList from "./EpisodeList.svelte";
+
 	import EpisodesPage from "./EpisodesPage.svelte";
 	import { layoutFor, observeWidth, restoreScroll, type Layout } from "./layout";
 	import LibraryPage from "./LibraryPage.svelte";
 	import ListPage from "./ListPage.svelte";
-	import { anchorOf, podcastMenu, showMenu } from "./menus";
+	import { anchorOf, podcastMenu, queueMenu, showMenu } from "./menus";
 	import MiniPlayer from "./MiniPlayer.svelte";
 	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
 	import PlayerOverlay from "./PlayerOverlay.svelte";
 	import PlaylistsPage from "./PlaylistsPage.svelte";
+	import QueuePage from "./QueuePage.svelte";
 	import Rail from "./Rail.svelte";
 	import SearchField from "./SearchField.svelte";
 
@@ -161,6 +162,16 @@
 								showMenu(podcastMenu(key, services), anchorOf(event))}
 							{@attach icon("more-horizontal")}
 						></button>
+					{:else if head.action === "queue"}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Queue options"
+							title="Queue options"
+							aria-haspopup="menu"
+							onclick={(event) => showMenu(queueMenu(services), anchorOf(event))}
+							{@attach icon("more-horizontal")}
+						></button>
 					{/if}
 				</header>
 				{#key pageKey(page)}
@@ -185,10 +196,7 @@
 						{:else if page.kind === "feed"}
 							<EpisodesPage key={page.key} />
 						{:else if page.kind === "queue"}
-							<EpisodeList
-								entries={createEpisodeListEntries($queue.episodes)}
-								cover
-							/>
+							<QueuePage />
 						{:else}
 							<ListPage {page} />
 						{/if}
@@ -225,6 +233,11 @@
 	/* The shell lays out the whole view, edge to edge. */
 	:global(.view-content:has(> .podcast-view)) {
 		padding: 0;
+	}
+
+	/* The Undo button at the end of a Notice the view's actions show. */
+	:global(.notice .pn-undo) {
+		margin-left: var(--size-4-2);
 	}
 
 	/* On a phone, Obsidian's navbar floats over the main area, and a mobile drawer
@@ -989,6 +1002,45 @@
 
 		.pn-ep:hover .pn-ep-more,
 		.pn-ep-more:focus-visible {
+			opacity: 1;
+		}
+
+		.pn-queue .pn-ep {
+			align-items: center;
+			gap: var(--size-2-2);
+		}
+
+		.pn-queue .pn-ep-main {
+			align-items: center;
+			padding-left: 0;
+		}
+
+		.pn-queue .pn-ep-main .pn-cover {
+			margin-top: 0;
+		}
+
+		.pn-grip {
+			cursor: grab;
+			touch-action: none;
+			color: var(--text-muted);
+			opacity: 1;
+			--icon-size: 16px;
+		}
+
+		.pn-ep:has(.pn-grip.is-dragging) {
+			position: relative;
+			z-index: 2;
+			background: var(--pn-surface);
+			box-shadow: var(--shadow-s);
+		}
+
+		.pn-ep-x {
+			margin-right: var(--size-2-2);
+			opacity: 0.55;
+		}
+
+		.pn-ep:hover .pn-ep-x,
+		.pn-ep-x:focus-visible {
 			opacity: 1;
 		}
 

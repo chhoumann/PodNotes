@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { Episode } from "src/types/Episode";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
@@ -13,6 +14,8 @@
 		available = true,
 		onplay,
 		onmenu,
+		leading,
+		trailing,
 	}: {
 		episode: Episode;
 		cover?: boolean;
@@ -21,6 +24,10 @@
 		available?: boolean;
 		onplay(): void;
 		onmenu(at: MenuAnchor): void;
+		/** Before the row's button, such as the queue's grip. */
+		leading?: Snippet;
+		/** In place of the More button, such as the queue's remove button. */
+		trailing?: Snippet;
 	} = $props();
 	const { player, library, rowHasNote } = useServices();
 	const { playedEpisodes, downloadedEpisodes } = library;
@@ -54,6 +61,7 @@
 	class:is-unavailable={row.unavailable}
 	role="listitem"
 >
+	{@render leading?.()}
 	<button
 		type="button"
 		class="pn-ep-main"
@@ -95,14 +103,18 @@
 			</span>
 		</span>
 	</button>
-	<button
-		type="button"
-		class="pn-iconbtn pn-ep-more"
-		aria-label="More options for {episode.title}"
-		title="More options"
-		aria-haspopup="menu"
-		onclick={menu}
-		oncontextmenu={menu}
-		{@attach icon("more-vertical")}
-	></button>
+	{#if trailing}
+		{@render trailing()}
+	{:else}
+		<button
+			type="button"
+			class="pn-iconbtn pn-ep-more"
+			aria-label="More options for {episode.title}"
+			title="More options"
+			aria-haspopup="menu"
+			onclick={menu}
+			oncontextmenu={menu}
+			{@attach icon("more-vertical")}
+		></button>
+	{/if}
 </div>

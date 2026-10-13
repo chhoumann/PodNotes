@@ -239,6 +239,61 @@ describe("library", () => {
 	});
 });
 
+describe("list pages", () => {
+	test("the Queue's head shows its time left and opens the queue's options", async () => {
+		services.library.queue.update((list) => ({
+			...list,
+			episodes: [{ ...episode, duration: 45 * 60 }],
+		}));
+		const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
+		services.navigation.replace({ kind: "queue" });
+		renderView(820);
+		await tick();
+
+		expect(screen.getByRole("heading", { name: "Queue" }).nextElementSibling).toHaveTextContent(
+			"45 min",
+		);
+		await fireEvent.click(button("Queue options"));
+		expect(titles.mock.calls.map(([title]) => title)).toEqual([
+			"Queue episodes I switch from",
+			"Clear queue",
+		]);
+	});
+
+	test("a playlist's title shows its count beside it in the sidebar", async () => {
+		services.library.playlists.set({
+			Walks: {
+				...structuredClone(DEFAULT_SETTINGS.favorites),
+				name: "Walks",
+				episodes: [episode],
+			},
+		});
+		services.navigation.replace({ kind: "playlist", name: "Walks" });
+		renderView(320);
+		await tick();
+
+		expect(screen.getByRole("heading", { name: "Walks" }).nextElementSibling).toHaveTextContent(
+			"1",
+		);
+		expect(document.querySelectorAll(".flair")).toHaveLength(1);
+	});
+
+	test("Latest's head refreshes every podcast", async () => {
+		const loads: unknown[] = [];
+		vi.spyOn(services.feeds, "load").mockImplementation(async (keys, mode) => {
+			loads.push([[...keys], mode]);
+			return true;
+		});
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+
+		await fireEvent.click(button("Refresh all feeds"));
+
+		expect(loads.at(-1)).toEqual([[feed.title], "network"]);
+	});
+});
+
 describe("first run", () => {
 	test("an empty library shows the podcast search instead of the library", async () => {
 		services.library.savedFeeds.set({});

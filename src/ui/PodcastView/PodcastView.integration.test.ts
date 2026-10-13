@@ -50,6 +50,7 @@ function renderView() {
 				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},
+				setAutoQueue: () => {},
 				hasNote: () => false,
 				rowHasNote: readable(() => false),
 			},

@@ -129,8 +129,12 @@ describe("headFor", () => {
 	};
 
 	test.each<[Layout, Page, Head]>([
-		["wide", { kind: "queue" }, { title: "Queue", flair: "1 h 5 min" }],
-		["compact", { kind: "queue" }, { back: "Library", pageTitle: "Queue", flair: "1 h 5 min" }],
+		["wide", { kind: "queue" }, { title: "Queue", flair: "1 h 5 min", action: "queue" }],
+		[
+			"compact",
+			{ kind: "queue" },
+			{ back: "Library", pageTitle: "Queue", flair: "1 h 5 min", action: "queue" },
+		],
 		["compact", walks, { back: "Playlists", pageTitle: "Walks", flair: "2" }],
 		[
 			"wide",

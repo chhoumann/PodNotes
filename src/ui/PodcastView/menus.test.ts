@@ -24,6 +24,7 @@ import {
 	anchorOf,
 	episodeMenu,
 	podcastMenu,
+	queueMenu,
 	showMenu,
 	type EpisodeMenuOptions,
 	type MenuAnchor,
@@ -326,6 +327,41 @@ describe("a podcast's menu", () => {
 		choose(podcastMenu("Other", services), "Remove podcast");
 
 		expect(services.navigation.current.page).toEqual({ kind: "feed", key: "Show" });
+	});
+});
+
+describe("the Queue page's menu", () => {
+	const queueSettings = () => get(services.settings).autoQueue;
+
+	test("offers the auto-queue preference, checked while it is on, and Clear queue", () => {
+		queue.add(episode);
+
+		expect(titles(queueMenu(services))).toEqual([
+			"Queue episodes I switch from",
+			"---",
+			"Clear queue",
+		]);
+		expect(queueMenu(services)[0]).toMatchObject({ checked: true });
+		expect(queueMenu(services)[2]).toMatchObject({ warning: true, disabled: false });
+	});
+
+	test("the preference item sets the opposite of what its menu showed, so a stale menu repeats", () => {
+		const open = queueMenu(services);
+
+		choose(open, "Queue episodes I switch from");
+		expect(queueSettings()).toBe(false);
+		expect(queueMenu(services)[0]).toMatchObject({ checked: false });
+		choose(open, "Queue episodes I switch from");
+		expect(services.setAutoQueue.mock.calls).toEqual([[false], [false]]);
+	});
+
+	test("Clear queue is disabled for an empty queue, and clears a full one", () => {
+		expect(queueMenu(services)[2]).toMatchObject({ disabled: true });
+
+		queue.add(episode);
+		choose(queueMenu(services), "Clear queue");
+
+		expect(get(queue).episodes).toEqual([]);
 	});
 });
 

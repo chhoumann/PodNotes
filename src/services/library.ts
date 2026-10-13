@@ -11,6 +11,7 @@ import {
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { askText } from "src/ui/TextPrompt";
+import { noticeWithUndo } from "src/ui/undoNotice";
 import checkStringIsUrl from "src/utility/checkStringIsUrl";
 import { isSameStoredEpisode } from "src/utility/episodeKey";
 import { ownRecord } from "src/utility/ownRecord";
@@ -41,6 +42,8 @@ export interface LibraryActions {
 	setQueued(episode: Episode, queued: boolean): void;
 	/** Components may not import the queue store, so a gesture reorders it here. */
 	reorderQueue(move: QueuePlacement): void;
+	/** Empties the queue and offers Undo, which refills it while it is still empty. */
+	clearQueue(): void;
 	setFavorite(episode: Episode, favorite: boolean): void;
 	setInPlaylist(name: string, episode: Episode, member: boolean): void;
 	/** `playedKey` names a Played record stored under another key than the episode's. */
@@ -157,6 +160,16 @@ export function createLibraryActions({
 
 		setQueued: (episode, queued) => (queued ? queue.add(episode) : queue.remove(episode)),
 		reorderQueue: (move) => queue.reorder(move),
+		clearQueue() {
+			const cleared = get(queue).episodes;
+			if (cleared.length === 0) return;
+			queue.update((list) => ({ ...list, episodes: [] }));
+			noticeWithUndo("Queue cleared", () => {
+				// Anything queued since, by the user or by playback, wins over the old queue.
+				if (get(queue).episodes.length === 0)
+					queue.update((list) => ({ ...list, episodes: cleared }));
+			});
+		},
 		setFavorite: (episode, favorite) =>
 			favorites.update((list) => ({
 				...list,

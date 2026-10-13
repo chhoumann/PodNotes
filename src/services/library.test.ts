@@ -3,7 +3,9 @@ import { fireEvent, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { savedFeeds } from "src/store";
+import { DEFAULT_SETTINGS } from "src/constants";
+import { queue, savedFeeds } from "src/store";
+import type { Episode } from "src/types/Episode";
 import { fetchTextWithTimeout } from "src/utility/networkRequest";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { deferred, MemoryStorage } from "../../tests/mocks/feeds";
@@ -65,8 +67,22 @@ beforeEach(() => {
 
 afterEach(() => {
 	savedFeeds.set({});
+	queue.set(structuredClone(DEFAULT_SETTINGS.queue));
 	vi.restoreAllMocks();
 });
+
+/** The messages of the Notices shown, and a click on the last one's Undo. */
+function notices() {
+	const notice = vi.spyOn(obsidian, "Notice");
+	return {
+		texts: () =>
+			notice.mock.calls.map(([message]) => (message as DocumentFragment).textContent),
+		undo: () => {
+			const [message] = notice.mock.calls.at(-1) ?? [];
+			(message as DocumentFragment).querySelector("button")?.click();
+		},
+	};
+}
 
 describe("removing a podcast", () => {
 	const shared = { title: "Shared", url: "https://feeds.example.com/shared.xml", artworkUrl: "" };
@@ -164,5 +180,60 @@ describe("setting a private feed's address on this device", () => {
 
 		expect(thisDevice.listSecrets()).toEqual([]);
 		expect(get(savedFeeds)).toEqual({ "Private Show": replaced });
+	});
+});
+
+describe("clearing the queue", () => {
+	const episode = (title: string): Episode => ({
+		title,
+		streamUrl: `https://media.test/${title}.mp3`,
+		url: "",
+		description: "",
+		content: "",
+		podcastName: "Pod",
+	});
+	const titles = () => get(queue).episodes.map(({ title }) => title);
+	const fill = (...names: string[]) =>
+		queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: names.map(episode) });
+
+	test("empties it, and Undo puts every entry back in order, once", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		fill("A", "B", "C");
+
+		actions.clearQueue();
+		expect(titles()).toEqual([]);
+		expect(shown.texts()).toEqual(["Queue clearedUndo"]);
+
+		shown.undo();
+		expect(titles()).toEqual(["A", "B", "C"]);
+		actions.setQueued(episode("A"), false);
+		shown.undo();
+		expect(titles()).toEqual(["B", "C"]);
+	});
+
+	test("Undo leaves a queue that playback or the user filled since", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		fill("A", "B");
+
+		actions.clearQueue();
+		actions.setQueued(episode("New"), true);
+		shown.undo();
+
+		expect(titles()).toEqual(["New"]);
+	});
+
+	test("an empty queue clears without a notice", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		let writes = 0;
+		const unsubscribe = queue.subscribe(() => writes++);
+
+		actions.clearQueue();
+		unsubscribe();
+
+		expect(shown.texts()).toEqual([]);
+		expect(writes).toBe(1);
 	});
 });

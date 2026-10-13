@@ -136,6 +136,7 @@ export class MainView extends ItemView {
 			settings,
 			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
+			setAutoQueue: (enabled) => plugin.setAutoQueue(enabled),
 			hasNote: (episode) => getPodcastNote(episode) !== null,
 			rowHasNote,
 		};

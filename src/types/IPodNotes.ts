@@ -23,4 +23,5 @@ export interface IPodNotes {
 	saveSettings(): Promise<void>;
 	showPlayer(): Promise<void>;
 	openSettingsTab(): void;
+	setAutoQueue(enabled: boolean): void;
 }

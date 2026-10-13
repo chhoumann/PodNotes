@@ -236,3 +236,29 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 		},
 	];
 }
+
+/** The Queue page's options. Each item sets the state it shows, so a stale menu repeats nothing. */
+export function queueMenu({
+	library,
+	actions,
+	settings,
+	setAutoQueue,
+}: ShellServices): MenuEntry[] {
+	const auto = get(settings).autoQueue;
+	return [
+		{
+			title: "Queue episodes I switch from",
+			icon: "list-end",
+			checked: auto,
+			onClick: () => setAutoQueue(!auto),
+		},
+		"separator",
+		{
+			title: "Clear queue",
+			icon: "trash",
+			warning: true,
+			disabled: get(library.queue).episodes.length === 0,
+			onClick: () => actions.clearQueue(),
+		},
+	];
+}
