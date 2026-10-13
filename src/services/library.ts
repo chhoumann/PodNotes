@@ -68,16 +68,35 @@ export interface LibraryActions {
 	setPlayed(episode: Episode, played: boolean, playedKey?: string): void;
 }
 
-/** `record` with `value` under `key` at `index` of its entry order, the order lists show. */
-function withEntryAt<T>(
-	record: Record<string, T>,
-	index: number,
+/**
+ * `now`, with each key of `before` that `now` lacks put back right after the key
+ * that preceded it in `before`, or first. `now` decides where its own keys are.
+ */
+function withRemoved(before: readonly string[], now: readonly string[]): string[] {
+	const keys = [...now];
+	before.forEach((key, index) => {
+		if (!keys.includes(key))
+			keys.splice(index === 0 ? 0 : keys.indexOf(before[index - 1]) + 1, 0, key);
+	});
+	return keys;
+}
+
+/**
+ * `current` with `value` back under `key`, in the entry order lists show: where
+ * `order`, which remembers removed keys too, puts it among the keys `current` has.
+ */
+function withRestored<T>(
+	order: readonly string[],
+	current: Record<string, T>,
 	key: string,
 	value: T,
 ): Record<string, T> {
-	const entries = Object.entries(record);
-	entries.splice(index, 0, [key, value]);
-	return ownRecord(Object.fromEntries(entries));
+	const kept = new Set([...Object.keys(current), key]);
+	const restored = ownRecord<T>();
+	for (const each of withRemoved(order, Object.keys(current))) {
+		if (kept.has(each)) restored[each] = each === key ? value : current[each];
+	}
+	return restored;
 }
 
 // The menu that asks for a state was built from an earlier read, so membership is
@@ -106,6 +125,11 @@ export function createLibraryActions({
 		console.error("PodNotes: could not store a private feed URL", error);
 		new Notice(`Could not store the private feed address for "${title}" on this device.`);
 	};
+
+	// The order of saved podcasts and of playlists, with every key removed since, so
+	// an Undo finds its place among the keys there now, after other removals and Undos.
+	let feedOrder: string[] = [];
+	let playlistOrder: string[] = [];
 
 	return {
 		savedKey,
@@ -143,7 +167,7 @@ export function createLibraryActions({
 			const all = get(savedFeeds);
 			const removed = ownRecord(all)[key];
 			if (!removed) return;
-			const index = Object.keys(all).indexOf(key);
+			feedOrder = withRemoved(feedOrder, Object.keys(all));
 			const reference = removed.urlSecretId?.trim();
 			// Read before the removal can forget it, for Undo.
 			const address = reference ? feedUrls.resolve(reference) : null;
@@ -169,7 +193,7 @@ export function createLibraryActions({
 						return;
 					}
 				}
-				savedFeeds.update((now) => withEntryAt(now, index, key, removed));
+				savedFeeds.update((now) => withRestored(feedOrder, now, key, removed));
 			});
 		},
 
@@ -329,7 +353,7 @@ export function createLibraryActions({
 			const all = get(playlists);
 			const deleted = ownRecord(all)[name];
 			if (!deleted) return;
-			const index = Object.keys(all).indexOf(name);
+			playlistOrder = withRemoved(playlistOrder, Object.keys(all));
 			playlists.update((current) => {
 				const rest = ownRecord(current);
 				delete rest[name];
@@ -337,7 +361,7 @@ export function createLibraryActions({
 			});
 			noticeWithUndo(`Deleted ${name}`, () => {
 				if (ownRecord(get(playlists))[name]) return;
-				playlists.update((current) => withEntryAt(current, index, name, deleted));
+				playlists.update((current) => withRestored(playlistOrder, current, name, deleted));
 			});
 		},
 		setPlayed(episode, played, playedKey) {

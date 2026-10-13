@@ -81,12 +81,92 @@ function notices() {
 	return {
 		texts: () =>
 			notice.mock.calls.map(([message]) => (message as DocumentFragment).textContent),
-		undo: () => {
-			const [message] = notice.mock.calls.at(-1) ?? [];
-			(message as DocumentFragment).querySelector("button")?.click();
+		/** Clicks Undo on the notice that says `message`, or on the latest one. */
+		undo: (message?: string) => {
+			const fragments = notice.mock.calls.map(([shown]) => shown as DocumentFragment);
+			const fragment =
+				message === undefined
+					? fragments.at(-1)
+					: fragments.find((shown) => shown.textContent === `${message}Undo`);
+			fragment?.querySelector("button")?.click();
 		},
 	};
 }
+
+describe("undoing several removals, one Undo at a time", () => {
+	const grid = [
+		"Field Notes",
+		"The Archive Hour",
+		"Slow Thinking",
+		"Signal & Noise",
+		"Lunch Break",
+	];
+	const apart = ["Slow Thinking", "Field Notes"];
+	const sideBySide = ["The Archive Hour", "Slow Thinking"];
+	const cases: Array<[string, string[], boolean]> = [
+		["two apart, undone in the order removed", apart, false],
+		["two apart, undone the other way round", apart, true],
+		["two side by side, undone in the order removed", sideBySide, false],
+		["two side by side, undone the other way round", sideBySide, true],
+	];
+	const undoOrder = (removed: string[], reversed: boolean) =>
+		reversed ? [...removed].reverse() : removed;
+	const feed = (title: string) => ({
+		title,
+		url: `https://feeds.example.com/${title}.xml`,
+		artworkUrl: "",
+	});
+	const list = (name: string): Playlist => ({
+		name,
+		icon: "list-music",
+		episodes: [],
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+	});
+
+	test.each(cases)("podcasts, %s, end in the grid's first order", (_, removed, reversed) => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		savedFeeds.set(Object.fromEntries(grid.map((title) => [title, feed(title)])));
+
+		for (const title of removed) actions.removePodcast(title);
+		for (const title of undoOrder(removed, reversed)) shown.undo(`Removed ${title}`);
+
+		expect(Object.keys(get(savedFeeds))).toEqual(grid);
+	});
+
+	test.each(cases)("playlists, %s, end in their first order", (_, removed, reversed) => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		playlists.set(Object.fromEntries(grid.map((name) => [name, list(name)])));
+
+		for (const name of removed) actions.deletePlaylist(name);
+		for (const name of undoOrder(removed, reversed)) shown.undo(`Deleted ${name}`);
+
+		expect(Object.keys(get(playlists))).toEqual(grid);
+	});
+
+	test("a podcast followed between the removals and the Undos keeps its place at the end", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		savedFeeds.set(Object.fromEntries(grid.map((title) => [title, feed(title)])));
+
+		actions.removePodcast("Slow Thinking");
+		actions.removePodcast("Field Notes");
+		expect(actions.addPodcast(feed("Night Owl"))).toBe("Night Owl");
+		shown.undo("Removed Slow Thinking");
+		expect(Object.keys(get(savedFeeds))).toEqual([
+			"The Archive Hour",
+			"Slow Thinking",
+			"Signal & Noise",
+			"Lunch Break",
+			"Night Owl",
+		]);
+		shown.undo("Removed Field Notes");
+
+		expect(Object.keys(get(savedFeeds))).toEqual([...grid, "Night Owl"]);
+	});
+});
 
 describe("removing a podcast", () => {
 	const shared = { title: "Shared", url: "https://feeds.example.com/shared.xml", artworkUrl: "" };
