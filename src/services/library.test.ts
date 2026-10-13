@@ -76,7 +76,6 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-/** The messages of the Notices shown, and a click on the last one's Undo. */
 function notices() {
 	const notice = vi.spyOn(obsidian, "Notice");
 	return {

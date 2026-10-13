@@ -64,7 +64,6 @@ export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 	menu.showAtPosition(at, at.doc);
 }
 
-/** Copies `text` and says so, naming it by `what`, such as "feed URL". */
 function copy(text: string, what: string): void {
 	navigator.clipboard.writeText(text).then(
 		() => new Notice(`${what.charAt(0).toUpperCase()}${what.slice(1)} copied`),
@@ -251,7 +250,6 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 						title: "Copy feed URL",
 						icon: "link",
 						onClick: () => {
-							// The feed can have turned private since the menu opened.
 							const url = publicFeedUrl(get(library.savedFeeds)[key] ?? feed);
 							if (url) copy(url, "feed URL");
 						},
@@ -278,7 +276,6 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 	];
 }
 
-/** The Queue page's options. The preference item asks for the opposite of what its menu showed. */
 export function queueMenu({
 	library,
 	actions,

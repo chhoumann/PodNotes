@@ -19,7 +19,6 @@ export interface IPodNotes {
 	feedUrls: FeedUrlRepository;
 	navigation: Navigation;
 	capture: CaptureService;
-	/** Whether the device has a connection. */
 	online: Readable<boolean>;
 	shouldMountPodcastView(): boolean;
 	unregisterPodcastView(view: PodNotesViewRegistration): void;

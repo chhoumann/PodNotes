@@ -85,12 +85,10 @@ export function isCurrentEpisode(now: Episode | undefined, episode: Episode): bo
 	);
 }
 
-/** The episode's length from the feed, else the one its Played record learned as it played. */
 function durationOf(episode: Episode, record: PlayedEpisode | undefined): number {
 	return episode.duration || record?.duration || 0;
 }
 
-/** What is left of an episode played part of the way. A finished one plays again from the start. */
 function leftOf(record: PlayedEpisode | undefined): number | undefined {
 	return record && !record.finished && record.time > 0 && record.duration > record.time
 		? record.duration - record.time
@@ -113,7 +111,6 @@ export function secondsLeft(episodes: readonly Episode[], played: PlayedEpisodeM
 	}, 0);
 }
 
-/** The vault folder of a file, "/" at the vault's root. */
 function folderOf(path: string): string {
 	const slash = path.lastIndexOf("/");
 	return slash > 0 ? path.slice(0, slash) : "/";

@@ -67,7 +67,6 @@ async function serve(): Promise<FixtureServer> {
 	return server;
 }
 
-/** Seeds the four-episode queue, with `current` loaded and paused, and opens the Queue page. */
 async function openQueue(current?: FixtureEpisode): Promise<FixtureServer> {
 	const context = getContext();
 	const server = await serve();
@@ -105,7 +104,6 @@ async function expectGripFocused(title: string, position: number, count: number)
 	expect(await eventually(obsidian, () => focusedLabel(obsidian), label)).toBe(label);
 }
 
-/** Plays `episode` the way a link or command does while the user is busy in the view. */
 async function playElsewhere(server: FixtureServer, episode: FixtureEpisode): Promise<void> {
 	const { obsidian } = getContext();
 	await obsidian.dev.evalJson(
@@ -132,7 +130,6 @@ describe("list journeys", () => {
 		const { obsidian } = getContext();
 		await openQueue();
 
-		// Dropped on a row's lower half, the episode lands after it; on its upper half, before it.
 		await drag(obsidian, ui.queueGrip(FOUR.title), ui.queueRow(TWO.title), "bottom");
 		await expectQueue(titles([ONE, TWO, FOUR, THREE]));
 		await drag(obsidian, ui.queueGrip(ONE.title), ui.queueRow(FOUR.title), "top");
@@ -167,7 +164,6 @@ describe("list journeys", () => {
 
 		const mouse = await pressMouse(obsidian, await pointOn(obsidian, ui.queueGrip(FOUR.title)));
 		await mouse.moveTo(await pointOn(obsidian, ui.queueRow(FOUR.title), "bottom"), 2);
-		// Switching episodes queues the one playing first, above the dragged row.
 		await playElsewhere(server, PICKED);
 		expect(
 			await eventually(obsidian, () => listedEpisodes(obsidian), titles([PLAYING, ...QUEUE])),
@@ -184,7 +180,6 @@ describe("list journeys", () => {
 
 		await click(obsidian, ui.queueGrip(FOUR.title));
 		await expectGripFocused(FOUR.title, 4, 4);
-		// Playing the row above takes it out of the queue and queues the one playing first.
 		await playElsewhere(server, THREE);
 		await expectQueue(titles([PLAYING, ONE, TWO, FOUR]));
 		await pressKey(obsidian, "ArrowUp");

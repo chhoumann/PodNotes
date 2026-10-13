@@ -481,7 +481,6 @@ describe("resilience journeys", () => {
 		).toEqual(grouped);
 		expect(await isDisabled(obsidian, ui.headAction("Refresh all feeds"))).toBe(true);
 
-		// A feed due for a refresh is loaded when PodNotes starts, and fails offline.
 		const offlineLoads = feedRequests();
 		await ageFeedCache(obsidian, 7 * 60 * 60 * 1000);
 		await plugin.reload(RELOAD_OPTIONS);

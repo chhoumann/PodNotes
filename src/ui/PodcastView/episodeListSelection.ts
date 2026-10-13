@@ -18,7 +18,6 @@ import type { ListPage } from "./pages";
 /** A row of a list. A Played row names the record it shows, which can be under a legacy key. */
 export type ListEntry = EpisodeListEntry & { readonly playedEpisodeKey?: string };
 
-/** What the list pages read from the library. */
 export interface ListSnapshot {
 	readonly feeds: ReadonlyMap<FeedKey, FeedState>;
 	readonly limit: number;

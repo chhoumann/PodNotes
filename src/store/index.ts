@@ -234,7 +234,6 @@ export const queue = (() => {
 				return queue;
 			});
 		},
-		/** Finds both episodes when the move applies, so a queue that changed since cannot move another. */
 		reorder: (move: QueuePlacement) => {
 			const { episodes } = get(store);
 			const reordered = reorderEpisodes(episodes, move);

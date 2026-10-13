@@ -53,11 +53,6 @@ const listed = () =>
 const grip = (title: string) =>
 	screen.getByRole("button", { name: new RegExp(`^Reorder ${title},`) });
 
-/**
- * Gives every row a 40 px band, top to bottom, in a view 300 px wide whose page scrolls
- * after `shown` px, and hit-tests a point as a browser would: what lies beside the view
- * or beyond what the page shows is not the list's.
- */
 function layOutRows(shown = 1000) {
 	const rows = [...document.querySelectorAll<HTMLElement>(".pn-ep")];
 	for (const [index, row] of rows.entries()) {

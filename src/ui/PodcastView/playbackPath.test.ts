@@ -4,7 +4,6 @@ import { describe, expect, test } from "vitest";
 const PLAY_CALL = /\.\s*play\s*\(/g;
 const TOP_LEVEL = /^(?:export )?(?:async )?function (\w+)|^\}/gm;
 
-/** Every call of `play` in `source`, named for its file and the top-level function it is in. */
 function playCalls(file: string, source: string): string[] {
 	return [...source.matchAll(PLAY_CALL)].map(({ index }) => {
 		let inside: string | undefined;
@@ -13,7 +12,6 @@ function playCalls(file: string, source: string): string[] {
 	});
 }
 
-// openEpisode refuses an episode offline before it calls the player, so it is the one caller.
 test("only openEpisode starts an episode from the view", () => {
 	const dir = import.meta.dirname;
 	const calls = readdirSync(dir)

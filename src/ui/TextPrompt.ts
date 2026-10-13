@@ -2,7 +2,6 @@ import { type App, Modal, Setting } from "obsidian";
 
 export interface TextPrompt {
 	readonly title: string;
-	/** The field's name. */
 	readonly label: string;
 	/** The accepting button. Enter in the field does the same. */
 	readonly cta: string;

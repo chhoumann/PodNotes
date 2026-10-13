@@ -303,7 +303,6 @@ export type HeldMouse = Readonly<{
 	release(): Promise<void>;
 }>;
 
-/** Presses the left mouse button at `at` and holds it until `release`. */
 export async function pressMouse(obsidian: ObsidianClient, at: Point): Promise<HeldMouse> {
 	let current = at;
 	const send = async (type: string, { x, y }: Point, buttons: number) => {
@@ -334,7 +333,6 @@ export async function pressMouse(obsidian: ObsidianClient, at: Point): Promise<H
 	};
 }
 
-/** Drags `from` with the mouse to `part` of `to` and lets go there. */
 export async function drag(
 	obsidian: ObsidianClient,
 	from: UiTarget,
@@ -450,7 +448,6 @@ export async function listedEpisodes(obsidian: ObsidianClient): Promise<string[]
 	);
 }
 
-/** The page's episode titles and the headings between them, in order. */
 export async function listedEpisodesWithHeadings(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>(
 		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-scroll :is(h2.pn-h2, .pn-ep-main .pn-ep-title)`)})].filter((el) => el.getClientRects().length > 0).map((el) => el.textContent.trim())`,

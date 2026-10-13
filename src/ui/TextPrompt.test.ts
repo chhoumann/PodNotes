@@ -11,7 +11,6 @@ const PROMPT = {
 	cta: "Create",
 };
 
-/** The prompt's answer, and whether it came yet. */
 function ask(prompt: Parameters<typeof askText>[1] = PROMPT) {
 	const answers: (string | null)[] = [];
 	const answered = askText(new App(), prompt).then((answer) => {

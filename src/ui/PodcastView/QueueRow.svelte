@@ -25,7 +25,6 @@
 	const services = useServices();
 	const { actions, library } = services;
 
-	/** Up and Down move the episode past its neighbour in the queue as it is now. */
 	async function nudge(event: KeyboardEvent) {
 		const side =
 			event.key === "ArrowUp" ? "before" : event.key === "ArrowDown" ? "after" : undefined;

@@ -370,8 +370,6 @@ describe("reorderEpisodes", () => {
 	const titles = (list: Episode[]) => list.map((e) => e.title);
 	const live = (...names: string[]) => names.map((name) => ep(name));
 
-	// The queue the store holds when the move applies, which can differ from the one
-	// the gesture saw: playback adds and removes entries during a drag.
 	test.each([
 		["the queue the gesture saw", ["A", "B", "C", "D"], ["A", "D", "B", "C"]],
 		["an entry auto-queued since", ["X", "A", "B", "C", "D"], ["X", "A", "D", "B", "C"]],

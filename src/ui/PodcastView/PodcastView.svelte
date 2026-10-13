@@ -277,7 +277,6 @@
 		padding: 0;
 	}
 
-	/* The Undo button at the end of a Notice the view's actions show. */
 	:global(.notice .pn-undo) {
 		margin-left: var(--size-4-2);
 	}
@@ -1030,7 +1029,6 @@
 			color: var(--text-faint);
 		}
 
-		/* In the sidebar and on a phone, the source takes its own line, so nothing truncates. */
 		.pn-ep-meta .pod {
 			min-width: 0;
 			overflow-wrap: anywhere;
@@ -1345,7 +1343,6 @@
 	}
 
 	.is-wide :global {
-		/* The pane keeps a row's metadata on one line; the source gives way. */
 		.pn-ep-meta {
 			flex-wrap: nowrap;
 			white-space: nowrap;

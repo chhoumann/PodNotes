@@ -97,7 +97,6 @@ interface EventRef {
 	e: { offref(ref: EventRef): void };
 }
 
-/** The workspace's events, which a test triggers as Obsidian would. */
 export class Workspace {
 	private readonly refs = new Set<EventRef & { name: string; callback(): unknown }>();
 

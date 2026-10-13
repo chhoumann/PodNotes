@@ -95,7 +95,6 @@ export interface Head {
 	readonly search?: true;
 }
 
-/** The lists a head's flair counts. */
 export interface HeadLists {
 	readonly queue: Playlist;
 	readonly favorites: Playlist;

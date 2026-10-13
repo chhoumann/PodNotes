@@ -549,7 +549,6 @@ export async function playerLeafCount(obsidian: ObsidianClient): Promise<number>
 	);
 }
 
-/** Where each PodNotes leaf sits. */
 export async function playerLeafPlaces(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>(
 		`app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).map((leaf) => {
