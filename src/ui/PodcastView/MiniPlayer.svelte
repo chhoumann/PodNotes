@@ -107,6 +107,7 @@
 {/if}
 
 <style>
+	/* Its controls sit above Obsidian's status bar, which floats over the view's bottom. */
 	.pn-mini {
 		--pn-btn: 36px;
 		position: relative;
@@ -114,16 +115,16 @@
 		display: flex;
 		align-items: center;
 		gap: var(--size-2-2);
-		height: 56px;
-		padding: 0 var(--size-4-2) 0 var(--size-4-1);
+		height: calc(56px + var(--pn-status-bar));
+		padding: 0 var(--size-4-2) var(--pn-status-bar) var(--size-4-1);
 		background: var(--pn-surface);
 		border-top: 1px solid var(--background-modifier-border);
 	}
 
 	.pn-mini.is-wide {
-		height: 64px;
+		height: calc(64px + var(--pn-status-bar));
 		gap: var(--size-4-3);
-		padding: 0 var(--size-4-4) 0 var(--size-4-3);
+		padding: 0 var(--size-4-4) var(--pn-status-bar) var(--size-4-3);
 	}
 
 	:global(.is-phone) .pn-mini {

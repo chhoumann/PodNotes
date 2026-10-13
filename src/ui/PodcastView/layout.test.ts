@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test } from "vitest";
 import { installResizeObserver } from "../../../tests/mocks/resizeObserver";
-import { observeWidth } from "./layout";
+import { observeWidth, statusBarInset } from "./layout";
 
 const uninstalls: Array<() => void> = [];
 afterEach(() => uninstalls.splice(0).forEach((uninstall) => uninstall()));
@@ -29,4 +29,27 @@ test("width keeps reporting after the view moves to a popout window", () => {
 	expect(inPopout.watching(el)).toBe(1);
 	if (typeof detach === "function") detach();
 	expect(inPopout.watching(el)).toBe(0);
+});
+
+// The window is 1024 x 800. Obsidian's status bar, showing "9 properties", is 89.5 x 27
+// in its bottom-right corner, or in its bottom-left one for a right-to-left language.
+const BAR = { left: 934.5, right: 1024, top: 773, bottom: 800 };
+const RTL_BAR = { left: 0, right: 89.5, top: 773, bottom: 800 };
+const RIGHT_SIDEBAR = { left: 724, right: 1024, top: 40, bottom: 800 };
+const LEFT_SIDEBAR = { left: 44, right: 324, top: 40, bottom: 800 };
+
+test("the status bar reaches its height into a view under the window's bottom corner", () => {
+	expect(statusBarInset(RIGHT_SIDEBAR, BAR)).toBe(27);
+	expect(statusBarInset({ ...LEFT_SIDEBAR, left: 0 }, RTL_BAR)).toBe(27);
+});
+
+test("a view beside the status bar, or above it, gets no inset", () => {
+	expect(statusBarInset(LEFT_SIDEBAR, BAR)).toBe(0);
+	expect(statusBarInset(RIGHT_SIDEBAR, RTL_BAR)).toBe(0);
+	// A theme that puts the bar in flow, below the workspace.
+	expect(statusBarInset({ ...RIGHT_SIDEBAR, bottom: 773 }, { ...BAR, left: 0 })).toBe(0);
+});
+
+test("a hidden status bar, as on mobile, gets no inset", () => {
+	expect(statusBarInset(RIGHT_SIDEBAR, { left: 0, right: 0, top: 0, bottom: 0 })).toBe(0);
 });

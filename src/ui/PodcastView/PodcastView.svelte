@@ -6,7 +6,13 @@
 	import AddPodcastPage from "./AddPodcastPage.svelte";
 	import { provideServices, type ShellServices } from "./context";
 	import EpisodesPage from "./EpisodesPage.svelte";
-	import { layoutFor, observeWidth, restoreScroll, type Layout } from "./layout";
+	import {
+		layoutFor,
+		observeStatusBar,
+		observeWidth,
+		restoreScroll,
+		type Layout,
+	} from "./layout";
 	import LibraryPage from "./LibraryPage.svelte";
 	import { anchorOf, podcastMenu, showMenu } from "./menus";
 	import MiniPlayer from "./MiniPlayer.svelte";
@@ -26,6 +32,7 @@
 
 	let root: HTMLDivElement | undefined = $state();
 	let layout = $state<Layout>("compact");
+	let statusBar = $state(0);
 
 	const page = $derived($navigation.page);
 	const counts: RootCounts = $derived({
@@ -64,11 +71,13 @@
 	class:is-compact={layout === "compact"}
 	class:is-wide={layout === "wide"}
 	class:is-phone={Platform.isPhone}
+	style:--pn-status-bar="{statusBar}px"
 	bind:this={root}
 	{@attach observeWidth((width) => {
 		// A hidden leaf measures 0 wide; it keeps the layout it had.
 		if (width > 0) layout = layoutFor(width);
 	})}
+	{@attach observeStatusBar((inset) => (statusBar = inset))}
 >
 	{#if firstRun}
 		<div class="pn-first-run" inert={overlaid}>
@@ -318,6 +327,11 @@
 		min-height: 0;
 		overflow-y: auto;
 		padding: 0 var(--pn-pad) var(--size-4-6);
+	}
+
+	/* Without the mini player, a page ends under Obsidian's status bar. */
+	.podcast-view:not(:has(> :global(.pn-mini))) .pn-scroll {
+		padding-bottom: calc(var(--size-4-6) + var(--pn-status-bar));
 	}
 
 	.pn-title {
