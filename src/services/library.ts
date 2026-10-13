@@ -215,16 +215,15 @@ export function createLibraryActions({
 					new Notice("Enter a private feed address.");
 					return;
 				}
-				const takenBy = () => {
+				const taken = () => {
+					if (isPrivate) return false;
 					const saved = get(savedFeeds);
 					const other = savedKey(saved, url.href);
-					return other === undefined || other === key ? undefined : saved[other].title;
+					if (other === undefined || other === key) return false;
+					new Notice(`You already follow ${saved[other].title} at that address.`);
+					return true;
 				};
-				const taken = isPrivate ? undefined : takenBy();
-				if (taken !== undefined) {
-					new Notice(`You already follow ${taken} at that address.`);
-					return;
-				}
+				if (taken()) return;
 				try {
 					await feeds.channelAt({ url: url.href });
 				} catch {
@@ -232,9 +231,8 @@ export function createLibraryActions({
 					new Notice("Could not load the feed at that address.");
 					return;
 				}
-				if (changed() || offline()) return;
-				// A sync can save the address for another podcast while it loads.
-				if (!isPrivate && takenBy() !== undefined) return;
+				// A sync can also save the address for another podcast while it loads.
+				if (changed() || offline() || taken()) return;
 				try {
 					if (isPrivate) setPrivateFeedAddress(feed, url.href, feedUrls);
 					else {

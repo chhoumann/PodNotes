@@ -240,6 +240,22 @@ describe("editing a public feed's address", () => {
 		expect(get(savedFeeds)["The Show"]).toEqual(show);
 	});
 
+	test("refuses an address a sync saved for another podcast while it loaded, and says so", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const response = deferred<string>();
+		fetchTextMock.mockReturnValue(response.promise);
+		const { actions } = saved();
+
+		const entered = enterAddress(actions.setFeedAddress("The Show"), NEW_URL);
+		await vi.waitFor(() => expect(fetchTextMock).toHaveBeenCalled());
+		savedFeeds.update((all) => ({ ...all, First: { ...all.First, url: NEW_URL } }));
+		response.resolve("<rss><channel><title>The Show</title></channel></rss>");
+		await entered;
+
+		expect(get(savedFeeds)["The Show"]).toEqual(show);
+		expect(notice.mock.calls).toEqual([["You already follow First at that address."]]);
+	});
+
 	test("keeps the address, and the sync's other changes, when a sync republishes the podcast while it loads", async () => {
 		const response = deferred<string>();
 		fetchTextMock.mockReturnValue(response.promise);
