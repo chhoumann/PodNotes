@@ -44,7 +44,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-function renderPage(key: string, feeds: PodcastFeed[] = [show]) {
+function renderPage(key: string, feeds: PodcastFeed[] = [show], { online = true } = {}) {
 	const repository = new FeedRepository({
 		load: (url) => load(url),
 		resolveUrl: (feed) =>
@@ -59,6 +59,7 @@ function renderPage(key: string, feeds: PodcastFeed[] = [show]) {
 	});
 	({ services, dispose } = createTestServices({ feeds: repository }));
 	services.library.savedFeeds.set(Object.fromEntries(feeds.map((feed) => [feed.title, feed])));
+	services.online.set(online);
 	render(WithServices, { props: { services, component: EpisodesPage, props: { key } } });
 	return services;
 }
@@ -228,23 +229,32 @@ describe("a podcast's page", () => {
 		expect(streamedMenu).not.toContain("Remove download");
 	});
 
-	test("offline, cannot refresh or retry, and does not load when it opens", async () => {
+	test("offline, cannot refresh, and shows no failure, since the Offline strip says why", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		load.mockRejectedValue(new Error("down"));
 		renderPage(show.title);
 		await screen.findByRole("alert");
-		load.mockClear();
 
 		services.online.set(false);
 		await tick();
 
+		expect(screen.queryByRole("alert")).toBeNull();
 		expect(screen.getByRole("button", { name: "Refresh episodes" })).toBeDisabled();
-		expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
-		document.body.innerHTML = "";
-		render(WithServices, {
-			props: { services, component: EpisodesPage, props: { key: show.title } },
-		});
+
+		services.online.set(true);
+		await tick();
+		expect(screen.getByRole("alert")).toHaveTextContent("Feed didn't load");
+	});
+
+	test("opened offline, loads its episodes once the connection returns", async () => {
+		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
+		renderPage(show.title, [show], { online: false });
 		await tick();
 		expect(load).not.toHaveBeenCalled();
+
+		services.online.set(true);
+
+		expect(await screen.findByText("First")).toBeInTheDocument();
+		expect(load.mock.calls).toEqual([[show.url]]);
 	});
 });

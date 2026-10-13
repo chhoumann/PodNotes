@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
@@ -37,9 +36,12 @@
 			Array.from($feeds.values()).some(({ status }) => status === "loading"),
 	);
 
-	// On mount, not on the click that opened the page, so a page restored at startup loads too.
-	onMount(() => {
-		if (page.kind !== "played" || !get(online)) return;
+	// Once open and online, not on the click that opened it, so a page restored at startup
+	// or opened offline loads too.
+	let loaded = false;
+	$effect(() => {
+		if (loaded || page.kind !== "played" || !$online) return;
+		loaded = true;
 		void feeds.load(
 			feedKeysWithPlayedEpisodes(get(savedFeeds), get(playedEpisodes)),
 			"complete",

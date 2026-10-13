@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
+import { tick } from "svelte";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { FeedRepository } from "src/services/FeedRepository";
 import type { PodcastFeed } from "src/types/PodcastFeed";
@@ -106,6 +107,22 @@ describe("the Library's podcast grid", () => {
 			await screen.findByRole("button", { name: "Art Show, feed didn't load" }),
 		).toContainElement(document.querySelector(".pn-badge"));
 		expect(card("Plain Show").querySelector(".pn-badge")).toBeNull();
+	});
+
+	test("offline, a podcast whose feed did not load wears no badge, since the Offline strip says why", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const repository = unreachable();
+		const { services } = renderLibrary([["Art Show", artShow]], { repository });
+		await repository.load(["Art Show"], "network");
+		services.online.set(false);
+		await tick();
+
+		expect(card("Art Show").querySelector(".pn-badge")).toBeNull();
+
+		services.online.set(true);
+		expect(
+			await screen.findByRole("button", { name: "Art Show, feed didn't load" }),
+		).toContainElement(document.querySelector(".pn-badge"));
 	});
 
 	test("a right-click on a podcast opens its menu at the pointer", async () => {

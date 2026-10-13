@@ -5,6 +5,8 @@ import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
+import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
+import { FeedRepository } from "src/services/FeedRepository";
 import { favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
@@ -19,6 +21,7 @@ import {
 	type TestServices,
 } from "../../../tests/mocks/services";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
+import { feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
 import { openPopout } from "../../../tests/mocks/popout";
 import PodcastView from "./PodcastView.svelte";
@@ -360,6 +363,36 @@ describe("offline", () => {
 		await tick();
 		expect(screen.queryByText("Offline")).toBeNull();
 		expect(button("Refresh all feeds")).toBeEnabled();
+	});
+
+	test("the feeds that could not load offline load when the connection returns", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const load = vi
+			.fn<(url: string) => Promise<ParsedFeedEpisodes>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue(feedDocument(feed.title, [episode]));
+		dispose();
+		({ services, doc, dispose } = createTestServices({
+			feeds: new FeedRepository({
+				load,
+				resolveUrl: (saved) => saved.url,
+				storage: new MemoryStorage(),
+				cache: () => ({ enabled: false, ttlHours: 6 }),
+				now: Date.now,
+			}),
+		}));
+		services.library.savedFeeds.set({ [feed.title]: feed });
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+		await tick();
+		expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
+
+		services.online.set(true);
+
+		expect(await screen.findByText(episode.title)).toBeInTheDocument();
+		expect(load.mock.calls).toEqual([[feed.url], [feed.url]]);
 	});
 
 	test("First run has no strip", async () => {

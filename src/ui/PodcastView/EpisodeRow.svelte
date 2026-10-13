@@ -21,7 +21,7 @@
 		cover?: boolean;
 		/** The episode's date. Rows with a cover name their source instead, except Latest's. */
 		date?: boolean;
-		/** False for a Played record whose episode left every feed. */
+		/** False for a Played record that matched no episode. */
 		resolved?: boolean;
 		onplay(): void;
 		onmenu(at: MenuAnchor): void;

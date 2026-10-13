@@ -414,25 +414,47 @@ describe("offline", () => {
 		expect(listed()).toEqual(["Streamed"]);
 	});
 
-	test("Played does not load its podcasts while offline", async () => {
+	const playedFirst = (library: TestServices["library"]) =>
+		library.playedEpisodes.set({
+			"Field Notes::First": {
+				title: "First",
+				podcastName: show.title,
+				time: 1,
+				duration: 1,
+				finished: true,
+			},
+		});
+
+	test("Played opened offline loads its podcasts once the connection returns", async () => {
 		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
-		renderPage({ kind: "played" }, [show], ({ library, online }) => {
-			online.set(false);
-			library.playedEpisodes.set({
-				"Field Notes::First": {
-					title: "First",
-					podcastName: show.title,
-					time: 1,
-					duration: 1,
-					finished: true,
-				},
-			});
+		renderPage({ kind: "played" }, [show], (services) => {
+			services.online.set(false);
+			playedFirst(services.library);
 		});
 		await tick();
-
 		expect(load).not.toHaveBeenCalled();
-		expect(
-			screen.getByRole("button", { name: "First, played, unavailable" }),
-		).toBeInTheDocument();
+
+		services.online.set(true);
+
+		expect(await screen.findByRole("button", { name: "First, played" })).not.toHaveAttribute(
+			"aria-disabled",
+		);
+		expect(load).toHaveBeenCalledTimes(1);
+	});
+
+	test("a Played record no loaded feed lists needs a connection, and a tap says it is not downloaded", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		renderPage({ kind: "played" }, [show], (services) => {
+			services.online.set(false);
+			playedFirst(services.library);
+		});
+		await tick();
+		const record = screen.getByRole("button", { name: "First, played, not downloaded" });
+
+		await fireEvent.click(record);
+
+		expect(headings()).toEqual(["Needs a connection"]);
+		expect(record).toHaveAttribute("aria-disabled", "true");
+		expect(notice.mock.calls).toEqual([["Not downloaded"]]);
 	});
 });

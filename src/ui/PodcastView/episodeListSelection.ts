@@ -84,7 +84,7 @@ export function selectListEntries(page: ListPage, library: ListSnapshot): ListEn
 
 /**
  * The entries that play offline, then the rest, each in the order given. A Played
- * record whose episode left every feed plays nowhere, so it needs a connection too.
+ * record that matched no episode needs a connection too.
  */
 export function splitOffline<T extends EpisodeListEntry>(
 	entries: readonly T[],
