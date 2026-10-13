@@ -23,6 +23,7 @@ export const sidebar = [
 		label: "Listen",
 		items: [
 			{ label: "Add and play podcasts", slug: "podcasts" },
+			{ label: "Use private feeds", slug: "private-feeds" },
 			{ label: "Use the queue and playlists", slug: "playlists" },
 			{ label: "Downloads and local files", slug: "local_files" },
 			{ label: "Transcribe episodes", slug: "transcripts" },

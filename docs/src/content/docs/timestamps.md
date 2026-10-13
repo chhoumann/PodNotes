@@ -11,11 +11,18 @@ Capture a timestamp while you listen, and PodNotes inserts the playback time at 
 ## <span id="capturing-timestamps"></span>Capture a timestamp
 
 1. Play an episode in PodNotes. You can pause it before you capture.
-2. Open a note in editing view.
-3. Place the cursor where you want the timestamp.
-4. Run **PodNotes: Capture Timestamp** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
+2. In a note in editing view, place the cursor where you want the timestamp.
+3. Run **PodNotes: Capture Timestamp** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
 PodNotes inserts a list item with a link such as `00:12:41`, followed by a space for your note. A capture replaces any selected text. Select the link, in Live Preview or reading view, to play the episode from that moment. To keep your timestamps in one note per episode, see [Create episode notes](/notes/).
+
+## Choose where a timestamp goes
+
+The capture commands work from anywhere, so you can capture while you browse episodes in the PodNotes view. A capture goes to the first of these:
+
+1. The note you are editing, at the cursor. A note in reading view does not count.
+2. The note you edited last, at its cursor, if it is still open in editing view. A capture from the PodNotes view, or from a headset, usually goes here.
+3. The end of the episode's note. PodNotes creates the note if it does not exist, and does not open it. This needs **Note creation file path** and **Note creation template**.
 
 ## Capture from a hotkey, the toolbar, or a headset
 
@@ -27,7 +34,7 @@ To capture from a hotkey:
 
 On a phone, [add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
 
-A headset button that sends the previous-track action also captures. If a note is open in an editor, the timestamp goes in at the cursor. If no note is open in an editor, PodNotes adds it to the end of the episode note. See [Capture with a headset](/mobile/#capture-with-a-headset).
+A headset button that sends the previous-track action also captures, except on Android. The timestamp goes where [a capture goes](#choose-where-a-timestamp-goes). See [Control playback from a headset or the lock screen](/mobile/#control-playback-from-a-headset-or-the-lock-screen).
 
 ## <span id="capturing-segments"></span>Capture a range
 
@@ -48,7 +55,7 @@ If your captures come out as plain text with no link, your format most likely us
 1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end.
 
-New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the episode has no feed URL or local file to link to.
+New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the episode has no feed or local file to link to, or it comes from a private feed that you have not added. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 ## Compensate for reaction time
 
@@ -67,13 +74,15 @@ With an offset of `5`, a capture at `00:12:46` inserts `00:12:41`, and ranges mo
 
 Captures and links behave differently in these cases:
 
-- Without a loaded episode or with an empty **Capture timestamp format**, **PodNotes: Capture Timestamp** shows "Play an episode and set a Capture timestamp format in settings to capture a timestamp."
-- `{{linktime}}` and `{{linksegment}}` insert plain text when the episode has no feed URL or local file to link to.
+- Without a loaded episode, a capture shows "Play an episode to capture". With an empty **Capture timestamp format**, it shows "Set a Capture timestamp format in settings to capture a timestamp."
+- When a capture goes to the episode's note and **Note creation file path** or **Note creation template** is empty, PodNotes shows "Set an episode note path and template to capture timestamps".
+- `{{linktime}}` and `{{linksegment}}` insert plain text when the episode has no feed or local file to link to, or comes from a private feed that you have not added.
 - At the very start of an episode, a range command shows "Play more of the episode before capturing a segment".
 - In a table cell, PodNotes escapes pipe characters and turns line breaks into spaces.
-- A link finds its episode by title, despite changes in case, punctuation, or word order. If the podcast renames the episode with different words, the link shows "Episode not found".
-- A link to a private feed works only on a device where you saved that feed.
-- A link to a local file needs the file in **Local Files**. See [Downloads and local files](/local_files/).
+- A link finds its episode by the ID the feed gives it, so it still works after the podcast renames the episode. A link without that ID, such as one captured before PodNotes 2.22.0, finds its episode by title, despite changes in case, punctuation, or word order. If the podcast renames such an episode with different words, the link shows "Episode not found".
+- When PodNotes cannot fetch the feed, a link plays the episode from the copy of the feed that PodNotes saved on this device, if the copy lists the episode.
+- A link to a private feed works on each device where you set that feed's address. See [Use private feeds](/private-feeds/).
+- A link to a local file needs the file in your vault. If the file moved, PodNotes plays the one vault file with the same name. With no such file, it shows `No vault file is named "<name>".` With several, it asks you to update the link with the correct path. See [Downloads and local files](/local_files/).
 
 ## Reference
 
@@ -127,15 +136,20 @@ The handler accepts these query parameters:
 
 | Parameter | Required | Meaning |
 | --- | --- | --- |
-| `url` | Yes | Podcast feed URL, vault path of a local file, or the placeholder that stands for a private feed. |
+| `url` | Yes | Podcast feed URL, vault path of a media file, or the placeholder that stands for a private feed. |
 | `episodeName` | Yes | Episode title. |
-| `time` | No | Start time in seconds, zero or greater. It can have decimals. |
+| `guid` | No | The episode's ID in the feed, its `<guid>`. PodNotes tries it before `episodeName`. |
+| `time` | No | Start time in seconds, zero or greater. It can have decimals, but the whole value must be a number, so PodNotes refuses `12abc`. |
 | `endTime` | No | End of a range in seconds, greater than `time`. Needs `time`. |
 | `end` | No | Alias of `endTime`. |
 | `to` | No | Alias of `endTime`. |
 
-When a link has no `time`, or an empty one, the episode resumes from its saved progress. An unplayed or finished episode starts at zero. When a link has more than one end parameter, `endTime` wins over `end`, and `end` wins over `to`.
+When a link has no `time`, or an empty one, the episode resumes from its saved progress. An unplayed or finished episode starts at zero. A `time` at or past the end of the episode pauses the episode 0.25 seconds before its end. When a link has more than one end parameter, `endTime` wins over `end`, and `end` wins over `to`.
 
-A feed `url` must be a public HTTP or HTTPS address. A private-feed placeholder resolves only through a saved podcast and the feed address stored on that device. A local `url` needs a registered episode and its media file.
+A feed `url` must be a public HTTP or HTTPS address. A private-feed placeholder resolves only through a saved podcast, with the feed address stored on that device or the copy of the feed saved there. A `url` that holds the private address of a saved podcast opens that podcast.
 
-PodNotes percent-encodes query values, and also reads links from older versions that encode a space as `+`. The handler matches `episodeName` to an episode title regardless of case, and otherwise to the one title with the same words in any order and with any punctuation.
+A vault path in `url` plays the file at that path, whether or not it is in **Local Files**. When no file is at that path, PodNotes looks for the one vault file with the same file name.
+
+PodNotes percent-encodes query values, and also reads links from older versions that encode a space as `+`. For a vault path, PodNotes tries the path as written first, then with each `+` as a space.
+
+When the link points at the loaded episode, PodNotes plays it without fetching the feed. Otherwise it looks for the episode in the feed by `guid`, if exactly one episode has that ID. Then it matches `episodeName` to an episode title regardless of case, and otherwise to the one title with the same words in any order and with any punctuation.

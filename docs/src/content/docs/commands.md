@@ -9,7 +9,7 @@ Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only whi
 | Command | ID | Available when |
 | --- | --- | --- |
 | [Show player](#show-player) | `podnotes:podnotes-show-leaf` | Always |
-| [Play Podcast](#play-podcast) | `podnotes:start-playing` | An episode is loaded and paused |
+| [Play Podcast](#play-podcast) | `podnotes:start-playing` | An episode is loaded and not playing |
 | [Stop Podcast](#stop-podcast) | `podnotes:stop-playing` | An episode is playing |
 | [Toggle playback](#toggle-playback) | `podnotes:podnotes-toggle-playback` | An episode is loaded |
 | [Skip Backward](#skip-backward) | `podnotes:skip-backward` | An episode is loaded |
@@ -19,16 +19,16 @@ Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only whi
 | [Reset playback rate](#reset-playback-rate) | `podnotes:reset-playback-rate` | An episode is loaded |
 | [Reorder Queue](#reorder-queue) | `podnotes:reorder-queue` | The queue has two or more episodes |
 | [Download Playing Episode](#download-playing-episode) | `podnotes:download-playing-episode` | An episode is loaded |
-| [Capture Timestamp](#capture-timestamp) | `podnotes:capture-timestamp` | A note is open in an editor |
-| [Capture Last 10 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-10s` | A note is open in an editor, an episode is loaded, and **Capture timestamp format** is set |
-| [Capture Last 20 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-20s` | A note is open in an editor, an episode is loaded, and **Capture timestamp format** is set |
-| [Create episode note](#create-episode-note) | `podnotes:create-podcast-note` | An episode is loaded, and **Note creation file path** and **Note creation template** are set |
+| [Capture Timestamp](#capture-timestamp) | `podnotes:capture-timestamp` | Always |
+| [Capture Last 10 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-10s` | Always |
+| [Capture Last 20 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-20s` | Always |
+| [Create episode note](#create-episode-note) | `podnotes:create-podcast-note` | **Note creation file path** and **Note creation template** are set, and an episode is loaded or you follow at least one podcast |
 | [Create podcast feed note](#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You follow at least one podcast, and **Feed note file path** and **Feed note template** are set |
 | [Copy universal episode link to clipboard](#copy-universal-episode-link-to-clipboard) | `podnotes:get-share-link-episode` | An episode is loaded |
 | [Transcribe current episode](#transcribe-current-episode) | `podnotes:podnotes-transcribe` | An audio episode is loaded |
 | [Transcribe current episode from audio](#transcribe-current-episode-from-audio) | `podnotes:podnotes-transcribe-audio` | An audio episode is loaded |
 
-A paused episode counts as loaded. Hotkeys and workflow plugins use the ID.
+A paused episode counts as loaded, and so does the episode that PodNotes restores, paused, when Obsidian starts. Hotkeys and workflow plugins use the ID.
 
 ## Show player
 
@@ -36,7 +36,7 @@ Opens the player in the right sidebar, or reveals it when it is already open. Th
 
 ## Play Podcast
 
-Starts the loaded episode.
+Plays the loaded episode from where it is. After Obsidian starts, that is the episode PodNotes restored, at its saved position. A finished episode starts over.
 
 ## Stop Podcast
 
@@ -52,7 +52,7 @@ Moves back by **Skip backward length (s)**, 15 seconds by default. It never move
 
 ## Skip Forward
 
-Moves forward by **Skip forward length (s)**, 15 seconds by default. When the duration is known, a forward skip stops 0.25 seconds before the end.
+Moves forward by **Skip forward length (s)**, 15 seconds by default. When the duration is known, a forward skip stops 0.25 seconds before the end and keeps playing, so the episode then ends and the queue moves on.
 
 ## Increase playback rate
 
@@ -77,18 +77,20 @@ If another episode's file already exists at that path, the download fails. See [
 
 ## Capture Timestamp
 
-Inserts a timestamp at the cursor, formatted by **Capture timestamp format**. The default format is `- {{linktime}}` with a space at the end. It makes a list item with a timestamp link.
-Obsidian lists the command only while a note is open in an editor. It does not need a loaded episode, so you can add it to the mobile toolbar before you play anything. Without an episode or with an empty format, it shows a notice. See [Capture timestamps](/timestamps/).
+Inserts a timestamp, formatted by **Capture timestamp format**, at the cursor of the note you are editing. With no note in editing view, it goes to the note you edited last, or else to the end of the episode's note. See [Choose where a timestamp goes](/timestamps/#choose-where-a-timestamp-goes).
+The default format is `- {{linktime}}` with a space at the end. It makes a list item with a timestamp link.
+Obsidian always lists the command, so you can add it to the mobile toolbar before you play anything. Without a loaded episode, it shows "Play an episode to capture". See [Capture timestamps](/timestamps/).
 
 ## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds
 
-Inserts the last 10 or 20 seconds of playback at the cursor as a range, in the style of **Capture timestamp format**. With the default format, the range is a link that plays from the start of the range and pauses at its end.
-Obsidian lists these commands only while a note is open in an editor, an episode is loaded, and **Capture timestamp format** is set. To add them to the mobile toolbar, see [Add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
-Early in an episode, PodNotes shows a notice to play more first. See [Capture a range](/timestamps/#capture-a-range).
+Inserts the last 10 or 20 seconds of playback as a range, in the style of **Capture timestamp format**, where [Capture Timestamp](#capture-timestamp) would insert a timestamp. With the default format, the range is a link that plays from the start of the range and pauses at its end.
+Obsidian always lists these commands. To add them to the mobile toolbar, see [Add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
+Without a loaded episode, they show "Play an episode to capture". Early in an episode, PodNotes shows a notice to play more first. See [Capture a range](/timestamps/#capture-a-range).
 
 ## Create episode note
 
 Creates a note for the loaded episode from **Note creation template** at **Note creation file path**, or opens the note if it exists.
+With no episode loaded, it asks you to select a podcast, then an episode, and creates or opens that episode's note. Nothing starts playing.
 The ID keeps the command's former name, Create Podcast Note. See [Create episode notes](/notes/).
 
 ## Create podcast feed note

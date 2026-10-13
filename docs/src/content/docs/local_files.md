@@ -18,7 +18,7 @@ To download any other episode:
 2. Select **Download**.
 
 A notice shows the progress. PodNotes saves the file in your vault at **Episode download path**, `PodNotes/{{podcast}}/{{title}}` by default, and adds the file extension.
-The episode then appears in the **Local Files** playlist and plays from the file.
+The episode then appears in the **Local Files** playlist and plays from the file. If the episode is playing when its download finishes, it keeps playing without a break, and PodNotes plays the file the next time it loads the episode.
 
 Keep `{{title}}` in **Episode download path**. Without it, two episodes can resolve to the same file, and the second download fails. [Template tags](/templates/#file-path-tags) lists the tags a path accepts.
 
@@ -40,17 +40,23 @@ The **Local Files** playlist in the podcast grid lists every episode you have of
 ## Remove a download or a local file
 
 1. Right-click the episode or select its **More options** button.
-2. Select **Remove file** for a download, or **Remove from Local Files** for your own file.
+2. Select **Remove download** for a download, or **Remove from Local Files** for your own file.
 
-**Remove from Local Files** keeps your file in the vault. **Remove file** removes the episode from **Local Files** and moves its file to the trash.
+**Remove from Local Files** keeps your file in the vault. **Remove download** removes the episode from **Local Files** and moves its file to the trash.
 Where a trashed file goes depends on Obsidian's **Deleted files** setting in **Settings → Files and links**. If that setting deletes files permanently, so does PodNotes.
 
 If PodNotes cannot confirm that it downloaded a file, as with downloads from older versions, it asks first. Select **Keep file** to leave the file in your vault, or **Delete file** to move it to the trash. Either way, the episode leaves **Local Files**.
 
-Your notes and timestamp links stay. Links to a download stream the episode from its feed again while the feed still lists it. Links to your own file stop working until you select **Play with PodNotes** on the file again. See [What happens to notes and links when I remove a download?](/faq/#what-happens-to-notes-and-links-when-i-remove-a-download)
+Your notes and timestamp links stay. Links to a download stream the episode from its feed again while the feed still lists it. Links to your own file keep working while the file stays in your vault. See [What happens to notes and links when I remove a download?](/faq/#what-happens-to-notes-and-links-when-i-remove-a-download)
+
+## Move or rename your files
+
+When you move or rename a media file in Obsidian, PodNotes follows it in **Local Files**, the queue, **Favorites**, your playlists, and the player. It also follows the files of your downloads. The episode keeps its name in PodNotes, its position, and its note. A file that is playing keeps playing.
+
+PodNotes does not see a move or a rename made while it is off or outside Obsidian. When a file is gone from its path, its episode shows "Could not load this episode's media." when you play it. To clear the entry, select **Remove from Local Files**.
 
 ## What works with local files
 
 A local file works like a podcast episode. You can capture timestamps, create an episode note, and resume where you stopped. Transcription works for local audio but not for video.
 PodNotes uses `local file` as the podcast name, so `{{podcast}}` in a note path resolves to `local file`.
-A timestamp link to a local file plays only on a device where the file is in your vault and in **Local Files**.
+A timestamp link to a local file plays on any device where the file is in your vault, whether or not it is in **Local Files**. If the file is no longer at the link's path, PodNotes plays the one vault file with the same name. See [Limits of capture and links](/timestamps/#limits-of-capture-and-links).

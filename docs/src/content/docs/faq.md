@@ -17,9 +17,9 @@ On a phone, the player stays closed until you open it. See [Use PodNotes on your
 
 ### Why are some commands missing?
 
-Most commands appear only while an episode is loaded. A paused episode counts.
-**PodNotes: Capture Timestamp** needs a note open in an editor, and **PodNotes: Reorder Queue** needs at least two episodes in the queue.
-**PodNotes: Show player** is always available. [Commands](/commands/) lists what each command needs.
+Most commands appear only while an episode is loaded. A paused episode counts, and so does the episode PodNotes shows when Obsidian starts.
+**PodNotes: Reorder Queue** needs at least two episodes in the queue.
+**PodNotes: Show player** and the capture commands are always available. [Commands](/commands/) lists what each command needs.
 
 ### How do I install a beta version or install manually?
 
@@ -41,9 +41,9 @@ A show that exists only inside Spotify or another app has no feed to add. If the
 
 ### Can I use a private feed?
 
-Yes, if your provider gives you a personal RSS URL. Paste the whole URL into **Search Podcasts**.
+Yes, if your provider gives you a personal RSS feed address. Add the podcast with the whole address.
 PodNotes cannot sign in to providers that require a browser login.
-When the URL contains a user name, a password, or a token parameter, PodNotes keeps it on the current device only, so the feed works on one device at a time. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device). Importing a settings file also leaves these feeds without their URL, as [Import your settings](/import_export/#import-your-settings) explains.
+PodNotes keeps a private address on each device, out of your synced vault, so you enter it once on each other device with **Set feed address**. See [Use private feeds](/private-feeds/).
 
 ### Can I annotate my own audio or video?
 
