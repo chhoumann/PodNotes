@@ -236,6 +236,20 @@ describe("the full player", () => {
 		expect(button("Pause")).toBeEnabled();
 	});
 
+	test("a media error shows over an open panel, with Retry", async () => {
+		const { player } = await openPlayer();
+		await fireEvent.click(button("Up next"));
+		expect(within(player).getByText("Queue is empty")).toBeInTheDocument();
+
+		doc.media.emit("error");
+		await tick();
+
+		expect(within(player).getByRole("alert")).toHaveTextContent(
+			"Could not load this episode's media.",
+		);
+		expect(button("Retry")).toBeEnabled();
+	});
+
 	test("Create note while the episode has none, Open note once it has one", async () => {
 		await openPlayer();
 		expect(button("Create note")).toBeInTheDocument();
@@ -288,6 +302,20 @@ describe("the full player", () => {
 		expect(
 			within(frame as HTMLElement).getByRole("button", { name: "Fullscreen" }),
 		).toBeInTheDocument();
+	});
+
+	test("the video frame plays and pauses on its own, as it does in fullscreen", async () => {
+		const { player } = await openPlayer({ ...episode, mediaType: "video" });
+		const frame = within(player.querySelector<HTMLElement>(".pn-video")!);
+
+		await fireEvent.click(frame.getByRole("button", { name: "Pause" }));
+		expect(get(services.player.state).status).toBe("paused");
+		expect(
+			frame.getByRole("button", { name: "Play" }).querySelector("[data-icon]"),
+		).toHaveAttribute("data-icon", "play");
+
+		await fireEvent.click(frame.getByRole("button", { name: "Play" }));
+		expect(get(services.player.state).status).toBe("playing");
 	});
 
 	test("a video in a popout shows its artwork, since the video plays in the main window", async () => {

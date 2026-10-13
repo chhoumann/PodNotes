@@ -245,9 +245,7 @@
 	<div class="pn-np-body">
 		<div class="pn-np-left">
 			<div class="pn-stage">
-				{#if !wide && shown}
-					{@render panelView(shown)}
-				{:else if failed}
+				{#if failed}
 					<div class="pn-np-err" role="alert">
 						<span class="pn-np-err-icon" {@attach icon("alert-triangle")}></span>
 						<span>Could not load this episode's media.</span>
@@ -255,8 +253,18 @@
 							>Retry</button
 						>
 					</div>
+				{:else if !wide && shown}
+					{@render panelView(shown)}
 				{:else if video && inMainWindow}
 					<div class="pn-video" use:player.videoStage bind:this={videoFrame}>
+						<button
+							type="button"
+							class="pn-vplay"
+							class:is-paused={!playing}
+							aria-label={playing ? "Pause" : "Play"}
+							onclick={() => player.toggle()}
+							><span {@attach icon(playing ? "pause" : "play")}></span></button
+						>
 						<button
 							type="button"
 							class="pn-fs"
@@ -509,6 +517,39 @@
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
+	}
+
+	/* Fullscreen shows this frame alone, so it carries its own play and pause. */
+	.pn-player .pn-vplay {
+		position: absolute;
+		inset: 0;
+		width: auto;
+		height: auto;
+		padding: 0;
+		border-radius: 0;
+		background: none;
+		box-shadow: none;
+		opacity: 0;
+	}
+
+	.pn-player .pn-vplay:focus-visible {
+		outline-offset: -2px;
+	}
+
+	.pn-vplay.is-paused,
+	.pn-video:hover .pn-vplay,
+	.pn-vplay:focus-visible {
+		opacity: 1;
+	}
+
+	.pn-vplay span {
+		display: flex;
+		padding: var(--size-4-3);
+		border-radius: 50%;
+		background: var(--background-primary);
+		box-shadow: var(--shadow-s);
+		color: var(--text-normal);
+		--icon-size: 24px;
 	}
 
 	.pn-player .pn-fs {
