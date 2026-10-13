@@ -92,7 +92,10 @@ export class FeedUrlRepository {
 			if (typeof value === "string") {
 				if (isFeedUrlSecretId(value.trim())) referenced.add(value.trim());
 			} else if (typeof value === "object" && value !== null) {
-				for (const entry of Object.values(value)) collect(entry);
+				for (const [key, entry] of Object.entries(value)) {
+					collect(key);
+					collect(entry);
+				}
 			}
 		};
 		for (const document of documents) collect(document);

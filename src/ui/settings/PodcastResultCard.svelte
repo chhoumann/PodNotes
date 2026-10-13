@@ -11,7 +11,11 @@
 	const dispatch = createEventDispatcher();
 </script>
 
-<div class="podcast-result-card" transition:fade={{ duration: 300 }}>
+<div
+	class="podcast-result-card"
+	class:needs-address={needsAddress}
+	transition:fade={{ duration: 300 }}
+>
 	<div class="podcast-artwork-container">
 		<img
 			src={podcast.artworkUrl}
@@ -73,6 +77,16 @@
 		transform: translateY(-1px);
 	}
 
+	.needs-address {
+		display: grid;
+		grid-template-columns: 4rem minmax(0, 1fr);
+	}
+
+	.needs-address .podcast-actions {
+		grid-column: 1 / -1;
+		justify-content: flex-end;
+	}
+
 	.podcast-artwork-container {
 		width: 4rem;
 		height: 4rem;
@@ -125,7 +139,7 @@
 	 * button styling with a text label. A label is always visible and is sized
 	 * correctly per platform (Obsidian renders larger buttons on mobile/iPad),
 	 * unlike the previous icon-only button whose glyph failed to render on iPad
-	 * and left an empty, unrecognisable tap target — the root cause of #109.
+	 * and left an empty, unrecognisable tap target - the root cause of #109.
 	 */
 	.podcast-actions {
 		display: flex;

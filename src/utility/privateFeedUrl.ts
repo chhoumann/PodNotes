@@ -97,15 +97,13 @@ export function redactPrivateFeedAddresses<T>(
 		add(feedUrl, privateFeedPlaceholder(typeof podcastName === "string" ? podcastName : ""));
 	});
 	if (placeholders.size === 0) return document;
-	const addressesLongestFirst = [...placeholders].sort(([a], [b]) => b.length - a.length);
 	return replaceStrings(document, (value) => {
 		const whole = /^https?:/i.test(value) && placeholders.get(canonicalUrl(value));
 		if (whole) return whole;
-		let redacted = value;
-		for (const [address, placeholder] of addressesLongestFirst) {
-			if (redacted.includes(address)) redacted = redacted.split(address).join(placeholder);
-		}
-		return redacted;
+		return value.replace(
+			/https?:\/\/[^\s<>"'`]+/gi,
+			(address) => placeholders.get(canonicalUrl(address)) ?? address,
+		);
 	});
 }
 
@@ -125,10 +123,16 @@ function replaceStrings<T>(value: T, replace: (value: string) => string): T {
 	if (typeof value === "string") return replace(value) as T;
 	if (!isPlainObjectOrArray(value)) return value;
 	let changed = false;
+	const keys = new Set<string>();
 	const entries = Object.entries(value).map(([key, entry]) => {
+		const replacedKey = replace(key);
+		if (keys.has(replacedKey)) {
+			throw new Error("Private feed address protection would overwrite a saved field.");
+		}
+		keys.add(replacedKey);
 		const replaced = replaceStrings(entry, replace);
-		if (replaced !== entry) changed = true;
-		return [key, replaced] as const;
+		if (replacedKey !== key || replaced !== entry) changed = true;
+		return [replacedKey, replaced] as const;
 	});
 	if (!changed) return value;
 	if (Array.isArray(value)) return entries.map(([, entry]) => entry) as T;

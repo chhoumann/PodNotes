@@ -151,6 +151,69 @@ describe("PodNotes data schema", () => {
 		});
 	});
 
+	it("keeps distinct resource URLs that share a private feed address prefix, including quoted links", () => {
+		const feedUrl = "https://private.example/resource?token=FEED_TOKEN";
+		const streamUrl = `${feedUrl}_DISTINCT_MEDIA_SIGNATURE&kind=audio`;
+		const item = {
+			...episode("Private"),
+			feedUrl,
+			streamUrl,
+			artworkUrl: `${feedUrl}&sig=ART`,
+			chaptersUrl: `${feedUrl}&sig=CHAPTERS`,
+			url: `${feedUrl}&token=ARTICLE`,
+			description: `<a href="${streamUrl}">Audio</a> Feed: "${feedUrl}"`,
+		};
+		const encoded = encodePodNotesData({
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: item,
+		});
+		expect(encoded.currentEpisode).toEqual({
+			...item,
+			episodeDate: episodeDate.toISOString(),
+			feedUrl: "podnotes-private-feed:Test%20Podcast",
+			description: `<a href="${streamUrl}">Audio</a> Feed: "podnotes-private-feed:Test%20Podcast"`,
+		});
+	});
+
+	it("puts no private feed address in data.json object keys without losing unknown entries", () => {
+		const feedUrl = "https://private.example/feed?token=KEY_SENTINEL";
+		const item = { ...episode("Private"), feedUrl };
+		const raw = {
+			...encodePodNotesData(DEFAULT_SETTINGS),
+			futureByFeed: JSON.parse(
+				JSON.stringify({ [feedUrl]: item, ["__proto__"]: { keep: true } }),
+			),
+		};
+		const decoded = decodePodNotesData(raw);
+		const encoded = encodePodNotesData(decoded.settings, decoded.unknownFields);
+		expect(JSON.stringify(encoded)).not.toContain("KEY_SENTINEL");
+		expect(encoded.futureByFeed).toEqual({
+			["podnotes-private-feed:Test%20Podcast"]: {
+				...item,
+				feedUrl: "podnotes-private-feed:Test%20Podcast",
+				episodeDate: episodeDate.toISOString(),
+			},
+			["__proto__"]: { keep: true },
+		});
+		expect(JSON.stringify(raw)).toContain("KEY_SENTINEL");
+	});
+
+	it("refuses colliding private feed keys instead of overwriting preserved data", () => {
+		const feedUrl = "https://private.example/feed?token=COLLISION";
+		const settings = {
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: { ...episode("Private"), feedUrl },
+		};
+		expect(() =>
+			encodePodNotesData(settings, {
+				futureByFeed: {
+					[feedUrl]: { keep: "first" },
+					["podnotes-private-feed:Test%20Podcast"]: { keep: "second" },
+				},
+			}),
+		).toThrow("Private feed address protection would overwrite a saved field.");
+	});
+
 	it("loads fresh data as independent deep-cloned defaults", () => {
 		const first = decodePodNotesData(undefined);
 		const second = decodePodNotesData(null);

@@ -154,6 +154,15 @@ describe("FeedUrlRepository", () => {
 		expect(values.get("podnotes-openai-api-key")).toBe("sk-keep");
 	});
 
+	it("keeps an ID that data.json references as an unknown map key", () => {
+		const id = "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef";
+		const url = "https://private.example/feed?token=KEEP";
+		const { api } = storage({ [id]: url });
+		const repository = new FeedUrlRepository(api);
+		repository.sweepOrphans({ futureFeedsByReference: { [id]: { title: "Private" } } });
+		expect(repository.resolve(id)).toBe(url);
+	});
+
 	it("survives a listSecrets failure without throwing", () => {
 		const { api } = storage();
 		(api.listSecrets as ReturnType<typeof vi.fn>).mockImplementation(() => {
