@@ -1,12 +1,10 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	clickInEditor,
 	closePopoutTab,
 	closeSettings,
 	dismissNotices,
-	isShown,
 	openInEditor,
 	openInReadingView,
 	openPodNotesSettings,
@@ -14,9 +12,10 @@ import {
 	runFromPalette,
 	showLibrary,
 	showPodNotes,
-	ui,
-	waitUntilShown,
 } from "./journey/actions";
+import { click } from "./journey/input";
+import { ui } from "./journey/targets";
+import { isShown, waitUntilShown } from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,

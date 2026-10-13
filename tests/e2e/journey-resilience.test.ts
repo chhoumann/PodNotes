@@ -5,17 +5,8 @@ import type { ObsidianClient } from "obsidian-e2e";
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	closePodNotes,
 	closeSettings,
-	eventually,
-	feedsLoading,
-	holdsFor,
-	isDisabled,
-	isShown,
-	listedEpisodes,
-	listedEpisodesWithHeadings,
-	notices,
 	openPodNotesSettings,
 	reloadObsidian,
 	restartObsidian,
@@ -25,12 +16,22 @@ import {
 	showAddPodcast,
 	showLibrary,
 	showList,
-	shownText,
 	showPodNotes,
-	typeInto,
-	ui,
-	waitUntilShown,
 } from "./journey/actions";
+import { click, typeInto } from "./journey/input";
+import { ui } from "./journey/targets";
+import {
+	eventually,
+	feedsLoading,
+	holdsFor,
+	isDisabled,
+	isShown,
+	listedEpisodes,
+	listedEpisodesWithHeadings,
+	notices,
+	shownText,
+	waitUntilShown,
+} from "./journey/wait";
 import {
 	deepgramRequests,
 	type FixtureEpisode,

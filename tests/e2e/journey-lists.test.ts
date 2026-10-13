@@ -2,28 +2,24 @@ import type { ObsidianClient } from "obsidian-e2e";
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	closePodNotes,
-	drag,
-	eventually,
-	holdsFor,
-	isShown,
-	listedEpisodes,
-	notices,
-	pointOn,
-	pressKey,
-	pressMouse,
 	reloadObsidian,
 	runFromPalette,
 	showLibrary,
 	showList,
 	showPodNotes,
-	typeText,
-	ui,
-	type UiTarget,
+} from "./journey/actions";
+import { click, drag, pointOn, pressKey, pressMouse, typeText } from "./journey/input";
+import { ui, type UiTarget } from "./journey/targets";
+import {
+	eventually,
+	holdsFor,
+	isShown,
+	listedEpisodes,
+	notices,
 	waitUntilFocused,
 	waitUntilShown,
-} from "./journey/actions";
+} from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,

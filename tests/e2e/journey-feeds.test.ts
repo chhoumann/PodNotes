@@ -2,33 +2,32 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	chooseFile,
-	click,
 	closePodNotes,
 	closeSettings,
 	enableAsNewInstall,
-	eventually,
-	feedsLoading,
-	holdsFor,
-	isShown,
-	listedEpisodes,
-	notices,
 	openPodNotesSettings,
 	removePodcast,
 	restartObsidian,
 	showAddPodcast,
 	showLibrary,
 	showList,
+	showPodNotes,
+} from "./journey/actions";
+import { chooseFile, click, typeInto, typeText } from "./journey/input";
+import { ui } from "./journey/targets";
+import {
+	eventually,
+	feedsLoading,
+	holdsFor,
+	isShown,
+	listedEpisodes,
+	notices,
 	shownPodcasts,
 	shownResults,
 	shownText,
-	showPodNotes,
-	typeInto,
-	typeText,
-	ui,
 	waitUntilFocused,
 	waitUntilShown,
-} from "./journey/actions";
+} from "./journey/wait";
 import {
 	type FixtureFeed,
 	type FixtureServer,

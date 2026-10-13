@@ -1,21 +1,15 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
-	isShown,
-	listedEpisodes,
 	openInEditor,
-	pageScrollTop,
-	pressKey,
 	reloadObsidian,
-	scrollPage,
 	showLibrary,
 	showList,
-	shownMenu,
 	showPodNotes,
-	ui,
-	waitUntilShown,
 } from "./journey/actions";
+import { click, pressKey, scrollPage } from "./journey/input";
+import { ui } from "./journey/targets";
+import { isShown, listedEpisodes, pageScrollTop, shownMenu, waitUntilShown } from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,

@@ -1,18 +1,15 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	closePodNotes,
 	closeSettings,
 	enableAsNewInstall,
-	holdsFor,
 	reloadObsidian,
 	setMobileEmulation,
-	typeText,
-	ui,
-	waitUntilFocused,
-	waitUntilShown,
 } from "./journey/actions";
+import { click, typeText } from "./journey/input";
+import { ui } from "./journey/targets";
+import { holdsFor, waitUntilFocused, waitUntilShown } from "./journey/wait";
 import { type FixtureFeed, startFixtureServer } from "./journey/fixtures";
 import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
 import { jsLiteral, RELOAD_OPTIONS } from "./runtime";

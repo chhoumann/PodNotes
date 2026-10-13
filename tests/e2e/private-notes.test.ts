@@ -2,7 +2,6 @@ import { expect, onTestFinished, test } from "vitest";
 import { SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	closeSettings,
 	openInReadingView,
 	openPodNotesSettings,
@@ -10,9 +9,9 @@ import {
 	showAddPodcast,
 	showLibrary,
 	showPodNotes,
-	typeInto,
-	ui,
 } from "./journey/actions";
+import { click, typeInto } from "./journey/input";
+import { ui } from "./journey/targets";
 import { type FixtureFeed, startFixtureServer } from "./journey/fixtures";
 import {
 	feedCacheText,
