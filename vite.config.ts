@@ -63,6 +63,7 @@ export default defineConfig(({ mode }) => {
 				preprocess: { style: ({ content }) => ({ code: stripCssComments(content) }) },
 				compilerOptions: {
 					css: "injected",
+					discloseVersion: false,
 					// Svelte skips a style whose id is already in the document, and Obsidian
 					// updates a plugin without reloading the window, so the id follows the CSS.
 					cssHash: ({ hash, css }) => `svelte-${hash(css)}`,
