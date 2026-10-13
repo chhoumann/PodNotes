@@ -39,7 +39,7 @@ function createVault() {
 			listeners.delete(ref);
 		},
 		trigger(name: string) {
-			for (const ref of [...listeners]) if (ref.name === name) ref.callback();
+			for (const ref of listeners) if (ref.name === name) ref.callback();
 		},
 		getAbstractFileByPath: (path: string) =>
 			notes.has(path) ? Object.assign(Object.create(TFile.prototype), { path }) : null,
