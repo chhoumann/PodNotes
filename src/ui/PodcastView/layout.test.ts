@@ -89,3 +89,29 @@ test("the inset follows the view when the workspace moves it without resizing it
 
 	expect(insets).toEqual([0, 27, 0, 27]);
 });
+
+test("a status bar a theme or snippet hides with visibility gets no inset, and the inset comes back with the bar", () => {
+	const observers = installResizeObserver(window);
+	uninstalls.push(observers.uninstall);
+	const bar = document.body.appendChild(document.createElement("div"));
+	bar.className = "status-bar";
+	bar.style.visibility = "hidden";
+	const el = document.body.appendChild(document.createElement("div"));
+	uninstalls.push(() => {
+		bar.remove();
+		el.remove();
+	});
+	el.getBoundingClientRect = () => RIGHT_SIDEBAR as DOMRect;
+	bar.getBoundingClientRect = () => BAR as DOMRect;
+	const { workspace } = new App();
+	const insets: number[] = [];
+
+	const detach = observeStatusBar((inset) => insets.push(inset), workspace)(el);
+	// Obsidian announces a theme or snippet that changed, which resizes nothing.
+	bar.style.visibility = "";
+	workspace.trigger("css-change");
+	if (typeof detach === "function") detach();
+	workspace.trigger("css-change");
+
+	expect(insets).toEqual([0, 27]);
+});

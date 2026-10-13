@@ -51,11 +51,12 @@ export function statusBarInset(view: Box, bar: Box): number {
 
 /**
  * Reports how far Obsidian's status bar reaches up into the element, now, whenever
- * either of them resizes, as the bar's items come and go, and whenever Obsidian
+ * either of them resizes, as the bar's items come and go, whenever Obsidian
  * resizes the workspace, which can move the view without resizing it: to a pane of
- * the same size, or as its sidebar slides open. The bar floats over the bottom of the
- * window, so it covers the bottom of a view beneath it. Like `observeWidth`, it
- * follows the element to a popout.
+ * the same size, or as its sidebar slides open, and whenever a theme or snippet
+ * changes, which can hide the bar. The bar floats over the bottom of the window, so
+ * it covers the bottom of a view beneath it. Like `observeWidth`, it follows the
+ * element to a popout.
  */
 export function observeStatusBar(
 	onInset: (inset: number) => void,
@@ -65,9 +66,9 @@ export function observeStatusBar(
 		const bar = () => el.doc.querySelector(".status-bar");
 		const report = () => {
 			const shown = bar();
-			// A popout window has no status bar.
+			// A popout window has no status bar. A hidden one keeps its box.
 			onInset(
-				shown
+				shown && shown.win.getComputedStyle(shown).visibility === "visible"
 					? statusBarInset(el.getBoundingClientRect(), shown.getBoundingClientRect())
 					: 0,
 			);
@@ -84,10 +85,12 @@ export function observeStatusBar(
 		observe(el.win);
 		const stopFollowing = el.onWindowMigrated(observe);
 		const moved = workspace.on("resize", report);
+		const restyled = workspace.on("css-change", report);
 		return () => {
 			stopFollowing();
 			observer?.disconnect();
 			workspace.offref(moved);
+			workspace.offref(restyled);
 		};
 	};
 }
