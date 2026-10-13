@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from "svelte";
+	import { onDestroy, tick } from "svelte";
 	import { get } from "svelte/store";
 	import type { Episode } from "src/types/Episode";
 	import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
@@ -35,6 +35,8 @@
 			// A button released outside the window sent no pointerup here.
 			if (moved.pointerType === "mouse" && moved.buttons === 0) return end();
 			place(episode, moved.clientY);
+			// Moving the row's node takes focus from its grip.
+			void tick().then(() => grip.focus({ preventScroll: true }));
 		};
 		const release = (released: PointerEvent) => {
 			if (released.pointerId === pointerId) end();

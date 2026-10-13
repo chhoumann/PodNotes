@@ -172,6 +172,18 @@ describe("dragging a grip", () => {
 		expect(document.querySelector(".pn-grip.is-dragging")).toBeNull();
 	});
 
+	test("keeps focus on the grip as its row moves down the list", async () => {
+		renderQueue(a, b, c);
+		layOutRows();
+
+		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		await fireEvent.pointerMove(window, at(70));
+		await tick();
+
+		expect(listed()).toEqual(["B", "A", "C"]);
+		expect(grip("A")).toHaveFocus();
+	});
+
 	test("over the row's own band, or past the list, moves nothing", async () => {
 		renderQueue(a, b, c);
 		layOutRows();
