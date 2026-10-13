@@ -27,7 +27,7 @@ describe("syntaxFloor", () => {
 					minify: false,
 				},
 			}),
-		).rejects.toThrow(/main\.js uses syntax Safari 15 cannot run/);
+		).rejects.toThrow(/main\.js uses syntax newer than ES2020 or Safari 15/);
 		expect(existsSync(join(dir, "out", "main.js"))).toBe(false);
 	});
 });

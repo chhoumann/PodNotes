@@ -4,15 +4,15 @@ import type { Plugin } from "vite";
 const LOOKBEHIND = /\(\?<[=!]/;
 
 /**
- * The Obsidian iOS app still supports Safari 15. It mis-scopes some class field
- * initializers (WebKit bug 236843) and lacks regular expression lookbehind,
- * which compilers cannot lower. ES2021 is the newest edition without class
- * fields, and lookbehind is the only older syntax Safari 15 cannot parse.
+ * Obsidian's Android app sets no WebView minimum, and its own code parses as
+ * ES2020, so main.js must too. The iOS app still supports Safari 15, which
+ * mis-scopes some class field initializers (WebKit bug 236843) and lacks
+ * regular expression lookbehind, which compilers cannot lower.
  */
-export function assertSafari15Syntax(fileName: string, code: string): void {
+export function assertSupportedSyntax(fileName: string, code: string): void {
 	try {
 		parse(code, {
-			ecmaVersion: 2021,
+			ecmaVersion: 2020,
 			sourceType: "script",
 			onToken(token) {
 				if (
@@ -25,7 +25,7 @@ export function assertSafari15Syntax(fileName: string, code: string): void {
 		});
 	} catch (error) {
 		throw new Error(
-			`${fileName} uses syntax Safari 15 cannot run: ${(error as Error).message}`,
+			`${fileName} uses syntax newer than ES2020 or Safari 15: ${(error as Error).message}`,
 		);
 	}
 }
@@ -35,7 +35,7 @@ export function syntaxFloor(): Plugin {
 		name: "podnotes-syntax-floor",
 		generateBundle(_options, bundle) {
 			for (const output of Object.values(bundle)) {
-				if (output.type === "chunk") assertSafari15Syntax(output.fileName, output.code);
+				if (output.type === "chunk") assertSupportedSyntax(output.fileName, output.code);
 			}
 		},
 	};

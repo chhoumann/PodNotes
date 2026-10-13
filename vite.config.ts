@@ -8,9 +8,10 @@ import { stripCssComments } from "./scripts/css-comments.ts";
 import { svelteWithoutHydration } from "./scripts/svelte-without-hydration.ts";
 import { syntaxFloor } from "./scripts/syntax-floor.ts";
 
-// Saving settings needs structuredClone (Chromium 98), and the Obsidian iOS app needs
-// iOS 15.6. Naming Safari 15 keeps class fields lowered, and syntaxFloor() enforces it.
-const target = ["chrome98", "safari15.6"];
+// Obsidian's Android app sets no WebView minimum and its own code is ES2020, and its
+// iOS app still supports Safari 15, which mis-scopes some class fields. syntaxFloor()
+// enforces this target on the final bundle.
+const target = "es2020";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
