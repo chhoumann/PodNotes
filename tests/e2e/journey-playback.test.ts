@@ -33,7 +33,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
-import { PLUGIN_ID } from "./runtime";
+import { jsLiteral, PLUGIN_ID } from "./runtime";
 
 const LONG: FixtureEpisode = { title: "Long Listen", seconds: 60, pubDate: pubDate(0) };
 const OPENER: FixtureEpisode = { title: "Short Opener", seconds: 6, pubDate: pubDate(1) };
@@ -453,6 +453,10 @@ describe("playback journeys", () => {
 			"three seconds played",
 		);
 
+		await obsidian.dev.evalJsonAsync(
+			`(async () => { await app.plugins.plugins.${PLUGIN_ID}.flushSaves(); return true; })()`,
+		);
+
 		await plugin.data<Record<string, any>>().patch((data) => {
 			data.playedEpisodes[`${FEED.title}::${LONG.title}`] = {
 				title: LONG.title,
@@ -475,8 +479,15 @@ describe("playback journeys", () => {
 			{ timeoutMs: 15_000, intervalMs: 200, message: "the remote change merged" },
 		);
 
+		expect(
+			await obsidian.dev.evalJson<number>(
+				`app.plugins.plugins.${PLUGIN_ID}.settings.playedEpisodes[${jsLiteral(`${FEED.title}::${LONG.title}`)}]?.time`,
+			),
+		).toBe(50);
+
 		const after = await expectAdvancing("after the remote change");
 		expect(after.episode).toEqual(episodeRef(FEED, LONG));
+		expect(after.seconds).toBeGreaterThan(before.seconds);
 		expect(after.seconds).toBeLessThan(before.seconds + 10);
 		expect(after.media?.src).toBe(before.media?.src);
 		await obsidian.dev.evalJsonAsync(
