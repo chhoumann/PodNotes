@@ -223,11 +223,10 @@ matches no test fails the run.
   restores the original layout after its last test.
 - Settings must open in the main window. A test fails at once, naming the
   `settingsPopoutWindow` config, when Obsidian would open it in a popout.
-  The harness reapplies the runner's required app settings on every restart.
-  V-446 traced its Settings cascade to `app.json` becoming `{}` at restart,
-  losing `settingsPopoutWindow: false`. This also matches V-427d's missing
-  main-window Settings controls. Workspace cleanup restores the original app
-  settings in memory and the exact `app.json` bytes.
+  The harness reapplies the runner's required app settings on every restart,
+  because a quit can leave `app.json` empty and Obsidian then opens Settings
+  in a popout. Workspace cleanup restores the original app settings in memory
+  and the exact `app.json` bytes.
 - Build code for Obsidian to evaluate with `jsLiteral` from
   `tests/e2e/runtime.ts`, never with `JSON.stringify` alone.
 - `harness-lifecycle.test.ts` runs the suites in `tests/e2e/harness-fixtures`

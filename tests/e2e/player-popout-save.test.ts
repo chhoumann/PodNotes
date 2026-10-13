@@ -11,6 +11,7 @@ import {
 	seedAudio,
 	waitForPlaybackState,
 } from "./harness";
+import { reloadAfterPopout } from "./journey/actions";
 import {
 	jsLiteral,
 	PLUGIN_ID,
@@ -19,7 +20,6 @@ import {
 	WAIT_OPTS,
 	waitForPodNotesReady,
 } from "./runtime";
-import { collectRuntimeErrors, POPOUT_RESIZE_LOOP } from "./runtime-evidence";
 
 const getContext = createPodNotesE2EHarness("player-popout-save");
 const EPISODE_TITLE = "E2E Popout Episode";
@@ -126,8 +126,7 @@ async function closePopoutAndReload(obsidian: Obsidian): Promise<void> {
 			return true;
 		})()`,
 	);
-	await reloadObsidian(obsidian);
-	await collectRuntimeErrors(obsidian, POPOUT_RESIZE_LOOP);
+	await reloadAfterPopout(obsidian);
 }
 
 // The audio lives in the main window, so a popout holding the player is only a view of it.
