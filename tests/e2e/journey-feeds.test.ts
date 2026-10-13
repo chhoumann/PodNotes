@@ -5,12 +5,15 @@ import {
 	click,
 	closePodNotes,
 	closeSettings,
+	enableAsNewInstall,
 	feedsLoading,
+	holdsFor,
 	isShown,
 	listedEpisodes,
 	notices,
 	openPodNotesSettings,
 	removePodcast,
+	restartObsidian,
 	showAddPodcast,
 	showLibrary,
 	showList,
@@ -39,6 +42,8 @@ import {
 	feedCachedAt,
 	feedCacheHolds,
 	observePlayback,
+	playerLeafCount,
+	playerLeafPlaces,
 	readLibrary,
 	seedLibrary,
 	waitForLibrary,
@@ -48,6 +53,7 @@ import {
 import { RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-feeds");
+const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
 
 async function serve(...feeds: FixtureFeed[]): Promise<FixtureServer> {
 	const server = await startFixtureServer(feeds);
@@ -140,7 +146,7 @@ describe("feed journeys", () => {
 		expect(await listedEpisodes(obsidian)).toEqual(["Search Show Pilot"]);
 	});
 
-	test("J-ONB-01 first run: a feed address typed without a tap first, one tap to add the podcast and one to play", async () => {
+	test("J-ONB-01 the first enable opens PodNotes once, in the right sidebar on First run: a feed address typed without a tap first, one tap to add the podcast and one to play", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
 		const show = feed("Journey First Run", "first-run", [
@@ -149,9 +155,12 @@ describe("feed journeys", () => {
 		]);
 		const server = await serve(show);
 		await seedLibrary(context, server);
+		await enableAsNewInstall(obsidian);
 
-		await showPodNotes(obsidian);
 		await waitUntilShown(obsidian, ui.firstRun);
+		expect(
+			await holdsFor(obsidian, () => playerLeafPlaces(obsidian), ["right sidebar"]),
+		).toEqual(["right sidebar"]);
 		await waitUntilFocused(obsidian, ui.podcastSearch);
 		await typeText(obsidian, server.feedUrl(show));
 		await resultsBecome(obsidian, [
@@ -184,6 +193,29 @@ describe("feed journeys", () => {
 		);
 		expect(saved.subscriptions).toEqual([{ title: show.title, url: server.feedUrl(show) }]);
 	});
+
+	test.runIf(isolatedInstance)(
+		"J-ONB-01 a view closed after the first enable stays closed on the next start until the ribbon icon opens it",
+		async () => {
+			const context = getContext();
+			const { obsidian } = context;
+			await seedLibrary(context, null);
+			await enableAsNewInstall(obsidian);
+			await waitUntilShown(obsidian, ui.firstRun);
+
+			await closePodNotes(obsidian);
+			await obsidian.dev.evalJsonAsync(
+				"(async () => { await app.workspace.saveLayout(); return true; })()",
+			);
+			await restartObsidian(obsidian);
+			expect(await holdsFor(obsidian, () => playerLeafCount(obsidian), 0)).toBe(0);
+
+			await click(obsidian, ui.ribbonAction("Show PodNotes"));
+			await waitUntilShown(obsidian, ui.firstRun);
+			expect(await playerLeafPlaces(obsidian)).toEqual(["right sidebar"]);
+		},
+		120_000,
+	);
 
 	test("J-FEED-02 a pasted RSS link and a pasted Apple Podcasts link each resolve to their one show", async () => {
 		const context = getContext();

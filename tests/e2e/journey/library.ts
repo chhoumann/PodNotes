@@ -548,3 +548,14 @@ export async function playerLeafCount(obsidian: ObsidianClient): Promise<number>
 		`app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).length`,
 	);
 }
+
+/** Where each PodNotes leaf sits. */
+export async function playerLeafPlaces(obsidian: ObsidianClient): Promise<string[]> {
+	return await obsidian.dev.evalJson<string[]>(
+		`app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).map((leaf) => {
+			const root = leaf.getRoot();
+			const { leftSplit, rightSplit, rootSplit } = app.workspace;
+			return root === rightSplit ? "right sidebar" : root === leftSplit ? "left sidebar" : root === rootSplit ? "main area" : "popout";
+		})`,
+	);
+}

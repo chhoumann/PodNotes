@@ -438,6 +438,49 @@ export async function closePodNotes(obsidian: ObsidianClient): Promise<void> {
 	})()`);
 }
 
+/** Closes PodNotes and enables it again with no data.json, as a new install starts. */
+export async function enableAsNewInstall(obsidian: ObsidianClient): Promise<void> {
+	await closePodNotes(obsidian);
+	const removed = await obsidian.dev.evalJsonAsync<boolean>(`(async () => {
+		const path = app.vault.configDir + ${jsLiteral(`/plugins/${PLUGIN_ID}/data.json`)};
+		await app.workspace.saveLayout();
+		await app.plugins.disablePlugin(${jsLiteral(PLUGIN_ID)});
+		await app.vault.adapter.remove(path);
+		const removed = !(await app.vault.adapter.exists(path));
+		await app.plugins.enablePlugin(${jsLiteral(PLUGIN_ID)});
+		return removed;
+	})()`);
+	if (!removed) throw new Error("data.json survived its removal, so this is not a new install.");
+	await waitForPodNotesReady(obsidian);
+}
+
+/**
+ * Reads `read` every 100 ms for `ms` and resolves to `expected` when every read
+ * matched it, or to the first read that did not.
+ */
+export async function holdsFor<T>(
+	obsidian: ObsidianClient,
+	read: () => Promise<T>,
+	expected: T,
+	ms = 1500,
+): Promise<T> {
+	const deadline = Date.now() + ms;
+	const { value } = await obsidian.waitFor(
+		async () => {
+			const value = await read();
+			const settled =
+				JSON.stringify(value) !== JSON.stringify(expected) || Date.now() >= deadline;
+			return settled ? { value } : false;
+		},
+		{
+			timeoutMs: ms + 10_000,
+			intervalMs: 100,
+			message: `${JSON.stringify(expected)} for ${ms} ms`,
+		},
+	);
+	return value;
+}
+
 export async function assertSettingsOpenInMainWindow(obsidian: ObsidianClient): Promise<void> {
 	const popout = await obsidian.dev.evalJson<unknown>(
 		'app.vault.getConfig("settingsPopoutWindow")',
