@@ -106,7 +106,7 @@ read state.
     node .claude/skills/verify/ui.mjs click '.nav-file-title[data-path="Fixtures/Local Fixture.wav"]' --right
     node .claude/skills/verify/ui.mjs fill '.podcast-view input[aria-label="Search or paste a link"]' "$FEED"
     node .claude/skills/verify/ui.mjs key Escape
-    node .claude/skills/verify/ui.mjs wait '.podcast-view button.pn-result[aria-label="Open PodNotes Fixture"]'
+    node .claude/skills/verify/ui.mjs wait '.podcast-view button.pn-result[aria-label="Add PodNotes Fixture"]'
     ```
 
 - **Commands.** The user path is the palette. The command name is the
