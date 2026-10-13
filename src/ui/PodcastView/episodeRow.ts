@@ -116,6 +116,11 @@ function folderOf(path: string): string {
 	return slash > 0 ? path.slice(0, slash) : "/";
 }
 
+/** Where the episode comes from: its podcast, or the folder of a local file. */
+export function sourceOf(episode: Episode): string {
+	return isLocalFile(episode) ? folderOf(episode.filePath ?? "") : episode.podcastName;
+}
+
 export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowModel {
 	const record = getPlayedEpisode(state.played, episode);
 	const played = record?.finished ?? false;

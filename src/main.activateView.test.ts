@@ -337,6 +337,7 @@ describe("PodNotes onload wiring (#55)", () => {
 				},
 				vault: {
 					on: vi.fn(() => ({ e: { offref: () => {} } })),
+					getAbstractFileByPath: () => null,
 					adapter: {
 						exists: vi.fn(async () => true),
 						read: vi.fn(async () =>

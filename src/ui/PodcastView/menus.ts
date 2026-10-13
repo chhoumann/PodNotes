@@ -93,7 +93,10 @@ export function rateMenu({ player }: ShellServices): MenuEntry[] {
 }
 
 /** Open note, or Create note from the template, which opens it. */
-export function noteEntry(episode: Episode, { hasNote, settings }: ShellServices): MenuEntry {
+export function noteEntry(
+	episode: Episode,
+	{ hasNote, settings }: ShellServices,
+): { readonly title: string; readonly icon: IconType; onClick(): void } {
 	return hasNote(episode)
 		? { title: "Open note", icon: "file-text", onClick: () => openPodcastNote(episode) }
 		: {

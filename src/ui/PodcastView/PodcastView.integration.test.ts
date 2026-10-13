@@ -14,7 +14,6 @@ import { hidePlayedEpisodes, playedEpisodes, plugin, savedFeeds } from "src/stor
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
-import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
 import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 import { pluginLibrary } from "../../../tests/mocks/services";
 import { FakeDocument } from "../../../tests/mocks/fakeMedia";
@@ -22,10 +21,6 @@ import { DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
 import { Navigation } from "./Navigation";
 import { PodcastSearch } from "./podcastSearch";
-
-vi.mock("./EpisodePlayer.svelte", () => ({
-	default: EpisodePlayerStub,
-}));
 
 import PodcastView from "./PodcastView.svelte";
 

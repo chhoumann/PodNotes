@@ -1,0 +1,35 @@
+import { describe, expect, test } from "vitest";
+import { chapterAt, segmentsOf } from "./chapters";
+
+const chapters = [0, 60, 120].map((startTime) => ({ startTime, title: `At ${startTime}` }));
+
+describe("chapters", () => {
+	test("the chapter under way is the last one started", () => {
+		expect([0, 59, 60, 500].map((time) => chapterAt(chapters, time))).toEqual([0, 0, 1, 2]);
+		expect(chapterAt(chapters.slice(1), 30)).toBe(-1);
+	});
+
+	test("split the scrubber at each start inside the episode", () => {
+		expect(segmentsOf(chapters, 180)).toEqual([
+			[0, 60],
+			[60, 120],
+			[120, 180],
+		]);
+		expect(segmentsOf([...chapters, { startTime: 500, title: "Past the end" }], 180)).toEqual([
+			[0, 60],
+			[60, 120],
+			[120, 180],
+		]);
+	});
+
+	test("never make an empty or backward stretch from unsorted or repeated starts", () => {
+		const messy = [120, 60, 60].map((startTime) => ({ startTime, title: "" }));
+
+		expect(segmentsOf(messy, 180)).toEqual([
+			[0, 60],
+			[60, 120],
+			[120, 180],
+		]);
+		expect(segmentsOf([], 0)).toEqual([[0, 0]]);
+	});
+});

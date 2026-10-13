@@ -74,7 +74,7 @@ export const ui = {
 		),
 	episode: (title: string): UiTarget => ({
 		name: `episode ${title}`,
-		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".episode-player") && el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".pn-player") && el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
 	}),
 	episodeLoading: byCss(
 		"episode list loading",
@@ -95,8 +95,8 @@ export const ui = {
 			label,
 		),
 	playbackToggle: byCss(
-		"on-screen playback toggle",
-		`${PLAYER_VIEW} .episode-player button[aria-label="Toggle playback"]`,
+		"full player's play/pause",
+		`${PLAYER_VIEW} section.pn-player button.pn-play`,
 	),
 	episodeMenu: (title: string) =>
 		byAttribute(
