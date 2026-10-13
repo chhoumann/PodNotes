@@ -1,3 +1,4 @@
+import { downloadedCopy } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
@@ -49,10 +50,6 @@ export function formatMinutes(seconds: number): string {
 	return total >= 60 ? `${Math.floor(total / 60)} h ${total % 60} min` : `${total} min`;
 }
 
-export function isDownloaded(downloads: Downloads, episode: Episode): boolean {
-	return downloads[episode.podcastName]?.some(({ title }) => title === episode.title) ?? false;
-}
-
 /**
  * Whether `episode` is the player's. Same-titled episodes of one podcast share a key,
  * so their media tells them apart, as it does for the player.
@@ -74,7 +71,7 @@ export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowMo
 	const current = isCurrentEpisode(state.now, episode);
 	const playing = current && state.playing;
 	const local = isLocalFile(episode);
-	const downloaded = !local && isDownloaded(state.downloads, episode);
+	const downloaded = !local && downloadedCopy(state.downloads, episode) !== undefined;
 	const time =
 		left !== undefined
 			? `${formatMinutes(left)} left`

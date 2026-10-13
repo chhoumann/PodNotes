@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
 import createPodcastNote, { openPodcastNote } from "src/createPodcastNote";
 import downloadEpisodeWithNotice, { removeDownloadedEpisode } from "src/downloadEpisode";
+import { downloadedCopy } from "src/player/source";
 import type { FeedKey } from "src/services/FeedRepository";
 import type { Episode } from "src/types/Episode";
 import type { IconType } from "src/types/IconType";
@@ -13,7 +14,7 @@ import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
 import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
-import { isCurrentEpisode, isDownloaded } from "./episodeRow";
+import { isCurrentEpisode } from "./episodeRow";
 import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 /** A menu item, or a separator. Menus are built as data, so tests read them as data. */
@@ -109,7 +110,7 @@ export function episodeMenu(
 	const favorite = get(library.favorites).episodes.some((entry) =>
 		isSameStoredEpisode(entry, episode),
 	);
-	const downloaded = isDownloaded(get(library.downloadedEpisodes), episode);
+	const downloaded = downloadedCopy(get(library.downloadedEpisodes), episode) !== undefined;
 	const lists = Object.values(get(library.playlists));
 	// An episode opened by a private feed's own address would put that secret in the link.
 	const link = isCredentialBearingUrl(episodeLinkTarget(episode) ?? "")
