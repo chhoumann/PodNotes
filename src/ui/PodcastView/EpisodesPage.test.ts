@@ -142,9 +142,7 @@ describe("a podcast's page", () => {
 
 		expect(setFeedAddress).toHaveBeenCalledWith("Patron");
 		expect(load).not.toHaveBeenCalled();
-		expect(notice).toHaveBeenCalledWith(
-			'The private feed address for "Patron" is not available on this device.',
-		);
+		expect(notice).not.toHaveBeenCalled();
 	});
 
 	test("names a private feed that failed without its address", async () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { get, readable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -429,33 +429,36 @@ describe("PodcastView integration flow", () => {
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
 	});
 
-	test("a podcast that fails to load says so only when nothing can be shown", async () => {
+	test("a podcast that fails to load says so on its page and keeps what it can show", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => {});
-		const failure = `Could not load episodes for ${testFeed.title}. Check your connection and try again.`;
 		usePlugin();
 		renderView();
 		await fireEvent.click(await screen.findByRole("button", { name: testFeed.title }));
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
+		expect(screen.queryByRole("alert")).toBeNull();
 
 		mockLoad.mockRejectedValue(new Error("offline"));
 		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(2));
 		await waitFor(() => expect(screen.queryByText("Loading episodes")).toBeNull());
-		expect(notice).not.toHaveBeenCalledWith(failure);
+		const banner = await screen.findByRole("alert");
+		expect(banner).toHaveTextContent("Feed didn't load");
+		expect(banner).toHaveTextContent("pod.example.com");
+		expect(within(banner).getByRole("button", { name: "Retry" })).toBeEnabled();
+		expect(listed()).toEqual([testEpisode.title]);
 
 		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 		await back();
 		await fireEvent.click(await screen.findByRole("button", { name: /^Second Podcast/ }));
-		await waitFor(() =>
-			expect(notice).toHaveBeenCalledWith(
-				`Could not load episodes for ${secondFeed.title}. Check your connection and try again.`,
-			),
-		);
-		expect(notice).not.toHaveBeenCalledWith(failure);
+		await waitFor(() => expect(mockLoad).toHaveBeenCalledWith(secondFeed.url));
+		expect(await screen.findByText("No episodes")).toBeInTheDocument();
+		expect(screen.getByRole("alert")).toHaveTextContent("Feed didn't load");
+		expect(listed()).toEqual([]);
+		expect(notice).not.toHaveBeenCalled();
 	});
 
-	test("a private podcast whose URL is not on this device says so when opened, not before", async () => {
+	test("a private podcast whose URL is not on this device asks for it on its page, not before", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		const patron: PodcastFeed = {
 			title: "Patron Show",
@@ -467,18 +470,22 @@ describe("PodcastView integration flow", () => {
 		usePlugin();
 		renderView();
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
-		expect(notice).not.toHaveBeenCalled();
+		expect(screen.queryByRole("alert")).toBeNull();
 
 		await fireEvent.click(
 			await screen.findByRole("button", { name: "Patron Show, feed didn't load" }),
 		);
 
-		await waitFor(() =>
-			expect(notice.mock.calls).toEqual([
-				['The private feed address for "Patron Show" is not available on this device.'],
-			]),
-		);
+		const banner = await screen.findByRole("alert");
+		expect(banner).toHaveTextContent("Feed didn't load");
+		expect(banner).toHaveTextContent("Address not on this device");
+		expect(
+			within(banner).getByRole("button", { name: "Set feed address" }),
+		).toBeInTheDocument();
+		expect(within(banner).queryByRole("button", { name: "Retry" })).toBeNull();
+		await new Promise((resolve) => setTimeout(resolve));
 		expect(mockLoad).toHaveBeenCalledTimes(1);
+		expect(notice).not.toHaveBeenCalled();
 	});
 
 	test("Latest Episodes drops a podcast as soon as it is removed", async () => {

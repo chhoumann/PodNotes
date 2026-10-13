@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { Notice } from "obsidian";
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
-	import type { FeedKey, FeedState, LoadMode } from "src/services/FeedRepository";
-	import { notifyPrivateFeedUnavailable } from "src/services/privateFeeds";
+	import type { FeedState, LoadMode } from "src/services/FeedRepository";
 	import {
 		buildPlayedEpisodeListEntries,
 		createEpisodeListEntries,
@@ -95,33 +93,16 @@
 
 	// On mount, not on the click that opened the page, so a page restored at startup loads too.
 	onMount(() => {
-		if (page.kind === "feed") void loadFeed(page.key, "complete");
+		if (page.kind === "feed") void feeds.load([page.key], "complete");
 		if (page.kind === "played") void loadPlayedFeeds("complete");
 	});
-
-	// Only an interactive load reports a failure. A network failure is reported
-	// only when nothing can be shown.
-	async function loadFeed(key: FeedKey, mode: LoadMode) {
-		await feeds.load([key], mode);
-		const state = get(feeds).get(key);
-		if (state?.error === "unavailable") {
-			notifyPrivateFeedUnavailable(state.feed.title);
-		} else if (
-			state?.error === "network" &&
-			selectFeedEpisodes(state, get(downloadedEpisodes)).length === 0
-		) {
-			new Notice(
-				`Could not load episodes for ${state.feed.title}. Check your connection and try again.`,
-			);
-		}
-	}
 
 	function loadPlayedFeeds(mode: LoadMode) {
 		return feeds.load(feedKeysWithPlayedEpisodes(get(savedFeeds), get(playedEpisodes)), mode);
 	}
 
 	function refresh() {
-		if (page.kind === "feed") void loadFeed(page.key, "network");
+		if (page.kind === "feed") void feeds.load([page.key], "network");
 		else if (page.kind === "played") void loadPlayedFeeds("network");
 		else void feeds.load(get(feeds).keys(), "network");
 	}
