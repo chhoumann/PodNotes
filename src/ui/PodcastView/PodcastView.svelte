@@ -576,11 +576,14 @@
 			text-overflow: ellipsis;
 		}
 
-		/* Obsidian styles .flair as a tag; here it is plain muted text. */
+		/* Obsidian styles .flair as an uppercase tag; here it is plain muted text. */
 		.flair {
 			flex: none;
+			margin-inline-start: 0;
 			padding: 0;
 			background: none;
+			letter-spacing: normal;
+			text-transform: none;
 			color: var(--text-muted);
 			font-size: var(--font-ui-small);
 			white-space: nowrap;
