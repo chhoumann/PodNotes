@@ -599,21 +599,22 @@ describe("feed journeys", () => {
 		]);
 	});
 
-	test("J-FEED-05 removing a podcast drops it from the grid, Latest Episodes and the feed cache at once", async () => {
+	test("J-FEED-05 removing a podcast drops it from the grid, Latest Episodes and the feed cache at once, and another device's removal from the open Latest Episodes", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
 		const keep = feed("Journey Keep", "keep", ["Keep One"]);
 		const drop = feed("Journey Drop", "drop", ["Drop One"]);
+		const synced = feed("Journey Drop Elsewhere", "drop-elsewhere", ["Elsewhere One"]);
 
-		const server = await serve(keep, drop);
-		await seedLibrary(context, server, { subscriptions: [keep, drop] });
+		const server = await serve(keep, drop, synced);
+		await seedLibrary(context, server, { subscriptions: [keep, drop, synced] });
 
 		await showPodNotes(obsidian);
 		await click(obsidian, ui.podcastCard(keep.title));
 		await showList(obsidian, "Latest episodes");
-		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 3, {
 			timeoutMs: 15_000,
-			message: "both podcasts in Latest Episodes",
+			message: "every podcast in Latest Episodes",
 		});
 		expect(await feedCacheHolds(obsidian, "Drop One")).toBe(true);
 		const dropPath = new URL(server.feedUrl(drop)).pathname;
@@ -622,15 +623,29 @@ describe("feed journeys", () => {
 		await removePodcast(obsidian, drop.title);
 		await waitForLibrary(
 			plugin,
-			(library) => library.subscriptions.length === 1,
+			(library) => library.subscriptions.length === 2,
 			"the removed podcast unsaved",
 		);
 		expect(await feedCacheHolds(obsidian, "Drop One")).toBe(false);
 		expect(await isShown(obsidian, ui.podcastCard(keep.title))).toBe(true);
 
 		await showList(obsidian, "Latest episodes");
-		expect(await listedEpisodes(obsidian)).toEqual(["Keep One"]);
+		expect((await listedEpisodes(obsidian)).sort()).toEqual(["Elsewhere One", "Keep One"]);
 		expect(server.requests().filter((path) => path === dropPath)).toHaveLength(dropRequests);
+
+		// Another device removes a podcast while this one shows Latest Episodes.
+		await plugin.data<Record<string, any>>().patch((data) => {
+			delete data.savedFeeds[synced.title];
+		});
+		await obsidian.waitFor(
+			async () =>
+				JSON.stringify(await listedEpisodes(obsidian)) === JSON.stringify(["Keep One"]),
+			{
+				timeoutMs: 15_000,
+				message: "Latest Episodes to drop the podcast removed elsewhere",
+			},
+		);
+		expect(await isShown(obsidian, ui.pageTitle("Latest episodes"))).toBe(true);
 	});
 
 	test("two saved podcasts sharing one feed URL each keep their own card, episodes and Remove", async () => {
