@@ -246,6 +246,27 @@ describe("a podcast's page", () => {
 		expect(screen.getByRole("alert")).toHaveTextContent("Feed didn't load");
 	});
 
+	test("back online, shows no failure while the feed loads again", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		load.mockRejectedValueOnce(new Error("down"));
+		renderPage(show.title);
+		await screen.findByRole("alert");
+		services.online.set(false);
+		await tick();
+
+		const answer = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(answer.promise);
+		services.online.set(true);
+		void services.feeds.ensureAll();
+		await tick();
+
+		expect(screen.queryByRole("alert")).toBeNull();
+		expect(screen.getByRole("status")).toHaveTextContent("Loading episodes");
+
+		answer.reject(new Error("down"));
+		expect(await screen.findByRole("alert")).toHaveTextContent("Feed didn't load");
+	});
+
 	test("offline, still asks for a private feed's address this device lacks", async () => {
 		const patron = { ...show, title: "Patron", url: privateFeedPlaceholder("Patron") };
 		renderPage("Patron", [patron]);

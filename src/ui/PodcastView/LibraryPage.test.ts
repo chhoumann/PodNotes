@@ -3,9 +3,10 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { tick } from "svelte";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { FeedRepository, type FeedRepositoryDeps } from "src/services/FeedRepository";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { MemoryStorage } from "../../../tests/mocks/feeds";
+import { deferred, MemoryStorage } from "../../../tests/mocks/feeds";
 import { createTestServices } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
 import type { Layout } from "./layout";
@@ -124,6 +125,29 @@ describe("the Library's podcast grid", () => {
 		expect(card("Art Show").querySelector(".pn-badge")).toBeNull();
 
 		services.online.set(true);
+		expect(
+			await screen.findByRole("button", { name: "Art Show, feed didn't load" }),
+		).toContainElement(document.querySelector(".pn-badge"));
+	});
+
+	test("back online, a podcast whose feed failed offline wears no badge while it loads again", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const answer = deferred<ParsedFeedEpisodes>();
+		const load = vi
+			.fn<FeedRepositoryDeps["load"]>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockReturnValueOnce(answer.promise);
+		const repository = repositoryWith({ load });
+		const { services } = renderLibrary([["Art Show", artShow]], { repository });
+		services.online.set(false);
+		await repository.load(["Art Show"], "network");
+
+		services.online.set(true);
+		void repository.ensureAll();
+		await tick();
+
+		expect(card("Art Show").querySelector(".pn-badge")).toBeNull();
+		answer.reject(new Error("down"));
 		expect(
 			await screen.findByRole("button", { name: "Art Show, feed didn't load" }),
 		).toContainElement(document.querySelector(".pn-badge"));

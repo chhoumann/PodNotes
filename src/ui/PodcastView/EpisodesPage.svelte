@@ -76,9 +76,7 @@
 					Set feed address
 				</button>
 			{:else}
-				<button type="button" class="pn-btn" disabled={loading} onclick={refresh}
-					>Retry</button
-				>
+				<button type="button" class="pn-btn" onclick={refresh}>Retry</button>
 			{/if}
 		</div>
 	{/if}
