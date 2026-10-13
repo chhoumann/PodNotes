@@ -411,6 +411,17 @@ describe("episode notes identified by guid (#349)", () => {
 		expect(created[0].data).toBe(`---\nfeedUrl: "${feedUrl}"\nguid: "finale-1"\n---\n`);
 	});
 
+	it("does not repeat keys the template writes in quotes", async () => {
+		const template = `---\n"feedUrl": "{{feedurl}}"\n'guid': "{{title}}"\n---\n`;
+		const { created } = vaultWith([], template);
+
+		await createPodcastNote(identified);
+
+		expect(created[0].data).toBe(
+			`---\n"feedUrl": "${feedUrl}"\n'guid': "Season Finale"\n---\n`,
+		);
+	});
+
 	it("adds nothing for an episode without a guid", async () => {
 		const { created } = vaultWith([], '---\ntitle: "{{title}}"\n---\n');
 

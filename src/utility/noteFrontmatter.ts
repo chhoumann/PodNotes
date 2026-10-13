@@ -13,7 +13,9 @@ export function addFrontmatterFields(
 			: -1;
 	const frontmatter = end > 0 ? lines.slice(1, end) : [];
 	const added = fields
-		.filter(([key]) => !frontmatter.some((line) => new RegExp(`^${key}\\s*:`).test(line)))
+		.filter(
+			([key]) => !frontmatter.some((line) => new RegExp(`^(["']?)${key}\\1\\s*:`).test(line)),
+		)
 		.map(([key, value]) => `${key}: ${yamlString(value)}`);
 
 	if (!added.length) return content;
