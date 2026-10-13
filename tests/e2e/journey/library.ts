@@ -62,6 +62,12 @@ type JourneyContext = Readonly<{
 type Json = Record<string, any>;
 
 const FEED_CACHE_KEY = "podnotes:feed-cache:v6";
+const WORKSPACE_FILES = [
+	"workspace.json",
+	"workspace-mobile.json",
+	"core-plugins.json",
+	"app.json",
+];
 
 type JourneySnapshot = Readonly<{
 	cache: unknown;
@@ -71,6 +77,7 @@ type JourneySnapshot = Readonly<{
 	size: [number, number];
 	corePlugins: Record<string, boolean>;
 	coreConfig: Record<string, unknown>;
+	appConfig: Record<string, unknown>;
 	workspaceFiles: ReadonlyArray<{ path: string; bytes: Buffer | null }>;
 }>;
 
@@ -86,10 +93,11 @@ export async function snapshotJourneyState(obsidian: ObsidianClient): Promise<vo
 		size: electronWindow.getSize(),
 		corePlugins: Object.fromEntries(Object.entries(app.internalPlugins.plugins).map(([id, plugin]) => [id, plugin.enabled])),
 		coreConfig: structuredClone(app.internalPlugins.config),
+		appConfig: structuredClone(app.vault.config),
 	})`);
 	const vault = await obsidian.vaultPath();
 	const workspaceFiles = await Promise.all(
-		["workspace.json", "workspace-mobile.json", "core-plugins.json"].map(async (name) => {
+		WORKSPACE_FILES.map(async (name) => {
 			const filePath = path.join(vault, ".obsidian", name);
 			const bytes = await fs.readFile(filePath).catch((error: NodeJS.ErrnoException) => {
 				if (error.code !== "ENOENT") throw error;
@@ -164,6 +172,8 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 			await setMobileEmulation(obsidian, snapshot.mobile);
 			await restoreCorePlugins(obsidian, snapshot);
 		}
+		// Obsidian writes app.json 1 s after a config change and reads it back only when
+		// it sees the file change, so the config is restored here and its save cancelled.
 		await obsidian.dev.evalJsonAsync(`(async () => {
 			await app.workspace.changeLayout(${jsLiteral(snapshot.layout)});
 			app.workspace.recentFileTracker.load(${jsLiteral(snapshot.recentFiles)});
@@ -174,6 +184,8 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 			app.internalPlugins.requestSaveConfig.cancel();
 			await app.internalPlugins.saveConfig();
 			app.internalPlugins.requestSaveConfig.cancel();
+			app.vault.requestSaveConfig.cancel();
+			app.vault.config = ${jsLiteral(snapshot.appConfig)};
 			await app.vault.adapter.promise;
 			return true;
 		})()`);

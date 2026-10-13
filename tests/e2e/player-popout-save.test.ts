@@ -19,6 +19,7 @@ import {
 	WAIT_OPTS,
 	waitForPodNotesReady,
 } from "./runtime";
+import { collectRuntimeErrors, POPOUT_RESIZE_LOOP } from "./runtime-evidence";
 
 const getContext = createPodNotesE2EHarness("player-popout-save");
 const EPISODE_TITLE = "E2E Popout Episode";
@@ -126,6 +127,7 @@ async function closePopoutAndReload(obsidian: Obsidian): Promise<void> {
 		})()`,
 	);
 	await reloadObsidian(obsidian);
+	await collectRuntimeErrors(obsidian, POPOUT_RESIZE_LOOP);
 }
 
 // The audio lives in the main window, so a popout holding the player is only a view of it.

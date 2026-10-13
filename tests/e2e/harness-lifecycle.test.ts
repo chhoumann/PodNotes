@@ -351,7 +351,10 @@ test.for([true, false])(
 				await app.vault.adapter.promise;
 				return true;
 			})()`);
-				return await fs.readFile(workspacePath);
+				return {
+					config: await fs.readFile(path.join(dir, "community-plugins.json"), "utf8"),
+					workspace: await fs.readFile(workspacePath),
+				};
 			});
 			const result = await runFixture("reused-vault", signal);
 
@@ -365,12 +368,10 @@ test.for([true, false])(
 				expect(after.enabled).toEqual(expected);
 				expect(after.recorders).toEqual([]);
 				expect(JSON.parse(String(after.config))).toEqual(
-					JSON.parse(String(before.config)).filter(
-						(id: string) => initiallyEnabled || id !== "podnotes",
-					),
+					JSON.parse(seeded.config).filter((id: string) => id !== stale),
 				);
 				await expect(fs.stat(unrelated)).resolves.toBeTruthy();
-				expect(await fs.readFile(workspacePath)).toEqual(seeded);
+				expect(await fs.readFile(workspacePath)).toEqual(seeded.workspace);
 				expect(
 					await obsidian.dev.evalJson<boolean>("app.workspace.leftSplit.collapsed"),
 				).toBe(true);

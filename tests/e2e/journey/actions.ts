@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchPodNotesInstance } from "../../../scripts/e2e-instance.mjs";
@@ -9,7 +10,7 @@ import {
 	waitForInstanceReady,
 } from "obsidian-e2e/runner";
 import { jsLiteral, PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../runtime";
-import { collectRuntimeErrors } from "../runtime-evidence";
+import { collectRuntimeErrors, POPOUT_RESIZE_LOOP } from "../runtime-evidence";
 
 export type UiTarget = Readonly<{
 	name: string;
@@ -559,10 +560,26 @@ async function appProcess(obsidian: ObsidianClient): Promise<AppProcess> {
 	);
 }
 
+// What runner provisioning enforces in app.json before Obsidian starts.
+const RUNNER_APP_CONFIG = { settingsPopoutWindow: false, spellcheck: false, trashOption: "local" };
+
+async function writeRunnerAppConfig(vaultPath: string): Promise<void> {
+	const file = path.join(vaultPath, ".obsidian", "app.json");
+	let config: unknown;
+	try {
+		config = JSON.parse(await fs.readFile(file, "utf8"));
+	} catch {
+		// Missing, empty or cut off: nothing to keep.
+	}
+	const kept = config && typeof config === "object" && !Array.isArray(config) ? config : {};
+	await fs.writeFile(file, `${JSON.stringify({ ...kept, ...RUNNER_APP_CONFIG }, null, "\t")}\n`);
+}
+
 /**
  * Runner provisioning replaces the enabled-plugin list. Relaunch without it so
- * the startup recorder stays first. macOS needs app.quit because closing its last
- * window leaves it running.
+ * the startup recorder stays first, but enforce its app.json settings again: a
+ * quit can leave app.json empty, and Obsidian then opens Settings in a popout.
+ * macOS needs app.quit because closing its last window leaves it running.
  * `beforeClose` is renderer code that runs 50 ms before the window closes.
  */
 export async function restartObsidian(
@@ -596,6 +613,7 @@ export async function restartObsidian(
 		failure = { error };
 	}
 	try {
+		await writeRunnerAppConfig(instance.vaultPath);
 		await launchPodNotesInstance(instance);
 		await waitForInstanceReady(instance);
 		await obsidian.waitFor(
@@ -640,7 +658,16 @@ function processAlive(pid: number): boolean {
 	}
 }
 
-export async function reloadObsidian(obsidian: ObsidianClient, ignored?: string): Promise<void> {
+export async function reloadObsidian(obsidian: ObsidianClient): Promise<void> {
+	await reloadRenderer(obsidian);
+}
+
+/** Reloads after a popout closed, accepting exactly POPOUT_RESIZE_LOOP on both sides of the reload. */
+export async function reloadAfterPopout(obsidian: ObsidianClient): Promise<void> {
+	await reloadRenderer(obsidian, POPOUT_RESIZE_LOOP);
+}
+
+async function reloadRenderer(obsidian: ObsidianClient, ignored?: string): Promise<void> {
 	await collectRuntimeErrors(obsidian, ignored);
 	await obsidian.dev.evalJson("window.__podnotesJourneyBeforeReload = true");
 	await obsidian.exec("reload");

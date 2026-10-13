@@ -1,10 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, onTestFinished, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	assertSingleWindow,
 	click,
+	closeSettings,
 	dismissNotices,
 	openPodNotesSettings,
 	restartObsidian,
@@ -103,6 +104,65 @@ test("restores the explorer runtime state and exact persisted core-plugin config
 	expect(await readFile(corePath)).toEqual(seeded);
 });
 
+describe("a restart that finds app.json broken", () => {
+	let appPath = "";
+	let originalBytes = Buffer.alloc(0);
+	let original: Record<string, unknown> = {};
+	let seeded = Buffer.alloc(0);
+	let seededConfig: Record<string, unknown> = {};
+	beforeAll(async () => {
+		const { obsidian } = getContext();
+		appPath = path.join(await obsidian.vaultPath(), ".obsidian", "app.json");
+		originalBytes = await readFile(appPath);
+		original = await obsidian.dev.evalJson<Record<string, unknown>>("app.vault.config");
+		seededConfig = { ...original, podnotesE2eUnrelated: "kept" };
+		// Tabs and a final newline, which Obsidian's own saves never write.
+		seeded = Buffer.from(
+			`${JSON.stringify({ ...JSON.parse(originalBytes.toString("utf8")), podnotesE2eUnrelated: "kept" }, null, "\t")}\n`,
+		);
+		await writeFile(appPath, seeded);
+		await obsidian.dev.evalJson(`app.vault.config = ${jsLiteral(seededConfig)}, true`);
+	});
+	afterAll(async () => {
+		await getContext().obsidian.dev.evalJson(
+			`app.vault.requestSaveConfig.cancel(), app.vault.config = ${jsLiteral(original)}, true`,
+		);
+		await writeFile(appPath, originalBytes);
+	});
+
+	test.for([
+		["emptied", "", {}],
+		[
+			"without the runner's settings",
+			'{"podnotesE2eUnrelated":"kept"}',
+			{ podnotesE2eUnrelated: "kept" },
+		],
+	] as const)(
+		"opens Settings in the main window when app.json is %s, and restores its exact bytes",
+		async ([, broken, kept]) => {
+			const { obsidian } = getContext();
+			await restartObsidian(obsidian, () => writeFile(appPath, broken));
+			expect(await obsidian.dev.evalJson("app.vault.config")).toMatchObject({
+				settingsPopoutWindow: false,
+				spellcheck: false,
+				trashOption: "local",
+				...kept,
+			});
+			await openPodNotesSettings(obsidian);
+			await closeSettings(obsidian);
+
+			await obsidian.dev.evalJson(
+				'app.vault.setConfig("podnotesE2eUnrelated", "changed"), true',
+			);
+			await restoreJourneyWorkspace(obsidian);
+			expect(await obsidian.dev.evalJson("app.vault.config")).toEqual(seededConfig);
+			// Obsidian saves a changed config 1 s after the change.
+			await obsidian.sleep(2_500);
+			expect(await readFile(appPath)).toEqual(seeded);
+		},
+	);
+});
+
 test("closes a leaked window and reports it during workspace rollback", async () => {
 	const { obsidian } = getContext();
 	const extra = await obsidian.dev.evalJson<number>(
@@ -136,6 +196,15 @@ test("evaluates quoted values as the same values, and matches attributes holding
 	}
 	expect(await obsidian.dev.evalJson<string>(`typeof ${jsLiteral(undefined)}`)).toBe("undefined");
 	expect(() => jsLiteral(() => undefined)).toThrow("has no JavaScript literal");
+	for (const [value, number] of [
+		[Number.NaN, "NaN"],
+		[Number.NEGATIVE_INFINITY, "-Infinity"],
+		[-0, "-0"],
+		[{ nested: [1, Number.POSITIVE_INFINITY] }, "Infinity"],
+		[{ seconds: -0 }, "-0"],
+	] as const)
+		expect(() => jsLiteral(value)).toThrow(`${number} has no JSON literal`);
+	expect(jsLiteral([0, -1.5])).toBe("[0,-1.5]");
 
 	await showPodNotes(obsidian);
 	const count = (target: UiTarget) =>

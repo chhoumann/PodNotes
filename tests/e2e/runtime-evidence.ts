@@ -7,6 +7,12 @@ const RECORDER_ID = /^podnotes-e2e-errors-\d+$/;
 const RECORDER_NAME = "PodNotes E2E error recorder";
 const INSTALL_FILES = new Set(["errors.jsonl", "main.js", "manifest.json.tmp", "manifest.json"]);
 
+/**
+ * From a popout's close until the main window reloads, Obsidian can raise this in the main
+ * window, with PodNotes disabled too.
+ */
+export const POPOUT_RESIZE_LOOP = "ResizeObserver loop completed with undelivered notifications.";
+
 type Evidence = {
 	id: string;
 	directory: string;

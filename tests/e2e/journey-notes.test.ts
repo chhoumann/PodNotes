@@ -10,7 +10,7 @@ import {
 	openInEditor,
 	openInReadingView,
 	openPodNotesSettings,
-	reloadObsidian,
+	reloadAfterPopout,
 	runFromPalette,
 	showLibrary,
 	showPodNotes,
@@ -632,12 +632,7 @@ describe("episode note and capture journeys", () => {
 				await app.workspace.saveLayout();
 				return true;
 			})()`);
-			// Obsidian can keep a ResizeObserver loop running in the main window after a popout
-			// closes, with PodNotes disabled too, until the window reloads.
-			await reloadObsidian(
-				obsidian,
-				"ResizeObserver loop completed with undelivered notifications.",
-			);
+			await reloadAfterPopout(obsidian);
 		}
 	});
 });

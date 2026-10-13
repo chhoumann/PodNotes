@@ -122,7 +122,7 @@ export function createPodNotesE2EHarness(testName: string) {
 			},
 			async () => lock?.release(),
 		);
-	}, 90_000);
+	}, 60_000);
 	const getContext = createSharedHarness(testName);
 	aroundEach(async (runTest) => {
 		const { obsidian, plugin } = getContext();
