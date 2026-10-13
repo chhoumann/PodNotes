@@ -109,6 +109,82 @@ function pausedByBrowser(media: FakeMedia) {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+describe("synced progress handoff", () => {
+	function paused() {
+		const context = setup();
+		context.player.play(A);
+		metadata(context.media());
+		reach(context.media(), 17);
+		context.player.pause();
+		return context;
+	}
+
+	test("adopts the loaded paused episode's synced position even when another episode is selected", () => {
+		const { player, media, state } = paused();
+		saved(A, 45);
+
+		player.restore(B);
+
+		expect(state()).toMatchObject({ status: "paused", episode: A, currentTime: 45 });
+		expect(media().currentTime).toBe(45);
+		player.save();
+		expect(progress(A)).toMatchObject({ time: 45, finished: false });
+	});
+
+	test("an unchanged paused save does not overwrite a different progress record", () => {
+		const { player } = paused();
+		saved(A, 45);
+
+		player.save();
+		player.dispose();
+
+		expect(progress(A)).toMatchObject({ time: 45, finished: false });
+	});
+
+	test("a local seek after adoption wins over the next sync", () => {
+		const { player, media, state } = paused();
+		saved(A, 45);
+		player.restore(A);
+		expect(state().currentTime).toBe(45);
+
+		player.seek(25);
+		saved(A, 50);
+		player.restore(A);
+		player.save();
+
+		expect(state().currentTime).toBe(25);
+		expect(media().currentTime).toBe(25);
+		expect(progress(A)?.time).toBe(25);
+	});
+
+	test("playing after adoption owns the position before the first timeupdate", () => {
+		const { player, state } = paused();
+		saved(A, 45);
+		player.restore(A);
+		expect(state().currentTime).toBe(45);
+
+		player.resume();
+		saved(A, 50);
+		player.restore(A);
+		player.save();
+
+		expect(state()).toMatchObject({ status: "playing", currentTime: 45 });
+		expect(progress(A)?.time).toBe(45);
+	});
+
+	test("a synced finish survives delayed paused media events and saving", () => {
+		const { player, media } = paused();
+		saved(A, 3600, 3600, true);
+		player.restore(A);
+
+		media().emit("timeupdate");
+		player.save();
+		player.dispose();
+
+		expect(progress(A)).toMatchObject({ time: 3600, duration: 3600, finished: true });
+	});
+});
+
 beforeEach(() => {
 	now = 0;
 	vi.spyOn(Date, "now").mockImplementation(() => now);
