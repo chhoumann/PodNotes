@@ -941,6 +941,19 @@ describe("PodNotes persistence integration", () => {
 			expect(saved()).toMatchObject({ time: 25, finished: false });
 			expect(doc.media.currentTime).toBe(25);
 		});
+
+		it("saves a seek from the browser's own controls made after the sync", async () => {
+			const { plugin, doc, saved, sync } = await paused();
+
+			await sync(45);
+			doc.media.currentTime = 42;
+			for (const type of ["seeking", "timeupdate", "seeked"]) doc.media.emit(type);
+			plugin.player.save();
+			await plugin.flushSaves();
+
+			expect(saved()).toMatchObject({ time: 42, finished: false });
+			expect(get(plugin.player.state)).toMatchObject({ status: "paused", currentTime: 42 });
+		});
 	});
 
 	describe("once a data.json it could not read at startup becomes readable", () => {

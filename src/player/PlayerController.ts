@@ -120,6 +120,7 @@ export class PlayerController {
 	}
 
 	restore(episode: Episode | undefined): void {
+		this.noteStoppedMove();
 		const { status, episode: shown, currentTime } = this.snapshot;
 		if (status === "paused" && shown && !this.moved) {
 			const time = this.resumeTime(shown);
@@ -538,6 +539,7 @@ export class PlayerController {
 			return;
 		}
 
+		this.noteStoppedMove();
 		this.setState({ currentTime: time, duration: finiteOr0(this.el.duration) });
 		const now = Date.now();
 		if (now - session.lastCheckpoint < SAVE_POSITION_THROTTLE_MS) return;
@@ -591,10 +593,19 @@ export class PlayerController {
 		return !!this.session?.ready && this.el.readyState > HAVE_NOTHING;
 	}
 
+	private noteStoppedMove(): void {
+		const { status, currentTime } = this.snapshot;
+		const time = this.el.currentTime;
+		if (status === "playing" || !this.holdsMedia() || time === currentTime) return;
+		this.moved = true;
+		this.setState({ currentTime: time });
+	}
+
 	private persist(): void {
 		const { session } = this;
 		const { episode, duration, status } = this.snapshot;
 		if (!session || !this.holdsMedia() || session.preview || this.disposed || !episode) return;
+		this.noteStoppedMove();
 		if (status !== "playing" && !this.moved) return;
 		const time = this.el.currentTime;
 		playedEpisodes.setEpisodeTime(episode, time, duration, duration > 0 && time >= duration);

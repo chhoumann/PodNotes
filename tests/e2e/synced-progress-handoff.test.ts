@@ -17,7 +17,9 @@ const FEED: FixtureFeed = {
 const PROGRESS_KEY = "Handoff Podcast::Handoff Episode";
 const POLL = { timeout: WAIT_OPTS.timeoutMs, interval: WAIT_OPTS.intervalMs };
 
-for (const action of ["hide", "seek"] as const) {
+const SAVED_AFTER = { hide: 45, seek: 25, "native seek": 42 };
+
+for (const [action, expected] of Object.entries(SAVED_AFTER)) {
 	test(`a paused episode adopts synced progress before a local ${action} (#461)`, async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
@@ -100,6 +102,14 @@ for (const action of ["hide", "seek"] as const) {
 				app.plugins.plugins.${PLUGIN_ID}.api.currentTime = 25;
 				return true;
 			})()`);
+		} else if (action === "native seek") {
+			await obsidian.dev.evalJsonAsync(`(async () => {
+				const media = document.querySelector(".podnotes-media");
+				const seeked = new Promise((resolve) => media.addEventListener("seeked", resolve, { once: true }));
+				media.currentTime = 42;
+				await seeked;
+				return true;
+			})()`);
 		} else {
 			await obsidian.dev.evalJson(
 				'require("@electron/remote").getCurrentWindow().hide(), true',
@@ -114,7 +124,6 @@ for (const action of ["hide", "seek"] as const) {
 			await plugin.flushSaves();
 			return true;
 		})()`);
-		const expected = action === "seek" ? 25 : 45;
 		expect(
 			(await plugin.data<PodNotesData>().read()).playedEpisodes?.[PROGRESS_KEY]?.time,
 		).toBe(expected);
