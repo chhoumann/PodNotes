@@ -13,6 +13,8 @@ import {
 export interface PlaybackSource {
 	src: string;
 	mediaType: EpisodeMediaType;
+	/** The vault file `src` plays, if it plays one. */
+	filePath?: string;
 }
 
 /**
@@ -34,6 +36,7 @@ export function selectSource(
 		return {
 			src: createMediaUrlObjectFromFilePath(vault, ownPath),
 			mediaType: getEpisodeMediaType(episode),
+			filePath: ownPath,
 		};
 	}
 
@@ -43,7 +46,11 @@ export function selectSource(
 		const sameMedia =
 			isLocalFile(episode) || isSameMediaSource(copy.streamUrl, episode.streamUrl);
 		if (sameMedia && (!episode.mediaType || mediaType === episode.mediaType)) {
-			return { src: createMediaUrlObjectFromFilePath(vault, copy.filePath), mediaType };
+			return {
+				src: createMediaUrlObjectFromFilePath(vault, copy.filePath),
+				mediaType,
+				filePath: copy.filePath,
+			};
 		}
 	}
 

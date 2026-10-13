@@ -142,9 +142,8 @@ describe("importing a settings file", () => {
 		expect(disk().queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Synced");
 	});
 
-	it("refuses an import whose private feed URL SecretStorage cannot keep", async () => {
+	it("imports other settings and keeps a failed private-address move for this session", async () => {
 		const { plugin, notice, disk, chooseFile } = setup();
-		const before = { settings: plugin.settings, disk: JSON.stringify(disk()) };
 		const setSecret = vi
 			.spyOn(obsidian.SecretStorage.prototype, "setSecret")
 			.mockImplementation(() => {
@@ -156,21 +155,22 @@ describe("importing a settings file", () => {
 			consoleError.mockRestore();
 		});
 
-		chooseFile({
+		await chooseFile({
 			...structuredClone(DEFAULT_SETTINGS),
 			schemaVersion: 2,
+			defaultVolume: 0.4,
 			savedFeeds: { Private: { title: "Private", url: privateUrl, artworkUrl: "" } },
-		}).click();
+		}).confirm();
 
-		await vi.waitFor(() =>
-			expect(notice).toHaveBeenCalledWith(
-				"Could not finish importing secrets into Obsidian SecretStorage. Existing settings were kept, and retrying is safe.",
-				10000,
-			),
+		expect(notice).toHaveBeenCalledWith(
+			"Could not store the private feed address on this device.",
 		);
-		expect(notice).not.toHaveBeenCalledWith("Imported PodNotes settings.");
-		expect(plugin.settings).toBe(before.settings);
-		expect(JSON.stringify(disk())).toBe(before.disk);
+		expect(disk().defaultVolume).toBe(0.4);
+		expect(disk().savedFeeds.Private.url).toBe("podnotes-private-feed:Private");
+		expect(JSON.stringify(disk())).not.toContain("s3cret");
+		expect(plugin.feedUrls.resolve(disk().savedFeeds.Private.urlSecretId ?? "")).toBe(
+			privateUrl,
+		);
 	});
 
 	it("never writes a private feed URL that an older build left in the imported file", async () => {
