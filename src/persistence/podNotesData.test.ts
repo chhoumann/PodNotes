@@ -60,6 +60,183 @@ function settingsWithEveryEpisodeContainer(): IPodNotesSettings {
 }
 
 describe("PodNotes data schema", () => {
+	it("puts no private feed address in data.json, from the first encode and without a device secret", () => {
+		const sentinel = "PRIV2_ENCODE_SENTINEL";
+		const rawUrl = `https://private.example/feed?auth=${sentinel}`;
+		const item = { ...episode("Private"), url: rawUrl, feedUrl: rawUrl };
+		const history = {
+			title: item.title,
+			podcastName: item.podcastName,
+			time: 12,
+			duration: 180,
+			finished: false,
+			episode: item,
+		};
+		const settings = {
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: item,
+			queue: playlist("Queue", item),
+			favorites: playlist("Favorites", item),
+			localFiles: playlist("Local files", { ...item, streamUrl: "audio.mp3" }),
+			playlists: { Custom: playlist("Custom", item) },
+			downloadedEpisodes: {
+				"Test Podcast": [{ ...item, filePath: "audio.mp3", size: 42 }],
+			},
+			playedEpisodes: { "Test Podcast::Private": history },
+		} satisfies IPodNotesSettings;
+		settings.queue.episodes[0] = {
+			...item,
+			sourceFeed: rawUrl,
+			description: `<p>Subscribe: <a href="${rawUrl}">your feed</a></p>`,
+		} as Episode;
+		const unknownFields = {
+			libraryId: "library",
+			nextVersion: { lastEpisode: item, note: `Moved from ${rawUrl} today` },
+		};
+		const before = structuredClone({ settings, unknownFields });
+
+		const encoded = encodePodNotesData(settings, unknownFields);
+
+		expect(JSON.stringify(encoded)).not.toContain(sentinel);
+		expect(encoded.queue.episodes[0].sourceFeed).toBe("podnotes-private-feed:Test%20Podcast");
+		expect(encoded.queue.episodes[0].description).toBe(
+			'<p>Subscribe: <a href="podnotes-private-feed:Test%20Podcast">your feed</a></p>',
+		);
+		expect(encoded.nextVersion).toEqual({
+			lastEpisode: {
+				...item,
+				url: "podnotes-private-feed:Test%20Podcast",
+				feedUrl: "podnotes-private-feed:Test%20Podcast",
+			},
+			note: "Moved from podnotes-private-feed:Test%20Podcast today",
+		});
+		expect(encoded.currentEpisode?.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
+		for (const list of [
+			encoded.queue,
+			encoded.favorites,
+			encoded.localFiles,
+			encoded.playlists.Custom,
+		]) {
+			expect(list.episodes).toHaveLength(1);
+			expect(list.episodes[0]).toMatchObject({
+				title: item.title,
+				url: "podnotes-private-feed:Test%20Podcast",
+				feedUrl: "podnotes-private-feed:Test%20Podcast",
+			});
+			expect(list.currentEpisode?.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
+		}
+		expect(encoded.queue.episodes[0].streamUrl).toBe(item.streamUrl);
+		expect(encoded.downloadedEpisodes["Test Podcast"][0].filePath).toBe("audio.mp3");
+		expect(encoded.playedEpisodes["Test Podcast::Private"].time).toBe(12);
+		expect({ settings, unknownFields }).toEqual(before);
+	});
+
+	it("keeps signed media and an episode's own tokened link of a private feed's episode", () => {
+		const signed = {
+			...episode("Signed"),
+			streamUrl: "https://media.example/ep.mp3?sig=MEDIA&token=MEDIA",
+			url: "https://private.example/post?token=ARTICLE",
+			artworkUrl: "https://media.example/art.jpg?signature=ART",
+			chaptersUrl: "https://media.example/chapters.json?key=CHAPTERS",
+			feedUrl: "https://private.example/feed?auth=FEED",
+		};
+		const settings = { ...structuredClone(DEFAULT_SETTINGS), currentEpisode: signed };
+
+		const encoded = encodePodNotesData(settings);
+
+		expect(encoded.currentEpisode).toEqual({
+			...signed,
+			episodeDate: episodeDate.toISOString(),
+			feedUrl: "podnotes-private-feed:Test%20Podcast",
+		});
+	});
+
+	it("keeps distinct resource URLs that share a private feed address prefix, including quoted links", () => {
+		const feedUrl = "https://private.example/resource?token=FEED_TOKEN";
+		const streamUrl = `${feedUrl}_DISTINCT_MEDIA_SIGNATURE&kind=audio`;
+		const item = {
+			...episode("Private"),
+			feedUrl,
+			streamUrl,
+			artworkUrl: `${feedUrl}.`,
+			chaptersUrl: `${feedUrl}&sig=CHAPTERS`,
+			url: `${feedUrl}&token=ARTICLE`,
+			description: `<a href="${streamUrl}">Audio</a> Feed: "${feedUrl}"`,
+		};
+		const encoded = encodePodNotesData({
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: item,
+		});
+		expect(encoded.currentEpisode).toEqual({
+			...item,
+			episodeDate: episodeDate.toISOString(),
+			feedUrl: "podnotes-private-feed:Test%20Podcast",
+			description: `<a href="${streamUrl}">Audio</a> Feed: "podnotes-private-feed:Test%20Podcast"`,
+		});
+	});
+
+	it.each([
+		["See URL.", "See PLACEHOLDER."],
+		["See URL, then listen.", "See PLACEHOLDER, then listen."],
+		["[Feed](URL)", "[Feed](PLACEHOLDER)"],
+		["See URL; listen next.", "See PLACEHOLDER; listen next."],
+		["URL#section", "PLACEHOLDER"],
+	])("puts no private feed address in data.json when quoted as %s", (template, expected) => {
+		const feedUrl = "https://private.example/feed?auth=PUNCTUATION_SENTINEL";
+		const item = {
+			...episode("Private"),
+			feedUrl,
+			description: template.replace("URL", feedUrl),
+		};
+		const encoded = encodePodNotesData({
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: item,
+		});
+		expect(encoded.currentEpisode?.description).toBe(
+			expected.replace("PLACEHOLDER", "podnotes-private-feed:Test%20Podcast"),
+		);
+		expect(JSON.stringify(encoded)).not.toContain("PUNCTUATION_SENTINEL");
+	});
+
+	it("puts no private feed address in data.json object keys without losing unknown entries", () => {
+		const feedUrl = "https://private.example/feed?token=KEY_SENTINEL";
+		const item = { ...episode("Private"), feedUrl };
+		const raw = {
+			...encodePodNotesData(DEFAULT_SETTINGS),
+			futureByFeed: JSON.parse(
+				JSON.stringify({ [feedUrl]: item, ["__proto__"]: { keep: true } }),
+			),
+		};
+		const decoded = decodePodNotesData(raw);
+		const encoded = encodePodNotesData(decoded.settings, decoded.unknownFields);
+		expect(JSON.stringify(encoded)).not.toContain("KEY_SENTINEL");
+		expect(encoded.futureByFeed).toEqual({
+			["podnotes-private-feed:Test%20Podcast"]: {
+				...item,
+				feedUrl: "podnotes-private-feed:Test%20Podcast",
+				episodeDate: episodeDate.toISOString(),
+			},
+			["__proto__"]: { keep: true },
+		});
+		expect(JSON.stringify(raw)).toContain("KEY_SENTINEL");
+	});
+
+	it("refuses colliding private feed keys instead of overwriting preserved data", () => {
+		const feedUrl = "https://private.example/feed?token=COLLISION";
+		const settings = {
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: { ...episode("Private"), feedUrl },
+		};
+		expect(() =>
+			encodePodNotesData(settings, {
+				futureByFeed: {
+					[feedUrl]: { keep: "first" },
+					["podnotes-private-feed:Test%20Podcast"]: { keep: "second" },
+				},
+			}),
+		).toThrow("Private feed address protection would overwrite a saved field.");
+	});
+
 	it("loads fresh data as independent deep-cloned defaults", () => {
 		const first = decodePodNotesData(undefined);
 		const second = decodePodNotesData(null);

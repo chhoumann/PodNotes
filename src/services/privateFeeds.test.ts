@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SecretStorage } from "obsidian";
+import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "src/constants";
 import {
 	decodePodNotesData,
@@ -9,7 +10,12 @@ import {
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { FeedUrlRepository } from "./FeedUrlRepository";
-import { internPrivateFeed, protectPrivateFeeds, resolveFeedUrl } from "./privateFeeds";
+import {
+	internPrivateFeed,
+	notifyPrivateFeedUnavailable,
+	protectPrivateFeeds,
+	resolveFeedUrl,
+} from "./privateFeeds";
 
 function repository(initial: Record<string, string> = {}) {
 	const values = new Map(Object.entries(initial));
@@ -28,6 +34,14 @@ function feed(overrides: Partial<PodcastFeed> = {}): PodcastFeed {
 }
 
 const PRIVATE_URL = "https://www.patreon.com/rss/show?auth=se-cret";
+
+it("reports a missing device address in one sentence without destructive recovery instructions", () => {
+	const notice = vi.spyOn(obsidian, "Notice");
+	notifyPrivateFeedUnavailable("My Show");
+	expect(notice).toHaveBeenCalledWith(
+		'The private feed address for "My Show" is not available on this device.',
+	);
+});
 
 describe("internPrivateFeed", () => {
 	it("moves a credential-bearing URL into SecretStorage and persists a placeholder", () => {
@@ -70,15 +84,15 @@ describe("internPrivateFeed", () => {
 		expect(interned.url).toBe("podnotes-private-feed:Renamed%20Key");
 	});
 
-	it("keeps the feed unchanged when SecretStorage fails, never half-migrated", () => {
-		const { api, feedUrls } = repository();
+	it("throws when SecretStorage fails, so the URL is never saved in its place", () => {
+		const { api, feedUrls, values } = repository();
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
 			throw new Error("locked");
 		});
 		const original = feed({ url: PRIVATE_URL });
-		const result = internPrivateFeed(original, feedUrls);
-		expect(result).toBe(original);
-		expect(result.urlSecretId).toBeUndefined();
+		expect(() => internPrivateFeed(original, feedUrls)).toThrow("locked");
+		expect(original).toEqual(feed({ url: PRIVATE_URL }));
+		expect(values.size).toBe(0);
 	});
 });
 
@@ -298,20 +312,24 @@ describe("protectPrivateFeeds", () => {
 		expect(safe.queue.episodes[0].url).toBe(link);
 	});
 
-	it("reports feeds whose URL could not be protected", () => {
+	it("keeps a failed move available only for the session and redacts its snapshots", () => {
 		const { api, feedUrls } = repository();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
 			throw new Error("locked");
 		});
-		const { failed, settings: result } = protectPrivateFeeds(
-			settings({
-				savedFeeds: { Patreon: feed({ title: "Patreon", url: PRIVATE_URL }) },
-				queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode("Ep 2", PRIVATE_URL)] },
-			}),
-			feedUrls,
-		);
+		const input = settings({
+			savedFeeds: {
+				Public: feed({ title: "Public" }),
+				Patreon: feed({ title: "Patreon", url: PRIVATE_URL }),
+			},
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode("Ep 2", PRIVATE_URL)] },
+		});
+		const { failed, settings: result } = protectPrivateFeeds(input, feedUrls);
 		expect(failed).toEqual(["Patreon"]);
-		expect(result.savedFeeds.Patreon.url).toBe(PRIVATE_URL);
-		expect(result.queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Patreon");
+		expect(JSON.stringify(result)).not.toContain(PRIVATE_URL);
+		expect(result.savedFeeds.Patreon.url).toBe("podnotes-private-feed:Patreon");
+		expect(resolveFeedUrl(result.savedFeeds.Patreon, feedUrls)).toBe(PRIVATE_URL);
+		expect(resolveFeedUrl(result.savedFeeds.Patreon, new FeedUrlRepository(api))).toBeNull();
 	});
 });

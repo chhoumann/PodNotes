@@ -28,6 +28,9 @@
 
 	function createButton(container: HTMLElement) {
 		button = new ButtonComponent(container);
+		button.onClick((event: MouseEvent) => {
+			dispatch("click", { event });
+		});
 
 		updateButtonAttributes(button);
 	}
@@ -42,10 +45,6 @@
 		if (className) btn.setClass(className);
 		if (cta) btn.setCta();
 		else btn.removeCta();
-
-		btn.onClick((event: MouseEvent) => {
-			dispatch("click", { event });
-		});
 
 		if (styles) {
 			btn.buttonEl.setAttr("style", extractStylesFromObj(styles));

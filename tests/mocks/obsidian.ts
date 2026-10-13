@@ -121,8 +121,13 @@ class BaseInteractiveElement {
 }
 
 export class ButtonComponent extends BaseInteractiveElement {
+	private clickCallback?: (event: MouseEvent) => void;
+
 	constructor(container: HTMLElement) {
 		super("button", container);
+		this.buttonEl.addEventListener("click", (event) => {
+			if (!this.buttonEl.disabled) this.clickCallback?.(event);
+		});
 	}
 
 	get buttonEl() {
@@ -175,7 +180,7 @@ export class ButtonComponent extends BaseInteractiveElement {
 	}
 
 	onClick(callback: (event: MouseEvent) => void) {
-		this.buttonEl.addEventListener("click", callback);
+		this.clickCallback = callback;
 		return this;
 	}
 }
@@ -291,13 +296,17 @@ export class SecretComponent extends TextComponent {
 
 export class Setting {
 	settingEl: HTMLElement;
+	nameEl: HTMLElement;
 
 	constructor(containerEl: HTMLElement) {
 		this.settingEl = document.createElement("div");
+		this.nameEl = document.createElement("div");
+		this.settingEl.appendChild(this.nameEl);
 		containerEl.appendChild(this.settingEl);
 	}
 
-	setName() {
+	setName(name: string) {
+		this.nameEl.textContent = name;
 		return this;
 	}
 
