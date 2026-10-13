@@ -280,6 +280,7 @@ describe("PodNotes onload wiring (#55)", () => {
 					on: vi.fn(() => ({})),
 					getLeavesOfType: vi.fn(() => []),
 					getRightLeaf: vi.fn(() => null),
+					getActiveViewOfType: vi.fn(() => null),
 					revealLeaf: vi.fn(),
 					detachLeavesOfType: vi.fn(),
 				},
@@ -388,18 +389,16 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(showCmd?.checkCallback).toBeUndefined();
 	});
 
-	it("registers Capture Timestamp as an editor callback so the mobile toolbar can add it", async () => {
-		// Must stay an editorCallback (not editorCheckCallback): an unconditional
-		// editor command remains addable to the mobile editor toolbar / command
-		// picker before any episode is loaded; it surfaces a Notice when capture
-		// isn't possible rather than no-opping silently (TS-01 / Codex review #213).
+	it("registers the capture commands as plain callbacks, so they run with no editor focused", async () => {
 		const { commands } = await loadPlugin();
+		const kinds = ["callback", "checkCallback", "editorCallback", "editorCheckCallback"];
 
-		const captureCmd = commands.find((c) => c.id === "capture-timestamp");
-		expect(captureCmd).toBeDefined();
-		expect(typeof captureCmd?.editorCallback).toBe("function");
-		expect(captureCmd?.editorCheckCallback).toBeUndefined();
-		expect(captureCmd?.checkCallback).toBeUndefined();
+		for (const id of ["capture-timestamp", "capture-segment-10s", "capture-segment-20s"]) {
+			const command = commands.find((c) => c.id === id);
+			expect(kinds.filter((kind) => typeof command?.[kind] === "function")).toEqual([
+				"callback",
+			]);
+		}
 	});
 
 	it("registers playback-rate commands for hotkeys", async () => {

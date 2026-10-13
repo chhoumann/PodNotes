@@ -27,6 +27,7 @@ describe("PodNotes runtime", () => {
 		await openPodNotesView(obsidian);
 
 		const state = await obsidian.dev.evalJson<{
+			captureUsesCallback: boolean;
 			captureUsesEditorCallback: boolean;
 			captureUsesEditorCheckCallback: boolean;
 			hasCaptureSegment10Command: boolean;
@@ -37,6 +38,8 @@ describe("PodNotes runtime", () => {
 			viewCount: number;
 		}>(`
 			(() => ({
+				captureUsesCallback:
+					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.callback === "function",
 				captureUsesEditorCallback:
 					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCallback === "function",
 				captureUsesEditorCheckCallback:
@@ -55,7 +58,8 @@ describe("PodNotes runtime", () => {
 		`);
 
 		expect(state).toMatchObject({
-			captureUsesEditorCallback: true,
+			captureUsesCallback: true,
+			captureUsesEditorCallback: false,
 			captureUsesEditorCheckCallback: false,
 			hasCaptureSegment10Command: true,
 			hasCaptureSegment20Command: true,
@@ -322,7 +326,7 @@ describe("PodNotes runtime", () => {
 		}
 	});
 
-	test("previous-track Media Session action appends to the episode note without an active editor", async () => {
+	test("previous-track Media Session action appends to the episode note with no editor open", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
 		const audioPath = await seedAudio(obsidian, sandbox);
 		const episode = createLocalEpisode("E2E Background Capture Episode", audioPath);
@@ -339,11 +343,18 @@ describe("PodNotes runtime", () => {
 		await installMediaSessionRecorder(obsidian);
 		try {
 			await waitForPodNotesReady(obsidian);
+			await obsidian.dev.evalJson<boolean>(`
+				(() => {
+					app.workspace.detachLeavesOfType("markdown");
+					return true;
+				})()
+			`);
 			await openPodNotesView(obsidian);
 			await setPlayback(obsidian, { currentTime: 185, paused: true });
 
 			const noEditor = await obsidian.dev.evalJson<boolean>(`
-				!app.workspace.activeEditor?.editor
+				!app.workspace.activeEditor?.editor &&
+					app.workspace.getLeavesOfType("markdown").length === 0
 			`);
 			expect(noEditor).toBe(true);
 

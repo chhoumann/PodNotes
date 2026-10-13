@@ -63,6 +63,13 @@ export const normalizePath = (path: string): string => {
 export class WorkspaceLeaf {}
 export class ItemView {}
 
+export class MarkdownView {
+	editor: unknown;
+	file: TFile | null = null;
+
+	constructor(public leaf: WorkspaceLeaf) {}
+}
+
 export class Modal {
 	app: App;
 	containerEl: HTMLElement;
