@@ -134,7 +134,7 @@ export function renderTranscriptBody(
 
 /** A list marker, quote or thematic break that starts an untimed paragraph stays text. */
 function escapeParagraphStart(text: string): string {
-	return text.replace(/^[-+*>_]/, "\\$&").replace(/^(\d{1,9})([.)])(?= |$)/, "$1\\$2");
+	return text.replace(/^[-+*>_]/, "\\$&").replace(/^(\d+)([.)])(?= |$)/, "$1\\$2");
 }
 
 /**

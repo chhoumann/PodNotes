@@ -226,6 +226,7 @@ describe("paragraph length", () => {
 			"_ _ _",
 			"1. item",
 			"12) item",
+			"1234567890. item",
 			`${filler} - item`,
 			"1990 was a year.",
 		];
@@ -240,6 +241,7 @@ describe("paragraph length", () => {
 			"\\_ _ _",
 			"1\\. item",
 			"12\\) item",
+			"1234567890\\. item",
 			filler,
 			"\\- item",
 			"1990 was a year.",
