@@ -479,6 +479,25 @@ describe("FeedRepository", () => {
 		expect(JSON.parse(JSON.stringify(encodeEpisode(withoutGuid)))).not.toHaveProperty("guid");
 	});
 
+	test("a guid that two items of a feed share identifies neither episode", async () => {
+		const t = setup();
+		const items = [
+			item(1, { guid: "shared" }),
+			item(2, { guid: "shared" }),
+			item(3, { guid: "own" }),
+		];
+		await loaded(t, { Alpha: alpha }, doc("Alpha", items));
+		const linked = t.repo.episodesAt(alpha.url);
+		t.requests[1].respond.resolve(doc("Alpha", items));
+
+		for (const episodes of [t.feed("Alpha")!.episodes, await linked])
+			expect(episodes.map(({ title, guid }) => [title, guid])).toEqual([
+				["Episode 1", undefined],
+				["Episode 2", undefined],
+				["Episode 3", "own"],
+			]);
+	});
+
 	test("reads an episode's transcripts from its own subscription's feed, by guid first", async () => {
 		const t = setup();
 		const transcripts = [{ url: "https://media.test/b.vtt", type: "text/vtt" }];

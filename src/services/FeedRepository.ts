@@ -148,8 +148,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	 */
 	async episodesAt(url: string): Promise<Episode[]> {
 		const doc = await this.documentAt({ url }, "network");
-		const feed = channelFeed(doc.channel, url);
-		return doc.items.map((item) => projectEpisode(item, feed));
+		return projectEpisodes(doc.items, channelFeed(doc.channel, url));
 	}
 
 	/** Feed metadata that episodes do not carry, for one of a subscription's episodes. */
@@ -288,7 +287,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 					doc,
 					title: feed.title,
 					artworkUrl: feed.artworkUrl,
-					episodes: doc?.items.map((item) => projectEpisode(item, feed)) ?? [],
+					episodes: doc ? projectEpisodes(doc.items, feed) : [],
 				};
 			}
 			projections.set(key, projection);
@@ -354,11 +353,13 @@ export async function loadFeed(url: string): Promise<ParsedFeedEpisodes> {
 	return parser.parseEpisodes(xml);
 }
 
-function projectEpisode(
-	item: ParsedEpisodeDocument,
+function projectEpisodes(
+	items: readonly ParsedEpisodeDocument[],
 	feed: Pick<PodcastFeed, "title" | "url" | "artworkUrl">,
-): Episode {
-	return {
+): Episode[] {
+	const guidCounts = new Map<string, number>();
+	for (const { guid } of items) if (guid) guidCounts.set(guid, (guidCounts.get(guid) ?? 0) + 1);
+	return items.map((item) => ({
 		title: item.title,
 		streamUrl: item.streamUrl,
 		url: item.itemLink || feed.url,
@@ -368,13 +369,14 @@ function projectEpisode(
 		artworkUrl: item.artworkUrl || feed.artworkUrl,
 		episodeDate: item.episodeDate,
 		feedUrl: feed.url,
-		guid: item.guid,
+		// A guid that several items repeat identifies none of them, so notes and links never get it.
+		guid: item.guid && guidCounts.get(item.guid) === 1 ? item.guid : undefined,
 		itunesTitle: item.itunesTitle || "",
 		episodeNumber: item.episodeNumber,
 		duration: item.duration,
 		chaptersUrl: item.chaptersUrl,
 		mediaType: item.mediaType,
-	};
+	}));
 }
 
 function channelFeed(channel: ParsedFeedDocument, url: string): PodcastFeed {
