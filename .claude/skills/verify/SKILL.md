@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in Settings, local files, episode notes, transcripts. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
+description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in the view, a new install, local files, episode notes, transcripts. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
 ---
 
 # Verify PodNotes in real Obsidian
@@ -56,6 +56,25 @@ finished episode, a saved feed, an interrupted `test:e2e` run):
 npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults && npm run start:e2e-obsidian
 ```
 
+### New install
+
+A fresh vault already has a `data.json`, so it is a later start, not a new
+install. To meet PodNotes as a new user does, disable it, delete its
+`data.json`, close its view, then enable it. Turn on mobile emulation first to
+take the mobile start path, which keeps PodNotes closed on every start but a
+new install's:
+
+```bash
+npm run obsidian:e2e -- dev:mobile on    # optional; reloads Obsidian
+npm run obsidian:e2e -- eval code='(async () => { const data = app.vault.configDir + "/plugins/podnotes/data.json"; await app.workspace.detachLeavesOfType("podcast_player_view"); await app.workspace.saveLayout(); await app.plugins.disablePlugin("podnotes"); await app.vault.adapter.remove(data); await app.plugins.enablePlugin("podnotes"); return true; })()'
+npm run obsidian:e2e -- eval code='(async () => JSON.stringify({leaves: app.workspace.getLeavesOfType("podcast_player_view").length, firstRun: document.querySelector(".podcast-view .pn-first-run h1")?.textContent, saved: await app.vault.adapter.exists(app.vault.configDir + "/plugins/podnotes/data.json")}))()'
+```
+
+Expect one leaf, `firstRun` `Add your first podcast`, and `saved` true. A
+later mobile start stays closed. Close the view, save the layout as above, and
+`npm run obsidian:e2e -- reload` leaves zero leaves. Run
+`npm run obsidian:e2e -- dev:mobile off` to return to the desktop.
+
 ## Doctor
 
 Run this first, and again whenever something looks off:
@@ -83,11 +102,11 @@ read state.
 
     ```bash
     node .claude/skills/verify/ui.mjs click '.podcast-view button.pn-navitem' --text 'Latest episodes'
-    node .claude/skills/verify/ui.mjs click '.podcast-view .podcast-episode-item' --text 'Fixture Episode 1'
+    node .claude/skills/verify/ui.mjs click '.podcast-view .pn-ep-main' --text 'Fixture Episode 1'
     node .claude/skills/verify/ui.mjs click '.nav-file-title[data-path="Fixtures/Local Fixture.wav"]' --right
-    node .claude/skills/verify/ui.mjs fill 'input[placeholder="Search or enter feed URL..."]' "$FEED"
+    node .claude/skills/verify/ui.mjs fill '.podcast-view input[aria-label="Search or paste a link"]' "$FEED"
     node .claude/skills/verify/ui.mjs key Escape
-    node .claude/skills/verify/ui.mjs wait '[aria-label="Remove PodNotes Fixture podcast"]'
+    node .claude/skills/verify/ui.mjs wait '.podcast-view button.pn-result[aria-label="Open PodNotes Fixture"]'
     ```
 
 - **Commands.** The user path is the palette. The command name is the

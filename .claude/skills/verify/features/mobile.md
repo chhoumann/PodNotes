@@ -7,7 +7,7 @@ systemd user manager, Node 22, npm, `uv`, `jq`, and `flock`.
 ## Sub-features
 
 - Build and deploy this checkout, load PodNotes, and open its visible player.
-- Play a local vault audio file and add a feed through Settings.
+- Play a local vault audio file and add a feed on the view's Add podcast page.
 - Capture a timestamp through the mobile toolbar and test dormant startup.
 - Download the playing undownloaded remote episode of at least 150 MiB,
   checking the file, persisted registration, native memory, app/renderer
@@ -57,19 +57,21 @@ For the issue checks:
    vault, long-press its file-explorer entry, choose **Play with PodNotes**, and
    confirm playback time advances without a media error. Include spaces and
    `#` in the filename. Read persisted `localFiles` separately.
-2. **Dormant startup (#110):** close the player, save the workspace layout,
-   then force-stop and start `md.obsidian` three times. Verify PodNotes remains
-   enabled, with zero `podcast_player_view` leaves and no player audio element
-   before deliberately opening it.
+2. **Dormant startup (#110):** on a device vault whose `data.json` exists,
+   close the player, save the workspace layout, then force-stop and start
+   `md.obsidian` three times. Verify PodNotes remains enabled, with zero
+   `podcast_player_view` leaves and no player audio element before
+   deliberately opening it. Only a new install opens the view, once (SKILL.md
+   "New install").
 3. **Mobile toolbar (#89):** configure **PodNotes: Capture Timestamp** in
    Obsidian's mobile toolbar settings, focus a note while an episode is loaded,
    and tap the toolbar button. Pull the Markdown separately to confirm its
    timestamp link was written.
-4. **Add feed (#109):** in Settings > PodNotes, enter
-   `https://lexfridman.com/feed/podcast/`, tap **Add**, and confirm **Remove**
-   appears and the saved feed persists. This phone check does not prove a
-   tablet layout.
-5. **Large download (#113, #389):** open the podcast grid, select Lex Fridman
+4. **Add feed (#109):** open the view's Add podcast page (First run's field,
+   or **+** on the Library), paste `https://lexfridman.com/feed/podcast/`, and
+   tap the one result. Confirm the podcast's page opens and the saved feed
+   persists. This phone check does not prove a tablet layout.
+5. **Large download (#113, #389):** open the Library, select Lex Fridman
    Podcast and episode **#501 - DHH**, let it play, then run:
 
     ```bash

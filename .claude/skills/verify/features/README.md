@@ -11,7 +11,7 @@ cleanup.
 - The vault is fresh, or its state cannot affect the feature you prove.
 - The `command-palette` and `file-explorer` core plugins are enabled.
 - Recipes that need a feed have run `node .claude/skills/verify/fixtures.mjs feed`
-  and added `PodNotes Fixture` through Settings ([feeds.md](./feeds.md)).
+  and added `PodNotes Fixture` on the view's Add podcast page ([feeds.md](./feeds.md)).
 
 ## Driving conventions
 
@@ -44,8 +44,8 @@ behavior, followed by exactly four H2s in this order: `Sub-features`,
 
 - [Player and playback](./player.md) covers opening the view, playing a feed
   episode, toggling, skipping and seeking.
-- [Feeds](./feeds.md) covers adding and removing a podcast by feed URL in
-  Settings > PodNotes, and browsing its episodes.
+- [Feeds](./feeds.md) covers adding a podcast on the view's Add podcast page,
+  browsing its episodes, its feed error banner, and removing it.
 - [Timestamps and URIs](./timestamps-uris.md) covers capturing timestamps and
   segments into a note and reopening episodes from `obsidian://podnotes` links.
 - [Local files](./local-files.md) covers "Play with PodNotes" on a vault audio

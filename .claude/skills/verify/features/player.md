@@ -19,7 +19,7 @@ audio plays. Collapsing it leaves the mini player at the bottom of every page.
 
 - Click the podcast icon in the left ribbon (`Show PodNotes`).
 - Run `PodNotes: Show player` from the command palette.
-- In the view, go Back to the Library, click a podcast, then an episode.
+- In the view, go Back to the Library, click a podcast's card, then an episode.
 - Click the chevron at the top of the full player, or press Escape, to collapse it. Click the mini player's title to open it again.
 - Run `PodNotes: Toggle playback`, `Increase playback rate`, `Decrease playback rate` or `Reset playback rate`.
 
@@ -32,7 +32,7 @@ Preconditions:
 
 - **Open from the ribbon.** Run `UI click '.side-dock-ribbon-action[aria-label="Show PodNotes"]'`. `.workspace-leaf-content[data-type="podcast_player_view"]` is visible.
 - **Open from the palette.** Run `UI key Ctrl+p`, `UI type .prompt-input 'Show player'`, `UI click .suggestion-item --text 'Show player'`. The same view is revealed, with no second PodNotes leaf (`CLI eval code='app.workspace.getLeavesOfType("podcast_player_view").length'` is `=> 1`). With an episode loaded, the full player (`.podcast-view section.pn-player`) covers the view.
-- **Play an episode.** On the Library (`UI click '.podcast-view button.pn-back'` until `h1.pn-head-title` reads `Library`), run `UI click '.podcast-view .podcast-card[aria-label="PodNotes Fixture"]'` and `UI click '.podcast-view .podcast-episode-item' --text 'Fixture Episode 1'`. The full player opens with the title `Fixture Episode 1`, and after a few seconds `api.isPlaying` is true and `api.currentTime` grows.
+- **Play an episode.** On the Library (`UI click '.podcast-view .pn-head button[aria-label^="Back to"]'` until `h1.pn-head-title` reads `Library`), run `UI click '.podcast-view button.pn-gridcard[aria-label="PodNotes Fixture"]'` and `UI click '.podcast-view .pn-ep-main' --text 'Fixture Episode 1'`. The full player opens with the title `Fixture Episode 1`, and after a few seconds `api.isPlaying` is true and `api.currentTime` grows.
 - **Collapse and open.** Run `UI click '.podcast-view [aria-label="Collapse player"]'` or `UI key Escape`. The mini player (`.podcast-view section.pn-mini`) shows the episode and `api.isPlaying` stays true. Run `UI click '.podcast-view .pn-mini-open'` to open the full player again.
 - **Toggle.** Run `UI click '.podcast-view [aria-label="Toggle playback"]'`. `api.isPlaying` flips and `api.currentTime` stops advancing.
 - **Skip.** Run `UI click '.podcast-view .controls-container > :last-child button'` (forward) or `'.podcast-view .controls-container > :first-child button'` (backward). `api.currentTime` moves by 15 s, clamped to the episode.
