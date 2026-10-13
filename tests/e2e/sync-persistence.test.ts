@@ -14,16 +14,10 @@ import {
 	seedAudio,
 	waitForPlaybackState,
 } from "./harness";
-import {
-	click,
-	closeSettings,
-	isShown,
-	listedEpisodes,
-	openPodNotesSettings,
-	showLibrary,
-	showPodNotes,
-	ui,
-} from "./journey/actions";
+import { closeSettings, openPodNotesSettings, showLibrary, showPodNotes } from "./journey/actions";
+import { click } from "./journey/input";
+import { ui } from "./journey/targets";
+import { isShown, listedEpisodes } from "./journey/wait";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import { seedLibrary, waitForLibrary } from "./journey/library";
 import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";

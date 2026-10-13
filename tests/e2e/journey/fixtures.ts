@@ -40,6 +40,11 @@ export type FixtureServer = Readonly<{
 	holdFeed(feed: FixtureFeed): () => Promise<void>;
 	/** Answers the feed with a server error until the returned restore runs. */
 	failFeed(feed: FixtureFeed): () => void;
+	/**
+	 * Drops every request without an answer, as a network that is gone does, until the
+	 * returned function runs. `requests` still lists what was sent.
+	 */
+	disconnect(): () => void;
 	/** Serves `episode` under `title` from now on, with its GUID and media unchanged. */
 	retitle(feed: FixtureFeed, episode: FixtureEpisode, title: string): void;
 	requests(): readonly string[];
@@ -60,9 +65,14 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		{ ready: Promise<void>; release: () => void; done: Promise<void>; complete: () => void }
 	>();
 	const failing = new Set<string>();
+	let disconnected = false;
 	const server = http.createServer((request, response) => {
 		const path = request.url ?? "";
 		requests.push(path);
+		if (disconnected) {
+			request.socket.destroy();
+			return;
+		}
 		if (failing.has(path)) {
 			response.writeHead(503).end();
 			return;
@@ -173,6 +183,12 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 			const path = feedPath(feed);
 			failing.add(path);
 			return () => failing.delete(path);
+		},
+		disconnect: () => {
+			disconnected = true;
+			return () => {
+				disconnected = false;
+			};
 		},
 		retitle: (feed, episode, title) => {
 			serveFeed({

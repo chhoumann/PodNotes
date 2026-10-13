@@ -19,6 +19,7 @@ import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { Navigation } from "src/ui/PodcastView/Navigation";
+import { dismissUndoNotices } from "src/ui/undoNotice";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import type { IPodNotes } from "./types/IPodNotes";
 import type PartialAppExtension from "./global";
@@ -27,7 +28,7 @@ import getContextMenuHandler from "./getContextMenuHandler";
 import getVaultRenameHandler from "./getVaultRenameHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
 import { CaptureService } from "./services/CaptureService";
-import { get, type Unsubscriber } from "svelte/store";
+import { get, type Readable, type Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
 import { bindMediaSession } from "./player/mediaSession";
 import {
@@ -51,6 +52,7 @@ import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { privateFeedAddresses, protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
 import { redactPrivateFeedAddresses } from "./utility/privateFeedUrl";
 import { FeedRepository, loadFeed } from "./services/FeedRepository";
+import { onlineStatus } from "./services/online";
 
 type WriteRefusal =
 	| "unreadable-data-file"
@@ -101,6 +103,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public feeds!: FeedRepository;
 	public capture!: CaptureService;
 	public navigation!: Navigation;
+	public online!: Readable<boolean>;
 
 	private views = new Set<MainView>();
 
@@ -110,10 +113,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private localFilesMirrorUnsubscribe?: Unsubscriber;
 	private closeRenames?: () => void;
 
-	private maxLayoutReadyAttempts = 10;
-	private layoutReadyAttempts = 0;
-	// window.setTimeout returns a number in the browser/Electron renderer.
-	private layoutReadyRetry: number | null = null;
 	private isUnloaded = false;
 	private freshInstall = false;
 	private podcastViewMountEnabled = true;
@@ -147,6 +146,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			}),
 		);
 		plugin.set(this);
+		this.online = onlineStatus(window);
 		this.credentials = new CredentialRepository(this.app.secretStorage);
 		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
 		this.feeds = new FeedRepository({
@@ -208,8 +208,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// PodNotes is a single-instance view, and onunload deliberately does NOT
 		// detach its leaves (detaching there would reset a leaf the user moved back
 		// to its default location on the next load). The trade-off is a hot reload
-		// (toggling the plugin) can briefly leave both the restored leaf and the
-		// freshly auto-opened one, so collapse any duplicates back to a single leaf
+		// (toggling the plugin) can briefly leave both the restored leaf and one
+		// opened before it came back, so collapse any duplicates back to a single leaf
 		// whenever the layout changes. This converges (it only acts when >1 exists)
 		// and never fires on a cold start, where only the restored leaf exists, so
 		// its position is preserved.
@@ -245,57 +245,14 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isReady = true;
 	}
 
+	// A new install meets the view once. After that PodNotes keeps the layout the
+	// user left, on desktop and mobile alike.
 	onLayoutReady(): void {
-		if (this.isUnloaded) {
-			return;
-		}
+		if (this.isUnloaded || !this.freshInstall) return;
 
-		if (this.isMobileRuntime()) {
-			// Mobile startup is sensitive to creating plugin-owned side panes; keep
-			// PodNotes dormant until the user opens it with the command or ribbon, but
-			// meet a new install with the view once.
-			this.clearLayoutReadyRetry();
-			this.layoutReadyAttempts = 0;
-			if (this.freshInstall) {
-				this.activateView().catch((error) => {
-					console.error("PodNotes: failed to initialize startup view", error);
-				});
-			}
-			return;
-		}
-
-		if (!this.app.workspace || !this.app.workspace.layoutReady) {
-			// Workspace is not ready, schedule a retry
-			this.layoutReadyAttempts++;
-			if (this.layoutReadyAttempts >= this.maxLayoutReadyAttempts) {
-				console.error("Failed to initialize PodNotes layout after maximum attempts");
-			} else if (!this.layoutReadyRetry) {
-				this.layoutReadyRetry = window.setTimeout(() => {
-					this.layoutReadyRetry = null;
-					this.onLayoutReady();
-				}, 100);
-			}
-			return;
-		}
-
-		this.clearLayoutReadyRetry();
-		this.layoutReadyAttempts = 0;
-
-		if (this.app.workspace.getLeavesOfType(VIEW_TYPE).length) {
-			return;
-		}
-
-		const leaf = this.app.workspace.getRightLeaf(false);
-
-		if (leaf) {
-			void leaf
-				.setViewState({
-					type: VIEW_TYPE,
-				})
-				.catch((error) => {
-					console.error("PodNotes: failed to initialize startup view", error);
-				});
-		}
+		this.activateView().catch((error) => {
+			console.error("PodNotes: failed to initialize startup view", error);
+		});
 	}
 
 	// Reveal the PodNotes view, creating its leaf when needed. Reusing an
@@ -332,6 +289,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	openSettingsTab(): void {
 		this.app.setting.open();
 		this.app.setting.openTabById(this.manifest.id);
+	}
+
+	/** The one writer of the auto-queue preference, for the settings tab and the Queue page. */
+	setAutoQueue(enabled: boolean): void {
+		if (this.settings.autoQueue === enabled) return;
+		this.settings.autoQueue = enabled;
+		// Views read settings through the plugin store, so it must tell them.
+		plugin.set(this);
+		void this.saveSettings();
 	}
 
 	shouldMountPodcastView(): boolean {
@@ -379,10 +345,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.isUnloaded = true;
 		// The refusal ends with this instance; the next one reads the file itself.
 		this.refusalNotice?.hide();
+		dismissUndoNotices();
 		// Before the store bindings are disposed, so the position it saves reaches the writer.
 		this.player?.dispose();
 		void this.writer?.unload();
-		this.clearLayoutReadyRetry();
 		for (const unsubscribe of this.storeUnsubscribers) unsubscribe();
 		this.storeUnsubscribers = [];
 		this.localFilesMirrorUnsubscribe?.();
@@ -394,13 +360,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// restores plugin leaves across reloads; detaching in onunload would reset a
 		// leaf the user moved (e.g. to the main area) back to its default location on
 		// the next load. Obsidian cleans up the leaves of an unloaded view itself.
-	}
-
-	private clearLayoutReadyRetry(): void {
-		if (!this.layoutReadyRetry) return;
-
-		window.clearTimeout(this.layoutReadyRetry);
-		this.layoutReadyRetry = null;
 	}
 
 	async loadSettings() {

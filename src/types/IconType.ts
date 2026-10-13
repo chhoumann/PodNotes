@@ -1,7 +1,5 @@
 // Lucide icon names accepted by Obsidian's setIcon / addCommand icon option.
-// Single deduplicated source of truth: ICON_LIST is the canonical array (used to
-// build the icon picker) and IconType is the matching string-literal union
-// derived from it, so the two can never drift and no name is duplicated.
+// ICON_LIST exists only to derive IconType, the union of the names it lists.
 
 export const ICON_LIST = [
 	"activity",

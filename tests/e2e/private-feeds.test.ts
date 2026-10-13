@@ -2,18 +2,10 @@ import type { ObsidianClient } from "obsidian-e2e";
 import { expect, onTestFinished, test } from "vitest";
 import { SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
-import {
-	click,
-	isShown,
-	notices,
-	runCommand,
-	showAddPodcast,
-	showLibrary,
-	showPodNotes,
-	typeInto,
-	ui,
-	waitUntilShown,
-} from "./journey/actions";
+import { runCommand, showAddPodcast, showLibrary, showPodNotes } from "./journey/actions";
+import { click, typeInto } from "./journey/input";
+import { ui } from "./journey/targets";
+import { isShown, notices, waitUntilShown } from "./journey/wait";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import {
 	feedCacheHolds,

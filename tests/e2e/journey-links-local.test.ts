@@ -1,20 +1,18 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	closePodNotes,
 	dismissNotices,
-	listedEpisodes,
-	notices,
 	openInReadingView,
 	revealInFileExplorer,
 	runCommand,
 	showLibrary,
 	showList,
 	showPodNotes,
-	ui,
-	waitUntilShown,
 } from "./journey/actions";
+import { click } from "./journey/input";
+import { ui } from "./journey/targets";
+import { listedEpisodes, notices, waitUntilShown } from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,

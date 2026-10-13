@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
+import { tick } from "svelte";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { FeedRepository } from "src/services/FeedRepository";
+import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
+import { FeedRepository, type FeedRepositoryDeps } from "src/services/FeedRepository";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { MemoryStorage } from "../../../tests/mocks/feeds";
+import { deferred, MemoryStorage } from "../../../tests/mocks/feeds";
 import { createTestServices } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
 import type { Layout } from "./layout";
@@ -27,14 +29,18 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-const unreachable = () =>
+const repositoryWith = ({
+	load = () => Promise.reject(new Error("unreachable")),
+	resolveUrl = (feed) => feed.url,
+}: Partial<Pick<FeedRepositoryDeps, "load" | "resolveUrl">> = {}) =>
 	new FeedRepository({
-		load: () => Promise.reject(new Error("unreachable")),
-		resolveUrl: (feed) => feed.url,
+		load,
+		resolveUrl,
 		storage: new MemoryStorage(),
 		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
+const unreachable = () => repositoryWith();
 
 function renderLibrary(
 	feeds: [string, PodcastFeed][],
@@ -108,6 +114,57 @@ describe("the Library's podcast grid", () => {
 		expect(card("Plain Show").querySelector(".pn-badge")).toBeNull();
 	});
 
+	test("offline, a podcast whose feed did not load wears no badge, since the Offline strip says why", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const repository = unreachable();
+		const { services } = renderLibrary([["Art Show", artShow]], { repository });
+		await repository.load(["Art Show"], "network");
+		services.online.set(false);
+		await tick();
+
+		expect(card("Art Show").querySelector(".pn-badge")).toBeNull();
+
+		services.online.set(true);
+		expect(
+			await screen.findByRole("button", { name: "Art Show, feed didn't load" }),
+		).toContainElement(document.querySelector(".pn-badge"));
+	});
+
+	test("back online, a podcast whose feed failed offline wears no badge while it loads again", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const answer = deferred<ParsedFeedEpisodes>();
+		const load = vi
+			.fn<FeedRepositoryDeps["load"]>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockReturnValueOnce(answer.promise);
+		const repository = repositoryWith({ load });
+		const { services } = renderLibrary([["Art Show", artShow]], { repository });
+		services.online.set(false);
+		await repository.load(["Art Show"], "network");
+
+		services.online.set(true);
+		void repository.ensureAll();
+		await tick();
+
+		expect(card("Art Show").querySelector(".pn-badge")).toBeNull();
+		answer.reject(new Error("down"));
+		expect(
+			await screen.findByRole("button", { name: "Art Show, feed didn't load" }),
+		).toContainElement(document.querySelector(".pn-badge"));
+	});
+
+	test("offline, a private feed whose address is not on this device still wears its badge", async () => {
+		const repository = repositoryWith({ resolveUrl: () => null });
+		const { services } = renderLibrary([["Art Show", artShow]], { repository });
+		await repository.load(["Art Show"], "network");
+		services.online.set(false);
+		await tick();
+
+		expect(card("Art Show, feed didn't load")).toContainElement(
+			document.querySelector(".pn-badge"),
+		);
+	});
+
 	test("a right-click on a podcast opens its menu at the pointer", async () => {
 		const { services } = renderLibrary([["Art Show", artShow]]);
 		Object.assign(services.app, { vault: { getAbstractFileByPath: () => null } });
@@ -118,6 +175,7 @@ describe("the Library's podcast grid", () => {
 
 		expect(titles.mock.calls.map(([title]) => title)).toEqual([
 			"Create podcast note",
+			"Copy feed URL",
 			"Remove podcast",
 		]);
 		expect(shown).toHaveBeenCalledWith({ x: 40, y: 50, doc: document }, document);

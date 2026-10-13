@@ -266,7 +266,7 @@
 						cover
 						onplay={() => openEpisode(services, queued)}
 						onmenu={(at) =>
-							showMenu(episodeMenu(queued, services, { place: "queue", at }), at)}
+							showMenu(episodeMenu(queued, services, { place: "list", at }), at)}
 					/>
 				{/each}
 			</div>
@@ -281,6 +281,7 @@
 		flex: 1 1 auto;
 		min-height: 0;
 		padding: 0 1rem;
+		padding-bottom: var(--pn-status-bar);
 		overflow-y: auto;
 		gap: 0.35rem;
 	}

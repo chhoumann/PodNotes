@@ -1,18 +1,29 @@
 <script lang="ts">
 	import { Platform } from "obsidian";
 	import { onMount } from "svelte";
+
 	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
 	import { icon } from "../obsidian/icon";
+	import { pickVaultMedia } from "../pickVaultMedia";
 	import AddPodcastPage from "./AddPodcastPage.svelte";
 	import { provideServices, type ShellServices } from "./context";
+
 	import EpisodesPage from "./EpisodesPage.svelte";
-	import { layoutFor, observeWidth, restoreScroll, type Layout } from "./layout";
+	import {
+		layoutFor,
+		observeStatusBar,
+		observeWidth,
+		restoreScroll,
+		type Layout,
+	} from "./layout";
 	import LibraryPage from "./LibraryPage.svelte";
-	import { anchorOf, podcastMenu, showMenu } from "./menus";
+	import ListPage from "./ListPage.svelte";
+	import { anchorOf, playlistMenu, podcastMenu, queueMenu, showMenu } from "./menus";
 	import MiniPlayer from "./MiniPlayer.svelte";
 	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
 	import PlayerOverlay from "./PlayerOverlay.svelte";
 	import PlaylistsPage from "./PlaylistsPage.svelte";
+	import QueuePage from "./QueuePage.svelte";
 	import Rail from "./Rail.svelte";
 	import SearchField from "./SearchField.svelte";
 
@@ -20,12 +31,13 @@
 	// svelte-ignore state_referenced_locally
 	provideServices(services);
 	// svelte-ignore state_referenced_locally
-	const { navigation, player, feeds, library, search, openSettings } = services;
+	const { navigation, player, feeds, library, search, online, openSettings } = services;
 	const { savedFeeds, queue, favorites, playlists, localFiles, playedEpisodes } = library;
 	const playerState = player.state;
 
 	let root: HTMLDivElement | undefined = $state();
 	let layout = $state<Layout>("compact");
+	let statusBar = $state(0);
 
 	const page = $derived($navigation.page);
 	const counts: RootCounts = $derived({
@@ -47,10 +59,19 @@
 	const overlaid = $derived(loaded && $navigation.expanded);
 
 	const head = $derived(
-		headFor(page, layout, $navigation.stack[$navigation.stack.length - 1]?.page, $feeds),
+		headFor(page, layout, $navigation.stack[$navigation.stack.length - 1]?.page, $feeds, {
+			queue: $queue,
+			favorites: $favorites,
+			playlists: $playlists,
+			played: $playedEpisodes,
+		}),
 	);
 
 	onMount(() => savedFeeds.subscribe(() => void feeds.ensureAll()));
+	// Offline, a feed due for a refresh fails to load, so the connection's return loads it.
+	$effect(() => {
+		if ($online) void feeds.ensureAll();
+	});
 
 	// A podcast or playlist removed while its page is open, or since the page was saved.
 	$effect(() => {
@@ -64,11 +85,13 @@
 	class:is-compact={layout === "compact"}
 	class:is-wide={layout === "wide"}
 	class:is-phone={Platform.isPhone}
+	style:--pn-status-bar="{statusBar}px"
 	bind:this={root}
 	{@attach observeWidth((width) => {
 		// A hidden leaf measures 0 wide; it keeps the layout it had.
 		if (width > 0) layout = layoutFor(width);
 	})}
+	{@attach observeStatusBar((inset) => (statusBar = inset), services.app.workspace)}
 >
 	{#if firstRun}
 		<div class="pn-first-run" inert={overlaid}>
@@ -88,6 +111,12 @@
 				<Rail {counts} active={activeRoot(page)} />
 			{/if}
 			<main class="pn-main">
+				{#if !$online}
+					<div class="pn-strip" role="status">
+						<span class="pn-strip-icon" {@attach icon("wifi-off")}></span>
+						<span>Offline</span>
+					</div>
+				{/if}
 				<header class="pn-head">
 					{#if head.back}
 						<button
@@ -111,6 +140,7 @@
 					{:else}
 						{#if head.title}
 							<h1 class="pn-head-title">{head.title}</h1>
+							{#if head.flair}<span class="flair">{head.flair}</span>{/if}
 						{/if}
 						<span class="pn-spacer"></span>
 					{/if}
@@ -137,6 +167,7 @@
 							class="pn-iconbtn"
 							aria-label="Refresh all feeds"
 							title="Refresh all feeds"
+							disabled={!$online}
 							onclick={() => feeds.load($feeds.keys(), "network")}
 							{@attach icon("refresh-cw")}
 						></button>
@@ -152,6 +183,37 @@
 								showMenu(podcastMenu(key, services), anchorOf(event))}
 							{@attach icon("more-horizontal")}
 						></button>
+					{:else if head.action === "local"}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Add a vault file"
+							title="Add a vault file"
+							onclick={() => pickVaultMedia(services.app)}
+							{@attach icon("plus")}
+						></button>
+					{:else if head.action === "queue"}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Queue options"
+							title="Queue options"
+							aria-haspopup="menu"
+							onclick={(event) => showMenu(queueMenu(services), anchorOf(event))}
+							{@attach icon("more-horizontal")}
+						></button>
+					{:else if head.action === "playlist" && page.kind === "playlist"}
+						{@const name = page.name}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Playlist options"
+							title="Playlist options"
+							aria-haspopup="menu"
+							onclick={(event) =>
+								showMenu(playlistMenu(name, services), anchorOf(event))}
+							{@attach icon("more-horizontal")}
+						></button>
 					{/if}
 				</header>
 				{#key pageKey(page)}
@@ -162,7 +224,10 @@
 							navigation.rememberScroll(event.currentTarget.scrollTop)}
 					>
 						{#if head.pageTitle}
-							<div class="pn-title"><h1>{head.pageTitle}</h1></div>
+							<div class="pn-title">
+								<h1>{head.pageTitle}</h1>
+								{#if head.flair}<span class="flair">{head.flair}</span>{/if}
+							</div>
 						{/if}
 						{#if page.kind === "library"}
 							<LibraryPage {layout} {counts} />
@@ -170,8 +235,12 @@
 							<AddPodcastPage firstRun={false} />
 						{:else if page.kind === "playlists"}
 							<PlaylistsPage />
+						{:else if page.kind === "feed"}
+							<EpisodesPage key={page.key} />
+						{:else if page.kind === "queue"}
+							<QueuePage />
 						{:else}
-							<EpisodesPage {page} />
+							<ListPage {page} />
 						{/if}
 					</div>
 				{/key}
@@ -206,6 +275,19 @@
 	/* The shell lays out the whole view, edge to edge. */
 	:global(.view-content:has(> .podcast-view)) {
 		padding: 0;
+	}
+
+	:global(.notice .pn-undo) {
+		margin-left: var(--size-4-2);
+	}
+
+	/* A prompt's field takes the rest of its row, so a feed address shows whole. */
+	:global(.pn-prompt .setting-item-info) {
+		flex: none;
+	}
+
+	:global(.pn-prompt .setting-item-control input) {
+		width: 100%;
 	}
 
 	/* On a phone, Obsidian's navbar floats over the main area, and a mobile drawer
@@ -268,6 +350,24 @@
 		background: var(--pn-bg);
 	}
 
+	.pn-strip {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-2);
+		height: 32px;
+		padding: 0 var(--pn-pad);
+		background: var(--background-modifier-border);
+		color: var(--text-muted);
+		font-size: var(--font-ui-smaller);
+		font-weight: var(--font-medium);
+	}
+
+	.pn-strip-icon {
+		display: flex;
+		--icon-size: 14px;
+	}
+
 	.pn-head {
 		flex: none;
 		display: flex;
@@ -320,6 +420,11 @@
 		padding: 0 var(--pn-pad) var(--size-4-6);
 	}
 
+	/* Without the mini player, a page ends under Obsidian's status bar. */
+	.podcast-view:not(:has(> :global(.pn-mini))) .pn-scroll {
+		padding-bottom: calc(var(--size-4-6) + var(--pn-status-bar));
+	}
+
 	.pn-title {
 		display: flex;
 		align-items: baseline;
@@ -365,6 +470,10 @@
 			color: var(--text-muted);
 		}
 
+		.pn-h2.is-first {
+			margin-top: var(--size-4-1);
+		}
+
 		.pn-iconbtn {
 			display: inline-flex;
 			align-items: center;
@@ -386,6 +495,12 @@
 			background: var(--background-modifier-hover);
 			color: var(--text-normal);
 			opacity: var(--icon-opacity-hover);
+		}
+
+		.pn-iconbtn:disabled {
+			background: none;
+			opacity: 0.35;
+			cursor: default;
 		}
 
 		.pn-btn {
@@ -473,12 +588,28 @@
 			text-overflow: ellipsis;
 		}
 
-		.pn-navitem .flair {
+		/* Obsidian styles .flair as an uppercase tag; here it is plain muted text. */
+		.flair {
+			flex: none;
+			margin-inline-start: 0;
 			padding: 0;
 			background: none;
+			letter-spacing: normal;
+			text-transform: none;
 			color: var(--text-muted);
-			font-size: var(--font-ui-smaller);
+			font-size: var(--font-ui-small);
+			white-space: nowrap;
 			font-variant-numeric: tabular-nums;
+		}
+
+		.pn-head .flair {
+			align-self: center;
+			margin-left: var(--size-4-2);
+			padding-top: 3px;
+		}
+
+		.pn-navitem .flair {
+			font-size: var(--font-ui-smaller);
 		}
 
 		.pn-back,
@@ -667,9 +798,19 @@
 		}
 
 		.pn-panel-empty {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: var(--size-4-3);
 			padding: var(--size-4-8) var(--size-4-3);
 			color: var(--text-muted);
 			text-align: center;
+		}
+
+		.pn-panel-empty-icon {
+			display: flex;
+			--icon-size: 28px;
+			--icon-stroke: 1.5px;
 		}
 
 		/* Obsidian's buttons keep their text on one line; these wrap their titles. */
@@ -888,6 +1029,29 @@
 			color: var(--text-faint);
 		}
 
+		.pn-ep-meta .pod {
+			min-width: 0;
+			overflow-wrap: anywhere;
+		}
+
+		.pn-brk {
+			flex-basis: 100%;
+			height: 0;
+		}
+
+		.pn-brk + .sep {
+			display: none;
+		}
+
+		.pn-filetile {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: var(--background-modifier-border);
+			color: var(--text-muted);
+			--icon-size: 18px;
+		}
+
 		.pn-bar {
 			width: 32px;
 			height: 3px;
@@ -914,6 +1078,7 @@
 
 		.pn-ep.is-unavailable .pn-ep-main {
 			opacity: 0.45;
+			cursor: default;
 		}
 
 		.pn-ep-more {
@@ -923,6 +1088,49 @@
 
 		.pn-ep:hover .pn-ep-more,
 		.pn-ep-more:focus-visible {
+			opacity: 1;
+		}
+
+		.pn-queue .pn-ep {
+			align-items: center;
+			gap: var(--size-2-2);
+		}
+
+		.pn-queue .pn-ep-main {
+			align-items: center;
+			padding-left: 0;
+		}
+
+		.pn-queue .pn-ep-main .pn-cover {
+			margin-top: 0;
+		}
+
+		.pn-queue .pn-bar {
+			display: none;
+		}
+
+		.pn-grip {
+			cursor: grab;
+			touch-action: none;
+			color: var(--text-muted);
+			opacity: 1;
+			--icon-size: 16px;
+		}
+
+		.pn-ep:has(.pn-grip.is-dragging) {
+			position: relative;
+			z-index: 2;
+			background: var(--pn-surface);
+			box-shadow: var(--shadow-s);
+		}
+
+		.pn-ep-x {
+			margin-right: var(--size-2-2);
+			opacity: 0.55;
+		}
+
+		.pn-ep:hover .pn-ep-x,
+		.pn-ep-x:focus-visible {
 			opacity: 1;
 		}
 
@@ -1025,11 +1233,88 @@
 			text-overflow: ellipsis;
 		}
 
+		.pn-plrow {
+			display: flex;
+			align-items: center;
+			gap: var(--size-4-3);
+			width: 100%;
+			height: auto;
+			padding: var(--size-4-2);
+			border: 0;
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-normal);
+			font-size: var(--font-ui-small);
+			font-weight: inherit;
+			text-align: left;
+			cursor: var(--cursor);
+		}
+
+		.pn-plrow:hover {
+			background: var(--background-modifier-hover);
+		}
+
+		.pn-plicon {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex: none;
+			width: 44px;
+			height: 44px;
+			border-radius: 8px;
+			background: var(--background-modifier-border);
+			color: var(--text-muted);
+			--icon-size: 20px;
+		}
+
+		.pn-plicon.is-fav {
+			background: rgba(var(--color-pink-rgb), 0.16);
+			color: var(--color-pink);
+		}
+
+		.pn-plrow .txt {
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.pn-plrow .t {
+			font-weight: var(--font-medium);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.pn-plrow .s {
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+		}
+
+		.pn-plchevron {
+			display: flex;
+			color: var(--text-muted);
+			--icon-size: 16px;
+		}
+
+		.pn-plrow.is-new .pn-plicon {
+			background: none;
+			border: 1px dashed var(--background-modifier-border-hover);
+		}
+
+		.pn-plrow.is-new .t {
+			color: var(--text-muted);
+			font-weight: var(--font-normal);
+		}
+
 		.pn-iconbtn:focus-visible,
 		.pn-btn:focus-visible,
 		.pn-ep-main:focus-visible,
 		.pn-gridcard:focus-visible,
 		.pn-navitem:focus-visible,
+		.pn-plrow:focus-visible,
 		.pn-back:focus-visible,
 		.pn-alt:focus-visible,
 		.pn-result:focus-visible,
@@ -1058,6 +1343,30 @@
 	}
 
 	.is-wide :global {
+		.pn-ep-meta {
+			flex-wrap: nowrap;
+			white-space: nowrap;
+		}
+
+		.pn-ep-meta > * {
+			flex: none;
+		}
+
+		.pn-ep-meta .pod {
+			flex: 0 1 auto;
+			min-width: 24px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.pn-brk {
+			display: none;
+		}
+
+		.pn-brk + .sep {
+			display: inline;
+		}
+
 		.pn-grid {
 			grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
 			gap: var(--size-4-4);

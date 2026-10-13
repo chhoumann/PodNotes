@@ -1,6 +1,15 @@
 import { describe, expect, test } from "vitest";
 import type { Episode } from "src/types/Episode";
-import { episodeRowModel, formatMinutes, rowKeys, type RowState } from "./episodeRow";
+import type { LocalEpisode } from "src/types/LocalEpisode";
+import {
+	availabilityOf,
+	episodeRowModel,
+	formatMinutes,
+	rowKeys,
+	secondsLeft,
+	totalSeconds,
+	type RowState,
+} from "./episodeRow";
 
 const thisYear = new Date().getFullYear();
 const episode: Episode = {
@@ -20,7 +29,8 @@ const state: RowState = {
 	playing: false,
 	hasNote: false,
 	cover: false,
-	available: true,
+	date: true,
+	availability: "available",
 };
 const record = (time: number, duration: number, finished = false) => ({
 	"Field Notes::#214 Reading slowly": {
@@ -104,14 +114,47 @@ describe("an episode row", () => {
 	});
 
 	test("names the podcast instead of the date when it has a cover", () => {
-		expect(row({ cover: true }).meta).toEqual(["48 min"]);
+		expect(row({ cover: true, date: false })).toMatchObject({
+			source: "Field Notes",
+			meta: ["48 min"],
+		});
+		expect(row().source).toBeUndefined();
+	});
+
+	test("on Latest, names the podcast and the date, but not the date of one under way", () => {
+		expect(row({ cover: true })).toMatchObject({
+			source: "Field Notes",
+			meta: ["Oct 9", "48 min"],
+		});
+		expect(row({ cover: true, played: record(14 * 60, 48 * 60) }).meta).toEqual([
+			"34 min left",
+		]);
+	});
+
+	test("names no podcast for the current episode, which says it is playing", () => {
+		expect(row({ cover: true, now: episode, playing: true })).toMatchObject({
+			source: undefined,
+			meta: ["Playing", "48 min"],
+		});
 	});
 
 	test("says a Played record whose episode left every feed is unavailable", () => {
-		expect(row({ available: false })).toMatchObject({
+		expect(row({ availability: "missing" })).toMatchObject({
 			unavailable: true,
 			label: "#214 Reading slowly, unavailable",
 		});
+	});
+
+	test("says an episode offline with no copy is not downloaded", () => {
+		expect(row({ availability: "not-downloaded" })).toMatchObject({
+			unavailable: true,
+			label: "#214 Reading slowly, not downloaded",
+		});
+	});
+
+	test("takes the length from the Played record when the feed gives none", () => {
+		const bare = { ...episode, duration: undefined };
+		expect(row({ played: record(2880, 2880, true) }, bare).meta).toEqual(["Oct 9", "48 min"]);
 	});
 
 	test("shows nothing it does not know", () => {
@@ -136,5 +179,92 @@ describe("row keys", () => {
 	test("keep every episode, also two that share a podcast and a title", () => {
 		const keys = rowKeys([rerun("1.mp3"), rerun("2.mp3")]).map(([key]) => key);
 		expect(new Set(keys).size).toBe(2);
+	});
+});
+
+describe("a vault file's row", () => {
+	const file: LocalEpisode = {
+		title: "Interview with grandma.m4a",
+		streamUrl: "app://vault/Recordings/Family/Interview with grandma.m4a",
+		url: "",
+		description: "",
+		content: "",
+		podcastName: "local file",
+		filePath: "Recordings/Family/Interview with grandma.m4a",
+	};
+	const played = {
+		"local file::Interview with grandma.m4a": {
+			title: file.title,
+			podcastName: "local file",
+			time: 0,
+			duration: 64 * 60,
+			finished: true,
+		},
+	};
+
+	test("shows a file tile and its folder, and the length it learned when it played", () => {
+		expect(row({ cover: true, played }, file)).toMatchObject({
+			tile: "music",
+			source: "Recordings/Family",
+			meta: ["1 h 4 min"],
+			played: true,
+		});
+	});
+
+	test("names the vault's root for a file at the root, and shows a video tile for a video", () => {
+		const video = { ...file, filePath: "Lecture.mp4", mediaType: "video" } as const;
+		expect(row({ cover: true }, video)).toMatchObject({ tile: "video", source: "/" });
+	});
+
+	test("shows no tile or folder without a cover", () => {
+		expect(row({}, file)).toMatchObject({ tile: undefined, source: undefined });
+	});
+});
+
+describe("list times", () => {
+	const second = { ...episode, title: "#215 Margins", duration: 30 * 60 };
+	const under = (time: number) => ({
+		...record(time, 48 * 60),
+		"Field Notes::#215 Margins": {
+			title: second.title,
+			podcastName: "Field Notes",
+			time: 30 * 60,
+			duration: 30 * 60,
+			finished: true,
+		},
+	});
+
+	test("total each episode's length", () => {
+		expect(totalSeconds([episode, second], under(14 * 60))).toBe(78 * 60);
+	});
+
+	test("count what is left of one under way, and all of a finished one, which plays again", () => {
+		expect(secondsLeft([episode, second], under(14 * 60))).toBe(34 * 60 + 30 * 60);
+	});
+
+	test("count an episode of unknown length as nothing", () => {
+		expect(secondsLeft([{ ...episode, duration: undefined }], {})).toBe(0);
+	});
+});
+
+describe("availability", () => {
+	const downloads = { "Field Notes": [{ ...episode, filePath: "Downloads/214.mp3", size: 1 }] };
+	const other = { ...episode, title: "#215 Margins", streamUrl: "https://media.test/215.mp3" };
+
+	test("online, every episode found in a feed plays", () => {
+		expect(availabilityOf(other, true, true, {})).toBe("available");
+	});
+
+	test("offline, an episode plays from its vault file or a downloaded copy, and no other", () => {
+		expect(availabilityOf(episode, true, false, downloads)).toBe("available");
+		expect(availabilityOf({ ...other, filePath: "a.mp3" } as Episode, true, false, {})).toBe(
+			"available",
+		);
+		expect(availabilityOf(other, true, false, downloads)).toBe("not-downloaded");
+	});
+
+	test("a Played record no loaded feed lists is missing online, and offline needs a connection", () => {
+		expect(availabilityOf(episode, false, true, downloads)).toBe("missing");
+		expect(availabilityOf(episode, false, false, downloads)).toBe("not-downloaded");
 	});
 });

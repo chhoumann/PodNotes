@@ -4,15 +4,14 @@ import { afterAll, beforeAll, describe, expect, onTestFinished, test } from "vit
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	assertSingleWindow,
-	click,
 	closeSettings,
 	dismissNotices,
 	openPodNotesSettings,
 	restartObsidian,
 	showPodNotes,
-	ui,
-	type UiTarget,
 } from "./journey/actions";
+import { click } from "./journey/input";
+import { ui, type UiTarget } from "./journey/targets";
 
 import {
 	restoreJourneyCache,
