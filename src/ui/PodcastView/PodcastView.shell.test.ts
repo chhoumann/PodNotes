@@ -97,7 +97,7 @@ describe("navigation", () => {
 
 	test("a rail item clears the pages visited before it", async () => {
 		renderView(820);
-		await fireEvent.click(screen.getByAltText(feed.title));
+		await fireEvent.click(screen.getByRole("button", { name: feed.title }));
 		expect(button(`Back to Library`)).toBeInTheDocument();
 
 		await fireEvent.click(button(/^Latest episodes/));
@@ -184,7 +184,7 @@ describe("library", () => {
 		renderView(820);
 		await tick();
 
-		expect(screen.getByAltText(feed.title)).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: feed.title })).toBeInTheDocument();
 		expect([/^Queue/, /^Playlists/, /^Local files/, /^Played/].map(flair)).toEqual([
 			"2",
 			"2",
@@ -200,6 +200,20 @@ describe("library", () => {
 		expect(screen.getByText(walk.title)).toBeInTheDocument();
 	});
 
+	test("refreshes every podcast from the wide Library's head", async () => {
+		const loads: unknown[] = [];
+		vi.spyOn(services.feeds, "load").mockImplementation(async (keys, mode) => {
+			loads.push([[...keys], mode]);
+			return true;
+		});
+		renderView(820);
+		await tick();
+
+		await fireEvent.click(button("Refresh all feeds"));
+
+		expect(loads.at(-1)).toEqual([[feed.title], "network"]);
+	});
+
 	test("is not the plugin's stores", async () => {
 		const other = { ...feed, title: "Other Podcast" };
 		savedFeeds.set({ [other.title]: other });
@@ -210,8 +224,8 @@ describe("library", () => {
 		renderView(820);
 		await tick();
 
-		expect(screen.getByAltText(feed.title)).toBeInTheDocument();
-		expect(screen.queryByAltText(other.title)).toBeNull();
+		expect(screen.getByRole("button", { name: feed.title })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: other.title })).toBeNull();
 		expect([/^Queue/, /^Playlists/, /^Local files/, /^Played/].map(flair)).toEqual([
 			undefined,
 			"1",
@@ -309,7 +323,7 @@ describe("first run", () => {
 
 		expect(screen.queryByRole("heading", { name: "Add your first podcast" })).toBeNull();
 		expect(screen.getByRole("heading", { name: "Library" })).toBeInTheDocument();
-		expect(screen.getByText("No saved podcasts.")).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Podcasts" })).toBeInTheDocument();
 	});
 });
 
@@ -420,7 +434,10 @@ describe("full player", () => {
 		renderView(820);
 		playing();
 		await tick();
-		const covered = [button(/^Latest episodes/), screen.getByAltText(feed.title)];
+		const covered = [
+			button(/^Latest episodes/),
+			screen.getByRole("button", { name: feed.title }),
+		];
 
 		await fireEvent.click(button(`Open player: ${episode.title}`));
 		for (const el of covered) expect(el.closest("[inert]")).not.toBeNull();

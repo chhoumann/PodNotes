@@ -32,7 +32,7 @@ test("a podcast card in the legacy grid opens the podcast's page", async () => {
 		props: { services, component: LibraryPage, props: { layout: "compact", counts: {} } },
 	});
 
-	await fireEvent.click(screen.getByAltText(feed.title));
+	await fireEvent.click(screen.getByRole("button", { name: feed.title }));
 
 	expect(services.navigation.current.page).toEqual({ kind: "feed", key: feed.title });
 });

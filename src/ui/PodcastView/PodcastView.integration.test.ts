@@ -253,8 +253,8 @@ describe("PodcastView integration flow", () => {
 
 		renderView();
 
-		const feedImage = await screen.findByAltText(testFeed.title);
-		await fireEvent.click(feedImage);
+		const feedCard = await screen.findByRole("button", { name: testFeed.title });
+		await fireEvent.click(feedCard);
 
 		const episodeNode = await screen.findByText(testEpisode.title);
 		await fireEvent.click(episodeNode);
@@ -364,7 +364,7 @@ describe("PodcastView integration flow", () => {
 
 		renderView();
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
-		await screen.findByAltText(testFeed.title);
+		await screen.findByRole("button", { name: testFeed.title });
 		await openList("Latest episodes");
 
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
@@ -383,7 +383,7 @@ describe("PodcastView integration flow", () => {
 			savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 			usePlugin();
 			renderView();
-			await fireEvent.click(await screen.findByAltText(testFeed.title));
+			await fireEvent.click(await screen.findByRole("button", { name: testFeed.title }));
 			expect(await screen.findByText(alphaEpisode.title)).toBeInTheDocument();
 			refresh = deferred<ParsedFeedEpisodes>();
 			mockLoad.mockReturnValueOnce(refresh.promise);
@@ -394,7 +394,7 @@ describe("PodcastView integration flow", () => {
 
 		test("never lists it under the podcast opened since, and the banner clears", async () => {
 			await back();
-			await fireEvent.click(await screen.findByAltText(secondFeed.title));
+			await fireEvent.click(await screen.findByRole("button", { name: secondFeed.title }));
 			expect(screen.getByText("Updating 1 feed")).toBeInTheDocument();
 
 			refresh.resolve(feedDocument(testFeed.title, [alphaEpisode]));
@@ -421,7 +421,7 @@ describe("PodcastView integration flow", () => {
 		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 		usePlugin();
 		renderView();
-		await fireEvent.click(await screen.findByAltText(secondFeed.title));
+		await fireEvent.click(await screen.findByRole("button", { name: secondFeed.title }));
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(2));
 
 		savedFeeds.set({ [testFeed.title]: testFeed });
@@ -437,7 +437,7 @@ describe("PodcastView integration flow", () => {
 		const failure = `Could not load episodes for ${testFeed.title}. Check your connection and try again.`;
 		usePlugin();
 		renderView();
-		await fireEvent.click(await screen.findByAltText(testFeed.title));
+		await fireEvent.click(await screen.findByRole("button", { name: testFeed.title }));
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
 
 		mockLoad.mockRejectedValue(new Error("offline"));
@@ -448,7 +448,7 @@ describe("PodcastView integration flow", () => {
 
 		savedFeeds.set({ [testFeed.title]: testFeed, [secondFeed.title]: secondFeed });
 		await back();
-		await fireEvent.click(await screen.findByAltText(secondFeed.title));
+		await fireEvent.click(await screen.findByRole("button", { name: /^Second Podcast/ }));
 		await waitFor(() =>
 			expect(notice).toHaveBeenCalledWith(
 				`Could not load episodes for ${secondFeed.title}. Check your connection and try again.`,
@@ -471,7 +471,9 @@ describe("PodcastView integration flow", () => {
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(notice).not.toHaveBeenCalled();
 
-		await fireEvent.click(await screen.findByRole("button", { name: patron.title }));
+		await fireEvent.click(
+			await screen.findByRole("button", { name: "Patron Show, feed didn't load" }),
+		);
 
 		await waitFor(() =>
 			expect(notice.mock.calls).toEqual([
@@ -509,9 +511,9 @@ describe("issue #174 feed cache cap regression", () => {
 	test("opening a show bypasses the truncated cache and loads older episodes", async () => {
 		renderView();
 
-		const feedImage = await screen.findByAltText(testFeed.title);
+		const feedCard = await screen.findByRole("button", { name: testFeed.title });
 		expect(mockLoad).not.toHaveBeenCalled();
-		await fireEvent.click(feedImage);
+		await fireEvent.click(feedCard);
 
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
@@ -532,7 +534,7 @@ describe("issue #174 feed cache cap regression", () => {
 
 		renderView();
 
-		await screen.findByAltText(testFeed.title);
+		await screen.findByRole("button", { name: testFeed.title });
 		expect(mockLoad).not.toHaveBeenCalled();
 		await openList("Played");
 
@@ -559,8 +561,8 @@ describe("issue #174 feed cache cap regression", () => {
 	test("reopening a show reuses the full feed without refetching", async () => {
 		renderView();
 
-		const feedImage = await screen.findByAltText(testFeed.title);
-		await fireEvent.click(feedImage);
+		const feedCard = await screen.findByRole("button", { name: testFeed.title });
+		await fireEvent.click(feedCard);
 
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
@@ -568,7 +570,7 @@ describe("issue #174 feed cache cap regression", () => {
 		await back();
 		expect(navigation.current.page).toEqual({ kind: "library" });
 
-		await fireEvent.click(await screen.findByAltText(testFeed.title));
+		await fireEvent.click(await screen.findByRole("button", { name: testFeed.title }));
 		expect(await screen.findByText(oldEpisode.title)).toBeInTheDocument();
 		expect(mockLoad).toHaveBeenCalledTimes(1);
 	});
@@ -579,8 +581,8 @@ describe("issue #174 feed cache cap regression", () => {
 
 		renderView();
 
-		const feedImage = await screen.findByAltText(testFeed.title);
-		await fireEvent.click(feedImage);
+		const feedCard = await screen.findByRole("button", { name: testFeed.title });
+		await fireEvent.click(feedCard);
 
 		expect(await screen.findByText(createNumberedEpisode(622).title)).toBeInTheDocument();
 		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
