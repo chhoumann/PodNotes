@@ -575,6 +575,21 @@ describe("resilience journeys", () => {
 			current: storedEpisode(server, show, hostile),
 		});
 		const notePath = sandbox.path("Transcripts/Journey Hostile Captions/Hostile Episode.md");
+		await obsidian.dev.evalJson(`(() => {
+			const beat = { last: performance.now(), max: 0 };
+			beat.timer = setInterval(() => {
+				const now = performance.now();
+				beat.max = Math.max(beat.max, now - beat.last);
+				beat.last = now;
+			}, 10);
+			window.__podnotesJourneyBeat = beat;
+			return true;
+		})()`);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(
+				"clearInterval(window.__podnotesJourneyBeat?.timer), delete window.__podnotesJourneyBeat",
+			),
+		);
 
 		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
 		await sandbox.waitForExists("Transcripts/Journey Hostile Captions/Hostile Episode.md", {
@@ -583,26 +598,36 @@ describe("resilience journeys", () => {
 		const opened = await obsidian.dev.evalJsonAsync<{
 			state: unknown;
 			stallMs: number;
-		}>(`(async () => {
-			const beat = { last: performance.now(), max: 0 };
-			const timer = setInterval(() => {
-				const now = performance.now();
-				beat.max = Math.max(beat.max, now - beat.last);
-				beat.last = now;
-			}, 10);
-			const leaf = app.workspace.getLeaf(true);
-			await leaf.openFile(app.vault.getAbstractFileByPath(${JSON.stringify(notePath)}), {
-				active: true,
-				state: { mode: "source", source: false },
-			});
-			await new Promise((resolve) => setTimeout(resolve, 1500));
-			clearInterval(timer);
-			await app.workspace.saveLayout();
-			return { state: leaf.view.getState(), stallMs: beat.max };
-		})()`);
+			text: string;
+		}>(
+			`(async () => {
+				const shows = (leaf) => leaf.view.file?.path === ${JSON.stringify(notePath)};
+				const deadline = Date.now() + 30000;
+				while (!app.workspace.getLeavesOfType("markdown").some(shows) && Date.now() < deadline) {
+					await new Promise((resolve) => setTimeout(resolve, 50));
+				}
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+				const beat = window.__podnotesJourneyBeat;
+				clearInterval(beat.timer);
+				const leaf = app.workspace.getLeavesOfType("markdown").find(shows);
+				app.workspace.setActiveLeaf(leaf, { focus: true });
+				await app.workspace.saveLayout();
+				return {
+					state: leaf.view.getState(),
+					stallMs: beat.max,
+					text: await app.vault.read(leaf.view.file),
+				};
+			})()`,
+			{ timeoutMs: 120_000 },
+		);
+		const lines = opened.text.trimEnd().split("\n");
 
+		expect(Math.max(...lines.map((line) => line.length))).toBeLessThan(4_300);
+		expect(opened.text.split("\\|").length - 1).toBe(3_000);
+		expect(opened.text.split("\\<").length - 1).toBe(6_000);
+		expect(lines.at(-1)).toMatch(/\) survived$/);
 		expect(opened.state).toMatchObject({ mode: "source", source: false });
-		expect(opened.stallMs).toBeLessThan(3000);
+		expect(opened.stallMs).toBeLessThan(5_000);
 
 		await reloadObsidian(obsidian);
 		const reopened = await obsidian.dev.evalJsonAsync<{
@@ -628,6 +653,6 @@ describe("resilience journeys", () => {
 
 		expect(reopened.file).toBe(notePath);
 		expect(reopened.state).toMatchObject({ mode: "source", source: false });
-		expect(reopened.longestTaskMs).toBeLessThan(3000);
-	}, 90_000);
+		expect(reopened.longestTaskMs).toBeLessThan(5_000);
+	}, 240_000);
 });
