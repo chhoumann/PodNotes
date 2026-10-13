@@ -2,7 +2,7 @@
 	import { importOPML } from "src/opml";
 	import { icon } from "../obsidian/icon";
 	import { pickFile } from "../pickFile";
-	import { pickVaultMedia } from "../VaultMediaModal";
+	import { pickVaultMedia } from "../pickVaultMedia";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
 	import type { PodcastResult, SearchFailure } from "./podcastSearch";

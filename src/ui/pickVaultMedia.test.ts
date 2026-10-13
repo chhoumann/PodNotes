@@ -2,7 +2,7 @@
 import { App, FuzzySuggestModal, TFile } from "obsidian";
 import { afterEach, expect, test, vi } from "vitest";
 import { playLocalFile } from "src/playLocalFile";
-import { pickVaultMedia } from "./VaultMediaModal";
+import { pickVaultMedia } from "./pickVaultMedia";
 
 vi.mock("src/playLocalFile", () => ({ playLocalFile: vi.fn(async () => {}) }));
 
