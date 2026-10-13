@@ -63,7 +63,19 @@ function usePlugin(feedUrls: FeedUrlRepository | object) {
 		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
-	plugin.set({ feedUrls, feeds } as unknown as PodNotes);
+	plugin.set({ app: new obsidian.App(), feedUrls, feeds } as unknown as PodNotes);
+}
+
+async function setFeedAddress(view: ReturnType<typeof renderGrid>, title: string, url: string) {
+	await fireEvent.click(
+		await view.findByRole("button", { name: `Set feed address for ${title}` }),
+	);
+	const dialog = within(document.body);
+	await fireEvent.input(dialog.getByRole("textbox", { name: "Feed address" }), {
+		target: { value: url },
+	});
+	await fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+	await settle();
 }
 
 // Runs the debounced handler and every response already resolved.
@@ -197,6 +209,22 @@ describe("PodcastQueryGrid", () => {
 		expect(queryByRole("button", { name: "Add Private Show podcast" })).toBeNull();
 	});
 
+	test("a changed channel title still removes the existing private subscription by its saved key", async () => {
+		const { saved, secrets } = followPrivateShow();
+		fetchTextMock.mockResolvedValue(
+			"<rss><channel><title>Renamed Show</title><author>Patron Host</author></channel></rss>",
+		);
+
+		const { findByText, getByRole, queryByRole } = paste(PRIVATE_URL);
+		await findByText("Patron Host");
+
+		expect(queryByRole("button", { name: "Add Renamed Show podcast" })).toBeNull();
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		await fireEvent.click(getByRole("button", { name: "Remove Renamed Show podcast" }));
+		expect(get(savedFeeds)).toEqual({});
+		expect(secrets.getSecret(saved.urlSecretId)).toBeFalsy();
+	});
+
 	test("shows a private feed followed with an uppercase host as saved when its URL is pasted", async () => {
 		followPrivateShow(PRIVATE_URL.replace("www.patreon.com", "WWW.PATREON.COM"));
 
@@ -221,7 +249,7 @@ describe("PodcastQueryGrid", () => {
 		expect(secrets.listSecrets()).toEqual([saved.urlSecretId]);
 	});
 
-	test("a followed private feed without its URL on this device asks to add it again", async () => {
+	test("a followed private feed without its URL on this device says so instead of adding it", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		const { saved } = followPrivateShow();
 		const thisDevice = new obsidian.SecretStorage();
@@ -231,14 +259,126 @@ describe("PodcastQueryGrid", () => {
 		await fireEvent.click(await findByRole("button", { name: "Add Private Show podcast" }));
 
 		expect(notice).toHaveBeenCalledWith(
-			'The private feed URL for "Private Show" is not available on this device. ' +
-				"Remove the feed and add it again with its private URL.",
+			'The private feed address for "Private Show" is not available on this device.',
 		);
 		expect(notice).not.toHaveBeenCalledWith(
 			"You already follow a podcast called Private Show from another feed.",
 		);
 		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
 		expect(thisDevice.listSecrets()).toEqual([]);
+	});
+
+	test("sets a synced private feed's address on this device under the reference data.json holds", async () => {
+		const { saved, secrets: firstDevice } = followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		usePlugin(new FeedUrlRepository(thisDevice));
+
+		const view = renderGrid();
+		await setFeedAddress(view, "Private Show", PRIVATE_URL);
+
+		expect(thisDevice.listSecrets()).toEqual([saved.urlSecretId]);
+		expect(thisDevice.getSecret(saved.urlSecretId)).toBe(PRIVATE_URL);
+		expect(firstDevice.getSecret(saved.urlSecretId)).toBe(PRIVATE_URL);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		expect(
+			view.queryByRole("button", { name: "Set feed address for Private Show" }),
+		).toBeNull();
+		expect(
+			view.getByRole("button", { name: "Remove Private Show podcast" }),
+		).toBeInTheDocument();
+	});
+
+	test("refuses a public recovery address before fetching it", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { saved } = followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		usePlugin(new FeedUrlRepository(thisDevice));
+		const view = renderGrid();
+		await setFeedAddress(view, "Private Show", "https://public.example/feed.xml");
+		expect(fetchTextMock).not.toHaveBeenCalled();
+		expect(notice).toHaveBeenCalledWith("Enter a private feed address.");
+		expect(thisDevice.listSecrets()).toEqual([]);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+	});
+
+	test("keeps the reference when the feed at the entered address cannot be loaded", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const { saved } = followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		usePlugin(new FeedUrlRepository(thisDevice));
+		fetchTextMock.mockRejectedValue(new NetworkError("timeout"));
+
+		const view = renderGrid();
+		await setFeedAddress(view, "Private Show", PRIVATE_URL);
+
+		expect(notice).toHaveBeenCalledWith(expect.stringMatching(/^Could not load feed: /));
+		expect(thisDevice.listSecrets()).toEqual([]);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		expect(
+			view.getByRole("button", { name: "Set feed address for Private Show" }),
+		).toBeInTheDocument();
+	});
+
+	test("sets no address on a feed that a sync replaced while the address loaded", async () => {
+		followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		usePlugin(new FeedUrlRepository(thisDevice));
+		const response = deferred<string>();
+		fetchTextMock.mockReturnValue(response.promise);
+		const replaced = {
+			title: "Private Show",
+			url: privateFeedPlaceholder("Private Show"),
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000009",
+			artworkUrl: "",
+		};
+
+		const view = renderGrid();
+		await setFeedAddress(view, "Private Show", PRIVATE_URL);
+		savedFeeds.set({ "Private Show": replaced });
+		response.resolve("<rss><channel><title>Private Show</title></channel></rss>");
+		await settle();
+
+		expect(thisDevice.listSecrets()).toEqual([]);
+		expect(get(savedFeeds)).toEqual({ "Private Show": replaced });
+	});
+
+	test("adds nothing when this device cannot store a pasted private feed's address", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const secrets = new obsidian.SecretStorage();
+		vi.spyOn(secrets, "setSecret").mockImplementation(() => {
+			throw new Error("locked");
+		});
+		usePlugin(new FeedUrlRepository(secrets));
+		fetchTextMock.mockResolvedValue(
+			"<rss><channel><title>Private Show</title></channel></rss>",
+		);
+
+		const { findByRole } = paste(PRIVATE_URL);
+		await fireEvent.click(await findByRole("button", { name: "Add Private Show podcast" }));
+
+		expect(get(savedFeeds)).toEqual({});
+		expect(notice).toHaveBeenCalledWith(
+			'Could not store the private feed address for "Private Show" on this device.',
+		);
+	});
+
+	test("removing a private feed saved under two names keeps its address for the other", async () => {
+		const { saved, secrets } = followPrivateShow();
+		const alias = { ...saved, title: "Alias", urlSecretId: ` ${saved.urlSecretId} ` };
+		savedFeeds.set({ "Private Show": saved, Alias: alias });
+
+		const { findByRole } = renderGrid();
+		await fireEvent.click(await findByRole("button", { name: "Remove Alias podcast" }));
+
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+		expect(secrets.getSecret(saved.urlSecretId)).toBe(PRIVATE_URL);
+
+		await fireEvent.click(await findByRole("button", { name: "Remove Private Show podcast" }));
+
+		expect(get(savedFeeds)).toEqual({});
+		expect(secrets.getSecret(saved.urlSecretId)).toBeFalsy();
 	});
 
 	test("keeps the newest search when an older one answers last", async () => {
