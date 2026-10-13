@@ -784,10 +784,14 @@ describe("feed journeys", () => {
 		await typeInto(obsidian, ui.podcastSearch, address);
 		await click(obsidian, ui.addPodcast(show.title));
 		await waitUntilShown(obsidian, ui.episode("Private Undo One"));
+		// The save is asynchronous, so the episodes can show before data.json holds the podcast.
 		const saved = (
-			await plugin
-				.data<{ savedFeeds: Record<string, { url: string; urlSecretId: string }> }>()
-				.read()
+			await plugin.waitForData<{
+				savedFeeds: Record<string, { url: string; urlSecretId: string }>;
+			}>((data) => Boolean(data.savedFeeds[show.title]), {
+				timeoutMs: 15_000,
+				intervalMs: 200,
+			})
 		).savedFeeds[show.title];
 		const secret = () =>
 			obsidian.dev.evalJson<string | null>(
