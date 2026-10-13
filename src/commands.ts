@@ -9,8 +9,8 @@ import downloadEpisodeWithNotice from "src/downloadEpisode";
 import getUniversalPodcastLink from "src/getUniversalPodcastLink";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { TRANSCRIBE_FROM_AUDIO_COMMAND } from "src/services/TranscriptionService";
+import { notifyPrivateFeedUnavailable } from "src/services/privateFeeds";
 import type PodNotes from "src/main";
-import type { PodcastFeed } from "src/types/PodcastFeed";
 
 /**
  * Registers every PodNotes command on the plugin. Extracted from main.onload so
@@ -160,7 +160,7 @@ export function registerCommands(plugin: PodNotes): void {
 		checkCallback: (checking) => {
 			const { path, template } = plugin.settings.note;
 			const episode = plugin.api.podcast;
-			const feeds = Object.values(get(savedFeeds));
+			const feeds = Object.entries(get(savedFeeds));
 			if (checking) {
 				return !!path && !!template && (!!episode || feeds.length > 0);
 			}
@@ -173,10 +173,10 @@ export function registerCommands(plugin: PodNotes): void {
 			new PickerModal(
 				plugin.app,
 				feeds,
-				(feed) => feed.title,
+				([, feed]) => feed.title,
 				"Select a podcast",
-				(feed) => {
-					void pickEpisodeForNote(plugin, feed);
+				([key, feed]) => {
+					void pickEpisodeForNote(plugin, key, feed.title);
 				},
 			).open();
 		},
@@ -312,14 +312,18 @@ export function registerCommands(plugin: PodNotes): void {
 	});
 }
 
-async function pickEpisodeForNote(plugin: PodNotes, feed: PodcastFeed): Promise<void> {
-	await plugin.feeds.load([feed.title], "cached");
-	const state = get(plugin.feeds).get(feed.title);
+async function pickEpisodeForNote(plugin: PodNotes, key: string, title: string): Promise<void> {
+	await plugin.feeds.load([key], "cached");
+	const state = get(plugin.feeds).get(key);
 	const episodes = state?.episodes ?? [];
 	if (episodes.length === 0) {
-		new Notice(
-			state?.error ? "Could not load the podcast feed" : "No episodes in this podcast",
-		);
+		if (state?.error === "unavailable") {
+			notifyPrivateFeedUnavailable(title);
+		} else {
+			new Notice(
+				state?.error ? "Could not load the podcast feed" : "No episodes in this podcast",
+			);
+		}
 		return;
 	}
 

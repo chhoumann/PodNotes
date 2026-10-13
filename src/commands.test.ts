@@ -8,6 +8,7 @@ import { VIEW_TYPE } from "./constants";
 import type { Episode } from "./types/Episode";
 import { PickerModal } from "./ui/PickerModal";
 import { fetchTextWithTimeout } from "./utility/networkRequest";
+import { privateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 
 vi.mock("./utility/networkRequest", async (importOriginal) => ({
@@ -426,6 +427,45 @@ describe("Create episode note", () => {
 		pickers.shown(0).choose("Pod");
 
 		await vi.waitFor(() => expect(notice).toHaveBeenCalledWith(message));
+		expect(pickers.open).toHaveBeenCalledTimes(1);
+		expect(notes.size).toBe(0);
+	});
+
+	it("loads the podcast saved under another name than its title", async () => {
+		vi.mocked(fetchTextWithTimeout).mockResolvedValue(rss(["One"]));
+		const pickers = watchPickers();
+		const { commands } = await loadPlugin({
+			...withFeed,
+			savedFeeds: { "Old Name": feed },
+		});
+
+		command(commands)(false);
+		expect(pickers.shown(0).texts).toEqual(["Pod"]);
+		pickers.shown(0).choose("Pod");
+
+		await vi.waitFor(() => expect(pickers.open).toHaveBeenCalledTimes(2));
+		expect(pickers.shown(1).texts).toEqual(["One"]);
+	});
+
+	it("says a private podcast's address is not on this device", async () => {
+		const pickers = watchPickers();
+		const { commands, notes } = await loadPlugin({
+			...withFeed,
+			savedFeeds: {
+				Pod: { ...feed, url: privateFeedPlaceholder("Pod"), urlSecretId: "pod-feed-url" },
+			},
+		});
+
+		command(commands)(false);
+		pickers.shown(0).choose("Pod");
+
+		await vi.waitFor(() =>
+			expect(notice).toHaveBeenCalledWith(
+				'The private feed address for "Pod" is not available on this device.',
+			),
+		);
+		expect(notice).not.toHaveBeenCalledWith("Could not load the podcast feed");
+		expect(fetchTextWithTimeout).not.toHaveBeenCalled();
 		expect(pickers.open).toHaveBeenCalledTimes(1);
 		expect(notes.size).toBe(0);
 	});
