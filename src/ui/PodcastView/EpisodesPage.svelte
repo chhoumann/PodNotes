@@ -72,7 +72,12 @@
 				<div class="d">{failedSource(feedState)}</div>
 			</div>
 			{#if error === "unavailable"}
-				<button type="button" class="pn-btn" onclick={() => actions.setFeedAddress(key)}>
+				<button
+					type="button"
+					class="pn-btn"
+					disabled={!$online}
+					onclick={() => actions.setFeedAddress(key)}
+				>
 					Set feed address
 				</button>
 			{:else}

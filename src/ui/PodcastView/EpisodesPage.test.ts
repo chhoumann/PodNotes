@@ -267,7 +267,7 @@ describe("a podcast's page", () => {
 		expect(await screen.findByRole("alert")).toHaveTextContent("Feed didn't load");
 	});
 
-	test("offline, still asks for a private feed's address this device lacks", async () => {
+	test("offline, still says a private feed's address is not on this device, and sets it once online", async () => {
 		const patron = { ...show, title: "Patron", url: privateFeedPlaceholder("Patron") };
 		renderPage("Patron", [patron]);
 		await screen.findByRole("alert");
@@ -277,7 +277,12 @@ describe("a podcast's page", () => {
 
 		const banner = screen.getByRole("alert");
 		expect(banner).toHaveTextContent("Address not on this device");
-		expect(within(banner).getByRole("button", { name: "Set feed address" })).toBeEnabled();
+		const setAddress = within(banner).getByRole("button", { name: "Set feed address" });
+		expect(setAddress).toBeDisabled();
+
+		services.online.set(true);
+		await tick();
+		expect(setAddress).toBeEnabled();
 	});
 
 	test("opened offline, loads its episodes once the connection returns", async () => {
