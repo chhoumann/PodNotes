@@ -158,7 +158,6 @@ export class CaptureService {
 		);
 	}
 
-	/** Takes `suffix` off the end of the note while it still ends with it. */
 	private async unappend(file: TFile, suffix: string): Promise<boolean> {
 		// An open editor's buffer is the note: a vault write behind it could lose what it
 		// has not saved yet.
@@ -201,7 +200,6 @@ export class CaptureService {
 	}
 }
 
-/** Puts `replacement` in place of `text` at `start`, only while `text` is still exactly there. */
 function replaceExactly(editor: Editor, start: number, text: string, replacement: string): boolean {
 	try {
 		const from = editor.offsetToPos(start);

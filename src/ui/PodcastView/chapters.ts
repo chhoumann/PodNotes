@@ -22,7 +22,6 @@ export function segmentsOf(chapters: readonly Chapter[], duration: number): [num
 
 let last: { url: string; chapters: Chapter[] } | undefined;
 
-/** The chapters last loaded, while they are the ones at `url`. */
 export function cachedChapters(url: string): Chapter[] | undefined {
 	return last?.url === url ? last.chapters : undefined;
 }
