@@ -50,7 +50,16 @@
 	const duration = $derived($playerState.duration);
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
 	const panels = $derived<Panel[]>(chapters.length > 0 ? ["chapters", "queue"] : ["queue"]);
-	const shown = $derived(panel && panels.includes(panel) ? panel : wide ? panels[0] : undefined);
+	// At compact widths a media error takes the stage, so no panel shows meanwhile.
+	const shown = $derived(
+		failed && !wide
+			? undefined
+			: panel && panels.includes(panel)
+				? panel
+				: wide
+					? panels[0]
+					: undefined,
+	);
 	const current = $derived(chapterAt(chapters, elapsed));
 	const back = $derived(normalizeSkipLength($settings.skipBackwardLength));
 	const forward = $derived(normalizeSkipLength($settings.skipForwardLength));
@@ -212,6 +221,7 @@
 			aria-selected={tabs ? shown === kind : undefined}
 			aria-controls={tabs ? `${id}-panel` : undefined}
 			aria-pressed={tabs ? undefined : shown === kind}
+			disabled={!tabs && failed}
 			onclick={() => (panel = !tabs && shown === kind ? undefined : kind)}
 			>{kind === "chapters" ? "Chapters" : "Up next"}</button
 		>
@@ -763,7 +773,7 @@
 		--icon-size: 20px;
 	}
 
-	.pn-player :is(.pn-rate, .pn-skip, .pn-vol, .pn-play):disabled {
+	.pn-player :is(.pn-rate, .pn-skip, .pn-vol, .pn-play, .pn-sw):disabled {
 		opacity: 0.35;
 	}
 

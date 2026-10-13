@@ -21,6 +21,7 @@ export function segmentsOf(chapters: readonly Chapter[], duration: number): [num
 }
 
 let last: { url: string; chapters: Chapter[] } | undefined;
+let requested: string | undefined;
 
 export function cachedChapters(url: string): Chapter[] | undefined {
 	return last?.url === url ? last.chapters : undefined;
@@ -28,7 +29,9 @@ export function cachedChapters(url: string): Chapter[] | undefined {
 
 /** The chapters at `url`. A failed load, as offline, is not kept, so the next one fetches again. */
 export async function loadChapters(url: string): Promise<Chapter[]> {
+	requested = url;
 	const chapters = await fetchChapters(url);
-	if (chapters.length > 0) last = { url, chapters };
+	// Only the latest request is kept, so a slower one for an earlier episode cannot evict it.
+	if (chapters.length > 0 && requested === url) last = { url, chapters };
 	return chapters;
 }

@@ -271,6 +271,8 @@ describe("the full player", () => {
 			"Could not load this episode's media.",
 		);
 		expect(button("Retry")).toBeEnabled();
+		expect(button("Up next")).toHaveAttribute("aria-pressed", "false");
+		expect(button("Up next")).toBeDisabled();
 	});
 
 	test("Create note while the episode has none, Open note once it has one", async () => {
