@@ -11,6 +11,7 @@ const LIBRARY_STORES = new Set([
 	"playedEpisodes",
 	"downloadedEpisodes",
 	"episodeListLimit",
+	"hidePlayedEpisodes",
 ]);
 // The legacy list and menu the shell hosts unchanged, which read the stores themselves,
 // and MainView, which fills `ShellServices.library` from them.

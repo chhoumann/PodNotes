@@ -8,6 +8,7 @@ import createPodcastNote from "src/createPodcastNote";
 import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { FeedRepository } from "src/services/FeedRepository";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
+import { createLibraryActions } from "src/services/library";
 import { resolveFeedUrl } from "src/services/privateFeeds";
 import { hidePlayedEpisodes, playedEpisodes, plugin, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
@@ -27,20 +28,28 @@ vi.mock("./EpisodePlayer.svelte", () => ({
 
 import PodcastView from "./PodcastView.svelte";
 
-/** The view over the plugin's stores, which the legacy episode list reads too. */
+/** The view over the plugin's stores, which its actions change. */
 function renderView() {
+	const app = new obsidian.App();
+	const { feeds } = get(plugin);
 	return render(PodcastView, {
 		props: {
 			services: {
-				app: new obsidian.App(),
+				app,
 				api: {} as never,
 				player,
-				feeds: get(plugin).feeds,
+				feeds,
 				navigation,
 				library: pluginLibrary,
+				actions: createLibraryActions({
+					app,
+					feeds,
+					feedUrls: new FeedUrlRepository(app.secretStorage),
+				}),
 				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},
+				hasNote: () => false,
 			},
 		},
 	});

@@ -8,6 +8,7 @@
 	import EpisodesPage from "./EpisodesPage.svelte";
 	import { layoutFor, observeWidth, restoreScroll, type Layout } from "./layout";
 	import LibraryPage from "./LibraryPage.svelte";
+	import { anchorOf, podcastMenu, showMenu } from "./menus";
 	import MiniPlayer from "./MiniPlayer.svelte";
 	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
 	import PlayerOverlay from "./PlayerOverlay.svelte";
@@ -104,7 +105,7 @@
 						<h1 class="pn-head-title">{head.title}</h1>
 					{/if}
 					<span class="pn-spacer"></span>
-					{#if head.libraryActions}
+					{#if head.action === "library"}
 						<button
 							type="button"
 							class="pn-iconbtn"
@@ -120,6 +121,27 @@
 							title="PodNotes settings"
 							onclick={openSettings}
 							{@attach icon("settings")}
+						></button>
+					{:else if head.action === "refresh-all"}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Refresh all feeds"
+							title="Refresh all feeds"
+							onclick={() => feeds.load($feeds.keys(), "network")}
+							{@attach icon("refresh-cw")}
+						></button>
+					{:else if head.action === "podcast" && page.kind === "feed"}
+						{@const key = page.key}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Podcast options"
+							title="Podcast options"
+							aria-haspopup="menu"
+							onclick={(event) =>
+								showMenu(podcastMenu(key, services), anchorOf(event))}
+							{@attach icon("more-horizontal")}
 						></button>
 					{/if}
 				</header>

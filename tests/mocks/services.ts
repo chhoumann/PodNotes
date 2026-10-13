@@ -3,11 +3,14 @@ import { vi } from "vitest";
 import { DEFAULT_EPISODE_LIST_LIMIT, DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
 import { FeedRepository } from "src/services/FeedRepository";
+import { FeedUrlRepository } from "src/services/FeedUrlRepository";
+import { createLibraryActions } from "src/services/library";
 import { derived, writable, type Readable, type Writable } from "svelte/store";
 import {
 	downloadedEpisodes,
 	episodeListLimit,
 	favorites,
+	hidePlayedEpisodes,
 	localFiles,
 	playedEpisodes,
 	playlists,
@@ -15,6 +18,7 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
+import type { Episode } from "src/types/Episode";
 import type { Library, ShellServices } from "src/ui/PodcastView/context";
 import { Navigation } from "src/ui/PodcastView/Navigation";
 import { FakeDocument } from "./fakeMedia";
@@ -36,12 +40,13 @@ export function createTestLibrary(): TestLibrary {
 		playedEpisodes: writable({}),
 		downloadedEpisodes: writable({}),
 		episodeListLimit: writable(DEFAULT_EPISODE_LIST_LIMIT),
+		hidePlayedEpisodes: writable(false),
 	};
 }
 
 /**
- * The plugin's global stores, as MainView supplies them. For a test that also
- * reaches legacy code, which reads these directly.
+ * The plugin's global stores, as MainView supplies them. For a test whose view
+ * changes the library: `actions` changes these stores, as in the plugin.
  */
 export const pluginLibrary: TestLibrary = {
 	savedFeeds,
@@ -52,24 +57,27 @@ export const pluginLibrary: TestLibrary = {
 	playedEpisodes,
 	downloadedEpisodes,
 	episodeListLimit,
+	hidePlayedEpisodes,
 };
 
 export type TestServices = ShellServices & {
 	readonly library: TestLibrary;
 	readonly captureTimestamp: ReturnType<typeof vi.fn<() => Promise<string | null>>>;
 	readonly openSettings: ReturnType<typeof vi.fn<() => void>>;
+	readonly hasNote: ReturnType<typeof vi.fn<(episode: Episode) => boolean>>;
 };
 
 /**
  * The plugin services a view gets, with a real player over a fake media
  * element, an empty library of its own, and a feed repository that follows
- * the library's `savedFeeds` until `dispose`. Legacy components still read
+ * the library's `savedFeeds` until `dispose`. `actions` changes the plugin's
+ * stores, so a test that uses it passes `library: pluginLibrary`. Legacy components still read
  * the `plugin` store, so it is set too, and `settings` follows it as the
  * view's does. It stays set: views the test rendered unmount after `dispose`,
  * and still read it until then.
  */
 export function createTestServices(
-	overrides: Partial<Omit<TestServices, "captureTimestamp" | "openSettings">> = {},
+	overrides: Partial<Omit<TestServices, "captureTimestamp" | "openSettings" | "hasNote">> = {},
 ): {
 	services: TestServices;
 	doc: FakeDocument;
@@ -98,9 +106,15 @@ export function createTestServices(
 		feeds,
 		navigation: new Navigation(),
 		library: createTestLibrary(),
+		actions: createLibraryActions({
+			app,
+			feeds,
+			feedUrls: new FeedUrlRepository(app.secretStorage),
+		}),
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),
+		hasNote: vi.fn(() => false),
 		...overrides,
 	} as TestServices;
 	const unsubscribe = services.library.savedFeeds.subscribe((saved) =>
