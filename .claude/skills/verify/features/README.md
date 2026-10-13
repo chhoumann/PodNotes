@@ -49,7 +49,7 @@ behavior, followed by exactly four H2s in this order: `Sub-features`,
 - [Timestamps and URIs](./timestamps-uris.md) covers capturing timestamps and
   segments into a note and reopening episodes from `obsidian://podnotes` links.
 - [Local files](./local-files.md) covers "Play with PodNotes" on a vault audio
-  file and the Local Files playlist.
+  file and the Local files list.
 - [Episode notes](./episode-notes.md) covers creating a note for the playing
   episode from its template.
 - [Transcripts](./transcripts.md) covers transcribing the current episode from

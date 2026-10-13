@@ -82,7 +82,7 @@ read state.
   to 10 s for exactly one visible match. `key` and `uri` do not wait:
 
     ```bash
-    node .claude/skills/verify/ui.mjs click '.podcast-view [aria-label="Podcast grid"]'
+    node .claude/skills/verify/ui.mjs click '.podcast-view button.pn-navitem' --text 'Latest episodes'
     node .claude/skills/verify/ui.mjs click '.podcast-view .podcast-episode-item' --text 'Fixture Episode 1'
     node .claude/skills/verify/ui.mjs click '.nav-file-title[data-path="Fixtures/Local Fixture.wav"]' --right
     node .claude/skills/verify/ui.mjs fill 'input[placeholder="Search or enter feed URL..."]' "$FEED"
@@ -154,8 +154,8 @@ npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/player/flow.mp4 -- .obsid
 npm run capture:e2e-obsidian -- sheet .obsidian-e2e-artifacts/player/flow.mp4 .obsidian-e2e-artifacts/player/flow-sheet.png
 ```
 
-`screenshot` and `record` open the player first and fail without capturing
-when it does not open. `record` then records the window while the driver runs.
+`screenshot` and `record` reveal the PodNotes view first and fail without
+capturing when it does not open. `record` then records the window while the driver runs.
 The driver is an executable script of `ui.mjs` and `obsidian:e2e` calls with short
 `sleep`s between steps. A driver that exits non-zero discards the take.
 Without a driver, `record` takes 3 s.
@@ -194,7 +194,9 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `type <css> <text>` (insert at the cursor), `fill <css> <text>` (replace),
   `key <Enter|Escape|Tab|ArrowUp|ArrowDown|Backspace|<char>|Ctrl+<char>>`,
   `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `click`, `type`,
-  `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. `key` and
+  `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. They also
+  wait until nothing covers the element's center, and fail with
+  `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
   `requests`, `audio [vault path]` or `stop`. `requests` prints the paths

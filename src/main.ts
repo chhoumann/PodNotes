@@ -12,12 +12,21 @@ import {
 } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import { registerCommands } from "src/commands";
-import { normalizePath, Notice, Platform, Plugin, type Editor, type WorkspaceLeaf } from "obsidian";
+import {
+	normalizePath,
+	Notice,
+	Platform,
+	Plugin,
+	type Editor,
+	type TFile,
+	type WorkspaceLeaf,
+} from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
+import { Navigation } from "src/ui/PodcastView/Navigation";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import type { IPodNotes } from "./types/IPodNotes";
 import { TimestampTemplateEngine } from "./TemplateEngine";
@@ -28,7 +37,7 @@ import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
 import getVaultRenameHandler from "./getVaultRenameHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
-import type { Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
 import { bindMediaSession } from "./player/mediaSession";
 import {
@@ -100,6 +109,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public feedUrls!: FeedUrlRepository;
 	public player!: PlayerController;
 	public feeds!: FeedRepository;
+	public navigation!: Navigation;
 
 	private views = new Set<MainView>();
 
@@ -181,7 +191,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
 		// downloadedEpisodes is the authoritative offline set, so mirror it into the
-		// localFiles playlist that the Podcast grid renders. Svelte's immediate-fire
+		// localFiles playlist that the Local files page renders. Svelte's immediate-fire
 		// backfills already-downloaded episodes on load; later changes keep it current.
 		this.localFilesMirrorUnsubscribe = downloadedEpisodes.subscribe((downloaded) =>
 			localFiles.syncWithDownloaded(downloaded),
@@ -195,6 +205,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
+		this.navigation = new Navigation();
 		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {
 			const view = new MainView(leaf, this);
 			this.views.add(view);
@@ -222,7 +233,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
 		this.registerObsidianProtocolHandler("podnotes", (action) =>
-			podNotesURIHandler(action, () => this.activateView()),
+			podNotesURIHandler(action, () => this.showPlayer()),
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
@@ -233,7 +244,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			bindMediaSession(this.player, {
 				mediaSession: window.navigator.mediaSession,
 				MediaMetadata: window.MediaMetadata,
-				captureTimestamp: () => void this.captureTimestampFromMediaSession(),
+				captureTimestamp: () => void this.captureTimestampToEditorOrNote(),
 				skipBackward: () => this.api.skipBackward(),
 				skipForward: () => this.api.skipForward(),
 			}),
@@ -310,6 +321,20 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		}
 	}
 
+	/**
+	 * Reveals the view, with the full player open when an episode is loaded. Works
+	 * while no view exists.
+	 */
+	async showPlayer(): Promise<void> {
+		if (get(this.player.state).status !== "empty") this.navigation.expand();
+		await this.activateView();
+	}
+
+	openSettingsTab(): void {
+		this.app.setting.open();
+		this.app.setting.openTabById(this.manifest.id);
+	}
+
 	shouldMountPodcastView(): boolean {
 		return this.podcastViewMountEnabled;
 	}
@@ -374,23 +399,29 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return true;
 	}
 
-	private captureTimestampInActiveEditor(): boolean {
-		return this.captureTimestamp(this.app.workspace.activeEditor?.editor);
+	/**
+	 * Into the active editor, else appended to the episode note. Resolves to the
+	 * note's name, or null when nothing was captured or the editor has no note.
+	 */
+	async captureTimestampToEditorOrNote(): Promise<string | null> {
+		const active = this.app.workspace.activeEditor;
+		if (this.captureTimestamp(active?.editor)) return active?.file?.basename ?? null;
+
+		return (await this.appendTimestampToEpisodeNote())?.basename ?? null;
 	}
 
-	private async appendTimestampToEpisodeNote(): Promise<boolean> {
-		if (
-			!this.api.podcast ||
-			!this.settings.timestamp.template ||
-			!this.settings.note.path ||
-			!this.settings.note.template
-		) {
-			return false;
+	private async appendTimestampToEpisodeNote(): Promise<TFile | null> {
+		if (!this.api.podcast) return null;
+
+		// This path runs from the media-session (headphone) handler and the mini
+		// player, where there is no editor to surface a failure, so a press that
+		// adds nothing looked like it did nothing. Say why instead (NT-13).
+		const { timestamp, note } = this.settings;
+		if (!timestamp.template || !note.path || !note.template) {
+			new Notice("Set an episode note path and template to capture timestamps");
+			return null;
 		}
 
-		// This path runs from the media-session (headphone) handler, where there is
-		// no editor to surface a failure, so swallowing an error left a button
-		// press looking like it did nothing. Report it instead (NT-13).
 		try {
 			const capture = TimestampTemplateEngine(this.settings.timestamp.template);
 			const textToAppend = capture.endsWith("\n") ? capture : `${capture}\n`;
@@ -401,20 +432,12 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
 
 			await this.app.vault.modify(file, `${content}${separator}${textToAppend}`);
-			return true;
+			return file;
 		} catch (error) {
 			console.error("PodNotes: failed to capture timestamp into episode note", error);
 			new Notice("Failed to capture timestamp into episode note");
-			return false;
+			return null;
 		}
-	}
-
-	private async captureTimestampFromMediaSession(): Promise<boolean> {
-		if (this.captureTimestampInActiveEditor()) {
-			return true;
-		}
-
-		return await this.appendTimestampToEpisodeNote();
 	}
 
 	override onunload() {

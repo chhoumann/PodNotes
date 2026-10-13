@@ -227,7 +227,7 @@
 	}
 </script>
 
-<div class="podcast-query-container" transition:fade={{ duration: 300 }}>
+<div class="podcast-query-container" in:fade={{ duration: 300 }}>
 	<Text
 		placeholder="Search or enter feed URL..."
 		on:change={(e) => debouncedUpdate(e.detail.value, ++latestInput)}

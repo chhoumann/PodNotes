@@ -66,7 +66,7 @@ export function registerCommands(plugin: PodNotes): void {
 		// overflow, dragged out of sight) there was no way to bring it back
 		// (#55). activateView reuses the existing leaf and reveals it.
 		callback: () => {
-			void plugin.activateView();
+			void plugin.showPlayer();
 		},
 	});
 

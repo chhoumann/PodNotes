@@ -6,13 +6,6 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
 import { getFinishedPlayedEpisodeRecords, type PlayedEpisodeMap } from "src/utility/episodeStatus";
 
-/** What the episode list shows. */
-export type Selection =
-	| { kind: "latest" }
-	| { kind: "feed"; key: FeedKey }
-	| { kind: "playlist"; name: string }
-	| { kind: "played" };
-
 /** The newest `limit` episodes of each subscription, merged newest first. */
 export function selectLatestEpisodes(
 	feeds: ReadonlyMap<FeedKey, FeedState>,

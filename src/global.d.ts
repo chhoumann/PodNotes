@@ -30,6 +30,10 @@ interface App2 extends App {
 		requestSaveConfig: () => void;
 		updates: Record<string, unknown>;
 	};
+	setting: {
+		open(): void;
+		openTabById(id: string): void;
+	};
 }
 
 export default App2;

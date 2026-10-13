@@ -1,11 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	click,
 	closePodNotes,
+	closeSettings,
 	reloadObsidian,
 	setMobileEmulation,
-	shownText,
 	ui,
 	waitUntilShown,
 } from "./journey/actions";
@@ -43,12 +43,10 @@ describe("mobile journeys", () => {
 		await waitUntilShown(obsidian, ui.podcastViewport);
 		expect(await playerLeafCount(obsidian)).toBe(1);
 
-		await click(obsidian, ui.playlistCard("Local Files"));
-		await obsidian.waitFor(async () => (await shownText(obsidian)).includes("Local Files"), {
-			timeoutMs: 10_000,
-			message: "the Local Files list",
-		});
-		expect(await shownText(obsidian)).toContain("No episodes found.");
+		await waitUntilShown(obsidian, ui.firstRun);
+		onTestFinished(() => closeSettings(obsidian));
+		await click(obsidian, ui.firstRunSettings);
+		await waitUntilShown(obsidian, ui.podcastSearch);
 	}, 120_000);
 
 	test("J-EDGE-13 a private feed URL moved to SecretStorage on a mobile start leaves no copy in the old feed cache", async () => {

@@ -10,11 +10,9 @@ import {
 	plugin,
 	queue,
 	savedFeeds,
-	viewState,
 } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { ViewState } from "src/types/ViewState";
 import { get } from "svelte/store";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isSameEpisode, isSameStoredEpisode } from "src/utility/episodeKey";
@@ -40,11 +38,13 @@ export interface MenuPosition {
 	y: number;
 }
 
+/** `inQueueList`: the menu is for a row of a list of the queue in its order, which can reorder it. */
 export default function spawnEpisodeContextMenu(
 	episode: Episode,
 	anchor: MouseEvent | MenuPosition,
 	disabledMenuItems?: Partial<DisabledMenuItems>,
 	playedEpisodeKey?: string,
+	inQueueList = false,
 ) {
 	const menu = new Menu();
 
@@ -55,7 +55,7 @@ export default function spawnEpisodeContextMenu(
 				.setTitle("Play")
 				.onClick(() => {
 					get(plugin).player.play(episode);
-					viewState.set(ViewState.Player);
+					get(plugin).navigation.expand();
 				}),
 		);
 	}
@@ -206,14 +206,7 @@ export default function spawnEpisodeContextMenu(
 				}),
 		);
 
-		// Reorder controls — only meaningful when viewing the queue as an ordered
-		// list in the Player. spawnEpisodeContextMenu is shared with the feed,
-		// playlist and Latest lists, so gate on the active view state.
-		const reorderItems = buildQueueReorderMenuItems(
-			get(viewState),
-			get(queue).episodes,
-			episode,
-		);
+		const reorderItems = buildQueueReorderMenuItems(inQueueList, get(queue).episodes, episode);
 
 		if (reorderItems.length > 0) {
 			menu.addSeparator();

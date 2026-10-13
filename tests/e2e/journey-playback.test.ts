@@ -8,8 +8,10 @@ import {
 	openPodNotesSettings,
 	restartObsidian,
 	runCommand,
+	showLibrary,
 	showPodNotes,
 	ui,
+	waitUntilShown,
 } from "./journey/actions";
 import {
 	type FixtureEpisode,
@@ -81,6 +83,7 @@ async function evalApi(code: string): Promise<void> {
 async function playFromList(episode: FixtureEpisode): Promise<void> {
 	const { obsidian } = getContext();
 	await showPodNotes(obsidian);
+	await showLibrary(obsidian);
 	await click(obsidian, ui.podcastCard(FEED.title));
 	await click(obsidian, ui.episode(episode.title));
 	await waitForPlayback(
@@ -226,7 +229,7 @@ describe("playback journeys", () => {
 			expect(relaunched.playing).toBe(false);
 
 			await showPodNotes(obsidian);
-			await click(obsidian, ui.playerTab);
+			await waitUntilShown(obsidian, ui.fullPlayer);
 			const shown = await waitForPlayback(
 				obsidian,
 				(playback) => playback.seconds > 0,
@@ -257,7 +260,7 @@ describe("playback journeys", () => {
 		await seedLibrary(context, await serve(), { subscriptions: [FEED] });
 		await playFromList(LONG);
 
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await expectAdvancing("on the podcast grid");
 		await click(obsidian, ui.podcastCard(FEED.title));
 		await expectAdvancing("in an episode list");
@@ -267,7 +270,7 @@ describe("playback journeys", () => {
 		} finally {
 			await closeSettings(obsidian);
 		}
-		await click(obsidian, ui.playerTab);
+		await click(obsidian, ui.openPlayer);
 		const back = await expectAdvancing("back in the player");
 		expect(back.media).toMatchObject({ paused: false });
 	});
@@ -290,7 +293,7 @@ describe("playback journeys", () => {
 			finished: false,
 		});
 
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(FEED.title));
 		await click(obsidian, ui.episode(LONG.title));
 		const resumed = await waitForPlayback(
@@ -493,7 +496,7 @@ describe("playback journeys", () => {
 			queue: [storedEpisode(server, FEED, FOLLOW_UP)],
 		});
 		await playFromList(OPENER);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 
 		await waitForPlayback(
 			obsidian,

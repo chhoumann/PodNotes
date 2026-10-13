@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { Menu, MenuItem } from "obsidian";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 import { get } from "svelte/store";
-import { downloadedEpisodes, playedEpisodes, playlists, queue } from "src/store";
+import { downloadedEpisodes, playedEpisodes, playlists, plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
+import { Navigation } from "./Navigation";
 
 const episode: Episode = {
 	title: "Episode",
@@ -96,35 +97,43 @@ describe("spawnEpisodeContextMenu removal item", () => {
 	});
 });
 
+type ShownItem = { title: string; click: () => void };
+
+function menuItems(...args: Parameters<typeof spawnEpisodeContextMenu>): ShownItem[] {
+	const items: ShownItem[] = [];
+	const addItem = vi.spyOn(Menu.prototype, "addItem").mockImplementation(function (
+		this: Menu,
+		callback: (item: MenuItem) => void,
+	) {
+		const item = { title: "", click: () => {} };
+		const builder = {
+			setIcon: () => builder,
+			setTitle: (title: string) => {
+				item.title = title;
+				return builder;
+			},
+			onClick: (click: () => void) => {
+				item.click = click;
+				return builder;
+			},
+		};
+		callback(builder as unknown as MenuItem);
+		items.push(item);
+		return this;
+	});
+	spawnEpisodeContextMenu(...args);
+	addItem.mockRestore();
+	return items;
+}
+
 describe("spawnEpisodeContextMenu queue item (#356)", () => {
 	const queueOnly = { ...allDisabled, queue: false };
 	const fromOtherPodcast: Episode = { ...episode, podcastName: "Other Podcast" };
 
-	function queueItem(target: Episode): { title: string; click: () => void } {
-		const items: { title: string; click: () => void }[] = [];
-		const addItem = vi.spyOn(Menu.prototype, "addItem").mockImplementation(function (
-			this: Menu,
-			callback: (item: MenuItem) => void,
-		) {
-			const item = { title: "", click: () => {} };
-			const builder = {
-				setIcon: () => builder,
-				setTitle: (title: string) => {
-					item.title = title;
-					return builder;
-				},
-				onClick: (click: () => void) => {
-					item.click = click;
-					return builder;
-				},
-			};
-			callback(builder as unknown as MenuItem);
-			items.push(item);
-			return this;
-		});
-		spawnEpisodeContextMenu(target, { x: 0, y: 0 }, queueOnly);
-		addItem.mockRestore();
-		const found = items.find((item) => item.title.endsWith("Queue"));
+	function queueItem(target: Episode): ShownItem {
+		const found = menuItems(target, { x: 0, y: 0 }, queueOnly).find((item) =>
+			item.title.endsWith("Queue"),
+		);
 		if (!found) throw new Error("no queue menu item");
 		return found;
 	}
@@ -138,5 +147,41 @@ describe("spawnEpisodeContextMenu queue item (#356)", () => {
 
 		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Podcast", "Other Podcast"]);
 		expect(queueItem(episode).title).toBe("Remove from Queue");
+	});
+});
+
+describe("spawnEpisodeContextMenu Play and queue order", () => {
+	const second: Episode = { ...episode, title: "Second" };
+
+	afterEach(() => plugin.set(undefined as never));
+
+	test("Play plays the episode and opens the full player", () => {
+		const navigation = new Navigation();
+		const play = vi.fn();
+		plugin.set({ player: { play }, navigation } as never);
+
+		const playItem = menuItems(episode, { x: 0, y: 0 }, { ...allDisabled, play: false })[0];
+		playItem.click();
+
+		expect(playItem.title).toBe("Play");
+		expect(play).toHaveBeenCalledWith(episode);
+		expect(navigation.current.expanded).toBe(true);
+	});
+
+	test("offers to move an episode in the queue only from a list of the queue", () => {
+		queue.add(episode);
+		queue.add(second);
+		const queueOnly = { ...allDisabled, queue: false };
+		const titles = (inQueueList?: boolean) =>
+			menuItems(second, { x: 0, y: 0 }, queueOnly, undefined, inQueueList).map(
+				({ title }) => title,
+			);
+
+		expect(titles()).toEqual(["Remove from Queue"]);
+		expect(titles(true)).toEqual([
+			"Remove from Queue",
+			"Move to top of queue",
+			"Move up in queue",
+		]);
 	});
 });

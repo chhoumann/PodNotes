@@ -16,7 +16,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
 import { FIXTURE_RESOLVER_RULES } from "../../scripts/e2e-instance.mjs";
-import { assertNoRuntimeErrors, assertSingleWindow } from "./journey/actions";
+import { assertNoRuntimeErrors, assertSingleWindow, dismissNotices } from "./journey/actions";
 import {
 	hasJourneySnapshot,
 	installJourneyErrorRecorder,
@@ -64,6 +64,13 @@ export function createPodNotesE2EHarness(testName: string) {
 		});
 		await lock.publishMarker(suiteClient);
 		await assertSingleWindow(suiteClient);
+		// Without a keyring, Obsidian loads stored secrets with a Notice that stays
+		// until dismissed, over the right sidebar's top. After a test stores a secret,
+		// every reload would bring it back over the view's controls.
+		await suiteClient.dev.evalJson(
+			'app.saveLocalStorage("secrets-encryption-warning-dismissed", "1"), true',
+		);
+		await dismissNotices(suiteClient);
 		const resolver = await suiteClient.dev.evalJson<string>(
 			'require("@electron/remote").app.commandLine.getSwitchValue("host-resolver-rules")',
 		);

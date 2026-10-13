@@ -10,8 +10,9 @@
 //   node .claude/skills/verify/ui.mjs uri 'obsidian://podnotes?...'
 //
 // `click`, `type`, `fill` and `wait` wait up to 10 s until exactly one visible
-// element matches the selector and --text filter, so they never act on a list
-// still loading or on the wrong match. `key` and `uri` do not wait.
+// element matches the selector and --text filter and nothing covers its center,
+// so they never act on a list still loading, on the wrong match, or through an
+// overlay. `key` and `uri` do not wait.
 import { fileURLToPath } from "node:url";
 import {
 	cliSocketExists,
@@ -84,7 +85,14 @@ async function locate(css, text) {
 			if (matches.length !== 1) return JSON.stringify({ count: matches.length });
 			matches[0].scrollIntoView({ block: "center", inline: "center" });
 			const rect = matches[0].getBoundingClientRect();
-			return JSON.stringify({ count: 1, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+			const x = rect.x + rect.width / 2;
+			const y = rect.y + rect.height / 2;
+			const hit = document.elementFromPoint(x, y);
+			if (!hit || !matches[0].contains(hit)) {
+				const covered = hit ? [hit.localName, ...hit.classList].join(".") : "nothing";
+				return JSON.stringify({ count: 1, covered });
+			}
+			return JSON.stringify({ count: 1, x, y });
 		})()`,
 	]);
 	if (!output.startsWith("=> ")) throw new Error(output);
@@ -96,8 +104,13 @@ async function find(css, text) {
 	const deadline = Date.now() + timeoutMs;
 	for (;;) {
 		const found = await locate(css, text);
-		if (found.count === 1) return found;
+		if (found.count === 1 && !found.covered) return found;
 		if (Date.now() > deadline) {
+			if (found.covered) {
+				throw new Error(
+					`${css}${text ? ` with text "${text}"` : ""} is covered by ${found.covered} after ${timeoutMs} ms.`,
+				);
+			}
 			throw new Error(
 				`${found.count} visible elements match ${css}${text ? ` with text "${text}"` : ""} after ${timeoutMs} ms; need exactly 1.`,
 			);

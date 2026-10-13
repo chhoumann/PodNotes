@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { get, writable } from "svelte/store";
+import { MenuItem } from "obsidian";
+import { tick } from "svelte";
+import { derived, get, writable } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "src/constants";
 import type { PlayerState } from "src/player/PlayerController";
-import { plugin, queue, viewState } from "src/store";
+import { plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
-import { ViewState } from "src/types/ViewState";
+import WithServices from "../../../tests/mocks/WithServices.svelte";
 import EpisodePlayer from "./EpisodePlayer.svelte";
 
 const episode: Episode = {
@@ -40,12 +42,18 @@ function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) 
 		setPlaybackRate: vi.fn(),
 		videoStage: vi.fn(() => ({ destroy: vi.fn() })),
 	};
-	plugin.set({
-		settings: structuredClone(DEFAULT_SETTINGS),
+	const services = {
+		settings: derived(plugin, ($plugin) => $plugin.settings),
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() },
 		player,
-	} as never);
-	return { ...render(EpisodePlayer, { target }), state, player };
+		// A queued episode's menu reads the plugin's queue, so the player shows that one.
+		library: { queue },
+	} as never;
+	return {
+		...render(WithServices, { target, props: { services, component: EpisodePlayer } }),
+		state,
+		player,
+	};
 }
 
 const labels = (container: HTMLElement) =>
@@ -55,7 +63,7 @@ const barWidth = (container: HTMLElement) =>
 
 beforeEach(() => {
 	queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: [] });
-	viewState.set(ViewState.Player);
+	plugin.set({ settings: structuredClone(DEFAULT_SETTINGS) } as never);
 });
 
 describe("EpisodePlayer", () => {
@@ -132,13 +140,44 @@ describe("EpisodePlayer", () => {
 	test("clicking a queued episode plays it", async () => {
 		const queued = { ...episode, title: "Queued Episode" };
 		queue.set({ ...get(queue), episodes: [queued] });
-		viewState.set(ViewState.EpisodeList);
 		const { player } = renderPlayer();
 
 		await fireEvent.click(screen.getByText("Queued Episode"));
 
 		expect(player.play).toHaveBeenCalledWith(queued);
-		expect(get(viewState)).toBe(ViewState.Player);
+	});
+
+	test("a queued episode's menu can move it in the queue", async () => {
+		const first = { ...episode, title: "First Queued" };
+		const second = { ...episode, title: "Second Queued" };
+		queue.set({ ...get(queue), episodes: [first, second] });
+		plugin.set({
+			app: { vault: { getAbstractFileByPath: () => null } },
+			settings: structuredClone(DEFAULT_SETTINGS),
+		} as never);
+		const titles = vi.spyOn(MenuItem.prototype, "setTitle");
+		renderPlayer();
+
+		await fireEvent.contextMenu(screen.getByText("Second Queued"));
+
+		expect(titles.mock.calls.map(([title]) => title)).toContain("Move up in queue");
+		titles.mockRestore();
+	});
+
+	test("an empty Queue follows queue automation as settings change or are imported (#108)", async () => {
+		const host = get(plugin);
+		renderPlayer();
+		expect(screen.getByRole("heading", { name: "Queue" })).toBeInTheDocument();
+
+		host.settings.autoQueue = false;
+		plugin.set(host);
+		await tick();
+		expect(screen.queryByRole("heading", { name: "Queue" })).toBeNull();
+
+		host.settings = { ...structuredClone(DEFAULT_SETTINGS), autoQueue: true };
+		plugin.set(host);
+		await tick();
+		expect(screen.getByRole("heading", { name: "Queue" })).toBeInTheDocument();
 	});
 
 	test("a video episode in a popout shows its artwork, since the video plays in the main window", async () => {
