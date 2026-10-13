@@ -458,16 +458,25 @@ describe("FeedRepository", () => {
 		});
 	});
 
-	test("episodes saved to data.json carry no feed-only metadata", async () => {
+	test("episodes saved to data.json carry their item's guid but not its transcripts", async () => {
 		const t = setup();
 		const transcripts = [{ url: "https://media.test/1.vtt", type: "text/vtt" }];
-		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1, { guid: "guid-1", transcripts })]));
+		await loaded(
+			t,
+			{ Alpha: alpha },
+			doc("Alpha", [item(1, { guid: "guid-1", transcripts }), item(2)]),
+		);
+		const [withGuid, withoutGuid] = t.feed("Alpha")!.episodes;
 
-		const persisted = encodeEpisode(t.feed("Alpha")!.episodes[0]);
+		const persisted = JSON.parse(JSON.stringify(encodeEpisode(withGuid)));
 
-		expect(persisted).toMatchObject({ title: "Episode 1", podcastName: "Alpha" });
-		expect(persisted).not.toHaveProperty("guid");
+		expect(persisted).toMatchObject({
+			title: "Episode 1",
+			podcastName: "Alpha",
+			guid: "guid-1",
+		});
 		expect(persisted).not.toHaveProperty("transcripts");
+		expect(JSON.parse(JSON.stringify(encodeEpisode(withoutGuid)))).not.toHaveProperty("guid");
 	});
 
 	test("reads an episode's guid and transcripts from its own subscription's feed", async () => {

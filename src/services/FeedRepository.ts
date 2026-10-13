@@ -370,6 +370,7 @@ function projectEpisode(
 		artworkUrl: item.artworkUrl || feed.artworkUrl,
 		episodeDate: item.episodeDate,
 		feedUrl: feed.url,
+		guid: item.guid,
 		itunesTitle: item.itunesTitle || "",
 		episodeNumber: item.episodeNumber,
 		duration: item.duration,
