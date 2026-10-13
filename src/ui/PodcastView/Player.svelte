@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Notice, Scope } from "obsidian";
+	import { Scope } from "obsidian";
 	import { tick } from "svelte";
 	import type { Chapter } from "src/types/Chapter";
 	import type { Episode } from "src/types/Episode";
@@ -37,6 +37,8 @@
 	let panel = $state<Panel>();
 	let volumeOpen = $state(false);
 	let failedArtworkUrl = $state("");
+	let added = $state(false);
+	let addedTimer: number | undefined;
 
 	const episode = $derived($playerState.episode as Episode);
 	const wide = $derived(layout === "wide");
@@ -165,8 +167,10 @@
 	}
 
 	async function capture() {
-		const name = (await captureTimestamp())?.path.split("/").pop()?.replace(/\.md$/, "");
-		if (name) new Notice(`Timestamp added to ${name}`);
+		if (!(await captureTimestamp())) return;
+		added = true;
+		window.clearTimeout(addedTimer);
+		addedTimer = window.setTimeout(() => (added = false), 1200);
 	}
 
 	function fullscreen() {
@@ -378,10 +382,13 @@
 					<button
 						type="button"
 						class="pn-btn mod-cta pn-cap"
+						class:is-done={added}
 						aria-label="Capture timestamp"
 						onclick={capture}
 					>
-						<span {@attach icon("clock-plus")}></span><span>Timestamp</span>
+						<span {@attach icon(added ? "check" : "clock-plus")}></span><span
+							>{added ? "Added" : "Timestamp"}</span
+						>
 					</button>
 					<button type="button" class="pn-btn pn-cap" onclick={() => note.onClick()}>
 						<span {@attach icon(note.icon)}></span><span>{note.title}</span>
@@ -748,6 +755,10 @@
 		height: var(--pn-cap-h);
 		font-weight: var(--font-medium);
 		--icon-size: 17px;
+	}
+
+	.pn-player .pn-cap.is-done {
+		background: var(--background-modifier-success);
 	}
 
 	.pn-cap span {

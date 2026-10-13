@@ -593,14 +593,20 @@ describe("PodNotes onload wiring (#55)", () => {
 
 	it("captures a timestamp into the active note and names that note", async () => {
 		const { plugin } = await loadPlugin(savedData);
+		const notice = vi.spyOn(obsidian, "Notice");
 		const editor = {
 			getCursor: () => ({ line: 0, ch: 0 }),
 			getLine: () => "",
 			lineCount: () => 1,
+			getSelection: () => "",
+			posToOffset: () => 0,
 			replaceSelection: vi.fn(),
 		};
 		Object.assign(plugin.app.workspace, {
-			activeEditor: { editor, file: { path: "Journal/Daily note.md" } },
+			activeEditor: {
+				editor,
+				file: { path: "Journal/Daily note.md", basename: "Daily note" },
+			},
 		});
 
 		await expect(plugin.capture.timestamp()).resolves.toMatchObject({
@@ -608,6 +614,9 @@ describe("PodNotes onload wiring (#55)", () => {
 			path: "Journal/Daily note.md",
 		});
 		expect(editor.replaceSelection).toHaveBeenCalledWith(expect.stringContaining("00:20:34"));
+		expect((notice.mock.calls[0][0] as DocumentFragment).textContent).toBe(
+			"Timestamp added to Daily noteUndo",
+		);
 	});
 
 	it("says why a timestamp has nowhere to go when the episode note is not set up", async () => {

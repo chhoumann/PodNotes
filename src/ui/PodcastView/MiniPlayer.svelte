@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Notice } from "obsidian";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
@@ -22,10 +21,7 @@
 	let failedArtworkUrl = $state("");
 	const id = $props.id();
 
-	async function capture() {
-		const note = (await captureTimestamp())?.path.split("/").pop()?.replace(/\.md$/, "");
-		if (note) new Notice(`Timestamp added to ${note}`);
-	}
+	const capture = () => void captureTimestamp();
 </script>
 
 {#snippet progress(kind: "pn-mini-prog" | "pn-mini-track")}

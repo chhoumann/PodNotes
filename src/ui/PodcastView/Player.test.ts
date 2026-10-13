@@ -247,6 +247,38 @@ describe("the full player", () => {
 		expect(button("Open note")).toBeInTheDocument();
 	});
 
+	test("Timestamp reads Added for 1.2 s after a capture, and not when nothing was captured", async () => {
+		await openPlayer();
+		const timestamp = button("Capture timestamp");
+		const reads = () => [
+			timestamp.textContent,
+			timestamp.querySelector("[data-icon]")?.getAttribute("data-icon"),
+		];
+		vi.useFakeTimers();
+		onTestFinished(() => void vi.useRealTimers());
+
+		await fireEvent.click(timestamp);
+		await tick();
+		expect(reads()).toEqual(["Timestamp", "clock-plus"]);
+
+		services.captureTimestamp.mockResolvedValueOnce({
+			destination: "note",
+			path: "PodNotes/Field Notes/How to remember everything.md",
+			text: "- 00:10:00\n",
+			created: false,
+		});
+		await fireEvent.click(timestamp);
+		await tick();
+		expect(reads()).toEqual(["Added", "check"]);
+
+		vi.advanceTimersByTime(1199);
+		await tick();
+		expect(reads()).toEqual(["Added", "check"]);
+		vi.advanceTimersByTime(1);
+		await tick();
+		expect(reads()).toEqual(["Timestamp", "clock-plus"]);
+	});
+
 	test("a video plays on the stage, which offers fullscreen", async () => {
 		const stage = vi.spyOn(services.player, "videoStage");
 		const { player } = await openPlayer({ ...episode, mediaType: "video" });

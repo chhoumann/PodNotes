@@ -500,24 +500,25 @@ describe("mini player", () => {
 		expect(button("Play")).toBeInTheDocument();
 	});
 
-	test("Timestamp names the note it added to", async () => {
+	test("Timestamp captures, compact or wide, and leaves saying where to the capture's notice", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		services.player.restore(episode);
-		renderView();
-
-		services.captureTimestamp.mockResolvedValueOnce(null);
-		await fireEvent.click(button("Capture timestamp"));
-		services.captureTimestamp.mockResolvedValueOnce({
+		const { resize } = renderView(320);
+		services.captureTimestamp.mockResolvedValue({
 			destination: "note",
 			path: "PodNotes/Pod/Episode 1 Launch.md",
 			text: "- 00:00:01\n",
 			created: false,
 		});
+
 		await fireEvent.click(button("Capture timestamp"));
+		resize(820);
+		await tick();
+		await fireEvent.click(button("Timestamp"));
 		await tick();
 
 		expect(services.captureTimestamp).toHaveBeenCalledTimes(2);
-		expect(notice.mock.calls).toEqual([["Timestamp added to Episode 1 Launch"]]);
+		expect(notice).not.toHaveBeenCalled();
 	});
 
 	test("tells assistive technology its progress, compact or wide", async () => {
