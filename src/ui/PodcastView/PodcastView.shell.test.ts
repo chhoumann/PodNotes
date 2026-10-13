@@ -342,7 +342,7 @@ describe("mini player", () => {
 	});
 
 	test("tells assistive technology its progress, compact or wide", async () => {
-		const { resize } = renderView(320);
+		const { resize, view } = renderView(320);
 		services.player.play(episode);
 		doc.media.duration = 2700.4;
 		doc.media.emit("loadedmetadata");
@@ -353,6 +353,7 @@ describe("mini player", () => {
 		for (const width of [320, 820]) {
 			resize(width);
 			await tick();
+			expect(view).toHaveClass(width < 560 ? "is-compact" : "is-wide");
 			const bars = screen.getAllByRole("progressbar", { name: "Episode progress" });
 			expect(bars).toHaveLength(1);
 			expect(bars[0]).toHaveAttribute("aria-valuemin", "0");

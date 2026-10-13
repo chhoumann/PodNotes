@@ -12,17 +12,21 @@ const LIBRARY_STORES = new Set([
 	"downloadedEpisodes",
 	"episodeListLimit",
 ]);
-// Legacy components the shell hosts unchanged, which read the stores themselves.
-const LEGACY = new Set(["EpisodeList.svelte"]);
+// The legacy list and menu the shell hosts unchanged, which read the stores themselves,
+// and MainView, which fills `ShellServices.library` from them.
+const ALLOWED = new Set(["EpisodeList.svelte", "spawnEpisodeContextMenu.ts", "index.ts"]);
 
 test("the view's components read the library from their services, not from src/store", () => {
 	const dir = import.meta.dirname;
 	const reads = readdirSync(dir)
-		.filter((file) => file.endsWith(".svelte") && !LEGACY.has(file))
+		.filter(
+			(file) =>
+				/\.(svelte|ts)$/.test(file) && !file.endsWith(".test.ts") && !ALLOWED.has(file),
+		)
 		.flatMap((file) =>
 			[
 				...readFileSync(`${dir}/${file}`, "utf8").matchAll(
-					/import\s*\{([^}]*)\}\s*from\s*"(?:src\/|(?:\.\.\/)+)store(?:\/index)?"/g,
+					/import\s*\{([^}]*)\}\s*from\s*"(?:src\/|(?:\.\.\/)+)store(?:\/[^"]*)?"/g,
 				),
 			]
 				.flatMap(([, names]) => names.split(",").map((name) => name.trim().split(/\s+/)[0]))
