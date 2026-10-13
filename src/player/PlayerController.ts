@@ -195,9 +195,9 @@ export class PlayerController {
 			}
 			session.segmentEnd = endTime ?? null;
 			session.preview = endTime !== undefined;
-			if (time === undefined && status === "ended") this.moveTo(0);
+			const at = time ?? (status === "ended" ? this.resumeTime(episode) : undefined);
 			if (time !== undefined) this.moved = true;
-			if (time === undefined || this.moveTo(time)) this.start();
+			if (at === undefined || this.moveTo(at)) this.start();
 			return true;
 		}
 
@@ -226,8 +226,7 @@ export class PlayerController {
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
 			this.load(episode, source, this.restartTime(episode));
-		} else {
-			if (status === "ended") this.moveTo(0);
+		} else if (status !== "ended" || this.moveTo(this.resumeTime(episode))) {
 			this.start();
 		}
 	}
