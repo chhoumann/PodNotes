@@ -1,6 +1,6 @@
 import { MarkdownView, Notice, type MarkdownFileInfo, type WorkspaceLeaf } from "obsidian";
 import { TimestampTemplateEngine } from "src/TemplateEngine";
-import { createPodcastNoteFileIfNotExists, getPodcastNote } from "src/createPodcastNote";
+import { createPodcastNoteFileIfNotExists } from "src/createPodcastNote";
 import { prepareTimestampForInsertion } from "src/utility/prepareTimestampInsertion";
 import { createRecentPodcastSegment, getSegmentCaptureTemplate } from "src/utility/podcastSegment";
 import type PodNotes from "src/main";
@@ -93,15 +93,14 @@ export class CaptureService {
 			return null;
 		}
 		try {
-			const existing = getPodcastNote(episode);
-			const file = existing ?? (await createPodcastNoteFileIfNotExists(episode));
+			const { file, created } = await createPodcastNoteFileIfNotExists(episode);
 			const appended = text.endsWith("\n") ? text : `${text}\n`;
 			await this.plugin.app.vault.process(file, (content) =>
 				content.length > 0 && !content.endsWith("\n")
 					? `${content}\n${appended}`
 					: `${content}${appended}`,
 			);
-			return { destination: "note", path: file.path, text: appended, created: !existing };
+			return { destination: "note", path: file.path, text: appended, created };
 		} catch (error) {
 			console.error("PodNotes: failed to capture timestamp into episode note", error);
 			new Notice("Failed to capture timestamp into episode note");

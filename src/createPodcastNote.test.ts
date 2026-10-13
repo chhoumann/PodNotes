@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as obsidian from "obsidian";
 import { TFile, TFolder } from "obsidian";
 import createPodcastNote, { getPodcastNote } from "./createPodcastNote";
 import { plugin } from "./store";
@@ -55,6 +56,7 @@ describe("createPodcastNote chapters template support (#47)", () => {
 
 	afterEach(() => {
 		mockFetchChapters.mockReset();
+		vi.restoreAllMocks();
 		plugin.set(undefined as never);
 	});
 
@@ -84,7 +86,8 @@ describe("createPodcastNote chapters template support (#47)", () => {
 		);
 	});
 
-	it("opens an existing note without fetching chapters", async () => {
+	it("says an existing note exists and opens it without fetching chapters", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
 		const existingFile = Object.assign(Object.create(TFile.prototype), {
 			path: "PodNotes/Chaptered Episode.md",
 		}) as TFile;
@@ -104,6 +107,7 @@ describe("createPodcastNote chapters template support (#47)", () => {
 		expect(mockFetchChapters).not.toHaveBeenCalled();
 		expect(createdFiles).toEqual([]);
 		expect(leaf.openFile).toHaveBeenCalledWith(existingFile);
+		expect(notice).toHaveBeenCalledWith('Note for "Chaptered Episode" already exists');
 	});
 
 	it("does not fetch chapters for templates that do not use the tag", async () => {

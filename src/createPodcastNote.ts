@@ -75,7 +75,8 @@ function getPodcastNoteTitleCandidates(episode: Episode): string[] {
 
 export default async function createPodcastNote(episode: Episode): Promise<void> {
 	try {
-		const file = await createPodcastNoteFileIfNotExists(episode);
+		const { file, created } = await createPodcastNoteFileIfNotExists(episode);
+		if (!created) new Notice(`Note for "${episode.title}" already exists`);
 
 		void get(plugin).app.workspace.getLeaf().openFile(file);
 	} catch (error) {
@@ -84,12 +85,11 @@ export default async function createPodcastNote(episode: Episode): Promise<void>
 	}
 }
 
-export async function createPodcastNoteFileIfNotExists(episode: Episode): Promise<TFile> {
+export async function createPodcastNoteFileIfNotExists(
+	episode: Episode,
+): Promise<{ file: TFile; created: boolean }> {
 	const existingFile = getPodcastNote(episode);
-	if (existingFile) {
-		new Notice(`Note for "${episode.title}" already exists`);
-		return existingFile;
-	}
+	if (existingFile) return { file: existingFile, created: false };
 
 	const pluginInstance = get(plugin);
 	const filePathDotMd = getPodcastNotePath(episode);
@@ -104,7 +104,7 @@ export async function createPodcastNoteFileIfNotExists(episode: Episode): Promis
 				])
 			: content;
 
-	return await createFileIfNotExists(filePathDotMd, identified, episode);
+	return { file: await createFileIfNotExists(filePathDotMd, identified), created: true };
 }
 
 async function getTemplateChapters(
@@ -173,19 +173,7 @@ export function openPodcastNote(episode: Episode): void {
 	void get(plugin).app.workspace.getLeaf().openFile(file);
 }
 
-async function createFileIfNotExists(
-	path: string,
-	content: string,
-	episode: Episode,
-): Promise<TFile> {
-	const file = getPodcastNote(episode);
-
-	if (file) {
-		new Notice(`Note for "${episode.title}" already exists`);
-
-		return file;
-	}
-
+async function createFileIfNotExists(path: string, content: string): Promise<TFile> {
 	const folderPath = path.split("/").slice(0, -1).join("/");
 	await ensureFolderExists(folderPath);
 

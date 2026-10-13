@@ -274,6 +274,18 @@ describe("capture", () => {
 		expect(notice).not.toHaveBeenCalled();
 	});
 
+	it("appends to an episode note the user already has, without a notice", async () => {
+		const { plugin, notes, read } = await loadPlugin(playing);
+		notes.set(NOTE_PATH, { file: vaultFile(NOTE_PATH), content: "# Mine" });
+
+		expect(await plugin.capture.timestamp()).toMatchObject({
+			destination: "note",
+			created: false,
+		});
+		expect(read(NOTE_PATH)).toBe("# Mine\n- 00:20:34\n");
+		expect(notice).not.toHaveBeenCalled();
+	});
+
 	it("asks for an episode when none is loaded, and writes nothing", async () => {
 		const { run, openNote, notes } = await loadPlugin({
 			...playing,
