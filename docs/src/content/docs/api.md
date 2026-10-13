@@ -71,7 +71,7 @@ export interface Episode {
 
 - `streamUrl` is the media source.
 - `url` is the episode's web page. It is the feed URL when the episode has no link, and a vault link for a local file.
-- `feedUrl` holds the placeholder of a private feed that you added, instead of a URL you can fetch. For an episode of a private feed you have not added, opened from a link, it holds the private address.
+- `feedUrl` holds the placeholder of a private feed that you added and that PodNotes recognizes, instead of a URL you can fetch. For an episode of a private feed you have not added, opened from a link, it holds the private address.
 - `guid` is the episode's ID in its feed, from `<guid>`. Links and notes use it to find the episode after the podcast renames it. It is missing when the feed gives no ID, or gives the same ID to several episodes.
 - `duration` is the length in seconds that the feed reports. It can differ from the player's measured `length`.
 - A local file has `podcastName: "local file"`, an empty `description` and `content`, and an optional `filePath`.
@@ -175,6 +175,6 @@ Setting the speed does not change **Default Playback Rate**. The speed lasts unt
 - `stop()` pauses the current episode and saves its position.
 - `togglePlayback()` switches between playing and paused.
 - `skipBackward()` and `skipForward()` move by **Skip backward length (s)** and **Skip forward length (s)**. An invalid length falls back to 15 seconds.
-- A backward skip stops at the start. A skip keeps the episode playing or paused. When the duration is known, a forward skip that would reach the last 0.25 seconds stops 0.25 seconds before the end, or stays where it is if it is already closer. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
+- A backward skip stops at the start. A skip keeps the episode playing or paused. When the duration is known, a forward skip that would reach the last 0.25 seconds stops 0.25 seconds before the end, or stays where it is when the position is already closer to the end. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
 - `increasePlaybackRate()` and `decreasePlaybackRate()` change the current speed by `0.1`, within `0.5` to `4`.
 - `resetPlaybackRate()` sets the current speed to **Default Playback Rate**.

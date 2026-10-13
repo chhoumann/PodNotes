@@ -64,7 +64,7 @@ PodNotes shortens a long folder or file name to fit file system limits, and keep
 | `{{podcast}}` | Podcast name cleaned for a file name. |
 | `{{description}}` | Episode description, converted from HTML to Markdown. |
 | `{{content}}` | Episode content from `<content:encoded>`, converted to Markdown. |
-| `{{url}}` | Episode web page from the item's `<link>`, or the feed URL when the item has none. For a private feed, the placeholder instead of its address. For a local file, the vault link. |
+| `{{url}}` | Episode web page from the item's `<link>`, or the feed URL when the item has none. For a private feed that PodNotes recognizes, the placeholder instead of its address. For a local file, the vault link. |
 | `{{stream}}` | Public HTTP or HTTPS media URL. Empty for a device-only URL or a blocked address. |
 | `{{date}}` | Episode publication date, or empty when the feed has none. |
 | `{{currentDate}}` | Date when PodNotes creates the note. |
@@ -80,7 +80,7 @@ The episode number comes from `<itunes:episode>` when the feed has a valid one. 
 
 `{{description}}`, `{{content}}`, and `{{chapters}}` accept a prefix for every line, as in `{{description:> }}`. Descriptions and content keep ordinary Markdown formatting, links, and image alt text. PodNotes removes media elements, escapes Markdown embeds, and turns `dataview` and `dataviewjs` code blocks into `text` code blocks.
 
-PodNotes never writes a private feed address that it recognizes into a note. When an episode's text, a file name, or your template quotes the address of a private feed that you added, PodNotes writes the feed's placeholder instead. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+PodNotes does not write the address of a private feed that you added into a note. When an episode's text, a file name, or your template quotes the address of a private feed that you added, PodNotes writes the feed's placeholder instead. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 PodNotes percent-encodes URLs from a feed where they contain whitespace, control characters, quotes, backticks, brackets, parentheses, angle brackets, or backslashes. A local file's `{{url}}` stays a vault link. `{{artwork}}` and `{{stream}}` accept only public HTTP or HTTPS addresses without a user name or password. A device-only address, or a private or local IP address, gives an empty value.
 
@@ -98,7 +98,7 @@ These episode note tags point to the episode or to its podcast:
 | --- | --- |
 | `{{episodeurl}}` | Same as `{{url}}`. |
 | `{{episodeartwork}}` | Same as `{{artwork}}`. |
-| `{{feedurl}}` | Podcast feed URL, or the placeholder for a private feed. Empty when no feed URL is stored, and for a private feed that you have not added. |
+| `{{feedurl}}` | Podcast feed URL, or the placeholder for a private feed that PodNotes recognizes. Empty when no feed URL is stored, and for a private feed that you have not added. |
 | `{{feedartwork}}` | Saved podcast artwork, or the episode artwork when the podcast has none. |
 | `{{podcastlink}}` | Wikilink to the feed note, built from **Feed note file path**. |
 
@@ -148,7 +148,7 @@ The title and the URL are in the body, not the properties. An escaped title can 
 | `{{safeTitle}}` | Podcast name cleaned for a file name. |
 | `{{podcast}}` | Podcast name cleaned for a file name. |
 | `{{url}}` | Podcast website from the feed's `<link>`, or empty. |
-| `{{feedurl}}` | Podcast feed URL, or the placeholder for a private feed. |
+| `{{feedurl}}` | Podcast feed URL, or the placeholder for a private feed that PodNotes recognizes. |
 | `{{artwork}}` | Podcast artwork URL, or empty when there is none or the address is blocked. |
 | `{{feedartwork}}` | Same as `{{artwork}}`. |
 | `{{author}}` | Author from `<itunes:author>`, with Markdown characters escaped. |

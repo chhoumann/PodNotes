@@ -46,7 +46,7 @@ The import replaces your preferences, templates, saved podcasts, playlists, queu
 The current volume changes to the imported **Default Volume** at once. The imported **Default Playback Rate** applies when a different episode loads.
 If PodNotes cannot save the import, a notice says which settings it kept, or asks you to change any setting to save again. See [Fix save problems](/save-problems/#failed-settings-imports-and-api-key-choices).
 
-Private feeds in the file work on a device that already has their addresses. On another device, set each address with **Set feed address**, or import an OPML file that lists the feeds. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
+Private feeds that PodNotes recognizes work on a device that already has their addresses. On another device, set each address with **Set feed address**, or import an OPML file that lists the feeds. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
 
 PodNotes also imports settings files from older versions and a copy of `data.json`. It rejects a file in a newer format than this version supports and asks you to update.
 

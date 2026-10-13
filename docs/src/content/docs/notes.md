@@ -18,7 +18,7 @@ PodNotes creates the note and opens it. With the default settings, the note for 
 The episode does not have to play.
 
 1. In an episode list, right-click the episode, or select its three-dot **More options** button.
-2. Select **Create note**. Once the note exists, the item reads **Open note**.
+2. Select **Create Note**. Once the note exists, the item reads **Open Note**.
 
 The [episode menu reference](/podcasts/#episode-menu-reference) lists the other items.
 
@@ -31,7 +31,7 @@ A feed note describes a whole podcast, with its artwork, author, description, we
 1. Run **PodNotes: Create podcast feed note** from the command palette.
 2. Select the podcast. If an episode is loaded, its podcast is first in the list.
 
-PodNotes creates the note and opens it, or opens the note if it exists. With the default settings, the feed note for Acquired is `PodNotes/Podcasts/Acquired.md`. In the PodNotes view, **Create podcast note** in the podcast's menu does the same.
+PodNotes creates the note and opens it, or opens the note if it exists. With the default settings, the feed note for Acquired is `PodNotes/Podcasts/Acquired.md`. The episode menu's **Create feed note** does the same.
 
 The default episode note template links each episode note to its feed note in the `podcast` property, such as `[[PodNotes/Podcasts/Acquired|Acquired]]`, even when you create the feed note later.
 
@@ -132,10 +132,10 @@ PodNotes adds the properties at the end of the template's properties, or in a ne
 - PodNotes cannot extend the template's properties, as with invalid YAML.
 - The properties would show a private feed's address, as for a private feed that you have not added.
 
-For a private feed that you added, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+For a private feed that you added and that PodNotes recognizes, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 ## Limits of note creation
 
-- **PodNotes: Create episode note** needs both **Note creation file path** and **Note creation template**. With either one empty, the command is missing, and **Create note** in the episode menu shows "Please set a note path and template in the settings."
+- **PodNotes: Create episode note** needs both **Note creation file path** and **Note creation template**. With either one empty, the command is missing, and **Create Note** in the episode menu shows "Please set a note path and template in the settings."
 - PodNotes finds a note without the `guid` and `feedUrl` properties, such as one created before PodNotes 2.22.0 or one for a local file, only by its path or by its title in the same folder. After you rename or move such a note, PodNotes can create a second note for the episode.
 - After you change **Feed note file path**, new episode notes link to the new path. Existing episode notes keep their old links.

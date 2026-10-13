@@ -13,12 +13,12 @@ Find short answers to the questions PodNotes users ask most. Each answer links t
 
 Run **PodNotes: Show player** from the command palette, or select the **Show PodNotes** podcast icon in the ribbon.
 Both open the player or reveal it if it is already open.
-On a phone, the player stays closed until you open it. See [Use PodNotes on your phone](/mobile/).
+On a phone, the player stays closed until you open it, except once on a new install. See [Use PodNotes on your phone](/mobile/).
 
 ### Why are some commands missing?
 
 Most commands appear only while an episode is loaded. A paused episode counts, and so does the episode PodNotes shows when Obsidian starts.
-**PodNotes: Create episode note** also appears once you add a podcast, if **Note creation file path** and **Note creation template** are set. **PodNotes: Reorder Queue** needs at least two episodes in the queue.
+**PodNotes: Create episode note** needs **Note creation file path** and **Note creation template**. With both set, it appears while an episode is loaded, and once you add a podcast. **PodNotes: Reorder Queue** needs at least two episodes in the queue.
 **PodNotes: Show player** and the capture commands are always available. [Commands](/commands/) lists what each command needs.
 
 ### How do I install a beta version or install manually?
@@ -85,7 +85,7 @@ Links to your own media files need only the file in your vault. See [Removed dow
 
 ### Does playback progress sync between devices?
 
-Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`, and merges the changes your devices make. When you switch devices, pause first and let sync finish. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
+Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`, and merges the changes your devices make. When you switch devices, follow [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices), so that your phone's older position does not replace your progress.
 If PodNotes shows a notice that it cannot save, see [Fix save problems](/save-problems/).
 API keys and the private feed addresses that PodNotes recognizes stay on each device. See [Sync between devices](/sync/).
 
@@ -93,6 +93,6 @@ API keys and the private feed addresses that PodNotes recognizes stay on each de
 
 ### Does transcription cost money?
 
-Not when the podcast's feed publishes a transcript. PodNotes saves that transcript for free, with no API key.
+Not when you added the podcast and its feed publishes a transcript. PodNotes saves that transcript for free, with no API key.
 To transcribe the audio, PodNotes uses your own OpenAI or Deepgram account, and the provider bills you for API use. Plain transcripts use OpenAI Whisper. **Speaker diarization** uses OpenAI or Deepgram.
 PodNotes does not import transcripts from Apple Podcasts. See [What transcription costs](/transcripts/#what-transcription-costs).

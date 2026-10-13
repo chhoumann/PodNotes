@@ -107,7 +107,7 @@ This macro runs a user script that saves the loaded episode's fields as QuickAdd
 
 QuickAdd asks you for `guest`, which the script does not set. For the other episode fields, see [`podcast`](/api/#podcast).
 
-PodNotes finds an episode note at **Note creation file path**, by the episode title in that folder, or by the note's `guid` and `feedUrl` properties. **Open note**, **PodNotes: Create episode note**, and a capture into the episode note do not find a note that QuickAdd saves anywhere else without those properties. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note). QuickAdd's [Macros](https://quickadd.obsidian.guide/docs/Choices/MacroChoice/) and [User Scripts](https://quickadd.obsidian.guide/docs/UserScripts/) docs describe the macro settings.
+PodNotes finds an episode note at **Note creation file path**, by the episode title in that folder, or by the note's `guid` and `feedUrl` properties. **Open Note**, **PodNotes: Create episode note**, and a capture into the episode note do not find a note that QuickAdd saves anywhere else without those properties. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note). QuickAdd's [Macros](https://quickadd.obsidian.guide/docs/Choices/MacroChoice/) and [User Scripts](https://quickadd.obsidian.guide/docs/UserScripts/) docs describe the macro settings.
 
 ## Send a transcript to an AI prompt
 

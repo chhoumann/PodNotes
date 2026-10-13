@@ -4,7 +4,7 @@ slug: save-problems
 description: Find out what each PodNotes save notice means, whether you lost anything, and how to make PodNotes save again.
 ---
 
-Find the notice PodNotes showed below. Each section says what happened, whether you lost anything, and how to make PodNotes save your library to `data.json` again.
+Find the notice that PodNotes showed in the sections below. Each section says what happened, whether you lost anything, and how to make PodNotes save your library to `data.json` again.
 
 ## PodNotes could not save your changes
 
@@ -12,7 +12,7 @@ The write to `data.json` failed, for example because the disk is full or the fol
 
 PodNotes keeps your changes in memory and tries again every 10 seconds. The changes stay in memory while Obsidian stays open, even if the next notice says that PodNotes could not read the file. If you quit Obsidian before a save succeeds, the unsaved changes are lost.
 
-PodNotes shows the notice once and gives no sign when a save succeeds. If the notice appears again after a while, saving failed again after it had worked.
+PodNotes shows the notice once and gives no sign when a save succeeds, so you cannot see whether a later save worked. To keep your changes safe, keep Obsidian open until you have fixed the cause. If the notice appears again after a while, saving failed again after it had worked.
 
 To fix the cause, free disk space, and check that PodNotes may write to its plugin folder, `.obsidian/plugins/podnotes/`.
 
@@ -24,15 +24,19 @@ If the notice also says that PodNotes started with default settings, see [A read
 
 ### A read error during a session
 
-Your changes stay in memory. While you have unsaved changes, PodNotes reads the file again every 10 seconds. When PodNotes can read the file again, the notice closes, and PodNotes saves your changes merged with the file.
+Your changes stay in memory. While you have unsaved changes, PodNotes reads the file again every 10 seconds. Without unsaved changes, it reads the file again when the file changes. When PodNotes can read the file again, the notice closes, and PodNotes saves your changes merged with the file.
 
 If you restart Obsidian now, the changes in memory are lost. If the notice stays, try these steps in order:
 
 1. Let your sync service finish.
 2. Check the free disk space and the permissions of the file named in the notice.
-3. If the notice still stays, use the last resort. Changes that your other devices saved into the file since this device last read it are lost. While Obsidian is open, rename the file, for example to `data.json.broken`. Obsidian does not show its configuration folder, so on a computer, use your system's file manager. On a phone, use a file manager app that can open the vault folder, or keep Obsidian open and repeat steps 1 and 2.
-4. In **Settings → PodNotes**, change any setting, so that PodNotes has a change to save. Within about 10 seconds, PodNotes writes a new `data.json` with your library from memory, and reads it back to check it.
-5. Wait about 10 seconds. If "PodNotes could not save your changes." appears, the write failed. Keep Obsidian open, fix the cause from step 2, and change a setting again.
+If the notice still stays, use the last resort in steps 3 to 5. It loses the changes that your other devices saved into the file since this device last read it.
+
+Obsidian does not show its configuration folder, so on a computer, use your system's file manager for these steps. On a phone, use a file manager app that can open the vault folder, or keep Obsidian open and repeat steps 1 and 2 instead.
+
+3. While Obsidian is open, rename the file, for example to `data.json.broken`.
+4. In **Settings → PodNotes**, change any setting, so that PodNotes has a change to save. Within about 10 seconds, PodNotes tries to write a new `data.json` with your library from memory.
+5. Keep Obsidian open, and open the new `data.json` in a text editor. If it lists your podcasts, PodNotes saved your library. If the file is missing, empty, or cut off, the write failed. Keep Obsidian open, and fix the cause from step 2. PodNotes tries again every 10 seconds. Do not rely on a notice here, because PodNotes shows its save-failure notice only once until a save succeeds.
 
 ### A read error at startup
 
@@ -45,7 +49,7 @@ Do not rename or delete the file in this case, unless you want to start a new li
 
 ## Older or newer data formats
 
-If a synced `data.json` uses an older data format, a notice says that the file was replaced by a copy from an older version of PodNotes. PodNotes saves nothing until you restart Obsidian, which updates the file. To fix it:
+If a synced `data.json` uses an older data format, a notice says that the file was replaced by a copy from an older version of PodNotes. PodNotes saves nothing until you restart Obsidian, which updates the file, so changes you make before the restart are lost. To fix it:
 
 1. Update PodNotes on every device.
 2. Let sync finish.
@@ -55,7 +59,7 @@ If `data.json` uses a data format that is newer than this version of PodNotes, P
 
 ## Failed settings imports and API key choices
 
-A failed settings import or API key choice shows its own notice, such as `Could not import PodNotes settings. The failed import was rolled back without overwriting newer changes.` The notice says which settings PodNotes kept. Fix the save problem first. Then, if the notice says that PodNotes rolled back, import the file or choose the key again. If it asks you to change any setting, change one.
+A failed settings import or API key choice shows its own notice, such as `Could not import PodNotes settings. The failed import was rolled back without overwriting newer changes.` The notice says which settings PodNotes kept. Fix the save problem first. Then, unless the notice asks you to change any setting, import the file or choose the key again. If it asks you to change any setting, change one.
 
 ## Start a new library
 

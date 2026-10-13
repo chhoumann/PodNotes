@@ -52,7 +52,7 @@ Moves back by **Skip backward length (s)**, 15 seconds by default. It never move
 
 ## Skip Forward
 
-Moves forward by **Skip forward length (s)**, 15 seconds by default, and keeps the episode playing or paused. When the duration is known, a skip that would reach the last 0.25 seconds stops 0.25 seconds before the end, or stays where it is if it is already closer. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
+Moves forward by **Skip forward length (s)**, 15 seconds by default, and keeps the episode playing or paused. When the duration is known, a skip that would reach the last 0.25 seconds stops 0.25 seconds before the end, or stays where it is when the position is already closer to the end. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
 
 ## Increase playback rate
 
@@ -105,7 +105,7 @@ PodNotes finds the show in the Apple Podcasts directory and the episode on pod.l
 
 ## Transcribe current episode
 
-Saves a transcript of the loaded episode at **Transcript file path**. When the episode's feed publishes a transcript, PodNotes saves that one, with no API key. Otherwise, it transcribes the audio with the selected provider. It works for podcast episodes and local audio, but not for video.
+Saves a transcript of the loaded episode at **Transcript file path**. For a podcast you added, when the episode's feed publishes a transcript, PodNotes saves that one, with no API key. Otherwise, it transcribes the audio with the selected provider. It works for podcast episodes and local audio, but not for video.
 If the transcript file already exists, PodNotes keeps it and does not transcribe again.
 When it transcribes the audio without an API key for the selected provider, it shows a notice that names the key to add. See [Transcribe episodes](/transcripts/).
 

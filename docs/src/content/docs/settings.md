@@ -42,7 +42,7 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Feed note file path** | `PodNotes/Podcasts/{{podcast}}.md` | Sets where **PodNotes: Create podcast feed note** and **Create podcast note** in the podcast's menu create the note for a podcast. See [Create episode notes](/notes/). |
+| **Feed note file path** | `PodNotes/Podcasts/{{podcast}}.md` | Sets where **PodNotes: Create podcast feed note** creates the note for a podcast. See [Create episode notes](/notes/). |
 | **Feed note template** | [The default feed note template](/templates/#feed-note-tags) | Sets the content of a new feed note. |
 
 ## Downloads
@@ -72,7 +72,7 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 | --- | --- | --- |
 | **Import settings** | None | **Import** opens a file picker. After you confirm, PodNotes replaces your preferences, templates, feeds, playlists, queue, and favorites with the ones in the file, and adds its playback progress for episodes this vault has not played. Your own progress, downloads, and local files stay. See [Import your settings](/import_export/#import-your-settings). |
 | **Include API keys** | Off | Adds the OpenAI and Deepgram keys on this device to the next export, in plain text. The export file sits in your vault, where sync and other plugins can read it. The toggle turns off again each time you open the tab. |
-| **Export settings** | `PodNotes_Settings.json` | **Export** saves your preferences, templates, feeds, playlists, queue, favorites, and playback progress to a file with this name in your vault. Private feeds keep only their placeholder. It does not overwrite an existing file. See [Export your settings](/import_export/#export-your-settings). |
+| **Export settings** | `PodNotes_Settings.json` | **Export** saves your preferences, templates, feeds, playlists, queue, favorites, and playback progress to a file with this name in your vault. Private feeds that PodNotes recognizes keep only their placeholder, and other feed addresses stay as they are. It does not overwrite an existing file. See [Export your settings](/import_export/#export-your-settings). |
 
 ## Transcripts
 

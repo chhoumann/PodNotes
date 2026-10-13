@@ -5,11 +5,11 @@ legacyTitleId: transcripts
 description: Save the transcript an episode's feed publishes, or transcribe the audio with your own API key, add speaker labels, and see what it costs.
 ---
 
-Turn an episode into a transcript note. When the podcast's feed publishes a transcript, PodNotes saves that one, with no API key and at no cost. Otherwise, PodNotes transcribes the audio with your own OpenAI or Deepgram account.
+Turn an episode into a transcript note. When you added the podcast and its feed publishes a transcript, PodNotes saves that one, with no API key and at no cost. Otherwise, PodNotes transcribes the audio with your own OpenAI or Deepgram account.
 
 ## <span id="creating-a-transcript"></span>Transcribe an episode
 
-For a podcast you added to PodNotes, the command first uses the transcript the episode's feed publishes, at no cost. Without one, it transcribes the audio with your provider and API key, and your provider bills you for it.
+**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, when you added the podcast to PodNotes. For any other episode, and when the feed publishes none, it transcribes the audio with your provider and API key, and your provider bills you for it.
 
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).

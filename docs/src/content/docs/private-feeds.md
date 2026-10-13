@@ -37,19 +37,19 @@ PodNotes keeps a feed address private when it has any of these:
 - A query parameter named `auth`, `token`, `key`, `secret`, `pass`, `password`, `apikey`, `api-key`, `api_key`, `access-token`, `access_token`, `sig`, `signature`, `jwt`, `credential`, or `credentials`, in any case.
 - The private feed form of one of the hosts in [Private feed hosts](#private-feed-hosts).
 
-PodNotes does not recognize other addresses, even when they hold a token in the path, such as `https://example.com/feeds/a1b2c3/rss`, or when they use a provider's custom domain. Such an address stays in `data.json`, syncs to every device, and works there with no setup.
+In these docs, a private feed is a feed with such an address. PodNotes does not recognize other addresses, even when they hold a token in the path, such as `https://example.com/feeds/a1b2c3/rss`, or when they use a provider's custom domain. Such an address stays in `data.json`, syncs to every device, and works there with no setup.
 
 ## After you update to PodNotes 2.22.0
 
-PodNotes 2.22.0 recognizes the hosts in [Private feed hosts](#private-feed-hosts), for example a Supercast address such as `https://myshow.supercast.com/feed/abc123.rss`. On its first start, PodNotes moves the address of each matching podcast out of `data.json` into secret storage and shows "Moved private feed URLs out of data.json." The podcast keeps working on that device.
+PodNotes 2.22.0 recognizes the hosts in [Private feed hosts](#private-feed-hosts), for example a Supercast address such as `https://myshow.supercast.com/feed/abc123.rss`. The first time PodNotes 2.22.0 starts, it moves the address of each matching podcast out of `data.json` into secret storage and shows "Moved private feed URLs out of data.json." The podcast keeps working on that device.
 
 Update PodNotes on every device, because an older PodNotes cannot load these podcasts and can overwrite your library. Then, on each other device, enter the address of each moved podcast once with [Set feed address](#use-a-private-feed-on-another-device).
 
-Notes and links that you created before the update keep the address in their text, and the links still play. PodNotes does not rewrite them.
+Notes and links that you created before the update keep the address in their text, and the links still play on every device. PodNotes does not rewrite them.
 
 ## Private feeds in notes and links
 
-PodNotes never writes an address that it [keeps private](#which-addresses-podnotes-keeps-private) into a note it creates:
+PodNotes does not write the address of a private feed that you added into the notes it creates:
 
 - Episode notes, feed notes, timestamps, and transcripts of a podcast you added use its placeholder instead. `{{feedurl}}` gives the placeholder, and links work on each device where you set the address.
 - When an episode's description or other text quotes the address, PodNotes replaces it with the placeholder.

@@ -14,7 +14,7 @@ PodNotes has no sync service of its own, so your vault sync service, such as Obs
 | Your podcasts, progress, queue, playlists, templates, and settings | In `data.json`, if your sync service includes plugin data |
 | Episode notes, feed notes, and transcripts | As Markdown files |
 | Downloads | As media files, if your sync service includes them |
-| API keys and the private feed addresses that PodNotes recognizes | Not at all. Each device keeps its own copy, and only a reference to it syncs. |
+| API keys and the private feed addresses that PodNotes recognizes | Not at all. Each device keeps its own copy, and only a reference to it syncs. See [API keys and private feeds on each device](#api-keys-and-private-feeds-on-each-device). |
 | The current playback speed | Not at all. PodNotes does not save it. Only **Default Playback Rate** syncs. |
 
 For your library to sync, your sync service must include PodNotes' plugin folder, `.obsidian/plugins/podnotes/`.
@@ -31,7 +31,7 @@ PodNotes merges the changes your devices make, so you can switch devices without
 5. If this device's player shows the episode at another time, move the progress bar to the time you noted.
 6. Play the episode.
 
-Step 5 matters because a device's player keeps its own position for the episode in it, once you played that episode there or moved its position. When that device saves its position, for example when you pause or switch apps, the older position replaces the progress from your other device. Other episodes start at their synced position when you play them.
+Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. The same happens when you moved the position before you played. Other episodes start at their synced position when you play them.
 
 ## Changes on two devices
 
@@ -47,7 +47,7 @@ When two devices change the same setting or the same item before either sees the
 
 Episodes match by podcast name and title, so episodes with the same title from different podcasts stay apart.
 
-Sync never starts, pauses, or moves an episode once you play it on this device. That episode keeps this device's position, as step 5 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains. Before you play anything after Obsidian starts, the player follows the episode and position that sync brings, unless you moved the position of that same episode.
+Sync never starts or pauses playback on this device. While an episode stays in this device's player, sync does not move its position, as step 5 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains.
 
 ### A device that starts before sync finishes
 
@@ -60,7 +60,7 @@ A device that starts PodNotes before sync delivers `data.json` starts a library 
 ### Limits of merging
 
 - A change that arrives between PodNotes' read and its write can still be lost.
-- PodNotes writes `data.json` in place, so your sync service can pick up a partly written file. Another device that picks up such a file shows a notice that PodNotes could not read the file, until the complete file arrives. See [Fix save problems](/save-problems/).
+- PodNotes writes `data.json` in place, so your sync service can pick up a partly written file. When another device picks up such a file and it is not empty, that device shows a notice that PodNotes could not read the file, until the complete file arrives. See [Fix save problems](/save-problems/).
 - PodNotes 2.21.1 and earlier do not merge, so a device that runs one of them can overwrite the whole file. Update PodNotes on every device.
 
 ## When PodNotes saves
