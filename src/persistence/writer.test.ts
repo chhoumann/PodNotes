@@ -557,6 +557,28 @@ describe("DataFileWriter lifecycle", () => {
 		expect(state.writes).toEqual([{ ...doc(), defaultVolume: 0.5 }]);
 	});
 
+	it("keeps a change made elsewhere that a save in flight at unload merged in", async () => {
+		const { access, state, writer } = setup();
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		access.read.mockImplementationOnce(async () => {
+			await held;
+			return structuredClone(state.disk);
+		});
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		await vi.waitFor(() => expect(access.read).toHaveBeenCalled());
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		const unloading = writer.unload();
+		release();
+		await unloading;
+
+		const expected = { ...doc(), defaultVolume: 0.5 };
+		expected.savedFeeds.Synced = { title: "Synced" };
+		expect(state.disk).toEqual(expected);
+	});
+
 	it("still merges with disk when unload writes waiting progress", async () => {
 		const { clock, state, writer } = setup();
 		state.memory.playedEpisodes["Pod::Ep"] = { time: 42 };

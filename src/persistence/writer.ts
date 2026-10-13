@@ -50,7 +50,7 @@ export class DataFileWriter<Doc> {
 	/** A save is queued and has not started, so later changes are written by it. */
 	private saveQueued = false;
 	private unloaded = false;
-	/** Memory as it was at unload: a callback that runs later must not reach the final save. */
+	/** Memory at unload: a callback that runs later must not reach the final save. */
 	private memoryAtUnload: Doc | null = null;
 	private publishing = false;
 	private checkpointing = false;
@@ -171,6 +171,8 @@ export class DataFileWriter<Doc> {
 	}
 
 	private publish(doc: Doc): void {
+		// After unload, memory moves on only by what the writer itself merged in.
+		if (this.memoryAtUnload) this.memoryAtUnload = structuredClone(doc);
 		this.publishing = true;
 		try {
 			this.file.publish(doc);
