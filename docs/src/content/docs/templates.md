@@ -86,7 +86,7 @@ PodNotes percent-encodes URLs from a feed where they contain whitespace, control
 
 ### Duration and chapters
 
-With no argument, `{{duration}}` gives `4:05` for an episode under an hour and `1:02:03` for longer ones. `{{duration:minutes}}` gives whole minutes, and `{{duration:seconds}}` gives seconds. Any other argument is a [time format](/timestamps/#time-formats), as in `{{duration:HH:mm:ss}}`. An episode restored from an older version can lack a duration. Create its note from the episode's menu in its podcast's list, which uses the feed's copy of the episode.
+With no argument, `{{duration}}` gives `4:05` for an episode under an hour and `1:02:03` for longer ones. `{{duration:minutes}}` gives whole minutes, and `{{duration:seconds}}` gives seconds. Any other argument is a [time format](/timestamps/#time-formats), as in `{{duration:HH:mm:ss}}`. An episode restored from an older version can lack a duration. Create its note from the episode's menu in its podcast's list. That menu uses the feed's copy of the episode, with its duration.
 
 `{{chapters}}` reads the chapters file from the feed's Podcasting 2.0 `<podcast:chapters>` tag. Each visible chapter becomes a line such as `- 0:00 Chapter title`, sorted by start time, with the title as plain text. PodNotes leaves out chapters marked `toc: false`. A failed request or an empty chapters file gives an empty value.
 

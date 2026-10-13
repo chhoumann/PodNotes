@@ -93,6 +93,6 @@ API keys and the private feed addresses that PodNotes recognizes stay on each de
 
 ### Does transcription cost money?
 
-Not when you added the podcast and its feed publishes a transcript. PodNotes saves that transcript for free, with no API key.
+Not for a podcast you added, when its feed lists a transcript in a format that PodNotes reads. PodNotes saves that transcript for free, with no API key.
 To transcribe the audio, PodNotes uses your own OpenAI or Deepgram account, and the provider bills you for API use. Plain transcripts use OpenAI Whisper. **Speaker diarization** uses OpenAI or Deepgram.
 PodNotes does not import transcripts from Apple Podcasts. See [What transcription costs](/transcripts/#what-transcription-costs).

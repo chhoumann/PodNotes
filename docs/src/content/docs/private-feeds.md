@@ -20,7 +20,7 @@ PodNotes cannot sign in to providers that require a browser login. If PodNotes c
 The podcast syncs to your other devices, but its address does not. On each other device, enter the address once:
 
 1. On a device that already has PodNotes, update it to 2.22.0 or later before you use PodNotes there. An older PodNotes does not [merge changes](/sync/#changes-on-two-devices), so it can overwrite the library that sync brings.
-2. Let your sync service bring your vault to the device. It must include PodNotes' plugin folder, as [What syncs](/sync/#what-syncs) describes. With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** on every device. On a new device, this also brings PodNotes itself.
+2. Let your sync service bring your vault to the device. It must include PodNotes' plugin folder, as [What syncs](/sync/#what-syncs) describes. With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** on every device. On a new device, these two settings also bring PodNotes itself.
 3. If PodNotes is still not on the device, install it. The podcast then appears on the device. Do not add it again from its address.
 4. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
 5. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item.
@@ -78,7 +78,7 @@ See [Import and export](/import_export/).
 
 ### Private feed hosts
 
-PodNotes recognizes these private feed addresses. A subdomain is any name that ends with the domain, such as `myshow.substack.com`.
+PodNotes recognizes these private feed addresses. A subdomain is any name that ends with a dot and the domain, such as `myshow.substack.com` for `substack.com`.
 
 | Provider | Host | Private address |
 | --- | --- | --- |

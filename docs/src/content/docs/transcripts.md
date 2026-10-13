@@ -5,11 +5,11 @@ legacyTitleId: transcripts
 description: Save the transcript an episode's feed publishes, or transcribe the audio with your own API key, add speaker labels, and see what it costs.
 ---
 
-Turn an episode into a transcript note. When you added the podcast and its feed publishes a transcript, PodNotes saves that one, with no API key and at no cost. Otherwise, PodNotes transcribes the audio with your own OpenAI or Deepgram account.
+Turn an episode into a transcript note. For a podcast you added, when its feed lists a transcript in a format that PodNotes reads, PodNotes saves that one, with no API key and at no cost. Otherwise, PodNotes transcribes the audio with your own OpenAI or Deepgram account.
 
 ## <span id="creating-a-transcript"></span>Transcribe an episode
 
-**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, when you added the podcast to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. On a device without the key your provider needs, the command never bills you. It saves only transcripts that feeds publish, and otherwise shows a notice that asks for a key.
+**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, for a podcast you added to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. On a device without the key your provider needs, the command never bills you. It saves only transcripts that feeds publish, and otherwise shows a notice that asks for a key.
 
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
@@ -72,7 +72,7 @@ The providers differ in these ways:
 | OpenAI | Your OpenAI key | `A`, `B`, `C` | Sent in parts of about 20 MB. `A` in one part may be `B` in the next. |
 | Deepgram | A Deepgram key. No OpenAI key needed. | `1`, `2`, `3` | Sent in one request. Labels stay the same for the whole episode. |
 
-A transcript that the feed publishes uses the speaker names in the feed, whatever this setting says.
+A transcript that the feed publishes uses the speaker names in the feed, with or without **Speaker diarization**.
 
 ### <span id="speaker-label-format"></span>Change the speaker label format
 

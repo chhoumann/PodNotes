@@ -6,7 +6,7 @@ description: Find out what each PodNotes save notice means, whether you lost any
 
 Find the notice that PodNotes showed in the sections below. Each section says what happened, whether you lost anything, and how to make PodNotes save your library to `data.json` again.
 
-Obsidian does not show its configuration folder. On a computer, open `data.json` with your system's file manager, with hidden files shown. On a phone, use a file manager app that can open the vault folder.
+Obsidian does not show its configuration folder. On a computer, find `data.json` with your system's file manager, with hidden files shown, and open it in a text editor. On a phone, use a file manager app that can open the vault folder.
 
 ## PodNotes could not save your changes
 

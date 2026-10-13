@@ -33,7 +33,7 @@ PodNotes merges the changes your devices make, so you can switch devices without
    - If it shows your episode at another time, move the progress bar to the time you noted, and play it.
    - If it shows your episode at the time you noted, play it.
 
-Step 5 matters because a device keeps its own position for an episode that it played since Obsidian started, while that episode stays in its player. For example, you listen on your phone to 10:00, continue on your laptop to 30:00, and Obsidian keeps running on the phone. Back on the phone, its player still shows 10:00. If you play it from there, or the phone saves before you move the progress bar, for example when you switch apps, 10:00 replaces 30:00 in your library. Any other episode, including the one the player shows when Obsidian starts, follows the synced position until you move it.
+Step 5 matters because a device keeps its own position for an episode that it played since Obsidian started, while that episode stays in its player. For example, you listen on your phone to 10:00, continue on your laptop to 30:00, and Obsidian keeps running on the phone. Back on the phone, its player still shows 10:00. If you play it from there, 10:00 replaces 30:00 in your library. The same happens when the phone saves before you move the progress bar, for example when you switch apps. Any other episode, including the one the player shows when Obsidian starts, follows the synced position until you move it.
 
 ## Changes on two devices
 
