@@ -110,7 +110,6 @@ export function episodeMenu(
 		isSameStoredEpisode(entry, episode),
 	);
 	const downloaded = downloadedCopy(get(library.downloadedEpisodes), episode) !== undefined;
-	const lists = Object.values(get(library.playlists));
 	// An episode opened by a private feed's own address would put that secret in the link.
 	const link = isCredentialBearingUrl(episodeLinkTarget(episode) ?? "")
 		? ""
@@ -167,10 +166,10 @@ export function episodeMenu(
 		{
 			title: "Add to playlist",
 			icon: "list-music",
-			disabled: lists.length === 0,
-			onClick: () =>
-				showMenu(
-					lists.map(({ name, icon, episodes }) => {
+			// Obsidian's menus have no submenu, so the playlists open as a menu of their own.
+			onClick: () => {
+				const lists = Object.values(get(library.playlists)).map(
+					({ name, icon, episodes }): MenuEntry => {
 						const member = episodes.some((entry) =>
 							isSameStoredEpisode(entry, episode),
 						);
@@ -180,9 +179,17 @@ export function episodeMenu(
 							checked: member,
 							onClick: () => actions.setInPlaylist(name, episode, !member),
 						};
-					}),
+					},
+				);
+				showMenu(
+					[
+						...lists,
+						...(lists.length ? ["separator" as const] : []),
+						item("New playlist", "plus", () => void actions.createPlaylist(episode)),
+					],
 					at,
-				),
+				);
+			},
 		},
 		"separator",
 	);
@@ -259,6 +266,22 @@ export function queueMenu({
 			warning: true,
 			disabled: get(library.queue).episodes.length === 0,
 			onClick: () => actions.clearQueue(),
+		},
+	];
+}
+
+/** A playlist of the user's. Deleting the open one first goes to Playlists, which stays. */
+export function playlistMenu(name: string, { actions, navigation }: ShellServices): MenuEntry[] {
+	return [
+		{
+			title: "Delete playlist",
+			icon: "trash",
+			warning: true,
+			onClick: () => {
+				const { page } = navigation.current;
+				if (page.kind === "playlist" && page.name === name) navigation.goRoot("playlists");
+				actions.deletePlaylist(name);
+			},
 		},
 	];
 }

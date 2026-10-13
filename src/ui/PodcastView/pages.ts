@@ -87,9 +87,10 @@ export interface Head {
 	readonly flair?: string;
 	/**
 	 * The head's right edge: the compact Library's Add podcast and Settings, Refresh
-	 * all on the wide Library and Latest, a podcast's menu, or the queue's.
+	 * all on the wide Library and Latest, or the menu of a podcast, the queue, or a
+	 * playlist of the user's.
 	 */
-	readonly action?: "library" | "refresh-all" | "podcast" | "queue";
+	readonly action?: "library" | "refresh-all" | "podcast" | "queue" | "playlist";
 	/** Add podcast's search field stands in the title's place. */
 	readonly search?: true;
 }
@@ -102,11 +103,12 @@ export interface HeadLists {
 	readonly played: PlayedEpisodeMap;
 }
 
-function actionOf({ kind }: Page, layout: Layout): Head["action"] {
-	if (kind === "library") return layout === "wide" ? "refresh-all" : "library";
-	if (kind === "latest") return "refresh-all";
-	if (kind === "feed") return "podcast";
-	if (kind === "queue") return "queue";
+function actionOf(page: Page, layout: Layout, { favorites }: HeadLists): Head["action"] {
+	if (page.kind === "library") return layout === "wide" ? "refresh-all" : "library";
+	if (page.kind === "latest") return "refresh-all";
+	if (page.kind === "feed") return "podcast";
+	if (page.kind === "queue") return "queue";
+	if (page.kind === "playlist" && page.name !== favorites.name) return "playlist";
 	return undefined;
 }
 
@@ -135,7 +137,7 @@ export function headFor(
 ): Head {
 	const { kind } = page;
 	const search = kind === "add" || undefined;
-	const action = actionOf(page, layout);
+	const action = actionOf(page, layout, lists);
 	const flair = flairOf(page, lists);
 	if (layout === "wide" && isRoot(page)) {
 		if (search) return previous ? { back: pageLabel(previous, feeds), search } : { search };

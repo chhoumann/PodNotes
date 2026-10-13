@@ -11,7 +11,7 @@
 	import { layoutFor, observeWidth, restoreScroll, type Layout } from "./layout";
 	import LibraryPage from "./LibraryPage.svelte";
 	import ListPage from "./ListPage.svelte";
-	import { anchorOf, podcastMenu, queueMenu, showMenu } from "./menus";
+	import { anchorOf, playlistMenu, podcastMenu, queueMenu, showMenu } from "./menus";
 	import MiniPlayer from "./MiniPlayer.svelte";
 	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
 	import PlayerOverlay from "./PlayerOverlay.svelte";
@@ -170,6 +170,18 @@
 							title="Queue options"
 							aria-haspopup="menu"
 							onclick={(event) => showMenu(queueMenu(services), anchorOf(event))}
+							{@attach icon("more-horizontal")}
+						></button>
+					{:else if head.action === "playlist" && page.kind === "playlist"}
+						{@const name = page.name}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Playlist options"
+							title="Playlist options"
+							aria-haspopup="menu"
+							onclick={(event) =>
+								showMenu(playlistMenu(name, services), anchorOf(event))}
 							{@attach icon("more-horizontal")}
 						></button>
 					{/if}
@@ -1207,6 +1219,16 @@
 			display: flex;
 			color: var(--text-muted);
 			--icon-size: 16px;
+		}
+
+		.pn-plrow.is-new .pn-plicon {
+			background: none;
+			border: 1px dashed var(--background-modifier-border-hover);
+		}
+
+		.pn-plrow.is-new .t {
+			color: var(--text-muted);
+			font-weight: var(--font-normal);
 		}
 
 		.pn-iconbtn:focus-visible,

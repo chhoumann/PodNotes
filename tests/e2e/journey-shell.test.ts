@@ -241,7 +241,10 @@ describe("view shell journeys", () => {
 
 		await click(obsidian, ui.menuItem("Add to playlist"));
 		await waitUntilShown(obsidian, ui.menuItem("Walks"));
-		expect(await shownMenu(obsidian)).toEqual([{ title: "Walks", checked: false }]);
+		expect(await shownMenu(obsidian)).toEqual([
+			{ title: "Walks", checked: false },
+			{ title: "New playlist", checked: false },
+		]);
 		await click(obsidian, ui.menuItem("Walks"));
 		await waitForLibrary(
 			plugin,
@@ -251,7 +254,10 @@ describe("view shell journeys", () => {
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await click(obsidian, ui.menuItem("Add to playlist"));
 		await waitUntilShown(obsidian, ui.menuItem("Walks"));
-		expect(await shownMenu(obsidian)).toEqual([{ title: "Walks", checked: true }]);
+		expect(await shownMenu(obsidian)).toEqual([
+			{ title: "Walks", checked: true },
+			{ title: "New playlist", checked: false },
+		]);
 		await pressEscape(obsidian);
 
 		await click(obsidian, ui.episodeMenu(OTHER.title));

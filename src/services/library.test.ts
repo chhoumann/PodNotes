@@ -4,7 +4,8 @@ import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
-import { queue, savedFeeds } from "src/store";
+import { playlists, queue, savedFeeds } from "src/store";
+import type { Playlist } from "src/types/Playlist";
 import type { Episode } from "src/types/Episode";
 import { fetchTextWithTimeout } from "src/utility/networkRequest";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
@@ -68,6 +69,7 @@ beforeEach(() => {
 afterEach(() => {
 	savedFeeds.set({});
 	queue.set(structuredClone(DEFAULT_SETTINGS.queue));
+	playlists.set({});
 	vi.restoreAllMocks();
 });
 
@@ -235,5 +237,106 @@ describe("clearing the queue", () => {
 
 		expect(shown.texts()).toEqual([]);
 		expect(writes).toBe(1);
+	});
+});
+
+describe("playlists", () => {
+	const list = (name: string, changes: Partial<Playlist> = {}): Playlist => ({
+		name,
+		icon: "list-music",
+		episodes: [],
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+		...changes,
+	});
+	const show: Episode = {
+		title: "First",
+		streamUrl: "https://media.test/first.mp3",
+		url: "",
+		description: "",
+		content: "",
+		podcastName: "Pod",
+	};
+
+	async function create(name: string, episode?: Episode) {
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		const created = actions.createPlaylist(episode);
+		const dialog = within(document.body);
+		await fireEvent.input(dialog.getByRole("textbox", { name: "Playlist name" }), {
+			target: { value: name },
+		});
+		await fireEvent.click(dialog.getByRole("button", { name: "Create" }));
+		return await created;
+	}
+
+	test("New playlist creates one under its trimmed name, with the episode it was asked from", async () => {
+		expect(await create("  My Shows  ", show)).toBe("My Shows");
+
+		expect(get(playlists)).toEqual({ "My Shows": list("My Shows", { episodes: [show] }) });
+	});
+
+	test("refuses a built-in list's name, Played's too", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+
+		expect(await create("Favorites")).toBeNull();
+		expect(await create("Played")).toBeNull();
+
+		expect(notice.mock.calls).toEqual([
+			['"Favorites" is a reserved playlist name.'],
+			['"Played" is a reserved playlist name.'],
+		]);
+		expect(get(playlists)).toEqual({});
+	});
+
+	test("refuses a name already taken, also after trimming, and keeps the playlist there", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const existing = list("Walks", { episodes: [show], icon: "star" });
+		playlists.set({ Walks: existing });
+
+		expect(await create("Walks")).toBeNull();
+		expect(await create(" Walks ")).toBeNull();
+
+		expect(notice.mock.calls).toEqual([
+			["A playlist with that name already exists."],
+			["A playlist with that name already exists."],
+		]);
+		expect(get(playlists).Walks).toBe(existing);
+	});
+
+	test("cancelling creates nothing", async () => {
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		const created = actions.createPlaylist();
+		await fireEvent.click(within(document.body).getByRole("button", { name: "Cancel" }));
+
+		expect(await created).toBeNull();
+		expect(get(playlists)).toEqual({});
+	});
+
+	test("Undo puts a deleted playlist back whole, where it was, unless its name was taken since", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		const runs = list("Runs", { episodes: [show], icon: "bike", shouldRepeat: true });
+		playlists.set({ Walks: list("Walks"), Runs: runs, Rides: list("Rides") });
+
+		actions.deletePlaylist("Runs");
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Rides"]);
+		expect(shown.texts()).toEqual(["Deleted RunsUndo"]);
+		shown.undo();
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Runs", "Rides"]);
+		expect(get(playlists).Runs).toEqual(runs);
+
+		actions.deletePlaylist("Runs");
+		const newer = list("Runs");
+		playlists.update((all) => ({ ...all, Runs: newer }));
+		shown.undo();
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Rides", "Runs"]);
+		expect(get(playlists).Runs).toBe(newer);
+	});
+
+	test("deleting a playlist that is gone shows nothing", () => {
+		const shown = notices();
+		actionsOn(new obsidian.SecretStorage()).actions.deletePlaylist("Gone");
+
+		expect(shown.texts()).toEqual([]);
 	});
 });

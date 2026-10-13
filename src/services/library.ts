@@ -1,7 +1,9 @@
 import { Notice, type App } from "obsidian";
 import { get } from "svelte/store";
+import { PLAYED_SETTINGS } from "src/constants";
 import {
 	favorites,
+	localFiles,
 	playedEpisodes,
 	playlists,
 	queue,
@@ -46,8 +48,27 @@ export interface LibraryActions {
 	clearQueue(): void;
 	setFavorite(episode: Episode, favorite: boolean): void;
 	setInPlaylist(name: string, episode: Episode, member: boolean): void;
+	/**
+	 * Asks for a name and creates a playlist, holding `episode` when one is given. The
+	 * name, or null when the user cancels or the name is a built-in list's or taken.
+	 */
+	createPlaylist(episode?: Episode): Promise<string | null>;
+	/** Deletes a playlist of the user's and offers Undo, which puts it back where it was. */
+	deletePlaylist(name: string): void;
 	/** `playedKey` names a Played record stored under another key than the episode's. */
 	setPlayed(episode: Episode, played: boolean, playedKey?: string): void;
+}
+
+/** `record` with `value` under `key` at `index` of its entry order, the order lists show. */
+function withEntryAt<T>(
+	record: Record<string, T>,
+	index: number,
+	key: string,
+	value: T,
+): Record<string, T> {
+	const entries = Object.entries(record);
+	entries.splice(index, 0, [key, value]);
+	return ownRecord(Object.fromEntries(entries));
 }
 
 // The menu that asks for a state was built from an earlier read, so membership is
@@ -188,6 +209,51 @@ export function createLibraryActions({
 						}
 					: all;
 			}),
+		async createPlaylist(episode) {
+			const name = await askText(app, {
+				title: "New playlist",
+				label: "Playlist name",
+				placeholder: "Name",
+				cta: "Create",
+			});
+			if (name === null) return null;
+			// A built-in list's name would make a custom playlist's page show the built-in list.
+			const builtIn = [get(queue), get(favorites), get(localFiles), PLAYED_SETTINGS];
+			if (builtIn.some((list) => list.name === name)) {
+				new Notice(`"${name}" is a reserved playlist name.`);
+				return null;
+			}
+			if (ownRecord(get(playlists))[name]) {
+				new Notice("A playlist with that name already exists.");
+				return null;
+			}
+			playlists.update((all) => ({
+				...all,
+				[name]: {
+					name,
+					icon: "list-music",
+					episodes: episode ? [episode] : [],
+					shouldEpisodeRemoveAfterPlay: false,
+					shouldRepeat: false,
+				},
+			}));
+			return name;
+		},
+		deletePlaylist(name) {
+			const all = get(playlists);
+			const deleted = ownRecord(all)[name];
+			if (!deleted) return;
+			const index = Object.keys(all).indexOf(name);
+			playlists.update((current) => {
+				const rest = ownRecord(current);
+				delete rest[name];
+				return rest;
+			});
+			noticeWithUndo(`Deleted ${name}`, () => {
+				if (ownRecord(get(playlists))[name]) return;
+				playlists.update((current) => withEntryAt(current, index, name, deleted));
+			});
+		},
 		setPlayed(episode, played, playedKey) {
 			if (played) playedEpisodes.markAsPlayed(episode);
 			else if (playedKey) playedEpisodes.markKeyAsUnplayed(playedKey);

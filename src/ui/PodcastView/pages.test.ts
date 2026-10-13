@@ -87,8 +87,13 @@ describe("headFor", () => {
 		["wide", latest, show, { title: "Latest episodes", action: "refresh-all" }],
 		["compact", show, latest, { back: "Latest episodes", action: "podcast" }],
 		["wide", show, undefined, { back: "Library", action: "podcast" }],
-		["compact", walks, undefined, { back: "Playlists", pageTitle: "Walks" }],
-		["wide", walks, show, { back: "The Show", pageTitle: "Walks" }],
+		[
+			"compact",
+			walks,
+			undefined,
+			{ back: "Playlists", pageTitle: "Walks", action: "playlist" },
+		],
+		["wide", walks, show, { back: "The Show", pageTitle: "Walks", action: "playlist" }],
 		["compact", { kind: "add" }, show, { back: "The Show", search: true }],
 		["compact", { kind: "add" }, undefined, { back: "Library", search: true }],
 		["wide", { kind: "add" }, { kind: "library" }, { back: "Library", search: true }],
@@ -135,7 +140,11 @@ describe("headFor", () => {
 			{ kind: "queue" },
 			{ back: "Library", pageTitle: "Queue", flair: "1 h 5 min", action: "queue" },
 		],
-		["compact", walks, { back: "Playlists", pageTitle: "Walks", flair: "2" }],
+		[
+			"compact",
+			walks,
+			{ back: "Playlists", pageTitle: "Walks", flair: "2", action: "playlist" },
+		],
 		[
 			"wide",
 			{ kind: "playlist", name: "Favorites" },

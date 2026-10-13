@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import * as obsidian from "obsidian";
 import { get } from "svelte/store";
+import { fireEvent, screen } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
 import {
@@ -23,6 +24,7 @@ import {
 import {
 	anchorOf,
 	episodeMenu,
+	playlistMenu,
 	podcastMenu,
 	queueMenu,
 	showMenu,
@@ -207,12 +209,7 @@ describe("an episode's menu", () => {
 		expect(get(favorites).episodes).toEqual([episode]);
 	});
 
-	test("Add to playlist is there but disabled without a playlist of the user's", () => {
-		const entry = choose(menu(), "Add to playlist");
-		expect(entry).toMatchObject({ disabled: true });
-	});
-
-	function playlistMenu(entries: MenuEntry[]) {
+	function secondMenu(entries: MenuEntry[]) {
 		const shown = vi.spyOn(obsidian.Menu.prototype, "showAtPosition");
 		const title = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
 		const checked = vi.spyOn(obsidian.MenuItem.prototype, "setChecked");
@@ -226,14 +223,17 @@ describe("an episode's menu", () => {
 		}));
 	}
 
-	test("Add to playlist lists each playlist, checked when the episode is in it", () => {
+	test("Add to playlist lists each playlist, checked when the episode is in it, then New playlist", () => {
 		playlists.set({ Walks: playlist("Walks", [episode]), Runs: playlist("Runs") });
+		const separators = vi.spyOn(obsidian.Menu.prototype, "addSeparator");
 
-		const [walks, runs] = playlistMenu(menu());
-		expect([walks, runs].map(({ name, checked }) => [name, checked])).toEqual([
+		const [walks, runs, add] = secondMenu(menu());
+		expect([walks, runs, add].map(({ name, checked }) => [name, checked])).toEqual([
 			["Walks", true],
 			["Runs", false],
+			["New playlist", false],
 		]);
+		expect(separators).toHaveBeenCalledTimes(1);
 		runs.click();
 		walks.click();
 
@@ -241,9 +241,24 @@ describe("an episode's menu", () => {
 		expect(get(playlists).Walks.episodes).toEqual([]);
 	});
 
+	test("without a playlist, Add to playlist offers New playlist, which creates one holding the episode", async () => {
+		const separators = vi.spyOn(obsidian.Menu.prototype, "addSeparator");
+		const [add, ...rest] = secondMenu(menu());
+		expect([add.name, rest]).toEqual(["New playlist", []]);
+		expect(separators).not.toHaveBeenCalled();
+
+		add.click();
+		await fireEvent.input(screen.getByRole("textbox", { name: "Playlist name" }), {
+			target: { value: "Walks" },
+		});
+		await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+		await vi.waitFor(() => expect(get(playlists).Walks?.episodes).toEqual([episode]));
+	});
+
 	test("a playlist deleted while its menu was open stays deleted", () => {
 		playlists.set({ Walks: playlist("Walks") });
-		const [walks] = playlistMenu(menu());
+		const [walks] = secondMenu(menu());
 		playlists.set({});
 
 		walks.click();
@@ -327,6 +342,33 @@ describe("a podcast's menu", () => {
 		choose(podcastMenu("Other", services), "Remove podcast");
 
 		expect(services.navigation.current.page).toEqual({ kind: "feed", key: "Show" });
+	});
+});
+
+describe("a playlist's menu", () => {
+	test("deletes the playlist, from its own page by going to Playlists first, with Undo", () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		playlists.set({ Walks: playlist("Walks"), Runs: playlist("Runs") });
+		services.navigation.go({ kind: "playlist", name: "Runs" });
+
+		expect(titles(playlistMenu("Runs", services))).toEqual(["Delete playlist"]);
+		expect(playlistMenu("Runs", services)[0]).toMatchObject({ warning: true });
+		choose(playlistMenu("Runs", services), "Delete playlist");
+
+		expect(services.navigation.current.page).toEqual({ kind: "playlists" });
+		expect(Object.keys(get(playlists))).toEqual(["Walks"]);
+		(notice.mock.calls[0][0] as DocumentFragment).querySelector("button")?.click();
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Runs"]);
+	});
+
+	test("deleting another playlist stays where the user is", () => {
+		playlists.set({ Walks: playlist("Walks") });
+		services.navigation.go({ kind: "queue" });
+
+		choose(playlistMenu("Walks", services), "Delete playlist");
+
+		expect(services.navigation.current.page).toEqual({ kind: "queue" });
+		expect(get(playlists)).toEqual({});
 	});
 });
 

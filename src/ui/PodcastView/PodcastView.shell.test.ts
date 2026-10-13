@@ -14,6 +14,7 @@ import {
 } from "../../../tests/mocks/resizeObserver";
 import {
 	createTestServices,
+	pluginLibrary,
 	type TestLibrary,
 	type TestServices,
 } from "../../../tests/mocks/services";
@@ -276,6 +277,30 @@ describe("list pages", () => {
 			"1",
 		);
 		expect(document.querySelectorAll(".flair")).toHaveLength(1);
+	});
+
+	test("a playlist of the user's deletes from its head and leaves for Playlists; Favorites has no menu", async () => {
+		dispose();
+		({ services, doc, dispose } = createTestServices({ library: pluginLibrary }));
+		savedFeeds.set({ [feed.title]: feed });
+		playlists.set({
+			Walks: { ...structuredClone(DEFAULT_SETTINGS.favorites), name: "Walks", episodes: [] },
+		});
+		services.navigation.replace({ kind: "playlist", name: "Favorites" });
+		renderView(320);
+		await tick();
+		expect(screen.queryByRole("button", { name: "Playlist options" })).toBeNull();
+
+		services.navigation.go({ kind: "playlist", name: "Walks" });
+		await tick();
+		const clicks = vi.spyOn(obsidian.MenuItem.prototype, "onClick");
+		await fireEvent.click(button("Playlist options"));
+		(clicks.mock.calls[0][0] as () => void)();
+		await tick();
+
+		expect(services.navigation.current.page).toEqual({ kind: "playlists" });
+		expect(get(playlists)).toEqual({});
+		expect(button(/^Favorites/)).toBeInTheDocument();
 	});
 
 	test("Latest's head refreshes every podcast", async () => {
