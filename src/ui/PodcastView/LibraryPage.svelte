@@ -8,7 +8,7 @@
 
 	let { layout, counts }: { layout: Layout; counts: RootCounts } = $props();
 	const services = useServices();
-	const { navigation, feeds, library } = services;
+	const { navigation, feeds, library, online } = services;
 	const { savedFeeds } = library;
 	const id = $props.id();
 </script>
@@ -32,7 +32,8 @@
 {/if}
 <div class="pn-grid">
 	{#each Object.entries($savedFeeds) as [key, feed] (key)}
-		{@const failed = $feeds.get(key)?.error !== undefined}
+		<!-- Offline, the strip says why a feed did not load. -->
+		{@const failed = $online && $feeds.get(key)?.error !== undefined}
 		<button
 			type="button"
 			class="pn-gridcard"

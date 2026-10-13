@@ -176,10 +176,15 @@ export function createLibraryActions({
 		async setFeedAddress(key) {
 			const feed = ownRecord(get(savedFeeds))[key];
 			if (!feed) return;
-			if (!get(online)) {
+			// Every write replaces a record, so the same object means that no sync, and no
+			// remove and follow again, changed the podcast while the user typed or it loaded.
+			const changed = () => ownRecord(get(savedFeeds))[key] !== feed;
+			const offline = () => {
+				if (get(online)) return false;
 				new Notice("Setting a feed address needs a connection.");
-				return;
-			}
+				return true;
+			};
+			if (offline()) return;
 			const isPrivate = Boolean(feed.urlSecretId?.trim());
 			const entered = await askText(app, {
 				title: feed.title,
@@ -187,7 +192,7 @@ export function createLibraryActions({
 				cta: "Save",
 				value: publicFeedUrl(feed),
 			});
-			if (entered === null) return;
+			if (entered === null || changed() || offline()) return;
 			const url = checkStringIsUrl(entered);
 			if (url?.protocol !== "http:" && url?.protocol !== "https:") {
 				new Notice("Enter the feed's http or https address.");
@@ -214,16 +219,14 @@ export function createLibraryActions({
 				new Notice("Could not load the feed at that address.");
 				return;
 			}
-			// A sync can replace the feed, or save the address elsewhere, while it loads.
-			const current = ownRecord(get(savedFeeds))[key];
-			if (!current || current.urlSecretId !== feed.urlSecretId || current.url !== feed.url)
-				return;
+			if (changed() || offline()) return;
+			// A sync can save the address for another podcast while it loads.
 			if (!isPrivate && takenBy() !== undefined) return;
 			try {
-				if (isPrivate) setPrivateFeedAddress(current, url.href, feedUrls);
+				if (isPrivate) setPrivateFeedAddress(feed, url.href, feedUrls);
 				else {
 					// A private address pasted for a public feed is kept as a secret, never in settings.
-					const edited = internPrivateFeed({ ...current, url: url.href }, feedUrls, key);
+					const edited = internPrivateFeed({ ...feed, url: url.href }, feedUrls, key);
 					savedFeeds.update((all) => ({ ...all, [key]: edited }));
 				}
 			} catch (error) {

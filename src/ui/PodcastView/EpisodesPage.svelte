@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { get } from "svelte/store";
 	import type { FeedKey, FeedState } from "src/services/FeedRepository";
 	import { createEpisodeListEntries } from "src/utility/episodeListEntry";
 	import { isEpisodeFinished } from "src/utility/episodeStatus";
@@ -37,9 +35,13 @@
 		$hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes",
 	);
 
-	// On mount, not on the click that opened the page, so a page restored at startup loads too.
-	onMount(() => {
-		if (get(online)) void feeds.load([key], "complete");
+	// Once open and online, not on the click that opened it, so a page restored at startup
+	// or opened offline loads too.
+	let loaded = false;
+	$effect(() => {
+		if (loaded || !$online) return;
+		loaded = true;
+		void feeds.load([key], "complete");
 	});
 
 	const refresh = () => void feeds.load([key], "network");
@@ -61,7 +63,8 @@
 			<div class="by">{channel?.author ?? feed.author ?? ""}</div>
 		</div>
 	</div>
-	{#if error}
+	<!-- Offline, the strip says why the feed did not load. -->
+	{#if error && $online}
 		<div class="pn-banner" role="alert">
 			<span class="pn-banner-icon" {@attach icon("alert-triangle")}></span>
 			<div class="txt">
@@ -73,11 +76,8 @@
 					Set feed address
 				</button>
 			{:else}
-				<button
-					type="button"
-					class="pn-btn"
-					disabled={loading || !$online}
-					onclick={refresh}>Retry</button
+				<button type="button" class="pn-btn" disabled={loading} onclick={refresh}
+					>Retry</button
 				>
 			{/if}
 		</div>

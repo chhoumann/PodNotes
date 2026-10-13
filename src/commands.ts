@@ -111,9 +111,11 @@ export function registerCommands(plugin: PodNotes): void {
 		name: "Reorder Queue",
 		icon: "list-ordered",
 		// Reveal first: restoring the workspace while the view reveals would replace the page.
-		callback: async () => {
-			await plugin.activateView();
-			plugin.navigation.goRoot("queue");
+		callback: () => {
+			void plugin
+				.activateView()
+				.then(() => plugin.navigation.goRoot("queue"))
+				.catch((error) => console.error("PodNotes: failed to open the Queue", error));
 		},
 	});
 

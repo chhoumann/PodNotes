@@ -38,6 +38,7 @@ beforeEach(() => {
 afterEach(() => {
 	dispose();
 	queue.set(structuredClone(DEFAULT_SETTINGS.queue));
+	Reflect.deleteProperty(document, "elementFromPoint");
 	vi.restoreAllMocks();
 });
 
@@ -52,14 +53,25 @@ const listed = () =>
 const grip = (title: string) =>
 	screen.getByRole("button", { name: new RegExp(`^Reorder ${title},`) });
 
-/** Gives every row a 40 px band, top to bottom, as a layout would. */
-function layOutRows() {
-	for (const [index, row] of document.querySelectorAll<HTMLElement>(".pn-ep").entries()) {
+/**
+ * Gives every row a 40 px band, top to bottom, in a view 300 px wide whose page scrolls
+ * after `shown` px, and hit-tests a point as a browser would: what lies beside the view
+ * or beyond what the page shows is not the list's.
+ */
+function layOutRows(shown = 1000) {
+	const rows = [...document.querySelectorAll<HTMLElement>(".pn-ep")];
+	for (const [index, row] of rows.entries()) {
 		vi.spyOn(row, "getBoundingClientRect").mockReturnValue({
 			top: index * 40,
 			bottom: index * 40 + 40,
+			left: 0,
+			right: 300,
 		} as DOMRect);
 	}
+	document.elementFromPoint = (x, y) => {
+		const inView = x >= 0 && x < 300 && y >= 0 && y < shown;
+		return (inView && rows[Math.floor(y / 40)]?.querySelector(".pn-ep-title")) || document.body;
+	};
 }
 
 describe("the Queue page", () => {
@@ -150,7 +162,12 @@ describe("the Queue page", () => {
 });
 
 describe("dragging a grip", () => {
-	const at = (y: number, pointerId = 1, buttons = 1) => ({ clientY: y, pointerId, buttons });
+	const at = (y: number, pointerId = 1, buttons = 1, x = 150) => ({
+		clientX: x,
+		clientY: y,
+		pointerId,
+		buttons,
+	});
 
 	test("places the episode beside each row the pointer crosses, and stops on release", async () => {
 		renderQueue(a, b, c);
@@ -193,6 +210,19 @@ describe("dragging a grip", () => {
 		await fireEvent.pointerMove(window, at(500));
 
 		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+	});
+
+	test("beside the view, or over a row the page has scrolled out of sight, moves nothing", async () => {
+		renderQueue(a, b, c);
+		layOutRows(100);
+
+		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		await fireEvent.pointerMove(window, at(70, 1, 1, 400));
+		await fireEvent.pointerMove(window, at(115));
+		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+
+		await fireEvent.pointerMove(window, at(70));
+		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
 	});
 
 	test("ignores another pointer, and Escape ends the drag", async () => {
@@ -256,16 +286,25 @@ describe("dragging a grip", () => {
 		expect(document.querySelector(".pn-grip.is-dragging")).toBeNull();
 	});
 
-	test("leaving the page stops listening", async () => {
+	test("leaving the page mid-drag removes every listener the drag added", async () => {
 		const { unmount } = renderQueue(a, b, c);
 		layOutRows();
+		const added = vi.spyOn(window, "addEventListener");
 		const removed = vi.spyOn(window, "removeEventListener");
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		const listening = added.mock.calls.map(([type, listener]) => [type, listener]);
+		expect(removed).not.toHaveBeenCalled();
 		unmount();
 
-		expect(removed.mock.calls.map(([type]) => type)).toEqual(
-			expect.arrayContaining(["pointermove", "pointerup", "pointercancel", "keydown"]),
+		expect(listening.map(([type]) => type)).toEqual([
+			"pointermove",
+			"pointerup",
+			"pointercancel",
+			"keydown",
+		]);
+		expect(removed.mock.calls.map(([type, listener]) => [type, listener])).toEqual(
+			expect.arrayContaining(listening),
 		);
 	});
 });

@@ -10,8 +10,9 @@ import { getEpisodeMediaType, isSameMediaSource } from "src/utility/mediaType";
 export type Downloads = Readonly<Record<string, readonly DownloadedEpisode[]>>;
 
 /**
- * Whether a row plays. missing: a Played record whose episode left every feed.
- * not-downloaded: offline, with no vault file or downloaded copy to play.
+ * Whether a row plays. missing: online, a Played record whose episode left every feed.
+ * not-downloaded: offline, with no vault file or downloaded copy to play. Offline, a
+ * Played record that matched no episode is one too, since its feed may only not have loaded.
  */
 export type Availability = "available" | "missing" | "not-downloaded";
 
@@ -21,8 +22,8 @@ export function availabilityOf(
 	online: boolean,
 	downloads: Downloads,
 ): Availability {
-	if (!resolved) return "missing";
-	return online || offlinePlayable(episode, downloads) ? "available" : "not-downloaded";
+	if (online) return resolved ? "available" : "missing";
+	return resolved && offlinePlayable(episode, downloads) ? "available" : "not-downloaded";
 }
 
 export interface RowState {

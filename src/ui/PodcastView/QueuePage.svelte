@@ -34,7 +34,7 @@
 			if (moved.pointerId !== pointerId) return;
 			// A button released outside the window sent no pointerup here.
 			if (moved.pointerType === "mouse" && moved.buttons === 0) return end();
-			place(episode, moved.clientY);
+			place(episode, moved.clientX, moved.clientY);
 			// Moving the row's node takes focus from its grip.
 			void tick().then(() => grip.focus({ preventScroll: true }));
 		};
@@ -65,18 +65,19 @@
 		drag = undefined;
 	}
 
-	/** Each row the pointer crosses places the episode before or after that row, in the store. */
-	function place(episode: Episode, y: number) {
-		for (const grip of list?.querySelectorAll<HTMLElement>("[data-queue-key]") ?? []) {
-			const { top, bottom } = (grip.closest(".pn-ep") ?? grip).getBoundingClientRect();
-			if (y < top || y >= bottom) continue;
-			const hovered = get(queue).episodes.find(
-				(entry) => getEpisodeKey(entry) === grip.dataset.queueKey,
-			);
-			if (!hovered) return;
-			const side = y < (top + bottom) / 2 ? "before" : "after";
-			return actions.reorderQueue({ episode, relativeTo: hovered, side });
-		}
+	/**
+	 * Each row the pointer crosses places the episode before or after that row, in the
+	 * store. The row is the one hit at the point, so a pointer beside the view, or over a
+	 * row the page has scrolled out of sight, places nothing.
+	 */
+	function place(episode: Episode, x: number, y: number) {
+		const row = list?.doc.elementFromPoint(x, y)?.closest<HTMLElement>(".pn-ep");
+		const key = row?.querySelector<HTMLElement>("[data-queue-key]")?.dataset.queueKey;
+		const hovered = key && get(queue).episodes.find((entry) => getEpisodeKey(entry) === key);
+		if (!row || !hovered) return;
+		const { top, bottom } = row.getBoundingClientRect();
+		const side = y < (top + bottom) / 2 ? "before" : "after";
+		actions.reorderQueue({ episode, relativeTo: hovered, side });
 	}
 
 	// Playback can take the dragged episode out of the queue mid-drag.

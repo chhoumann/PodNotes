@@ -263,8 +263,8 @@ describe("availability", () => {
 		expect(availabilityOf(other, true, false, downloads)).toBe("not-downloaded");
 	});
 
-	test("a Played record whose episode left every feed is missing, online or not", () => {
+	test("a Played record no loaded feed lists is missing online, and offline needs a connection", () => {
 		expect(availabilityOf(episode, false, true, downloads)).toBe("missing");
-		expect(availabilityOf(episode, false, false, downloads)).toBe("missing");
+		expect(availabilityOf(episode, false, false, downloads)).toBe("not-downloaded");
 	});
 });

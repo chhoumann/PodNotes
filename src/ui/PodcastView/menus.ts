@@ -3,7 +3,7 @@ import { get } from "svelte/store";
 import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
 import createPodcastNote, { openPodcastNote } from "src/createPodcastNote";
 import downloadEpisodeWithNotice, { removeDownloadedEpisode } from "src/downloadEpisode";
-import { downloadedCopy, offlinePlayable } from "src/player/source";
+import { downloadedCopy } from "src/player/source";
 import type { FeedKey } from "src/services/FeedRepository";
 import { publicFeedUrl } from "src/services/privateFeeds";
 import type { Episode } from "src/types/Episode";
@@ -15,7 +15,7 @@ import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
 import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
-import { isCurrentEpisode } from "./episodeRow";
+import { availabilityOf, isCurrentEpisode } from "./episodeRow";
 
 /** A menu item, or a separator. Menus are built as data, so tests read them as data. */
 export type MenuEntry =
@@ -81,12 +81,18 @@ export function openEpisode(
 	episode: Episode,
 	resolved = true,
 ) {
-	if (!resolved) {
+	const availability = availabilityOf(
+		episode,
+		resolved,
+		get(online),
+		get(library.downloadedEpisodes),
+	);
+	if (availability === "missing") {
 		new Notice("This played episode is no longer available in current feeds.");
 		return;
 	}
 	if (!isCurrentEpisode(get(player.state).episode, episode)) {
-		if (!get(online) && !offlinePlayable(episode, get(library.downloadedEpisodes))) {
+		if (availability === "not-downloaded") {
 			new Notice("Not downloaded");
 			return;
 		}
@@ -99,7 +105,7 @@ export interface EpisodeMenuOptions {
 	/** player: the full player's own episode, which has no Play. */
 	readonly place: "list" | "player";
 	readonly at: MenuAnchor;
-	/** False for a Played record whose episode left every feed. */
+	/** False for a Played record that matched no episode. */
 	readonly resolved?: boolean;
 	/** A Played record stored under another key than the episode's. */
 	readonly playedKey?: string;
@@ -282,7 +288,7 @@ export function queueMenu({
 	const auto = get(settings).autoQueue;
 	return [
 		{
-			title: "Queue episodes I switch from",
+			title: "Queue episodes I switch away from",
 			icon: "list-end",
 			checked: auto,
 			onClick: () => setAutoQueue(!auto),

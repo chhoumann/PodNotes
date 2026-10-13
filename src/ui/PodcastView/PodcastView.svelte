@@ -68,6 +68,10 @@
 	);
 
 	onMount(() => savedFeeds.subscribe(() => void feeds.ensureAll()));
+	// Offline, a feed due for a refresh fails to load, so the connection's return loads it.
+	$effect(() => {
+		if ($online) void feeds.ensureAll();
+	});
 
 	// A podcast or playlist removed while its page is open, or since the page was saved.
 	$effect(() => {
