@@ -1,3 +1,5 @@
+import { parse } from "yaml";
+
 export class SecretStorage {
 	private values = new Map<string, string>();
 
@@ -457,6 +459,9 @@ export const requestUrl = async () => ({
 });
 
 export const htmlToMarkdown = (value: string) => value;
+
+// Obsidian's parseYaml is eemeli/yaml's parse(text, null, {}).
+export const parseYaml = (text: string): unknown => parse(text, {});
 
 // Mutable so tests can simulate a specific OS (e.g. set isMacOS=false, isLinux=true).
 // Defaults to a desktop macOS profile, matching the typical dev environment.
