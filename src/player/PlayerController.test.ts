@@ -244,6 +244,85 @@ describe("synced progress handoff", () => {
 		expect(progress(A)).toMatchObject({ time: 20, duration: 60, finished: false });
 	});
 
+	function ended() {
+		const context = setup({ autoQueue: false });
+		context.player.play(A);
+		metadata(context.media(), 120);
+		reach(context.media(), 120);
+		context.media().ended = true;
+		pausedByBrowser(context.media());
+		context.media().emit("ended");
+		return context;
+	}
+
+	const playAgain = Object.entries({
+		"resume()": (player: PlayerController) => player.resume(),
+		"play() of the same episode": (player: PlayerController) => player.play(A),
+	});
+
+	test.each(playAgain)(
+		"%s after a natural end continues a re-listen synced afterwards (#463)",
+		(_, again) => {
+			const { player, media, state } = ended();
+			saved(A, 30, 120);
+			player.restore(A);
+			player.save();
+			expect(progress(A)).toMatchObject({ time: 30, duration: 120, finished: false });
+
+			again(player);
+			media().emit("play");
+
+			expect(media()).toMatchObject({ currentTime: 30, paused: false });
+			expect(state()).toMatchObject({ status: "playing", currentTime: 30 });
+		},
+	);
+
+	test.each(playAgain)(
+		"%s after a natural end with no newer progress starts over",
+		(_, again) => {
+			const { player, media, state } = ended();
+			player.restore(A);
+			player.save();
+			expect(progress(A)).toMatchObject({ time: 120, duration: 120, finished: true });
+
+			again(player);
+			media().emit("play");
+
+			expect(media()).toMatchObject({ currentTime: 0, paused: false });
+			expect(state()).toMatchObject({ status: "playing", currentTime: 0 });
+		},
+	);
+
+	test.each(playAgain)(
+		"%s after a natural end pauses short of the end of a shorter copy than the synced re-listen's",
+		(_, again) => {
+			const { player, media, state } = ended();
+			saved(A, 125, 130);
+			player.restore(A);
+
+			again(player);
+			player.save();
+
+			expect(media()).toMatchObject({ currentTime: 119.75, paused: true });
+			expect(state()).toMatchObject({ status: "paused", currentTime: 119.75 });
+			expect(progress(A)).toMatchObject({ time: 125, duration: 130, finished: false });
+		},
+	);
+
+	test("play() with a time after a natural end starts there, not at a re-listen synced afterwards", () => {
+		const { player, media, state } = ended();
+		saved(A, 30, 120);
+		player.restore(A);
+
+		player.play(A, { time: 12 });
+		media().emit("play");
+
+		expect(media()).toMatchObject({ currentTime: 12, paused: false });
+		expect(state()).toMatchObject({ status: "playing", currentTime: 12 });
+		player.pause();
+		expect(progress(A)).toMatchObject({ time: 12, duration: 120, finished: false });
+	});
+
 	test("a seek made before the sync arrives wins over it", () => {
 		const { player, media, state } = paused();
 		player.seek(25);
@@ -1974,6 +2053,18 @@ describe("video stage", () => {
 		expect(media().currentTime).toBe(0);
 		expect(media().paused).toBe(false);
 		expect(state().status).toBe("playing");
+	});
+
+	test("resume() of a finished video that a reset reloaded continues a re-listen synced afterwards", () => {
+		const { player, media, state } = finishedThenReset();
+		saved(VIDEO, 30, 60);
+		player.restore(VIDEO);
+
+		player.resume();
+		metadata(media(), 60);
+
+		expect(media()).toMatchObject({ currentTime: 30, paused: false });
+		expect(state()).toMatchObject({ status: "playing", currentTime: 30 });
 	});
 
 	test("resume() of a finished video that a reset reloaded keeps its live speed", () => {

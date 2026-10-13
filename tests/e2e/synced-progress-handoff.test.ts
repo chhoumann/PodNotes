@@ -130,3 +130,84 @@ for (const [action, expected] of Object.entries(SAVED_AFTER)) {
 		expect((await observePlayback(obsidian)).seconds).toBe(expected);
 	});
 }
+
+const PLAY_AFTER_END = { "a re-listen synced afterwards": 30, "no newer progress": 0 };
+
+for (const [sync, expected] of Object.entries(PLAY_AFTER_END)) {
+	test(`Play on a naturally ended episode with ${sync} starts at ${expected} s (#463)`, async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const server = await startFixtureServer([FEED]);
+		onTestFinished(() => server.stop());
+		await seedLibrary(context, server, { subscriptions: [FEED] });
+		await showPodNotes(obsidian);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(FEED.title));
+		await click(obsidian, ui.episode("Handoff Episode"));
+		await waitForPlayback(obsidian, (state) => state.playing && state.seconds > 0, "playing");
+		await obsidian.dev.evalJson(`(() => {
+			app.plugins.plugins.${PLUGIN_ID}.api.currentTime = 57;
+			return true;
+		})()`);
+		await plugin.waitForData<PodNotesData>(
+			(data) => data.playedEpisodes?.[PROGRESS_KEY]?.finished === true,
+			WAIT_OPTS,
+		);
+		const ended = await waitForPlayback(
+			obsidian,
+			(state) => !state.playing && state.media?.paused === true,
+			"ended",
+		);
+		expect(ended.seconds).toBeGreaterThan(59);
+
+		if (expected > 0) {
+			await plugin.data<PodNotesData>().patch((data) => {
+				const progress = data.playedEpisodes?.[PROGRESS_KEY];
+				if (!progress) throw new Error("The ended episode has no saved progress.");
+				progress.time = expected;
+				progress.finished = false;
+			});
+			await expect
+				.poll(
+					() =>
+						obsidian.dev.evalJson<number>(
+							`app.plugins.plugins.${PLUGIN_ID}.settings.playedEpisodes[${jsLiteral(PROGRESS_KEY)}]?.time`,
+						),
+					POLL,
+				)
+				.toBe(expected);
+		}
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			const plugin = app.plugins.plugins.${PLUGIN_ID};
+			plugin.player.save();
+			await plugin.flushSaves();
+			return true;
+		})()`);
+		expect(
+			(await plugin.data<PodNotesData>().read()).playedEpisodes?.[PROGRESS_KEY],
+		).toMatchObject(expected > 0 ? { time: expected, finished: false } : { finished: true });
+
+		await click(obsidian, ui.playbackToggle);
+		const resumed = await waitForPlayback(
+			obsidian,
+			(state) => state.playing && state.media?.paused === false,
+			"playing again",
+		);
+		expect(resumed.seconds).toBeGreaterThanOrEqual(expected);
+		expect(resumed.seconds).toBeLessThan(expected + 5);
+
+		await click(obsidian, ui.playbackToggle);
+		const paused = await waitForPlayback(
+			obsidian,
+			(state) => !state.playing && state.media?.paused === true,
+			"paused again",
+		);
+		await obsidian.dev.evalJsonAsync(
+			`(async () => { await app.plugins.plugins.${PLUGIN_ID}.flushSaves(); return true; })()`,
+		);
+		const progress = (await plugin.data<PodNotesData>().read()).playedEpisodes?.[PROGRESS_KEY];
+		expect(progress).toMatchObject({ time: paused.seconds, finished: false });
+		expect(progress?.time).toBeGreaterThanOrEqual(expected);
+		expect(progress?.time).toBeLessThan(expected + 5);
+	});
+}
