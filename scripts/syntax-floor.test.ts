@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assertEs2021 } from "./syntax-floor";
+import { assertSafari15Syntax } from "./syntax-floor";
 
-describe("assertEs2021", () => {
-	it("accepts ES2021 syntax such as logical assignment and optional chaining", () => {
+describe("assertSafari15Syntax", () => {
+	it("accepts ES2021 syntax such as logical assignment and named groups", () => {
 		expect(() =>
-			assertEs2021("main.js", "let a; a ??= {}; a?.b; module.exports = a;"),
+			assertSafari15Syntax("main.js", "let a; a ??= {}; a?.b; module.exports = /(?<x>a)/;"),
 		).not.toThrow();
 	});
 
@@ -12,9 +12,11 @@ describe("assertEs2021", () => {
 		["a class field", "class A { x = 1; }"],
 		["a private method", "class A { #m() {} }"],
 		["a class static block", "class A { static {} }"],
+		["a lookbehind", "module.exports = /(?<=a)b/;"],
+		["a negative lookbehind", "module.exports = /(?<!a)b/;"],
 	])("rejects %s", (_name, code) => {
-		expect(() => assertEs2021("main.js", code)).toThrow(
-			/^main\.js uses syntax newer than ES2021/,
+		expect(() => assertSafari15Syntax("main.js", code)).toThrow(
+			/^main\.js uses syntax Safari 15 cannot run/,
 		);
 	});
 });
