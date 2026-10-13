@@ -53,6 +53,7 @@
 	.pn-panel .pn-chap {
 		display: flex;
 		align-items: baseline;
+		justify-content: flex-start;
 		gap: var(--size-4-3);
 		width: 100%;
 		height: auto;

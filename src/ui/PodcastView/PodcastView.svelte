@@ -280,8 +280,24 @@
 		padding: 0;
 	}
 
+	/* A long note or podcast name keeps an Undo notice to two lines, with Undo beside it. */
+	:global(.notice-message:has(> .pn-undo)) {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-2);
+	}
+
+	:global(.notice .pn-undo-message) {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+	}
+
 	:global(.notice .pn-undo) {
-		margin-left: var(--size-4-2);
+		flex: none;
 	}
 
 	/* A prompt's field takes the rest of its row, so a feed address shows whole. */
