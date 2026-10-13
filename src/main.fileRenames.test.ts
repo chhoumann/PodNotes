@@ -331,6 +331,45 @@ describe("a vault file PodNotes tracks that is renamed or moved", () => {
 	});
 });
 
+describe("a tracked file renamed just before PodNotes unloads", () => {
+	it("is saved at its new path, so the reloaded plugin plays it from there", async () => {
+		const clip = registered("Fixtures/Clip One.wav");
+		vaultPaths = ["Fixtures/Clip One.wav"];
+		const plugin = await loadPlugin({
+			schemaVersion: 2,
+			currentEpisode: clip,
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [clip] },
+			favorites: { ...DEFAULT_SETTINGS.favorites, episodes: [clip] },
+			playlists: { Mix: { ...DEFAULT_SETTINGS.favorites, name: "Mix", episodes: [clip] } },
+			downloadedEpisodes: { "local file": [{ ...clip, size: 1 }] },
+		});
+		await plugin.flushSaves();
+
+		vaultPaths = ["Fixtures/Changed.wav"];
+		for (const listener of renameListeners) {
+			listener(vaultFile("Fixtures/Changed.wav"), "Fixtures/Clip One.wav");
+		}
+		loaded.splice(loaded.indexOf(plugin), 1);
+		plugin.onunload();
+		await Promise.resolve();
+		await plugin.flushSaves();
+
+		const saved = vi.mocked(plugin.saveData).mock.lastCall?.[0] as Record<string, unknown>;
+		renameListeners = [];
+		await loadPlugin(saved);
+		const atNewPath = [{ title: "Clip One", filePath: "Fixtures/Changed.wav" }];
+		expect(get(downloadedEpisodes)["local file"]).toMatchObject(atNewPath);
+		expect(get(localFiles).episodes).toMatchObject(atNewPath);
+		expect(get(queue).episodes).toMatchObject(atNewPath);
+		expect(get(favorites).episodes).toMatchObject(atNewPath);
+		expect(get(playlists).Mix.episodes).toMatchObject(atNewPath);
+		const [queued] = get(queue).episodes;
+		expect(selectSource(queued, get(downloadedEpisodes), plugin.app.vault).src).toBe(
+			"app://resource/Fixtures/Changed.wav",
+		);
+	});
+});
+
 describe("a vault file PodNotes does not track that is renamed", () => {
 	it("asks for no save and writes nothing", async () => {
 		const clip = registered("Fixtures/Clip One.wav");
