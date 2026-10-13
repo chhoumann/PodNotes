@@ -15,21 +15,29 @@ import { isLocalFile } from "./utility/isLocalFile";
  * title, so its progress, its note and its identity across devices stay as they were. A
  * rename nothing refers to changes nothing, so it writes nothing.
  */
-export default function getVaultRenameHandler(plugin: PodNotes): EventRef {
+export default function getVaultRenameHandler(plugin: PodNotes): {
+	eventRef: EventRef;
+	/** Follows the renames not followed yet, as unload must while the stores still save. */
+	drain: () => void;
+} {
 	// A renamed folder reports each file in it, so the renames of one task are followed
 	// together. The map keeps the TFile, whose path is where the file ends up.
 	let renamed: Map<string, TFile> | null = null;
-	return plugin.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
+	const drain = () => {
+		if (!renamed) return;
+		const batch = renamed;
+		renamed = null;
+		followRenames(plugin, batch);
+	};
+	const eventRef = plugin.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
 		if (!(file instanceof TFile)) return;
 		if (!renamed) {
-			const batch = (renamed = new Map());
-			queueMicrotask(() => {
-				renamed = null;
-				followRenames(plugin, batch);
-			});
+			renamed = new Map();
+			queueMicrotask(drain);
 		}
 		renamed.set(oldPath, file);
 	});
+	return { eventRef, drain };
 }
 
 function followRenames(plugin: PodNotes, renamed: Map<string, TFile>): void {
