@@ -1,8 +1,9 @@
 /**
  * Private (credentialed) podcast feeds embed a durable secret in their URL -
- * userinfo (`user:pass@`) or an auth-bearing query parameter (Patreon's
- * `?auth=...` and similar). Persisting such a URL in data.json leaks the
- * secret through vault sync, git-versioned vaults, and shared vaults.
+ * userinfo (`user:pass@`), an auth-bearing query parameter (Patreon's
+ * `?auth=...` and similar), or, on a few publishers' hosts, the path.
+ * Persisting such a URL in data.json leaks the secret through vault sync,
+ * git-versioned vaults, and shared vaults.
  *
  * Private feeds therefore persist a placeholder in `PodcastFeed.url` and keep
  * the real URL in Obsidian's vault-local SecretStorage, referenced by
@@ -16,9 +17,7 @@ const PLACEHOLDER_SCHEME = "podnotes-private-feed:";
 
 /**
  * Query parameter names that carry a durable subscriber secret. Matched on the
- * whole name, case-insensitively. Path-embedded tokens (Supercast-style) are
- * indistinguishable from public URLs and are NOT detected; those feeds keep
- * working, their URL just stays in data.json like before.
+ * whole name, case-insensitively.
  */
 const SECRET_QUERY_PARAM =
 	/^(auth|token|key|secret|pass|password|apikey|api[-_]key|access[-_]token|sig|signature|jwt|credential|credentials)$/i;
@@ -35,7 +34,37 @@ export function isCredentialBearingUrl(rawUrl: string): boolean {
 	for (const name of url.searchParams.keys()) {
 		if (SECRET_QUERY_PARAM.test(name)) return true;
 	}
+	return isPublisherPrivateFeed(url);
+}
+
+function isPublisherPrivateFeed({ hostname, pathname, searchParams }: URL): boolean {
+	const host = hostname.replace(/\.$/, "");
+	// https://supercast.readme.io/reference/getsubscriber (/feed/<key>.rss) and
+	// https://github.com/Podcastindex-org/private-feed-blocklist/pull/2 (/feeds/)
+	if (isWithin(host, "supercast.com") || isWithin(host, "supercast.tech"))
+		return /^\/feed\/[^/]+\.rss$/.test(pathname) || /^\/feeds\/[^/]+/.test(pathname);
+	// https://support.substack.com/hc/en-us/articles/360041722272-Will-my-Podcast-RSS-feed-show-paid-only-content
+	// https://forums.pocketcasts.com/forums/topic/a-private-rss-feed-has-stopped-showing-me-new-episodes/
+	if (isWithin(host, "substack.com"))
+		return /^\/feed\/podcast\/\d+(\/s\/\d+)?\/private\/[^/]+\.rss$/.test(pathname);
+	// https://developers.supportingcast.fm/api/docs-v2-source (UserFeed.url)
+	if (host.endsWith(".supportingcast.fm")) return /^\/content\/[^/]+\.rss$/.test(pathname);
+	// https://developers.transistor.fm/ (subscriber feed_url)
+	if (host === "subscribers.transistor.fm") return /^\/[^/]+/.test(pathname);
+	// https://help.pinecast.com/article/61-subscribing-to-a-private-rss-feed
+	if (host === "pinecast.com") return /^\/feed\/[^/]+\/sub\/[^/]+/.test(pathname);
+	// https://github.com/Podcastindex-org/private-feed-blocklist/issues/1
+	if (host === "private.captivate.fm") return /^\/[^/]+/.test(pathname);
+	// https://github.com/Podcastindex-org/private-feed-blocklist/pull/5
+	if (host === "feeds.redcircle.com") return /^\/[^/]+\/pf\/[^/]+/.test(pathname);
+	if (host === "api.podcache.net") return /^\/shows\/[^/]+\/pf\/[^/]+/.test(pathname);
+	// https://github.com/Podcastindex-org/private-feed-blocklist/pull/4
+	if (host.endsWith(".castos.com")) return Boolean(searchParams.get("uuid"));
 	return false;
+}
+
+function isWithin(host: string, domain: string): boolean {
+	return host === domain || host.endsWith(`.${domain}`);
 }
 
 /**
