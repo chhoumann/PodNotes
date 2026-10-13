@@ -3,6 +3,7 @@ import type { Episode } from "src/types/Episode";
 import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, type PlayedEpisodeMap } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
+import { isSameMediaSource } from "src/utility/mediaType";
 
 export type Downloads = Readonly<Record<string, readonly DownloadedEpisode[]>>;
 
@@ -56,13 +57,25 @@ export function isDownloaded(downloads: Downloads, episode: Episode): boolean {
 	return downloads[episode.podcastName]?.some(({ title }) => title === episode.title) ?? false;
 }
 
+/**
+ * Whether `episode` is the player's. Same-titled episodes of one podcast share a key,
+ * so their media tells them apart, as it does for the player.
+ */
+export function isCurrentEpisode(now: Episode | undefined, episode: Episode): boolean {
+	return (
+		now !== undefined &&
+		isSameEpisode(now, episode) &&
+		isSameMediaSource(now.streamUrl, episode.streamUrl)
+	);
+}
+
 export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowModel {
 	const record = getPlayedEpisode(state.played, episode);
 	const played = record?.finished ?? false;
 	const inProgress =
 		!played && record !== undefined && record.time > 0 && record.duration > record.time;
 	const left = inProgress ? record.duration - record.time : undefined;
-	const current = state.now !== undefined && isSameEpisode(state.now, episode);
+	const current = isCurrentEpisode(state.now, episode);
 	const playing = current && state.playing;
 	const local = isLocalFile(episode);
 	const downloaded = !local && isDownloaded(state.downloads, episode);

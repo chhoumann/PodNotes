@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceLeaf } from "obsidian";
-import type { Readable } from "svelte/store";
 import { plugin as pluginStore } from "src/store";
 import type { IPodNotes } from "../../types/IPodNotes";
 import type { IPodNotesSettings } from "../../types/IPodNotesSettings";
@@ -15,6 +14,7 @@ vi.mock("svelte", () => svelte);
 vi.mock("./PodcastView.svelte", () => ({ default: {} }));
 
 import { MainView } from ".";
+import type { ShellServices } from "./context";
 import { Navigation } from "./Navigation";
 
 function createView({ shouldMount }: { shouldMount: boolean }) {
@@ -25,10 +25,27 @@ function createView({ shouldMount }: { shouldMount: boolean }) {
 	} as unknown as IPodNotes;
 	const view = new MainView({} as WorkspaceLeaf, plugin);
 	const contentEl = document.createElement("div");
-	const workspace = { requestSaveLayout: vi.fn() };
-	Object.assign(view, { contentEl, app: { workspace } });
+	const layoutReady: Array<() => void> = [];
+	const workspace = {
+		requestSaveLayout: vi.fn(),
+		onLayoutReady: (callback: () => void) => layoutReady.push(callback),
+	};
+	const vaultEvents = new Map<string, () => void>();
+	const vault = {
+		on: vi.fn((name: string, callback: () => void) => {
+			vaultEvents.set(name, callback);
+			return { name };
+		}),
+	};
+	Object.assign(view, { contentEl, app: { workspace, vault } });
 
-	return { contentEl, plugin, view, workspace };
+	return { contentEl, plugin, view, workspace, layoutReady, vault, vaultEvents };
+}
+
+function mountedServices(): ShellServices {
+	return (
+		svelte.mount.mock.calls[0] as unknown as [unknown, { props: { services: ShellServices } }]
+	)[1].props.services;
 }
 
 async function openView(view: MainView): Promise<void> {
@@ -83,12 +100,7 @@ describe("MainView mobile startup mounting", () => {
 		const host = Object.assign(plugin, { settings: { autoQueue: true } as IPodNotesSettings });
 		pluginStore.set(host as never);
 		await openView(view);
-		const { settings } = (
-			svelte.mount.mock.calls[0] as unknown as [
-				unknown,
-				{ props: { services: { settings: Readable<IPodNotesSettings> } } },
-			]
-		)[1].props.services;
+		const { settings } = mountedServices();
 		const seen: boolean[] = [];
 
 		const stop = settings.subscribe(({ autoQueue }) => seen.push(autoQueue));
@@ -109,6 +121,32 @@ describe("MainView mobile startup mounting", () => {
 
 		expect(svelte.unmount).toHaveBeenCalledTimes(1);
 		expect(plugin.unregisterPodcastView).toHaveBeenCalledWith(view);
+	});
+});
+
+describe("MainView episode notes", () => {
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("once the layout is ready, gives rows a new note lookup when a note is created, deleted or renamed, not edited", async () => {
+		const { view, layoutReady, vault, vaultEvents } = createView({ shouldMount: true });
+		const registerEvent = vi.spyOn(view, "registerEvent");
+		await openView(view);
+		const lookups: unknown[] = [];
+		const stop = mountedServices().rowHasNote.subscribe((lookup) => lookups.push(lookup));
+
+		expect(vault.on).not.toHaveBeenCalled();
+		for (const ready of layoutReady) ready();
+		for (const name of ["create", "modify", "delete", "rename"]) vaultEvents.get(name)?.();
+		stop();
+
+		expect(new Set(lookups).size).toBe(4);
+		// Obsidian removes a view's registered events when the view closes.
+		expect(registerEvent.mock.calls.map(([ref]) => ref)).toEqual(
+			vault.on.mock.results.map(({ value }) => value),
+		);
+		expect(registerEvent).toHaveBeenCalledTimes(3);
 	});
 });
 

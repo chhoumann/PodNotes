@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
+import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
@@ -129,6 +130,26 @@ describe("a podcast's page", () => {
 		expect(load).toHaveBeenCalledTimes(3);
 	});
 
+	test("lists nothing for a podcast that is gone, not the latest episodes", async () => {
+		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
+		renderPage({ kind: "feed", key: "Gone" });
+
+		await services.feeds.load([show.title], "network");
+		await tick();
+
+		expect(listed()).toEqual([]);
+	});
+
+	test("lists nothing for a playlist that is gone, not the latest episodes", async () => {
+		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
+		renderPage({ kind: "playlist", name: "Gone" });
+
+		await services.feeds.load([show.title], "network");
+		await tick();
+
+		expect(listed()).toEqual([]);
+	});
+
 	test("asks for a private feed's address where this device lacks it, instead of retrying", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		const patron = { ...show, title: "Patron", url: privateFeedPlaceholder("Patron") };
@@ -186,6 +207,24 @@ describe("an episode list", () => {
 		expect(services.navigation.current.expanded).toBe(true);
 	});
 
+	test("plays a same-titled episode with other media, and marks only the one playing", async () => {
+		const trailer = (n: number) =>
+			episode("Trailer", { streamUrl: `https://media.test/trailer-${n}.mp3` });
+		renderPlaylist([trailer(1), trailer(2)]);
+		const [first, second] = await screen.findAllByRole("button", { name: /^Trailer/ });
+		await fireEvent.click(first);
+		services.navigation.collapse();
+
+		await fireEvent.click(second);
+
+		expect(get(services.player.state).episode).toEqual(trailer(2));
+		expect(services.navigation.current.expanded).toBe(true);
+		expect([first, second].map((button) => button.getAttribute("aria-label"))).toEqual([
+			"Trailer",
+			"Trailer, playing",
+		]);
+	});
+
 	test("shows each episode's state in its row and its label", async () => {
 		const [played, inProgress, fresh] = [episode("Played"), episode("Halfway"), episode("New")];
 		renderPlaylist([played, inProgress, fresh]);
@@ -205,7 +244,7 @@ describe("an episode list", () => {
 				finished: false,
 			},
 		});
-		services.hasNote.mockImplementation(({ title }) => title === "New");
+		services.rowHasNote.set(({ title }) => title === "New");
 
 		expect(await screen.findByRole("button", { name: "Played, played" })).toBeInTheDocument();
 		expect(row("Played").closest(".pn-ep")).toHaveClass("is-played");
@@ -214,6 +253,15 @@ describe("an episode list", () => {
 			width: `${(840 / 2880) * 100}%`,
 		});
 		expect(row("New, has note")).toHaveTextContent("48 min");
+	});
+
+	test("shows that an episode has a note once its note is written", async () => {
+		renderPlaylist([episode("First")]);
+		await screen.findByRole("button", { name: "First" });
+
+		services.rowHasNote.set(() => true);
+
+		expect(await screen.findByRole("button", { name: "First, has note" })).toBeInTheDocument();
 	});
 
 	test("filters by a search and says when nothing matches", async () => {
@@ -306,6 +354,30 @@ describe("an episode list", () => {
 		await waitFor(() => expect(listed()).toEqual(["Second"]));
 		expect(row("Second")).toBe(second);
 		expect(second.querySelector("img")).toBeNull();
+	});
+
+	test("Played lists a search's best match first", async () => {
+		const long = episode("Reading slowly, again and again", {
+			episodeDate: new Date("2026-02-01"),
+		});
+		const short = episode("Reading", { episodeDate: new Date("2026-01-01") });
+		renderPage({ kind: "played" }, []);
+		services.library.favorites.update((list) => ({ ...list, episodes: [long, short] }));
+		services.library.playedEpisodes.set(
+			Object.fromEntries(
+				[long, short].map(({ title }) => [
+					`${show.title}::${title}`,
+					{ title, podcastName: show.title, time: 1, duration: 1, finished: true },
+				]),
+			),
+		);
+		await waitFor(() => expect(listed()).toEqual([long.title, short.title]));
+
+		await fireEvent.input(screen.getByRole("searchbox", { name: "Search episodes" }), {
+			target: { value: "reading" },
+		});
+
+		expect(listed()).toEqual([short.title, long.title]);
 	});
 
 	test("a Played record whose episode left every feed is dimmed and says why it does not play", async () => {

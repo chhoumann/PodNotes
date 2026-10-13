@@ -14,6 +14,7 @@ import {
 } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
+import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import {
 	createTestServices,
 	pluginLibrary,
@@ -135,6 +136,12 @@ describe("an episode's menu", () => {
 		expect(services.navigation.current.expanded).toBe(true);
 	});
 
+	test("offers Play for a same-titled episode of the podcast with other media", () => {
+		services.player.play(episode);
+
+		expect(titles(menu({ ...episode, streamUrl: "https://media.test/b.mp3" }))[0]).toBe("Play");
+	});
+
 	test("adds a same-titled episode from another podcast to the queue, keeping both (#356)", () => {
 		const fromOtherPodcast = { ...episode, podcastName: "Other Podcast" };
 		queue.add(episode);
@@ -179,15 +186,10 @@ describe("an episode's menu", () => {
 		]);
 	});
 
-	test("for a played episode that left every feed offers only its note, Favorites and played", () => {
+	test("for a played episode that left every feed offers only Mark as unplayed", () => {
 		playedEpisodes.markAsPlayed(episode);
 
-		expect(titles(menu(episode, { available: false }))).toEqual([
-			"Create note",
-			"Add to Favorites",
-			"---",
-			"Mark as unplayed",
-		]);
+		expect(titles(menu(episode, { available: false }))).toEqual(["Mark as unplayed"]);
 	});
 
 	test("marks a Played record unplayed under the key it is stored by", () => {
@@ -292,6 +294,20 @@ describe("an episode's menu", () => {
 			expect.stringMatching(
 				/^obsidian:\/\/podnotes\?episodeName=Episode&url=https%3A%2F%2Fshow\.test%2Ffeed\.xml/,
 			),
+		);
+	});
+
+	test("offers no episode link for an episode opened by a private feed's own address", () => {
+		const opened = { ...episode, feedUrl: "https://show.test/feed.xml?auth=s3cret" };
+		const subscribed = { ...episode, feedUrl: privateFeedPlaceholder("Podcast") };
+		const writeText = vi.fn(async () => {});
+		Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+		expect(titles(menu(opened))).not.toContain("Copy episode link");
+		choose(menu(subscribed), "Copy episode link");
+
+		expect(writeText).toHaveBeenCalledWith(
+			expect.stringContaining("url=podnotes-private-feed%3APodcast"),
 		);
 	});
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { importOPML } from "src/opml";
 	import { icon } from "../obsidian/icon";
 	import { pickFile } from "../pickFile";
@@ -12,6 +13,11 @@
 	let { firstRun }: { firstRun: boolean } = $props();
 	const { app, navigation, library, actions, search } = useServices();
 	const { savedFeeds } = library;
+
+	// Back from Add podcast starts First run over, with no query and no search left to answer.
+	onMount(() => {
+		if (firstRun) search.set("");
+	});
 
 	const FAILED: Record<SearchFailure, string> = {
 		offline: "Search needs a connection",
@@ -62,7 +68,7 @@
 			autofocus
 			oninput={(value) => {
 				search.set(value);
-				if (value) navigation.go({ kind: "add" });
+				if (value.trim()) navigation.go({ kind: "add" });
 			}}
 		/>
 		{@render alternatives()}

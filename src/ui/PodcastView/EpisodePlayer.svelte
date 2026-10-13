@@ -15,6 +15,7 @@
 	import EpisodeRow from "./EpisodeRow.svelte";
 	import { anchorOf, episodeMenu, openEpisode, showMenu } from "./menus";
 	import { getEpisodeKey } from "src/utility/episodeKey";
+	import { isEpisodeFinished } from "src/utility/episodeStatus";
 	import {
 		PLAYBACK_RATE_MAX,
 		PLAYBACK_RATE_MIN,
@@ -23,7 +24,7 @@
 
 	const services = useServices();
 	const { player, api, settings, library } = services;
-	const { queue } = library;
+	const { queue, playedEpisodes, hidePlayedEpisodes } = library;
 	const playerState = player.state;
 
 	let isHoveringArtwork = $state(false);
@@ -37,6 +38,11 @@
 	// is empty (issue #108), otherwise show it (default-on state or a non-empty
 	// manual queue).
 	const showQueue = $derived($settings.autoQueue !== false || $queue.episodes.length > 0);
+	const queueRows = $derived(
+		$hidePlayedEpisodes
+			? $queue.episodes.filter((entry) => !isEpisodeFinished(entry, $playedEpisodes))
+			: $queue.episodes,
+	);
 
 	const episode = $derived($playerState.episode as Episode);
 	// Title length feeds the CSS length-based downscaling on .podcast-title (issue #81).
@@ -254,7 +260,7 @@
 		{#if showQueue}
 			<h3>Queue</h3>
 			<div class="pn-list" role="list">
-				{#each $queue.episodes as queued (getEpisodeKey(queued))}
+				{#each queueRows as queued (getEpisodeKey(queued))}
 					<EpisodeRow
 						episode={queued}
 						cover

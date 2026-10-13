@@ -257,7 +257,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			// meet a new install with the view once.
 			this.clearLayoutReadyRetry();
 			this.layoutReadyAttempts = 0;
-			if (this.freshInstall) void this.activateView();
+			if (this.freshInstall) {
+				this.activateView().catch((error) => {
+					console.error("PodNotes: failed to initialize startup view", error);
+				});
+			}
 			return;
 		}
 

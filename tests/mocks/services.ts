@@ -67,6 +67,7 @@ export type TestServices = ShellServices & {
 	readonly captureTimestamp: ReturnType<typeof vi.fn<() => Promise<Capture | null>>>;
 	readonly openSettings: ReturnType<typeof vi.fn<() => void>>;
 	readonly hasNote: ReturnType<typeof vi.fn<(episode: Episode) => boolean>>;
+	readonly rowHasNote: Writable<(episode: Episode) => boolean>;
 };
 
 /**
@@ -118,6 +119,7 @@ export function createTestServices(
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),
 		hasNote: vi.fn(() => false),
+		rowHasNote: writable(() => false),
 		...overrides,
 	} as TestServices;
 	const unsubscribe = services.library.savedFeeds.subscribe((saved) =>

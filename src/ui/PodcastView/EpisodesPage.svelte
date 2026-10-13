@@ -64,20 +64,24 @@
 				$localFiles.episodes,
 				...Object.values($playlists).map(({ episodes }) => episodes),
 			]);
-			const found = new Set(
-				searchEpisodes(
-					query,
-					played.map(({ episode }) => episode),
-				),
-			);
-			return played.filter(({ episode }) => found.has(episode));
+			// The search's order, best match first, not the Played order.
+			const entryOf = new Map(played.map((entry) => [entry.episode, entry]));
+			return searchEpisodes(
+				query,
+				played.map(({ episode }) => episode),
+			).flatMap((episode) => entryOf.get(episode) ?? []);
 		}
+		// A podcast or playlist that is gone lists nothing until the shell leaves its page.
 		const listed = createEpisodeListEntries(
 			searchEpisodes(
 				query,
-				feedState
-					? selectFeedEpisodes(feedState, $downloadedEpisodes)
-					: (playlist?.episodes ?? selectLatestEpisodes($feeds, $episodeListLimit)),
+				page.kind === "feed"
+					? feedState
+						? selectFeedEpisodes(feedState, $downloadedEpisodes)
+						: []
+					: page.kind === "latest"
+						? selectLatestEpisodes($feeds, $episodeListLimit)
+						: (playlist?.episodes ?? []),
 			),
 		);
 		return $hidePlayedEpisodes

@@ -589,17 +589,19 @@
 		.pn-cover.is-text {
 			display: flex;
 			align-items: flex-end;
-			padding: 10%;
 			overflow: hidden;
 			background: var(--background-modifier-border);
 			color: var(--text-muted);
 			font-weight: var(--font-bold);
 			line-height: 1;
+			text-align: left;
 			overflow-wrap: anywhere;
 			container-type: inline-size;
 		}
 
+		/* cqw is the cover's width. A percentage padding on the cover is its row's. */
 		.pn-cover.is-text > span {
+			padding: 10cqw;
 			font-size: 12cqw;
 		}
 

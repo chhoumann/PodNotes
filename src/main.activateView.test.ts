@@ -153,8 +153,11 @@ describe("PodNotes.onLayoutReady", () => {
 		});
 	});
 
-	/** Starts PodNotes in the mobile app on a vault whose data.json holds `disk`, or none. */
-	async function startOnMobile(disk?: unknown) {
+	/**
+	 * Starts PodNotes in the mobile app on a vault whose data.json holds `disk`, or none.
+	 * `disk()` reads the data.json the start left.
+	 */
+	async function startOnMobile(disk?: unknown, rightLeaf = makeLeaf()) {
 		Object.assign(Platform, {
 			isDesktop: false,
 			isDesktopApp: false,
@@ -162,7 +165,7 @@ describe("PodNotes.onLayoutReady", () => {
 			isMobileApp: true,
 			isPhone: true,
 		});
-		const started = setupLayoutPlugin();
+		const started = setupLayoutPlugin({ rightLeaf });
 		Object.assign(started.plugin, {
 			app: {
 				...started.plugin.app,
@@ -189,7 +192,7 @@ describe("PodNotes.onLayoutReady", () => {
 		await started.plugin.loadSettings();
 		started.plugin.onLayoutReady();
 		await tick();
-		return started;
+		return { ...started, disk: () => disk };
 	}
 
 	it("opens the view once when the mobile app enables PodNotes for the first time", async () => {
@@ -198,6 +201,36 @@ describe("PodNotes.onLayoutReady", () => {
 		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE, active: true });
 		expect(workspace.revealLeaf).toHaveBeenCalledWith(rightLeaf);
 		expect(plugin.shouldMountPodcastView()).toBe(true);
+	});
+
+	it("opens the view on the first mobile start only, not on the next start from the data it saved", async () => {
+		const first = await startOnMobile();
+		expect(first.rightLeaf?.setViewState).toHaveBeenCalledWith({
+			type: VIEW_TYPE,
+			active: true,
+		});
+
+		const next = await startOnMobile(first.disk());
+
+		expect(next.rightLeaf?.setViewState).not.toHaveBeenCalled();
+		expect(next.workspace.revealLeaf).not.toHaveBeenCalled();
+		expect(next.plugin.shouldMountPodcastView()).toBe(false);
+	});
+
+	it("logs a failure to open the view on the first mobile start", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		onTestFinished(() => error.mockRestore());
+		const rightLeaf = makeLeaf();
+		rightLeaf.setViewState.mockRejectedValue(new Error("no leaf"));
+
+		await startOnMobile(undefined, rightLeaf);
+
+		await vi.waitFor(() =>
+			expect(error).toHaveBeenCalledWith(
+				"PodNotes: failed to initialize startup view",
+				expect.any(Error),
+			),
+		);
 	});
 
 	it("keeps PodNotes closed on a later mobile start", async () => {
