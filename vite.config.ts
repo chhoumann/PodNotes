@@ -92,7 +92,11 @@ export default defineConfig(({ mode }) => {
 			outDir,
 			emptyOutDir: true,
 			sourcemap: !isProd,
-			minify: false,
+			// Terser inlines single-use functions and variables that Oxc keeps. It runs
+			// before the Oxc minifier below, which mangles names and drops console calls.
+			minify: isProd ? "terser" : false,
+			// Reading a Svelte state property subscribes to it, so a read is not pure.
+			terserOptions: { compress: { pure_getters: false }, mangle: false },
 			rollupOptions: {
 				external,
 				output: {

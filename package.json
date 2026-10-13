@@ -60,6 +60,7 @@
 		"svelte": "^5.57.1",
 		"svelte-check": "4.7.6",
 		"svelte-policy": "^0.1.0",
+		"terser": "^5.51.2",
 		"typescript": "6.0.3",
 		"vite": "^8.3.2",
 		"vitest": "^5.0.3",
