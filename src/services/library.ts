@@ -126,8 +126,9 @@ export function createLibraryActions({
 			}
 			try {
 				await feeds.channelAt({ url: url.href });
-			} catch (e) {
-				new Notice(`Could not load feed: ${e instanceof Error ? e.message : String(e)}`);
+			} catch {
+				// An error's text can carry the address, a secret.
+				new Notice("Could not load the feed at that address.");
 				return;
 			}
 			// A sync can replace the feed while its address loads.

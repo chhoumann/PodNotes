@@ -4,7 +4,7 @@ import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { savedFeeds } from "src/store";
-import { fetchTextWithTimeout, NetworkError } from "src/utility/networkRequest";
+import { fetchTextWithTimeout } from "src/utility/networkRequest";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { deferred, MemoryStorage } from "../../tests/mocks/feeds";
 import { FeedRepository, loadFeed } from "./FeedRepository";
@@ -134,15 +134,15 @@ describe("setting a private feed's address on this device", () => {
 		expect(thisDevice.listSecrets()).toEqual([]);
 	});
 
-	test("keeps nothing when the feed at that address does not load", async () => {
+	test("keeps nothing when the feed at that address does not load, and never shows the address", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => {});
-		fetchTextMock.mockRejectedValue(new NetworkError("timeout"));
+		fetchTextMock.mockRejectedValue(new Error(`Request to ${PRIVATE_URL} failed`));
 		const { saved, thisDevice, actions } = followedElsewhere();
 
 		await enterAddress(actions.setFeedAddress("Private Show"), PRIVATE_URL);
 
-		expect(notice).toHaveBeenCalledWith(expect.stringMatching(/^Could not load feed: /));
+		expect(notice.mock.calls).toEqual([["Could not load the feed at that address."]]);
 		expect(thisDevice.listSecrets()).toEqual([]);
 		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
 	});
