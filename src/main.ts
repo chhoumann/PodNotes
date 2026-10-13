@@ -191,7 +191,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
 		// downloadedEpisodes is the authoritative offline set, so mirror it into the
-		// localFiles playlist that the Podcast grid renders. Svelte's immediate-fire
+		// localFiles playlist that the Local files page renders. Svelte's immediate-fire
 		// backfills already-downloaded episodes on load; later changes keep it current.
 		this.localFilesMirrorUnsubscribe = downloadedEpisodes.subscribe((downloaded) =>
 			localFiles.syncWithDownloaded(downloaded),
