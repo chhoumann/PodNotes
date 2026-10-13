@@ -31,7 +31,7 @@ const closeFeedAddressDialog = (obsidian: ObsidianClient) =>
 		'document.querySelectorAll(".modal-container:not(:has(.mod-settings)) .modal-close-button").forEach(el => el.click()), true',
 	);
 
-test("a Supercast feed's address stays out of data.json, the feed cache and notes, and is set again on a device without it", async () => {
+test("protects a Supercast subscription's address in data, cache keys and note links, then accepts it under the same reference", async () => {
 	const context = getContext();
 	const { obsidian, plugin, sandbox } = context;
 	const sentinel = "PRIV3_E2E_SENTINEL";
