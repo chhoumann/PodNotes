@@ -52,3 +52,5 @@ behavior, followed by exactly four H2s in this order: `Sub-features`,
   file and the Local Files playlist.
 - [Episode notes](./episode-notes.md) covers creating a note for the playing
   episode from its template.
+- [Transcripts](./transcripts.md) covers transcribing the current episode from
+  the transcript its feed publishes, or from its audio with a provider key.

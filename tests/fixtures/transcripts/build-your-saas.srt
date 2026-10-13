@@ -1,0 +1,55 @@
+1
+00:00:00,000 --> 00:00:02,320
+Justin: Michael, I can't do a
+podcast with you. I just
+
+2
+00:00:02,320 --> 00:00:08,080
+decided. It's done. We're done.
+I'll say, man, we got geese in
+
+3
+00:00:08,080 --> 00:00:08,560
+the background.
+
+4
+00:00:08,560 --> 00:00:10,160
+What is going on here?
+
+5
+00:00:10,160 --> 00:00:13,280
+Michael: Oh gosh. It's my door.
+Sorry. One second. Sorry about
+
+6
+00:00:13,280 --> 00:00:13,760
+the geese.
+
+7
+00:00:15,185 --> 00:00:18,545
+Justin: God. Chris is gonna have
+a ball editing this one.
+
+8
+00:00:32,390 --> 00:00:36,470
+Welcome to Build Your SaaS. This
+is the podcast where we
+
+9
+00:00:36,470 --> 00:00:41,190
+chronicle the journey of
+building transistor.fm, a
+
+10
+00:00:40,245 --> 00:00:44,405
+podcast hosting platform. I'm
+Justin Jackson, one of the co
+
+11
+00:00:44,405 --> 00:00:45,125
+founders.
+
+12
+00:00:45,445 --> 00:00:51,205
+And today, I want to talk about
+what our secret weapon is at

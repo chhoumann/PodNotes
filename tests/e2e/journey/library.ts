@@ -49,6 +49,7 @@ export type LibrarySeed = Readonly<{
 		finished: boolean;
 	}>;
 	openAISecretId?: string;
+	transcriptTemplate?: string;
 }>;
 
 type JourneyContext = Readonly<{
@@ -322,9 +323,7 @@ export async function seedLibrary(
 	server: FixtureServer | null,
 	seed: LibrarySeed = {},
 ): Promise<void> {
-	await obsidian.dev.evalJson(
-		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
-	);
+	await clearFeedCache(obsidian);
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		await app.workspace.detachLeavesOfType(${JSON.stringify(VIEW_TYPE)});
 		return true;
@@ -377,8 +376,15 @@ export async function seedLibrary(
 			]),
 		);
 		if (seed.openAISecretId) data.openAISecretId = seed.openAISecretId;
+		if (seed.transcriptTemplate) data.transcript.template = seed.transcriptTemplate;
 	}, RELOAD_OPTIONS);
 	await dismissNotices(obsidian);
+}
+
+export async function clearFeedCache(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJson(
+		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
+	);
 }
 
 export async function feedCacheHolds(

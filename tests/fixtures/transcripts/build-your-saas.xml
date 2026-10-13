@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="/stylesheet.xsl" type="text/xsl"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <atom:link rel="self" type="application/rss+xml" href="https://feeds.transistor.fm/build-your-saas" title="MP3 Audio"/>
+    <atom:link rel="hub" href="https://pubsubhubbub.appspot.com/"/>
+    <podcast:podping usesPodping="true"/>
+    <title>Build Your SaaS</title>
+    <generator>Transistor (https://transistor.fm)</generator>
+    <itunes:new-feed-url>https://feeds.transistor.fm/build-your-saas</itunes:new-feed-url>
+    <description>Follow the journey of Transistor.fm as they bootstrap a podcast hosting startup.</description>
+    <copyright>© 2025 Transistor, Inc.</copyright>
+    <podcast:guid>778116ac-6b1e-5ae2-b037-26a7ff2aee64</podcast:guid>
+    <podcast:podroll>
+      <podcast:remoteItem feedGuid="ec3625d6-799c-5efb-93c7-a2a8c15f4fb8" feedUrl="https://feeds.castos.com/mqv6"/>
+      <podcast:remoteItem feedGuid="3f7f94d2-8111-5ed2-b4d3-88ce0c4a7b24" feedUrl="https://feeds.transistor.fm/the-business-of-laravel"/>
+      <podcast:remoteItem feedGuid="d6671fb6-3ad2-5533-b157-e70f1a3b23cb" feedUrl="https://feeds.transistor.fm/mostly-technical"/>
+      <podcast:remoteItem feedGuid="ae85e704-aea7-5502-b8d4-dd1a6d4b5a40" feedUrl="https://feeds.transistor.fm/hackers-inc"/>
+      <podcast:remoteItem feedGuid="0f17bc61-9135-5308-87da-390a957fcd83" feedUrl="https://feeds.transistor.fm/building-livewire"/>
+      <podcast:remoteItem feedGuid="1f23616e-697c-5796-8aa2-fe7feaf83e5c" feedUrl="https://feeds.transistor.fm/bootstrapped-founder"/>
+      <podcast:remoteItem feedGuid="7ac16be6-8783-5b11-8290-f8eaf9df4f1d" feedUrl="https://feeds.transistor.fm/bootstrapped-web"/>
+      <podcast:remoteItem feedGuid="4a10b63a-41b2-5c31-82e1-9ea2cd7cc19a" feedUrl="https://feeds.transistor.fm/the-panel"/>
+    </podcast:podroll>
+    <podcast:locked>yes</podcast:locked>
+    <podcast:funding url="https://www.patreon.com/jonjustin">Support this podcast on Patreon</podcast:funding>
+    <podcast:person role="Editor" href="https://www.lemonproductions.ca/" img="https://img.transistorcdn.com/2SiuRhS348JffvBzdB3JGfWiktif4lkAlJ7qEYIddM0/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vOTViZmQ4MTYt/MjE2ZC00NGFjLTk1/MTgtOTdmZTgxZWNm/ZjQyLzE2NjQ0Nzkx/NTMtaW1hZ2UuanBn.jpg">Chris Enns</podcast:person>
+    <podcast:person role="Host" href="https://transistor.fm" img="https://img.transistorcdn.com/gDRCHUWtnyUcFLoKYzonKCNOePi94JeSg0YRNPbdsDA/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vODk0MzlmOGYt/NDE0Ni00NjM4LWIw/NzctNmMwZDBkOTYy/MTVlLzE2ODE5OTQz/MzEtaW1hZ2UuanBn.jpg">Jon Buda</podcast:person>
+    <podcast:person role="Host" href="https://justinjackson.ca" img="https://img.transistorcdn.com/smTvekjC85pUxar6FCHHuAlHwamJGkZQ86Q0uqyef8U/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vYjYwODFjYzkt/Y2ZmYi00YWIzLThj/NWMtZDVkZWYyMDRm/ZjgyLzE2NjQ0NjU4/NzItaW1hZ2UuanBn.jpg">Justin Jackson</podcast:person>
+    <podcast:trailer pubdate="Tue, 19 Jun 2018 12:00:00 -0700" url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/cd78d193/5d907ace.mp3" length="1117509" type="audio/mpeg">Teaser: I don't want to get crushed by the VC monster</podcast:trailer>
+    <podcast:trailer pubdate="Tue, 29 May 2018 01:05:00 -0700" url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/1b8db7a0/76c28761.mp3" length="11090436" type="audio/mpeg">What does Nathan Barry think of podcast hosting pricing?</podcast:trailer>
+    <podcast:trailer pubdate="Fri, 16 Feb 2018 17:00:00 -0800" url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/07d3a3b7/65742513.mp3" length="5537837" type="audio/mpeg">What does it take to build a SaaS these days?</podcast:trailer>
+    <language>en</language>
+    <pubDate>Mon, 12 Oct 2026 03:36:15 -0700</pubDate>
+    <lastBuildDate>Mon, 12 Oct 2026 03:36:55 -0700</lastBuildDate>
+    <link>https://saas.transistor.fm</link>
+    <image>
+      <url>https://img.transistorcdn.com/An4UnCBXf-0MXzTVM7zHAs8am60aE1-MC7V16hltka0/rs:fill:0:0:1/w:1400/h:1400/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9zaG93/LzE1LzE1MjEyMzc4/NDYtYXJ0d29yay5q/cGc.jpg</url>
+      <title>Build Your SaaS</title>
+      <link>https://saas.transistor.fm</link>
+    </image>
+    <itunes:category text="Business">
+      <itunes:category text="Marketing"/>
+    </itunes:category>
+    <itunes:category text="Technology"/>
+    <itunes:type>episodic</itunes:type>
+    <itunes:author>Transistor.fm</itunes:author>
+    <itunes:image href="https://img.transistorcdn.com/An4UnCBXf-0MXzTVM7zHAs8am60aE1-MC7V16hltka0/rs:fill:0:0:1/w:1400/h:1400/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9zaG93/LzE1LzE1MjEyMzc4/NDYtYXJ0d29yay5q/cGc.jpg"/>
+    <itunes:summary>Follow the journey of Transistor.fm as they bootstrap a podcast hosting startup.</itunes:summary>
+    <itunes:subtitle>Follow the journey of Transistor.fm as they bootstrap a podcast hosting startup..</itunes:subtitle>
+    <itunes:keywords>technology, podcasting, business, saas, software, marketing, bootstrap, bootstrapping, rails, ruby on rails</itunes:keywords>
+    <itunes:owner>
+      <itunes:name>Transistor.fm</itunes:name>
+      <itunes:email>shows@transistor.fm</itunes:email>
+    </itunes:owner>
+    <itunes:complete>No</itunes:complete>
+    <itunes:explicit>Yes</itunes:explicit>
+<item>
+      <title>What is Transistor's secret weapon?</title>
+      <itunes:episode>164</itunes:episode>
+      <podcast:episode>164</podcast:episode>
+      <itunes:title>What is Transistor's secret weapon?</itunes:title>
+      <itunes:episodeType>full</itunes:episodeType>
+      <guid isPermaLink="false">b34e7e5b-750f-43e1-ab2e-3cc93f7fb5fd</guid>
+      <link>https://share.transistor.fm/s/9c22a01c</link>
+      <description>
+        <![CDATA[<p>Justin sits down with Helen Ryles and Michael Green, the two people behind almost every chat, email, and demo call that comes into Transistor, to talk about the company's secret weapon: the thing that converts 75% of trials to paid and keeps people around for years.</p><p><strong>Chapters:</strong><br></p><ul><li>(02:13) - What did Helen do before she joined Transistor?</li>
+<li>(03:00) - What did Michael do before joining Transistor?</li>
+<li>(05:05) - How does Transistor do customer support different?</li>
+<li>(08:04) - What have we learned by doing demo calls with customers?</li>
+<li>(12:32) - What are some of the emotions of starting a podcast?</li>
+<li>(16:15) - What can startups learn from being a customer led company?</li>
+<li>(18:44) - How do we approach AI in customer support?</li>
+<li>(22:50) - How does customer support translate into sales?</li>
+<li>(25:49) - What else does a customer support role do at a Saas?</li>
+<li>(33:41) - How do future generations learn how to be on a team?</li>
+</ul><br><strong>Quotes:<p></p></strong>From Helen:"The bar with customer support is really quite low across the industry... If companies are setting the standard of getting back to people in three to five business days, we don't have to necessarily adopt that. We can set our own standards."<p>From Michael:</p>"There is an emotional side to podcasting, to using a product, to creation, and we help on that side as well. People are often excited or nervous or panicking or something feels urgent, and we can help alleviate all of that emotional side. It's not just about questions and answers."<p><strong>Have feedback on this episode?</strong></p><ul><li>👉 <a href="https://podline.fm/build-your-saas">​Leave a voicemail here​</a></li><li>🦋 <a href="https://bsky.app/profile/did:plc:gp74daaof2ydekw2pmbgwfgm/post/3mjq6k7g3kr2j" title="Reply on Bluesky">Reply on Bluesky</a><br>
+</li><li>📺 </li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<br><p>🎙️ <em>Podcast hosting is provided by</em> <a href="https://transistor.fm/?via=rubyblend"><em>Transistor.fm</em></a><em>.<br>📺 Learn </em><a href="https://transistor.fm/how-to-start-a-podcast/"><em>how to start your own podcast</em></a><em>!</em></p>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </description>
+      <content:encoded>
+        <![CDATA[<p>Justin sits down with Helen Ryles and Michael Green, the two people behind almost every chat, email, and demo call that comes into Transistor, to talk about the company's secret weapon: the thing that converts 75% of trials to paid and keeps people around for years.</p><p><strong>Chapters:</strong><br></p><ul><li>(02:13) - What did Helen do before she joined Transistor?</li>
+<li>(03:00) - What did Michael do before joining Transistor?</li>
+<li>(05:05) - How does Transistor do customer support different?</li>
+<li>(08:04) - What have we learned by doing demo calls with customers?</li>
+<li>(12:32) - What are some of the emotions of starting a podcast?</li>
+<li>(16:15) - What can startups learn from being a customer led company?</li>
+<li>(18:44) - How do we approach AI in customer support?</li>
+<li>(22:50) - How does customer support translate into sales?</li>
+<li>(25:49) - What else does a customer support role do at a Saas?</li>
+<li>(33:41) - How do future generations learn how to be on a team?</li>
+</ul><br><strong>Quotes:<p></p></strong>From Helen:"The bar with customer support is really quite low across the industry... If companies are setting the standard of getting back to people in three to five business days, we don't have to necessarily adopt that. We can set our own standards."<p>From Michael:</p>"There is an emotional side to podcasting, to using a product, to creation, and we help on that side as well. People are often excited or nervous or panicking or something feels urgent, and we can help alleviate all of that emotional side. It's not just about questions and answers."<p><strong>Have feedback on this episode?</strong></p><ul><li>👉 <a href="https://podline.fm/build-your-saas">​Leave a voicemail here​</a></li><li>🦋 <a href="https://bsky.app/profile/did:plc:gp74daaof2ydekw2pmbgwfgm/post/3mjq6k7g3kr2j" title="Reply on Bluesky">Reply on Bluesky</a><br>
+</li><li>📺 </li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<br><p>🎙️ <em>Podcast hosting is provided by</em> <a href="https://transistor.fm/?via=rubyblend"><em>Transistor.fm</em></a><em>.<br>📺 Learn </em><a href="https://transistor.fm/how-to-start-a-podcast/"><em>how to start your own podcast</em></a><em>!</em></p>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </content:encoded>
+      <pubDate>Fri, 17 Apr 2026 17:26:43 -0700</pubDate>
+      <author>Transistor.fm</author>
+      <enclosure url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/9c22a01c/fa09d122.mp3" length="39793259" type="audio/mpeg"/>
+      <itunes:author>Transistor.fm</itunes:author>
+      <itunes:duration>2486</itunes:duration>
+      <itunes:summary>
+        <![CDATA[<p>Justin sits down with Helen Ryles and Michael Green, the two people behind almost every chat, email, and demo call that comes into Transistor, to talk about the company's secret weapon: the thing that converts 75% of trials to paid and keeps people around for years.</p><p><strong>Chapters:</strong><br></p><ul><li>(02:13) - What did Helen do before she joined Transistor?</li>
+<li>(03:00) - What did Michael do before joining Transistor?</li>
+<li>(05:05) - How does Transistor do customer support different?</li>
+<li>(08:04) - What have we learned by doing demo calls with customers?</li>
+<li>(12:32) - What are some of the emotions of starting a podcast?</li>
+<li>(16:15) - What can startups learn from being a customer led company?</li>
+<li>(18:44) - How do we approach AI in customer support?</li>
+<li>(22:50) - How does customer support translate into sales?</li>
+<li>(25:49) - What else does a customer support role do at a Saas?</li>
+<li>(33:41) - How do future generations learn how to be on a team?</li>
+</ul><br><strong>Quotes:<p></p></strong>From Helen:"The bar with customer support is really quite low across the industry... If companies are setting the standard of getting back to people in three to five business days, we don't have to necessarily adopt that. We can set our own standards."<p>From Michael:</p>"There is an emotional side to podcasting, to using a product, to creation, and we help on that side as well. People are often excited or nervous or panicking or something feels urgent, and we can help alleviate all of that emotional side. It's not just about questions and answers."<p><strong>Have feedback on this episode?</strong></p><ul><li>👉 <a href="https://podline.fm/build-your-saas">​Leave a voicemail here​</a></li><li>🦋 <a href="https://bsky.app/profile/did:plc:gp74daaof2ydekw2pmbgwfgm/post/3mjq6k7g3kr2j" title="Reply on Bluesky">Reply on Bluesky</a><br>
+</li><li>📺 </li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<br><p>🎙️ <em>Podcast hosting is provided by</em> <a href="https://transistor.fm/?via=rubyblend"><em>Transistor.fm</em></a><em>.<br>📺 Learn </em><a href="https://transistor.fm/how-to-start-a-podcast/"><em>how to start your own podcast</em></a><em>!</em></p>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </itunes:summary>
+      <itunes:keywords>technology, podcasting, business, saas, software, marketing, bootstrap, bootstrapping, rails, ruby on rails</itunes:keywords>
+      <itunes:explicit>No</itunes:explicit>
+      <podcast:person role="Editor" href="https://www.lemonproductions.ca/" img="https://img.transistorcdn.com/2SiuRhS348JffvBzdB3JGfWiktif4lkAlJ7qEYIddM0/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vOTViZmQ4MTYt/MjE2ZC00NGFjLTk1/MTgtOTdmZTgxZWNm/ZjQyLzE2NjQ0Nzkx/NTMtaW1hZ2UuanBn.jpg">Chris Enns</podcast:person>
+      <podcast:person role="Host" href="https://justinjackson.ca" img="https://img.transistorcdn.com/smTvekjC85pUxar6FCHHuAlHwamJGkZQ86Q0uqyef8U/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vYjYwODFjYzkt/Y2ZmYi00YWIzLThj/NWMtZDVkZWYyMDRm/ZjgyLzE2NjQ0NjU4/NzItaW1hZ2UuanBn.jpg">Justin Jackson</podcast:person>
+      <podcast:person role="Guest" href="https://transistor.fm/helen/" img="https://img.transistorcdn.com/1mwCcjPJ28W0q-MHPuUSfr0WXlnQOrBYX61oBX21rOU/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vMzcyYTczN2Mt/YjczYS00YmIwLWIy/OTQtZTYwYzU3Njdi/OTIzLzE2NjQ0Njkz/NDMtaW1hZ2UuanBn.jpg">Helen Ryles</podcast:person>
+      <podcast:person role="Guest" href="https://saas.transistor.fm/people/michael-green" img="https://img.transistorcdn.com/5lAhEoEXSLgMOD5jQ6T1TJsUOxKAlSyYMiAtdI0bTjU/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS80OWI1/YjRkNWUxYTgyNTk5/Njg2ZDI3MGM1NTVm/OTAyMC5wbmc.jpg">Michael Green</podcast:person>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.vtt" type="text/vtt" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.srt" type="application/x-subrip" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.json" type="application/json" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.txt" type="text/plain"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription" type="text/html"/>
+      <podcast:chapters url="https://share.transistor.fm/s/9c22a01c/chapters.json" type="application/json+chapters"/>
+      <podcast:socialInteract protocol="atproto" uri="at://did:plc:gp74daaof2ydekw2pmbgwfgm/app.bsky.feed.post/3mjq6k7g3kr2j"/>
+    </item>
+</channel>
+</rss>
