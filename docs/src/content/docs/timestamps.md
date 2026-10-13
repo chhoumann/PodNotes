@@ -146,7 +146,7 @@ The handler accepts these query parameters:
 
 When a link has no `time`, or an empty one, the episode resumes from its saved progress. An unplayed or finished episode starts at zero. A `time` at or past the end of the episode pauses the episode 0.25 seconds before its end. When a link has more than one end parameter, `endTime` wins over `end`, and `end` wins over `to`.
 
-A feed `url` must be a public HTTP or HTTPS address. A private-feed placeholder resolves only through a saved podcast, with the feed address stored on that device or the copy of the feed saved there. A `url` that holds the private address of a saved podcast opens that podcast.
+A feed `url` must be an HTTP or HTTPS address on the internet, not on a local or private network. A private-feed placeholder resolves only through a saved podcast, with the feed address stored on that device or the copy of the feed saved there. A `url` that holds the private address of a saved podcast opens that podcast.
 
 A vault path in `url` plays the file at that path, whether or not it is in **Local Files**. When no file is at that path, PodNotes looks for the one vault file with the same file name.
 

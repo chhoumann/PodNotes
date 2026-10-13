@@ -11,7 +11,7 @@ Listen to a paid or members-only podcast through the private RSS feed address yo
 1. Copy the private feed address from your podcast provider, such as your Supercast or Substack account.
 2. In PodNotes, add the podcast with that address, as in [Add a podcast](/podcasts/#add-a-podcast).
 
-PodNotes stores the address in Obsidian's secret storage on this device. Your vault, including PodNotes' `data.json`, holds a placeholder such as `podnotes-private-feed:Members%20Show` and a reference to the stored address. The addresses it recognizes are in [Which addresses PodNotes keeps private](#which-addresses-podnotes-keeps-private).
+PodNotes stores the address in Obsidian's secret storage on this device. Your vault, including PodNotes' `data.json`, holds a placeholder such as `podnotes-private-feed:Members%20Show` and a reference to the stored address. The addresses PodNotes recognizes are in [Which addresses PodNotes keeps private](#which-addresses-podnotes-keeps-private).
 
 PodNotes cannot sign in to providers that require a browser login. If PodNotes cannot store the address, it does not add the podcast, and a notice says so, such as `Could not store the private feed address for "Members Show" on this device.`
 
@@ -19,11 +19,12 @@ PodNotes cannot sign in to providers that require a browser login. If PodNotes c
 
 The podcast syncs to your other devices, but its address does not. On each other device, enter the address once:
 
-1. Let your sync service bring your vault to the device. It must sync plugin settings, as [What syncs](/sync/#what-syncs) describes.
-2. If PodNotes is not on the device, install it. If it is older than on your other devices, update it. The podcast then appears on the device. Do not add it again from its address.
-3. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
-4. Select **Set feed address**. The podcast's menu has the same item.
-5. Paste the private feed address into **Feed address**, and select **Save**.
+1. If the device already has PodNotes, update it first, before you use PodNotes there. An older PodNotes can overwrite your library when sync brings the new one.
+2. Let your sync service bring your vault to the device. It must sync plugin settings, as [What syncs](/sync/#what-syncs) describes.
+3. If PodNotes is not on the device, install it. The podcast then appears on the device. Do not add it again from its address.
+4. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
+5. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item.
+6. Paste the private feed address into **Feed address**, and select **Save**.
 
 PodNotes stores the address on this device and loads the feed. From then on, the podcast and its timestamp links work on this device too.
 
@@ -43,13 +44,13 @@ In these docs, a private feed is a feed with such an address. PodNotes does not 
 
 PodNotes 2.22.0 recognizes the hosts in [Private feed hosts](#private-feed-hosts), for example a Supercast address such as `https://myshow.supercast.com/feed/abc123.rss`. The first time PodNotes 2.22.0 starts, it moves the address of each matching podcast out of `data.json` into secret storage and shows "Moved private feed URLs out of data.json." The podcast keeps working on that device.
 
-Update PodNotes on every device, because an older PodNotes cannot load these podcasts and can overwrite your library. Then, on each other device, enter the address of each moved podcast once with [Set feed address](#use-a-private-feed-on-another-device).
+Update PodNotes on every device first. An older PodNotes cannot load these podcasts, and because it does not merge, it can overwrite the changes from your other devices. Then, on each other device, enter the address of each moved podcast once with [Set feed address](#use-a-private-feed-on-another-device).
 
 Notes and links that you created before the update keep the address in their text. Those links still play on every device, because they hold the address itself. PodNotes does not rewrite them.
 
 ## Private feeds in notes and links
 
-PodNotes does not write the address of a private feed that you added into the notes it creates:
+PodNotes keeps the address of a private feed that you added out of the notes it creates, as these rules describe:
 
 - Episode notes, feed notes, timestamps, and transcripts of a podcast you added use its placeholder instead. `{{feedurl}}` gives the placeholder, and links work on each device where you set the address.
 - When an episode's description or other text quotes the address, PodNotes replaces it with the placeholder, as long as the address is on this device.
