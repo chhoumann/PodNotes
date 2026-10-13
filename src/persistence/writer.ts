@@ -98,6 +98,13 @@ export class DataFileWriter<Doc> {
 		return (this.chain ?? Promise.resolve()).catch(() => undefined);
 	}
 
+	/** Retry pending work at the checkpoint interval; nothing before a file was loaded. */
+	retryPending(): void {
+		if (this.base !== null && (this.failedWrite || this.hasUnsavedEdits())) {
+			this.scheduleCheckpoint();
+		}
+	}
+
 	/** Save now. Rejects when the save fails; a failed write is the caller's to report. */
 	save(): Promise<void> {
 		this.cancelTimer();
@@ -191,6 +198,7 @@ export class DataFileWriter<Doc> {
 		try {
 			disk = await this.file.read(this.base);
 		} catch (error) {
+			// A failed read can refuse later saves until a read succeeds, so retry what is pending.
 			if (this.failedWrite || this.hasUnsavedEdits()) this.scheduleCheckpoint();
 			throw error;
 		}
