@@ -51,10 +51,6 @@
 		border-right: 1px solid var(--background-modifier-border);
 	}
 
-	.pn-spacer {
-		flex: 1;
-	}
-
 	.pn-railsearch {
 		display: flex;
 		align-items: center;

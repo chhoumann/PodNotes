@@ -112,6 +112,7 @@
 
 <style>
 	.pn-mini {
+		--pn-btn: 36px;
 		position: relative;
 		flex: none;
 		display: flex;
@@ -130,6 +131,7 @@
 	}
 
 	:global(.is-phone) .pn-mini {
+		--pn-btn: 44px;
 		height: 64px;
 		padding: 0 var(--size-4-2);
 	}
@@ -240,15 +242,8 @@
 	}
 
 	.pn-mini .pn-iconbtn {
-		width: 36px;
-		height: 36px;
 		opacity: 1;
 		color: var(--text-normal);
-	}
-
-	:global(.is-phone) .pn-mini .pn-iconbtn {
-		width: 44px;
-		height: 44px;
 	}
 
 	.pn-mini .pn-mini-capture {

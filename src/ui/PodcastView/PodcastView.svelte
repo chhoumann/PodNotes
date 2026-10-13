@@ -254,10 +254,6 @@
 		padding-top: var(--size-4-1);
 	}
 
-	.pn-spacer {
-		flex: 1;
-	}
-
 	.pn-head-title {
 		margin: 0 0 0 var(--size-4-2);
 		font-size: var(--font-ui-medium);
@@ -356,6 +352,10 @@
 	}
 
 	.podcast-view :global {
+		.pn-spacer {
+			flex: 1;
+		}
+
 		.pn-h2 {
 			margin: var(--size-4-5) 0 var(--size-4-2);
 			font-size: var(--font-ui-small);
