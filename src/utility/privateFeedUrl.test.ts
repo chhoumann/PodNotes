@@ -125,6 +125,29 @@ describe("isCredentialBearingUrl for publishers that put the secret in the addre
 });
 
 describe("redactPrivateFeedAddresses", () => {
+	it.each([
+		["https://private.example.com", "https://%70rivate.example.com"],
+		["https://xn--bcher-kva.example.com", "https://bücher.example.com"],
+		["https://127.0.0.1", "https://2130706433"],
+		["https://[::1]", "https://[0:0:0:0:0:0:0:1]"],
+	])("redacts a quoted address whose authority normalizes to %s", (canonical, alias) => {
+		const feedUrl = `${canonical}/rss?auth=PRIVATE_SENTINEL`;
+		const episodeUrl = `${canonical}/audio.mp3?token=MEDIA_SIGNATURE`;
+		const document = {
+			podcastName: "Paid",
+			feedUrl,
+			description: `Subscribe at ${alias}/rss?auth=PRIVATE_SENTINEL.`,
+			episodeUrl,
+		};
+
+		expect(redactPrivateFeedAddresses(document)).toEqual({
+			podcastName: "Paid",
+			feedUrl: "podnotes-private-feed:Paid",
+			description: "Subscribe at podnotes-private-feed:Paid.",
+			episodeUrl,
+		});
+	});
+
 	it("finds the address of a host the previous pass did not see", () => {
 		const patreon = "https://www.patreon.com/rss/show?auth=FIRST_SENTINEL";
 		const supercast = "https://show.supercast.com/feeds/SECOND_SENTINEL";
