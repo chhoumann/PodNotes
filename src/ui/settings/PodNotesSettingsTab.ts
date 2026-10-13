@@ -474,6 +474,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				textComponent.onChange((value) => {
 					this.plugin.settings.note.path = value;
 					void this.plugin.saveSettings();
+					// An open episode list looks its notes up at the new path.
+					plugin.set(this.plugin);
 
 					const demoVal = FilePathTemplateEngine(value, randomEpisode);
 					renderMarkdownPreview(this.app, demoVal, noteCreationFilePathDemoEl);

@@ -6,7 +6,7 @@ import type { ShellServices } from "./context";
 import { pageKey, parsePage } from "./pages";
 import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
-import { derived, writable } from "svelte/store";
+import { derived, get, writable } from "svelte/store";
 import { findExactPodcastNote, getPodcastNote } from "src/createPodcastNote";
 import { createLibraryActions } from "src/services/library";
 import {
@@ -101,6 +101,15 @@ export class MainView extends ItemView {
 		this.registerEvent(app.vault.on("create", vaultChanged));
 		this.registerEvent(app.vault.on("delete", vaultChanged));
 		this.registerEvent(app.vault.on("rename", vaultChanged));
+		const settings = derived(pluginStore, ($plugin) => $plugin.settings);
+		let notePath = get(settings).note.path;
+		this.register(
+			settings.subscribe(({ note }) => {
+				if (note.path === notePath) return;
+				notePath = note.path;
+				notesChangedSoon();
+			}),
+		);
 		return {
 			app,
 			api: plugin.api,
@@ -124,7 +133,7 @@ export class MainView extends ItemView {
 				feedUrls: plugin.feedUrls,
 			}),
 			search: new PodcastSearch(plugin.feeds),
-			settings: derived(pluginStore, ($plugin) => $plugin.settings),
+			settings,
 			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
 			hasNote: (episode) => getPodcastNote(episode) !== null,

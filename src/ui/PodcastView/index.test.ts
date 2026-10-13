@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TFile, type WorkspaceLeaf } from "obsidian";
 import { get } from "svelte/store";
 import { plugin as pluginStore } from "src/store";
+import { DEFAULT_SETTINGS } from "src/constants";
 import type { Episode } from "../../types/Episode";
 import type { IPodNotes } from "../../types/IPodNotes";
 import type { IPodNotesSettings } from "../../types/IPodNotesSettings";
@@ -76,6 +77,7 @@ function createView({
 	const vault = createVault();
 	const app = { workspace, vault };
 	Object.assign(view, { contentEl, app });
+	pluginStore.set({ app, settings: structuredClone(DEFAULT_SETTINGS) } as never);
 
 	return { app, contentEl, plugin, view, workspace, vault };
 }
@@ -135,16 +137,19 @@ describe("MainView mobile startup mounting", () => {
 
 	it("gives the view the plugin's settings, current through a toggle and an import", async () => {
 		const { plugin, view } = createView({ shouldMount: true });
-		const host = Object.assign(plugin, { settings: { autoQueue: true } as IPodNotesSettings });
+		const settings = (autoQueue: boolean): IPodNotesSettings => ({
+			...structuredClone(DEFAULT_SETTINGS),
+			autoQueue,
+		});
+		const host = Object.assign(plugin, { settings: settings(true) });
 		pluginStore.set(host as never);
 		await openView(view);
-		const { settings } = mountedServices();
 		const seen: boolean[] = [];
 
-		const stop = settings.subscribe(({ autoQueue }) => seen.push(autoQueue));
+		const stop = mountedServices().settings.subscribe(({ autoQueue }) => seen.push(autoQueue));
 		host.settings.autoQueue = false;
 		pluginStore.set(host as never);
-		host.settings = { autoQueue: true } as IPodNotesSettings;
+		host.settings = settings(true);
 		pluginStore.set(host as never);
 		stop();
 

@@ -38,7 +38,10 @@ export interface ShellServices {
 	readonly library: Library;
 	readonly actions: LibraryActions;
 	readonly search: PodcastSearch;
-	/** Current through a settings toggle or an import, which replaces the object. */
+	/**
+	 * Current through a settings toggle, the note path field and an import, which replaces
+	 * the object.
+	 */
 	readonly settings: Readable<IPodNotesSettings>;
 	/** Into the note being written, else into the episode note. Null when nothing was captured. */
 	captureTimestamp(): Promise<Capture | null>;
@@ -48,7 +51,8 @@ export interface ShellServices {
 	hasNote(episode: Episode): boolean;
 	/**
 	 * Whether a row shows its episode's note: found by guid or at its template path only,
-	 * so every row can ask. A new lookup each time a note is created, deleted or renamed.
+	 * so every row can ask. A new lookup each time a note is created, deleted or renamed, and
+	 * when the note path setting changes.
 	 */
 	readonly rowHasNote: Readable<(episode: Episode) => boolean>;
 }

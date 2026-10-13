@@ -360,7 +360,7 @@ describe("PodNotes onload wiring (#55)", () => {
 					listSecrets: vi.fn(() => []),
 				},
 				vault: {
-					on: vi.fn(() => ({})),
+					on: vi.fn(() => ({ e: { offref: () => {} } })),
 					adapter: {
 						exists: vi.fn(async () => true),
 						read: vi.fn(async () =>
@@ -588,7 +588,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			const leaf = { setViewState: vi.fn() };
 			const view = new MainView(leaf as unknown as WorkspaceLeaf, plugin);
 			onTestFinished(async () => {
-				await (view as unknown as { onClose(): Promise<void> }).onClose();
+				await (view as unknown as { close(): Promise<void> }).close();
 			});
 			const { scope, keymap } = new App();
 			Object.assign(plugin.app, { scope, keymap });
@@ -599,7 +599,7 @@ describe("PodNotes onload wiring (#55)", () => {
 				getLeavesOfType: vi.fn(() => [leaf]),
 				requestSaveLayout: vi.fn(),
 				revealLeaf: vi.fn(async () => {
-					await (view as unknown as { onOpen(): Promise<void> }).onOpen();
+					await (view as unknown as { open(): Promise<void> }).open();
 					await view.setState({ page: saved }, { history: false });
 				}),
 			});
