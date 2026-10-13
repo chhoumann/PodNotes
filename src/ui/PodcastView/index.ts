@@ -98,7 +98,7 @@ export class MainView extends ItemView {
 				episodeListLimit,
 			},
 			settings: derived(pluginStore, ($plugin) => $plugin.settings),
-			captureTimestamp: () => plugin.captureTimestampToEditorOrNote(),
+			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
 		};
 	}

@@ -46,6 +46,7 @@ export function decodeEpisode(
 	decoded.podcastName = readString(value, "podcastName", "", warnings, path);
 
 	setOptionalString(decoded, value, "feedUrl", warnings, path);
+	setOptionalString(decoded, value, "guid", warnings, path);
 	setOptionalString(decoded, value, "artworkUrl", warnings, path);
 	setOptionalString(decoded, value, "itunesTitle", warnings, path);
 	setOptionalString(decoded, value, "chaptersUrl", warnings, path);

@@ -3,8 +3,9 @@
 `planet-money.xml` contains the channel and first four items retrieved from
 <https://feeds.npr.org/510289/podcast.xml> on 2026-10-11. Episode descriptions,
 content, dates, and enclosure URLs are retained. No media is downloaded.
-`feed-sample.json` freezes the feed and episode projection PodNotes saves. The
-fixture test compares it with what `FeedRepository` projects from the feed.
+`feed-sample.json` freezes the feed and episode projection PodNotes saves,
+with each episode's guid in `guids`. The fixture test compares it with what
+`FeedRepository` projects from the feed.
 Long dashes use JSON escapes and XML character references outside CDATA to
 preserve parsed feed text while following the repository's character rule.
 

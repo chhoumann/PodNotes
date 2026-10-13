@@ -161,6 +161,20 @@ describe("findPublishedTranscript", () => {
 		expect(load).toHaveBeenCalledOnce();
 	});
 
+	test("finds the episode's item by its guid after the feed rotated its enclosure URL", async () => {
+		const { feeds } = repository([
+			{
+				...item([{ url: "t.vtt", type: "text/vtt" }]),
+				guid: "ep-1",
+				streamUrl: "https://media.test/1.mp3?token=rotated",
+			},
+		]);
+
+		await expect(
+			findPublishedTranscript(feeds, { ...episodeOf(show), guid: "ep-1" }),
+		).resolves.toMatchObject({ reference: "t.vtt" });
+	});
+
 	test("asks an unreachable feed once and finds nothing", async () => {
 		const { feeds, load } = repository([]);
 		load.mockRejectedValue(new Error("offline"));

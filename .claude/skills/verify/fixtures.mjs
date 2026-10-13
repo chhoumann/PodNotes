@@ -8,6 +8,7 @@
 //   node .claude/skills/verify/fixtures.mjs library        same server, print the URL of a JSON manifest of eight
 //                                                          podcasts as PodNotes saves them (Night Owl Science's feed
 //                                                          answers 404) and one more feed to add
+//   node .claude/skills/verify/fixtures.mjs retitle        rename the first feed's episodes, keeping their GUIDs, until the server stops
 //   node .claude/skills/verify/fixtures.mjs requests       print the paths the server has answered, oldest first
 //   node .claude/skills/verify/fixtures.mjs audio [path]   write a 60 s WAV into this worktree's vault
 //                                                          (default path: "Fixtures/Local Fixture.wav")
@@ -61,12 +62,14 @@ function wav(seconds = 60) {
 	return buffer;
 }
 
-/** @param {number} audioBytes @param {string} title @param {string} prefix */
-function feedXml(audioBytes, title, prefix) {
+const RETITLED = ["", "Renamed Opening Show", "Renamed Closing Show"];
+
+/** @param {number} audioBytes @param {string} title @param {string} prefix @param {boolean} [retitled] */
+function feedXml(audioBytes, title, prefix, retitled = false) {
 	/** @param {number} n @param {string} date */
 	const item = (n, date) => `
 		<item>
-			<title>Fixture Episode ${n}</title>
+			<title>${retitled ? RETITLED[n] : `Fixture Episode ${n}`}</title>
 			<guid isPermaLink="false">podnotes-fixture${prefix}-${n}</guid>
 			<pubDate>${date}</pubDate>
 			<description>Fixture episode ${n} for PodNotes verification.</description>
@@ -398,6 +401,11 @@ function serve() {
 	/** @type {string[]} */
 	const requests = [];
 	const server = http.createServer((request, response) => {
+		if (request.method === "POST" && request.url === "/__retitle") {
+			routes["/feed.xml"][1] = Buffer.from(feedXml(audio.length, FEED_TITLE, "", true));
+			response.end();
+			return;
+		}
 		if (request.method === "POST" && request.url === "/__stop") {
 			server.close();
 			response.end(() => process.exit(0));
@@ -499,6 +507,16 @@ async function printRequests() {
 	for (const line of /** @type {string[]} */ (await response.json())) console.log(line);
 }
 
+async function retitleFeed() {
+	const response = await fetch(`${local}/__retitle`, {
+		method: "POST",
+		signal: AbortSignal.timeout(1000),
+	});
+	if (!response.ok)
+		throw new Error("The fixture feed is not running. Run fixtures.mjs feed first.");
+	console.log(RETITLED.slice(1).join("\n"));
+}
+
 async function stopFeed() {
 	await fetch(`${local}/__stop`, {
 		method: "POST",
@@ -513,12 +531,13 @@ try {
 	else if (verb === "feed-b") await startFeed(feedBUrl);
 	else if (verb === "transcripts") await startFeed(transcriptsUrl);
 	else if (verb === "library") await startFeed(libraryUrl);
+	else if (verb === "retitle") await retitleFeed();
 	else if (verb === "requests") await printRequests();
 	else if (verb === "audio") await writeAudio(arg);
 	else if (verb === "stop") await stopFeed();
 	else
 		throw new Error(
-			"Usage: fixtures.mjs feed | feed-b | transcripts | library | requests | audio [vault-relative path] | stop",
+			"Usage: fixtures.mjs feed | feed-b | transcripts | library | retitle | requests | audio [vault-relative path] | stop",
 		);
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));

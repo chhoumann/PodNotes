@@ -736,6 +736,137 @@ describe("a timestamp link PodNotes wrote for the loaded episode", () => {
 	});
 });
 
+describe("a link that carries the episode's guid", () => {
+	const retitled: Episode = {
+		...testEpisode,
+		title: "Season finale: what we learned",
+		guid: "ep-1",
+	};
+	const trailer: Episode = {
+		...testEpisode,
+		title: "Trailer",
+		streamUrl: "https://pod.example.com/trailer.mp3",
+	};
+
+	test("plays the feed episode with that guid after the publisher retitled it and reused its title", async () => {
+		loadedAt({ ...testEpisode, guid: "ep-1" }, 754);
+		const written = new API().getPodcastTimeFormatted("HH:mm:ss", true);
+		loadedAt(plusEpisode, 10);
+		mockEpisodesAt.mockResolvedValue([
+			{ ...trailer, title: testEpisode.title, guid: "ep-2" },
+			retitled,
+		]);
+
+		await follow(written);
+		metadata();
+
+		expect(state().episode).toMatchObject({ title: retitled.title, guid: "ep-1" });
+		expect(media().currentTime).toBe(754);
+	});
+
+	test("falls back to the title when two feed episodes share the guid", async () => {
+		mockEpisodesAt.mockResolvedValue([
+			{ ...trailer, guid: "ep-1" },
+			{ ...testEpisode, guid: "ep-1" },
+		]);
+
+		await link({ guid: "ep-1", time: "30" });
+
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
+	});
+
+	test("falls back to the title when no feed episode has the guid", async () => {
+		mockEpisodesAt.mockResolvedValue([trailer, { ...testEpisode, guid: "ep-1" }]);
+
+		await link({ guid: "ep-2", time: "30" });
+
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
+	});
+
+	test("a link without a guid plays the titled episode, not the one feed episode without a guid", async () => {
+		mockEpisodesAt.mockResolvedValue([trailer, { ...testEpisode, guid: "ep-1" }]);
+
+		await link({ time: "30" });
+
+		expect(state().episode).toMatchObject({ title: testEpisode.title });
+	});
+
+	test("resumes the loaded episode by its guid after it was retitled", async () => {
+		loadedAt(retitled, 10);
+		mockEpisodesAt.mockResolvedValue([trailer, retitled]);
+
+		await link({ guid: "ep-1", time: "90" });
+
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
+		expect(state().episode).toMatchObject({ title: retitled.title, guid: "ep-1" });
+		expect(media().currentTime).toBe(90);
+		expect(media().paused).toBe(false);
+	});
+
+	test("plays the feed episode with the link's guid, not a loaded same-titled episode with another guid", async () => {
+		const linked: Episode = { ...retitled, streamUrl: "https://pod.example.com/finale.mp3" };
+		loadedAt({ ...testEpisode, guid: "ep-2" }, 10);
+		mockEpisodesAt.mockResolvedValue([{ ...testEpisode, guid: "ep-2" }, linked]);
+
+		await link({ guid: "ep-1", time: "30" });
+		metadata();
+
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
+		expect(state().episode).toMatchObject({ title: linked.title, guid: "ep-1" });
+		expect(media().src).toBe(linked.streamUrl);
+		expect(media().currentTime).toBe(30);
+	});
+
+	test("plays the feed episode with the link's guid, not a loaded same-titled episode without a guid", async () => {
+		const linked: Episode = { ...retitled, streamUrl: "https://pod.example.com/finale.mp3" };
+		loadedAt(testEpisode, 10);
+		mockEpisodesAt.mockResolvedValue([
+			{ ...trailer, title: testEpisode.title, guid: "ep-2" },
+			linked,
+		]);
+
+		await link({ guid: "ep-1", time: "30" });
+		metadata();
+
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
+		expect(state().episode).toMatchObject({ title: linked.title, guid: "ep-1" });
+		expect(media().src).toBe(linked.streamUrl);
+		expect(media().currentTime).toBe(30);
+	});
+
+	test("plays the titled episode, not the loaded one, when both share the link's guid", async () => {
+		const loadedTwin: Episode = { ...trailer, guid: "ep-1" };
+		const named: Episode = { ...testEpisode, guid: "ep-1" };
+		loadedAt(loadedTwin, 10);
+		mockEpisodesAt.mockResolvedValue([loadedTwin, named]);
+
+		await link({ guid: "ep-1", time: "30" });
+		metadata();
+
+		expect(state().episode).toMatchObject({ title: named.title });
+		expect(media().src).toBe(named.streamUrl);
+		expect(media().currentTime).toBe(30);
+	});
+
+	test("does not take the loaded episode of another feed for one with the same guid", async () => {
+		const otherFeed = "https://other.example.com/feed.xml";
+		const other: Episode = {
+			...testEpisode,
+			title: "Other show's episode",
+			streamUrl: "https://other.example.com/1.mp3",
+			feedUrl: otherFeed,
+			guid: "ep-1",
+		};
+		loadedAt(retitled, 10);
+		mockEpisodesAt.mockResolvedValue([other]);
+
+		await link({ url: otherFeed, episodeName: "Something else", guid: "ep-1", time: "5" });
+
+		expect(mockEpisodesAt).toHaveBeenCalledWith(otherFeed);
+		expect(media().src).toBe(other.streamUrl);
+	});
+});
+
 describe("a link to a vault file at its path", () => {
 	test("plays the file at the link's time when it is not in Local Files", async () => {
 		vaultFiles = ["Fixtures/Orphan.mp3"];
