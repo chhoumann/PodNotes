@@ -11,7 +11,7 @@ import { downloadedEpisodes, localFiles } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
 import { resolveFeedUrl } from "./services/privateFeeds";
-import { attachDataFileWriter, dataFileText } from "../tests/mocks/dataFileWriter";
+import { attachDataFileWriter, dataFileText, manualClock } from "../tests/mocks/dataFileWriter";
 import { FakeDocument } from "../tests/mocks/fakeMedia";
 import released2200 from "../tests/fixtures/persistence/released-2.20.0.json";
 import released2211 from "../tests/fixtures/persistence/released-2.21.1.json";
@@ -58,6 +58,13 @@ function makePlugin(
 	});
 	attachDataFileWriter(plugin);
 	return plugin;
+}
+
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function saveInBackground(plugin: PodNotes): Promise<void> {
+	void plugin.saveSettings();
+	await settled();
 }
 
 afterEach(() => {
@@ -604,6 +611,9 @@ describe("PodNotes persistence integration", () => {
 		const resolvers: Array<() => void> = [];
 		const saveData = vi.fn(() => new Promise<void>((resolve) => resolvers.push(resolve)));
 		const plugin = makePlugin(saveData);
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
 		plugin.settings.defaultVolume = 0.5;
@@ -618,6 +628,8 @@ describe("PodNotes persistence integration", () => {
 		await expect(queued).rejects.toThrow("window unloads");
 		await expect(late).rejects.toThrow("window unloads");
 		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(notice).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(0);
 	});
 
 	it("keeps this device's queue when the synced file's queue had to be repaired", async () => {
@@ -960,27 +972,114 @@ describe("PodNotes persistence integration", () => {
 
 	it("shows one Notice per failed-write streak and recovers silently", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		const plugin = makePlugin();
 		const writes = plugin.saveData.bind(plugin);
 		Object.assign(plugin, { saveData: vi.fn().mockResolvedValue(undefined) });
 		plugin.settings.skipBackwardLength = 16;
 
-		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
-		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+		await saveInBackground(plugin);
+		await saveInBackground(plugin);
 		expect(notice.mock.calls).toEqual([["PodNotes could not save your changes."]]);
 
 		Object.assign(plugin, { saveData: writes });
-		await plugin.saveSettingsStrict();
+		await saveInBackground(plugin);
 		expect(await plugin.loadData()).toMatchObject({ skipBackwardLength: 16 });
 		expect(notice).toHaveBeenCalledTimes(1);
 
 		Object.assign(plugin, { saveData: vi.fn().mockResolvedValue(undefined) });
 		plugin.settings.skipBackwardLength = 17;
-		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+		await saveInBackground(plugin);
 		expect(notice.mock.calls).toEqual([
 			["PodNotes could not save your changes."],
 			["PodNotes could not save your changes."],
 		]);
+	});
+
+	describe("while data.json cannot be read for a while", () => {
+		const refusal =
+			"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged and saves nothing until the file can be read again.";
+
+		function setup() {
+			const file = { readable: true, writable: true };
+			const plugin = makePlugin(
+				async () => {
+					if (!file.writable) throw new Error("ENOSPC: no space left on device");
+				},
+				{ dataFileExists: true },
+			);
+			const loadData = plugin.loadData.bind(plugin);
+			const { adapter } = plugin.app.vault;
+			const read = adapter.read.bind(adapter);
+			Object.assign(plugin, {
+				// Obsidian's loadData resolves undefined for a file it cannot read.
+				loadData: async () => (file.readable ? loadData() : undefined),
+			});
+			Object.assign(adapter, {
+				read: async (path: string) => {
+					if (!file.readable) throw new Error("EACCES: permission denied");
+					return read(path);
+				},
+			});
+			const clock = manualClock();
+			attachDataFileWriter(plugin, clock);
+			const notice = vi.spyOn(obsidian, "Notice");
+			vi.spyOn(console, "error").mockImplementation(() => undefined);
+			const retry = async () => {
+				clock.advance(10_000);
+				clock.runAll();
+				await settled();
+			};
+			return { plugin, file, clock, notice, retry };
+		}
+
+		it("saves an edit whose save could not read the file once it reads again", async () => {
+			const { plugin, file, clock, notice, retry } = setup();
+			file.readable = false;
+			plugin.settings.skipForwardLength = 25;
+			await saveInBackground(plugin);
+			expect(notice.mock.calls).toEqual([[refusal, 0]]);
+
+			file.readable = true;
+			await retry();
+			expect(await plugin.loadData()).toMatchObject({ skipForwardLength: 25 });
+			expect(clock.pending()).toBe(0);
+
+			plugin.settings.skipBackwardLength = 16;
+			await saveInBackground(plugin);
+			expect(await plugin.loadData()).toMatchObject({ skipBackwardLength: 16 });
+			expect(notice).toHaveBeenCalledTimes(1);
+			expect(clock.delays).toEqual([10_000]);
+		});
+
+		it("warns once per streak while writes and then reads fail, and saves every edit once both work", async () => {
+			const { plugin, file, clock, notice, retry } = setup();
+			file.writable = false;
+			plugin.settings.skipBackwardLength = 29;
+			await saveInBackground(plugin);
+
+			file.readable = false;
+			await retry();
+			plugin.settings.skipForwardLength = 25;
+			await saveInBackground(plugin);
+			await retry();
+			file.readable = true;
+			await retry();
+			expect(notice.mock.calls).toEqual([
+				["PodNotes could not save your changes."],
+				[refusal, 0],
+			]);
+
+			file.writable = true;
+			await retry();
+			expect(await plugin.loadData()).toMatchObject({
+				skipBackwardLength: 29,
+				skipForwardLength: 25,
+			});
+			expect(notice).toHaveBeenCalledTimes(2);
+			expect(clock.delays).toEqual([10_000, 10_000, 10_000, 10_000]);
+			expect(clock.pending()).toBe(0);
+		});
 	});
 
 	it("treats a save Obsidian reported but did not write as failed, even at the same size", async () => {
