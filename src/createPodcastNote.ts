@@ -139,7 +139,9 @@ function findPodcastNoteByGuid({ guid, feedUrl }: Episode): TFile | undefined {
 	const { vault, metadataCache } = get(plugin).app;
 	const notes = vault.getMarkdownFiles().flatMap((file) => {
 		const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
-		return frontmatter?.feedUrl === feedUrl ? [{ file, guid: frontmatter.guid }] : [];
+		return frontmatter?.feedUrl === feedUrl && typeof frontmatter.guid === "string"
+			? [{ file, guid: frontmatter.guid }]
+			: [];
 	});
 	return findByGuid(notes, guid)?.file;
 }
