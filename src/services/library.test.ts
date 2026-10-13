@@ -254,17 +254,77 @@ describe("editing a public feed's address", () => {
 
 		expect(get(savedFeeds)["The Show"]).toEqual(synced);
 	});
+
+	test("leaves alone a podcast removed and followed again at its old address while the new one loaded", async () => {
+		const response = deferred<string>();
+		fetchTextMock.mockReturnValue(response.promise);
+		const { actions } = saved();
+
+		const entered = enterAddress(actions.setFeedAddress("The Show"), NEW_URL);
+		await vi.waitFor(() => expect(fetchTextMock).toHaveBeenCalled());
+		actions.removePodcast("The Show");
+		expect(actions.addPodcast({ ...show })).toBe("The Show");
+		response.resolve("<rss><channel><title>The Show</title></channel></rss>");
+		await entered;
+
+		expect(get(savedFeeds)["The Show"]).toEqual(show);
+	});
+
+	test("loads nothing for a podcast removed while its address is typed", async () => {
+		const { actions } = saved();
+
+		const setting = actions.setFeedAddress("The Show");
+		actions.removePodcast("The Show");
+		await enterAddress(setting, NEW_URL);
+
+		expect(fetchTextMock).not.toHaveBeenCalled();
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "Last"]);
+	});
 });
 
-test("a feed's address is not asked for while offline", async () => {
-	const notice = vi.spyOn(obsidian, "Notice");
-	const { actions } = followedElsewhere();
-	online.set(false);
+describe("setting a feed's address needs a connection", () => {
+	test("it is not asked for while offline", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { actions } = followedElsewhere();
+		online.set(false);
 
-	await actions.setFeedAddress("Private Show");
+		await actions.setFeedAddress("Private Show");
 
-	expect(notice).toHaveBeenCalledWith("Setting a feed address needs a connection.");
-	expect(within(document.body).queryByRole("textbox")).toBeNull();
+		expect(notice).toHaveBeenCalledWith("Setting a feed address needs a connection.");
+		expect(within(document.body).queryByRole("textbox")).toBeNull();
+	});
+
+	test("one lost while the address is typed loads and keeps nothing", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { saved, thisDevice, actions } = followedElsewhere();
+
+		const setting = actions.setFeedAddress("Private Show");
+		online.set(false);
+		await enterAddress(setting, PRIVATE_URL);
+
+		expect(notice.mock.calls).toEqual([["Setting a feed address needs a connection."]]);
+		expect(fetchTextMock).not.toHaveBeenCalled();
+		expect(thisDevice.listSecrets()).toEqual([]);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+	});
+
+	test("one lost while the address loads keeps nothing", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const response = deferred<string>();
+		fetchTextMock.mockReturnValue(response.promise);
+		const { saved, thisDevice, actions } = followedElsewhere();
+
+		const entered = enterAddress(actions.setFeedAddress("Private Show"), PRIVATE_URL);
+		await vi.waitFor(() => expect(fetchTextMock).toHaveBeenCalled());
+		online.set(false);
+		response.resolve("<rss><channel><title>Private Show</title></channel></rss>");
+		await entered;
+
+		expect(notice.mock.calls).toEqual([["Setting a feed address needs a connection."]]);
+		expect(fetchTextMock).toHaveBeenCalledTimes(1);
+		expect(thisDevice.listSecrets()).toEqual([]);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+	});
 });
 
 describe("setting a private feed's address on this device", () => {
