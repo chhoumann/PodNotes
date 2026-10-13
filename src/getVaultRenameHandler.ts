@@ -17,12 +17,16 @@ import { isLocalFile } from "./utility/isLocalFile";
  */
 export default function getVaultRenameHandler(plugin: PodNotes): {
 	eventRef: EventRef;
-	/** Follows the renames not followed yet, as unload must while the stores still save. */
-	drain: () => void;
+	/**
+	 * Follows the renames received so far and ignores any later one, as unload must
+	 * while the stores still save.
+	 */
+	close: () => void;
 } {
 	// A renamed folder reports each file in it, so the renames of one task are followed
 	// together. The map keeps the TFile, whose path is where the file ends up.
 	let renamed: Map<string, TFile> | null = null;
+	let closed = false;
 	const drain = () => {
 		if (!renamed) return;
 		const batch = renamed;
@@ -30,14 +34,21 @@ export default function getVaultRenameHandler(plugin: PodNotes): {
 		followRenames(plugin, batch);
 	};
 	const eventRef = plugin.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
-		if (!(file instanceof TFile)) return;
+		// Obsidian still calls a listener it collected before an earlier one unloaded PodNotes.
+		if (closed || !(file instanceof TFile)) return;
 		if (!renamed) {
 			renamed = new Map();
 			queueMicrotask(drain);
 		}
 		renamed.set(oldPath, file);
 	});
-	return { eventRef, drain };
+	return {
+		eventRef,
+		close: () => {
+			drain();
+			closed = true;
+		},
+	};
 }
 
 function followRenames(plugin: PodNotes, renamed: Map<string, TFile>): void {

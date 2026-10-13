@@ -106,7 +106,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private storeUnsubscribers: Unsubscriber[] = [];
 	private transcriptionService?: TranscriptionService;
 	private localFilesMirrorUnsubscribe?: Unsubscriber;
-	private followPendingRenames?: () => void;
+	private closeRenames?: () => void;
 
 	private maxLayoutReadyAttempts = 10;
 	private layoutReadyAttempts = 0;
@@ -227,7 +227,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.registerEvent(getContextMenuHandler(this.app));
 		const renames = getVaultRenameHandler(this);
 		this.registerEvent(renames.eventRef);
-		this.followPendingRenames = renames.drain;
+		this.closeRenames = renames.close;
 		this.storeUnsubscribers.push(
 			bindMediaSession(this.player, {
 				mediaSession: window.navigator.mediaSession,
@@ -418,7 +418,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	override onunload() {
 		// While the player and the store bindings still save what a rename changes.
-		this.followPendingRenames?.();
+		this.closeRenames?.();
 		this.isUnloaded = true;
 		// The refusal ends with this instance; the next one reads the file itself.
 		this.refusalNotice?.hide();

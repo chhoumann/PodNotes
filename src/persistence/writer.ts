@@ -50,6 +50,8 @@ export class DataFileWriter<Doc> {
 	/** A save is queued and has not started, so later changes are written by it. */
 	private saveQueued = false;
 	private unloaded = false;
+	/** Memory as it was at unload: a callback that runs later must not reach the final save. */
+	private memoryAtUnload: Doc | null = null;
 	private publishing = false;
 	private checkpointing = false;
 	private lastSaveAt = Number.NEGATIVE_INFINITY;
@@ -126,6 +128,7 @@ export class DataFileWriter<Doc> {
 
 	/** The next instance reads the file itself; the flushed save still merges with disk. */
 	unload(): Promise<void> {
+		this.memoryAtUnload = this.file.local();
 		this.unloaded = true;
 		return this.flush();
 	}
@@ -159,8 +162,12 @@ export class DataFileWriter<Doc> {
 		);
 	}
 
+	private local(): Doc {
+		return this.memoryAtUnload ?? this.file.local();
+	}
+
 	private hasUnsavedEdits(): boolean {
-		return this.base !== null && !jsonValuesEqual(this.file.local(), this.base);
+		return this.base !== null && !jsonValuesEqual(this.local(), this.base);
 	}
 
 	private publish(doc: Doc): void {
@@ -205,7 +212,7 @@ export class DataFileWriter<Doc> {
 		this.settleFailedWrite(disk);
 		const base = this.base;
 		// Captured after the read, so edits made while it was in flight are written too.
-		const local = this.file.local();
+		const local = this.local();
 		let toWrite = local;
 		if (disk && base) {
 			toWrite = mergeDataFile(base, local, disk);
@@ -236,7 +243,7 @@ export class DataFileWriter<Doc> {
 	private settle(local: Doc, written: Doc): void {
 		this.base = written;
 		if (jsonValuesEqual(written, local)) return;
-		const current = this.file.local();
+		const current = this.local();
 		this.publish(
 			jsonValuesEqual(current, local)
 				? written
@@ -266,7 +273,7 @@ export class DataFileWriter<Doc> {
 		const base = this.base;
 		if (base && jsonValuesEqual(disk, base)) return;
 
-		const local = this.file.local();
+		const local = this.local();
 		const merged = base ? mergeDataFile(base, local, disk) : structuredClone(disk);
 		this.base = disk;
 		if (!jsonValuesEqual(merged, local)) this.publish(merged);
