@@ -67,14 +67,16 @@
 
 	/**
 	 * Each row the pointer crosses places the episode before or after that row, in the
-	 * store. The row is the one hit at the point, so a pointer beside the view, or over a
-	 * row the page has scrolled out of sight, places nothing.
+	 * store. The row is the one hit at the point, in this list, so a pointer beside the
+	 * view, over another view's Queue, or over a row the page has scrolled out of sight,
+	 * places nothing.
 	 */
 	function place(episode: Episode, x: number, y: number) {
 		const row = list?.doc.elementFromPoint(x, y)?.closest<HTMLElement>(".pn-ep");
-		const key = row?.querySelector<HTMLElement>("[data-queue-key]")?.dataset.queueKey;
+		if (!row || !list?.contains(row)) return;
+		const key = row.querySelector<HTMLElement>("[data-queue-key]")?.dataset.queueKey;
 		const hovered = key && get(queue).episodes.find((entry) => getEpisodeKey(entry) === key);
-		if (!row || !hovered) return;
+		if (!hovered) return;
 		const { top, bottom } = row.getBoundingClientRect();
 		const side = y < (top + bottom) / 2 ? "before" : "after";
 		actions.reorderQueue({ episode, relativeTo: hovered, side });

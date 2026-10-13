@@ -225,6 +225,20 @@ describe("dragging a grip", () => {
 		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
 	});
 
+	test("over a row of another Queue, as in a second PodNotes view, moves nothing", async () => {
+		renderQueue(a, b, c);
+		render(WithServices, { props: { services, component: QueuePage } });
+		layOutRows();
+		const [ownGrip] = screen.getAllByRole("button", { name: /^Reorder A,/ });
+
+		await fireEvent.pointerDown(ownGrip, { ...at(20), button: 0 });
+		await fireEvent.pointerMove(window, at(190));
+		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+
+		await fireEvent.pointerMove(window, at(70));
+		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
+	});
+
 	test("ignores another pointer, and Escape ends the drag", async () => {
 		renderQueue(a, b, c);
 		layOutRows();
