@@ -346,7 +346,6 @@ describe("PodNotes persistence integration", () => {
 		await plugin.loadSettings();
 		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
 		const clock = manualClock();
-		// onload creates the writer after loading settings.
 		attachDataFileWriter(plugin, clock);
 		const recovered = vi.fn(async () =>
 			JSON.parse(JSON.stringify(encodePodNotesData(DEFAULT_SETTINGS))),
