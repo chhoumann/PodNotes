@@ -30,6 +30,7 @@ import {
 import {
 	playerLeafCount,
 	readLibrary,
+	recordWrites,
 	seedLibrary,
 	storedEpisode,
 	waitForPlayback,
@@ -135,6 +136,34 @@ describe("list journeys", () => {
 		await showPodNotes(obsidian);
 		await showList(obsidian, "Queue");
 		await expectQueue(titles([TWO, ONE, FOUR, THREE]));
+	});
+
+	test("J-QUEUE-03 a slow drag across three rows writes data.json once, on release", async () => {
+		const { obsidian } = getContext();
+		await openQueue();
+		const writes = await recordWrites(obsidian);
+
+		const mouse = await pressMouse(obsidian, await pointOn(obsidian, ui.queueGrip(ONE.title)));
+		for (const [row, shown] of [
+			[TWO, [TWO, ONE, THREE, FOUR]],
+			[THREE, [TWO, THREE, ONE, FOUR]],
+			[FOUR, [TWO, THREE, FOUR, ONE]],
+		] as const) {
+			await mouse.moveTo(await pointOn(obsidian, ui.queueRow(row.title), "bottom"), 4);
+			// Long enough for a save the crossing started to finish.
+			expect(
+				await holdsFor(obsidian, () => listedEpisodes(obsidian), titles(shown), 1000),
+			).toEqual(titles(shown));
+		}
+		await mouse.release();
+
+		await expectQueue(titles([TWO, THREE, FOUR, ONE]));
+		expect(await writes.stop()).toMatchObject({
+			attempted: 1,
+			completed: 1,
+			failed: 0,
+			intact: true,
+		});
 	});
 
 	test("J-QUEUE-03 arrow keys on a grip move its episode one place and keep focus on that grip", async () => {

@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ObsidianClient, PluginHandle, SandboxApi } from "obsidian-e2e";
+import { onTestFinished } from "vitest";
 import e2eConfig from "../../../obsidian-e2e.config.mjs";
+import { installWriteRecorder } from "../../../scripts/write-counts.mjs";
 import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE } from "../runtime";
 import { collectRuntimeErrors } from "../runtime-evidence";
 import { assertSingleWindow, dismissNotices, setMobileEmulation } from "./actions";
@@ -446,6 +448,47 @@ export async function waitForLibrary(
 		throw new Error(`${message} (data.json never matched): ${String(error)}`);
 	}
 	return last as SavedLibrary;
+}
+
+export type WriteCounts = Readonly<{
+	attempted: number;
+	completed: number;
+	failed: number;
+	intact: boolean;
+}>;
+
+const WRITE_RECORDER = "__podnotesE2eWrites";
+
+/**
+ * Counts PodNotes' data.json writes from now on with the repository's write recorder.
+ * `stop` waits for a write in flight, then reports. It also runs when the test ends.
+ */
+export async function recordWrites(
+	obsidian: ObsidianClient,
+): Promise<{ stop(): Promise<WriteCounts | null> }> {
+	await obsidian.dev.evalJson(`(() => {
+		const plugin = app.plugins.plugins.${PLUGIN_ID};
+		window.${WRITE_RECORDER} = (${installWriteRecorder.toString()})(app.vault.adapter, plugin.manifest.dir + "/data.json");
+		return true;
+	})()`);
+	const stop = async () => {
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					`!window.${WRITE_RECORDER} || window.${WRITE_RECORDER}.report().inflight === 0`,
+				),
+			{ timeoutMs: 10_000, intervalMs: 100, message: "data.json writes settled" },
+		);
+		return await obsidian.dev.evalJson<WriteCounts | null>(`(() => {
+			const recorder = window.${WRITE_RECORDER};
+			delete window.${WRITE_RECORDER};
+			return recorder ? recorder.stop() : null;
+		})()`);
+	};
+	onTestFinished(async () => {
+		await stop();
+	});
+	return { stop };
 }
 
 export async function observePlayback(obsidian: ObsidianClient): Promise<PlaybackObservation> {
