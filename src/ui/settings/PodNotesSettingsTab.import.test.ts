@@ -756,30 +756,46 @@ describe("PodNotesSettingsTab settings import", () => {
 			}
 		});
 
-		it("warns once when neither the import nor its rollback saves, and writes nothing more once the file holds the rollback", async () => {
-			const saveData = vi.fn().mockRejectedValue(new Error("disk full"));
-			const { plugin, unbind, applyImport, disk, clock } = setup(saveData);
-			const notice = vi.spyOn(obsidian, "Notice");
-			try {
-				await applyImport({ savedFeeds: { Imported: feed("Imported") } });
-				clock.advance(10_000);
-				clock.runAll();
-				await plugin.flushSaves();
+		it.each([
+			["intact", feed("Before")],
+			["unreadable", null],
+		])(
+			"warns once when neither the import nor its rollback saves, and writes the rollback over a replaced podcast left %s",
+			async (_, before) => {
+				let writable = false;
+				const saveData = vi.fn(async () => {
+					if (!writable) throw new Error("disk full");
+				});
+				const { plugin, unbind, applyImport, disk, clock } = setup(saveData);
+				disk().savedFeeds = { Before: before, Remote: feed("Remote") };
+				const notice = vi.spyOn(obsidian, "Notice");
+				const retry = async () => {
+					clock.advance(10_000);
+					clock.runAll();
+					await new Promise((resolve) => setTimeout(resolve, 0));
+				};
+				try {
+					await applyImport({ savedFeeds: { Imported: feed("Imported") } });
+					await retry();
+					writable = true;
+					await retry();
 
-				expect(notice.mock.calls).toEqual([
-					[
-						"Could not import PodNotes settings or persist its rollback. The safest recovered settings remain active for this session.",
-						10000,
-					],
-				]);
-				expect(saveData).toHaveBeenCalledTimes(2);
-				expect(clock.pending()).toBe(0);
-				expect(Object.keys(disk().savedFeeds as object)).toEqual(["Before", "Remote"]);
-				expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Before", "Remote"]);
-			} finally {
-				unbind();
-			}
-		});
+					expect(notice.mock.calls).toEqual([
+						[
+							"Could not import PodNotes settings or persist its rollback. The safest recovered settings remain active for this session.",
+							10000,
+						],
+					]);
+					const rolledBack = { Before: feed("Before"), Remote: feed("Remote") };
+					expect(disk().savedFeeds).toEqual(rolledBack);
+					expect(plugin.settings.savedFeeds).toEqual(rolledBack);
+					expect(saveData).toHaveBeenCalledTimes(4);
+					expect(clock.pending()).toBe(0);
+				} finally {
+					unbind();
+				}
+			},
+		);
 	});
 
 	it("ordinary settings export never resolves or serializes SecretStorage values", async () => {

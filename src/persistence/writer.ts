@@ -183,17 +183,18 @@ export class DataFileWriter<Doc> {
 	private async persist(warnOnFailure: boolean): Promise<void> {
 		// After a failed write the file is unknown, so memory equal to base proves nothing.
 		if (this.base && !this.failedWrite && !this.hasUnsavedEdits()) return;
+		// Before the read settles a failed write the file holds, which does not end its streak.
+		const reportFailure = warnOnFailure && !this.failedWrite;
 
 		this.lastSaveAt = this.clock.now();
 		let disk: Doc | null;
 		try {
 			disk = await this.file.read(this.base);
 		} catch (error) {
-			// A failed read can refuse later saves until a read succeeds, so retry what is pending.
 			if (this.failedWrite || this.hasUnsavedEdits()) this.scheduleCheckpoint();
 			throw error;
 		}
-		if (this.settleFailedWrite(disk) && !this.hasUnsavedEdits()) return;
+		this.settleFailedWrite(disk);
 		const base = this.base;
 		// Captured after the read, so edits made while it was in flight are written too.
 		const local = this.file.local();
@@ -210,7 +211,7 @@ export class DataFileWriter<Doc> {
 			await this.file.write(toWrite);
 		} catch (error) {
 			if (error instanceof WriteRefusedError) throw error;
-			if (!this.failedWrite && warnOnFailure) this.onWriteFailed();
+			if (reportFailure) this.onWriteFailed();
 			this.failedWrite = { local, written: toWrite };
 			this.scheduleCheckpoint();
 			throw error;
@@ -235,14 +236,10 @@ export class DataFileWriter<Doc> {
 		);
 	}
 
-	/** True when the file holds what the failed write wrote. */
-	private settleFailedWrite(disk: Doc | null): boolean {
-		if (!this.failedWrite || !disk || !jsonValuesEqual(disk, this.failedWrite.written)) {
-			return false;
-		}
+	private settleFailedWrite(disk: Doc | null): void {
+		if (!this.failedWrite || !disk || !jsonValuesEqual(disk, this.failedWrite.written)) return;
 		this.settle(this.failedWrite.local, this.failedWrite.written);
 		this.failedWrite = null;
-		return true;
 	}
 
 	private async applyExternalChange(): Promise<void> {
