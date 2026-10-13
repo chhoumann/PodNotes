@@ -542,7 +542,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	saveSettings(): Promise<void> {
-		if (this.isReady && !this.writeRefusal) this.writer?.request();
+		if (!this.isReady) return Promise.resolve();
+		if (!this.writeRefusal) this.writer?.request();
+		// Only a read lifts this refusal, and the writer's retry reads first.
+		else if (this.writeRefusal === "unreadable-data-file") this.writer?.retryPending();
 		return Promise.resolve();
 	}
 
