@@ -18,6 +18,7 @@ import {
 	shownText,
 	showPodNotes,
 	typeInto,
+	typeText,
 	ui,
 	waitUntilShown,
 } from "./journey/actions";
@@ -138,7 +139,7 @@ describe("feed journeys", () => {
 		expect(await listedEpisodes(obsidian)).toEqual(["Search Show Pilot"]);
 	});
 
-	test("J-ONB-01 first run: a pasted feed address, one tap to add the podcast and one to play", async () => {
+	test("J-ONB-01 first run: a feed address typed without a tap first, one tap to add the podcast and one to play", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
 		const show = feed("Journey First Run", "first-run", [
@@ -150,7 +151,7 @@ describe("feed journeys", () => {
 
 		await showPodNotes(obsidian);
 		await waitUntilShown(obsidian, ui.firstRun);
-		await typeInto(obsidian, ui.podcastSearch, server.feedUrl(show));
+		await typeText(obsidian, server.feedUrl(show));
 		await resultsBecome(obsidian, [
 			{ label: `Add ${show.title}`, title: show.title, via: "RSS feed" },
 		]);

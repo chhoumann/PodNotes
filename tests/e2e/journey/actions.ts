@@ -263,6 +263,11 @@ export async function typeInto(
 		});
 		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...selectAll });
 	}
+	await typeText(obsidian, text);
+}
+
+/** Types into whatever has focus, as a user does who starts typing without a click. */
+export async function typeText(obsidian: ObsidianClient, text: string): Promise<void> {
 	await cdp(obsidian, "Input.insertText", { text });
 }
 

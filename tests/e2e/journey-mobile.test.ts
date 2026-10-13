@@ -7,9 +7,11 @@ import {
 	closeSettings,
 	reloadObsidian,
 	setMobileEmulation,
+	typeText,
 	ui,
 	waitUntilShown,
 } from "./journey/actions";
+import { type FixtureFeed, startFixtureServer } from "./journey/fixtures";
 import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
 import { PLUGIN_ID, RELOAD_OPTIONS, waitForPodNotesReady } from "./runtime";
 
@@ -18,9 +20,17 @@ const getContext = createPodNotesE2EHarness("journey-mobile");
 describe("mobile journeys", () => {
 	// Obsidian's mobile emulation on desktop: the plugin runs its mobile code paths and
 	// the mobile layout, but this is not an iOS or Android device.
-	test("J-ONB-02 a new install on mobile opens PodNotes once, on First run", async () => {
+	test("J-ONB-02 a new install on mobile opens PodNotes once, on First run, ready to type", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
+		const show: FixtureFeed = {
+			title: "Journey Mobile Start",
+			slug: "mobile-start",
+			artwork: false,
+			episodes: [{ title: "Mobile Start Pilot", seconds: 6 }],
+		};
+		const server = await startFixtureServer([show]);
+		onTestFinished(() => server.stop());
 		await seedLibrary(context, null);
 		await setMobileEmulation(obsidian, true);
 		await closePodNotes(obsidian);
@@ -47,6 +57,9 @@ describe("mobile journeys", () => {
 		);
 		expect(leaves.count).toBe(1);
 		expect((await readLibrary(plugin)).subscriptions).toEqual([]);
+
+		await typeText(obsidian, server.feedUrl(show));
+		await waitUntilShown(obsidian, ui.addPodcast(show.title));
 		await assertNoRuntimeErrors(obsidian);
 	}, 120_000);
 
