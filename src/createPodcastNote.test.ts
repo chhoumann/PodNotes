@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as obsidian from "obsidian";
 import { TFile, TFolder } from "obsidian";
+import { get } from "svelte/store";
 import createPodcastNote, {
 	createPodcastNoteFileIfNotExists,
 	getPodcastNote,
@@ -497,6 +498,26 @@ describe("episode notes identified by guid (#349)", () => {
 		const line = created[0].data.split("\n")[1];
 		expect(line).toBe(String.raw`guid: "tag: \"a\"\nb\\c\u007f\u0085\ufffe 123"`);
 		expect(JSON.parse(line.slice("guid: ".length))).toBe(guid);
+	});
+
+	it("reads the vault once for a list's notes, and again once that list is drawn", async () => {
+		const { files } = vaultWith([
+			{ path: "podcasts/Old Title.md", frontmatter: { guid: "finale-1", feedUrl } },
+		]);
+		const app = get(plugin).app;
+		const read = vi.spyOn(app.vault, "getMarkdownFiles");
+		const episodes = ["finale-1", "finale-2", "finale-3"].map((guid) => ({
+			...identified,
+			guid,
+		}));
+
+		expect(episodes.map(getPodcastNote)).toEqual([files[0], null, null]);
+		expect(read).toHaveBeenCalledTimes(1);
+
+		files.length = 0;
+		await Promise.resolve();
+		expect(getPodcastNote(identified)).toBeNull();
+		expect(read).toHaveBeenCalledTimes(2);
 	});
 
 	it("finds a retitled episode's note by its guid", async () => {
