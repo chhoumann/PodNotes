@@ -99,8 +99,41 @@ export class App {
 	keymap = new Keymap(this.scope);
 }
 export class Plugin {}
+
+interface EventRef {
+	e: { offref(ref: EventRef): void };
+}
+
+/** Obsidian's lifecycle: a callback registered after unload never runs. */
 export class Component {
 	app?: App;
+	private loaded = false;
+	private cleanups: Array<() => unknown> = [];
+
+	load(): void {
+		if (this.loaded) return;
+		this.loaded = true;
+		this.onload();
+	}
+
+	onload(): void {}
+
+	unload(): void {
+		if (!this.loaded) return;
+		this.loaded = false;
+		while (this.cleanups.length > 0) this.cleanups.pop()?.();
+		this.onunload();
+	}
+
+	onunload(): void {}
+
+	register(cb: () => unknown): void {
+		this.cleanups.push(cb);
+	}
+
+	registerEvent(ref: EventRef): void {
+		this.register(() => ref.e.offref(ref));
+	}
 }
 
 export class TFile {
@@ -142,8 +175,21 @@ export const normalizePath = (path: string): string => {
 };
 
 export class WorkspaceLeaf {}
-export class ItemView {
-	registerEvent(_eventRef: unknown): void {}
+export class ItemView extends Component {
+	/** Obsidian loads a view before onOpen and unloads it before onClose. */
+	async open(): Promise<void> {
+		this.load();
+		await this.onOpen();
+	}
+
+	async close(): Promise<void> {
+		this.unload();
+		await this.onClose();
+	}
+
+	protected async onOpen(): Promise<void> {}
+
+	protected async onClose(): Promise<void> {}
 
 	getState(): Record<string, unknown> {
 		return {};

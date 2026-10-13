@@ -1,4 +1,4 @@
-import { ItemView } from "obsidian";
+import { debounce, ItemView } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
 import { VIEW_TYPE } from "../../constants";
@@ -89,12 +89,17 @@ export class MainView extends ItemView {
 		const noteLookup = () => (episode: Episode) => findExactPodcastNote(episode) !== null;
 		const rowHasNote = writable(noteLookup());
 		const notesChanged = () => rowHasNote.set(noteLookup());
-		// Obsidian reports every file as created while it loads the vault.
-		app.workspace.onLayoutReady(() => {
-			this.registerEvent(app.vault.on("create", notesChanged));
-			this.registerEvent(app.vault.on("delete", notesChanged));
-			this.registerEvent(app.vault.on("rename", notesChanged));
-		});
+		// A view restored at startup lists its rows while the vault is still indexing.
+		app.workspace.onLayoutReady(notesChanged);
+		// Obsidian reports every file as created while it loads the vault, and a sync can
+		// bring a thousand at once, so the rows look their notes up once per burst.
+		const notesChangedSoon = debounce(notesChanged, 200, true);
+		const vaultChanged = () => {
+			if (app.workspace.layoutReady) notesChangedSoon();
+		};
+		this.registerEvent(app.vault.on("create", vaultChanged));
+		this.registerEvent(app.vault.on("delete", vaultChanged));
+		this.registerEvent(app.vault.on("rename", vaultChanged));
 		return {
 			app,
 			api: plugin.api,

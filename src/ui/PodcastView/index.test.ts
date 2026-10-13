@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceLeaf } from "obsidian";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TFile, type WorkspaceLeaf } from "obsidian";
 import { plugin as pluginStore } from "src/store";
+import type { Episode } from "../../types/Episode";
 import type { IPodNotes } from "../../types/IPodNotes";
 import type { IPodNotesSettings } from "../../types/IPodNotesSettings";
 
@@ -17,7 +18,43 @@ import { MainView } from ".";
 import type { ShellServices } from "./context";
 import { Navigation } from "./Navigation";
 
-function createView({ shouldMount }: { shouldMount: boolean }) {
+interface VaultListener {
+	name: string;
+	callback(): void;
+}
+
+/** A vault of notes at their template paths, whose event refs work like Obsidian's. */
+function createVault() {
+	const notes = new Set<string>();
+	const listeners = new Set<VaultListener>();
+	const vault = {
+		notes,
+		listeners,
+		on(name: string, callback: () => void) {
+			const ref = { e: vault, name, callback };
+			listeners.add(ref);
+			return ref;
+		},
+		offref(ref: VaultListener) {
+			listeners.delete(ref);
+		},
+		trigger(name: string) {
+			for (const ref of [...listeners]) if (ref.name === name) ref.callback();
+		},
+		getAbstractFileByPath: (path: string) =>
+			notes.has(path) ? Object.assign(Object.create(TFile.prototype), { path }) : null,
+		getMarkdownFiles: () => [],
+	};
+	return vault;
+}
+
+function createView({
+	shouldMount,
+	layoutReady = true,
+}: {
+	shouldMount: boolean;
+	layoutReady?: boolean;
+}) {
 	const plugin = {
 		navigation: new Navigation(),
 		shouldMountPodcastView: vi.fn(() => shouldMount),
@@ -25,21 +62,22 @@ function createView({ shouldMount }: { shouldMount: boolean }) {
 	} as unknown as IPodNotes;
 	const view = new MainView({} as WorkspaceLeaf, plugin);
 	const contentEl = document.createElement("div");
-	const layoutReady: Array<() => void> = [];
+	const pending: Array<() => void> = [];
 	const workspace = {
+		layoutReady,
 		requestSaveLayout: vi.fn(),
-		onLayoutReady: (callback: () => void) => layoutReady.push(callback),
+		onLayoutReady: (callback: () => void) =>
+			workspace.layoutReady ? callback() : pending.push(callback),
+		finishLayout() {
+			workspace.layoutReady = true;
+			for (const callback of pending.splice(0)) callback();
+		},
 	};
-	const vaultEvents = new Map<string, () => void>();
-	const vault = {
-		on: vi.fn((name: string, callback: () => void) => {
-			vaultEvents.set(name, callback);
-			return { name };
-		}),
-	};
-	Object.assign(view, { contentEl, app: { workspace, vault } });
+	const vault = createVault();
+	const app = { workspace, vault };
+	Object.assign(view, { contentEl, app });
 
-	return { contentEl, plugin, view, workspace, layoutReady, vault, vaultEvents };
+	return { app, contentEl, plugin, view, workspace, vault };
 }
 
 function mountedServices(): ShellServices {
@@ -49,11 +87,11 @@ function mountedServices(): ShellServices {
 }
 
 async function openView(view: MainView): Promise<void> {
-	await (view as unknown as { onOpen(): Promise<void> }).onOpen();
+	await (view as unknown as { open(): Promise<void> }).open();
 }
 
 async function closeView(view: MainView): Promise<void> {
-	await (view as unknown as { onClose(): Promise<void> }).onClose();
+	await (view as unknown as { close(): Promise<void> }).close();
 }
 
 describe("MainView mobile startup mounting", () => {
@@ -125,28 +163,92 @@ describe("MainView mobile startup mounting", () => {
 });
 
 describe("MainView episode notes", () => {
+	const episode = { title: "Episode One", podcastName: "Show" } as Episode;
+	const notePath = "podcasts/Episode One.md";
+
+	function createNotesView(options: { layoutReady?: boolean } = {}) {
+		const created = createView({ shouldMount: true, ...options });
+		pluginStore.set({
+			app: created.app,
+			settings: { note: { path: "podcasts/{{title}}" } },
+		} as never);
+		return created;
+	}
+
+	/** Whether the row shows its note icon, each time it looks again, as EpisodeRow does. */
+	function watchRow() {
+		const shown: boolean[] = [];
+		mountedServices().rowHasNote.subscribe((hasNote) => shown.push(hasNote(episode)));
+		return shown;
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
 	afterEach(() => {
+		vi.useRealTimers();
 		vi.clearAllMocks();
 	});
 
-	it("once the layout is ready, gives rows a new note lookup when a note is created, deleted or renamed, not edited", async () => {
-		const { view, layoutReady, vault, vaultEvents } = createView({ shouldMount: true });
-		const registerEvent = vi.spyOn(view, "registerEvent");
+	it("looks again when a note is created, deleted or renamed, not edited, until the view closes", async () => {
+		const { view, vault } = createNotesView();
 		await openView(view);
-		const lookups: unknown[] = [];
-		const stop = mountedServices().rowHasNote.subscribe((lookup) => lookups.push(lookup));
+		const shown = watchRow();
+		const change = (name: string, apply: () => void) => {
+			apply();
+			vault.trigger(name);
+			vi.runAllTimers();
+		};
 
-		expect(vault.on).not.toHaveBeenCalled();
-		for (const ready of layoutReady) ready();
-		for (const name of ["create", "modify", "delete", "rename"]) vaultEvents.get(name)?.();
-		stop();
+		change("create", () => vault.notes.add(notePath));
+		change("delete", () => vault.notes.delete(notePath));
+		change("rename", () => vault.notes.add(notePath));
+		change("modify", () => vault.notes.delete(notePath));
+		await closeView(view);
+		change("create", () => vault.notes.add(notePath));
 
-		expect(new Set(lookups).size).toBe(4);
-		// Obsidian removes a view's registered events when the view closes.
-		expect(registerEvent.mock.calls.map(([ref]) => ref)).toEqual(
-			vault.on.mock.results.map(({ value }) => value),
-		);
-		expect(registerEvent).toHaveBeenCalledTimes(3);
+		expect(shown).toEqual([false, true, false, true]);
+	});
+
+	it("looks again once the layout is ready, not for the files Obsidian reports while it loads the vault", async () => {
+		const { view, vault, workspace } = createNotesView({ layoutReady: false });
+		await openView(view);
+		const shown = watchRow();
+
+		vault.notes.add(notePath);
+		vault.trigger("create");
+		vi.runAllTimers();
+		expect(shown).toEqual([false]);
+
+		workspace.finishLayout();
+		vi.runAllTimers();
+		expect(shown).toEqual([false, true]);
+	});
+
+	it("leaves no vault listener when the view closes before the layout is ready", async () => {
+		const { view, vault, workspace } = createNotesView({ layoutReady: false });
+		await openView(view);
+
+		await closeView(view);
+		workspace.finishLayout();
+
+		expect(vault.listeners.size).toBe(0);
+	});
+
+	it("looks once, after a burst of a thousand vault changes ends", async () => {
+		const { view, vault } = createNotesView();
+		await openView(view);
+		const shown = watchRow();
+
+		vault.notes.add(notePath);
+		for (let index = 0; index < 1000; index++) {
+			vault.trigger(["create", "delete", "rename"][index % 3] as string);
+		}
+		expect(shown).toEqual([false]);
+		vi.runAllTimers();
+
+		expect(shown).toEqual([false, true]);
 	});
 });
 
