@@ -1,37 +1,25 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, test, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { Notice } from "obsidian";
+import { deferred } from "../../tests/mocks/feeds";
 import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
+import {
+	createMockPlugin,
+	diarizeWithDeepgramMock,
+	fetchMock,
+	getEpisodeAudioBufferMock,
+	installTranscriptionMocks,
+	mockEpisode,
+	noticeMessages,
+} from "../../tests/mocks/transcriptionService";
 import { TranscriptionService } from "./TranscriptionService";
-import type { Episode } from "src/types/Episode";
 import type PodNotes from "src/main";
-
-const noticeMessages = vi.hoisted(() => [] as string[]);
+import type { Episode } from "src/types/Episode";
 
 vi.mock("obsidian", async (importOriginal) => {
-	const obsidian = await importOriginal<typeof import("obsidian")>();
-	class RecordingNotice extends obsidian.Notice {
-		constructor(message: string | DocumentFragment, duration?: number) {
-			super(message, duration);
-			noticeMessages.push(String(message));
-		}
-	}
-	return { ...obsidian, Notice: RecordingNotice };
+	const { recordingNotices } = await import("../../tests/mocks/transcriptionService");
+	return recordingNotices(await importOriginal<typeof import("obsidian")>());
 });
-
-const getEpisodeAudioBufferMock = vi.fn();
-const fetchMock = vi.fn<typeof fetch>();
-const diarizeWithDeepgramMock = vi.hoisted(() => vi.fn());
-
-function deferred<T>() {
-	let resolve!: (value: T | PromiseLike<T>) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise;
-		reject = rejectPromise;
-	});
-	return { promise, resolve, reject };
-}
 
 async function settlesAfterMicrotasks(promise: Promise<unknown>): Promise<boolean> {
 	let settled = false;
@@ -48,89 +36,21 @@ async function settlesAfterMicrotasks(promise: Promise<unknown>): Promise<boolea
 	return settled;
 }
 
-vi.mock("../downloadEpisode", () => ({
-	getEpisodeAudioBuffer: (...args: unknown[]) => getEpisodeAudioBufferMock(...args),
+vi.mock("../downloadEpisode", async () => ({
+	getEpisodeAudioBuffer: (await import("../../tests/mocks/transcriptionService"))
+		.getEpisodeAudioBufferMock,
 }));
 
-vi.mock("./diarization", async () => {
-	const actual = await vi.importActual<typeof import("./diarization")>("./diarization");
-	return {
-		...actual,
-		diarizeWithDeepgram: diarizeWithDeepgramMock,
-	};
-});
+vi.mock("./diarization", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./diarization")>()),
+	diarizeWithDeepgram: (await import("../../tests/mocks/transcriptionService"))
+		.diarizeWithDeepgramMock,
+}));
 
-const mockEpisode: Episode = {
-	title: "Test Episode",
-	streamUrl: "https://example.com/episode.mp3",
-	url: "https://example.com/episode",
-	description: "Test description",
-	content: "Test content",
-	podcastName: "Test Podcast",
-	feedUrl: "https://example.com/feed.xml",
-	artworkUrl: "https://example.com/artwork.jpg",
-	episodeDate: new Date("2024-01-01"),
-};
+installTranscriptionMocks();
 
-function createMockPlugin(
-	overrides: {
-		openAIKey?: string;
-		podcast?: Episode | null;
-		existingTranscriptPath?: string | null;
-	} = {},
-): PodNotes {
-	const {
-		openAIKey = "test-api-key",
-		podcast = mockEpisode,
-		existingTranscriptPath = null,
-	} = overrides;
-
-	return {
-		settings: {
-			openAISecretId: openAIKey ? "openai-secret" : "",
-			deepgramSecretId: "",
-			transcript: {
-				path: "Transcripts/{{podcast}}/{{title}}.md",
-				template: "# {{title}}\n\n{{transcript}}",
-			},
-			download: {
-				path: "Downloads",
-			},
-		},
-		credentials: {
-			get: vi.fn((_settings, kind: "openai" | "deepgram") =>
-				kind === "openai" ? openAIKey || null : null,
-			),
-			has: vi.fn((_settings, kind: "openai" | "deepgram") =>
-				kind === "openai" ? Boolean(openAIKey) : false,
-			),
-			status: vi.fn((_settings, kind: "openai" | "deepgram") =>
-				kind === "openai" && openAIKey ? "available" : "unconfigured",
-			),
-		},
-		api: {
-			podcast,
-		},
-		app: {
-			vault: {
-				getAbstractFileByPath: vi.fn((path: string) => {
-					if (existingTranscriptPath && path === existingTranscriptPath) {
-						return { path };
-					}
-					return null;
-				}),
-				readBinary: vi.fn(),
-				create: vi.fn(),
-				createFolder: vi.fn(),
-			},
-			workspace: {
-				getLeaf: vi.fn(() => ({
-					openFile: vi.fn(),
-				})),
-			},
-		},
-	} as unknown as PodNotes;
-}
+type AudioJob = { episode: Episode; source: { kind: "audio" } };
+const audioJob: AudioJob = { episode: mockEpisode, source: { kind: "audio" } };
 
 const whisperReturns = (text: string) =>
 	fetchMock.mockImplementation(async () => Response.json({ text }));
@@ -138,23 +58,6 @@ const whisperReturns = (text: string) =>
 const sentFile = (init?: RequestInit) => (init?.body as FormData | undefined)?.get("file") as File;
 
 describe("TranscriptionService", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		noticeMessages.length = 0;
-		fetchMock.mockReset();
-		vi.stubGlobal("fetch", fetchMock);
-		diarizeWithDeepgramMock.mockReset();
-		getEpisodeAudioBufferMock.mockResolvedValue({
-			buffer: new ArrayBuffer(1024),
-			extension: "mp3",
-			basename: "episode",
-		});
-	});
-
-	afterEach(() => {
-		vi.unstubAllGlobals();
-	});
-
 	describe("transcribeCurrentEpisode validation", () => {
 		test("shows notice when no API key is configured", async () => {
 			const mockPlugin = createMockPlugin({ openAIKey: "" });
@@ -181,7 +84,7 @@ describe("TranscriptionService", () => {
 		test("prevents queued work and credential reads after unload", async () => {
 			const plugin = createMockPlugin();
 			const service = new TranscriptionService(plugin);
-			(service as unknown as { pendingEpisodes: Episode[] }).pendingEpisodes = [mockEpisode];
+			(service as unknown as { pendingJobs: AudioJob[] }).pendingJobs = [audioJob];
 			service.dispose();
 
 			(service as unknown as { drainQueue: () => void }).drainQueue();
@@ -205,9 +108,9 @@ describe("TranscriptionService", () => {
 			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 			const pending = (
 				service as unknown as {
-					transcribeEpisode: (episode: Episode) => Promise<void>;
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
 				}
-			).transcribeEpisode(mockEpisode);
+			).transcribeEpisode(audioJob);
 			await vi.waitFor(() => expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce());
 
 			service.dispose();
@@ -235,9 +138,9 @@ describe("TranscriptionService", () => {
 			try {
 				const pending = (
 					service as unknown as {
-						transcribeEpisode: (episode: Episode) => Promise<void>;
+						transcribeEpisode: (job: AudioJob) => Promise<void>;
 					}
-				).transcribeEpisode(mockEpisode);
+				).transcribeEpisode(audioJob);
 				await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
 
 				const messagesBeforeDispose = setMessage.mock.calls.length;
@@ -273,9 +176,9 @@ describe("TranscriptionService", () => {
 			const service = new TranscriptionService(plugin);
 			const pending = (
 				service as unknown as {
-					transcribeEpisode: (episode: Episode) => Promise<void>;
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
 				}
-			).transcribeEpisode(mockEpisode);
+			).transcribeEpisode(audioJob);
 			await vi.waitFor(() => expect(diarizeWithDeepgramMock).toHaveBeenCalledOnce());
 
 			service.dispose();
@@ -301,9 +204,9 @@ describe("TranscriptionService", () => {
 			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 			const pending = (
 				service as unknown as {
-					transcribeEpisode: (episode: Episode) => Promise<void>;
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
 				}
-			).transcribeEpisode(mockEpisode);
+			).transcribeEpisode(audioJob);
 			await vi.waitFor(() => expect(diarizeWithDeepgramMock).toHaveBeenCalledOnce());
 
 			service.dispose();
@@ -326,9 +229,9 @@ describe("TranscriptionService", () => {
 				const service = new TranscriptionService(plugin);
 				await (
 					service as unknown as {
-						transcribeEpisode: (episode: Episode) => Promise<void>;
+						transcribeEpisode: (job: AudioJob) => Promise<void>;
 					}
-				).transcribeEpisode(mockEpisode);
+				).transcribeEpisode(audioJob);
 
 				expect(hide).not.toHaveBeenCalled();
 				service.dispose();
@@ -351,9 +254,9 @@ describe("TranscriptionService", () => {
 			const service = new TranscriptionService(plugin);
 			await (
 				service as unknown as {
-					transcribeEpisode: (episode: Episode) => Promise<void>;
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
 				}
-			).transcribeEpisode(mockEpisode);
+			).transcribeEpisode(audioJob);
 			return service;
 		};
 
@@ -367,7 +270,7 @@ describe("TranscriptionService", () => {
 		});
 
 		test("does not write a file when the transcript is only whitespace", async () => {
-			// Multiple empty chunks join to " ", not "" — the trimmed-emptiness check
+			// Multiple empty chunks join to " ", not "", so the trimmed-emptiness check
 			// must still treat this as failure.
 			whisperReturns("   \n\t  ");
 			const plugin = createMockPlugin();
@@ -514,9 +417,9 @@ describe("TranscriptionService", () => {
 			try {
 				const promise = (
 					service as unknown as {
-						transcribeEpisode: (episode: Episode) => Promise<void>;
+						transcribeEpisode: (job: AudioJob) => Promise<void>;
 					}
-				).transcribeEpisode(mockEpisode);
+				).transcribeEpisode(audioJob);
 				// One chunk, MAX_RETRIES=3 → backoff 1000ms + 2000ms before it gives up.
 				await vi.advanceTimersByTimeAsync(3500);
 				await promise;
@@ -557,9 +460,9 @@ describe("TranscriptionService", () => {
 		const transcribe = (plugin: PodNotes) =>
 			(
 				new TranscriptionService(plugin) as unknown as {
-					transcribeEpisode: (episode: Episode) => Promise<void>;
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
 				}
-			).transcribeEpisode(mockEpisode);
+			).transcribeEpisode(audioJob);
 
 		const finalNotice = async (plugin: PodNotes): Promise<string> => {
 			vi.useFakeTimers();
@@ -649,10 +552,10 @@ describe("TranscriptionService", () => {
 				let settled = false;
 				const pending = (
 					service as unknown as {
-						transcribeEpisode: (episode: Episode) => Promise<void>;
+						transcribeEpisode: (job: AudioJob) => Promise<void>;
 					}
 				)
-					.transcribeEpisode(mockEpisode)
+					.transcribeEpisode(audioJob)
 					.finally(() => {
 						settled = true;
 					});
@@ -678,14 +581,14 @@ describe("TranscriptionService", () => {
 			whisperReturns("Hello.");
 			const plugin = createMockPlugin({ openAIKey: "first-key" });
 			const service = new TranscriptionService(plugin) as unknown as {
-				transcribeEpisode: (episode: Episode) => Promise<void>;
+				transcribeEpisode: (job: AudioJob) => Promise<void>;
 			};
 
-			await service.transcribeEpisode(mockEpisode);
+			await service.transcribeEpisode(audioJob);
 			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
 				kind === "openai" ? "second-key" : null,
 			);
-			await service.transcribeEpisode(mockEpisode);
+			await service.transcribeEpisode(audioJob);
 
 			const authorization = (call: number) =>
 				new Headers(fetchMock.mock.calls[call][1]?.headers).get("authorization");

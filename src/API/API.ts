@@ -1,5 +1,5 @@
 import type { Episode } from "src/types/Episode";
-import { formatSeconds } from "src/utility/formatSeconds";
+import { formatEpisodeTimestamp } from "src/utility/formatEpisodeTimestamp";
 import type { IAPI } from "./IAPI";
 import { TFile } from "obsidian";
 import { plugin } from "src/store";
@@ -85,22 +85,12 @@ export class API implements IAPI {
 			throw new Error("No podcast loaded");
 		}
 
-		const adjustedTime = Math.max(0, this.currentTime - offsetSeconds);
-		const time = formatSeconds(adjustedTime, format);
-
-		if (!linkify) return time;
-
-		const target = episodeLinkTarget(this.podcast);
-
-		if (!target) {
-			// Considered handling this as an error case, but I think
-			// it's better UX to just show the time rather than getting an error.
-			return time;
-		}
-
-		const url = encodePodnotesURI(this.podcast.title, target, adjustedTime);
-
-		return `[${time}](${url.href})`;
+		return formatEpisodeTimestamp(
+			this.podcast,
+			Math.max(0, this.currentTime - offsetSeconds),
+			format,
+			linkify,
+		);
 	}
 
 	getPodcastSegmentFormatted(

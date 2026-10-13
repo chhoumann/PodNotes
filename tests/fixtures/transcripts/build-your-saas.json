@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "segments": [
+    {
+      "speaker": "Justin",
+      "startTime": "0.0",
+      "endTime": "8.559999",
+      "body": "Michael, I can't do a podcast with you. I just decided. It's done. We're done. I'll say, man, we got geese in the background."
+    },
+    {
+      "speaker": "Justin",
+      "startTime": "8.559999",
+      "endTime": "10.16",
+      "body": "What is going on here?"
+    },
+    {
+      "speaker": "Michael",
+      "startTime": "10.16",
+      "endTime": "13.759999",
+      "body": "Oh gosh. It's my door. Sorry. One second. Sorry about the geese."
+    },
+    {
+      "speaker": "Justin",
+      "startTime": "15.185",
+      "endTime": "18.545",
+      "body": "God. Chris is gonna have a ball editing this one."
+    },
+    {
+      "speaker": "Justin",
+      "startTime": "32.39",
+      "endTime": "45.125",
+      "body": "Welcome to Build Your SaaS. This is the podcast where we chronicle the journey of building transistor.fm, a podcast hosting platform. I'm Justin Jackson, one of the co founders."
+    },
+    {
+      "speaker": "Justin",
+      "startTime": "45.445",
+      "endTime": "57.44",
+      "body": "And today, I want to talk about what our secret weapon is at transistor, something that sets us apart. And to do that, I've got on the show Helen Ryles."
+    }
+  ]
+}

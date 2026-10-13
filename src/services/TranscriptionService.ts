@@ -18,6 +18,16 @@ import {
 	renderDiarizedTranscript,
 	requiredTranscriptionKeyPresent,
 } from "./diarization";
+import {
+	fetchPublishedTranscript,
+	findPublishedTranscript,
+	type PublishedTranscript,
+	PublishedTranscriptError,
+	renderTranscriptBody,
+	timestampStyle,
+} from "./publishedTranscript";
+
+export const TRANSCRIBE_FROM_AUDIO_COMMAND = "Transcribe current episode from audio";
 
 // A chunk that exhausts its retries leaves this placeholder in its transcript
 // slot; the pattern matches it so buildTranscriptBody can tell real speech apart
@@ -27,6 +37,13 @@ function chunkErrorPlaceholder(index: number): string {
 }
 const CHUNK_ERROR_PLACEHOLDER_PATTERN = /\[Error transcribing chunk \d+\]/g;
 
+interface TranscriptionJob {
+	readonly episode: Episode;
+	readonly source:
+		| { readonly kind: "published"; readonly transcript: PublishedTranscript }
+		| { readonly kind: "audio" };
+}
+
 export class TranscriptionService {
 	private plugin: PodNotes;
 	private disposed = false;
@@ -35,7 +52,7 @@ export class TranscriptionService {
 	private MAX_RETRIES = 3;
 	private readonly MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 	private readonly MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
-	private pendingEpisodes: Episode[] = [];
+	private pendingJobs: TranscriptionJob[] = [];
 	private activeTranscriptions = new Set<string>();
 
 	constructor(plugin: PodNotes) {
@@ -44,74 +61,112 @@ export class TranscriptionService {
 
 	async transcribeCurrentEpisode(): Promise<void> {
 		if (this.disposed) return;
-		if (
-			!requiredTranscriptionKeyPresent(this.plugin.settings, (kind) =>
-				this.plugin.credentials.has(this.plugin.settings, kind),
-			)
-		) {
-			const diarization = this.plugin.settings.transcript.diarization;
-			const needsDeepgram = diarization?.enabled && diarization.provider === "deepgram";
-			const kind = needsDeepgram ? "deepgram" : "openai";
-			const unavailableOnDevice =
-				this.plugin.credentials.status(this.plugin.settings, kind) === "missing";
-			new Notice(
-				unavailableOnDevice
-					? `The selected ${needsDeepgram ? "Deepgram" : "OpenAI"} API key is not available on this device. Select or create it in the transcript settings.`
-					: needsDeepgram
-						? "Select or create a Deepgram API key in the transcript settings on this device."
-						: "Select or create an OpenAI API key in the transcript settings on this device.",
-			);
-			return;
-		}
-
-		const currentEpisode = this.plugin.api.podcast;
-		if (!currentEpisode) {
+		const episode = this.plugin.api.podcast;
+		if (!episode) {
 			new Notice("No episode is currently playing.");
 			return;
 		}
 
-		const transcriptPath = this.getTranscriptPath(currentEpisode);
+		let transcript: PublishedTranscript | undefined;
+		try {
+			transcript = await this.waitForLifecycle(
+				findPublishedTranscript(this.plugin.feeds, episode),
+			);
+		} catch (error) {
+			if (this.disposed || this.lifetimeAbortController.signal.aborted) return;
+			throw error;
+		}
+
+		if (transcript) {
+			this.enqueue({ episode, source: { kind: "published", transcript } });
+		} else if (this.hasRequiredKey()) {
+			this.enqueue({ episode, source: { kind: "audio" } });
+		} else {
+			this.noticeMissingKey();
+		}
+	}
+
+	transcribeCurrentEpisodeFromAudio(): void {
+		if (this.disposed) return;
+		if (!this.hasRequiredKey()) {
+			this.noticeMissingKey();
+			return;
+		}
+		const episode = this.plugin.api.podcast;
+		if (!episode) {
+			new Notice("No episode is currently playing.");
+			return;
+		}
+		this.enqueue({ episode, source: { kind: "audio" } });
+	}
+
+	private hasRequiredKey(): boolean {
+		return requiredTranscriptionKeyPresent(this.plugin.settings, (kind) =>
+			this.plugin.credentials.has(this.plugin.settings, kind),
+		);
+	}
+
+	private needsDeepgram(): boolean {
+		const diarization = this.plugin.settings.transcript.diarization;
+		return Boolean(diarization?.enabled && diarization.provider === "deepgram");
+	}
+
+	private noticeMissingKey(): void {
+		const needsDeepgram = this.needsDeepgram();
+		const kind = needsDeepgram ? "deepgram" : "openai";
+		const unavailableOnDevice =
+			this.plugin.credentials.status(this.plugin.settings, kind) === "missing";
+		new Notice(
+			unavailableOnDevice
+				? `The selected ${needsDeepgram ? "Deepgram" : "OpenAI"} API key is not available on this device. Select or create it in the transcript settings.`
+				: needsDeepgram
+					? "Select or create a Deepgram API key in the transcript settings on this device."
+					: "Select or create an OpenAI API key in the transcript settings on this device.",
+		);
+	}
+
+	private enqueue(job: TranscriptionJob): void {
+		const transcriptPath = this.getTranscriptPath(job.episode);
 		const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
 		if (existingFile instanceof TFile) {
 			new Notice(`You've already transcribed this episode - found ${transcriptPath}.`);
 			return;
 		}
 
-		const episodeKey = this.getEpisodeKey(currentEpisode);
+		const episodeKey = this.getEpisodeKey(job.episode);
 		const isAlreadyQueued =
-			this.pendingEpisodes.some((episode) => this.getEpisodeKey(episode) === episodeKey) ||
-			this.activeTranscriptions.has(episodeKey);
+			this.pendingJobs.some(
+				(pending) => this.getEpisodeKey(pending.episode) === episodeKey,
+			) || this.activeTranscriptions.has(episodeKey);
 
 		if (isAlreadyQueued) {
 			new Notice("This episode is already queued or transcribing.");
 			return;
 		}
 
-		this.pendingEpisodes.push(currentEpisode);
-		new Notice(
-			`Queued "${currentEpisode.title}" for transcription. It will start automatically.`,
-		);
+		this.pendingJobs.push(job);
+		new Notice(`Queued "${job.episode.title}" for transcription. It will start automatically.`);
 		this.drainQueue();
 	}
 
 	private drainQueue(): void {
 		if (this.disposed) {
-			this.pendingEpisodes = [];
+			this.pendingJobs = [];
 			return;
 		}
 		while (
 			this.activeTranscriptions.size < this.MAX_CONCURRENT_TRANSCRIPTIONS &&
-			this.pendingEpisodes.length > 0
+			this.pendingJobs.length > 0
 		) {
-			const nextEpisode = this.pendingEpisodes.shift();
-			if (!nextEpisode) {
+			const job = this.pendingJobs.shift();
+			if (!job) {
 				return;
 			}
 
-			const episodeKey = this.getEpisodeKey(nextEpisode);
+			const episodeKey = this.getEpisodeKey(job.episode);
 			this.activeTranscriptions.add(episodeKey);
 
-			void this.transcribeEpisode(nextEpisode).finally(() => {
+			void this.transcribeEpisode(job).finally(() => {
 				this.activeTranscriptions.delete(episodeKey);
 				if (!this.disposed) this.drainQueue();
 			});
@@ -122,7 +177,7 @@ export class TranscriptionService {
 		return `${episode.podcastName}:${episode.title}`;
 	}
 
-	private async transcribeEpisode(episode: Episode): Promise<void> {
+	private async transcribeEpisode({ episode, source }: TranscriptionJob): Promise<void> {
 		this.assertActive();
 		const notice = TimerNotice(`Transcription: ${episode.title}`, "Preparing to transcribe...");
 		this.activeNotices.add(notice);
@@ -139,38 +194,27 @@ export class TranscriptionService {
 				return;
 			}
 
-			updateNotice("Fetching episode audio...");
-			const {
-				buffer: fileBuffer,
-				extension: fileExtension,
-				basename,
-			} = await this.waitForLifecycle(getEpisodeAudioBuffer(episode));
-			this.assertActive();
-			const mimeType = getMimeType(fileExtension);
-
-			const { body: transcriptBody, warning } = await this.buildTranscriptBody(
-				{
-					buffer: fileBuffer,
-					mimeType,
-					extension: fileExtension,
-					basename,
-				},
-				updateNotice,
-			);
+			const { body, completion } =
+				source.kind === "published"
+					? await this.readPublishedTranscript(episode, source.transcript, updateNotice)
+					: await this.transcribeAudio(episode, updateNotice);
 			this.assertActive();
 
 			updateNotice("Saving transcription...");
-			await this.saveTranscription(episode, transcriptBody);
+			await this.saveTranscription(episode, body);
 			this.assertActive();
 
 			notice.stop();
-			updateNotice(warning ?? "Transcription completed and saved.");
+			updateNotice(completion);
 		} catch (error) {
 			if (this.disposed || this.lifetimeAbortController.signal.aborted) return;
 			console.error("Transcription error:", error);
-			const message = error instanceof Error ? error.message : String(error);
 			notice.stop();
-			updateNotice(`Transcription failed: ${message}`);
+			updateNotice(
+				error instanceof PublishedTranscriptError
+					? this.publishedTranscriptFailure(error)
+					: `Transcription failed: ${error instanceof Error ? error.message : String(error)}`,
+			);
 		} finally {
 			notice.stop();
 			if (this.disposed) {
@@ -180,6 +224,50 @@ export class TranscriptionService {
 				notice.scheduleHide(5000, () => this.activeNotices.delete(notice));
 			}
 		}
+	}
+
+	private async readPublishedTranscript(
+		episode: Episode,
+		transcript: PublishedTranscript,
+		updateNotice: (message: string) => void,
+	): Promise<{ body: string; completion: string }> {
+		updateNotice("Fetching the published transcript...");
+		const parsed = await this.waitForLifecycle(
+			fetchPublishedTranscript(
+				this.plugin.feeds,
+				transcript,
+				this.lifetimeAbortController.signal,
+			),
+		);
+		const { timestamp, transcript: settings } = this.plugin.settings;
+		const body = renderTranscriptBody(parsed, {
+			episode,
+			speakerTemplate: settings.diarization?.speakerTemplate ?? "",
+			timestamp: timestampStyle(timestamp.template),
+		});
+		return { body, completion: "Saved the transcript the feed publishes." };
+	}
+
+	private async transcribeAudio(
+		episode: Episode,
+		updateNotice: (message: string) => void,
+	): Promise<{ body: string; completion: string }> {
+		updateNotice("Fetching episode audio...");
+		const { buffer, extension, basename } = await this.waitForLifecycle(
+			getEpisodeAudioBuffer(episode),
+		);
+		this.assertActive();
+		const { body, warning } = await this.buildTranscriptBody(
+			{ buffer, mimeType: getMimeType(extension), extension, basename },
+			updateNotice,
+		);
+		return { body, completion: warning ?? "Transcription completed and saved." };
+	}
+
+	private publishedTranscriptFailure(error: PublishedTranscriptError): string {
+		if (!this.hasRequiredKey()) return error.message;
+		const provider = this.needsDeepgram() ? "Deepgram" : "OpenAI";
+		return `${error.message} Run "${TRANSCRIBE_FROM_AUDIO_COMMAND}" to transcribe it with ${provider} instead, which uses your API credit.`;
 	}
 
 	/**
@@ -260,7 +348,7 @@ export class TranscriptionService {
 				throw new Error("Missing Deepgram API key on this device.");
 			}
 			// Deepgram ingests the whole file in one request, so it needs no
-			// chunking — which is exactly why its speaker labels stay consistent
+			// chunking, which is exactly why its speaker labels stay consistent
 			// across the entire episode.
 			const segments = await this.waitForLifecycle(
 				diarizeWithDeepgram({
@@ -439,9 +527,6 @@ export class TranscriptionService {
 	private async saveTranscription(episode: Episode, transcriptBody: string): Promise<void> {
 		this.assertActive();
 		const transcriptPath = this.getTranscriptPath(episode);
-		// transcriptBody is already formatted by buildTranscriptBody (sentence
-		// reflow for Whisper, speaker turns for diarization), so it is templated
-		// verbatim here.
 		const transcriptContent = TranscriptTemplateEngine(
 			this.plugin.settings.transcript.template,
 			episode,
@@ -489,7 +574,7 @@ export class TranscriptionService {
 		this.lifetimeAbortController.abort(
 			new DOMException("PodNotes was unloaded during transcription.", "AbortError"),
 		);
-		this.pendingEpisodes = [];
+		this.pendingJobs = [];
 		for (const notice of this.activeNotices) {
 			notice.dispose();
 		}

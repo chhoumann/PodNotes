@@ -1,0 +1,25 @@
+1
+00:00:08,119 --> 00:00:10,431
+Welcome back to Adventures in DevOps.
+
+2
+00:00:10,431 --> 00:00:17,276
+It's like the world suddenly woke up to realize that maybe testing is a necessity shocker,
+really.
+
+3
+00:00:17,276 --> 00:00:20,628
+And historically one of the most challenging places to do it is in the browser.
+
+4
+00:00:20,628 --> 00:00:23,020
+So I'm hoping we can get down to it.
+
+5
+00:00:23,020 --> 00:00:30,605
+And I brought in a longtime test expert, previous engineering manager at Mozilla, and now
+head of open source at Browser Stack, David Burns.
+
+6
+00:00:30,605 --> 00:00:31,992
+Thank you for joining us.

@@ -3,6 +3,13 @@ import type { AddressInfo } from "node:net";
 import type { ObsidianClient } from "obsidian-e2e";
 import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
 
+export type FixtureTranscript = Readonly<{
+	path: string;
+	type: string;
+	absolute?: boolean;
+	body?: string;
+}>;
+
 export type FixtureEpisode = Readonly<{
 	title: string;
 	seconds: number | null;
@@ -10,6 +17,7 @@ export type FixtureEpisode = Readonly<{
 	omitTitle?: boolean;
 	description?: string;
 	guid?: string;
+	transcripts?: readonly FixtureTranscript[];
 }>;
 
 export type FixtureFeed = Readonly<{
@@ -83,6 +91,13 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 				const body = wav(episode.seconds, 300 + 40 * index + 7 * feed.slug.length);
 				routes.set(mediaPath(feed, episode), { type: "audio/wav", body });
 			}
+			for (const transcript of episode.transcripts ?? []) {
+				if (transcript.body === undefined) continue;
+				routes.set(`/${feed.slug}/${transcript.path}`, {
+					type: transcript.type,
+					body: Buffer.from(transcript.body),
+				});
+			}
 		});
 		if (feed.artwork) {
 			routes.set(`/${feed.slug}/artwork.svg`, {
@@ -94,13 +109,20 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		routes.set(feedPath(feed), {
 			type: "application/rss+xml",
 			body: Buffer.from(
-				rss(feed, feed.artwork ? artworkUrl(feed) : null, (episode) =>
-					episode.seconds === null
-						? null
-						: {
-								url: `${origin}${mediaPath(feed, episode)}`,
-								bytes: audio(feed, episode).length,
-							},
+				rss(
+					feed,
+					feed.artwork ? artworkUrl(feed) : null,
+					(episode) =>
+						episode.seconds === null
+							? null
+							: {
+									url: `${origin}${mediaPath(feed, episode)}`,
+									bytes: audio(feed, episode).length,
+								},
+					(transcript) =>
+						transcript.absolute
+							? `${origin}/${feed.slug}/${transcript.path}`
+							: transcript.path,
 				),
 			),
 		});
@@ -212,6 +234,7 @@ function rss(
 	feed: FixtureFeed,
 	artworkUrl: string | null,
 	enclosure: (episode: FixtureEpisode) => { url: string; bytes: number } | null,
+	transcriptUrl: (transcript: FixtureTranscript) => string,
 ): string {
 	const items = feed.episodes.map((episode) => {
 		const media = enclosure(episode);
@@ -226,13 +249,17 @@ function rss(
 			media
 				? `\t\t\t<enclosure url="${escapeXml(media.url)}" type="audio/wav" length="${media.bytes}"/>`
 				: "",
+			...(episode.transcripts ?? []).map(
+				(transcript) =>
+					`\t\t\t<podcast:transcript url="${escapeXml(transcriptUrl(transcript))}" type="${escapeXml(transcript.type)}"/>`,
+			),
 			"\t\t</item>",
 		]
 			.filter(Boolean)
 			.join("\n");
 	});
 	return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
 	<channel>
 		<title>${escapeXml(feed.title)}</title>
 		<description>Journey fixture feed ${escapeXml(feed.title)}.</description>
@@ -301,6 +328,40 @@ export async function removeItunesStub(obsidian: ObsidianClient): Promise<void> 
 		const stub = window.__podnotesJourneyItunes;
 		if (stub) stub.ipc.send = stub.originalSend;
 		delete window.__podnotesJourneyItunes;
+		return true;
+	})()`);
+}
+
+const DEEPGRAM_ORIGIN = "https://api.deepgram.com/";
+
+export async function installDeepgramTripwire(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		if (window.__podnotesJourneyDeepgram) throw new Error("The Deepgram tripwire is already installed.");
+		const ipc = window.electron.ipcRenderer;
+		const originalSend = ipc.send;
+		const requests = [];
+		ipc.send = function (channel, replyChannel, request, ...rest) {
+			if (channel === "request-url" && typeof request?.url === "string" && request.url.startsWith(${JSON.stringify(DEEPGRAM_ORIGIN)})) {
+				requests.push(request.url);
+				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 500, headers: {}, body: new ArrayBuffer(0) }));
+				return;
+			}
+			return originalSend.call(ipc, channel, replyChannel, request, ...rest);
+		};
+		window.__podnotesJourneyDeepgram = { ipc, originalSend, requests };
+		return true;
+	})()`);
+}
+
+export async function deepgramRequests(obsidian: ObsidianClient): Promise<string[]> {
+	return await obsidian.dev.evalJson<string[]>("window.__podnotesJourneyDeepgram.requests");
+}
+
+export async function removeDeepgramTripwire(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJson(`(() => {
+		const tripwire = window.__podnotesJourneyDeepgram;
+		if (tripwire) tripwire.ipc.send = tripwire.originalSend;
+		delete window.__podnotesJourneyDeepgram;
 		return true;
 	})()`);
 }
