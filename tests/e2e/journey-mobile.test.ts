@@ -9,6 +9,7 @@ import {
 	setMobileEmulation,
 	typeText,
 	ui,
+	waitUntilFocused,
 	waitUntilShown,
 } from "./journey/actions";
 import { type FixtureFeed, startFixtureServer } from "./journey/fixtures";
@@ -58,6 +59,7 @@ describe("mobile journeys", () => {
 		expect(leaves.count).toBe(1);
 		expect((await readLibrary(plugin)).subscriptions).toEqual([]);
 
+		await waitUntilFocused(obsidian, ui.podcastSearch);
 		await typeText(obsidian, server.feedUrl(show));
 		await waitUntilShown(obsidian, ui.addPodcast(show.title));
 		await assertNoRuntimeErrors(obsidian);

@@ -266,6 +266,15 @@ export async function typeInto(
 	await typeText(obsidian, text);
 }
 
+/** Waits until `target` has focus, as a user sees the caret before typing. */
+export async function waitUntilFocused(obsidian: ObsidianClient, target: UiTarget): Promise<void> {
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(`(${target.elements}).includes(document.activeElement)`),
+		{ timeoutMs: 5_000, intervalMs: 100, message: `${target.name} focused` },
+	);
+}
+
 /** Types into whatever has focus, as a user does who starts typing without a click. */
 export async function typeText(obsidian: ObsidianClient, text: string): Promise<void> {
 	await cdp(obsidian, "Input.insertText", { text });

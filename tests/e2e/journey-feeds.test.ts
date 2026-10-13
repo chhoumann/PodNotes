@@ -20,6 +20,7 @@ import {
 	typeInto,
 	typeText,
 	ui,
+	waitUntilFocused,
 	waitUntilShown,
 } from "./journey/actions";
 import {
@@ -151,6 +152,7 @@ describe("feed journeys", () => {
 
 		await showPodNotes(obsidian);
 		await waitUntilShown(obsidian, ui.firstRun);
+		await waitUntilFocused(obsidian, ui.podcastSearch);
 		await typeText(obsidian, server.feedUrl(show));
 		await resultsBecome(obsidian, [
 			{ label: `Add ${show.title}`, title: show.title, via: "RSS feed" },
