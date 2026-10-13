@@ -136,9 +136,11 @@ export function redactPrivateFeedAddresses<T>(
 		...new Set([...placeholders.keys()].map((address) => new URL(address).hostname)),
 	];
 	// Encoded, numeric and non-ASCII authorities can normalize to a known host too.
+	// A tagged template anywhere in main.js prevents V8 from caching the eval-compiled
+	// plugin, so keep this untagged to let Obsidian reuse it across reloads.
 	const candidate = new RegExp(
 		hosts.map((host) => host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") +
-			String.raw`|https?:\/\/[^\s/?#]*[%\\\[\u0080-\uFFFF]|https?:\/\/(?:[^\s/?#@]*@)?[\d/\\]`,
+			"|https?:\\/\\/[^\\s/?#]*[%\\\\\\[\\u0080-\\uFFFF]|https?:\\/\\/(?:[^\\s/?#@]*@)?[\\d/\\\\]",
 		"i",
 	);
 	const matches = new Map<string, string | undefined>();
