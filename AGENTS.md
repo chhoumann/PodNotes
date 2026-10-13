@@ -41,7 +41,7 @@ root symlinks for local Obsidian loading.
 - `npm run lint:tsconfig`: fail with TS18003 when `tsconfig.json` or `tsconfig.test.json` matches no files, using the native compiler without type checking.
 - `npm run test`: run Svelte checks and the application Vitest suite.
 - `npm run test:unit`: run the application Vitest suite without the Svelte checks.
-- `npm run test:tooling`: run the real-process Svelte checker failure tests. CI runs these separately on every PR.
+- `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 - `npm run docs:deploy`: build docs and deploy `docs/dist` to Cloudflare Pages.
