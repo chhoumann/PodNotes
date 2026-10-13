@@ -1,5 +1,5 @@
 import { newestFirst } from "src/persistence/dateCodec";
-import type { FeedKey, FeedState } from "src/services/FeedRepository";
+import type { FeedError, FeedKey, FeedState } from "src/services/FeedRepository";
 import { offlinePlayable } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
@@ -47,6 +47,14 @@ export function selectFeedEpisodes(
 	downloads: Record<string, DownloadedEpisode[]>,
 ): readonly Episode[] {
 	return feed.channel || !feed.error ? feed.episodes : (downloads[feed.feed.title] ?? []);
+}
+
+/**
+ * Why a podcast's page and card say its feed did not load. Offline, only an address
+ * missing from this device, since the Offline strip says why the rest failed.
+ */
+export function shownFailure(feed: FeedState, online: boolean): FeedError | undefined {
+	return online || feed.error === "unavailable" ? feed.error : undefined;
 }
 
 /** Subscriptions with a finished played episode, the ones the Played view needs in full. */

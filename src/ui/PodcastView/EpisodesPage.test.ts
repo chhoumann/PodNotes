@@ -246,6 +246,19 @@ describe("a podcast's page", () => {
 		expect(screen.getByRole("alert")).toHaveTextContent("Feed didn't load");
 	});
 
+	test("offline, still asks for a private feed's address this device lacks", async () => {
+		const patron = { ...show, title: "Patron", url: privateFeedPlaceholder("Patron") };
+		renderPage("Patron", [patron]);
+		await screen.findByRole("alert");
+
+		services.online.set(false);
+		await tick();
+
+		const banner = screen.getByRole("alert");
+		expect(banner).toHaveTextContent("Address not on this device");
+		expect(within(banner).getByRole("button", { name: "Set feed address" })).toBeEnabled();
+	});
+
 	test("opened offline, loads its episodes once the connection returns", async () => {
 		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
 		renderPage(show.title, [show], { online: false });

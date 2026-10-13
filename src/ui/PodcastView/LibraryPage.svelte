@@ -2,6 +2,7 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
+	import { shownFailure } from "./episodeListSelection";
 	import type { Layout } from "./layout";
 	import { anchorOf, podcastMenu, showMenu } from "./menus";
 	import { LIST_ROOTS, type RootCounts } from "./pages";
@@ -32,8 +33,8 @@
 {/if}
 <div class="pn-grid">
 	{#each Object.entries($savedFeeds) as [key, feed] (key)}
-		<!-- Offline, the strip says why a feed did not load. -->
-		{@const failed = $online && $feeds.get(key)?.error !== undefined}
+		{@const feedState = $feeds.get(key)}
+		{@const failed = feedState !== undefined && shownFailure(feedState, $online) !== undefined}
 		<button
 			type="button"
 			class="pn-gridcard"

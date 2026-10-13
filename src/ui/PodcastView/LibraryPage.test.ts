@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { tick } from "svelte";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { FeedRepository } from "src/services/FeedRepository";
+import { FeedRepository, type FeedRepositoryDeps } from "src/services/FeedRepository";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { MemoryStorage } from "../../../tests/mocks/feeds";
 import { createTestServices } from "../../../tests/mocks/services";
@@ -28,14 +28,18 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-const unreachable = () =>
+const repositoryWith = ({
+	load = () => Promise.reject(new Error("unreachable")),
+	resolveUrl = (feed) => feed.url,
+}: Partial<Pick<FeedRepositoryDeps, "load" | "resolveUrl">> = {}) =>
 	new FeedRepository({
-		load: () => Promise.reject(new Error("unreachable")),
-		resolveUrl: (feed) => feed.url,
+		load,
+		resolveUrl,
 		storage: new MemoryStorage(),
 		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
+const unreachable = () => repositoryWith();
 
 function renderLibrary(
 	feeds: [string, PodcastFeed][],
@@ -123,6 +127,18 @@ describe("the Library's podcast grid", () => {
 		expect(
 			await screen.findByRole("button", { name: "Art Show, feed didn't load" }),
 		).toContainElement(document.querySelector(".pn-badge"));
+	});
+
+	test("offline, a private feed whose address is not on this device still wears its badge", async () => {
+		const repository = repositoryWith({ resolveUrl: () => null });
+		const { services } = renderLibrary([["Art Show", artShow]], { repository });
+		await repository.load(["Art Show"], "network");
+		services.online.set(false);
+		await tick();
+
+		expect(card("Art Show, feed didn't load")).toContainElement(
+			document.querySelector(".pn-badge"),
+		);
 	});
 
 	test("a right-click on a podcast opens its menu at the pointer", async () => {

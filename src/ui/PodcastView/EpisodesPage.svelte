@@ -9,7 +9,7 @@
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
-	import { selectFeedEpisodes } from "./episodeListSelection";
+	import { selectFeedEpisodes, shownFailure } from "./episodeListSelection";
 	import SearchField from "./SearchField.svelte";
 
 	/** A podcast's page, with its hero, its feed's state, and its episodes to search and filter. */
@@ -55,7 +55,8 @@
 </script>
 
 {#if feedState}
-	{@const { feed, channel, error } = feedState}
+	{@const { feed, channel } = feedState}
+	{@const error = shownFailure(feedState, $online)}
 	<div class="pn-hero">
 		<Cover src={feed.artworkUrl} title={feed.title} />
 		<div>
@@ -63,8 +64,7 @@
 			<div class="by">{channel?.author ?? feed.author ?? ""}</div>
 		</div>
 	</div>
-	<!-- Offline, the strip says why the feed did not load. -->
-	{#if error && $online}
+	{#if error}
 		<div class="pn-banner" role="alert">
 			<span class="pn-banner-icon" {@attach icon("alert-triangle")}></span>
 			<div class="txt">
