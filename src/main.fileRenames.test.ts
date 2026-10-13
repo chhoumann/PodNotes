@@ -76,6 +76,8 @@ async function loadPlugin(data: Record<string, unknown>): Promise<PodNotes> {
 		views: new Set(),
 		manifest: { dir: ".obsidian/plugins/podnotes" },
 		app: {
+			loadLocalStorage: vi.fn(() => null),
+			saveLocalStorage: vi.fn(),
 			secretStorage: {
 				getSecret: vi.fn(() => null),
 				setSecret: vi.fn(),
@@ -124,6 +126,7 @@ afterEach(() => {
 
 describe("a queued local file whose vault file moves", () => {
 	it("plays from where the file is now once the queue reaches it", async () => {
+		const warn = vi.spyOn(console, "warn");
 		const clip = registered("Fixtures/Clip One.wav");
 		vaultPaths = ["Fixtures/Clip One.wav", "Fixtures/Lead.wav"];
 		const plugin = await loadPlugin({
@@ -134,6 +137,10 @@ describe("a queued local file whose vault file moves", () => {
 				"local file": [{ ...clip, size: 960_044 }, registered("Fixtures/Lead.wav")],
 			},
 		});
+		expect(warn).not.toHaveBeenCalledWith(
+			"PodNotes: could not remove old feed caches",
+			expect.anything(),
+		);
 
 		await move("Fixtures/Clip One.wav", "Fixtures/A/Clip One.wav");
 
