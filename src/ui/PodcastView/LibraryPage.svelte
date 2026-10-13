@@ -4,6 +4,7 @@
 	import type { Layout } from "./layout";
 	import { LIST_ROOTS, type RootCounts } from "./pages";
 	import PodcastGrid from "./PodcastGrid.svelte";
+	import PodcastGridCard from "./PodcastGridCard.svelte";
 
 	let { layout, counts }: { layout: Layout; counts: RootCounts } = $props();
 	const { navigation, library } = useServices();
@@ -28,8 +29,16 @@
 	</nav>
 	<h2 class="pn-h2">Podcasts</h2>
 {/if}
-<PodcastGrid
-	feeds={Object.entries($savedFeeds)}
-	playlists={[]}
-	on:clickPodcast={(event) => navigation.go({ kind: "feed", key: event.detail.key })}
-/>
+<PodcastGrid>
+	{#each Object.entries($savedFeeds) as [key, feed] (key)}
+		<PodcastGridCard
+			{key}
+			{feed}
+			on:clickPodcast={() => navigation.go({ kind: "feed", key })}
+		/>
+	{:else}
+		<div>
+			<p>No saved podcasts.</p>
+		</div>
+	{/each}
+</PodcastGrid>

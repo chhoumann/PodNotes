@@ -349,16 +349,10 @@
 
 	/* Legacy pages scroll inside themselves. In the shell the page's scroller
 	   scrolls them instead, so Back can restore where a page was. */
-	.pn-scroll :global(.podcast-grid),
 	.pn-scroll :global(.episode-list-view-container),
 	.pn-scroll :global(.podcast-episode-list) {
 		height: auto;
 		overflow: visible;
-	}
-
-	/* The page's scroller insets the page, so the grid lines up with its heading. */
-	.pn-scroll :global(.podcast-grid) {
-		padding: 0;
 	}
 
 	.podcast-view :global {
