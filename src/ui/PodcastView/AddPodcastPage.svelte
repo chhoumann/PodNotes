@@ -5,20 +5,18 @@
 	let { firstRun }: { firstRun: boolean } = $props();
 </script>
 
-{#if firstRun}
-	<!-- Top-aligned, so the field stays put while results load under it. -->
-	<div class="pn-first-col">
+<div class:pn-first-col={firstRun}>
+	{#if firstRun}
 		<div class="pn-empty">
 			<span class="pn-empty-mark" {@attach icon("podcast")}></span>
 			<h1>Add your first podcast</h1>
 		</div>
-		<PodcastQueryGrid />
-	</div>
-{:else}
+	{/if}
 	<PodcastQueryGrid />
-{/if}
+</div>
 
 <style>
+	/* Top-aligned, so the field stays put while results load under it. */
 	.pn-first-col {
 		max-width: 360px;
 		margin: 0 auto;
