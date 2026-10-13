@@ -91,7 +91,13 @@ describe("private feed reference transfer", () => {
 				},
 			},
 		};
-		const envelope = serializeSettings(settings, {}, "0.0.0", "2026-07-11T00:00:00Z");
+		const envelope = serializeSettings(
+			settings,
+			{},
+			"0.0.0",
+			"2026-07-11T00:00:00Z",
+			new Map(),
+		);
 		const exported = (
 			envelope.settings as unknown as Record<string, Record<string, Record<string, unknown>>>
 		).savedFeeds.Private;
@@ -126,7 +132,7 @@ describe("private feed reference transfer", () => {
 
 describe("serializeSettings", () => {
 	it("wraps settings in a versioned envelope", () => {
-		const envelope = serializeSettings(makeSettings(), {}, "2.16.0", NOW);
+		const envelope = serializeSettings(makeSettings(), {}, "2.16.0", NOW, new Map());
 
 		expect(envelope.type).toBe(SETTINGS_EXPORT_TYPE);
 		expect(envelope.version).toBe(SETTINGS_EXPORT_VERSION);
@@ -144,7 +150,7 @@ describe("serializeSettings", () => {
 			currentEpisode: { title: "ep" } as never,
 		});
 
-		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 
 		for (const key of VAULT_LOCAL_KEYS) {
 			expect(exported).not.toHaveProperty(key as string);
@@ -154,7 +160,7 @@ describe("serializeSettings", () => {
 	it("keeps SecretStorage references out and puts opted-in values in a separate payload", () => {
 		const settings = makeSettings({ openAISecretId: "podnotes-openai-api-key" });
 
-		const ordinary = serializeSettings(settings, {}, "2.16.0", NOW);
+		const ordinary = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 		expect(ordinary.settings).not.toHaveProperty("openAISecretId");
 		expect(ordinary).not.toHaveProperty("secrets");
 
@@ -163,6 +169,7 @@ describe("serializeSettings", () => {
 			{ secrets: { openAI: "sk-secret" } },
 			"2.16.0",
 			NOW,
+			new Map(),
 		);
 		expect(withKey.settings).not.toHaveProperty("openAISecretId");
 		expect(withKey.secrets).toEqual({ openAI: "sk-secret" });
@@ -174,7 +181,7 @@ describe("serializeSettings", () => {
 			deepgramSecretId: "podnotes-deepgram-api-key",
 		});
 
-		const without = serializeSettings(settings, {}, "2.16.0", NOW);
+		const without = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 		expect(without.settings).not.toHaveProperty("openAISecretId");
 		expect(without.settings).not.toHaveProperty("deepgramSecretId");
 
@@ -183,6 +190,7 @@ describe("serializeSettings", () => {
 			{ secrets: { openAI: "sk-secret", deepgram: "dg-secret" } },
 			"2.16.0",
 			NOW,
+			new Map(),
 		);
 		expect(withKeys.secrets).toEqual({ openAI: "sk-secret", deepgram: "dg-secret" });
 		expect(JSON.stringify(withKeys.settings)).not.toContain("secret");
@@ -192,7 +200,7 @@ describe("serializeSettings", () => {
 		// The key lives top-level precisely so it can be redacted; the nested
 		// transcript object (copied wholesale) must never carry a secret.
 		const settings = makeSettings({ deepgramSecretId: "podnotes-deepgram-api-key" });
-		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 		expect(JSON.stringify(exported.transcript ?? {})).not.toContain("dg-secret");
 	});
 
@@ -204,7 +212,7 @@ describe("serializeSettings", () => {
 			},
 		});
 
-		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 
 		expect(exported.note).toEqual(settings.note);
 		expect(exported.savedFeeds).toEqual(settings.savedFeeds);
@@ -232,7 +240,7 @@ describe("serializeSettings", () => {
 			playlists: { Mix: { ...DEFAULT_SETTINGS.queue, name: "Mix", episodes: [show, memo] } },
 		});
 
-		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 
 		expect(exported).not.toHaveProperty("localFiles");
 		expect(JSON.stringify(exported)).not.toContain("Memo");
@@ -265,7 +273,7 @@ describe("serializeSettings", () => {
 			playedEpisodes: { "local file::Memo": { ...progress, ...memo } as never },
 		});
 
-		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 		const imported = parseImport(JSON.stringify(settings));
 
 		for (const transferred of [exported, imported.ok ? imported.settings : {}]) {
@@ -284,7 +292,7 @@ describe("serializeSettings", () => {
 		};
 		const settings = makeSettings({ playedEpisodes: { "Show::Ep 1": progress } });
 
-		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW);
+		const { settings: exported } = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 
 		expect(exported.playedEpisodes).toEqual({ "Show::Ep 1": progress });
 	});
@@ -308,7 +316,7 @@ describe("serializeSettings", () => {
 			},
 		});
 
-		const exported = serializeSettings(settings, {}, "2.17.3", NOW);
+		const exported = serializeSettings(settings, {}, "2.17.3", NOW, new Map());
 		expect(exported.settings.queue?.episodes[0].episodeDate).toBe(date.toISOString());
 	});
 });
@@ -355,7 +363,7 @@ describe("parseImport", () => {
 			defaultPlaybackRate: 1.5,
 			note: { path: "p", template: "t" },
 		});
-		const envelope = serializeSettings(settings, {}, "2.16.0", NOW);
+		const envelope = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 
 		const result = parseImport(JSON.stringify(envelope));
 		expect(result.ok).toBe(true);

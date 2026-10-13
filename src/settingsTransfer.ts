@@ -170,7 +170,7 @@ export function serializeSettings(
 	opts: ExportOptions,
 	pluginVersion: string,
 	nowISO: string,
-	privateFeedAddresses?: ReadonlyMap<string, string>,
+	privateFeedAddresses: ReadonlyMap<string, string>,
 ): SettingsEnvelope {
 	const out: Record<string, unknown> = {};
 	const persisted = encodePodNotesData(settings, {}, privateFeedAddresses);
