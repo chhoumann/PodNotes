@@ -552,6 +552,11 @@ describe("mini player", () => {
 		await tick();
 		expect(nowPlaying()).toHaveTextContent(`${feed.title} · 10 min left`);
 
+		doc.media.currentTime = 3555;
+		doc.media.emit("timeupdate");
+		await tick();
+		expect(nowPlaying()).toHaveTextContent(`${feed.title} · 45 s left`);
+
 		doc.media.currentTime = 3600;
 		doc.media.emit("timeupdate");
 		await tick();
