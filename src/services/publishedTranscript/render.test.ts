@@ -215,6 +215,47 @@ describe("paragraph length", () => {
 		expect(paragraphs.slice(0, -1).join(" ")).toBe(long);
 		expect(paragraphs.at(-1)).toBe("Short.");
 	});
+
+	test("an untimed paragraph stays prose where it starts, also after a split", () => {
+		const filler = "a".repeat(MAX_PARAGRAPH_LENGTH);
+		const paragraphs: NonEmpty<string> = [
+			"- item",
+			"+ item",
+			"* item",
+			"> quote",
+			"_ _ _",
+			"1. item",
+			"12) item",
+			`${filler} - item`,
+			"1990 was a year.",
+		];
+
+		expect(
+			renderTranscriptBody({ kind: "untimed", paragraphs }, options).split("\n\n"),
+		).toEqual([
+			"\\- item",
+			"\\+ item",
+			"\\* item",
+			"\\> quote",
+			"\\_ _ _",
+			"1\\. item",
+			"12\\) item",
+			filler,
+			"\\- item",
+			"1990 was a year.",
+		]);
+	});
+
+	test("a speaker label keeps at most the speaker's first 100 written characters", () => {
+		const speaker = `${"<".repeat(MAX_PARAGRAPH_LENGTH)} Eve`;
+
+		expect(
+			renderTranscriptBody(
+				{ kind: "timed", cues: [{ start: 1, speaker, text: "Hi." }] },
+				options,
+			),
+		).toBe(`00:00:01 **${"\\<".repeat(50)}:** Hi.`);
+	});
 });
 
 describe("timestampStyle", () => {

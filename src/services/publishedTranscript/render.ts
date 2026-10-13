@@ -36,6 +36,8 @@ const ENDS_SENTENCE = /[.!?]["')\]]*$/;
  * characters, and a line of 4,000 escaped characters opens in under 0.7 s.
  */
 export const MAX_PARAGRAPH_LENGTH = 4000;
+/** A speaker label repeats on each of its paragraphs. Real names stay under 20 characters. */
+const MAX_SPEAKER_LENGTH = 100;
 
 export function groupCues(cues: readonly TranscriptCue[]): TranscriptParagraph[] {
 	const paragraphs: TranscriptParagraph[] = [];
@@ -67,16 +69,16 @@ function continues(paragraph: TranscriptParagraph, cue: TranscriptCue): boolean 
 }
 
 /**
- * Splits written text into pieces of at most MAX_PARAGRAPH_LENGTH characters at
- * the last space that fits. A piece without a space ends at the last character
- * that fits, stepping over each escape and each surrogate pair whole, so no
- * piece ends in a lone `\` or half a character.
+ * Splits written text into pieces of at most `max` characters at the last space
+ * that fits. A piece without a space ends at the last character that fits,
+ * stepping over each escape and each surrogate pair whole, so no piece ends in
+ * a lone `\` or half a character.
  */
-function splitParagraph(text: string): string[] {
+function splitText(text: string, max: number): string[] {
 	const pieces: string[] = [];
 	let rest = text;
-	while (rest.length > MAX_PARAGRAPH_LENGTH) {
-		const space = rest.lastIndexOf(" ", MAX_PARAGRAPH_LENGTH);
+	while (rest.length > max) {
+		const space = rest.lastIndexOf(" ", max);
 		if (space > 0) {
 			pieces.push(rest.slice(0, space));
 			rest = rest.slice(space + 1);
@@ -85,7 +87,7 @@ function splitParagraph(text: string): string[] {
 		const width = (at: number) =>
 			rest[at] === "\\" || (rest.codePointAt(at) ?? 0) > 0xffff ? 2 : 1;
 		let end = 0;
-		while (end + width(end) <= MAX_PARAGRAPH_LENGTH) end += width(end);
+		while (end + width(end) <= max) end += width(end);
 		pieces.push(rest.slice(0, end));
 		rest = rest.slice(end);
 	}
@@ -99,13 +101,17 @@ export function renderTranscriptBody(
 ): string {
 	if (transcript.kind === "untimed") {
 		return transcript.paragraphs
-			.flatMap((text) => splitParagraph(escapeTranscriptText(text)))
+			.flatMap((text) => splitText(escapeTranscriptText(text), MAX_PARAGRAPH_LENGTH))
+			.map(escapeParagraphStart)
 			.join("\n\n");
 	}
 	const { episode, timestamp } = options;
 	const speakerTemplate = options.speakerTemplate || DEFAULT_SPEAKER_TEMPLATE;
 	const cues = transcript.cues.flatMap((cue) =>
-		splitParagraph(escapeTranscriptText(cue.text)).map((text) => ({ ...cue, text })),
+		splitText(escapeTranscriptText(cue.text), MAX_PARAGRAPH_LENGTH).map((text) => ({
+			...cue,
+			text,
+		})),
 	);
 	return groupCues(cues)
 		.map(({ start, speaker, text }) => {
@@ -116,11 +122,19 @@ export function renderTranscriptBody(
 				timestamp.linkify,
 			);
 			const label = speaker
-				? formatSpeakerLabel(speakerTemplate, escapeTranscriptText(speaker))
+				? formatSpeakerLabel(
+						speakerTemplate,
+						splitText(escapeTranscriptText(speaker), MAX_SPEAKER_LENGTH)[0],
+					)
 				: "";
 			return `${time} ${label}${text}`;
 		})
 		.join("\n\n");
+}
+
+/** A list marker, quote or thematic break that starts an untimed paragraph stays text. */
+function escapeParagraphStart(text: string): string {
+	return text.replace(/^[-+*>_]/, "\\$&").replace(/^(\d{1,9})([.)])(?= |$)/, "$1\\$2");
 }
 
 /**
