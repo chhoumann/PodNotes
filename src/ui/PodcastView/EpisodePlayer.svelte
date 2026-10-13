@@ -306,10 +306,12 @@
 		background: #000;
 	}
 
+	/* Square by aspect-ratio: Obsidian's mobile buttons override padding. */
 	.hover-container {
+		box-sizing: border-box;
 		width: 100%;
-		height: 0;
-		padding-bottom: 100%;
+		height: auto;
+		aspect-ratio: 1;
 		display: block;
 		position: relative;
 		border: none;
