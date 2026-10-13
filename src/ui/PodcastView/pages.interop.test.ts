@@ -5,7 +5,7 @@ import { createTestServices } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
 import EpisodesPage from "./EpisodesPage.svelte";
 import LibraryPage from "./LibraryPage.svelte";
-import type { Page } from "./pages";
+import ListPage from "./ListPage.svelte";
 
 const feed = {
 	title: "Test Podcast",
@@ -20,12 +20,6 @@ beforeEach(() => {
 });
 afterEach(() => context.dispose());
 
-function renderEpisodesPage(page: Page) {
-	render(WithServices, {
-		props: { services: context.services, component: EpisodesPage, props: { page } },
-	});
-}
-
 test("a podcast card opens the podcast's page", async () => {
 	const { services } = context;
 	render(WithServices, {
@@ -38,14 +32,22 @@ test("a podcast card opens the podcast's page", async () => {
 });
 
 test("a podcast's page is headed by the podcast", () => {
-	renderEpisodesPage({ kind: "feed", key: feed.title });
+	render(WithServices, {
+		props: { services: context.services, component: EpisodesPage, props: { key: feed.title } },
+	});
 
 	expect(screen.getByRole("heading", { name: feed.title })).toBeInTheDocument();
 });
 
 test("a list page leaves its heading to the shell", () => {
-	renderEpisodesPage({ kind: "latest" });
+	render(WithServices, {
+		props: {
+			services: context.services,
+			component: ListPage,
+			props: { page: { kind: "latest" } },
+		},
+	});
 
-	expect(screen.getByPlaceholderText("Search episodes")).toBeInTheDocument();
+	expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
 	expect(screen.queryByRole("heading")).toBeNull();
 });

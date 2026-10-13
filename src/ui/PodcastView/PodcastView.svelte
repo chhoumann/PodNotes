@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { Platform } from "obsidian";
 	import { onMount } from "svelte";
+	import { createEpisodeListEntries } from "src/utility/episodeListEntry";
 	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
 	import { icon } from "../obsidian/icon";
 	import AddPodcastPage from "./AddPodcastPage.svelte";
 	import { provideServices, type ShellServices } from "./context";
+	import EpisodeList from "./EpisodeList.svelte";
 	import EpisodesPage from "./EpisodesPage.svelte";
 	import { layoutFor, observeWidth, restoreScroll, type Layout } from "./layout";
 	import LibraryPage from "./LibraryPage.svelte";
+	import ListPage from "./ListPage.svelte";
 	import { anchorOf, podcastMenu, showMenu } from "./menus";
 	import MiniPlayer from "./MiniPlayer.svelte";
 	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
@@ -47,7 +50,12 @@
 	const overlaid = $derived(loaded && $navigation.expanded);
 
 	const head = $derived(
-		headFor(page, layout, $navigation.stack[$navigation.stack.length - 1]?.page, $feeds),
+		headFor(page, layout, $navigation.stack[$navigation.stack.length - 1]?.page, $feeds, {
+			queue: $queue,
+			favorites: $favorites,
+			playlists: $playlists,
+			played: $playedEpisodes,
+		}),
 	);
 
 	onMount(() => savedFeeds.subscribe(() => void feeds.ensureAll()));
@@ -111,6 +119,7 @@
 					{:else}
 						{#if head.title}
 							<h1 class="pn-head-title">{head.title}</h1>
+							{#if head.flair}<span class="flair">{head.flair}</span>{/if}
 						{/if}
 						<span class="pn-spacer"></span>
 					{/if}
@@ -162,7 +171,10 @@
 							navigation.rememberScroll(event.currentTarget.scrollTop)}
 					>
 						{#if head.pageTitle}
-							<div class="pn-title"><h1>{head.pageTitle}</h1></div>
+							<div class="pn-title">
+								<h1>{head.pageTitle}</h1>
+								{#if head.flair}<span class="flair">{head.flair}</span>{/if}
+							</div>
 						{/if}
 						{#if page.kind === "library"}
 							<LibraryPage {layout} {counts} />
@@ -170,8 +182,15 @@
 							<AddPodcastPage firstRun={false} />
 						{:else if page.kind === "playlists"}
 							<PlaylistsPage />
+						{:else if page.kind === "feed"}
+							<EpisodesPage key={page.key} />
+						{:else if page.kind === "queue"}
+							<EpisodeList
+								entries={createEpisodeListEntries($queue.episodes)}
+								cover
+							/>
 						{:else}
-							<EpisodesPage {page} />
+							<ListPage {page} />
 						{/if}
 					</div>
 				{/key}
@@ -473,12 +492,25 @@
 			text-overflow: ellipsis;
 		}
 
-		.pn-navitem .flair {
+		/* Obsidian styles .flair as a tag; here it is plain muted text. */
+		.flair {
+			flex: none;
 			padding: 0;
 			background: none;
 			color: var(--text-muted);
-			font-size: var(--font-ui-smaller);
+			font-size: var(--font-ui-small);
+			white-space: nowrap;
 			font-variant-numeric: tabular-nums;
+		}
+
+		.pn-head .flair {
+			align-self: center;
+			margin-left: var(--size-4-2);
+			padding-top: 3px;
+		}
+
+		.pn-navitem .flair {
+			font-size: var(--font-ui-smaller);
 		}
 
 		.pn-back,
@@ -667,9 +699,19 @@
 		}
 
 		.pn-panel-empty {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: var(--size-4-3);
 			padding: var(--size-4-8) var(--size-4-3);
 			color: var(--text-muted);
 			text-align: center;
+		}
+
+		.pn-panel-empty-icon {
+			display: flex;
+			--icon-size: 28px;
+			--icon-stroke: 1.5px;
 		}
 
 		/* Obsidian's buttons keep their text on one line; these wrap their titles. */
@@ -886,6 +928,30 @@
 
 		.pn-ep-meta .sep {
 			color: var(--text-faint);
+		}
+
+		/* Sidebar and phone: the source takes its own line, so nothing truncates. */
+		.pn-ep-meta .pod {
+			min-width: 0;
+			overflow-wrap: anywhere;
+		}
+
+		.pn-brk {
+			flex-basis: 100%;
+			height: 0;
+		}
+
+		.pn-brk + .sep {
+			display: none;
+		}
+
+		.pn-filetile {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: var(--background-modifier-border);
+			color: var(--text-muted);
+			--icon-size: 18px;
 		}
 
 		.pn-bar {
@@ -1125,6 +1191,31 @@
 	}
 
 	.is-wide :global {
+		/* The pane keeps a row's metadata on one line; the source gives way. */
+		.pn-ep-meta {
+			flex-wrap: nowrap;
+			white-space: nowrap;
+		}
+
+		.pn-ep-meta > * {
+			flex: none;
+		}
+
+		.pn-ep-meta .pod {
+			flex: 0 1 auto;
+			min-width: 24px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.pn-brk {
+			display: none;
+		}
+
+		.pn-brk + .sep {
+			display: inline;
+		}
+
 		.pn-grid {
 			grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
 			gap: var(--size-4-4);

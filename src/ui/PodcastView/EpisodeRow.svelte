@@ -9,12 +9,15 @@
 	let {
 		episode,
 		cover = false,
+		date = !cover,
 		available = true,
 		onplay,
 		onmenu,
 	}: {
 		episode: Episode;
 		cover?: boolean;
+		/** The episode's date. Rows with a cover name their source instead, except Latest's. */
+		date?: boolean;
 		available?: boolean;
 		onplay(): void;
 		onmenu(at: MenuAnchor): void;
@@ -37,6 +40,7 @@
 			playing,
 			hasNote: noted,
 			cover,
+			date,
 			available,
 		}),
 	);
@@ -59,17 +63,23 @@
 		onclick={onplay}
 		oncontextmenu={menu}
 	>
-		{#if cover}<Cover src={episode.artworkUrl} title={episode.podcastName} />{/if}
+		{#if row.tile}
+			<span class="pn-cover pn-filetile" {@attach icon(row.tile)}></span>
+		{:else if cover}
+			<Cover src={episode.artworkUrl} title={episode.podcastName} />
+		{/if}
 		<span class="pn-ep-text">
 			<span class="pn-ep-title">{episode.title}</span>
-			{#if cover}<span class="pn-ep-meta">{episode.podcastName}</span>{/if}
 			<span class="pn-ep-meta">
 				{#if row.current}
 					<span class="pn-eq" class:paused={!row.playing}><i></i><i></i><i></i></span>
 				{/if}
 				{#if row.played}<span {@attach icon("check")}></span>{/if}
+				{#if row.source}
+					<span class="pod">{row.source}</span><span class="pn-brk"></span>
+				{/if}
 				{#each row.meta as text, index (index)}
-					{#if index}<span class="sep">·</span>{/if}
+					{#if index || row.source}<span class="sep">·</span>{/if}
 					{#if row.progress !== undefined && index === row.meta.length - 1}
 						<span class="pn-bar"><span style:width="{row.progress * 100}%"></span></span
 						>
