@@ -274,16 +274,25 @@ describe("dragging a grip", () => {
 		expect(document.querySelector(".pn-grip.is-dragging")).toBeNull();
 	});
 
-	test("leaving the page stops listening", async () => {
+	test("leaving the page mid-drag removes every listener the drag added", async () => {
 		const { unmount } = renderQueue(a, b, c);
 		layOutRows();
+		const added = vi.spyOn(window, "addEventListener");
 		const removed = vi.spyOn(window, "removeEventListener");
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		const listening = added.mock.calls.map(([type, listener]) => [type, listener]);
+		expect(removed).not.toHaveBeenCalled();
 		unmount();
 
-		expect(removed.mock.calls.map(([type]) => type)).toEqual(
-			expect.arrayContaining(["pointermove", "pointerup", "pointercancel", "keydown"]),
+		expect(listening.map(([type]) => type)).toEqual([
+			"pointermove",
+			"pointerup",
+			"pointercancel",
+			"keydown",
+		]);
+		expect(removed.mock.calls.map(([type, listener]) => [type, listener])).toEqual(
+			expect.arrayContaining(listening),
 		);
 	});
 });
