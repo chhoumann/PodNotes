@@ -17,6 +17,8 @@ import type { PodcastSegmentTimes } from "./utility/podcastSegment";
 import type { Chapter } from "./types/Chapter";
 import { normalizeChapters } from "./utility/normalizeChapters";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
+import { privateFeedAddresses } from "./services/privateFeeds";
+import { redactPrivateFeedAddresses, vaultSafeFeedUrl } from "./utility/privateFeedUrl";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -32,7 +34,7 @@ type ReplacerFn = (template: string) => string;
 
 // The optional argument group uses `.*?` (zero-or-more), so a bare trailing
 // colon ({{date:}}) is captured AS the argument group (params === ":") rather
-// than being absorbed into the tag id — which previously yielded tagId "date:",
+// than being absorbed into the tag id - which previously yielded tagId "date:",
 // an unknown tag, and a spurious "invalid tag" Notice (NT-05/CH-09).
 const TEMPLATE_TAG_REGEX = /\{\{(.*?)(:\s*.*?)?\}\}/g;
 
@@ -44,6 +46,28 @@ export function templateHasTag(template: string, tag: Lowercase<string>): boolea
 	return Array.from(template.matchAll(TEMPLATE_TAG_REGEX)).some(
 		([, tagId]) => tagId.toLowerCase() === tag,
 	);
+}
+
+/**
+ * `value` with each private feed address this device knows, and an episode's own
+ * credential-bearing feed, replaced by its placeholder. Templates read this copy,
+ * because escaping, Markdown conversion and file-name stripping would disguise
+ * an address from the matcher.
+ */
+export function withoutPrivateFeedAddresses<T>(value: T): T {
+	const instance = get(plugin);
+	return redactPrivateFeedAddresses(
+		value,
+		instance?.feedUrls && privateFeedAddresses(instance.settings.savedFeeds, instance.feedUrls),
+	);
+}
+
+/**
+ * `feed` as notes may show it, with its own credential-bearing URL counted as an
+ * address. Its placeholder names no feed, since the title may quote the URL.
+ */
+function withoutFeedAddresses(feed: PodcastFeed): PodcastFeed {
+	return withoutPrivateFeedAddresses({ ...feed, feedUrl: feed.url });
 }
 
 function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
@@ -74,7 +98,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 				if (typeof tagValue === "function") {
 					// Everything after the leading colon is a single argument. A bare
 					// trailing colon ({{date:}}) means "use the tag default", same as a
-					// bare {{date}} — not an empty format string (NT-05/CH-09). Only an
+					// bare {{date}} - not an empty format string (NT-05/CH-09). Only an
 					// EMPTY argument is collapsed; a whitespace argument ({{description: }})
 					// is preserved so the obscure space-prepend usage still works.
 					const arg = params ? params.slice(1) : "";
@@ -128,7 +152,7 @@ function legalizedNameTag(
  * template engine: {{title}} and {{podcast}} (illegal-character-stripped, with an
  * optional whitespace-replacement arg), {{date}} (episode publish date),
  * {{currentdate}}, and {{episodenumber}}. NoteTemplateEngine intentionally does
- * NOT use this — there {{title}} is the raw episode title, not a file name.
+ * NOT use this - there {{title}} is the raw episode title, not a file name.
  */
 function addEpisodeFileNameTags(
 	addTag: AddTagFn,
@@ -279,10 +303,16 @@ function resolveEpisodeUrl(episode: Episode): string {
 
 export function NoteTemplateEngine(
 	template: string,
-	episode: Episode,
+	liveEpisode: Episode,
 	context: NoteTemplateContext = {},
 ) {
 	const [replacer, addTag] = useTemplateEngine();
+	const [redacted, chapters] = withoutPrivateFeedAddresses([
+		liveEpisode,
+		context.chapters,
+	] as const);
+	// A placeholder made up for an unsaved feed names nothing, so such a feed gets no address.
+	const episode = { ...redacted, feedUrl: vaultSafeFeedUrl(liveEpisode.feedUrl) };
 
 	const episodeUrl = resolveEpisodeUrl(episode);
 
@@ -332,7 +362,7 @@ export function NoteTemplateEngine(
 	// Podcasting 2.0 chapters, fetched before note creation when the template
 	// asks for them. Empty when the feed has no chapters URL or fetching fails.
 	addTag("chapters", (prependToLines?: string) =>
-		formatTemplateChapters(context.chapters, prependToLines),
+		formatTemplateChapters(chapters, prependToLines),
 	);
 	addTag("podcast", replaceIllegalFileNameCharactersInString(episode.podcastName));
 	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
@@ -410,7 +440,7 @@ export function FilePathTemplateEngine(
 ) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	addEpisodeFileNameTags(addTag, episode, sanitizeFileName);
+	addEpisodeFileNameTags(addTag, withoutPrivateFeedAddresses(episode), sanitizeFileName);
 
 	return replacer(template);
 }
@@ -431,17 +461,21 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 
 	const [replacer, addTag] = useTemplateEngine();
 
-	addEpisodeFileNameTags(addTag, episode);
+	addEpisodeFileNameTags(addTag, withoutPrivateFeedAddresses(episode));
 
 	return replacer(templateWithoutExtension);
 }
 
 export function TranscriptTemplateEngine(
 	template: string,
-	episode: Episode,
-	transcription: string,
+	liveEpisode: Episode,
+	liveTranscription: string,
 ) {
 	const [replacer, addTag] = useTemplateEngine();
+	const [episode, transcription] = withoutPrivateFeedAddresses([
+		liveEpisode,
+		liveTranscription,
+	] as const);
 
 	addEpisodeFileNameTags(addTag, episode);
 	addTag("duration", (format?: string) =>
@@ -464,8 +498,9 @@ export function TranscriptTemplateEngine(
 	return replacer(template);
 }
 
-export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
+export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) {
 	const [replacer, addTag] = useTemplateEngine();
+	const feed = withoutFeedAddresses(liveFeed);
 
 	const safeTitle = replaceIllegalFileNameCharactersInString(feed.title);
 
@@ -480,7 +515,7 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 	// inside quoted YAML frontmatter scalars (the default feed template uses both).
 	// A well-formed URL never contains the characters this neutralizes.
 	addTag("url", sanitizeUrlForTemplate(feed.link ?? ""));
-	addTag("feedurl", sanitizeUrlForTemplate(feed.url));
+	addTag("feedurl", sanitizeUrlForTemplate(vaultSafeFeedUrl(liveFeed.url) ?? ""));
 	addTag("artwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("feedartwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
@@ -506,7 +541,7 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 export function FeedFilePathTemplateEngine(template: string, feed: PodcastFeed) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	const nameTag = legalizedNameTag(feed.title);
+	const nameTag = legalizedNameTag(withoutFeedAddresses(feed).title);
 	addTag("title", nameTag);
 	addTag("podcast", nameTag);
 	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
