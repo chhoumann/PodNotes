@@ -384,6 +384,22 @@ describe("full player", () => {
 			expect(await escape()).toBe(true);
 		});
 
+		test("leaves a modal above the player when its window regains focus", async () => {
+			renderView();
+			playing();
+			await tick();
+			await fireEvent.click(button(`Open player: ${episode.title}`));
+			const modal = new obsidian.Scope(services.app.scope);
+			modal.register(null, "Escape", () => false);
+			services.app.keymap.pushScope(modal);
+
+			window.dispatchEvent(new Event("focus"));
+			await escape();
+
+			expect(services.navigation.current.expanded).toBe(true);
+			services.app.keymap.popScope(modal);
+		});
+
 		test("typed outside the view stays there", async () => {
 			const note = document.body.appendChild(document.createElement("textarea"));
 			renderView();

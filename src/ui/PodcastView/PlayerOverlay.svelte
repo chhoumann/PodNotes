@@ -13,9 +13,10 @@
 
 	// Obsidian's keymap gives Escape to the newest scope, so a menu or modal opened
 	// over the player closes first. It keeps one stack per window and pushes onto the
-	// active window's, so the scope follows the view's window: on mount, on each focus
-	// of that window, and when the view moves to another one. Escape typed elsewhere,
-	// as in an editor, stays there.
+	// active window's, so the scope goes onto the stack of the view's window once that
+	// window is active, and moves when the view moves to another window. It is pushed
+	// once: pushing it again on a later focus would lift it over a modal opened since.
+	// Escape typed elsewhere, as in an editor, stays there.
 	$effect(() => {
 		const scope = new Scope(app.scope);
 		scope.register(null, "Escape", (evt) => {
@@ -24,18 +25,23 @@
 			void collapse();
 			return false;
 		});
+		let win = viewRoot.win;
+		let pushed = false;
 		// Obsidian's own focus listener runs first and makes the window active.
 		const push = () => {
-			if (activeWindow !== viewRoot.win) return;
-			app.keymap.popScope(scope);
+			if (pushed || activeWindow !== win) return;
 			app.keymap.pushScope(scope);
+			pushed = true;
 		};
-		let win = viewRoot.win;
+		const pop = () => {
+			app.keymap.popScope(scope);
+			pushed = false;
+		};
 		win.addEventListener("focus", push);
 		push();
 		const stopFollowing = viewRoot.onWindowMigrated((next) => {
 			win.removeEventListener("focus", push);
-			app.keymap.popScope(scope);
+			pop();
 			win = next;
 			win.addEventListener("focus", push);
 			push();
@@ -43,7 +49,7 @@
 		return () => {
 			stopFollowing();
 			win.removeEventListener("focus", push);
-			app.keymap.popScope(scope);
+			pop();
 		};
 	});
 
