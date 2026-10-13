@@ -26,7 +26,7 @@ function renderEpisodesPage(page: Page) {
 	});
 }
 
-test("a podcast card in the legacy grid opens the podcast's page", async () => {
+test("a podcast card opens the podcast's page", async () => {
 	const { services } = context;
 	render(WithServices, {
 		props: { services, component: LibraryPage, props: { layout: "compact", counts: {} } },
@@ -37,17 +37,15 @@ test("a podcast card in the legacy grid opens the podcast's page", async () => {
 	expect(services.navigation.current.page).toEqual({ kind: "feed", key: feed.title });
 });
 
-test("a podcast's page heads the legacy episode list with the podcast", () => {
+test("a podcast's page is headed by the podcast", () => {
 	renderEpisodesPage({ kind: "feed", key: feed.title });
 
 	expect(screen.getByRole("heading", { name: feed.title })).toBeInTheDocument();
-	expect(screen.queryByText("Fallback")).toBeNull();
 });
 
-test("a list page gives the legacy episode list no heading", () => {
+test("a list page leaves its heading to the shell", () => {
 	renderEpisodesPage({ kind: "latest" });
 
 	expect(screen.getByPlaceholderText("Search episodes")).toBeInTheDocument();
 	expect(screen.queryByRole("heading")).toBeNull();
-	expect(screen.queryByText("Fallback")).toBeNull();
 });

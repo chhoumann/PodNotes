@@ -1,30 +1,36 @@
 <script lang="ts">
-	import { debounce, Notice } from "obsidian";
+	import { Notice } from "obsidian";
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
-	import type { FeedKey, LoadMode } from "src/services/FeedRepository";
+	import type { FeedKey, FeedState, LoadMode } from "src/services/FeedRepository";
 	import { notifyPrivateFeedUnavailable } from "src/services/privateFeeds";
-	import type { Episode } from "src/types/Episode";
 	import {
 		buildPlayedEpisodeListEntries,
+		createEpisodeListEntries,
 		type EpisodeListEntry,
-		type PlayedEpisodeListEntry,
 	} from "src/utility/episodeListEntry";
+	import { isEpisodeFinished } from "src/utility/episodeStatus";
+	import checkStringIsUrl from "src/utility/checkStringIsUrl";
+	import { isPrivateFeedPlaceholder } from "src/utility/privateFeedUrl";
 	import searchEpisodes from "src/utility/searchEpisodes";
-	import Icon from "../obsidian/Icon.svelte";
+	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import EpisodeList from "./EpisodeList.svelte";
-	import EpisodeListHeader from "./EpisodeListHeader.svelte";
+	import Cover from "./Cover.svelte";
 	import {
 		feedKeysWithPlayedEpisodes,
 		selectFeedEpisodes,
 		selectLatestEpisodes,
 	} from "./episodeListSelection";
+	import { rowKeys } from "./episodeRow";
+	import EpisodeRow from "./EpisodeRow.svelte";
+	import { episodeMenu, openEpisode, showMenu } from "./menus";
 	import type { ListPage } from "./pages";
-	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
+	import SearchField from "./SearchField.svelte";
 
+	/** Every list of episodes. A podcast's page also has its hero and its feed's state. */
 	let { page }: { page: ListPage } = $props();
-	const { player, feeds, navigation, library } = useServices();
+	const services = useServices();
+	const { feeds, actions, library } = services;
 	const {
 		savedFeeds,
 		queue,
@@ -34,6 +40,7 @@
 		playedEpisodes,
 		downloadedEpisodes,
 		episodeListLimit,
+		hidePlayedEpisodes,
 	} = library;
 	let query = $state("");
 
@@ -49,42 +56,41 @@
 						)
 					: undefined,
 	);
-	const shownEpisodes = $derived(
-		feedState
-			? selectFeedEpisodes(feedState, $downloadedEpisodes)
-			: (playlist?.episodes ?? selectLatestEpisodes($feeds, $episodeListLimit)),
-	);
-	const playedEntries = $derived(
-		page.kind === "played"
-			? filterPlayedEntries(
-					buildPlayedEpisodeListEntries($playedEpisodes, [
-						...Array.from($feeds.values(), ({ episodes }) => episodes),
-						...Object.values($downloadedEpisodes),
-						$queue.episodes,
-						$favorites.episodes,
-						$localFiles.episodes,
-						...Object.values($playlists).map(({ episodes }) => episodes),
-					]),
+	const entries: (EpisodeListEntry & { playedEpisodeKey?: string })[] = $derived.by(() => {
+		if (page.kind === "played") {
+			const played = buildPlayedEpisodeListEntries($playedEpisodes, [
+				...Array.from($feeds.values(), ({ episodes }) => episodes),
+				...Object.values($downloadedEpisodes),
+				$queue.episodes,
+				$favorites.episodes,
+				$localFiles.episodes,
+				...Object.values($playlists).map(({ episodes }) => episodes),
+			]);
+			const found = new Set(
+				searchEpisodes(
 					query,
-				)
-			: null,
-	);
-	const episodes = $derived(
-		playedEntries
-			? playedEntries.map(({ episode }) => episode)
-			: searchEpisodes(query, shownEpisodes),
-	);
-
-	// The open podcast's own loading shows as the list's spinner, so the banner leaves it out.
-	const bannerFeedNames = $derived(
-		Array.from($feeds.values())
-			.filter((state) => state.status === "loading" && state !== feedState)
-			.map(({ feed }) => feed.title),
-	);
-	const loadingFeedSummary = $derived(
-		bannerFeedNames.length > 3
-			? `${bannerFeedNames.slice(0, 3).join(", ")} +${bannerFeedNames.length - 3} more`
-			: bannerFeedNames.join(", "),
+					played.map(({ episode }) => episode),
+				),
+			);
+			return played.filter(({ episode }) => found.has(episode));
+		}
+		const listed = createEpisodeListEntries(
+			searchEpisodes(
+				query,
+				feedState
+					? selectFeedEpisodes(feedState, $downloadedEpisodes)
+					: (playlist?.episodes ?? selectLatestEpisodes($feeds, $episodeListLimit)),
+			),
+		);
+		return $hidePlayedEpisodes
+			? listed.filter(({ episode }) => !isEpisodeFinished(episode, $playedEpisodes))
+			: listed;
+	});
+	const loading = $derived(
+		feedState
+			? feedState.status === "loading"
+			: (page.kind === "latest" || page.kind === "played") &&
+					Array.from($feeds.values()).some(({ status }) => status === "loading"),
 	);
 
 	// On mount, not on the click that opened the page, so a page restored at startup loads too.
@@ -92,28 +98,6 @@
 		if (page.kind === "feed") void loadFeed(page.key, "complete");
 		if (page.kind === "played") void loadPlayedFeeds("complete");
 	});
-
-	function filterPlayedEntries(
-		entries: PlayedEpisodeListEntry[],
-		search: string,
-	): PlayedEpisodeListEntry[] {
-		if (!search) return entries;
-
-		const entriesByEpisode = new Map(entries.map((entry) => [entry.episode, entry]));
-
-		return searchEpisodes(
-			search,
-			entries.map((entry) => entry.episode),
-		)
-			.map((episode) => entriesByEpisode.get(episode))
-			.filter((entry): entry is PlayedEpisodeListEntry => Boolean(entry));
-	}
-
-	function getPlayedEpisodeKey(entry: EpisodeListEntry): string | undefined {
-		if (!("playedEpisodeKey" in entry)) return undefined;
-
-		return typeof entry.playedEpisodeKey === "string" ? entry.playedEpisodeKey : undefined;
-	}
 
 	// Only an interactive load reports a failure. A network failure is reported
 	// only when nothing can be shown.
@@ -136,121 +120,105 @@
 		return feeds.load(feedKeysWithPlayedEpisodes(get(savedFeeds), get(playedEpisodes)), mode);
 	}
 
-	function handleClickEpisode(event: CustomEvent<{ episode: Episode; entry: EpisodeListEntry }>) {
-		const { episode, entry } = event.detail;
-		if (!entry.isAvailable) {
-			new Notice("This played episode is no longer available in current feeds.");
-			return;
-		}
-
-		player.play(episode);
-		navigation.expand();
-	}
-
-	function handleContextMenuEpisode({
-		detail: { event, episode, entry },
-	}: CustomEvent<{ episode: Episode; entry: EpisodeListEntry; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(
-			episode,
-			event,
-			entry.isAvailable
-				? undefined
-				: {
-						play: true,
-						download: true,
-						createNote: true,
-						favorite: true,
-						queue: true,
-						playlists: true,
-					},
-			getPlayedEpisodeKey(entry),
-			page.kind === "queue",
-		);
-	}
-
-	function handleClickRefresh() {
+	function refresh() {
 		if (page.kind === "feed") void loadFeed(page.key, "network");
 		else if (page.kind === "played") void loadPlayedFeeds("network");
-		else if (page.kind === "latest") void feeds.load(get(feeds).keys(), "network");
+		else void feeds.load(get(feeds).keys(), "network");
 	}
 
-	const handleSearch = debounce((event: CustomEvent<{ query: string }>) => {
-		query = event.detail.query;
-	}, 250);
+	/** Which server failed, without the address: a private feed's address is a secret. */
+	function failedSource({ error, feed }: FeedState): string {
+		if (error === "unavailable") return "Address not on this device";
+		if (isPrivateFeedPlaceholder(feed.url)) return "Private feed";
+		return checkStringIsUrl(feed.url)?.host ?? "";
+	}
 </script>
 
-{#if bannerFeedNames.length > 0}
-	<div class="feed-loading-banner">
-		<div class="feed-loading-spinner">
-			<Icon icon="loader-2" size={18} clickable={false} />
-		</div>
-		<div class="feed-loading-text">
-			<span>
-				Updating {bannerFeedNames.length} feed{bannerFeedNames.length === 1 ? "" : "s"}
-			</span>
-			{#if loadingFeedSummary}
-				<span class="feed-loading-names">{loadingFeedSummary}</span>
-			{/if}
+{#if feedState && page.kind === "feed"}
+	{@const { feed, channel, error } = feedState}
+	{@const key = page.key}
+	<div class="pn-hero">
+		<Cover src={feed.artworkUrl} title={feed.title} />
+		<div>
+			<h1 title={feed.title}>{feed.title}</h1>
+			<div class="by">{channel?.author ?? feed.author ?? ""}</div>
 		</div>
 	</div>
+	{#if error}
+		<div class="pn-banner" role="alert">
+			<span class="pn-banner-icon" {@attach icon("alert-triangle")}></span>
+			<div class="txt">
+				<div class="h">Feed didn't load</div>
+				<div class="d">{failedSource(feedState)}</div>
+			</div>
+			{#if error === "unavailable"}
+				<button type="button" class="pn-btn" onclick={() => actions.setFeedAddress(key)}>
+					Set feed address
+				</button>
+			{:else}
+				<button type="button" class="pn-btn" disabled={loading} onclick={refresh}
+					>Retry</button
+				>
+			{/if}
+		</div>
+	{/if}
 {/if}
-<EpisodeList
-	{episodes}
-	episodeEntries={playedEntries}
-	showThumbnails={page.kind !== "queue" && page.kind !== "local" && page.kind !== "playlist"}
-	showPlayedToggle={page.kind !== "played"}
-	alwaysShowPlayedEpisodes={page.kind === "played"}
-	isLoading={feedState ? feedState.status === "loading" : bannerFeedNames.length > 0}
-	on:clickEpisode={handleClickEpisode}
-	on:contextMenuEpisode={handleContextMenuEpisode}
-	on:clickRefresh={handleClickRefresh}
-	on:search={handleSearch}
->
-	<svelte:fragment slot="header">
-		{#if feedState}
-			<EpisodeListHeader text={feedState.feed.title} artworkUrl={feedState.feed.artworkUrl} />
-		{/if}
-	</svelte:fragment>
-</EpisodeList>
 
-<style>
-	.feed-loading-banner {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-		width: 100%;
-		padding: 0.625rem 0.75rem;
-		background: var(--background-secondary);
-		border-bottom: 1px solid var(--background-modifier-border);
-		box-sizing: border-box;
-	}
+<div class="pn-filter">
+	<SearchField value={query} placeholder="Search episodes" oninput={(value) => (query = value)} />
+	{#if page.kind !== "played"}
+		{@const label = $hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
+		<button
+			type="button"
+			class="pn-iconbtn"
+			aria-pressed={$hidePlayedEpisodes}
+			aria-label={label}
+			title={label}
+			onclick={() => hidePlayedEpisodes.update((hidden) => !hidden)}
+			{@attach icon("eye-off")}
+		></button>
+	{/if}
+	{#if page.kind === "feed" || page.kind === "latest" || page.kind === "played"}
+		<button
+			type="button"
+			class="pn-iconbtn"
+			aria-label="Refresh episodes"
+			title="Refresh episodes"
+			onclick={refresh}
+			{@attach icon("refresh-cw")}
+		></button>
+	{/if}
+</div>
 
-	.feed-loading-spinner {
-		display: inline-flex;
-		color: var(--interactive-accent);
-		animation: spin 1s linear infinite;
-	}
-
-	.feed-loading-text {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		font-size: 0.85rem;
-		color: var(--text-normal);
-	}
-
-	.feed-loading-names {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-	}
-
-	@keyframes spin {
-		from {
-			transform: rotate(0deg);
-		}
-
-		to {
-			transform: rotate(360deg);
-		}
-	}
-</style>
+{#if loading}
+	<div class="pn-count" role="status">Loading episodes</div>
+{/if}
+{#if entries.length > 0}
+	<div class="pn-list" role="list">
+		{#each rowKeys(entries) as [key, entry] (key)}
+			{@const { episode, isAvailable } = entry}
+			<EpisodeRow
+				{episode}
+				available={isAvailable}
+				cover={page.kind === "latest" || page.kind === "played"}
+				onplay={() => openEpisode(services, episode, isAvailable)}
+				onmenu={(at) =>
+					showMenu(
+						episodeMenu(episode, services, {
+							place: page.kind === "queue" ? "queue" : "list",
+							at,
+							available: isAvailable,
+							playedKey: entry.playedEpisodeKey,
+						}),
+						at,
+					)}
+			/>
+		{/each}
+	</div>
+{:else if !loading}
+	<div class="pn-panel-empty">
+		{query || ($hidePlayedEpisodes && page.kind !== "played")
+			? "No episodes match"
+			: "No episodes"}
+	</div>
+{/if}

@@ -13,9 +13,8 @@ const LIBRARY_STORES = new Set([
 	"episodeListLimit",
 	"hidePlayedEpisodes",
 ]);
-// The legacy list and menu the shell hosts unchanged, which read the stores themselves,
-// and MainView, which fills `ShellServices.library` from them.
-const ALLOWED = new Set(["EpisodeList.svelte", "spawnEpisodeContextMenu.ts", "index.ts"]);
+// MainView, which fills `ShellServices.library` from them.
+const ALLOWED = new Set(["index.ts"]);
 
 const STORE_MODULE = String.raw`"(?:src\/|(?:\.\.\/)+)store(?:\/[^"]*)?"`;
 // `import { queue }`, `export { queue as q }`: named bindings of src/store or one of its modules.
