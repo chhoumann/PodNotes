@@ -514,7 +514,7 @@ describe("the Queue page's menu", () => {
 		queue.add(episode);
 
 		expect(titles(queueMenu(services))).toEqual([
-			"Queue episodes I switch from",
+			"Queue episodes I switch away from",
 			"---",
 			"Clear queue",
 		]);
@@ -525,10 +525,10 @@ describe("the Queue page's menu", () => {
 	test("the preference item sets the opposite of what its menu showed, so a stale menu repeats", () => {
 		const open = queueMenu(services);
 
-		choose(open, "Queue episodes I switch from");
+		choose(open, "Queue episodes I switch away from");
 		expect(queueSettings()).toBe(false);
 		expect(queueMenu(services)[0]).toMatchObject({ checked: false });
-		choose(open, "Queue episodes I switch from");
+		choose(open, "Queue episodes I switch away from");
 		expect(services.setAutoQueue.mock.calls).toEqual([[false], [false]]);
 	});
 

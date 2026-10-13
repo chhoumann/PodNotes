@@ -259,7 +259,7 @@ describe("list pages", () => {
 		);
 		await fireEvent.click(button("Queue options"));
 		expect(titles.mock.calls.map(([title]) => title)).toEqual([
-			"Queue episodes I switch from",
+			"Queue episodes I switch away from",
 			"Clear queue",
 		]);
 	});

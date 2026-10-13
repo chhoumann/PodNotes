@@ -288,7 +288,7 @@ export function queueMenu({
 	const auto = get(settings).autoQueue;
 	return [
 		{
-			title: "Queue episodes I switch from",
+			title: "Queue episodes I switch away from",
 			icon: "list-end",
 			checked: auto,
 			onClick: () => setAutoQueue(!auto),
