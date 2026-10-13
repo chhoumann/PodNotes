@@ -154,6 +154,13 @@ npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/player/flow.mp4 -- .obsid
 npm run capture:e2e-obsidian -- sheet .obsidian-e2e-artifacts/player/flow.mp4 .obsidian-e2e-artifacts/player/flow-sheet.png
 ```
 
+For a before/after comparison with the v3 design, capture the view at the
+design's widths (sidebar 320, pane 820, phone 390) in both themes:
+
+```bash
+node .claude/skills/verify/screens.mjs set all <label>   # five states, plus a sheet each beside the prototype
+```
+
 `screenshot` and `record` reveal the PodNotes view first and fail without
 capturing when it does not open. `record` then records the window while the driver runs.
 The driver is an executable script of `ui.mjs` and `obsidian:e2e` calls with short
@@ -198,8 +205,19 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   wait until nothing covers the element's center, and fail with
   `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
+- `.claude/skills/verify/screens.mjs` captures pixels, not behavior. Its verbs
+  are `place <sidebar|pane|phone>` (fails unless the view measures 320 x 720,
+  820 x 680, or a 390 x 844 phone screen), `theme <light|dark>`,
+  `seed <empty|library|episodes>` (replaces `data.json` while PodNotes is
+  disabled), `go '<page JSON>'`, `shot <file.png>`, and
+  `set <state|all> <label> [--widths ...] [--themes ...]`. `set` writes
+  `.obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png` and a
+  `<state>-sheet.png` with the design prototype's screen beside each shot. The
+  states are `first-run`, `add-podcast`, `library`, `episodes` and `error-feed`.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
-  `requests`, `audio [vault path]` or `stop`. `requests` prints the paths
+  `library`, `requests`, `audio [vault path]` or `stop`. `library` prints the
+  URL of a manifest of eight podcasts, one whose feed answers 404, and one more
+  feed to add. `requests` prints the paths
   PodNotes fetched from the server. The feed URL uses the host `podnotes.test`,
   because PodNotes refuses literal loopback hosts. The instance maps it to
   127.0.0.1 with Chromium's `--host-resolver-rules`, so it needs no DNS, and an
