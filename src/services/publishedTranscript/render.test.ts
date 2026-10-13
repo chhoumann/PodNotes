@@ -224,11 +224,16 @@ describe("paragraph length", () => {
 			"* item",
 			"> quote",
 			"_ _ _",
+			"---",
+			"***",
 			"1. item",
 			"12) item",
 			"1234567890. item",
 			`${filler} - item`,
 			"1990 was a year.",
+			"**Host:** Welcome back.",
+			"_So_ it begins.",
+			"-1 degrees.",
 		];
 
 		expect(
@@ -239,12 +244,17 @@ describe("paragraph length", () => {
 			"\\* item",
 			"\\> quote",
 			"\\_ _ _",
+			"\\---",
+			"\\***",
 			"1\\. item",
 			"12\\) item",
 			"1234567890\\. item",
 			filler,
 			"\\- item",
 			"1990 was a year.",
+			"**Host:** Welcome back.",
+			"_So_ it begins.",
+			"-1 degrees.",
 		]);
 	});
 
@@ -257,6 +267,22 @@ describe("paragraph length", () => {
 				options,
 			),
 		).toBe(`00:00:01 **${"\\<".repeat(50)}:** Hi.`);
+	});
+
+	test("a long speaker on many paragraphs renders in linear time", () => {
+		const speaker = "<".repeat(64_000);
+		const cue = (index: number): TranscriptCue => ({ start: index * 10, speaker, text: "Hi." });
+		const cues: NonEmpty<TranscriptCue> = [
+			cue(0),
+			...Array.from({ length: 1_999 }, (_, index) => cue(index + 1)),
+		];
+
+		const started = performance.now();
+		const body = renderTranscriptBody({ kind: "timed", cues }, options);
+		const elapsed = performance.now() - started;
+
+		expect(body.split("\n\n")).toHaveLength(2_000);
+		expect(elapsed).toBeLessThan(500);
 	});
 });
 

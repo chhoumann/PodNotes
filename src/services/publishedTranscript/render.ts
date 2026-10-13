@@ -107,6 +107,16 @@ export function renderTranscriptBody(
 	}
 	const { episode, timestamp } = options;
 	const speakerTemplate = options.speakerTemplate || DEFAULT_SPEAKER_TEMPLATE;
+	const labels = new Map<string, string>();
+	const label = (speaker: string) => {
+		let written = labels.get(speaker);
+		if (written === undefined) {
+			const name = splitText(escapeTranscriptText(speaker), MAX_SPEAKER_LENGTH)[0];
+			written = formatSpeakerLabel(speakerTemplate, name);
+			labels.set(speaker, written);
+		}
+		return written;
+	};
 	const cues = transcript.cues.flatMap((cue) =>
 		splitText(escapeTranscriptText(cue.text), MAX_PARAGRAPH_LENGTH).map((text) => ({
 			...cue,
@@ -121,20 +131,16 @@ export function renderTranscriptBody(
 				timestamp.format,
 				timestamp.linkify,
 			);
-			const label = speaker
-				? formatSpeakerLabel(
-						speakerTemplate,
-						splitText(escapeTranscriptText(speaker), MAX_SPEAKER_LENGTH)[0],
-					)
-				: "";
-			return `${time} ${label}${text}`;
+			return `${time} ${speaker ? label(speaker) : ""}${text}`;
 		})
 		.join("\n\n");
 }
 
 /** A list marker, quote or thematic break that starts an untimed paragraph stays text. */
 function escapeParagraphStart(text: string): string {
-	return text.replace(/^[-+*>_]/, "\\$&").replace(/^(\d+)([.)])(?= |$)/, "$1\\$2");
+	return text
+		.replace(/^(?:[-+*](?= |$)|>|([-*_])(?: ?\1){2,}$)/, "\\$&")
+		.replace(/^(\d+)([.)])(?= |$)/, "$1\\$2");
 }
 
 /**
