@@ -548,10 +548,14 @@ describe("feed journeys", () => {
 				message: "Alpha's delayed response to update the cache",
 			},
 		);
-		await obsidian.waitFor(async () => !(await feedsLoading(obsidian)), {
-			timeoutMs: 15_000,
-			message: "the delayed refresh to settle on Beta",
-		});
+		await obsidian.waitFor(
+			async () =>
+				!(await feedsLoading(obsidian)) && !(await isShown(obsidian, ui.episodeLoading)),
+			{
+				timeoutMs: 15_000,
+				message: "the delayed refresh to settle on Beta",
+			},
+		);
 		expect(await listedEpisodes(obsidian)).toEqual(["Beta Two", "Beta One"]);
 
 		await showLibrary(obsidian);
@@ -578,7 +582,9 @@ describe("feed journeys", () => {
 		);
 		await obsidian.waitFor(
 			async () =>
-				(await listedEpisodes(obsidian)).length === 4 && !(await feedsLoading(obsidian)),
+				(await listedEpisodes(obsidian)).length === 4 &&
+				!(await feedsLoading(obsidian)) &&
+				!(await isShown(obsidian, ui.episodeLoading)),
 			{
 				timeoutMs: 15_000,
 				message: "Latest Episodes after the delayed refresh",
