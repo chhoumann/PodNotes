@@ -225,7 +225,7 @@ describe("the full player", () => {
 			"aria-disabled",
 			"true",
 		);
-		expect(button("Capture timestamp")).toBeEnabled();
+		expect(button("Timestamp")).toBeEnabled();
 		expect(button("Episode options")).toBeEnabled();
 
 		await fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
@@ -263,7 +263,7 @@ describe("the full player", () => {
 
 	test("Timestamp reads Added for 1.2 s after a capture, and not when nothing was captured", async () => {
 		await openPlayer();
-		const timestamp = button("Capture timestamp");
+		const timestamp = button("Timestamp");
 		const reads = () => [
 			timestamp.textContent,
 			timestamp.querySelector("[data-icon]")?.getAttribute("data-icon"),
@@ -284,6 +284,7 @@ describe("the full player", () => {
 		await fireEvent.click(timestamp);
 		await tick();
 		expect(reads()).toEqual(["Added", "check"]);
+		expect(button("Added")).toBe(timestamp);
 
 		vi.advanceTimersByTime(1199);
 		await tick();
@@ -364,7 +365,14 @@ describe("the player's panels", () => {
 				"true",
 			),
 		);
-		expect(screen.getByRole("list", { name: "Chapters" })).toBeInTheDocument();
+		expect(
+			within(screen.getByRole("tabpanel", { name: "Chapters" })).getByRole("list", {
+				name: "Chapters",
+			}),
+		).toBeInTheDocument();
+		expect(screen.getByRole("tabpanel").id).toBe(
+			screen.getByRole("tab", { name: "Chapters" }).getAttribute("aria-controls"),
+		);
 
 		services.player.play(queued("Without chapters"));
 		await tick();
@@ -375,6 +383,7 @@ describe("the player's panels", () => {
 			"aria-selected",
 			"true",
 		);
+		expect(screen.getByRole("tabpanel", { name: "Up next" })).toBeInTheDocument();
 	});
 
 	test("a reopened player shows the chapters it loaded on its first frame", async () => {

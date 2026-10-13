@@ -613,7 +613,7 @@ describe("episode note and capture journeys", () => {
 		const episodeNote = notePath(journey.show, ORIGINAL.title);
 		const original = "Before the cut after the cut\nSecond line\n";
 		await writeVaultFile(obsidian, draft, original);
-		const timestamp = ui.playerControl("Capture timestamp");
+		const timestamp = ui.playerTimestamp;
 		const label = () =>
 			obsidian.dev.evalJson<string>(`(${timestamp.elements})[0]?.textContent.trim() ?? ""`);
 

@@ -206,9 +206,11 @@
 	{#each panels as kind (kind)}
 		<button
 			type="button"
+			id={tabs ? `${id}-${kind}` : undefined}
 			class={tabs ? "pn-tab" : "pn-sw"}
 			role={tabs ? "tab" : undefined}
 			aria-selected={tabs ? shown === kind : undefined}
+			aria-controls={tabs ? `${id}-panel` : undefined}
 			aria-pressed={tabs ? undefined : shown === kind}
 			onclick={() => (panel = !tabs && shown === kind ? undefined : kind)}
 			>{kind === "chapters" ? "Chapters" : "Up next"}</button
@@ -395,7 +397,6 @@
 						type="button"
 						class="pn-btn mod-cta pn-cap"
 						class:is-done={added}
-						aria-label="Capture timestamp"
 						onclick={capture}
 					>
 						<span {@attach icon(added ? "check" : "clock-plus")}></span><span
@@ -418,7 +419,14 @@
 				<div class="pn-tabs" role="tablist" aria-label="Player panels">
 					{@render choices(true)}
 				</div>
-				<div class="pn-panelwrap" role="tabpanel">{@render panelView(shown)}</div>
+				<div
+					class="pn-panelwrap"
+					id="{id}-panel"
+					role="tabpanel"
+					aria-labelledby="{id}-{shown}"
+				>
+					{@render panelView(shown)}
+				</div>
 			</div>
 		{/if}
 	</div>

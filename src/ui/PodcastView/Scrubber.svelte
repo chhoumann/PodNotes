@@ -24,7 +24,7 @@
 	const shown = $derived(drag?.time ?? position);
 	const segments = $derived(segmentsOf(chapters, duration));
 	const fill = (from: number, to: number) =>
-		Math.min(1, Math.max(0, (shown - from) / (to - from))) * 100;
+		to > from ? Math.min(1, Math.max(0, (shown - from) / (to - from))) * 100 : 0;
 	const clamp = (time: number) => Math.min(duration, Math.max(0, time));
 	const KEYS: Record<string, (time: number) => number> = {
 		ArrowLeft: (time) => time - 5,

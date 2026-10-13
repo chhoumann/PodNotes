@@ -106,6 +106,11 @@ export const ui = {
 			label,
 		),
 	playerVolume: byCss("full player's volume", `${PLAYER_VIEW} section.pn-player button.pn-vol`),
+	/** It reads Timestamp, then Added for a moment after a capture. */
+	playerTimestamp: byCss(
+		"full player's Timestamp",
+		`${PLAYER_VIEW} section.pn-player button.pn-cap.mod-cta`,
+	),
 	volumeSlider: byCss(
 		"volume slider",
 		`${PLAYER_VIEW} section.pn-player input[type="range"][aria-label="Volume"]`,

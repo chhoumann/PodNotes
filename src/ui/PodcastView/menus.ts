@@ -79,6 +79,8 @@ export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 	menu.onHide(() => {
 		// Obsidian's menu passes on the Escape that closes it, and Obsidian sends focus from
 		// a sidebar to the main area on an Escape nothing handled. This one counts as handled.
+		// It works because the menu hides synchronously inside that keydown. On a phone the
+		// hide is animated, so the event is gone by then and this does nothing.
 		const closing = at.el.win.event;
 		if (closing?.type === "keydown" && "key" in closing && closing.key === "Escape")
 			closing.preventDefault();

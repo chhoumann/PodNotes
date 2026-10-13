@@ -89,4 +89,13 @@ describe("the scrubber", () => {
 		const fills = [...container.querySelectorAll<HTMLElement>(".pn-seg > span")];
 		expect(fills.map((fill) => fill.style.width)).toEqual(["100%", "50%", "0%"]);
 	});
+
+	test("shows an empty track before the duration is known", () => {
+		const { container } = render(Scrubber, {
+			props: { position: 0, duration: 0, chapters: [], disabled: false, onseek: vi.fn() },
+		});
+
+		const fills = [...container.querySelectorAll<HTMLElement>(".pn-seg > span")];
+		expect(fills.map((fill) => fill.style.width)).toEqual(["0%"]);
+	});
 });
