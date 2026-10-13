@@ -759,7 +759,15 @@ describe("PodNotes runtime", () => {
 		await plugin.data<PodNotesData>().write(future);
 		try {
 			await plugin.enable().catch(() => undefined);
-			await obsidian.sleep(200);
+			await obsidian.waitFor(
+				async () =>
+					(await obsidian.dev.notices()).some(
+						(notice) =>
+							notice.message ===
+							"PodNotes data schema v3 requires a newer version of PodNotes. The file was not modified.",
+					),
+				{ ...WAIT_OPTS, message: "PodNotes to report the unsupported schema" },
+			);
 
 			const after = await plugin.data<PodNotesData>().read();
 			const state = await obsidian.dev.evalJson<{ hasCommand: boolean; ready: boolean }>(

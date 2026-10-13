@@ -49,7 +49,12 @@ import {
 	type PersistedPodNotesDataV2,
 } from "./persistence/podNotesData";
 import { jsonValuesEqual, restoreDropped } from "./persistence/merge";
-import { type Clock, type DataFileAccess, DataFileWriter } from "./persistence/writer";
+import {
+	type Clock,
+	type DataFileAccess,
+	DataFileWriter,
+	WriteRefusedError,
+} from "./persistence/writer";
 import { CredentialRepository } from "./services/CredentialRepository";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
@@ -603,7 +608,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		refusal: "unreadable-data-file" | "older-data-file",
 		message: string,
 	): void {
-		// Closing refusals never lift; this one would. An unloaded plugin shows nothing.
+		// Closing refusals never lift; this one would.
 		if (
 			this.isUnloaded ||
 			this.writeRefusal === "window-unloading" ||
@@ -622,6 +627,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			this.dataFileAccess(),
 			clock,
 			this.writeRefusal ? null : this.localDocument(),
+			() => new Notice("PodNotes could not save your changes."),
 		);
 	}
 
@@ -725,7 +731,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	private async writeDataFile(data: unknown): Promise<void> {
-		if (this.writeRefusal) throw new Error(WRITE_REFUSALS[this.writeRefusal]);
+		if (this.writeRefusal) throw new WriteRefusedError(WRITE_REFUSALS[this.writeRefusal]);
 		const write = this.saveData(data);
 		this.writeInFlight = write.catch(() => undefined);
 		try {

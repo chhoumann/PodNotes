@@ -67,6 +67,39 @@ describe("DataFileWriter saves", () => {
 		expect(clock.pending()).toBe(0);
 	});
 
+	it("retries failed writes at the checkpoint interval and stops after recovery or unload", async () => {
+		const { access, clock, state, writer } = setup();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		access.write
+			.mockRejectedValueOnce(new Error("disk full"))
+			.mockRejectedValueOnce(new Error("disk full"));
+		state.memory.defaultVolume = 0.5;
+		await expect(writer.save()).rejects.toThrow("disk full");
+
+		clock.advance(10_000);
+		clock.runAll();
+		await vi.waitFor(() => expect(clock.delays).toEqual([10_000, 10_000]));
+		expect(state.disk?.defaultVolume).toBe(1);
+
+		clock.advance(10_000);
+		clock.runAll();
+		await vi.waitFor(() => expect(state.disk?.defaultVolume).toBe(0.5));
+		expect(access.write).toHaveBeenCalledTimes(3);
+
+		clock.advance(30_000);
+		clock.runAll();
+		await writer.flush();
+		expect(state.disk).toEqual({ ...doc(), defaultVolume: 0.5 });
+		expect(access.write).toHaveBeenCalledTimes(3);
+		expect(clock.pending()).toBe(0);
+
+		state.memory.defaultVolume = 0.75;
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+		await writer.unload();
+		expect(access.write).toHaveBeenCalledTimes(4);
+		expect(clock.pending()).toBe(0);
+	});
+
 	it("saves a change made during a save right after it", async () => {
 		const { access, state, writer } = setup();
 		let finishWrite = () => {};

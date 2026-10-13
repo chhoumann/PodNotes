@@ -2,6 +2,7 @@
 import { get } from "svelte/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Notice, type SecretStorage } from "obsidian";
+import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import { encodePodNotesData } from "./persistence/podNotesData";
@@ -700,6 +701,31 @@ describe("PodNotes persistence integration", () => {
 
 		await expect(plugin.loadSettings()).rejects.toThrow("disk full");
 		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
+	});
+
+	it("shows one Notice per failed-write streak and recovers silently", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const plugin = makePlugin();
+		const writes = plugin.saveData.bind(plugin);
+		Object.assign(plugin, { saveData: vi.fn().mockResolvedValue(undefined) });
+		plugin.settings.skipBackwardLength = 16;
+
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+		expect(notice.mock.calls).toEqual([["PodNotes could not save your changes."]]);
+
+		Object.assign(plugin, { saveData: writes });
+		await plugin.saveSettingsStrict();
+		expect(await plugin.loadData()).toMatchObject({ skipBackwardLength: 16 });
+		expect(notice).toHaveBeenCalledTimes(1);
+
+		Object.assign(plugin, { saveData: vi.fn().mockResolvedValue(undefined) });
+		plugin.settings.skipBackwardLength = 17;
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+		expect(notice.mock.calls).toEqual([
+			["PodNotes could not save your changes."],
+			["PodNotes could not save your changes."],
+		]);
 	});
 
 	it("treats a save Obsidian reported but did not write as failed, even at the same size", async () => {

@@ -5,7 +5,7 @@ import { localFiles, plugin, savedFeeds } from "./store";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
-import { resolveFeedUrl } from "./services/privateFeeds";
+import { isSavedFeed, resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { episodeLinkTarget } from "./utility/episodeLinkTarget";
@@ -89,10 +89,10 @@ function parseSeconds(value: string): number {
 let latestRequest = 0;
 
 export default async function podNotesURIHandler(
-	{ url, episodeName, time, endTime, end, to }: PodNotesProtocolData,
+	{ url: linkUrl, episodeName, time, endTime, end, to }: PodNotesProtocolData,
 	revealPlayer?: RevealPodNotesPlayer,
 ) {
-	if (!url || !episodeName) {
+	if (!linkUrl || !episodeName) {
 		new Notice("URL and episode name are required to play an episode");
 		return;
 	}
@@ -126,7 +126,12 @@ export default async function podNotesURIHandler(
 	const player = get(plugin).player;
 	const playOptions = hasExplicitTime ? { time: requestedTime, endTime: requestedEndTime } : {};
 	const loaded = get(player.state).episode;
-	const { app } = get(plugin);
+	const { app, feedUrls } = get(plugin);
+	// A link carrying a saved private feed's secret URL opens as the feed's placeholder
+	// link, so the secret stays out of the episode.
+	const url =
+		Object.values(get(savedFeeds)).find((saved) => isSavedFeed(saved, linkUrl, feedUrls))
+			?.url ?? linkUrl;
 	const localFile = candidateValues(url)
 		.map((path) => app.vault.getAbstractFileByPath(path))
 		.find((file) => file instanceof TFile);

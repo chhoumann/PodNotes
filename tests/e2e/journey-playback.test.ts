@@ -202,7 +202,8 @@ describe("playback journeys", () => {
 					plugin,
 					(library) => (library.progress(episodeRef(FEED, LONG))?.seconds ?? 0) >= 5,
 					"a playback checkpoint of at least 5 s on disk",
-					20_000,
+					// The second write lands about 20 s after the click.
+					30_000,
 				)
 			).progress(episodeRef(FEED, LONG))?.seconds as number;
 			expect((await observePlayback(obsidian)).playing).toBe(true);
