@@ -126,6 +126,28 @@ describe("isCredentialBearingUrl for publishers that put the secret in the addre
 
 describe("redactPrivateFeedAddresses", () => {
 	it.each([
+		"https://private.example.com./rss?auth=ALIAS_SENTINEL",
+		"https:\\\\private.example.com/rss?auth=ALIAS_SENTINEL",
+		"https:/\\private.example.com/rss?auth=ALIAS_SENTINEL",
+		"https:///%70rivate.example.com/rss?auth=ALIAS_SENTINEL",
+	])("redacts standalone and quoted browser aliases: %s", (alias) => {
+		const known = new Map([
+			["https://private.example.com/rss?auth=ALIAS_SENTINEL", "podnotes-private-feed:Paid"],
+		]);
+		const document = {
+			standalone: alias,
+			quoted: `Your feed: ${alias}.`,
+			episode: "https://private.example.com/episode?auth=EPISODE_TOKEN",
+			media: "https://private.example.com/audio.mp3?token=MEDIA_SIGNATURE",
+		};
+		expect(redactPrivateFeedAddresses(document, known)).toEqual({
+			...document,
+			standalone: "podnotes-private-feed:Paid",
+			quoted: "Your feed: podnotes-private-feed:Paid.",
+		});
+	});
+
+	it.each([
 		["https://private.example.com", "https://%70rivate.example.com"],
 		["https://xn--bcher-kva.example.com", "https://bücher.example.com"],
 		["https://127.0.0.1", "https://2130706433"],
