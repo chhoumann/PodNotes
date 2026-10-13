@@ -560,13 +560,21 @@ export const MarkdownRenderer = {
 };
 
 export class MenuItem {
-	setIcon() {
+	title = "";
+	icon: string | null = null;
+	checked: boolean | null = null;
+	callback: (() => void) | null = null;
+
+	setIcon(icon: string | null) {
+		this.icon = icon;
 		return this;
 	}
-	setTitle() {
+	setTitle(title: string) {
+		this.title = title;
 		return this;
 	}
-	setChecked(_checked: boolean | null) {
+	setChecked(checked: boolean | null) {
+		this.checked = checked;
 		return this;
 	}
 	setWarning(_warning: boolean) {
@@ -575,24 +583,65 @@ export class MenuItem {
 	setDisabled(_disabled: boolean) {
 		return this;
 	}
-	onClick(_callback: () => void) {
+	onClick(callback: () => void) {
+		this.callback = callback;
 		return this;
 	}
 }
 
 export class Menu {
+	/** Test only: the menu on screen, until it hides. */
+	static shown: Menu | null = null;
+	items: Array<MenuItem | "separator"> = [];
+	private hideCallback: (() => unknown) | null = null;
+
 	addItem(callback: (item: MenuItem) => void) {
-		callback(new MenuItem());
+		const item = new MenuItem();
+		this.items.push(item);
+		callback(item);
 		return this;
 	}
 
 	addSeparator() {
+		this.items.push("separator");
 		return this;
 	}
 
-	showAtMouseEvent() {}
+	onHide(callback: () => unknown) {
+		this.hideCallback = callback;
+	}
 
-	showAtPosition() {}
+	showAtMouseEvent() {
+		Menu.shown = this;
+		return this;
+	}
+
+	showAtPosition() {
+		Menu.shown = this;
+		return this;
+	}
+
+	hide() {
+		if (Menu.shown === this) Menu.shown = null;
+		const callback = this.hideCallback;
+		this.hideCallback = null;
+		callback?.();
+		return this;
+	}
+
+	close() {
+		this.hide();
+	}
+
+	/** Test only: as Obsidian, runs the item, then hides the menu. */
+	pick(title: string) {
+		const item = this.items.find(
+			(entry): entry is MenuItem => entry !== "separator" && entry.title === title,
+		);
+		if (!item) throw new Error(`No menu item ${title}`);
+		item.callback?.();
+		this.hide();
+	}
 }
 
 export const debounce = <T extends (...args: unknown[]) => unknown>(fn: T) => {

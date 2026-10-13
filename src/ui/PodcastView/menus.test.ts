@@ -2,7 +2,7 @@
 import * as obsidian from "obsidian";
 import { get } from "svelte/store";
 import { fireEvent, screen } from "@testing-library/svelte";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
 import {
 	downloadedEpisodes,
@@ -18,6 +18,7 @@ import type { Playlist } from "src/types/Playlist";
 import { FeedRepository } from "src/services/FeedRepository";
 import { isPrivateFeedPlaceholder, privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
+import type { Menu as FakeMenu } from "../../../tests/mocks/obsidian";
 import {
 	createTestServices,
 	pluginLibrary,
@@ -30,6 +31,7 @@ import {
 	playlistMenu,
 	podcastMenu,
 	queueMenu,
+	rateMenu,
 	showMenu,
 	type EpisodeMenuOptions,
 	type MenuAnchor,
@@ -45,7 +47,8 @@ const episode: Episode = {
 	podcastName: "Podcast",
 	feedUrl: "https://show.test/feed.xml",
 };
-const at: MenuAnchor = { x: 3, y: 4, doc: document };
+const trigger = document.body.appendChild(document.createElement("button"));
+const at: MenuAnchor = { x: 3, y: 4, doc: document, el: trigger };
 
 let services: TestServices;
 let dispose: () => void;
@@ -547,9 +550,9 @@ describe("a menu", () => {
 		const shown = vi.spyOn(obsidian.Menu.prototype, "showAtPosition");
 		const popout = document.implementation.createHTMLDocument();
 
-		showMenu([], { x: 12, y: 34, doc: popout });
+		showMenu([], { x: 12, y: 34, doc: popout, el: trigger });
 
-		expect(shown).toHaveBeenCalledWith({ x: 12, y: 34, doc: popout }, popout);
+		expect(shown).toHaveBeenCalledWith({ x: 12, y: 34, doc: popout, el: trigger }, popout);
 	});
 
 	test("marks checked, destructive and disabled items", () => {
@@ -591,10 +594,77 @@ describe("a menu", () => {
 		button.click();
 
 		expect(anchors).toEqual([
-			{ x: 50, y: 60, doc: document },
-			{ x: 7, y: 30, doc: document },
+			{ x: 50, y: 60, doc: document, el: button },
+			{ x: 7, y: 30, doc: document, el: button },
 		]);
 		expect(rightClick.defaultPrevented).toBe(true);
 		button.remove();
+	});
+
+	describe("gives focus back to the control that opened it", () => {
+		const shown = () => (obsidian.Menu as unknown as typeof FakeMenu).shown!;
+		let note: HTMLTextAreaElement;
+
+		beforeEach(() => {
+			note = document.body.appendChild(document.createElement("textarea"));
+			onTestFinished(() => note.remove());
+		});
+
+		test("when it closes with nothing picked, wherever focus went meanwhile", () => {
+			showMenu([{ title: "Item", onClick: () => {} }], at);
+			note.focus();
+
+			shown().close();
+
+			expect(trigger).toHaveFocus();
+		});
+
+		test("before a picked item runs", () => {
+			const focusedOnRun = vi.fn(() => document.activeElement);
+			showMenu([{ title: "Item", onClick: focusedOnRun }], at);
+			note.focus();
+
+			shown().pick("Item");
+
+			expect(focusedOnRun).toHaveReturnedWith(trigger);
+			expect(trigger).toHaveFocus();
+		});
+
+		test("and leaves it where a picked item put it", () => {
+			showMenu([{ title: "Open", onClick: () => note.focus() }], at);
+
+			shown().pick("Open");
+
+			expect(note).toHaveFocus();
+		});
+	});
+});
+
+describe("the rate menu", () => {
+	test("offers 0.75 to 2 in quarter steps, the live rate checked, and sets the picked one", () => {
+		services.player.setPlaybackRate(1.25);
+
+		showMenu(rateMenu(services), at);
+		const menu = (obsidian.Menu as unknown as typeof FakeMenu).shown!;
+		const items = menu.items.filter((item) => item !== "separator");
+		expect(items.map(({ title, checked }) => [title, checked])).toEqual([
+			["0.75×", null],
+			["1×", null],
+			["1.25×", true],
+			["1.5×", null],
+			["1.75×", null],
+			["2×", null],
+		]);
+		menu.pick("1.75×");
+
+		expect(get(services.player.state).playbackRate).toBe(1.75);
+	});
+
+	test("checks none while the commands have stepped to a rate it does not offer", () => {
+		services.player.setPlaybackRate(1.1);
+
+		expect(rateMenu(services).some((entry) => entry !== "separator" && entry.checked)).toBe(
+			false,
+		);
 	});
 });
