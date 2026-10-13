@@ -21,8 +21,8 @@ export default function buildEpisodeResumeLink(episode: Episode): string {
 	const target = episodeLinkTarget(episode) ?? downloadedEpisodes.getEpisode(episode)?.filePath;
 
 	// URIHandler rejects an empty episodeName, so without a title there is no
-	// working link to emit — degrade to "" rather than a dead link (UR-03).
+	// working link to emit: degrade to "" rather than a dead link (UR-03).
 	if (!target || !episode.title) return "";
 
-	return encodePodnotesURI(episode.title, target).href;
+	return encodePodnotesURI(episode, target).href;
 }

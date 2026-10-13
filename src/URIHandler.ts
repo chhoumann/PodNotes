@@ -9,11 +9,13 @@ import { isSavedFeed, resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { episodeLinkTarget } from "./utility/episodeLinkTarget";
+import { findByGuid } from "./utility/findByGuid";
 import { isLocalFile } from "./utility/isLocalFile";
 import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 import { getEpisodeMediaType, getUnambiguousMediaTypeFromPath } from "./utility/mediaType";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
+	guid?: string;
 	end?: string;
 	endTime?: string;
 	to?: string;
@@ -89,7 +91,7 @@ function parseSeconds(value: string): number {
 let latestRequest = 0;
 
 export default async function podNotesURIHandler(
-	{ url: linkUrl, episodeName, time, endTime, end, to }: PodNotesProtocolData,
+	{ url: linkUrl, episodeName, guid, time, endTime, end, to }: PodNotesProtocolData,
 	revealPlayer?: RevealPodNotesPlayer,
 ) {
 	if (!linkUrl || !episodeName) {
@@ -147,11 +149,14 @@ export default async function podNotesURIHandler(
 	// Sub-1.0 overlap is not enough here: "… Part 1" vs the loaded "… Part 2"
 	// scores ~0.78, and with only one candidate the uniqueness guard is vacuous.
 	// Those links fall through to the feed lookup, which can still exact-match.
+	// A link with a guid takes the loaded episode only when its guid matches. Otherwise the feed
+	// lookup decides, and only it can tell whether the feed repeats the guid.
 	const episodeIsLoaded =
 		!!loaded &&
 		!!loadedLinkTarget &&
 		(!isLocalFile(loaded) || localFile?.path === loadedLinkTarget) &&
 		candidateValues(url).includes(loadedLinkTarget) &&
+		(!guid || loaded.guid === guid) &&
 		(nameCandidates.includes(loaded.title) ||
 			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
 
@@ -231,7 +236,9 @@ export default async function podNotesURIHandler(
 			await feeds.load([placeholderKey], "network");
 			if (request !== latestRequest) return;
 			const state = get(feeds).get(placeholderKey);
-			episode = findEpisodeByCandidates(state?.episodes ?? [], nameCandidates);
+			const episodes = state?.episodes ?? [];
+			episode =
+				findByGuid(episodes, guid) ?? findEpisodeByCandidates(episodes, nameCandidates);
 			if (!episode && (!state || state.error)) {
 				new Notice(
 					state?.error === "network"
@@ -268,7 +275,8 @@ export default async function podNotesURIHandler(
 				return;
 			}
 			if (request !== latestRequest) return;
-			episode = findEpisodeByCandidates(episodes, nameCandidates);
+			episode =
+				findByGuid(episodes, guid) ?? findEpisodeByCandidates(episodes, nameCandidates);
 		}
 	}
 

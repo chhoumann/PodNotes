@@ -54,9 +54,11 @@ describe("persistence byte fixture", () => {
 		});
 		expect(await feeds.channelAt({ url: sample.source.url })).toEqual(sample.feed);
 		expect(JSON.parse(JSON.stringify(await feeds.episodesAt(sample.source.url)))).toEqual(
-			sample.episodes,
+			sample.episodes.map((episode: object, index: number) => ({
+				...episode,
+				guid: sample.guids[index],
+			})),
 		);
-		expect(parsed.episodes.map((episode) => episode.guid)).toEqual(sample.guids);
 	});
 
 	it("retains a complete stress library through the released v2 codec", () => {

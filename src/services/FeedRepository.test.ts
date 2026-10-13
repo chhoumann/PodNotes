@@ -458,42 +458,109 @@ describe("FeedRepository", () => {
 		});
 	});
 
-	test("episodes saved to data.json carry no feed-only metadata", async () => {
+	test("episodes saved to data.json carry their item's guid but not its transcripts", async () => {
 		const t = setup();
 		const transcripts = [{ url: "https://media.test/1.vtt", type: "text/vtt" }];
-		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1, { guid: "guid-1", transcripts })]));
+		await loaded(
+			t,
+			{ Alpha: alpha },
+			doc("Alpha", [item(1, { guid: "guid-1", transcripts }), item(2)]),
+		);
+		const [withGuid, withoutGuid] = t.feed("Alpha")!.episodes;
 
-		const persisted = encodeEpisode(t.feed("Alpha")!.episodes[0]);
+		const persisted = JSON.parse(JSON.stringify(encodeEpisode(withGuid)));
 
-		expect(persisted).toMatchObject({ title: "Episode 1", podcastName: "Alpha" });
-		expect(persisted).not.toHaveProperty("guid");
+		expect(persisted).toMatchObject({
+			title: "Episode 1",
+			podcastName: "Alpha",
+			guid: "guid-1",
+		});
 		expect(persisted).not.toHaveProperty("transcripts");
+		expect(JSON.parse(JSON.stringify(encodeEpisode(withoutGuid)))).not.toHaveProperty("guid");
 	});
 
-	test("reads an episode's guid and transcripts from its own subscription's feed", async () => {
+	test("a guid that two items of a feed share identifies neither episode", async () => {
+		const t = setup();
+		const items = [
+			item(1, { guid: "shared" }),
+			item(2, { guid: "shared" }),
+			item(3, { guid: "own" }),
+		];
+		await loaded(t, { Alpha: alpha }, doc("Alpha", items));
+		const linked = t.repo.episodesAt(alpha.url);
+		t.requests[1].respond.resolve(doc("Alpha", items));
+
+		for (const episodes of [t.feed("Alpha")!.episodes, await linked])
+			expect(episodes.map(({ title, guid }) => [title, guid])).toEqual([
+				["Episode 1", undefined],
+				["Episode 2", undefined],
+				["Episode 3", "own"],
+			]);
+	});
+
+	test("a guid whose twin the cache cut identifies no episode after a restart", async () => {
+		const first = setup();
+		const items = Array.from({ length: 76 }, (_, index) =>
+			item(76 - index, { guid: `own-${76 - index}` }),
+		);
+		items[0] = item(76, { guid: "shared" });
+		items[75] = item(1, { guid: "shared" });
+		await loaded(first, { Alpha: alpha }, doc("Alpha", items));
+		expect(first.cached()[alpha.url].items).toHaveLength(75);
+
+		const t = setup({ storage: first.storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+		await t.repo.ensureAll();
+
+		expect(t.load).not.toHaveBeenCalled();
+		const guids = new Map(t.feed("Alpha")!.episodes.map(({ title, guid }) => [title, guid]));
+		expect(guids.get("Episode 76")).toBeUndefined();
+		expect(guids.get("Episode 75")).toBe("own-75");
+	});
+
+	test("reads an episode's transcripts from its own subscription's feed, by guid first", async () => {
 		const t = setup();
 		const transcripts = [{ url: "https://media.test/b.vtt", type: "text/vtt" }];
 		const items = [
 			item(1, { title: "Rerun", guid: "guid-a" }),
 			item(2, { title: "Rerun", guid: "guid-b", transcripts }),
+			item(3),
 		];
 		await loaded(
 			t,
 			{ Alpha: alpha, "Alpha Alias": { ...alpha, title: "Alpha Alias" } },
 			doc("Alpha", items),
 		);
-		const [first] = t.feed("Alpha")!.episodes;
+		const [first, , third] = t.feed("Alpha")!.episodes;
 		const [, second] = t.feed("Alpha Alias")!.episodes;
+		const rotated = (episode: typeof first) => ({
+			...episode,
+			streamUrl: "https://media.test/rotated.mp3",
+		});
 
-		expect(t.repo.episodeMetadata("Alpha", first)).toEqual({ guid: "guid-a", transcripts: [] });
-		expect(t.repo.episodeMetadata("Alpha Alias", second)).toEqual({
-			guid: "guid-b",
+		expect(t.repo.episodeMetadata("Alpha", first)).toEqual({ transcripts: [] });
+		expect(t.repo.episodeMetadata("Alpha Alias", second)).toEqual({ transcripts });
+		expect(t.repo.episodeMetadata("Alpha", rotated(second))).toEqual({ transcripts });
+		expect(t.repo.episodeMetadata("Alpha", { ...second, guid: "guid-gone" })).toEqual({
 			transcripts,
 		});
 		expect(t.repo.episodeMetadata("Beta", first)).toBeUndefined();
-		expect(
-			t.repo.episodeMetadata("Alpha", { ...first, streamUrl: "https://media.test/gone.mp3" }),
-		).toBeUndefined();
+		expect(t.repo.episodeMetadata("Alpha", rotated(third))).toBeUndefined();
+	});
+
+	test("does not match an episode of another feed by guid, even under the subscription's name", async () => {
+		const t = setup();
+		const transcripts = [{ url: "https://media.test/1.vtt", type: "text/vtt" }];
+		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1, { guid: "guid-1", transcripts })]));
+		const [subscribed] = t.feed("Alpha")!.episodes;
+
+		const namesake = {
+			...subscribed,
+			streamUrl: "https://namesake.test/1.mp3",
+			feedUrl: "https://namesake.test/feed.xml",
+		};
+
+		expect(t.repo.episodeMetadata("Alpha", namesake)).toBeUndefined();
 	});
 
 	test("episodes keep their array until the feed's document, title or artwork changes", async () => {

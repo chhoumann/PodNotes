@@ -4,8 +4,6 @@ import type { IAPI } from "./IAPI";
 import { TFile } from "obsidian";
 import { plugin } from "src/store";
 import { get } from "svelte/store";
-import encodePodnotesURI from "src/utility/encodePodnotesURI";
-import { episodeLinkTarget } from "src/utility/episodeLinkTarget";
 import { formatPodcastSegment, normalizePodcastSegmentTimes } from "src/utility/podcastSegment";
 import {
 	adjustPlaybackRate,
@@ -103,27 +101,16 @@ export class API implements IAPI {
 			throw new Error("No podcast loaded");
 		}
 
-		const segmentTimes = normalizePodcastSegmentTimes(startTime, endTime);
-		const segment = segmentTimes
-			? formatPodcastSegment(segmentTimes.startTime, segmentTimes.endTime, format)
-			: formatPodcastSegment(startTime, endTime, format);
+		const segment = normalizePodcastSegmentTimes(startTime, endTime);
+		if (!segment) return formatPodcastSegment(startTime, endTime, format);
 
-		if (!linkify || !segmentTimes) return segment;
-
-		const target = episodeLinkTarget(this.podcast);
-
-		if (!target) {
-			return segment;
-		}
-
-		const url = encodePodnotesURI(
-			this.podcast.title,
-			target,
-			segmentTimes.startTime,
-			segmentTimes.endTime,
+		return formatEpisodeTimestamp(
+			this.podcast,
+			segment.startTime,
+			format,
+			linkify,
+			segment.endTime,
 		);
-
-		return `[${segment}](${url.href})`;
 	}
 
 	async getTranscript(episode = this.podcast): Promise<string | null> {

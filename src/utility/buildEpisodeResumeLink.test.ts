@@ -32,6 +32,14 @@ describe("buildEpisodeResumeLink (#35)", () => {
 		expect(parsed.searchParams.get("url")).toBe("https://pod.example.com/feed.xml");
 		// No time => URIHandler resumes from the last played location.
 		expect(parsed.searchParams.has("time")).toBe(false);
+		expect(parsed.searchParams.has("guid")).toBe(false);
+	});
+
+	test("carries a feed episode's guid", () => {
+		const parsed = new URL(buildEpisodeResumeLink({ ...remoteEpisode, guid: "ep-1" }));
+
+		expect(parsed.searchParams.get("guid")).toBe("ep-1");
+		expect(parsed.searchParams.get("url")).toBe("https://pod.example.com/feed.xml");
 	});
 
 	test("addresses a local-file episode by its own file path", () => {

@@ -1,17 +1,15 @@
-import { Notice, type Editor } from "obsidian";
+import { Notice } from "obsidian";
 import { get } from "svelte/store";
 import { queue, savedFeeds } from "src/store";
 import { QueueReorderModal } from "src/ui/QueueReorderModal";
-import { TimestampTemplateEngine } from "src/TemplateEngine";
-import { prepareTimestampForInsertion } from "src/utility/prepareTimestampInsertion";
-import { createRecentPodcastSegment, getSegmentCaptureTemplate } from "src/utility/podcastSegment";
 import createPodcastNote from "src/createPodcastNote";
 import createFeedNote from "src/createFeedNote";
-import { FeedSuggestModal, orderFeedsByCurrent } from "src/ui/FeedSuggestModal";
+import { PickerModal, orderFeedsByCurrent } from "src/ui/PickerModal";
 import downloadEpisodeWithNotice from "src/downloadEpisode";
 import getUniversalPodcastLink from "src/getUniversalPodcastLink";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { TRANSCRIBE_FROM_AUDIO_COMMAND } from "src/services/TranscriptionService";
+import { notifyPrivateFeedUnavailable } from "src/services/privateFeeds";
 import type PodNotes from "src/main";
 
 /**
@@ -20,42 +18,6 @@ import type PodNotes from "src/main";
  * live state off the passed plugin (api/settings/app) at invocation time.
  */
 export function registerCommands(plugin: PodNotes): void {
-	const canCaptureTimestamp = () => !!plugin.api.podcast && !!plugin.settings.timestamp.template;
-	const insertCapture = (editor: Editor, capture: string) => {
-		// Insert with replaceSelection (not getCursor + replaceRange +
-		// setCursor): it drops the text at the live cursor and lets the
-		// editor place the caret after it, which is reliable inside Live
-		// Preview table cells where hand-computed positions land in the
-		// wrong cell. Inside a table the capture is escaped so pipes and
-		// newlines don't break the row. See issue #165.
-		const cursor = editor.getCursor("from");
-		const textToInsert = prepareTimestampForInsertion(capture, {
-			getLine: (line) => editor.getLine(line),
-			lineCount: editor.lineCount(),
-			cursorLine: cursor.line,
-		});
-
-		editor.replaceSelection(textToInsert);
-	};
-	const captureRecentSegment = (editor: Editor, lengthSeconds: number) => {
-		const segment = createRecentPodcastSegment(
-			plugin.api.currentTime,
-			lengthSeconds,
-			plugin.settings.timestamp.offset ?? 0,
-		);
-
-		if (!segment) {
-			new Notice("Play more of the episode before capturing a segment");
-			return;
-		}
-
-		const capture = TimestampTemplateEngine(
-			getSegmentCaptureTemplate(plugin.settings.timestamp.template),
-			{ segment },
-		);
-		insertCapture(editor, capture);
-	};
-
 	plugin.addCommand({
 		id: "podnotes-show-leaf",
 		name: "Show player",
@@ -158,23 +120,14 @@ export function registerCommands(plugin: PodNotes): void {
 		},
 	});
 
+	// Plain callbacks: with no editor focused a capture goes to the episode note, and
+	// a check would hide them from the mobile toolbar's picker until an episode loads.
 	plugin.addCommand({
 		id: "capture-timestamp",
 		name: "Capture Timestamp",
 		icon: "clock",
-		// Keep this an editorCallback (not editorCheckCallback): an unconditional
-		// editor command stays addable to the mobile editor toolbar / command
-		// picker even before an episode is loaded, whereas a checkCallback that
-		// returns false would filter it out (and an e2e test pins this). Surface a
-		// Notice when capture isn't possible instead of silently no-opping (TS-01).
-		editorCallback: (editor) => {
-			if (plugin.captureTimestamp(editor)) {
-				return;
-			}
-
-			new Notice(
-				"Play an episode and set a Capture timestamp format in settings to capture a timestamp.",
-			);
+		callback: () => {
+			void plugin.capture.timestamp();
 		},
 	});
 
@@ -182,12 +135,8 @@ export function registerCommands(plugin: PodNotes): void {
 		id: "capture-segment-10s",
 		name: "Capture Last 10 Seconds",
 		icon: "scissors",
-		editorCheckCallback: (checking, editor) => {
-			if (checking) {
-				return canCaptureTimestamp();
-			}
-
-			captureRecentSegment(editor, 10);
+		callback: () => {
+			void plugin.capture.segment(10);
 		},
 	});
 
@@ -195,33 +144,41 @@ export function registerCommands(plugin: PodNotes): void {
 		id: "capture-segment-20s",
 		name: "Capture Last 20 Seconds",
 		icon: "scissors",
-		editorCheckCallback: (checking, editor) => {
-			if (checking) {
-				return canCaptureTimestamp();
-			}
-
-			captureRecentSegment(editor, 20);
+		callback: () => {
+			void plugin.capture.segment(20);
 		},
 	});
 
 	plugin.addCommand({
 		id: "create-podcast-note",
-		// Despite the id, this creates a note for the CURRENT EPISODE. The
-		// visible name was corrected to disambiguate it from the feed-level
-		// "Create podcast feed note" command below (issue #163). The id is kept
-		// for backward compatibility (hotkeys/API).
+		// Despite the id, this creates an episode note: the loaded episode's, else one
+		// picked from a saved podcast. The visible name was corrected to disambiguate
+		// it from the feed-level "Create podcast feed note" command below (issue
+		// #163). The id is kept for backward compatibility (hotkeys/API).
 		name: "Create episode note",
 		icon: "file-plus",
 		checkCallback: (checking) => {
+			const { path, template } = plugin.settings.note;
+			const episode = plugin.api.podcast;
+			const feeds = Object.entries(get(savedFeeds));
 			if (checking) {
-				return (
-					!!plugin.api.podcast &&
-					!!plugin.settings.note.path &&
-					!!plugin.settings.note.template
-				);
+				return !!path && !!template && (!!episode || feeds.length > 0);
 			}
 
-			void createPodcastNote(plugin.api.podcast);
+			if (episode) {
+				void createPodcastNote(episode);
+				return;
+			}
+
+			new PickerModal(
+				plugin.app,
+				feeds,
+				([, feed]) => feed.title,
+				"Select a podcast",
+				([key, feed]) => {
+					void pickEpisodeForNote(plugin, key, feed.title);
+				},
+			).open();
 		},
 	});
 
@@ -246,9 +203,15 @@ export function registerCommands(plugin: PodNotes): void {
 			// picker opens on the most likely choice without requiring playback.
 			const orderedFeeds = orderFeedsByCurrent(feeds, plugin.api.podcast?.podcastName);
 
-			new FeedSuggestModal(plugin.app, orderedFeeds, (feed) => {
-				void createFeedNote(feed);
-			}).open();
+			new PickerModal(
+				plugin.app,
+				orderedFeeds,
+				(feed) => feed.title,
+				"Select a podcast to create or open its note",
+				(feed) => {
+					void createFeedNote(feed);
+				},
+			).open();
 		},
 	});
 
@@ -347,4 +310,31 @@ export function registerCommands(plugin: PodNotes): void {
 			}
 		},
 	});
+}
+
+async function pickEpisodeForNote(plugin: PodNotes, key: string, title: string): Promise<void> {
+	// The cache keeps a long feed's newest episodes, so only a complete feed lists them all.
+	await plugin.feeds.load([key], "complete");
+	const state = get(plugin.feeds).get(key);
+	const episodes = state?.episodes ?? [];
+	if (episodes.length === 0) {
+		if (state?.error === "unavailable") {
+			notifyPrivateFeedUnavailable(title);
+		} else {
+			new Notice(
+				state?.error ? "Could not load the podcast feed" : "No episodes in this podcast",
+			);
+		}
+		return;
+	}
+
+	new PickerModal(
+		plugin.app,
+		episodes,
+		(episode) => episode.title,
+		"Select an episode",
+		(episode) => {
+			void createPodcastNote(episode);
+		},
+	).open();
 }

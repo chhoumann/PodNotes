@@ -12,15 +12,7 @@ import {
 } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import { registerCommands } from "src/commands";
-import {
-	normalizePath,
-	Notice,
-	Platform,
-	Plugin,
-	type Editor,
-	type TFile,
-	type WorkspaceLeaf,
-} from "obsidian";
+import { normalizePath, Notice, Platform, Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { VIEW_TYPE } from "src/constants";
@@ -29,14 +21,12 @@ import { MainView } from "src/ui/PodcastView";
 import { Navigation } from "src/ui/PodcastView/Navigation";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import type { IPodNotes } from "./types/IPodNotes";
-import { TimestampTemplateEngine } from "./TemplateEngine";
-import { prepareTimestampForInsertion } from "./utility/prepareTimestampInsertion";
-import { createPodcastNoteFileIfNotExists, getPodcastNote } from "./createPodcastNote";
 import type PartialAppExtension from "./global";
 import podNotesURIHandler from "./URIHandler";
 import getContextMenuHandler from "./getContextMenuHandler";
 import getVaultRenameHandler from "./getVaultRenameHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
+import { CaptureService } from "./services/CaptureService";
 import { get, type Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
 import { bindMediaSession } from "./player/mediaSession";
@@ -109,6 +99,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public feedUrls!: FeedUrlRepository;
 	public player!: PlayerController;
 	public feeds!: FeedRepository;
+	public capture!: CaptureService;
 	public navigation!: Navigation;
 
 	private views = new Set<MainView>();
@@ -198,6 +189,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		);
 
 		this.api = new API();
+		this.capture = new CaptureService(this);
 
 		// All user-facing commands live in src/commands.ts; this keeps onload
 		// focused on lifecycle wiring (stores, view, ribbon, protocol, media session).
@@ -244,7 +236,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			bindMediaSession(this.player, {
 				mediaSession: window.navigator.mediaSession,
 				MediaMetadata: window.MediaMetadata,
-				captureTimestamp: () => void this.captureTimestampToEditorOrNote(),
+				captureTimestamp: () => void this.capture.timestamp(),
 				skipBackward: () => this.api.skipBackward(),
 				skipForward: () => this.api.skipForward(),
 			}),
@@ -365,79 +357,13 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return Platform.isMobileApp || this.app.isMobile === true;
 	}
 
-	// Public so the command registrations in src/commands.ts can reach them; both
-	// are still only invoked from command callbacks (and, for captureTimestamp,
-	// the media-session handler below).
+	// Public so the command registrations in src/commands.ts can reach it.
 	getTranscriptionService(): TranscriptionService {
 		if (!this.transcriptionService) {
 			this.transcriptionService = new TranscriptionService(this);
 		}
 
 		return this.transcriptionService;
-	}
-
-	captureTimestamp(editor: Editor | null | undefined): boolean {
-		if (!editor || !this.api.podcast || !this.settings.timestamp.template) {
-			return false;
-		}
-
-		const capture = TimestampTemplateEngine(this.settings.timestamp.template);
-
-		// Insert with replaceSelection (not getCursor + replaceRange + setCursor):
-		// it drops the text at the live cursor and lets the editor place the caret
-		// after it, which is reliable inside Live Preview table cells where
-		// hand-computed positions land in the wrong cell. Inside a table the capture
-		// is escaped so pipes and newlines don't break the row. See issue #165.
-		const cursor = editor.getCursor("from");
-		const textToInsert = prepareTimestampForInsertion(capture, {
-			getLine: (line) => editor.getLine(line),
-			lineCount: editor.lineCount(),
-			cursorLine: cursor.line,
-		});
-
-		editor.replaceSelection(textToInsert);
-		return true;
-	}
-
-	/**
-	 * Into the active editor, else appended to the episode note. Resolves to the
-	 * note's name, or null when nothing was captured or the editor has no note.
-	 */
-	async captureTimestampToEditorOrNote(): Promise<string | null> {
-		const active = this.app.workspace.activeEditor;
-		if (this.captureTimestamp(active?.editor)) return active?.file?.basename ?? null;
-
-		return (await this.appendTimestampToEpisodeNote())?.basename ?? null;
-	}
-
-	private async appendTimestampToEpisodeNote(): Promise<TFile | null> {
-		if (!this.api.podcast) return null;
-
-		// This path runs from the media-session (headphone) handler and the mini
-		// player, where there is no editor to surface a failure, so a press that
-		// adds nothing looked like it did nothing. Say why instead (NT-13).
-		const { timestamp, note } = this.settings;
-		if (!timestamp.template || !note.path || !note.template) {
-			new Notice("Set an episode note path and template to capture timestamps");
-			return null;
-		}
-
-		try {
-			const capture = TimestampTemplateEngine(this.settings.timestamp.template);
-			const textToAppend = capture.endsWith("\n") ? capture : `${capture}\n`;
-			const file =
-				getPodcastNote(this.api.podcast) ??
-				(await createPodcastNoteFileIfNotExists(this.api.podcast));
-			const content = await this.app.vault.read(file);
-			const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
-
-			await this.app.vault.modify(file, `${content}${separator}${textToAppend}`);
-			return file;
-		} catch (error) {
-			console.error("PodNotes: failed to capture timestamp into episode note", error);
-			new Notice("Failed to capture timestamp into episode note");
-			return null;
-		}
 	}
 
 	override onunload() {

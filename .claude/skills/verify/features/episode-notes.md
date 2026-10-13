@@ -34,5 +34,5 @@ Preconditions:
 
 ## Gotchas
 
-- The palette lists `Create episode note` only while an episode is loaded and both the note path and template settings are non-empty.
+- The palette lists `Create episode note` only while both the note path and template settings are non-empty, and an episode is loaded or a podcast is saved. With nothing loaded it asks for a podcast, then for an episode.
 - `{{podcastlink}}` in the default template links the feed note path, which does not exist until you run `Create podcast feed note`. An unresolved link in the new note is expected.
