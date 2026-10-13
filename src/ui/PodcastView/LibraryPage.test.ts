@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import PodcastGrid from "./PodcastGrid.svelte";
+import { createTestServices } from "../../../tests/mocks/services";
+import WithServices from "../../../tests/mocks/WithServices.svelte";
+import LibraryPage from "./LibraryPage.svelte";
 
 const artShow: PodcastFeed = {
 	title: "Art Show",
@@ -16,14 +18,29 @@ const plainShow: PodcastFeed = {
 	artworkUrl: "",
 };
 
+let dispose = () => {};
+afterEach(() => dispose());
+
 function renderGrid(feeds: [string, PodcastFeed][]) {
-	const clickPodcast = vi.fn<(event: CustomEvent<{ key: string }>) => void>();
-	render(PodcastGrid, { props: { feeds }, events: { clickPodcast } });
-	const openedKeys = () => clickPodcast.mock.calls.map(([event]) => event.detail.key);
-	return { openedKeys };
+	const context = createTestServices();
+	dispose = context.dispose;
+	const { library, navigation } = context.services;
+	library.savedFeeds.set(Object.fromEntries(feeds));
+	render(WithServices, {
+		props: {
+			services: context.services,
+			component: LibraryPage,
+			props: { layout: "wide", counts: {} },
+		},
+	});
+	const opened: string[] = [];
+	navigation.subscribe(({ page }) => {
+		if (page.kind === "feed") opened.push(page.key);
+	});
+	return { openedKeys: () => opened };
 }
 
-describe("PodcastGrid", () => {
+describe("the Library's podcast grid", () => {
 	test("a podcast whose artwork is missing or broken still has a tile that opens it", async () => {
 		const { openedKeys } = renderGrid([
 			["Art Show", artShow],

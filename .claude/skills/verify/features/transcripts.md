@@ -44,6 +44,6 @@ Preconditions:
 
 - `net.mjs` sees `window.fetch` and `requestUrl`. The player streams audio through the media element, which only `fixtures.mjs requests` shows.
 - A secret id must be `podnotes-openai-api-key` or `podnotes-openai-api-key-<n>`. Any other id reads as missing on this device.
-- Notices hide after about 5 s. Read them right after the command. They also cover the PodNotes view's header buttons, so dismiss them before clicking `Podcast grid`.
+- Notices hide after about 5 s. Read them right after the command. They also cover the PodNotes view's head and the full player's collapse button, and `ui.mjs` refuses a covered click, so dismiss them first.
 - After editing `fixtures.mjs`, run `fixtures.mjs stop` before `fixtures.mjs transcripts`. A running server keeps serving the old routes.
 - Every fixture transcript cue falls inside the 60 s WAV, so its links seek within the audio.

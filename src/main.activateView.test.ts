@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import PodNotes from "./main";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { VIEW_TYPE } from "./constants";
-import { Notice, Platform, type WorkspaceLeaf } from "obsidian";
+import { App, Notice, Platform, type WorkspaceLeaf } from "obsidian";
+import * as obsidian from "obsidian";
+import { tick } from "svelte";
 import type { Episode } from "./types/Episode";
+import { MainView } from "./ui/PodcastView";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
 // surface the view. The bug was that the command was gated on the leaf NOT
@@ -261,6 +264,8 @@ describe("PodNotes onload wiring (#55)", () => {
 			views: new Set(),
 			manifest: { dir: ".obsidian/plugins/podnotes" },
 			app: {
+				loadLocalStorage: vi.fn(() => null),
+				saveLocalStorage: vi.fn(),
 				secretStorage: {
 					getSecret: vi.fn(() => null),
 					setSecret: vi.fn(),
@@ -425,21 +430,6 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(hide).toHaveBeenCalledTimes(1);
 	});
 
-	it("Show PodNotes command and ribbon icon both route to activateView", async () => {
-		const { commands, ribbonCalls, activateSpy } = await loadPlugin();
-
-		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
-		expect(showCmd).toBeDefined();
-		(showCmd!.callback as () => void)();
-		expect(activateSpy).toHaveBeenCalledTimes(1);
-
-		const ribbon = ribbonCalls.find((r) => r.title === "Show PodNotes");
-		expect(ribbon).toBeDefined();
-		expect(ribbon?.icon).toBe("podcast");
-		ribbon?.handler(new MouseEvent("click"));
-		expect(activateSpy).toHaveBeenCalledTimes(2);
-	});
-
 	const savedEpisode: Episode = {
 		title: "Saved Episode",
 		streamUrl: "https://example.com/saved.mp3",
@@ -466,6 +456,102 @@ describe("PodNotes onload wiring (#55)", () => {
 		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => boolean)(true);
 	const runCommand = (commands: Array<Record<string, unknown>>, id: string) =>
 		(commands.find((c) => c.id === id)!.checkCallback as (checking: boolean) => void)(false);
+
+	it("Show player opens the full player while an episode is loaded, and the ribbon icon only reveals the view", async () => {
+		const { commands, ribbonCalls, activateSpy, plugin } = await loadPlugin();
+		const showCmd = commands.find((c) => c.id === "podnotes-show-leaf");
+		expect(showCmd).toBeDefined();
+
+		(showCmd!.callback as () => void)();
+		expect(activateSpy).toHaveBeenCalledTimes(1);
+		expect(plugin.navigation.current.expanded).toBe(false);
+		plugin.player.restore(savedEpisode);
+		expect(plugin.navigation.current.expanded).toBe(false);
+
+		(showCmd!.callback as () => void)();
+		expect(activateSpy).toHaveBeenCalledTimes(2);
+		expect(plugin.navigation.current.expanded).toBe(true);
+
+		plugin.navigation.collapse();
+		const ribbon = ribbonCalls.find((r) => r.title === "Show PodNotes");
+		expect(ribbon).toBeDefined();
+		expect(ribbon?.icon).toBe("podcast");
+		ribbon?.handler(new MouseEvent("click"));
+		expect(activateSpy).toHaveBeenCalledTimes(3);
+		expect(plugin.navigation.current.expanded).toBe(false);
+	});
+
+	it.each([
+		{ title: "keeps the saved Queue page", saved: { kind: "queue" }, shown: { kind: "queue" } },
+		{
+			title: "falls back to Latest episodes for a removed podcast",
+			saved: { kind: "feed", key: "Removed podcast" },
+			shown: { kind: "latest" },
+		},
+		{
+			title: "falls back to Latest episodes for a removed playlist",
+			saved: { kind: "playlist", name: "Removed playlist" },
+			shown: { kind: "latest" },
+		},
+	])(
+		"Show player on a deferred view $title with the full player open",
+		async ({ saved, shown }) => {
+			const { plugin, activateSpy } = await loadPlugin(savedData);
+			activateSpy.mockRestore();
+			const leaf = { setViewState: vi.fn() };
+			const view = new MainView(leaf as unknown as WorkspaceLeaf, plugin);
+			onTestFinished(async () => {
+				await (view as unknown as { onClose(): Promise<void> }).onClose();
+			});
+			const { scope, keymap } = new App();
+			Object.assign(plugin.app, { scope, keymap });
+			Object.assign(view, { app: plugin.app, contentEl: document.createElement("div") });
+			// Obsidian 1.14 holds a leaf in a collapsed sidebar deferred. Revealing it
+			// opens the view, then hands it the state saved in the workspace.
+			Object.assign(plugin.app.workspace, {
+				getLeavesOfType: vi.fn(() => [leaf]),
+				requestSaveLayout: vi.fn(),
+				revealLeaf: vi.fn(async () => {
+					await (view as unknown as { onOpen(): Promise<void> }).onOpen();
+					await view.setState({ page: saved }, { history: false });
+				}),
+			});
+
+			await plugin.showPlayer();
+			await tick();
+
+			expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+			expect(plugin.navigation.current).toMatchObject({ page: shown, expanded: true });
+			expect(view.contentEl.querySelector(".pn-player")).not.toBeNull();
+		},
+	);
+
+	it("captures a timestamp into the active note and names that note", async () => {
+		const { plugin } = await loadPlugin(savedData);
+		const editor = {
+			getCursor: () => ({ line: 0, ch: 0 }),
+			getLine: () => "",
+			lineCount: () => 1,
+			replaceSelection: vi.fn(),
+		};
+		Object.assign(plugin.app.workspace, {
+			activeEditor: { editor, file: { basename: "Daily note" } },
+		});
+
+		await expect(plugin.captureTimestampToEditorOrNote()).resolves.toBe("Daily note");
+		expect(editor.replaceSelection).toHaveBeenCalledWith(expect.stringContaining("00:20:34"));
+	});
+
+	it("says why a timestamp has nowhere to go when the episode note is not set up", async () => {
+		const { plugin } = await loadPlugin(savedData);
+		const notice = vi.spyOn(obsidian, "Notice");
+		plugin.settings.note.path = "";
+
+		await expect(plugin.captureTimestampToEditorOrNote()).resolves.toBeNull();
+		expect(notice.mock.calls).toEqual([
+			["Set an episode note path and template to capture timestamps"],
+		]);
+	});
 
 	it("restores the selected episode paused at its saved position, without loading it", async () => {
 		const { plugin } = await loadPlugin(savedData);

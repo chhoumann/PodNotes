@@ -228,8 +228,8 @@ npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/flow.mp4 -- ./drive.sh  #
 npm run capture:e2e-obsidian -- screenshot .obsidian-e2e-artifacts/modal.png --modal
 ```
 
-`screenshot` and `record` open the player first and fail without capturing
-when it does not open. `capture` forwards to `obsidian-e2e capture` (see its
+`screenshot` and `record` reveal the PodNotes view first and fail without
+capturing when it does not open. `capture` forwards to `obsidian-e2e capture` (see its
 README), with this instance's CDP port for the verbs that connect. A record
 driver that exits non-zero discards the take.
 

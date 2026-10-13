@@ -1,12 +1,14 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as obsidian from "obsidian";
 import { TFile } from "obsidian";
 import { get } from "svelte/store";
 import getContextMenuHandler from "./getContextMenuHandler";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "./constants";
+import PodNotes from "./main";
 import { PlayerController } from "./player/PlayerController";
-import { downloadedEpisodes, playedEpisodes, plugin, viewState } from "./store";
-import { ViewState } from "./types/ViewState";
+import { downloadedEpisodes, playedEpisodes, plugin } from "./store";
+import { Navigation } from "./ui/PodcastView/Navigation";
 import { FakeDocument } from "../tests/mocks/fakeMedia";
 
 // `tsc` resolves `obsidian` to the real typings while Vitest aliases it to
@@ -82,6 +84,7 @@ function setupWorkspace(openLeaves: unknown[]) {
 
 let doc: FakeDocument;
 let player: PlayerController;
+let podnotes: PodNotes;
 const playing = () => get(player.state).episode;
 
 function makeApp(workspace: unknown, file: TFile) {
@@ -99,14 +102,23 @@ function makeApp(workspace: unknown, file: TFile) {
 	};
 	doc = new FakeDocument();
 	player = new PlayerController(doc.asPlayerDocument(), host as never);
-	plugin.set({ ...host, player, enablePodcastViewMount: vi.fn() } as never);
-	return {
+	const app = {
 		workspace,
 		vault,
 		fileManager: {
 			generateMarkdownLink: vi.fn((target: TFile) => `[[${target.path}]]`),
 		},
 	};
+	podnotes = Object.create(PodNotes.prototype) as PodNotes;
+	Object.assign(podnotes, {
+		...host,
+		app,
+		player,
+		navigation: new Navigation(),
+		views: new Set(),
+	});
+	plugin.set(podnotes);
+	return app;
 }
 
 async function playFile(
@@ -137,7 +149,6 @@ afterEach(() => {
 beforeEach(() => {
 	downloadedEpisodes.set({});
 	playedEpisodes.set({});
-	viewState.set(ViewState.PodcastGrid);
 });
 
 describe("getContextMenuHandler — Play with PodNotes", () => {
@@ -158,7 +169,7 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 		});
 		expect(doc.media.src).toBe("app://resource/Audio/tone.mp3?1");
 		expect(doc.media.paused).toBe(false);
-		expect(get(viewState)).toBe(ViewState.Player);
+		expect(podnotes.navigation.current.expanded).toBe(true);
 	});
 
 	it("offers the item for local video files and preserves their media type", async () => {
@@ -180,7 +191,7 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 			streamUrl: "app://resource/Videos/lecture.mp4?1",
 		});
 		expect(doc.media.tagName).toBe("VIDEO");
-		expect(get(viewState)).toBe(ViewState.Player);
+		expect(podnotes.navigation.current.expanded).toBe(true);
 	});
 
 	it("can preserve local audio-only ambiguous container files as audio", async () => {
@@ -203,7 +214,7 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 			mediaType: "audio",
 		});
 		expect(doc.media.tagName).toBe("AUDIO");
-		expect(get(viewState)).toBe(ViewState.Player);
+		expect(podnotes.navigation.current.expanded).toBe(true);
 	});
 
 	it("refreshes the stored local file when a same-basename video replaces audio", async () => {
