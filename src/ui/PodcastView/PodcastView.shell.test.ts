@@ -7,11 +7,17 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
+import type { Playlist } from "src/types/Playlist";
 import {
 	installResizeObserver,
 	type FakeResizeObservers,
 } from "../../../tests/mocks/resizeObserver";
-import { createTestServices, type TestServices } from "../../../tests/mocks/services";
+import {
+	createTestServices,
+	pluginLibrary,
+	type TestLibrary,
+	type TestServices,
+} from "../../../tests/mocks/services";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
 import { openPopout } from "../../../tests/mocks/popout";
@@ -39,8 +45,8 @@ let dispose: () => void;
 let widths: FakeResizeObservers;
 
 beforeEach(() => {
-	savedFeeds.set({ [feed.title]: feed });
 	({ services, doc, dispose } = createTestServices());
+	services.library.savedFeeds.set({ [feed.title]: feed });
 	widths = installResizeObserver();
 });
 
@@ -152,8 +158,80 @@ describe("landmarks", () => {
 	});
 });
 
+describe("library", () => {
+	const walk = { ...episode, title: "A walk" };
+	const playlist = (name: string, episodes: Episode[]) => ({
+		...structuredClone(DEFAULT_SETTINGS.favorites),
+		name,
+		episodes,
+	});
+	const flair = (name: RegExp) => button(name).querySelector(".flair")?.textContent;
+
+	test("is the one the view's services hold", async () => {
+		const { library } = services;
+		library.queue.update((list) => ({ ...list, episodes: [episode, walk] }));
+		library.playlists.set({ Walks: playlist("Walks", [walk]) });
+		library.localFiles.update((list) => ({ ...list, episodes: [walk] }));
+		library.playedEpisodes.set({
+			[`${feed.title}::${walk.title}`]: {
+				title: walk.title,
+				podcastName: feed.title,
+				time: 60,
+				duration: 60,
+				finished: true,
+			},
+		});
+		renderView(820);
+		await tick();
+
+		expect(screen.getByAltText(feed.title)).toBeInTheDocument();
+		expect([/^Queue/, /^Playlists/, /^Local files/, /^Played/].map(flair)).toEqual([
+			"2",
+			"2",
+			"1",
+			"1",
+		]);
+		await fireEvent.click(button(/^Queue/));
+		expect(screen.getByText(episode.title)).toBeInTheDocument();
+		expect(screen.getByText(walk.title)).toBeInTheDocument();
+		await fireEvent.click(button(/^Playlists/));
+		await fireEvent.click(button("Walks"));
+		expect(screen.getByRole("heading", { name: "Walks" })).toBeInTheDocument();
+		expect(screen.getByText(walk.title)).toBeInTheDocument();
+	});
+
+	test("is not the plugin's stores", async () => {
+		const other = { ...feed, title: "Other Podcast" };
+		savedFeeds.set({ [other.title]: other });
+		queue.add(walk);
+		playlists.set({ Runs: playlist("Runs", [walk]) });
+		localFiles.set({ ...structuredClone(DEFAULT_SETTINGS.localFiles), episodes: [walk] });
+		playedEpisodes.markAsPlayed(walk);
+		renderView(820);
+		await tick();
+
+		expect(screen.getByAltText(feed.title)).toBeInTheDocument();
+		expect(screen.queryByAltText(other.title)).toBeNull();
+		expect([/^Queue/, /^Playlists/, /^Local files/, /^Played/].map(flair)).toEqual([
+			undefined,
+			"1",
+			undefined,
+			undefined,
+		]);
+		await fireEvent.click(button(/^Queue/));
+		expect(screen.queryByText(walk.title)).toBeNull();
+		await fireEvent.click(button(/^Playlists/));
+		expect(button("Favorites")).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Runs" })).toBeNull();
+	});
+});
+
 describe("pages", () => {
 	test("an episode's menu can move it in the queue on the Queue page only", async () => {
+		// The menu reads the plugin's stores, so the view reads them too, as in the plugin.
+		dispose();
+		({ services, doc, dispose } = createTestServices({ library: pluginLibrary }));
+		savedFeeds.set({ [feed.title]: feed });
 		const second = { ...episode, title: "Episode 2" };
 		queue.add(episode);
 		queue.add(second);
@@ -180,44 +258,58 @@ describe("pages", () => {
 
 describe("first run", () => {
 	test("an empty library shows the podcast search instead of the library", async () => {
-		savedFeeds.set({});
+		services.library.savedFeeds.set({});
 		renderView(820);
 
 		expect(screen.getByRole("heading", { name: "Add your first podcast" })).toBeInTheDocument();
 		expect(screen.queryByRole("navigation", { name: "PodNotes" })).toBeNull();
 
-		savedFeeds.set({ [feed.title]: feed });
+		services.library.savedFeeds.set({ [feed.title]: feed });
 		await tick();
 		expect(screen.queryByRole("heading", { name: "Add your first podcast" })).toBeNull();
 		expect(screen.getByRole("heading", { name: "Podcasts" })).toBeInTheDocument();
 	});
 
+	const withEpisode = (list: Playlist) => ({ ...list, episodes: [episode] });
 	test.each([
-		["a queued episode", () => queue.add(episode)],
-		["a favorite", () => favorites.update((list) => ({ ...list, episodes: [episode] }))],
+		["a queued episode", (library: TestLibrary) => library.queue.update(withEpisode)],
+		["a favorite", (library: TestLibrary) => library.favorites.update(withEpisode)],
 		[
 			"a local file",
-			() =>
-				localFiles.set({
-					...structuredClone(DEFAULT_SETTINGS.localFiles),
+			(library: TestLibrary) =>
+				library.localFiles.update((list) => ({
+					...list,
 					episodes: [{ ...episode, podcastName: "local file" }],
-				}),
+				})),
 		],
 		[
 			"a custom playlist",
-			() =>
-				playlists.set({
+			(library: TestLibrary) =>
+				library.playlists.set({
 					Walks: { ...structuredClone(DEFAULT_SETTINGS.favorites), name: "Walks" },
 				}),
 		],
-		["a finished episode", () => playedEpisodes.markAsPlayed(episode)],
+		[
+			"a finished episode",
+			(library: TestLibrary) =>
+				library.playedEpisodes.set({
+					[`${feed.title}::${episode.title}`]: {
+						title: episode.title,
+						podcastName: feed.title,
+						time: 60,
+						duration: 60,
+						finished: true,
+					},
+				}),
+		],
 	])("a library of only %s is no first run", (_source, add) => {
-		savedFeeds.set({});
-		add();
+		services.library.savedFeeds.set({});
+		add(services.library);
 		renderView();
 
 		expect(screen.queryByRole("heading", { name: "Add your first podcast" })).toBeNull();
 		expect(screen.getByRole("heading", { name: "Library" })).toBeInTheDocument();
+		expect(screen.getByText("No saved podcasts.")).toBeInTheDocument();
 	});
 });
 

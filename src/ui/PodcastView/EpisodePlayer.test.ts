@@ -46,6 +46,8 @@ function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) 
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() },
 		player,
+		// A queued episode's menu reads the plugin's queue, so the player shows that one.
+		library: { queue },
 	} as never;
 	return {
 		...render(WithServices, { target, props: { services, component: EpisodePlayer } }),

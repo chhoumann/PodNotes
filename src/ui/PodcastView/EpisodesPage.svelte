@@ -4,16 +4,6 @@
 	import { get } from "svelte/store";
 	import type { FeedKey, LoadMode } from "src/services/FeedRepository";
 	import { notifyPrivateFeedUnavailable } from "src/services/privateFeeds";
-	import {
-		downloadedEpisodes,
-		episodeListLimit,
-		favorites,
-		localFiles,
-		playedEpisodes,
-		playlists,
-		queue,
-		savedFeeds,
-	} from "src/store";
 	import type { Episode } from "src/types/Episode";
 	import {
 		buildPlayedEpisodeListEntries,
@@ -34,7 +24,17 @@
 	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 
 	let { page }: { page: ListPage } = $props();
-	const { player, feeds, navigation } = useServices();
+	const { player, feeds, navigation, library } = useServices();
+	const {
+		savedFeeds,
+		queue,
+		favorites,
+		playlists,
+		localFiles,
+		playedEpisodes,
+		downloadedEpisodes,
+		episodeListLimit,
+	} = library;
 	let query = $state("");
 
 	const feedState = $derived(page.kind === "feed" ? $feeds.get(page.key) : undefined);

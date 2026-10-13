@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { queue } from "src/store";
 	import { formatSeconds } from "src/utility/formatSeconds";
 	import { fetchChapters } from "src/utility/fetchChapters";
 	import { onMount } from "svelte";
@@ -21,7 +20,8 @@
 		PLAYBACK_RATE_STEP,
 	} from "src/utility/playbackRate";
 
-	const { player, api, settings } = useServices();
+	const { player, api, settings, library } = useServices();
+	const { queue } = library;
 	const playerState = player.state;
 
 	let isHoveringArtwork = $state(false);

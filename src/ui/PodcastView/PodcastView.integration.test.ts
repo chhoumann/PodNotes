@@ -15,6 +15,7 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
 import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
+import { pluginLibrary } from "../../../tests/mocks/services";
 import { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
@@ -26,7 +27,7 @@ vi.mock("./EpisodePlayer.svelte", () => ({
 
 import PodcastView from "./PodcastView.svelte";
 
-/** The view, over the plugin `usePlugin` set. */
+/** The view over the plugin's stores, which the legacy episode list reads too. */
 function renderView() {
 	return render(PodcastView, {
 		props: {
@@ -36,6 +37,7 @@ function renderView() {
 				player,
 				feeds: get(plugin).feeds,
 				navigation,
+				library: pluginLibrary,
 				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},

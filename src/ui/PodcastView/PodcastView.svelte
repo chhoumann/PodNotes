@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Platform } from "obsidian";
 	import { onMount } from "svelte";
-	import { favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds } from "src/store";
 	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
 	import { icon } from "../obsidian/icon";
 	import AddPodcastPage from "./AddPodcastPage.svelte";
@@ -19,7 +18,8 @@
 	// svelte-ignore state_referenced_locally
 	provideServices(services);
 	// svelte-ignore state_referenced_locally
-	const { navigation, player, feeds, openSettings } = services;
+	const { navigation, player, feeds, library, openSettings } = services;
+	const { savedFeeds, queue, favorites, playlists, localFiles, playedEpisodes } = library;
 	const playerState = player.state;
 
 	let root: HTMLDivElement | undefined = $state();

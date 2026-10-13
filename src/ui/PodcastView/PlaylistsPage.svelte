@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { favorites, playlists } from "src/store";
 	import { useServices } from "./context";
 	import PlaylistCard from "./PlaylistCard.svelte";
 
-	const { navigation } = useServices();
+	const { navigation, library } = useServices();
+	const { favorites, playlists } = library;
 </script>
 
 <div class="podcast-grid">

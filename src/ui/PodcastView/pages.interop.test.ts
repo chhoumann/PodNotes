@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { savedFeeds } from "src/store";
 import { createTestServices } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
 import EpisodesPage from "./EpisodesPage.svelte";
@@ -16,13 +15,10 @@ const feed = {
 
 let context: ReturnType<typeof createTestServices>;
 beforeEach(() => {
-	savedFeeds.set({ [feed.title]: feed });
 	context = createTestServices();
+	context.services.library.savedFeeds.set({ [feed.title]: feed });
 });
-afterEach(() => {
-	context.dispose();
-	savedFeeds.set({});
-});
+afterEach(() => context.dispose());
 
 function renderEpisodesPage(page: Page) {
 	render(WithServices, {

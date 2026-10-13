@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { savedFeeds } from "src/store";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import type { Layout } from "./layout";
@@ -7,7 +6,8 @@
 	import PodcastGrid from "./PodcastGrid.svelte";
 
 	let { layout, counts }: { layout: Layout; counts: RootCounts } = $props();
-	const { navigation } = useServices();
+	const { navigation, library } = useServices();
+	const { savedFeeds } = library;
 	const id = $props.id();
 </script>
 
