@@ -14,8 +14,8 @@ import {
 	showPodNotes,
 } from "./journey/actions";
 import { click } from "./journey/input";
-import { ui } from "./journey/targets";
-import { isShown, waitUntilShown } from "./journey/wait";
+import { ui, type UiTarget } from "./journey/targets";
+import { eventually, isShown, notices, waitUntilShown } from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,
@@ -214,6 +214,46 @@ async function properties(path: string): Promise<Record<string, unknown>> {
 			intervalMs: 200,
 			message: `Obsidian reading the properties of ${path}`,
 		},
+	);
+}
+
+/** The text in the open editor of `path`, which runs ahead of the file it saves. */
+async function editorText(path: string): Promise<string | null> {
+	return await getContext().obsidian.dev.evalJson<string | null>(
+		`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)})?.view.editor.getValue() ?? null`,
+	);
+}
+
+/** Opens `path` in Live Preview with the caret at `line` and `ch`, both zero-based. */
+async function writeIn(path: string, line: number, ch: number): Promise<void> {
+	const { obsidian } = getContext();
+	await openInEditor(obsidian, path);
+	expect(
+		await obsidian.dev.evalJson<unknown>(
+			`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.getState()`,
+		),
+		"Live Preview",
+	).toMatchObject({ mode: "source", source: false });
+	expect(await clickInEditor(obsidian, path, line, ch)).toEqual({ line, ch });
+}
+
+/**
+ * Clicks `timestamp`, waits until `read` shows `captured`, then clicks Undo on the Notice
+ * that says `message` and waits until `read` shows `before` again.
+ */
+async function captureThenUndo(
+	timestamp: UiTarget,
+	message: string,
+	read: () => Promise<string | null>,
+	{ before, captured }: { before: string; captured: string },
+): Promise<void> {
+	const { obsidian } = getContext();
+	await click(obsidian, timestamp);
+	expect(await eventually(obsidian, read, captured, 10_000), "captured").toBe(captured);
+	await click(obsidian, ui.undo(message));
+	expect(await eventually(obsidian, read, before, 10_000), "after Undo").toBe(before);
+	expect(await notices(obsidian), "Undo left nothing behind to say").not.toContainEqual(
+		expect.stringContaining("The note changed since"),
 	);
 }
 
@@ -564,6 +604,116 @@ describe("episode note and capture journeys", () => {
 			]),
 		);
 		expect(note.endsWith(`\n${firstLine}\n${secondLine}\n`), note).toBe(true);
+	});
+
+	test("J-TS-12 the player's Timestamp goes into the note being written and into the episode note, and Undo leaves each as it was", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Player Capture");
+		const draft = sandbox.path("Player draft.md");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		const original = "Before the cut after the cut\nSecond line\n";
+		await writeVaultFile(obsidian, draft, original);
+		const timestamp = ui.playerControl("Capture timestamp");
+		const label = () =>
+			obsidian.dev.evalJson<string>(`(${timestamp.elements})[0]?.textContent.trim() ?? ""`);
+
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 0, 14);
+		const paused = await pauseInView();
+		const line = capture(journey, ORIGINAL, paused.seconds);
+
+		await click(obsidian, timestamp);
+		expect(await eventually(obsidian, label, "Added", 1_000), "the button confirms").toBe(
+			"Added",
+		);
+		expect(await eventually(obsidian, label, "Timestamp", 3_000)).toBe("Timestamp");
+		const captured = `Before the cut${line} after the cut\nSecond line\n`;
+		expect(await eventually(obsidian, () => editorText(draft), captured)).toBe(captured);
+		await click(obsidian, ui.undo("Timestamp added to Player draft"));
+		expect(await eventually(obsidian, () => editorText(draft), original)).toBe(original);
+		await waitForText(draft, (text) => text === original, "the draft saved as it was");
+
+		await detachMarkdownTabs();
+		await click(obsidian, timestamp);
+		const created = await waitForText(
+			episodeNote,
+			(text) => text.endsWith(`\n${line}\n`),
+			"the capture in a new episode note",
+		);
+		await click(obsidian, ui.undo("Created Original Title"));
+		const kept = created.slice(0, -`${line}\n`.length);
+		await waitForText(
+			episodeNote,
+			(text) => text === kept,
+			"the created note kept, without the line",
+		);
+
+		const read = async () =>
+			(await exists(episodeNote)) ? await readVaultText(obsidian, episodeNote) : null;
+		await captureThenUndo(timestamp, "Timestamp added to Original Title", read, {
+			before: kept,
+			captured: `${kept}${line}\n`,
+		});
+		expect(await editorText(draft), "the draft is closed").toBeNull();
+		expect(await readVaultText(obsidian, draft)).toBe(original);
+	});
+
+	test("J-TS-13 the mini player's Timestamp goes into the note being written and into the episode note, and Undo leaves each as it was", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Mini Capture");
+		const draft = sandbox.path("Mini draft.md");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		const original = "First line\nSecond line\n";
+		const mine = "# My notes\nNo newline at the end";
+		await writeVaultFile(obsidian, draft, original);
+		await writeVaultFile(obsidian, episodeNote, mine);
+
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 1, 6);
+		await click(obsidian, ui.collapsePlayer);
+		await waitUntilShown(obsidian, ui.miniPlayer);
+		await click(obsidian, ui.miniPlayback);
+		const paused = await waitForPlayback(obsidian, (playback) => !playback.playing, "paused");
+		const line = capture(journey, ORIGINAL, paused.seconds);
+
+		await captureThenUndo(
+			ui.miniCapture,
+			"Timestamp added to Mini draft",
+			() => editorText(draft),
+			{
+				before: original,
+				captured: `First line\nSecond${line} line\n`,
+			},
+		);
+		await waitForText(draft, (text) => text === original, "the draft saved as it was");
+
+		await detachMarkdownTabs();
+		await captureThenUndo(
+			ui.miniCapture,
+			"Timestamp added to Original Title",
+			() => readVaultText(obsidian, episodeNote),
+			{ before: mine, captured: `${mine}\n${line}\n` },
+		);
+	});
+
+	test("J-TS-14 Capture Timestamp with nothing loaded says to play an episode, and writes nothing", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Nothing Loaded");
+		const draft = sandbox.path("Nothing loaded.md");
+		await writeVaultFile(obsidian, draft, "Notes\n");
+		await showPodNotes(obsidian);
+		expect(await loadedEpisode()).toBeNull();
+		expect(await isShown(obsidian, ui.miniPlayer), "no mini player").toBe(false);
+		await writeIn(draft, 0, 5);
+
+		await runFromPalette(obsidian, "Capture Timestamp");
+
+		await obsidian.waitFor(
+			async () => (await notices(obsidian)).includes("Play an episode to capture"),
+			{ timeoutMs: 5_000, intervalMs: 100, message: "the Play an episode to capture Notice" },
+		);
+		expect(await editorText(draft)).toBe("Notes\n");
+		expect(await exists(notePath(journey.show, ORIGINAL.title))).toBe(false);
 	});
 
 	test("J-TS-09 Capture Timestamp lands in a popout editor, then in the episode note once the popout closes", async () => {

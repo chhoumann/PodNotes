@@ -98,6 +98,30 @@ export const ui = {
 		"full player's play/pause",
 		`${PLAYER_VIEW} section.pn-player button.pn-play`,
 	),
+	playerControl: (label: string) =>
+		byAttribute(
+			`full player's ${label}`,
+			`${PLAYER_VIEW} section.pn-player button`,
+			"aria-label",
+			label,
+		),
+	playerVolume: byCss("full player's volume", `${PLAYER_VIEW} section.pn-player button.pn-vol`),
+	volumeSlider: byCss(
+		"volume slider",
+		`${PLAYER_VIEW} section.pn-player input[type="range"][aria-label="Volume"]`,
+	),
+	playerPanel: (name: string) =>
+		byCss(
+			`player panel ${name}`,
+			`${PLAYER_VIEW} section.pn-player :is(.pn-sw, .pn-tab)`,
+			name,
+		),
+	miniCapture: byAttribute(
+		"mini player's Capture timestamp",
+		`${PLAYER_VIEW} section.pn-mini button`,
+		"aria-label",
+		"Capture timestamp",
+	),
 	episodeMenu: (title: string) =>
 		byAttribute(
 			`More options for ${title}`,
