@@ -123,6 +123,14 @@ async function getTemplateChapters(
 }
 
 export function getPodcastNote(episode: Episode): TFile | null {
+	return findExactPodcastNote(episode) ?? findPodcastNoteByTitleOverlap(episode);
+}
+
+/**
+ * The note with the episode's guid, else the one at a path the template renders. It
+ * skips the title-overlap scan of the notes folder, so a list can ask for every row.
+ */
+export function findExactPodcastNote(episode: Episode): TFile | null {
 	const { vault } = get(plugin).app;
 
 	const identified = findPodcastNoteByGuid(episode);
@@ -135,19 +143,39 @@ export function getPodcastNote(episode: Episode): TFile | null {
 		}
 	}
 
-	return findPodcastNoteByTitleOverlap(episode);
+	return null;
+}
+
+interface IdentifiedNote {
+	file: TFile;
+	guid: string;
+	feedUrl: unknown;
+}
+
+let identifiedNotes: IdentifiedNote[] | undefined;
+
+// An episode list asks for every row's note at once, so the vault is read once per
+// task, not once per episode. The next task reads it again, so it sees new notes.
+function notesWithGuid(): IdentifiedNote[] {
+	if (!identifiedNotes) {
+		const { vault, metadataCache } = get(plugin).app;
+		identifiedNotes = vault.getMarkdownFiles().flatMap((file) => {
+			const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
+			return typeof frontmatter?.guid === "string"
+				? [{ file, guid: frontmatter.guid, feedUrl: frontmatter.feedUrl }]
+				: [];
+		});
+		queueMicrotask(() => (identifiedNotes = undefined));
+	}
+	return identifiedNotes;
 }
 
 function findPodcastNoteByGuid({ guid, feedUrl }: Episode): TFile | undefined {
 	if (!guid || !feedUrl) return undefined;
-	const { vault, metadataCache } = get(plugin).app;
-	const notes = vault.getMarkdownFiles().flatMap((file) => {
-		const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
-		return frontmatter?.feedUrl === feedUrl && typeof frontmatter.guid === "string"
-			? [{ file, guid: frontmatter.guid }]
-			: [];
-	});
-	return findByGuid(notes, guid)?.file;
+	return findByGuid(
+		notesWithGuid().filter((note) => note.feedUrl === feedUrl),
+		guid,
+	)?.file;
 }
 
 function findPodcastNoteByTitleOverlap(episode: Episode): TFile | null {

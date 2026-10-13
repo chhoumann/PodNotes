@@ -12,15 +12,10 @@ export const downloadedEpisodes = (() => {
 	const store = recordStore<DownloadedEpisode[]>();
 	const { subscribe, update, set } = store;
 
-	function isEpisodeDownloaded(episode: Episode): boolean {
-		return get(store)[episode.podcastName]?.some((e) => e.title === episode.title);
-	}
-
 	return {
 		subscribe,
 		set,
 		update,
-		isEpisodeDownloaded,
 		/**
 		 * Adds or replaces a downloaded/local episode. Returns the file path that
 		 * was REPLACED when a different file collapsed onto the same key (a basename

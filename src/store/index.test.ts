@@ -328,7 +328,7 @@ describe("downloadedEpisodes store — removeEpisode is pure (no vault I/O)", ()
 		const removed = downloadedEpisodes.removeEpisode(ep("Episode 1", "Design Podcast"));
 
 		expect(removed).toEqual({ ...downloaded, size: 2048, downloadedByPodNotes: true });
-		expect(downloadedEpisodes.isEpisodeDownloaded(downloaded)).toBe(false);
+		expect(downloadedEpisodes.getEpisode(downloaded)).toBeUndefined();
 		expect(get(downloadedEpisodes)["Design Podcast"]).toEqual([]);
 	});
 
@@ -340,7 +340,7 @@ describe("downloadedEpisodes store — removeEpisode is pure (no vault I/O)", ()
 		const removed = downloadedEpisodes.removeEpisode(missing);
 
 		expect(removed).toBeUndefined();
-		expect(downloadedEpisodes.isEpisodeDownloaded(present)).toBe(true);
+		expect(downloadedEpisodes.getEpisode(present)).toBeDefined();
 	});
 });
 
@@ -591,7 +591,6 @@ describe("stores keyed by a podcast, playlist or episode name", () => {
 		const vault = { getAbstractFileByPath: () => null } as unknown as Vault;
 
 		expect(downloadedEpisodes.getEpisode(of)).toBeUndefined();
-		expect(downloadedEpisodes.isEpisodeDownloaded(of)).toBeFalsy();
 		expect(selectSource(of, get(downloadedEpisodes), vault).src).toBe(episode.streamUrl);
 	});
 
@@ -602,7 +601,6 @@ describe("stores keyed by a podcast, playlist or episode name", () => {
 		downloadedEpisodes.addEpisode(of, `${name}/Shared title.mp3`, 1);
 
 		expect(downloadedEpisodes.getEpisode(of)?.filePath).toBe(`${name}/Shared title.mp3`);
-		expect(downloadedEpisodes.isEpisodeDownloaded(of)).toBe(true);
 		expect(Object.keys(get(downloadedEpisodes))).toEqual([name]);
 	});
 

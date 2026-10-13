@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import PodNotes from "./main";
-import { dataFileText } from "../tests/mocks/dataFileWriter";
-import { VIEW_TYPE } from "./constants";
+import { attachDataFileWriter, dataFileText } from "../tests/mocks/dataFileWriter";
+import { DEFAULT_SETTINGS, VIEW_TYPE } from "./constants";
+import { encodePodNotesData } from "./persistence/podNotesData";
 import { App, Notice, Platform, type WorkspaceLeaf } from "obsidian";
 import * as obsidian from "obsidian";
 import { tick } from "svelte";
@@ -121,6 +122,7 @@ describe("PodNotes.onLayoutReady", () => {
 			getLeavesOfType: vi.fn().mockReturnValue(existingLeaves),
 			getRightLeaf: vi.fn().mockReturnValue(rightLeaf),
 			detachLeavesOfType: vi.fn(),
+			revealLeaf: vi.fn().mockResolvedValue(undefined),
 		};
 
 		const plugin = Object.create(PodNotes.prototype) as PodNotes;
@@ -149,6 +151,92 @@ describe("PodNotes.onLayoutReady", () => {
 		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({
 			type: VIEW_TYPE,
 		});
+	});
+
+	async function startOnMobile(disk?: unknown, rightLeaf = makeLeaf()) {
+		Object.assign(Platform, {
+			isDesktop: false,
+			isDesktopApp: false,
+			isMobile: true,
+			isMobileApp: true,
+			isPhone: true,
+		});
+		const started = setupLayoutPlugin({ rightLeaf });
+		Object.assign(started.plugin, {
+			app: {
+				...started.plugin.app,
+				secretStorage: new obsidian.SecretStorage(),
+				vault: {
+					adapter: {
+						exists: vi.fn(async () => disk !== undefined),
+						read: vi.fn(async () => (disk === undefined ? "" : dataFileText(disk))),
+					},
+				},
+			},
+			manifest: { dir: ".obsidian/plugins/podnotes" },
+			isReady: true,
+			// onload leaves the view dormant in the mobile app.
+			podcastViewMountEnabled: false,
+			settings: structuredClone(DEFAULT_SETTINGS),
+			persistenceUnknownFields: {},
+			loadData: vi.fn(async () => structuredClone(disk) ?? null),
+			saveData: vi.fn(async (data: unknown) => {
+				disk = structuredClone(data);
+			}),
+		});
+		attachDataFileWriter(started.plugin);
+		await started.plugin.loadSettings();
+		started.plugin.onLayoutReady();
+		await tick();
+		return { ...started, disk: () => disk };
+	}
+
+	it("opens the view once when the mobile app enables PodNotes for the first time", async () => {
+		const { workspace, rightLeaf, plugin } = await startOnMobile();
+
+		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE, active: true });
+		expect(workspace.revealLeaf).toHaveBeenCalledWith(rightLeaf);
+		expect(plugin.shouldMountPodcastView()).toBe(true);
+	});
+
+	it("opens the view on the first mobile start only, not on the next start from the data it saved", async () => {
+		const first = await startOnMobile();
+		expect(first.rightLeaf?.setViewState).toHaveBeenCalledWith({
+			type: VIEW_TYPE,
+			active: true,
+		});
+
+		const next = await startOnMobile(first.disk());
+
+		expect(next.rightLeaf?.setViewState).not.toHaveBeenCalled();
+		expect(next.workspace.revealLeaf).not.toHaveBeenCalled();
+		expect(next.plugin.shouldMountPodcastView()).toBe(false);
+	});
+
+	it("logs a failure to open the view on the first mobile start", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		onTestFinished(() => error.mockRestore());
+		const rightLeaf = makeLeaf();
+		rightLeaf.setViewState.mockRejectedValue(new Error("no leaf"));
+
+		await startOnMobile(undefined, rightLeaf);
+
+		await vi.waitFor(() =>
+			expect(error).toHaveBeenCalledWith(
+				"PodNotes: failed to initialize startup view",
+				expect.any(Error),
+			),
+		);
+	});
+
+	it("keeps PodNotes closed on a later mobile start", async () => {
+		const { workspace, rightLeaf, plugin } = await startOnMobile(
+			encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+		);
+
+		expect(rightLeaf?.setViewState).not.toHaveBeenCalled();
+		expect(workspace.revealLeaf).not.toHaveBeenCalled();
+		expect(plugin.shouldMountPodcastView()).toBe(false);
 	});
 
 	it("does not auto-create the startup view in the mobile app", () => {
@@ -272,7 +360,7 @@ describe("PodNotes onload wiring (#55)", () => {
 					listSecrets: vi.fn(() => []),
 				},
 				vault: {
-					on: vi.fn(() => ({})),
+					on: vi.fn(() => ({ e: { offref: () => {} } })),
 					adapter: {
 						exists: vi.fn(async () => true),
 						read: vi.fn(async () =>
@@ -500,7 +588,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			const leaf = { setViewState: vi.fn() };
 			const view = new MainView(leaf as unknown as WorkspaceLeaf, plugin);
 			onTestFinished(async () => {
-				await (view as unknown as { onClose(): Promise<void> }).onClose();
+				await (view as unknown as { close(): Promise<void> }).close();
 			});
 			const { scope, keymap } = new App();
 			Object.assign(plugin.app, { scope, keymap });
@@ -511,7 +599,7 @@ describe("PodNotes onload wiring (#55)", () => {
 				getLeavesOfType: vi.fn(() => [leaf]),
 				requestSaveLayout: vi.fn(),
 				revealLeaf: vi.fn(async () => {
-					await (view as unknown as { onOpen(): Promise<void> }).onOpen();
+					await (view as unknown as { open(): Promise<void> }).open();
 					await view.setState({ page: saved }, { history: false });
 				}),
 			});

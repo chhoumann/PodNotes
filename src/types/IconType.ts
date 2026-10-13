@@ -51,6 +51,7 @@ export const ICON_LIST = [
 	"arrow-down-circle",
 	"arrow-down-left",
 	"arrow-down-right",
+	"arrow-down-to-line",
 	"arrow-down",
 	"arrow-left-circle",
 	"arrow-left-right",

@@ -75,6 +75,15 @@ if (!("win" in Node.prototype)) {
 	});
 }
 
+if (!("doc" in Node.prototype)) {
+	Object.defineProperty(Node.prototype, "doc", {
+		configurable: true,
+		get(this: Node) {
+			return this.ownerDocument ?? document;
+		},
+	});
+}
+
 if (!("onWindowMigrated" in HTMLElement.prototype)) {
 	(HTMLElement.prototype as unknown as { onWindowMigrated: () => () => void }).onWindowMigrated =
 		() => () => {};

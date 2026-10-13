@@ -63,7 +63,7 @@ describe("local files runtime", () => {
 				await showList(obsidian, "Local files");
 				await clickInPodNotesView(obsidian, `[aria-label="More options for ${title}"]`);
 				const removalMenu = await clickMenuItem(obsidian, "Remove from Local Files");
-				expect(removalMenu).not.toContain("Remove file");
+				expect(removalMenu).not.toContain("Remove download");
 				await plugin.waitForData<PodNotesData>(
 					(data) => !inDownloads(data) && !inLocalFiles(data),
 					WAIT_OPTS,
@@ -74,7 +74,7 @@ describe("local files runtime", () => {
 					`(async () => {
 					const view = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0]?.view;
 					return {
-						listed: Array.from(view?.containerEl.querySelectorAll(".episode-item-title") ?? [])
+						listed: Array.from(view?.containerEl.querySelectorAll(".pn-ep-title") ?? [])
 							.some((candidate) => candidate.textContent?.trim() === ${jsLiteral(title)}),
 						original: await app.vault.adapter.exists(${jsLiteral(audioPath)}),
 					};
@@ -176,7 +176,7 @@ describe("local files runtime", () => {
 			await showList(obsidian, "Local files");
 
 			await clickInPodNotesView(obsidian, `[aria-label="More options for ${kept}"]`);
-			await clickMenuItem(obsidian, "Remove file");
+			await clickMenuItem(obsidian, "Remove download");
 			expect(await removalPrompt(obsidian, recordingPath(kept))).toEqual({
 				prompt: promptFor(kept),
 				focused: "Keep file",
@@ -189,7 +189,7 @@ describe("local files runtime", () => {
 			);
 
 			await clickInPodNotesView(obsidian, `[aria-label="More options for ${discarded}"]`);
-			await clickMenuItem(obsidian, "Remove file");
+			await clickMenuItem(obsidian, "Remove download");
 			expect(await removalPrompt(obsidian, recordingPath(discarded))).toEqual({
 				prompt: promptFor(discarded),
 				focused: "Keep file",
@@ -210,7 +210,7 @@ describe("local files runtime", () => {
 			);
 
 			await clickInPodNotesView(obsidian, `[aria-label="More options for ${unindexed}"]`);
-			await clickMenuItem(obsidian, "Remove file");
+			await clickMenuItem(obsidian, "Remove download");
 			await plugin.waitForData<PodNotesData>(
 				(data) => !inDownloads(data, feed, unindexed),
 				WAIT_OPTS,

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceLeaf } from "obsidian";
-import type { Readable } from "svelte/store";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TFile, type WorkspaceLeaf } from "obsidian";
+import { get } from "svelte/store";
 import { plugin as pluginStore } from "src/store";
+import { DEFAULT_SETTINGS } from "src/constants";
+import type { Episode } from "../../types/Episode";
 import type { IPodNotes } from "../../types/IPodNotes";
 import type { IPodNotesSettings } from "../../types/IPodNotesSettings";
 
@@ -15,9 +17,45 @@ vi.mock("svelte", () => svelte);
 vi.mock("./PodcastView.svelte", () => ({ default: {} }));
 
 import { MainView } from ".";
+import type { ShellServices } from "./context";
 import { Navigation } from "./Navigation";
 
-function createView({ shouldMount }: { shouldMount: boolean }) {
+interface VaultListener {
+	name: string;
+	callback(): void;
+}
+
+function createVault() {
+	const notes = new Set<string>();
+	const listeners = new Set<VaultListener>();
+	const vault = {
+		notes,
+		listeners,
+		on(name: string, callback: () => void) {
+			const ref = { e: vault, name, callback };
+			listeners.add(ref);
+			return ref;
+		},
+		offref(ref: VaultListener) {
+			listeners.delete(ref);
+		},
+		trigger(name: string) {
+			for (const ref of listeners) if (ref.name === name) ref.callback();
+		},
+		getAbstractFileByPath: (path: string) =>
+			notes.has(path) ? Object.assign(Object.create(TFile.prototype), { path }) : null,
+		getMarkdownFiles: () => [],
+	};
+	return vault;
+}
+
+function createView({
+	shouldMount,
+	layoutReady = true,
+}: {
+	shouldMount: boolean;
+	layoutReady?: boolean;
+}) {
 	const plugin = {
 		navigation: new Navigation(),
 		shouldMountPodcastView: vi.fn(() => shouldMount),
@@ -25,18 +63,37 @@ function createView({ shouldMount }: { shouldMount: boolean }) {
 	} as unknown as IPodNotes;
 	const view = new MainView({} as WorkspaceLeaf, plugin);
 	const contentEl = document.createElement("div");
-	const workspace = { requestSaveLayout: vi.fn() };
-	Object.assign(view, { contentEl, app: { workspace } });
+	const pending: Array<() => void> = [];
+	const workspace = {
+		layoutReady,
+		requestSaveLayout: vi.fn(),
+		onLayoutReady: (callback: () => void) =>
+			workspace.layoutReady ? callback() : pending.push(callback),
+		finishLayout() {
+			workspace.layoutReady = true;
+			for (const callback of pending.splice(0)) callback();
+		},
+	};
+	const vault = createVault();
+	const app = { workspace, vault };
+	Object.assign(view, { contentEl, app });
+	pluginStore.set({ app, settings: structuredClone(DEFAULT_SETTINGS) } as never);
 
-	return { contentEl, plugin, view, workspace };
+	return { app, contentEl, plugin, view, workspace, vault };
+}
+
+function mountedServices(): ShellServices {
+	return (
+		svelte.mount.mock.calls[0] as unknown as [unknown, { props: { services: ShellServices } }]
+	)[1].props.services;
 }
 
 async function openView(view: MainView): Promise<void> {
-	await (view as unknown as { onOpen(): Promise<void> }).onOpen();
+	await (view as unknown as { open(): Promise<void> }).open();
 }
 
 async function closeView(view: MainView): Promise<void> {
-	await (view as unknown as { onClose(): Promise<void> }).onClose();
+	await (view as unknown as { close(): Promise<void> }).close();
 }
 
 describe("MainView mobile startup mounting", () => {
@@ -80,21 +137,19 @@ describe("MainView mobile startup mounting", () => {
 
 	it("gives the view the plugin's settings, current through a toggle and an import", async () => {
 		const { plugin, view } = createView({ shouldMount: true });
-		const host = Object.assign(plugin, { settings: { autoQueue: true } as IPodNotesSettings });
+		const settings = (autoQueue: boolean): IPodNotesSettings => ({
+			...structuredClone(DEFAULT_SETTINGS),
+			autoQueue,
+		});
+		const host = Object.assign(plugin, { settings: settings(true) });
 		pluginStore.set(host as never);
 		await openView(view);
-		const { settings } = (
-			svelte.mount.mock.calls[0] as unknown as [
-				unknown,
-				{ props: { services: { settings: Readable<IPodNotesSettings> } } },
-			]
-		)[1].props.services;
 		const seen: boolean[] = [];
 
-		const stop = settings.subscribe(({ autoQueue }) => seen.push(autoQueue));
+		const stop = mountedServices().settings.subscribe(({ autoQueue }) => seen.push(autoQueue));
 		host.settings.autoQueue = false;
 		pluginStore.set(host as never);
-		host.settings = { autoQueue: true } as IPodNotesSettings;
+		host.settings = settings(true);
 		pluginStore.set(host as never);
 		stop();
 
@@ -109,6 +164,127 @@ describe("MainView mobile startup mounting", () => {
 
 		expect(svelte.unmount).toHaveBeenCalledTimes(1);
 		expect(plugin.unregisterPodcastView).toHaveBeenCalledWith(view);
+	});
+});
+
+describe("MainView episode notes", () => {
+	const episode = { title: "Episode One", podcastName: "Show" } as Episode;
+	const notePath = "podcasts/Episode One.md";
+
+	function createNotesView(options: { layoutReady?: boolean } = {}) {
+		const created = createView({ shouldMount: true, ...options });
+		pluginStore.set({
+			app: created.app,
+			settings: { note: { path: "podcasts/{{title}}" } },
+		} as never);
+		return created;
+	}
+
+	function watchRow() {
+		const shown: boolean[] = [];
+		mountedServices().rowHasNote.subscribe((hasNote) => shown.push(hasNote(episode)));
+		return shown;
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.clearAllMocks();
+	});
+
+	it("looks again when a note is created, deleted or renamed, not edited, until the view closes", async () => {
+		const { view, vault } = createNotesView();
+		await openView(view);
+		const shown = watchRow();
+		const change = (name: string, apply: () => void) => {
+			apply();
+			vault.trigger(name);
+			vi.runAllTimers();
+		};
+
+		change("create", () => vault.notes.add(notePath));
+		change("delete", () => vault.notes.delete(notePath));
+		change("rename", () => vault.notes.add(notePath));
+		change("modify", () => vault.notes.delete(notePath));
+		await closeView(view);
+		change("create", () => vault.notes.add(notePath));
+
+		expect(shown).toEqual([false, true, false, true]);
+	});
+
+	it("looks again when the note path setting changes, until the view closes", async () => {
+		const { view, vault } = createNotesView();
+		await openView(view);
+		const shown = watchRow();
+		const host = get(pluginStore);
+		const setNotePath = (path: string) => {
+			host.settings.note.path = path;
+			pluginStore.set(host);
+			vi.runAllTimers();
+		};
+
+		vault.notes.add("elsewhere/Episode One.md");
+		setNotePath("elsewhere/{{title}}");
+		await closeView(view);
+		setNotePath("podcasts/{{title}}");
+
+		expect(shown).toEqual([false, true]);
+	});
+
+	it("looks again once the layout is ready, not for the files Obsidian reports while it loads the vault", async () => {
+		const { view, vault, workspace } = createNotesView({ layoutReady: false });
+		await openView(view);
+		const shown = watchRow();
+
+		vault.notes.add(notePath);
+		vault.trigger("create");
+		vi.runAllTimers();
+		expect(shown).toEqual([false]);
+
+		workspace.finishLayout();
+		vi.runAllTimers();
+		expect(shown).toEqual([false, true]);
+	});
+
+	it("leaves no vault listener when the view closes before the layout is ready", async () => {
+		const { view, vault, workspace } = createNotesView({ layoutReady: false });
+		await openView(view);
+
+		await closeView(view);
+		workspace.finishLayout();
+
+		expect(vault.listeners.size).toBe(0);
+	});
+
+	it("looks once, after a burst of a thousand vault changes ends", async () => {
+		const { view, vault } = createNotesView();
+		await openView(view);
+		const shown = watchRow();
+
+		vault.notes.add(notePath);
+		for (let index = 0; index < 1000; index++) {
+			vault.trigger(["create", "delete", "rename"][index % 3] as string);
+		}
+		expect(shown).toEqual([false]);
+		vi.runAllTimers();
+
+		expect(shown).toEqual([false, true]);
+	});
+
+	it("drops a look that is still waiting when the view closes", async () => {
+		const { view, vault } = createNotesView();
+		await openView(view);
+		const shown = watchRow();
+
+		vault.notes.add(notePath);
+		vault.trigger("create");
+		await closeView(view);
+		vi.runAllTimers();
+
+		expect(shown).toEqual([false]);
 	});
 });
 

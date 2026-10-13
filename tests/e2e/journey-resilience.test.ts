@@ -8,6 +8,7 @@ import {
 	click,
 	closePodNotes,
 	closeSettings,
+	feedsLoading,
 	isShown,
 	listedEpisodes,
 	notices,
@@ -22,6 +23,7 @@ import {
 	showPodNotes,
 	typeInto,
 	ui,
+	waitUntilShown,
 } from "./journey/actions";
 import {
 	deepgramRequests,
@@ -340,7 +342,7 @@ describe("resilience journeys", () => {
 			await obsidian.waitFor(
 				async () =>
 					(await listedEpisodes(obsidian)).includes("Offline Keeper") &&
-					!(await isShown(obsidian, ui.feedLoading)) &&
+					!(await feedsLoading(obsidian)) &&
 					!(await isShown(obsidian, ui.episodeLoading)),
 				{
 					timeoutMs: 15_000,
@@ -352,7 +354,7 @@ describe("resilience journeys", () => {
 				async () =>
 					(await listedEpisodes(obsidian)).length === 2 &&
 					(await isShown(obsidian, ui.pageTitle("Latest episodes"))) &&
-					!(await isShown(obsidian, ui.feedLoading)) &&
+					!(await feedsLoading(obsidian)) &&
 					!(await isShown(obsidian, ui.episodeLoading)),
 				{
 					timeoutMs: 15_000,
@@ -361,7 +363,10 @@ describe("resilience journeys", () => {
 			);
 			expect(await listedEpisodes(obsidian)).toEqual(["Offline Keeper", "Offline Extra"]);
 
+			// The restored current episode's row opens the player, where play resumes it.
 			await click(obsidian, ui.episode("Offline Keeper"));
+			await waitUntilShown(obsidian, ui.fullPlayer);
+			await click(obsidian, ui.playbackToggle);
 			const playing = await waitForPlayback(
 				obsidian,
 				(playback) =>
@@ -380,15 +385,11 @@ describe("resilience journeys", () => {
 
 			await showLibrary(obsidian);
 			await click(obsidian, ui.podcastCard("Journey Never Loaded"));
-			await obsidian.waitFor(
-				async () =>
-					(await notices(obsidian)).includes(
-						"Could not load episodes for Journey Never Loaded. Check your connection and try again.",
-					),
-				{ timeoutMs: 15_000, message: "the offline failure notice" },
-			);
+			await waitUntilShown(obsidian, ui.feedError);
+			expect(await shownText(obsidian)).toContain("Feed didn't load");
+			expect(await isShown(obsidian, ui.feedErrorAction("Retry"))).toBe(true);
 			expect(await isShown(obsidian, ui.episodeLoading)).toBe(false);
-			expect(await shownText(obsidian)).toContain("No episodes found.");
+			expect(await isShown(obsidian, ui.noEpisodes)).toBe(true);
 		},
 		120_000,
 	);

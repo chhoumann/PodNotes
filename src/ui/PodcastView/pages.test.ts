@@ -60,24 +60,18 @@ describe("headFor", () => {
 	const walks: Page = { kind: "playlist", name: "Walks" };
 
 	test.each<[Layout, Page, Page | undefined, Head]>([
-		["compact", { kind: "library" }, undefined, { title: "Library", libraryActions: true }],
-		["wide", { kind: "library" }, undefined, { title: "Podcasts", libraryActions: false }],
-		[
-			"compact",
-			latest,
-			undefined,
-			{ back: "Library", pageTitle: "Latest episodes", libraryActions: false },
-		],
-		["wide", latest, show, { title: "Latest episodes", libraryActions: false }],
-		["compact", show, latest, { back: "Latest episodes", libraryActions: false }],
-		["wide", show, undefined, { back: "Library", libraryActions: false }],
-		[
-			"compact",
-			walks,
-			undefined,
-			{ back: "Playlists", pageTitle: "Walks", libraryActions: false },
-		],
-		["wide", walks, show, { back: "The Show", pageTitle: "Walks", libraryActions: false }],
+		["compact", { kind: "library" }, undefined, { title: "Library", action: "library" }],
+		["wide", { kind: "library" }, undefined, { title: "Podcasts", action: "refresh-all" }],
+		["compact", latest, undefined, { back: "Library", pageTitle: "Latest episodes" }],
+		["wide", latest, show, { title: "Latest episodes" }],
+		["compact", show, latest, { back: "Latest episodes", action: "podcast" }],
+		["wide", show, undefined, { back: "Library", action: "podcast" }],
+		["compact", walks, undefined, { back: "Playlists", pageTitle: "Walks" }],
+		["wide", walks, show, { back: "The Show", pageTitle: "Walks" }],
+		["compact", { kind: "add" }, show, { back: "The Show", search: true }],
+		["compact", { kind: "add" }, undefined, { back: "Library", search: true }],
+		["wide", { kind: "add" }, { kind: "library" }, { back: "Library", search: true }],
+		["wide", { kind: "add" }, undefined, { search: true }],
 	])("%s %j after %j", (layout, page, previous, head) => {
 		expect(headFor(page, layout, previous, feeds)).toEqual(head);
 	});

@@ -1,4 +1,4 @@
-import { ItemView } from "obsidian";
+import { debounce, ItemView } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
 import { VIEW_TYPE } from "../../constants";
@@ -6,11 +6,14 @@ import type { ShellServices } from "./context";
 import { pageKey, parsePage } from "./pages";
 import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
-import { derived } from "svelte/store";
+import { derived, get, writable } from "svelte/store";
+import { findExactPodcastNote, getPodcastNote } from "src/createPodcastNote";
+import { createLibraryActions } from "src/services/library";
 import {
 	downloadedEpisodes,
 	episodeListLimit,
 	favorites,
+	hidePlayedEpisodes,
 	localFiles,
 	playedEpisodes,
 	playlists,
@@ -18,6 +21,8 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
+import type { Episode } from "src/types/Episode";
+import { PodcastSearch } from "./podcastSearch";
 
 export class MainView extends ItemView {
 	constructor(
@@ -80,9 +85,33 @@ export class MainView extends ItemView {
 	}
 
 	private services(): ShellServices {
-		const { plugin } = this;
+		const { plugin, app } = this;
+		const noteLookup = () => (episode: Episode) => findExactPodcastNote(episode) !== null;
+		const rowHasNote = writable(noteLookup());
+		const notesChanged = () => rowHasNote.set(noteLookup());
+		// A view restored at startup lists its rows while the vault is still indexing.
+		app.workspace.onLayoutReady(notesChanged);
+		// Obsidian reports every file as created while it loads the vault, and a sync can
+		// bring a thousand at once, so the rows look their notes up once per burst.
+		const notesChangedSoon = debounce(notesChanged, 200, true);
+		this.register(() => notesChangedSoon.cancel());
+		const vaultChanged = () => {
+			if (app.workspace.layoutReady) notesChangedSoon();
+		};
+		this.registerEvent(app.vault.on("create", vaultChanged));
+		this.registerEvent(app.vault.on("delete", vaultChanged));
+		this.registerEvent(app.vault.on("rename", vaultChanged));
+		const settings = derived(pluginStore, ($plugin) => $plugin.settings);
+		let notePath = get(settings).note.path;
+		this.register(
+			settings.subscribe(({ note }) => {
+				if (note.path === notePath) return;
+				notePath = note.path;
+				notesChangedSoon();
+			}),
+		);
 		return {
-			app: this.app,
+			app,
 			api: plugin.api,
 			player: plugin.player,
 			feeds: plugin.feeds,
@@ -96,10 +125,19 @@ export class MainView extends ItemView {
 				playedEpisodes,
 				downloadedEpisodes,
 				episodeListLimit,
+				hidePlayedEpisodes,
 			},
-			settings: derived(pluginStore, ($plugin) => $plugin.settings),
+			actions: createLibraryActions({
+				app,
+				feeds: plugin.feeds,
+				feedUrls: plugin.feedUrls,
+			}),
+			search: new PodcastSearch(plugin.feeds),
+			settings,
 			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
+			hasNote: (episode) => getPodcastNote(episode) !== null,
+			rowHasNote,
 		};
 	}
 

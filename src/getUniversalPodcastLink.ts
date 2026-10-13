@@ -54,9 +54,8 @@ async function resolveCollectionId(
 		return savedFeed.collectionId;
 	}
 
-	const iTunesResponse = await queryiTunesPodcasts(podcastName);
-	const match =
-		iTunesResponse.find(hasUrl) ?? iTunesResponse.find((pod) => pod.title === podcastName);
+	const listed = (await queryiTunesPodcasts(podcastName)).map(({ feed }) => feed);
+	const match = listed.find(hasUrl) ?? listed.find((pod) => pod.title === podcastName);
 
 	return match?.collectionId;
 }

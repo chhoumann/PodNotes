@@ -12,13 +12,19 @@ interface iTunesResult {
 	feedUrl?: string;
 	artworkUrl100: string;
 	collectionId: number;
+	trackCount?: number;
+}
+
+export interface DirectoryShow {
+	readonly feed: PodcastFeed;
+	readonly episodeCount?: number;
 }
 
 interface iTunesResponse {
 	results: iTunesResult[];
 }
 
-export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]> {
+export async function queryiTunesPodcasts(query: string): Promise<DirectoryShow[]> {
 	const url = new URL("https://itunes.apple.com/search");
 	url.searchParams.append("term", query);
 	url.searchParams.append("media", "podcast");
@@ -26,21 +32,21 @@ export async function queryiTunesPodcasts(query: string): Promise<PodcastFeed[]>
 	url.searchParams.append("kind", "podcast");
 
 	// Search can list one feed under several shows; keep the best-ranked one.
-	const feeds = new Map<string, PodcastFeed>();
-	for (const feed of await fetchPodcastFeeds(url)) {
-		if (!feeds.has(feed.url)) feeds.set(feed.url, feed);
+	const shows = new Map<string, DirectoryShow>();
+	for (const show of await fetchShows(url)) {
+		if (!shows.has(show.feed.url)) shows.set(show.feed.url, show);
 	}
-	return [...feeds.values()];
+	return [...shows.values()];
 }
 
 /** Resolve an Apple Podcasts show id to its public RSS feed, or null when it has none. */
-export async function lookupiTunesPodcast(id: string): Promise<PodcastFeed | null> {
+export async function lookupiTunesPodcast(id: string): Promise<DirectoryShow | null> {
 	const url = new URL("https://itunes.apple.com/lookup");
 	url.searchParams.append("id", id);
 	url.searchParams.append("entity", "podcast");
 	// An artist id returns the artist's shows, none of which is the linked show.
-	const feeds = await fetchPodcastFeeds(url);
-	return feeds.find((feed) => feed.collectionId === id) ?? null;
+	const shows = await fetchShows(url);
+	return shows.find(({ feed }) => feed.collectionId === id) ?? null;
 }
 
 /**
@@ -69,7 +75,7 @@ export function parseApplePodcastsId(input: string): string | null {
 	return id && /^\d+$/.test(id) ? id : null;
 }
 
-async function fetchPodcastFeeds(url: URL): Promise<PodcastFeed[]> {
+async function fetchShows(url: URL): Promise<DirectoryShow[]> {
 	try {
 		const data = await fetchJsonWithTimeout<iTunesResponse>(url.href, {
 			timeoutMs: ITUNES_REQUEST_TIMEOUT_MS,
@@ -80,7 +86,7 @@ async function fetchPodcastFeeds(url: URL): Promise<PodcastFeed[]> {
 			throw new NetworkError("invalid-response");
 		}
 
-		return data.results.map(toPodcastFeed).filter((feed) => feed !== null);
+		return data.results.map(toShow).filter((show) => show !== null);
 	} catch (error) {
 		// Keep diagnostics useful without copying a target, query, native error, or
 		// response body into the console. NetworkError messages and status values are
@@ -95,13 +101,16 @@ async function fetchPodcastFeeds(url: URL): Promise<PodcastFeed[]> {
 }
 
 // Shows without a public RSS feed (Apple-hosted or subscription-only) cannot be added.
-function toPodcastFeed(result: iTunesResult): PodcastFeed | null {
+function toShow(result: iTunesResult): DirectoryShow | null {
 	if (typeof result.feedUrl !== "string") return null;
 	return {
-		title: result.collectionName,
-		url: result.feedUrl,
-		artworkUrl: result.artworkUrl100,
-		collectionId: String(result.collectionId),
-		...(typeof result.artistName === "string" ? { author: result.artistName } : {}),
+		feed: {
+			title: result.collectionName,
+			url: result.feedUrl,
+			artworkUrl: result.artworkUrl100,
+			collectionId: String(result.collectionId),
+			...(typeof result.artistName === "string" ? { author: result.artistName } : {}),
+		},
+		episodeCount: result.trackCount,
 	};
 }
