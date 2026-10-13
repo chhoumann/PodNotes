@@ -369,6 +369,17 @@ describe("DataFileWriter saves", () => {
 		expect(access.write).toHaveBeenCalledTimes(1);
 	});
 
+	it("schedules no retry of a failed read before anything was loaded", async () => {
+		const file = memoryFile();
+		const clock = manualClock();
+		const writer = new DataFileWriter<Doc>(file.access, clock, null);
+		file.access.read.mockRejectedValue(new Error("busy"));
+
+		await expect(writer.save()).rejects.toThrow("busy");
+
+		expect(clock.pending()).toBe(0);
+	});
+
 	it("never mistakes progress it took from disk for an edit made here", async () => {
 		const { state, writer } = setup();
 		state.memory.defaultVolume = 0.5;

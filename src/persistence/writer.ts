@@ -98,10 +98,10 @@ export class DataFileWriter<Doc> {
 		return (this.chain ?? Promise.resolve()).catch(() => undefined);
 	}
 
-	/** Save now. Rejects when the save fails. */
+	/** Save now. Rejects when the save fails; a failed write is the caller's to report. */
 	save(): Promise<void> {
 		this.cancelTimer();
-		return this.enqueue(() => this.persist()).catch((error: unknown) => {
+		return this.enqueue(() => this.persist(false)).catch((error: unknown) => {
 			throw toError(error, "PodNotes could not save its settings.");
 		});
 	}
@@ -135,7 +135,7 @@ export class DataFileWriter<Doc> {
 			} else {
 				this.saveQueued = false;
 			}
-			await this.persist();
+			await this.persist(true);
 		}).catch((error: unknown) => {
 			console.error("PodNotes: failed to save settings", error);
 		});
@@ -180,12 +180,20 @@ export class DataFileWriter<Doc> {
 		return chain;
 	}
 
-	private async persist(): Promise<void> {
+	private async persist(warnOnFailure: boolean): Promise<void> {
 		// After a failed write the file is unknown, so memory equal to base proves nothing.
 		if (this.base && !this.failedWrite && !this.hasUnsavedEdits()) return;
+		// Before the read settles a failed write the file holds, which does not end its streak.
+		const reportFailure = warnOnFailure && !this.failedWrite;
 
 		this.lastSaveAt = this.clock.now();
-		const disk = await this.file.read(this.base);
+		let disk: Doc | null;
+		try {
+			disk = await this.file.read(this.base);
+		} catch (error) {
+			if (this.failedWrite || this.hasUnsavedEdits()) this.scheduleCheckpoint();
+			throw error;
+		}
 		this.settleFailedWrite(disk);
 		const base = this.base;
 		// Captured after the read, so edits made while it was in flight are written too.
@@ -203,7 +211,7 @@ export class DataFileWriter<Doc> {
 			await this.file.write(toWrite);
 		} catch (error) {
 			if (error instanceof WriteRefusedError) throw error;
-			if (!this.failedWrite) this.onWriteFailed();
+			if (reportFailure) this.onWriteFailed();
 			this.failedWrite = { local, written: toWrite };
 			this.scheduleCheckpoint();
 			throw error;
