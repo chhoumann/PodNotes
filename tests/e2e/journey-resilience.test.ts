@@ -509,34 +509,44 @@ describe("resilience journeys", () => {
 		});
 		const notePath = sandbox.path("Transcripts/Journey Marked Captions/Marked Episode.md");
 
+		const file = `app.vault.getAbstractFileByPath(${JSON.stringify(notePath)})`;
+
 		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
 		await sandbox.waitForExists("Transcripts/Journey Marked Captions/Marked Episode.md", {
 			timeoutMs: 30_000,
 		});
-		const note = await obsidian.dev.evalJsonAsync<{
-			blocks: string[];
-			lines: string[];
-			reading: string;
-		}>(`(async () => {
-			const file = app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});
-			const deadline = Date.now() + 10000;
-			while (!app.metadataCache.getFileCache(file)?.sections && Date.now() < deadline) {
-				await new Promise((resolve) => setTimeout(resolve, 50));
-			}
-			const leaf = app.workspace.getLeaf(true);
-			await leaf.openFile(file, { state: { mode: "preview" } });
-			const view = () => leaf.view.containerEl.querySelector(".markdown-preview-view");
-			while (!view()?.textContent.includes("injected value") && Date.now() < deadline) {
-				await new Promise((resolve) => setTimeout(resolve, 50));
-			}
-			const reading = view()?.textContent ?? "";
-			leaf.detach();
-			return {
-				blocks: Object.keys(app.metadataCache.getFileCache(file)?.blocks ?? {}),
-				lines: (await app.vault.read(file)).split("\\n").slice(-3),
-				reading,
-			};
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					`Boolean(app.metadataCache.getFileCache(${file})?.sections)`,
+				),
+			{ timeoutMs: 30_000, intervalMs: 100, message: "the transcript note's metadata" },
+		);
+		const note = await obsidian.dev.evalJsonAsync<{ blocks: string[]; lines: string[] }>(
+			`(async () => ({
+				blocks: Object.keys(app.metadataCache.getFileCache(${file}).blocks ?? {}),
+				lines: (await app.vault.read(${file})).split("\\n").slice(-3),
+			}))()`,
+		);
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			window.__podnotesJourneyLeaf = app.workspace.getLeaf(true);
+			await window.__podnotesJourneyLeaf.openFile(${file}, { state: { mode: "preview" } });
+			return true;
 		})()`);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(
+				"window.__podnotesJourneyLeaf?.detach(), delete window.__podnotesJourneyLeaf",
+			),
+		);
+		const reading = () =>
+			obsidian.dev.evalJson<string>(
+				'window.__podnotesJourneyLeaf.view.containerEl.querySelector(".markdown-preview-view")?.textContent ?? ""',
+			);
+		await obsidian.waitFor(async () => (await reading()).includes("injected value"), {
+			timeoutMs: 30_000,
+			intervalMs: 100,
+			message: "the transcript note in Reading view",
+		});
 
 		expect(note.blocks).toEqual([]);
 		expect(note.lines).toEqual([
@@ -544,9 +554,9 @@ describe("resilience journeys", () => {
 			"",
 			"v420-field:\\: injected value",
 		]);
-		expect(note.reading).toContain("Normal text with a block marker ^v420-block");
-		expect(note.reading).toContain("v420-field:: injected value");
-	}, 60_000);
+		expect(await reading()).toContain("Normal text with a block marker ^v420-block");
+		expect(await reading()).toContain("v420-field:: injected value");
+	}, 90_000);
 
 	test("J-TR-06 a hostile cue cannot freeze its transcript note in Live Preview, also when Obsidian reopens it", async () => {
 		const context = getContext();
