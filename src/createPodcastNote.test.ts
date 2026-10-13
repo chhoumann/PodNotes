@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as obsidian from "obsidian";
 import { TFile, TFolder } from "obsidian";
+import { get } from "svelte/store";
 import createPodcastNote, {
 	createPodcastNoteFileIfNotExists,
+	findExactPodcastNote,
 	getPodcastNote,
 } from "./createPodcastNote";
 import { plugin } from "./store";
@@ -285,6 +287,37 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		expect(createdFiles).toEqual([]);
 	});
 
+	it("finds a note at a path its template renders without the title-word scan", () => {
+		const legacy = fileAt(
+			"podcasts/Philosophize This! - Episode 001 Presocratic Philosophy - Ionian.md",
+		);
+		const retitled = fileAt(
+			"podcasts/Huberman Lab - Dr. Martha Beck Access Your Best Self With Mind-Body Practices Belief Testing Imagination.md",
+		);
+		const files = new Map<string, TFile>([
+			[legacy.path, legacy],
+			[retitled.path, retitled],
+		]);
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === "podcasts"
+							? folderWith([...files.values()])
+							: (files.get(path) ?? null),
+					),
+				},
+			},
+			settings: {
+				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
+			},
+		} as never);
+
+		expect(findExactPodcastNote(philosophizeEpisode)).toBe(legacy);
+		expect(findExactPodcastNote(hubermanEpisode)).toBeNull();
+		expect(getPodcastNote(hubermanEpisode)).toBe(retitled);
+	});
+
 	it("does not treat a Part 2 note as the Part 1 note", async () => {
 		const part1: Episode = {
 			title: "The Fall of the Republic, Part 1",
@@ -499,6 +532,26 @@ describe("episode notes identified by guid (#349)", () => {
 		expect(JSON.parse(line.slice("guid: ".length))).toBe(guid);
 	});
 
+	it("reads the vault once for a list's notes, and again once that list is drawn", async () => {
+		const { files } = vaultWith([
+			{ path: "podcasts/Old Title.md", frontmatter: { guid: "finale-1", feedUrl } },
+		]);
+		const app = get(plugin).app;
+		const read = vi.spyOn(app.vault, "getMarkdownFiles");
+		const episodes = ["finale-1", "finale-2", "finale-3"].map((guid) => ({
+			...identified,
+			guid,
+		}));
+
+		expect(episodes.map(getPodcastNote)).toEqual([files[0], null, null]);
+		expect(read).toHaveBeenCalledTimes(1);
+
+		files.length = 0;
+		await Promise.resolve();
+		expect(getPodcastNote(identified)).toBeNull();
+		expect(read).toHaveBeenCalledTimes(2);
+	});
+
 	it("finds a retitled episode's note by its guid", async () => {
 		const { files, created } = vaultWith([
 			{ path: "podcasts/Old Title.md", frontmatter: { guid: "finale-1", feedUrl } },
@@ -508,6 +561,14 @@ describe("episode notes identified by guid (#349)", () => {
 
 		await createPodcastNote(identified);
 		expect(created).toEqual([]);
+	});
+
+	it("finds a retitled episode's note by its guid without the title-word scan", () => {
+		const { files } = vaultWith([
+			{ path: "podcasts/Old Title.md", frontmatter: { guid: "finale-1", feedUrl } },
+		]);
+
+		expect(findExactPodcastNote(identified)).toBe(files[0]);
 	});
 
 	it("returns a note with the episode's guid that appeared while its chapters loaded", async () => {

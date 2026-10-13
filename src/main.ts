@@ -115,6 +115,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	// window.setTimeout returns a number in the browser/Electron renderer.
 	private layoutReadyRetry: number | null = null;
 	private isUnloaded = false;
+	private freshInstall = false;
 	private podcastViewMountEnabled = true;
 	private isReady = false;
 	// Why data.json must not be written, or null while writes are allowed. Set when the
@@ -251,9 +252,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		if (this.isMobileRuntime()) {
 			// Mobile startup is sensitive to creating plugin-owned side panes; keep
-			// PodNotes dormant until the user opens it with the command or ribbon.
+			// PodNotes dormant until the user opens it with the command or ribbon, but
+			// meet a new install with the view once.
 			this.clearLayoutReadyRetry();
 			this.layoutReadyAttempts = 0;
+			if (this.freshInstall) {
+				this.activateView().catch((error) => {
+					console.error("PodNotes: failed to initialize startup view", error);
+				});
+			}
 			return;
 		}
 
@@ -413,6 +420,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				);
 				return;
 			}
+			this.freshInstall = data == null;
 
 			const decoded = decodePodNotesData(data);
 			this.credentials ??= new CredentialRepository(this.app.secretStorage);

@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in Settings, local files, episode notes, transcripts. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
+description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in the view, a new install, local files, episode notes, transcripts. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
 ---
 
 # Verify PodNotes in real Obsidian
@@ -56,6 +56,25 @@ finished episode, a saved feed, an interrupted `test:e2e` run):
 npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults && npm run start:e2e-obsidian
 ```
 
+### New install
+
+A fresh vault already has a `data.json`, so it is a later start, not a new
+install. To meet PodNotes as a new user does, disable it, delete its
+`data.json`, close its view, then enable it. Turn on mobile emulation first to
+take the mobile start path, which keeps PodNotes closed on every start but a
+new install's:
+
+```bash
+npm run obsidian:e2e -- dev:mobile on    # optional; reloads Obsidian
+npm run obsidian:e2e -- eval code='(async () => { const data = app.vault.configDir + "/plugins/podnotes/data.json"; await app.workspace.detachLeavesOfType("podcast_player_view"); await app.workspace.saveLayout(); await app.plugins.disablePlugin("podnotes"); await app.vault.adapter.remove(data); await app.plugins.enablePlugin("podnotes"); return true; })()'
+npm run obsidian:e2e -- eval code='(async () => JSON.stringify({leaves: app.workspace.getLeavesOfType("podcast_player_view").length, firstRun: document.querySelector(".podcast-view .pn-first-run h1")?.textContent, saved: await app.vault.adapter.exists(app.vault.configDir + "/plugins/podnotes/data.json")}))()'
+```
+
+Expect one leaf, `firstRun` `Add your first podcast`, and `saved` true. A
+later mobile start stays closed. Close the view, save the layout as above, and
+`npm run obsidian:e2e -- reload` leaves zero leaves. Run
+`npm run obsidian:e2e -- dev:mobile off` to return to the desktop.
+
 ## Doctor
 
 Run this first, and again whenever something looks off:
@@ -83,11 +102,11 @@ read state.
 
     ```bash
     node .claude/skills/verify/ui.mjs click '.podcast-view button.pn-navitem' --text 'Latest episodes'
-    node .claude/skills/verify/ui.mjs click '.podcast-view .podcast-episode-item' --text 'Fixture Episode 1'
+    node .claude/skills/verify/ui.mjs click '.podcast-view .pn-ep-main' --text 'Fixture Episode 1'
     node .claude/skills/verify/ui.mjs click '.nav-file-title[data-path="Fixtures/Local Fixture.wav"]' --right
-    node .claude/skills/verify/ui.mjs fill 'input[placeholder="Search or enter feed URL..."]' "$FEED"
+    node .claude/skills/verify/ui.mjs fill '.podcast-view input[aria-label="Search or paste a link"]' "$FEED"
     node .claude/skills/verify/ui.mjs key Escape
-    node .claude/skills/verify/ui.mjs wait '[aria-label="Remove PodNotes Fixture podcast"]'
+    node .claude/skills/verify/ui.mjs wait '.podcast-view button.pn-result[aria-label="Add PodNotes Fixture"]'
     ```
 
 - **Commands.** The user path is the palette. The command name is the
@@ -155,6 +174,13 @@ npm run record:e2e-obsidian -- .obsidian-e2e-artifacts/player/flow.mp4 -- .obsid
 npm run capture:e2e-obsidian -- sheet .obsidian-e2e-artifacts/player/flow.mp4 .obsidian-e2e-artifacts/player/flow-sheet.png
 ```
 
+For a before/after comparison with the v3 design, capture the view at the
+design's widths (sidebar 320, pane 820, phone 390) in both themes:
+
+```bash
+node .claude/skills/verify/screens.mjs set all <label>   # five states, plus a sheet each beside the prototype
+```
+
 `screenshot` and `record` reveal the PodNotes view first and fail without
 capturing when it does not open. `record` then records the window while the driver runs.
 The driver is an executable script of `ui.mjs` and `obsidian:e2e` calls with short
@@ -199,10 +225,21 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   wait until nothing covers the element's center, and fail with
   `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
+- `.claude/skills/verify/screens.mjs` captures pixels, not behavior. Its verbs
+  are `place <sidebar|pane|phone>` (fails unless the view measures 320 x 720,
+  820 x 680, or a 390 x 844 phone screen), `theme <light|dark>`,
+  `seed <empty|library|episodes>` (replaces `data.json` while PodNotes is
+  disabled), `go '<page JSON>'`, `shot <file.png>`, and
+  `set <state|all> <label> [--widths ...] [--themes ...]`. `set` writes
+  `.obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png` and a
+  `<state>-sheet.png` with the design prototype's screen beside each shot. The
+  states are `first-run`, `add-podcast`, `library`, `episodes` and `error-feed`.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
-  `retitle`, `requests`, `audio [vault path]` or `stop`. `retitle` renames the
-  first feed's two episodes to `Renamed Opening Show` and `Renamed Closing Show`,
-  keeping their GUIDs, until the server stops. `requests` prints the paths
+  `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
+  prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
+  one more feed to add. `retitle` renames the first feed's two episodes to
+  `Renamed Opening Show` and `Renamed Closing Show`, keeping their GUIDs, until
+  the server stops. `requests` prints the paths
   PodNotes fetched from the server. The feed URL uses the host `podnotes.test`,
   because PodNotes refuses literal loopback hosts. The instance maps it to
   127.0.0.1 with Chromium's `--host-resolver-rules`, so it needs no DNS, and an
