@@ -6,7 +6,9 @@ description: Every PodNotes setting, in the order the settings tab shows it, wit
 
 Look up any PodNotes setting, its default, and what it does. The settings live in **Settings → PodNotes**, and the sections below follow the tab from top to bottom.
 
-<span id="search-podcasts"></span>You add and remove podcasts in the PodNotes view, not in the settings. See [Add a podcast](/podcasts/#add-a-podcast).
+## Search Podcasts
+
+The search box at the top finds podcasts by name, RSS feed URL, or Apple Podcasts link. With the box empty, it lists the podcasts you added, each with a **Remove** button. See [Add a podcast](/podcasts/#add-a-podcast).
 
 ## Playlists
 
