@@ -347,6 +347,7 @@ describe("PodNotes onload wiring (#55)", () => {
 				workspace: {
 					onLayoutReady: vi.fn(),
 					on: vi.fn(() => ({})),
+					offref: vi.fn(),
 					getLeavesOfType: vi.fn(() => []),
 					getRightLeaf: vi.fn(() => null),
 					getActiveViewOfType: vi.fn(() => null),

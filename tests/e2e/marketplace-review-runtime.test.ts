@@ -42,11 +42,10 @@ describe("marketplace review runtime paths", () => {
 			`);
 
 			expect(initial.definitionCount).toBe(1);
-			expect(initial.indexedAliases).toBe(28);
+			expect(initial.indexedAliases).toBe(27);
 			expect(initial.renderedControls).toBeGreaterThan(25);
 			expect(initial.headings).toEqual(
 				expect.arrayContaining([
-					"Playlists",
 					"Episode notes",
 					"Feed notes",
 					"Downloads",
@@ -55,6 +54,7 @@ describe("marketplace review runtime paths", () => {
 				]),
 			);
 			expect(initial.headings).not.toContain("PodNotes");
+			expect(initial.headings, "playlists live in the view").not.toContain("Playlists");
 			expect(initial.headings, "podcast search lives in the view").not.toContain(
 				"Search Podcasts",
 			);
