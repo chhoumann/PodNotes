@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import checkStringIsUrl from "src/utility/checkStringIsUrl";
 import { ownRecord } from "src/utility/ownRecord";
 import {
 	canonicalUrl,
@@ -48,6 +49,17 @@ export function internPrivateFeed(
 	if (!isCredentialBearingUrl(feed.url)) return feed;
 	const urlSecretId = feedUrls.store(feed.url);
 	return { ...feed, url: privateFeedPlaceholder(savedKey), urlSecretId };
+}
+
+/**
+ * The http(s) address of a public feed, safe to show and to copy. A private feed
+ * has none: its address is a secret, which this never resolves.
+ */
+export function publicFeedUrl(feed: PodcastFeed): string | undefined {
+	if (feed.urlSecretId?.trim() || isPrivateFeedPlaceholder(feed.url)) return undefined;
+	if (isCredentialBearingUrl(feed.url)) return undefined;
+	const protocol = checkStringIsUrl(feed.url)?.protocol;
+	return protocol === "http:" || protocol === "https:" ? feed.url : undefined;
 }
 
 /** Whether this saved private feed waits for its URL to be set on this device. */

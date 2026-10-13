@@ -24,6 +24,7 @@ import {
 	findSavedFeed,
 	internPrivateFeed,
 	notifyPrivateFeedUnavailable,
+	publicFeedUrl,
 	resolveFeedUrl,
 	setPrivateFeedAddress,
 } from "./privateFeeds";
@@ -37,9 +38,17 @@ export interface LibraryActions {
 	savedKey(feeds: Record<FeedKey, PodcastFeed>, url: string): FeedKey | undefined;
 	/** Saves the feed and returns its key, or tells the user why not and returns null. */
 	addPodcast(feed: PodcastFeed): FeedKey | null;
-	/** Also forgets a private feed's address once no saved podcast uses it. */
+	/**
+	 * Also forgets a private feed's address once no saved podcast uses it. Offers Undo,
+	 * which puts the podcast back where it was, with its address, unless it was saved
+	 * again since. Played records, downloads and the queue never left.
+	 */
 	removePodcast(key: FeedKey): void;
-	/** Asks for a saved private feed's address, checks that it loads, and keeps it on this device. */
+	/**
+	 * Asks for a feed's address, checks that it loads, and keeps it under the same key.
+	 * A private feed takes only a private address, kept on this device. A public feed
+	 * takes any address not saved for another podcast; a private one is kept as a secret.
+	 */
 	setFeedAddress(key: FeedKey): Promise<void>;
 	setQueued(episode: Episode, queued: boolean): void;
 	/** Components may not import the queue store, so a gesture reorders it here. */
@@ -129,9 +138,16 @@ export function createLibraryActions({
 		},
 
 		removePodcast(key) {
-			savedFeeds.update((all) => {
-				const { [key]: removed, ...rest } = all;
-				const reference = removed?.urlSecretId?.trim();
+			const all = get(savedFeeds);
+			const removed = ownRecord(all)[key];
+			if (!removed) return;
+			const index = Object.keys(all).indexOf(key);
+			const reference = removed.urlSecretId?.trim();
+			// Read before the removal can forget it, for Undo.
+			const address = reference ? feedUrls.resolve(reference) : null;
+			savedFeeds.update((current) => {
+				const rest = ownRecord(current);
+				delete rest[key];
 				if (
 					reference &&
 					!Object.values(rest).some((feed) => feed.urlSecretId?.trim() === reference)
@@ -140,15 +156,30 @@ export function createLibraryActions({
 				}
 				return rest;
 			});
+			noticeWithUndo(`Removed ${removed.title}`, () => {
+				const current = get(savedFeeds);
+				if (ownRecord(current)[key] || savedKey(current, address ?? removed.url)) return;
+				if (reference && address) {
+					try {
+						feedUrls.attach(reference, address);
+					} catch (error) {
+						notStored(removed.title, error);
+						return;
+					}
+				}
+				savedFeeds.update((now) => withEntryAt(now, index, key, removed));
+			});
 		},
 
 		async setFeedAddress(key) {
 			const feed = ownRecord(get(savedFeeds))[key];
 			if (!feed) return;
+			const isPrivate = Boolean(feed.urlSecretId?.trim());
 			const entered = await askText(app, {
 				title: feed.title,
 				label: "Feed address",
 				cta: "Save",
+				value: publicFeedUrl(feed),
 			});
 			if (entered === null) return;
 			const url = checkStringIsUrl(entered);
@@ -156,8 +187,18 @@ export function createLibraryActions({
 				new Notice("Enter the feed's http or https address.");
 				return;
 			}
-			if (!isCredentialBearingUrl(url.href)) {
+			if (isPrivate && !isCredentialBearingUrl(url.href)) {
 				new Notice("Enter a private feed address.");
+				return;
+			}
+			const takenBy = () => {
+				const saved = get(savedFeeds);
+				const other = savedKey(saved, url.href);
+				return other === undefined || other === key ? undefined : saved[other].title;
+			};
+			const taken = isPrivate ? undefined : takenBy();
+			if (taken !== undefined) {
+				new Notice(`You already follow ${taken} at that address.`);
 				return;
 			}
 			try {
@@ -167,11 +208,18 @@ export function createLibraryActions({
 				new Notice("Could not load the feed at that address.");
 				return;
 			}
-			// A sync can replace the feed while its address loads.
+			// A sync can replace the feed, or save the address elsewhere, while it loads.
 			const current = ownRecord(get(savedFeeds))[key];
-			if (!current || current.urlSecretId !== feed.urlSecretId) return;
+			if (!current || current.urlSecretId !== feed.urlSecretId || current.url !== feed.url)
+				return;
+			if (!isPrivate && takenBy() !== undefined) return;
 			try {
-				setPrivateFeedAddress(current, url.href, feedUrls);
+				if (isPrivate) setPrivateFeedAddress(current, url.href, feedUrls);
+				else {
+					// A private address pasted for a public feed is kept as a secret, never in settings.
+					const edited = internPrivateFeed({ ...current, url: url.href }, feedUrls, key);
+					savedFeeds.update((all) => ({ ...all, [key]: edited }));
+				}
 			} catch (error) {
 				notStored(feed.title, error);
 				return;

@@ -14,6 +14,7 @@ import {
 	internPrivateFeed,
 	notifyPrivateFeedUnavailable,
 	protectPrivateFeeds,
+	publicFeedUrl,
 	resolveFeedUrl,
 } from "./privateFeeds";
 
@@ -41,6 +42,25 @@ it("reports a missing device address in one sentence without destructive recover
 	expect(notice).toHaveBeenCalledWith(
 		'The private feed address for "My Show" is not available on this device.',
 	);
+});
+
+describe("publicFeedUrl", () => {
+	it("is a public feed's http or https address", () => {
+		expect(publicFeedUrl(feed())).toBe("https://feeds.example.com/rss");
+		expect(publicFeedUrl(feed({ url: "http://feeds.example.com/rss" }))).toBe(
+			"http://feeds.example.com/rss",
+		);
+	});
+
+	it.each([
+		["a private feed's placeholder", feed({ url: "podnotes-private-feed:My Show" })],
+		["a feed with a secret reference", feed({ urlSecretId: "podnotes-feed-url-1" })],
+		["a raw private address", feed({ url: PRIVATE_URL })],
+		["an address that is not http", feed({ url: "file:///feeds/rss.xml" })],
+		["no address", feed({ url: "not a url" })],
+	])("is nothing for %s", (_, saved) => {
+		expect(publicFeedUrl(saved)).toBeUndefined();
+	});
 });
 
 describe("internPrivateFeed", () => {

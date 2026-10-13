@@ -8,7 +8,7 @@ import { playlists, queue, savedFeeds } from "src/store";
 import type { Playlist } from "src/types/Playlist";
 import type { Episode } from "src/types/Episode";
 import { fetchTextWithTimeout } from "src/utility/networkRequest";
-import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
+import { isPrivateFeedPlaceholder, privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { deferred, MemoryStorage } from "../../tests/mocks/feeds";
 import { FeedRepository, loadFeed } from "./FeedRepository";
 import { FeedUrlRepository } from "./FeedUrlRepository";
@@ -121,6 +121,135 @@ describe("removing a podcast", () => {
 		actions.removePodcast("Private Show");
 		expect(get(savedFeeds)).toEqual({});
 		expect(secrets.getSecret(reference)).toBeFalsy();
+	});
+});
+
+describe("undoing Remove podcast", () => {
+	const feed = (title: string) => ({
+		title,
+		url: `https://feeds.example.com/${title}.xml`,
+		artworkUrl: `https://art.example.com/${title}.jpg`,
+		author: "Someone",
+	});
+
+	test("puts the exact record back at its place in the grid, once", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		savedFeeds.set({ First: feed("First"), Middle: feed("Middle"), Last: feed("Last") });
+
+		actions.removePodcast("Middle");
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "Last"]);
+		expect(shown.texts()).toEqual(["Removed MiddleUndo"]);
+		shown.undo();
+		shown.undo();
+
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "Middle", "Last"]);
+		expect(get(savedFeeds).Middle).toEqual(feed("Middle"));
+	});
+
+	test("puts a private feed's address back under its reference, and never shows it", () => {
+		const shown = notices();
+		const secrets = new obsidian.SecretStorage();
+		const { actions, feedUrls } = actionsOn(secrets);
+		const saved = {
+			title: "Private Show",
+			url: privateFeedPlaceholder("Private Show"),
+			urlSecretId: feedUrls.store(PRIVATE_URL),
+			artworkUrl: "",
+		};
+		savedFeeds.set({ First: feed("First"), "Private Show": saved });
+
+		actions.removePodcast("Private Show");
+		expect(feedUrls.resolve(saved.urlSecretId)).toBeNull();
+		shown.undo();
+
+		expect(get(savedFeeds)["Private Show"]).toEqual(saved);
+		expect(feedUrls.resolve(saved.urlSecretId)).toBe(PRIVATE_URL);
+		expect(shown.texts().join()).not.toContain("se-cret");
+	});
+
+	test("leaves a podcast saved again since, under its key or at its address", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		savedFeeds.set({ Middle: feed("Middle") });
+
+		actions.removePodcast("Middle");
+		const again = { ...feed("Middle"), author: "Someone else" };
+		savedFeeds.set({ Middle: again });
+		shown.undo();
+		expect(get(savedFeeds)).toEqual({ Middle: again });
+
+		actions.removePodcast("Middle");
+		savedFeeds.set({ Renamed: { ...feed("Middle"), title: "Renamed" } });
+		shown.undo();
+		expect(Object.keys(get(savedFeeds))).toEqual(["Renamed"]);
+	});
+});
+
+describe("editing a public feed's address", () => {
+	const OLD_URL = "https://old.example.com/feed.xml";
+	const NEW_URL = "https://new.example.com/feed.xml";
+	const show = { title: "The Show", url: OLD_URL, artworkUrl: "" };
+
+	function saved() {
+		savedFeeds.set({
+			First: { ...show, title: "First", url: "https://first.example.com/" },
+			"The Show": show,
+			Last: { ...show, title: "Last", url: "https://last.example.com/" },
+		});
+		return actionsOn(new obsidian.SecretStorage());
+	}
+
+	test("opens on its address and keeps the new one under the same key and place", async () => {
+		const { actions } = saved();
+		const edited = actions.setFeedAddress("The Show");
+		expect(within(document.body).getByRole("textbox", { name: "Feed address" })).toHaveValue(
+			OLD_URL,
+		);
+
+		await enterAddress(edited, NEW_URL);
+
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "The Show", "Last"]);
+		expect(get(savedFeeds)["The Show"]).toEqual({ ...show, url: NEW_URL });
+		expect(fetchTextMock).toHaveBeenCalledWith(NEW_URL, expect.anything());
+	});
+
+	test("keeps a private address pasted for it as a secret, never in settings", async () => {
+		const { actions, feedUrls } = saved();
+
+		await enterAddress(actions.setFeedAddress("The Show"), PRIVATE_URL);
+
+		const feed = get(savedFeeds)["The Show"];
+		expect(isPrivateFeedPlaceholder(feed.url)).toBe(true);
+		expect(feedUrls.resolve(feed.urlSecretId!)).toBe(PRIVATE_URL);
+		expect(JSON.stringify(get(savedFeeds))).not.toContain("se-cret");
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "The Show", "Last"]);
+	});
+
+	test("refuses an address another saved podcast has, before fetching it", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { actions } = saved();
+
+		await enterAddress(actions.setFeedAddress("The Show"), "https://first.example.com/");
+
+		expect(notice).toHaveBeenCalledWith("You already follow First at that address.");
+		expect(fetchTextMock).not.toHaveBeenCalled();
+		expect(get(savedFeeds)["The Show"]).toEqual(show);
+	});
+
+	test("keeps nothing for a feed that a sync changed while the address loaded", async () => {
+		const response = deferred<string>();
+		fetchTextMock.mockReturnValue(response.promise);
+		const { actions } = saved();
+
+		const entered = enterAddress(actions.setFeedAddress("The Show"), NEW_URL);
+		await vi.waitFor(() => expect(fetchTextMock).toHaveBeenCalled());
+		const synced = { ...show, url: "https://synced.example.com/feed.xml" };
+		savedFeeds.update((all) => ({ ...all, "The Show": synced }));
+		response.resolve("<rss><channel><title>The Show</title></channel></rss>");
+		await entered;
+
+		expect(get(savedFeeds)["The Show"]).toEqual(synced);
 	});
 });
 

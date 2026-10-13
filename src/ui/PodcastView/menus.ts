@@ -5,6 +5,7 @@ import createPodcastNote, { openPodcastNote } from "src/createPodcastNote";
 import downloadEpisodeWithNotice, { removeDownloadedEpisode } from "src/downloadEpisode";
 import { downloadedCopy } from "src/player/source";
 import type { FeedKey } from "src/services/FeedRepository";
+import { publicFeedUrl } from "src/services/privateFeeds";
 import type { Episode } from "src/types/Episode";
 import type { IconType } from "src/types/IconType";
 import buildEpisodeResumeLink from "src/utility/buildEpisodeResumeLink";
@@ -61,6 +62,14 @@ export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 		});
 	}
 	menu.showAtPosition(at, at.doc);
+}
+
+/** Copies `text` and says so, naming it by `what`, such as "feed URL". */
+function copy(text: string, what: string): void {
+	navigator.clipboard.writeText(text).then(
+		() => new Notice(`${what.charAt(0).toUpperCase()}${what.slice(1)} copied`),
+		() => new Notice(`Could not copy the ${what}`),
+	);
 }
 
 export function openEpisode(
@@ -195,14 +204,7 @@ export function episodeMenu(
 	);
 	if (place !== "player") entries.push(markPlayed);
 	if (link) {
-		entries.push(
-			item("Copy episode link", "link", () => {
-				navigator.clipboard.writeText(link).then(
-					() => new Notice("Episode link copied"),
-					() => new Notice("Could not copy the episode link"),
-				);
-			}),
-		);
+		entries.push(item("Copy episode link", "link", () => copy(link, "episode link")));
 	}
 	return entries;
 }
@@ -212,6 +214,13 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 	const feed = get(library.savedFeeds)[key];
 	if (!feed) return [];
 	const note = getFeedNote(feed);
+	const error = get(feeds).get(key)?.error;
+	const isPublic = publicFeedUrl(feed) !== undefined;
+	const address = (title: string): MenuEntry => ({
+		title,
+		icon: "rss",
+		onClick: () => void actions.setFeedAddress(key),
+	});
 	return [
 		note
 			? { title: "Open podcast note", icon: "file-text", onClick: () => openFeedNote(feed) }
@@ -220,15 +229,24 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 					icon: "file-plus",
 					onClick: () => void createFeedNote(feed),
 				},
-		...(get(feeds).get(key)?.error === "unavailable"
+		...(isPublic
 			? [
 					{
-						title: "Set feed address",
-						icon: "rss",
-						onClick: () => void actions.setFeedAddress(key),
+						title: "Copy feed URL",
+						icon: "link",
+						onClick: () => {
+							// The feed can have turned private since the menu opened.
+							const url = publicFeedUrl(get(library.savedFeeds)[key] ?? feed);
+							if (url) copy(url, "feed URL");
+						},
 					} as const,
 				]
 			: []),
+		...(error === "unavailable"
+			? [address("Set feed address")]
+			: isPublic && error === "network"
+				? [address("Edit feed URL")]
+				: []),
 		"separator",
 		{
 			title: "Remove podcast",

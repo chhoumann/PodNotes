@@ -15,7 +15,9 @@ import {
 } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
-import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
+import { FeedRepository } from "src/services/FeedRepository";
+import { isPrivateFeedPlaceholder, privateFeedPlaceholder } from "src/utility/privateFeedUrl";
+import { feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 import {
 	createTestServices,
 	pluginLibrary,
@@ -318,13 +320,35 @@ describe("a podcast's menu", () => {
 		plugin.update((current) => ({ ...current, app: services.app }) as never);
 	});
 
-	test("offers the podcast note and removal, and a feed address only where it is missing", () => {
+	test("offers the podcast note, its public address and removal", () => {
 		expect(titles(podcastMenu("Show", services))).toEqual([
 			"Create podcast note",
+			"Copy feed URL",
 			"---",
 			"Remove podcast",
 		]);
-		expect(podcastMenu("Show", services)[2]).toMatchObject({ warning: true });
+		expect(podcastMenu("Show", services)[3]).toMatchObject({ warning: true });
+	});
+
+	test("Copy feed URL copies the address the feed has when it is clicked", async () => {
+		const writeText = vi.fn(async () => {});
+		Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+		const notice = vi.spyOn(obsidian, "Notice");
+		const open = podcastMenu("Show", services);
+
+		choose(open, "Copy feed URL");
+		await vi.waitFor(() => expect(notice).toHaveBeenCalledWith("Feed URL copied"));
+		savedFeeds.update((all) => ({
+			...all,
+			Show: {
+				...feed,
+				url: privateFeedPlaceholder("Show"),
+				urlSecretId: "podnotes-feed-url-1",
+			},
+		}));
+		choose(open, "Copy feed URL");
+
+		expect(writeText.mock.calls).toEqual([["https://show.test/feed.xml"]]);
 	});
 
 	test("removing the open podcast returns to the Library first", () => {
@@ -342,6 +366,73 @@ describe("a podcast's menu", () => {
 		choose(podcastMenu("Other", services), "Remove podcast");
 
 		expect(services.navigation.current.page).toEqual({ kind: "feed", key: "Show" });
+	});
+});
+
+describe("a podcast's menu, by how its feed loaded", () => {
+	beforeEach(async () => {
+		dispose();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const feeds = new FeedRepository({
+			load: async (url) => {
+				if (url.startsWith("https://down.")) throw new Error("503");
+				return feedDocument("", []);
+			},
+			resolveUrl: (feed) =>
+				feed.urlSecretId === "down"
+					? "https://down.patron.test/feed.xml"
+					: isPrivateFeedPlaceholder(feed.url)
+						? null
+						: feed.url,
+			storage: new MemoryStorage(),
+			cache: () => ({ enabled: false, ttlHours: 6 }),
+			now: Date.now,
+		});
+		({ services, dispose } = createTestServices({ library: pluginLibrary, feeds }));
+		Object.assign(services.app, { vault: { getAbstractFileByPath: () => null } });
+		plugin.update((current) => ({ ...current, app: services.app }) as never);
+		savedFeeds.set({
+			Up: { title: "Up", url: "https://up.test/feed.xml", artworkUrl: "" },
+			Down: { title: "Down", url: "https://down.test/feed.xml", artworkUrl: "" },
+			Patron: {
+				title: "Patron",
+				url: privateFeedPlaceholder("Patron"),
+				urlSecretId: "podnotes-feed-url-1",
+				artworkUrl: "",
+			},
+			"Patron Down": {
+				title: "Patron Down",
+				url: privateFeedPlaceholder("Patron Down"),
+				urlSecretId: "down",
+				artworkUrl: "",
+			},
+		});
+		await services.feeds.load(["Up", "Down", "Patron", "Patron Down"], "network");
+	});
+
+	test.each([
+		["loaded", "Up", ["Create podcast note", "Copy feed URL", "---", "Remove podcast"]],
+		[
+			"failed",
+			"Down",
+			["Create podcast note", "Copy feed URL", "Edit feed URL", "---", "Remove podcast"],
+		],
+		[
+			"has no address on this device",
+			"Patron",
+			["Create podcast note", "Set feed address", "---", "Remove podcast"],
+		],
+		["is private and failed", "Patron Down", ["Create podcast note", "---", "Remove podcast"]],
+	])("of a feed that %s", (_, key, items) => {
+		expect(titles(podcastMenu(key, services))).toEqual(items);
+	});
+
+	test("Edit feed URL asks for the failed feed's address", () => {
+		const setFeedAddress = vi.spyOn(services.actions, "setFeedAddress").mockResolvedValue();
+
+		choose(podcastMenu("Down", services), "Edit feed URL");
+
+		expect(setFeedAddress).toHaveBeenCalledWith("Down");
 	});
 });
 
