@@ -119,13 +119,14 @@ export class PlayerController {
 		this.placeElement();
 	}
 
-	/**
-	 * Shows the selected episode paused at its saved position, without loading it: at
-	 * startup, and again after a sync while nothing is loaded. Loaded media stays, and
-	 * so does a position the user moved the same episode to.
-	 */
 	restore(episode: Episode | undefined): void {
+		this.noteStoppedMove();
 		const { status, episode: shown, currentTime } = this.snapshot;
+		if (status === "paused" && shown && !this.moved) {
+			const time = this.resumeTime(shown);
+			if (time !== currentTime) this.moveTo(time);
+			return;
+		}
 		if (!episode || (status !== "empty" && status !== "restored")) return;
 		this.moved &&= !!shown && getEpisodeKey(shown) === getEpisodeKey(episode);
 		this.setState({
@@ -468,12 +469,12 @@ export class PlayerController {
 	}
 
 	private settlePaused(): void {
+		this.persist();
 		this.setState(
 			this.holdsMedia()
 				? { status: "paused", currentTime: this.el.currentTime }
 				: { status: "paused" },
 		);
-		this.persist();
 	}
 
 	private onLoadedMetadata(): void {
@@ -538,6 +539,7 @@ export class PlayerController {
 			return;
 		}
 
+		this.noteStoppedMove();
 		this.setState({ currentTime: time, duration: finiteOr0(this.el.duration) });
 		const now = Date.now();
 		if (now - session.lastCheckpoint < SAVE_POSITION_THROTTLE_MS) return;
@@ -591,10 +593,20 @@ export class PlayerController {
 		return !!this.session?.ready && this.el.readyState > HAVE_NOTHING;
 	}
 
+	private noteStoppedMove(): void {
+		const { status, currentTime } = this.snapshot;
+		const time = this.el.currentTime;
+		if (status === "playing" || !this.holdsMedia() || time === currentTime) return;
+		this.moved = true;
+		this.setState({ currentTime: time });
+	}
+
 	private persist(): void {
 		const { session } = this;
-		const { episode, duration } = this.snapshot;
+		const { episode, duration, status } = this.snapshot;
 		if (!session || !this.holdsMedia() || session.preview || this.disposed || !episode) return;
+		this.noteStoppedMove();
+		if (status !== "playing" && !this.moved) return;
 		const time = this.el.currentTime;
 		playedEpisodes.setEpisodeTime(episode, time, duration, duration > 0 && time >= duration);
 		this.moved = false;

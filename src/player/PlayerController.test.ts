@@ -107,7 +107,307 @@ function pausedByBrowser(media: FakeMedia) {
 	media.emit("pause");
 }
 
+const SEEK_EVENTS = ["seeking", "timeupdate", "seeked"] as const;
+
+function seekedByBrowser(media: FakeMedia, time: number, at = now) {
+	now = at;
+	media.currentTime = time;
+	for (const type of SEEK_EVENTS) media.emit(type);
+}
+
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("synced progress handoff", () => {
+	function paused() {
+		const context = setup();
+		context.player.play(A);
+		metadata(context.media());
+		reach(context.media(), 17);
+		context.player.pause();
+		return context;
+	}
+
+	test("adopts the loaded paused episode's synced position even when another episode is selected", () => {
+		const { player, media, state } = paused();
+		saved(A, 45);
+
+		player.restore(B);
+
+		expect(state()).toMatchObject({ status: "paused", episode: A, currentTime: 45 });
+		expect(media().currentTime).toBe(45);
+		player.save();
+		expect(progress(A)).toMatchObject({ time: 45, finished: false });
+	});
+
+	test("an unchanged paused save does not overwrite a different progress record", () => {
+		const { player } = paused();
+		saved(A, 45);
+
+		player.save();
+		player.dispose();
+
+		expect(progress(A)).toMatchObject({ time: 45, finished: false });
+	});
+
+	test("a local seek after adoption wins over the next sync", () => {
+		const { player, media, state } = paused();
+		saved(A, 45);
+		player.restore(A);
+		expect(state().currentTime).toBe(45);
+
+		player.seek(25);
+		saved(A, 50);
+		player.restore(A);
+		player.save();
+
+		expect(state().currentTime).toBe(25);
+		expect(media().currentTime).toBe(25);
+		expect(progress(A)?.time).toBe(25);
+	});
+
+	test("playing after adoption owns the position before the first timeupdate", () => {
+		const { player, state } = paused();
+		saved(A, 45);
+		player.restore(A);
+		expect(state().currentTime).toBe(45);
+
+		player.resume();
+		saved(A, 50);
+		player.restore(A);
+		player.save();
+
+		expect(state()).toMatchObject({ status: "playing", currentTime: 45 });
+		expect(progress(A)?.time).toBe(45);
+	});
+
+	test("a synced finish survives delayed paused media events and saving", () => {
+		const { player, media } = paused();
+		saved(A, 3600, 3600, true);
+		player.restore(A);
+
+		media().emit("timeupdate");
+		player.save();
+		player.dispose();
+
+		expect(progress(A)).toMatchObject({ time: 3600, duration: 3600, finished: true });
+	});
+
+	test("the seek's delayed timeupdate at a checkpoint does not save over newer progress", () => {
+		const { player, media } = paused();
+		saved(A, 45);
+		player.restore(A);
+
+		saved(A, 50);
+		reach(media(), media().currentTime, 10_000);
+
+		expect(progress(A)?.time).toBe(50);
+	});
+
+	test.each([
+		["play()", (player: PlayerController) => player.play(A)],
+		[
+			"a media key",
+			(_: PlayerController, media: FakeMedia) => {
+				media.paused = false;
+				media.emit("play");
+			},
+		],
+	] as const)("%s after adoption plays on from the synced position", (_, start) => {
+		const { player, media, state } = paused();
+		saved(A, 45);
+		player.restore(A);
+
+		start(player, media());
+		saved(A, 50);
+		player.restore(A);
+		player.save();
+
+		expect(state()).toMatchObject({ status: "playing", currentTime: 45 });
+		expect(media()).toMatchObject({ currentTime: 45, paused: false });
+		expect(progress(A)?.time).toBe(45);
+	});
+
+	test("a natural end keeps a re-listen synced afterwards", () => {
+		const { player, media } = setup({ autoQueue: false });
+		player.play(A);
+		metadata(media(), 60);
+		reach(media(), 60);
+		media().ended = true;
+		pausedByBrowser(media());
+		media().emit("ended");
+
+		saved(A, 20, 60);
+		player.restore(A);
+		player.save();
+		player.dispose();
+
+		expect(progress(A)).toMatchObject({ time: 20, duration: 60, finished: false });
+	});
+
+	test("a seek made before the sync arrives wins over it", () => {
+		const { player, media, state } = paused();
+		player.seek(25);
+
+		saved(A, 45);
+		player.restore(A);
+		player.save();
+
+		expect(state().currentTime).toBe(25);
+		expect(media().currentTime).toBe(25);
+		expect(progress(A)?.time).toBe(25);
+	});
+
+	test.each([
+		["the next save", 0, (player: PlayerController) => player.save()],
+		["its own checkpoint", 10_000, () => {}],
+	] as const)("a seek from the browser's controls while paused is saved by %s", (_, at, save) => {
+		const { player, media, state } = paused();
+
+		seekedByBrowser(media(), 42, at);
+		save(player);
+
+		expect(state()).toMatchObject({ status: "paused", currentTime: 42 });
+		expect(progress(A)?.time).toBe(42);
+	});
+
+	test("a seek from the browser's controls before the sync arrives wins over it", () => {
+		const { player, media, state } = paused();
+		seekedByBrowser(media(), 42);
+
+		saved(A, 45);
+		player.restore(A);
+		player.save();
+
+		expect(state().currentTime).toBe(42);
+		expect(media().currentTime).toBe(42);
+		expect(progress(A)?.time).toBe(42);
+	});
+
+	test("a seek from the browser's controls after adoption wins over the next sync", () => {
+		const { player, media, state } = paused();
+		saved(A, 45);
+		player.restore(A);
+		for (const type of SEEK_EVENTS) media().emit(type);
+
+		seekedByBrowser(media(), 42);
+		saved(A, 50);
+		player.restore(A);
+		player.save();
+
+		expect(state().currentTime).toBe(42);
+		expect(media().currentTime).toBe(42);
+		expect(progress(A)?.time).toBe(42);
+	});
+
+	test("the adoption's own seek events leave the next sync free to apply", () => {
+		const { player, media, state } = paused();
+		saved(A, 45);
+		player.restore(A);
+		now = 10_000;
+		for (const type of SEEK_EVENTS) media().emit(type);
+
+		saved(A, 50);
+		player.restore(A);
+		player.save();
+
+		expect(state().currentTime).toBe(50);
+		expect(progress(A)?.time).toBe(50);
+	});
+
+	test("a seek from the browser's controls right after a pause counts when the pause's timeupdate comes first", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		reach(media(), 17);
+		player.pause();
+
+		media().currentTime = 42;
+		for (const type of ["timeupdate", "pause", ...SEEK_EVENTS]) media().emit(type);
+		player.save();
+
+		expect(state().currentTime).toBe(42);
+		expect(progress(A)?.time).toBe(42);
+	});
+
+	test.each([
+		["save()", (player: PlayerController) => player.save()],
+		["dispose()", (player: PlayerController) => player.dispose()],
+		["playing another episode", (player: PlayerController) => player.play(B)],
+	] as const)(
+		"%s keeps a seek from the browser's controls before its events arrive",
+		(_, end) => {
+			const { player, media } = paused();
+
+			media().currentTime = 42;
+			end(player);
+
+			expect(progress(A)?.time).toBe(42);
+		},
+	);
+
+	test("a sync leaves a seek from the browser's controls whose events have not arrived", () => {
+		const { player, media } = paused();
+		media().currentTime = 42;
+
+		saved(A, 45);
+		player.restore(A);
+		player.save();
+
+		expect(media().currentTime).toBe(42);
+		expect(progress(A)?.time).toBe(42);
+	});
+
+	test.each([
+		["no events", []],
+		["its delayed events", SEEK_EVENTS],
+	] as const)(
+		"a sync applies once a seek from the browser's controls is saved, with %s",
+		(_, events) => {
+			const { player, media, state } = paused();
+			media().currentTime = 42;
+			player.save();
+			expect(progress(A)?.time).toBe(42);
+			for (const type of events) media().emit(type);
+
+			saved(A, 45);
+			player.restore(A);
+			player.save();
+
+			expect(state().currentTime).toBe(45);
+			expect(media().currentTime).toBe(45);
+			expect(progress(A)?.time).toBe(45);
+		},
+	);
+
+	test("a seek from the browser's controls after a natural end saves the new position", () => {
+		const { player, media } = setup({ autoQueue: false });
+		player.play(A);
+		metadata(media(), 60);
+		reach(media(), 60);
+		media().ended = true;
+		pausedByBrowser(media());
+		media().emit("ended");
+
+		media().ended = false;
+		seekedByBrowser(media(), 20);
+		player.save();
+
+		expect(progress(A)).toMatchObject({ time: 20, duration: 60, finished: false });
+	});
+
+	test("a paused segment keeps its position when a sync arrives", () => {
+		const { player, media, state } = setup();
+		player.play(A, { time: 100, endTime: 125 });
+		metadata(media());
+		reach(media(), 126);
+
+		saved(A, 45);
+		player.restore(A);
+
+		expect(state()).toMatchObject({ status: "paused", currentTime: 125 });
+		expect(media().currentTime).toBe(125);
+	});
+});
 
 beforeEach(() => {
 	now = 0;
@@ -475,6 +775,22 @@ describe("pause", () => {
 		expect(state().status).toBe("paused");
 		expect(written.at(-1)).toEqual({ time: 137, finished: false, checkpoint: false });
 	});
+
+	test.each([
+		["pause()", (player: PlayerController) => player.pause()],
+		["a media key", (_: PlayerController, media: FakeMedia) => pausedByBrowser(media)],
+	] as const)("from %s saves where playback got to after the last checkpoint", (_, pause) => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		reach(media(), 10, 1000);
+		reach(media(), 12, 2000);
+
+		pause(player, media());
+
+		expect(state()).toMatchObject({ status: "paused", currentTime: 12 });
+		expect(progress(A)?.time).toBe(12);
+	});
 });
 
 describe("consecutive intents on loaded media, with no media event between them", () => {
@@ -723,6 +1039,7 @@ describe("progress", () => {
 
 		metadata(media());
 		media().paused = false;
+		media().emit("play");
 		for (let second = 1; second <= 11; second++) reach(media(), second, second * 1000);
 
 		expect(written).toEqual([
@@ -1460,7 +1777,7 @@ describe("errors", () => {
 		metadata(media());
 		player.seek(630);
 		reach(media(), 700, 10_000);
-		reach(media(), 1800, 20_000);
+		reach(media(), 1800, 12_000);
 		media().emit("error");
 
 		saved(A, 3000, 3600);
