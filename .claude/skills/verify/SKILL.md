@@ -60,9 +60,9 @@ npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults && npm run start:e2e-ob
 
 A fresh vault already has a `data.json`, so it is a later start, not a new
 install. To meet PodNotes as a new user does, disable it, delete its
-`data.json`, close its view, then enable it. Turn on mobile emulation first to
-take the mobile start path, which keeps PodNotes closed on every start but a
-new install's:
+`data.json`, close its view, then enable it. Desktop and mobile both open the
+view on a new install only, and keep it closed on every later start. Turn on
+mobile emulation first to check the mobile start:
 
 ```bash
 npm run obsidian:e2e -- dev:mobile on    # optional; reloads Obsidian
@@ -71,9 +71,9 @@ npm run obsidian:e2e -- eval code='(async () => JSON.stringify({leaves: app.work
 ```
 
 Expect one leaf, `firstRun` `Add your first podcast`, and `saved` true. A
-later mobile start stays closed. Close the view, save the layout as above, and
-`npm run obsidian:e2e -- reload` leaves zero leaves. Run
-`npm run obsidian:e2e -- dev:mobile off` to return to the desktop.
+later start stays closed. Close the view, save the layout as above, and
+`npm run obsidian:e2e -- reload` leaves zero leaves. After mobile emulation,
+run `npm run obsidian:e2e -- dev:mobile off` to return to the desktop.
 
 ## Doctor
 
