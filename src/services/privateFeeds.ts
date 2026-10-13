@@ -1,12 +1,13 @@
 import { Notice } from "obsidian";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import checkStringIsUrl from "src/utility/checkStringIsUrl";
 import { ownRecord } from "src/utility/ownRecord";
 import {
+	canonicalUrl,
 	isCredentialBearingUrl,
 	isPrivateFeedPlaceholder,
 	privateFeedPlaceholder,
+	redactPrivateFeedAddresses,
 } from "src/utility/privateFeedUrl";
 import type { FeedAddress } from "./FeedRepository";
 import type { FeedUrlRepository } from "./FeedUrlRepository";
@@ -31,9 +32,8 @@ import type { FeedUrlRepository } from "./FeedUrlRepository";
  * when a reference already exists (an imported or hand-edited record can
  * carry BOTH a reference and a raw URL - the raw URL is the visible ground
  * truth, so it is re-interned and the placeholder restored). Non-credentialed
- * feeds pass through untouched. On a SecretStorage failure the feed is
- * returned unchanged - keeping the URL in data.json (the status quo) rather
- * than breaking the subscription; migration surfaces that failure to the user.
+ * feeds pass through untouched. Throws when SecretStorage fails: the URL must
+ * never be saved in its place.
  *
  * `savedKey` is the feed's savedFeeds key, which links and the URI handler
  * use to find the feed again; it defaults to the title (they match everywhere
@@ -45,13 +45,30 @@ export function internPrivateFeed(
 	savedKey: string = feed.title,
 ): PodcastFeed {
 	if (!isCredentialBearingUrl(feed.url)) return feed;
-	try {
-		const urlSecretId = feedUrls.store(feed.url);
-		return { ...feed, url: privateFeedPlaceholder(savedKey), urlSecretId };
-	} catch (error) {
-		console.error(`PodNotes: could not protect the private feed "${feed.title}"`, error);
-		return feed;
+	const urlSecretId = feedUrls.store(feed.url);
+	return { ...feed, url: privateFeedPlaceholder(savedKey), urlSecretId };
+}
+
+/** Whether this saved private feed waits for its URL to be set on this device. */
+export function needsPrivateFeedAddress(feed: PodcastFeed, feedUrls: FeedUrlRepository): boolean {
+	return Boolean(feed.urlSecretId?.trim()) && resolveFeedUrl(feed, feedUrls) === null;
+}
+
+/**
+ * Set a saved private feed's URL on this device, under the reference data.json
+ * already holds. Every device keeps its own copy under that one reference, so
+ * setting it up here leaves the feed working on the others. Throws when `url`
+ * is not a private feed URL or SecretStorage cannot keep it.
+ */
+export function setPrivateFeedAddress(
+	feed: PodcastFeed,
+	url: string,
+	feedUrls: FeedUrlRepository,
+): void {
+	if (!feed.urlSecretId || !isCredentialBearingUrl(url)) {
+		throw new Error("Not a private feed URL for this feed.");
 	}
+	feedUrls.attach(feed.urlSecretId, url);
 }
 
 /**
@@ -80,22 +97,23 @@ export function isSavedFeed(saved: PodcastFeed, url: string, feedUrls: FeedUrlRe
 	return resolved !== null && canonicalUrl(resolved) === wanted;
 }
 
-/** `url` as the URL parser serializes it, or as given when it is not a URL. */
-function canonicalUrl(url: string): string {
-	return checkStringIsUrl(url)?.href ?? url;
+/** The savedFeeds key of the feed at `url`, whatever the feed is called now. */
+export function findSavedFeed(
+	feeds: Record<string, PodcastFeed>,
+	url: string,
+	feedUrls: FeedUrlRepository,
+): string | undefined {
+	return Object.keys(feeds).find((key) => isSavedFeed(feeds[key], url, feedUrls));
 }
 
 /** Tells the user that a saved private feed's URL is not on this device. */
 export function notifyPrivateFeedUnavailable(title: string): void {
-	new Notice(
-		`The private feed URL for "${title}" is not available on this device. ` +
-			"Remove the feed and add it again with its private URL.",
-	);
+	new Notice(`The private feed address for "${title}" is not available on this device.`);
 }
 
 export interface PrivateFeedProtection {
 	settings: IPodNotesSettings;
-	/** Feeds whose URL could NOT be protected (SecretStorage failure). */
+	/** Feeds whose URL could NOT be protected (SecretStorage failure); `settings` is then the input. */
 	failed: string[];
 }
 
@@ -105,57 +123,42 @@ export function protectPrivateFeeds(
 ): PrivateFeedProtection {
 	const failed: string[] = [];
 	const savedFeeds = ownRecord<PodcastFeed>();
-	// A private feed's real URL maps to the placeholder naming its saved key,
-	// which links resolve by.
-	const byUrl = new Map<string, string>();
 	let moved = false;
 	for (const [key, feed] of Object.entries(settings.savedFeeds)) {
-		const interned = internPrivateFeed(feed, feedUrls, key);
-		if (interned !== feed) moved = true;
-		else if (isCredentialBearingUrl(feed.url)) failed.push(key);
-		if (isPrivateFeedPlaceholder(interned.url)) {
-			byUrl.set(feed.url, interned.url);
-			const url = interned.urlSecretId && feedUrls.resolve(interned.urlSecretId);
-			if (url) byUrl.set(url, interned.url);
+		let interned = feed;
+		try {
+			interned = internPrivateFeed(feed, feedUrls, key);
+		} catch (error) {
+			console.error(`PodNotes: could not protect the private feed "${key}"`, error);
+			failed.push(key);
 		}
+		if (interned !== feed) moved = true;
 		savedFeeds[key] = interned;
 	}
-	// Snapshots stamp `feedUrl`, and an episode without a link of its own takes
-	// the feed URL as `url`. A private URL no saved feed matches still goes: its
-	// podcast's placeholder stands for it.
-	const placeholderFor = (url: string, episode: Record<string, unknown>) =>
-		byUrl.get(url) ??
-		(url === episode.feedUrl &&
-		typeof episode.podcastName === "string" &&
-		isCredentialBearingUrl(url)
-			? privateFeedPlaceholder(episode.podcastName)
-			: url);
+	if (failed.length > 0) return { settings, failed };
 	return {
-		settings: scrubEpisodeUrls(moved ? { ...settings, savedFeeds } : settings, placeholderFor),
+		settings: redactPrivateFeedAddresses(
+			moved ? { ...settings, savedFeeds } : settings,
+			privateFeedAddresses(savedFeeds, feedUrls),
+		),
 		failed,
 	};
 }
 
-/** Returns `value` itself when no URL changed, so callers can tell whether to save. */
-function scrubEpisodeUrls<T>(
-	value: T,
-	placeholderFor: (url: string, episode: Record<string, unknown>) => string,
-): T {
-	if (typeof value !== "object" || value === null) return value;
-	const isArray = Array.isArray(value);
-	const prototype = Object.getPrototypeOf(value) as object | null;
-	if (!isArray && prototype !== Object.prototype && prototype !== null) return value;
-
-	const record = value as Record<string, unknown>;
-	let changed = false;
-	const next = (isArray ? [] : Object.create(prototype)) as Record<string, unknown>;
-	for (const [key, entry] of Object.entries(record)) {
-		const scrubbed =
-			(key === "url" || key === "feedUrl") && typeof entry === "string"
-				? placeholderFor(entry, record)
-				: scrubEpisodeUrls(entry, placeholderFor);
-		if (scrubbed !== entry) changed = true;
-		next[key] = scrubbed;
+/**
+ * Each saved private feed's URL on this device, to the placeholder naming its
+ * saved key, which links resolve by. An episode snapshot of the feed takes that
+ * placeholder even when the feed is now called something else.
+ */
+export function privateFeedAddresses(
+	feeds: Record<string, PodcastFeed>,
+	feedUrls: FeedUrlRepository,
+): Map<string, string> {
+	const addresses = new Map<string, string>();
+	for (const feed of Object.values(feeds)) {
+		if (!isPrivateFeedPlaceholder(feed.url)) continue;
+		const url = resolveFeedUrl(feed, feedUrls);
+		if (url) addresses.set(url, feed.url);
 	}
-	return (changed ? next : value) as T;
+	return addresses;
 }

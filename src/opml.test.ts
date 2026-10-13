@@ -280,6 +280,33 @@ describe("importOPML (IE-01)", () => {
 		expect([...feedUrlSecrets]).toEqual([[saved.urlSecretId, privateUrl]]);
 	});
 
+	it("sets no address on a saved private feed a sync replaced while the import loaded", async () => {
+		const privateUrl = "https://private.test/feed?auth=s3cret";
+		feedUrlSecrets.clear();
+		const saved = {
+			title: "Private",
+			url: "podnotes-private-feed:Private",
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000001",
+			artworkUrl: "",
+		};
+		const replaced = {
+			...saved,
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000002",
+		};
+		savedFeeds.set({ Private: saved });
+		channelAt.mockImplementation(async ({ url }: { url: string }) => {
+			savedFeeds.set({ Private: replaced });
+			return { title: "Private", url, artworkUrl: "" };
+		});
+
+		await importOPML(
+			`<opml><body><outline text="Private" xmlUrl="${privateUrl}" /></body></opml>`,
+		);
+
+		expect(get(savedFeeds)).toEqual({ Private: replaced });
+		expect(feedUrlSecrets.size).toBe(0);
+	});
+
 	it("never replaces a saved private feed missing on this device with a public namesake", async () => {
 		feedUrlSecrets.clear();
 		const saved = {

@@ -1,5 +1,4 @@
 import type { SecretStorage } from "obsidian";
-import type { PodcastFeed } from "src/types/PodcastFeed";
 import { isValidSecretId } from "src/types/Credentials";
 
 /**
@@ -11,8 +10,9 @@ import { isValidSecretId } from "src/types/Credentials";
  * references sync through data.json while SecretStorage stays device-local,
  * so IDs must never collide across devices. With sequential IDs, device A's
  * synced reference could resolve on device B to an UNRELATED feed's secret
- * and silently fetch the wrong private feed; with UUIDs a foreign reference
- * simply misses and the user re-adds the feed. Content-free by construction -
+ * and silently fetch the wrong private feed. With UUIDs a reference misses on
+ * a device until its user sets the feed's address there, under the same ID, so
+ * one reference names each device's own copy. Content-free by construction -
  * neither the feed name nor the URL leaks through the ID namespace, which
  * `listSecrets` exposes.
  */
@@ -41,15 +41,31 @@ export class FeedUrlRepository {
 
 	/** Store a private feed URL under a fresh PodNotes-owned ID and verify the readback. */
 	store(url: string): string {
-		const value = url.trim();
-		if (!value) throw new Error("A private feed URL must not be empty.");
-
 		const id = `podnotes-feed-url-${crypto.randomUUID()}`;
+		this.attach(id, url);
+		return id;
+	}
+
+	/**
+	 * Store a private feed URL under `urlSecretId`, a reference data.json already
+	 * holds, and verify the readback. Refuses an ID PodNotes does not own, and a
+	 * slot that holds another URL on this device.
+	 */
+	attach(urlSecretId: string, url: string): void {
+		const id = urlSecretId.trim();
+		const value = url.trim();
+		if (!isFeedUrlSecretId(id) || !isValidSecretId(id)) {
+			throw new Error("Not a PodNotes private feed reference.");
+		}
+		if (!value) throw new Error("A private feed URL must not be empty.");
+		const current = this.storage.getSecret(id)?.trim();
+		if (current && current !== value) {
+			throw new Error("This device holds another URL for this private feed.");
+		}
 		this.storage.setSecret(id, value);
 		if (this.storage.getSecret(id) !== value) {
 			throw new Error("SecretStorage did not retain the private feed URL.");
 		}
-		return id;
 	}
 
 	/** Clearing to "" is SecretStorage's deletion idiom; reads treat "" as absent. */
@@ -64,18 +80,22 @@ export class FeedUrlRepository {
 	}
 
 	/**
-	 * Delete every PodNotes-owned feed-url secret no saved feed references.
-	 * Covers removals that bypassed the remove flow (e.g. a settings import
-	 * replacing savedFeeds wholesale). Never throws: a sweep failure must not
-	 * abort plugin loading.
+	 * Delete every PodNotes-owned feed-url secret none of `documents` references
+	 * anywhere, so an ID in a record this version could not read, or in a field it
+	 * does not know, keeps its secret. Covers removals that bypassed the remove
+	 * flow (e.g. a settings import replacing savedFeeds wholesale). Never throws:
+	 * a sweep failure must not abort plugin loading.
 	 */
-	sweepOrphans(feeds: Record<string, PodcastFeed>): void {
+	sweepOrphans(...documents: unknown[]): void {
 		const referenced = new Set<string>();
-		for (const feed of Object.values(feeds)) {
-			// Trim to match resolve(): a reference that resolves must also protect
-			// its secret from the sweep.
-			if (feed.urlSecretId?.trim()) referenced.add(feed.urlSecretId.trim());
-		}
+		const collect = (value: unknown): void => {
+			if (typeof value === "string") {
+				if (isFeedUrlSecretId(value.trim())) referenced.add(value.trim());
+			} else if (typeof value === "object" && value !== null) {
+				for (const entry of Object.values(value)) collect(entry);
+			}
+		};
+		for (const document of documents) collect(document);
 		try {
 			for (const id of this.storage.listSecrets()) {
 				if (!isFeedUrlSecretId(id) || referenced.has(id)) continue;

@@ -439,10 +439,7 @@ describe("PodcastView integration flow", () => {
 
 		await waitFor(() =>
 			expect(notice.mock.calls).toEqual([
-				[
-					'The private feed URL for "Patron Show" is not available on this device. ' +
-						"Remove the feed and add it again with its private URL.",
-				],
+				['The private feed address for "Patron Show" is not available on this device.'],
 			]),
 		);
 		expect(mockLoad).toHaveBeenCalledTimes(1);

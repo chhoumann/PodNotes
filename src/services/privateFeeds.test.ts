@@ -84,15 +84,15 @@ describe("internPrivateFeed", () => {
 		expect(interned.url).toBe("podnotes-private-feed:Renamed%20Key");
 	});
 
-	it("keeps the feed unchanged when SecretStorage fails, never half-migrated", () => {
-		const { api, feedUrls } = repository();
+	it("throws when SecretStorage fails, so the URL is never saved in its place", () => {
+		const { api, feedUrls, values } = repository();
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
 			throw new Error("locked");
 		});
 		const original = feed({ url: PRIVATE_URL });
-		const result = internPrivateFeed(original, feedUrls);
-		expect(result).toBe(original);
-		expect(result.urlSecretId).toBeUndefined();
+		expect(() => internPrivateFeed(original, feedUrls)).toThrow("locked");
+		expect(original).toEqual(feed({ url: PRIVATE_URL }));
+		expect(values.size).toBe(0);
 	});
 });
 
@@ -312,20 +312,22 @@ describe("protectPrivateFeeds", () => {
 		expect(safe.queue.episodes[0].url).toBe(link);
 	});
 
-	it("reports feeds whose URL could not be protected", () => {
+	it("reports feeds whose URL could not be protected and changes nothing", () => {
 		const { api, feedUrls } = repository();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
 			throw new Error("locked");
 		});
-		const { failed, settings: result } = protectPrivateFeeds(
-			settings({
-				savedFeeds: { Patreon: feed({ title: "Patreon", url: PRIVATE_URL }) },
-				queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode("Ep 2", PRIVATE_URL)] },
-			}),
-			feedUrls,
-		);
+		const input = settings({
+			savedFeeds: {
+				Public: feed({ title: "Public" }),
+				Patreon: feed({ title: "Patreon", url: PRIVATE_URL }),
+			},
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode("Ep 2", PRIVATE_URL)] },
+		});
+		const { failed, settings: result } = protectPrivateFeeds(input, feedUrls);
 		expect(failed).toEqual(["Patreon"]);
+		expect(result).toBe(input);
 		expect(result.savedFeeds.Patreon.url).toBe(PRIVATE_URL);
-		expect(result.queue.episodes[0].feedUrl).toBe("podnotes-private-feed:Patreon");
 	});
 });

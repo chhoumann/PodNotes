@@ -1,6 +1,13 @@
 import { type App, Notice } from "obsidian";
 import { plugin, savedFeeds } from "./store";
-import { internPrivateFeed, isSavedFeed, resolveFeedUrl } from "./services/privateFeeds";
+import {
+	internPrivateFeed,
+	isSavedFeed,
+	needsPrivateFeedAddress,
+	resolveFeedUrl,
+	setPrivateFeedAddress,
+} from "./services/privateFeeds";
+import { isCredentialBearingUrl } from "./utility/privateFeedUrl";
 import type { PodcastFeed } from "./types/PodcastFeed";
 import { TimerNotice } from "./ui/TimerNotice";
 import { get } from "svelte/store";
@@ -44,7 +51,8 @@ async function importOPML(opml: string): Promise<void> {
 			throw new Error("No valid podcast entries found in OPML");
 		}
 
-		const existingSavedFeeds = Object.values(get(savedFeeds));
+		const savedAtStart = get(savedFeeds);
+		const existingSavedFeeds = Object.values(savedAtStart);
 		const { feeds, feedUrls } = get(plugin);
 		const newPodcastsToAdd = incompletePodcastsToAdd.filter(
 			(pod) => !existingSavedFeeds.some((saved) => isSavedFeed(saved, pod.url, feedUrls)),
@@ -92,14 +100,34 @@ async function importOPML(opml: string): Promise<void> {
 		// from an earlier import in this batch or a previously saved feed) are
 		// dropped. Count what is actually written so the summary doesn't over-report.
 		let savedCount = 0;
+		const notStored: string[] = [];
 		savedFeeds.update((saved) => {
 			for (const pod of validPodcasts) {
-				// A saved private feed whose URL is not on this device takes the listed URL.
-				if (saved[pod.title] && resolveFeedUrl(saved[pod.title], feedUrls) !== null)
-					continue;
-				// Imported private URLs go straight to SecretStorage, never data.json.
-				saved[pod.title] = internPrivateFeed(structuredClone(pod), feedUrls);
-				savedCount++;
+				try {
+					const existing = Object.prototype.hasOwnProperty.call(saved, pod.title)
+						? saved[pod.title]
+						: undefined;
+					if (existing) {
+						if (
+							!needsPrivateFeedAddress(existing, feedUrls) ||
+							!isCredentialBearingUrl(pod.url) ||
+							savedAtStart[pod.title]?.urlSecretId !== existing.urlSecretId
+						) {
+							continue;
+						}
+						setPrivateFeedAddress(existing, pod.url, feedUrls);
+					} else {
+						// Imported private URLs go straight to SecretStorage, never data.json.
+						saved[pod.title] = internPrivateFeed(structuredClone(pod), feedUrls);
+					}
+					savedCount++;
+				} catch (error) {
+					console.error(
+						`PodNotes: could not store the private feed "${pod.title}"`,
+						error,
+					);
+					notStored.push(pod.title);
+				}
 			}
 			return saved;
 		});
@@ -108,13 +136,20 @@ async function importOPML(opml: string): Promise<void> {
 		const skippedExisting = incompletePodcastsToAdd.length - newPodcastsToAdd.length;
 		// Feeds that fetched fine but collided with an existing/earlier title and
 		// were therefore silently dropped by the title-keyed store above.
-		const droppedDuplicateTitle = validPodcasts.length - savedCount;
+		const droppedDuplicateTitle = validPodcasts.length - savedCount - notStored.length;
 
 		let summary = `OPML import complete. Saved ${savedCount} new podcasts. Skipped ${skippedExisting} existing podcasts.`;
 		if (droppedDuplicateTitle > 0) {
 			summary += ` Skipped ${droppedDuplicateTitle} with duplicate titles.`;
 		}
 		notice.update(summary);
+
+		if (notStored.length > 0) {
+			new Notice(
+				`Could not store the private feed ${notStored.length === 1 ? "address" : "addresses"} for ${notStored.join(", ")} on this device.`,
+				10000,
+			);
+		}
 
 		if (validPodcasts.length !== newPodcastsToAdd.length) {
 			const failedImports = newPodcastsToAdd.length - validPodcasts.length;

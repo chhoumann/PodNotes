@@ -9,6 +9,7 @@ import {
 } from "./episodeCodec";
 import { decodeSettings } from "./settingsCodec";
 import type { CredentialValues } from "src/types/Credentials";
+import { isCredentialBearingUrl, redactPrivateFeedAddresses } from "src/utility/privateFeedUrl";
 
 export const PODNOTES_DATA_SCHEMA_VERSION = 2;
 
@@ -113,43 +114,63 @@ export function decodePodNotesData(value: unknown): DecodedPodNotesData {
 	};
 }
 
-/** Serialize a validated runtime snapshot with canonical dates and schema. */
+/**
+ * Serialize a validated runtime snapshot with canonical dates and schema. No
+ * private feed address reaches the result. A saved feed's own private URL must
+ * be in SecretStorage first: this throws rather than drop its only copy.
+ */
 export function encodePodNotesData(
 	settings: IPodNotesSettings,
 	unknownFields: UnknownRecord = {},
+	/** Saved private feeds' URLs on this device, to their placeholders. */
+	privateFeedAddresses?: ReadonlyMap<string, string>,
 ): PersistedPodNotesDataV2 {
 	const validated = decodeSettings(
 		settings as unknown as UnknownRecord,
 		new Set(),
 		PODNOTES_DATA_SCHEMA_VERSION,
 	);
+	for (const [key, feed] of Object.entries(validated.savedFeeds)) {
+		if (isCredentialBearingUrl(feed.url)) {
+			throw new PodNotesDataError(
+				`PodNotes does not write the private feed URL of "${key}" to data.json.`,
+				"invalid-data",
+			);
+		}
+	}
 
-	return {
-		...copyUnknownRootFields(unknownFields),
-		...validated,
-		schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
-		libraryId:
-			typeof unknownFields.libraryId === "string"
-				? unknownFields.libraryId
-				: LIBRARY_BEFORE_IDS,
-		currentEpisode: validated.currentEpisode
-			? encodeEpisode(validated.currentEpisode)
-			: undefined,
-		favorites: encodePlaylist(validated.favorites),
-		queue: encodePlaylist(validated.queue),
-		localFiles: encodePlaylist(validated.localFiles),
-		playlists: mapRecord(validated.playlists, (playlist) => encodePlaylist(playlist)),
-		downloadedEpisodes: mapRecord(validated.downloadedEpisodes, (episodes) =>
-			episodes.map((episode) => encodeEpisode(episode)),
-		),
-	};
+	return redactPrivateFeedAddresses(
+		{
+			...copyUnknownRootFields(unknownFields),
+			...validated,
+			schemaVersion: PODNOTES_DATA_SCHEMA_VERSION,
+			libraryId:
+				typeof unknownFields.libraryId === "string"
+					? unknownFields.libraryId
+					: LIBRARY_BEFORE_IDS,
+			currentEpisode: validated.currentEpisode
+				? encodeEpisode(validated.currentEpisode)
+				: undefined,
+			favorites: encodePlaylist(validated.favorites),
+			queue: encodePlaylist(validated.queue),
+			localFiles: encodePlaylist(validated.localFiles),
+			playlists: mapRecord(validated.playlists, (playlist) => encodePlaylist(playlist)),
+			downloadedEpisodes: mapRecord(validated.downloadedEpisodes, (episodes) =>
+				episodes.map((episode) => encodeEpisode(episode)),
+			),
+		},
+		privateFeedAddresses,
+	);
 }
 
 export function toDocument(
 	settings: IPodNotesSettings,
 	unknownFields?: UnknownRecord,
+	privateFeedAddresses?: ReadonlyMap<string, string>,
 ): PersistedPodNotesDataV2 {
-	return JSON.parse(JSON.stringify(encodePodNotesData(settings, unknownFields)));
+	return JSON.parse(
+		JSON.stringify(encodePodNotesData(settings, unknownFields, privateFeedAddresses)),
+	);
 }
 
 function readSchemaVersion(root: UnknownRecord): PodNotesDataSchemaVersion {

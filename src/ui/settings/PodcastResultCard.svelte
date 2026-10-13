@@ -6,6 +6,7 @@
 
 	export let podcast: PodcastFeed;
 	export let isSaved = false;
+	export let needsAddress = false;
 
 	const dispatch = createEventDispatcher();
 </script>
@@ -25,6 +26,13 @@
 		{/if}
 	</div>
 	<div class="podcast-actions">
+		{#if needsAddress}
+			<Button
+				text="Set feed address"
+				ariaLabel={`Set feed address for ${podcast.title}`}
+				on:click={() => dispatch("setFeedAddress", { podcast })}
+			/>
+		{/if}
 		{#if isSaved}
 			<Button
 				text="Remove"
@@ -122,6 +130,7 @@
 	.podcast-actions {
 		display: flex;
 		align-items: center;
+		gap: 0.5rem;
 		flex-shrink: 0;
 	}
 </style>

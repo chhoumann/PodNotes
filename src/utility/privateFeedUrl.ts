@@ -10,6 +10,8 @@
  * scheme: if it ever reaches the network gate unresolved, the gate refuses it.
  */
 
+import checkStringIsUrl from "./checkStringIsUrl";
+
 const PLACEHOLDER_SCHEME = "podnotes-private-feed:";
 
 /**
@@ -58,4 +60,78 @@ export function parsePrivateFeedPlaceholder(value: string): string | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * `url` as a request sends it, so the scheme and host in any case, and with or
+ * without a default port, name the same feed. As given when it is not a URL.
+ */
+export function canonicalUrl(url: string): string {
+	return checkStringIsUrl(url)?.href ?? url;
+}
+
+/**
+ * `document` with no private feed address left in it. A snapshot's
+ * credential-bearing `feedUrl` is a private feed address, as is each key of
+ * `known` (saved private feeds' real URLs, mapped to their placeholders). Every
+ * string anywhere that is one of these addresses, or quotes one as written,
+ * gets its placeholder instead, so the address cannot stay behind in a
+ * description or a field this version does not know. Signed media and an
+ * episode's own link are other URLs and stay as they are. Returns `document`
+ * itself when nothing changed; never mutates it.
+ */
+export function redactPrivateFeedAddresses<T>(
+	document: T,
+	known: ReadonlyMap<string, string> = new Map(),
+): T {
+	const placeholders = new Map<string, string>();
+	const add = (url: string, placeholder: string) => {
+		const canonical = canonicalUrl(url);
+		const kept = placeholders.get(canonical) ?? placeholder;
+		placeholders.set(canonical, kept);
+		if (!placeholders.has(url)) placeholders.set(url, kept);
+	};
+	for (const [url, placeholder] of known) add(url, placeholder);
+	visitRecords(document, ({ feedUrl, podcastName }) => {
+		if (typeof feedUrl !== "string" || !isCredentialBearingUrl(feedUrl)) return;
+		add(feedUrl, privateFeedPlaceholder(typeof podcastName === "string" ? podcastName : ""));
+	});
+	if (placeholders.size === 0) return document;
+	const addressesLongestFirst = [...placeholders].sort(([a], [b]) => b.length - a.length);
+	return replaceStrings(document, (value) => {
+		const whole = /^https?:/i.test(value) && placeholders.get(canonicalUrl(value));
+		if (whole) return whole;
+		let redacted = value;
+		for (const [address, placeholder] of addressesLongestFirst) {
+			if (redacted.includes(address)) redacted = redacted.split(address).join(placeholder);
+		}
+		return redacted;
+	});
+}
+
+function isPlainObjectOrArray(value: unknown): value is Record<string, unknown> {
+	if (typeof value !== "object" || value === null) return false;
+	const prototype = Object.getPrototypeOf(value) as object | null;
+	return Array.isArray(value) || prototype === Object.prototype || prototype === null;
+}
+
+function visitRecords(value: unknown, visit: (record: Record<string, unknown>) => void): void {
+	if (!isPlainObjectOrArray(value)) return;
+	if (!Array.isArray(value)) visit(value);
+	for (const entry of Object.values(value)) visitRecords(entry, visit);
+}
+
+function replaceStrings<T>(value: T, replace: (value: string) => string): T {
+	if (typeof value === "string") return replace(value) as T;
+	if (!isPlainObjectOrArray(value)) return value;
+	let changed = false;
+	const entries = Object.entries(value).map(([key, entry]) => {
+		const replaced = replaceStrings(entry, replace);
+		if (replaced !== entry) changed = true;
+		return [key, replaced] as const;
+	});
+	if (!changed) return value;
+	if (Array.isArray(value)) return entries.map(([, entry]) => entry) as T;
+	// fromEntries defines each key as its own, so a key named __proto__ stays data.
+	return Object.setPrototypeOf(Object.fromEntries(entries), Object.getPrototypeOf(value)) as T;
 }

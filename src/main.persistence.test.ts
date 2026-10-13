@@ -10,8 +10,11 @@ import { PlayerController } from "./player/PlayerController";
 import { downloadedEpisodes, localFiles } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
+import { resolveFeedUrl } from "./services/privateFeeds";
 import { attachDataFileWriter, dataFileText } from "../tests/mocks/dataFileWriter";
 import { FakeDocument } from "../tests/mocks/fakeMedia";
+import released2200 from "../tests/fixtures/persistence/released-2.20.0.json";
+import released2211 from "../tests/fixtures/persistence/released-2.21.1.json";
 
 function memorySecretStorage(initial: Record<string, string> = {}) {
 	const values = new Map(Object.entries(initial));
@@ -266,33 +269,36 @@ describe("PodNotes persistence integration", () => {
 		const secretUrl = "https://private.example/feed.xml?auth=leaked";
 		const { storage } = memorySecretStorage({ [id]: secretUrl });
 		Object.assign(plugin, { app: { ...plugin.app, secretStorage: storage } });
-		await plugin.saveData(
-			encodePodNotesData({
-				...structuredClone(DEFAULT_SETTINGS),
-				savedFeeds: {
-					Private: {
-						title: "Private",
-						url: "podnotes-private-feed:Private",
-						urlSecretId: id,
-						artworkUrl: "",
-					},
-				},
-				queue: {
-					...DEFAULT_SETTINGS.queue,
-					episodes: [
-						{
-							title: "Ep",
-							streamUrl: "https://media.example/ep.mp3",
-							url: "",
-							description: "",
-							content: "",
-							podcastName: "Private",
-							feedUrl: secretUrl,
+		const leaked = JSON.parse(
+			JSON.stringify(
+				encodePodNotesData({
+					...structuredClone(DEFAULT_SETTINGS),
+					savedFeeds: {
+						Private: {
+							title: "Private",
+							url: "podnotes-private-feed:Private",
+							urlSecretId: id,
+							artworkUrl: "",
 						},
-					],
-				},
-			}),
+					},
+					queue: {
+						...DEFAULT_SETTINGS.queue,
+						episodes: [
+							{
+								title: "Ep",
+								streamUrl: "https://media.example/ep.mp3",
+								url: "",
+								description: "",
+								content: "",
+								podcastName: "Private",
+							},
+						],
+					},
+				}),
+			),
 		);
+		leaked.queue.episodes[0].feedUrl = secretUrl;
+		await plugin.saveData(leaked);
 		saveData.mockClear();
 
 		await plugin.loadSettings();
@@ -339,56 +345,12 @@ describe("PodNotes persistence integration", () => {
 	});
 
 	it.each([
-		["2.20.0", "- {{time}} ", {}],
-		["2.21.1", "- {{linktime}} ", { downloadedByPodNotes: true }],
-	])("loads a %s library with a private feed unchanged", async (_version, template, download) => {
-		const id = "podnotes-feed-url-00000000-0000-4000-8000-000000000001";
-		const secretUrl = "https://private.example/feed.xml?auth=released";
+		["2.20.0", released2200],
+		["2.21.1", released2211],
+	])("loads a %s library with a private feed unchanged", async (_version, released) => {
+		const id = "podnotes-feed-url-00000000-0000-4000-8000-000000000211";
+		const secretUrl = "http://podnotes.test:41627/private.xml?auth=released";
 		const { storage, values } = memorySecretStorage({ [id]: secretUrl });
-		const episode = {
-			title: "Ep",
-			streamUrl: "https://media.example/ep.mp3?sig=media",
-			url: "podnotes-private-feed:Private",
-			description: "",
-			content: "",
-			podcastName: "Private",
-			episodeDate: "2026-01-01T00:00:00.000Z",
-			feedUrl: "podnotes-private-feed:Private",
-		};
-		const released = {
-			...JSON.parse(JSON.stringify(encodePodNotesData(structuredClone(DEFAULT_SETTINGS)))),
-			timestamp: { template, offset: 0 },
-			savedFeeds: {
-				Private: {
-					title: "Private",
-					url: "podnotes-private-feed:Private",
-					urlSecretId: id,
-					artworkUrl: "https://media.example/art.jpg?sig=art",
-				},
-				Public: {
-					title: "Public",
-					url: "https://feeds.example/public.xml",
-					artworkUrl: "",
-				},
-			},
-			queue: { ...DEFAULT_SETTINGS.queue, episodes: [episode] },
-			currentEpisode: episode,
-			downloadedEpisodes: {
-				Private: [
-					{ ...episode, filePath: "PodNotes/Private/Ep.mp3", size: 42, ...download },
-				],
-			},
-			playedEpisodes: {
-				"Private::Ep": {
-					title: "Ep",
-					podcastName: "Private",
-					time: 30,
-					duration: 60,
-					finished: false,
-				},
-			},
-		};
-		delete released.libraryId;
 		const saveData = vi.fn().mockResolvedValue(undefined);
 		const plugin = makePlugin(saveData, { dataFileExists: true });
 		Object.assign(plugin, {
@@ -408,9 +370,194 @@ describe("PodNotes persistence integration", () => {
 			libraryId: "",
 		});
 		expect(values.get(id)).toBe(secretUrl);
-		expect(plugin.feedUrls.resolve(plugin.settings.savedFeeds.Private.urlSecretId ?? "")).toBe(
+		expect(resolveFeedUrl(plugin.settings.savedFeeds["PRIV2 Both"], plugin.feedUrls)).toBe(
 			secretUrl,
 		);
+	});
+
+	it("keeps data.json and every secret, and saves nothing, when a private feed URL cannot move", async () => {
+		const orphanId = "podnotes-feed-url-00000000-0000-4000-8000-000000000003";
+		const rawUrl = "https://private.example/feed.xml?auth=only-copy";
+		const values = new Map([[orphanId, "https://private.example/old.xml?auth=old"]]);
+		const storage = {
+			getSecret: vi.fn((id: string) => values.get(id) ?? null),
+			setSecret: vi.fn((id: string, value: string) => {
+				if (id.startsWith("podnotes-feed-url-") && value) throw new Error("locked");
+				values.set(id, value);
+			}),
+			listSecrets: vi.fn(() => [...values.keys()]),
+		} as unknown as SecretStorage;
+		const legacy = {
+			openAIApiKey: "sk-legacy",
+			savedFeeds: { Private: { title: "Private", url: rawUrl, artworkUrl: "" } },
+		};
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue(structuredClone(legacy)),
+		});
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		plugin.settings.defaultVolume = 0.4;
+
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/private feed URL/);
+		expect(saveData).not.toHaveBeenCalled();
+		expect(values.get(orphanId)).toBe("https://private.example/old.xml?auth=old");
+		expect(resolveFeedUrl(plugin.settings.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
+		expect(notice).toHaveBeenCalledWith(
+			"PodNotes could not move the private feed URL for Private into SecretStorage, so it saves nothing until you restart Obsidian.",
+			0,
+		);
+	});
+
+	it("moves legacy API keys and private feed URLs out of data.json in one write", async () => {
+		const rawUrl = "https://private.example/feed.xml?auth=legacy";
+		const { storage, values } = memorySecretStorage();
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue({
+				openAIApiKey: "sk-legacy",
+				savedFeeds: { Private: { title: "Private", url: rawUrl, artworkUrl: "" } },
+				queue: {
+					...DEFAULT_SETTINGS.queue,
+					episodes: [
+						{
+							title: "Ep",
+							streamUrl: "https://media.example/ep.mp3?sig=media",
+							url: rawUrl,
+							description: "",
+							content: "",
+							podcastName: "Private",
+							feedUrl: rawUrl,
+						},
+					],
+				},
+			}),
+		});
+
+		await plugin.loadSettings();
+
+		expect(saveData).toHaveBeenCalledTimes(1);
+		const written = saveData.mock.calls[0][0];
+		expect(JSON.stringify(written)).not.toContain("auth=legacy");
+		const { urlSecretId } = written.savedFeeds.Private;
+		expect(written).toMatchObject({
+			schemaVersion: 2,
+			openAISecretId: "podnotes-openai-api-key",
+			savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+			queue: {
+				episodes: [
+					{
+						streamUrl: "https://media.example/ep.mp3?sig=media",
+						url: "podnotes-private-feed:Private",
+						feedUrl: "podnotes-private-feed:Private",
+					},
+				],
+			},
+		});
+		expect(values.get(urlSecretId)).toBe(rawUrl);
+		expect(values.get("podnotes-openai-api-key")).toBe("sk-legacy");
+	});
+
+	it("never writes a private feed URL that arrives raw in a synced data.json it cannot protect", async () => {
+		const rawUrl = "https://private.example/feed.xml?auth=synced";
+		const values = new Map<string, string>();
+		let locked = false;
+		const storage = {
+			getSecret: vi.fn((id: string) => values.get(id) ?? null),
+			setSecret: vi.fn((id: string, value: string) => {
+				if (locked) throw new Error("locked");
+				values.set(id, value);
+			}),
+			listSecrets: vi.fn(() => [...values.keys()]),
+		} as unknown as SecretStorage;
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, { app: { ...plugin.app, secretStorage: storage } });
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		locked = true;
+		const synced = JSON.parse(
+			JSON.stringify(encodePodNotesData(structuredClone(DEFAULT_SETTINGS))),
+		);
+		synced.savedFeeds = { Private: { title: "Private", url: rawUrl, artworkUrl: "" } };
+		await plugin.saveData(synced);
+		saveData.mockClear();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		plugin.settings.defaultVolume = 0.4;
+
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/SecretStorage/);
+		expect(saveData).not.toHaveBeenCalled();
+	});
+
+	it("names a renamed private feed's episodes by its saved key and leaves its URL nowhere", async () => {
+		const id = "podnotes-feed-url-00000000-0000-4000-8000-000000000001";
+		const rawUrl = "https://private.example/feed.xml?auth=renamed";
+		const { storage } = memorySecretStorage({ [id]: rawUrl });
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			loadData: vi.fn().mockResolvedValue({
+				...JSON.parse(
+					JSON.stringify(encodePodNotesData(structuredClone(DEFAULT_SETTINGS))),
+				),
+				savedFeeds: {
+					"Saved Key": {
+						title: "Channel Title",
+						url: "podnotes-private-feed:Saved%20Key",
+						urlSecretId: id,
+						artworkUrl: "",
+					},
+				},
+			}),
+		});
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const linked = {
+			title: "Linked",
+			streamUrl: "https://media.example/linked.mp3?sig=media",
+			url: rawUrl,
+			description: "",
+			content: "",
+			podcastName: "Channel Title",
+			feedUrl: rawUrl,
+		};
+		const listed = {
+			...linked,
+			title: "Listed",
+			url: rawUrl.replace("private.example", "PRIVATE.EXAMPLE"),
+			feedUrl: "podnotes-private-feed:Saved%20Key",
+			description: `Your feed: ${rawUrl}`,
+			sourceFeed: rawUrl,
+		};
+		plugin.settings.currentEpisode = linked;
+		plugin.settings.queue = { ...plugin.settings.queue, episodes: [listed] };
+
+		await plugin.saveSettingsStrict();
+
+		const written = saveData.mock.calls.at(-1)?.[0];
+		expect(JSON.stringify(written)).not.toContain("auth=renamed");
+		expect(written.currentEpisode).toMatchObject({
+			url: "podnotes-private-feed:Saved%20Key",
+			feedUrl: "podnotes-private-feed:Saved%20Key",
+			streamUrl: "https://media.example/linked.mp3?sig=media",
+		});
+		expect(written.queue.episodes[0]).toMatchObject({
+			url: "podnotes-private-feed:Saved%20Key",
+			description: "Your feed: podnotes-private-feed:Saved%20Key",
+			sourceFeed: "podnotes-private-feed:Saved%20Key",
+		});
+		expect(plugin.settings.currentEpisode?.feedUrl).toBe(rawUrl);
 	});
 
 	it("starts on an empty data.json as on a new install", async () => {

@@ -84,20 +84,31 @@ describe("PodNotes data schema", () => {
 			},
 			playedEpisodes: { "Test Podcast::Private": history },
 		} satisfies IPodNotesSettings;
-		settings.queue.episodes[0] = { ...item, sourceFeed: rawUrl } as Episode;
-		const unknownFields = { libraryId: "library", nextVersion: { lastEpisode: item } };
+		settings.queue.episodes[0] = {
+			...item,
+			sourceFeed: rawUrl,
+			description: `<p>Subscribe: <a href="${rawUrl}">your feed</a></p>`,
+		} as Episode;
+		const unknownFields = {
+			libraryId: "library",
+			nextVersion: { lastEpisode: item, note: `Moved from ${rawUrl} today` },
+		};
 		const before = structuredClone({ settings, unknownFields });
 
 		const encoded = encodePodNotesData(settings, unknownFields);
 
 		expect(JSON.stringify(encoded)).not.toContain(sentinel);
 		expect(encoded.queue.episodes[0].sourceFeed).toBe("podnotes-private-feed:Test%20Podcast");
+		expect(encoded.queue.episodes[0].description).toBe(
+			'<p>Subscribe: <a href="podnotes-private-feed:Test%20Podcast">your feed</a></p>',
+		);
 		expect(encoded.nextVersion).toEqual({
 			lastEpisode: {
 				...item,
 				url: "podnotes-private-feed:Test%20Podcast",
 				feedUrl: "podnotes-private-feed:Test%20Podcast",
 			},
+			note: "Moved from podnotes-private-feed:Test%20Podcast today",
 		});
 		expect(encoded.currentEpisode?.feedUrl).toBe("podnotes-private-feed:Test%20Podcast");
 		for (const list of [

@@ -8,14 +8,17 @@
 	import { plugin, savedFeeds } from "src/store";
 	import { get } from "svelte/store";
 	import {
+		findSavedFeed,
 		internPrivateFeed,
-		isSavedFeed,
+		needsPrivateFeedAddress,
 		notifyPrivateFeedUnavailable,
 		resolveFeedUrl,
+		setPrivateFeedAddress,
 	} from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
 	import Text from "../obsidian/Text.svelte";
+	import { askFeedAddress } from "./FeedAddressModal";
 	import PodcastResultCard from "./PodcastResultCard.svelte";
 	import { onMount } from "svelte";
 	import { fade } from "svelte/transition";
@@ -123,26 +126,35 @@
 
 	// Saved feeds are keyed by title. Only own keys count, so a show called
 	// "toString" is not mistaken for a saved one.
-	function savedFeedTitled(
-		feeds: Record<string, PodcastFeed>,
-		title: string,
-	): PodcastFeed | undefined {
-		return Object.prototype.hasOwnProperty.call(feeds, title) ? feeds[title] : undefined;
+	function savedFeedAt(feeds: Record<string, PodcastFeed>, key: string): PodcastFeed | undefined {
+		return Object.prototype.hasOwnProperty.call(feeds, key) ? feeds[key] : undefined;
 	}
 
-	function isSavedResult(feeds: Record<string, PodcastFeed>, podcast: PodcastFeed): boolean {
-		const saved = savedFeedTitled(feeds, podcast.title);
-		return saved !== undefined && isSavedFeed(saved, podcast.url, get(plugin).feedUrls);
+	// Saved private feeds whose URL is not on this device. SecretStorage is not a
+	// store, so setting an address here recomputes it.
+	let missingAddresses = new Set<string>();
+	$: missingAddresses = feedsMissingAddress($savedFeeds);
+
+	function feedsMissingAddress(feeds: Record<string, PodcastFeed>): Set<string> {
+		const { feedUrls } = get(plugin);
+		return new Set(
+			Object.keys(feeds).filter((key) => needsPrivateFeedAddress(feeds[key], feedUrls)),
+		);
+	}
+
+	function notStored(title: string, error: unknown) {
+		console.error("PodNotes: could not store a private feed URL", error);
+		new Notice(`Could not store the private feed address for "${title}" on this device.`);
 	}
 
 	function addPodcast(event: CustomEvent<{ podcast: PodcastFeed }>) {
 		const { podcast } = event.detail;
 		const { feedUrls } = get(plugin);
+		if (findSavedFeed($savedFeeds, podcast.url, feedUrls) !== undefined) return;
 		// A namesake must never replace a saved feed. A saved private feed whose
 		// URL is missing on this device cannot be compared, so say that instead.
-		const saved = savedFeedTitled($savedFeeds, podcast.title);
+		const saved = savedFeedAt($savedFeeds, podcast.title);
 		if (saved) {
-			if (isSavedFeed(saved, podcast.url, feedUrls)) return;
 			if (resolveFeedUrl(saved, feedUrls) === null) {
 				notifyPrivateFeedUnavailable(saved.title);
 				return;
@@ -152,9 +164,44 @@
 		}
 		// A pasted private feed URL must never reach persisted settings: intern it
 		// into SecretStorage and save the placeholder + reference instead.
-		const feed = internPrivateFeed(podcast, feedUrls);
+		let feed: PodcastFeed;
+		try {
+			feed = internPrivateFeed(podcast, feedUrls);
+		} catch (error) {
+			notStored(podcast.title, error);
+			return;
+		}
 		savedFeeds.update((feeds) => ({ ...feeds, [feed.title]: feed }));
 		updateSearchResults();
+	}
+
+	async function setFeedAddress(key: string) {
+		const feed = savedFeedAt(get(savedFeeds), key);
+		if (!feed) return;
+		const { app, feeds, feedUrls } = get(plugin);
+		const entered = await askFeedAddress(app, feed.title);
+		if (entered === null || entered.trim() === "") return;
+		const url = checkStringIsUrl(entered.trim());
+		if (url?.protocol !== "http:" && url?.protocol !== "https:") {
+			new Notice("Enter the feed's http or https address.");
+			return;
+		}
+		try {
+			await feeds.channelAt({ url: url.href });
+		} catch (e) {
+			new Notice(`Could not load feed: ${e instanceof Error ? e.message : String(e)}`);
+			return;
+		}
+		const current = savedFeedAt(get(savedFeeds), key);
+		if (!current || current.urlSecretId !== feed.urlSecretId) return;
+		try {
+			setPrivateFeedAddress(current, url.href, feedUrls);
+		} catch (error) {
+			notStored(feed.title, error);
+			return;
+		}
+		missingAddresses = feedsMissingAddress(get(savedFeeds));
+		void feeds.load([key], "network");
 	}
 
 	function removePodcast(key: string) {
@@ -162,13 +209,12 @@
 			const removed = feeds[key];
 			const newFeeds = { ...feeds };
 			delete newFeeds[key];
-			// Identical private URLs dedupe to one secret ID, so delete only when no
-			// remaining feed still references it (the load-time sweep is the backstop).
+			const reference = removed?.urlSecretId?.trim();
 			const stillReferenced = Object.values(newFeeds).some(
-				(feed) => feed.urlSecretId === removed?.urlSecretId,
+				(feed) => feed.urlSecretId?.trim() === reference,
 			);
-			if (removed?.urlSecretId && !stillReferenced) {
-				get(plugin).feedUrls.delete(removed.urlSecretId);
+			if (reference && !stillReferenced) {
+				get(plugin).feedUrls.delete(reference);
 			}
 			return newFeeds;
 		});
@@ -199,12 +245,15 @@
 
 	<div class="podcast-query-results" role="list" aria-label="Podcast search results">
 		{#each searchResults as [key, podcast] (key ?? podcast)}
+			{@const savedKey = key ?? findSavedFeed($savedFeeds, podcast.url, $plugin.feedUrls)}
 			<div role="listitem">
 				<PodcastResultCard
 					{podcast}
-					isSaved={key !== undefined || isSavedResult($savedFeeds, podcast)}
+					isSaved={savedKey !== undefined}
+					needsAddress={savedKey !== undefined && missingAddresses.has(savedKey)}
 					on:addPodcast={addPodcast}
-					on:removePodcast={() => removePodcast(key ?? podcast.title)}
+					on:removePodcast={() => savedKey !== undefined && removePodcast(savedKey)}
+					on:setFeedAddress={() => savedKey !== undefined && setFeedAddress(savedKey)}
 				/>
 			</div>
 		{/each}
