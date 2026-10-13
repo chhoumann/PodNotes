@@ -11,7 +11,6 @@ import {
 export interface EpisodeListEntry {
 	episode: Episode;
 	isAvailable: boolean;
-	unavailableReason?: string;
 }
 
 export interface PlayedEpisodeListEntry extends EpisodeListEntry {
@@ -60,7 +59,6 @@ function createPlayedEpisodeListEntry(
 	return {
 		episode: createPlayedEpisodePlaceholder(playedEpisode),
 		isAvailable: false,
-		unavailableReason: "Unavailable in current feeds",
 		playedEpisode,
 		playedEpisodeKey: key,
 	};
