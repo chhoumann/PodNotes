@@ -150,13 +150,15 @@ export default async function podNotesURIHandler(
 	// Sub-1.0 overlap is not enough here: "… Part 1" vs the loaded "… Part 2"
 	// scores ~0.78, and with only one candidate the uniqueness guard is vacuous.
 	// Those links fall through to the feed lookup, which can still exact-match.
+	// A guid only rules the loaded episode out: a feed can repeat a guid, and only the
+	// feed lookup can tell that it is unique.
 	const episodeIsLoaded =
 		!!loaded &&
 		!!loadedLinkTarget &&
 		(!isLocalFile(loaded) || localFile?.path === loadedLinkTarget) &&
 		candidateValues(url).includes(loadedLinkTarget) &&
-		((!!guid && loaded.guid === guid) ||
-			nameCandidates.includes(loaded.title) ||
+		(!guid || !loaded.guid || loaded.guid === guid) &&
+		(nameCandidates.includes(loaded.title) ||
 			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
 
 	if (episodeIsLoaded) {

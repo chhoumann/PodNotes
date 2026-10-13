@@ -793,15 +793,44 @@ describe("a link that carries the episode's guid", () => {
 		expect(state().episode).toMatchObject({ title: testEpisode.title });
 	});
 
-	test("resumes the loaded episode by its guid after it was retitled, without fetching", async () => {
+	test("resumes the loaded episode by its guid after it was retitled", async () => {
 		loadedAt(retitled, 10);
+		mockEpisodesAt.mockResolvedValue([trailer, retitled]);
 
 		await link({ guid: "ep-1", time: "90" });
 
-		expect(mockEpisodesAt).not.toHaveBeenCalled();
-		expect(state().episode).toMatchObject({ title: retitled.title });
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
+		expect(state().episode).toMatchObject({ title: retitled.title, guid: "ep-1" });
 		expect(media().currentTime).toBe(90);
 		expect(media().paused).toBe(false);
+	});
+
+	test("plays the feed episode with the link's guid, not a loaded same-titled episode with another guid", async () => {
+		const linked: Episode = { ...retitled, streamUrl: "https://pod.example.com/finale.mp3" };
+		loadedAt({ ...testEpisode, guid: "ep-2" }, 10);
+		mockEpisodesAt.mockResolvedValue([{ ...testEpisode, guid: "ep-2" }, linked]);
+
+		await link({ guid: "ep-1", time: "30" });
+		metadata();
+
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
+		expect(state().episode).toMatchObject({ title: linked.title, guid: "ep-1" });
+		expect(media().src).toBe(linked.streamUrl);
+		expect(media().currentTime).toBe(30);
+	});
+
+	test("plays the titled episode, not the loaded one, when both share the link's guid", async () => {
+		const loadedTwin: Episode = { ...trailer, guid: "ep-1" };
+		const named: Episode = { ...testEpisode, guid: "ep-1" };
+		loadedAt(loadedTwin, 10);
+		mockEpisodesAt.mockResolvedValue([loadedTwin, named]);
+
+		await link({ guid: "ep-1", time: "30" });
+		metadata();
+
+		expect(state().episode).toMatchObject({ title: named.title });
+		expect(media().src).toBe(named.streamUrl);
+		expect(media().currentTime).toBe(30);
 	});
 
 	test("does not take the loaded episode of another feed for one with the same guid", async () => {
