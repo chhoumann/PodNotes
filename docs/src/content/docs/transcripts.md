@@ -100,7 +100,11 @@ A transcript that the feed publishes costs nothing. To transcribe the audio, Pod
 These cases stop a transcription or change its result:
 
 - PodNotes transcribes audio episodes only. For a video episode, both commands are missing.
-- PodNotes transcribes the audio instead of using the feed's transcript for a local file, for a podcast you have not added to PodNotes, when the feed no longer lists the episode or lists no transcript in a format PodNotes reads, and when PodNotes cannot fetch the feed and has no copy of it on this device.
+- PodNotes transcribes the audio instead of using the feed's transcript in these cases:
+  - The episode is a local file.
+  - You have not added the podcast to PodNotes.
+  - The feed no longer lists the episode, or lists no transcript in a format PodNotes reads.
+  - PodNotes cannot fetch the feed, and no copy of the feed on this device lists the episode.
 - When PodNotes would transcribe the audio but the provider's key is not on this device, it transcribes nothing, and a notice asks you to select or create the key in the transcript settings.
 - When PodNotes cannot fetch or read the feed's transcript, a notice starts with "The published transcript could not be fetched" or "The published transcript could not be read." PodNotes does not transcribe the audio on its own. If your provider's key is on this device, the notice names **Transcribe current episode from audio**, which uses your API credit. To try the feed again, run **PodNotes: Transcribe current episode** again.
 - PodNotes waits 30 seconds for a feed's transcript and reads at most about 16 MB of it.

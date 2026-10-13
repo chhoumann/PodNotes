@@ -53,7 +53,7 @@ Sync never starts or pauses playback on this device. An episode you played since
 
 ### A new device that starts before sync finishes
 
-A device that starts PodNotes before sync delivers `data.json` starts a library of its own. When the two files meet, PodNotes combines the two libraries:
+A new device that starts PodNotes before sync delivers `data.json` starts a library of its own. When the two files meet, PodNotes combines the two libraries:
 
 - Every podcast, progress record, playlist, and download from both libraries stays.
 - A setting changed from its default in only one library keeps that library's value. A setting changed in both libraries keeps this device's value.

@@ -128,7 +128,7 @@ So a note with both properties keeps working after you rename it or move it to a
 To get a note that you can rename and move:
 
 1. In the podcast's episode list, open the episode's menu.
-2. If the menu shows **Open Note**, PodNotes still finds the old note. Move the old note to a folder that PodNotes does not use for episode notes, such as a new `Archive` folder.
+2. If the menu shows **Open Note**, PodNotes still finds the old note, so move the old note to a folder that PodNotes does not use for episode notes, such as a new `Archive` folder.
 3. Open the episode's menu again.
 4. Select **Create Note**. Use the menu, not the command, because an episode that PodNotes restored from an older version can lack the ID from its feed.
 5. Check that the new note's properties include `guid` and `feedUrl`. If either is missing, keep the new note at its path. The cases after these steps explain why PodNotes may not add them.
