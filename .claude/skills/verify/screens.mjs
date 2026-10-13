@@ -46,7 +46,8 @@
 //         mini-player stays on the podcast's page. media-error waits for the load to
 //         fail instead. capture, chapters, up-next and up-next-empty then press the full
 //         player's Timestamp, Chapters or Up next button with real input, so they fail
-//         at once on a full player without a button that reads exactly that.
+//         at once on a full player without a button that reads exactly that. capture
+//         keeps the "Timestamp added to" notice in its shots.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -102,6 +103,7 @@ const CURRENT_THEME = `(document.body.classList.contains("theme-dark") ? "dark" 
  *   when its media fails to load.
  * @property {boolean} [note] The episode note already holds a capture.
  * @property {string} [press] The full player's button to press, by its text.
+ * @property {string} [notice] Text an Obsidian notice shows, which the shot keeps.
  */
 
 /** The episode the listener is in the middle of, as in the prototype. @type {[string, string]} */
@@ -178,8 +180,8 @@ const STATES = {
 		play: NOW_PLAYING_AT,
 		text: (library) => episode(library, NOW_PLAYING).title.slice(0, 40),
 	},
-	// The capture toast, which has to outlast the shot.
-	capture: { ...FULL_PLAYER, note: true, press: "Timestamp", text: () => "Timestamp added" },
+	// The capture's notice, which has to outlast the shot.
+	capture: { ...FULL_PLAYER, note: true, press: "Timestamp", notice: "Timestamp added to" },
 	// #213's last chapter.
 	chapters: { ...FULL_PLAYER, press: "Chapters", text: () => "Listener question" },
 	"up-next": { ...FULL_PLAYER, press: "Up next", text: () => QUEUE[0][1] },
@@ -881,10 +883,10 @@ async function settle(text = "") {
 
 /**
  * `statusBar` keeps Obsidian's status bar in the capture, which then fails unless the
- * whole bar lies inside it.
- * @param {string} file @param {string} [text] @param {string} [themeName] @param {boolean} [statusBar]
+ * whole bar lies inside it. `notice` keeps Obsidian's notices, and fails unless one says it.
+ * @param {string} file @param {string} [text] @param {string} [themeName] @param {boolean} [statusBar] @param {string} [notice]
  */
-async function shot(file, text, themeName, statusBar = false) {
+async function shot(file, text, themeName, statusBar = false, notice = "") {
 	await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x: -10, y: -10 });
 	await evaluate(`
 		document.activeElement?.blur?.();
@@ -896,7 +898,7 @@ async function shot(file, text, themeName, statusBar = false) {
 		document.querySelectorAll(".tooltip").forEach((tooltip) => tooltip.remove());
 		const notices = [...document.querySelectorAll(".notice")].map((notice) => {
 			const said = notice.innerText.trim();
-			notice.remove();
+			if (!${JSON.stringify(notice)}) notice.remove();
 			return said;
 		});
 		// Obsidian's status bar floats over the view's bottom-right corner.
@@ -908,6 +910,9 @@ async function shot(file, text, themeName, statusBar = false) {
 			: document.querySelector(".podcast-view").getBoundingClientRect().toJSON();
 		return { notices, rect, bar: bar?.getBoundingClientRect().toJSON(), scale: devicePixelRatio, theme: ${CURRENT_THEME} };
 	`);
+	if (notice && !target.notices.some((/** @type {string} */ said) => said.includes(notice))) {
+		throw new Error(`No notice says "${notice}": ${JSON.stringify(target.notices)}`);
+	}
 	// Whole pixels, so the capture is not resampled.
 	const [x, y, width, height] = ["x", "y", "width", "height"].map((key) =>
 		Math.round(target.rect[key]),
@@ -1045,9 +1050,15 @@ async function set(state, label, widths, themes) {
 				await theme(name);
 				if (recipe.statusBar) await statusItem(true);
 				if (recipe.note) await episodeNote();
+				// Notices from earlier shots would stand above the one the press shows.
+				if (recipe.notice) {
+					await evaluate(
+						`document.querySelectorAll(".notice").forEach((n) => n.remove()); return true;`,
+					);
+				}
 				if (recipe.press) await press(recipe.press);
 				const file = path.join(dir, `${state}-${width}-${name}.png`);
-				await shot(file, recipe.text?.(lib), name, recipe.statusBar);
+				await shot(file, recipe.text?.(lib), name, recipe.statusBar, recipe.notice);
 				row.push({ file, caption: `${width} ${name} ${label}` });
 				const prototype = path.join(DESIGN, `${state}-${width}-${name}.png`);
 				if (fs.existsSync(prototype))
