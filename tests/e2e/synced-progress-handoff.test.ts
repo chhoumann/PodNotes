@@ -84,11 +84,11 @@ for (const [action, expected] of Object.entries(SAVED_AFTER)) {
 			.poll(
 				() =>
 					obsidian.dev.evalJson<string>(
-						'document.querySelector(".episode-player .status-container")?.textContent',
+						'document.querySelector(".pn-player .pn-times span")?.textContent',
 					),
 				POLL,
 			)
-			.toContain("00:00:45");
+			.toBe("0:45");
 		await click(obsidian, ui.collapsePlayer);
 		expect(
 			await obsidian.dev.evalJson<string>(
