@@ -42,7 +42,14 @@ function addPlayLocalFileItem(
 			.setIcon("play")
 			.setTitle(title)
 			.onClick(async () => {
-				const localEpisode = localEpisodeFromFile(app, file, mediaType);
+				// A file renamed after it was registered keeps the title it was registered under.
+				const registeredHere = get(downloadedEpisodes)["local file"]?.find(
+					(episode) => episode.filePath === file.path,
+				);
+				const localEpisode = {
+					...localEpisodeFromFile(app, file, mediaType),
+					...(registeredHere && { title: registeredHere.title }),
+				};
 
 				// The Local Files playlist is mirrored from downloadedEpisodes
 				// (see localFiles.syncWithDownloaded), so this single write
@@ -57,7 +64,9 @@ function addPlayLocalFileItem(
 					file.stat.size,
 				);
 				if (replacedFilePath) {
-					showReplacedLocalFileNotice(file.basename, replacedFilePath, file.path);
+					new Notice(
+						`A local file named "${file.basename}" was already tracked at "${replacedFilePath}". It has been replaced by "${file.path}".`,
+					);
 				}
 
 				// Re-enable replay for a finished local file. Look it up with
@@ -80,17 +89,6 @@ function addPlayLocalFileItem(
 				// surfaces with the just-selected episode.
 				await revealPodcastView(app);
 			}),
-	);
-}
-
-/** The local file at `filePath` took over the name `title` from the file at `replacedFilePath`. */
-export function showReplacedLocalFileNotice(
-	title: string,
-	replacedFilePath: string,
-	filePath: string,
-): void {
-	new Notice(
-		`A local file named "${title}" was already tracked at "${replacedFilePath}". It has been replaced by "${filePath}".`,
 	);
 }
 

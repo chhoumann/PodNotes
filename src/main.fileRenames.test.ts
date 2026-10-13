@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 import * as obsidian from "obsidian";
-import { TFile, type TAbstractFile } from "obsidian";
+import { TFile, TFolder, type TAbstractFile } from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import { selectSource } from "./player/source";
-import { downloadedEpisodes, favorites, localFiles, playedEpisodes, queue } from "./store";
+import {
+	downloadedEpisodes,
+	favorites,
+	localFiles,
+	playedEpisodes,
+	playlists,
+	queue,
+} from "./store";
 import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
@@ -45,9 +52,10 @@ let vaultPaths: string[] = [];
 let renameListeners: RenameListener[] = [];
 
 /** Obsidian moving a file: the file is at its new path, then listeners hear of it. */
-function move(oldPath: string, newPath: string): void {
+async function move(oldPath: string, newPath: string): Promise<void> {
 	vaultPaths = vaultPaths.map((path) => (path === oldPath ? newPath : path));
 	for (const listener of renameListeners) listener(vaultFile(newPath), oldPath);
+	await Promise.resolve();
 }
 
 async function loadPlugin(data: Record<string, unknown>): Promise<PodNotes> {
@@ -126,7 +134,7 @@ describe("a queued local file whose vault file moves", () => {
 			},
 		});
 
-		move("Fixtures/Clip One.wav", "Fixtures/A/Clip One.wav");
+		await move("Fixtures/Clip One.wav", "Fixtures/A/Clip One.wav");
 
 		const [queued] = get(queue).episodes;
 		expect(queued).toMatchObject({
@@ -154,69 +162,76 @@ describe("a queued local file whose vault file moves", () => {
 });
 
 describe("a vault file PodNotes tracks that is renamed or moved", () => {
-	it("takes the local file's new name and keeps its progress", async () => {
+	const progress = () => ({
+		"local file::Clip One": {
+			title: "Clip One",
+			podcastName: "local file",
+			time: 42,
+			duration: 600,
+			finished: false,
+		},
+	});
+
+	it("keeps a renamed local file's title and progress", async () => {
 		const clip = registered("Fixtures/Clip One.wav");
 		vaultPaths = ["Fixtures/Clip One.wav"];
 		await loadPlugin({
 			schemaVersion: 2,
 			downloadedEpisodes: { "local file": [{ ...clip, size: 960_044 }] },
-			playedEpisodes: {
-				"local file::Clip One": {
-					title: "Clip One",
-					podcastName: "local file",
-					time: 42,
-					duration: 600,
-					finished: false,
-				},
+			playedEpisodes: progress(),
+		});
+
+		await move("Fixtures/Clip One.wav", "Fixtures/Intro.wav");
+
+		expect(get(downloadedEpisodes)["local file"]).toEqual([
+			{
+				...clip,
+				filePath: "Fixtures/Intro.wav",
+				url: "[[Intro.wav]]",
+				streamUrl: "app://resource/Fixtures/Intro.wav",
+				size: 960_044,
 			},
-		});
-
-		move("Fixtures/Clip One.wav", "Fixtures/Intro.wav");
-
-		const entry = { title: "Intro", filePath: "Fixtures/Intro.wav" };
-		expect(get(downloadedEpisodes)["local file"]).toMatchObject([entry]);
-		expect(get(localFiles).episodes).toMatchObject([entry]);
-		expect(get(playedEpisodes)["local file::Intro"]).toMatchObject({
-			title: "Intro",
-			time: 42,
-		});
-		expect(get(playedEpisodes)).not.toHaveProperty(["local file::Clip One"]);
+		]);
+		expect(get(localFiles).episodes).toMatchObject([
+			{ title: "Clip One", filePath: "Fixtures/Intro.wav" },
+		]);
+		expect(get(playedEpisodes)).toEqual(progress());
 	});
 
-	it.each(["local file", ""])(
-		"moves the local file's legacy title-only progress (podcast %j) to its new name and keeps another podcast's",
-		async (podcastName) => {
-			const clip = registered("Fixtures/Clip One.wav");
-			vaultPaths = ["Fixtures/Clip One.wav"];
-			const progress = { duration: 600, finished: false };
-			const otherShow = {
-				title: "Clip One",
-				podcastName: "Other Show",
-				time: 7,
-				...progress,
-			};
-			await loadPlugin({
-				schemaVersion: 2,
-				downloadedEpisodes: { "local file": [{ ...clip, size: 960_044 }] },
-				playedEpisodes: {
-					"Clip One": { title: "Clip One", podcastName, time: 42, ...progress },
-					"Other Show::Clip One": otherShow,
-				},
-			});
+	it("moves the snapshots that play a local file through its registration", async () => {
+		const clip = registered("Fixtures/Clip One.wav");
+		const pathless: LocalEpisode = { ...clip };
+		delete pathless.filePath;
+		vaultPaths = ["Fixtures/Clip One.wav"];
+		const plugin = await loadPlugin({
+			schemaVersion: 2,
+			currentEpisode: pathless,
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: [pathless] },
+			favorites: { ...DEFAULT_SETTINGS.favorites, episodes: [pathless] },
+			playlists: {
+				Mix: { ...DEFAULT_SETTINGS.favorites, name: "Mix", episodes: [pathless] },
+			},
+			downloadedEpisodes: { "local file": [{ ...clip, size: 960_044 }] },
+			playedEpisodes: progress(),
+		});
 
-			move("Fixtures/Clip One.wav", "Fixtures/Intro.wav");
+		await move("Fixtures/Clip One.wav", "Fixtures/A/Intro.wav");
 
-			expect(get(playedEpisodes)).toEqual({
-				"local file::Intro": {
-					title: "Intro",
-					podcastName: "local file",
-					time: 42,
-					...progress,
-				},
-				"Other Show::Clip One": otherShow,
-			});
-		},
-	);
+		const atNewPath = {
+			...pathless,
+			filePath: "Fixtures/A/Intro.wav",
+			url: "[[Intro.wav]]",
+			streamUrl: "app://resource/Fixtures/A/Intro.wav",
+		};
+		expect(get(queue).episodes).toEqual([atNewPath]);
+		expect(get(favorites).episodes).toEqual([atNewPath]);
+		expect(get(playlists).Mix.episodes).toEqual([atNewPath]);
+		expect(plugin.settings.currentEpisode).toEqual(atNewPath);
+		expect(get(plugin.player.state).episode).toEqual(atNewPath);
+		expect(plugin.api.getPodcastTimeFormatted("HH:mm:ss", true)).toBe(
+			"[00:00:42](obsidian://podnotes?episodeName=Clip%20One&url=Fixtures%2FA%2FIntro.wav&time=42)",
+		);
+	});
 
 	it("keeps a download's episode and takes its new path", async () => {
 		const download: DownloadedEpisode = {
@@ -233,7 +248,7 @@ describe("a vault file PodNotes tracks that is renamed or moved", () => {
 		vaultPaths = ["PodNotes/Show/Ep 1.mp3"];
 		await loadPlugin({ schemaVersion: 2, downloadedEpisodes: { Show: [download] } });
 
-		move("PodNotes/Show/Ep 1.mp3", "Archive/Ep 1.mp3");
+		await move("PodNotes/Show/Ep 1.mp3", "Archive/Ep 1.mp3");
 
 		expect(get(downloadedEpisodes).Show).toEqual([
 			{ ...download, filePath: "Archive/Ep 1.mp3" },
@@ -249,7 +264,7 @@ describe("a vault file PodNotes tracks that is renamed or moved", () => {
 			downloadedEpisodes: { "local file": [{ ...clip, size: 960_044 }] },
 		});
 
-		move("Fixtures/Clip One.wav", "Fixtures/A/Clip One.wav");
+		await move("Fixtures/Clip One.wav", "Fixtures/A/Clip One.wav");
 
 		const atNewPath = { title: "Clip One", filePath: "Fixtures/A/Clip One.wav" };
 		expect(plugin.settings.currentEpisode).toMatchObject(atNewPath);
@@ -262,51 +277,58 @@ describe("a vault file PodNotes tracks that is renamed or moved", () => {
 		expect(saved.currentEpisode).toMatchObject(atNewPath);
 	});
 
-	it("takes over the name of another tracked local file, with a notice", async () => {
+	it("keeps two tracked local files apart when one is renamed to the other's name", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
+		const listed = [registered("Fixtures/Clip One.wav"), registered("Fixtures/Lead.wav")];
 		vaultPaths = ["Fixtures/Clip One.wav", "Fixtures/Lead.wav"];
 		await loadPlugin({
 			schemaVersion: 2,
-			downloadedEpisodes: {
-				"local file": [
-					{ ...registered("Fixtures/Clip One.wav"), size: 1 },
-					{ ...registered("Fixtures/Lead.wav"), size: 2 },
-				],
-			},
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: listed },
+			favorites: { ...DEFAULT_SETTINGS.favorites, episodes: listed },
+			downloadedEpisodes: { "local file": listed.map((e) => ({ ...e, size: 1 })) },
 		});
 
-		move("Fixtures/Lead.wav", "Archive/Clip One.wav");
+		await move("Fixtures/Lead.wav", "Archive/Clip One.wav");
 
-		const entry = { title: "Clip One", filePath: "Archive/Clip One.wav", size: 2 };
-		expect(get(downloadedEpisodes)["local file"]).toMatchObject([entry]);
-		expect(get(localFiles).episodes).toMatchObject([entry]);
-		expect(notice).toHaveBeenCalledWith(
-			'A local file named "Clip One" was already tracked at "Fixtures/Clip One.wav". It has been replaced by "Archive/Clip One.wav".',
-		);
+		const entries = [
+			{ title: "Clip One", filePath: "Fixtures/Clip One.wav" },
+			{ title: "Lead", filePath: "Archive/Clip One.wav" },
+		];
+		expect(get(downloadedEpisodes)["local file"]).toMatchObject(entries);
+		expect(get(localFiles).episodes).toMatchObject(entries);
+		expect(get(queue).episodes).toMatchObject(entries);
+		expect(get(favorites).episodes).toMatchObject(entries);
+		expect(notice).not.toHaveBeenCalled();
 	});
 
-	it.each([
-		["with it listed first", ["Fixtures/Clip One.wav", "Fixtures/Lead.wav"]],
-		["with it listed second", ["Fixtures/Lead.wav", "Fixtures/Clip One.wav"]],
-	])(
-		"takes over the queue and favorites entries of the tracked file whose name it takes, %s",
-		async (_, paths) => {
-			const listed = paths.map((path) => registered(path));
-			vaultPaths = ["Fixtures/Clip One.wav", "Fixtures/Lead.wav"];
-			await loadPlugin({
-				schemaVersion: 2,
-				queue: { ...DEFAULT_SETTINGS.queue, episodes: listed },
-				favorites: { ...DEFAULT_SETTINGS.favorites, episodes: listed },
-				downloadedEpisodes: { "local file": listed.map((e) => ({ ...e, size: 1 })) },
-			});
+	it("follows every file of a moved folder", async () => {
+		const listed = [registered("Fixtures/Clip One.wav"), registered("Fixtures/Lead.wav")];
+		vaultPaths = ["Fixtures/Clip One.wav", "Fixtures/Lead.wav"];
+		const plugin = await loadPlugin({
+			schemaVersion: 2,
+			currentEpisode: listed[1],
+			queue: { ...DEFAULT_SETTINGS.queue, episodes: listed },
+			downloadedEpisodes: { "local file": listed.map((e) => ({ ...e, size: 1 })) },
+		});
 
-			move("Fixtures/Lead.wav", "Archive/Clip One.wav");
+		vaultPaths = ["Archive/Clip One.wav", "Archive/Lead.wav"];
+		for (const listener of renameListeners) {
+			listener(Object.assign(new TFolder(), { path: "Archive" }), "Fixtures");
+			listener(vaultFile("Archive/Clip One.wav"), "Fixtures/Clip One.wav");
+			listener(vaultFile("Archive/Lead.wav"), "Fixtures/Lead.wav");
+		}
+		await Promise.resolve();
 
-			const entry = { title: "Clip One", filePath: "Archive/Clip One.wav" };
-			expect(get(queue).episodes).toMatchObject([entry]);
-			expect(get(favorites).episodes).toMatchObject([entry]);
-		},
-	);
+		const entries = [
+			{ title: "Clip One", filePath: "Archive/Clip One.wav" },
+			{ title: "Lead", filePath: "Archive/Lead.wav" },
+		];
+		expect(get(downloadedEpisodes)["local file"]).toMatchObject(entries);
+		expect(get(localFiles).episodes).toMatchObject(entries);
+		expect(get(queue).episodes).toMatchObject(entries);
+		expect(plugin.settings.currentEpisode).toMatchObject(entries[1]);
+		expect(get(plugin.player.state).episode).toMatchObject(entries[1]);
+	});
 });
 
 describe("a vault file PodNotes does not track that is renamed", () => {
@@ -324,7 +346,7 @@ describe("a vault file PodNotes does not track that is renamed", () => {
 		vi.mocked(plugin.saveData).mockClear();
 		const saveSettings = vi.spyOn(plugin, "saveSettings");
 
-		move("Notes/Daily.md", "Notes/Journal.md");
+		await move("Notes/Daily.md", "Notes/Journal.md");
 		await plugin.flushSaves();
 
 		expect(saveSettings).not.toHaveBeenCalled();

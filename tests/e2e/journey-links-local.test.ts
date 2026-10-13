@@ -310,7 +310,7 @@ describe("link and local file journeys", () => {
 		);
 	});
 
-	test("a playing local file plays on under its new name from where it was moved to", async () => {
+	test("a playing local file keeps its title and plays on from where it was moved to", async () => {
 		const context = getContext();
 		const { obsidian, sandbox } = context;
 		await seedLibrary(context, null);
@@ -340,12 +340,12 @@ describe("link and local file journeys", () => {
 		const after = await waitForPlayback(
 			obsidian,
 			(playback) =>
-				playback.episode?.title === "Renamed Journey" &&
+				playback.episode?.title === "Playing Journey" &&
 				decodeURIComponent(playback.media?.src ?? "").includes(movedPath) &&
 				playback.media?.paused === false,
-			"the moved file playing on under its new name",
+			"the moved file playing on under its title",
 		);
-		expect(after.episode).toEqual({ podcast: "local file", title: "Renamed Journey" });
+		expect(after.episode).toEqual({ podcast: "local file", title: "Playing Journey" });
 		expect(after.media?.seconds).toBeGreaterThanOrEqual(before.media?.seconds ?? Infinity);
 	});
 

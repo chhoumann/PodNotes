@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as obsidian from "obsidian";
 import { TFile } from "obsidian";
 import { get } from "svelte/store";
 import getContextMenuHandler from "./getContextMenuHandler";
@@ -227,6 +228,47 @@ describe("getContextMenuHandler — Play with PodNotes", () => {
 			mediaType: "video",
 		});
 		expect(doc.media.src).toBe("app://resource/Videos/lecture.mp4?1");
+	});
+
+	it("plays a file renamed after it was registered under the title it was registered under", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const file = audioFile("Audio/Intro.mp3");
+		const { workspace } = setupWorkspace([{}]);
+		const app = makeApp(workspace, file);
+		downloadedEpisodes.set({
+			"local file": [
+				{
+					title: "Clip One",
+					description: "",
+					content: "",
+					podcastName: "local file",
+					url: "[[Audio/Intro.mp3]]",
+					streamUrl: "app://resource/Audio/Intro.mp3?0",
+					filePath: "Audio/Intro.mp3",
+					size: 1024,
+				},
+			],
+		});
+		playedEpisodes.set({
+			"local file::Clip One": {
+				title: "Clip One",
+				podcastName: "local file",
+				time: 42,
+				duration: 600,
+				finished: false,
+			},
+		});
+
+		await playFile(app, workspace, file);
+
+		const atItsPath = {
+			title: "Clip One",
+			filePath: "Audio/Intro.mp3",
+			streamUrl: "app://resource/Audio/Intro.mp3?1",
+		};
+		expect(get(player.state)).toMatchObject({ episode: atItsPath, currentTime: 42 });
+		expect(get(downloadedEpisodes)["local file"]).toMatchObject([atItsPath]);
+		expect(notice).not.toHaveBeenCalled();
 	});
 
 	it("does not offer the item for non-media files", () => {
