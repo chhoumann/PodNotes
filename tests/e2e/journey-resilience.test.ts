@@ -575,6 +575,11 @@ describe("resilience journeys", () => {
 			current: storedEpisode(server, show, hostile),
 		});
 		const notePath = sandbox.path("Transcripts/Journey Hostile Captions/Hostile Episode.md");
+		expect(
+			await obsidian.dev.evalJson(
+				'[app.vault.getConfig("defaultViewMode"), app.vault.getConfig("livePreview")]',
+			),
+		).toEqual(["source", true]);
 		await obsidian.dev.evalJson(`(() => {
 			const beat = { last: performance.now(), max: 0 };
 			beat.timer = setInterval(() => {
