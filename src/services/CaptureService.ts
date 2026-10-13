@@ -112,7 +112,9 @@ export class CaptureService {
 	/** The focused editor, which covers canvas and embedded editors, else the last markdown one. */
 	private editorTarget(): MarkdownFileInfo | null {
 		const active = this.plugin.app.workspace.activeEditor;
-		return active?.editor ? active : this.lastMarkdownView();
+		const target = active?.editor ? active : this.lastMarkdownView();
+		// A note in Reading view keeps its hidden editor, where written text is lost.
+		return target instanceof MarkdownView && target.getMode() === "preview" ? null : target;
 	}
 
 	private lastMarkdownView(): MarkdownView | null {

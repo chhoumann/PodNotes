@@ -68,6 +68,10 @@ export class MarkdownView {
 	file: TFile | null = null;
 
 	constructor(public leaf: WorkspaceLeaf) {}
+
+	getMode(): "source" | "preview" {
+		return "source";
+	}
 }
 
 export class Modal {

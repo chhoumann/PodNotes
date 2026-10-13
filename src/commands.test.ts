@@ -242,6 +242,19 @@ describe("capture", () => {
 		expect(editor.getValue()).toBe("");
 	});
 
+	it("goes to the episode note when the last note is in Reading view", async () => {
+		const { plugin, openNote, focusPodNotes, read } = await loadPlugin(playing);
+		const { leaf, editor } = openNote("Journal.md", "Notes");
+		vi.spyOn(leaf.view as MarkdownView, "getMode").mockReturnValue("preview");
+
+		expect(await plugin.capture.timestamp()).toMatchObject({ destination: "note" });
+		focusPodNotes();
+		expect(await plugin.capture.timestamp()).toMatchObject({ destination: "note" });
+
+		expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34\n- 00:20:34\n");
+		expect(editor.getValue()).toBe("Notes");
+	});
+
 	it("creates the episode note from its template, then appends to it", async () => {
 		const { plugin, read } = await loadPlugin(playing);
 
