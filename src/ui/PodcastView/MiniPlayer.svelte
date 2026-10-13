@@ -3,6 +3,7 @@
 	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
+	import { formatMinutes } from "./episodeRow";
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
@@ -17,14 +18,9 @@
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
 	const remaining = $derived(Math.max(0, duration - elapsed));
 	const percent = $derived(duration > 0 ? (elapsed / duration) * 100 : 0);
-	const left = $derived(remaining > 0 ? ` · ${minutes(remaining)} left` : "");
+	const left = $derived(remaining > 0 ? ` · ${formatMinutes(remaining)} left` : "");
 	let failedArtworkUrl = $state("");
 	const id = $props.id();
-
-	function minutes(seconds: number): string {
-		const total = Math.max(1, Math.round(seconds / 60));
-		return total >= 60 ? `${Math.floor(total / 60)} h ${total % 60} min` : `${total} min`;
-	}
 
 	async function capture() {
 		const note = await captureTimestamp();

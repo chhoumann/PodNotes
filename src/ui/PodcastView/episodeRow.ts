@@ -9,7 +9,6 @@ export type Downloads = Readonly<Record<string, readonly DownloadedEpisode[]>>;
 export interface RowState {
 	readonly played: PlayedEpisodeMap;
 	readonly downloads: Downloads;
-	/** The player's episode, and whether it is playing. */
 	readonly now: Episode | undefined;
 	readonly playing: boolean;
 	readonly hasNote: boolean;

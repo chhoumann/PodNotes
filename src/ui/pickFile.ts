@@ -1,6 +1,5 @@
 import { Notice } from "obsidian";
 
-/** Asks for a file and hands over its text. */
 export function pickFile(
 	accept: string,
 	onContents: (contents: string) => void | Promise<void>,
