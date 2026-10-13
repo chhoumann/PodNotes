@@ -48,12 +48,6 @@ export function templateHasTag(template: string, tag: Lowercase<string>): boolea
 	);
 }
 
-/**
- * `value` with each private feed address this device knows, and an episode's own
- * credential-bearing feed, replaced by its placeholder. Templates read this copy,
- * because escaping, Markdown conversion and file-name stripping would disguise
- * an address from the matcher.
- */
 export function withoutPrivateFeedAddresses<T>(value: T): T {
 	const instance = get(plugin);
 	return redactPrivateFeedAddresses(
@@ -62,12 +56,8 @@ export function withoutPrivateFeedAddresses<T>(value: T): T {
 	);
 }
 
-/**
- * `feed` as notes may show it, with its own credential-bearing URL counted as an
- * address. Its placeholder names no feed, since the title may quote the URL.
- */
 function withoutFeedAddresses(feed: PodcastFeed): PodcastFeed {
-	return withoutPrivateFeedAddresses({ ...feed, feedUrl: feed.url });
+	return withoutPrivateFeedAddresses([feed, { feedUrl: feed.url }] as const)[0];
 }
 
 function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
@@ -311,8 +301,7 @@ export function NoteTemplateEngine(
 		liveEpisode,
 		context.chapters,
 	] as const);
-	// A placeholder made up for an unsaved feed names nothing, so such a feed gets no address.
-	const episode = { ...redacted, feedUrl: vaultSafeFeedUrl(liveEpisode.feedUrl) };
+	const episode = { ...redacted, feedUrl: liveEpisode.feedUrl };
 
 	const episodeUrl = resolveEpisodeUrl(episode);
 
@@ -372,7 +361,7 @@ export function NoteTemplateEngine(
 	// (which always describe the episode itself). See issue #163.
 	addTag("episodeurl", episodeUrl);
 	addTag("episodeartwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
-	addTag("feedurl", sanitizeUrlForTemplate(episode.feedUrl ?? ""));
+	addTag("feedurl", sanitizeUrlForTemplate(vaultSafeFeedUrl(episode.feedUrl) ?? ""));
 	const parentFeed = get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
 	addTag(
 		"feedartwork",

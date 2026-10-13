@@ -91,11 +91,6 @@ export function parsePrivateFeedPlaceholder(value: string): string | null {
 	}
 }
 
-/**
- * `url` as a request sends it, so the scheme and host in any case, with or
- * without a default port or a terminal dot, name the same feed. As given when
- * it is not a URL.
- */
 export function canonicalUrl(url: string): string {
 	const parsed = checkStringIsUrl(url);
 	if (!parsed) return url;
@@ -103,11 +98,6 @@ export function canonicalUrl(url: string): string {
 	return parsed.href;
 }
 
-/**
- * `address` unless it is a credential-bearing feed URL. A saved private feed's
- * episodes carry its placeholder, so such a URL belongs to a feed with no
- * placeholder on this device, and notes and links get no address for it.
- */
 export function vaultSafeFeedUrl(address: string | undefined): string | undefined {
 	return address && isCredentialBearingUrl(address) ? undefined : address;
 }
