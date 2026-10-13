@@ -83,7 +83,9 @@ export default defineConfig(({ mode }) => {
 				formats: ["cjs"],
 				fileName: () => "main.js",
 			},
-			target: "es2020",
+			// Saving settings already needs structuredClone (Chromium 98, Safari 15.4), and
+			// every engine that has it also runs ES2022 syntax such as private methods.
+			target: "es2022",
 			outDir,
 			emptyOutDir: true,
 			sourcemap: !isProd,
