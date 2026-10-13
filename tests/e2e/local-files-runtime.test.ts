@@ -8,7 +8,7 @@ import {
 	writeSilentWav,
 } from "./harness";
 
-import { click, revealInFileExplorer, ui } from "./journey/actions";
+import { click, revealInFileExplorer, showList, ui } from "./journey/actions";
 import { RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 type PodNotesData = Partial<IPodNotesSettings>;
@@ -60,11 +60,7 @@ describe("local files runtime", () => {
 					(data) => inDownloads(data) && inLocalFiles(data),
 					WAIT_OPTS,
 				);
-				await clickInPodNotesView(obsidian, 'button[aria-label="Podcast grid"]');
-				await clickInPodNotesView(
-					obsidian,
-					'button.playlist-card[aria-label="Local Files"]',
-				);
+				await showList(obsidian, "Local files");
 				await clickInPodNotesView(obsidian, `[aria-label="More options for ${title}"]`);
 				const removalMenu = await clickMenuItem(obsidian, "Remove from Local Files");
 				expect(removalMenu).not.toContain("Remove file");
@@ -177,8 +173,7 @@ describe("local files runtime", () => {
 		await openPodNotesView(obsidian);
 
 		try {
-			await clickInPodNotesView(obsidian, 'button[aria-label="Podcast grid"]');
-			await clickInPodNotesView(obsidian, 'button.playlist-card[aria-label="Local Files"]');
+			await showList(obsidian, "Local files");
 
 			await clickInPodNotesView(obsidian, `[aria-label="More options for ${kept}"]`);
 			await clickMenuItem(obsidian, "Remove file");

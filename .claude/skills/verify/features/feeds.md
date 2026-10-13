@@ -16,7 +16,7 @@ remove it again from Settings.
 
 - Open Settings (`Ctrl+,` or the gear), then select `PodNotes` under Community plugins.
 - Type or paste into `Search or enter feed URL...` under `Search Podcasts`.
-- In the PodNotes view, click the grid button, then the podcast's artwork.
+- In the PodNotes view, go Back to the Library, then click the podcast's artwork.
 
 ## Driving it with ui.mjs
 
@@ -29,8 +29,8 @@ Preconditions:
 - **Load the feed.** Run `UI fill 'input[placeholder="Search or enter feed URL..."]' "$FEED"`. A card titled `PodNotes Fixture`, with purple artwork and an `Add` button labelled `Add PodNotes Fixture podcast`, appears within about 1 s.
 - **Add it.** Run `UI click '[aria-label="Add PodNotes Fixture podcast"]'`. The button becomes `Remove PodNotes Fixture podcast`, and after about 2 s `data.json` `savedFeeds["PodNotes Fixture"].url` equals `$FEED`.
 - **Close Settings.** Run `UI click '.modal.mod-settings .modal-header-button'`.
-- **Browse.** Run `CLI command id=podnotes:podnotes-show-leaf`, `UI click '.podcast-view [aria-label="Podcast grid"]'`, `UI click '.podcast-view .podcast-card[aria-label="PodNotes Fixture"]'`. The header reads `PodNotes Fixture`, and the list shows `Fixture Episode 2` (`10 OCTOBER 2026`) above `Fixture Episode 1` (`09 OCTOBER 2026`).
-- **Remove it.** Reopen Settings > PodNotes with the search input empty, and run `UI click '[aria-label="Remove PodNotes Fixture podcast"]'`. `savedFeeds` no longer has it, and the grid shows `No saved podcasts.`.
+- **Browse.** Run `CLI command id=podnotes:podnotes-show-leaf`, then on the Library `UI click '.podcast-view .podcast-card[aria-label="PodNotes Fixture"]'`. The header reads `PodNotes Fixture`, and the list shows `Fixture Episode 2` (`10 OCTOBER 2026`) above `Fixture Episode 1` (`09 OCTOBER 2026`).
+- **Remove it.** Reopen Settings > PodNotes with the search input empty, and run `UI click '[aria-label="Remove PodNotes Fixture podcast"]'`. `savedFeeds` no longer has it. With nothing else in the library, the view shows `Add your first podcast`.
 - **Proof.** Run `npm run capture:e2e-obsidian -- screenshot .obsidian-e2e-artifacts/feeds/settings.png --modal` with the result card showing, then `npm run screenshot:e2e-obsidian -- .obsidian-e2e-artifacts/feeds/episodes.png` on the episode list, and save the `savedFeeds` read.
 
 ## Gotchas

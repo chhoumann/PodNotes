@@ -1,7 +1,7 @@
 import { Notice, TFile } from "obsidian";
 import type { ObsidianProtocolData } from "obsidian";
 import { get } from "svelte/store";
-import { localFiles, plugin, savedFeeds, viewState } from "./store";
+import { localFiles, plugin, savedFeeds } from "./store";
 import type { Episode } from "./types/Episode";
 import type { LocalEpisode } from "./types/LocalEpisode";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
@@ -13,7 +13,6 @@ import { findByGuid } from "./utility/findByGuid";
 import { isLocalFile } from "./utility/isLocalFile";
 import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 import { getEpisodeMediaType, getUnambiguousMediaTypeFromPath } from "./utility/mediaType";
-import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
 	guid?: string;
@@ -164,7 +163,6 @@ export default async function podNotesURIHandler(
 	if (episodeIsLoaded) {
 		latestRequest++;
 		if (!player.play(loaded, playOptions)) return;
-		viewState.set(ViewState.Player);
 		await revealPlayer?.();
 		return;
 	}
@@ -289,7 +287,6 @@ export default async function podNotesURIHandler(
 
 	latestRequest++;
 	if (!play(episode, playOptions)) return;
-	viewState.set(ViewState.Player);
 	await revealPlayer?.();
 }
 

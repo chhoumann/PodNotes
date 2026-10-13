@@ -103,7 +103,7 @@ function buildEpisodeLookup(episodes: Episode[]): Map<string, Episode> {
 	return lookup;
 }
 
-export function createPlayedEpisodePlaceholder(
+function createPlayedEpisodePlaceholder(
 	playedEpisode: Pick<PlayedEpisode, "title" | "podcastName">,
 ): Episode {
 	return {

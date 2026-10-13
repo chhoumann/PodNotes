@@ -58,6 +58,50 @@ if (typeof (globalThis as { activeDocument?: unknown }).activeDocument === "unde
 	});
 }
 
+// Obsidian points `activeWindow` at the focused window. Tests that open a second
+// window set it as Obsidian's focus listeners would.
+if (typeof (globalThis as { activeWindow?: unknown }).activeWindow === "undefined") {
+	(globalThis as { activeWindow?: Window }).activeWindow = window;
+}
+
+// Obsidian gives every node its window and lets an element follow a move to a
+// popout. jsdom has one window and no popouts.
+if (!("win" in Node.prototype)) {
+	Object.defineProperty(Node.prototype, "win", {
+		configurable: true,
+		get(this: Node) {
+			return this.ownerDocument?.defaultView ?? window;
+		},
+	});
+}
+
+if (!("onWindowMigrated" in HTMLElement.prototype)) {
+	(HTMLElement.prototype as unknown as { onWindowMigrated: () => () => void }).onWindowMigrated =
+		() => () => {};
+}
+
+// jsdom has no layout, so nothing resizes. tests/mocks/resizeObserver.ts reports widths.
+if (!("ResizeObserver" in window)) {
+	(window as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+		observe() {}
+		unobserve() {}
+		disconnect() {}
+	};
+}
+
+// jsdom has no `inert`. Browsers reflect it to the attribute.
+if (!("inert" in HTMLElement.prototype)) {
+	Object.defineProperty(HTMLElement.prototype, "inert", {
+		configurable: true,
+		get(this: HTMLElement) {
+			return this.hasAttribute("inert");
+		},
+		set(this: HTMLElement, inert: boolean) {
+			this.toggleAttribute("inert", inert);
+		},
+	});
+}
+
 if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};
 }

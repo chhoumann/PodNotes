@@ -20,6 +20,7 @@ import {
 	closeSettings,
 	listedEpisodes,
 	openPodNotesSettings,
+	showLibrary,
 	showPodNotes,
 	ui,
 } from "./journey/actions";
@@ -128,9 +129,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 		await expect
 			.poll(() => obsidian.dev.evalJson<Memory>(MEMORY), POLL)
 			.toMatchObject({ feed: true, playlist: true, progress: 1234 });
-		await obsidian.dev.evalJson(
-			`(() => { document.querySelector('.podcast-view [aria-label="Podcast grid"]')?.click(); return true; })()`,
-		);
+		await showLibrary(obsidian);
 		await expect
 			.poll(
 				() =>
@@ -433,7 +432,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 		]);
 		await showPodNotes(obsidian);
 		for (const title of [earlier.title, current.title]) {
-			await click(obsidian, ui.podcastGridTab);
+			await showLibrary(obsidian);
 			await click(obsidian, ui.podcastCard(title));
 			await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length > 0, {
 				timeoutMs: 15_000,

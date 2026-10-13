@@ -263,32 +263,20 @@ describe("marketplace review runtime paths", () => {
 			);
 			await evalJsonAsync<boolean>(
 				obsidian,
-				`(() => {
-					const gridButton = document.querySelector(
-						'.workspace-leaf.mod-active .podcast-view button[aria-label="Podcast grid"]',
-					);
-					if (!(gridButton instanceof HTMLButtonElement)) {
-						throw new Error("Podcast grid navigation button not found.");
+				`(async () => {
+					const view = document.querySelector(".workspace-leaf.mod-active .podcast-view");
+					if (!view) throw new Error("PodNotes view not found.");
+					const localFiles = () =>
+						[...view.querySelectorAll("button.pn-navitem")].find(
+							(item) => item.querySelector(".lbl")?.textContent.trim() === "Local files",
+						);
+					for (let step = 0; step < 5 && !localFiles(); step++) {
+						view.querySelector("button.pn-back")?.click();
+						await new Promise((resolve) => setTimeout(resolve, 50));
 					}
-					gridButton.click();
-					return true;
-				})()`,
-			);
-			await obsidian.waitFor(
-				async () =>
-					await obsidian.dev.evalJson<boolean>(
-						"Boolean(document.querySelector('.workspace-leaf.mod-active .podcast-view button.playlist-card[aria-label=\"Local Files\"]'))",
-					),
-				WAIT_OPTS,
-			);
-			await evalJsonAsync<boolean>(
-				obsidian,
-				`(() => {
-					const localFiles = document.querySelector(
-						'.workspace-leaf.mod-active .podcast-view button.playlist-card[aria-label="Local Files"]',
-					);
-					if (!(localFiles instanceof HTMLButtonElement)) throw new Error("Local Files card not found.");
-					localFiles.click();
+					const item = localFiles();
+					if (!(item instanceof HTMLButtonElement)) throw new Error("Local files not found.");
+					item.click();
 					return true;
 				})()`,
 			);

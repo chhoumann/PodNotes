@@ -12,6 +12,7 @@ import {
 	openPodNotesSettings,
 	reloadObsidian,
 	runFromPalette,
+	showLibrary,
 	showPodNotes,
 	ui,
 	waitUntilShown,
@@ -110,7 +111,7 @@ function frontmatter(note: string): string[] {
 async function playFromList(show: FixtureFeed, title: string): Promise<void> {
 	const { obsidian } = getContext();
 	await showPodNotes(obsidian);
-	await click(obsidian, ui.podcastGridTab);
+	await showLibrary(obsidian);
 	await click(obsidian, ui.podcastCard(show.title));
 	await click(obsidian, ui.episode(title));
 	await waitForPlayback(
@@ -277,7 +278,7 @@ describe("episode note and capture journeys", () => {
 		await click(obsidian, ui.settingControl("Clear cached feeds", "button"));
 		await closeSettings(obsidian);
 		await dismissNotices(obsidian);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(show.title));
 		await waitUntilShown(obsidian, ui.episode(RETITLED));
 
@@ -381,7 +382,7 @@ describe("episode note and capture journeys", () => {
 		const betaNote = notePath(show, beta.title);
 
 		await showPodNotes(obsidian);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(show.title));
 		await click(obsidian, ui.episodeMenu(alpha.title));
 		await click(obsidian, ui.menuItem("Create Note"));
@@ -421,7 +422,7 @@ describe("episode note and capture journeys", () => {
 		const feedUrl = server.feedUrl(show);
 
 		await showPodNotes(obsidian);
-		await click(obsidian, ui.podcastGridTab);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(show.title));
 		await click(obsidian, ui.episodeMenu(ORIGINAL.title));
 		await click(obsidian, ui.menuItem("Create Note"));

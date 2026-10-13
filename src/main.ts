@@ -18,6 +18,7 @@ import type { IAPI } from "src/API/IAPI";
 import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
+import { Navigation } from "src/ui/PodcastView/Navigation";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import type { IPodNotes } from "./types/IPodNotes";
 import type PartialAppExtension from "./global";
@@ -26,7 +27,7 @@ import getContextMenuHandler from "./getContextMenuHandler";
 import getVaultRenameHandler from "./getVaultRenameHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
 import { CaptureService } from "./services/CaptureService";
-import type { Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
 import { bindMediaSession } from "./player/mediaSession";
 import {
@@ -99,6 +100,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public player!: PlayerController;
 	public feeds!: FeedRepository;
 	public capture!: CaptureService;
+	public navigation!: Navigation;
 
 	private views = new Set<MainView>();
 
@@ -180,7 +182,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		// Keep the Local Files playlist in sync with downloaded episodes (issue #176).
 		// downloadedEpisodes is the authoritative offline set, so mirror it into the
-		// localFiles playlist that the Podcast grid renders. Svelte's immediate-fire
+		// localFiles playlist that the Local files page renders. Svelte's immediate-fire
 		// backfills already-downloaded episodes on load; later changes keep it current.
 		this.localFilesMirrorUnsubscribe = downloadedEpisodes.subscribe((downloaded) =>
 			localFiles.syncWithDownloaded(downloaded),
@@ -195,6 +197,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
+		this.navigation = new Navigation();
 		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {
 			const view = new MainView(leaf, this);
 			this.views.add(view);
@@ -222,7 +225,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.app.workspace.onLayoutReady(this.onLayoutReady.bind(this));
 
 		this.registerObsidianProtocolHandler("podnotes", (action) =>
-			podNotesURIHandler(action, () => this.activateView()),
+			podNotesURIHandler(action, () => this.showPlayer()),
 		);
 
 		this.registerEvent(getContextMenuHandler(this.app));
@@ -308,6 +311,20 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		if (leaf) {
 			await workspace.revealLeaf(leaf);
 		}
+	}
+
+	/**
+	 * Reveals the view, with the full player open when an episode is loaded. Works
+	 * while no view exists.
+	 */
+	async showPlayer(): Promise<void> {
+		if (get(this.player.state).status !== "empty") this.navigation.expand();
+		await this.activateView();
+	}
+
+	openSettingsTab(): void {
+		this.app.setting.open();
+		this.app.setting.openTabById(this.manifest.id);
 	}
 
 	shouldMountPodcastView(): boolean {

@@ -46,28 +46,56 @@ function byCss(name: string, selector: string, text?: string): UiTarget {
 
 const PLAYER_VIEW = `.workspace-leaf-content[data-type="${VIEW_TYPE}"] .podcast-view`;
 
+function navItem(name: string, nav: string, label: string): UiTarget {
+	return {
+		name,
+		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} ${nav} button.pn-navitem`)})].filter((el) => el.querySelector(".lbl")?.textContent.trim() === ${q(label)})`,
+	};
+}
+
 export const ui = {
-	podcastGridTab: byCss("Podcast grid tab", `${PLAYER_VIEW} button[aria-label="Podcast grid"]`),
-	episodeListTab: byCss("Episode list tab", `${PLAYER_VIEW} button[aria-label="Episode list"]`),
-	playerTab: byCss("Player tab", `${PLAYER_VIEW} button[aria-label="Player"]`),
+	firstRun: byCss("first run", `${PLAYER_VIEW} .pn-first-run h1`, "Add your first podcast"),
+	firstRunSettings: byCss(
+		"first run settings button",
+		`${PLAYER_VIEW} .pn-first-run button[aria-label="PodNotes settings"]`,
+	),
+	libraryHead: byCss("Library page", `${PLAYER_VIEW} h1.pn-head-title`, "Library"),
+	pageTitle: (title: string) =>
+		byCss(`${title} page`, `${PLAYER_VIEW} :is(h1.pn-head-title, .pn-title h1)`, title),
+	back: byCss("Back button", `${PLAYER_VIEW} button.pn-back`),
+	backTo: (label: string) =>
+		byCss(
+			`Back to ${label}`,
+			`${PLAYER_VIEW} button.pn-back[aria-label=${q(`Back to ${label}`)}]`,
+		),
+	listRow: (label: string) => navItem(`Library row ${label}`, ".pn-scroll > nav.pn-nav", label),
+	rail: byCss("rail", `${PLAYER_VIEW} nav.pn-rail`),
+	railItem: (label: string) => navItem(`rail item ${label}`, "nav.pn-rail", label),
+	miniPlayer: byCss("mini player", `${PLAYER_VIEW} section.pn-mini`),
+	openPlayer: byCss("mini player", `${PLAYER_VIEW} section.pn-mini button.pn-mini-open`),
+	openPlayerFor: (title: string) =>
+		byCss(
+			`mini player of ${title}`,
+			`${PLAYER_VIEW} section.pn-mini button[aria-label=${q(`Open player: ${title}`)}]`,
+		),
+	miniPlay: byCss("mini player Play", `${PLAYER_VIEW} section.pn-mini button[aria-label="Play"]`),
+	miniPlayback: byCss(
+		"mini player play/pause",
+		`${PLAYER_VIEW} section.pn-mini :is(button[aria-label="Play"], button[aria-label="Pause"])`,
+	),
+	fullPlayer: byCss("full player", `${PLAYER_VIEW} section.pn-player`),
+	collapsePlayer: byCss(
+		"Collapse player",
+		`${PLAYER_VIEW} section.pn-player button[aria-label="Collapse player"]`,
+	),
 	podcastCard: (title: string): UiTarget => ({
 		name: `podcast card ${title}`,
 		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-grid button`)})].filter((button) => (button.getAttribute("aria-label") ?? button.querySelector("img")?.alt ?? button.textContent.trim()) === ${q(title)})`,
 	}),
-	playlistCard: (name: string) =>
-		byCss(
-			`playlist card ${name}`,
-			`${PLAYER_VIEW} button.playlist-card[aria-label=${q(name)}]`,
-		),
 	episode: (title: string): UiTarget => ({
 		name: `episode ${title}`,
 		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-episode-item`)})].filter((el) => !el.closest(".episode-player") && el.querySelector(".episode-item-title")?.textContent.trim() === ${q(title)})`,
 	}),
-	backToLatestEpisodes: byCss(
-		"Latest Episodes back button",
-		`${PLAYER_VIEW} button.go-back`,
-		"Latest Episodes",
-	),
 	feedLoading: byCss("feed loading banner", `${PLAYER_VIEW} .feed-loading-banner`),
 	episodeLoading: byCss("episode list loading", `${PLAYER_VIEW} .episode-list-loading`),
 	refreshEpisodes: byCss("Refresh episodes", `${PLAYER_VIEW} [aria-label="Refresh episodes"]`),
@@ -122,6 +150,7 @@ export const ui = {
 		name: `palette command PodNotes: ${name}`,
 		elements: `[...document.querySelectorAll(".prompt .suggestion-item")].filter((el) => el.querySelector(".suggestion-prefix")?.textContent === "PodNotes" && el.querySelector(".suggestion-title")?.textContent === ${q(`PodNotes${name}`)})`,
 	}),
+	pageScroller: byCss("page scroller", `${PLAYER_VIEW} .pn-scroll`),
 } as const;
 
 type Located =
@@ -213,6 +242,41 @@ export async function typeInto(
 	await cdp(obsidian, "Input.insertText", { text });
 }
 
+export async function pressEscape(obsidian: ObsidianClient): Promise<void> {
+	const escape = { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 };
+	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...escape });
+	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...escape });
+}
+
+/** Where the page's scroller is scrolled to, in whole pixels. */
+export async function pageScrollTop(obsidian: ObsidianClient): Promise<number> {
+	return await obsidian.dev.evalJson<number>(
+		`Math.round(document.querySelector(${q(`${PLAYER_VIEW} .pn-scroll`)})?.scrollTop ?? -1)`,
+	);
+}
+
+/** Turns the mouse wheel over the page, as a user scrolls, and resolves to where it came to rest. */
+export async function scrollPage(obsidian: ObsidianClient, deltaY: number): Promise<number> {
+	const { x, y } = await settledPoint(obsidian, ui.pageScroller);
+	await cdp(obsidian, "Input.dispatchMouseEvent", {
+		type: "mouseWheel",
+		x,
+		y,
+		deltaX: 0,
+		deltaY,
+	});
+	let last = Number.NaN;
+	return await obsidian.waitFor(
+		async () => {
+			const top = await pageScrollTop(obsidian);
+			const settled = top > 0 && top === last;
+			last = top;
+			return settled ? top : false;
+		},
+		{ timeoutMs: 5_000, intervalMs: 150, message: "the page scrolled and came to rest" },
+	);
+}
+
 export async function isShown(obsidian: ObsidianClient, target: UiTarget): Promise<boolean> {
 	return (
 		(await obsidian.dev.evalJson<number>(
@@ -279,6 +343,22 @@ export async function runCommand(obsidian: ObsidianClient, id: string): Promise<
 export async function showPodNotes(obsidian: ObsidianClient): Promise<void> {
 	await runCommand(obsidian, `${PLUGIN_ID}:podnotes-show-leaf`);
 	await waitUntilShown(obsidian, ui.podcastViewport);
+}
+
+/** Goes to the Library as a user does: closes the full player, then Back until the Library shows. */
+export async function showLibrary(obsidian: ObsidianClient): Promise<void> {
+	if (await isShown(obsidian, ui.fullPlayer)) await click(obsidian, ui.collapsePlayer);
+	for (let step = 0; step < 5 && !(await isShown(obsidian, ui.libraryHead)); step++) {
+		await click(obsidian, ui.back);
+	}
+	await waitUntilShown(obsidian, ui.libraryHead);
+}
+
+/** Opens a list from the Library's rows: Latest episodes, Queue, Playlists, Local files or Played. */
+export async function showList(obsidian: ObsidianClient, label: string): Promise<void> {
+	await showLibrary(obsidian);
+	await click(obsidian, ui.listRow(label));
+	await waitUntilShown(obsidian, ui.pageTitle(label));
 }
 
 export async function closePodNotes(obsidian: ObsidianClient): Promise<void> {

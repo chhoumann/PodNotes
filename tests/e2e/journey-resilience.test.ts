@@ -16,6 +16,8 @@ import {
 	restartObsidian,
 	runCommand,
 	setMobileEmulation,
+	showLibrary,
+	showList,
 	shownText,
 	showPodNotes,
 	typeInto,
@@ -333,6 +335,7 @@ describe("resilience journeys", () => {
 			});
 
 			await showPodNotes(obsidian);
+			await showLibrary(obsidian);
 			await click(obsidian, ui.podcastCard("Journey Offline"));
 			await obsidian.waitFor(
 				async () =>
@@ -344,11 +347,11 @@ describe("resilience journeys", () => {
 					message: "the downloaded episode listed offline after loading settles",
 				},
 			);
-			await click(obsidian, ui.backToLatestEpisodes);
+			await showList(obsidian, "Latest episodes");
 			await obsidian.waitFor(
 				async () =>
 					(await listedEpisodes(obsidian)).length === 2 &&
-					!(await isShown(obsidian, ui.backToLatestEpisodes)) &&
+					(await isShown(obsidian, ui.pageTitle("Latest episodes"))) &&
 					!(await isShown(obsidian, ui.feedLoading)) &&
 					!(await isShown(obsidian, ui.episodeLoading)),
 				{
@@ -375,7 +378,7 @@ describe("resilience journeys", () => {
 			expect(advanced.media?.src).toBeTruthy();
 			expect(advanced.media?.src.startsWith("http")).toBe(false);
 
-			await click(obsidian, ui.podcastGridTab);
+			await showLibrary(obsidian);
 			await click(obsidian, ui.podcastCard("Journey Never Loaded"));
 			await obsidian.waitFor(
 				async () =>
