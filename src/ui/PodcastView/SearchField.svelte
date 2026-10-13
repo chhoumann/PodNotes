@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { icon } from "../obsidian/icon";
+	import { observeWidth } from "./layout";
 
 	let {
 		value,
@@ -32,8 +33,14 @@
 		oncompositionend={(event) => oninput(event.currentTarget.value)}
 		{@attach (el) => {
 			if (!autofocus) return;
-			el.focus();
-			el.setSelectionRange(el.value.length, el.value.length);
+			// A view mounts before Obsidian reveals its leaf, and a hidden field cannot take focus.
+			let shown = false;
+			return observeWidth((width) => {
+				if (shown || width === 0) return;
+				shown = true;
+				el.focus();
+				el.setSelectionRange(el.value.length, el.value.length);
+			})(el);
 		}}
 	/>
 	{#if value}
