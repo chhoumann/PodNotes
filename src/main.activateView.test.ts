@@ -272,6 +272,7 @@ describe("PodNotes onload wiring (#55)", () => {
 					listSecrets: vi.fn(() => []),
 				},
 				vault: {
+					on: vi.fn(() => ({})),
 					adapter: {
 						exists: vi.fn(async () => true),
 						read: vi.fn(async () =>

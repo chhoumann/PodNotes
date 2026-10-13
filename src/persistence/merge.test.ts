@@ -345,6 +345,89 @@ describe("threeWayMergeSettings", () => {
 		expect(merged.localFiles.episodes).toEqual([download("Ep 1", "U", "P1", 2)]);
 	});
 
+	describe("a local file renamed on a device", () => {
+		/** A document as `device` writes it while it tracks "Clip One" at `Fixtures/<name>.wav`. */
+		const tracking = (name: string, progress: PlayedEpisode, device = "a"): Data => {
+			const doc = data();
+			const entry = () => ({
+				...episode("Clip One", "local file"),
+				url: `[[${name}.wav]]`,
+				streamUrl: `app://${device}/Fixtures/${name}.wav`,
+				filePath: `Fixtures/${name}.wav`,
+				size: 1,
+			});
+			doc.downloadedEpisodes = { "local file": [entry()] };
+			doc.localFiles.episodes = [entry()];
+			doc.queue.episodes = [entry()];
+			doc.playedEpisodes = { "local file::Clip One": progress };
+			return doc;
+		};
+		const at = (time: number, finished = false): PlayedEpisode => ({
+			title: "Clip One",
+			podcastName: "local file",
+			time,
+			duration: 600,
+			finished,
+		});
+		const expectFilesOf = (merged: Data, renamed: Data) => {
+			expect(merged.downloadedEpisodes).toEqual(renamed.downloadedEpisodes);
+			expect(merged.localFiles.episodes).toEqual(renamed.localFiles.episodes);
+			expect(merged.queue.episodes).toEqual(renamed.queue.episodes);
+		};
+
+		it("keeps this device's new path and the progress another device saved", () => {
+			const local = tracking("Intro", at(10));
+
+			const merged = threeWayMergeSettings(
+				tracking("Clip One", at(10)),
+				local,
+				tracking("Clip One", at(42)),
+			);
+
+			expectFilesOf(merged, local);
+			expect(merged.playedEpisodes).toEqual({ "local file::Clip One": at(42) });
+		});
+
+		it("keeps another device's new path and the progress this device saved", () => {
+			const disk = tracking("Intro", at(10));
+
+			const merged = threeWayMergeSettings(
+				tracking("Clip One", at(10)),
+				tracking("Clip One", at(42)),
+				disk,
+			);
+
+			expectFilesOf(merged, disk);
+			expect(merged.playedEpisodes).toEqual({ "local file::Clip One": at(42) });
+		});
+
+		it("keeps this device's new path and the finished marker another device saved", () => {
+			const local = tracking("Intro", at(10));
+
+			const merged = threeWayMergeSettings(
+				tracking("Clip One", at(10)),
+				local,
+				tracking("Clip One", at(600, true)),
+			);
+
+			expectFilesOf(merged, local);
+			expect(merged.playedEpisodes).toEqual({ "local file::Clip One": at(600, true) });
+		});
+
+		it("keeps one entry at the new path when both devices applied the same rename", () => {
+			const local = tracking("Intro", at(42));
+
+			const merged = threeWayMergeSettings(
+				tracking("Clip One", at(42)),
+				local,
+				tracking("Intro", at(42), "b"),
+			);
+
+			expectFilesOf(merged, local);
+			expect(merged.playedEpisodes).toEqual({ "local file::Clip One": at(42) });
+		});
+	});
+
 	it("never marks a file this device registered as one PodNotes downloaded because another device downloaded the episode", () => {
 		const base = data();
 		const local = structuredClone(base);
