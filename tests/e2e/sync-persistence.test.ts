@@ -18,6 +18,7 @@ import {
 	assertNoRuntimeErrors,
 	click,
 	closeSettings,
+	isShown,
 	listedEpisodes,
 	openPodNotesSettings,
 	showLibrary,
@@ -130,15 +131,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			.poll(() => obsidian.dev.evalJson<Memory>(MEMORY), POLL)
 			.toMatchObject({ feed: true, playlist: true, progress: 1234 });
 		await showLibrary(obsidian);
-		await expect
-			.poll(
-				() =>
-					obsidian.dev.evalJson<boolean>(
-						`Boolean(document.querySelector('.podcast-view .podcast-card[aria-label="Synced Feed"]'))`,
-					),
-				POLL,
-			)
-			.toBe(true);
+		await expect.poll(() => isShown(obsidian, ui.podcastCard("Synced Feed")), POLL).toBe(true);
 
 		await setVolume(obsidian, 0.42);
 		const disk = await plugin.waitForData<PodNotesData>(

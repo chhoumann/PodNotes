@@ -46,7 +46,7 @@ describe("mobile journeys", () => {
 		await waitUntilShown(obsidian, ui.firstRun);
 		onTestFinished(() => closeSettings(obsidian));
 		await click(obsidian, ui.firstRunSettings);
-		await waitUntilShown(obsidian, ui.podcastSearch);
+		await waitUntilShown(obsidian, ui.settingHeading("Playlists"));
 	}, 120_000);
 
 	test("J-EDGE-13 a private feed URL moved to SecretStorage on a mobile start leaves no copy in the old feed cache", async () => {

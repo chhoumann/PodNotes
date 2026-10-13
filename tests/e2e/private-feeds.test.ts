@@ -4,13 +4,15 @@ import { SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	click,
-	closeSettings,
+	isShown,
 	notices,
-	openPodNotesSettings,
 	runCommand,
+	showAddPodcast,
+	showLibrary,
 	showPodNotes,
 	typeInto,
 	ui,
+	waitUntilShown,
 } from "./journey/actions";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import {
@@ -57,10 +59,10 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 	const placeholder = "podnotes-private-feed:PRIV3%20Supercast";
 	onTestFinished(async () => {
 		await closeFeedAddressDialog(obsidian);
-		await closeSettings(obsidian);
 	});
 
-	await openPodNotesSettings(obsidian);
+	await showPodNotes(obsidian);
+	await showAddPodcast(obsidian);
 	await typeInto(obsidian, ui.podcastSearch, address);
 	await click(obsidian, ui.addPodcast(show.title));
 	await waitForLibrary(
@@ -80,10 +82,7 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 	);
 	expect(saved.url).toBe(placeholder);
 	expect(await secret(saved.urlSecretId)).toBe(address);
-	await closeSettings(obsidian);
 
-	await showPodNotes(obsidian);
-	await click(obsidian, ui.podcastCard(show.title));
 	await click(obsidian, ui.episode(episode.title));
 	await waitForPlayback(
 		obsidian,
@@ -114,11 +113,15 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 	);
 	await plugin.reload(RELOAD_OPTIONS);
 	const fetches = server.requests().filter((path) => path === feedPath).length;
-	await openPodNotesSettings(obsidian);
-	await click(obsidian, {
-		name: "Set feed address",
-		elements: `[...document.querySelectorAll(${JSON.stringify(`button[aria-label="Set feed address for ${show.title}"]`)})]`,
-	});
+	await showPodNotes(obsidian);
+	await showLibrary(obsidian);
+	await click(obsidian, ui.podcastCard(show.title));
+	await waitUntilShown(obsidian, ui.episode(episode.title));
+	// The cached copy shows until a load needs the address this device no longer has.
+	await click(obsidian, ui.refreshEpisodes);
+	await waitUntilShown(obsidian, ui.feedError);
+	expect(await isShown(obsidian, ui.feedErrorAction("Retry"))).toBe(false);
+	await click(obsidian, ui.feedErrorAction("Set feed address"));
 	const dialog = ".modal-container:not(:has(.mod-settings))";
 	await typeInto(
 		obsidian,
@@ -137,6 +140,10 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 		() => server.requests().filter((path) => path === feedPath).length > fetches,
 		{ timeoutMs: 10_000, message: "the feed fetched again" },
 	);
+	await obsidian.waitFor(async () => !(await isShown(obsidian, ui.feedError)), {
+		timeoutMs: 10_000,
+		message: "the banner gone once the feed loads",
+	});
 	expect((await readLibrary(plugin)).subscriptions).toEqual([
 		{ title: show.title, url: placeholder },
 	]);
@@ -181,13 +188,11 @@ test.each(["invalid", "public", "private"])(
 		}, RELOAD_OPTIONS);
 		onTestFinished(async () => {
 			await closeFeedAddressDialog(obsidian);
-			await closeSettings(obsidian);
 		});
-		await openPodNotesSettings(obsidian);
-		await click(obsidian, {
-			name: "Set feed address",
-			elements: `[...document.querySelectorAll(${JSON.stringify('button[aria-label="Set feed address for Private"]')})]`,
-		});
+		await showPodNotes(obsidian);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.failedPodcastCard("Private"), { button: "right" });
+		await click(obsidian, ui.menuItem("Set feed address"));
 		await typeInto(
 			obsidian,
 			{

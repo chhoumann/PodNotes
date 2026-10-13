@@ -41,7 +41,7 @@ const FEED: FixtureFeed = {
 };
 
 /** Enough podcasts that the Library scrolls. */
-const SHELF: FixtureFeed[] = Array.from({ length: 11 }, (_, index) => ({
+const SHELF: FixtureFeed[] = Array.from({ length: 23 }, (_, index) => ({
 	title: `Shell Shelf ${index + 1}`,
 	slug: `shelf-${index + 1}`,
 	artwork: true,

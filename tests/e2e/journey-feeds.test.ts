@@ -5,10 +5,13 @@ import {
 	click,
 	closePodNotes,
 	closeSettings,
+	feedsLoading,
 	isShown,
 	listedEpisodes,
 	notices,
 	openPodNotesSettings,
+	removePodcast,
+	showAddPodcast,
 	showLibrary,
 	showList,
 	shownText,
@@ -66,12 +69,13 @@ function feed(title: string, slug: string, episodeTitles: string[], artwork = tr
 const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title);
 
 describe("feed journeys", () => {
-	test("J-FEED-01 searching Settings and clicking Add subscribes to the podcast for good", async () => {
+	test("J-FEED-01 searching Add podcast and tapping a result subscribes to the podcast for good", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
+		const existing = feed("Journey Followed", "followed", ["Followed Episode"]);
 		const show = feed("Journey Search Show", "search", ["Search Show Pilot"]);
-		const server = await serve(show);
-		await seedLibrary(context, server);
+		const server = await serve(existing, show);
+		await seedLibrary(context, server, { subscriptions: [existing] });
 		await installItunesStub(obsidian, [
 			{
 				collectionName: "Journey Search Show",
@@ -81,25 +85,30 @@ describe("feed journeys", () => {
 			},
 		]);
 		onTestFinished(() => removeItunesStub(obsidian));
-		onTestFinished(() => closeSettings(obsidian));
 
-		await openPodNotesSettings(obsidian);
+		await showPodNotes(obsidian);
+		await showAddPodcast(obsidian);
 		await typeInto(obsidian, ui.podcastSearch, "Journey Search");
 		await click(obsidian, ui.addPodcast("Journey Search Show"));
 
-		await waitForLibrary(
+		await waitUntilShown(obsidian, ui.episode("Search Show Pilot"));
+		expect(await shownText(obsidian)).toContain("Journey Search Show");
+		const expected = [
+			{ title: "Journey Followed", url: server.feedUrl(existing) },
+			{ title: "Journey Search Show", url: server.feedUrl(show) },
+		];
+		const saved = await waitForLibrary(
 			plugin,
-			(library) => library.subscriptions.length === 1,
+			(library) => library.subscriptions.length === 2,
 			"the added podcast saved",
 		);
+		expect([...saved.subscriptions].sort(byTitle)).toEqual(expected);
 		expect(await itunesSearchTerms(obsidian)).toEqual(["Journey Search"]);
-		await closeSettings(obsidian);
 
 		await plugin.reload(RELOAD_OPTIONS);
-		expect((await readLibrary(plugin)).subscriptions).toEqual([
-			{ title: "Journey Search Show", url: server.feedUrl(show) },
-		]);
+		expect([...(await readLibrary(plugin)).subscriptions].sort(byTitle)).toEqual(expected);
 		await showPodNotes(obsidian);
+		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard("Journey Search Show"));
 		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length > 0, {
 			timeoutMs: 15_000,
@@ -250,11 +259,9 @@ describe("feed journeys", () => {
 			message: "the empty channel finished loading",
 		});
 		expect(await listedEpisodes(obsidian)).toEqual([]);
-		expect(await shownText(obsidian)).toContain("No episodes found.");
+		expect(await isShown(obsidian, ui.noEpisodes)).toBe(true);
 		expect(server.requests()).toContain("/empty/feed.xml");
-		expect(await notices(obsidian)).not.toContain(
-			"Could not load episodes for Journey Empty. Check your connection and try again.",
-		);
+		expect(await isShown(obsidian, ui.feedError), "an empty feed is no failure").toBe(false);
 	});
 
 	test("J-EDGE-05: a feed episode without pubDate still appears in the episode list (#378)", async () => {
@@ -365,7 +372,7 @@ describe("feed journeys", () => {
 				message: "Alpha's delayed response to update the cache",
 			},
 		);
-		await obsidian.waitFor(async () => !(await shownText(obsidian)).includes("Updating"), {
+		await obsidian.waitFor(async () => !(await feedsLoading(obsidian)), {
 			timeoutMs: 15_000,
 			message: "the delayed refresh to settle on Beta",
 		});
@@ -395,8 +402,7 @@ describe("feed journeys", () => {
 		);
 		await obsidian.waitFor(
 			async () =>
-				(await listedEpisodes(obsidian)).length === 4 &&
-				!(await shownText(obsidian)).includes("Updating"),
+				(await listedEpisodes(obsidian)).length === 4 && !(await feedsLoading(obsidian)),
 			{
 				timeoutMs: 15_000,
 				message: "Latest Episodes after the delayed refresh",
@@ -416,7 +422,9 @@ describe("feed journeys", () => {
 		const { obsidian, plugin } = context;
 		const keep = feed("Journey Keep", "keep", ["Keep One"]);
 		const drop = feed("Journey Drop", "drop", ["Drop One"]);
-		await seedLibrary(context, await serve(keep, drop), { subscriptions: [keep, drop] });
+
+		const server = await serve(keep, drop);
+		await seedLibrary(context, server, { subscriptions: [keep, drop] });
 
 		await showPodNotes(obsidian);
 		await click(obsidian, ui.podcastCard(keep.title));
@@ -426,21 +434,21 @@ describe("feed journeys", () => {
 			message: "both podcasts in Latest Episodes",
 		});
 		expect(await feedCacheHolds(obsidian, "Drop One")).toBe(true);
+		const dropPath = new URL(server.feedUrl(drop)).pathname;
+		const dropRequests = server.requests().filter((path) => path === dropPath).length;
 
-		await openPodNotesSettings(obsidian);
-		await click(obsidian, ui.removePodcast(drop.title));
+		await removePodcast(obsidian, drop.title);
 		await waitForLibrary(
 			plugin,
 			(library) => library.subscriptions.length === 1,
 			"the removed podcast unsaved",
 		);
-		await closeSettings(obsidian);
-
-		expect(await listedEpisodes(obsidian)).toEqual(["Keep One"]);
 		expect(await feedCacheHolds(obsidian, "Drop One")).toBe(false);
-		await showLibrary(obsidian);
 		expect(await isShown(obsidian, ui.podcastCard(keep.title))).toBe(true);
-		expect(await isShown(obsidian, ui.podcastCard(drop.title))).toBe(false);
+
+		await showList(obsidian, "Latest episodes");
+		expect(await listedEpisodes(obsidian)).toEqual(["Keep One"]);
+		expect(server.requests().filter((path) => path === dropPath)).toHaveLength(dropRequests);
 	});
 
 	test("two saved podcasts sharing one feed URL each keep their own card, episodes and Remove", async () => {
@@ -467,14 +475,12 @@ describe("feed journeys", () => {
 			expect(await shownText(obsidian)).toContain(title);
 		}
 
-		await openPodNotesSettings(obsidian);
-		await click(obsidian, ui.removePodcast("Journey Shared Alias"));
+		await removePodcast(obsidian, "Journey Shared Alias");
 		await waitForLibrary(
 			plugin,
 			(library) => library.subscriptions.length === 1,
 			"the alias unsaved",
 		);
-		await closeSettings(obsidian);
 		expect((await readLibrary(plugin)).subscriptions.map((entry) => entry.title)).toEqual([
 			show.title,
 		]);
@@ -532,7 +538,7 @@ describe("feed journeys", () => {
 			"the toString episode downloaded",
 		);
 		await click(obsidian, ui.episode("To String Episode"), { button: "right" });
-		await click(obsidian, ui.menuItem("Add to Queue"));
+		await click(obsidian, ui.menuItem("Add to queue"));
 		await waitForLibrary(
 			plugin,
 			(library) => library.queue.includes("To String Episode"),

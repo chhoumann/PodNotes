@@ -42,11 +42,10 @@ describe("marketplace review runtime paths", () => {
 			`);
 
 			expect(initial.definitionCount).toBe(1);
-			expect(initial.indexedAliases).toBe(29);
+			expect(initial.indexedAliases).toBe(28);
 			expect(initial.renderedControls).toBeGreaterThan(25);
 			expect(initial.headings).toEqual(
 				expect.arrayContaining([
-					"Search Podcasts",
 					"Playlists",
 					"Episode notes",
 					"Feed notes",
@@ -56,6 +55,9 @@ describe("marketplace review runtime paths", () => {
 				]),
 			);
 			expect(initial.headings).not.toContain("PodNotes");
+			expect(initial.headings, "podcast search lives in the view").not.toContain(
+				"Search Podcasts",
+			);
 			expect(initial.headings.every((heading) => !/settings/i.test(heading))).toBe(true);
 
 			await evalJsonAsync<boolean>(
@@ -296,7 +298,7 @@ describe("marketplace review runtime paths", () => {
 						${JSON.stringify(`.workspace-leaf.mod-active [aria-label="More options for ${episode.title}"]`)},
 					);
 					return {
-						episodeVisible: Array.from(document.querySelectorAll(".workspace-leaf.mod-active .episode-item-title"))
+						episodeVisible: Array.from(document.querySelectorAll(".workspace-leaf.mod-active .pn-ep-title"))
 							.some((candidate) => candidate.textContent?.trim() === ${JSON.stringify(episode.title)}),
 						overflowVisible: overflow instanceof HTMLButtonElement && overflow.getBoundingClientRect().width > 0,
 					};

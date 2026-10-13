@@ -62,11 +62,11 @@ export const ui = {
 	libraryHead: byCss("Library page", `${PLAYER_VIEW} h1.pn-head-title`, "Library"),
 	pageTitle: (title: string) =>
 		byCss(`${title} page`, `${PLAYER_VIEW} :is(h1.pn-head-title, .pn-title h1)`, title),
-	back: byCss("Back button", `${PLAYER_VIEW} button.pn-back`),
+	back: byCss("Back button", `${PLAYER_VIEW} .pn-head button[aria-label^="Back to "]`),
 	backTo: (label: string) =>
 		byCss(
 			`Back to ${label}`,
-			`${PLAYER_VIEW} button.pn-back[aria-label=${q(`Back to ${label}`)}]`,
+			`${PLAYER_VIEW} .pn-head button[aria-label=${q(`Back to ${label}`)}]`,
 		),
 	listRow: (label: string) => navItem(`Library row ${label}`, ".pn-scroll > nav.pn-nav", label),
 	rail: byCss("rail", `${PLAYER_VIEW} nav.pn-rail`),
@@ -88,17 +88,38 @@ export const ui = {
 		"Collapse player",
 		`${PLAYER_VIEW} section.pn-player button[aria-label="Collapse player"]`,
 	),
+	/** A Library card, named by its podcast, also while its feed did not load. */
 	podcastCard: (title: string): UiTarget => ({
 		name: `podcast card ${title}`,
-		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-grid button`)})].filter((button) => (button.getAttribute("aria-label") ?? button.querySelector("img")?.alt ?? button.textContent.trim()) === ${q(title)})`,
+		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} button.pn-gridcard`)})].filter((button) => [${q(title)}, ${q(`${title}, feed didn't load`)}].includes(button.getAttribute("aria-label")))`,
 	}),
+	failedPodcastCard: (title: string) =>
+		byCss(
+			`podcast card ${title} with its feed error badge`,
+			`${PLAYER_VIEW} button.pn-gridcard[aria-label=${q(`${title}, feed didn't load`)}]`,
+		),
 	episode: (title: string): UiTarget => ({
 		name: `episode ${title}`,
-		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-episode-item`)})].filter((el) => !el.closest(".episode-player") && el.querySelector(".episode-item-title")?.textContent.trim() === ${q(title)})`,
+		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".episode-player") && el.querySelector(".pn-ep-title")?.textContent.trim() === ${q(title)})`,
 	}),
-	feedLoading: byCss("feed loading banner", `${PLAYER_VIEW} .feed-loading-banner`),
-	episodeLoading: byCss("episode list loading", `${PLAYER_VIEW} .episode-list-loading`),
+	episodeLoading: byCss(
+		"episode list loading",
+		`${PLAYER_VIEW} .pn-count[role="status"]`,
+		"Loading episodes",
+	),
+	noEpisodes: byCss("No episodes", `${PLAYER_VIEW} .pn-panel-empty`, "No episodes"),
 	refreshEpisodes: byCss("Refresh episodes", `${PLAYER_VIEW} [aria-label="Refresh episodes"]`),
+	podcastOptions: byCss(
+		"Podcast options",
+		`${PLAYER_VIEW} .pn-head button[aria-label="Podcast options"]`,
+	),
+	feedError: byCss("feed error banner", `${PLAYER_VIEW} .pn-banner[role="alert"]`),
+	feedErrorAction: (label: string) =>
+		byCss(
+			`feed error banner ${label}`,
+			`${PLAYER_VIEW} .pn-banner[role="alert"] button`,
+			label,
+		),
 	playbackToggle: byCss(
 		"on-screen playback toggle",
 		`${PLAYER_VIEW} .episode-player button[aria-label="Toggle playback"]`,
@@ -129,20 +150,24 @@ export const ui = {
 		name: `${control} of setting ${settingName}`,
 		elements: `[...document.querySelectorAll(".modal.mod-settings .setting-item")].filter((row) => row.querySelector(".setting-item-name")?.textContent.trim() === ${q(settingName)}).map((row) => row.querySelector(${q(control)})).filter(Boolean)`,
 	}),
+	settingHeading: (name: string) =>
+		byCss(
+			`settings heading ${name}`,
+			".modal.mod-settings .setting-item-heading .setting-item-name",
+			name,
+		),
+	/** First run's field, or Add podcast's in the head. They share the label. */
 	podcastSearch: byCss(
 		"podcast search",
-		'.modal.mod-settings input[placeholder="Search or enter feed URL..."]',
+		`${PLAYER_VIEW} input[aria-label="Search or paste a link"]`,
 	),
+	addPodcastButton: byCss(
+		"Library's Add podcast",
+		`${PLAYER_VIEW} .pn-head button[aria-label="Add podcast"]`,
+	),
+	railSearch: byCss("rail's Add podcast", `${PLAYER_VIEW} nav.pn-rail button.pn-railsearch`),
 	addPodcast: (title: string) =>
-		byCss(
-			`Add ${title}`,
-			`.modal.mod-settings button[aria-label=${q(`Add ${title} podcast`)}]`,
-		),
-	removePodcast: (title: string) =>
-		byCss(
-			`Remove ${title}`,
-			`.modal.mod-settings button[aria-label=${q(`Remove ${title} podcast`)}]`,
-		),
+		byCss(`Add ${title}`, `${PLAYER_VIEW} button.pn-result[aria-label=${q(`Add ${title}`)}]`),
 	podcastViewport: byCss("PodNotes view", PLAYER_VIEW),
 	promptInput: byCss("prompt input", ".prompt .prompt-input"),
 	suggestion: (text: string) => byCss(`suggestion ${text}`, ".prompt .suggestion-item", text),
@@ -299,8 +324,35 @@ export async function waitUntilShown(
 
 export async function listedEpisodes(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>(
-		`[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-episode-item`)})].filter((el) => !el.closest(".episode-player") && el.getClientRects().length > 0).map((el) => el.querySelector(".episode-item-title")?.textContent.trim() ?? "")`,
+		`[...document.querySelectorAll(${q(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".episode-player") && el.getClientRects().length > 0).map((el) => el.querySelector(".pn-ep-title")?.textContent.trim() ?? "")`,
 	);
+}
+
+export type ShownResult = Readonly<{ label: string; title: string; via: string | null }>;
+
+/** Add podcast's results: each one's button label, title and the link chip it resolved through. */
+export async function shownResults(obsidian: ObsidianClient): Promise<ShownResult[]> {
+	return await obsidian.dev.evalJson<ShownResult[]>(
+		`[...document.querySelectorAll(${q(`${PLAYER_VIEW} button.pn-result`)})].map((el) => ({ label: el.getAttribute("aria-label"), title: el.querySelector(".t")?.textContent.trim() ?? "", via: el.querySelector(".pn-linkchip")?.textContent.trim() ?? null }))`,
+	);
+}
+
+export type ShownMenuItem = Readonly<{ title: string; checked: boolean }>;
+
+/** The items of the open menus, top to bottom. */
+export async function shownMenu(obsidian: ObsidianClient): Promise<ShownMenuItem[]> {
+	return await obsidian.dev.evalJson<ShownMenuItem[]>(
+		`[...document.querySelectorAll(".menu .menu-item")].filter((el) => el.getClientRects().length > 0).map((el) => ({ title: el.querySelector(".menu-item-title")?.textContent.trim() ?? "", checked: el.classList.contains("mod-checked") }))`,
+	);
+}
+
+/** Whether any saved podcast's feed is loading, by the feed repository the view reads. */
+export async function feedsLoading(obsidian: ObsidianClient): Promise<boolean> {
+	return await obsidian.dev.evalJson<boolean>(`(() => {
+		let states;
+		app.plugins.plugins.${PLUGIN_ID}.feeds.subscribe((value) => (states = value))();
+		return [...states.values()].some(({ status }) => status === "loading");
+	})()`);
 }
 
 export async function shownText(obsidian: ObsidianClient): Promise<string> {
@@ -371,7 +423,30 @@ export async function closePodNotes(obsidian: ObsidianClient): Promise<void> {
 export async function openPodNotesSettings(obsidian: ObsidianClient): Promise<void> {
 	await runCommand(obsidian, "app:open-settings");
 	await click(obsidian, ui.settingsTab("PodNotes"));
+	await waitUntilShown(obsidian, ui.settingHeading("Playlists"));
+}
+
+/** Opens Add podcast as a user does: from the rail, else the Library's Add podcast. First run searches in place. */
+export async function showAddPodcast(obsidian: ObsidianClient): Promise<void> {
+	if (await isShown(obsidian, ui.firstRun)) return;
+	if (await isShown(obsidian, ui.rail)) await click(obsidian, ui.railSearch);
+	else {
+		await showLibrary(obsidian);
+		await click(obsidian, ui.addPodcastButton);
+	}
 	await waitUntilShown(obsidian, ui.podcastSearch);
+}
+
+/** Removes a podcast as a user does: its Library card's menu, then Remove podcast. */
+export async function removePodcast(obsidian: ObsidianClient, title: string): Promise<void> {
+	await showLibrary(obsidian);
+	await click(obsidian, ui.podcastCard(title), { button: "right" });
+	await click(obsidian, ui.menuItem("Remove podcast"));
+	await obsidian.waitFor(async () => !(await isShown(obsidian, ui.podcastCard(title))), {
+		timeoutMs: 10_000,
+		intervalMs: 100,
+		message: `${title}'s card gone from the Library`,
+	});
 }
 
 export async function closeSettings(obsidian: ObsidianClient): Promise<void> {

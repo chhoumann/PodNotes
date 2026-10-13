@@ -283,12 +283,12 @@ describe("episode note and capture journeys", () => {
 		await waitUntilShown(obsidian, ui.episode(RETITLED));
 
 		await click(obsidian, ui.episodeMenu(RETITLED));
-		await waitUntilShown(obsidian, ui.menuItem("Open Note"));
-		expect(await isShown(obsidian, ui.menuItem("Create Note")), "no Create Note offered").toBe(
+		await waitUntilShown(obsidian, ui.menuItem("Open note"));
+		expect(await isShown(obsidian, ui.menuItem("Create note")), "no Create note offered").toBe(
 			false,
 		);
-		await click(obsidian, ui.menuItem("Open Note"));
-		await waitForActiveFile(original, "Open Note opening the original note");
+		await click(obsidian, ui.menuItem("Open note"));
+		await waitForActiveFile(original, "Open note opening the original note");
 		expect(await exists(notePath(show, RETITLED)), "no note made for the new title").toBe(
 			false,
 		);
@@ -385,7 +385,7 @@ describe("episode note and capture journeys", () => {
 		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(show.title));
 		await click(obsidian, ui.episodeMenu(alpha.title));
-		await click(obsidian, ui.menuItem("Create Note"));
+		await click(obsidian, ui.menuItem("Create note"));
 		const alphaText = await waitForText(
 			alphaNote,
 			(text) => text.includes("\n# Alpha Original\n"),
@@ -394,9 +394,9 @@ describe("episode note and capture journeys", () => {
 
 		await click(obsidian, ui.episodeMenu(beta.title));
 		const titles = await menuTitles();
-		expect(titles, "Beta's menu offers a note of its own").toContain("Create Note");
-		expect(titles).not.toContain("Open Note");
-		await click(obsidian, ui.menuItem("Create Note"));
+		expect(titles, "Beta's menu offers a note of its own").toContain("Create note");
+		expect(titles).not.toContain("Open note");
+		await click(obsidian, ui.menuItem("Create note"));
 		const betaText = await waitForText(
 			betaNote,
 			(text) => text.includes("\n# Beta Different\n"),
@@ -425,7 +425,7 @@ describe("episode note and capture journeys", () => {
 		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(show.title));
 		await click(obsidian, ui.episodeMenu(ORIGINAL.title));
-		await click(obsidian, ui.menuItem("Create Note"));
+		await click(obsidian, ui.menuItem("Create note"));
 		const text = await waitForText(
 			note,
 			(value) => value.includes("\n# Original Title\n"),
