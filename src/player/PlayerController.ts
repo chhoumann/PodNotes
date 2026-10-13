@@ -5,6 +5,7 @@ import { writePlayerSettings } from "src/store/persistence";
 import type { Episode, EpisodeMediaType } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
+import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { getEpisodeMediaType } from "src/utility/mediaType";
@@ -53,6 +54,8 @@ export type PlayerDocument = Pick<Document, "createElement" | "body">;
 /** One load of one episode. A load replaces it. */
 interface Session {
 	src: string;
+	/** The vault file `src` plays, if it plays one. */
+	filePath?: string;
 	/** Where playback starts once the metadata loads. */
 	pendingTime: number;
 	/** The metadata loaded and the start position is set. */
@@ -132,6 +135,30 @@ export class PlayerController {
 			currentTime: this.moved ? currentTime : this.resumeTime(episode),
 			duration: this.startDuration(episode),
 		});
+	}
+
+	/**
+	 * Follows a vault file that moved from `from` to `to`: shows the episode `moved` maps
+	 * the shown one to, and media loaded from that file reloads from `to`, with the same
+	 * status, position and speed. A finished episode's session ends. Not
+	 * an intent: nothing is selected, queued or saved, and a deferred play stays valid.
+	 */
+	relocate(from: string, to: string, moved: (episode: Episode) => Episode): void {
+		const shown = this.snapshot.episode;
+		if (this.disposed || !shown) return;
+		const episode = moved(shown);
+		const session = this.session?.filePath === from ? this.session : null;
+		if (episode === shown && !session) return;
+		this.setState(
+			this.holdsMedia() ? { episode, currentTime: this.el.currentTime } : { episode },
+		);
+		if (!session) return;
+		session.src = createMediaUrlObjectFromFilePath(this.plugin.app.vault, to);
+		session.filePath = to;
+		this.el.setAttribute("aria-label", episode.title);
+		this.el.src = session.src;
+		// The element reports "emptied" only later, so the next intent would act on stale state.
+		this.onEmptied();
 	}
 
 	/**
@@ -328,6 +355,7 @@ export class PlayerController {
 		}
 		this.session = {
 			src: source.src,
+			filePath: source.filePath,
 			pendingTime: time,
 			ready: false,
 			segmentEnd: endTime ?? null,
