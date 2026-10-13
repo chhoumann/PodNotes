@@ -6,7 +6,7 @@
 </script>
 
 {#if firstRun}
-	<!-- Top-aligned: the results list under the field, which must not move while the user types. -->
+	<!-- Top-aligned, so the field stays put while results load under it. -->
 	<div class="pn-first-col">
 		<div class="pn-empty">
 			<span class="pn-empty-mark" {@attach icon("podcast")}></span>
