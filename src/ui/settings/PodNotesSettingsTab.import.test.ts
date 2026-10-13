@@ -756,6 +756,56 @@ describe("PodNotesSettingsTab settings import", () => {
 			}
 		});
 
+		it("saves a podcast added once data.json reads again, after an import that could not read it was rolled back", async () => {
+			const { plugin, unbind, applyImport, disk, clock } = setup(async () => {});
+			let readable = false;
+			const loadData = plugin.loadData.bind(plugin);
+			const { adapter } = plugin.app.vault;
+			const read = adapter.read.bind(adapter);
+			Object.assign(plugin, { loadData: async () => (readable ? loadData() : undefined) });
+			Object.assign(adapter, {
+				read: async (path: string) => {
+					if (!readable) throw new Error("EACCES: permission denied");
+					return read(path);
+				},
+			});
+			const notice = vi.spyOn(obsidian, "Notice");
+			const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+			try {
+				await applyImport({ savedFeeds: { Imported: feed("Imported") } });
+				clock.advance(10_000);
+				clock.runAll();
+				await settled();
+				expect(clock.pending()).toBe(0);
+
+				readable = true;
+				savedFeeds.update((feeds) => ({ ...feeds, Later: feed("Later") }));
+				const armed = clock.pending();
+				clock.runAll();
+				await settled();
+
+				expect(disk().savedFeeds).toEqual({
+					Before: feed("Before"),
+					Remote: feed("Remote"),
+					Later: feed("Later"),
+				});
+				expect(armed).toBe(1);
+				expect(clock.pending()).toBe(0);
+				expect(notice.mock.calls).toEqual([
+					[
+						"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged and saves nothing until the file can be read again.",
+						0,
+					],
+					[
+						"Could not import PodNotes settings or persist its rollback. The safest recovered settings remain active for this session.",
+						10000,
+					],
+				]);
+			} finally {
+				unbind();
+			}
+		});
+
 		it.each([
 			["intact", feed("Before")],
 			["unreadable", null],
