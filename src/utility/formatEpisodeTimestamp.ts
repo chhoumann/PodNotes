@@ -3,7 +3,7 @@ import encodePodnotesURI from "./encodePodnotesURI";
 import { episodeLinkTarget } from "./episodeLinkTarget";
 import { formatSeconds } from "./formatSeconds";
 import { formatPodcastSegment } from "./podcastSegment";
-import { vaultSafeFeedUrl } from "./privateFeedUrl";
+import { vaultSafeLinkTarget } from "src/services/privateFeeds";
 
 export function formatEpisodeTimestamp(
 	episode: Episode,
@@ -16,7 +16,7 @@ export function formatEpisodeTimestamp(
 		endSeconds === undefined
 			? formatSeconds(seconds, format)
 			: formatPodcastSegment(seconds, endSeconds, format);
-	const target = linkify ? vaultSafeFeedUrl(episodeLinkTarget(episode)) : undefined;
+	const target = linkify ? vaultSafeLinkTarget(episode, episodeLinkTarget(episode)) : undefined;
 	return target
 		? `[${time}](${encodePodnotesURI(episode, target, seconds, endSeconds).href})`
 		: time;

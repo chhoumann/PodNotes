@@ -17,8 +17,7 @@ import type { PodcastSegmentTimes } from "./utility/podcastSegment";
 import type { Chapter } from "./types/Chapter";
 import { normalizeChapters } from "./utility/normalizeChapters";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
-import { privateFeedAddresses } from "./services/privateFeeds";
-import { redactPrivateFeedAddresses, vaultSafeFeedUrl } from "./utility/privateFeedUrl";
+import { vaultSafeLinkTarget, withoutPrivateFeedAddresses } from "./services/privateFeeds";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -48,14 +47,6 @@ export function templateHasTag(template: string, tag: Lowercase<string>): boolea
 	);
 }
 
-export function withoutPrivateFeedAddresses<T>(value: T): T {
-	const instance = get(plugin);
-	return redactPrivateFeedAddresses(
-		value,
-		instance?.feedUrls && privateFeedAddresses(instance.settings.savedFeeds, instance.feedUrls),
-	);
-}
-
 function withoutFeedAddresses(feed: PodcastFeed): PodcastFeed {
 	return withoutPrivateFeedAddresses([feed, { feedUrl: feed.url }] as const)[0];
 }
@@ -68,7 +59,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	}
 
 	function replacer(template: string): string {
-		return template.replace(
+		return withoutPrivateFeedAddresses(template).replace(
 			TEMPLATE_TAG_REGEX,
 			(match: string, tagId: string, params: string) => {
 				const tagValue = tags[tagId.toLowerCase()];
@@ -247,7 +238,7 @@ function neutralizeMarkdownEmbeds(markdown: string): string {
  * rewritten here to avoid mangling legitimate inline code in programming show
  * notes.
  */
-function feedHtmlToMarkdown(html: string): string {
+function feedHtmlToMarkdown(html: string, source: object): string {
 	const document = new DOMParser().parseFromString(html, "text/html");
 	for (const element of document.querySelectorAll(
 		"img, audio, video, source, iframe, object, embed, link",
@@ -255,6 +246,13 @@ function feedHtmlToMarkdown(html: string): string {
 		const alt = element.instanceOf(HTMLImageElement) ? element.alt.trim() : "";
 		element.replaceWith(document.createTextNode(alt));
 	}
+	// Entities can spell out a private feed address, so redact the decoded text.
+	const nodes = [document.body, ...document.body.querySelectorAll("*")].flatMap((element) => [
+		...element.attributes,
+		...element.childNodes,
+	]);
+	const [, values] = withoutPrivateFeedAddresses([source, nodes.map((node) => node.nodeValue)]);
+	nodes.forEach((node, index) => (node.nodeValue = values[index]));
 	return neutralizeMarkdownEmbeds(
 		neutralizeExecutableCodeBlocks(htmlToMarkdown(document.body.innerHTML)),
 	);
@@ -297,18 +295,19 @@ export function NoteTemplateEngine(
 	context: NoteTemplateContext = {},
 ) {
 	const [replacer, addTag] = useTemplateEngine();
-	const [redacted, chapters] = withoutPrivateFeedAddresses([
+	const parentFeed = get(plugin)?.settings?.savedFeeds?.[liveEpisode.podcastName];
+	const [episode, chapters, feedArtwork] = withoutPrivateFeedAddresses([
 		liveEpisode,
 		context.chapters,
+		parentFeed?.artworkUrl,
 	] as const);
-	const episode = { ...redacted, feedUrl: liveEpisode.feedUrl };
 
 	const episodeUrl = resolveEpisodeUrl(episode);
 
 	addTag("title", escapeMarkdownBodyText(episode.title));
 	addTag("description", (prependToLines?: string) => {
 		// reduce multiple new lines
-		const sanitizeDescription = feedHtmlToMarkdown(episode.description).replace(
+		const sanitizeDescription = feedHtmlToMarkdown(episode.description, liveEpisode).replace(
 			/\n{3,}/g,
 			"\n\n",
 		);
@@ -323,13 +322,13 @@ export function NoteTemplateEngine(
 	});
 	addTag("content", (prependToLines?: string) => {
 		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.content)
+			return feedHtmlToMarkdown(episode.content, liveEpisode)
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return feedHtmlToMarkdown(episode.content);
+		return feedHtmlToMarkdown(episode.content, liveEpisode);
 	});
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
 	addTag("stream", sanitizePortableResourceUrl(episode.streamUrl));
@@ -361,12 +360,11 @@ export function NoteTemplateEngine(
 	// (which always describe the episode itself). See issue #163.
 	addTag("episodeurl", episodeUrl);
 	addTag("episodeartwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
-	addTag("feedurl", sanitizeUrlForTemplate(vaultSafeFeedUrl(episode.feedUrl) ?? ""));
-	const parentFeed = get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
 	addTag(
-		"feedartwork",
-		sanitizePortableResourceUrl(parentFeed?.artworkUrl ?? episode.artworkUrl ?? ""),
+		"feedurl",
+		sanitizeUrlForTemplate(vaultSafeLinkTarget(liveEpisode, liveEpisode.feedUrl) ?? ""),
 	);
+	addTag("feedartwork", sanitizePortableResourceUrl(feedArtwork ?? episode.artworkUrl ?? ""));
 	// A ready-made wikilink to the parent feed's note, pointing at the same file
 	// createFeedNote writes (derived from the feed-note path setting).
 	addTag("podcastlink", getFeedNoteWikilink(episode.podcastName));
@@ -375,7 +373,7 @@ export function NoteTemplateEngine(
 	// never been played). The resume point is resolved at click time, not baked
 	// in here, so a single templated link always jumps to where you left off.
 	// Empty when the episode has no feed/file URL to address it by. See issue #35.
-	addTag("episodelink", buildEpisodeResumeLink(episode));
+	addTag("episodelink", buildEpisodeResumeLink(liveEpisode));
 
 	return replacer(template);
 }
@@ -473,13 +471,13 @@ export function TranscriptTemplateEngine(
 	addTag("transcript", transcription);
 	addTag("description", (prependToLines?: string) => {
 		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.description)
+			return feedHtmlToMarkdown(episode.description, liveEpisode)
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return feedHtmlToMarkdown(episode.description);
+		return feedHtmlToMarkdown(episode.description, liveEpisode);
 	});
 	addTag("url", resolveEpisodeUrl(episode));
 	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
@@ -504,15 +502,14 @@ export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) 
 	// inside quoted YAML frontmatter scalars (the default feed template uses both).
 	// A well-formed URL never contains the characters this neutralizes.
 	addTag("url", sanitizeUrlForTemplate(feed.link ?? ""));
-	addTag("feedurl", sanitizeUrlForTemplate(vaultSafeFeedUrl(liveFeed.url) ?? ""));
+	addTag("feedurl", sanitizeUrlForTemplate(vaultSafeLinkTarget(liveFeed, liveFeed.url) ?? ""));
 	addTag("artwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("feedartwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
 	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "").replace(
-			/\n{3,}/g,
-			"\n\n",
-		);
+		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "", {
+			feedUrl: liveFeed.url,
+		}).replace(/\n{3,}/g, "\n\n");
 		if (prependToLines) {
 			return sanitizeDescription
 				.split("\n")

@@ -4,7 +4,6 @@ import {
 	legacyReplaceIllegalFileNameCharactersInString,
 	NoteTemplateEngine,
 	templateHasTag,
-	withoutPrivateFeedAddresses,
 } from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import type { Chapter } from "./types/Chapter";
@@ -17,7 +16,7 @@ import { fetchChapters } from "./utility/fetchChapters";
 import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
 import { findByGuid } from "./utility/findByGuid";
 import { addFrontmatterFields } from "./utility/noteFrontmatter";
-import { vaultSafeFeedUrl } from "./utility/privateFeedUrl";
+import { vaultSafeLinkTarget } from "./services/privateFeeds";
 
 /**
  * Resolve the on-disk path of an episode's note from the configured template.
@@ -102,16 +101,13 @@ export async function createPodcastNoteFileIfNotExists(
 	if (arrivedFile) return { file: arrivedFile, created: false };
 
 	const content = NoteTemplateEngine(template, episode, { chapters });
-	const feedUrl = vaultSafeFeedUrl(episode.feedUrl);
+	const feedUrl = vaultSafeLinkTarget(episode, episode.feedUrl);
 	const identified =
 		episode.guid && feedUrl
-			? addFrontmatterFields(
-					content,
-					withoutPrivateFeedAddresses([
-						["guid", episode.guid],
-						["feedUrl", feedUrl],
-					]),
-				)
+			? addFrontmatterFields(content, [
+					["guid", episode.guid],
+					["feedUrl", feedUrl],
+				])
 			: content;
 
 	return createFileIfNotExists(filePathDotMd, identified);

@@ -2,7 +2,7 @@ import type { Episode } from "src/types/Episode";
 import { downloadedEpisodes } from "src/store";
 import encodePodnotesURI from "./encodePodnotesURI";
 import { episodeLinkTarget } from "./episodeLinkTarget";
-import { vaultSafeFeedUrl } from "./privateFeedUrl";
+import { vaultSafeLinkTarget } from "src/services/privateFeeds";
 
 /**
  * Build an `obsidian://podnotes` deep link that reopens `episode` in the PodNotes
@@ -15,11 +15,12 @@ import { vaultSafeFeedUrl } from "./privateFeedUrl";
  * (the player refetches the feed and matches by title); a local file is
  * addressed by its on-disk vault path. As a last resort either kind falls back
  * to a downloaded copy's path, so an episode whose snapshot predates `feedUrl`
- * still gets a working link instead of none. Returns "" when the target is a private feed
- * without a subscription placeholder, or nothing can address the episode.
+ * still gets a working link instead of none. Returns "" when nothing can address the
+ * episode, or the link would carry a private feed address (see vaultSafeLinkTarget).
  */
 export default function buildEpisodeResumeLink(episode: Episode): string {
-	const target = vaultSafeFeedUrl(
+	const target = vaultSafeLinkTarget(
+		episode,
 		episodeLinkTarget(episode) ?? downloadedEpisodes.getEpisode(episode)?.filePath,
 	);
 

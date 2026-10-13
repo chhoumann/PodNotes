@@ -98,10 +98,6 @@ export function canonicalUrl(url: string): string {
 	return parsed.href;
 }
 
-export function vaultSafeFeedUrl(address: string | undefined): string | undefined {
-	return address && isCredentialBearingUrl(address) ? undefined : address;
-}
-
 /**
  * `document` with no private feed address left in it. A snapshot's
  * credential-bearing `feedUrl` is a private feed address, as is each key of
@@ -143,7 +139,7 @@ export function redactPrivateFeedAddresses<T>(
 	// plugin, so keep this untagged to let Obsidian reuse it across reloads.
 	const candidate = new RegExp(
 		hosts.map((host) => host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") +
-			"|https?:[/\\\\]{2}[^\\s/?#]*[%\\\\\\[\\u0080-\\uFFFF]|https?:[/\\\\]{2}(?:[^\\s/?#@]*@)?[\\d/\\\\]",
+			"|https?:[/\\\\]*[^\\s/?#]*[%\\\\\\[\\u0080-\\uFFFF]|https?:[/\\\\]*(?:[^\\s/?#@]*@)?\\d",
 		"i",
 	);
 	const matches = new Map<string, string | undefined>();
@@ -156,9 +152,9 @@ export function redactPrivateFeedAddresses<T>(
 		return replacement;
 	};
 	return replaceStrings(document, (value) => {
-		if (!/:[/\\]{2}/.test(value) || !candidate.test(value)) return value;
-		if (/^https?:[/\\]{2}[^\s<>"'`]+$/i.test(value)) return lookup(value) ?? value;
-		return value.replace(/https?:[/\\]{2}[^\s<>"'`]+/gi, (address) => {
+		if (!/https?:/i.test(value) || !candidate.test(value)) return value;
+		if (/^https?:[^\s<>"'`]+$/i.test(value)) return lookup(value) ?? value;
+		return value.replace(/https?:[^\s<>"'`]+/gi, (address) => {
 			const whole = lookup(address);
 			if (whole) return whole;
 			const bare = address.replace(/[.,;:!?)\]}]+$/, "");
