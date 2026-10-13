@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "src/constants";
 import type { PlayerState } from "src/player/PlayerController";
-import { plugin, queue } from "src/store";
+import { hidePlayedEpisodes, playedEpisodes, plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
 import { pluginLibrary } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
@@ -68,6 +68,8 @@ const barWidth = (container: HTMLElement) =>
 
 beforeEach(() => {
 	queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: [] });
+	playedEpisodes.set({});
+	hidePlayedEpisodes.set(false);
 	plugin.set({ settings: structuredClone(DEFAULT_SETTINGS) } as never);
 });
 
@@ -150,6 +152,21 @@ describe("EpisodePlayer", () => {
 		await fireEvent.click(screen.getByText("Queued Episode"));
 
 		expect(player.play).toHaveBeenCalledWith(queued);
+	});
+
+	test("leaves played episodes out of the queue while hide played is pressed", async () => {
+		const played = { ...episode, title: "Played Queued" };
+		const fresh = { ...episode, title: "New Queued" };
+		queue.set({ ...get(queue), episodes: [played, fresh] });
+		playedEpisodes.markAsPlayed(played);
+		renderPlayer();
+		expect(screen.getByText("Played Queued")).toBeInTheDocument();
+
+		hidePlayedEpisodes.set(true);
+		await tick();
+
+		expect(screen.queryByText("Played Queued")).toBeNull();
+		expect(screen.getByText("New Queued")).toBeInTheDocument();
 	});
 
 	test("a queued episode's menu can move it in the queue", async () => {
