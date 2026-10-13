@@ -4,6 +4,7 @@
 
 	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
 	import { icon } from "../obsidian/icon";
+	import { pickVaultMedia } from "../pickVaultMedia";
 	import AddPodcastPage from "./AddPodcastPage.svelte";
 	import { provideServices, type ShellServices } from "./context";
 
@@ -161,6 +162,15 @@
 							onclick={(event) =>
 								showMenu(podcastMenu(key, services), anchorOf(event))}
 							{@attach icon("more-horizontal")}
+						></button>
+					{:else if head.action === "local"}
+						<button
+							type="button"
+							class="pn-iconbtn"
+							aria-label="Add a vault file"
+							title="Add a vault file"
+							onclick={() => pickVaultMedia(services.app)}
+							{@attach icon("plus")}
 						></button>
 					{:else if head.action === "queue"}
 						<button

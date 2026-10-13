@@ -98,6 +98,13 @@ describe("headFor", () => {
 		["compact", { kind: "add" }, undefined, { back: "Library", search: true }],
 		["wide", { kind: "add" }, { kind: "library" }, { back: "Library", search: true }],
 		["wide", { kind: "add" }, undefined, { search: true }],
+		[
+			"compact",
+			{ kind: "local" },
+			undefined,
+			{ back: "Library", pageTitle: "Local files", action: "local" },
+		],
+		["wide", { kind: "local" }, show, { title: "Local files", action: "local" }],
 	])("%s %j after %j", (layout, page, previous, head) => {
 		expect(headFor(page, layout, previous, feeds, empty)).toEqual(head);
 	});

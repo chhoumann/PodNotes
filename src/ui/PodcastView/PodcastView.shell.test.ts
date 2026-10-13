@@ -303,6 +303,26 @@ describe("list pages", () => {
 		expect(button(/^Favorites/)).toBeInTheDocument();
 	});
 
+	test("Local files' head adds a vault file through the media picker", async () => {
+		const open = vi
+			.spyOn(obsidian.FuzzySuggestModal.prototype, "open")
+			.mockImplementation(() => {});
+		Object.assign(services.app, {
+			vault: {
+				getFiles: () => [Object.assign(new obsidian.TFile(), { path: "Talks/a.mp3" })],
+			},
+		});
+		services.navigation.replace({ kind: "local" });
+		renderView(320);
+		await tick();
+
+		await fireEvent.click(button("Add a vault file"));
+
+		const picker = open.mock
+			.contexts[0] as unknown as obsidian.FuzzySuggestModal<obsidian.TFile>;
+		expect(picker.getItems().map((file) => picker.getItemText(file))).toEqual(["Talks/a.mp3"]);
+	});
+
 	test("Latest's head refreshes every podcast", async () => {
 		const loads: unknown[] = [];
 		vi.spyOn(services.feeds, "load").mockImplementation(async (keys, mode) => {

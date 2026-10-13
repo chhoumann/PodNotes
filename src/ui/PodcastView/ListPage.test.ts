@@ -312,3 +312,43 @@ describe("a list page", () => {
 		expect(load.mock.calls).toEqual([[show.url]]);
 	});
 });
+
+describe("Local files", () => {
+	test("shows a vault file as a file tile with its folder and the length it learned, and a download as its podcast's row", async () => {
+		const file = {
+			...episode("Interview with grandma.m4a", { duration: undefined }),
+			podcastName: "local file",
+			filePath: "Recordings/Family/Interview with grandma.m4a",
+		};
+		const download = {
+			...episode("Reading slowly", { artworkUrl: "https://art.test/reading.jpg" }),
+			filePath: "PodNotes/Field Notes/Reading slowly.mp3",
+		};
+		renderPage({ kind: "local" }, [show], ({ library }) => {
+			library.localFiles.update((list) => ({ ...list, episodes: [file, download] }));
+			library.playedEpisodes.set({
+				"local file::Interview with grandma.m4a": {
+					title: file.title,
+					podcastName: "local file",
+					time: 64 * 60,
+					duration: 64 * 60,
+					finished: true,
+				},
+			});
+		});
+		await tick();
+		const parts = (row: HTMLElement) =>
+			[...row.querySelectorAll(".pn-ep-meta > span:not(.pn-brk, .sep)")].map(
+				(part) => part.textContent,
+			);
+
+		const vaultFile = row("Interview with grandma.m4a");
+		expect(vaultFile.querySelector(".pn-filetile")).toHaveAttribute("data-icon", "music");
+		expect(vaultFile.querySelector("img")).toBeNull();
+		expect(parts(vaultFile)).toEqual(["", "Recordings/Family", "1 h 4 min"]);
+		const podcast = row("Reading slowly");
+		expect(podcast.querySelector(".pn-filetile")).toBeNull();
+		expect(podcast.querySelector("img")).toHaveAttribute("src", "https://art.test/reading.jpg");
+		expect(parts(podcast)).toEqual(["Field Notes", "48 min"]);
+	});
+});

@@ -87,10 +87,10 @@ export interface Head {
 	readonly flair?: string;
 	/**
 	 * The head's right edge: the compact Library's Add podcast and Settings, Refresh
-	 * all on the wide Library and Latest, or the menu of a podcast, the queue, or a
-	 * playlist of the user's.
+	 * all on the wide Library and Latest, Local files' Add a vault file, or the menu
+	 * of a podcast, the queue, or a playlist of the user's.
 	 */
-	readonly action?: "library" | "refresh-all" | "podcast" | "queue" | "playlist";
+	readonly action?: "library" | "refresh-all" | "local" | "podcast" | "queue" | "playlist";
 	/** Add podcast's search field stands in the title's place. */
 	readonly search?: true;
 }
@@ -108,6 +108,7 @@ function actionOf(page: Page, layout: Layout, { favorites }: HeadLists): Head["a
 	if (page.kind === "latest") return "refresh-all";
 	if (page.kind === "feed") return "podcast";
 	if (page.kind === "queue") return "queue";
+	if (page.kind === "local") return "local";
 	if (page.kind === "playlist" && page.name !== favorites.name) return "playlist";
 	return undefined;
 }
