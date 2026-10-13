@@ -33,7 +33,10 @@
 //         Then <state>-sheet.png has a row per width: light, then dark, each shot
 //         followed by the prototype's screen when the design folder has one.
 //         States: first-run, add-podcast, library, episodes, error-feed, queue,
-//         playlists, playlist, latest, played, local-files, offline.
+//         playlists, playlist, latest, played, local-files, offline, status-bar.
+//         status-bar is the queue with the mini player and a "9 properties" item in
+//         Obsidian's status bar, which that state's shots keep. It has no phone shot:
+//         Obsidian hides the status bar on mobile.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -75,7 +78,7 @@ const CURRENT_THEME = `(document.body.classList.contains("theme-dark") ? "dark" 
  * @typedef {(data: Data, library: Library) => void | Promise<void>} Ingredient
  */
 
-/** @type {Record<string, { scene: string, page: (library: Library) => Page, text?: (library: Library) => string, paste?: boolean, offline?: boolean }>} */
+/** @type {Record<string, { scene: string, page: (library: Library) => Page, text?: (library: Library) => string, paste?: boolean, offline?: boolean, statusBar?: boolean }>} */
 const STATES = {
 	"first-run": { scene: "empty", page: () => ({ kind: "library" }) },
 	"add-podcast": {
@@ -118,7 +121,14 @@ const STATES = {
 		text: newestTitle,
 		offline: true,
 	},
+	"status-bar": {
+		scene: "lists",
+		page: () => ({ kind: "queue" }),
+		text: () => QUEUE[0][1],
+		statusBar: true,
+	},
 };
+const STATUS_ITEM = "podnotes-verify-status-item";
 
 // What a listener of the fixture library did with it, as in the design prototype.
 // Episodes are named by the start of their podcast's title and of their own.
@@ -637,6 +647,15 @@ async function offline(on) {
 	}
 }
 
+/** Adds or removes an item in Obsidian's status bar, as a plugin's addStatusBarItem does. @param {boolean} on */
+async function statusItem(on) {
+	await evaluate(`
+		document.querySelector(".${STATUS_ITEM}")?.remove();
+		if (${on}) document.querySelector(".status-bar").createDiv({ cls: "status-bar-item ${STATUS_ITEM}", text: "9 properties" });
+		return true;
+	`);
+}
+
 /** @param {string} [text] */
 async function settle(text = "") {
 	const deadline = Date.now() + 20000;
@@ -670,8 +689,12 @@ async function settle(text = "") {
 	}
 }
 
-/** @param {string} file @param {string} [text] @param {string} [themeName] */
-async function shot(file, text, themeName) {
+/**
+ * `statusBar` keeps Obsidian's status bar in the capture, which then fails unless the
+ * whole bar lies inside it.
+ * @param {string} file @param {string} [text] @param {string} [themeName] @param {boolean} [statusBar]
+ */
+async function shot(file, text, themeName, statusBar = false) {
 	await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x: -10, y: -10 });
 	await evaluate(`
 		document.activeElement?.blur?.();
@@ -687,17 +710,31 @@ async function shot(file, text, themeName) {
 			return said;
 		});
 		// Obsidian's status bar floats over the view's bottom-right corner.
-		document.querySelector(".status-bar")?.style.setProperty("visibility", "hidden");
+		const bar = document.querySelector(".status-bar");
+		if (!${statusBar}) bar?.style.setProperty("visibility", "hidden");
 		await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 		const rect = document.body.classList.contains("is-phone")
 			? { x: 0, y: 0, width: innerWidth, height: innerHeight }
 			: document.querySelector(".podcast-view").getBoundingClientRect().toJSON();
-		return { notices, rect, scale: devicePixelRatio, theme: ${CURRENT_THEME} };
+		return { notices, rect, bar: bar?.getBoundingClientRect().toJSON(), scale: devicePixelRatio, theme: ${CURRENT_THEME} };
 	`);
 	// Whole pixels, so the capture is not resampled.
 	const [x, y, width, height] = ["x", "y", "width", "height"].map((key) =>
 		Math.round(target.rect[key]),
 	);
+	const bar = target.bar;
+	if (
+		statusBar &&
+		!(
+			bar?.width > 0 &&
+			Math.round(bar.left) >= x &&
+			Math.round(bar.right) <= x + width &&
+			Math.round(bar.top) >= y &&
+			Math.round(bar.bottom) <= y + height
+		)
+	) {
+		throw new Error(`Obsidian's status bar ${JSON.stringify(bar)} is not inside the view.`);
+	}
 	const { data } = await cdp("Page.captureScreenshot", {
 		format: "png",
 		clip: { x, y, width, height, scale: 1 },
@@ -793,6 +830,7 @@ async function set(state, label, widths, themes) {
 	const rows = [];
 	try {
 		for (const width of widths) {
+			if (recipe.statusBar && width === "phone") continue;
 			await place(width);
 			const row = [];
 			for (const name of themes) {
@@ -806,8 +844,9 @@ async function set(state, label, widths, themes) {
 				}
 				if (recipe.offline) await offline(true);
 				await theme(name);
+				if (recipe.statusBar) await statusItem(true);
 				const file = path.join(dir, `${state}-${width}-${name}.png`);
-				await shot(file, recipe.text?.(lib), name);
+				await shot(file, recipe.text?.(lib), name, recipe.statusBar);
 				row.push({ file, caption: `${width} ${name} ${label}` });
 				const prototype = path.join(DESIGN, `${state}-${width}-${name}.png`);
 				if (fs.existsSync(prototype))
@@ -817,6 +856,7 @@ async function set(state, label, widths, themes) {
 		}
 	} finally {
 		if (recipe.offline) await offline(false);
+		if (recipe.statusBar) await statusItem(false);
 	}
 	const sheet = path.join(dir, `${state}-sheet.png`);
 	contactSheet(rows, sheet);

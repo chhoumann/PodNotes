@@ -247,8 +247,11 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `<state>-sheet.png` with the design prototype's screen beside each shot, when
   the design has one. The states are `first-run`, `add-podcast`, `library`,
   `episodes`, `error-feed`, `queue`, `playlists`, `playlist`, `latest`,
-  `played`, `local-files` and `offline`. `set` opens each page by its page
-  JSON, so a state works on any version of the view.
+  `played`, `local-files`, `offline` and `status-bar`. `set` opens each page
+  by its page JSON, so a state works on any version of the view. `shot` hides
+  Obsidian's status bar, except in `status-bar`, which puts a `9 properties`
+  item in it over the mini player and has no phone shot, because Obsidian hides
+  the status bar on mobile.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
   `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
