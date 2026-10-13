@@ -123,7 +123,14 @@ When the feed gives an episode an ID, PodNotes adds two properties to the episod
 2. The note at the path that **Note creation file path** gives for the episode.
 3. The one note in that folder whose name matches the episode title.
 
-So a note with both properties keeps working after you rename it or move it to another folder. If you used PodNotes before 2.22.0, your existing notes do not have these properties, and PodNotes cannot add them. Keep such a note at the path that **Note creation file path** gives for the episode, or in that path's folder with the episode's title as its name. Otherwise PodNotes no longer finds it for the episode. To get a note that you can rename and move, first move the old note out of that folder, so that PodNotes no longer finds it. Then create a new note for the episode, which gets both properties when the feed gives the episode an ID, and move your text into it.
+So a note with both properties keeps working after you rename it or move it to another folder. If you used PodNotes before 2.22.0, your existing notes do not have these properties, and PodNotes cannot add them. Keep such a note at the path that **Note creation file path** gives for the episode, or in that path's folder with the episode's title as its name. Otherwise PodNotes no longer finds it for the episode.
+
+To get a note that you can rename and move:
+
+1. Move the old note out of that folder, so that PodNotes no longer finds it.
+2. In the podcast's episode list, open the episode's menu, and select **Create Note**. Use the menu, not the command, because an episode that PodNotes restored from an older version can lack the ID from its feed.
+3. Check that the new note's properties include `guid` and `feedUrl`. Without them, the feed gives the episode no ID, so keep that note at its path.
+4. Copy your text from the old note into the new one, below its properties.
 
 PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. PodNotes adds neither property in these cases:
 

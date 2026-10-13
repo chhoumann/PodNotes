@@ -18,6 +18,8 @@ To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key). For [speaker
 
 A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
+### Transcribe the audio instead
+
 To transcribe the audio even when the feed publishes a transcript, first rename, move, or delete any transcript note you saved for the episode, because PodNotes does not replace an existing transcript. Then run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key. A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:** with OpenAI or **1:** with Deepgram.
 
 ## Transcripts that feeds publish

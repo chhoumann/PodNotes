@@ -18,7 +18,9 @@ To fix the cause, free disk space, and check that PodNotes may write to its plug
 
 1. In **Settings → PodNotes**, change any setting, such as **Skip forward length (s)** to 20.
 2. Wait about 10 seconds.
-3. Open `data.json` in a text editor, as [Write a new data.json](#write-a-new-datajson) describes. It should hold the new value, such as `"skipForwardLength": 20`, and end with a closing `}`. If your editor checks JSON, it should report no errors.
+3. Open `data.json` in a text editor. Obsidian does not show its configuration folder, so use your system's file manager, with hidden files shown. It should hold the new value, such as `"skipForwardLength": 20`, and end with a closing `}`. If your editor checks JSON, it should report no errors.
+
+If the file still holds the old value, the cause is not fixed yet. PodNotes shows no new notice until a save succeeds, so fix the cause and check again. If the notice that PodNotes could not read the file appears instead, see [PodNotes could not read data.json](#podnotes-could-not-read-datajson).
 
 ## PodNotes could not read data.json
 
@@ -30,7 +32,7 @@ If the notice also says that PodNotes started with default settings, see [A read
 
 Your changes stay in memory. While you have unsaved changes, PodNotes reads the file again every 10 seconds. Without unsaved changes, it reads the file again when the file changes. When PodNotes can read the file again, the notice closes, and PodNotes saves your changes merged with the file. If you restart Obsidian before then, the changes in memory are lost.
 
-If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. Waiting for sync is unlikely to help then. Fix its cause, such as a full disk or a folder that does not allow writes. If the read notice stays, go to [Write a new data.json](#write-a-new-datajson).
+If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. Waiting for sync is unlikely to help then. Fix its cause, such as a full disk or a folder that does not allow writes. If the read notice is still there after you fixed the cause, go to [Write a new data.json](#write-a-new-datajson).
 
 Otherwise, try these steps first:
 
@@ -49,7 +51,7 @@ Obsidian does not show its configuration folder. On a computer, use your system'
 2. In **Settings → PodNotes**, change any setting, such as **Skip forward length (s)** to 20, so that PodNotes has a change to save. You can set it back once your library is saved. Because no file is there now, PodNotes can write again. Within about 10 seconds, it tries to write a new `data.json` with your library from memory.
 3. Keep Obsidian open, and open the new `data.json` in a text editor.
 
-Check that the file holds the setting you changed in step 2, such as `"skipForwardLength": 20`, and that it ends with a closing `}`, with no JSON errors if your editor checks them. If it does, PodNotes saved your library from memory, with your recent changes. Keep `data.json.broken` until you have checked your library on this device and your other devices, then delete it.
+Check that the file holds the setting you changed in step 2, such as `"skipForwardLength": 20`. Check that it ends with a closing `}`. If your editor checks JSON, it should report no errors. If all of this holds, PodNotes saved your library from memory, with your recent changes. Keep `data.json.broken` until you have checked your library on this device and your other devices, then delete it.
 
 If the file is missing or empty, the write failed. Keep Obsidian open, and fix the cause, such as a full disk or a folder that does not allow writes. PodNotes tries again every 10 seconds. It shows its save-failure notice on the first failed write, and does not show it again until a save succeeds.
 
