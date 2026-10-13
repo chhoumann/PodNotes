@@ -505,7 +505,12 @@ function serve() {
 			if (extra?.video) {
 				/** @type {Promise<Buffer> | undefined} */
 				let made;
-				videos[file] = () => (made ??= testPattern(seconds));
+				// A failed run is dropped, so the next request tries again.
+				videos[file] = () =>
+					(made ??= testPattern(seconds).catch((error) => {
+						made = undefined;
+						throw error;
+					}));
 			} else if (!extra?.missing) {
 				routes[file] = ["audio/wav", silentWav(seconds)];
 			}
