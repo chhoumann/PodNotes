@@ -498,6 +498,26 @@ describe("FeedRepository", () => {
 			]);
 	});
 
+	test("a guid whose twin the cache cut identifies no episode after a restart", async () => {
+		const first = setup();
+		const items = Array.from({ length: 76 }, (_, index) =>
+			item(76 - index, { guid: `own-${76 - index}` }),
+		);
+		items[0] = item(76, { guid: "shared" });
+		items[75] = item(1, { guid: "shared" });
+		await loaded(first, { Alpha: alpha }, doc("Alpha", items));
+		expect(first.cached()[alpha.url].items).toHaveLength(75);
+
+		const t = setup({ storage: first.storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+		await t.repo.ensureAll();
+
+		expect(t.load).not.toHaveBeenCalled();
+		const guids = new Map(t.feed("Alpha")!.episodes.map(({ title, guid }) => [title, guid]));
+		expect(guids.get("Episode 76")).toBeUndefined();
+		expect(guids.get("Episode 75")).toBe("own-75");
+	});
+
 	test("reads an episode's transcripts from its own subscription's feed, by guid first", async () => {
 		const t = setup();
 		const transcripts = [{ url: "https://media.test/b.vtt", type: "text/vtt" }];

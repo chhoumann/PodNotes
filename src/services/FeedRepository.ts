@@ -357,8 +357,7 @@ function projectEpisodes(
 	items: readonly ParsedEpisodeDocument[],
 	feed: Pick<PodcastFeed, "title" | "url" | "artworkUrl">,
 ): Episode[] {
-	const guidCounts = new Map<string, number>();
-	for (const { guid } of items) if (guid) guidCounts.set(guid, (guidCounts.get(guid) ?? 0) + 1);
+	const repeated = repeatedGuids(items);
 	return items.map((item) => ({
 		title: item.title,
 		streamUrl: item.streamUrl,
@@ -370,7 +369,7 @@ function projectEpisodes(
 		episodeDate: item.episodeDate,
 		feedUrl: feed.url,
 		// A guid that several items repeat identifies none of them, so notes and links never get it.
-		guid: item.guid && guidCounts.get(item.guid) === 1 ? item.guid : undefined,
+		guid: item.guid && !repeated.has(item.guid) ? item.guid : undefined,
 		itunesTitle: item.itunesTitle || "",
 		episodeNumber: item.episodeNumber,
 		duration: item.duration,
@@ -402,7 +401,22 @@ const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 function keepNewestItems(doc: FeedDocument): FeedDocument {
 	if (doc.items.length <= MAX_ITEMS_PER_FEED) return doc;
 	const kept = new Set([...doc.items].sort(newestFirst).slice(0, MAX_ITEMS_PER_FEED));
-	return { ...doc, items: doc.items.filter((item) => kept.has(item)), complete: false };
+	// The cut can drop one of two items that share a guid, which would make the other look unique.
+	const repeated = repeatedGuids(doc.items);
+	const items = doc.items
+		.filter((item) => kept.has(item))
+		.map((item) =>
+			item.guid && repeated.has(item.guid) ? { ...item, guid: undefined } : item,
+		);
+	return { ...doc, items, complete: false };
+}
+
+/** Guids that more than one item carries. */
+function repeatedGuids(items: readonly ParsedEpisodeDocument[]): Set<string> {
+	const seen = new Set<string>();
+	const repeated = new Set<string>();
+	for (const { guid } of items) if (guid) (seen.has(guid) ? repeated : seen).add(guid);
+	return repeated;
 }
 
 function evictOldest(
