@@ -20,7 +20,7 @@ import { addFrontmatterFields } from "./utility/noteFrontmatter";
 /**
  * Resolve the on-disk path of an episode's note from the configured template.
  * Centralized so the existence check, the open action, and creation all agree on
- * the exact same (length-capped) path — otherwise a truncated note would be
+ * the exact same (length-capped) path, otherwise a truncated note would be
  * re-created on every invocation. See issue #22.
  */
 function getPodcastNotePath(episode: Episode): string {
