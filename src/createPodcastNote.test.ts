@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as obsidian from "obsidian";
 import { TFile, TFolder } from "obsidian";
-import createPodcastNote, { getPodcastNote } from "./createPodcastNote";
+import createPodcastNote, {
+	createPodcastNoteFileIfNotExists,
+	getPodcastNote,
+} from "./createPodcastNote";
 import { plugin } from "./store";
+import type { Chapter } from "./types/Chapter";
 import type { Episode } from "./types/Episode";
+import { deferred } from "../tests/mocks/feeds";
 
 const mockFetchChapters = vi.hoisted(() => vi.fn());
 
@@ -453,6 +458,30 @@ describe("episode notes identified by guid (#349)", () => {
 		expect(getPodcastNote(identified)).toBe(files[0]);
 
 		await createPodcastNote(identified);
+		expect(created).toEqual([]);
+	});
+
+	it("returns a note with the episode's guid that appeared while its chapters loaded", async () => {
+		const chapters = deferred<Chapter[]>();
+		mockFetchChapters.mockReturnValueOnce(chapters.promise);
+		const notes: Note[] = [];
+		const { files, created } = vaultWith(notes, "# {{title}}\n\n{{chapters}}");
+
+		const creating = createPodcastNoteFileIfNotExists({
+			...identified,
+			chaptersUrl: "https://example.com/chapters.json",
+		});
+		const synced = {
+			path: "podcasts/Finale (synced).md",
+			frontmatter: { guid: "finale-1", feedUrl },
+		};
+		notes.push(synced);
+		files.push(
+			Object.assign(Object.create(TFile.prototype), { path: synced.path, extension: "md" }),
+		);
+		chapters.resolve([]);
+
+		expect(await creating).toEqual({ file: files[0], created: false });
 		expect(created).toEqual([]);
 	});
 

@@ -95,6 +95,10 @@ export async function createPodcastNoteFileIfNotExists(
 	const filePathDotMd = getPodcastNotePath(episode);
 	const template = pluginInstance.settings.note.template;
 	const chapters = await getTemplateChapters(template, episode);
+	// Sync can write the note while the chapters load.
+	const arrivedFile = chapters && getPodcastNote(episode);
+	if (arrivedFile) return { file: arrivedFile, created: false };
+
 	const content = NoteTemplateEngine(template, episode, { chapters });
 	const identified =
 		episode.guid && episode.feedUrl
