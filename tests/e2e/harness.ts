@@ -75,7 +75,7 @@ export function createPodNotesE2EHarness(testName: string) {
 				lock = await acquireVaultRunLock({
 					vaultName: suiteClient.vaultName,
 					vaultPath: await suiteClient.vaultPath(),
-					timeoutMs: 60_000,
+					timeoutMs: 45_000,
 				});
 				await lock.publishMarker(suiteClient);
 				await assertSingleWindow(suiteClient);
