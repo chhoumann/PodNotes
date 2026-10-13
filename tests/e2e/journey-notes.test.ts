@@ -10,7 +10,7 @@ import {
 	openInEditor,
 	openInReadingView,
 	openPodNotesSettings,
-	reloadObsidian,
+	reloadAfterPopout,
 	runFromPalette,
 	showLibrary,
 	showPodNotes,
@@ -33,7 +33,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
-import { PLUGIN_ID } from "./runtime";
+import { jsLiteral, PLUGIN_ID } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-notes");
 
@@ -143,7 +143,7 @@ async function loadedEpisode(): Promise<unknown> {
 
 async function exists(path: string): Promise<boolean> {
 	return await getContext().obsidian.dev.evalJson<boolean>(
-		`Boolean(app.vault.getAbstractFileByPath(${JSON.stringify(path)}))`,
+		`Boolean(app.vault.getAbstractFileByPath(${jsLiteral(path)}))`,
 	);
 }
 
@@ -173,7 +173,7 @@ async function waitForActiveFile(path: string, message: string): Promise<void> {
 	await getContext().obsidian.waitFor(
 		() =>
 			getContext().obsidian.dev.evalJson<boolean>(
-				`app.workspace.getActiveFile()?.path === ${JSON.stringify(path)}`,
+				`app.workspace.getActiveFile()?.path === ${jsLiteral(path)}`,
 			),
 		{ timeoutMs: 10_000, intervalMs: 100, message },
 	);
@@ -183,7 +183,7 @@ async function waitForPrompt(placeholder: string): Promise<void> {
 	await getContext().obsidian.waitFor(
 		() =>
 			getContext().obsidian.dev.evalJson<boolean>(
-				`document.querySelector(".prompt .prompt-input")?.placeholder === ${JSON.stringify(placeholder)}`,
+				`document.querySelector(".prompt .prompt-input")?.placeholder === ${jsLiteral(placeholder)}`,
 			),
 		{ timeoutMs: 10_000, intervalMs: 100, message: `the "${placeholder}" picker` },
 	);
@@ -209,7 +209,7 @@ async function properties(path: string): Promise<Record<string, unknown>> {
 	return await obsidian.waitFor(
 		async () =>
 			(await obsidian.dev.evalJson<Record<string, unknown> | null>(
-				`app.metadataCache.getFileCache(app.vault.getAbstractFileByPath(${JSON.stringify(path)}))?.frontmatter ?? null`,
+				`app.metadataCache.getFileCache(app.vault.getAbstractFileByPath(${jsLiteral(path)}))?.frontmatter ?? null`,
 			)) ?? false,
 		{
 			timeoutMs: 10_000,
@@ -581,7 +581,7 @@ describe("episode note and capture journeys", () => {
 			expect(
 				await obsidian.dev.evalJsonAsync<boolean>(`(async () => {
 					const leaf = app.workspace.openPopoutLeaf();
-					await leaf.openFile(app.vault.getAbstractFileByPath(${JSON.stringify(draft)}), { state: { mode: "source" } });
+					await leaf.openFile(app.vault.getAbstractFileByPath(${jsLiteral(draft)}), { state: { mode: "source" } });
 					return leaf.view.containerEl.ownerDocument !== document;
 				})()`),
 				"the draft open in a popout window",
@@ -632,12 +632,7 @@ describe("episode note and capture journeys", () => {
 				await app.workspace.saveLayout();
 				return true;
 			})()`);
-			// Obsidian can keep a ResizeObserver loop running in the main window after a popout
-			// closes, with PodNotes disabled too, until the window reloads.
-			await reloadObsidian(
-				obsidian,
-				"ResizeObserver loop completed with undelivered notifications.",
-			);
+			await reloadAfterPopout(obsidian);
 		}
 	});
 });

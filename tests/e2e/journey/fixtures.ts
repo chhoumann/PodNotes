@@ -2,6 +2,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ObsidianClient } from "obsidian-e2e";
 import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
+import { jsLiteral } from "../runtime";
 
 export type FixtureTranscript = Readonly<{
 	path: string;
@@ -327,7 +328,7 @@ export async function installItunesStub(
 		ipc.send = function (channel, replyChannel, request, ...rest) {
 			if (channel === "request-url" && typeof request?.url === "string" && request.url.startsWith("https://itunes.apple.com/search?")) {
 				terms.push(new URL(request.url).searchParams.get("term"));
-				const body = new TextEncoder().encode(JSON.stringify({ resultCount: ${results.length}, results: ${JSON.stringify(results)} })).buffer;
+				const body = new TextEncoder().encode(JSON.stringify({ resultCount: ${results.length}, results: ${jsLiteral(results)} })).buffer;
 				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
 				return;
 			}
@@ -360,7 +361,7 @@ export async function installDeepgramTripwire(obsidian: ObsidianClient): Promise
 		const originalSend = ipc.send;
 		const requests = [];
 		ipc.send = function (channel, replyChannel, request, ...rest) {
-			if (channel === "request-url" && typeof request?.url === "string" && request.url.startsWith(${JSON.stringify(DEEPGRAM_ORIGIN)})) {
+			if (channel === "request-url" && typeof request?.url === "string" && request.url.startsWith(${jsLiteral(DEEPGRAM_ORIGIN)})) {
 				requests.push(request.url);
 				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 500, headers: {}, body: new ArrayBuffer(0) }));
 				return;
@@ -404,7 +405,7 @@ export async function installOpenAIStub(obsidian: ObsidianClient, text: string):
 		const uploads = [];
 		window.fetch = async function (input, init) {
 			const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-			if (url !== ${JSON.stringify(OPENAI_TRANSCRIPTIONS_URL)}) return originalFetch.call(this, input, init);
+			if (url !== ${jsLiteral(OPENAI_TRANSCRIPTIONS_URL)}) return originalFetch.call(this, input, init);
 			const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 			if (method !== "POST") throw new TypeError("The transcription upload must use POST.");
 			const body = init?.body;
@@ -420,7 +421,7 @@ export async function installOpenAIStub(obsidian: ObsidianClient, text: string):
 				riffWave: ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE",
 				sha256: require("node:crypto").createHash("sha256").update(bytes).digest("hex"),
 			});
-			return new Response(JSON.stringify({ text: ${JSON.stringify(text)} }), {
+			return new Response(JSON.stringify({ text: ${jsLiteral(text)} }), {
 				status: 200,
 				headers: { "content-type": "application/json" },
 			});

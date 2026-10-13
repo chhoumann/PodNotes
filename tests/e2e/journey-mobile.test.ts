@@ -10,7 +10,7 @@ import {
 	waitUntilShown,
 } from "./journey/actions";
 import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
-import { RELOAD_OPTIONS } from "./runtime";
+import { jsLiteral, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-mobile");
 
@@ -63,7 +63,7 @@ describe("mobile journeys", () => {
 			},
 		});
 		await obsidian.dev.evalJson(
-			`app.saveLocalStorage("podnotes:feed-cache:v5", ${JSON.stringify(legacyCache)}), true`,
+			`app.saveLocalStorage("podnotes:feed-cache:v5", ${jsLiteral(legacyCache)}), true`,
 		);
 
 		await plugin.updateDataAndReload<Record<string, any>>((data) => {

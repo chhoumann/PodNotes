@@ -16,7 +16,14 @@ import {
 	getPlaybackState,
 	openPodNotesView,
 } from "./harness";
-import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
+import {
+	jsLiteral,
+	PLUGIN_ID,
+	RELOAD_OPTIONS,
+	VIEW_TYPE,
+	WAIT_OPTS,
+	waitForPodNotesReady,
+} from "./runtime";
 
 const getContext = createPodNotesE2EHarness("podnotes-runtime");
 
@@ -39,21 +46,21 @@ describe("PodNotes runtime", () => {
 		}>(`
 			(() => ({
 				captureUsesCallback:
-					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.callback === "function",
+					typeof app.commands?.commands?.[${jsLiteral(`${PLUGIN_ID}:capture-timestamp`)}]?.callback === "function",
 				captureUsesEditorCallback:
-					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCallback === "function",
+					typeof app.commands?.commands?.[${jsLiteral(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCallback === "function",
 				captureUsesEditorCheckCallback:
-					typeof app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCheckCallback === "function",
-				hasCaptureSegment10Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-10s`)}]),
-				hasCaptureSegment20Command: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:capture-segment-20s`)}]),
-				hasProtocolHandler: (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers)?.has(${JSON.stringify(PLUGIN_ID)}) ?? false,
+					typeof app.commands?.commands?.[${jsLiteral(`${PLUGIN_ID}:capture-timestamp`)}]?.editorCheckCallback === "function",
+				hasCaptureSegment10Command: Boolean(app.commands?.commands?.[${jsLiteral(`${PLUGIN_ID}:capture-segment-10s`)}]),
+				hasCaptureSegment20Command: Boolean(app.commands?.commands?.[${jsLiteral(`${PLUGIN_ID}:capture-segment-20s`)}]),
+				hasProtocolHandler: (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers)?.has(${jsLiteral(PLUGIN_ID)}) ?? false,
 				hasRateCommands: [
-					${JSON.stringify(`${PLUGIN_ID}:increase-playback-rate`)},
-					${JSON.stringify(`${PLUGIN_ID}:decrease-playback-rate`)},
-					${JSON.stringify(`${PLUGIN_ID}:reset-playback-rate`)},
+					${jsLiteral(`${PLUGIN_ID}:increase-playback-rate`)},
+					${jsLiteral(`${PLUGIN_ID}:decrease-playback-rate`)},
+					${jsLiteral(`${PLUGIN_ID}:reset-playback-rate`)},
 				].every((id) => Boolean(app.commands?.commands?.[id])),
-				hasShowCommand: Boolean(app.commands?.commands?.[${JSON.stringify(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
-				viewCount: app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length,
+				hasShowCommand: Boolean(app.commands?.commands?.[${jsLiteral(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
+				viewCount: app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).length,
 			}))()
 		`);
 
@@ -661,7 +668,7 @@ describe("PodNotes runtime", () => {
 				window.__podnotesNoteOpen = { prototype, original, done: false };
 				prototype.openFile = function(file, ...args) {
 					const opening = original.call(this, file, ...args);
-					if (file.path === ${JSON.stringify(notePath)}) {
+					if (file.path === ${jsLiteral(notePath)}) {
 						void opening.then(
 							() => { window.__podnotesNoteOpen.done = true; },
 							(error) => { window.__podnotesNoteOpen.error = String(error); },
@@ -701,7 +708,7 @@ describe("PodNotes runtime", () => {
 				obsidian,
 				`
 				(async () => {
-					const file = app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});
+					const file = app.vault.getAbstractFileByPath(${jsLiteral(notePath)});
 					if (!file) throw new Error("Template escaping note was not created.");
 					const leaf = app.workspace.getLeavesOfType("markdown").find(
 						(candidate) => candidate.view?.file?.path === file.path,
@@ -726,7 +733,7 @@ describe("PodNotes runtime", () => {
 							const preview = document.querySelector(
 								".workspace-leaf.mod-active .markdown-preview-view",
 							);
-							return Boolean(preview?.textContent?.includes(${JSON.stringify(visible)}));
+							return Boolean(preview?.textContent?.includes(${jsLiteral(visible)}));
 						})()
 					`),
 				WAIT_OPTS,
@@ -783,7 +790,7 @@ describe("PodNotes runtime", () => {
 			const after = await plugin.data<PodNotesData>().read();
 			const state = await obsidian.dev.evalJson<{ hasCommand: boolean; ready: boolean }>(
 				`(() => ({
-					hasCommand: Boolean(app.commands.commands[${JSON.stringify(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
+					hasCommand: Boolean(app.commands.commands[${jsLiteral(`${PLUGIN_ID}:podnotes-show-leaf`)}]),
 					ready: app.plugins.plugins.${PLUGIN_ID}?.isReady === true,
 				}))()`,
 			);
@@ -799,8 +806,8 @@ describe("PodNotes runtime", () => {
 			await evalJsonAsync<boolean>(
 				obsidian,
 				`(async () => {
-					await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
-					void app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)}).catch((error) => {
+					await app.plugins.disablePlugin(${jsLiteral(PLUGIN_ID)});
+					void app.plugins.enablePlugin(${jsLiteral(PLUGIN_ID)}).catch((error) => {
 						console.error("PodNotes E2E: restored enable failed", error);
 					});
 					return true;
@@ -934,7 +941,7 @@ async function openMarkdownFile(
 		obsidian,
 		`
 		(async () => {
-			const targetPath = ${JSON.stringify(path)};
+			const targetPath = ${jsLiteral(path)};
 			let file = app.vault.getAbstractFileByPath(targetPath);
 			if (!file) {
 				const parentParts = targetPath.split("/").slice(0, -1);
@@ -1072,8 +1079,8 @@ async function setPlayback(
 	await obsidian.dev.evalJson(`
 		(() => {
 			const api = app.plugins.plugins.${PLUGIN_ID}.api;
-			api.currentTime = ${JSON.stringify(currentTime)};
-			if (${JSON.stringify(paused)}) {
+			api.currentTime = ${jsLiteral(currentTime)};
+			if (${jsLiteral(paused)}) {
 				api.stop();
 			} else {
 				api.start();
@@ -1089,7 +1096,7 @@ async function setVolume(
 ): Promise<void> {
 	await obsidian.dev.evalJson(`
 		(() => {
-			app.plugins.plugins.${PLUGIN_ID}.api.volume = ${JSON.stringify(value)};
+			app.plugins.plugins.${PLUGIN_ID}.api.volume = ${jsLiteral(value)};
 			return true;
 		})()
 	`);
@@ -1192,8 +1199,8 @@ async function installMediaSessionRecorder(
 				return result;
 			};
 
-			await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
-			await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});
+			await app.plugins.disablePlugin(${jsLiteral(PLUGIN_ID)});
+			await app.plugins.enablePlugin(${jsLiteral(PLUGIN_ID)});
 
 			return { ok: true };
 		})()
@@ -1240,18 +1247,18 @@ async function invokeRecordedMediaSessionAction(
 		`
 		(() => {
 			const handlers = globalThis.__podnotesMediaSessionHandlers ?? {};
-			const handler = handlers[${JSON.stringify(action)}];
+			const handler = handlers[${jsLiteral(action)}];
 
 			if (typeof handler !== "function") {
 				return {
-					action: ${JSON.stringify(action)},
+					action: ${jsLiteral(action)},
 					ok: false,
 					error: "Media Session action handler was not registered.",
 				};
 			}
 
-			handler({ ...${JSON.stringify(details)}, action: ${JSON.stringify(action)} });
-			return { action: ${JSON.stringify(action)}, ok: true };
+			handler({ ...${jsLiteral(details)}, action: ${jsLiteral(action)} });
+			return { action: ${jsLiteral(action)}, ok: true };
 		})()
 	`,
 	);

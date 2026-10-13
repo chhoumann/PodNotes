@@ -9,7 +9,7 @@ import {
 } from "./harness";
 
 import { click, revealInFileExplorer, showList, ui } from "./journey/actions";
-import { RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
+import { jsLiteral, RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 type PodNotesData = Partial<IPodNotesSettings>;
 
@@ -72,11 +72,11 @@ describe("local files runtime", () => {
 				const after = await evalJsonAsync<{ listed: boolean; original: boolean }>(
 					obsidian,
 					`(async () => {
-					const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0]?.view;
+					const view = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0]?.view;
 					return {
 						listed: Array.from(view?.containerEl.querySelectorAll(".episode-item-title") ?? [])
-							.some((candidate) => candidate.textContent?.trim() === ${JSON.stringify(title)}),
-						original: await app.vault.adapter.exists(${JSON.stringify(audioPath)}),
+							.some((candidate) => candidate.textContent?.trim() === ${jsLiteral(title)}),
+						original: await app.vault.adapter.exists(${jsLiteral(audioPath)}),
 					};
 				})()`,
 				);
@@ -90,7 +90,7 @@ describe("local files runtime", () => {
 				await evalJsonAsync<boolean>(
 					obsidian,
 					`(async () => {
-					for (const path of ${JSON.stringify(await trashedFixture())}) {
+					for (const path of ${jsLiteral(await trashedFixture())}) {
 						await app.vault.adapter.remove(path);
 					}
 					return true;
@@ -142,7 +142,7 @@ describe("local files runtime", () => {
 		await evalJsonAsync<boolean>(
 			obsidian,
 			`(async () => {
-				await app.vault.adapter.writeBinary(${JSON.stringify(unindexedPath)}, new ArrayBuffer(${SILENT_WAV_SECOND_BYTES}));
+				await app.vault.adapter.writeBinary(${jsLiteral(unindexedPath)}, new ArrayBuffer(${SILENT_WAV_SECOND_BYTES}));
 				return true;
 			})()`,
 		);
@@ -222,10 +222,10 @@ describe("local files runtime", () => {
 					const { adapter } = app.vault;
 					return {
 						prompt: Boolean(document.querySelector(".modal-container")),
-						kept: await adapter.exists(${JSON.stringify(recordingPath(kept))}),
-						discarded: await adapter.exists(${JSON.stringify(recordingPath(discarded))}),
-						legacy: await adapter.exists(${JSON.stringify(recordingPath(legacy))}),
-						unindexed: await adapter.exists(${JSON.stringify(unindexedPath)}),
+						kept: await adapter.exists(${jsLiteral(recordingPath(kept))}),
+						discarded: await adapter.exists(${jsLiteral(recordingPath(discarded))}),
+						legacy: await adapter.exists(${jsLiteral(recordingPath(legacy))}),
+						unindexed: await adapter.exists(${jsLiteral(unindexedPath)}),
 					};
 				})()`,
 			);
@@ -243,15 +243,15 @@ describe("local files runtime", () => {
 				obsidian,
 				`(async () => {
 					for (const modal of document.querySelectorAll(".modal-container")) {
-						if (modal.textContent.includes(${JSON.stringify(String(stamp))})) {
+						if (modal.textContent.includes(${jsLiteral(String(stamp))})) {
 							modal.querySelector(".modal-header-button")?.click();
 						}
 					}
-					for (const path of ${JSON.stringify(await trashedFixtures())}) {
+					for (const path of ${jsLiteral(await trashedFixtures())}) {
 						await app.vault.adapter.remove(path);
 					}
-					if (await app.vault.adapter.exists(${JSON.stringify(unindexedPath)})) {
-						await app.vault.adapter.remove(${JSON.stringify(unindexedPath)});
+					if (await app.vault.adapter.exists(${jsLiteral(unindexedPath)})) {
+						await app.vault.adapter.remove(${jsLiteral(unindexedPath)});
 					}
 					return true;
 				})()`,
@@ -274,7 +274,7 @@ async function removalPrompt(
 	obsidian: ObsidianClient,
 	path: string,
 ): Promise<{ prompt: string | null; focused: string | null; original: boolean }> {
-	const original = `app.vault.adapter.exists(${JSON.stringify(path)})`;
+	const original = `app.vault.adapter.exists(${jsLiteral(path)})`;
 	await obsidian.waitFor(
 		() =>
 			evalJsonAsync<boolean>(
@@ -294,7 +294,7 @@ async function removalPrompt(
 }
 
 async function clickModalButton(obsidian: ObsidianClient, label: string): Promise<void> {
-	const button = `Array.from(document.querySelectorAll(".modal-container button")).find((button) => button.textContent?.trim() === ${JSON.stringify(label)})`;
+	const button = `Array.from(document.querySelectorAll(".modal-container button")).find((button) => button.textContent?.trim() === ${jsLiteral(label)})`;
 	await obsidian.waitFor(() => obsidian.dev.evalJson<boolean>(`Boolean(${button})`), {
 		...WAIT_OPTS,
 		message: `Modal button "${label}" did not appear.`,
@@ -308,7 +308,7 @@ async function clickMenuItem(obsidian: ObsidianClient, label: string): Promise<s
 	await obsidian.waitFor(
 		() =>
 			obsidian.dev.evalJson<boolean>(
-				`${items}.map(${titleOf}).includes(${JSON.stringify(label)})`,
+				`${items}.map(${titleOf}).includes(${jsLiteral(label)})`,
 			),
 		{ ...WAIT_OPTS, message: `Menu item "${label}" did not appear.` },
 	);
@@ -317,14 +317,14 @@ async function clickMenuItem(obsidian: ObsidianClient, label: string): Promise<s
 		`(() => {
 			const items = ${items};
 			const offered = items.map(${titleOf});
-			items[offered.indexOf(${JSON.stringify(label)})].click();
+			items[offered.indexOf(${jsLiteral(label)})].click();
 			return offered;
 		})()`,
 	);
 }
 
 async function clickInPodNotesView(obsidian: ObsidianClient, selector: string): Promise<void> {
-	const findTarget = `app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0]?.view.containerEl.querySelector(${JSON.stringify(selector)})`;
+	const findTarget = `app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0]?.view.containerEl.querySelector(${jsLiteral(selector)})`;
 	await obsidian.waitFor(
 		() =>
 			obsidian.dev.evalJson<boolean>(

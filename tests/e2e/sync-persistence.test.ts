@@ -15,7 +15,6 @@ import {
 	waitForPlaybackState,
 } from "./harness";
 import {
-	assertNoRuntimeErrors,
 	click,
 	closeSettings,
 	listedEpisodes,
@@ -26,7 +25,8 @@ import {
 } from "./journey/actions";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import { seedLibrary, waitForLibrary } from "./journey/library";
-import { PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
+import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
+import { assertNoNewRuntimeErrors } from "./runtime-evidence";
 
 // Obsidian calls Plugin#onExternalSettingsChange when data.json is newer than
 // the plugin's last write: Obsidian Sync, iCloud, another instance on the vault,
@@ -259,7 +259,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 				const podnotes = app.plugins.plugins.${PLUGIN_ID};
 				const path = podnotes.manifest.dir + "/data.json";
 				const data = JSON.parse(await app.vault.adapter.read(path));
-				data.savedFeeds[${JSON.stringify(SYNCED_FEED.title)}] = ${JSON.stringify(SYNCED_FEED)};
+				data.savedFeeds[${jsLiteral(SYNCED_FEED.title)}] = ${jsLiteral(SYNCED_FEED)};
 				let release;
 				const held = new Promise((resolve) => { release = resolve; });
 				const read = podnotes.loadData.bind(podnotes);
@@ -268,13 +268,13 @@ describe("PodNotes data.json changed elsewhere", () => {
 					await app.vault.adapter.write(path, JSON.stringify(data));
 					podnotes.api.volume = 0.27;
 					void podnotes.onExternalSettingsChange?.();
-					await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
+					await app.plugins.disablePlugin(${jsLiteral(PLUGIN_ID)});
 					release();
 					await podnotes.flushSaves();
 					return JSON.parse(await app.vault.adapter.read(path));
 				} finally {
 					release();
-					await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});
+					await app.plugins.enablePlugin(${jsLiteral(PLUGIN_ID)});
 				}
 			})()`,
 		);
@@ -441,7 +441,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			expect(await listedEpisodes(obsidian)).toEqual(["Renamed Show Episode"]);
 		}
 		await openPodNotesSettings(obsidian);
-		await assertNoRuntimeErrors(obsidian);
+		await assertNoNewRuntimeErrors(obsidian);
 	});
 });
 
