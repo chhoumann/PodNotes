@@ -16,6 +16,7 @@ import { fetchChapters } from "./utility/fetchChapters";
 import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
 import { findByGuid } from "./utility/findByGuid";
 import { addFrontmatterFields } from "./utility/noteFrontmatter";
+import { vaultSafeLinkTarget } from "./services/privateFeeds";
 
 /**
  * Resolve the on-disk path of an episode's note from the configured template.
@@ -100,11 +101,12 @@ export async function createPodcastNoteFileIfNotExists(
 	if (arrivedFile) return { file: arrivedFile, created: false };
 
 	const content = NoteTemplateEngine(template, episode, { chapters });
+	const feedUrl = vaultSafeLinkTarget(episode, episode.feedUrl);
 	const identified =
-		episode.guid && episode.feedUrl
+		episode.guid && feedUrl
 			? addFrontmatterFields(content, [
 					["guid", episode.guid],
-					["feedUrl", episode.feedUrl],
+					["feedUrl", feedUrl],
 				])
 			: content;
 

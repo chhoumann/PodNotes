@@ -309,4 +309,40 @@ describe("published transcripts", () => {
 			);
 		}
 	});
+
+	test.each([
+		[
+			"timed",
+			{ url: "1.vtt", type: "text/vtt" },
+			(feed: string) =>
+				`WEBVTT\n\n00:00:00.480 --> 00:00:04.410\n<v Host ${feed}>Your feed: ${feed}\n`,
+			"# Test Episode\n\n00:00:00 **Host podnotes-private-feed:Test\\%20Podcast:** Your feed: podnotes-private-feed:Test\\%20Podcast",
+		],
+		[
+			"untimed",
+			{ url: "1.txt", type: "text/plain" },
+			(feed: string) => `Your feed: ${feed}`,
+			"# Test Episode\n\nYour feed: podnotes-private-feed:Test\\%20Podcast",
+		],
+	])(
+		"a %s transcript quoting the episode's private feed keeps no address",
+		async (_, link, body, note) => {
+			const secretFeed = "https://private.example.com/rss?auth=REVIEW%2FSENTINEL";
+			fetchTextMock.mockResolvedValue(body(secretFeed));
+			const plugin = createMockPlugin({
+				openAIKey: "",
+				podcast: { ...mockEpisode, feedUrl: secretFeed },
+				transcripts: [link],
+			});
+			const service = new TranscriptionService(plugin);
+
+			await service.transcribeCurrentEpisode();
+			await finished(service, "Saved the transcript the feed publishes.");
+
+			expect(plugin.app.vault.create).toHaveBeenCalledExactlyOnceWith(
+				"Transcripts/Test Podcast/Test Episode.md",
+				note,
+			);
+		},
+	);
 });

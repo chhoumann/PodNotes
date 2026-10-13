@@ -17,6 +17,7 @@ import type { PodcastSegmentTimes } from "./utility/podcastSegment";
 import type { Chapter } from "./types/Chapter";
 import { normalizeChapters } from "./utility/normalizeChapters";
 import { isFetchableUrl } from "./utility/assertFetchableUrl";
+import { vaultSafeLinkTarget, withoutPrivateFeedAddresses } from "./services/privateFeeds";
 
 // Each tag is either a literal string or a function taking at most one argument
 // (the raw text after the leading colon, e.g. the format in {{date:YYYY}}). The
@@ -32,7 +33,7 @@ type ReplacerFn = (template: string) => string;
 
 // The optional argument group uses `.*?` (zero-or-more), so a bare trailing
 // colon ({{date:}}) is captured AS the argument group (params === ":") rather
-// than being absorbed into the tag id — which previously yielded tagId "date:",
+// than being absorbed into the tag id - which previously yielded tagId "date:",
 // an unknown tag, and a spurious "invalid tag" Notice (NT-05/CH-09).
 const TEMPLATE_TAG_REGEX = /\{\{(.*?)(:\s*.*?)?\}\}/g;
 
@@ -46,6 +47,10 @@ export function templateHasTag(template: string, tag: Lowercase<string>): boolea
 	);
 }
 
+function withoutFeedAddresses(feed: PodcastFeed): PodcastFeed {
+	return withoutPrivateFeedAddresses([feed, { feedUrl: feed.url }] as const)[0];
+}
+
 function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	const tags: Tags = {};
 
@@ -54,7 +59,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 	}
 
 	function replacer(template: string): string {
-		return template.replace(
+		return withoutPrivateFeedAddresses(template).replace(
 			TEMPLATE_TAG_REGEX,
 			(match: string, tagId: string, params: string) => {
 				const tagValue = tags[tagId.toLowerCase()];
@@ -74,7 +79,7 @@ function useTemplateEngine(): Readonly<[ReplacerFn, AddTagFn]> {
 				if (typeof tagValue === "function") {
 					// Everything after the leading colon is a single argument. A bare
 					// trailing colon ({{date:}}) means "use the tag default", same as a
-					// bare {{date}} — not an empty format string (NT-05/CH-09). Only an
+					// bare {{date}} - not an empty format string (NT-05/CH-09). Only an
 					// EMPTY argument is collapsed; a whitespace argument ({{description: }})
 					// is preserved so the obscure space-prepend usage still works.
 					const arg = params ? params.slice(1) : "";
@@ -128,7 +133,7 @@ function legalizedNameTag(
  * template engine: {{title}} and {{podcast}} (illegal-character-stripped, with an
  * optional whitespace-replacement arg), {{date}} (episode publish date),
  * {{currentdate}}, and {{episodenumber}}. NoteTemplateEngine intentionally does
- * NOT use this — there {{title}} is the raw episode title, not a file name.
+ * NOT use this - there {{title}} is the raw episode title, not a file name.
  */
 function addEpisodeFileNameTags(
 	addTag: AddTagFn,
@@ -233,7 +238,7 @@ function neutralizeMarkdownEmbeds(markdown: string): string {
  * rewritten here to avoid mangling legitimate inline code in programming show
  * notes.
  */
-function feedHtmlToMarkdown(html: string): string {
+function feedHtmlToMarkdown(html: string, source: object): string {
 	const document = new DOMParser().parseFromString(html, "text/html");
 	for (const element of document.querySelectorAll(
 		"img, audio, video, source, iframe, object, embed, link",
@@ -241,6 +246,13 @@ function feedHtmlToMarkdown(html: string): string {
 		const alt = element.instanceOf(HTMLImageElement) ? element.alt.trim() : "";
 		element.replaceWith(document.createTextNode(alt));
 	}
+	// Entities can spell out a private feed address, so redact the decoded text.
+	const nodes = [document.body, ...document.body.querySelectorAll("*")].flatMap((element) => [
+		...element.attributes,
+		...element.childNodes,
+	]);
+	const [, values] = withoutPrivateFeedAddresses([source, nodes.map((node) => node.nodeValue)]);
+	nodes.forEach((node, index) => (node.nodeValue = values[index]));
 	return neutralizeMarkdownEmbeds(
 		neutralizeExecutableCodeBlocks(htmlToMarkdown(document.body.innerHTML)),
 	);
@@ -279,17 +291,23 @@ function resolveEpisodeUrl(episode: Episode): string {
 
 export function NoteTemplateEngine(
 	template: string,
-	episode: Episode,
+	liveEpisode: Episode,
 	context: NoteTemplateContext = {},
 ) {
 	const [replacer, addTag] = useTemplateEngine();
+	const parentFeed = get(plugin)?.settings?.savedFeeds?.[liveEpisode.podcastName];
+	const [episode, chapters, feedArtwork] = withoutPrivateFeedAddresses([
+		liveEpisode,
+		context.chapters,
+		parentFeed?.artworkUrl,
+	] as const);
 
 	const episodeUrl = resolveEpisodeUrl(episode);
 
 	addTag("title", escapeMarkdownBodyText(episode.title));
 	addTag("description", (prependToLines?: string) => {
 		// reduce multiple new lines
-		const sanitizeDescription = feedHtmlToMarkdown(episode.description).replace(
+		const sanitizeDescription = feedHtmlToMarkdown(episode.description, liveEpisode).replace(
 			/\n{3,}/g,
 			"\n\n",
 		);
@@ -304,13 +322,13 @@ export function NoteTemplateEngine(
 	});
 	addTag("content", (prependToLines?: string) => {
 		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.content)
+			return feedHtmlToMarkdown(episode.content, liveEpisode)
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return feedHtmlToMarkdown(episode.content);
+		return feedHtmlToMarkdown(episode.content, liveEpisode);
 	});
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
 	addTag("stream", sanitizePortableResourceUrl(episode.streamUrl));
@@ -332,7 +350,7 @@ export function NoteTemplateEngine(
 	// Podcasting 2.0 chapters, fetched before note creation when the template
 	// asks for them. Empty when the feed has no chapters URL or fetching fails.
 	addTag("chapters", (prependToLines?: string) =>
-		formatTemplateChapters(context.chapters, prependToLines),
+		formatTemplateChapters(chapters, prependToLines),
 	);
 	addTag("podcast", replaceIllegalFileNameCharactersInString(episode.podcastName));
 	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
@@ -342,12 +360,11 @@ export function NoteTemplateEngine(
 	// (which always describe the episode itself). See issue #163.
 	addTag("episodeurl", episodeUrl);
 	addTag("episodeartwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
-	addTag("feedurl", sanitizeUrlForTemplate(episode.feedUrl ?? ""));
-	const parentFeed = get(plugin)?.settings?.savedFeeds?.[episode.podcastName];
 	addTag(
-		"feedartwork",
-		sanitizePortableResourceUrl(parentFeed?.artworkUrl ?? episode.artworkUrl ?? ""),
+		"feedurl",
+		sanitizeUrlForTemplate(vaultSafeLinkTarget(liveEpisode, liveEpisode.feedUrl) ?? ""),
 	);
+	addTag("feedartwork", sanitizePortableResourceUrl(feedArtwork ?? episode.artworkUrl ?? ""));
 	// A ready-made wikilink to the parent feed's note, pointing at the same file
 	// createFeedNote writes (derived from the feed-note path setting).
 	addTag("podcastlink", getFeedNoteWikilink(episode.podcastName));
@@ -356,7 +373,7 @@ export function NoteTemplateEngine(
 	// never been played). The resume point is resolved at click time, not baked
 	// in here, so a single templated link always jumps to where you left off.
 	// Empty when the episode has no feed/file URL to address it by. See issue #35.
-	addTag("episodelink", buildEpisodeResumeLink(episode));
+	addTag("episodelink", buildEpisodeResumeLink(liveEpisode));
 
 	return replacer(template);
 }
@@ -410,7 +427,7 @@ export function FilePathTemplateEngine(
 ) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	addEpisodeFileNameTags(addTag, episode, sanitizeFileName);
+	addEpisodeFileNameTags(addTag, withoutPrivateFeedAddresses(episode), sanitizeFileName);
 
 	return replacer(template);
 }
@@ -431,17 +448,21 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 
 	const [replacer, addTag] = useTemplateEngine();
 
-	addEpisodeFileNameTags(addTag, episode);
+	addEpisodeFileNameTags(addTag, withoutPrivateFeedAddresses(episode));
 
 	return replacer(templateWithoutExtension);
 }
 
 export function TranscriptTemplateEngine(
 	template: string,
-	episode: Episode,
-	transcription: string,
+	liveEpisode: Episode,
+	liveTranscription: string,
 ) {
 	const [replacer, addTag] = useTemplateEngine();
+	const [episode, transcription] = withoutPrivateFeedAddresses([
+		liveEpisode,
+		liveTranscription,
+	] as const);
 
 	addEpisodeFileNameTags(addTag, episode);
 	addTag("duration", (format?: string) =>
@@ -450,13 +471,13 @@ export function TranscriptTemplateEngine(
 	addTag("transcript", transcription);
 	addTag("description", (prependToLines?: string) => {
 		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.description)
+			return feedHtmlToMarkdown(episode.description, liveEpisode)
 				.split("\n")
 				.map((str) => `${prependToLines}${str}`)
 				.join("\n");
 		}
 
-		return feedHtmlToMarkdown(episode.description);
+		return feedHtmlToMarkdown(episode.description, liveEpisode);
 	});
 	addTag("url", resolveEpisodeUrl(episode));
 	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
@@ -464,8 +485,9 @@ export function TranscriptTemplateEngine(
 	return replacer(template);
 }
 
-export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
+export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) {
 	const [replacer, addTag] = useTemplateEngine();
+	const feed = withoutFeedAddresses(liveFeed);
 
 	const safeTitle = replaceIllegalFileNameCharactersInString(feed.title);
 
@@ -480,15 +502,14 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 	// inside quoted YAML frontmatter scalars (the default feed template uses both).
 	// A well-formed URL never contains the characters this neutralizes.
 	addTag("url", sanitizeUrlForTemplate(feed.link ?? ""));
-	addTag("feedurl", sanitizeUrlForTemplate(feed.url));
+	addTag("feedurl", sanitizeUrlForTemplate(vaultSafeLinkTarget(liveFeed, liveFeed.url) ?? ""));
 	addTag("artwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("feedartwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
 	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "").replace(
-			/\n{3,}/g,
-			"\n\n",
-		);
+		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "", {
+			feedUrl: liveFeed.url,
+		}).replace(/\n{3,}/g, "\n\n");
 		if (prependToLines) {
 			return sanitizeDescription
 				.split("\n")
@@ -506,7 +527,7 @@ export function FeedNoteTemplateEngine(template: string, feed: PodcastFeed) {
 export function FeedFilePathTemplateEngine(template: string, feed: PodcastFeed) {
 	const [replacer, addTag] = useTemplateEngine();
 
-	const nameTag = legalizedNameTag(feed.title);
+	const nameTag = legalizedNameTag(withoutFeedAddresses(feed).title);
 	addTag("title", nameTag);
 	addTag("podcast", nameTag);
 	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));

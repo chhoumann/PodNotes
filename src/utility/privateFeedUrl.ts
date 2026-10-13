@@ -91,12 +91,11 @@ export function parsePrivateFeedPlaceholder(value: string): string | null {
 	}
 }
 
-/**
- * `url` as a request sends it, so the scheme and host in any case, and with or
- * without a default port, name the same feed. As given when it is not a URL.
- */
 export function canonicalUrl(url: string): string {
-	return checkStringIsUrl(url)?.href ?? url;
+	const parsed = checkStringIsUrl(url);
+	if (!parsed) return url;
+	parsed.hostname = parsed.hostname.replace(/\.$/, "");
+	return parsed.href;
 }
 
 /**
@@ -140,20 +139,22 @@ export function redactPrivateFeedAddresses<T>(
 	// plugin, so keep this untagged to let Obsidian reuse it across reloads.
 	const candidate = new RegExp(
 		hosts.map((host) => host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") +
-			"|https?:\\/\\/[^\\s/?#]*[%\\\\\\[\\u0080-\\uFFFF]|https?:\\/\\/(?:[^\\s/?#@]*@)?[\\d/\\\\]",
+			"|https?:[/\\\\]*[^\\s/?#]*[%\\\\\\[\\u0080-\\uFFFF]|https?:[/\\\\]*(?:[^\\s/?#@]*@)?\\d",
 		"i",
 	);
 	const matches = new Map<string, string | undefined>();
 	const lookup = (address: string) => {
 		if (matches.has(address)) return matches.get(address);
-		const replacement = placeholders.get(canonicalUrl(address).split("#")[0]);
+		const replacement = placeholders.get(
+			canonicalUrl(address.replace(/&amp;/gi, "&")).split("#")[0],
+		);
 		matches.set(address, replacement);
 		return replacement;
 	};
 	return replaceStrings(document, (value) => {
-		if (!value.includes("://") || !candidate.test(value)) return value;
-		if (/^https?:\/\/[^\s<>"'`]+$/i.test(value)) return lookup(value) ?? value;
-		return value.replace(/https?:\/\/[^\s<>"'`]+/gi, (address) => {
+		if (!/https?:/i.test(value) || !candidate.test(value)) return value;
+		if (/^https?:[^\s<>"'`]+$/i.test(value)) return lookup(value) ?? value;
+		return value.replace(/https?:[^\s<>"'`]+/gi, (address) => {
 			const whole = lookup(address);
 			if (whole) return whole;
 			const bare = address.replace(/[.,;:!?)\]}]+$/, "");

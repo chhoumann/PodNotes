@@ -1,4 +1,7 @@
 import { Notice } from "obsidian";
+import { get } from "svelte/store";
+import { plugin } from "src/store";
+import type { Episode } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { ownRecord } from "src/utility/ownRecord";
@@ -166,4 +169,27 @@ export function privateFeedAddresses(
 		if (url) addresses.set(url, feed.url);
 	}
 	return addresses;
+}
+
+export function withoutPrivateFeedAddresses<T>(value: T): T {
+	const instance = get(plugin);
+	return redactPrivateFeedAddresses(
+		value,
+		instance?.feedUrls && privateFeedAddresses(instance.settings.savedFeeds, instance.feedUrls),
+	);
+}
+
+/**
+ * `target` when a note may address `episode` by it, so a PodNotes link or note
+ * identity can carry it with the episode's title and GUID. Undefined when the
+ * target is a private feed's own address, or any of them quotes one, because a
+ * redacted title or GUID would no longer find the episode.
+ */
+export function vaultSafeLinkTarget(
+	episode: Pick<Episode, "title" | "guid">,
+	target: string | undefined,
+): string | undefined {
+	if (!target || isCredentialBearingUrl(target)) return undefined;
+	const fields = [target, episode.title, episode.guid];
+	return withoutPrivateFeedAddresses(fields) === fields ? target : undefined;
 }

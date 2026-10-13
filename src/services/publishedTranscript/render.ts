@@ -1,4 +1,5 @@
 import type { Episode } from "src/types/Episode";
+import { withoutPrivateFeedAddresses } from "src/services/privateFeeds";
 import { DEFAULT_SPEAKER_TEMPLATE, formatSpeakerLabel } from "src/services/diarization/segments";
 import { formatEpisodeTimestamp } from "src/utility/formatEpisodeTimestamp";
 import { collapseWhitespace, type ParsedTranscript, type TranscriptCue } from "./parse";
@@ -97,9 +98,11 @@ function splitText(text: string, max: number): string[] {
 }
 
 export function renderTranscriptBody(
-	transcript: ParsedTranscript,
+	parsed: ParsedTranscript,
 	options: { episode: Episode; speakerTemplate: string; timestamp: TimestampStyle },
 ): string {
+	// Escaping puts backslashes inside an address, so redact before it.
+	const [, transcript] = withoutPrivateFeedAddresses([options.episode, parsed] as const);
 	if (transcript.kind === "untimed") {
 		return transcript.paragraphs
 			.flatMap((text) => splitText(escapeTranscriptText(text), MAX_PARAGRAPH_LENGTH))
