@@ -1323,12 +1323,7 @@ function expectedTimestampLink(
 	endTime?: number,
 ): string {
 	// Use the production encoder so this helper can never drift from the real wire format.
-	const uri = encodePodnotesURI(
-		episode.title,
-		episode.filePath ?? episode.streamUrl,
-		time,
-		endTime,
-	);
+	const uri = encodePodnotesURI(episode, episode.filePath ?? episode.streamUrl, time, endTime);
 
 	return `[${label}](${uri.href})`;
 }

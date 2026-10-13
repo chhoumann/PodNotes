@@ -24,5 +24,5 @@ export default function buildEpisodeResumeLink(episode: Episode): string {
 	// working link to emit — degrade to "" rather than a dead link (UR-03).
 	if (!target || !episode.title) return "";
 
-	return encodePodnotesURI(episode.title, target).href;
+	return encodePodnotesURI(episode, target).href;
 }

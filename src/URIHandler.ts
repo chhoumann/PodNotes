@@ -9,12 +9,14 @@ import { isSavedFeed, resolveFeedUrl } from "./services/privateFeeds";
 import { isPrivateFeedPlaceholder, parsePrivateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { findUniqueTitleMatch, titleTokenSimilarity } from "./utility/episodeTitleMatch";
 import { episodeLinkTarget } from "./utility/episodeLinkTarget";
+import { findByGuid } from "./utility/findByGuid";
 import { isLocalFile } from "./utility/isLocalFile";
 import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 import { getEpisodeMediaType, getUnambiguousMediaTypeFromPath } from "./utility/mediaType";
 import { ViewState } from "./types/ViewState";
 
 type PodNotesProtocolData = ObsidianProtocolData & {
+	guid?: string;
 	end?: string;
 	endTime?: string;
 	to?: string;
@@ -90,7 +92,7 @@ function parseSeconds(value: string): number {
 let latestRequest = 0;
 
 export default async function podNotesURIHandler(
-	{ url: linkUrl, episodeName, time, endTime, end, to }: PodNotesProtocolData,
+	{ url: linkUrl, episodeName, guid, time, endTime, end, to }: PodNotesProtocolData,
 	revealPlayer?: RevealPodNotesPlayer,
 ) {
 	if (!linkUrl || !episodeName) {
@@ -153,7 +155,8 @@ export default async function podNotesURIHandler(
 		!!loadedLinkTarget &&
 		(!isLocalFile(loaded) || localFile?.path === loadedLinkTarget) &&
 		candidateValues(url).includes(loadedLinkTarget) &&
-		(nameCandidates.includes(loaded.title) ||
+		((!!guid && loaded.guid === guid) ||
+			nameCandidates.includes(loaded.title) ||
 			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
 
 	if (episodeIsLoaded) {
@@ -233,7 +236,9 @@ export default async function podNotesURIHandler(
 			await feeds.load([placeholderKey], "network");
 			if (request !== latestRequest) return;
 			const state = get(feeds).get(placeholderKey);
-			episode = findEpisodeByCandidates(state?.episodes ?? [], nameCandidates);
+			const episodes = state?.episodes ?? [];
+			episode =
+				findByGuid(episodes, guid) ?? findEpisodeByCandidates(episodes, nameCandidates);
 			if (!episode && (!state || state.error)) {
 				new Notice(
 					state?.error === "network"
@@ -270,7 +275,8 @@ export default async function podNotesURIHandler(
 				return;
 			}
 			if (request !== latestRequest) return;
-			episode = findEpisodeByCandidates(episodes, nameCandidates);
+			episode =
+				findByGuid(episodes, guid) ?? findEpisodeByCandidates(episodes, nameCandidates);
 		}
 	}
 

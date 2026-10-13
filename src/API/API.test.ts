@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { API } from "./API";
+import { TimestampTemplateEngine } from "src/TemplateEngine";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
 import { downloadedEpisodes, playedEpisodes, plugin, queue } from "src/store";
@@ -137,6 +138,33 @@ describe("API.getPodcastSegmentFormatted", () => {
 		expect(api.currentTime).toBe(600);
 		expect(media().paused).toBe(false);
 		expect(get(playedEpisodes)["Feed Podcast::Feed Episode"]?.time).toBe(600);
+	});
+});
+
+describe("timestamp links", () => {
+	const feedLink = "episodeName=Feed%20Episode&url=https%3A%2F%2Fpod.example.com%2Ffeed.xml";
+
+	function capture(episode: Episode): string {
+		const { player } = setup();
+		player.restore(episode);
+		plugin.update((host) => ({ ...host, api: new API() }) as never);
+		return TimestampTemplateEngine("{{linktime}} {{linksegment}}", {
+			segment: { startTime: 115, endTime: 125 },
+		});
+	}
+
+	test("{{linktime}} and {{linksegment}} carry the episode's guid", () => {
+		expect(capture({ ...feedEpisode, guid: "ep-1" })).toBe(
+			`[00:00:00](obsidian://podnotes?${feedLink}&guid=ep-1&time=0) ` +
+				`[00:01:55-00:02:05](obsidian://podnotes?${feedLink}&guid=ep-1&time=115&endTime=125)`,
+		);
+	});
+
+	test("{{linktime}} and {{linksegment}} have no guid for an episode without one", () => {
+		expect(capture(feedEpisode)).toBe(
+			`[00:00:00](obsidian://podnotes?${feedLink}&time=0) ` +
+				`[00:01:55-00:02:05](obsidian://podnotes?${feedLink}&time=115&endTime=125)`,
+		);
 	});
 });
 

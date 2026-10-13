@@ -117,6 +117,22 @@ describe("podNotesURIHandler with saved feeds", () => {
 		expect(get(viewState)).toBe(ViewState.Player);
 	});
 
+	test("a private feed link plays the episode with its guid after the publisher retitled it", async () => {
+		follow();
+		const retitled = { ...first, title: "Bonus: behind the scenes", guid: "patron-1" };
+		load.mockResolvedValue(feedDocument("Patron Show", [second, retitled]));
+
+		await podNotesURIHandler({
+			action: "podnotes",
+			url: privateLink,
+			episodeName: first.title,
+			guid: "patron-1",
+			time: "5",
+		});
+
+		expect(playing()).toMatchObject({ title: retitled.title, guid: "patron-1" });
+	});
+
 	test("a link to a private feed by its secret URL plays the subscription's episode, which keeps the secret out", async () => {
 		follow();
 		const linkless = { ...second, url: "" };
