@@ -36,12 +36,12 @@ describe("mobile journeys", () => {
 		await setMobileEmulation(obsidian, true);
 		await closePodNotes(obsidian);
 		const dataFile = await obsidian.dev.evalJsonAsync<{ before: boolean }>(`(async () => {
-			const path = app.vault.configDir + "/plugins/${PLUGIN_ID}/data.json";
+			const path = app.vault.configDir + ${jsLiteral(`/plugins/${PLUGIN_ID}/data.json`)};
 			await app.workspace.saveLayout();
-			await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
+			await app.plugins.disablePlugin(${jsLiteral(PLUGIN_ID)});
 			await app.vault.adapter.remove(path);
 			const before = await app.vault.adapter.exists(path);
-			await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});
+			await app.plugins.enablePlugin(${jsLiteral(PLUGIN_ID)});
 			return { before };
 		})()`);
 		expect(dataFile.before, "no data.json, as on a new install").toBe(false);
