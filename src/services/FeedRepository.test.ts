@@ -123,7 +123,7 @@ describe("FeedRepository", () => {
 		const first = t.repo.ensureAll();
 		const refresh = t.repo.load(["Alpha"], "network");
 		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
-		await Promise.all([first, refresh]);
+		await expect(Promise.all([first, refresh])).resolves.toEqual([true, true]);
 
 		expect(t.load).toHaveBeenCalledTimes(1);
 		expect(t.titles("Alpha")).toEqual(["Episode 1"]);
@@ -170,7 +170,7 @@ describe("FeedRepository", () => {
 		t.repo.setSubscriptions({ Alpha: alpha });
 		const loading = t.repo.ensureAll();
 		t.requests[0].respond.reject(new Error("offline"));
-		await loading;
+		await expect(loading).resolves.toBe(false);
 
 		expect(t.feed("Alpha")).toMatchObject({ status: "error", error: "network", episodes: [] });
 	});
@@ -545,6 +545,48 @@ describe("FeedRepository", () => {
 		expect(({} as { updatedAt?: number }).updatedAt).toBeUndefined();
 	});
 
+	test("skips malformed cached transcript links and keeps their episodes", async () => {
+		const storage = new MemoryStorage();
+		storage.saveLocalStorage(
+			CACHE_KEY,
+			JSON.stringify({
+				[alpha.url]: {
+					updatedAt: Date.UTC(2026, 9, 11),
+					complete: true,
+					channel: { title: "Alpha" },
+					items: [
+						{
+							...item(1),
+							transcripts: [
+								null,
+								"t.vtt",
+								{ url: 7, type: "text/vtt" },
+								{ url: "t.srt", type: ["application/srt"] },
+								{ url: "t.json", type: "application/json", language: 5 },
+								{
+									url: "t.txt",
+									type: "text/plain; charset=utf-8",
+									rel: "captions",
+								},
+							],
+						},
+						{ ...item(2), transcripts: { url: "t.vtt", type: "text/vtt" } },
+					],
+				},
+			}),
+		);
+		const t = setup({ storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+		await t.repo.ensureAll();
+		const [first, second] = t.feed("Alpha")!.episodes;
+
+		expect(t.load).not.toHaveBeenCalled();
+		expect(t.repo.episodeMetadata("Alpha", first)?.transcripts).toEqual([
+			{ url: "t.txt", type: "text/plain; charset=utf-8", rel: "captions" },
+		]);
+		expect(t.repo.episodeMetadata("Alpha", second)?.transcripts).toEqual([]);
+	});
+
 	test.each([true, false])(
 		"removes the caches of earlier versions (cache on: %s)",
 		async (enabled) => {
@@ -750,5 +792,42 @@ describe("FeedRepository", () => {
 		t.requests[0].respond.reject(new Error("offline"));
 
 		await expect(episodes).rejects.toThrow("offline");
+	});
+
+	test("an item URL resolves against the feed's URL, absolute ones stay as they are, and fragments go", () => {
+		const t = setup();
+		t.repo.setSubscriptions({ Alpha: { ...alpha, url: "https://alpha.test/show/feed.xml" } });
+
+		expect(t.repo.itemUrl("Alpha", "t.vtt")).toBe("https://alpha.test/show/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "../t.vtt")).toBe("https://alpha.test/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "/t.vtt")).toBe("https://alpha.test/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "t.vtt#cue-3")).toBe("https://alpha.test/show/t.vtt");
+		expect(t.repo.itemUrl("Alpha", "https://cdn.test/a b.vtt?v=2")).toBe(
+			"https://cdn.test/a b.vtt?v=2",
+		);
+		expect(t.repo.itemUrl("Alpha", "https://cdn.test/t.vtt#cue-3")).toBe(
+			"https://cdn.test/t.vtt",
+		);
+	});
+
+	test("a private feed's item URL resolves against the secret URL only resolveUrl knows", () => {
+		const secretUrl = "https://private.test/s3cret/feed.xml?auth=s3cret";
+		const placeholder = privateFeedPlaceholder("Private");
+		const t = setup({ resolveUrl: (feed) => (feed.url === placeholder ? secretUrl : null) });
+		t.repo.setSubscriptions({ Private: { ...alpha, url: placeholder, urlSecretId: "id" } });
+
+		expect(t.repo.itemUrl("Private", "t.vtt")).toBe("https://private.test/s3cret/t.vtt");
+		expect(t.repo.itemUrl("Private", "/t.vtt")).toBe("https://private.test/t.vtt");
+	});
+
+	test("a relative item URL has no address when the private feed's URL is not on this device", () => {
+		const t = setup({ resolveUrl: () => null });
+		t.repo.setSubscriptions({
+			Private: { ...alpha, url: privateFeedPlaceholder("Private"), urlSecretId: "id" },
+		});
+
+		expect(t.repo.itemUrl("Private", "t.vtt")).toBeUndefined();
+		expect(t.repo.itemUrl("Unsubscribed", "t.vtt")).toBeUndefined();
+		expect(t.repo.itemUrl("Private", "https://cdn.test/t.vtt")).toBe("https://cdn.test/t.vtt");
 	});
 });

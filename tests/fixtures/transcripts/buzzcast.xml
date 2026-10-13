@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<?xml-stylesheet href="https://rss.buzzsprout.com/styles.xsl" type="text/xsl"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:psc="http://podlove.org/simple-chapters" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <atom:link href="https://rss.buzzsprout.com/231452.rss" rel="self" type="application/rss+xml" />
+  <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub" xmlns="http://www.w3.org/2005/Atom" />
+  <title>Buzzcast</title>
+
+  <lastBuildDate>Sat, 10 Oct 2026 00:06:09 -0400</lastBuildDate>
+  <link>https://buzzcast.buzzsprout.com/</link>
+  <language>en-us</language>
+  <copyright>© 2026 Buzzsprout</copyright>
+  <podcast:locked>yes</podcast:locked>
+    <podcast:guid>29cdca4a-32d8-56ba-b48b-09a011c5daa9</podcast:guid>
+  <podcast:txt purpose="verify">albanbrooke@gmail.com</podcast:txt>
+<podcast:podroll>
+    <podcast:remoteItem feedGuid="7f070883-c06a-5a63-94bd-a12f168f0576" feedUrl="https://feeds.buzzsprout.com/2208836.rss" />
+    <podcast:remoteItem feedGuid="c562cd80-014a-5f04-a6a0-6c76a00f208d" feedUrl="https://feeds.buzzsprout.com/2366845.rss" />
+    <podcast:remoteItem feedGuid="396d9ae0-da7e-5557-b894-b606231fa3ea" feedUrl="https://feeds.buzzsprout.com/1538779.rss" />
+    <podcast:remoteItem feedGuid="917393e3-1b1e-5cef-ace4-edaa54e1f810" feedUrl="http://mp3s.nashownotes.com/pc20rss.xml" />
+    <podcast:remoteItem feedGuid="b3a4c44f-73cf-5d38-82b8-e4475190fd97" feedUrl="https://feeds.buzzsprout.com/328919.rss" />
+    <podcast:remoteItem feedGuid="7d1a25c1-c5d2-540b-95eb-ba83ec2521de" feedUrl="https://feeds.buzzsprout.com/1.rss" />
+    <podcast:remoteItem feedGuid="e4b357cd-e380-5b7a-bab7-02ca01f3b12c" feedUrl="https://feeds.buzzsprout.com/328913.rss" />
+    <podcast:remoteItem feedGuid="9b024349-ccf0-5f69-a609-6b82873eab3c" feedUrl="https://podnews.net/rss" />
+    <podcast:remoteItem feedGuid="01c8728f-c3dc-57d2-a47a-a57bc9ea4b2b" feedUrl="https://rss.buzzsprout.com/406843.rss" />
+    <podcast:remoteItem feedGuid="9a1acca3-3dca-5dbc-9bcd-a01ba68dd799" feedUrl="https://rss.buzzsprout.com/367916.rss" />
+    <podcast:remoteItem feedGuid="82a28382-782b-5198-91aa-52557919e294" feedUrl="https://feeds.buzzsprout.com/186317.rss" />
+  </podcast:podroll>
+  <itunes:author>Buzzsprout</itunes:author>
+  <itunes:type>episodic</itunes:type>
+  <itunes:explicit>false</itunes:explicit>
+  <description><![CDATA[<p>Buzzcast helps podcasters stay informed, inspired, and excited to keep podcasting.<br><br>Each week, Jordan, Kevin, and Alban break down the podcasting news, trends, tools, and creator debates that actually matter. We share what we’re seeing at Buzzsprout, what we’re testing ourselves, and what podcasters should pay attention to without chasing every new thing.<br><br>The goal is to help you keep podcasting without burning out. Expect honest opinions, practical takeaways, occasional rabbit trails, and a reminder that podcasting should be fun!</p>]]></description>
+  <generator>Buzzsprout (https://www.buzzsprout.com)</generator>
+  <itunes:keywords>podcasting, how to podcast, podcast strategies, podcast tutorial</itunes:keywords>
+  <itunes:owner>
+    <itunes:name>Buzzsprout</itunes:name>
+    <itunes:email>albanbrooke@gmail.com</itunes:email>
+  </itunes:owner>
+  <image>
+     <url>https://storage.buzzsprout.com/r8lrzwe62jw11ti3yzms9wnvy4jb?.jpg</url>
+     <title>Buzzcast</title>
+     <link>https://buzzcast.buzzsprout.com/</link>
+  </image>
+  <itunes:image href="https://storage.buzzsprout.com/r8lrzwe62jw11ti3yzms9wnvy4jb?.jpg" />
+  <itunes:category text="News">
+    <itunes:category text="Tech News" />
+  </itunes:category>
+  <itunes:category text="Technology" />
+  <itunes:category text="Business">
+    <itunes:category text="Marketing" />
+  </itunes:category>
+  <podcast:person role="host" href="https://twitter.com/albanbrooke" img="https://storage.buzzsprout.com/u74fhxi1dftpajwx0t4kfebsgw5e">Alban Brooke</podcast:person>
+  <podcast:person role="host" href="https://twitter.com/JordanPods" img="https://storage.buzzsprout.com/nogzlp48m9zqmg2szsh5e8g7khfy">Jordan Blair</podcast:person>
+  <podcast:person role="host" href="https://twitter.com/kfinn" img="https://storage.buzzsprout.com/78wda3dz42dmegt8m8g31hcpm671">Kevin Finn</podcast:person>
+<item>
+    <itunes:title>These Podcasting Features Will Save You So Much Time</itunes:title>
+    <title>These Podcasting Features Will Save You So Much Time</title>
+    <itunes:summary><![CDATA[ This week, we’re digging into a bunch of new Buzzsprout updates, including a redesigned Episodes page, podcast app previews, transcript autocorrect with easier editing, and a completely rebuilt embed player. Then in Fan Mail, we talk about podcast guesting as a growth strategy, the possibility of a Buzzsprout conference, and why podcasts might actually be pretty good at changing our minds. PodMatchPodMatch Automatically Matches Ideal Podcast Guests and Hosts For InterviewsContact Buzzcast Se...]]></itunes:summary>
+    <description><![CDATA[<p><a target="_blank" href="https://www.buzzsprout.com/231452/fan_mail/new"></a></p><p>This week, we’re digging into a bunch of new Buzzsprout updates, including a redesigned <a href='https://www.buzzsprout.com/new/137-updated-episodes-page'>Episodes page</a>, podcast app previews, <a href='https://www.buzzsprout.com/new/138-transcript-editor-improvements'>transcript</a> autocorrect with easier editing, and a completely rebuilt <a href='https://www.buzzsprout.com/new/135-more-ways-to-customize-your-embed-player'>embed player</a>.</p><p>Then in Fan Mail, we talk about podcast guesting as a growth strategy, the possibility of a Buzzsprout conference, and why podcasts might actually be pretty good at changing our minds.</p><strong><a href='https://podmatch.com' class='no-underline' target='_blank'>PodMatch</a></strong><br>PodMatch Automatically Matches Ideal Podcast Guests and Hosts For Interviews<br><p><b>Contact Buzzcast</b></p><ul><li><a href='https://www.buzzsprout.com/twilio/text_messages/231452/open_sms'>Send us Fan Mail</a></li><li>Tweet us at <a href='https://twitter.com/BuzzcastPodcast'>@buzzcastpodcast</a>, <a href='https://twitter.com/albanbrooke'>@albanbrooke</a>, <a href='https://twitter.com/kfinn'>@kfinn</a>, and <a href='https://twitter.com/JordanPods'>@JordanPods</a></li></ul><p><b><em>Thanks for listening and Keep Podcasting!</em></b></p>]]></description>
+    <content:encoded><![CDATA[<p><a target="_blank" href="https://www.buzzsprout.com/231452/fan_mail/new"></a></p><p>This week, we’re digging into a bunch of new Buzzsprout updates, including a redesigned <a href='https://www.buzzsprout.com/new/137-updated-episodes-page'>Episodes page</a>, podcast app previews, <a href='https://www.buzzsprout.com/new/138-transcript-editor-improvements'>transcript</a> autocorrect with easier editing, and a completely rebuilt <a href='https://www.buzzsprout.com/new/135-more-ways-to-customize-your-embed-player'>embed player</a>.</p><p>Then in Fan Mail, we talk about podcast guesting as a growth strategy, the possibility of a Buzzsprout conference, and why podcasts might actually be pretty good at changing our minds.</p><strong><a href='https://podmatch.com' class='no-underline' target='_blank'>PodMatch</a></strong><br>PodMatch Automatically Matches Ideal Podcast Guests and Hosts For Interviews<br><p><b>Contact Buzzcast</b></p><ul><li><a href='https://www.buzzsprout.com/twilio/text_messages/231452/open_sms'>Send us Fan Mail</a></li><li>Tweet us at <a href='https://twitter.com/BuzzcastPodcast'>@buzzcastpodcast</a>, <a href='https://twitter.com/albanbrooke'>@albanbrooke</a>, <a href='https://twitter.com/kfinn'>@kfinn</a>, and <a href='https://twitter.com/JordanPods'>@JordanPods</a></li></ul><p><b><em>Thanks for listening and Keep Podcasting!</em></b></p>]]></content:encoded>
+    <enclosure url="https://op3.dev/e/https://dts.podtrac.com/redirect.mp3/www.buzzsprout.com/231452/episodes/19932962-these-podcasting-features-will-save-you-so-much-time.mp3" length="30995245" type="audio/mpeg" />
+    <itunes:image href="https://storage.buzzsprout.com/9xbtdhlebid5po1idggdljae0g5g?.jpg" />
+    <podcast:image href="https://storage.buzzsprout.com/5nz1guvleycmer3bmefijthwv9jf" purpose="poster" aspect-ratio="16/9" width="1920" height="1080" />
+    <podcast:alternateEnclosure type="application/vnd.apple.mpegurl" length="0">
+      <podcast:source uri="https://www.buzzsprout.com/231452/episodes/19932962.m3u8" />
+    </podcast:alternateEnclosure>
+    <itunes:author>Buzzsprout</itunes:author>
+    <guid isPermaLink="false">Buzzsprout-19932962</guid>
+    <pubDate>Fri, 09 Oct 2026 08:00:00 -0400</pubDate>
+    <podcast:transcript url="https://www.buzzsprout.com/231452/19932962/transcript" type="text/html" />
+    <podcast:transcript url="https://www.buzzsprout.com/231452/19932962/transcript.json" type="application/json" />
+    <podcast:transcript url="https://www.buzzsprout.com/231452/19932962/transcript.srt" type="application/x-subrip" />
+    <podcast:transcript url="https://www.buzzsprout.com/231452/19932962/transcript.vtt" type="text/vtt" />
+    <podcast:chapters url="https://www.buzzsprout.com/231452/19932962/chapters.json" type="application/json" />
+    <psc:chapters>
+  <psc:chapter start="0:00" title="Podcast Details With Live Preview" />
+  <psc:chapter start="5:03" title="Episodes Page Glow Up" />
+  <psc:chapter start="7:49" title="Transcript Editor Autocorrect And Polish" />
+  <psc:chapter start="14:24" title="Embed Player Rebuild And Customization" />
+  <psc:chapter start="18:03" title="[Ad] PodMatch" />
+  <psc:chapter start="18:41" title="(Cont.) Embed Player Rebuild And Customization" />
+  <psc:chapter start="21:42" title="Fan Mail " />
+  <psc:chapter start="36:00" title="Post Show: AI Giveth, AI Taketh Away" />
+</psc:chapters>
+    <itunes:duration>2574</itunes:duration>
+    <itunes:keywords></itunes:keywords>
+    <itunes:episode>249</itunes:episode>
+    <itunes:episodeType>full</itunes:episodeType>
+    <itunes:explicit>false</itunes:explicit>
+  </item>
+</channel>
+</rss>

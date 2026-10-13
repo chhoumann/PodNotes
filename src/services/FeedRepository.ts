@@ -119,8 +119,11 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		this.emit();
 	}
 
-	/** Resolves when every request it started or joined has settled. Never rejects. */
-	load(keys: Iterable<FeedKey>, mode: LoadMode): Promise<void> {
+	/**
+	 * Resolves when every request it started or joined has settled, to false when one
+	 * failed. Never rejects.
+	 */
+	load(keys: Iterable<FeedKey>, mode: LoadMode): Promise<boolean> {
 		this.hydrate();
 		const requests: Promise<void>[] = [];
 		for (const key of keys) {
@@ -128,10 +131,12 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			const request = feed && this.request(feed, mode);
 			if (request) requests.push(request);
 		}
-		return Promise.allSettled(requests).then(() => undefined);
+		return Promise.allSettled(requests).then((results) =>
+			results.every(({ status }) => status === "fulfilled"),
+		);
 	}
 
-	ensureAll(): Promise<void> {
+	ensureAll(): Promise<boolean> {
 		return this.load(this.subscriptions.keys(), "cached");
 	}
 
@@ -158,6 +163,19 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 				.get(feed.url)
 				?.doc?.items.find(({ streamUrl }) => streamUrl === episode.streamUrl);
 		return item && { guid: item.guid, transcripts: item.transcripts ?? [] };
+	}
+
+	itemUrl(key: FeedKey, reference: string): string | undefined {
+		const [target] = reference.split("#", 1);
+		if (/^[a-z][a-z\d+.-]*:/i.test(target)) return target;
+		const feed = this.subscriptions.get(key);
+		const base = feed && this.deps.resolveUrl(feed);
+		if (!base) return undefined;
+		try {
+			return new URL(target, base).href;
+		} catch {
+			return undefined;
+		}
 	}
 
 	/** The feed as a podcast, to preview, subscribe to or describe in a feed note. */
@@ -428,7 +446,10 @@ function decodeCache(raw: unknown): [string, FeedDocument][] {
 				typeof item.title === "string" &&
 				typeof item.streamUrl === "string",
 		);
-		for (const item of items) item.episodeDate = decodeDate(item.episodeDate);
+		for (const item of items) {
+			item.episodeDate = decodeDate(item.episodeDate);
+			item.transcripts = decodeTranscripts(item.transcripts);
+		}
 		return [
 			[
 				url,
@@ -441,4 +462,18 @@ function decodeCache(raw: unknown): [string, FeedDocument][] {
 			],
 		];
 	});
+}
+
+function decodeTranscripts(value: unknown): TranscriptLink[] | undefined {
+	return Array.isArray(value) ? value.filter(isTranscriptLink) : undefined;
+}
+
+function isTranscriptLink(value: unknown): value is TranscriptLink {
+	return (
+		isPlainObject(value) &&
+		typeof value.url === "string" &&
+		(["type", "language", "rel"] as const).every(
+			(name) => value[name] === undefined || typeof value[name] === "string",
+		)
+	);
 }

@@ -1,0 +1,36 @@
+  1
+00:00:00,160 --> 00:00:03,759
+Alban: Moments ago, I just hit a
+professional milestone, a new
+
+2
+00:00:03,759 --> 00:00:04,320
+accomplishment.
+
+3
+00:00:04,320 --> 00:00:07,280
+All right, I'm gonna be using
+air quotes for this, but the
+
+4
+00:00:07,280 --> 00:00:11,199
+first code that I ever wrote,
+and I'm now using air quotes for
+
+5
+00:00:11,199 --> 00:00:14,480
+I wrote is now live in
+Buzzsprout as of like four
+
+6
+00:00:14,480 --> 00:00:15,039
+minutes ago.
+
+7
+00:00:15,199 --> 00:00:17,280
+Kevin: Oh, your PR got accepted
+and merged?
+
+8
+00:00:17,440 --> 00:00:18,320
+Alban: It's merged.
