@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import type { ObsidianClient } from "obsidian-e2e";
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
@@ -60,6 +61,110 @@ async function serve(...feeds: FixtureFeed[]): Promise<FixtureServer> {
 	const server = await startFixtureServer(feeds);
 	onTestFinished(() => server.stop());
 	return server;
+}
+
+/** The longest main-thread stall, sampled every 10 ms, from now until `heartbeatStop`. */
+const heartbeatStart = `(() => {
+	const beat = { last: performance.now(), max: 0 };
+	beat.timer = setInterval(() => {
+		const now = performance.now();
+		beat.max = Math.max(beat.max, now - beat.last);
+		beat.last = now;
+	}, 10);
+	window.__podnotesJourneyBeat = beat;
+	return true;
+})()`;
+const heartbeatStop =
+	"(clearInterval(window.__podnotesJourneyBeat.timer), window.__podnotesJourneyBeat.max)";
+
+/**
+ * Runs "Transcribe current episode", which opens the new note in Live Preview,
+ * and measures the longest main-thread stall from the command until 5 s after
+ * the note shows.
+ */
+async function transcribeAndTimeOpen(
+	obsidian: ObsidianClient,
+	notePath: string,
+): Promise<{ state: unknown; stallMs: number; text: string; viewport: string }> {
+	expect(
+		await obsidian.dev.evalJson(
+			'[app.vault.getConfig("defaultViewMode"), app.vault.getConfig("livePreview")]',
+		),
+	).toEqual(["source", true]);
+	await obsidian.dev.evalJson(heartbeatStart);
+	onTestFinished(() =>
+		obsidian.dev.evalJson(
+			"clearInterval(window.__podnotesJourneyBeat?.timer), delete window.__podnotesJourneyBeat",
+		),
+	);
+	await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+	return await obsidian.dev.evalJsonAsync(
+		`(async () => {
+			const shows = (leaf) => leaf.view.file?.path === ${JSON.stringify(notePath)};
+			const deadline = Date.now() + 30000;
+			while (!app.workspace.getLeavesOfType("markdown").some(shows)) {
+				if (Date.now() > deadline) throw new Error("Transcribe did not open the note.");
+				await new Promise((resolve) => setTimeout(resolve, 50));
+			}
+			await new Promise((resolve) => setTimeout(resolve, 5000));
+			const stallMs = ${heartbeatStop};
+			const leaf = app.workspace.getLeavesOfType("markdown").find(shows);
+			return {
+				state: leaf.view.getState(),
+				stallMs,
+				text: await app.vault.read(leaf.view.file),
+				viewport: innerWidth + "x" + innerHeight,
+			};
+		})()`,
+		{ timeoutMs: 120_000 },
+	);
+}
+
+/**
+ * Closes the note and opens it again in a new Live Preview tab, as a user who
+ * comes back to it does, and measures the longest stall until 5 s after the
+ * open. Leaves the note as the active tab in the saved layout.
+ */
+async function reopenAndTimeOpen(obsidian: ObsidianClient, notePath: string): Promise<number> {
+	return await obsidian.dev.evalJsonAsync<number>(
+		`(async () => {
+			const file = app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});
+			for (const leaf of app.workspace.getLeavesOfType("markdown")) leaf.detach();
+			await new Promise((resolve) => setTimeout(resolve, 500));
+			${heartbeatStart};
+			const leaf = app.workspace.getLeaf(true);
+			await leaf.openFile(file, { active: true, state: { mode: "source", source: false } });
+			await new Promise((resolve) => setTimeout(resolve, 5000));
+			const stallMs = ${heartbeatStop};
+			await app.workspace.saveLayout();
+			return stallMs;
+		})()`,
+		{ timeoutMs: 120_000 },
+	);
+}
+
+/** Reloads Obsidian, then reads the restored active tab and the longest task since the reload. */
+async function reloadAndReadActiveTab(
+	obsidian: ObsidianClient,
+): Promise<{ file?: string; state: unknown; longestTaskMs: number; viewport: string }> {
+	await reloadObsidian(obsidian);
+	return await obsidian.dev.evalJsonAsync(`(async () => {
+		const tasks = await new Promise((resolve) => {
+			const observer = new PerformanceObserver((list) => {
+				observer.disconnect();
+				resolve(list.getEntries());
+			});
+			observer.observe({ type: "longtask", buffered: true });
+			setTimeout(() => resolve([]), 500);
+		});
+		const view = app.workspace.activeLeaf?.view;
+		return {
+			file: view?.file?.path,
+			state: view?.getState?.(),
+			longestTaskMs: Math.max(0, ...tasks.map((task) => task.duration)),
+			viewport: innerWidth + "x" + innerHeight,
+		};
+	})()`);
 }
 
 describe("resilience journeys", () => {
@@ -585,88 +690,75 @@ describe("resilience journeys", () => {
 			current: storedEpisode(server, show, hostile),
 		});
 		const notePath = sandbox.path("Transcripts/Journey Hostile Captions/Hostile Episode.md");
-		expect(
-			await obsidian.dev.evalJson(
-				'[app.vault.getConfig("defaultViewMode"), app.vault.getConfig("livePreview")]',
-			),
-		).toEqual(["source", true]);
-		await obsidian.dev.evalJson(`(() => {
-			const beat = { last: performance.now(), max: 0 };
-			beat.timer = setInterval(() => {
-				const now = performance.now();
-				beat.max = Math.max(beat.max, now - beat.last);
-				beat.last = now;
-			}, 10);
-			window.__podnotesJourneyBeat = beat;
-			return true;
-		})()`);
-		onTestFinished(() =>
-			obsidian.dev.evalJson(
-				"clearInterval(window.__podnotesJourneyBeat?.timer), delete window.__podnotesJourneyBeat",
-			),
-		);
-
-		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
-		await sandbox.waitForExists("Transcripts/Journey Hostile Captions/Hostile Episode.md", {
-			timeoutMs: 30_000,
-		});
-		const opened = await obsidian.dev.evalJsonAsync<{
-			state: unknown;
-			stallMs: number;
-			text: string;
-		}>(
-			`(async () => {
-				const shows = (leaf) => leaf.view.file?.path === ${JSON.stringify(notePath)};
-				const deadline = Date.now() + 30000;
-				while (!app.workspace.getLeavesOfType("markdown").some(shows) && Date.now() < deadline) {
-					await new Promise((resolve) => setTimeout(resolve, 50));
-				}
-				await new Promise((resolve) => setTimeout(resolve, 1500));
-				const beat = window.__podnotesJourneyBeat;
-				clearInterval(beat.timer);
-				const leaf = app.workspace.getLeavesOfType("markdown").find(shows);
-				app.workspace.setActiveLeaf(leaf, { focus: true });
-				await app.workspace.saveLayout();
-				return {
-					state: leaf.view.getState(),
-					stallMs: beat.max,
-					text: await app.vault.read(leaf.view.file),
-				};
-			})()`,
-			{ timeoutMs: 120_000 },
-		);
+		const opened = await transcribeAndTimeOpen(obsidian, notePath);
 		const lines = opened.text.trimEnd().split("\n");
 
-		expect(Math.max(...lines.map((line) => line.length))).toBeLessThan(4_300);
+		expect(Math.max(...lines.map((line) => line.length))).toBeLessThan(2_300);
 		expect(opened.text.split("\\|").length - 1).toBe(3_000);
 		expect(opened.text.split("\\<").length - 1).toBe(6_000);
 		expect(lines.at(-1)).toMatch(/\) survived$/);
 		expect(opened.state).toMatchObject({ mode: "source", source: false });
 		expect(opened.stallMs).toBeLessThan(5_000);
+		expect(await reopenAndTimeOpen(obsidian, notePath)).toBeLessThan(5_000);
 
-		await reloadObsidian(obsidian);
-		const reopened = await obsidian.dev.evalJsonAsync<{
-			file?: string;
-			state: unknown;
-			longestTaskMs: number;
-		}>(`(async () => {
-			const tasks = await new Promise((resolve) => {
-				const observer = new PerformanceObserver((list) => {
-					observer.disconnect();
-					resolve(list.getEntries());
-				});
-				observer.observe({ type: "longtask", buffered: true });
-				setTimeout(() => resolve([]), 500);
-			});
-			const view = app.workspace.activeLeaf?.view;
-			return {
-				file: view?.file?.path,
-				state: view?.getState?.(),
-				longestTaskMs: Math.max(0, ...tasks.map((task) => task.duration)),
-			};
-		})()`);
+		const reopened = await reloadAndReadActiveTab(obsidian);
 
 		expect(reopened.file).toBe(notePath);
+		expect(reopened.state).toMatchObject({ mode: "source", source: false });
+		expect(reopened.longestTaskMs).toBeLessThan(5_000);
+	}, 240_000);
+
+	test("J-TR-07 a body-only note of 64,000 escaped dollar signs opens in a wide Live Preview within 5 s, also when Obsidian reopens it", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const dollars: FixtureEpisode = {
+			title: "Dollar Episode",
+			seconds: 4,
+			pubDate: pubDate(0),
+			transcripts: [{ path: "1.txt", type: "text/plain", body: "$".repeat(64_000) }],
+		};
+		const show: FixtureFeed = {
+			title: "Journey Dollar Captions",
+			slug: "dollar-captions",
+			artwork: true,
+			episodes: [dollars],
+		};
+		const server = await serve(show);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, dollars),
+			transcriptTemplate: "{{transcript}}",
+		});
+		await obsidian.exec("dev:cdp", {
+			method: "Emulation.setDeviceMetricsOverride",
+			params: JSON.stringify({
+				width: 2560,
+				height: 1440,
+				deviceScaleFactor: 1,
+				mobile: false,
+			}),
+		});
+		onTestFinished(async () => {
+			await obsidian.exec("dev:cdp", { method: "Emulation.clearDeviceMetricsOverride" });
+		});
+		const notePath = sandbox.path("Transcripts/Journey Dollar Captions/Dollar Episode.md");
+
+		const opened = await transcribeAndTimeOpen(obsidian, notePath);
+		const paragraphs = opened.text.split("\n\n");
+
+		expect(paragraphs.join("")).toBe("\\$".repeat(64_000));
+		expect(Math.max(...paragraphs.map((paragraph) => paragraph.length))).toBeLessThanOrEqual(
+			2_000,
+		);
+		expect(opened.viewport).toBe("2560x1440");
+		expect(opened.state).toMatchObject({ mode: "source", source: false });
+		expect(opened.stallMs).toBeLessThan(5_000);
+		expect(await reopenAndTimeOpen(obsidian, notePath)).toBeLessThan(5_000);
+
+		const reopened = await reloadAndReadActiveTab(obsidian);
+
+		expect(reopened.file).toBe(notePath);
+		expect(reopened.viewport).toBe("2560x1440");
 		expect(reopened.state).toMatchObject({ mode: "source", source: false });
 		expect(reopened.longestTaskMs).toBeLessThan(5_000);
 	}, 240_000);
