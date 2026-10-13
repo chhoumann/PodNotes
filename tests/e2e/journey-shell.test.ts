@@ -10,6 +10,7 @@ import {
 	scrollPage,
 	showLibrary,
 	showList,
+	shownMenu,
 	showPodNotes,
 	ui,
 	waitUntilShown,
@@ -206,6 +207,83 @@ describe("view shell journeys", () => {
 		expect(later.playing).toBe(false);
 		expect(later.seconds).toBeCloseTo(position, 0);
 		expect(later.seconds - first.seconds).toBe(0);
+	});
+
+	test("J-CTX-01 J-CTX-02 J-CTX-09 an episode's menu opens from its button and by right-click, in the menu's order", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		await seedLibrary(context, await serve(), {
+			subscriptions: [FEED],
+			playlists: [{ name: "Walks", removeAfterPlay: false, episodes: [] }],
+		});
+		const order = [
+			"Play",
+			"Add to queue",
+			"Create note",
+			"Download",
+			"Add to Favorites",
+			"Add to playlist",
+			"Mark as played",
+			"Copy episode link",
+		];
+		const titles = async () => (await shownMenu(obsidian)).map(({ title }) => title);
+
+		await showPodNotes(obsidian);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(FEED.title));
+		await click(obsidian, ui.episodeMenu(OTHER.title));
+		await waitUntilShown(obsidian, ui.menuItem("Play"));
+		expect(await titles(), "the overflow button's menu").toEqual(order);
+		await pressEscape(obsidian);
+		await click(obsidian, ui.episode(OTHER.title), { button: "right" });
+		await waitUntilShown(obsidian, ui.menuItem("Play"));
+		expect(await titles(), "the right-click menu").toEqual(order);
+
+		await click(obsidian, ui.menuItem("Add to playlist"));
+		await waitUntilShown(obsidian, ui.menuItem("Walks"));
+		expect(await shownMenu(obsidian)).toEqual([{ title: "Walks", checked: false }]);
+		await click(obsidian, ui.menuItem("Walks"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.playlists.Walks?.includes(OTHER.title) === true,
+			"the episode added to Walks",
+		);
+		await click(obsidian, ui.episodeMenu(OTHER.title));
+		await click(obsidian, ui.menuItem("Add to playlist"));
+		await waitUntilShown(obsidian, ui.menuItem("Walks"));
+		expect(await shownMenu(obsidian)).toEqual([{ title: "Walks", checked: true }]);
+		await pressEscape(obsidian);
+
+		await click(obsidian, ui.episodeMenu(OTHER.title));
+		await click(obsidian, ui.menuItem("Mark as played"));
+		const played = await waitForLibrary(
+			plugin,
+			(library) => library.progress(episodeRef(FEED, OTHER))?.finished === true,
+			"the episode marked as played",
+		);
+		expect(played.currentEpisode).toBeNull();
+		await click(obsidian, ui.episodeMenu(OTHER.title));
+		await waitUntilShown(obsidian, ui.menuItem("Mark as unplayed"));
+		expect(await titles()).not.toContain("Mark as played");
+		await pressEscape(obsidian);
+
+		await click(obsidian, ui.episode(LONG.title));
+		const started = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === LONG.title && playback.playing && playback.seconds > 1,
+			`${LONG.title} playing`,
+		);
+		await click(obsidian, ui.collapsePlayer);
+		await click(obsidian, ui.episode(LONG.title), { button: "right" });
+		await waitUntilShown(obsidian, ui.menuItem("Open player"));
+		expect((await titles())[0]).toBe("Open player");
+		expect(await titles()).not.toContain("Play");
+		await click(obsidian, ui.menuItem("Open player"));
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		const after = await observePlayback(obsidian);
+		expect(after.episode, "the same episode, not restarted").toEqual(episodeRef(FEED, LONG));
+		expect(after.seconds).toBeGreaterThanOrEqual(started.seconds);
 	});
 
 	test("the same view switches to the rail at 560 px and back as its sidebar is resized", async () => {
