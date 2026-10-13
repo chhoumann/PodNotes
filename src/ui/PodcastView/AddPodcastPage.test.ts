@@ -23,6 +23,10 @@ import searchPlanetMoney from "../../../tests/fixtures/itunes/search-planet-mone
 import searchPlanetMoneyNamesake from "../../../tests/fixtures/itunes/search-planet-money-namesake.json";
 import { deferred, MemoryStorage } from "../../../tests/mocks/feeds";
 import {
+	installResizeObserver,
+	type FakeResizeObservers,
+} from "../../../tests/mocks/resizeObserver";
+import {
 	createTestServices,
 	pluginLibrary,
 	type TestServices,
@@ -114,13 +118,25 @@ afterEach(() => {
 });
 
 describe("first run", () => {
+	let widths: FakeResizeObservers;
+	beforeEach(() => {
+		widths = installResizeObserver();
+	});
+	afterEach(() => {
+		widths.uninstall();
+	});
+	// jsdom lays nothing out, so a field is 0 wide until the test reports a width.
+	const show = (el: HTMLElement) => widths.resize(el, 300);
+
 	test("focuses the search, and the first keystroke opens Add podcast with the text kept", async () => {
 		render(PodcastView, { props: { services } });
 		expect(screen.getByRole("heading", { name: "Add your first podcast" })).toBeInTheDocument();
+		show(field());
 		expect(field()).toHaveFocus();
 		fetchJsonMock.mockReturnValue(new Promise(() => {}));
 
 		await type("h");
+		show(field());
 
 		expect(services.navigation.current.page).toEqual({ kind: "add" });
 		expect(screen.queryByRole("heading", { name: "Add your first podcast" })).toBeNull();
@@ -128,6 +144,19 @@ describe("first run", () => {
 		expect(field()).toHaveFocus();
 		expect(field().selectionStart).toBe(1);
 		expect(screen.getByRole("button", { name: "Back to Library" })).toBeInTheDocument();
+	});
+
+	test("focuses the search the first time its view shows, not while the view is hidden", async () => {
+		render(PodcastView, { props: { services } });
+		expect(field()).not.toHaveFocus();
+
+		show(field());
+		expect(field()).toHaveFocus();
+
+		field().blur();
+		widths.resize(field(), 0);
+		show(field());
+		expect(field()).not.toHaveFocus();
 	});
 
 	test("Back starts it over, with an empty field and no search left to answer", async () => {
