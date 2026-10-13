@@ -284,6 +284,7 @@ describe("view shell journeys", () => {
 		const after = await observePlayback(obsidian);
 		expect(after.episode, "the same episode, not restarted").toEqual(episodeRef(FEED, LONG));
 		expect(after.seconds).toBeGreaterThanOrEqual(started.seconds);
+		await expectAdvancing("after Open player");
 	});
 
 	test("the same view switches to the rail at 560 px and back as its sidebar is resized", async () => {
