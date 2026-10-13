@@ -8,6 +8,7 @@ import {
 	selectFeedEpisodes,
 	selectLatestEpisodes,
 	selectListEntries,
+	splitOffline,
 	type ListSnapshot,
 } from "./episodeListSelection";
 
@@ -160,5 +161,27 @@ describe("selectListEntries", () => {
 			["Gone", false, "Show A::Gone"],
 		]);
 		expect(entries[0].episode).toBe(second);
+	});
+});
+
+describe("splitOffline", () => {
+	const [newest, middle, oldest] = episodes("Show A", 3);
+	const downloads = {
+		"Show A": [newest, oldest].map((episode) => ({ ...episode, filePath: "a.mp3", size: 1 })),
+	};
+
+	test("puts the episodes that play offline first, each part in the order given", () => {
+		const entries = [middle, newest, oldest].map((episode) => ({ episode, isAvailable: true }));
+
+		const { offline, online } = splitOffline(entries, downloads);
+
+		expect(offline.map(({ episode }) => episode.title)).toEqual(["Show A #3", "Show A #1"]);
+		expect(online.map(({ episode }) => episode.title)).toEqual(["Show A #2"]);
+	});
+
+	test("a Played record whose episode left every feed needs a connection, and keeps its key", () => {
+		const gone = { episode: newest, isAvailable: false, playedEpisodeKey: "legacy" };
+
+		expect(splitOffline([gone], downloads)).toEqual({ offline: [], online: [gone] });
 	});
 });

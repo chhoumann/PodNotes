@@ -1,5 +1,6 @@
 import { newestFirst } from "src/persistence/dateCodec";
 import type { FeedKey, FeedState } from "src/services/FeedRepository";
+import { offlinePlayable } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
@@ -79,4 +80,22 @@ export function selectListEntries(page: ListPage, library: ListSnapshot): ListEn
 		localFiles.episodes,
 		...Object.values(playlists).map(({ episodes }) => episodes),
 	]);
+}
+
+/**
+ * The entries that play offline, then the rest, each in the order given. A Played
+ * record whose episode left every feed plays nowhere, so it needs a connection too.
+ */
+export function splitOffline<T extends EpisodeListEntry>(
+	entries: readonly T[],
+	downloads: Record<string, DownloadedEpisode[]>,
+): { readonly offline: T[]; readonly online: T[] } {
+	const offline: T[] = [];
+	const online: T[] = [];
+	for (const entry of entries) {
+		(entry.isAvailable && offlinePlayable(entry.episode, downloads) ? offline : online).push(
+			entry,
+		);
+	}
+	return { offline, online };
 }

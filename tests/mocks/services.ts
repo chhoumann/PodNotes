@@ -68,6 +68,7 @@ export type TestServices = ShellServices & {
 	readonly setAutoQueue: ReturnType<typeof vi.fn<(enabled: boolean) => void>>;
 	readonly hasNote: ReturnType<typeof vi.fn<(episode: Episode) => boolean>>;
 	readonly rowHasNote: Writable<(episode: Episode) => boolean>;
+	readonly online: Writable<boolean>;
 };
 
 /**
@@ -104,6 +105,7 @@ export function createTestServices(
 		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
+	const online = writable(true);
 	const services = {
 		app,
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() } as never,
@@ -115,8 +117,10 @@ export function createTestServices(
 			app,
 			feeds,
 			feedUrls: new FeedUrlRepository(app.secretStorage),
+			online,
 		}),
-		search: new PodcastSearch(feeds),
+		search: new PodcastSearch(feeds, online),
+		online,
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),

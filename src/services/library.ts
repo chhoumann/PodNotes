@@ -1,5 +1,5 @@
 import { Notice, type App } from "obsidian";
-import { get } from "svelte/store";
+import { get, type Readable } from "svelte/store";
 import { PLAYED_SETTINGS } from "src/constants";
 import {
 	favorites,
@@ -92,10 +92,12 @@ export function createLibraryActions({
 	app,
 	feeds,
 	feedUrls,
+	online,
 }: {
 	app: App;
 	feeds: FeedRepository;
 	feedUrls: FeedUrlRepository;
+	online: Readable<boolean>;
 }): LibraryActions {
 	const savedKey = (saved: Record<FeedKey, PodcastFeed>, url: string) =>
 		findSavedFeed(saved, url, feedUrls);
@@ -174,6 +176,10 @@ export function createLibraryActions({
 		async setFeedAddress(key) {
 			const feed = ownRecord(get(savedFeeds))[key];
 			if (!feed) return;
+			if (!get(online)) {
+				new Notice("Setting a feed address needs a connection.");
+				return;
+			}
 			const isPrivate = Boolean(feed.urlSecretId?.trim());
 			const entered = await askText(app, {
 				title: feed.title,

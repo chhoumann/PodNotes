@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { Episode } from "src/types/Episode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import {
+	availabilityOf,
 	episodeRowModel,
 	formatMinutes,
 	rowKeys,
@@ -29,7 +30,7 @@ const state: RowState = {
 	hasNote: false,
 	cover: false,
 	date: true,
-	available: true,
+	availability: "available",
 };
 const record = (time: number, duration: number, finished = false) => ({
 	"Field Notes::#214 Reading slowly": {
@@ -138,9 +139,16 @@ describe("an episode row", () => {
 	});
 
 	test("says a Played record whose episode left every feed is unavailable", () => {
-		expect(row({ available: false })).toMatchObject({
+		expect(row({ availability: "missing" })).toMatchObject({
 			unavailable: true,
 			label: "#214 Reading slowly, unavailable",
+		});
+	});
+
+	test("says an episode offline with no copy is not downloaded", () => {
+		expect(row({ availability: "not-downloaded" })).toMatchObject({
+			unavailable: true,
+			label: "#214 Reading slowly, not downloaded",
 		});
 	});
 
@@ -236,5 +244,27 @@ describe("list times", () => {
 
 	test("count an episode of unknown length as nothing", () => {
 		expect(secondsLeft([{ ...episode, duration: undefined }], {})).toBe(0);
+	});
+});
+
+describe("availability", () => {
+	const downloads = { "Field Notes": [{ ...episode, filePath: "Downloads/214.mp3", size: 1 }] };
+	const other = { ...episode, title: "#215 Margins", streamUrl: "https://media.test/215.mp3" };
+
+	test("online, every episode found in a feed plays", () => {
+		expect(availabilityOf(other, true, true, {})).toBe("available");
+	});
+
+	test("offline, an episode plays from its vault file or a downloaded copy, and no other", () => {
+		expect(availabilityOf(episode, true, false, downloads)).toBe("available");
+		expect(availabilityOf({ ...other, filePath: "a.mp3" } as Episode, true, false, {})).toBe(
+			"available",
+		);
+		expect(availabilityOf(other, true, false, downloads)).toBe("not-downloaded");
+	});
+
+	test("a Played record whose episode left every feed is missing, online or not", () => {
+		expect(availabilityOf(episode, false, true, downloads)).toBe("missing");
+		expect(availabilityOf(episode, false, false, downloads)).toBe("missing");
 	});
 });

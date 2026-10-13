@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { playlists, queue, savedFeeds } from "src/store";
@@ -23,6 +23,8 @@ vi.mock("src/utility/networkRequest", async (importOriginal) => {
 const fetchTextMock = vi.mocked(fetchTextWithTimeout);
 const PRIVATE_URL = "https://www.patreon.com/rss/show?auth=se-cret";
 
+const online = writable(true);
+
 function actionsOn(secrets: obsidian.SecretStorage) {
 	const feedUrls = new FeedUrlRepository(secrets);
 	const feeds = new FeedRepository({
@@ -33,7 +35,7 @@ function actionsOn(secrets: obsidian.SecretStorage) {
 		now: Date.now,
 	});
 	return {
-		actions: createLibraryActions({ app: new obsidian.App(), feeds, feedUrls }),
+		actions: createLibraryActions({ app: new obsidian.App(), feeds, feedUrls, online }),
 		feedUrls,
 	};
 }
@@ -61,6 +63,7 @@ async function enterAddress(setting: Promise<void>, address: string) {
 }
 
 beforeEach(() => {
+	online.set(true);
 	savedFeeds.set({});
 	fetchTextMock.mockReset();
 	fetchTextMock.mockResolvedValue("<rss><channel><title>Private Show</title></channel></rss>");
@@ -251,6 +254,17 @@ describe("editing a public feed's address", () => {
 
 		expect(get(savedFeeds)["The Show"]).toEqual(synced);
 	});
+});
+
+test("a feed's address is not asked for while offline", async () => {
+	const notice = vi.spyOn(obsidian, "Notice");
+	const { actions } = followedElsewhere();
+	online.set(false);
+
+	await actions.setFeedAddress("Private Show");
+
+	expect(notice).toHaveBeenCalledWith("Setting a feed address needs a connection.");
+	expect(within(document.body).queryByRole("textbox")).toBeNull();
 });
 
 describe("setting a private feed's address on this device", () => {

@@ -25,7 +25,7 @@
 	// svelte-ignore state_referenced_locally
 	provideServices(services);
 	// svelte-ignore state_referenced_locally
-	const { navigation, player, feeds, library, search, openSettings } = services;
+	const { navigation, player, feeds, library, search, online, openSettings } = services;
 	const { savedFeeds, queue, favorites, playlists, localFiles, playedEpisodes } = library;
 	const playerState = player.state;
 
@@ -98,6 +98,12 @@
 				<Rail {counts} active={activeRoot(page)} />
 			{/if}
 			<main class="pn-main">
+				{#if !$online}
+					<div class="pn-strip" role="status">
+						<span class="pn-strip-icon" {@attach icon("wifi-off")}></span>
+						<span>Offline</span>
+					</div>
+				{/if}
 				<header class="pn-head">
 					{#if head.back}
 						<button
@@ -148,6 +154,7 @@
 							class="pn-iconbtn"
 							aria-label="Refresh all feeds"
 							title="Refresh all feeds"
+							disabled={!$online}
 							onclick={() => feeds.load($feeds.keys(), "network")}
 							{@attach icon("refresh-cw")}
 						></button>
@@ -322,6 +329,24 @@
 		background: var(--pn-bg);
 	}
 
+	.pn-strip {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-2);
+		height: 32px;
+		padding: 0 var(--pn-pad);
+		background: var(--background-modifier-border);
+		color: var(--text-muted);
+		font-size: var(--font-ui-smaller);
+		font-weight: var(--font-medium);
+	}
+
+	.pn-strip-icon {
+		display: flex;
+		--icon-size: 14px;
+	}
+
 	.pn-head {
 		flex: none;
 		display: flex;
@@ -419,6 +444,10 @@
 			color: var(--text-muted);
 		}
 
+		.pn-h2.is-first {
+			margin-top: var(--size-4-1);
+		}
+
 		.pn-iconbtn {
 			display: inline-flex;
 			align-items: center;
@@ -440,6 +469,12 @@
 			background: var(--background-modifier-hover);
 			color: var(--text-normal);
 			opacity: var(--icon-opacity-hover);
+		}
+
+		.pn-iconbtn:disabled {
+			background: none;
+			opacity: 0.35;
+			cursor: default;
 		}
 
 		.pn-btn {
@@ -1015,6 +1050,7 @@
 
 		.pn-ep.is-unavailable .pn-ep-main {
 			opacity: 0.45;
+			cursor: default;
 		}
 
 		.pn-ep-more {

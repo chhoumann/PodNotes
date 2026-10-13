@@ -593,3 +593,20 @@ describe("Reorder Queue", () => {
 		expect(plugin.navigation.current.page).toEqual({ kind: "queue" });
 	});
 });
+
+describe("Transcribe", () => {
+	it.each(["podnotes-transcribe", "podnotes-transcribe-audio"])(
+		"%s is available for an audio episode only while online",
+		async (id) => {
+			const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+			const { commands } = await loadPlugin(playing);
+			const available = () =>
+				commands.find((command) => command.id === id)!.checkCallback!(true);
+
+			expect(available()).toBe(true);
+			online.mockReturnValue(false);
+			window.dispatchEvent(new Event("offline"));
+			expect(available()).toBe(false);
+		},
+	);
+});

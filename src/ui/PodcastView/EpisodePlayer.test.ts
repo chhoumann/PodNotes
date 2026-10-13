@@ -52,6 +52,7 @@ function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) 
 		library: pluginLibrary,
 		hasNote: () => false,
 		rowHasNote: readable(() => false),
+		online: readable(true),
 	} as never;
 	return {
 		...render(WithServices, { target, props: { services, component: EpisodePlayer } }),

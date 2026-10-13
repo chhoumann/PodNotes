@@ -4,6 +4,7 @@ import type { CaptureService } from "src/services/CaptureService";
 import type { FeedRepository } from "src/services/FeedRepository";
 import type { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import type { Navigation } from "src/ui/PodcastView/Navigation";
+import type { Readable } from "svelte/store";
 import type { IPodNotesSettings } from "./IPodNotesSettings";
 
 interface PodNotesViewRegistration {
@@ -18,6 +19,8 @@ export interface IPodNotes {
 	feedUrls: FeedUrlRepository;
 	navigation: Navigation;
 	capture: CaptureService;
+	/** Whether the device has a connection. */
+	online: Readable<boolean>;
 	shouldMountPodcastView(): boolean;
 	unregisterPodcastView(view: PodNotesViewRegistration): void;
 	saveSettings(): Promise<void>;

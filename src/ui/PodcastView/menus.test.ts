@@ -26,6 +26,7 @@ import {
 import {
 	anchorOf,
 	episodeMenu,
+	openEpisode,
 	playlistMenu,
 	podcastMenu,
 	queueMenu,
@@ -176,7 +177,7 @@ describe("an episode's menu", () => {
 	test("for a played episode that left every feed offers only Mark as unplayed", () => {
 		playedEpisodes.markAsPlayed(episode);
 
-		expect(titles(menu(episode, { available: false }))).toEqual(["Mark as unplayed"]);
+		expect(titles(menu(episode, { resolved: false }))).toEqual(["Mark as unplayed"]);
 	});
 
 	test("marks a Played record unplayed under the key it is stored by", () => {
@@ -308,6 +309,49 @@ describe("an episode's menu", () => {
 		expect(writeText).toHaveBeenCalledWith(
 			expect.stringContaining("url=podnotes-private-feed%3APodcast"),
 		);
+	});
+});
+
+describe("opening an episode offline", () => {
+	const other = { ...episode, title: "Other", streamUrl: "https://media.test/other.mp3" };
+	const fetched = { ...episode, title: "Fetched", streamUrl: "https://media.test/fetched.mp3" };
+
+	beforeEach(() => {
+		services.player.play(episode);
+		services.navigation.collapse();
+		services.online.set(false);
+	});
+
+	test("refuses an episode with no copy, before the player queues the one playing", () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+
+		openEpisode(services, other);
+
+		expect(notice).toHaveBeenCalledWith("Not downloaded");
+		expect(get(services.player.state).episode).toEqual(episode);
+		expect(get(queue).episodes).toEqual([]);
+		expect(services.navigation.current.expanded).toBe(false);
+	});
+
+	test("plays a downloaded episode, and opens the player for the one playing", () => {
+		downloadedEpisodes.set({ Podcast: [{ ...fetched, filePath: "Fetched.mp3", size: 1 }] });
+		const play = vi.spyOn(services.player, "play").mockReturnValue(true);
+
+		openEpisode(services, episode);
+		expect(services.navigation.current.expanded).toBe(true);
+		openEpisode(services, fetched);
+
+		expect(play.mock.calls).toEqual([[fetched]]);
+	});
+
+	test("a menu opened online refuses Play once the connection is gone", () => {
+		services.online.set(true);
+		const open = menu(other);
+		services.online.set(false);
+
+		choose(open, "Play");
+
+		expect(get(services.player.state).episode).toEqual(episode);
 	});
 });
 

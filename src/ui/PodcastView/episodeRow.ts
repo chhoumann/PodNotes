@@ -1,4 +1,4 @@
-import { downloadedCopy } from "src/player/source";
+import { downloadedCopy, offlinePlayable } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
@@ -8,6 +8,22 @@ import { isLocalFile } from "src/utility/isLocalFile";
 import { getEpisodeMediaType, isSameMediaSource } from "src/utility/mediaType";
 
 export type Downloads = Readonly<Record<string, readonly DownloadedEpisode[]>>;
+
+/**
+ * Whether a row plays. missing: a Played record whose episode left every feed.
+ * not-downloaded: offline, with no vault file or downloaded copy to play.
+ */
+export type Availability = "available" | "missing" | "not-downloaded";
+
+export function availabilityOf(
+	episode: Episode,
+	resolved: boolean,
+	online: boolean,
+	downloads: Downloads,
+): Availability {
+	if (!resolved) return "missing";
+	return online || offlinePlayable(episode, downloads) ? "available" : "not-downloaded";
+}
 
 export interface RowState {
 	readonly played: PlayedEpisodeMap;
@@ -19,8 +35,7 @@ export interface RowState {
 	readonly cover: boolean;
 	/** Whether the row shows the episode's date, unless it is under way in a cover row. */
 	readonly date: boolean;
-	/** False for a Played record whose episode left every feed. */
-	readonly available: boolean;
+	readonly availability: Availability;
 }
 
 export interface EpisodeRowModel {
@@ -133,7 +148,8 @@ export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowMo
 		downloaded && "downloaded",
 		state.hasNote && "has note",
 		current && (playing ? "playing" : "paused"),
-		!state.available && "unavailable",
+		state.availability === "missing" && "unavailable",
+		state.availability === "not-downloaded" && "not downloaded",
 	]
 		.filter(Boolean)
 		.join(", ");
@@ -157,7 +173,7 @@ export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowMo
 		playing,
 		downloaded,
 		hasNote: state.hasNote,
-		unavailable: !state.available,
+		unavailable: state.availability !== "available",
 		label,
 	};
 }

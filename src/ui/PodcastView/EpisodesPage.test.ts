@@ -227,4 +227,24 @@ describe("a podcast's page", () => {
 		expect(streamedMenu).toContain("Download");
 		expect(streamedMenu).not.toContain("Remove download");
 	});
+
+	test("offline, cannot refresh or retry, and does not load when it opens", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		load.mockRejectedValue(new Error("down"));
+		renderPage(show.title);
+		await screen.findByRole("alert");
+		load.mockClear();
+
+		services.online.set(false);
+		await tick();
+
+		expect(screen.getByRole("button", { name: "Refresh episodes" })).toBeDisabled();
+		expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+		document.body.innerHTML = "";
+		render(WithServices, {
+			props: { services, component: EpisodesPage, props: { key: show.title } },
+		});
+		await tick();
+		expect(load).not.toHaveBeenCalled();
+	});
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { get } from "svelte/store";
 	import type { FeedKey, FeedState } from "src/services/FeedRepository";
 	import { createEpisodeListEntries } from "src/utility/episodeListEntry";
 	import { isEpisodeFinished } from "src/utility/episodeStatus";
@@ -15,7 +16,7 @@
 
 	/** A podcast's page: its hero, its feed's state, and its episodes to search and filter. */
 	let { key }: { key: FeedKey } = $props();
-	const { feeds, actions, library } = useServices();
+	const { feeds, actions, library, online } = useServices();
 	const { playedEpisodes, downloadedEpisodes, hidePlayedEpisodes } = library;
 	let query = $state("");
 
@@ -37,7 +38,9 @@
 	);
 
 	// On mount, not on the click that opened the page, so a page restored at startup loads too.
-	onMount(() => void feeds.load([key], "complete"));
+	onMount(() => {
+		if (get(online)) void feeds.load([key], "complete");
+	});
 
 	const refresh = () => void feeds.load([key], "network");
 
@@ -70,8 +73,11 @@
 					Set feed address
 				</button>
 			{:else}
-				<button type="button" class="pn-btn" disabled={loading} onclick={refresh}
-					>Retry</button
+				<button
+					type="button"
+					class="pn-btn"
+					disabled={loading || !$online}
+					onclick={refresh}>Retry</button
 				>
 			{/if}
 		</div>
@@ -94,6 +100,7 @@
 		class="pn-iconbtn"
 		aria-label="Refresh episodes"
 		title="Refresh episodes"
+		disabled={!$online}
 		onclick={refresh}
 		{@attach icon("refresh-cw")}
 	></button>

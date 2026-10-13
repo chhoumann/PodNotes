@@ -38,6 +38,8 @@ export interface ShellServices {
 	readonly library: Library;
 	readonly actions: LibraryActions;
 	readonly search: PodcastSearch;
+	/** Whether the device has a connection. Network controls follow it, and lists group by it. */
+	readonly online: Readable<boolean>;
 	/**
 	 * Current through a settings toggle, the note path field and an import, which replaces
 	 * the object.

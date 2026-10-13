@@ -352,3 +352,87 @@ describe("Local files", () => {
 		expect(parts(podcast)).toEqual(["Field Notes", "48 min"]);
 	});
 });
+
+describe("offline", () => {
+	const headings = () => screen.queryAllByRole("heading").map((heading) => heading.textContent);
+	const [kept, streamed, later] = [episode("Kept"), episode("Streamed"), episode("Later")];
+	const withDownload = (library: TestServices["library"]) =>
+		library.downloadedEpisodes.set({
+			[show.title]: [{ ...kept, filePath: "PodNotes/Kept.mp3", size: 1 }],
+		});
+
+	test("a list puts what plays offline first, and greys what needs a connection", async () => {
+		renderPage({ kind: "playlist", name: "Walks" }, [show], (services) => {
+			withDownload(services.library);
+			services.online.set(false);
+		});
+		setPlaylist([streamed, kept, later]);
+		await tick();
+
+		expect(headings()).toEqual(["Available offline", "Needs a connection"]);
+		expect(listed()).toEqual(["Kept", "Streamed", "Later"]);
+		const greyed = row("Streamed, not downloaded");
+		expect(greyed).toHaveAttribute("aria-disabled", "true");
+		expect(greyed.closest(".pn-ep")).toHaveClass("is-unavailable");
+		expect(row("Kept, downloaded")).not.toHaveAttribute("aria-disabled");
+	});
+
+	test("a tap on a row that needs a connection says it is not downloaded and plays nothing", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		renderPlaylist([streamed]);
+		services.online.set(false);
+		await tick();
+
+		await fireEvent.click(row("Streamed, not downloaded"));
+
+		expect(notice).toHaveBeenCalledWith("Not downloaded");
+		expect(get(services.player.state).episode).toBeUndefined();
+	});
+
+	test("the list comes back whole and ungrouped when the connection does", async () => {
+		renderPlaylist([streamed, kept]);
+		withDownload(services.library);
+		services.online.set(false);
+		await tick();
+		expect(headings()).toEqual(["Available offline", "Needs a connection"]);
+
+		services.online.set(true);
+		await tick();
+
+		expect(headings()).toEqual([]);
+		expect(listed()).toEqual(["Streamed", "Kept"]);
+	});
+
+	test("Local files never group, since every file plays", async () => {
+		renderPage({ kind: "local" }, [show], (services) => {
+			services.library.localFiles.update((list) => ({ ...list, episodes: [streamed] }));
+			services.online.set(false);
+		});
+		await tick();
+
+		expect(headings()).toEqual([]);
+		expect(listed()).toEqual(["Streamed"]);
+	});
+
+	test("Played does not load its podcasts while offline", async () => {
+		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
+		renderPage({ kind: "played" }, [show], ({ library, online }) => {
+			online.set(false);
+			library.playedEpisodes.set({
+				"Field Notes::First": {
+					title: "First",
+					podcastName: show.title,
+					time: 1,
+					duration: 1,
+					finished: true,
+				},
+			});
+		});
+		await tick();
+
+		expect(load).not.toHaveBeenCalled();
+		expect(
+			screen.getByRole("button", { name: "First, played, unavailable" }),
+		).toBeInTheDocument();
+	});
+});

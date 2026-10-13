@@ -4,14 +4,14 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
-	import { episodeRowModel } from "./episodeRow";
+	import { availabilityOf, episodeRowModel } from "./episodeRow";
 	import { anchorOf, type MenuAnchor } from "./menus";
 
 	let {
 		episode,
 		cover = false,
 		date = !cover,
-		available = true,
+		resolved = true,
 		onplay,
 		onmenu,
 		leading,
@@ -21,7 +21,8 @@
 		cover?: boolean;
 		/** The episode's date. Rows with a cover name their source instead, except Latest's. */
 		date?: boolean;
-		available?: boolean;
+		/** False for a Played record whose episode left every feed. */
+		resolved?: boolean;
 		onplay(): void;
 		onmenu(at: MenuAnchor): void;
 		/** Before the row's button, such as the queue's grip. */
@@ -29,7 +30,7 @@
 		/** In place of the More button, such as the queue's remove button. */
 		trailing?: Snippet;
 	} = $props();
-	const { player, library, rowHasNote } = useServices();
+	const { player, library, rowHasNote, online } = useServices();
 	const { playedEpisodes, downloadedEpisodes } = library;
 	const playerState = player.state;
 	// The player's state changes many times a second; a row changes only with these.
@@ -48,7 +49,7 @@
 			hasNote: noted,
 			cover,
 			date,
-			available,
+			availability: availabilityOf(episode, resolved, $online, $downloadedEpisodes),
 		}),
 	);
 	const menu = (event: MouseEvent) => onmenu(anchorOf(event));

@@ -66,3 +66,14 @@ export function downloadedCopy(
 	const mediaType = getEpisodeMediaTypeWithContainerHint(copy, episode.mediaType);
 	return sameMedia && (!episode.mediaType || mediaType === episode.mediaType) ? copy : undefined;
 }
+
+/** Whether the episode plays with no connection: its own vault file, or a downloaded copy. */
+export function offlinePlayable(
+	episode: Episode,
+	downloaded: Readonly<Record<string, readonly DownloadedEpisode[]>>,
+): boolean {
+	return (
+		Boolean((episode as Partial<DownloadedEpisode>).filePath) ||
+		!!downloadedCopy(downloaded, episode)
+	);
+}

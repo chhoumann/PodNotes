@@ -3,7 +3,7 @@ import { get } from "svelte/store";
 import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
 import createPodcastNote, { openPodcastNote } from "src/createPodcastNote";
 import downloadEpisodeWithNotice, { removeDownloadedEpisode } from "src/downloadEpisode";
-import { downloadedCopy } from "src/player/source";
+import { downloadedCopy, offlinePlayable } from "src/player/source";
 import type { FeedKey } from "src/services/FeedRepository";
 import { publicFeedUrl } from "src/services/privateFeeds";
 import type { Episode } from "src/types/Episode";
@@ -72,16 +72,26 @@ function copy(text: string, what: string): void {
 	);
 }
 
+/**
+ * The one way the view starts an episode. One it cannot play is refused before
+ * `player.play`, which would queue the episode playing now and then fail.
+ */
 export function openEpisode(
-	{ player, navigation }: ShellServices,
+	{ player, navigation, library, online }: ShellServices,
 	episode: Episode,
-	available = true,
+	resolved = true,
 ) {
-	if (!available) {
+	if (!resolved) {
 		new Notice("This played episode is no longer available in current feeds.");
 		return;
 	}
-	if (!isCurrentEpisode(get(player.state).episode, episode)) player.play(episode);
+	if (!isCurrentEpisode(get(player.state).episode, episode)) {
+		if (!get(online) && !offlinePlayable(episode, get(library.downloadedEpisodes))) {
+			new Notice("Not downloaded");
+			return;
+		}
+		player.play(episode);
+	}
 	navigation.expand();
 }
 
@@ -90,7 +100,7 @@ export interface EpisodeMenuOptions {
 	readonly place: "list" | "player";
 	readonly at: MenuAnchor;
 	/** False for a Played record whose episode left every feed. */
-	readonly available?: boolean;
+	readonly resolved?: boolean;
 	/** A Played record stored under another key than the episode's. */
 	readonly playedKey?: string;
 }
@@ -98,7 +108,7 @@ export interface EpisodeMenuOptions {
 export function episodeMenu(
 	episode: Episode,
 	services: ShellServices,
-	{ place, at, available = true, playedKey }: EpisodeMenuOptions,
+	{ place, at, resolved = true, playedKey }: EpisodeMenuOptions,
 ): MenuEntry[] {
 	const { library, actions, player, settings } = services;
 	const item = (title: string, icon: IconType, onClick: () => void): MenuEntry => ({
@@ -112,7 +122,7 @@ export function episodeMenu(
 	const markPlayed = item(finished ? "Mark as unplayed" : "Mark as played", "check", () =>
 		actions.setPlayed(episode, !finished, playedKey),
 	);
-	if (!available) return [markPlayed];
+	if (!resolved) return [markPlayed];
 
 	const queued = get(library.queue).episodes.some((entry) => isSameEpisode(entry, episode));
 	const favorite = get(library.favorites).episodes.some((entry) =>

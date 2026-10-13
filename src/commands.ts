@@ -278,7 +278,9 @@ export function registerCommands(plugin: PodNotes): void {
 	});
 
 	const canTranscribe = () =>
-		!!plugin.api.podcast && getEpisodeMediaType(plugin.api.podcast) === "audio";
+		get(plugin.online) &&
+		!!plugin.api.podcast &&
+		getEpisodeMediaType(plugin.api.podcast) === "audio";
 
 	plugin.addCommand({
 		id: "podnotes-transcribe",

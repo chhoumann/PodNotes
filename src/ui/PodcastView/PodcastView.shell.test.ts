@@ -339,6 +339,64 @@ describe("list pages", () => {
 	});
 });
 
+describe("offline", () => {
+	test("every page says so above its head, and Refresh all is off", async () => {
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		const { resize } = renderView(320);
+		await tick();
+
+		expect(screen.getByText("Offline").closest('[role="status"]')).toHaveClass("pn-strip");
+		expect(document.querySelector(".pn-strip + .pn-head")).not.toBeNull();
+		expect(button("Refresh all feeds")).toBeDisabled();
+
+		await fireEvent.click(button("Back to Library"));
+		resize(820);
+		await tick();
+		expect(screen.getByText("Offline").closest('[role="status"]')).toHaveClass("pn-strip");
+		expect(button("Refresh all feeds")).toBeDisabled();
+
+		services.online.set(true);
+		await tick();
+		expect(screen.queryByText("Offline")).toBeNull();
+		expect(button("Refresh all feeds")).toBeEnabled();
+	});
+
+	test("First run has no strip", async () => {
+		services.library.savedFeeds.set({});
+		services.online.set(false);
+		renderView();
+		await tick();
+
+		expect(
+			screen.getByRole("searchbox", { name: "Search or paste a link" }),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Offline")).toBeNull();
+	});
+
+	test("the Queue keeps its order, and greys what needs a connection", async () => {
+		const later = {
+			...episode,
+			title: "Later",
+			streamUrl: "https://pod.example.com/later.mp3",
+		};
+		services.library.queue.update((list) => ({ ...list, episodes: [later, episode] }));
+		services.library.downloadedEpisodes.set({
+			[feed.title]: [{ ...episode, filePath: "PodNotes/Launch.mp3", size: 1 }],
+		});
+		services.online.set(false);
+		services.navigation.replace({ kind: "queue" });
+		renderView(320);
+		await tick();
+
+		expect(screen.queryByRole("heading", { name: "Available offline" })).toBeNull();
+		expect(
+			[...document.querySelectorAll(".pn-ep-title")].map((title) => title.textContent),
+		).toEqual(["Later", episode.title]);
+		expect(button("Later, not downloaded")).toHaveAttribute("aria-disabled", "true");
+	});
+});
+
 describe("first run", () => {
 	test("an empty library shows the podcast search instead of the library", async () => {
 		services.library.savedFeeds.set({});

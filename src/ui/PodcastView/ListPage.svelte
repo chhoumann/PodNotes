@@ -8,7 +8,7 @@
 	import type { ListPage } from "./pages";
 
 	let { page }: { page: ListPage } = $props();
-	const { feeds, library } = useServices();
+	const { feeds, library, online } = useServices();
 	const {
 		savedFeeds,
 		queue,
@@ -39,7 +39,7 @@
 
 	// On mount, not on the click that opened the page, so a page restored at startup loads too.
 	onMount(() => {
-		if (page.kind !== "played") return;
+		if (page.kind !== "played" || !get(online)) return;
 		void feeds.load(
 			feedKeysWithPlayedEpisodes(get(savedFeeds), get(playedEpisodes)),
 			"complete",
@@ -51,7 +51,7 @@
 	<div class="pn-count" role="status">Loading episodes</div>
 {/if}
 {#if entries.length > 0}
-	<EpisodeList {entries} cover date={page.kind === "latest"} />
+	<EpisodeList {entries} cover date={page.kind === "latest"} group={page.kind !== "local"} />
 {:else if !loading}
 	<div class="pn-panel-empty">
 		<span class="pn-panel-empty-icon" {@attach icon("inbox")}></span>
