@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TFile, type WorkspaceLeaf } from "obsidian";
+import { get } from "svelte/store";
 import { plugin as pluginStore } from "src/store";
 import type { Episode } from "../../types/Episode";
 import type { IPodNotes } from "../../types/IPodNotes";
@@ -207,6 +208,25 @@ describe("MainView episode notes", () => {
 		change("create", () => vault.notes.add(notePath));
 
 		expect(shown).toEqual([false, true, false, true]);
+	});
+
+	it("looks again when the note path setting changes, until the view closes", async () => {
+		const { view, vault } = createNotesView();
+		await openView(view);
+		const shown = watchRow();
+		const host = get(pluginStore);
+		const setNotePath = (path: string) => {
+			host.settings.note.path = path;
+			pluginStore.set(host);
+			vi.runAllTimers();
+		};
+
+		vault.notes.add("elsewhere/Episode One.md");
+		setNotePath("elsewhere/{{title}}");
+		await closeView(view);
+		setNotePath("podcasts/{{title}}");
+
+		expect(shown).toEqual([false, true]);
 	});
 
 	it("looks again once the layout is ready, not for the files Obsidian reports while it loads the vault", async () => {
