@@ -10,6 +10,7 @@ import { DANGEROUS_KEYS, isPlainObject } from "src/persistence/codecUtils";
 import { decodeDate, newestFirst } from "src/persistence/dateCodec";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { findByGuid } from "src/utility/findByGuid";
 import { fetchTextWithTimeout } from "src/utility/networkRequest";
 
 /** A savedFeeds key, the only identity of a subscription. */
@@ -152,17 +153,13 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	}
 
 	/** Feed metadata that episodes do not carry, for one of a subscription's episodes. */
-	episodeMetadata(
-		key: FeedKey,
-		episode: Episode,
-	): { guid?: string; transcripts: TranscriptLink[] } | undefined {
+	episodeMetadata(key: FeedKey, episode: Episode): { transcripts: TranscriptLink[] } | undefined {
 		const feed = this.subscriptions.get(key);
+		const items = (feed && this.sources.get(feed.url)?.doc?.items) ?? [];
 		const item =
-			feed &&
-			this.sources
-				.get(feed.url)
-				?.doc?.items.find(({ streamUrl }) => streamUrl === episode.streamUrl);
-		return item && { guid: item.guid, transcripts: item.transcripts ?? [] };
+			findByGuid(items, episode.guid) ??
+			items.find(({ streamUrl }) => streamUrl === episode.streamUrl);
+		return item && { transcripts: item.transcripts ?? [] };
 	}
 
 	itemUrl(key: FeedKey, reference: string): string | undefined {

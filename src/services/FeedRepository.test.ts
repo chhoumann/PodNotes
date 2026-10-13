@@ -479,30 +479,34 @@ describe("FeedRepository", () => {
 		expect(JSON.parse(JSON.stringify(encodeEpisode(withoutGuid)))).not.toHaveProperty("guid");
 	});
 
-	test("reads an episode's guid and transcripts from its own subscription's feed", async () => {
+	test("reads an episode's transcripts from its own subscription's feed, by guid first", async () => {
 		const t = setup();
 		const transcripts = [{ url: "https://media.test/b.vtt", type: "text/vtt" }];
 		const items = [
 			item(1, { title: "Rerun", guid: "guid-a" }),
 			item(2, { title: "Rerun", guid: "guid-b", transcripts }),
+			item(3),
 		];
 		await loaded(
 			t,
 			{ Alpha: alpha, "Alpha Alias": { ...alpha, title: "Alpha Alias" } },
 			doc("Alpha", items),
 		);
-		const [first] = t.feed("Alpha")!.episodes;
+		const [first, , third] = t.feed("Alpha")!.episodes;
 		const [, second] = t.feed("Alpha Alias")!.episodes;
+		const rotated = (episode: typeof first) => ({
+			...episode,
+			streamUrl: "https://media.test/rotated.mp3",
+		});
 
-		expect(t.repo.episodeMetadata("Alpha", first)).toEqual({ guid: "guid-a", transcripts: [] });
-		expect(t.repo.episodeMetadata("Alpha Alias", second)).toEqual({
-			guid: "guid-b",
+		expect(t.repo.episodeMetadata("Alpha", first)).toEqual({ transcripts: [] });
+		expect(t.repo.episodeMetadata("Alpha Alias", second)).toEqual({ transcripts });
+		expect(t.repo.episodeMetadata("Alpha", rotated(second))).toEqual({ transcripts });
+		expect(t.repo.episodeMetadata("Alpha", { ...second, guid: "guid-gone" })).toEqual({
 			transcripts,
 		});
 		expect(t.repo.episodeMetadata("Beta", first)).toBeUndefined();
-		expect(
-			t.repo.episodeMetadata("Alpha", { ...first, streamUrl: "https://media.test/gone.mp3" }),
-		).toBeUndefined();
+		expect(t.repo.episodeMetadata("Alpha", rotated(third))).toBeUndefined();
 	});
 
 	test("episodes keep their array until the feed's document, title or artwork changes", async () => {
