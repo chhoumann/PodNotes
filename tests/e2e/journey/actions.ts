@@ -162,6 +162,27 @@ export const ui = {
 			`Add ${title}`,
 		),
 	podcastViewport: byCss("PodNotes view", PLAYER_VIEW),
+	headAction: (label: string) =>
+		byAttribute(`${label} button`, `${PLAYER_VIEW} .pn-head button`, "aria-label", label),
+	offlineStrip: byCss("Offline strip", `${PLAYER_VIEW} .pn-strip[role="status"]`, "Offline"),
+	queueRow: (title: string): UiTarget => ({
+		name: `queue row ${title}`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-queue .pn-ep`)})].filter((el) => el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
+	}),
+	queueGrip: (title: string): UiTarget => ({
+		name: `grip of ${title}`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-queue button.pn-grip`)})].filter((el) => el.getAttribute("aria-label").startsWith(${jsLiteral(`Reorder ${title}, position `)}))`,
+	}),
+	playlistRow: (name: string): UiTarget => ({
+		name: `playlist row ${name}`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} button.pn-plrow`)})].filter((el) => el.querySelector(".t")?.textContent.trim() === ${jsLiteral(name)})`,
+	}),
+	textPrompt: byCss("text prompt", ".modal.pn-prompt"),
+	textPromptField: byCss("text prompt field", ".modal.pn-prompt input"),
+	undo: (message: string): UiTarget => ({
+		name: `Undo of "${message}"`,
+		elements: `[...document.querySelectorAll(".notice")].filter((el) => el.textContent.trim().startsWith(${jsLiteral(message)})).map((el) => el.querySelector("button.pn-undo")).filter(Boolean)`,
+	}),
 	promptInput: byCss("prompt input", ".prompt .prompt-input"),
 	suggestion: (text: string) => byCss(`suggestion ${text}`, ".prompt .suggestion-item", text),
 	paletteCommand: (name: string): UiTarget => ({
@@ -172,7 +193,7 @@ export const ui = {
 } as const;
 
 type Located =
-	| { state: "ready"; x: number; y: number }
+	| { state: "ready"; x: number; y: number; height: number }
 	| { state: "behind notice"; detail: string; keyring: boolean }
 	| { state: "absent" | "hidden" | "ambiguous" | "covered"; detail: string };
 
@@ -192,7 +213,7 @@ async function locate(obsidian: ObsidianClient, target: UiTarget): Promise<Locat
 		if (notice?.dataset.podnotesE2ePersistent === "true" && !el.contains(hit))
 			return { state: "behind notice", detail: (notice.querySelector(".notice-message") ?? notice).textContent.trim(), keyring: notice.dataset.podnotesE2eKeyring === "true" };
 		if (!hit || !el.contains(hit)) return { state: "covered", detail: hit ? hit.outerHTML.slice(0, 120) : "nothing" };
-		return { state: "ready", x, y };
+		return { state: "ready", x, y, height: rect.height };
 	})()`);
 }
 
@@ -200,7 +221,7 @@ async function settledPoint(
 	obsidian: ObsidianClient,
 	target: UiTarget,
 	timeoutMs = 10_000,
-): Promise<{ x: number; y: number }> {
+): Promise<{ x: number; y: number; height: number }> {
 	let previous = "";
 	let last = "";
 	let coveringNotice: string | undefined;
@@ -243,12 +264,86 @@ export async function click(
 	target: UiTarget,
 	options: { button?: "left" | "right"; timeoutMs?: number } = {},
 ): Promise<void> {
-	const { x, y } = await settledPoint(obsidian, target, options.timeoutMs);
-	const button = options.button ?? "left";
+	await clickAt(
+		obsidian,
+		await settledPoint(obsidian, target, options.timeoutMs),
+		options.button,
+	);
+}
+
+async function clickAt(
+	obsidian: ObsidianClient,
+	{ x, y }: Point,
+	button: "left" | "right" = "left",
+): Promise<void> {
 	await cdp(obsidian, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
 	for (const type of ["mousePressed", "mouseReleased"]) {
 		await cdp(obsidian, "Input.dispatchMouseEvent", { type, x, y, button, clickCount: 1 });
 	}
+}
+
+export type Point = Readonly<{ x: number; y: number }>;
+
+/**
+ * A point on `target` once it is visible, alone, still and not covered: its middle, or a
+ * quarter of its height below its top or above its bottom.
+ */
+export async function pointOn(
+	obsidian: ObsidianClient,
+	target: UiTarget,
+	part: "top" | "middle" | "bottom" = "middle",
+): Promise<Point> {
+	const { x, y, height } = await settledPoint(obsidian, target);
+	return { x, y: part === "middle" ? y : y + (part === "top" ? -height / 4 : height / 4) };
+}
+
+export type HeldMouse = Readonly<{
+	/** Moves the mouse in `steps` even steps, as a hand drags it. */
+	moveTo(to: Point, steps?: number): Promise<void>;
+	release(): Promise<void>;
+}>;
+
+/** Presses the left mouse button at `at` and holds it until `release`. */
+export async function pressMouse(obsidian: ObsidianClient, at: Point): Promise<HeldMouse> {
+	let current = at;
+	const send = async (type: string, { x, y }: Point, buttons: number) => {
+		const clickCount = type === "mouseMoved" ? 0 : 1;
+		await cdp(obsidian, "Input.dispatchMouseEvent", {
+			type,
+			x,
+			y,
+			button: "left",
+			buttons,
+			clickCount,
+		});
+	};
+	await cdp(obsidian, "Input.dispatchMouseEvent", { type: "mouseMoved", ...at });
+	await send("mousePressed", at, 1);
+	return {
+		async moveTo(to, steps = 8) {
+			const from = current;
+			for (let step = 1; step <= steps; step++) {
+				current = {
+					x: from.x + ((to.x - from.x) * step) / steps,
+					y: from.y + ((to.y - from.y) * step) / steps,
+				};
+				await send("mouseMoved", current, 1);
+			}
+		},
+		release: () => send("mouseReleased", current, 0),
+	};
+}
+
+/** Drags `from` with the mouse to `part` of `to` and lets go there. */
+export async function drag(
+	obsidian: ObsidianClient,
+	from: UiTarget,
+	to: UiTarget,
+	part: "top" | "bottom",
+): Promise<void> {
+	const mouse = await pressMouse(obsidian, await pointOn(obsidian, from));
+	await mouse.moveTo(await pointOn(obsidian, to, part));
+	await mouse.release();
 }
 
 export async function typeInto(
@@ -288,10 +383,16 @@ export async function typeText(obsidian: ObsidianClient, text: string): Promise<
 	await cdp(obsidian, "Input.insertText", { text });
 }
 
-export async function pressEscape(obsidian: ObsidianClient): Promise<void> {
-	const escape = { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 };
-	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...escape });
-	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...escape });
+const KEY_CODES = { Enter: 13, Escape: 27, ArrowUp: 38, ArrowDown: 40 } as const;
+
+/** Presses and releases `key` on whatever has focus. */
+export async function pressKey(
+	obsidian: ObsidianClient,
+	key: keyof typeof KEY_CODES,
+): Promise<void> {
+	const event = { key, code: key, windowsVirtualKeyCode: KEY_CODES[key] };
+	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...event });
+	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...event });
 }
 
 /** Where the page's scroller is scrolled to, in whole pixels. */
@@ -349,6 +450,26 @@ export async function listedEpisodes(obsidian: ObsidianClient): Promise<string[]
 	);
 }
 
+/** The page's episode titles and the headings between them, in order. */
+export async function listedEpisodesWithHeadings(obsidian: ObsidianClient): Promise<string[]> {
+	return await obsidian.dev.evalJson<string[]>(
+		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-scroll :is(h2.pn-h2, .pn-ep-main .pn-ep-title)`)})].filter((el) => el.getClientRects().length > 0).map((el) => el.textContent.trim())`,
+	);
+}
+
+export async function isDisabled(obsidian: ObsidianClient, target: UiTarget): Promise<boolean> {
+	return await obsidian.dev.evalJson<boolean>(
+		`(() => { const all = (${target.elements}); return all.length > 0 && all.every((el) => el.disabled); })()`,
+	);
+}
+
+/** The Library's podcast cards, in grid order, by their names. */
+export async function shownPodcasts(obsidian: ObsidianClient): Promise<string[]> {
+	return await obsidian.dev.evalJson<string[]>(
+		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} button.pn-gridcard`)})].map((el) => el.getAttribute("aria-label"))`,
+	);
+}
+
 export type ShownResult = Readonly<{ label: string; title: string; via: string | null }>;
 
 export async function shownResults(obsidian: ObsidianClient): Promise<ShownResult[]> {
@@ -391,8 +512,12 @@ export async function dismissNotices(obsidian: ObsidianClient): Promise<void> {
 	);
 }
 
-/** Opens the command palette with its hotkey, types `name` and clicks PodNotes' command. */
+/**
+ * Opens the command palette with its hotkey, types `name` and clicks PodNotes' command.
+ * The hotkey needs the core plugin on, so this turns it on; the harness restores it.
+ */
 export async function runFromPalette(obsidian: ObsidianClient, name: string): Promise<void> {
+	await obsidian.plugin("command-palette").enable({ filter: "core" });
 	const hotkey = {
 		key: "p",
 		code: "KeyP",
@@ -455,6 +580,26 @@ export async function enableAsNewInstall(obsidian: ObsidianClient): Promise<void
 }
 
 /**
+ * Resolves to what `read` returns once it equals `expected`, or after `ms` to its last
+ * read, so the assertion that follows shows what differed.
+ */
+export async function eventually<T>(
+	obsidian: ObsidianClient,
+	read: () => Promise<T>,
+	expected: T,
+	ms = 5_000,
+): Promise<T> {
+	let last = await read();
+	await obsidian
+		.waitFor(async () => JSON.stringify((last = await read())) === JSON.stringify(expected), {
+			timeoutMs: ms,
+			intervalMs: 100,
+		})
+		.catch(() => undefined);
+	return last;
+}
+
+/**
  * Reads `read` every 100 ms for `ms` and resolves to `expected` when every read
  * matched it, or to the first read that did not.
  */
@@ -508,6 +653,45 @@ export async function showAddPodcast(obsidian: ObsidianClient): Promise<void> {
 	await waitUntilShown(obsidian, ui.podcastSearch);
 }
 
+/**
+ * Closes the Notice that starts with `message` as a user does, by clicking its text and
+ * never a button in it, so it cannot cover what the test clicks next.
+ */
+export async function dismissNotice(obsidian: ObsidianClient, message: string): Promise<void> {
+	let last = "";
+	// A Notice slides in, so its text is clicked once it stands still.
+	const point = await obsidian.waitFor(
+		async () => {
+			const sample = await obsidian.dev.evalJson<Point | null>(`(() => {
+				const notice = [...document.querySelectorAll(".notice")].find((el) => el.textContent.trim().startsWith(${jsLiteral(message)}));
+				const body = notice?.querySelector(".notice-message") ?? notice;
+				const text = body && [...body.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+				if (!text) return null;
+				const range = document.createRange();
+				range.selectNodeContents(text);
+				const rect = range.getBoundingClientRect();
+				const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+				const hit = document.elementFromPoint(point.x, point.y);
+				return hit && notice.contains(hit) && !hit.closest("button") ? point : null;
+			})()`);
+			const key = JSON.stringify(sample);
+			const settled = sample !== null && key === last;
+			last = key;
+			return settled ? sample : false;
+		},
+		{ timeoutMs: 10_000, intervalMs: 100, message: `the Notice "${message}" shown and still` },
+	);
+	await clickAt(obsidian, point);
+	await obsidian.waitFor(
+		async () =>
+			!(await obsidian.dev.evalJson<boolean>(
+				`[...document.querySelectorAll(".notice")].some((el) => el.textContent.trim().startsWith(${jsLiteral(message)}))`,
+			)),
+		{ timeoutMs: 5_000, intervalMs: 100, message: `the Notice "${message}" closed` },
+	);
+}
+
+/** Removes a podcast from its card's menu, and closes the Notice that offers Undo. */
 export async function removePodcast(obsidian: ObsidianClient, title: string): Promise<void> {
 	await showLibrary(obsidian);
 	await click(obsidian, ui.podcastCard(title), { button: "right" });
@@ -517,6 +701,7 @@ export async function removePodcast(obsidian: ObsidianClient, title: string): Pr
 		intervalMs: 100,
 		message: `${title}'s card gone from the Library`,
 	});
+	await dismissNotice(obsidian, `Removed ${title}`);
 }
 
 export async function closeSettings(obsidian: ObsidianClient): Promise<void> {
@@ -807,6 +992,29 @@ async function reloadRenderer(obsidian: ObsidianClient, ignored?: string): Promi
 	await waitForPodNotesReady(obsidian);
 	await collectRuntimeErrors(obsidian, ignored);
 	await dismissNotices(obsidian);
+}
+
+/**
+ * Takes the renderer off the network, or back on, through Chromium's network
+ * emulation, which also fires the window's offline or online event. Feed requests
+ * run in Obsidian's main process and still reach the network, so a test also
+ * disconnects its fixture server. A renderer reload goes back online.
+ */
+export async function setOffline(obsidian: ObsidianClient, offline: boolean): Promise<void> {
+	await cdp(obsidian, "Network.emulateNetworkConditions", {
+		offline,
+		latency: 0,
+		downloadThroughput: -1,
+		uploadThroughput: -1,
+	});
+	await obsidian.waitFor(
+		() => obsidian.dev.evalJson<boolean>(`navigator.onLine === ${!offline}`),
+		{
+			timeoutMs: 5_000,
+			intervalMs: 100,
+			message: `the renderer ${offline ? "offline" : "online"}`,
+		},
+	);
 }
 
 /** Switches Obsidian's mobile emulation, which reloads the app, and waits for PodNotes. */

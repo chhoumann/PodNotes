@@ -66,7 +66,6 @@ async function setUp(
 	const server = await startFixtureServer([show]);
 	onTestFinished(() => server.stop());
 	await seedLibrary(context, server, { subscriptions: [show], noteTemplate });
-	await context.obsidian.plugin("command-palette").enable({ filter: "core" });
 	return { server, show };
 }
 

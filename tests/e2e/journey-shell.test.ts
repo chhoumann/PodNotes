@@ -6,7 +6,7 @@ import {
 	listedEpisodes,
 	openInEditor,
 	pageScrollTop,
-	pressEscape,
+	pressKey,
 	reloadObsidian,
 	scrollPage,
 	showLibrary,
@@ -202,7 +202,7 @@ describe("view shell journeys", () => {
 		expect(await isShown(obsidian, ui.miniPlayer)).toBe(false);
 		await expectAdvancing("opened from the mini player");
 
-		await pressEscape(obsidian);
+		await pressKey(obsidian, "Escape");
 		await waitUntilShown(obsidian, ui.miniPlayer);
 		expect(await isShown(obsidian, ui.fullPlayer)).toBe(false);
 		await expectAdvancing("collapsed by Escape");
@@ -289,7 +289,7 @@ describe("view shell journeys", () => {
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await waitUntilShown(obsidian, ui.menuItem("Play"));
 		expect(await titles(), "the overflow button's menu").toEqual(order);
-		await pressEscape(obsidian);
+		await pressKey(obsidian, "Escape");
 		await click(obsidian, ui.episode(OTHER.title), { button: "right" });
 		await waitUntilShown(obsidian, ui.menuItem("Play"));
 		expect(await titles(), "the right-click menu").toEqual(order);
@@ -313,7 +313,7 @@ describe("view shell journeys", () => {
 			{ title: "Walks", checked: true },
 			{ title: "New playlist", checked: false },
 		]);
-		await pressEscape(obsidian);
+		await pressKey(obsidian, "Escape");
 
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await click(obsidian, ui.menuItem("Mark as played"));
@@ -326,7 +326,7 @@ describe("view shell journeys", () => {
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await waitUntilShown(obsidian, ui.menuItem("Mark as unplayed"));
 		expect(await titles()).not.toContain("Mark as played");
-		await pressEscape(obsidian);
+		await pressKey(obsidian, "Escape");
 
 		await click(obsidian, ui.episode(LONG.title));
 		const started = await waitForPlayback(
