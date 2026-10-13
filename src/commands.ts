@@ -1,14 +1,16 @@
+import { Notice } from "obsidian";
 import { get } from "svelte/store";
 import { queue, savedFeeds } from "src/store";
 import { QueueReorderModal } from "src/ui/QueueReorderModal";
 import createPodcastNote from "src/createPodcastNote";
 import createFeedNote from "src/createFeedNote";
-import { FeedSuggestModal, orderFeedsByCurrent } from "src/ui/FeedSuggestModal";
+import { PickerModal, orderFeedsByCurrent } from "src/ui/PickerModal";
 import downloadEpisodeWithNotice from "src/downloadEpisode";
 import getUniversalPodcastLink from "src/getUniversalPodcastLink";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { TRANSCRIBE_FROM_AUDIO_COMMAND } from "src/services/TranscriptionService";
 import type PodNotes from "src/main";
+import type { PodcastFeed } from "src/types/PodcastFeed";
 
 /**
  * Registers every PodNotes command on the plugin. Extracted from main.onload so
@@ -149,22 +151,34 @@ export function registerCommands(plugin: PodNotes): void {
 
 	plugin.addCommand({
 		id: "create-podcast-note",
-		// Despite the id, this creates a note for the CURRENT EPISODE. The
-		// visible name was corrected to disambiguate it from the feed-level
-		// "Create podcast feed note" command below (issue #163). The id is kept
-		// for backward compatibility (hotkeys/API).
+		// Despite the id, this creates an episode note: the loaded episode's, else one
+		// picked from a saved podcast. The visible name was corrected to disambiguate
+		// it from the feed-level "Create podcast feed note" command below (issue
+		// #163). The id is kept for backward compatibility (hotkeys/API).
 		name: "Create episode note",
 		icon: "file-plus",
 		checkCallback: (checking) => {
+			const { path, template } = plugin.settings.note;
+			const episode = plugin.api.podcast;
+			const feeds = Object.values(get(savedFeeds));
 			if (checking) {
-				return (
-					!!plugin.api.podcast &&
-					!!plugin.settings.note.path &&
-					!!plugin.settings.note.template
-				);
+				return !!path && !!template && (!!episode || feeds.length > 0);
 			}
 
-			void createPodcastNote(plugin.api.podcast);
+			if (episode) {
+				void createPodcastNote(episode);
+				return;
+			}
+
+			new PickerModal(
+				plugin.app,
+				feeds,
+				(feed) => feed.title,
+				"Select a podcast",
+				(feed) => {
+					void pickEpisodeForNote(plugin, feed);
+				},
+			).open();
 		},
 	});
 
@@ -189,9 +203,15 @@ export function registerCommands(plugin: PodNotes): void {
 			// picker opens on the most likely choice without requiring playback.
 			const orderedFeeds = orderFeedsByCurrent(feeds, plugin.api.podcast?.podcastName);
 
-			new FeedSuggestModal(plugin.app, orderedFeeds, (feed) => {
-				void createFeedNote(feed);
-			}).open();
+			new PickerModal(
+				plugin.app,
+				orderedFeeds,
+				(feed) => feed.title,
+				"Select a podcast to create or open its note",
+				(feed) => {
+					void createFeedNote(feed);
+				},
+			).open();
 		},
 	});
 
@@ -290,4 +310,26 @@ export function registerCommands(plugin: PodNotes): void {
 			}
 		},
 	});
+}
+
+async function pickEpisodeForNote(plugin: PodNotes, feed: PodcastFeed): Promise<void> {
+	await plugin.feeds.load([feed.title], "cached");
+	const state = get(plugin.feeds).get(feed.title);
+	const episodes = state?.episodes ?? [];
+	if (episodes.length === 0) {
+		new Notice(
+			state?.error ? "Could not load the podcast feed" : "No episodes in this podcast",
+		);
+		return;
+	}
+
+	new PickerModal(
+		plugin.app,
+		episodes,
+		(episode) => episode.title,
+		"Select an episode",
+		(episode) => {
+			void createPodcastNote(episode);
+		},
+	).open();
 }

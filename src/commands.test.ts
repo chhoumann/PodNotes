@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 import * as obsidian from "obsidian";
 import { MarkdownView, TFile, TFolder, type WorkspaceLeaf } from "obsidian";
+import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import PodNotes from "./main";
 import { VIEW_TYPE } from "./constants";
 import type { Episode } from "./types/Episode";
+import { PickerModal } from "./ui/PickerModal";
+import { fetchTextWithTimeout } from "./utility/networkRequest";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
+
+vi.mock("./utility/networkRequest", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./utility/networkRequest")>()),
+	fetchTextWithTimeout: vi.fn(),
+}));
 
 const episode: Episode = {
 	title: "Saved Episode",
@@ -92,6 +100,7 @@ function fakeWorkspace() {
 		for (const listener of listeners.get(name) ?? []) listener(...args);
 	};
 	const open: WorkspaceLeaf[] = [];
+	const opened: string[] = [];
 	const podNotesLeaf = { view: { getViewType: () => VIEW_TYPE } } as unknown as WorkspaceLeaf;
 	const workspace = {
 		activeEditor: null as MarkdownView | null,
@@ -104,11 +113,13 @@ function fakeWorkspace() {
 		getRightLeaf: () => null,
 		revealLeaf: vi.fn(),
 		onLayoutReady: vi.fn(),
-		getLeaf: () => ({ openFile: vi.fn() }),
+		getLeaf: () => ({ openFile: async (file: TFile) => opened.push(file.path) }),
 	};
 
 	return {
 		workspace,
+		/** Paths of the files opened in a tab. */
+		opened,
 		/** Opens a note and puts the caret in it. */
 		openNote(path: string, text: string, caret?: number) {
 			const leaf = {} as WorkspaceLeaf;
@@ -314,5 +325,103 @@ describe("capture", () => {
 				expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:24-00:20:34\n- 00:20:34\n"),
 			);
 		});
+	});
+});
+
+describe("Create episode note", () => {
+	const feed = { title: "Pod", url: "https://feeds.test/pod.xml", artworkUrl: "" };
+	const withFeed = { schemaVersion: 2, note: playing.note, savedFeeds: { Pod: feed } };
+	const rss = (items: string[]) =>
+		`<rss><channel><title>Pod</title>${items
+			.map(
+				(title) =>
+					`<item><title>${title}</title><enclosure url="https://media.test/${title}.mp3"/></item>`,
+			)
+			.join("")}</channel></rss>`;
+	const command = (commands: obsidian.Command[]) =>
+		commands.find(({ id }) => id === "create-podcast-note")!.checkCallback!;
+
+	/** The pickers opened so far, as the user sees them. */
+	function watchPickers() {
+		const open = vi.spyOn(PickerModal.prototype, "open");
+		const shown = (index: number) => {
+			const modal = open.mock.contexts[index] as PickerModal<unknown>;
+			const items = modal.getItems();
+			const texts = items.map((item) => modal.getItemText(item));
+			return {
+				placeholder: modal.inputEl.placeholder,
+				texts,
+				choose: (text: string) => modal.onChooseItem(items[texts.indexOf(text)]),
+			};
+		};
+		return { open, shown };
+	}
+
+	it("picks a podcast, then one of its episodes, and creates that episode's note without playing it", async () => {
+		vi.mocked(fetchTextWithTimeout).mockResolvedValue(rss(["Two", "One"]));
+		const pickers = watchPickers();
+		const { plugin, commands, read, opened } = await loadPlugin(withFeed);
+
+		expect(command(commands)(true)).toBe(true);
+		command(commands)(false);
+
+		expect(pickers.shown(0)).toMatchObject({ placeholder: "Select a podcast", texts: ["Pod"] });
+		pickers.shown(0).choose("Pod");
+
+		await vi.waitFor(() => expect(pickers.open).toHaveBeenCalledTimes(2));
+		expect(pickers.shown(1)).toMatchObject({
+			placeholder: "Select an episode",
+			texts: ["Two", "One"],
+		});
+		pickers.shown(1).choose("One");
+
+		await vi.waitFor(() => expect(opened).toEqual(["PodNotes/Pod/One.md"]));
+		expect(read("PodNotes/Pod/One.md")).toBe("# One");
+		expect(plugin.api.podcast).toBeUndefined();
+		expect(get(plugin.player.state).status).toBe("empty");
+	});
+
+	it.each([
+		[
+			"cannot be loaded",
+			() => vi.mocked(fetchTextWithTimeout).mockRejectedValue(new Error("offline")),
+			"Could not load the podcast feed",
+		],
+		[
+			"has no episodes",
+			() => vi.mocked(fetchTextWithTimeout).mockResolvedValue(rss([])),
+			"No episodes in this podcast",
+		],
+	])("says so when the podcast %s", async (_, respond, message) => {
+		respond();
+		const pickers = watchPickers();
+		const { commands, notes } = await loadPlugin(withFeed);
+
+		command(commands)(false);
+		pickers.shown(0).choose("Pod");
+
+		await vi.waitFor(() => expect(notice).toHaveBeenCalledWith(message));
+		expect(pickers.open).toHaveBeenCalledTimes(1);
+		expect(notes.size).toBe(0);
+	});
+
+	it("creates the loaded episode's note without a picker", async () => {
+		const pickers = watchPickers();
+		const { commands, read, opened } = await loadPlugin({
+			...playing,
+			savedFeeds: { Pod: feed },
+		});
+
+		command(commands)(false);
+
+		await vi.waitFor(() => expect(opened).toEqual([NOTE_PATH]));
+		expect(read(NOTE_PATH)).toBe("# Saved Episode");
+		expect(pickers.open).not.toHaveBeenCalled();
+	});
+
+	it("is unavailable with nothing loaded and no saved podcast", async () => {
+		const { commands } = await loadPlugin({ schemaVersion: 2, note: playing.note });
+
+		expect(command(commands)(true)).toBe(false);
 	});
 });

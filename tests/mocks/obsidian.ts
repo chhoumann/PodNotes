@@ -103,7 +103,11 @@ export class Modal {
 
 export class SuggestModal<T> extends Modal {
 	declare protected readonly itemType?: T;
-	setPlaceholder(_placeholder: string): void {}
+	inputEl = document.createElement("input");
+
+	setPlaceholder(placeholder: string): void {
+		this.inputEl.placeholder = placeholder;
+	}
 }
 
 export class FuzzySuggestModal<T> extends SuggestModal<T> {
