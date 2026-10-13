@@ -27,7 +27,7 @@ import getContextMenuHandler from "./getContextMenuHandler";
 import getVaultRenameHandler from "./getVaultRenameHandler";
 import { TranscriptionService } from "./services/TranscriptionService";
 import { CaptureService } from "./services/CaptureService";
-import { get, type Unsubscriber } from "svelte/store";
+import { get, type Readable, type Unsubscriber } from "svelte/store";
 import { PlayerController } from "./player/PlayerController";
 import { bindMediaSession } from "./player/mediaSession";
 import {
@@ -51,6 +51,7 @@ import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { privateFeedAddresses, protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
 import { redactPrivateFeedAddresses } from "./utility/privateFeedUrl";
 import { FeedRepository, loadFeed } from "./services/FeedRepository";
+import { onlineStatus } from "./services/online";
 
 type WriteRefusal =
 	| "unreadable-data-file"
@@ -101,6 +102,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public feeds!: FeedRepository;
 	public capture!: CaptureService;
 	public navigation!: Navigation;
+	public online!: Readable<boolean>;
 
 	private views = new Set<MainView>();
 
@@ -143,6 +145,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			}),
 		);
 		plugin.set(this);
+		this.online = onlineStatus(window);
 		this.credentials = new CredentialRepository(this.app.secretStorage);
 		this.feedUrls = new FeedUrlRepository(this.app.secretStorage);
 		this.feeds = new FeedRepository({
@@ -285,6 +288,15 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	openSettingsTab(): void {
 		this.app.setting.open();
 		this.app.setting.openTabById(this.manifest.id);
+	}
+
+	/** The one writer of the auto-queue preference, for the settings tab and the Queue page. */
+	setAutoQueue(enabled: boolean): void {
+		if (this.settings.autoQueue === enabled) return;
+		this.settings.autoQueue = enabled;
+		// Views read settings through the plugin store, so it must tell them.
+		plugin.set(this);
+		void this.saveSettings();
 	}
 
 	shouldMountPodcastView(): boolean {

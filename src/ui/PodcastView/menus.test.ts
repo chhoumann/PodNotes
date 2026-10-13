@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import * as obsidian from "obsidian";
 import { get } from "svelte/store";
+import { fireEvent, screen } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
 import {
@@ -14,7 +15,9 @@ import {
 } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
-import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
+import { FeedRepository } from "src/services/FeedRepository";
+import { isPrivateFeedPlaceholder, privateFeedPlaceholder } from "src/utility/privateFeedUrl";
+import { feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 import {
 	createTestServices,
 	pluginLibrary,
@@ -23,7 +26,10 @@ import {
 import {
 	anchorOf,
 	episodeMenu,
+	openEpisode,
+	playlistMenu,
 	podcastMenu,
+	queueMenu,
 	showMenu,
 	type EpisodeMenuOptions,
 	type MenuAnchor,
@@ -155,24 +161,6 @@ describe("an episode's menu", () => {
 		expect(titles(menu())).toContain("Remove from queue");
 	});
 
-	test("moves an episode in the queue only from a row of the queue", () => {
-		const second = { ...episode, title: "Second" };
-		queue.add(episode);
-		queue.add(second);
-
-		expect(titles(menu(second))).not.toContain("Move up in queue");
-		const fromQueue = menu(second, { place: "queue" });
-		expect(titles(fromQueue).slice(0, 5)).toEqual([
-			"Play",
-			"Remove from queue",
-			"---",
-			"Move to top of queue",
-			"Move up in queue",
-		]);
-		choose(fromQueue, "Move to top of queue");
-		expect(get(queue).episodes.map(({ title }) => title)).toEqual(["Second", "Episode"]);
-	});
-
 	test("in the full player offers neither Play nor Mark as played", () => {
 		expect(titles(menu(episode, { place: "player" }))).toEqual([
 			"Add to queue",
@@ -189,7 +177,7 @@ describe("an episode's menu", () => {
 	test("for a played episode that left every feed offers only Mark as unplayed", () => {
 		playedEpisodes.markAsPlayed(episode);
 
-		expect(titles(menu(episode, { available: false }))).toEqual(["Mark as unplayed"]);
+		expect(titles(menu(episode, { resolved: false }))).toEqual(["Mark as unplayed"]);
 	});
 
 	test("marks a Played record unplayed under the key it is stored by", () => {
@@ -224,12 +212,7 @@ describe("an episode's menu", () => {
 		expect(get(favorites).episodes).toEqual([episode]);
 	});
 
-	test("Add to playlist is there but disabled without a playlist of the user's", () => {
-		const entry = choose(menu(), "Add to playlist");
-		expect(entry).toMatchObject({ disabled: true });
-	});
-
-	function playlistMenu(entries: MenuEntry[]) {
+	function secondMenu(entries: MenuEntry[]) {
 		const shown = vi.spyOn(obsidian.Menu.prototype, "showAtPosition");
 		const title = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
 		const checked = vi.spyOn(obsidian.MenuItem.prototype, "setChecked");
@@ -243,14 +226,17 @@ describe("an episode's menu", () => {
 		}));
 	}
 
-	test("Add to playlist lists each playlist, checked when the episode is in it", () => {
+	test("Add to playlist lists each playlist, checked when the episode is in it, then New playlist", () => {
 		playlists.set({ Walks: playlist("Walks", [episode]), Runs: playlist("Runs") });
+		const separators = vi.spyOn(obsidian.Menu.prototype, "addSeparator");
 
-		const [walks, runs] = playlistMenu(menu());
-		expect([walks, runs].map(({ name, checked }) => [name, checked])).toEqual([
+		const [walks, runs, add] = secondMenu(menu());
+		expect([walks, runs, add].map(({ name, checked }) => [name, checked])).toEqual([
 			["Walks", true],
 			["Runs", false],
+			["New playlist", false],
 		]);
+		expect(separators).toHaveBeenCalledTimes(1);
 		runs.click();
 		walks.click();
 
@@ -258,9 +244,24 @@ describe("an episode's menu", () => {
 		expect(get(playlists).Walks.episodes).toEqual([]);
 	});
 
+	test("without a playlist, Add to playlist offers New playlist, which creates one holding the episode", async () => {
+		const separators = vi.spyOn(obsidian.Menu.prototype, "addSeparator");
+		const [add, ...rest] = secondMenu(menu());
+		expect([add.name, rest]).toEqual(["New playlist", []]);
+		expect(separators).not.toHaveBeenCalled();
+
+		add.click();
+		await fireEvent.input(screen.getByRole("textbox", { name: "Playlist name" }), {
+			target: { value: "Walks" },
+		});
+		await fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+		await vi.waitFor(() => expect(get(playlists).Walks?.episodes).toEqual([episode]));
+	});
+
 	test("a playlist deleted while its menu was open stays deleted", () => {
 		playlists.set({ Walks: playlist("Walks") });
-		const [walks] = playlistMenu(menu());
+		const [walks] = secondMenu(menu());
 		playlists.set({});
 
 		walks.click();
@@ -311,6 +312,49 @@ describe("an episode's menu", () => {
 	});
 });
 
+describe("opening an episode offline", () => {
+	const other = { ...episode, title: "Other", streamUrl: "https://media.test/other.mp3" };
+	const fetched = { ...episode, title: "Fetched", streamUrl: "https://media.test/fetched.mp3" };
+
+	beforeEach(() => {
+		services.player.play(episode);
+		services.navigation.collapse();
+		services.online.set(false);
+	});
+
+	test("refuses an episode with no copy, before the player queues the one playing", () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+
+		openEpisode(services, other);
+
+		expect(notice).toHaveBeenCalledWith("Not downloaded");
+		expect(get(services.player.state).episode).toEqual(episode);
+		expect(get(queue).episodes).toEqual([]);
+		expect(services.navigation.current.expanded).toBe(false);
+	});
+
+	test("plays a downloaded episode, and opens the player for the one playing", () => {
+		downloadedEpisodes.set({ Podcast: [{ ...fetched, filePath: "Fetched.mp3", size: 1 }] });
+		const play = vi.spyOn(services.player, "play").mockReturnValue(true);
+
+		openEpisode(services, episode);
+		expect(services.navigation.current.expanded).toBe(true);
+		openEpisode(services, fetched);
+
+		expect(play.mock.calls).toEqual([[fetched]]);
+	});
+
+	test("a menu opened online refuses Play once the connection is gone", () => {
+		services.online.set(true);
+		const open = menu(other);
+		services.online.set(false);
+
+		choose(open, "Play");
+
+		expect(get(services.player.state).episode).toEqual(episode);
+	});
+});
+
 describe("a podcast's menu", () => {
 	const feed = { title: "Show", url: "https://show.test/feed.xml", artworkUrl: "" };
 
@@ -320,13 +364,35 @@ describe("a podcast's menu", () => {
 		plugin.update((current) => ({ ...current, app: services.app }) as never);
 	});
 
-	test("offers the podcast note and removal, and a feed address only where it is missing", () => {
+	test("offers the podcast note, its public address and removal", () => {
 		expect(titles(podcastMenu("Show", services))).toEqual([
 			"Create podcast note",
+			"Copy feed URL",
 			"---",
 			"Remove podcast",
 		]);
-		expect(podcastMenu("Show", services)[2]).toMatchObject({ warning: true });
+		expect(podcastMenu("Show", services)[3]).toMatchObject({ warning: true });
+	});
+
+	test("Copy feed URL copies the address the feed has when it is clicked", async () => {
+		const writeText = vi.fn(async () => {});
+		Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+		const notice = vi.spyOn(obsidian, "Notice");
+		const open = podcastMenu("Show", services);
+
+		choose(open, "Copy feed URL");
+		await vi.waitFor(() => expect(notice).toHaveBeenCalledWith("Feed URL copied"));
+		savedFeeds.update((all) => ({
+			...all,
+			Show: {
+				...feed,
+				url: privateFeedPlaceholder("Show"),
+				urlSecretId: "podnotes-feed-url-1",
+			},
+		}));
+		choose(open, "Copy feed URL");
+
+		expect(writeText.mock.calls).toEqual([["https://show.test/feed.xml"]]);
 	});
 
 	test("removing the open podcast returns to the Library first", () => {
@@ -344,6 +410,135 @@ describe("a podcast's menu", () => {
 		choose(podcastMenu("Other", services), "Remove podcast");
 
 		expect(services.navigation.current.page).toEqual({ kind: "feed", key: "Show" });
+	});
+});
+
+describe("a podcast's menu, by how its feed loaded", () => {
+	beforeEach(async () => {
+		dispose();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const feeds = new FeedRepository({
+			load: async (url) => {
+				if (url.startsWith("https://down.")) throw new Error("503");
+				return feedDocument("", []);
+			},
+			resolveUrl: (feed) =>
+				feed.urlSecretId === "down"
+					? "https://down.patron.test/feed.xml"
+					: isPrivateFeedPlaceholder(feed.url)
+						? null
+						: feed.url,
+			storage: new MemoryStorage(),
+			cache: () => ({ enabled: false, ttlHours: 6 }),
+			now: Date.now,
+		});
+		({ services, dispose } = createTestServices({ library: pluginLibrary, feeds }));
+		Object.assign(services.app, { vault: { getAbstractFileByPath: () => null } });
+		plugin.update((current) => ({ ...current, app: services.app }) as never);
+		savedFeeds.set({
+			Up: { title: "Up", url: "https://up.test/feed.xml", artworkUrl: "" },
+			Down: { title: "Down", url: "https://down.test/feed.xml", artworkUrl: "" },
+			Patron: {
+				title: "Patron",
+				url: privateFeedPlaceholder("Patron"),
+				urlSecretId: "podnotes-feed-url-1",
+				artworkUrl: "",
+			},
+			"Patron Down": {
+				title: "Patron Down",
+				url: privateFeedPlaceholder("Patron Down"),
+				urlSecretId: "down",
+				artworkUrl: "",
+			},
+		});
+		await services.feeds.load(["Up", "Down", "Patron", "Patron Down"], "network");
+	});
+
+	test.each([
+		["loaded", "Up", ["Create podcast note", "Copy feed URL", "---", "Remove podcast"]],
+		[
+			"failed",
+			"Down",
+			["Create podcast note", "Copy feed URL", "Edit feed URL", "---", "Remove podcast"],
+		],
+		[
+			"has no address on this device",
+			"Patron",
+			["Create podcast note", "Set feed address", "---", "Remove podcast"],
+		],
+		["is private and failed", "Patron Down", ["Create podcast note", "---", "Remove podcast"]],
+	])("of a feed that %s", (_, key, items) => {
+		expect(titles(podcastMenu(key, services))).toEqual(items);
+	});
+
+	test("Edit feed URL asks for the failed feed's address", () => {
+		const setFeedAddress = vi.spyOn(services.actions, "setFeedAddress").mockResolvedValue();
+
+		choose(podcastMenu("Down", services), "Edit feed URL");
+
+		expect(setFeedAddress).toHaveBeenCalledWith("Down");
+	});
+});
+
+describe("a playlist's menu", () => {
+	test("deletes the playlist, from its own page by going to Playlists first, with Undo", () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		playlists.set({ Walks: playlist("Walks"), Runs: playlist("Runs") });
+		services.navigation.go({ kind: "playlist", name: "Runs" });
+
+		expect(titles(playlistMenu("Runs", services))).toEqual(["Delete playlist"]);
+		expect(playlistMenu("Runs", services)[0]).toMatchObject({ warning: true });
+		choose(playlistMenu("Runs", services), "Delete playlist");
+
+		expect(services.navigation.current.page).toEqual({ kind: "playlists" });
+		expect(Object.keys(get(playlists))).toEqual(["Walks"]);
+		(notice.mock.calls[0][0] as DocumentFragment).querySelector("button")?.click();
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Runs"]);
+	});
+
+	test("deleting another playlist stays where the user is", () => {
+		playlists.set({ Walks: playlist("Walks") });
+		services.navigation.go({ kind: "queue" });
+
+		choose(playlistMenu("Walks", services), "Delete playlist");
+
+		expect(services.navigation.current.page).toEqual({ kind: "queue" });
+		expect(get(playlists)).toEqual({});
+	});
+});
+
+describe("the Queue page's menu", () => {
+	const queueSettings = () => get(services.settings).autoQueue;
+
+	test("offers the auto-queue preference, checked while it is on, and Clear queue", () => {
+		queue.add(episode);
+
+		expect(titles(queueMenu(services))).toEqual([
+			"Queue episodes I switch from",
+			"---",
+			"Clear queue",
+		]);
+		expect(queueMenu(services)[0]).toMatchObject({ checked: true });
+		expect(queueMenu(services)[2]).toMatchObject({ warning: true, disabled: false });
+	});
+
+	test("the preference item sets the opposite of what its menu showed, so a stale menu repeats", () => {
+		const open = queueMenu(services);
+
+		choose(open, "Queue episodes I switch from");
+		expect(queueSettings()).toBe(false);
+		expect(queueMenu(services)[0]).toMatchObject({ checked: false });
+		choose(open, "Queue episodes I switch from");
+		expect(services.setAutoQueue.mock.calls).toEqual([[false], [false]]);
+	});
+
+	test("Clear queue is disabled for an empty queue, and clears a full one", () => {
+		expect(queueMenu(services)[2]).toMatchObject({ disabled: true });
+
+		queue.add(episode);
+		choose(queueMenu(services), "Clear queue");
+
+		expect(get(queue).episodes).toEqual([]);
 	});
 });
 

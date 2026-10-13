@@ -367,37 +367,63 @@ function setQueue(...titles: string[]) {
 }
 
 describe("reorderEpisodes", () => {
-	const episodes = [ep("A"), ep("B"), ep("C"), ep("D")];
 	const titles = (list: Episode[]) => list.map((e) => e.title);
+	const live = (...names: string[]) => names.map((name) => ep(name));
 
-	test("moves forward (from < to)", () => {
-		expect(titles(reorderEpisodes(episodes, 0, 2))).toEqual(["B", "C", "A", "D"]);
+	// The queue the store holds when the move applies, which can differ from the one
+	// the gesture saw: playback adds and removes entries during a drag.
+	test.each([
+		["the queue the gesture saw", ["A", "B", "C", "D"], ["A", "D", "B", "C"]],
+		["an entry auto-queued since", ["X", "A", "B", "C", "D"], ["X", "A", "D", "B", "C"]],
+	])("moves D before B in %s", (_, queued, moved) => {
+		const move = { episode: ep("D"), relativeTo: ep("B"), side: "before" } as const;
+		expect(titles(reorderEpisodes(live(...queued), move))).toEqual(moved);
 	});
 
-	test("moves backward (from > to)", () => {
-		expect(titles(reorderEpisodes(episodes, 3, 1))).toEqual(["A", "D", "B", "C"]);
+	test.each([
+		["the moved episode left the queue", ["A", "B", "C"]],
+		["the anchor left the queue", ["A", "C", "D"]],
+		["the move was already applied", ["A", "D", "B", "C"]],
+	])("changes nothing when %s", (_, queued) => {
+		const episodes = live(...queued);
+		const move = { episode: ep("D"), relativeTo: ep("B"), side: "before" } as const;
+		expect(reorderEpisodes(episodes, move)).toBe(episodes);
 	});
 
-	test("move to last index truly lands last", () => {
-		expect(titles(reorderEpisodes(episodes, 0, episodes.length - 1))).toEqual([
-			"B",
-			"C",
-			"D",
-			"A",
-		]);
+	test("places after the anchor, in either direction", () => {
+		const episodes = live("A", "B", "C", "D");
+		expect(
+			titles(
+				reorderEpisodes(episodes, { episode: ep("A"), relativeTo: ep("C"), side: "after" }),
+			),
+		).toEqual(["B", "C", "A", "D"]);
+		expect(
+			titles(
+				reorderEpisodes(episodes, { episode: ep("D"), relativeTo: ep("A"), side: "after" }),
+			),
+		).toEqual(["A", "D", "B", "C"]);
 	});
 
-	test("returns the same reference for no-op / out-of-range indices", () => {
-		expect(reorderEpisodes(episodes, 1, 1)).toBe(episodes);
-		expect(reorderEpisodes(episodes, -1, 0)).toBe(episodes);
-		expect(reorderEpisodes(episodes, 0, 99)).toBe(episodes);
-		expect(reorderEpisodes(episodes, 99, 0)).toBe(episodes);
+	test("an episode placed beside itself, or after the one before it, stays put", () => {
+		const episodes = live("A", "B", "C");
+		expect(
+			reorderEpisodes(episodes, { episode: ep("B"), relativeTo: ep("B"), side: "after" }),
+		).toBe(episodes);
+		expect(
+			reorderEpisodes(episodes, { episode: ep("B"), relativeTo: ep("A"), side: "after" }),
+		).toBe(episodes);
 	});
 
-	test("does not mutate the input array", () => {
-		const input = [ep("A"), ep("B"), ep("C")];
-		reorderEpisodes(input, 0, 2);
-		expect(titles(input)).toEqual(["A", "B", "C"]);
+	test("keeps the stored entry and leaves the input as it was", () => {
+		const episodes = live("A", "B", "C");
+		const stored = episodes[2];
+		const moved = reorderEpisodes(episodes, {
+			episode: { ...ep("C"), description: "a newer copy" },
+			relativeTo: ep("A"),
+			side: "before",
+		});
+		expect(moved[0]).toBe(stored);
+		expect(titles(episodes)).toEqual(["A", "B", "C"]);
 	});
 });
 
@@ -455,45 +481,40 @@ describe("queue store", () => {
 		expect(queueTitles()).toEqual(["A", "B", "C"]);
 	});
 
-	test("move takes an episode to the top or the bottom", () => {
+	test("reorder moves an episode beside another", () => {
 		setQueue("A", "B", "C");
 
-		queue.move(ep("A"), "bottom");
+		queue.reorder({ episode: ep("A"), relativeTo: ep("C"), side: "after" });
 		expect(queueTitles()).toEqual(["B", "C", "A"]);
 
-		queue.move(ep("A"), "top");
+		queue.reorder({ episode: ep("A"), relativeTo: ep("B"), side: "before" });
 		expect(queueTitles()).toEqual(["A", "B", "C"]);
 	});
 
-	test("move shifts an episode up or down one place", () => {
-		setQueue("A", "B", "C");
-
-		queue.move(ep("A"), "down");
-		expect(queueTitles()).toEqual(["B", "A", "C"]);
-
-		queue.move(ep("C"), "up");
-		expect(queueTitles()).toEqual(["B", "C", "A"]);
-	});
-
-	test("move finds the episode itself, not a same-titled one from another podcast (#356)", () => {
+	test("reorder finds the episode itself, not a same-titled one from another podcast (#356)", () => {
 		queue.set({
 			...QUEUE_SETTINGS,
 			episodes: [ep("Trailer", "Pod A"), ep("Trailer", "Pod B")],
 		});
 
-		queue.move(ep("Trailer", "Pod B"), "top");
+		queue.reorder({
+			episode: ep("Trailer", "Pod B"),
+			relativeTo: ep("Trailer", "Pod A"),
+			side: "before",
+		});
 
 		expect(get(queue).episodes.map((e) => e.podcastName)).toEqual(["Pod B", "Pod A"]);
 	});
 
-	test("a move past an end, or of an episode not queued, changes and saves nothing", () => {
+	test("a move that changes nothing, or of an episode not queued, changes and saves nothing", () => {
 		setQueue("A", "B", "C");
 		let writes = 0;
 		const unsubscribe = queue.subscribe(() => writes++);
 
-		queue.move(ep("A"), "up");
-		queue.move(ep("C"), "down");
-		queue.move(ep("Z"), "top");
+		queue.reorder({ episode: ep("A"), relativeTo: ep("B"), side: "before" });
+		queue.reorder({ episode: ep("C"), relativeTo: ep("B"), side: "after" });
+		queue.reorder({ episode: ep("Z"), relativeTo: ep("A"), side: "before" });
+		queue.reorder({ episode: ep("A"), relativeTo: ep("Z"), side: "after" });
 		unsubscribe();
 
 		expect(queueTitles()).toEqual(["A", "B", "C"]);
@@ -520,7 +541,7 @@ describe("queue store", () => {
 		const unbind = bindStoresToSettings(fakePlugin);
 
 		try {
-			queue.move(ep("A"), "bottom");
+			queue.reorder({ episode: ep("A"), relativeTo: ep("C"), side: "after" });
 
 			expect(fakePlugin.settings.queue.episodes.map((e) => e.title)).toEqual(["B", "C", "A"]);
 			expect(fakePlugin.saveSettings).toHaveBeenCalled();

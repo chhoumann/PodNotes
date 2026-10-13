@@ -195,7 +195,7 @@ describe("library", () => {
 		expect(screen.getByText(episode.title)).toBeInTheDocument();
 		expect(screen.getByText(walk.title)).toBeInTheDocument();
 		await fireEvent.click(button(/^Playlists/));
-		await fireEvent.click(button("Walks"));
+		await fireEvent.click(button(/^Walks/));
 		expect(screen.getByRole("heading", { name: "Walks" })).toBeInTheDocument();
 		expect(screen.getByText(walk.title)).toBeInTheDocument();
 	});
@@ -235,38 +235,165 @@ describe("library", () => {
 		await fireEvent.click(button(/^Queue/));
 		expect(screen.queryByText(walk.title)).toBeNull();
 		await fireEvent.click(button(/^Playlists/));
-		expect(button("Favorites")).toBeInTheDocument();
-		expect(screen.queryByRole("button", { name: "Runs" })).toBeNull();
+		expect(button(/^Favorites/)).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Runs/ })).toBeNull();
 	});
 });
 
-describe("pages", () => {
-	test("an episode's menu can move it in the queue on the Queue page only", async () => {
-		// The menu reads the plugin's stores, so the view reads them too, as in the plugin.
+describe("list pages", () => {
+	test("the Queue's head shows its time left and opens the queue's options", async () => {
+		services.library.queue.update((list) => ({
+			...list,
+			episodes: [{ ...episode, duration: 45 * 60 }],
+		}));
+		const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
+		services.navigation.replace({ kind: "queue" });
+		renderView(820);
+		await tick();
+
+		expect(screen.getByRole("heading", { name: "Queue" }).nextElementSibling).toHaveTextContent(
+			"45 min",
+		);
+		await fireEvent.click(button("Queue options"));
+		expect(titles.mock.calls.map(([title]) => title)).toEqual([
+			"Queue episodes I switch from",
+			"Clear queue",
+		]);
+	});
+
+	test("a playlist's title shows its count beside it in the sidebar", async () => {
+		services.library.playlists.set({
+			Walks: {
+				...structuredClone(DEFAULT_SETTINGS.favorites),
+				name: "Walks",
+				episodes: [episode],
+			},
+		});
+		services.navigation.replace({ kind: "playlist", name: "Walks" });
+		renderView(320);
+		await tick();
+
+		expect(screen.getByRole("heading", { name: "Walks" }).nextElementSibling).toHaveTextContent(
+			"1",
+		);
+		expect(document.querySelectorAll(".flair")).toHaveLength(1);
+	});
+
+	test("a playlist of the user's deletes from its head and leaves for Playlists; Favorites has no menu", async () => {
 		dispose();
 		({ services, doc, dispose } = createTestServices({ library: pluginLibrary }));
 		savedFeeds.set({ [feed.title]: feed });
-		const second = { ...episode, title: "Episode 2" };
-		queue.add(episode);
-		queue.add(second);
-		Object.assign(services.app, { vault: { getAbstractFileByPath: () => null } });
-		const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
-		const menuOf = async (title: string) => {
-			titles.mockClear();
-			await fireEvent.contextMenu(screen.getByText(title));
-			return titles.mock.calls.map(([shown]) => shown);
-		};
-		renderView();
+		playlists.set({
+			Walks: { ...structuredClone(DEFAULT_SETTINGS.favorites), name: "Walks", episodes: [] },
+		});
+		services.navigation.replace({ kind: "playlist", name: "Favorites" });
+		renderView(320);
+		await tick();
+		expect(screen.queryByRole("button", { name: "Playlist options" })).toBeNull();
 
-		await fireEvent.click(button(/^Queue/));
-		expect(await menuOf("Episode 2")).toContain("Move up in queue");
+		services.navigation.go({ kind: "playlist", name: "Walks" });
+		await tick();
+		const clicks = vi.spyOn(obsidian.MenuItem.prototype, "onClick");
+		await fireEvent.click(button("Playlist options"));
+		(clicks.mock.calls[0][0] as () => void)();
+		await tick();
+
+		expect(services.navigation.current.page).toEqual({ kind: "playlists" });
+		expect(get(playlists)).toEqual({});
+		expect(button(/^Favorites/)).toBeInTheDocument();
+	});
+
+	test("Local files' head adds a vault file through the media picker", async () => {
+		const open = vi
+			.spyOn(obsidian.FuzzySuggestModal.prototype, "open")
+			.mockImplementation(() => {});
+		Object.assign(services.app, {
+			vault: {
+				getFiles: () => [Object.assign(new obsidian.TFile(), { path: "Talks/a.mp3" })],
+			},
+		});
+		services.navigation.replace({ kind: "local" });
+		renderView(320);
+		await tick();
+
+		await fireEvent.click(button("Add a vault file"));
+
+		const picker = open.mock
+			.contexts[0] as unknown as obsidian.FuzzySuggestModal<obsidian.TFile>;
+		expect(picker.getItems().map((file) => picker.getItemText(file))).toEqual(["Talks/a.mp3"]);
+	});
+
+	test("Latest's head refreshes every podcast", async () => {
+		const loads: unknown[] = [];
+		vi.spyOn(services.feeds, "load").mockImplementation(async (keys, mode) => {
+			loads.push([[...keys], mode]);
+			return true;
+		});
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+
+		await fireEvent.click(button("Refresh all feeds"));
+
+		expect(loads.at(-1)).toEqual([[feed.title], "network"]);
+	});
+});
+
+describe("offline", () => {
+	test("every page says so above its head, and Refresh all is off", async () => {
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		const { resize } = renderView(320);
+		await tick();
+
+		expect(screen.getByText("Offline").closest('[role="status"]')).toHaveClass("pn-strip");
+		expect(document.querySelector(".pn-strip + .pn-head")).not.toBeNull();
+		expect(button("Refresh all feeds")).toBeDisabled();
 
 		await fireEvent.click(button("Back to Library"));
-		await fireEvent.click(button(/^Playlists/));
-		await fireEvent.click(button("Favorites"));
-		favorites.update((playlist) => ({ ...playlist, episodes: [second] }));
+		resize(820);
 		await tick();
-		expect(await menuOf("Episode 2")).not.toContain("Move up in queue");
+		expect(screen.getByText("Offline").closest('[role="status"]')).toHaveClass("pn-strip");
+		expect(button("Refresh all feeds")).toBeDisabled();
+
+		services.online.set(true);
+		await tick();
+		expect(screen.queryByText("Offline")).toBeNull();
+		expect(button("Refresh all feeds")).toBeEnabled();
+	});
+
+	test("First run has no strip", async () => {
+		services.library.savedFeeds.set({});
+		services.online.set(false);
+		renderView();
+		await tick();
+
+		expect(
+			screen.getByRole("searchbox", { name: "Search or paste a link" }),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Offline")).toBeNull();
+	});
+
+	test("the Queue keeps its order, and greys what needs a connection", async () => {
+		const later = {
+			...episode,
+			title: "Later",
+			streamUrl: "https://pod.example.com/later.mp3",
+		};
+		services.library.queue.update((list) => ({ ...list, episodes: [later, episode] }));
+		services.library.downloadedEpisodes.set({
+			[feed.title]: [{ ...episode, filePath: "PodNotes/Launch.mp3", size: 1 }],
+		});
+		services.online.set(false);
+		services.navigation.replace({ kind: "queue" });
+		renderView(320);
+		await tick();
+
+		expect(screen.queryByRole("heading", { name: "Available offline" })).toBeNull();
+		expect(
+			[...document.querySelectorAll(".pn-ep-title")].map((title) => title.textContent),
+		).toEqual(["Later", episode.title]);
+		expect(button("Later, not downloaded")).toHaveAttribute("aria-disabled", "true");
 	});
 });
 

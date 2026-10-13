@@ -118,6 +118,7 @@ describe("the Library's podcast grid", () => {
 
 		expect(titles.mock.calls.map(([title]) => title)).toEqual([
 			"Create podcast note",
+			"Copy feed URL",
 			"Remove podcast",
 		]);
 		expect(shown).toHaveBeenCalledWith({ x: 40, y: 50, doc: document }, document);

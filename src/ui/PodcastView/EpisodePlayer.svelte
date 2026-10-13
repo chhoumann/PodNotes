@@ -266,7 +266,7 @@
 						cover
 						onplay={() => openEpisode(services, queued)}
 						onmenu={(at) =>
-							showMenu(episodeMenu(queued, services, { place: "queue", at }), at)}
+							showMenu(episodeMenu(queued, services, { place: "list", at }), at)}
 					/>
 				{/each}
 			</div>

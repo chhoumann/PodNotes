@@ -339,7 +339,7 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 			);
 		} else if (key === "favorites") {
 			// Built-in playlist objects must carry an `episodes` array; consumers
-			// (PlaylistCard, context menu, removeEpisodeFromPlaylists) iterate it
+			// (the Playlists page, context menu, removeEpisodeFromPlaylists) iterate it
 			// without guarding. Drop the key when it's malformed so the merge falls
 			// back to the default rather than crashing the UI.
 			if (Array.isArray((value as { episodes?: unknown }).episodes)) {

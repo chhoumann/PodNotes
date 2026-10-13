@@ -1,7 +1,6 @@
 import { Notice } from "obsidian";
 import { get } from "svelte/store";
-import { queue, savedFeeds } from "src/store";
-import { QueueReorderModal } from "src/ui/QueueReorderModal";
+import { savedFeeds } from "src/store";
 import createPodcastNote from "src/createPodcastNote";
 import createFeedNote from "src/createFeedNote";
 import { PickerModal, orderFeedsByCurrent } from "src/ui/PickerModal";
@@ -111,12 +110,10 @@ export function registerCommands(plugin: PodNotes): void {
 		id: "reorder-queue",
 		name: "Reorder Queue",
 		icon: "list-ordered",
-		checkCallback: (checking) => {
-			if (checking) {
-				return get(queue).episodes.length > 1;
-			}
-
-			new QueueReorderModal(plugin.app).open();
+		// Reveal first: restoring the workspace while the view reveals would replace the page.
+		callback: async () => {
+			await plugin.activateView();
+			plugin.navigation.goRoot("queue");
 		},
 	});
 
@@ -281,7 +278,9 @@ export function registerCommands(plugin: PodNotes): void {
 	});
 
 	const canTranscribe = () =>
-		!!plugin.api.podcast && getEpisodeMediaType(plugin.api.podcast) === "audio";
+		get(plugin.online) &&
+		!!plugin.api.podcast &&
+		getEpisodeMediaType(plugin.api.podcast) === "audio";
 
 	plugin.addCommand({
 		id: "podnotes-transcribe",

@@ -38,6 +38,8 @@ export interface ShellServices {
 	readonly library: Library;
 	readonly actions: LibraryActions;
 	readonly search: PodcastSearch;
+	/** Whether the device has a connection. Network controls follow it, and lists group by it. */
+	readonly online: Readable<boolean>;
 	/**
 	 * Current through a settings toggle, the note path field and an import, which replaces
 	 * the object.
@@ -47,6 +49,8 @@ export interface ShellServices {
 	captureTimestamp(): Promise<Capture | null>;
 	/** Opens Obsidian's settings at the PodNotes tab. */
 	openSettings(): void;
+	/** Whether playback queues the episode the user switches from, and plays the queue on. */
+	setAutoQueue(enabled: boolean): void;
 	/** Whether the episode has a note: a vault lookup, so a caller decides when to ask again. */
 	hasNote(episode: Episode): boolean;
 	/**

@@ -154,14 +154,21 @@ export class TFolder {
 }
 
 export class Notice {
-	constructor(public message?: string) {}
+	hidden = false;
 
-	setMessage(message: string): this {
+	constructor(
+		public message?: string | DocumentFragment,
+		public duration?: number,
+	) {}
+
+	setMessage(message: string | DocumentFragment): this {
 		this.message = message;
 		return this;
 	}
 
-	hide(): void {}
+	hide(): void {
+		this.hidden = true;
+	}
 }
 
 export const normalizePath = (path: string): string => {

@@ -65,8 +65,10 @@ export type TestServices = ShellServices & {
 	readonly library: TestLibrary;
 	readonly captureTimestamp: ReturnType<typeof vi.fn<() => Promise<Capture | null>>>;
 	readonly openSettings: ReturnType<typeof vi.fn<() => void>>;
+	readonly setAutoQueue: ReturnType<typeof vi.fn<(enabled: boolean) => void>>;
 	readonly hasNote: ReturnType<typeof vi.fn<(episode: Episode) => boolean>>;
 	readonly rowHasNote: Writable<(episode: Episode) => boolean>;
+	readonly online: Writable<boolean>;
 };
 
 /**
@@ -79,7 +81,9 @@ export type TestServices = ShellServices & {
  * after `dispose`, and still read it until then.
  */
 export function createTestServices(
-	overrides: Partial<Omit<TestServices, "captureTimestamp" | "openSettings" | "hasNote">> = {},
+	overrides: Partial<
+		Omit<TestServices, "captureTimestamp" | "openSettings" | "setAutoQueue" | "hasNote">
+	> = {},
 ): {
 	services: TestServices;
 	doc: FakeDocument;
@@ -101,6 +105,7 @@ export function createTestServices(
 		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
+	const online = writable(true);
 	const services = {
 		app,
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() } as never,
@@ -112,11 +117,18 @@ export function createTestServices(
 			app,
 			feeds,
 			feedUrls: new FeedUrlRepository(app.secretStorage),
+			online,
 		}),
-		search: new PodcastSearch(feeds),
+		search: new PodcastSearch(feeds, online),
+		online,
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),
+		// As the plugin's writer does, the settings change and the plugin store says so.
+		setAutoQueue: vi.fn((enabled: boolean) => {
+			settings.autoQueue = enabled;
+			plugin.update((host) => host);
+		}),
 		hasNote: vi.fn(() => false),
 		rowHasNote: writable(() => false),
 		...overrides,

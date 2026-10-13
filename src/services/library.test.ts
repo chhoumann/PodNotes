@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { fireEvent, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { savedFeeds } from "src/store";
+import { DEFAULT_SETTINGS } from "src/constants";
+import { playlists, queue, savedFeeds } from "src/store";
+import type { Playlist } from "src/types/Playlist";
+import type { Episode } from "src/types/Episode";
 import { fetchTextWithTimeout } from "src/utility/networkRequest";
-import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
+import { isPrivateFeedPlaceholder, privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { deferred, MemoryStorage } from "../../tests/mocks/feeds";
 import { FeedRepository, loadFeed } from "./FeedRepository";
 import { FeedUrlRepository } from "./FeedUrlRepository";
@@ -20,6 +23,8 @@ vi.mock("src/utility/networkRequest", async (importOriginal) => {
 const fetchTextMock = vi.mocked(fetchTextWithTimeout);
 const PRIVATE_URL = "https://www.patreon.com/rss/show?auth=se-cret";
 
+const online = writable(true);
+
 function actionsOn(secrets: obsidian.SecretStorage) {
 	const feedUrls = new FeedUrlRepository(secrets);
 	const feeds = new FeedRepository({
@@ -30,7 +35,7 @@ function actionsOn(secrets: obsidian.SecretStorage) {
 		now: Date.now,
 	});
 	return {
-		actions: createLibraryActions({ app: new obsidian.App(), feeds, feedUrls }),
+		actions: createLibraryActions({ app: new obsidian.App(), feeds, feedUrls, online }),
 		feedUrls,
 	};
 }
@@ -58,6 +63,7 @@ async function enterAddress(setting: Promise<void>, address: string) {
 }
 
 beforeEach(() => {
+	online.set(true);
 	savedFeeds.set({});
 	fetchTextMock.mockReset();
 	fetchTextMock.mockResolvedValue("<rss><channel><title>Private Show</title></channel></rss>");
@@ -65,8 +71,23 @@ beforeEach(() => {
 
 afterEach(() => {
 	savedFeeds.set({});
+	queue.set(structuredClone(DEFAULT_SETTINGS.queue));
+	playlists.set({});
 	vi.restoreAllMocks();
 });
+
+/** The messages of the Notices shown, and a click on the last one's Undo. */
+function notices() {
+	const notice = vi.spyOn(obsidian, "Notice");
+	return {
+		texts: () =>
+			notice.mock.calls.map(([message]) => (message as DocumentFragment).textContent),
+		undo: () => {
+			const [message] = notice.mock.calls.at(-1) ?? [];
+			(message as DocumentFragment).querySelector("button")?.click();
+		},
+	};
+}
 
 describe("removing a podcast", () => {
 	const shared = { title: "Shared", url: "https://feeds.example.com/shared.xml", artworkUrl: "" };
@@ -104,6 +125,146 @@ describe("removing a podcast", () => {
 		expect(get(savedFeeds)).toEqual({});
 		expect(secrets.getSecret(reference)).toBeFalsy();
 	});
+});
+
+describe("undoing Remove podcast", () => {
+	const feed = (title: string) => ({
+		title,
+		url: `https://feeds.example.com/${title}.xml`,
+		artworkUrl: `https://art.example.com/${title}.jpg`,
+		author: "Someone",
+	});
+
+	test("puts the exact record back at its place in the grid, once", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		savedFeeds.set({ First: feed("First"), Middle: feed("Middle"), Last: feed("Last") });
+
+		actions.removePodcast("Middle");
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "Last"]);
+		expect(shown.texts()).toEqual(["Removed MiddleUndo"]);
+		shown.undo();
+		shown.undo();
+
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "Middle", "Last"]);
+		expect(get(savedFeeds).Middle).toEqual(feed("Middle"));
+	});
+
+	test("puts a private feed's address back under its reference, and never shows it", () => {
+		const shown = notices();
+		const secrets = new obsidian.SecretStorage();
+		const { actions, feedUrls } = actionsOn(secrets);
+		const saved = {
+			title: "Private Show",
+			url: privateFeedPlaceholder("Private Show"),
+			urlSecretId: feedUrls.store(PRIVATE_URL),
+			artworkUrl: "",
+		};
+		savedFeeds.set({ First: feed("First"), "Private Show": saved });
+
+		actions.removePodcast("Private Show");
+		expect(feedUrls.resolve(saved.urlSecretId)).toBeNull();
+		shown.undo();
+
+		expect(get(savedFeeds)["Private Show"]).toEqual(saved);
+		expect(feedUrls.resolve(saved.urlSecretId)).toBe(PRIVATE_URL);
+		expect(shown.texts().join()).not.toContain("se-cret");
+	});
+
+	test("leaves a podcast saved again since, under its key or at its address", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		savedFeeds.set({ Middle: feed("Middle") });
+
+		actions.removePodcast("Middle");
+		const again = { ...feed("Middle"), author: "Someone else" };
+		savedFeeds.set({ Middle: again });
+		shown.undo();
+		expect(get(savedFeeds)).toEqual({ Middle: again });
+
+		actions.removePodcast("Middle");
+		savedFeeds.set({ Renamed: { ...feed("Middle"), title: "Renamed" } });
+		shown.undo();
+		expect(Object.keys(get(savedFeeds))).toEqual(["Renamed"]);
+	});
+});
+
+describe("editing a public feed's address", () => {
+	const OLD_URL = "https://old.example.com/feed.xml";
+	const NEW_URL = "https://new.example.com/feed.xml";
+	const show = { title: "The Show", url: OLD_URL, artworkUrl: "" };
+
+	function saved() {
+		savedFeeds.set({
+			First: { ...show, title: "First", url: "https://first.example.com/" },
+			"The Show": show,
+			Last: { ...show, title: "Last", url: "https://last.example.com/" },
+		});
+		return actionsOn(new obsidian.SecretStorage());
+	}
+
+	test("opens on its address and keeps the new one under the same key and place", async () => {
+		const { actions } = saved();
+		const edited = actions.setFeedAddress("The Show");
+		expect(within(document.body).getByRole("textbox", { name: "Feed address" })).toHaveValue(
+			OLD_URL,
+		);
+
+		await enterAddress(edited, NEW_URL);
+
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "The Show", "Last"]);
+		expect(get(savedFeeds)["The Show"]).toEqual({ ...show, url: NEW_URL });
+		expect(fetchTextMock).toHaveBeenCalledWith(NEW_URL, expect.anything());
+	});
+
+	test("keeps a private address pasted for it as a secret, never in settings", async () => {
+		const { actions, feedUrls } = saved();
+
+		await enterAddress(actions.setFeedAddress("The Show"), PRIVATE_URL);
+
+		const feed = get(savedFeeds)["The Show"];
+		expect(isPrivateFeedPlaceholder(feed.url)).toBe(true);
+		expect(feedUrls.resolve(feed.urlSecretId!)).toBe(PRIVATE_URL);
+		expect(JSON.stringify(get(savedFeeds))).not.toContain("se-cret");
+		expect(Object.keys(get(savedFeeds))).toEqual(["First", "The Show", "Last"]);
+	});
+
+	test("refuses an address another saved podcast has, before fetching it", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { actions } = saved();
+
+		await enterAddress(actions.setFeedAddress("The Show"), "https://first.example.com/");
+
+		expect(notice).toHaveBeenCalledWith("You already follow First at that address.");
+		expect(fetchTextMock).not.toHaveBeenCalled();
+		expect(get(savedFeeds)["The Show"]).toEqual(show);
+	});
+
+	test("keeps nothing for a feed that a sync changed while the address loaded", async () => {
+		const response = deferred<string>();
+		fetchTextMock.mockReturnValue(response.promise);
+		const { actions } = saved();
+
+		const entered = enterAddress(actions.setFeedAddress("The Show"), NEW_URL);
+		await vi.waitFor(() => expect(fetchTextMock).toHaveBeenCalled());
+		const synced = { ...show, url: "https://synced.example.com/feed.xml" };
+		savedFeeds.update((all) => ({ ...all, "The Show": synced }));
+		response.resolve("<rss><channel><title>The Show</title></channel></rss>");
+		await entered;
+
+		expect(get(savedFeeds)["The Show"]).toEqual(synced);
+	});
+});
+
+test("a feed's address is not asked for while offline", async () => {
+	const notice = vi.spyOn(obsidian, "Notice");
+	const { actions } = followedElsewhere();
+	online.set(false);
+
+	await actions.setFeedAddress("Private Show");
+
+	expect(notice).toHaveBeenCalledWith("Setting a feed address needs a connection.");
+	expect(within(document.body).queryByRole("textbox")).toBeNull();
 });
 
 describe("setting a private feed's address on this device", () => {
@@ -164,5 +325,161 @@ describe("setting a private feed's address on this device", () => {
 
 		expect(thisDevice.listSecrets()).toEqual([]);
 		expect(get(savedFeeds)).toEqual({ "Private Show": replaced });
+	});
+});
+
+describe("clearing the queue", () => {
+	const episode = (title: string): Episode => ({
+		title,
+		streamUrl: `https://media.test/${title}.mp3`,
+		url: "",
+		description: "",
+		content: "",
+		podcastName: "Pod",
+	});
+	const titles = () => get(queue).episodes.map(({ title }) => title);
+	const fill = (...names: string[]) =>
+		queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes: names.map(episode) });
+
+	test("empties it, and Undo puts every entry back in order, once", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		fill("A", "B", "C");
+
+		actions.clearQueue();
+		expect(titles()).toEqual([]);
+		expect(shown.texts()).toEqual(["Queue clearedUndo"]);
+
+		shown.undo();
+		expect(titles()).toEqual(["A", "B", "C"]);
+		actions.setQueued(episode("A"), false);
+		shown.undo();
+		expect(titles()).toEqual(["B", "C"]);
+	});
+
+	test("Undo leaves a queue that playback or the user filled since", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		fill("A", "B");
+
+		actions.clearQueue();
+		actions.setQueued(episode("New"), true);
+		shown.undo();
+
+		expect(titles()).toEqual(["New"]);
+	});
+
+	test("an empty queue clears without a notice", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		let writes = 0;
+		const unsubscribe = queue.subscribe(() => writes++);
+
+		actions.clearQueue();
+		unsubscribe();
+
+		expect(shown.texts()).toEqual([]);
+		expect(writes).toBe(1);
+	});
+});
+
+describe("playlists", () => {
+	const list = (name: string, changes: Partial<Playlist> = {}): Playlist => ({
+		name,
+		icon: "list-music",
+		episodes: [],
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+		...changes,
+	});
+	const show: Episode = {
+		title: "First",
+		streamUrl: "https://media.test/first.mp3",
+		url: "",
+		description: "",
+		content: "",
+		podcastName: "Pod",
+	};
+
+	async function create(name: string, episode?: Episode) {
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		const created = actions.createPlaylist(episode);
+		const dialog = within(document.body);
+		await fireEvent.input(dialog.getByRole("textbox", { name: "Playlist name" }), {
+			target: { value: name },
+		});
+		await fireEvent.click(dialog.getByRole("button", { name: "Create" }));
+		return await created;
+	}
+
+	test("New playlist creates one under its trimmed name, with the episode it was asked from", async () => {
+		expect(await create("  My Shows  ", show)).toBe("My Shows");
+
+		expect(get(playlists)).toEqual({ "My Shows": list("My Shows", { episodes: [show] }) });
+	});
+
+	test("refuses a built-in list's name, Played's too", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+
+		expect(await create("Favorites")).toBeNull();
+		expect(await create("Played")).toBeNull();
+
+		expect(notice.mock.calls).toEqual([
+			['"Favorites" is a reserved playlist name.'],
+			['"Played" is a reserved playlist name.'],
+		]);
+		expect(get(playlists)).toEqual({});
+	});
+
+	test("refuses a name already taken, also after trimming, and keeps the playlist there", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const existing = list("Walks", { episodes: [show], icon: "star" });
+		playlists.set({ Walks: existing });
+
+		expect(await create("Walks")).toBeNull();
+		expect(await create(" Walks ")).toBeNull();
+
+		expect(notice.mock.calls).toEqual([
+			["A playlist with that name already exists."],
+			["A playlist with that name already exists."],
+		]);
+		expect(get(playlists).Walks).toBe(existing);
+	});
+
+	test("cancelling creates nothing", async () => {
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		const created = actions.createPlaylist();
+		await fireEvent.click(within(document.body).getByRole("button", { name: "Cancel" }));
+
+		expect(await created).toBeNull();
+		expect(get(playlists)).toEqual({});
+	});
+
+	test("Undo puts a deleted playlist back whole, where it was, unless its name was taken since", () => {
+		const shown = notices();
+		const { actions } = actionsOn(new obsidian.SecretStorage());
+		const runs = list("Runs", { episodes: [show], icon: "bike", shouldRepeat: true });
+		playlists.set({ Walks: list("Walks"), Runs: runs, Rides: list("Rides") });
+
+		actions.deletePlaylist("Runs");
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Rides"]);
+		expect(shown.texts()).toEqual(["Deleted RunsUndo"]);
+		shown.undo();
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Runs", "Rides"]);
+		expect(get(playlists).Runs).toEqual(runs);
+
+		actions.deletePlaylist("Runs");
+		const newer = list("Runs");
+		playlists.update((all) => ({ ...all, Runs: newer }));
+		shown.undo();
+		expect(Object.keys(get(playlists))).toEqual(["Walks", "Rides", "Runs"]);
+		expect(get(playlists).Runs).toBe(newer);
+	});
+
+	test("deleting a playlist that is gone shows nothing", () => {
+		const shown = notices();
+		actionsOn(new obsidian.SecretStorage()).actions.deletePlaylist("Gone");
+
+		expect(shown.texts()).toEqual([]);
 	});
 });

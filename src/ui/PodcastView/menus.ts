@@ -3,8 +3,9 @@ import { get } from "svelte/store";
 import createFeedNote, { getFeedNote, openFeedNote } from "src/createFeedNote";
 import createPodcastNote, { openPodcastNote } from "src/createPodcastNote";
 import downloadEpisodeWithNotice, { removeDownloadedEpisode } from "src/downloadEpisode";
-import { downloadedCopy } from "src/player/source";
+import { downloadedCopy, offlinePlayable } from "src/player/source";
 import type { FeedKey } from "src/services/FeedRepository";
+import { publicFeedUrl } from "src/services/privateFeeds";
 import type { Episode } from "src/types/Episode";
 import type { IconType } from "src/types/IconType";
 import buildEpisodeResumeLink from "src/utility/buildEpisodeResumeLink";
@@ -15,7 +16,6 @@ import { isLocalFile } from "src/utility/isLocalFile";
 import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
 import { isCurrentEpisode } from "./episodeRow";
-import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 /** A menu item, or a separator. Menus are built as data, so tests read them as data. */
 export type MenuEntry =
@@ -64,24 +64,43 @@ export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 	menu.showAtPosition(at, at.doc);
 }
 
+/** Copies `text` and says so, naming it by `what`, such as "feed URL". */
+function copy(text: string, what: string): void {
+	navigator.clipboard.writeText(text).then(
+		() => new Notice(`${what.charAt(0).toUpperCase()}${what.slice(1)} copied`),
+		() => new Notice(`Could not copy the ${what}`),
+	);
+}
+
+/**
+ * The one way the view starts an episode. One it cannot play is refused before
+ * `player.play`, which would queue the episode playing now and then fail.
+ */
 export function openEpisode(
-	{ player, navigation }: ShellServices,
+	{ player, navigation, library, online }: ShellServices,
 	episode: Episode,
-	available = true,
+	resolved = true,
 ) {
-	if (!available) {
+	if (!resolved) {
 		new Notice("This played episode is no longer available in current feeds.");
 		return;
 	}
-	if (!isCurrentEpisode(get(player.state).episode, episode)) player.play(episode);
+	if (!isCurrentEpisode(get(player.state).episode, episode)) {
+		if (!get(online) && !offlinePlayable(episode, get(library.downloadedEpisodes))) {
+			new Notice("Not downloaded");
+			return;
+		}
+		player.play(episode);
+	}
 	navigation.expand();
 }
 
 export interface EpisodeMenuOptions {
-	readonly place: "list" | "queue" | "player";
+	/** player: the full player's own episode, which has no Play. */
+	readonly place: "list" | "player";
 	readonly at: MenuAnchor;
 	/** False for a Played record whose episode left every feed. */
-	readonly available?: boolean;
+	readonly resolved?: boolean;
 	/** A Played record stored under another key than the episode's. */
 	readonly playedKey?: string;
 }
@@ -89,7 +108,7 @@ export interface EpisodeMenuOptions {
 export function episodeMenu(
 	episode: Episode,
 	services: ShellServices,
-	{ place, at, available = true, playedKey }: EpisodeMenuOptions,
+	{ place, at, resolved = true, playedKey }: EpisodeMenuOptions,
 ): MenuEntry[] {
 	const { library, actions, player, settings } = services;
 	const item = (title: string, icon: IconType, onClick: () => void): MenuEntry => ({
@@ -103,15 +122,13 @@ export function episodeMenu(
 	const markPlayed = item(finished ? "Mark as unplayed" : "Mark as played", "check", () =>
 		actions.setPlayed(episode, !finished, playedKey),
 	);
-	if (!available) return [markPlayed];
+	if (!resolved) return [markPlayed];
 
-	const queue = get(library.queue).episodes;
-	const queued = queue.some((entry) => isSameEpisode(entry, episode));
+	const queued = get(library.queue).episodes.some((entry) => isSameEpisode(entry, episode));
 	const favorite = get(library.favorites).episodes.some((entry) =>
 		isSameStoredEpisode(entry, episode),
 	);
 	const downloaded = downloadedCopy(get(library.downloadedEpisodes), episode) !== undefined;
-	const lists = Object.values(get(library.playlists));
 	// An episode opened by a private feed's own address would put that secret in the link.
 	const link = isCredentialBearingUrl(episodeLinkTarget(episode) ?? "")
 		? ""
@@ -129,15 +146,6 @@ export function episodeMenu(
 			actions.setQueued(episode, !queued),
 		),
 	);
-	const moves = buildQueueReorderMenuItems(place === "queue", queue, episode);
-	if (moves.length > 0) {
-		entries.push(
-			"separator",
-			...moves.map(({ title, icon, kind }) =>
-				item(title, icon, () => actions.moveInQueue(episode, kind)),
-			),
-		);
-	}
 	entries.push(
 		"separator",
 		services.hasNote(episode)
@@ -177,10 +185,10 @@ export function episodeMenu(
 		{
 			title: "Add to playlist",
 			icon: "list-music",
-			disabled: lists.length === 0,
-			onClick: () =>
-				showMenu(
-					lists.map(({ name, icon, episodes }) => {
+			// Obsidian's menus have no submenu, so the playlists open as a menu of their own.
+			onClick: () => {
+				const lists = Object.values(get(library.playlists)).map(
+					({ name, icon, episodes }): MenuEntry => {
 						const member = episodes.some((entry) =>
 							isSameStoredEpisode(entry, episode),
 						);
@@ -190,22 +198,23 @@ export function episodeMenu(
 							checked: member,
 							onClick: () => actions.setInPlaylist(name, episode, !member),
 						};
-					}),
+					},
+				);
+				showMenu(
+					[
+						...lists,
+						...(lists.length ? ["separator" as const] : []),
+						item("New playlist", "plus", () => void actions.createPlaylist(episode)),
+					],
 					at,
-				),
+				);
+			},
 		},
 		"separator",
 	);
 	if (place !== "player") entries.push(markPlayed);
 	if (link) {
-		entries.push(
-			item("Copy episode link", "link", () => {
-				navigator.clipboard.writeText(link).then(
-					() => new Notice("Episode link copied"),
-					() => new Notice("Could not copy the episode link"),
-				);
-			}),
-		);
+		entries.push(item("Copy episode link", "link", () => copy(link, "episode link")));
 	}
 	return entries;
 }
@@ -215,6 +224,13 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 	const feed = get(library.savedFeeds)[key];
 	if (!feed) return [];
 	const note = getFeedNote(feed);
+	const error = get(feeds).get(key)?.error;
+	const isPublic = publicFeedUrl(feed) !== undefined;
+	const address = (title: string): MenuEntry => ({
+		title,
+		icon: "rss",
+		onClick: () => void actions.setFeedAddress(key),
+	});
 	return [
 		note
 			? { title: "Open podcast note", icon: "file-text", onClick: () => openFeedNote(feed) }
@@ -223,15 +239,24 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 					icon: "file-plus",
 					onClick: () => void createFeedNote(feed),
 				},
-		...(get(feeds).get(key)?.error === "unavailable"
+		...(isPublic
 			? [
 					{
-						title: "Set feed address",
-						icon: "rss",
-						onClick: () => void actions.setFeedAddress(key),
+						title: "Copy feed URL",
+						icon: "link",
+						onClick: () => {
+							// The feed can have turned private since the menu opened.
+							const url = publicFeedUrl(get(library.savedFeeds)[key] ?? feed);
+							if (url) copy(url, "feed URL");
+						},
 					} as const,
 				]
 			: []),
+		...(error === "unavailable"
+			? [address("Set feed address")]
+			: isPublic && error === "network"
+				? [address("Edit feed URL")]
+				: []),
 		"separator",
 		{
 			title: "Remove podcast",
@@ -242,6 +267,48 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 				const { page } = navigation.current;
 				if (page.kind === "feed" && page.key === key) navigation.goRoot("library");
 				actions.removePodcast(key);
+			},
+		},
+	];
+}
+
+/** The Queue page's options. The preference item asks for the opposite of what its menu showed. */
+export function queueMenu({
+	library,
+	actions,
+	settings,
+	setAutoQueue,
+}: ShellServices): MenuEntry[] {
+	const auto = get(settings).autoQueue;
+	return [
+		{
+			title: "Queue episodes I switch from",
+			icon: "list-end",
+			checked: auto,
+			onClick: () => setAutoQueue(!auto),
+		},
+		"separator",
+		{
+			title: "Clear queue",
+			icon: "trash",
+			warning: true,
+			disabled: get(library.queue).episodes.length === 0,
+			onClick: () => actions.clearQueue(),
+		},
+	];
+}
+
+/** A playlist of the user's. Deleting the open one goes to Playlists first, which stays. */
+export function playlistMenu(name: string, { actions, navigation }: ShellServices): MenuEntry[] {
+	return [
+		{
+			title: "Delete playlist",
+			icon: "trash",
+			warning: true,
+			onClick: () => {
+				const { page } = navigation.current;
+				if (page.kind === "playlist" && page.name === name) navigation.goRoot("playlists");
+				actions.deletePlaylist(name);
 			},
 		},
 	];

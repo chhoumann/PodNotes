@@ -1,5 +1,9 @@
 import type { FeedKey, FeedState } from "src/services/FeedRepository";
 import type { IconType } from "src/types/IconType";
+import type { Playlist } from "src/types/Playlist";
+import type { PlayedEpisodeMap } from "src/utility/episodeStatus";
+import { ownRecord } from "src/utility/ownRecord";
+import { formatMinutes, secondsLeft } from "./episodeRow";
 import type { Layout } from "./layout";
 
 /** A page the shell shows. Plain JSON, so it is also the view's workspace state. */
@@ -16,11 +20,8 @@ export type Page =
 
 export type RootKind = Exclude<Page["kind"], "feed" | "playlist">;
 export type RootPage = Extract<Page, { kind: RootKind }>;
-/** The pages that list episodes. */
-export type ListPage = Extract<
-	Page,
-	{ kind: "latest" | "queue" | "local" | "played" | "feed" | "playlist" }
->;
+/** The pages that list episodes with no filter bar, in the order their list keeps. */
+export type ListPage = Extract<Page, { kind: "latest" | "played" | "playlist" | "local" }>;
 
 export interface RootItem {
 	readonly kind: RootKind;
@@ -82,13 +83,44 @@ export interface Head {
 	readonly title?: string;
 	/** The title at the top of the page's scroller. */
 	readonly pageTitle?: string;
+	/** Beside whichever title the head has, such as the queue's time left or a playlist's count. */
+	readonly flair?: string;
 	/**
-	 * The head's right edge: the compact Library's Add podcast and Settings, the
-	 * wide Library's Refresh all, or a podcast's menu.
+	 * The head's right edge: the compact Library's Add podcast and Settings, Refresh
+	 * all on the wide Library and Latest, Local files' Add a vault file, or the menu
+	 * of a podcast, the queue, or a playlist of the user's.
 	 */
-	readonly action?: "library" | "refresh-all" | "podcast";
+	readonly action?: "library" | "refresh-all" | "local" | "podcast" | "queue" | "playlist";
 	/** Add podcast's search field stands in the title's place. */
 	readonly search?: true;
+}
+
+/** The lists a head's flair counts. */
+export interface HeadLists {
+	readonly queue: Playlist;
+	readonly favorites: Playlist;
+	readonly playlists: Readonly<Record<string, Playlist>>;
+	readonly played: PlayedEpisodeMap;
+}
+
+function actionOf(page: Page, layout: Layout, { favorites }: HeadLists): Head["action"] {
+	if (page.kind === "library") return layout === "wide" ? "refresh-all" : "library";
+	if (page.kind === "latest") return "refresh-all";
+	if (page.kind === "feed") return "podcast";
+	if (page.kind === "queue") return "queue";
+	if (page.kind === "local") return "local";
+	if (page.kind === "playlist" && page.name !== favorites.name) return "playlist";
+	return undefined;
+}
+
+function flairOf(page: Page, { queue, favorites, playlists, played }: HeadLists) {
+	if (page.kind === "queue") {
+		const left = secondsLeft(queue.episodes, played);
+		return left > 0 ? formatMinutes(left) : undefined;
+	}
+	if (page.kind !== "playlist") return undefined;
+	const list = page.name === favorites.name ? favorites : ownRecord(playlists)[page.name];
+	return list && String(list.episodes.length);
 }
 
 /**
@@ -102,15 +134,15 @@ export function headFor(
 	layout: Layout,
 	previous: Page | undefined,
 	feeds: ReadonlyMap<FeedKey, FeedState>,
+	lists: HeadLists,
 ): Head {
 	const { kind } = page;
 	const search = kind === "add" || undefined;
+	const action = actionOf(page, layout, lists);
+	const flair = flairOf(page, lists);
 	if (layout === "wide" && isRoot(page)) {
 		if (search) return previous ? { back: pageLabel(previous, feeds), search } : { search };
-		return {
-			title: rootItem(page.kind).label,
-			action: kind === "library" ? "refresh-all" : undefined,
-		};
+		return { title: rootItem(page.kind).label, flair, action };
 	}
 	const back = previous ?? parentOf(page);
 	const label = pageLabel(page, feeds);
@@ -118,7 +150,8 @@ export function headFor(
 		back: back ? pageLabel(back, feeds) : undefined,
 		title: kind === "library" ? label : undefined,
 		pageTitle: kind === "library" || kind === "feed" || search ? undefined : label,
-		action: kind === "library" ? "library" : kind === "feed" ? "podcast" : undefined,
+		flair,
+		action,
 		search,
 	};
 }
