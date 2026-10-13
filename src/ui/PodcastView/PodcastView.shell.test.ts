@@ -10,7 +10,6 @@ import {
 	localFiles,
 	playedEpisodes,
 	playlists,
-	plugin,
 	queue,
 	savedFeeds,
 } from "src/store";
@@ -242,7 +241,7 @@ describe("mini player", () => {
 		expect(button("Play")).toBeInTheDocument();
 	});
 
-	test("Timestamp names the note it added to, or says why it added nothing", async () => {
+	test("Timestamp names the note it added to", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		services.player.restore(episode);
 		renderView();
@@ -252,20 +251,9 @@ describe("mini player", () => {
 		services.captureTimestamp.mockResolvedValueOnce("Episode 1 Launch");
 		await fireEvent.click(button("Capture timestamp"));
 		await tick();
+
+		expect(services.captureTimestamp).toHaveBeenCalledTimes(2);
 		expect(notice.mock.calls).toEqual([["Timestamp added to Episode 1 Launch"]]);
-
-		const host = get(plugin);
-		host.settings.note.path = "";
-		plugin.set(host);
-		services.captureTimestamp.mockResolvedValueOnce(null);
-		await fireEvent.click(button("Capture timestamp"));
-		await tick();
-
-		expect(services.captureTimestamp).toHaveBeenCalledTimes(3);
-		expect(notice.mock.calls).toEqual([
-			["Timestamp added to Episode 1 Launch"],
-			["Set an episode note path and template to capture timestamps"],
-		]);
 	});
 
 	test("tells the minutes left, and nothing once none are left", async () => {

@@ -4,6 +4,7 @@ import PodNotes from "./main";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { VIEW_TYPE } from "./constants";
 import { App, Notice, Platform, type WorkspaceLeaf } from "obsidian";
+import * as obsidian from "obsidian";
 import { tick } from "svelte";
 import type { Episode } from "./types/Episode";
 import { MainView } from "./ui/PodcastView";
@@ -533,6 +534,17 @@ describe("PodNotes onload wiring (#55)", () => {
 
 		await expect(plugin.captureTimestampToEditorOrNote()).resolves.toBe("Daily note");
 		expect(editor.replaceSelection).toHaveBeenCalledWith(expect.stringContaining("00:20:34"));
+	});
+
+	it("says why a timestamp has nowhere to go when the episode note is not set up", async () => {
+		const { plugin } = await loadPlugin(savedData);
+		const notice = vi.spyOn(obsidian, "Notice");
+		plugin.settings.note.path = "";
+
+		await expect(plugin.captureTimestampToEditorOrNote()).resolves.toBeNull();
+		expect(notice.mock.calls).toEqual([
+			["Set an episode note path and template to capture timestamps"],
+		]);
 	});
 
 	it("restores the selected episode paused at its saved position, without loading it", async () => {

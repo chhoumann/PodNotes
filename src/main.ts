@@ -405,18 +405,17 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	private async appendTimestampToEpisodeNote(): Promise<TFile | null> {
-		if (
-			!this.api.podcast ||
-			!this.settings.timestamp.template ||
-			!this.settings.note.path ||
-			!this.settings.note.template
-		) {
+		if (!this.api.podcast) return null;
+
+		// This path runs from the media-session (headphone) handler and the mini
+		// player, where there is no editor to surface a failure, so a press that
+		// adds nothing looked like it did nothing. Say why instead (NT-13).
+		const { timestamp, note } = this.settings;
+		if (!timestamp.template || !note.path || !note.template) {
+			new Notice("Set an episode note path and template to capture timestamps");
 			return null;
 		}
 
-		// This path runs from the media-session (headphone) handler, where there is
-		// no editor to surface a failure, so swallowing an error left a button
-		// press looking like it did nothing. Report it instead (NT-13).
 		try {
 			const capture = TimestampTemplateEngine(this.settings.timestamp.template);
 			const textToAppend = capture.endsWith("\n") ? capture : `${capture}\n`;

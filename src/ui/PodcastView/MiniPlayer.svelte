@@ -6,7 +6,7 @@
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
-	const { player, navigation, settings, captureTimestamp } = useServices();
+	const { player, navigation, captureTimestamp } = useServices();
 	const playerState = player.state;
 
 	const episode = $derived($playerState.episode);
@@ -33,14 +33,6 @@
 	async function capture() {
 		const note = await captureTimestamp();
 		if (note) new Notice(`Timestamp added to ${note}`);
-		// A failed write has said so. An episode note that is not set up has not.
-		else if (
-			!$settings.note.path ||
-			!$settings.note.template ||
-			!$settings.timestamp.template
-		) {
-			new Notice("Set an episode note path and template to capture timestamps");
-		}
 	}
 </script>
 
