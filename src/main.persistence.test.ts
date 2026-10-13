@@ -10,7 +10,11 @@ import { PlayerController } from "./player/PlayerController";
 import { downloadedEpisodes, localFiles } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
-import { resolveFeedUrl } from "./services/privateFeeds";
+import {
+	needsPrivateFeedAddress,
+	resolveFeedUrl,
+	setPrivateFeedAddress,
+} from "./services/privateFeeds";
 import { attachDataFileWriter, dataFileText, manualClock } from "../tests/mocks/dataFileWriter";
 import { FakeDocument } from "../tests/mocks/fakeMedia";
 import released2200 from "../tests/fixtures/persistence/released-2.20.0.json";
@@ -382,10 +386,71 @@ describe("PodNotes persistence integration", () => {
 		);
 	});
 
+	it("moves a 2.21.1 library's path-secret feed address into SecretStorage once, for each device to set", async () => {
+		const rawUrl = "https://priv3.supercast.com/feeds/RELEASED_SENTINEL";
+		const released = JSON.parse(
+			JSON.stringify(released2211).replaceAll(
+				'"podnotes-private-feed:PRIV2%20Both"',
+				JSON.stringify(rawUrl),
+			),
+		);
+		delete released.savedFeeds["PRIV2 Both"].urlSecretId;
+		const { storage, values } = memorySecretStorage();
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			loadData: vi.fn().mockResolvedValue(released),
+		});
+		const notice = vi.spyOn(obsidian, "Notice");
+
+		await plugin.loadSettings();
+
+		expect(saveData).toHaveBeenCalledTimes(1);
+		const written = saveData.mock.calls[0][0];
+		const { urlSecretId } = written.savedFeeds["PRIV2 Both"];
+		expect(urlSecretId).toMatch(/^podnotes-feed-url-[0-9a-f-]{36}$/);
+		expect(written).toEqual({
+			...released2211,
+			libraryId: "",
+			savedFeeds: { "PRIV2 Both": { ...released2211.savedFeeds["PRIV2 Both"], urlSecretId } },
+		});
+		expect(values.get(urlSecretId)).toBe(rawUrl);
+		expect(notice.mock.calls).toEqual([["Moved private feed URLs out of data.json."]]);
+
+		const restartSave = vi.fn().mockResolvedValue(undefined);
+		const restarted = makePlugin(restartSave, { dataFileExists: true });
+		Object.assign(restarted, { app: { ...restarted.app, secretStorage: storage } });
+		await restarted.saveData(written);
+		restartSave.mockClear();
+		await restarted.loadSettings();
+		expect(restartSave).not.toHaveBeenCalled();
+		expect(restarted.settings.savedFeeds["PRIV2 Both"].urlSecretId).toBe(urlSecretId);
+		expect(
+			resolveFeedUrl(restarted.settings.savedFeeds["PRIV2 Both"], restarted.feedUrls),
+		).toBe(rawUrl);
+
+		const otherSave = vi.fn().mockResolvedValue(undefined);
+		const other = makePlugin(otherSave, { dataFileExists: true });
+		await other.saveData(written);
+		otherSave.mockClear();
+		await other.loadSettings();
+		const feed = other.settings.savedFeeds["PRIV2 Both"];
+		expect(needsPrivateFeedAddress(feed, other.feedUrls)).toBe(true);
+		setPrivateFeedAddress(feed, rawUrl, other.feedUrls);
+		expect(resolveFeedUrl(feed, other.feedUrls)).toBe(rawUrl);
+		expect(other.app.secretStorage.getSecret(urlSecretId)).toBe(rawUrl);
+		attachDataFileWriter(other);
+		other.settings.defaultVolume = 0.4;
+		await other.saveSettingsStrict();
+		expect(otherSave.mock.calls).toEqual([[{ ...written, defaultVolume: 0.4 }]]);
+	});
+
 	it.each(["throws", "drops the write"])(
-		"keeps saving with a session-only private feed when storage %s",
+		"keeps saving with session-only private feeds when storage %s",
 		async (failure) => {
 			const rawUrl = "https://private.example/feed.xml?auth=SESSION_SENTINEL";
+			const pathUrl = "https://show.supercast.com/feeds/SESSION_SENTINEL";
 			const { storage } = memorySecretStorage();
 			vi.mocked(storage.setSecret).mockImplementation(() => {
 				if (failure === "throws") throw new Error("locked");
@@ -395,7 +460,10 @@ describe("PodNotes persistence integration", () => {
 			Object.assign(plugin, { app: { ...plugin.app, secretStorage: storage } });
 			const raw = {
 				...encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
-				savedFeeds: { Private: { title: "Private", url: rawUrl, artworkUrl: "" } },
+				savedFeeds: {
+					Private: { title: "Private", url: rawUrl, artworkUrl: "" },
+					Supercast: { title: "Supercast", url: pathUrl, artworkUrl: "" },
+				},
 			};
 			await plugin.saveData(raw);
 			saveData.mockClear();
@@ -409,14 +477,17 @@ describe("PodNotes persistence integration", () => {
 			plugin.settings.skipForwardLength = 42;
 			await plugin.saveSettingsStrict();
 
-			expect(resolveFeedUrl(plugin.settings.savedFeeds.Private, plugin.feedUrls)).toBe(
-				rawUrl,
-			);
+			const { Private, Supercast } = plugin.settings.savedFeeds;
+			expect(resolveFeedUrl(Private, plugin.feedUrls)).toBe(rawUrl);
+			expect(resolveFeedUrl(Supercast, plugin.feedUrls)).toBe(pathUrl);
 			const disk = await plugin.loadData();
 			expect(disk).toMatchObject({
 				defaultVolume: 0.4,
 				skipForwardLength: 42,
-				savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+				savedFeeds: {
+					Private: { url: "podnotes-private-feed:Private" },
+					Supercast: { url: "podnotes-private-feed:Supercast" },
+				},
 			});
 			for (const [written] of saveData.mock.calls)
 				expect(JSON.stringify(written)).not.toContain("SESSION_SENTINEL");
@@ -428,11 +499,12 @@ describe("PodNotes persistence integration", () => {
 			Object.assign(restarted, { app: { ...restarted.app, secretStorage: storage } });
 			await restarted.saveData(disk);
 			await restarted.loadSettings();
-			expect(restarted.settings.savedFeeds.Private).toEqual(
-				plugin.settings.savedFeeds.Private,
-			);
+			expect(restarted.settings.savedFeeds).toEqual(plugin.settings.savedFeeds);
 			expect(
 				resolveFeedUrl(restarted.settings.savedFeeds.Private, restarted.feedUrls),
+			).toBeNull();
+			expect(
+				resolveFeedUrl(restarted.settings.savedFeeds.Supercast, restarted.feedUrls),
 			).toBeNull();
 		},
 	);

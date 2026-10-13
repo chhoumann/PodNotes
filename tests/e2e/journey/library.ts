@@ -381,6 +381,13 @@ export async function seedLibrary(
 	await dismissNotices(obsidian);
 }
 
+export async function feedCacheText(obsidian: ObsidianClient): Promise<string> {
+	const cached = await obsidian.dev.evalJson<string | null>(
+		`app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)})`,
+	);
+	return cached ?? "";
+}
+
 export async function clearFeedCache(obsidian: ObsidianClient): Promise<void> {
 	await obsidian.dev.evalJson(
 		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
@@ -391,10 +398,7 @@ export async function feedCacheHolds(
 	obsidian: ObsidianClient,
 	episodeTitle: string,
 ): Promise<boolean> {
-	const cached = await obsidian.dev.evalJson<string | null>(
-		`app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)})`,
-	);
-	return cached?.includes(JSON.stringify(episodeTitle)) ?? false;
+	return (await feedCacheText(obsidian)).includes(JSON.stringify(episodeTitle));
 }
 
 export async function feedCachedAt(obsidian: ObsidianClient, feedUrl: string): Promise<number> {
