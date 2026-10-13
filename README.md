@@ -32,7 +32,7 @@
 - **Capture the moment.** One command inserts a timestamp link, such as `00:12:41`, into your note. Select it later to play from that second.
 - **Create a note for any episode.** A template fills in the show, date, description, and a link that resumes playback. Browse the notes as a table with Obsidian Bases.
 - **Take it with you.** PodNotes works on iOS and Android. Download episodes for offline listening, or play your own audio and video files.
-- **Transcribe episodes.** Use your own OpenAI API key, or a Deepgram key when you turn on speaker labels and choose Deepgram.
+- **Transcribe episodes.** Save the transcript a podcast publishes for free, or transcribe the audio with your own OpenAI or Deepgram key.
 - **Build your own workflows.** Use the commands, the JavaScript API, and QuickAdd.
 
 ## Get started
