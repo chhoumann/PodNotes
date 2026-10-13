@@ -596,6 +596,13 @@ describe("PodNotes onload wiring (#55)", () => {
 		});
 	});
 
+	it("offers both transcribe commands for an audio episode, even without an API key", async () => {
+		const { commands } = await loadPlugin(savedData);
+
+		expect(checkCommand(commands, "podnotes-transcribe")).toBe(true);
+		expect(checkCommand(commands, "podnotes-transcribe-audio")).toBe(true);
+	});
+
 	function recordMediaSession(target: { navigator: Navigator }) {
 		const calls: Array<{ action: string; hasHandler: boolean }> = [];
 		const original = Object.getOwnPropertyDescriptor(target.navigator, "mediaSession");
@@ -665,9 +672,13 @@ describe("PodNotes onload wiring (#55)", () => {
 			currentEpisode: videoEpisode,
 		});
 
-		const transcribeCmd = commands.find((c) => c.id === "podnotes-transcribe");
-		expect(transcribeCmd).toBeDefined();
-		expect((transcribeCmd!.checkCallback as (checking: boolean) => boolean)(true)).toBe(false);
+		for (const id of ["podnotes-transcribe", "podnotes-transcribe-audio"]) {
+			const transcribeCmd = commands.find((c) => c.id === id);
+			expect(transcribeCmd).toBeDefined();
+			expect((transcribeCmd!.checkCallback as (checking: boolean) => boolean)(true)).toBe(
+				false,
+			);
+		}
 	});
 });
 

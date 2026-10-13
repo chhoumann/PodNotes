@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in Settings, local files, episode notes. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
+description: Drive PodNotes in a real Obsidian (headless on Linux, isolated per worktree) the way a user does, and capture screenshot and video evidence. Use to prove or reproduce PodNotes behavior end to end - the player and playback, timestamps and obsidian://podnotes URIs, feeds added in Settings, local files, episode notes, transcripts. Not for the unit suite (npm run test) or the tests/e2e suite (npm run test:e2e).
 ---
 
 # Verify PodNotes in real Obsidian
@@ -185,6 +185,10 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
 
 ## Helpers
 
+- `.claude/skills/verify/net.mjs` runs as `watch`, `log` or `unwatch`. It logs
+  every `fetch` and `requestUrl` call PodNotes makes, without query strings,
+  and answers OpenAI and Deepgram with a fixture provider while it watches.
+
 - `.claude/skills/verify/ui.mjs` sends trusted input through
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,
   `type <css> <text>` (insert at the cursor), `fill <css> <text>` (replace),
@@ -194,8 +198,9 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   wait until nothing covers the element's center, and fail with
   `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
-- `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`,
-  `audio [vault path]` or `stop`. The feed URL uses the host `podnotes.test`,
+- `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
+  `requests`, `audio [vault path]` or `stop`. `requests` prints the paths
+  PodNotes fetched from the server. The feed URL uses the host `podnotes.test`,
   because PodNotes refuses literal loopback hosts. The instance maps it to
   127.0.0.1 with Chromium's `--host-resolver-rules`, so it needs no DNS, and an
   Obsidian started any other way cannot reach it. Its port is fixed per

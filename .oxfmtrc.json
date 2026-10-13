@@ -2,7 +2,7 @@
 	"$schema": "./node_modules/oxfmt/configuration_schema.json",
 	"svelte": true,
 	"useTabs": true,
-	"ignorePatterns": [],
+	"ignorePatterns": ["tests/fixtures/transcripts/**"],
 	"overrides": [
 		{
 			"files": ["**/*.yaml", "**/*.yml"],
