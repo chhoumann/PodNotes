@@ -92,6 +92,13 @@ export const ui = {
 		"on-screen playback toggle",
 		`${PLAYER_VIEW} .episode-player button[aria-label="Toggle playback"]`,
 	),
+	episodeMenu: (title: string) =>
+		byAttribute(
+			`More options for ${title}`,
+			`${PLAYER_VIEW} button`,
+			"aria-label",
+			`More options for ${title}`,
+		),
 	menuItem: (title: string): UiTarget => ({
 		name: `menu item ${title}`,
 		elements: `[...document.querySelectorAll(".menu .menu-item")].filter((el) => el.querySelector(".menu-item-title")?.textContent.trim() === ${jsLiteral(title)})`,
@@ -132,6 +139,12 @@ export const ui = {
 			`Remove ${title} podcast`,
 		),
 	podcastViewport: byCss("PodNotes view", PLAYER_VIEW),
+	promptInput: byCss("prompt input", ".prompt .prompt-input"),
+	suggestion: (text: string) => byCss(`suggestion ${text}`, ".prompt .suggestion-item", text),
+	paletteCommand: (name: string): UiTarget => ({
+		name: `palette command PodNotes: ${name}`,
+		elements: `[...document.querySelectorAll(".prompt .suggestion-item")].filter((el) => el.querySelector(".suggestion-prefix")?.textContent === "PodNotes" && el.querySelector(".suggestion-title")?.textContent === ${jsLiteral(`PodNotes${name}`)})`,
+	}),
 	pageScroller: byCss("page scroller", `${PLAYER_VIEW} .pn-scroll`),
 } as const;
 
@@ -312,6 +325,20 @@ export async function dismissNotices(obsidian: ObsidianClient): Promise<void> {
 	);
 }
 
+/** Opens the command palette with its hotkey, types `name` and clicks PodNotes' command. */
+export async function runFromPalette(obsidian: ObsidianClient, name: string): Promise<void> {
+	const hotkey = {
+		key: "p",
+		code: "KeyP",
+		windowsVirtualKeyCode: 80,
+		modifiers: process.platform === "darwin" ? 4 : 2,
+	};
+	for (const type of ["keyDown", "keyUp"])
+		await cdp(obsidian, "Input.dispatchKeyEvent", { type, ...hotkey });
+	await typeInto(obsidian, ui.promptInput, name);
+	await click(obsidian, ui.paletteCommand(name));
+}
+
 export async function runCommand(obsidian: ObsidianClient, id: string): Promise<void> {
 	const { stdout } = await obsidian.exec("command", { id });
 	if (/^Error/m.test(stdout)) throw new Error(`command ${id}: ${stdout.trim()}`);
@@ -423,6 +450,72 @@ export async function openInReadingView(obsidian: ObsidianClient, notePath: stri
 		app.workspace.setActiveLeaf(leaf, { focus: true });
 		return true;
 	})()`);
+}
+
+export async function openInEditor(obsidian: ObsidianClient, notePath: string): Promise<void> {
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		const file = app.vault.getAbstractFileByPath(${jsLiteral(notePath)});
+		if (!file) throw new Error(${jsLiteral(`${notePath} does not exist.`)});
+		const leaf = app.workspace.getLeaf("tab");
+		await leaf.openFile(file, { active: true, state: { mode: "source" } });
+		return true;
+	})()`);
+}
+
+/**
+ * Renderer code that finds the markdown leaf showing `notePath` as `leaf`, and
+ * defines `press(x, y)`, a real click at that point of the window holding it,
+ * which CDP cannot reach when it is a popout.
+ */
+function inNoteWindow(notePath: string): string {
+	return `
+		const remote = require("@electron/remote");
+		const leaf = app.workspace.getLeavesOfType("markdown").find((each) => each.view.file?.path === ${jsLiteral(notePath)});
+		if (!leaf) throw new Error(${jsLiteral(`${notePath} is not open in an editor.`)});
+		const main = remote.getCurrentWindow();
+		const others = remote.BrowserWindow.getAllWindows().filter((win) => win.id !== main.id);
+		if (leaf.view.containerEl.ownerDocument !== document && others.length !== 1)
+			throw new Error("Expected exactly one popout window, found " + others.length + ".");
+		const win = leaf.view.containerEl.ownerDocument === document ? main : others[0];
+		const press = (x, y) => {
+			const point = { x: Math.round(x), y: Math.round(y) };
+			win.webContents.sendInputEvent({ type: "mouseMove", ...point });
+			for (const type of ["mouseDown", "mouseUp"])
+				win.webContents.sendInputEvent({ type, ...point, button: "left", clickCount: 1 });
+		};`;
+}
+
+/**
+ * Clicks the open editor of `notePath` at `line` and `ch` (both zero-based), in
+ * whichever window holds it, and returns where the caret landed.
+ */
+export async function clickInEditor(
+	obsidian: ObsidianClient,
+	notePath: string,
+	line: number,
+	ch: number,
+): Promise<{ line: number; ch: number }> {
+	return await obsidian.dev.evalJsonAsync<{ line: number; ch: number }>(`(async () => {
+		${inNoteWindow(notePath)}
+		const { cm } = leaf.view.editor;
+		const at = cm.coordsAtPos(cm.state.doc.line(${line + 1}).from + ${ch});
+		press(at.left, (at.top + at.bottom) / 2);
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		return leaf.view.editor.getCursor();
+	})()`);
+}
+
+/** Clicks the close button of the popout tab showing `notePath`, which closes its window. */
+export async function closePopoutTab(obsidian: ObsidianClient, notePath: string): Promise<void> {
+	const closed = await obsidian.dev.evalJsonAsync<boolean>(`(async () => {
+		${inNoteWindow(notePath)}
+		const close = leaf.tabHeaderEl.querySelector(".workspace-tab-header-inner-close-button").getBoundingClientRect();
+		press(close.left + close.width / 2, close.top + close.height / 2);
+		for (let i = 0; i < 50 && remote.BrowserWindow.getAllWindows().length > 1; i++)
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		return remote.BrowserWindow.getAllWindows().length === 1;
+	})()`);
+	if (!closed) throw new Error(`The popout showing ${notePath} did not close.`);
 }
 
 export async function revealInFileExplorer(
@@ -542,8 +635,8 @@ function processAlive(pid: number): boolean {
 	}
 }
 
-export async function reloadObsidian(obsidian: ObsidianClient): Promise<void> {
-	await collectRuntimeErrors(obsidian);
+export async function reloadObsidian(obsidian: ObsidianClient, ignored?: string): Promise<void> {
+	await collectRuntimeErrors(obsidian, ignored);
 	await obsidian.dev.evalJson("window.__podnotesJourneyBeforeReload = true");
 	await obsidian.exec("reload");
 	await obsidian.waitFor(
@@ -556,6 +649,7 @@ export async function reloadObsidian(obsidian: ObsidianClient): Promise<void> {
 		{ timeoutMs: 30_000, intervalMs: 300, message: "Obsidian to reload" },
 	);
 	await waitForPodNotesReady(obsidian);
+	await collectRuntimeErrors(obsidian, ignored);
 	await dismissNotices(obsidian);
 }
 

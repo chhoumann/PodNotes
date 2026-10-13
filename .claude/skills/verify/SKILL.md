@@ -100,8 +100,9 @@ read state.
     ```
 
     The direct path is `npm run obsidian:e2e -- command id=podnotes:podnotes-show-leaf`.
-    Command ids are in `src/commands.ts`. Editor commands such as
-    `capture-timestamp` only exist while a Markdown editor is focused.
+    Command ids are in `src/commands.ts`. Capture commands such as
+    `capture-timestamp` run from anywhere. They write into the last focused
+    editor, else the episode note.
 
 - **URIs.** Click the link in a note (Reading view), or deliver it the way
   Obsidian does when the OS hands it over:
@@ -199,7 +200,9 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
-  `requests`, `audio [vault path]` or `stop`. `requests` prints the paths
+  `retitle`, `requests`, `audio [vault path]` or `stop`. `retitle` renames the
+  first feed's two episodes to `Renamed Opening Show` and `Renamed Closing Show`,
+  keeping their GUIDs, until the server stops. `requests` prints the paths
   PodNotes fetched from the server. The feed URL uses the host `podnotes.test`,
   because PodNotes refuses literal loopback hosts. The instance maps it to
   127.0.0.1 with Chromium's `--host-resolver-rules`, so it needs no DNS, and an

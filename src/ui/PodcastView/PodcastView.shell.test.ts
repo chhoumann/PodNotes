@@ -333,7 +333,12 @@ describe("mini player", () => {
 
 		services.captureTimestamp.mockResolvedValueOnce(null);
 		await fireEvent.click(button("Capture timestamp"));
-		services.captureTimestamp.mockResolvedValueOnce("Episode 1 Launch");
+		services.captureTimestamp.mockResolvedValueOnce({
+			destination: "note",
+			path: "PodNotes/Pod/Episode 1 Launch.md",
+			text: "- 00:00:01\n",
+			created: false,
+		});
 		await fireEvent.click(button("Capture timestamp"));
 		await tick();
 

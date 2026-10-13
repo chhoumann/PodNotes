@@ -2,6 +2,7 @@ import { App } from "obsidian";
 import { vi } from "vitest";
 import { DEFAULT_EPISODE_LIST_LIMIT, DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
+import type { Capture } from "src/services/CaptureService";
 import { FeedRepository } from "src/services/FeedRepository";
 import { derived, writable, type Readable, type Writable } from "svelte/store";
 import {
@@ -56,7 +57,7 @@ export const pluginLibrary: TestLibrary = {
 
 export type TestServices = ShellServices & {
 	readonly library: TestLibrary;
-	readonly captureTimestamp: ReturnType<typeof vi.fn<() => Promise<string | null>>>;
+	readonly captureTimestamp: ReturnType<typeof vi.fn<() => Promise<Capture | null>>>;
 	readonly openSettings: ReturnType<typeof vi.fn<() => void>>;
 };
 

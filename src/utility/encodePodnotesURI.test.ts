@@ -15,7 +15,7 @@ function obsidianDecode(href: string, key: string): string {
 describe("encodePodnotesURI", () => {
 	test("encodes spaces as %20 and a literal '+' as %2B, and href preserves them", () => {
 		const url = encodePodnotesURI(
-			"Episode 50: C++ Tips",
+			{ title: "Episode 50: C++ Tips" },
 			"https://pod.example.com/feed.xml",
 			30,
 		);
@@ -37,29 +37,46 @@ describe("encodePodnotesURI", () => {
 		];
 
 		for (const title of titles) {
-			const url = encodePodnotesURI(title, "https://x/feed", 0);
+			const url = encodePodnotesURI({ title }, "https://x/feed", 0);
 			expect(obsidianDecode(url.href, "episodeName")).toBe(title);
 		}
 	});
 
 	test("round-trips a feed url / local path containing a literal '+'", () => {
-		const url = encodePodnotesURI("Ep", "Notes+/C++ Tips.mp3", 5);
+		const url = encodePodnotesURI({ title: "Ep" }, "Notes+/C++ Tips.mp3", 5);
 		expect(obsidianDecode(url.href, "url")).toBe("Notes+/C++ Tips.mp3");
 	});
 
 	test("omits the time param when time is undefined", () => {
-		const url = encodePodnotesURI("Title", "https://x/feed");
+		const url = encodePodnotesURI({ title: "Title" }, "https://x/feed");
 		expect(url.href).not.toContain("time=");
 	});
 
 	test("encodes segment end time when a start time is present", () => {
-		const url = encodePodnotesURI("Title", "https://x/feed", 115, 125);
+		const url = encodePodnotesURI({ title: "Title" }, "https://x/feed", 115, 125);
 		expect(param(url.href, "time")).toBe("115");
 		expect(param(url.href, "endTime")).toBe("125");
 	});
 
+	test("carries the episode's guid between the url and the times, and omits it without one", () => {
+		const url = encodePodnotesURI(
+			{ title: "Ep", guid: "tag:a+b c/1?x=1&y" },
+			"https://x/feed",
+			5,
+			9,
+		);
+
+		expect(url.href).toBe(
+			"obsidian://podnotes?episodeName=Ep&url=https%3A%2F%2Fx%2Ffeed&guid=tag%3Aa%2Bb%20c%2F1%3Fx%3D1%26y&time=5&endTime=9",
+		);
+		expect(obsidianDecode(url.href, "guid")).toBe("tag:a+b c/1?x=1&y");
+		expect(encodePodnotesURI({ title: "Ep" }, "https://x/feed", 5).href).toBe(
+			"obsidian://podnotes?episodeName=Ep&url=https%3A%2F%2Fx%2Ffeed&time=5",
+		);
+	});
+
 	test("omits segment end time when no start time is present", () => {
-		const url = encodePodnotesURI("Title", "https://x/feed", undefined, 125);
+		const url = encodePodnotesURI({ title: "Title" }, "https://x/feed", undefined, 125);
 		expect(url.href).not.toContain("time=");
 		expect(url.href).not.toContain("endTime=");
 	});

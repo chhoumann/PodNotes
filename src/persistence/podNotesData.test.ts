@@ -10,6 +10,7 @@ import {
 	PODNOTES_DATA_SCHEMA_VERSION,
 	PodNotesDataError,
 } from "./podNotesData";
+import released2211 from "../../tests/fixtures/persistence/released-2.21.1.json";
 
 const episodeDate = new Date("2024-03-01T10:05:03.000Z");
 
@@ -23,6 +24,10 @@ function episode(title: string): Episode {
 		podcastName: "Test Podcast",
 		episodeDate,
 	};
+}
+
+function isEpisodeRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && "streamUrl" in value;
 }
 
 function playlist(name: string, item: Episode): Playlist {
@@ -486,6 +491,57 @@ describe("PodNotes data schema", () => {
 
 		expect(decoded.settings.currentEpisode?.content).toBe("");
 		expect(decoded.settings.downloadedEpisodes["Old Podcast"][0].size).toBe(0);
+	});
+
+	it("keeps an episode's guid in every persisted episode container through load and save", () => {
+		const stored = JSON.parse(
+			JSON.stringify(encodePodNotesData(settingsWithEveryEpisodeContainer())),
+			(_key, value: unknown) =>
+				isEpisodeRecord(value) ? { ...value, guid: `guid-${value.title}` } : value,
+		) as Record<string, unknown>;
+
+		const decoded = decodePodNotesData(stored);
+		const { settings } = decoded;
+
+		expect(decoded.warnings).toEqual([]);
+		expect(
+			[
+				settings.currentEpisode,
+				settings.queue.episodes[0],
+				settings.favorites.episodes[0],
+				settings.playlists.Custom.currentEpisode,
+				settings.downloadedEpisodes["Test Podcast"][0],
+			].map((saved) => saved?.guid),
+		).toEqual([
+			"guid-Current",
+			"guid-Queued",
+			"guid-Favorite",
+			"guid-Custom",
+			"guid-Downloaded",
+		]);
+		expect(
+			JSON.parse(JSON.stringify(encodePodNotesData(settings, decoded.unknownFields))),
+		).toEqual(stored);
+	});
+
+	it("drops a guid that is not a string", () => {
+		const decoded = decodePodNotesData({
+			currentEpisode: { ...episode("Restored"), guid: 12345 },
+		});
+
+		expect(decoded.settings.currentEpisode).toMatchObject({ title: "Restored" });
+		expect(decoded.settings.currentEpisode).not.toHaveProperty("guid");
+		expect(decoded.warnings).toEqual(["currentEpisode.guid: expected a string"]);
+	});
+
+	it("loads a 2.21.1 library unchanged", () => {
+		const decoded = decodePodNotesData(structuredClone(released2211));
+
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.changed).toBe(false);
+		expect(
+			JSON.parse(JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields))),
+		).toEqual({ ...released2211, libraryId: "" });
 	});
 
 	const storedDownload = (downloadedByPodNotes: unknown) => ({

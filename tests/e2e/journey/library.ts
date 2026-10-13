@@ -51,6 +51,7 @@ export type LibrarySeed = Readonly<{
 	}>;
 	openAISecretId?: string;
 	transcriptTemplate?: string;
+	noteTemplate?: string;
 }>;
 
 type JourneyContext = Readonly<{
@@ -319,6 +320,7 @@ export async function seedLibrary(
 		);
 		if (seed.openAISecretId) data.openAISecretId = seed.openAISecretId;
 		if (seed.transcriptTemplate) data.transcript.template = seed.transcriptTemplate;
+		if (seed.noteTemplate) data.note.template = seed.noteTemplate;
 	}, RELOAD_OPTIONS);
 	await dismissNotices(obsidian);
 }

@@ -1,3 +1,5 @@
+import { parse } from "yaml";
+
 export class SecretStorage {
 	private values = new Map<string, string>();
 
@@ -148,6 +150,17 @@ export class ItemView {
 	async setState(_state: unknown, _result: unknown): Promise<void> {}
 }
 
+export class MarkdownView {
+	editor: unknown;
+	file: TFile | null = null;
+
+	constructor(public leaf: WorkspaceLeaf) {}
+
+	getMode(): "source" | "preview" {
+		return "source";
+	}
+}
+
 export class Modal {
 	app: App;
 	containerEl: HTMLElement;
@@ -181,7 +194,11 @@ export class Modal {
 
 export class SuggestModal<T> extends Modal {
 	declare protected readonly itemType?: T;
-	setPlaceholder(_placeholder: string): void {}
+	inputEl = document.createElement("input");
+
+	setPlaceholder(placeholder: string): void {
+		this.inputEl.placeholder = placeholder;
+	}
 }
 
 export class FuzzySuggestModal<T> extends SuggestModal<T> {
@@ -527,6 +544,9 @@ export const requestUrl = async () => ({
 });
 
 export const htmlToMarkdown = (value: string) => value;
+
+// Obsidian's parseYaml is eemeli/yaml's parse(text, null, {}).
+export const parseYaml = (text: string): unknown => parse(text, {});
 
 // Mutable so tests can simulate a specific OS (e.g. set isMacOS=false, isLinux=true).
 // Defaults to a desktop macOS profile, matching the typical dev environment.

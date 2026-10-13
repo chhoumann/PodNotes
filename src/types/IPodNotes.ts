@@ -1,5 +1,6 @@
 import type { IAPI } from "src/API/IAPI";
 import type { PlayerController } from "src/player/PlayerController";
+import type { CaptureService } from "src/services/CaptureService";
 import type { FeedRepository } from "src/services/FeedRepository";
 import type { Navigation } from "src/ui/PodcastView/Navigation";
 import type { IPodNotesSettings } from "./IPodNotesSettings";
@@ -14,10 +15,10 @@ export interface IPodNotes {
 	player: PlayerController;
 	feeds: FeedRepository;
 	navigation: Navigation;
+	capture: CaptureService;
 	shouldMountPodcastView(): boolean;
 	unregisterPodcastView(view: PodNotesViewRegistration): void;
 	saveSettings(): Promise<void>;
 	showPlayer(): Promise<void>;
 	openSettingsTab(): void;
-	captureTimestampToEditorOrNote(): Promise<string | null>;
 }

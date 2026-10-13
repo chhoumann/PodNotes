@@ -38,6 +38,8 @@ export type FixtureServer = Readonly<{
 	artworkUrl(feed: FixtureFeed): string;
 	audio(feed: FixtureFeed, episode: FixtureEpisode): Buffer;
 	holdFeed(feed: FixtureFeed): () => Promise<void>;
+	/** Serves `episode` under `title` from now on, with its GUID and media unchanged. */
+	retitle(feed: FixtureFeed, episode: FixtureEpisode, title: string): void;
 	requests(): readonly string[];
 	stop(): Promise<void>;
 }>;
@@ -92,6 +94,28 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		return route.body;
 	};
 
+	const serveFeed = (feed: FixtureFeed) =>
+		routes.set(feedPath(feed), {
+			type: "application/rss+xml",
+			body: Buffer.from(
+				rss(
+					feed,
+					feed.artwork ? artworkUrl(feed) : null,
+					(episode) =>
+						episode.seconds === null
+							? null
+							: {
+									url: `${origin}${mediaPath(feed, episode)}`,
+									bytes: audio(feed, episode).length,
+								},
+					(transcript) =>
+						transcript.absolute
+							? `${origin}/${feed.slug}/${transcript.path}`
+							: transcript.path,
+				),
+			),
+		});
+
 	for (const feed of feeds) {
 		feed.episodes.forEach((episode, index) => {
 			if (episode.seconds !== null) {
@@ -113,26 +137,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 				cache: true,
 			});
 		}
-		routes.set(feedPath(feed), {
-			type: "application/rss+xml",
-			body: Buffer.from(
-				rss(
-					feed,
-					feed.artwork ? artworkUrl(feed) : null,
-					(episode) =>
-						episode.seconds === null
-							? null
-							: {
-									url: `${origin}${mediaPath(feed, episode)}`,
-									bytes: audio(feed, episode).length,
-								},
-					(transcript) =>
-						transcript.absolute
-							? `${origin}/${feed.slug}/${transcript.path}`
-							: transcript.path,
-				),
-			),
-		});
+		serveFeed(feed);
 	}
 
 	return {
@@ -156,6 +161,14 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 				release();
 				await done;
 			};
+		},
+		retitle: (feed, episode, title) => {
+			serveFeed({
+				...feed,
+				episodes: feed.episodes.map((each) =>
+					each === episode ? { ...each, title } : each,
+				),
+			});
 		},
 		requests: () => [...requests],
 		stop: () =>
