@@ -86,10 +86,9 @@ export function redactPrivateFeedAddresses<T>(
 ): T {
 	const placeholders = new Map<string, string>();
 	const add = (url: string, placeholder: string) => {
-		const canonical = canonicalUrl(url);
+		const canonical = canonicalUrl(url).split("#")[0];
 		const kept = placeholders.get(canonical) ?? placeholder;
 		placeholders.set(canonical, kept);
-		if (!placeholders.has(url)) placeholders.set(url, kept);
 	};
 	for (const [url, placeholder] of known) add(url, placeholder);
 	visitRecords(document, ({ feedUrl, podcastName }) => {
@@ -97,13 +96,16 @@ export function redactPrivateFeedAddresses<T>(
 		add(feedUrl, privateFeedPlaceholder(typeof podcastName === "string" ? podcastName : ""));
 	});
 	if (placeholders.size === 0) return document;
+	const lookup = (address: string) => placeholders.get(canonicalUrl(address).split("#")[0]);
 	return replaceStrings(document, (value) => {
-		const whole = /^https?:/i.test(value) && placeholders.get(canonicalUrl(value));
-		if (whole) return whole;
-		return value.replace(
-			/https?:\/\/[^\s<>"'`]+/gi,
-			(address) => placeholders.get(canonicalUrl(address)) ?? address,
-		);
+		if (/^https?:\/\/[^\s<>"'`]+$/i.test(value)) return lookup(value) ?? value;
+		return value.replace(/https?:\/\/[^\s<>"'`]+/gi, (address) => {
+			const whole = lookup(address);
+			if (whole) return whole;
+			const bare = address.replace(/[.,;:!?)\]}]+$/, "");
+			const replacement = lookup(bare);
+			return replacement ? replacement + address.slice(bare.length) : address;
+		});
 	});
 }
 

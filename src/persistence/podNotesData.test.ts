@@ -158,7 +158,7 @@ describe("PodNotes data schema", () => {
 			...episode("Private"),
 			feedUrl,
 			streamUrl,
-			artworkUrl: `${feedUrl}&sig=ART`,
+			artworkUrl: `${feedUrl}.`,
 			chaptersUrl: `${feedUrl}&sig=CHAPTERS`,
 			url: `${feedUrl}&token=ARTICLE`,
 			description: `<a href="${streamUrl}">Audio</a> Feed: "${feedUrl}"`,
@@ -173,6 +173,29 @@ describe("PodNotes data schema", () => {
 			feedUrl: "podnotes-private-feed:Test%20Podcast",
 			description: `<a href="${streamUrl}">Audio</a> Feed: "podnotes-private-feed:Test%20Podcast"`,
 		});
+	});
+
+	it.each([
+		["See URL.", "See PLACEHOLDER."],
+		["See URL, then listen.", "See PLACEHOLDER, then listen."],
+		["[Feed](URL)", "[Feed](PLACEHOLDER)"],
+		["See URL; listen next.", "See PLACEHOLDER; listen next."],
+		["URL#section", "PLACEHOLDER"],
+	])("puts no private feed address in data.json when quoted as %s", (template, expected) => {
+		const feedUrl = "https://private.example/feed?auth=PUNCTUATION_SENTINEL";
+		const item = {
+			...episode("Private"),
+			feedUrl,
+			description: template.replace("URL", feedUrl),
+		};
+		const encoded = encodePodNotesData({
+			...structuredClone(DEFAULT_SETTINGS),
+			currentEpisode: item,
+		});
+		expect(encoded.currentEpisode?.description).toBe(
+			expected.replace("PLACEHOLDER", "podnotes-private-feed:Test%20Podcast"),
+		);
+		expect(JSON.stringify(encoded)).not.toContain("PUNCTUATION_SENTINEL");
 	});
 
 	it("puts no private feed address in data.json object keys without losing unknown entries", () => {

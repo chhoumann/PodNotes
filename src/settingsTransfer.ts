@@ -12,6 +12,7 @@ import type { Episode } from "./types/Episode";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { ownRecord } from "./utility/ownRecord";
 import { isLocalFile } from "./utility/isLocalFile";
+import { isFeedUrlSecretId } from "./services/FeedUrlRepository";
 
 /**
  * Serialization for the "import/export settings & templates" feature (issue #162).
@@ -33,7 +34,7 @@ export const VAULT_LOCAL_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"currentEpisode",
 ];
 
-/** SecretStorage references are device-local implementation details, not settings transfer data. */
+/** Provider API-key references are device-local, not settings transfer data. */
 const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
 	"openAISecretId",
 	"deepgramSecretId",
@@ -113,10 +114,18 @@ export type ParseResult =
 
 function portable<T extends object>(settings: T): T {
 	const out = { ...settings } as Record<string, unknown>;
-	// SecretStorage is device-local: an imported urlSecretId is at best meaningless here.
 	if (isPlainObject(out.savedFeeds)) {
 		out.savedFeeds = mapRecord(out.savedFeeds, (feed) =>
-			isPlainObject(feed) ? { ...feed, urlSecretId: undefined } : feed,
+			isPlainObject(feed)
+				? {
+						...feed,
+						urlSecretId:
+							typeof feed.urlSecretId === "string" &&
+							isFeedUrlSecretId(feed.urlSecretId)
+								? feed.urlSecretId
+								: undefined,
+					}
+				: feed,
 		);
 	}
 	for (const key of ["queue", "favorites"]) {
