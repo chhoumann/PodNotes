@@ -1103,6 +1103,10 @@
 			margin-top: 0;
 		}
 
+		.pn-queue .pn-bar {
+			display: none;
+		}
+
 		.pn-grip {
 			cursor: grab;
 			touch-action: none;
