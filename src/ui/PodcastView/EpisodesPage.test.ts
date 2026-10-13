@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
+import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
@@ -127,6 +128,26 @@ describe("a podcast's page", () => {
 		await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 		expect(listed()).toEqual(["Second", "First"]);
 		expect(load).toHaveBeenCalledTimes(3);
+	});
+
+	test("lists nothing for a podcast that is gone, not the latest episodes", async () => {
+		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
+		renderPage({ kind: "feed", key: "Gone" });
+
+		await services.feeds.load([show.title], "network");
+		await tick();
+
+		expect(listed()).toEqual([]);
+	});
+
+	test("lists nothing for a playlist that is gone, not the latest episodes", async () => {
+		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
+		renderPage({ kind: "playlist", name: "Gone" });
+
+		await services.feeds.load([show.title], "network");
+		await tick();
+
+		expect(listed()).toEqual([]);
 	});
 
 	test("asks for a private feed's address where this device lacks it, instead of retrying", async () => {

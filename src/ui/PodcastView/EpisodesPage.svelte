@@ -71,12 +71,17 @@
 				played.map(({ episode }) => episode),
 			).flatMap((episode) => entryOf.get(episode) ?? []);
 		}
+		// A podcast or playlist that is gone lists nothing until the shell leaves its page.
 		const listed = createEpisodeListEntries(
 			searchEpisodes(
 				query,
-				feedState
-					? selectFeedEpisodes(feedState, $downloadedEpisodes)
-					: (playlist?.episodes ?? selectLatestEpisodes($feeds, $episodeListLimit)),
+				page.kind === "feed"
+					? feedState
+						? selectFeedEpisodes(feedState, $downloadedEpisodes)
+						: []
+					: page.kind === "latest"
+						? selectLatestEpisodes($feeds, $episodeListLimit)
+						: (playlist?.episodes ?? []),
 			),
 		);
 		return $hidePlayedEpisodes
