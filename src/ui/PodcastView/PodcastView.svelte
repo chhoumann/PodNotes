@@ -1000,7 +1000,7 @@
 			color: var(--text-faint);
 		}
 
-		/* Sidebar and phone: the source takes its own line, so nothing truncates. */
+		/* In the sidebar and on a phone, the source takes its own line, so nothing truncates. */
 		.pn-ep-meta .pod {
 			min-width: 0;
 			overflow-wrap: anywhere;

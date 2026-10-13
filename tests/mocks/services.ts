@@ -124,7 +124,7 @@ export function createTestServices(
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),
-		// As the plugin's writer does: the settings change, and the plugin store says so.
+		// As the plugin's writer does, the settings change and the plugin store says so.
 		setAutoQueue: vi.fn((enabled: boolean) => {
 			settings.autoQueue = enabled;
 			plugin.update((host) => host);

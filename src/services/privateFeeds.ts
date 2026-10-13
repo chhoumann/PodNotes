@@ -52,8 +52,8 @@ export function internPrivateFeed(
 }
 
 /**
- * The http(s) address of a public feed, safe to show and to copy. A private feed
- * has none: its address is a secret, which this never resolves.
+ * The http(s) address of a public feed, safe to show and to copy. A private feed has
+ * none, since its address is a secret, and this never resolves one.
  */
 export function publicFeedUrl(feed: PodcastFeed): string | undefined {
 	if (feed.urlSecretId?.trim() || isPrivateFeedPlaceholder(feed.url)) return undefined;

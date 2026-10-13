@@ -272,7 +272,7 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 	];
 }
 
-/** The Queue page's options. Each item sets the state it shows, so a stale menu repeats nothing. */
+/** The Queue page's options. The preference item asks for the opposite of what its menu showed. */
 export function queueMenu({
 	library,
 	actions,
@@ -298,7 +298,7 @@ export function queueMenu({
 	];
 }
 
-/** A playlist of the user's. Deleting the open one first goes to Playlists, which stays. */
+/** A playlist of the user's. Deleting the open one goes to Playlists first, which stays. */
 export function playlistMenu(name: string, { actions, navigation }: ShellServices): MenuEntry[] {
 	return [
 		{

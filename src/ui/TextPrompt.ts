@@ -12,8 +12,8 @@ export interface TextPrompt {
 }
 
 /**
- * The trimmed text the user enters, or null when they close the prompt. Empty text
- * is never accepted: the prompt stays open with the field focused.
+ * The trimmed text the user enters, or null when they close the prompt. Empty text is
+ * never accepted, and the prompt stays open with the field focused.
  */
 export function askText(app: App, prompt: TextPrompt): Promise<string | null> {
 	return new Promise((resolve) => new TextPromptModal(app, prompt, resolve).open());

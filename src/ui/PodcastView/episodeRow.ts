@@ -84,7 +84,7 @@ export function isCurrentEpisode(now: Episode | undefined, episode: Episode): bo
 	);
 }
 
-/** The episode's length: the feed's, else the one its Played record learned as it played. */
+/** The episode's length from the feed, else the one its Played record learned as it played. */
 function durationOf(episode: Episode, record: PlayedEpisode | undefined): number {
 	return episode.duration || record?.duration || 0;
 }
@@ -104,7 +104,7 @@ export function totalSeconds(episodes: readonly Episode[], played: PlayedEpisode
 	);
 }
 
-/** The listening left in the episodes, in seconds: the rest of one under way, else its length. */
+/** The listening left in the episodes, in seconds, counting only the rest of one under way. */
 export function secondsLeft(episodes: readonly Episode[], played: PlayedEpisodeMap): number {
 	return episodes.reduce((sum, episode) => {
 		const record = getPlayedEpisode(played, episode);

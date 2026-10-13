@@ -290,7 +290,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.app.setting.openTabById(this.manifest.id);
 	}
 
-	/** The one writer of the auto-queue preference: the settings tab and the Queue page use it. */
+	/** The one writer of the auto-queue preference, for the settings tab and the Queue page. */
 	setAutoQueue(enabled: boolean): void {
 		if (this.settings.autoQueue === enabled) return;
 		this.settings.autoQueue = enabled;

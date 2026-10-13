@@ -83,7 +83,7 @@ export interface Head {
 	readonly title?: string;
 	/** The title at the top of the page's scroller. */
 	readonly pageTitle?: string;
-	/** Beside whichever title the head has: the queue's time left, a playlist's count. */
+	/** Beside whichever title the head has, such as the queue's time left or a playlist's count. */
 	readonly flair?: string;
 	/**
 	 * The head's right edge: the compact Library's Add podcast and Settings, Refresh

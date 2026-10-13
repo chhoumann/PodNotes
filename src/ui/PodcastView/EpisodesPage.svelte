@@ -14,7 +14,7 @@
 	import { selectFeedEpisodes } from "./episodeListSelection";
 	import SearchField from "./SearchField.svelte";
 
-	/** A podcast's page: its hero, its feed's state, and its episodes to search and filter. */
+	/** A podcast's page, with its hero, its feed's state, and its episodes to search and filter. */
 	let { key }: { key: FeedKey } = $props();
 	const { feeds, actions, library, online } = useServices();
 	const { playedEpisodes, downloadedEpisodes, hidePlayedEpisodes } = library;

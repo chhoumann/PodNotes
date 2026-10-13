@@ -67,7 +67,7 @@ export function downloadedCopy(
 	return sameMedia && (!episode.mediaType || mediaType === episode.mediaType) ? copy : undefined;
 }
 
-/** Whether the episode plays with no connection: its own vault file, or a downloaded copy. */
+/** Whether the episode plays with no connection, from its own vault file or a downloaded copy. */
 export function offlinePlayable(
 	episode: Episode,
 	downloaded: Readonly<Record<string, readonly DownloadedEpisode[]>>,
