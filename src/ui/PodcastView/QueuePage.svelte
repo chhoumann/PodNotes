@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, tick } from "svelte";
 	import { get } from "svelte/store";
+	import { reorderEpisodes, type QueuePlacement } from "src/store";
 	import type { Episode } from "src/types/Episode";
 	import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 	import { icon } from "../obsidian/icon";
@@ -11,12 +12,20 @@
 	const { queue } = library;
 
 	let list: HTMLElement | undefined = $state();
-	/** The drag under way. The queue store keeps the order; a drag only names its episode. */
+	/**
+	 * The drag under way, with where it would put its episode, by entry. The queue is
+	 * written once, on release, so a drag across several rows saves once.
+	 */
 	let drag = $state.raw<{
 		readonly pointerId: number;
 		readonly episode: Episode;
+		readonly placement?: QueuePlacement;
 		stop(): void;
 	}>();
+	// The queue as the drop would leave it, with anything playback or the user changed since.
+	const shown = $derived(
+		drag?.placement ? reorderEpisodes($queue.episodes, drag.placement) : $queue.episodes,
+	);
 
 	/**
 	 * Listens on the grip's own window, which is a popout's when the view is in one,
@@ -33,20 +42,23 @@
 		const move = (moved: PointerEvent) => {
 			if (moved.pointerId !== pointerId) return;
 			// A button released outside the window sent no pointerup here.
-			if (moved.pointerType === "mouse" && moved.buttons === 0) return end();
-			place(episode, moved.clientX, moved.clientY);
+			if (moved.pointerType === "mouse" && moved.buttons === 0) return drop();
+			place(moved.clientX, moved.clientY);
 			// Moving the row's node takes focus from its grip.
 			void tick().then(() => grip.focus({ preventScroll: true }));
 		};
 		const release = (released: PointerEvent) => {
-			if (released.pointerId === pointerId) end();
+			if (released.pointerId === pointerId) drop();
+		};
+		const cancel = (cancelled: PointerEvent) => {
+			if (cancelled.pointerId === pointerId) end();
 		};
 		const escape = (key: KeyboardEvent) => {
 			if (key.key === "Escape") end();
 		};
 		win.addEventListener("pointermove", move);
 		win.addEventListener("pointerup", release);
-		win.addEventListener("pointercancel", release);
+		win.addEventListener("pointercancel", cancel);
 		win.addEventListener("keydown", escape);
 		drag = {
 			pointerId,
@@ -54,32 +66,42 @@
 			stop() {
 				win.removeEventListener("pointermove", move);
 				win.removeEventListener("pointerup", release);
-				win.removeEventListener("pointercancel", release);
+				win.removeEventListener("pointercancel", cancel);
 				win.removeEventListener("keydown", escape);
 			},
 		};
 	}
 
+	/** Ends the drag and writes nothing. */
 	function end() {
 		drag?.stop();
 		drag = undefined;
 	}
 
+	/** Ends the drag and puts the episode where it is shown. */
+	function drop() {
+		const placement = drag?.placement;
+		end();
+		if (placement) actions.reorderQueue(placement);
+	}
+
 	/**
-	 * Each row the pointer crosses places the episode before or after that row, in the
-	 * store. The row is the one hit at the point, in this list, so a pointer beside the
-	 * view, over another view's Queue, or over a row the page has scrolled out of sight,
-	 * places nothing.
+	 * Each row the pointer crosses puts the episode before or after that row. The row
+	 * is the one hit at the point, in this list, so a pointer beside the view, over
+	 * another view's Queue, or over a row the page has scrolled out of sight, places
+	 * nothing. Over its own row the episode stays where it is shown, since placing it
+	 * beside itself would move it back.
 	 */
-	function place(episode: Episode, x: number, y: number) {
+	function place(x: number, y: number) {
+		if (!drag) return;
 		const row = list?.doc.elementFromPoint(x, y)?.closest<HTMLElement>(".pn-ep");
 		if (!row || !list?.contains(row)) return;
 		const key = row.querySelector<HTMLElement>("[data-queue-key]")?.dataset.queueKey;
 		const hovered = key && get(queue).episodes.find((entry) => getEpisodeKey(entry) === key);
-		if (!hovered) return;
+		if (!hovered || isSameEpisode(hovered, drag.episode)) return;
 		const { top, bottom } = row.getBoundingClientRect();
 		const side = y < (top + bottom) / 2 ? "before" : "after";
-		actions.reorderQueue({ episode, relativeTo: hovered, side });
+		drag = { ...drag, placement: { episode: drag.episode, relativeTo: hovered, side } };
 	}
 
 	// Playback can take the dragged episode out of the queue mid-drag.
@@ -92,11 +114,11 @@
 
 {#if $queue.episodes.length > 0}
 	<div class="pn-list pn-queue" role="list" aria-label="Queue" bind:this={list}>
-		{#each $queue.episodes as episode, index (getEpisodeKey(episode))}
+		{#each shown as episode, index (getEpisodeKey(episode))}
 			<QueueRow
 				{episode}
 				{index}
-				count={$queue.episodes.length}
+				count={shown.length}
 				dragging={drag !== undefined && isSameEpisode(drag.episode, episode)}
 				onstart={start}
 			/>

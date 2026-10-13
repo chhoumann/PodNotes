@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { tick } from "svelte";
 import { get } from "svelte/store";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { queue } from "src/store";
 import type { Episode } from "src/types/Episode";
@@ -163,24 +163,44 @@ describe("dragging a grip", () => {
 		pointerId,
 		buttons,
 	});
+	const d = episode("D");
 
-	test("places the episode beside each row the pointer crosses, and stops on release", async () => {
-		renderQueue(a, b, c);
+	/** Every order the queue store notifies, the current one first. */
+	function notified(): string[][] {
+		const orders: string[][] = [];
+		const unsubscribe = queue.subscribe(({ episodes }) =>
+			orders.push(episodes.map(({ title }) => title)),
+		);
+		onTestFinished(unsubscribe);
+		return orders;
+	}
+
+	test("shows the episode beside each row the pointer crosses, and writes the queue once, on release, in the order shown", async () => {
+		renderQueue(a, b, c, d);
+		const orders = notified();
 		layOutRows();
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
 		expect(grip("A")).toHaveClass("is-dragging");
 		await fireEvent.pointerMove(window, at(70));
-		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
-
+		expect(listed()).toEqual(["B", "A", "C", "D"]);
 		layOutRows();
-		await fireEvent.pointerMove(window, at(115));
-		expect(queued()).toEqual(["Field Notes/B", "Field Notes/C", "Field Notes/A"]);
+		await fireEvent.pointerMove(window, at(110));
+		expect(listed()).toEqual(["B", "C", "A", "D"]);
+		layOutRows();
+		await fireEvent.pointerMove(window, at(150));
+		expect(listed()).toEqual(["B", "C", "D", "A"]);
+		expect(orders).toEqual([["A", "B", "C", "D"]]);
 
-		await fireEvent.pointerUp(window, at(115));
+		await fireEvent.pointerUp(window, at(150));
 		layOutRows();
 		await fireEvent.pointerMove(window, at(10));
-		expect(queued()).toEqual(["Field Notes/B", "Field Notes/C", "Field Notes/A"]);
+
+		expect(orders).toEqual([
+			["A", "B", "C", "D"],
+			["B", "C", "D", "A"],
+		]);
+		expect(listed()).toEqual(["B", "C", "D", "A"]);
 		expect(document.querySelector(".pn-grip.is-dragging")).toBeNull();
 	});
 
@@ -196,15 +216,32 @@ describe("dragging a grip", () => {
 		expect(grip("A")).toHaveFocus();
 	});
 
+	test("over the row it moved to, keeps showing it there", async () => {
+		renderQueue(a, b, c);
+		layOutRows();
+
+		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		await fireEvent.pointerMove(window, at(70));
+		layOutRows();
+		await fireEvent.pointerMove(window, at(50));
+		expect(listed()).toEqual(["B", "A", "C"]);
+
+		await fireEvent.pointerUp(window, at(50));
+		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
+	});
+
 	test("over the row's own band, or past the list, moves nothing", async () => {
 		renderQueue(a, b, c);
+		const orders = notified();
 		layOutRows();
 
 		await fireEvent.pointerDown(grip("B"), { ...at(60), button: 0 });
 		await fireEvent.pointerMove(window, at(55));
 		await fireEvent.pointerMove(window, at(500));
+		expect(listed()).toEqual(["A", "B", "C"]);
+		await fireEvent.pointerUp(window, at(500));
 
-		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+		expect(orders).toEqual([["A", "B", "C"]]);
 	});
 
 	test("beside the view, or over a row the page has scrolled out of sight, moves nothing", async () => {
@@ -214,98 +251,130 @@ describe("dragging a grip", () => {
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
 		await fireEvent.pointerMove(window, at(70, 1, 1, 400));
 		await fireEvent.pointerMove(window, at(115));
-		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+		expect(listed()).toEqual(["A", "B", "C"]);
 
 		await fireEvent.pointerMove(window, at(70));
-		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
+		expect(listed()).toEqual(["B", "A", "C"]);
 	});
 
 	test("over a row of another Queue, as in a second PodNotes view, moves nothing", async () => {
 		renderQueue(a, b, c);
 		render(WithServices, { props: { services, component: QueuePage } });
 		layOutRows();
-		const [ownGrip] = screen.getAllByRole("button", { name: /^Reorder A,/ });
+		const ownGrip = () => screen.getAllByRole("button", { name: /^Reorder A,/ })[0];
 
-		await fireEvent.pointerDown(ownGrip, { ...at(20), button: 0 });
+		await fireEvent.pointerDown(ownGrip(), { ...at(20), button: 0 });
 		await fireEvent.pointerMove(window, at(190));
+		await fireEvent.pointerUp(window, at(190));
 		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
 
+		await fireEvent.pointerDown(ownGrip(), { ...at(20), button: 0 });
 		await fireEvent.pointerMove(window, at(70));
+		await fireEvent.pointerUp(window, at(70));
 		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
 	});
 
-	test("ignores another pointer, and Escape ends the drag", async () => {
+	test("ignores another pointer, and Escape ends the drag where it began, writing nothing", async () => {
 		renderQueue(a, b, c);
+		const orders = notified();
 		layOutRows();
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
 		await fireEvent.pointerMove(window, at(110, 2));
-		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+		expect(listed()).toEqual(["A", "B", "C"]);
+		await fireEvent.pointerMove(window, at(70));
+		expect(listed()).toEqual(["B", "A", "C"]);
 
 		await fireEvent.keyDown(window, { key: "Escape" });
+		expect(listed()).toEqual(["A", "B", "C"]);
+		layOutRows();
 		await fireEvent.pointerMove(window, at(110));
-		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+		await fireEvent.pointerUp(window, at(110));
+
+		expect(listed()).toEqual(["A", "B", "C"]);
+		expect(orders).toEqual([["A", "B", "C"]]);
 	});
 
-	test("ends when the dragged episode leaves the queue, even if it comes back", async () => {
+	test("a cancelled pointer ends the drag where it began, writing nothing", async () => {
+		renderQueue(a, b, c);
+		const orders = notified();
+		layOutRows();
+
+		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		await fireEvent.pointerMove(window, at(70));
+		await fireEvent.pointerCancel(window, at(70));
+
+		expect(listed()).toEqual(["A", "B", "C"]);
+		expect(orders).toEqual([["A", "B", "C"]]);
+		expect(document.querySelector(".pn-grip.is-dragging")).toBeNull();
+	});
+
+	test("ends, writing nothing, when the dragged episode leaves the queue, even if it comes back", async () => {
 		renderQueue(a, b, c);
 		layOutRows();
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		await fireEvent.pointerMove(window, at(70));
 		queue.remove(a);
 		await tick();
-		layOutRows();
-		await fireEvent.pointerMove(window, at(60));
-		expect(queued()).toEqual(["Field Notes/B", "Field Notes/C"]);
+		expect(listed()).toEqual(["B", "C"]);
 
 		queue.add(a);
 		await tick();
 		layOutRows();
 		await fireEvent.pointerMove(window, at(10));
+		await fireEvent.pointerUp(window, at(10));
 		expect(queued()).toEqual(["Field Notes/B", "Field Notes/C", "Field Notes/A"]);
 		expect(document.querySelector(".pn-grip.is-dragging")).toBeNull();
 	});
 
-	test("an entry queued mid-drag keeps its place as the drag goes on", async () => {
+	test("an entry queued mid-drag keeps its place, and the drop puts the episode by the row it was shown beside", async () => {
 		renderQueue(a, b, c);
+		const orders = notified();
 		layOutRows();
 
 		await fireEvent.pointerDown(grip("C"), { ...at(100), button: 0 });
+		await fireEvent.pointerMove(window, at(50));
+		expect(listed()).toEqual(["A", "C", "B"]);
 		queue.prepend(episode("X"));
 		await tick();
-		layOutRows();
-		await fireEvent.pointerMove(window, at(85));
+		expect(listed()).toEqual(["X", "A", "C", "B"]);
+		await fireEvent.pointerUp(window, at(50));
 
-		expect(queued()).toEqual([
-			"Field Notes/X",
-			"Field Notes/A",
-			"Field Notes/C",
-			"Field Notes/B",
+		expect(orders).toEqual([
+			["A", "B", "C"],
+			["X", "A", "B", "C"],
+			["X", "A", "C", "B"],
 		]);
 	});
 
-	test("a mouse that comes back with its button up ends the drag", async () => {
+	test("a mouse that comes back with its button up drops the episode where it was shown", async () => {
 		renderQueue(a, b, c);
 		layOutRows();
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0, pointerType: "mouse" });
+		await fireEvent.pointerMove(window, { ...at(70), pointerType: "mouse" });
+		layOutRows();
 		await fireEvent.pointerMove(window, { ...at(110, 1, 0), pointerType: "mouse" });
 
-		expect(queued()).toEqual(["Field Notes/A", "Field Notes/B", "Field Notes/C"]);
+		expect(queued()).toEqual(["Field Notes/B", "Field Notes/A", "Field Notes/C"]);
 		expect(document.querySelector(".pn-grip.is-dragging")).toBeNull();
 	});
 
-	test("leaving the page mid-drag removes every listener the drag added", async () => {
+	test("leaving the page mid-drag writes nothing and removes every listener the drag added", async () => {
 		const { unmount } = renderQueue(a, b, c);
+		const orders = notified();
 		layOutRows();
 		const added = vi.spyOn(window, "addEventListener");
 		const removed = vi.spyOn(window, "removeEventListener");
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
+		await fireEvent.pointerMove(window, at(70));
 		const listening = added.mock.calls.map(([type, listener]) => [type, listener]);
 		expect(removed).not.toHaveBeenCalled();
 		unmount();
 
+		expect(orders).toEqual([["A", "B", "C"]]);
 		expect(listening.map(([type]) => type)).toEqual([
 			"pointermove",
 			"pointerup",
