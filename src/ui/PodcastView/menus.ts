@@ -77,6 +77,11 @@ export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 		});
 	}
 	menu.onHide(() => {
+		// Obsidian's menu passes on the Escape that closes it, and Obsidian sends focus from
+		// a sidebar to the main area on an Escape nothing handled. This one counts as handled.
+		const closing = at.el.win.event;
+		if (closing?.type === "keydown" && "key" in closing && closing.key === "Escape")
+			closing.preventDefault();
 		if (!picked && at.el.isConnected) at.el.focus();
 	});
 	menu.showAtPosition(at, at.doc);

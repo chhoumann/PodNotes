@@ -601,6 +601,29 @@ describe("a menu", () => {
 		button.remove();
 	});
 
+	test("an Escape that closes it counts as handled, so Obsidian leaves focus in the view", () => {
+		// As Obsidian's keymap, which hears a key first and closes the menu on Escape.
+		const keymap = (event: KeyboardEvent) => {
+			if (event.key === "Escape") (obsidian.Menu as unknown as typeof FakeMenu).shown?.hide();
+		};
+		window.addEventListener("keydown", keymap, true);
+		onTestFinished(() => window.removeEventListener("keydown", keymap, true));
+		const escape = () => {
+			const event = new KeyboardEvent("keydown", {
+				key: "Escape",
+				bubbles: true,
+				cancelable: true,
+			});
+			document.body.dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+		showMenu([{ title: "Item", onClick: () => {} }], at);
+
+		expect(escape(), "the Escape that closes the menu").toBe(true);
+		expect(trigger, "focus back on the control").toHaveFocus();
+		expect(escape(), "an Escape once the menu is gone").toBe(false);
+	});
+
 	describe("gives focus back to the control that opened it", () => {
 		const shown = () => (obsidian.Menu as unknown as typeof FakeMenu).shown!;
 		let note: HTMLTextAreaElement;
