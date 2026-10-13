@@ -240,7 +240,28 @@ describe("editing a public feed's address", () => {
 		expect(get(savedFeeds)["The Show"]).toEqual(show);
 	});
 
-	test("keeps nothing for a feed that a sync changed while the address loaded", async () => {
+	test("keeps the address, and the sync's other changes, when a sync republishes the podcast while it loads", async () => {
+		const response = deferred<string>();
+		fetchTextMock.mockReturnValue(response.promise);
+		const { actions } = saved();
+
+		const entered = enterAddress(actions.setFeedAddress("The Show"), NEW_URL);
+		await vi.waitFor(() => expect(fetchTextMock).toHaveBeenCalled());
+		const synced = structuredClone(get(savedFeeds));
+		synced["The Show"].artworkUrl = "https://art.example.com/new.jpg";
+		savedFeeds.set(synced);
+		response.resolve("<rss><channel><title>The Show</title></channel></rss>");
+		await entered;
+
+		expect(get(savedFeeds)["The Show"]).toEqual({
+			...show,
+			url: NEW_URL,
+			artworkUrl: "https://art.example.com/new.jpg",
+		});
+	});
+
+	test("keeps nothing for a feed whose address a sync changed while the new one loaded, and says so", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
 		const response = deferred<string>();
 		fetchTextMock.mockReturnValue(response.promise);
 		const { actions } = saved();
@@ -253,9 +274,13 @@ describe("editing a public feed's address", () => {
 		await entered;
 
 		expect(get(savedFeeds)["The Show"]).toEqual(synced);
+		expect(notice.mock.calls).toEqual([
+			["The Show changed while its address loaded. Try again."],
+		]);
 	});
 
-	test("leaves alone a podcast removed and followed again at its old address while the new one loaded", async () => {
+	test("leaves alone a podcast removed and followed again from the same search result while the address loaded, and says so", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
 		const response = deferred<string>();
 		fetchTextMock.mockReturnValue(response.promise);
 		const { actions } = saved();
@@ -263,14 +288,18 @@ describe("editing a public feed's address", () => {
 		const entered = enterAddress(actions.setFeedAddress("The Show"), NEW_URL);
 		await vi.waitFor(() => expect(fetchTextMock).toHaveBeenCalled());
 		actions.removePodcast("The Show");
-		expect(actions.addPodcast({ ...show })).toBe("The Show");
+		expect(actions.addPodcast(show)).toBe("The Show");
 		response.resolve("<rss><channel><title>The Show</title></channel></rss>");
 		await entered;
 
-		expect(get(savedFeeds)["The Show"]).toEqual(show);
+		expect(get(savedFeeds)["The Show"]).toBe(show);
+		expect(notice).toHaveBeenLastCalledWith(
+			"The Show changed while its address loaded. Try again.",
+		);
 	});
 
-	test("loads nothing for a podcast removed while its address is typed", async () => {
+	test("loads nothing for a podcast removed while its address is typed, and says so", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
 		const { actions } = saved();
 
 		const setting = actions.setFeedAddress("The Show");
@@ -279,6 +308,9 @@ describe("editing a public feed's address", () => {
 
 		expect(fetchTextMock).not.toHaveBeenCalled();
 		expect(Object.keys(get(savedFeeds))).toEqual(["First", "Last"]);
+		expect(notice).toHaveBeenLastCalledWith(
+			"The Show changed while its address loaded. Try again.",
+		);
 	});
 });
 
@@ -366,7 +398,8 @@ describe("setting a private feed's address on this device", () => {
 		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
 	});
 
-	test("keeps nothing for a feed that a sync replaced while the address loaded", async () => {
+	test("keeps nothing for a feed that a sync replaced while the address loaded, and says so", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
 		const response = deferred<string>();
 		fetchTextMock.mockReturnValue(response.promise);
 		const { thisDevice, actions } = followedElsewhere();
@@ -385,6 +418,9 @@ describe("setting a private feed's address on this device", () => {
 
 		expect(thisDevice.listSecrets()).toEqual([]);
 		expect(get(savedFeeds)).toEqual({ "Private Show": replaced });
+		expect(notice.mock.calls).toEqual([
+			["Private Show changed while its address loaded. Try again."],
+		]);
 	});
 });
 

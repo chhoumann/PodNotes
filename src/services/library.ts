@@ -176,64 +176,86 @@ export function createLibraryActions({
 		async setFeedAddress(key) {
 			const feed = ownRecord(get(savedFeeds))[key];
 			if (!feed) return;
-			// Every write replaces a record, so the same object means that no sync, and no
-			// remove and follow again, changed the podcast while the user typed or it loaded.
-			const changed = () => ownRecord(get(savedFeeds))[key] !== feed;
+			// A sync replaces every record, unchanged or not, so the podcast is the same one
+			// while it stays in the library. Removed and followed again, even from the same
+			// search result, it is another subscription.
+			let left = false;
+			const unsubscribe = savedFeeds.subscribe((all) => {
+				if (!ownRecord(all)[key]) left = true;
+			});
+			const changed = () => {
+				const now = ownRecord(get(savedFeeds))[key];
+				if (!left && now.url === feed.url && now.urlSecretId === feed.urlSecretId) {
+					return false;
+				}
+				new Notice(`${feed.title} changed while its address loaded. Try again.`);
+				return true;
+			};
 			const offline = () => {
 				if (get(online)) return false;
 				new Notice("Setting a feed address needs a connection.");
 				return true;
 			};
-			if (offline()) return;
-			const isPrivate = Boolean(feed.urlSecretId?.trim());
-			const entered = await askText(app, {
-				title: feed.title,
-				label: "Feed address",
-				cta: "Save",
-				value: publicFeedUrl(feed),
-			});
-			if (entered === null || changed() || offline()) return;
-			const url = checkStringIsUrl(entered);
-			if (url?.protocol !== "http:" && url?.protocol !== "https:") {
-				new Notice("Enter the feed's http or https address.");
-				return;
-			}
-			if (isPrivate && !isCredentialBearingUrl(url.href)) {
-				new Notice("Enter a private feed address.");
-				return;
-			}
-			const takenBy = () => {
-				const saved = get(savedFeeds);
-				const other = savedKey(saved, url.href);
-				return other === undefined || other === key ? undefined : saved[other].title;
-			};
-			const taken = isPrivate ? undefined : takenBy();
-			if (taken !== undefined) {
-				new Notice(`You already follow ${taken} at that address.`);
-				return;
-			}
 			try {
-				await feeds.channelAt({ url: url.href });
-			} catch {
-				// An error's text can carry the address, a secret.
-				new Notice("Could not load the feed at that address.");
-				return;
-			}
-			if (changed() || offline()) return;
-			// A sync can save the address for another podcast while it loads.
-			if (!isPrivate && takenBy() !== undefined) return;
-			try {
-				if (isPrivate) setPrivateFeedAddress(feed, url.href, feedUrls);
-				else {
-					// A private address pasted for a public feed is kept as a secret, never in settings.
-					const edited = internPrivateFeed({ ...feed, url: url.href }, feedUrls, key);
-					savedFeeds.update((all) => ({ ...all, [key]: edited }));
+				if (offline()) return;
+				const isPrivate = Boolean(feed.urlSecretId?.trim());
+				const entered = await askText(app, {
+					title: feed.title,
+					label: "Feed address",
+					cta: "Save",
+					value: publicFeedUrl(feed),
+				});
+				if (entered === null || changed() || offline()) return;
+				const url = checkStringIsUrl(entered);
+				if (url?.protocol !== "http:" && url?.protocol !== "https:") {
+					new Notice("Enter the feed's http or https address.");
+					return;
 				}
-			} catch (error) {
-				notStored(feed.title, error);
-				return;
+				if (isPrivate && !isCredentialBearingUrl(url.href)) {
+					new Notice("Enter a private feed address.");
+					return;
+				}
+				const takenBy = () => {
+					const saved = get(savedFeeds);
+					const other = savedKey(saved, url.href);
+					return other === undefined || other === key ? undefined : saved[other].title;
+				};
+				const taken = isPrivate ? undefined : takenBy();
+				if (taken !== undefined) {
+					new Notice(`You already follow ${taken} at that address.`);
+					return;
+				}
+				try {
+					await feeds.channelAt({ url: url.href });
+				} catch {
+					// An error's text can carry the address, a secret.
+					new Notice("Could not load the feed at that address.");
+					return;
+				}
+				if (changed() || offline()) return;
+				// A sync can save the address for another podcast while it loads.
+				if (!isPrivate && takenBy() !== undefined) return;
+				try {
+					if (isPrivate) setPrivateFeedAddress(feed, url.href, feedUrls);
+					else {
+						// A private address pasted for a public feed is kept as a secret, never in
+						// settings. The rest of the record is the one saved now, with a sync's changes.
+						const current = ownRecord(get(savedFeeds))[key];
+						const edited = internPrivateFeed(
+							{ ...current, url: url.href },
+							feedUrls,
+							key,
+						);
+						savedFeeds.update((all) => ({ ...all, [key]: edited }));
+					}
+				} catch (error) {
+					notStored(feed.title, error);
+					return;
+				}
+				void feeds.load([key], "network");
+			} finally {
+				unsubscribe();
 			}
-			void feeds.load([key], "network");
 		},
 
 		setQueued: (episode, queued) => (queued ? queue.add(episode) : queue.remove(episode)),
