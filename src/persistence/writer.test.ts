@@ -369,6 +369,37 @@ describe("DataFileWriter saves", () => {
 		expect(access.write).toHaveBeenCalledTimes(1);
 	});
 
+	it("schedules no retry of a failed read before anything was loaded", async () => {
+		const file = memoryFile();
+		const clock = manualClock();
+		const writer = new DataFileWriter<Doc>(file.access, clock, null);
+		file.access.read.mockRejectedValue(new Error("busy"));
+
+		await expect(writer.save()).rejects.toThrow("busy");
+
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("retries pending work once, 10 s after the last save, and nothing when nothing is pending", async () => {
+		const { access, clock, state, writer } = setup();
+		writer.retryPending();
+		expect(clock.pending()).toBe(0);
+
+		state.memory.defaultVolume = 0.5;
+		await writer.save();
+		clock.advance(4_000);
+		state.memory.defaultVolume = 0.25;
+		writer.retryPending();
+		writer.retryPending();
+		expect(clock.delays).toEqual([6_000]);
+
+		clock.advance(6_000);
+		clock.runAll();
+		await vi.waitFor(() => expect(state.disk?.defaultVolume).toBe(0.25));
+		expect(access.write).toHaveBeenCalledTimes(2);
+		expect(clock.pending()).toBe(0);
+	});
+
 	it("never mistakes progress it took from disk for an edit made here", async () => {
 		const { state, writer } = setup();
 		state.memory.defaultVolume = 0.5;
