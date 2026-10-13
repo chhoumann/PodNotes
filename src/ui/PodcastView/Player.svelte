@@ -550,6 +550,7 @@
 	.pn-player .pn-np-pod,
 	.pn-player .pn-chapnow {
 		display: inline-block;
+		min-width: 0;
 		max-width: 100%;
 		height: auto;
 		padding: 1px var(--size-2-3);
@@ -557,6 +558,7 @@
 		background: none;
 		box-shadow: none;
 		color: var(--text-muted);
+		font-size: inherit;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -587,11 +589,6 @@
 		color: var(--text-muted);
 		font-size: var(--font-ui-smaller);
 		font-variant-numeric: tabular-nums;
-	}
-
-	.pn-player .pn-chapnow {
-		min-width: 0;
-		font-size: inherit;
 	}
 
 	.r {
