@@ -696,6 +696,37 @@ describe("episode note and capture journeys", () => {
 		);
 	});
 
+	test("J-TS-15 Undo leaves an episode note written to since the capture, and says so", async () => {
+		const { obsidian } = getContext();
+		const journey = await setUp("Journey Undo Refused");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		await detachMarkdownTabs();
+		await playFromList(journey.show, ORIGINAL.title);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const created = await waitForText(
+			episodeNote,
+			(text) => text.endsWith(`\n${line}\n`),
+			"the capture in a new episode note",
+		);
+		await obsidian.dev.evalJsonAsync(
+			`app.vault.append(app.vault.getAbstractFileByPath(${jsLiteral(episodeNote)}), ${jsLiteral("My thought\n")}).then(() => true)`,
+		);
+		const written = `${created}My thought\n`;
+		await waitForText(episodeNote, (text) => text === written, "a line written after it");
+		await click(obsidian, ui.undo("Created Original Title"));
+
+		await obsidian.waitFor(
+			async () =>
+				(await notices(obsidian)).includes(
+					"The note changed since, so the timestamp stays",
+				),
+			{ timeoutMs: 5_000, intervalMs: 100, message: "the Notice that Undo left the note" },
+		);
+		expect(await readVaultText(obsidian, episodeNote)).toBe(written);
+	});
+
 	test("J-TS-14 Capture Timestamp with nothing loaded says to play an episode, and writes nothing", async () => {
 		const { obsidian, sandbox } = getContext();
 		const journey = await setUp("Journey Nothing Loaded");

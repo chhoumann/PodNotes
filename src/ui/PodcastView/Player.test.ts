@@ -126,6 +126,29 @@ describe("the full player", () => {
 		expect(services.navigation.current.page).toEqual({ kind: "local" });
 	});
 
+	test("a saved podcast's name opens its page; another's is plain text", async () => {
+		services.library.savedFeeds.set({
+			"Field Notes": {
+				title: "Field Notes",
+				url: "https://pod.test/feed.xml",
+				artworkUrl: "",
+			},
+		});
+		const { player } = await openPlayer();
+
+		await fireEvent.click(within(player).getByRole("button", { name: "Field Notes" }));
+
+		expect(services.navigation.current).toMatchObject({
+			page: { kind: "feed", key: "Field Notes" },
+			expanded: false,
+		});
+		services.library.savedFeeds.set({});
+		services.navigation.expand();
+		await tick();
+		expect(screen.queryByRole("button", { name: "Field Notes" })).toBeNull();
+		expect(screen.getByText("Field Notes")).toBeInTheDocument();
+	});
+
 	test("the rate pill shows the live rate once, and its menu sets another", async () => {
 		const { player } = await openPlayer();
 		services.player.setPlaybackRate(1.25);

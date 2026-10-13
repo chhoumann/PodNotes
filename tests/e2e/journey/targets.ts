@@ -36,6 +36,7 @@ export const ui = {
 	libraryHead: byCss("Library page", `${PLAYER_VIEW} h1.pn-head-title`, "Library"),
 	pageTitle: (title: string) =>
 		byCss(`${title} page`, `${PLAYER_VIEW} :is(h1.pn-head-title, .pn-title h1)`, title),
+	podcastPage: (title: string) => byCss(`${title}'s page`, `${PLAYER_VIEW} .pn-hero h1`, title),
 	back: byCss("Back button", `${PLAYER_VIEW} .pn-head button[aria-label^="Back to "]`),
 	backTo: (label: string) =>
 		byAttribute(`Back to ${label}`, `${PLAYER_VIEW} button`, "aria-label", `Back to ${label}`),
@@ -105,6 +106,11 @@ export const ui = {
 			"aria-label",
 			label,
 		),
+	playerTitle: byCss("full player's title", `${PLAYER_VIEW} section.pn-player h2.pn-np-title`),
+	playerPodcast: byCss(
+		"full player's podcast link",
+		`${PLAYER_VIEW} section.pn-player button.pn-np-pod`,
+	),
 	playerVolume: byCss("full player's volume", `${PLAYER_VIEW} section.pn-player button.pn-vol`),
 	/** It reads Timestamp, then Added for a moment after a capture. */
 	playerTimestamp: byCss(

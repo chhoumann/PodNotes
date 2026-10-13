@@ -237,6 +237,29 @@ describe("player journeys", () => {
 		expect(mini.tile?.width).toBe(mini.tile?.height);
 	});
 
+	test("Space pauses and plays with the focus on the player's text, and the podcast's name opens its page", async () => {
+		const { obsidian } = getContext();
+		await openPlayer([ONE]);
+		await click(obsidian, ui.playbackToggle);
+		await waitForPlayback(obsidian, (playback) => playback.seconds > 0.5, "playing");
+
+		await click(obsidian, ui.playerTitle);
+		expect(
+			await obsidian.dev.evalJson<string>(
+				'document.activeElement.closest("button, input, a, [role=slider]")?.outerHTML ?? "none"',
+			),
+			"the focused control",
+		).toBe("none");
+		await pressKey(obsidian, "Space");
+		await waitForPlayback(obsidian, (playback) => !playback.playing, "paused by Space");
+		await pressKey(obsidian, "Space");
+		await waitForPlayback(obsidian, (playback) => playback.playing, "playing again by Space");
+
+		await click(obsidian, ui.playerPodcast);
+		await waitUntilShown(obsidian, ui.podcastPage(FEED.title));
+		expect(await isShown(obsidian, ui.fullPlayer), "the player collapsed").toBe(false);
+	});
+
 	test("Escape closes the episode menu, then the volume slider, then the player, with a note open beside it", async () => {
 		const { obsidian, sandbox } = getContext();
 		const note = sandbox.path("Beside the player.md");
