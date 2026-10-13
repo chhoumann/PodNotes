@@ -537,6 +537,26 @@ describe("DataFileWriter lifecycle", () => {
 		expect(state.published).toHaveLength(0);
 	});
 
+	it("writes memory as it was at unload, not a change a later callback makes", async () => {
+		const { access, state, writer } = setup();
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		access.read.mockImplementationOnce(async () => {
+			await held;
+			return structuredClone(state.disk);
+		});
+		state.memory.defaultVolume = 0.5;
+
+		const unloading = writer.unload();
+		state.memory.playedEpisodes["Pod::Ep"] = { time: 99 };
+		writer.request();
+		release();
+		await unloading;
+		await writer.flush();
+
+		expect(state.writes).toEqual([{ ...doc(), defaultVolume: 0.5 }]);
+	});
+
 	it("still merges with disk when unload writes waiting progress", async () => {
 		const { clock, state, writer } = setup();
 		state.memory.playedEpisodes["Pod::Ep"] = { time: 42 };
