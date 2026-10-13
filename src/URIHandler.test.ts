@@ -819,6 +819,23 @@ describe("a link that carries the episode's guid", () => {
 		expect(media().currentTime).toBe(30);
 	});
 
+	test("plays the feed episode with the link's guid, not a loaded same-titled episode without a guid", async () => {
+		const linked: Episode = { ...retitled, streamUrl: "https://pod.example.com/finale.mp3" };
+		loadedAt(testEpisode, 10);
+		mockEpisodesAt.mockResolvedValue([
+			{ ...trailer, title: testEpisode.title, guid: "ep-2" },
+			linked,
+		]);
+
+		await link({ guid: "ep-1", time: "30" });
+		metadata();
+
+		expect(mockEpisodesAt).toHaveBeenCalledWith(testFeedUrl);
+		expect(state().episode).toMatchObject({ title: linked.title, guid: "ep-1" });
+		expect(media().src).toBe(linked.streamUrl);
+		expect(media().currentTime).toBe(30);
+	});
+
 	test("plays the titled episode, not the loaded one, when both share the link's guid", async () => {
 		const loadedTwin: Episode = { ...trailer, guid: "ep-1" };
 		const named: Episode = { ...testEpisode, guid: "ep-1" };
