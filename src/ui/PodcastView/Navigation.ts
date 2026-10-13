@@ -48,21 +48,23 @@ export class Navigation implements Readable<NavState> {
 	go(page: Page): void {
 		const { page: from, stack } = this.current;
 		if (samePage(from, page)) return this.collapse();
-		this.show(page, [...stack, { page: from, scrollTop: this.liveScrollTop }], 0);
+		this.show(page, [...stack, { page: from, scrollTop: this.liveScrollTop }], 0, false);
 	}
 
 	goRoot(kind: RootKind): void {
 		const { page, stack } = this.current;
 		if (page.kind === kind && stack.length === 0) return this.collapse();
-		this.show({ kind }, [], 0);
+		this.show({ kind }, [], 0, false);
 	}
 
 	back(): void {
 		const { page, stack } = this.current;
 		const previous = stack[stack.length - 1];
-		if (previous) return this.show(previous.page, stack.slice(0, -1), previous.scrollTop);
+		if (previous) {
+			return this.show(previous.page, stack.slice(0, -1), previous.scrollTop, false);
+		}
 		const parent = parentOf(page);
-		if (parent) return this.show(parent, [], 0);
+		if (parent) return this.show(parent, [], 0, false);
 		this.collapse();
 	}
 
@@ -88,7 +90,7 @@ export class Navigation implements Readable<NavState> {
 		page: Page,
 		stack: readonly StackEntry[],
 		scrollTop: number,
-		expanded = false,
+		expanded: boolean,
 	): void {
 		this.liveScrollTop = scrollTop;
 		this.state.set({ page, stack, expanded, scrollTop });
