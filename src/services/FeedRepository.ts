@@ -156,8 +156,9 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	episodeMetadata(key: FeedKey, episode: Episode): { transcripts: TranscriptLink[] } | undefined {
 		const feed = this.subscriptions.get(key);
 		const items = (feed && this.sources.get(feed.url)?.doc?.items) ?? [];
+		// A guid is unique only within its feed, and another feed can share the subscription's name.
 		const item =
-			findByGuid(items, episode.guid) ??
+			(feed?.url === episode.feedUrl ? findByGuid(items, episode.guid) : undefined) ??
 			items.find(({ streamUrl }) => streamUrl === episode.streamUrl);
 		return item && { transcripts: item.transcripts ?? [] };
 	}

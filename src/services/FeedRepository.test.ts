@@ -509,6 +509,21 @@ describe("FeedRepository", () => {
 		expect(t.repo.episodeMetadata("Alpha", rotated(third))).toBeUndefined();
 	});
 
+	test("does not match an episode of another feed by guid, even under the subscription's name", async () => {
+		const t = setup();
+		const transcripts = [{ url: "https://media.test/1.vtt", type: "text/vtt" }];
+		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1, { guid: "guid-1", transcripts })]));
+		const [subscribed] = t.feed("Alpha")!.episodes;
+
+		const namesake = {
+			...subscribed,
+			streamUrl: "https://namesake.test/1.mp3",
+			feedUrl: "https://namesake.test/feed.xml",
+		};
+
+		expect(t.repo.episodeMetadata("Alpha", namesake)).toBeUndefined();
+	});
+
 	test("episodes keep their array until the feed's document, title or artwork changes", async () => {
 		const t = setup();
 		await loaded(t, { Alpha: alpha, Beta: beta }, doc("Show", [item(1)]));
