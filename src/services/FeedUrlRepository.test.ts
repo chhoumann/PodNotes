@@ -47,6 +47,52 @@ describe("FeedUrlRepository", () => {
 		);
 	});
 
+	it("sets a URL on a second device under the reference the first device created", () => {
+		const firstDevice = storage();
+		const secondDevice = storage();
+		const id = new FeedUrlRepository(firstDevice.api).store("https://p.example/rss?auth=tok");
+		const repository = new FeedUrlRepository(secondDevice.api);
+
+		repository.attach(` ${id} `, "https://p.example/rss?auth=tok");
+		repository.attach(id, "https://p.example/rss?auth=tok");
+
+		expect([...secondDevice.values]).toEqual([[id, "https://p.example/rss?auth=tok"]]);
+		expect(firstDevice.values.get(id)).toBe("https://p.example/rss?auth=tok");
+	});
+
+	it("never attaches over another URL, a foreign ID, an unreadable slot or an unkept write", () => {
+		const id = "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef";
+		const occupied = storage({ [id]: "https://p.example/rss?auth=other" });
+		expect(() =>
+			new FeedUrlRepository(occupied.api).attach(id, "https://p.example/rss?auth=tok"),
+		).toThrow(/another URL/);
+		expect(occupied.values.get(id)).toBe("https://p.example/rss?auth=other");
+
+		const foreign = storage();
+		expect(() =>
+			new FeedUrlRepository(foreign.api).attach(
+				"podnotes-openai-api-key",
+				"https://p.example/rss?auth=tok",
+			),
+		).toThrow(/Not a PodNotes/);
+		expect(foreign.values.size).toBe(0);
+
+		const unreadable = storage();
+		(unreadable.api.getSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
+			throw new Error("locked");
+		});
+		expect(() =>
+			new FeedUrlRepository(unreadable.api).attach(id, "https://p.example/rss?auth=tok"),
+		).toThrow("locked");
+		expect(unreadable.api.setSecret).not.toHaveBeenCalled();
+
+		const unkept = storage();
+		(unkept.api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {});
+		expect(() =>
+			new FeedUrlRepository(unkept.api).attach(id, "https://p.example/rss?auth=tok"),
+		).toThrow(/did not retain/);
+	});
+
 	it("resolves only PodNotes-owned feed-url IDs and fails closed", () => {
 		const { api } = storage({
 			"podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef":
@@ -106,6 +152,15 @@ describe("FeedUrlRepository", () => {
 		);
 		expect(values.get("podnotes-feed-url-22345678-9abc-4def-8123-456789abcdef")).toBe("");
 		expect(values.get("podnotes-openai-api-key")).toBe("sk-keep");
+	});
+
+	it("keeps an ID that data.json references as an unknown map key", () => {
+		const id = "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef";
+		const url = "https://private.example/feed?token=KEEP";
+		const { api } = storage({ [id]: url });
+		const repository = new FeedUrlRepository(api);
+		repository.sweepOrphans({ futureFeedsByReference: { [id]: { title: "Private" } } });
+		expect(repository.resolve(id)).toBe(url);
 	});
 
 	it("survives a listSecrets failure without throwing", () => {

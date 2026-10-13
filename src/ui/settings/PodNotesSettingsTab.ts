@@ -37,7 +37,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
-import { protectPrivateFeeds } from "src/services/privateFeeds";
+import { privateFeedAddresses, protectPrivateFeeds } from "src/services/privateFeeds";
 import {
 	describeSecrets,
 	mergeImportedSettings,
@@ -839,6 +839,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				{ secrets: includeSecret ? secrets : undefined },
 				this.plugin.manifest.version,
 				new Date().toISOString(),
+				privateFeedAddresses(this.plugin.settings.savedFeeds, this.plugin.feedUrls),
 			);
 			const contents = JSON.stringify(envelope, null, 2);
 
@@ -934,7 +935,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				mergeImportedSettings(previous, { ...imported, ...secretReferences }),
 				this.plugin.feedUrls,
 			);
-			if (protection.failed.length > 0) throw new Error();
 			merged = protection.settings;
 		} catch (error) {
 			new Notice(

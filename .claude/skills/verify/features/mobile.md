@@ -9,8 +9,9 @@ systemd user manager, Node 22, npm, `uv`, `jq`, and `flock`.
 - Build and deploy this checkout, load PodNotes, and open its visible player.
 - Play a local vault audio file and add a feed through Settings.
 - Capture a timestamp through the mobile toolbar and test dormant startup.
-- Download an undownloaded remote episode of at least 150 MiB, checking the
-  file, persisted registration, native memory, and app/renderer survival.
+- Download the playing undownloaded remote episode of at least 150 MiB,
+  checking the file, persisted registration, native memory, app/renderer
+  survival, and that playback keeps its source and position.
 
 ## How to get to it (user POV)
 
@@ -68,8 +69,8 @@ For the issue checks:
    `https://lexfridman.com/feed/podcast/`, tap **Add**, and confirm **Remove**
    appears and the saved feed persists. This phone check does not prove a
    tablet layout.
-5. **Large download (#113):** open the podcast grid, select Lex Fridman
-   Podcast and episode **#501 - DHH**, then run:
+5. **Large download (#113, #389):** open the podcast grid, select Lex Fridman
+   Podcast and episode **#501 - DHH**, let it play, then run:
 
     ```bash
     npm run --silent mobile:download
@@ -79,6 +80,9 @@ For the issue checks:
     undownloaded episode of at least 150 MiB on subsequent runs. The probe runs
     the registered download command, waits for persisted registration, compares
     the native file stat with the registered size, and checks for partial files.
+    It fails unless the same media element keeps its source, reports no media
+    error, and advances 2 s past its position at registration. `playback` holds
+    the element state before, at registration, and after.
     Reports and raw native samples go under
     `.obsidian-e2e-artifacts/mobile/download-<UTC>/`.
 

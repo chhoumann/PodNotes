@@ -15,6 +15,7 @@ export type FixtureEpisode = Readonly<{
 export type FixtureFeed = Readonly<{
 	title: string;
 	slug: string;
+	query?: string;
 	artwork: boolean;
 	episodes: readonly FixtureEpisode[];
 }>;
@@ -65,7 +66,8 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 	});
 	const origin = `http://${FIXTURE_HOST}:${(server.address() as AddressInfo).port}`;
 
-	const feedUrl = (feed: FixtureFeed) => `${origin}/${feed.slug}/feed.xml`;
+	const feedPath = (feed: FixtureFeed) => `/${feed.slug}/feed.xml${feed.query ?? ""}`;
+	const feedUrl = (feed: FixtureFeed) => `${origin}${feedPath(feed)}`;
 	const artworkUrl = (feed: FixtureFeed) => `${origin}/${feed.slug}/artwork.svg`;
 	const mediaPath = (feed: FixtureFeed, episode: FixtureEpisode) =>
 		`/${feed.slug}/${feed.episodes.indexOf(episode) + 1}.wav`;
@@ -89,7 +91,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 				cache: true,
 			});
 		}
-		routes.set(`/${feed.slug}/feed.xml`, {
+		routes.set(feedPath(feed), {
 			type: "application/rss+xml",
 			body: Buffer.from(
 				rss(feed, feed.artwork ? artworkUrl(feed) : null, (episode) =>
@@ -110,7 +112,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		mediaUrl: (feed, episode) => `${origin}${mediaPath(feed, episode)}`,
 		audio,
 		holdFeed: (feed) => {
-			const path = `/${feed.slug}/feed.xml`;
+			const path = feedPath(feed);
 			let release!: () => void;
 			let complete!: () => void;
 			const ready = new Promise<void>((resolve) => {
