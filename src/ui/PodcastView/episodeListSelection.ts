@@ -1,6 +1,5 @@
 import { newestFirst } from "src/persistence/dateCodec";
 import type { FeedError, FeedKey, FeedState } from "src/services/FeedRepository";
-import { offlinePlayable } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
@@ -13,6 +12,7 @@ import {
 import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
 import { getFinishedPlayedEpisodeRecords, type PlayedEpisodeMap } from "src/utility/episodeStatus";
 import { ownRecord } from "src/utility/ownRecord";
+import { availabilityOf, type Downloads } from "./episodeRow";
 import type { ListPage } from "./pages";
 
 /** A row of a list. A Played row names the record it shows, which can be under a legacy key. */
@@ -92,20 +92,17 @@ export function selectListEntries(page: ListPage, library: ListSnapshot): ListEn
 	]);
 }
 
-/**
- * The entries that play offline, then the rest, each in the order given. A Played
- * record that matched no episode needs a connection too.
- */
+/** The entries whose rows play offline, then the rest, each in the order given. */
 export function splitOffline<T extends EpisodeListEntry>(
 	entries: readonly T[],
-	downloads: Record<string, DownloadedEpisode[]>,
+	downloads: Downloads,
 ): { readonly offline: T[]; readonly online: T[] } {
 	const offline: T[] = [];
 	const online: T[] = [];
 	for (const entry of entries) {
-		(entry.isAvailable && offlinePlayable(entry.episode, downloads) ? offline : online).push(
-			entry,
-		);
+		const plays =
+			availabilityOf(entry.episode, entry.isAvailable, false, downloads) === "available";
+		(plays ? offline : online).push(entry);
 	}
 	return { offline, online };
 }
