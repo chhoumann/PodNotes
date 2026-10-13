@@ -82,8 +82,13 @@ export interface Head {
 	readonly title?: string;
 	/** The title at the top of the page's scroller. */
 	readonly pageTitle?: string;
-	/** The compact Library's Add podcast and Settings buttons. */
-	readonly libraryActions: boolean;
+	/**
+	 * The head's right edge: the compact Library's Add podcast and Settings, the
+	 * wide Library's Refresh all, or a podcast's menu.
+	 */
+	readonly action?: "library" | "refresh-all" | "podcast";
+	/** Add podcast's search field stands in the title's place. */
+	readonly search?: true;
 }
 
 /**
@@ -97,16 +102,23 @@ export function headFor(
 	previous: Page | undefined,
 	feeds: ReadonlyMap<FeedKey, FeedState>,
 ): Head {
+	const { kind } = page;
+	const search = kind === "add" || undefined;
 	if (layout === "wide" && isRoot(page)) {
-		return { title: rootItem(page.kind).label, libraryActions: false };
+		if (search) return { search };
+		return {
+			title: rootItem(page.kind).label,
+			action: kind === "library" ? "refresh-all" : undefined,
+		};
 	}
 	const back = previous ?? parentOf(page);
 	const label = pageLabel(page, feeds);
 	return {
 		back: back ? pageLabel(back, feeds) : undefined,
-		title: page.kind === "library" ? label : undefined,
-		pageTitle: page.kind === "library" || page.kind === "feed" ? undefined : label,
-		libraryActions: page.kind === "library",
+		title: kind === "library" ? label : undefined,
+		pageTitle: kind === "library" || kind === "feed" || search ? undefined : label,
+		action: kind === "library" ? "library" : kind === "feed" ? "podcast" : undefined,
+		search,
 	};
 }
 

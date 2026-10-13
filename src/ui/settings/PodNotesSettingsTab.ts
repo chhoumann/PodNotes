@@ -10,7 +10,7 @@ import {
 	type SettingDefinitionItem,
 } from "obsidian";
 import type PodNotes from "../../main";
-import PodcastQueryGrid from "./PodcastQueryGrid.svelte";
+import { pickFile } from "../pickFile";
 import PlaylistManager from "./PlaylistManager.svelte";
 import { mount, unmount } from "svelte";
 import {
@@ -64,7 +64,6 @@ interface SecretReferenceSaveResult {
 type ImportMutationResult = "failed" | "applied" | "complete";
 
 const SETTINGS_SEARCH_ALIASES = [
-	"Search podcasts",
 	"Playlists",
 	"Keep a queue",
 	"Latest episodes per podcast",
@@ -228,7 +227,6 @@ function renderMarkdownPreview(app: App, markdown: string, el: HTMLElement): voi
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
-	private podcastQueryGrid: Record<string, unknown> | null = null;
 	private playlistManager: Record<string, unknown> | null = null;
 	private settingsMutationTail: Promise<void> = Promise.resolve();
 	private credentialSaveGenerations: Record<SecretReferenceKey, number> = {
@@ -267,16 +265,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		settingsContainer.classList.add("settings-container");
 
 		new Setting(settingsContainer)
-			.setName("Search Podcasts")
-			.setHeading()
-			.setDesc("Search for podcasts by name or custom feed URL.");
-
-		const queryGridContainer = settingsContainer.createDiv();
-		this.podcastQueryGrid = mount(PodcastQueryGrid, {
-			target: queryGridContainer,
-		});
-
-		new Setting(settingsContainer)
 			.setName("Playlists")
 			.setHeading()
 			.setDesc("Add playlists to gather podcast episodes.");
@@ -304,11 +292,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private unmountSettingsComponents(): void {
-		if (this.podcastQueryGrid) {
-			void unmount(this.podcastQueryGrid);
-			this.podcastQueryGrid = null;
-		}
-
 		if (this.playlistManager) {
 			void unmount(this.playlistManager);
 			this.playlistManager = null;
@@ -686,7 +669,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			.setDesc("Import podcasts from an OPML file.")
 			.addButton((button) =>
 				button.setButtonText("Import").onClick(() => {
-					this.pickFile(".opml", importOPML, {
+					pickFile(".opml", importOPML, {
 						tooLargeMessage: "That file is too large to be an OPML file.",
 					});
 				}),
@@ -735,7 +718,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			)
 			.addButton((button) =>
 				button.setButtonText("Import").onClick(() => {
-					this.pickFile(".json", (contents) => this.handleSettingsImport(contents));
+					pickFile(".json", (contents) => this.handleSettingsImport(contents));
 				}),
 			);
 
@@ -773,58 +756,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					void this.handleSettingsExport(fileName, includeSecret);
 				}),
 			);
-	}
-
-	private pickFile(
-		accept: string,
-		onContents: (contents: string) => void | Promise<void>,
-		options: { maxBytes?: number; tooLargeMessage?: string } = {},
-	): void {
-		// Both pickers read small text files, so cap the size before reading the
-		// whole thing into memory. The cap and its message are per-caller so OPML
-		// import doesn't inherit the settings-file copy.
-		const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
-		const tooLargeMessage =
-			options.tooLargeMessage ?? "That file is too large to be a PodNotes settings file.";
-
-		const fileInput = activeDocument.body.createEl("input");
-		fileInput.type = "file";
-		fileInput.accept = accept;
-		fileInput.setCssStyles({ display: "none" });
-
-		// The native picker firing "cancel" (no selection) never triggers
-		// "change", so clean up the orphaned input then too.
-		fileInput.oncancel = () => fileInput.remove();
-
-		fileInput.onchange = (e: Event) => {
-			const target = e.target as HTMLInputElement;
-			const file = target.files?.[0];
-			fileInput.remove();
-
-			if (!file) {
-				new Notice("No file selected.");
-				return;
-			}
-
-			if (file.size > maxBytes) {
-				new Notice(tooLargeMessage);
-				return;
-			}
-
-			const reader = new FileReader();
-			reader.onload = (event) => {
-				const contents = event.target?.result;
-				if (typeof contents === "string") {
-					void onContents(contents);
-				} else {
-					new Notice("Could not read the selected file.");
-				}
-			};
-			reader.onerror = () => new Notice("Could not read the selected file.");
-			reader.readAsText(file);
-		};
-
-		fileInput.click();
 	}
 
 	private async handleSettingsExport(fileName: string, includeSecret: boolean): Promise<void> {

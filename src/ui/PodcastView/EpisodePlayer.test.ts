@@ -9,8 +9,10 @@ import { DEFAULT_SETTINGS } from "src/constants";
 import type { PlayerState } from "src/player/PlayerController";
 import { plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
+import { pluginLibrary } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
 import EpisodePlayer from "./EpisodePlayer.svelte";
+import { Navigation } from "./Navigation";
 
 const episode: Episode = {
 	title: "Current Episode",
@@ -46,8 +48,10 @@ function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) 
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() },
 		player,
+		navigation: new Navigation(),
 		// A queued episode's menu reads the plugin's queue, so the player shows that one.
-		library: { queue },
+		library: pluginLibrary,
+		hasNote: () => false,
 	} as never;
 	return {
 		...render(WithServices, { target, props: { services, component: EpisodePlayer } }),

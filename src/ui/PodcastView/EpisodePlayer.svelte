@@ -6,21 +6,23 @@
 	import Button from "../obsidian/Button.svelte";
 	import Slider from "../obsidian/Slider.svelte";
 	import Loading from "./Loading.svelte";
-	import EpisodeList from "./EpisodeList.svelte";
 	import ChapterList from "./ChapterList.svelte";
 	import Progressbar from "../common/Progressbar.svelte";
-	import spawnEpisodeContextMenu from "./spawnEpisodeContextMenu";
 	import type { Episode } from "src/types/Episode";
 	import type { Chapter } from "src/types/Chapter";
 	import Image from "../common/Image.svelte";
 	import { useServices } from "./context";
+	import EpisodeRow from "./EpisodeRow.svelte";
+	import { anchorOf, episodeMenu, openEpisode, showMenu } from "./menus";
+	import { getEpisodeKey } from "src/utility/episodeKey";
 	import {
 		PLAYBACK_RATE_MAX,
 		PLAYBACK_RATE_MIN,
 		PLAYBACK_RATE_STEP,
 	} from "src/utility/playbackRate";
 
-	const { player, api, settings, library } = useServices();
+	const services = useServices();
+	const { player, api, settings, library } = services;
 	const { queue } = library;
 	const playerState = player.state;
 
@@ -103,21 +105,9 @@
 		}
 	}
 
-	function handleContextMenuEpisode({
-		detail: { event, episode },
-	}: CustomEvent<{ episode: Episode; event: MouseEvent }>) {
-		spawnEpisodeContextMenu(episode, event, undefined, undefined, true);
-	}
-
 	function handleContextMenuEpisodeImage(event: MouseEvent) {
-		spawnEpisodeContextMenu(episode, event, {
-			play: true,
-			markPlayed: true,
-		});
-	}
-
-	function handleClickEpisode(event: CustomEvent<{ episode: Episode }>) {
-		player.play(event.detail.episode);
+		const at = anchorOf(event);
+		showMenu(episodeMenu(episode, services, { place: "player", at }), at);
 	}
 </script>
 
@@ -262,17 +252,18 @@
 		/>
 
 		{#if showQueue}
-			<EpisodeList
-				episodes={$queue.episodes}
-				showListMenu={false}
-				showThumbnails={true}
-				on:contextMenuEpisode={handleContextMenuEpisode}
-				on:clickEpisode={handleClickEpisode}
-			>
-				<svelte:fragment slot="header">
-					<h3>Queue</h3>
-				</svelte:fragment>
-			</EpisodeList>
+			<h3>Queue</h3>
+			<div class="pn-list" role="list">
+				{#each $queue.episodes as queued (getEpisodeKey(queued))}
+					<EpisodeRow
+						episode={queued}
+						cover
+						onplay={() => openEpisode(services, queued)}
+						onmenu={(at) =>
+							showMenu(episodeMenu(queued, services, { place: "queue", at }), at)}
+					/>
+				{/each}
+			</div>
 		{/if}
 	</div>
 </div>
@@ -571,24 +562,10 @@
 		padding: 0 0.5rem;
 	}
 
-	:global(.episode-player .episode-list-view-container) {
-		height: auto;
-		overflow: visible;
-	}
-
-	:global(.episode-player .podcast-episode-list) {
-		flex: 0 0 auto;
-		overflow: visible;
-	}
-
 	.lists-container {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
 		padding-bottom: 0.5rem;
-	}
-
-	:global(.lists-container .episode-list-view-container) {
-		height: auto;
 	}
 </style>

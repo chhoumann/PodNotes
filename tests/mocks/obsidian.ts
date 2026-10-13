@@ -489,6 +489,15 @@ export class MenuItem {
 	setTitle() {
 		return this;
 	}
+	setChecked(_checked: boolean | null) {
+		return this;
+	}
+	setWarning(_warning: boolean) {
+		return this;
+	}
+	setDisabled(_disabled: boolean) {
+		return this;
+	}
 	onClick(_callback: () => void) {
 		return this;
 	}

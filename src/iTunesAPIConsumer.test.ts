@@ -59,26 +59,32 @@ describe("queryiTunesPodcasts", () => {
 		expect(url.searchParams.get("limit")).toBe("20");
 	});
 
-	it("maps shows to feeds and drops shows without a public RSS feed", async () => {
+	it("maps shows to feeds with their episode counts and drops shows without a public RSS feed", async () => {
 		// The first result, Apple News Today, is Apple-hosted and has no feedUrl.
 		fetchJsonMock.mockResolvedValue(searchAppleNews);
 
 		await expect(queryiTunesPodcasts("apple news")).resolves.toEqual([
 			{
-				title: "Apple News In Conversation",
-				url: "https://apple.news/podcast/apple_news_in_conversation",
-				artworkUrl:
-					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/21/e5/93/21e59350-3d63-8dfb-f8a1-c762f85e069c/mza_13661945558824532647.jpg/100x100bb.jpg",
-				collectionId: "1577591053",
-				author: "Apple News",
+				feed: {
+					title: "Apple News In Conversation",
+					url: "https://apple.news/podcast/apple_news_in_conversation",
+					artworkUrl:
+						"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/21/e5/93/21e59350-3d63-8dfb-f8a1-c762f85e069c/mza_13661945558824532647.jpg/100x100bb.jpg",
+					collectionId: "1577591053",
+					author: "Apple News",
+				},
+				episodes: 259,
 			},
 			{
-				title: "Apple Quarterly Earnings Call",
-				url: "https://rss.art19.com/apple-quarterly-earnings-call",
-				artworkUrl:
-					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/72/23/72/72237247-8b65-6174-8aa2-0a3691352b02/mza_5761462598177267980.jpeg/100x100bb.jpg",
-				collectionId: "74942331",
-				author: "Apple Inc.",
+				feed: {
+					title: "Apple Quarterly Earnings Call",
+					url: "https://rss.art19.com/apple-quarterly-earnings-call",
+					artworkUrl:
+						"https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/72/23/72/72237247-8b65-6174-8aa2-0a3691352b02/mza_5761462598177267980.jpeg/100x100bb.jpg",
+					collectionId: "74942331",
+					author: "Apple Inc.",
+				},
+				episodes: 1,
 			},
 		]);
 	});
@@ -87,9 +93,9 @@ describe("queryiTunesPodcasts", () => {
 		// Planet Money's feed comes back as three shows: ranks 1, 4, and 5.
 		fetchJsonMock.mockResolvedValue(searchPlanetMoney);
 
-		const feeds = await queryiTunesPodcasts("planet money");
+		const shows = await queryiTunesPodcasts("planet money");
 
-		expect(feeds.map(({ collectionId, url }) => [collectionId, url])).toEqual([
+		expect(shows.map(({ feed: { collectionId, url } }) => [collectionId, url])).toEqual([
 			["290783428", "https://feeds.npr.org/510289/podcast.xml"],
 			["1320118593", "https://feeds.npr.org/510325/podcast.xml"],
 			["1578892272", "https://feeds.npr.org/510362/podcast.xml"],
@@ -159,12 +165,15 @@ describe("lookupiTunesPodcast", () => {
 		fetchJsonMock.mockResolvedValue(lookupHubermanLab);
 
 		await expect(lookupiTunesPodcast("1545953110")).resolves.toEqual({
-			title: "Huberman Lab",
-			url: "https://feeds.megaphone.fm/hubermanlab",
-			artworkUrl:
-				"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/100x100bb.jpg",
-			collectionId: "1545953110",
-			author: "Scicomm Media",
+			feed: {
+				title: "Huberman Lab",
+				url: "https://feeds.megaphone.fm/hubermanlab",
+				artworkUrl:
+					"https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9a/d3/19/9ad31912-0b5a-a16e-2d7c-9fd074698b9c/mza_8994222203629500925.jpg/100x100bb.jpg",
+				collectionId: "1545953110",
+				author: "Scicomm Media",
+			},
+			episodes: 448,
 		});
 		const url = requestedUrl();
 		expect(url.origin + url.pathname).toBe("https://itunes.apple.com/lookup");

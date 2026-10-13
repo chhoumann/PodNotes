@@ -55,7 +55,6 @@ describe("episodeListEntry", () => {
 		expect(entries).toHaveLength(1);
 		expect(entries[0]).toMatchObject({
 			isAvailable: false,
-			unavailableReason: "Unavailable in current feeds",
 			episode: {
 				title: "Missing",
 				podcastName: "Design Podcast",

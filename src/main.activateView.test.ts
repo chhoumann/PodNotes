@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import PodNotes from "./main";
-import { dataFileText } from "../tests/mocks/dataFileWriter";
-import { VIEW_TYPE } from "./constants";
+import { attachDataFileWriter, dataFileText } from "../tests/mocks/dataFileWriter";
+import { DEFAULT_SETTINGS, VIEW_TYPE } from "./constants";
+import { encodePodNotesData } from "./persistence/podNotesData";
 import { App, Notice, Platform, type WorkspaceLeaf } from "obsidian";
 import * as obsidian from "obsidian";
 import { tick } from "svelte";
@@ -121,6 +122,7 @@ describe("PodNotes.onLayoutReady", () => {
 			getLeavesOfType: vi.fn().mockReturnValue(existingLeaves),
 			getRightLeaf: vi.fn().mockReturnValue(rightLeaf),
 			detachLeavesOfType: vi.fn(),
+			revealLeaf: vi.fn().mockResolvedValue(undefined),
 		};
 
 		const plugin = Object.create(PodNotes.prototype) as PodNotes;
@@ -149,6 +151,63 @@ describe("PodNotes.onLayoutReady", () => {
 		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({
 			type: VIEW_TYPE,
 		});
+	});
+
+	/** Starts PodNotes in the mobile app on a vault whose data.json holds `disk`, or none. */
+	async function startOnMobile(disk?: unknown) {
+		Object.assign(Platform, {
+			isDesktop: false,
+			isDesktopApp: false,
+			isMobile: true,
+			isMobileApp: true,
+			isPhone: true,
+		});
+		const started = setupLayoutPlugin();
+		Object.assign(started.plugin, {
+			app: {
+				...started.plugin.app,
+				secretStorage: new obsidian.SecretStorage(),
+				vault: {
+					adapter: {
+						exists: vi.fn(async () => disk !== undefined),
+						read: vi.fn(async () => (disk === undefined ? "" : dataFileText(disk))),
+					},
+				},
+			},
+			manifest: { dir: ".obsidian/plugins/podnotes" },
+			isReady: true,
+			// onload leaves the view dormant in the mobile app.
+			podcastViewMountEnabled: false,
+			settings: structuredClone(DEFAULT_SETTINGS),
+			persistenceUnknownFields: {},
+			loadData: vi.fn(async () => structuredClone(disk) ?? null),
+			saveData: vi.fn(async (data: unknown) => {
+				disk = structuredClone(data);
+			}),
+		});
+		attachDataFileWriter(started.plugin);
+		await started.plugin.loadSettings();
+		started.plugin.onLayoutReady();
+		await tick();
+		return started;
+	}
+
+	it("opens the view once when the mobile app enables PodNotes for the first time", async () => {
+		const { workspace, rightLeaf, plugin } = await startOnMobile();
+
+		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE, active: true });
+		expect(workspace.revealLeaf).toHaveBeenCalledWith(rightLeaf);
+		expect(plugin.shouldMountPodcastView()).toBe(true);
+	});
+
+	it("keeps PodNotes closed on a later mobile start", async () => {
+		const { workspace, rightLeaf, plugin } = await startOnMobile(
+			encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+		);
+
+		expect(rightLeaf?.setViewState).not.toHaveBeenCalled();
+		expect(workspace.revealLeaf).not.toHaveBeenCalled();
+		expect(plugin.shouldMountPodcastView()).toBe(false);
 	});
 
 	it("does not auto-create the startup view in the mobile app", () => {

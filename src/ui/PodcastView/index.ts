@@ -7,10 +7,13 @@ import { pageKey, parsePage } from "./pages";
 import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
 import { derived } from "svelte/store";
+import { getPodcastNote } from "src/createPodcastNote";
+import { createLibraryActions } from "src/services/library";
 import {
 	downloadedEpisodes,
 	episodeListLimit,
 	favorites,
+	hidePlayedEpisodes,
 	localFiles,
 	playedEpisodes,
 	playlists,
@@ -18,6 +21,7 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
+import { PodcastSearch } from "./podcastSearch";
 
 export class MainView extends ItemView {
 	constructor(
@@ -96,10 +100,18 @@ export class MainView extends ItemView {
 				playedEpisodes,
 				downloadedEpisodes,
 				episodeListLimit,
+				hidePlayedEpisodes,
 			},
+			actions: createLibraryActions({
+				app: this.app,
+				feeds: plugin.feeds,
+				feedUrls: plugin.feedUrls,
+			}),
+			search: new PodcastSearch(plugin.feeds),
 			settings: derived(pluginStore, ($plugin) => $plugin.settings),
 			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
+			hasNote: (episode) => getPodcastNote(episode) !== null,
 		};
 	}
 
