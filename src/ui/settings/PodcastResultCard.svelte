@@ -6,11 +6,16 @@
 
 	export let podcast: PodcastFeed;
 	export let isSaved = false;
+	export let needsAddress = false;
 
 	const dispatch = createEventDispatcher();
 </script>
 
-<div class="podcast-result-card" transition:fade={{ duration: 300 }}>
+<div
+	class="podcast-result-card"
+	class:needs-address={needsAddress}
+	transition:fade={{ duration: 300 }}
+>
 	<div class="podcast-artwork-container">
 		<img
 			src={podcast.artworkUrl}
@@ -25,6 +30,13 @@
 		{/if}
 	</div>
 	<div class="podcast-actions">
+		{#if needsAddress}
+			<Button
+				text="Set feed address"
+				ariaLabel={`Set feed address for ${podcast.title}`}
+				on:click={() => dispatch("setFeedAddress", { podcast })}
+			/>
+		{/if}
 		{#if isSaved}
 			<Button
 				text="Remove"
@@ -63,6 +75,16 @@
 		border-color: var(--interactive-accent);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 		transform: translateY(-1px);
+	}
+
+	.needs-address {
+		display: grid;
+		grid-template-columns: 4rem minmax(0, 1fr);
+	}
+
+	.needs-address .podcast-actions {
+		grid-column: 1 / -1;
+		justify-content: flex-end;
 	}
 
 	.podcast-artwork-container {
@@ -117,11 +139,12 @@
 	 * button styling with a text label. A label is always visible and is sized
 	 * correctly per platform (Obsidian renders larger buttons on mobile/iPad),
 	 * unlike the previous icon-only button whose glyph failed to render on iPad
-	 * and left an empty, unrecognisable tap target — the root cause of #109.
+	 * and left an empty, unrecognisable tap target - the root cause of #109.
 	 */
 	.podcast-actions {
 		display: flex;
 		align-items: center;
+		gap: 0.5rem;
 		flex-shrink: 0;
 	}
 </style>
