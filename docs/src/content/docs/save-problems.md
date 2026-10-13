@@ -36,14 +36,13 @@ If the notice also says that PodNotes started with default settings, see [A read
 
 Your changes stay in memory. While you have unsaved changes, PodNotes reads the file again every 10 seconds. Without unsaved changes, it reads the file again when the file changes. When PodNotes can read the file again, the notice closes, and PodNotes saves your changes merged with the file. If you restart Obsidian before then, the changes in memory are lost.
 
-If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. Waiting for sync is unlikely to help then. Fix its cause, such as a full disk or a folder that does not allow writes. If the read notice does not close within a minute after you fixed the cause, go to [Write a new data.json](#write-a-new-datajson).
+To make PodNotes read the file again:
 
-Otherwise, try these steps first:
+1. Let your sync service finish writing the file.
+2. Check the free disk space, and that the file named in the notice and its folder allow reads and writes. Fix any problem you find.
+3. Wait a minute. If the read notice is still there, go to [Write a new data.json](#write-a-new-datajson).
 
-1. Let your sync service finish.
-2. Check the free disk space and the permissions of the file named in the notice.
-
-If the notice still stays, go to [Write a new data.json](#write-a-new-datajson).
+If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. The read notice then usually stays until you write a new `data.json`.
 
 #### Write a new data.json
 

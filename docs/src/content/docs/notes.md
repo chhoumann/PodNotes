@@ -127,10 +127,12 @@ So a note with both properties keeps working after you rename it or move it to a
 
 To get a note that you can rename and move:
 
-1. In the podcast's episode list, open the episode's menu. If it shows **Open Note**, PodNotes still finds the old note. Move the old note to a folder that PodNotes does not use for episode notes, such as a new `Archive` folder, and open the menu again.
-2. Select **Create Note**. Use the menu, not the command, because an episode that PodNotes restored from an older version can lack the ID from its feed.
-3. Check that the new note's properties include `guid` and `feedUrl`. If either is missing, keep the new note at its path. The cases after these steps explain why PodNotes may not add them.
-4. Copy your text from the old note into the new one, below its properties.
+1. In the podcast's episode list, open the episode's menu.
+2. If the menu shows **Open Note**, PodNotes still finds the old note. Move the old note to a folder that PodNotes does not use for episode notes, such as a new `Archive` folder.
+3. Open the episode's menu again.
+4. Select **Create Note**. Use the menu, not the command, because an episode that PodNotes restored from an older version can lack the ID from its feed.
+5. Check that the new note's properties include `guid` and `feedUrl`. If either is missing, keep the new note at its path. The cases after these steps explain why PodNotes may not add them.
+6. Copy your text from the old note into the new one, below its properties.
 
 PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. PodNotes adds neither property in these cases:
 

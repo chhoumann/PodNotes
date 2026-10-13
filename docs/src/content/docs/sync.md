@@ -28,7 +28,7 @@ PodNotes merges the changes your devices make, so you can switch devices without
 2. Note the time where you stopped.
 3. Wait until your sync service finishes uploading.
 4. On the device you are switching to, wait until sync finishes.
-5. Look at this device's player, and do one of these:
+5. Before you play or switch apps, look at this device's player, and do one of these:
    - If it shows another episode, select your episode in its podcast's list. It plays from the synced time.
    - If it shows your episode at another time, move the progress bar to the time you noted, and play it.
    - If it shows your episode at the time you noted, play it.
@@ -51,7 +51,7 @@ Episodes match by podcast name and title, so episodes with the same title from d
 
 Sync never starts or pauses playback on this device. An episode you played since Obsidian started keeps this device's position while it stays in the player, as step 5 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains.
 
-### A device that starts before sync finishes
+### A new device that starts before sync finishes
 
 A device that starts PodNotes before sync delivers `data.json` starts a library of its own. When the two files meet, PodNotes combines the two libraries:
 

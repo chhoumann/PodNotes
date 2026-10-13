@@ -54,7 +54,7 @@ The **Queue** list under the player has none of these controls.
 
 When PodNotes cannot fetch a podcast's feed, for example offline, the podcast's episode list shows **Feed didn't load** with a **Retry** button. PodNotes lists the episodes from the last copy of the feed on this device, however old the copy is. That copy is the one PodNotes fetched since Obsidian started, or the one it cached if **Cache podcast feeds** is on. Without a copy, PodNotes lists the podcast's downloaded episodes. If there are none, the list is empty.
 
-For a private feed whose address is not on this device, the list shows **Address not on this device** and **Set feed address** instead. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
+For a private feed whose address is not on this device, **Feed didn't load** comes with **Address not on this device** and a **Set feed address** button instead of **Retry**. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 
 ## <span id="player"></span>Play an episode
 
