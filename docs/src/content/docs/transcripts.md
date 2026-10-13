@@ -18,7 +18,7 @@ To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key), or a Deepgra
 
 A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
-To transcribe the audio even when the feed publishes a transcript, first rename or move any transcript note you saved for the episode, because PodNotes does not replace an existing transcript. Then run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key. A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:** with OpenAI or **1:** with Deepgram.
+To transcribe the audio even when the feed publishes a transcript, first rename, move, or delete any transcript note you saved for the episode, because PodNotes does not replace an existing transcript. Then run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key. A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:** with OpenAI or **1:** with Deepgram.
 
 ## Transcripts that feeds publish
 
@@ -29,7 +29,7 @@ Some feeds list a transcript for each episode with the Podcasting 2.0 `<podcast:
 - When the transcript names its speakers, each speaker's turn starts with **Speaker label format**, even with **Speaker diarization** off.
 - A plain text transcript, or an HTML transcript without times, has paragraphs but no times.
 
-With the default settings, a transcript with times and speakers looks like this:
+With the default settings, the Markdown of a transcript with times and speakers looks like this:
 
 ```md wrap
 [00:00:00](obsidian://podnotes?...) **Ben:** Welcome back to the show. Today we look at how the company started.

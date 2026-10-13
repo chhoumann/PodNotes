@@ -45,7 +45,7 @@ PodNotes inserts a timestamp link at the cursor, or shows "Play an episode to ca
 
 On Android, Obsidian does not pass headset buttons or lock screen controls to PodNotes, so they do not work there. To capture on Android, use [a capture button in the editor toolbar](#add-a-capture-button-to-the-editor-toolbar). On an iPhone or iPad, the controls should work as on a computer, but they are not tested yet.
 
-Where your system passes them on, these controls work while an episode is loaded, playing or paused:
+On a computer, and on an iPhone or iPad, these controls work while an episode is loaded, playing or paused:
 
 | Control | What it does |
 | --- | --- |

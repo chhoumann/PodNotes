@@ -81,7 +81,7 @@ Captures and links behave differently in these cases:
 - In a table cell, PodNotes escapes pipe characters and turns line breaks into spaces.
 - A link finds its episode by the ID the feed gives it, so it still works after the podcast renames the episode. A link without that ID, such as one captured before PodNotes 2.22.0, finds its episode by title, despite changes in case, punctuation, or word order. If the podcast renames such an episode with different words, the link shows "Episode not found".
 - When PodNotes cannot fetch the feed, a link plays the episode from the copy of the feed that PodNotes saved on this device, if the copy lists the episode.
-- A link to a private feed works on each device where you set that feed's address. See [Use private feeds](/private-feeds/).
+- A link that PodNotes captures for a private feed works on each device where you set that feed's address. See [Use private feeds](/private-feeds/).
 - A link to a local file needs the file in your vault. If the file moved, PodNotes plays the one vault file with the same name. With no such file, it shows `No vault file is named "<name>".` With several, it asks you to update the link with the correct path. See [Downloads and local files](/local_files/).
 
 ## Reference
