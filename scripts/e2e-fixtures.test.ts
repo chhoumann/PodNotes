@@ -49,3 +49,31 @@ it("releases a held feed when its connection closes before the response finishes
 		await server.stop();
 	}
 });
+
+it("answers a failing feed with a server error, and the feed again once restored", async () => {
+	const feed = { title: "Failing feed", slug: "failing", artwork: false, episodes: [] };
+	const server = await startFixtureServer([feed]);
+	const url = new URL(server.feedUrl(feed));
+	url.hostname = "127.0.0.1";
+	const get = () =>
+		new Promise<{ status?: number; body: string }>((resolve, reject) => {
+			http.get(url, (response) => {
+				let body = "";
+				response.setEncoding("utf8").on("data", (chunk) => {
+					body += chunk;
+				});
+				response.on("end", () => resolve({ status: response.statusCode, body }));
+			}).on("error", reject);
+		});
+	try {
+		const restore = server.failFeed(feed);
+		expect(await get()).toEqual({ status: 503, body: "" });
+		restore();
+		const answered = await get();
+		expect(answered.status).toBe(200);
+		expect(answered.body).toContain("<title>Failing feed</title>");
+		expect(server.requests()).toEqual([url.pathname, url.pathname]);
+	} finally {
+		await server.stop();
+	}
+});

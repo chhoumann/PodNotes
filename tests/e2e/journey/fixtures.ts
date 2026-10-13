@@ -37,6 +37,8 @@ export type FixtureServer = Readonly<{
 	artworkUrl(feed: FixtureFeed): string;
 	audio(feed: FixtureFeed, episode: FixtureEpisode): Buffer;
 	holdFeed(feed: FixtureFeed): () => Promise<void>;
+	/** Answers the feed with a server error until the returned restore runs. */
+	failFeed(feed: FixtureFeed): () => void;
 	/** Serves `episode` under `title` from now on, with its GUID and media unchanged. */
 	retitle(feed: FixtureFeed, episode: FixtureEpisode, title: string): void;
 	requests(): readonly string[];
@@ -56,9 +58,14 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		string,
 		{ ready: Promise<void>; release: () => void; done: Promise<void>; complete: () => void }
 	>();
+	const failing = new Set<string>();
 	const server = http.createServer((request, response) => {
 		const path = request.url ?? "";
 		requests.push(path);
+		if (failing.has(path)) {
+			response.writeHead(503).end();
+			return;
+		}
 		const route = routes.get(path);
 		if (!route) {
 			response.writeHead(404).end();
@@ -160,6 +167,11 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 				release();
 				await done;
 			};
+		},
+		failFeed: (feed) => {
+			const path = feedPath(feed);
+			failing.add(path);
+			return () => failing.delete(path);
 		},
 		retitle: (feed, episode, title) => {
 			serveFeed({
@@ -311,9 +323,10 @@ export type ItunesResult = Readonly<{
 }>;
 
 /**
- * Answer iTunes search requests, and only those, with `results`. Obsidian's
- * requestUrl goes to the main process over the `request-url` IPC channel, so
- * the stub sits there; every other request passes through untouched.
+ * Answer iTunes searches with `results`, and lookups with the result whose
+ * `collectionId` is the looked-up id, as Apple does. Obsidian's requestUrl goes
+ * to the main process over the `request-url` IPC channel, so the stub sits
+ * there; every other request passes through untouched.
  */
 export async function installItunesStub(
 	obsidian: ObsidianClient,
@@ -323,23 +336,37 @@ export async function installItunesStub(
 		if (window.__podnotesJourneyItunes) throw new Error("The iTunes stub is already installed.");
 		const ipc = window.electron.ipcRenderer;
 		const originalSend = ipc.send;
+		const results = ${JSON.stringify(results)};
 		const terms = [];
+		const lookups = [];
+		const answer = (replyChannel, found) => {
+			const body = new TextEncoder().encode(JSON.stringify({ resultCount: found.length, results: found })).buffer;
+			queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
+		};
 		ipc.send = function (channel, replyChannel, request, ...rest) {
-			if (channel === "request-url" && typeof request?.url === "string" && request.url.startsWith("https://itunes.apple.com/search?")) {
-				terms.push(new URL(request.url).searchParams.get("term"));
-				const body = new TextEncoder().encode(JSON.stringify({ resultCount: ${results.length}, results: ${JSON.stringify(results)} })).buffer;
-				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
-				return;
+			const url = channel === "request-url" && typeof request?.url === "string" ? request.url : "";
+			if (url.startsWith("https://itunes.apple.com/search?")) {
+				terms.push(new URL(url).searchParams.get("term"));
+				return answer(replyChannel, results);
+			}
+			if (url.startsWith("https://itunes.apple.com/lookup?")) {
+				const id = new URL(url).searchParams.get("id");
+				lookups.push(id);
+				return answer(replyChannel, results.filter((result) => result.collectionId === id));
 			}
 			return originalSend.call(ipc, channel, replyChannel, request, ...rest);
 		};
-		window.__podnotesJourneyItunes = { ipc, originalSend, terms };
+		window.__podnotesJourneyItunes = { ipc, originalSend, terms, lookups };
 		return true;
 	})()`);
 }
 
 export async function itunesSearchTerms(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>("window.__podnotesJourneyItunes.terms");
+}
+
+export async function itunesLookupIds(obsidian: ObsidianClient): Promise<string[]> {
+	return await obsidian.dev.evalJson<string[]>("window.__podnotesJourneyItunes.lookups");
 }
 
 export async function removeItunesStub(obsidian: ObsidianClient): Promise<void> {

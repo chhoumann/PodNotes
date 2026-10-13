@@ -14,6 +14,7 @@ import {
 	showAddPodcast,
 	showLibrary,
 	showList,
+	shownResults,
 	shownText,
 	showPodNotes,
 	typeInto,
@@ -24,6 +25,7 @@ import {
 	type FixtureFeed,
 	type FixtureServer,
 	installItunesStub,
+	itunesLookupIds,
 	itunesSearchTerms,
 	opmlDocument,
 	pubDate,
@@ -67,6 +69,26 @@ function feed(title: string, slug: string, episodeTitles: string[], artwork = tr
 }
 
 const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title);
+
+/** Waits for Add podcast's results to be exactly `expected`, and returns them. */
+async function resultsBecome(
+	obsidian: Parameters<typeof shownResults>[0],
+	expected: Awaited<ReturnType<typeof shownResults>>,
+) {
+	let last: unknown;
+	await obsidian
+		.waitFor(
+			async () => {
+				last = await shownResults(obsidian);
+				return JSON.stringify(last) === JSON.stringify(expected);
+			},
+			{ timeoutMs: 15_000, intervalMs: 100 },
+		)
+		.catch(() => {
+			throw new Error(`Add podcast showed ${JSON.stringify(last)}`);
+		});
+	return expected;
+}
 
 describe("feed journeys", () => {
 	test("J-FEED-01 searching Add podcast and tapping a result subscribes to the podcast for good", async () => {
@@ -115,6 +137,160 @@ describe("feed journeys", () => {
 			message: "the subscribed podcast's episodes",
 		});
 		expect(await listedEpisodes(obsidian)).toEqual(["Search Show Pilot"]);
+	});
+
+	test("J-ONB-01 first run: a pasted feed address, one tap to add the podcast and one to play", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const show = feed("Journey First Run", "first-run", [
+			"First Run Opening",
+			"First Run Later",
+		]);
+		const server = await serve(show);
+		await seedLibrary(context, server);
+
+		await showPodNotes(obsidian);
+		await waitUntilShown(obsidian, ui.firstRun);
+		await typeInto(obsidian, ui.podcastSearch, server.feedUrl(show));
+		await resultsBecome(obsidian, [
+			{ label: `Add ${show.title}`, title: show.title, via: "RSS feed" },
+		]);
+		expect(await isShown(obsidian, ui.firstRun)).toBe(false);
+
+		await click(obsidian, ui.addPodcast(show.title));
+		await click(obsidian, ui.episode("First Run Opening"));
+
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		const started = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === "First Run Opening" &&
+				playback.playing &&
+				playback.seconds > 0,
+			"the first episode playing",
+		);
+		const advanced = await waitForPlayback(
+			obsidian,
+			(playback) => playback.seconds > started.seconds + 1,
+			"the first episode's media advancing",
+		);
+		expect(advanced.media?.src).toBe(server.mediaUrl(show, show.episodes[0]));
+		const saved = await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 1,
+			"the podcast saved",
+		);
+		expect(saved.subscriptions).toEqual([{ title: show.title, url: server.feedUrl(show) }]);
+	});
+
+	test("J-FEED-02 a pasted RSS link and a pasted Apple Podcasts link each resolve to their one show", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const pasted = feed("Journey Pasted Feed", "pasted", ["Pasted Episode"]);
+		const apple = feed("Journey Apple Show", "apple", ["Apple Episode"]);
+		const server = await serve(pasted, apple);
+		await seedLibrary(context, server);
+		await installItunesStub(obsidian, [
+			{
+				collectionName: apple.title,
+				feedUrl: server.feedUrl(apple),
+				artworkUrl100: server.artworkUrl(apple),
+				collectionId: "4243",
+			},
+		]);
+		onTestFinished(() => removeItunesStub(obsidian));
+
+		await showPodNotes(obsidian);
+		await showAddPodcast(obsidian);
+		await typeInto(obsidian, ui.podcastSearch, server.feedUrl(pasted));
+		await resultsBecome(obsidian, [
+			{ label: `Add ${pasted.title}`, title: pasted.title, via: "RSS feed" },
+		]);
+		expect(server.requests()).toContain(new URL(server.feedUrl(pasted)).pathname);
+
+		await typeInto(
+			obsidian,
+			ui.podcastSearch,
+			"https://podcasts.apple.com/us/podcast/journey-apple-show/id4243",
+			{ replace: true },
+		);
+		await resultsBecome(obsidian, [
+			{ label: `Add ${apple.title}`, title: apple.title, via: "podcasts.apple.com" },
+		]);
+		expect(await itunesLookupIds(obsidian)).toEqual(["4243"]);
+		expect(await itunesSearchTerms(obsidian)).toEqual([]);
+
+		await click(obsidian, ui.addPodcast(apple.title));
+		await waitUntilShown(obsidian, ui.episode("Apple Episode"));
+		const saved = await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 1,
+			"the Apple show saved",
+		);
+		expect(saved.subscriptions).toEqual([{ title: apple.title, url: server.feedUrl(apple) }]);
+	});
+
+	test("a podcast whose feed stops answering keeps its episodes under a banner, and Retry loads it again", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const show = feed("Journey Flaky", "flaky", ["Flaky Two", "Flaky One"]);
+		const server = await serve(show);
+		await seedLibrary(context, server, { subscriptions: [show] });
+		const feedPath = new URL(server.feedUrl(show)).pathname;
+		const fetched = () => server.requests().filter((path) => path === feedPath).length;
+		const settled = async (message: string) =>
+			await obsidian.waitFor(async () => !(await feedsLoading(obsidian)), {
+				timeoutMs: 15_000,
+				message,
+			});
+
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastCard(show.title));
+		await obsidian.waitFor(async () => (await listedEpisodes(obsidian)).length === 2, {
+			timeoutMs: 15_000,
+			message: "the podcast's episodes",
+		});
+		expect(await isShown(obsidian, ui.feedError)).toBe(false);
+		const cachedAt = await feedCachedAt(obsidian, server.feedUrl(show));
+		expect(cachedAt).toBeGreaterThan(0);
+
+		const restore = server.failFeed(show);
+		let before = fetched();
+		await click(obsidian, ui.refreshEpisodes);
+		await waitUntilShown(obsidian, ui.feedError);
+		expect(fetched()).toBeGreaterThan(before);
+		const banner = await shownText(obsidian);
+		expect(banner).toContain("Feed didn't load");
+		expect(banner).toContain(new URL(server.feedUrl(show)).host);
+		expect(await listedEpisodes(obsidian)).toEqual(["Flaky Two", "Flaky One"]);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.failedPodcastCard(show.title));
+		await waitUntilShown(obsidian, ui.feedError);
+		await settled("the reopened podcast's load to settle");
+
+		before = fetched();
+		await click(obsidian, ui.feedErrorAction("Retry"));
+		await obsidian.waitFor(() => fetched() > before, {
+			timeoutMs: 10_000,
+			message: "Retry's request to reach the feed",
+		});
+		await settled("the failed Retry to settle");
+		expect(await isShown(obsidian, ui.feedError)).toBe(true);
+		expect(await listedEpisodes(obsidian)).toEqual(["Flaky Two", "Flaky One"]);
+
+		restore();
+		before = fetched();
+		await click(obsidian, ui.feedErrorAction("Retry"));
+		await obsidian.waitFor(async () => !(await isShown(obsidian, ui.feedError)), {
+			timeoutMs: 15_000,
+			message: "the banner gone once the feed answers",
+		});
+		expect(fetched()).toBeGreaterThan(before);
+		expect(await listedEpisodes(obsidian)).toEqual(["Flaky Two", "Flaky One"]);
+		expect(await feedCachedAt(obsidian, server.feedUrl(show))).toBeGreaterThan(cachedAt);
+		await showLibrary(obsidian);
+		expect(await isShown(obsidian, ui.failedPodcastCard(show.title))).toBe(false);
+		expect(await isShown(obsidian, ui.podcastCard(show.title))).toBe(true);
 	});
 
 	test("J-FEED-06 opening a podcast lists every episode, beyond the Latest Episodes limit", async () => {
