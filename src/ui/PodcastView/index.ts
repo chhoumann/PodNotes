@@ -39,7 +39,7 @@ export class MainView extends ItemView {
 
 	override async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		const page = parsePage((state as { page?: unknown } | null)?.page);
-		if (page) this.plugin.navigation.restore(page);
+		if (page) this.plugin.navigation.replace(page);
 		await super.setState(state, result);
 	}
 

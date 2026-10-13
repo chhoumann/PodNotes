@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import PodNotes from "./main";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { VIEW_TYPE } from "./constants";
-import { Notice, Platform, type WorkspaceLeaf } from "obsidian";
+import { App, Notice, Platform, type WorkspaceLeaf } from "obsidian";
+import { tick } from "svelte";
 import type { Episode } from "./types/Episode";
 import { MainView } from "./ui/PodcastView";
+import { installResizeObserver } from "../tests/mocks/resizeObserver";
 
 // Regression coverage for #55: "Show PodNotes" / the ribbon icon must reliably
 // surface the view. The bug was that the command was gated on the leaf NOT
@@ -478,26 +480,44 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(plugin.navigation.current.expanded).toBe(false);
 	});
 
-	it("keeps the full player open when revealing the view loads it from the saved workspace", async () => {
-		const { plugin, activateSpy } = await loadPlugin(savedData);
-		activateSpy.mockRestore();
-		const leaf = { setViewState: vi.fn() };
-		const view = new MainView(leaf as unknown as WorkspaceLeaf, plugin);
-		// Obsidian 1.14 holds a leaf in a collapsed sidebar deferred. Revealing it
-		// creates the view and hands it the state saved in the workspace.
-		Object.assign(plugin.app.workspace, {
-			getLeavesOfType: vi.fn(() => [leaf]),
-			revealLeaf: vi.fn(() => view.setState({ page: { kind: "queue" } }, { history: false })),
-		});
+	it.each([
+		{ saved: { kind: "queue" }, shown: { kind: "queue" } },
+		{ saved: { kind: "feed", key: "Removed podcast" }, shown: { kind: "latest" } },
+		{ saved: { kind: "playlist", name: "Removed playlist" }, shown: { kind: "latest" } },
+	])(
+		"keeps the full player open when revealing the view restores the saved $saved.kind page",
+		async ({ saved, shown }) => {
+			const { plugin, activateSpy } = await loadPlugin(savedData);
+			activateSpy.mockRestore();
+			const widths = installResizeObserver();
+			const leaf = { setViewState: vi.fn() };
+			const view = new MainView(leaf as unknown as WorkspaceLeaf, plugin);
+			onTestFinished(async () => {
+				await (view as unknown as { onClose(): Promise<void> }).onClose();
+				widths.uninstall();
+			});
+			const { scope, keymap } = new App();
+			Object.assign(plugin.app, { scope, keymap });
+			Object.assign(view, { app: plugin.app, contentEl: document.createElement("div") });
+			// Obsidian 1.14 holds a leaf in a collapsed sidebar deferred. Revealing it
+			// opens the view, then hands it the state saved in the workspace.
+			Object.assign(plugin.app.workspace, {
+				getLeavesOfType: vi.fn(() => [leaf]),
+				requestSaveLayout: vi.fn(),
+				revealLeaf: vi.fn(async () => {
+					await (view as unknown as { onOpen(): Promise<void> }).onOpen();
+					await view.setState({ page: saved }, { history: false });
+				}),
+			});
 
-		await plugin.showPlayer();
+			await plugin.showPlayer();
+			await tick();
 
-		expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith(leaf);
-		expect(plugin.navigation.current).toMatchObject({
-			page: { kind: "queue" },
-			expanded: true,
-		});
-	});
+			expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+			expect(plugin.navigation.current).toMatchObject({ page: shown, expanded: true });
+			expect(view.contentEl.querySelector(".pn-player")).not.toBeNull();
+		},
+	);
 
 	it("captures a timestamp into the active note and names that note", async () => {
 		const { plugin } = await loadPlugin(savedData);

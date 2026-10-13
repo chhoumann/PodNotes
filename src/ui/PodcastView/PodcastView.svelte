@@ -53,7 +53,7 @@
 	// A podcast or playlist removed while its page is open, or since the page was saved.
 	$effect(() => {
 		const playlistNames = new Set([$favorites.name, ...Object.keys($playlists)]);
-		if (!pageExists(page, $feeds, playlistNames)) navigation.goRoot("latest");
+		if (!pageExists(page, $feeds, playlistNames)) navigation.replace({ kind: "latest" });
 	});
 </script>
 

@@ -77,10 +77,12 @@ export class Navigation implements Readable<NavState> {
 	}
 
 	/**
-	 * Shows the page saved in the workspace. Back then leads to its parent. The full
-	 * player stays as it is: Obsidian restores a deferred view as Show player reveals it.
+	 * Shows `page` with nothing before it, so Back leads to its parent. It keeps the
+	 * full player as it is, because the user did not navigate: the view restores the
+	 * page saved in the workspace, which Obsidian does as Show player reveals a
+	 * deferred view, or leaves a page whose podcast or playlist is gone.
 	 */
-	restore(page: Page): void {
+	replace(page: Page): void {
 		const { page: from, stack, expanded } = this.current;
 		if (samePage(from, page) && stack.length === 0) return;
 		this.show(page, [], 0, expanded);

@@ -40,7 +40,7 @@ describe("Navigation", () => {
 
 	test("Back from a page nothing led to goes to its parent", () => {
 		const navigation = new Navigation();
-		navigation.restore({ kind: "playlist", name: "Walks" });
+		navigation.replace({ kind: "playlist", name: "Walks" });
 
 		navigation.back();
 		expect(navigation.current.page).toEqual({ kind: "playlists" });
@@ -66,23 +66,23 @@ describe("Navigation", () => {
 		}
 	});
 
-	test("restoring the saved page leaves the full player as it is", () => {
+	test("replacing the page leaves the full player as it is", () => {
 		const navigation = new Navigation();
 		navigation.go({ kind: "latest" });
 		navigation.expand();
 
-		navigation.restore({ kind: "feed", key: "Show" });
+		navigation.replace({ kind: "feed", key: "Show" });
 		expect(navigation.current).toEqual({
 			page: { kind: "feed", key: "Show" },
 			stack: [],
 			expanded: true,
 			scrollTop: 0,
 		});
-		navigation.restore({ kind: "feed", key: "Show" });
+		navigation.replace({ kind: "feed", key: "Show" });
 		expect(navigation.current.expanded).toBe(true);
 
 		navigation.collapse();
-		navigation.restore({ kind: "queue" });
+		navigation.replace({ kind: "queue" });
 		expect(navigation.current.expanded).toBe(false);
 	});
 
@@ -94,7 +94,7 @@ describe("Navigation", () => {
 		navigation.goRoot("library");
 		navigation.back();
 		navigation.collapse();
-		navigation.restore({ kind: "library" });
+		navigation.replace({ kind: "library" });
 		navigation.expand();
 		navigation.expand();
 

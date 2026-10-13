@@ -110,7 +110,7 @@ describe("navigation", () => {
 	});
 
 	test("a saved page whose podcast is gone opens Latest episodes", async () => {
-		services.navigation.restore({ kind: "feed", key: "Gone" });
+		services.navigation.replace({ kind: "feed", key: "Gone" });
 		renderView();
 		await tick();
 
