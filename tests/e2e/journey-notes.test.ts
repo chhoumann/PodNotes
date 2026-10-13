@@ -53,17 +53,18 @@ const RETITLED = "Completely Different Name";
 type Journey = Readonly<{ server: FixtureServer; show: FixtureFeed }>;
 
 /** Subscribes to a podcast named `title`, so each journey writes its notes to its own folder. */
-async function setUp(title: string): Promise<Journey> {
+async function setUp(
+	title: string,
+	{
+		episodes = [ORIGINAL, STEADY],
+		noteTemplate,
+	}: { episodes?: readonly FixtureEpisode[]; noteTemplate?: string } = {},
+): Promise<Journey> {
 	const context = getContext();
-	const show: FixtureFeed = {
-		title,
-		slug: "identity",
-		artwork: true,
-		episodes: [ORIGINAL, STEADY],
-	};
+	const show: FixtureFeed = { title, slug: "identity", artwork: true, episodes };
 	const server = await startFixtureServer([show]);
 	onTestFinished(() => server.stop());
-	await seedLibrary(context, server, { subscriptions: [show] });
+	await seedLibrary(context, server, { subscriptions: [show], noteTemplate });
 	await context.obsidian.plugin("command-palette").enable({ filter: "core" });
 	return { server, show };
 }
@@ -79,15 +80,25 @@ function hms(seconds: number): string {
 		.join(":");
 }
 
-/** The default "Capture timestamp format", `- {{linktime}} `, for `episode` at `seconds`. */
-function capture({ server, show }: Journey, episode: FixtureEpisode, seconds: number): string {
+/**
+ * The default "Capture timestamp format", `- {{linktime}} `, for `episode` at `seconds`,
+ * or the segment from `seconds` to `end` that it captures as `- {{linksegment}} `.
+ */
+function capture(
+	{ server, show }: Journey,
+	episode: FixtureEpisode,
+	seconds: number,
+	end?: number,
+): string {
 	const query = [
 		`episodeName=${encodeURIComponent(episode.title)}`,
 		`url=${encodeURIComponent(server.feedUrl(show))}`,
 		`guid=${encodeURIComponent(episode.guid ?? "")}`,
 		`time=${seconds}`,
+		...(end === undefined ? [] : [`endTime=${end}`]),
 	].join("&");
-	return `- [${hms(seconds)}](obsidian://podnotes?${query}) `;
+	const shown = end === undefined ? hms(seconds) : `${hms(seconds)}-${hms(end)}`;
+	return `- [${shown}](obsidian://podnotes?${query}) `;
 }
 
 function frontmatter(note: string): string[] {
@@ -174,6 +185,36 @@ async function waitForPrompt(placeholder: string): Promise<void> {
 				`document.querySelector(".prompt .prompt-input")?.placeholder === ${JSON.stringify(placeholder)}`,
 			),
 		{ timeoutMs: 10_000, intervalMs: 100, message: `the "${placeholder}" picker` },
+	);
+}
+
+/** The titles in the open menu, once it shows. */
+async function menuTitles(): Promise<string[]> {
+	const { obsidian } = getContext();
+	return await obsidian.waitFor(
+		async () => {
+			const titles = await obsidian.dev.evalJson<string[]>(
+				'[...document.querySelectorAll(".menu .menu-item-title")].map((el) => el.textContent.trim())',
+			);
+			return titles.length > 0 ? titles : false;
+		},
+		{ timeoutMs: 10_000, intervalMs: 100, message: "the menu open" },
+	);
+}
+
+/** The properties Obsidian reads from the note at `path`, once it reads any. */
+async function properties(path: string): Promise<Record<string, unknown>> {
+	const { obsidian } = getContext();
+	return await obsidian.waitFor(
+		async () =>
+			(await obsidian.dev.evalJson<Record<string, unknown> | null>(
+				`app.metadataCache.getFileCache(app.vault.getAbstractFileByPath(${JSON.stringify(path)}))?.frontmatter ?? null`,
+			)) ?? false,
+		{
+			timeoutMs: 10_000,
+			intervalMs: 200,
+			message: `Obsidian reading the properties of ${path}`,
+		},
 	);
 }
 
@@ -326,6 +367,82 @@ describe("episode note and capture journeys", () => {
 		expect(server.requests().filter((path) => path.endsWith(".wav"))).toEqual([]);
 	});
 
+	test("J-NOTE-11 two episodes that share a GUID each get their own note", async () => {
+		const { obsidian } = getContext();
+		const alpha: FixtureEpisode = {
+			title: "Alpha Original",
+			seconds: 60,
+			pubDate: pubDate(0),
+			guid: "shared-guid",
+		};
+		const beta: FixtureEpisode = { ...alpha, title: "Beta Different", pubDate: pubDate(1) };
+		const { show } = await setUp("Journey Shared GUID", { episodes: [alpha, beta] });
+		const alphaNote = notePath(show, alpha.title);
+		const betaNote = notePath(show, beta.title);
+
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastGridTab);
+		await click(obsidian, ui.podcastCard(show.title));
+		await click(obsidian, ui.episodeMenu(alpha.title));
+		await click(obsidian, ui.menuItem("Create Note"));
+		const alphaText = await waitForText(
+			alphaNote,
+			(text) => text.includes("\n# Alpha Original\n"),
+			"Alpha's note created",
+		);
+
+		await click(obsidian, ui.episodeMenu(beta.title));
+		const titles = await menuTitles();
+		expect(titles, "Beta's menu offers a note of its own").toContain("Create Note");
+		expect(titles).not.toContain("Open Note");
+		await click(obsidian, ui.menuItem("Create Note"));
+		const betaText = await waitForText(
+			betaNote,
+			(text) => text.includes("\n# Beta Different\n"),
+			"Beta's own note created",
+		);
+		await waitForActiveFile(betaNote, "Beta's note opened");
+
+		expect(await readVaultText(obsidian, alphaNote), "Alpha's note untouched").toBe(alphaText);
+		for (const text of [alphaText, betaText])
+			expect(
+				frontmatter(text).filter((line) => line.startsWith("guid:")),
+				"a GUID two episodes share identifies neither",
+			).toEqual([]);
+	});
+
+	test("J-NOTE-12 a note template with indented frontmatter keys gets the GUID in the same mapping", async () => {
+		const { obsidian } = getContext();
+		const { server, show } = await setUp("Journey Indented", {
+			noteTemplate:
+				'---\n  type: podcastEpisode\n  feedUrl: "{{feedurl}}"\n---\n# {{title}}\n',
+		});
+		const note = notePath(show, ORIGINAL.title);
+		const feedUrl = server.feedUrl(show);
+
+		await showPodNotes(obsidian);
+		await click(obsidian, ui.podcastGridTab);
+		await click(obsidian, ui.podcastCard(show.title));
+		await click(obsidian, ui.episodeMenu(ORIGINAL.title));
+		await click(obsidian, ui.menuItem("Create Note"));
+		const text = await waitForText(
+			note,
+			(value) => value.includes("\n# Original Title\n"),
+			"the episode note created",
+		);
+
+		expect(frontmatter(text)).toEqual([
+			"  type: podcastEpisode",
+			`  feedUrl: "${feedUrl}"`,
+			`  guid: "${ORIGINAL.guid}"`,
+		]);
+		expect(await properties(note)).toEqual({
+			type: "podcastEpisode",
+			feedUrl,
+			guid: ORIGINAL.guid,
+		});
+	});
+
 	test("J-TS-08 Capture Timestamp from the palette lands at the caret of the editor used last", async () => {
 		const { obsidian, sandbox } = getContext();
 		const journey = await setUp("Journey Caret");
@@ -349,6 +466,54 @@ describe("episode note and capture journeys", () => {
 		);
 		expect(text).toBe(
 			`Before the cut${capture(journey, ORIGINAL, paused.seconds)} after the cut\nSecond line\n`,
+		);
+		expect(
+			await exists(notePath(journey.show, ORIGINAL.title)),
+			"no episode note created",
+		).toBe(false);
+	});
+
+	test("J-TS-11 captures land in the editor used last, not in a note opened since in Reading view", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Reading Tab");
+		const remembered = sandbox.path("Remembered.md");
+		const reading = sandbox.path("Reading other.md");
+		await writeVaultFile(obsidian, remembered, "Before the cut after the cut\n");
+		await writeVaultFile(obsidian, reading, "Read only\n");
+
+		await playFromList(journey.show, ORIGINAL.title);
+		await openInEditor(obsidian, remembered);
+		expect(await clickInEditor(obsidian, remembered, 0, 14), "caret mid-line").toEqual({
+			line: 0,
+			ch: 14,
+		});
+		await openInReadingView(obsidian, reading);
+		expect(
+			await obsidian.dev.evalJson<Record<string, string>>(
+				'Object.fromEntries(app.workspace.getLeavesOfType("markdown").map((leaf) => [leaf.view.file?.path, leaf.view.getMode()]))',
+			),
+			"the editor and the Reading view both open",
+		).toMatchObject({ [remembered]: "source", [reading]: "preview" });
+		const paused = await pauseInView();
+		expect(await activeEditorPath(), "the PodNotes view has focus").toBeNull();
+
+		await runFromPalette(obsidian, "Capture Timestamp");
+		await runFromPalette(obsidian, "Capture Last 10 Seconds");
+		const timestamp = capture(journey, ORIGINAL, paused.seconds);
+		const segment = capture(
+			journey,
+			ORIGINAL,
+			Math.max(0, paused.seconds - 10),
+			paused.seconds,
+		);
+		const text = await waitForText(
+			remembered,
+			(value) => value.includes("endTime="),
+			"both captures saved into the editor used last",
+		);
+		expect(text).toBe(`Before the cut${timestamp}${segment} after the cut\n`);
+		expect(await readVaultText(obsidian, reading), "the Reading view note untouched").toBe(
+			"Read only\n",
 		);
 		expect(
 			await exists(notePath(journey.show, ORIGINAL.title)),
