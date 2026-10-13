@@ -244,6 +244,7 @@ describe("feed journeys", () => {
 			server.mediaUrl(sparse, sparse.episodes[0]),
 		);
 		await showLibrary(obsidian);
+		const noticesBeforeEmptyFeed = (await obsidian.dev.notices()).length;
 		await click(obsidian, ui.podcastCard("Journey Empty"));
 		await obsidian.waitFor(async () => !(await isShown(obsidian, ui.episodeLoading)), {
 			timeoutMs: 15_000,
@@ -252,9 +253,7 @@ describe("feed journeys", () => {
 		expect(await listedEpisodes(obsidian)).toEqual([]);
 		expect(await shownText(obsidian)).toContain("No episodes found.");
 		expect(server.requests()).toContain("/empty/feed.xml");
-		expect(await notices(obsidian)).not.toContain(
-			"Could not load episodes for Journey Empty. Check your connection and try again.",
-		);
+		expect((await obsidian.dev.notices()).slice(noticesBeforeEmptyFeed)).toEqual([]);
 	});
 
 	test("J-EDGE-05: a feed episode without pubDate still appears in the episode list (#378)", async () => {

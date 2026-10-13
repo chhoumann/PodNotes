@@ -36,7 +36,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
-import { PLUGIN_ID, RELOAD_OPTIONS } from "./runtime";
+import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-links-local");
 
@@ -289,8 +289,8 @@ describe("link and local file journeys", () => {
 		);
 
 		await obsidian.dev.evalJsonAsync(`(async () => {
-			await app.vault.createFolder(${JSON.stringify(sandbox.path("Queue moved"))});
-			await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${JSON.stringify(queuedPath)}), ${JSON.stringify(movedPath)});
+			await app.vault.createFolder(${jsLiteral(sandbox.path("Queue moved"))});
+			await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${jsLiteral(queuedPath)}), ${jsLiteral(movedPath)});
 			return true;
 		})()`);
 
@@ -333,8 +333,8 @@ describe("link and local file journeys", () => {
 		);
 
 		await obsidian.dev.evalJsonAsync(`(async () => {
-			await app.vault.createFolder(${JSON.stringify(sandbox.path("Renamed"))});
-			await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${JSON.stringify(audioPath)}), ${JSON.stringify(movedPath)});
+			await app.vault.createFolder(${jsLiteral(sandbox.path("Renamed"))});
+			await app.fileManager.renameFile(app.vault.getAbstractFileByPath(${jsLiteral(audioPath)}), ${jsLiteral(movedPath)});
 			return true;
 		})()`);
 

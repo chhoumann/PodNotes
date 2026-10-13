@@ -2,14 +2,23 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
-import { assertSingleWindow, restartObsidian } from "./journey/actions";
+import {
+	assertSingleWindow,
+	click,
+	dismissNotices,
+	openPodNotesSettings,
+	restartObsidian,
+	showPodNotes,
+	ui,
+	type UiTarget,
+} from "./journey/actions";
 
 import {
 	restoreJourneyCache,
 	restoreJourneyWorkspace,
 	snapshotJourneyState,
 } from "./journey/library";
-import { waitForPodNotesReady } from "./runtime";
+import { jsLiteral, waitForPodNotesReady } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("harness-isolation");
 
@@ -113,5 +122,111 @@ test("closes a leaked window and reports it during workspace rollback", async ()
 		await obsidian.dev.evalJson(
 			`require("@electron/remote").BrowserWindow.fromId(${extra})?.destroy(), true`,
 		);
+	}
+});
+
+const TRICKY = `say "hi" \\ to\n</script> \u2028\u2029 end`;
+
+test("evaluates quoted values as the same values, and matches attributes holding them", async () => {
+	const { obsidian } = getContext();
+	const values = [TRICKY, { nested: [TRICKY, 1, null, true], "key with </script>": TRICKY }];
+	for (const value of values) {
+		expect(jsLiteral(value)).not.toMatch(/[<>\u2028\u2029]/);
+		expect(await obsidian.dev.evalJson(`(${jsLiteral(value)})`)).toEqual(value);
+	}
+	expect(await obsidian.dev.evalJson<string>(`typeof ${jsLiteral(undefined)}`)).toBe("undefined");
+	expect(() => jsLiteral(() => undefined)).toThrow("has no JavaScript literal");
+
+	await showPodNotes(obsidian);
+	const count = (target: UiTarget) =>
+		obsidian.dev.evalJson<number>(`(${target.elements}).length`);
+	await obsidian.dev.evalJson(`(() => {
+		const button = document.createElement("button");
+		button.className = "pn-back podnotes-e2e-probe";
+		button.setAttribute("aria-label", ${jsLiteral(`Back to ${TRICKY}`)});
+		document.querySelector(".podcast-view").append(button);
+		return true;
+	})()`);
+	try {
+		expect(await count(ui.backTo(TRICKY))).toBe(1);
+		expect(await count(ui.backTo(`${TRICKY} `))).toBe(0);
+	} finally {
+		await obsidian.dev.evalJson(
+			'document.querySelector(".podnotes-e2e-probe")?.remove(), true',
+		);
+	}
+});
+
+test("names the popout config when Settings would open outside the main window", async () => {
+	const { obsidian } = getContext();
+	// The config object, not setConfig, so app.json is never written.
+	await obsidian.dev.evalJson("delete app.vault.config.settingsPopoutWindow, true");
+	try {
+		await expect(openPodNotesSettings(obsidian)).rejects.toThrow(
+			"settingsPopoutWindow config is true, so Settings opens in a popout window",
+		);
+	} finally {
+		await obsidian.dev.evalJson("app.vault.config.settingsPopoutWindow = false, true");
+	}
+	await assertSingleWindow(obsidian);
+});
+
+test("reports persistent Notices and waits for expiring Notices", async () => {
+	const { obsidian } = getContext();
+	const probe: UiTarget = {
+		name: "covered probe",
+		elements: '[...document.querySelectorAll(".podnotes-e2e-probe")]',
+	};
+	const coverWith = async (notice: string) => {
+		await obsidian.dev.evalJson(`${notice}, true`);
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(`(() => {
+				const notice = document.querySelector(".notice");
+				const rect = notice.getBoundingClientRect();
+				return rect.x >= 0 && rect.y >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight
+					&& notice.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+			})()`),
+			{ timeoutMs: 5_000, message: "the fixture Notice inside the viewport" },
+		);
+		await obsidian.dev.evalJson(`(() => {
+			const rect = document.querySelector(".notice").getBoundingClientRect();
+			const button = document.createElement("button");
+			button.className = "podnotes-e2e-probe";
+			button.onclick = () => { button.dataset.clicked = "true"; };
+			button.style.cssText = \`position: fixed; left: \${rect.x}px; top: \${rect.y}px; width: \${rect.width}px; height: \${rect.height}px\`;
+			document.body.append(button);
+			return true;
+		})()`);
+	};
+	const uncover = async () => {
+		await dismissNotices(obsidian);
+		await obsidian.dev.evalJson(
+			'document.querySelector(".podnotes-e2e-probe")?.remove(), true',
+		);
+	};
+	try {
+		await coverWith('new Notice("Probe needs a decision", 0).addButton("Dismiss", () => {})');
+		await expect(click(obsidian, probe)).rejects.toThrow(
+			'covered probe is behind a Notice that stays until it is dismissed: "Probe needs a decision"',
+		);
+		await uncover();
+
+		await coverWith('new Notice("Persistent without buttons", 0)');
+		await expect(click(obsidian, probe)).rejects.toThrow(
+			'is behind a Notice that stays until it is dismissed: "Persistent without buttons"',
+		);
+		await uncover();
+		await coverWith(
+			'new Notice("Expires despite its button", 1_000).addButton("Dismiss", () => {})',
+		);
+		await click(obsidian, probe);
+		expect(
+			await obsidian.dev.evalJson<string>(
+				'document.querySelector(".podnotes-e2e-probe").dataset.clicked',
+			),
+		).toBe("true");
+	} finally {
+		await uncover();
 	}
 });

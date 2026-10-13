@@ -214,6 +214,19 @@ matches no test fails the run.
   `core-plugins.json`, and PodNotes' `data.json` before each test, and restores
   them after it. A test can turn on a core plugin, such as the file explorer,
   and leave its restore to the harness.
+- A temporary plugin, loaded before PodNotes, writes every uncaught renderer
+  error to a journal that survives reloads and restarts. The harness fails the
+  test that raised the error, or the next test, or the suite when its final
+  cleanup raised it. The next run removes a recorder that an interrupted run
+  left behind.
+- A collapsed or narrow left sidebar opens at 280 px for the run. The suite
+  restores the original layout after its last test.
+- Settings must open in the main window. A test fails at once, naming the
+  `settingsPopoutWindow` config, when Obsidian would open it in a popout.
+- Build code for Obsidian to evaluate with `jsLiteral` from
+  `tests/e2e/runtime.ts`, never with `JSON.stringify` alone.
+- `harness-lifecycle.test.ts` runs the suites in `tests/e2e/harness-fixtures`
+  in their own Vitest processes and checks how each run ends.
 - An interrupted run can leave test fixtures in the vault's `data.json`. Reset
   the vault with `npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults`.
 

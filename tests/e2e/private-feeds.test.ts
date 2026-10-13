@@ -22,7 +22,7 @@ import {
 	waitForLibrary,
 	waitForPlayback,
 } from "./journey/library";
-import { PLUGIN_ID, RELOAD_OPTIONS } from "./runtime";
+import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("private-feeds");
 
@@ -69,13 +69,13 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 		"the private feed saved",
 	);
 	const saved = await obsidian.dev.evalJson<{ url: string; urlSecretId: string }>(
-		`app.plugins.plugins.${PLUGIN_ID}.settings.savedFeeds[${JSON.stringify(show.title)}]`,
+		`app.plugins.plugins.${PLUGIN_ID}.settings.savedFeeds[${jsLiteral(show.title)}]`,
 	);
 	const secret = (id: string) =>
-		obsidian.dev.evalJson<string | null>(`app.secretStorage.getSecret(${JSON.stringify(id)})`);
+		obsidian.dev.evalJson<string | null>(`app.secretStorage.getSecret(${jsLiteral(id)})`);
 	onTestFinished(() =>
 		obsidian.dev.evalJson(
-			`app.secretStorage.setSecret(${JSON.stringify(saved.urlSecretId)}, ""), true`,
+			`app.secretStorage.setSecret(${jsLiteral(saved.urlSecretId)}, ""), true`,
 		),
 	);
 	expect(saved.url).toBe(placeholder);
@@ -110,14 +110,14 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 	expect(JSON.stringify(await plugin.data().read())).not.toContain(sentinel);
 
 	await obsidian.dev.evalJson(
-		`app.secretStorage.setSecret(${JSON.stringify(saved.urlSecretId)}, ""), true`,
+		`app.secretStorage.setSecret(${jsLiteral(saved.urlSecretId)}, ""), true`,
 	);
 	await plugin.reload(RELOAD_OPTIONS);
 	const fetches = server.requests().filter((path) => path === feedPath).length;
 	await openPodNotesSettings(obsidian);
 	await click(obsidian, {
 		name: "Set feed address",
-		elements: `[...document.querySelectorAll(${JSON.stringify(`button[aria-label="Set feed address for ${show.title}"]`)})]`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`button[aria-label="Set feed address for ${show.title}"]`)})]`,
 	});
 	const dialog = ".modal-container:not(:has(.mod-settings))";
 	await typeInto(
@@ -142,7 +142,7 @@ test("protects a Supercast subscription's address in data, cache keys and note l
 	]);
 	expect(
 		await obsidian.dev.evalJson<string>(
-			`app.plugins.plugins.${PLUGIN_ID}.settings.savedFeeds[${JSON.stringify(show.title)}].urlSecretId`,
+			`app.plugins.plugins.${PLUGIN_ID}.settings.savedFeeds[${jsLiteral(show.title)}].urlSecretId`,
 		),
 	).toBe(saved.urlSecretId);
 	expect(JSON.stringify(await plugin.data().read())).not.toContain(sentinel);
@@ -165,9 +165,9 @@ test.each(["invalid", "public", "private"])(
 		onTestFinished(() => server.stop());
 		await seedLibrary(context, server);
 		const id = "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef";
-		await obsidian.dev.evalJson(`app.secretStorage.setSecret(${JSON.stringify(id)}, ""), true`);
+		await obsidian.dev.evalJson(`app.secretStorage.setSecret(${jsLiteral(id)}, ""), true`);
 		onTestFinished(() =>
-			obsidian.dev.evalJson(`app.secretStorage.setSecret(${JSON.stringify(id)}, ""), true`),
+			obsidian.dev.evalJson(`app.secretStorage.setSecret(${jsLiteral(id)}, ""), true`),
 		);
 		await plugin.updateDataAndReload<Record<string, unknown>>((data) => {
 			data.savedFeeds = {
@@ -186,7 +186,7 @@ test.each(["invalid", "public", "private"])(
 		await openPodNotesSettings(obsidian);
 		await click(obsidian, {
 			name: "Set feed address",
-			elements: `[...document.querySelectorAll(${JSON.stringify('button[aria-label="Set feed address for Private"]')})]`,
+			elements: `[...document.querySelectorAll(${jsLiteral('button[aria-label="Set feed address for Private"]')})]`,
 		});
 		await typeInto(
 			obsidian,
@@ -215,7 +215,7 @@ test.each(["invalid", "public", "private"])(
 			await obsidian.waitFor(
 				() =>
 					obsidian.dev.evalJson<boolean>(
-						`app.secretStorage.getSecret(${JSON.stringify(id)}) === ${JSON.stringify(server.feedUrl(show))}`,
+						`app.secretStorage.getSecret(${jsLiteral(id)}) === ${jsLiteral(server.feedUrl(show))}`,
 					),
 				{ timeoutMs: 10_000 },
 			);

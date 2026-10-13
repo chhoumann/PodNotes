@@ -12,20 +12,25 @@ import {
 	clearVaultRunLockMarker,
 	createPluginHarness,
 } from "obsidian-e2e/vitest";
-import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
+import { aroundAll, aroundEach } from "vitest";
 import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
 import { FIXTURE_RESOLVER_RULES } from "../../scripts/e2e-instance.mjs";
-import { assertNoRuntimeErrors, assertSingleWindow, dismissNotices } from "./journey/actions";
+import {
+	assertSettingsOpenInMainWindow,
+	assertSingleWindow,
+	dismissNotices,
+} from "./journey/actions";
 import {
 	hasJourneySnapshot,
-	installJourneyErrorRecorder,
-	removeJourneyErrorRecorder,
+	normalizeJourneyLayout,
 	restoreJourneyCache,
 	restoreJourneyWorkspace,
 	snapshotJourneyState,
 } from "./journey/library";
 import {
+	runAllSteps,
+	jsLiteral,
 	PLUGIN_ID,
 	podNotesReady,
 	RELOAD_OPTIONS,
@@ -33,6 +38,11 @@ import {
 	WAIT_OPTS,
 	waitForPodNotesReady,
 } from "./runtime";
+import {
+	assertNoNewRuntimeErrors,
+	closeRuntimeEvidence,
+	installRuntimeEvidence,
+} from "./runtime-evidence";
 
 /**
  * Suite-scoped PodNotes E2E harness built on obsidian-e2e's shared
@@ -45,6 +55,10 @@ import {
  * `restoreData()` via `beforeDataRestore`, preserving the original
  * detach -> flush -> restore ordering.
  *
+ * Its own setup and cleanup wrap the shared harness's hooks with `aroundAll`
+ * and `aroundEach`. An `afterAll` would be skipped when an earlier one throws,
+ * leaving the vault locked and unrestored.
+ *
  * Canonical `OBSIDIAN_E2E_*` env is emitted by the shared runner; the legacy
  * `PODNOTES_E2E_*` aliases remain a fallback during the migration.
  */
@@ -52,110 +66,86 @@ export function createPodNotesE2EHarness(testName: string) {
 	const suiteClient = createObsidianClient(
 		resolveObsidianEnvOptions({ legacyPrefix: "PODNOTES" }),
 	);
-	let lock: VaultRunLock | undefined;
-	let wasEnabled = false;
-	let runtimeFailure: unknown;
-	// Own the lock before shared setup reloads the plugin and can open a player leaf.
-	beforeAll(async () => {
-		lock = await acquireVaultRunLock({
-			vaultName: suiteClient.vaultName,
-			vaultPath: await suiteClient.vaultPath(),
-			timeoutMs: 60_000,
-		});
-		await lock.publishMarker(suiteClient);
-		await assertSingleWindow(suiteClient);
-		// Without a keyring, Obsidian loads stored secrets with a Notice that stays
-		// until dismissed, over the right sidebar's top. After a test stores a secret,
-		// every reload would bring it back over the view's controls.
-		await suiteClient.dev.evalJson(
-			'app.saveLocalStorage("secrets-encryption-warning-dismissed", "1"), true',
-		);
-		await dismissNotices(suiteClient);
-		const resolver = await suiteClient.dev.evalJson<string>(
-			'require("@electron/remote").app.commandLine.getSwitchValue("host-resolver-rules")',
-		);
-		if (resolver !== FIXTURE_RESOLVER_RULES)
-			throw new Error(
-				"The fixture host resolver is missing. Stop this worktree's instance, then run npm run start:e2e-obsidian.",
-			);
-		wasEnabled = await suiteClient.plugin(PLUGIN_ID).isEnabled();
-		await snapshotJourneyState(suiteClient);
-		await installJourneyErrorRecorder(suiteClient);
-	}, 90_000);
-	afterAll(async () => {
-		try {
-			if (hasJourneySnapshot(suiteClient)) {
+	aroundAll(async (runSuite) => {
+		let lock: VaultRunLock | undefined;
+		let snapshotted = false;
+		let wasEnabled = false;
+		await runAllSteps(
+			async () => {
+				lock = await acquireVaultRunLock({
+					vaultName: suiteClient.vaultName,
+					vaultPath: await suiteClient.vaultPath(),
+					timeoutMs: 60_000,
+				});
+				await lock.publishMarker(suiteClient);
+				await assertSingleWindow(suiteClient);
+				// Without a keyring, Obsidian loads stored secrets with a Notice that stays
+				// until dismissed, over the right sidebar's top. After a test stores a secret,
+				// every reload would bring it back over the view's controls.
+				await suiteClient.dev.evalJson(
+					'app.saveLocalStorage("secrets-encryption-warning-dismissed", "1"), true',
+				);
+				await dismissNotices(suiteClient);
+				const resolver = await suiteClient.dev.evalJson<string>(
+					'require("@electron/remote").app.commandLine.getSwitchValue("host-resolver-rules")',
+				);
+				if (resolver !== FIXTURE_RESOLVER_RULES)
+					throw new Error(
+						"The fixture host resolver is missing. Stop this worktree's instance, then run npm run start:e2e-obsidian.",
+					);
+				wasEnabled = await suiteClient.plugin(PLUGIN_ID).isEnabled();
+				await snapshotJourneyState(suiteClient);
+				snapshotted = true;
+				await normalizeJourneyLayout(suiteClient);
+				await installRuntimeEvidence(suiteClient);
+				await runSuite();
+			},
+			async () => {
+				if (!snapshotted) return;
 				await restoreJourneyCache(suiteClient);
 				await suiteClient.plugin(PLUGIN_ID).enable();
 				await waitForPodNotesReady(suiteClient);
 				await suiteClient.dev.evalJsonAsync(
 					"(async () => { await app.plugins.saveConfig(); return true; })()",
 				);
-				await restoreJourneyWorkspace(suiteClient);
-				if (!wasEnabled) {
-					await suiteClient.dev.evalJsonAsync(
-						`(async () => { await app.plugins.disablePluginAndSave(${JSON.stringify(PLUGIN_ID)}); await app.plugins.saveConfig(); return true; })()`,
-					);
-				}
-			}
-			await assertNoRuntimeErrors(suiteClient);
-		} finally {
-			if (lock) {
-				try {
-					await removeJourneyErrorRecorder(suiteClient);
-				} finally {
-					try {
-						await clearVaultRunLockMarker(suiteClient);
-					} finally {
-						await lock.release();
-					}
-				}
-			}
-		}
-	}, 60_000);
-	afterEach(async () => {
-		try {
-			if (hasJourneySnapshot(getContext().obsidian)) {
-				await getContext().obsidian.dev.evalJsonAsync(
+			},
+			() => restoreJourneyWorkspace(suiteClient),
+			async () => {
+				if (!snapshotted || wasEnabled) return;
+				await suiteClient.dev.evalJsonAsync(
+					`(async () => { await app.plugins.disablePluginAndSave(${jsLiteral(PLUGIN_ID)}); await app.plugins.saveConfig(); return true; })()`,
+				);
+			},
+			() => closeRuntimeEvidence(suiteClient),
+			async () => {
+				if (lock) await clearVaultRunLockMarker(suiteClient);
+			},
+			async () => lock?.release(),
+		);
+	}, 90_000);
+	const getContext = createSharedHarness(testName);
+	aroundEach(async (runTest) => {
+		const { obsidian, plugin } = getContext();
+		await assertNoNewRuntimeErrors(obsidian, "before this test started");
+		await assertSingleWindow(obsidian);
+		await assertSettingsOpenInMainWindow(obsidian);
+		await snapshotJourneyState(obsidian);
+		await runAllSteps(
+			async () => {
+				// The shared harness tracks writes through its client; this snapshots data.json
+				// for tests that change settings through Obsidian instead.
+				await plugin.data().patch(() => undefined);
+				await runTest();
+			},
+			async () => {
+				if (!hasJourneySnapshot(obsidian)) return;
+				await obsidian.dev.evalJsonAsync(
 					"(async () => { await app.plugins.saveConfig(); return true; })()",
 				);
-			}
-			await restoreJourneyWorkspace(getContext().obsidian);
-			await assertNoRuntimeErrors(getContext().obsidian);
-		} catch (error) {
-			if (runtimeFailure)
-				throw new AggregateError(
-					[runtimeFailure, error],
-					"Runtime and workspace restoration failed.",
-				);
-			throw error;
-		}
-		if (runtimeFailure) throw runtimeFailure;
-	});
-	const getContext = createSharedHarness(testName);
-	beforeAll(async () => assertNoRuntimeErrors(getContext().obsidian));
-	afterEach(async () => {
-		const { obsidian } = getContext();
-		if (hasJourneySnapshot(obsidian)) {
-			try {
-				await assertNoRuntimeErrors(obsidian);
-			} catch (error) {
-				runtimeFailure = error;
-			}
-		}
-	});
-	// The shared harness rolls back only files a test wrote through the client, so
-	// data.json is snapshotted up front for tests that change settings through the UI.
-	beforeEach(async () => {
-		await assertSingleWindow(getContext().obsidian);
-		await snapshotJourneyState(getContext().obsidian);
-		await assertNoRuntimeErrors(getContext().obsidian);
-		runtimeFailure = undefined;
-		await getContext().obsidian.dev.evalJson("window.__podnotesJourneyEarlyErrors = [], true");
-		await getContext().obsidian.exec("dev:errors", { clear: true });
-		await getContext()
-			.plugin.data()
-			.patch(() => undefined);
+			},
+			() => restoreJourneyWorkspace(obsidian),
+			() => assertNoNewRuntimeErrors(obsidian, "during this test or its cleanup"),
+		);
 	});
 	return getContext;
 }
@@ -234,11 +224,11 @@ export async function writeSilentWav(
 			view.setUint32(40, sampleCount, true);
 			bytes.fill(128, 44);
 
-			const existing = app.vault.getAbstractFileByPath(${JSON.stringify(audioPath)});
+			const existing = app.vault.getAbstractFileByPath(${jsLiteral(audioPath)});
 			if (existing) {
 				await app.vault.modifyBinary(existing, bytes.buffer);
 			} else {
-				await app.vault.createBinary(${JSON.stringify(audioPath)}, bytes.buffer);
+				await app.vault.createBinary(${jsLiteral(audioPath)}, bytes.buffer);
 			}
 			return true;
 		})()`,
@@ -250,7 +240,7 @@ async function detachPodNotesViews(obsidian: ObsidianClient): Promise<void> {
 		obsidian,
 		`
 		(async () => {
-			await app.workspace.detachLeavesOfType(${JSON.stringify(VIEW_TYPE)});
+			await app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)});
 			return true;
 		})()
 	`,
@@ -304,20 +294,20 @@ export async function openPodNotesView(obsidian: ObsidianClient): Promise<void> 
 		obsidian,
 		`
 		(async () => {
-			const leaves = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)});
+			const leaves = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)});
 			const leaf = leaves[0] ?? app.workspace.getRightLeaf(false);
 
 			if (!leaf) {
 				return { ok: false, count: 0, activeViewType: null };
 			}
 
-			await leaf.setViewState({ type: ${JSON.stringify(VIEW_TYPE)} });
+			await leaf.setViewState({ type: ${jsLiteral(VIEW_TYPE)} });
 			await app.workspace.revealLeaf(leaf);
 			app.workspace.setActiveLeaf(leaf, { focus: true });
 
 			return {
 				ok: true,
-				count: app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length,
+				count: app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).length,
 				activeViewType: app.workspace.activeLeaf?.view?.getViewType?.() ?? leaf.view?.getViewType?.() ?? null,
 			};
 		})()
@@ -383,17 +373,17 @@ export async function invokePodNotesUri(
 		obsidian,
 		`
 		(async () => {
-			const handler = (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers).get(${JSON.stringify(PLUGIN_ID)});
+			const handler = (app.workspace.protocolHandlers ?? app.workspace.protocolHandler?.handlers).get(${jsLiteral(PLUGIN_ID)});
 			if (!handler) {
 				return { ok: false, error: "PodNotes protocol handler is not registered." };
 			}
 
 			await handler({
-				action: ${JSON.stringify(PLUGIN_ID)},
-				url: ${JSON.stringify(episode.filePath ?? episode.streamUrl)},
-				episodeName: ${JSON.stringify(episode.title)},
-				time: ${JSON.stringify(String(time))},
-				endTime: ${JSON.stringify(endTime === undefined ? undefined : String(endTime))},
+				action: ${jsLiteral(PLUGIN_ID)},
+				url: ${jsLiteral(episode.filePath ?? episode.streamUrl)},
+				episodeName: ${jsLiteral(episode.title)},
+				time: ${jsLiteral(String(time))},
+				endTime: ${jsLiteral(endTime === undefined ? undefined : String(endTime))},
 			});
 
 			return { ok: true };

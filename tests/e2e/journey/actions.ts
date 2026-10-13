@@ -8,30 +8,25 @@ import {
 	resolveProvisionOptions,
 	waitForInstanceReady,
 } from "obsidian-e2e/runner";
-import { PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../runtime";
-
-export async function assertNoRuntimeErrors(obsidian: ObsidianClient): Promise<void> {
-	const early = await obsidian.dev.evalJson<unknown[]>("window.__podnotesJourneyEarlyErrors");
-	if (!Array.isArray(early)) throw new Error("The startup error recorder is missing.");
-	if (early.length) throw new Error(`Startup runtime errors: ${JSON.stringify(early)}`);
-	const errors = await obsidian.dev.runtimeErrors();
-	if (errors.length) throw new Error(`Unrelated renderer errors: ${JSON.stringify(errors)}`);
-	const { stdout } = await obsidian.exec("dev:errors");
-	if (stdout.trim() !== "No errors captured.")
-		throw new Error(`Obsidian runtime errors: ${stdout.trim()}`);
-}
+import { jsLiteral, PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../runtime";
+import { collectRuntimeErrors } from "../runtime-evidence";
 
 export type UiTarget = Readonly<{
 	name: string;
 	elements: string;
 }>;
 
-const q = JSON.stringify;
-
 function byCss(name: string, selector: string, text?: string): UiTarget {
 	const filter =
-		text === undefined ? "" : `.filter((el) => el.textContent.trim() === ${q(text)})`;
-	return { name, elements: `[...document.querySelectorAll(${q(selector)})]${filter}` };
+		text === undefined ? "" : `.filter((el) => el.textContent.trim() === ${jsLiteral(text)})`;
+	return { name, elements: `[...document.querySelectorAll(${jsLiteral(selector)})]${filter}` };
+}
+
+function byAttribute(name: string, selector: string, attribute: string, value: string): UiTarget {
+	return {
+		name,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${selector}[${attribute}]`)})].filter((el) => el.getAttribute(${jsLiteral(attribute)}) === ${jsLiteral(value)})`,
+	};
 }
 
 const PLAYER_VIEW = `.workspace-leaf-content[data-type="${VIEW_TYPE}"] .podcast-view`;
@@ -39,7 +34,7 @@ const PLAYER_VIEW = `.workspace-leaf-content[data-type="${VIEW_TYPE}"] .podcast-
 function navItem(name: string, nav: string, label: string): UiTarget {
 	return {
 		name,
-		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} ${nav} button.pn-navitem`)})].filter((el) => el.querySelector(".lbl")?.textContent.trim() === ${q(label)})`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} ${nav} button.pn-navitem`)})].filter((el) => el.querySelector(".lbl")?.textContent.trim() === ${jsLiteral(label)})`,
 	};
 }
 
@@ -54,9 +49,11 @@ export const ui = {
 		byCss(`${title} page`, `${PLAYER_VIEW} :is(h1.pn-head-title, .pn-title h1)`, title),
 	back: byCss("Back button", `${PLAYER_VIEW} button.pn-back`),
 	backTo: (label: string) =>
-		byCss(
+		byAttribute(
 			`Back to ${label}`,
-			`${PLAYER_VIEW} button.pn-back[aria-label=${q(`Back to ${label}`)}]`,
+			`${PLAYER_VIEW} button.pn-back`,
+			"aria-label",
+			`Back to ${label}`,
 		),
 	listRow: (label: string) => navItem(`Library row ${label}`, ".pn-scroll > nav.pn-nav", label),
 	rail: byCss("rail", `${PLAYER_VIEW} nav.pn-rail`),
@@ -64,9 +61,11 @@ export const ui = {
 	miniPlayer: byCss("mini player", `${PLAYER_VIEW} section.pn-mini`),
 	openPlayer: byCss("mini player", `${PLAYER_VIEW} section.pn-mini button.pn-mini-open`),
 	openPlayerFor: (title: string) =>
-		byCss(
+		byAttribute(
 			`mini player of ${title}`,
-			`${PLAYER_VIEW} section.pn-mini button[aria-label=${q(`Open player: ${title}`)}]`,
+			`${PLAYER_VIEW} section.pn-mini button`,
+			"aria-label",
+			`Open player: ${title}`,
 		),
 	miniPlay: byCss("mini player Play", `${PLAYER_VIEW} section.pn-mini button[aria-label="Play"]`),
 	miniPlayback: byCss(
@@ -80,11 +79,11 @@ export const ui = {
 	),
 	podcastCard: (title: string): UiTarget => ({
 		name: `podcast card ${title}`,
-		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-grid button`)})].filter((button) => (button.getAttribute("aria-label") ?? button.querySelector("img")?.alt ?? button.textContent.trim()) === ${q(title)})`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .podcast-grid button`)})].filter((button) => (button.getAttribute("aria-label") ?? button.querySelector("img")?.alt ?? button.textContent.trim()) === ${jsLiteral(title)})`,
 	}),
 	episode: (title: string): UiTarget => ({
 		name: `episode ${title}`,
-		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-episode-item`)})].filter((el) => !el.closest(".episode-player") && el.querySelector(".episode-item-title")?.textContent.trim() === ${q(title)})`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .podcast-episode-item`)})].filter((el) => !el.closest(".episode-player") && el.querySelector(".episode-item-title")?.textContent.trim() === ${jsLiteral(title)})`,
 	}),
 	feedLoading: byCss("feed loading banner", `${PLAYER_VIEW} .feed-loading-banner`),
 	episodeLoading: byCss("episode list loading", `${PLAYER_VIEW} .episode-list-loading`),
@@ -95,13 +94,13 @@ export const ui = {
 	),
 	menuItem: (title: string): UiTarget => ({
 		name: `menu item ${title}`,
-		elements: `[...document.querySelectorAll(".menu .menu-item")].filter((el) => el.querySelector(".menu-item-title")?.textContent.trim() === ${q(title)})`,
+		elements: `[...document.querySelectorAll(".menu .menu-item")].filter((el) => el.querySelector(".menu-item-title")?.textContent.trim() === ${jsLiteral(title)})`,
 	}),
 	fileExplorerItem: (filePath: string) =>
-		byCss(`file explorer item ${filePath}`, `.nav-file-title[data-path=${q(filePath)}]`),
+		byAttribute(`file explorer item ${filePath}`, ".nav-file-title", "data-path", filePath),
 	leftDrawerToggle: byCss("left sidebar toggle", ".sidebar-toggle-button.mod-left"),
 	ribbonAction: (label: string) =>
-		byCss(`ribbon action ${label}`, `.side-dock-ribbon-action[aria-label=${q(label)}]`),
+		byAttribute(`ribbon action ${label}`, ".side-dock-ribbon-action", "aria-label", label),
 	readingLink: (text: string) =>
 		byCss(
 			`Reading view link ${text}`,
@@ -112,21 +111,25 @@ export const ui = {
 		byCss(`settings tab ${name}`, ".modal.mod-settings .vertical-tab-nav-item", name),
 	settingControl: (settingName: string, control: string): UiTarget => ({
 		name: `${control} of setting ${settingName}`,
-		elements: `[...document.querySelectorAll(".modal.mod-settings .setting-item")].filter((row) => row.querySelector(".setting-item-name")?.textContent.trim() === ${q(settingName)}).map((row) => row.querySelector(${q(control)})).filter(Boolean)`,
+		elements: `[...document.querySelectorAll(".modal.mod-settings .setting-item")].filter((row) => row.querySelector(".setting-item-name")?.textContent.trim() === ${jsLiteral(settingName)}).map((row) => row.querySelector(${jsLiteral(control)})).filter(Boolean)`,
 	}),
 	podcastSearch: byCss(
 		"podcast search",
 		'.modal.mod-settings input[placeholder="Search or enter feed URL..."]',
 	),
 	addPodcast: (title: string) =>
-		byCss(
+		byAttribute(
 			`Add ${title}`,
-			`.modal.mod-settings button[aria-label=${q(`Add ${title} podcast`)}]`,
+			".modal.mod-settings button",
+			"aria-label",
+			`Add ${title} podcast`,
 		),
 	removePodcast: (title: string) =>
-		byCss(
+		byAttribute(
 			`Remove ${title}`,
-			`.modal.mod-settings button[aria-label=${q(`Remove ${title} podcast`)}]`,
+			".modal.mod-settings button",
+			"aria-label",
+			`Remove ${title} podcast`,
 		),
 	podcastViewport: byCss("PodNotes view", PLAYER_VIEW),
 	pageScroller: byCss("page scroller", `${PLAYER_VIEW} .pn-scroll`),
@@ -134,7 +137,7 @@ export const ui = {
 
 type Located =
 	| { state: "ready"; x: number; y: number }
-	| { state: "absent" | "hidden" | "ambiguous" | "covered"; detail: string };
+	| { state: "absent" | "hidden" | "ambiguous" | "covered" | "behind notice"; detail: string };
 
 async function locate(obsidian: ObsidianClient, target: UiTarget): Promise<Located> {
 	return await obsidian.dev.evalJson<Located>(`(() => {
@@ -148,6 +151,9 @@ async function locate(obsidian: ObsidianClient, target: UiTarget): Promise<Locat
 		const x = rect.left + rect.width / 2;
 		const y = rect.top + rect.height / 2;
 		const hit = document.elementFromPoint(x, y);
+		const notice = hit?.closest(".notice");
+		if (notice?.dataset.podnotesE2ePersistent === "true" && !el.contains(hit))
+			return { state: "behind notice", detail: (notice.querySelector(".notice-message") ?? notice).textContent.trim() };
 		if (!hit || !el.contains(hit)) return { state: "covered", detail: hit ? hit.outerHTML.slice(0, 120) : "nothing" };
 		return { state: "ready", x, y };
 	})()`);
@@ -160,10 +166,11 @@ async function settledPoint(
 ): Promise<{ x: number; y: number }> {
 	let previous = "";
 	let last = "";
-	return await obsidian
+	const point = await obsidian
 		.waitFor(
 			async () => {
 				const sample = await locate(obsidian, target);
+				if (sample.state === "behind notice") return sample;
 				const key = JSON.stringify(sample);
 				const settled = sample.state === "ready" && key === last;
 				previous = last;
@@ -176,6 +183,11 @@ async function settledPoint(
 			error.message += ` Last samples: ${previous}, ${last}.`;
 			throw error;
 		});
+	if (point.state !== "ready")
+		throw new Error(
+			`${target.name} is behind a Notice that stays until it is dismissed: "${point.detail}". Find what raised it; the test cannot click through it.`,
+		);
+	return point;
 }
 
 async function cdp(obsidian: ObsidianClient, method: string, params: object): Promise<unknown> {
@@ -230,7 +242,7 @@ export async function pressEscape(obsidian: ObsidianClient): Promise<void> {
 /** Where the page's scroller is scrolled to, in whole pixels. */
 export async function pageScrollTop(obsidian: ObsidianClient): Promise<number> {
 	return await obsidian.dev.evalJson<number>(
-		`Math.round(document.querySelector(${q(`${PLAYER_VIEW} .pn-scroll`)})?.scrollTop ?? -1)`,
+		`Math.round(document.querySelector(${jsLiteral(`${PLAYER_VIEW} .pn-scroll`)})?.scrollTop ?? -1)`,
 	);
 }
 
@@ -278,13 +290,13 @@ export async function waitUntilShown(
 
 export async function listedEpisodes(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>(
-		`[...document.querySelectorAll(${q(`${PLAYER_VIEW} .podcast-episode-item`)})].filter((el) => !el.closest(".episode-player") && el.getClientRects().length > 0).map((el) => el.querySelector(".episode-item-title")?.textContent.trim() ?? "")`,
+		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .podcast-episode-item`)})].filter((el) => !el.closest(".episode-player") && el.getClientRects().length > 0).map((el) => el.querySelector(".episode-item-title")?.textContent.trim() ?? "")`,
 	);
 }
 
 export async function shownText(obsidian: ObsidianClient): Promise<string> {
 	return await obsidian.dev.evalJson<string>(
-		`document.querySelector(${q(PLAYER_VIEW)})?.innerText ?? ""`,
+		`document.querySelector(${jsLiteral(PLAYER_VIEW)})?.innerText ?? ""`,
 	);
 }
 
@@ -328,12 +340,23 @@ export async function showList(obsidian: ObsidianClient, label: string): Promise
 
 export async function closePodNotes(obsidian: ObsidianClient): Promise<void> {
 	await obsidian.dev.evalJsonAsync(`(async () => {
-		await app.workspace.detachLeavesOfType(${q(VIEW_TYPE)});
+		await app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)});
 		return true;
 	})()`);
 }
 
+export async function assertSettingsOpenInMainWindow(obsidian: ObsidianClient): Promise<void> {
+	const popout = await obsidian.dev.evalJson<unknown>(
+		'app.vault.getConfig("settingsPopoutWindow")',
+	);
+	if (popout !== false)
+		throw new Error(
+			`Obsidian's settingsPopoutWindow config is ${JSON.stringify(popout)}, so Settings opens in a popout window the tests cannot see. Restore "settingsPopoutWindow": false in the vault's .obsidian/app.json, or restart the instance: npm run stop:e2e-obsidian && npm run start:e2e-obsidian.`,
+		);
+}
+
 export async function openPodNotesSettings(obsidian: ObsidianClient): Promise<void> {
+	await assertSettingsOpenInMainWindow(obsidian);
 	await runCommand(obsidian, "app:open-settings");
 	await click(obsidian, ui.settingsTab("PodNotes"));
 	await waitUntilShown(obsidian, ui.podcastSearch);
@@ -393,8 +416,8 @@ export async function chooseFile(
 
 export async function openInReadingView(obsidian: ObsidianClient, notePath: string): Promise<void> {
 	await obsidian.dev.evalJsonAsync(`(async () => {
-		const file = app.vault.getAbstractFileByPath(${q(notePath)});
-		if (!file) throw new Error(${q(`${notePath} does not exist.`)});
+		const file = app.vault.getAbstractFileByPath(${jsLiteral(notePath)});
+		if (!file) throw new Error(${jsLiteral(`${notePath} does not exist.`)});
 		const leaf = app.workspace.getLeaf("tab");
 		await leaf.openFile(file, { active: true, state: { mode: "preview" } });
 		app.workspace.setActiveLeaf(leaf, { focus: true });
@@ -408,7 +431,7 @@ export async function revealInFileExplorer(
 ): Promise<void> {
 	await runCommand(obsidian, "file-explorer:open");
 	await obsidian.dev.evalJsonAsync(`(async () => {
-		const file = app.vault.getAbstractFileByPath(${q(filePath)});
+		const file = app.vault.getAbstractFileByPath(${jsLiteral(filePath)});
 		const leaf = app.workspace.getLeavesOfType("file-explorer")[0];
 		if (!file || !leaf) throw new Error("The file explorer or the file is missing.");
 		await app.workspace.revealLeaf(leaf);
@@ -449,13 +472,13 @@ export async function restartObsidian(
 	whileClosed: () => Promise<void> = async () => {},
 	beforeClose = "",
 ): Promise<{ before: AppProcess; after: AppProcess }> {
-	await assertNoRuntimeErrors(obsidian);
 	const before = await appProcess(obsidian);
 	const argv = await obsidian.dev.evalJson<string[]>("window.electron.remote.process.argv");
 	const instance = await isolatedInstance();
 	if (!argv.includes(`--user-data-dir=${instance.userDataPath}`))
 		throw new Error("Refusing to quit a different Obsidian profile.");
 	await assertSingleWindow(obsidian);
+	await collectRuntimeErrors(obsidian);
 	const close =
 		process.platform === "darwin"
 			? "window.electron.remote.app.quit()"
@@ -487,7 +510,6 @@ export async function restartObsidian(
 			{ timeoutMs: 30_000, intervalMs: 200, message: "Obsidian to relaunch" },
 		);
 		await waitForPodNotesReady(obsidian);
-		await assertNoRuntimeErrors(obsidian);
 		await dismissNotices(obsidian);
 	} catch (error) {
 		if (failure)
@@ -521,7 +543,7 @@ function processAlive(pid: number): boolean {
 }
 
 export async function reloadObsidian(obsidian: ObsidianClient): Promise<void> {
-	await assertNoRuntimeErrors(obsidian);
+	await collectRuntimeErrors(obsidian);
 	await obsidian.dev.evalJson("window.__podnotesJourneyBeforeReload = true");
 	await obsidian.exec("reload");
 	await obsidian.waitFor(
@@ -534,13 +556,12 @@ export async function reloadObsidian(obsidian: ObsidianClient): Promise<void> {
 		{ timeoutMs: 30_000, intervalMs: 300, message: "Obsidian to reload" },
 	);
 	await waitForPodNotesReady(obsidian);
-	await assertNoRuntimeErrors(obsidian);
 	await dismissNotices(obsidian);
 }
 
 /** Switches Obsidian's mobile emulation, which reloads the app, and waits for PodNotes. */
 export async function setMobileEmulation(obsidian: ObsidianClient, on: boolean): Promise<void> {
-	await assertNoRuntimeErrors(obsidian);
+	await collectRuntimeErrors(obsidian);
 	await obsidian.exec("dev:mobile", on ? { on: true } : { off: true });
 	await obsidian.waitFor(
 		async () =>
@@ -550,6 +571,5 @@ export async function setMobileEmulation(obsidian: ObsidianClient, on: boolean):
 		{ timeoutMs: 30_000, intervalMs: 500, message: `mobile emulation ${on ? "on" : "off"}` },
 	);
 	await waitForPodNotesReady(obsidian);
-	await assertNoRuntimeErrors(obsidian);
 	await dismissNotices(obsidian);
 }
