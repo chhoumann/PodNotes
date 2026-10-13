@@ -427,6 +427,8 @@ function serve() {
 				"Content-Type": type,
 				"Content-Length": body.length,
 				"Accept-Ranges": "bytes",
+				// As a podcast host serves artwork, so covers seen once still show offline.
+				...(type.startsWith("image/") && { "Cache-Control": "max-age=86400" }),
 			});
 			response.end(body);
 			return;

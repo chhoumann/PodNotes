@@ -4,27 +4,36 @@
 //
 //   node .claude/skills/verify/screens.mjs place <sidebar|pane|phone>
 //   node .claude/skills/verify/screens.mjs theme <light|dark>
-//   node .claude/skills/verify/screens.mjs seed <empty|library|episodes>
+//   node .claude/skills/verify/screens.mjs seed <empty|library|episodes|lists|local|offline>
 //   node .claude/skills/verify/screens.mjs go '<page JSON>'     e.g. '{"kind":"feed","key":"Field Notes"}'
+//   node .claude/skills/verify/screens.mjs offline <on|off>
 //   node .claude/skills/verify/screens.mjs shot <file.png>
 //   node .claude/skills/verify/screens.mjs set <state|all> <label> [--widths sidebar,pane,phone] [--themes light,dark]
 //
-// place  sidebar: the view in the right sidebar, 320 x 720. pane: the view in the
-//        main area, 820 x 680, both sidebars collapsed. phone: mobile emulation on a
-//        390 x 844 screen, the view in the main area. Fails unless the view measures
-//        exactly that. Any other place leaves the phone for the desktop.
-// seed   empty is a first run. library has the fixture library's eight podcasts (one
-//        feed answers 404), a queue of four, a playlist and some played episodes;
-//        episodes is the same vault. It rewrites data.json while PodNotes is
-//        disabled and clears its feed cache, as a user would have it after earlier use.
-// shot   waits until the view stops changing, moves the mouse off the window, blurs
-//        focus, removes tooltips and notices (printing what the notices said), then
-//        captures the view, or the whole screen on a phone.
-// set    seeds the state's scene and, at each width and theme, opens its page and
-//        shoots .obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png.
-//        Then <state>-sheet.png has a row per width: light, then dark, each shot
-//        followed by the prototype's screen when the design folder has one.
-//        States: first-run, add-podcast, library, episodes, error-feed.
+// place   sidebar: the view in the right sidebar, 320 x 720. pane: the view in the
+//         main area, 820 x 680, both sidebars collapsed. phone: mobile emulation on a
+//         390 x 844 screen, the view in the main area. Fails unless the view measures
+//         exactly that. Any other place leaves the phone for the desktop.
+// seed    empty is a first run. library has the fixture library's eight podcasts (one
+//         feed answers 404), a queue of four, a playlist and some played episodes;
+//         episodes is the same vault. lists adds Favorites, three more playlists and
+//         a loaded, paused episode. local adds four media files in vault folders,
+//         registered as local files; offline adds four downloaded episodes instead.
+//         It rewrites data.json while PodNotes is disabled and clears its feed
+//         cache, as a user would have it after earlier use.
+// offline on: the renderer goes offline through CDP, so navigator.onLine is false
+//         and the window fires `offline`, and the fixture server stops, so feed
+//         requests fail too: Obsidian sends them from its main process, which CDP
+//         does not reach. off undoes both. Each fails unless all of that holds.
+// shot    waits until the view stops changing, moves the mouse off the window, blurs
+//         focus, removes tooltips and notices (printing what the notices said), hides
+//         Obsidian's status bar, then captures the view, or the whole screen on a phone.
+// set     seeds the state's scene and, at each width and theme, opens its page and
+//         shoots .obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png.
+//         Then <state>-sheet.png has a row per width: light, then dark, each shot
+//         followed by the prototype's screen when the design folder has one.
+//         States: first-run, add-podcast, library, episodes, error-feed, queue,
+//         playlists, playlist, latest, played, local-files, offline.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -55,16 +64,18 @@ const CALL_TIMEOUT_MS = 15000;
 const WIDTHS = { sidebar: [320, 720], pane: [820, 680], phone: [390, 844] };
 /** @type {Record<string, string>} */
 const THEMES = { light: "moonstone", dark: "obsidian" };
-const SCENES = ["empty", "library", "episodes"];
+const CURRENT_THEME = `(document.body.classList.contains("theme-dark") ? "dark" : "light")`;
 
 /**
- * @typedef {{ title: string, podcastName: string, duration: number }} Episode
+ * @typedef {{ title: string, podcastName: string, duration: number, episodeDate: string }} Episode
  * @typedef {{ feed: { title: string }, missing: boolean, episodes: Episode[] }} LibraryFeed
  * @typedef {{ feeds: LibraryFeed[], add: { title: string, url: string } }} Library
- * @typedef {{ kind: string, key?: string }} Page
+ * @typedef {{ kind: string, key?: string, name?: string }} Page
+ * @typedef {Record<string, any>} Data
+ * @typedef {(data: Data, library: Library) => void | Promise<void>} Ingredient
  */
 
-/** @type {Record<string, { scene: string, page: (library: Library) => Page, text?: (library: Library) => string, paste?: boolean }>} */
+/** @type {Record<string, { scene: string, page: (library: Library) => Page, text?: (library: Library) => string, paste?: boolean, offline?: boolean }>} */
 const STATES = {
 	"first-run": { scene: "empty", page: () => ({ kind: "library" }) },
 	"add-podcast": {
@@ -83,10 +94,34 @@ const STATES = {
 		scene: "library",
 		page: (library) => ({ kind: "feed", key: missingFeed(library).feed.title }),
 	},
+	queue: { scene: "lists", page: () => ({ kind: "queue" }), text: () => QUEUE[0][1] },
+	playlists: {
+		scene: "lists",
+		page: () => ({ kind: "playlists" }),
+		text: () => PLAYLISTS[PLAYLISTS.length - 1].name,
+	},
+	playlist: {
+		scene: "lists",
+		page: () => ({ kind: "playlist", name: PLAYLIST.name }),
+		text: () => PLAYLIST.episodes[0][1],
+	},
+	latest: { scene: "lists", page: () => ({ kind: "latest" }), text: newestTitle },
+	played: { scene: "lists", page: () => ({ kind: "played" }), text: () => PLAYED[1][0][1] },
+	"local-files": {
+		scene: "local",
+		page: () => ({ kind: "local" }),
+		text: () => path.parse(LOCAL_FILES[0][0]).name,
+	},
+	offline: {
+		scene: "offline",
+		page: () => ({ kind: "latest" }),
+		text: newestTitle,
+		offline: true,
+	},
 };
 
 // What a listener of the fixture library did with it, as in the design prototype.
-// Episodes are named by podcast and the start of their title.
+// Episodes are named by the start of their podcast's title and of their own.
 /** @type {[string, string][]} */
 const QUEUE = [
 	["Slow Thinking", "The case for boredom"],
@@ -117,6 +152,68 @@ const PLAYED = [
 	[["Signal & Noise", "Ep. 88"], 760],
 	[["Night Owl Science", "Sleep, memory"], 600],
 ];
+/** @type {[string, string][]} */
+const FAVORITES = [
+	["Field Notes", "#212"],
+	["The Archive Hour", "Luhmann"],
+	["Slow Thinking", "Attention"],
+	["Lunch Break History", "The library of Alexandria"],
+	["Field Notes", "#208"],
+];
+const PLAYLISTS = [
+	{
+		name: "Memory research",
+		/** @type {[string, string][]} */
+		episodes: [
+			["Field Notes", "#213"],
+			["Night Owl Science", "Sleep, memory"],
+			["The Archive Hour", "Commonplace books"],
+			["Field Notes", "#209"],
+		],
+	},
+	{
+		name: "Long walks, slow ideas",
+		/** @type {[string, string][]} */
+		episodes: [
+			["Slow Thinking", "Walking"],
+			["Field Notes", "#211"],
+			["The Archive Hour", "Luhmann"],
+		],
+	},
+];
+/** @type {[string, string]} */
+const NOW_PLAYING = ["Field Notes", "#213"];
+/** @type {[string, string][]} */
+const DOWNLOADS = [
+	["Field Notes", "#213"],
+	["Field Notes", "#211"],
+	["Slow Thinking", "The case for boredom"],
+	["Night Owl Science", "Sleep, memory"],
+];
+/** Vault media: path, length in seconds, and the played position. @type {[string, number, (number | "finished")?][]} */
+const LOCAL_FILES = [
+	["Recordings/Family/Interview with grandma.m4a", 3850],
+	["University/Psychology/Lecture 07 - Cognitive load theory.mp4", 2913, 1032],
+	["Inbox/Voice memo 2026-09-14.webm", 221],
+	["Recordings/Book club/Book club - The Overstory, chapters 1-4.mp3", 5460, "finished"],
+];
+/** Silent media small enough for a vault, by container. @type {Record<string, string[]>} */
+const ENCODERS = {
+	".m4a": ["-c:a", "aac", "-b:a", "8k"],
+	".mp4": ["-c:v", "libx264", "-crf", "51", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "8k"],
+	".webm": ["-c:a", "libopus", "-b:a", "6k"],
+	".mp3": ["-c:a", "libmp3lame", "-b:a", "8k"],
+};
+
+/** Each scene's ingredients, applied in order to the default data.json. @type {Record<string, Ingredient[]>} */
+const SCENES = {
+	empty: [],
+	library: [libraryData],
+	episodes: [libraryData],
+	lists: [libraryData, listening],
+	local: [libraryData, listening, localFiles],
+	offline: [libraryData, listening, downloads],
+};
 
 /** @param {string[]} args */
 async function obsidian(args) {
@@ -318,52 +415,161 @@ function missingFeed(lib) {
 	return feed;
 }
 
+/** The newest episode Latest episodes lists: Night Owl Science's feed answers 404. @param {Library} lib */
+function newestTitle(lib) {
+	return lib.feeds
+		.filter((feed) => !feed.missing)
+		.flatMap((feed) => feed.episodes)
+		.reduce((newest, episode) => (episode.episodeDate > newest.episodeDate ? episode : newest))
+		.title;
+}
+
 /** @param {Library} lib @param {[string, string]} reference */
 function episode(lib, [podcast, title]) {
 	const found = lib.feeds
-		.find((feed) => feed.feed.title === podcast)
+		.find((feed) => feed.feed.title.startsWith(podcast))
 		?.episodes.find((candidate) => candidate.title.startsWith(title));
 	if (!found) throw new Error(`The fixture library has no episode "${title}" in ${podcast}.`);
 	return found;
 }
 
-/** @param {Library} lib */
-function libraryData(lib) {
+/** @param {{ name: string, episodes: [string, string][] }} list @param {Library} lib */
+function playlist({ name, episodes }, lib) {
 	return {
-		savedFeeds: Object.fromEntries(lib.feeds.map(({ feed }) => [feed.title, feed])),
-		queue: {
-			episodes: QUEUE.map((reference) => episode(lib, reference)),
-		},
-		playlists: {
-			[PLAYLIST.name]: {
-				icon: "list-music",
-				name: PLAYLIST.name,
-				shouldEpisodeRemoveAfterPlay: false,
-				shouldRepeat: false,
-				episodes: PLAYLIST.episodes.map((reference) => episode(lib, reference)),
-			},
-		},
-		playedEpisodes: Object.fromEntries(
-			PLAYED.map(([reference, time]) => {
-				const { title, podcastName, duration } = episode(lib, reference);
-				const finished = time === "finished";
-				return [
-					`${podcastName}::${title}`,
-					{ title, podcastName, time: finished ? duration : time, duration, finished },
-				];
-			}),
-		),
+		icon: "list-music",
+		name,
+		shouldEpisodeRemoveAfterPlay: false,
+		shouldRepeat: false,
+		episodes: episodes.map((reference) => episode(lib, reference)),
 	};
+}
+
+/**
+ * The playedEpisodes entry PodNotes keeps for an episode.
+ * @param {{ title: string, podcastName: string }} episode @param {number | "finished"} time @param {number} duration
+ * @returns {[string, { title: string, podcastName: string, time: number, duration: number, finished: boolean }]}
+ */
+function playedRecord({ title, podcastName }, time, duration) {
+	const finished = time === "finished";
+	return [
+		`${podcastName}::${title}`,
+		{ title, podcastName, time: finished ? duration : time, duration, finished },
+	];
+}
+
+/** @type {Ingredient} */
+function libraryData(data, lib) {
+	data.savedFeeds = Object.fromEntries(lib.feeds.map(({ feed }) => [feed.title, feed]));
+	data.queue.episodes = QUEUE.map((reference) => episode(lib, reference));
+	data.playlists = { [PLAYLIST.name]: playlist(PLAYLIST, lib) };
+	data.playedEpisodes = Object.fromEntries(
+		PLAYED.map(([reference, time]) => {
+			const found = episode(lib, reference);
+			return playedRecord(found, time, found.duration);
+		}),
+	);
+}
+
+/** Restored at startup, so the mini player shows it paused. @type {Ingredient} */
+function listening(data, lib) {
+	data.favorites.episodes = FAVORITES.map((reference) => episode(lib, reference));
+	for (const list of PLAYLISTS) data.playlists[list.name] = playlist(list, lib);
+	data.currentEpisode = episode(lib, NOW_PLAYING);
+}
+
+/** The entries src/playLocalFile.ts writes, for media written into the vault. @type {Ingredient} */
+async function localFiles(data) {
+	for (const [file, seconds] of LOCAL_FILES) {
+		const target = path.join(provision.vaultPath, file);
+		if (fs.existsSync(target)) continue;
+		const video = path.extname(file) === ".mp4";
+		const scratch = path.join(
+			fs.mkdtempSync(path.join(os.tmpdir(), "podnotes-media-")),
+			path.basename(file),
+		);
+		execFileSync("ffmpeg", [
+			"-v",
+			"error",
+			"-f",
+			"lavfi",
+			"-i",
+			"anullsrc=r=8000:cl=mono",
+			...(video ? ["-f", "lavfi", "-i", "color=c=0x334155:s=64x36:r=1"] : []),
+			"-t",
+			String(seconds),
+			...ENCODERS[path.extname(file)],
+			scratch,
+		]);
+		// Copied in whole, so Obsidian never indexes a file ffmpeg is still writing.
+		fs.mkdirSync(path.dirname(target), { recursive: true });
+		fs.copyFileSync(scratch, target);
+		fs.rmSync(path.dirname(scratch), { recursive: true });
+	}
+	const sizes = Object.fromEntries(
+		LOCAL_FILES.map(([file]) => [file, fs.statSync(path.join(provision.vaultPath, file)).size]),
+	);
+	await waitFor(
+		`const sizes = ${JSON.stringify(sizes)};
+		return Object.entries(sizes).every(([file, size]) => app.vault.getAbstractFileByPath(file)?.stat.size === size);`,
+		"Obsidian did not index the local media files",
+		10000,
+	);
+	/** @type {{ file: string, title: string, url: string, streamUrl: string, ctime: number }[]} */
+	const files = await evaluate(`
+		return ${JSON.stringify(Object.keys(sizes))}.map((file) => {
+			const found = app.vault.getAbstractFileByPath(file);
+			return { file, title: found.basename, url: app.fileManager.generateMarkdownLink(found, ""),
+				streamUrl: app.vault.getResourcePath(found), ctime: found.stat.ctime };
+		});
+	`);
+	data.downloadedEpisodes["local file"] = files.map(({ file, title, url, streamUrl, ctime }) => ({
+		title,
+		description: "",
+		content: "",
+		podcastName: "local file",
+		url,
+		streamUrl,
+		filePath: file,
+		episodeDate: new Date(ctime).toISOString(),
+		mediaType: path.extname(file) === ".mp4" ? "video" : "audio",
+		size: sizes[file],
+	}));
+	for (const [file, seconds, time] of LOCAL_FILES) {
+		if (time === undefined) continue;
+		const [key, record] = playedRecord(
+			{ title: path.parse(file).name, podcastName: "local file" },
+			time,
+			seconds,
+		);
+		data.playedEpisodes[key] = record;
+	}
+}
+
+/** Downloaded as PodNotes does, to its default download path; the fixture serves a WAV. @type {Ingredient} */
+function downloads(data, lib) {
+	for (const reference of DOWNLOADS) {
+		const found = episode(lib, reference);
+		const file = `PodNotes/${found.podcastName}/${found.title.replace(/[\\/:*?"<>|#^[\]]/g, "")}.wav`;
+		const target = path.join(provision.vaultPath, file);
+		if (!fs.existsSync(target)) execFileSync(process.execPath, [FIXTURES, "audio", file]);
+		(data.downloadedEpisodes[found.podcastName] ??= []).push({
+			...found,
+			filePath: file,
+			size: fs.statSync(target).size,
+			downloadedByPodNotes: true,
+		});
+	}
 }
 
 /** @param {string} scene */
 async function seed(scene) {
-	if (!SCENES.includes(scene)) throw new Error(`Usage: seed <${SCENES.join("|")}>`);
-	/** @type {Record<string, any>} */
-	const data = structuredClone(/** @type {Record<string, any>} */ (config.defaultData));
-	if (scene !== "empty") {
-		const { queue, ...rest } = libraryData(await library());
-		Object.assign(data, rest, { queue: { ...data.queue, ...queue } });
+	const ingredients = SCENES[scene];
+	if (!ingredients) throw new Error(`Usage: seed <${Object.keys(SCENES).join("|")}>`);
+	/** @type {Data} */
+	const data = structuredClone(/** @type {Data} */ (config.defaultData));
+	if (ingredients.length > 0) {
+		const lib = await library();
+		for (const add of ingredients) await add(data, lib);
 	}
 	await evaluate(`
 		await app.plugins.disablePlugin("podnotes");
@@ -389,6 +595,46 @@ async function go(page) {
 		await plugin.activateView();
 		return true;
 	`);
+}
+
+/** @param {boolean} on */
+async function offline(on) {
+	execFileSync(process.execPath, [FIXTURES, on ? "stop" : "library"]);
+	const event = on ? "offline" : "online";
+	await evaluate(`
+		window.__podnotesVerifyNetwork = navigator.onLine === ${on}
+			? new Promise((resolve) => addEventListener("${event}", () => resolve("fired"), { once: true }))
+			: Promise.resolve("was already ${event}");
+		return true;
+	`);
+	await cdp("Network.emulateNetworkConditions", {
+		offline: on,
+		latency: 0,
+		downloadThroughput: -1,
+		uploadThroughput: -1,
+	});
+	const state = await evaluate(`
+		const event = await Promise.race([
+			window.__podnotesVerifyNetwork,
+			new Promise((resolve) => setTimeout(() => resolve("did not fire"), 2000)),
+		]);
+		// The first saved feed, sent the way requestUrl sends PodNotes' feed requests.
+		const url = Object.values(app.plugins.plugins.podnotes.settings.savedFeeds)[0]?.url;
+		const ipc = window.electron.ipcRenderer;
+		const reply = "podnotes-verify-" + Math.random();
+		const feed = url === undefined ? "no saved feed" : await new Promise((resolve) => {
+			ipc.once(reply, (_event, response) => resolve(response.error ? "failed" : response.status));
+			ipc.send("request-url", reply, { url, method: "GET" });
+			setTimeout(() => resolve("no answer"), 5000);
+		});
+		return { onLine: navigator.onLine, ${event}: event, feed };
+	`);
+	console.log(JSON.stringify(state));
+	const feedAsExpected =
+		state.feed === "no saved feed" || (typeof state.feed === "number") !== on;
+	if (state.onLine === on || state[event] === "did not fire" || !feedAsExpected) {
+		throw new Error(`offline ${on ? "on" : "off"} did not take: ${JSON.stringify(state)}`);
+	}
 }
 
 /** @param {string} [text] */
@@ -424,8 +670,8 @@ async function settle(text = "") {
 	}
 }
 
-/** @param {string} file @param {string} [text] */
-async function shot(file, text) {
+/** @param {string} file @param {string} [text] @param {string} [themeName] */
+async function shot(file, text, themeName) {
 	await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x: -10, y: -10 });
 	await evaluate(`
 		document.activeElement?.blur?.();
@@ -440,11 +686,13 @@ async function shot(file, text) {
 			notice.remove();
 			return said;
 		});
+		// Obsidian's status bar floats over the view's bottom-right corner.
+		document.querySelector(".status-bar")?.style.setProperty("visibility", "hidden");
 		await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 		const rect = document.body.classList.contains("is-phone")
 			? { x: 0, y: 0, width: innerWidth, height: innerHeight }
 			: document.querySelector(".podcast-view").getBoundingClientRect().toJSON();
-		return { notices, rect, scale: devicePixelRatio };
+		return { notices, rect, scale: devicePixelRatio, theme: ${CURRENT_THEME} };
 	`);
 	// Whole pixels, so the capture is not resampled.
 	const [x, y, width, height] = ["x", "y", "width", "height"].map((key) =>
@@ -454,6 +702,15 @@ async function shot(file, text) {
 		format: "png",
 		clip: { x, y, width, height, scale: 1 },
 	});
+	const after = await evaluate(
+		`document.querySelector(".status-bar")?.style.removeProperty("visibility"); return ${CURRENT_THEME};`,
+	);
+	// The file name promises a theme, and a window reload can still be applying the saved one.
+	if (themeName && (target.theme !== themeName || after !== themeName)) {
+		throw new Error(
+			`The theme turned ${target.theme === themeName ? after : target.theme} around the capture of ${path.relative(root, path.resolve(file))}, not ${themeName}. Run it again.`,
+		);
+	}
 	const png = Buffer.from(data, "base64");
 	const size = pngSize(png);
 	if (size.width !== width * target.scale || size.height !== height * target.scale) {
@@ -534,27 +791,32 @@ async function set(state, label, widths, themes) {
 	await seed(recipe.scene);
 	/** @type {{ file: string, caption: string }[][]} */
 	const rows = [];
-	for (const width of widths) {
-		await place(width);
-		const row = [];
-		for (const name of themes) {
-			await theme(name);
-			await go(recipe.page(lib));
-			if (recipe.paste) {
-				execFileSync(
-					process.execPath,
-					[UI, "fill", '.podcast-view input[placeholder^="Search"]', lib.add.url],
-					{ stdio: "inherit" },
-				);
+	try {
+		for (const width of widths) {
+			await place(width);
+			const row = [];
+			for (const name of themes) {
+				await go(recipe.page(lib));
+				if (recipe.paste) {
+					execFileSync(
+						process.execPath,
+						[UI, "fill", '.podcast-view input[placeholder^="Search"]', lib.add.url],
+						{ stdio: "inherit" },
+					);
+				}
+				if (recipe.offline) await offline(true);
+				await theme(name);
+				const file = path.join(dir, `${state}-${width}-${name}.png`);
+				await shot(file, recipe.text?.(lib), name);
+				row.push({ file, caption: `${width} ${name} ${label}` });
+				const prototype = path.join(DESIGN, `${state}-${width}-${name}.png`);
+				if (fs.existsSync(prototype))
+					row.push({ file: prototype, caption: `${width} ${name} prototype` });
 			}
-			const file = path.join(dir, `${state}-${width}-${name}.png`);
-			await shot(file, recipe.text?.(lib));
-			row.push({ file, caption: `${width} ${name} ${label}` });
-			const prototype = path.join(DESIGN, `${state}-${width}-${name}.png`);
-			if (fs.existsSync(prototype))
-				row.push({ file: prototype, caption: `${width} ${name} prototype` });
+			rows.push(row);
 		}
-		rows.push(row);
+	} finally {
+		if (recipe.offline) await offline(false);
 	}
 	const sheet = path.join(dir, `${state}-sheet.png`);
 	contactSheet(rows, sheet);
@@ -573,6 +835,8 @@ try {
 	else if (verb === "theme" && target) await theme(target);
 	else if (verb === "seed" && target) await seed(target);
 	else if (verb === "go" && target) await go(JSON.parse(target));
+	else if (verb === "offline" && (target === "on" || target === "off"))
+		await offline(target === "on");
 	else if (verb === "shot" && target) await shot(target);
 	else if (verb === "set" && target && rest[0] && /^[\w.-]+$/.test(rest[0])) {
 		const widths = list(rest, "--widths", Object.keys(WIDTHS));
@@ -587,7 +851,7 @@ try {
 		}
 	} else {
 		throw new Error(
-			"Usage: screens.mjs place|theme|seed|go|shot|set ... (see the header of this file)",
+			"Usage: screens.mjs place|theme|seed|go|offline|shot|set ... (see the header of this file)",
 		);
 	}
 } catch (error) {

@@ -178,8 +178,19 @@ For a before/after comparison with the v3 design, capture the view at the
 design's widths (sidebar 320, pane 820, phone 390) in both themes:
 
 ```bash
-node .claude/skills/verify/screens.mjs set all <label>   # five states, plus a sheet each beside the prototype
+node .claude/skills/verify/screens.mjs set all <label>   # every state, plus a sheet each beside the prototype
 ```
+
+To see PodNotes offline, `screens.mjs offline on` makes the renderer offline
+through CDP `Network.emulateNetworkConditions`, so `navigator.onLine` is false
+and the window fires `offline`. Obsidian sends every `requestUrl` call, feeds
+included, from its main process. Neither CDP nor Electron's session emulation
+reaches that process, so `offline on` also stops the fixture server. It fails
+unless the event fired and the first saved feed is unreachable. The server
+lets artwork be cached for a day, so covers seen online still show offline.
+`offline off` restarts the server and goes back online. A window reload, such
+as entering or leaving mobile emulation, puts the renderer back online, so run
+`offline on` again after it.
 
 `screenshot` and `record` reveal the PodNotes view first and fail without
 capturing when it does not open. `record` then records the window while the driver runs.
@@ -228,12 +239,16 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
 - `.claude/skills/verify/screens.mjs` captures pixels, not behavior. Its verbs
   are `place <sidebar|pane|phone>` (fails unless the view measures 320 x 720,
   820 x 680, or a 390 x 844 phone screen), `theme <light|dark>`,
-  `seed <empty|library|episodes>` (replaces `data.json` while PodNotes is
-  disabled), `go '<page JSON>'`, `shot <file.png>`, and
+  `seed <empty|library|episodes|lists|local|offline>` (replaces `data.json`
+  while PodNotes is disabled; `local` and `offline` also write media files into
+  the vault), `go '<page JSON>'`, `offline <on|off>`, `shot <file.png>`, and
   `set <state|all> <label> [--widths ...] [--themes ...]`. `set` writes
   `.obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png` and a
-  `<state>-sheet.png` with the design prototype's screen beside each shot. The
-  states are `first-run`, `add-podcast`, `library`, `episodes` and `error-feed`.
+  `<state>-sheet.png` with the design prototype's screen beside each shot, when
+  the design has one. The states are `first-run`, `add-podcast`, `library`,
+  `episodes`, `error-feed`, `queue`, `playlists`, `playlist`, `latest`,
+  `played`, `local-files` and `offline`. `set` opens each page by its page
+  JSON, so a state works on any version of the view.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
   `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
