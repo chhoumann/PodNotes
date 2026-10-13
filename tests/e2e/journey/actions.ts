@@ -50,12 +50,7 @@ export const ui = {
 		byCss(`${title} page`, `${PLAYER_VIEW} :is(h1.pn-head-title, .pn-title h1)`, title),
 	back: byCss("Back button", `${PLAYER_VIEW} .pn-head button[aria-label^="Back to "]`),
 	backTo: (label: string) =>
-		byAttribute(
-			`Back to ${label}`,
-			`${PLAYER_VIEW} .pn-head button`,
-			"aria-label",
-			`Back to ${label}`,
-		),
+		byAttribute(`Back to ${label}`, `${PLAYER_VIEW} button`, "aria-label", `Back to ${label}`),
 	listRow: (label: string) => navItem(`Library row ${label}`, ".pn-scroll > nav.pn-nav", label),
 	rail: byCss("rail", `${PLAYER_VIEW} nav.pn-rail`),
 	railItem: (label: string) => navItem(`rail item ${label}`, "nav.pn-rail", label),
