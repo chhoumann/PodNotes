@@ -330,7 +330,7 @@ describe("PodNotes persistence integration", () => {
 		expect(JSON.parse(text)).toMatchObject({ schemaVersion: 2, defaultVolume: 0.5 });
 	});
 
-	it("leaves a data.json it cannot read unchanged and refuses every save", async () => {
+	it("leaves a data.json it cannot read unchanged and refuses every save, even once it becomes readable", async () => {
 		const saveData = vi.fn().mockResolvedValue(undefined);
 		const plugin = makePlugin(saveData, { dataFileExists: true });
 		const privateFeedUrl = "podnotes-feed-url-00000000-0000-4000-8000-000000000000";
@@ -344,11 +344,23 @@ describe("PodNotes persistence integration", () => {
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
 		await plugin.loadSettings();
-		await plugin.saveSettings();
+		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const recovered = vi.fn(async () =>
+			JSON.parse(JSON.stringify(encodePodNotesData(DEFAULT_SETTINGS))),
+		);
+		Object.assign(plugin, { loadData: recovered });
+		plugin.settings.defaultVolume = 0.5;
+		await saveInBackground(plugin);
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
 
 		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
+		expect(recovered).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(0);
 		expect(saveData).not.toHaveBeenCalled();
-		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
 		expect(values.get(privateFeedUrl)).toBe("https://user:token@example.com/feed.xml");
 	});
 
@@ -373,6 +385,24 @@ describe("PodNotes persistence integration", () => {
 		await expect(queued).rejects.toThrow("window unloads");
 		await expect(late).rejects.toThrow("window unloads");
 		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(notice).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("starts no write and shows no failure Notice when unload flushes an edit after Obsidian starts closing", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		plugin.settings.defaultVolume = 0.5;
+		Object.assign(plugin, { writeRefusal: "obsidian-closing" });
+		await (plugin as unknown as { writer: { unload(): Promise<void> } }).writer.unload();
+
+		expect(plugin.loadData).toHaveBeenCalledTimes(1);
+		expect(saveData).not.toHaveBeenCalled();
 		expect(notice).not.toHaveBeenCalled();
 		expect(clock.pending()).toBe(0);
 	});
@@ -548,11 +578,15 @@ describe("PodNotes persistence integration", () => {
 			loadData: vi.fn().mockResolvedValue(older),
 		});
 		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
 
 		await plugin.onExternalSettingsChange();
 		plugin.settings.defaultVolume = 0.5;
+		await saveInBackground(plugin);
 
 		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/older version/);
+		expect(clock.pending()).toBe(0);
 		expect(saveData).not.toHaveBeenCalled();
 		expect(values.size).toBe(0);
 	});
@@ -795,6 +829,35 @@ describe("PodNotes persistence integration", () => {
 			expect(await plugin.loadData()).toMatchObject({ skipBackwardLength: 16 });
 			expect(notice).toHaveBeenCalledTimes(1);
 			expect(clock.delays).toEqual([10_000]);
+		});
+
+		it("saves an edit made once it reads again, after the edits it could not save were undone", async () => {
+			const { plugin, file, clock, notice, retry } = setup();
+			const hide = vi.spyOn(Notice.prototype, "hide");
+			file.readable = false;
+			plugin.settings.skipForwardLength = 25;
+			await saveInBackground(plugin);
+			plugin.settings.skipForwardLength = 15;
+			await saveInBackground(plugin);
+			await retry();
+			expect(clock.pending()).toBe(0);
+
+			file.readable = true;
+			plugin.settings.skipBackwardLength = 33;
+			await saveInBackground(plugin);
+			await saveInBackground(plugin);
+			const armed = { pending: clock.pending(), delays: [...clock.delays] };
+			clock.runAll();
+			await settled();
+
+			expect(await plugin.loadData()).toMatchObject({
+				skipForwardLength: 15,
+				skipBackwardLength: 33,
+			});
+			expect(armed).toEqual({ pending: 1, delays: [10_000, 0] });
+			expect(notice.mock.calls).toEqual([[refusal, 0]]);
+			expect(hide).toHaveBeenCalledTimes(1);
+			expect(clock.pending()).toBe(0);
 		});
 
 		it("warns once per streak while writes and then reads fail, and saves every edit once both work", async () => {
