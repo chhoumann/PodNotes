@@ -748,7 +748,7 @@ describe("a link to a vault file at its path", () => {
 			podcastName: "local file",
 			filePath: "Fixtures/Orphan.mp3",
 		});
-		expect(get(viewState)).toBe(ViewState.Player);
+		expect(reveal).toHaveBeenCalledTimes(1);
 		expect(media().src).toBe("app://resource/Fixtures/Orphan.mp3");
 		expect(media().currentTime).toBe(12);
 		expect(media().paused).toBe(false);
