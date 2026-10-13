@@ -13,19 +13,29 @@ export function podcastNamesAgree(podcastName: string, otherPodcastName: string)
 	return !podcastName || !otherPodcastName || podcastName === otherPodcastName;
 }
 
+/** The keys whose records are `episode`'s progress, in the order `getPlayedEpisode` reads them. */
+export function getPlayedEpisodeKeys(playedEpisodes: PlayedEpisodeMap, episode: Episode): string[] {
+	const has = (key: string) => Object.prototype.hasOwnProperty.call(playedEpisodes, key);
+	const key = getEpisodeKey(episode);
+	const keys = has(key) ? [key] : [];
+	const legacy = episode.title;
+	if (
+		legacy !== key &&
+		has(legacy) &&
+		podcastNamesAgree(playedEpisodes[legacy].podcastName, episode.podcastName)
+	) {
+		keys.push(legacy);
+	}
+	return keys;
+}
+
 export function getPlayedEpisode(
 	playedEpisodes: PlayedEpisodeMap,
 	episode: Episode | null | undefined,
 ): PlayedEpisode | undefined {
 	if (!episode) return undefined;
-
-	const own = (key: string) =>
-		Object.prototype.hasOwnProperty.call(playedEpisodes, key) ? playedEpisodes[key] : undefined;
-	const legacy = own(episode.title);
-	return (
-		own(getEpisodeKey(episode)) ??
-		(legacy && podcastNamesAgree(legacy.podcastName, episode.podcastName) ? legacy : undefined)
-	);
+	const [key] = getPlayedEpisodeKeys(playedEpisodes, episode);
+	return key === undefined ? undefined : playedEpisodes[key];
 }
 
 export function isEpisodeFinished(

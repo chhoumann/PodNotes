@@ -954,7 +954,6 @@ describe("relocate", () => {
 		reach(media(), 42);
 		expect(media().src).toBe("app://resource/Downloads/A.mp3");
 
-		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Archive/A.mp3", size: 1 }] });
 		player.relocate("Downloads/A.mp3", "Archive/A.mp3", (ep) => ep);
 
 		expect(media().src).toBe("app://resource/Archive/A.mp3");
