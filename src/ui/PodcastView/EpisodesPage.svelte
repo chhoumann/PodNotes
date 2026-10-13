@@ -64,13 +64,12 @@
 				$localFiles.episodes,
 				...Object.values($playlists).map(({ episodes }) => episodes),
 			]);
-			const found = new Set(
-				searchEpisodes(
-					query,
-					played.map(({ episode }) => episode),
-				),
-			);
-			return played.filter(({ episode }) => found.has(episode));
+			// The search's order, best match first, not the Played order.
+			const entryOf = new Map(played.map((entry) => [entry.episode, entry]));
+			return searchEpisodes(
+				query,
+				played.map(({ episode }) => episode),
+			).flatMap((episode) => entryOf.get(episode) ?? []);
 		}
 		const listed = createEpisodeListEntries(
 			searchEpisodes(

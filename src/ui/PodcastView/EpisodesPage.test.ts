@@ -335,6 +335,30 @@ describe("an episode list", () => {
 		expect(second.querySelector("img")).toBeNull();
 	});
 
+	test("Played lists a search's best match first", async () => {
+		const long = episode("Reading slowly, again and again", {
+			episodeDate: new Date("2026-02-01"),
+		});
+		const short = episode("Reading", { episodeDate: new Date("2026-01-01") });
+		renderPage({ kind: "played" }, []);
+		services.library.favorites.update((list) => ({ ...list, episodes: [long, short] }));
+		services.library.playedEpisodes.set(
+			Object.fromEntries(
+				[long, short].map(({ title }) => [
+					`${show.title}::${title}`,
+					{ title, podcastName: show.title, time: 1, duration: 1, finished: true },
+				]),
+			),
+		);
+		await waitFor(() => expect(listed()).toEqual([long.title, short.title]));
+
+		await fireEvent.input(screen.getByRole("searchbox", { name: "Search episodes" }), {
+			target: { value: "reading" },
+		});
+
+		expect(listed()).toEqual([short.title, long.title]);
+	});
+
 	test("a Played record whose episode left every feed is dimmed and says why it does not play", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		renderPage({ kind: "played" });
