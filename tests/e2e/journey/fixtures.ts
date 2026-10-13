@@ -24,6 +24,9 @@ export type FixtureFeed = Readonly<{
 	title: string;
 	slug: string;
 	query?: string;
+	/** The feed's own host and path, where the slug's would not do; media keeps the slug's. */
+	host?: string;
+	path?: string;
 	artwork: boolean;
 	episodes: readonly FixtureEpisode[];
 }>;
@@ -72,10 +75,13 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		server.once("error", reject);
 		server.listen(0, "127.0.0.1", resolve);
 	});
-	const origin = `http://${FIXTURE_HOST}:${(server.address() as AddressInfo).port}`;
+	const { port } = server.address() as AddressInfo;
+	const origin = `http://${FIXTURE_HOST}:${port}`;
 
-	const feedPath = (feed: FixtureFeed) => `/${feed.slug}/feed.xml${feed.query ?? ""}`;
-	const feedUrl = (feed: FixtureFeed) => `${origin}${feedPath(feed)}`;
+	const feedPath = (feed: FixtureFeed) =>
+		`${feed.path ?? `/${feed.slug}/feed.xml`}${feed.query ?? ""}`;
+	const feedUrl = (feed: FixtureFeed) =>
+		`http://${feed.host ?? FIXTURE_HOST}:${port}${feedPath(feed)}`;
 	const artworkUrl = (feed: FixtureFeed) => `${origin}/${feed.slug}/artwork.svg`;
 	const mediaPath = (feed: FixtureFeed, episode: FixtureEpisode) =>
 		`/${feed.slug}/${feed.episodes.indexOf(episode) + 1}.wav`;

@@ -41,7 +41,7 @@ root symlinks for local Obsidian loading.
 - `npm run lint:tsconfig`: fail with TS18003 when `tsconfig.json` or `tsconfig.test.json` matches no files, using the native compiler without type checking.
 - `npm run test`: run Svelte checks and the application Vitest suite.
 - `npm run test:unit`: run the application Vitest suite without the Svelte checks.
-- `npm run test:tooling`: run the real-process Svelte checker failure tests. CI runs these separately on every PR.
+- `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 - `npm run docs:deploy`: build docs and deploy `docs/dist` to Cloudflare Pages.
@@ -127,9 +127,10 @@ by `obsidian-e2e.config.mjs`. Each worktree gets its own vault
 `DEFAULT_SETTINGS` on first provision), private `HOME`, CLI socket, and
 Obsidian process. `start`, `run`, `test:e2e`, and a test that restarts Obsidian
 all launch it through `scripts/e2e-instance.mjs`, which adds
-`--host-resolver-rules=MAP podnotes.test 127.0.0.1`. The fixture feeds live at
-`http://podnotes.test:<port>`, so they need no DNS. The same commands work on
-both platforms:
+`--host-resolver-rules=MAP podnotes.test 127.0.0.1,MAP priv3.supercast.com 127.0.0.1`.
+The fixture feeds live at `http://podnotes.test:<port>`, and the Supercast-shaped
+private feed at `http://priv3.supercast.com:<port>`, so they need no DNS. The
+same commands work on both platforms:
 
 ```bash
 npm run build                    # the vault links the root main.js
@@ -203,8 +204,8 @@ matches no test fails the run.
 - On both platforms it builds, starts or reuses this worktree's isolated
   instance, runs `tests/e2e` against it, and stops the instance afterwards only
   if this run launched it. It never uses the shared `dev` vault.
-- The suite fails before any test runs when the instance lacks the
-  `podnotes.test` resolver rule. Stop the instance, then run
+- The suite fails before any test runs when the instance lacks these
+  resolver rules. Stop the instance, then run
   `npm run start:e2e-obsidian`.
 - The suite fails when Obsidian has more than one window open, because a second
   vault window keeps Obsidian from quitting. Close it, or stop the instance,

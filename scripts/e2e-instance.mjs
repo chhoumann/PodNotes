@@ -5,7 +5,8 @@ import { promisify } from "node:util";
 import { ensureObsidianInstance, launchObsidianInstance } from "obsidian-e2e/runner";
 
 export const FIXTURE_HOST = "podnotes.test";
-export const FIXTURE_RESOLVER_RULES = `MAP ${FIXTURE_HOST} 127.0.0.1`;
+export const SUPERCAST_FIXTURE_HOST = "priv3.supercast.com";
+export const FIXTURE_RESOLVER_RULES = `MAP ${FIXTURE_HOST} 127.0.0.1,MAP ${SUPERCAST_FIXTURE_HOST} 127.0.0.1`;
 const resolverFlag = `--host-resolver-rules=${FIXTURE_RESOLVER_RULES}`;
 const exec = promisify(execFile);
 
