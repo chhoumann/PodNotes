@@ -186,6 +186,24 @@ describe("an episode list", () => {
 		expect(services.navigation.current.expanded).toBe(true);
 	});
 
+	test("plays a same-titled episode with other media, and marks only the one playing", async () => {
+		const trailer = (n: number) =>
+			episode("Trailer", { streamUrl: `https://media.test/trailer-${n}.mp3` });
+		renderPlaylist([trailer(1), trailer(2)]);
+		const [first, second] = await screen.findAllByRole("button", { name: /^Trailer/ });
+		await fireEvent.click(first);
+		services.navigation.collapse();
+
+		await fireEvent.click(second);
+
+		expect(get(services.player.state).episode).toEqual(trailer(2));
+		expect(services.navigation.current.expanded).toBe(true);
+		expect([first, second].map((button) => button.getAttribute("aria-label"))).toEqual([
+			"Trailer",
+			"Trailer, playing",
+		]);
+	});
+
 	test("shows each episode's state in its row and its label", async () => {
 		const [played, inProgress, fresh] = [episode("Played"), episode("Halfway"), episode("New")];
 		renderPlaylist([played, inProgress, fresh]);

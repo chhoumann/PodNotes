@@ -13,7 +13,7 @@ import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
 import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
-import { isDownloaded } from "./episodeRow";
+import { isCurrentEpisode, isDownloaded } from "./episodeRow";
 import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 /** A menu item, or a separator. Menus are built as data, so tests read them as data. */
@@ -73,8 +73,7 @@ export function openEpisode(
 		new Notice("This played episode is no longer available in current feeds.");
 		return;
 	}
-	const now = get(player.state).episode;
-	if (!now || !isSameEpisode(now, episode)) player.play(episode);
+	if (!isCurrentEpisode(get(player.state).episode, episode)) player.play(episode);
 	navigation.expand();
 }
 
@@ -118,8 +117,7 @@ export function episodeMenu(
 
 	if (available) {
 		if (place !== "player") {
-			const now = get(player.state).episode;
-			const current = now !== undefined && isSameEpisode(now, episode);
+			const current = isCurrentEpisode(get(player.state).episode, episode);
 			entries.push(
 				item(current ? "Open player" : "Play", "play", () =>
 					openEpisode(services, episode),

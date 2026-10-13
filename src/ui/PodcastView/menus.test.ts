@@ -136,6 +136,12 @@ describe("an episode's menu", () => {
 		expect(services.navigation.current.expanded).toBe(true);
 	});
 
+	test("offers Play for a same-titled episode of the podcast with other media", () => {
+		services.player.play(episode);
+
+		expect(titles(menu({ ...episode, streamUrl: "https://media.test/b.mp3" }))[0]).toBe("Play");
+	});
+
 	test("adds a same-titled episode from another podcast to the queue, keeping both (#356)", () => {
 		const fromOtherPodcast = { ...episode, podcastName: "Other Podcast" };
 		queue.add(episode);
