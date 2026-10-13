@@ -147,6 +147,19 @@ describe("redactPrivateFeedAddresses", () => {
 		});
 	});
 
+	it("redacts an address an HTML attribute quotes with &amp;", () => {
+		const known = new Map([
+			[
+				"https://private.example.com/rss?auth=HTML_SENTINEL&show=1",
+				"podnotes-private-feed:Paid",
+			],
+		]);
+		const html = '<a href="https://private.example.com/rss?auth=HTML_SENTINEL&amp;show=1">';
+		expect(redactPrivateFeedAddresses({ description: html }, known)).toEqual({
+			description: '<a href="podnotes-private-feed:Paid">',
+		});
+	});
+
 	it.each([
 		["https://private.example.com", "https://%70rivate.example.com"],
 		["https://xn--bcher-kva.example.com", "https://bücher.example.com"],

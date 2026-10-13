@@ -5,6 +5,12 @@ import { DEFAULT_SETTINGS } from "./constants";
 import { createPodcastNoteFileIfNotExists } from "./createPodcastNote";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { plugin } from "./store";
+import {
+	FeedFilePathTemplateEngine,
+	FeedNoteTemplateEngine,
+	NoteTemplateEngine,
+	TranscriptTemplateEngine,
+} from "./TemplateEngine";
 import type { Episode } from "./types/Episode";
 import buildEpisodeResumeLink from "./utility/buildEpisodeResumeLink";
 
@@ -89,4 +95,46 @@ test.each([
 ])("the public resume-link builder refuses an unsubscribed private feed: %s", (feedUrl) => {
 	noteVault(false);
 	expect(buildEpisodeResumeLink({ ...episode, feedUrl })).toBe("");
+});
+
+test("a note's path, title and identity carry no subscribed feed address they quote", async () => {
+	const written = noteVault(true);
+	await createPodcastNoteFileIfNotExists({
+		...episode,
+		feedUrl: placeholder,
+		title: `Feed ${address}`,
+		guid: `${address}#1`,
+	});
+	expect(written).toHaveLength(1);
+	expect(written[0].path).toBe("PodNotes/Paid/Feed podnotes-private-feedPaid.md");
+	expect(written[0].content).toContain('guid: "podnotes-private-feed:Paid"');
+	expect(written[0].content).not.toContain("NOTE_SENTINEL");
+});
+
+test("chapters and transcripts that quote a subscribed feed render its placeholder", () => {
+	noteVault(true);
+	const quoted = `Your feed: ${address}.`;
+	const chapters = [{ startTime: 0, title: quoted }];
+	expect(NoteTemplateEngine("{{chapters}}", episode, { chapters })).toBe(
+		"- 0:00 Your feed: podnotes\\-private\\-feed:Paid\\.",
+	);
+	expect(TranscriptTemplateEngine("{{transcript}}", episode, quoted)).toBe(
+		"Your feed: podnotes-private-feed:Paid.",
+	);
+});
+
+test("a feed note for an unsubscribed private feed writes no feed address", () => {
+	noteVault(false);
+	const feed = {
+		title: "Paid",
+		url: address,
+		artworkUrl: "",
+		description: `Your feed: ${address}.`,
+	};
+	expect(FeedNoteTemplateEngine("{{feedurl}}|{{description}}", feed)).toBe(
+		"|Your feed: podnotes-private-feed:.",
+	);
+	expect(FeedFilePathTemplateEngine("{{title}}", { ...feed, title: `Paid ${address}` })).toBe(
+		"Paid podnotes-private-feed",
+	);
 });
