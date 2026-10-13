@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
-import { selectSource } from "./source";
+import { offlinePlayable, selectSource } from "./source";
 
 const episode: Episode = {
 	title: "Episode",
@@ -134,5 +134,23 @@ describe("selectSource", () => {
 			mediaType: "video",
 			filePath: "Downloads/video.mp4",
 		});
+	});
+});
+
+describe("offlinePlayable", () => {
+	test("an episode with its own vault file plays offline", () => {
+		expect(offlinePlayable(copy(episode, "Show/Episode.mp3"), {})).toBe(true);
+	});
+
+	test("an episode with a downloaded copy of its media plays offline", () => {
+		expect(offlinePlayable(episode, { Show: [copy(episode, "Show/Episode.mp3")] })).toBe(true);
+	});
+
+	test("a stream, or a same-titled download of other media, needs a connection", () => {
+		const other = copy(episode, "Show/Episode.mp3", {
+			streamUrl: "https://cdn.example.com/v2.mp3",
+		});
+		expect(offlinePlayable(episode, {})).toBe(false);
+		expect(offlinePlayable(episode, { Show: [other] })).toBe(false);
 	});
 });

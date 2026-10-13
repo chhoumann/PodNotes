@@ -8,7 +8,9 @@ import {
 	writeSilentWav,
 } from "./harness";
 
-import { click, revealInFileExplorer, showList, ui } from "./journey/actions";
+import { revealInFileExplorer, showList } from "./journey/actions";
+import { click } from "./journey/input";
+import { ui } from "./journey/targets";
 import { jsLiteral, RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 type PodNotesData = Partial<IPodNotesSettings>;

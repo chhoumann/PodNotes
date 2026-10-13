@@ -1,9 +1,19 @@
 import { Notice, type App } from "obsidian";
-import { get } from "svelte/store";
-import { favorites, playedEpisodes, playlists, queue, savedFeeds, type QueueMove } from "src/store";
+import { get, type Readable } from "svelte/store";
+import { PLAYED_SETTINGS } from "src/constants";
+import {
+	favorites,
+	localFiles,
+	playedEpisodes,
+	playlists,
+	queue,
+	savedFeeds,
+	type QueuePlacement,
+} from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { askFeedAddress } from "src/ui/settings/FeedAddressModal";
+import { askText } from "src/ui/TextPrompt";
+import { noticeWithUndo } from "src/ui/undoNotice";
 import checkStringIsUrl from "src/utility/checkStringIsUrl";
 import { isSameStoredEpisode } from "src/utility/episodeKey";
 import { ownRecord } from "src/utility/ownRecord";
@@ -14,6 +24,7 @@ import {
 	findSavedFeed,
 	internPrivateFeed,
 	notifyPrivateFeedUnavailable,
+	publicFeedUrl,
 	resolveFeedUrl,
 	setPrivateFeedAddress,
 } from "./privateFeeds";
@@ -27,16 +38,65 @@ export interface LibraryActions {
 	savedKey(feeds: Record<FeedKey, PodcastFeed>, url: string): FeedKey | undefined;
 	/** Saves the feed and returns its key, or tells the user why not and returns null. */
 	addPodcast(feed: PodcastFeed): FeedKey | null;
-	/** Also forgets a private feed's address once no saved podcast uses it. */
+	/**
+	 * Also forgets a private feed's address once no saved podcast uses it. Offers Undo,
+	 * which puts the podcast back where it was, with its address, unless it was saved
+	 * again since. Played records, downloads and the queue never left.
+	 */
 	removePodcast(key: FeedKey): void;
-	/** Asks for a saved private feed's address, checks that it loads, and keeps it on this device. */
+	/**
+	 * Asks for a feed's address, checks that it loads, and keeps it under the same key.
+	 * A private feed takes only a private address, kept on this device. A public feed
+	 * takes any address not saved for another podcast; a private one is kept as a secret.
+	 */
 	setFeedAddress(key: FeedKey): Promise<void>;
 	setQueued(episode: Episode, queued: boolean): void;
-	moveInQueue(episode: Episode, to: QueueMove): void;
+	/** Components may not import the queue store, so a gesture reorders it here. */
+	reorderQueue(move: QueuePlacement): void;
+	/** Empties the queue and offers Undo, which refills it while it is still empty. */
+	clearQueue(): void;
 	setFavorite(episode: Episode, favorite: boolean): void;
 	setInPlaylist(name: string, episode: Episode, member: boolean): void;
+	/**
+	 * Asks for a name and creates a playlist, holding `episode` when one is given. The
+	 * name, or null when the user cancels or the name is a built-in list's or taken.
+	 */
+	createPlaylist(episode?: Episode): Promise<string | null>;
+	/** Deletes a playlist of the user's and offers Undo, which puts it back where it was. */
+	deletePlaylist(name: string): void;
 	/** `playedKey` names a Played record stored under another key than the episode's. */
 	setPlayed(episode: Episode, played: boolean, playedKey?: string): void;
+}
+
+/**
+ * `now`, with each key of `before` that `now` lacks put back right after the key
+ * that preceded it in `before`, or first. `now` decides where its own keys are.
+ */
+function withRemoved(before: readonly string[], now: readonly string[]): string[] {
+	const keys = [...now];
+	before.forEach((key, index) => {
+		if (!keys.includes(key))
+			keys.splice(index === 0 ? 0 : keys.indexOf(before[index - 1]) + 1, 0, key);
+	});
+	return keys;
+}
+
+/**
+ * `current` with `value` back under `key`, in the entry order lists show: where
+ * `order`, which remembers removed keys too, puts it among the keys `current` has.
+ */
+function withRestored<T>(
+	order: readonly string[],
+	current: Record<string, T>,
+	key: string,
+	value: T,
+): Record<string, T> {
+	const kept = new Set([...Object.keys(current), key]);
+	const restored = ownRecord<T>();
+	for (const each of withRemoved(order, Object.keys(current))) {
+		if (kept.has(each)) restored[each] = each === key ? value : current[each];
+	}
+	return restored;
 }
 
 // The menu that asks for a state was built from an earlier read, so membership is
@@ -51,10 +111,12 @@ export function createLibraryActions({
 	app,
 	feeds,
 	feedUrls,
+	online,
 }: {
 	app: App;
 	feeds: FeedRepository;
 	feedUrls: FeedUrlRepository;
+	online: Readable<boolean>;
 }): LibraryActions {
 	const savedKey = (saved: Record<FeedKey, PodcastFeed>, url: string) =>
 		findSavedFeed(saved, url, feedUrls);
@@ -63,6 +125,11 @@ export function createLibraryActions({
 		console.error("PodNotes: could not store a private feed URL", error);
 		new Notice(`Could not store the private feed address for "${title}" on this device.`);
 	};
+
+	// The order of saved podcasts and of playlists, with every key removed since, so
+	// an Undo finds its place among the keys there now, after other removals and Undos.
+	let feedOrder: string[] = [];
+	let playlistOrder: string[] = [];
 
 	return {
 		savedKey,
@@ -97,9 +164,16 @@ export function createLibraryActions({
 		},
 
 		removePodcast(key) {
-			savedFeeds.update((all) => {
-				const { [key]: removed, ...rest } = all;
-				const reference = removed?.urlSecretId?.trim();
+			const all = get(savedFeeds);
+			const removed = ownRecord(all)[key];
+			if (!removed) return;
+			feedOrder = withRemoved(feedOrder, Object.keys(all));
+			const reference = removed.urlSecretId?.trim();
+			// Read before the removal can forget it, for Undo.
+			const address = reference ? feedUrls.resolve(reference) : null;
+			savedFeeds.update((current) => {
+				const rest = ownRecord(current);
+				delete rest[key];
 				if (
 					reference &&
 					!Object.values(rest).some((feed) => feed.urlSecretId?.trim() === reference)
@@ -108,43 +182,125 @@ export function createLibraryActions({
 				}
 				return rest;
 			});
+			noticeWithUndo(`Removed ${removed.title}`, () => {
+				const current = get(savedFeeds);
+				if (ownRecord(current)[key] || savedKey(current, address ?? removed.url)) return;
+				if (reference && address) {
+					try {
+						feedUrls.attach(reference, address);
+					} catch (error) {
+						notStored(removed.title, error);
+						return;
+					}
+				}
+				savedFeeds.update((now) => withRestored(feedOrder, now, key, removed));
+			});
 		},
 
 		async setFeedAddress(key) {
 			const feed = ownRecord(get(savedFeeds))[key];
 			if (!feed) return;
-			const entered = (await askFeedAddress(app, feed.title))?.trim();
-			if (!entered) return;
-			const url = checkStringIsUrl(entered);
-			if (url?.protocol !== "http:" && url?.protocol !== "https:") {
-				new Notice("Enter the feed's http or https address.");
-				return;
-			}
-			if (!isCredentialBearingUrl(url.href)) {
-				new Notice("Enter a private feed address.");
-				return;
-			}
+			// A sync replaces every record, unchanged or not, so the podcast is the same one
+			// while it stays in the library. Removed and followed again, even from the same
+			// search result, it is another subscription.
+			let left = false;
+			const unsubscribe = savedFeeds.subscribe((all) => {
+				if (!ownRecord(all)[key]) left = true;
+			});
+			const isPrivate = Boolean(feed.urlSecretId?.trim());
+			const refusal = (address?: string): string | undefined => {
+				if (left) return `${feed.title} was removed while its address was edited.`;
+				const now = ownRecord(get(savedFeeds))[key];
+				if (now.url !== feed.url || now.urlSecretId !== feed.urlSecretId)
+					return `${feed.title} changed while its address was edited. Try again.`;
+				if (!get(online)) return "Setting a feed address needs a connection.";
+				if (address === undefined || isPrivate) return undefined;
+				const saved = get(savedFeeds);
+				const other = savedKey(saved, address);
+				if (other !== undefined && other !== key)
+					return `You already follow ${saved[other].title} at that address.`;
+				return undefined;
+			};
 			try {
-				await feeds.channelAt({ url: url.href });
-			} catch {
-				// An error's text can carry the address, a secret.
-				new Notice("Could not load the feed at that address.");
-				return;
+				let why = refusal();
+				if (why) {
+					new Notice(why);
+					return;
+				}
+				const entered = await askText(app, {
+					title: feed.title,
+					label: "Feed address",
+					cta: "Save",
+					value: publicFeedUrl(feed),
+				});
+				if (entered === null) return;
+				why = refusal();
+				if (why) {
+					new Notice(why);
+					return;
+				}
+				const url = checkStringIsUrl(entered);
+				if (url?.protocol !== "http:" && url?.protocol !== "https:") {
+					new Notice("Enter the feed's http or https address.");
+					return;
+				}
+				if (isPrivate && !isCredentialBearingUrl(url.href)) {
+					new Notice("Enter a private feed address.");
+					return;
+				}
+				why = refusal(url.href);
+				if (why) {
+					new Notice(why);
+					return;
+				}
+				try {
+					await feeds.channelAt({ url: url.href });
+				} catch {
+					// An error's text can carry the address, a secret.
+					new Notice("Could not load the feed at that address.");
+					return;
+				}
+				// A sync can also save the address for another podcast while it loads.
+				why = refusal(url.href);
+				if (why) {
+					new Notice(why);
+					return;
+				}
+				try {
+					if (isPrivate) setPrivateFeedAddress(feed, url.href, feedUrls);
+					else {
+						// A private address pasted for a public feed is kept as a secret, never in
+						// settings. The rest of the record is the one saved now, with a sync's changes.
+						const current = ownRecord(get(savedFeeds))[key];
+						const edited = internPrivateFeed(
+							{ ...current, url: url.href },
+							feedUrls,
+							key,
+						);
+						savedFeeds.update((all) => ({ ...all, [key]: edited }));
+					}
+				} catch (error) {
+					notStored(feed.title, error);
+					return;
+				}
+				void feeds.load([key], "network");
+			} finally {
+				unsubscribe();
 			}
-			// A sync can replace the feed while its address loads.
-			const current = ownRecord(get(savedFeeds))[key];
-			if (!current || current.urlSecretId !== feed.urlSecretId) return;
-			try {
-				setPrivateFeedAddress(current, url.href, feedUrls);
-			} catch (error) {
-				notStored(feed.title, error);
-				return;
-			}
-			void feeds.load([key], "network");
 		},
 
 		setQueued: (episode, queued) => (queued ? queue.add(episode) : queue.remove(episode)),
-		moveInQueue: (episode, to) => queue.move(episode, to),
+		reorderQueue: (move) => queue.reorder(move),
+		clearQueue() {
+			const cleared = get(queue).episodes;
+			if (cleared.length === 0) return;
+			queue.update((list) => ({ ...list, episodes: [] }));
+			noticeWithUndo("Queue cleared", () => {
+				// Anything queued since, by the user or by playback, wins over the old queue.
+				if (get(queue).episodes.length === 0)
+					queue.update((list) => ({ ...list, episodes: cleared }));
+			});
+		},
 		setFavorite: (episode, favorite) =>
 			favorites.update((list) => ({
 				...list,
@@ -163,6 +319,51 @@ export function createLibraryActions({
 						}
 					: all;
 			}),
+		async createPlaylist(episode) {
+			const name = await askText(app, {
+				title: "New playlist",
+				label: "Playlist name",
+				placeholder: "Name",
+				cta: "Create",
+			});
+			if (name === null) return null;
+			// A built-in list's name would make a custom playlist's page show the built-in list.
+			const builtIn = [get(queue), get(favorites), get(localFiles), PLAYED_SETTINGS];
+			if (builtIn.some((list) => list.name === name)) {
+				new Notice(`"${name}" is a reserved playlist name.`);
+				return null;
+			}
+			if (ownRecord(get(playlists))[name]) {
+				new Notice("A playlist with that name already exists.");
+				return null;
+			}
+			playlists.update((all) => ({
+				...all,
+				[name]: {
+					name,
+					icon: "list-music",
+					episodes: episode ? [episode] : [],
+					shouldEpisodeRemoveAfterPlay: false,
+					shouldRepeat: false,
+				},
+			}));
+			return name;
+		},
+		deletePlaylist(name) {
+			const all = get(playlists);
+			const deleted = ownRecord(all)[name];
+			if (!deleted) return;
+			playlistOrder = withRemoved(playlistOrder, Object.keys(all));
+			playlists.update((current) => {
+				const rest = ownRecord(current);
+				delete rest[name];
+				return rest;
+			});
+			noticeWithUndo(`Deleted ${name}`, () => {
+				if (ownRecord(get(playlists))[name]) return;
+				playlists.update((current) => withRestored(playlistOrder, current, name, deleted));
+			});
+		},
 		setPlayed(episode, played, playedKey) {
 			if (played) playedEpisodes.markAsPlayed(episode);
 			else if (playedKey) playedEpisodes.markKeyAsUnplayed(playedKey);

@@ -575,3 +575,53 @@ describe("Create episode note", () => {
 		expect(command(commands)(true)).toBe(false);
 	});
 });
+
+describe("Reorder Queue", () => {
+	it("reveals the view, then opens the Queue page, with any queue", async () => {
+		const { plugin, commands, run } = await loadPlugin({ schemaVersion: 2 });
+		const order: string[] = [];
+		vi.spyOn(plugin, "activateView").mockImplementation(async () => {
+			order.push(`reveal on ${plugin.navigation.current.page.kind}`);
+		});
+		plugin.navigation.replace({ kind: "playlists" });
+
+		// A check would hide it from the palette while the queue is short.
+		expect(commands.find(({ id }) => id === "reorder-queue")?.checkCallback).toBeUndefined();
+		run("reorder-queue");
+
+		await vi.waitFor(() => expect(plugin.navigation.current.page).toEqual({ kind: "queue" }));
+		expect(order).toEqual(["reveal on playlists"]);
+	});
+
+	it("logs a view that does not open, and stays on the page it was on", async () => {
+		const { plugin, run } = await loadPlugin({ schemaVersion: 2 });
+		const failure = new Error("no leaf");
+		vi.spyOn(plugin, "activateView").mockRejectedValue(failure);
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		plugin.navigation.replace({ kind: "playlists" });
+
+		run("reorder-queue");
+
+		await vi.waitFor(() =>
+			expect(logged.mock.calls).toEqual([["PodNotes: failed to open the Queue", failure]]),
+		);
+		expect(plugin.navigation.current.page).toEqual({ kind: "playlists" });
+	});
+});
+
+describe("Transcribe", () => {
+	it.each(["podnotes-transcribe", "podnotes-transcribe-audio"])(
+		"%s is available for an audio episode only while online",
+		async (id) => {
+			const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+			const { commands } = await loadPlugin(playing);
+			const available = () =>
+				commands.find((command) => command.id === id)!.checkCallback!(true);
+
+			expect(available()).toBe(true);
+			online.mockReturnValue(false);
+			window.dispatchEvent(new Event("offline"));
+			expect(available()).toBe(false);
+		},
+	);
+});

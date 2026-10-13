@@ -45,11 +45,14 @@ function renderView() {
 					app,
 					feeds,
 					feedUrls: new FeedUrlRepository(app.secretStorage),
+					online: readable(true),
 				}),
-				search: new PodcastSearch(feeds),
+				search: new PodcastSearch(feeds, readable(true)),
+				online: readable(true),
 				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},
+				setAutoQueue: () => {},
 				hasNote: () => false,
 				rowHasNote: readable(() => false),
 			},
@@ -324,37 +327,6 @@ describe("PodcastView integration flow", () => {
 		expect(screen.getByText("Played")).toBeInTheDocument();
 	});
 
-	test("does not apply a delayed played feed refresh after leaving the played view", async () => {
-		const playedEpisode = episode("Already Finished", testFeed, "2023-01-15T00:00:00.000Z");
-		const refresh = deferred<ParsedFeedEpisodes>();
-		respondByUrl({ [testFeed.url]: [testEpisode, playedEpisode] });
-		playedEpisodes.set({
-			[`${testFeed.title}::${playedEpisode.title}`]: {
-				title: playedEpisode.title,
-				podcastName: testFeed.title,
-				time: 100,
-				duration: 100,
-				finished: true,
-			},
-		});
-		usePlugin();
-
-		renderView();
-
-		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
-		await openList("Played");
-		expect(await screen.findByText("Already Finished")).toBeInTheDocument();
-
-		mockLoad.mockReturnValueOnce(refresh.promise);
-		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
-		await back();
-		await openList("Latest episodes");
-		refresh.resolve(feedDocument(testFeed.title, [testEpisode]));
-
-		await waitFor(() => expect(listed()).toEqual([testEpisode.title]));
-		expect(screen.getByRole("heading", { name: "Latest episodes" })).toBeInTheDocument();
-	});
-
 	test("Latest episodes shows episodes that loaded while the library was open (#375)", async () => {
 		usePlugin();
 
@@ -423,7 +395,7 @@ describe("PodcastView integration flow", () => {
 
 		savedFeeds.set({ [testFeed.title]: testFeed });
 		expect(await screen.findByRole("heading", { name: "Latest episodes" })).toBeInTheDocument();
-		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
+		await fireEvent.click(screen.getByLabelText("Refresh all feeds"));
 
 		expect(mockLoad).toHaveBeenLastCalledWith(testFeed.url);
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();

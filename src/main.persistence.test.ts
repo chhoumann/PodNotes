@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import { encodePodNotesData } from "./persistence/podNotesData";
 import { PlayerController } from "./player/PlayerController";
-import { downloadedEpisodes, localFiles } from "./store";
+import { downloadedEpisodes, localFiles, plugin as pluginStore } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
 import {
@@ -1716,5 +1716,25 @@ describe("a device that started before sync delivered its data.json", () => {
 
 		expect(Object.keys(established.plugin.settings.savedFeeds)).toEqual(["Library Feed"]);
 		expect(established.plugin.settings.defaultVolume).toBe(0.5);
+	});
+});
+
+describe("the auto-queue preference", () => {
+	it("has one writer, which tells the views and saves it once", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		const seen: boolean[] = [];
+		pluginStore.set(undefined as never);
+		const stop = pluginStore.subscribe((host) => host && seen.push(host.settings.autoQueue));
+
+		plugin.setAutoQueue(false);
+		plugin.setAutoQueue(false);
+		await settled();
+		stop();
+
+		expect(seen).toEqual([false]);
+		expect(
+			saveData.mock.calls.map(([data]) => (data as { autoQueue: boolean }).autoQueue),
+		).toEqual([false]);
 	});
 });

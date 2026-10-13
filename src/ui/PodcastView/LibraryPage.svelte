@@ -2,13 +2,14 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
+	import { shownFailure } from "./feedState";
 	import type { Layout } from "./layout";
 	import { anchorOf, podcastMenu, showMenu } from "./menus";
 	import { LIST_ROOTS, type RootCounts } from "./pages";
 
 	let { layout, counts }: { layout: Layout; counts: RootCounts } = $props();
 	const services = useServices();
-	const { navigation, feeds, library } = services;
+	const { navigation, feeds, library, online } = services;
 	const { savedFeeds } = library;
 	const id = $props.id();
 </script>
@@ -32,7 +33,8 @@
 {/if}
 <div class="pn-grid">
 	{#each Object.entries($savedFeeds) as [key, feed] (key)}
-		{@const failed = $feeds.get(key)?.error !== undefined}
+		{@const feedState = $feeds.get(key)}
+		{@const failed = feedState !== undefined && shownFailure(feedState, $online) !== undefined}
 		<button
 			type="button"
 			class="pn-gridcard"

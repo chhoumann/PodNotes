@@ -1,5 +1,5 @@
 import { debounce } from "obsidian";
-import { writable, type Readable, type Subscriber, type Unsubscriber } from "svelte/store";
+import { get, writable, type Readable, type Subscriber, type Unsubscriber } from "svelte/store";
 import {
 	lookupiTunesPodcast,
 	parseApplePodcastsId,
@@ -38,7 +38,10 @@ export class PodcastSearch implements Readable<SearchState> {
 		true,
 	);
 
-	constructor(private readonly feeds: Pick<FeedRepository, "channelAt">) {}
+	constructor(
+		private readonly feeds: Pick<FeedRepository, "channelAt">,
+		private readonly online: Readable<boolean>,
+	) {}
 
 	subscribe(run: Subscriber<SearchState>): Unsubscriber {
 		return this.state.subscribe(run);
@@ -72,11 +75,13 @@ export class PodcastSearch implements Readable<SearchState> {
 		failure: SearchFailure,
 		find: () => Promise<PodcastResult[] | "no-feed">,
 	): Promise<void> {
-		let found: PodcastResult[] | SearchFailure;
-		try {
-			found = await find();
-		} catch {
-			found = navigator.onLine ? failure : "offline";
+		let found: PodcastResult[] | SearchFailure = "offline";
+		if (get(this.online)) {
+			try {
+				found = await find();
+			} catch {
+				found = get(this.online) ? failure : "offline";
+			}
 		}
 		if (run !== this.latest) return;
 		this.state.update(({ query }) =>

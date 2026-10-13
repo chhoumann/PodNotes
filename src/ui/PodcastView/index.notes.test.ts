@@ -52,7 +52,10 @@ async function openPodcastPage(notes: string[]) {
 	const app = {
 		...services.app,
 		vault,
-		workspace: { layoutReady: true, onLayoutReady: (ready: () => void) => ready() },
+		workspace: Object.assign(services.app.workspace, {
+			layoutReady: true,
+			onLayoutReady: (ready: () => void) => ready(),
+		}),
 	};
 	const settings = structuredClone(DEFAULT_SETTINGS);
 	settings.note.path = "Notes/{{title}}.md";
