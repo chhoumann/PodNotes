@@ -1,5 +1,8 @@
-import { describe, expect, test } from "vitest";
-import { chapterAt, segmentsOf } from "./chapters";
+import { describe, expect, test, vi } from "vitest";
+import { fetchChapters } from "src/utility/fetchChapters";
+import { cachedChapters, chapterAt, loadChapters, segmentsOf } from "./chapters";
+
+vi.mock("src/utility/fetchChapters", () => ({ fetchChapters: vi.fn() }));
 
 const chapters = [0, 60, 120].map((startTime) => ({ startTime, title: `At ${startTime}` }));
 
@@ -31,5 +34,18 @@ describe("chapters", () => {
 			[120, 180],
 		]);
 		expect(segmentsOf([], 0)).toEqual([[0, 0]]);
+	});
+
+	test("a load that failed, as offline, fetches again the next time", async () => {
+		const url = "https://pod.test/chapters.json";
+		vi.mocked(fetchChapters).mockResolvedValueOnce([]).mockResolvedValueOnce(chapters);
+
+		expect(await loadChapters(url)).toEqual([]);
+		expect(cachedChapters(url)).toBeUndefined();
+		expect(await loadChapters(url)).toEqual(chapters);
+
+		expect(fetchChapters).toHaveBeenCalledTimes(2);
+		expect(cachedChapters(url)).toEqual(chapters);
+		expect(cachedChapters("https://pod.test/other.json")).toBeUndefined();
 	});
 });

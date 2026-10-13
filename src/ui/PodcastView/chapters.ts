@@ -20,10 +20,16 @@ export function segmentsOf(chapters: readonly Chapter[], duration: number): [num
 	return bounds.slice(1).map((end, index) => [bounds[index], end]);
 }
 
-let last: { url: string; chapters: Promise<Chapter[]> } | undefined;
+let last: { url: string; chapters: Chapter[] } | undefined;
 
-/** The chapters at `url`. The last one stays loaded, so reopening the player fetches nothing. */
-export function loadChapters(url: string): Promise<Chapter[]> {
-	if (last?.url !== url) last = { url, chapters: fetchChapters(url) };
-	return last.chapters;
+/** The chapters last loaded, while they are the ones at `url`. */
+export function cachedChapters(url: string): Chapter[] | undefined {
+	return last?.url === url ? last.chapters : undefined;
+}
+
+/** The chapters at `url`. A failed load, as offline, is not kept, so the next one fetches again. */
+export async function loadChapters(url: string): Promise<Chapter[]> {
+	const chapters = await fetchChapters(url);
+	if (chapters.length > 0) last = { url, chapters };
+	return chapters;
 }

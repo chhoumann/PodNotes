@@ -8,7 +8,7 @@
 	import { ownRecord } from "src/utility/ownRecord";
 	import { normalizeSkipLength } from "src/utility/skipLength";
 	import { icon } from "../obsidian/icon";
-	import { chapterAt, loadChapters } from "./chapters";
+	import { cachedChapters, chapterAt, loadChapters } from "./chapters";
 	import ChaptersPanel from "./ChaptersPanel.svelte";
 	import { useServices } from "./context";
 	import { sourceOf } from "./episodeRow";
@@ -71,9 +71,13 @@
 
 	$effect.pre(() => {
 		const url = chaptersUrl;
-		chapters = [];
+		// A choice of Chapters belongs to the episode it was made on.
+		panel = undefined;
+		const cached = url && cachedChapters(url);
+		chapters = cached || [];
+		if (!url || cached) return;
 		let latest = true;
-		if (url) void loadChapters(url).then((loaded) => latest && (chapters = loaded));
+		void loadChapters(url).then((loaded) => latest && (chapters = loaded));
 		return () => (latest = false);
 	});
 

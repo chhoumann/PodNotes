@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
-import { tick } from "svelte";
+import { flushSync, tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
@@ -347,6 +347,36 @@ describe("the player's panels", () => {
 			"aria-selected",
 			"true",
 		);
+	});
+
+	test("a reopened player shows the chapters it loaded on its first frame", async () => {
+		await openPlayer({ ...episode, chaptersUrl: "https://pod.test/reopened.json" }, 820);
+		await vi.waitFor(() => expect(screen.getByRole("tab", { name: "Chapters" })).toBeVisible());
+		await fireEvent.click(button("Collapse player"));
+
+		flushSync(() => services.navigation.expand());
+
+		expect(screen.getByRole("tab", { name: "Chapters" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+	});
+
+	test("a choice of Chapters stays with its episode", async () => {
+		const { player } = await openPlayer(withChapters);
+		await vi.waitFor(() => expect(switchButton("Chapters")).toBeInTheDocument());
+		await fireEvent.click(switchButton("Chapters"));
+		services.player.play(queued("Without chapters"));
+		await tick();
+
+		services.player.play({
+			...queued("Also with chapters"),
+			chaptersUrl: "https://pod.test/also.json",
+		});
+		await vi.waitFor(() => expect(switchButton("Chapters")).toBeInTheDocument());
+
+		expect(switchButton("Chapters")).toHaveAttribute("aria-pressed", "false");
+		expect(player.querySelector(".pn-np-art")).not.toBeNull();
 	});
 
 	test("the current chapter is named under the scrubber, opens Chapters, and is marked there", async () => {
