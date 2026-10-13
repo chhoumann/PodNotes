@@ -290,7 +290,7 @@ describe("editing a public feed's address", () => {
 
 		expect(get(savedFeeds)["The Show"]).toEqual(synced);
 		expect(notice.mock.calls).toEqual([
-			["The Show changed while its address loaded. Try again."],
+			["The Show changed while its address was edited. Try again."],
 		]);
 	});
 
@@ -309,7 +309,7 @@ describe("editing a public feed's address", () => {
 
 		expect(get(savedFeeds)["The Show"]).toBe(show);
 		expect(notice).toHaveBeenLastCalledWith(
-			"The Show changed while its address loaded. Try again.",
+			"The Show was removed while its address was edited.",
 		);
 	});
 
@@ -324,7 +324,21 @@ describe("editing a public feed's address", () => {
 		expect(fetchTextMock).not.toHaveBeenCalled();
 		expect(Object.keys(get(savedFeeds))).toEqual(["First", "Last"]);
 		expect(notice).toHaveBeenLastCalledWith(
-			"The Show changed while its address loaded. Try again.",
+			"The Show was removed while its address was edited.",
+		);
+	});
+
+	test("says a podcast removed while its address is typed was removed, not that it needs a connection", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { actions } = saved();
+
+		const setting = actions.setFeedAddress("The Show");
+		actions.removePodcast("The Show");
+		online.set(false);
+		await enterAddress(setting, NEW_URL);
+
+		expect(notice).toHaveBeenLastCalledWith(
+			"The Show was removed while its address was edited.",
 		);
 	});
 });
@@ -434,7 +448,7 @@ describe("setting a private feed's address on this device", () => {
 		expect(thisDevice.listSecrets()).toEqual([]);
 		expect(get(savedFeeds)).toEqual({ "Private Show": replaced });
 		expect(notice.mock.calls).toEqual([
-			["Private Show changed while its address loaded. Try again."],
+			["Private Show changed while its address was edited. Try again."],
 		]);
 	});
 });

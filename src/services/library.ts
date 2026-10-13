@@ -183,29 +183,38 @@ export function createLibraryActions({
 			const unsubscribe = savedFeeds.subscribe((all) => {
 				if (!ownRecord(all)[key]) left = true;
 			});
-			const changed = () => {
+			const isPrivate = Boolean(feed.urlSecretId?.trim());
+			const refusal = (address?: string): string | undefined => {
+				if (left) return `${feed.title} was removed while its address was edited.`;
 				const now = ownRecord(get(savedFeeds))[key];
-				if (!left && now.url === feed.url && now.urlSecretId === feed.urlSecretId) {
-					return false;
-				}
-				new Notice(`${feed.title} changed while its address loaded. Try again.`);
-				return true;
-			};
-			const offline = () => {
-				if (get(online)) return false;
-				new Notice("Setting a feed address needs a connection.");
-				return true;
+				if (now.url !== feed.url || now.urlSecretId !== feed.urlSecretId)
+					return `${feed.title} changed while its address was edited. Try again.`;
+				if (!get(online)) return "Setting a feed address needs a connection.";
+				if (address === undefined || isPrivate) return undefined;
+				const saved = get(savedFeeds);
+				const other = savedKey(saved, address);
+				if (other !== undefined && other !== key)
+					return `You already follow ${saved[other].title} at that address.`;
+				return undefined;
 			};
 			try {
-				if (offline()) return;
-				const isPrivate = Boolean(feed.urlSecretId?.trim());
+				let why = refusal();
+				if (why) {
+					new Notice(why);
+					return;
+				}
 				const entered = await askText(app, {
 					title: feed.title,
 					label: "Feed address",
 					cta: "Save",
 					value: publicFeedUrl(feed),
 				});
-				if (entered === null || changed() || offline()) return;
+				if (entered === null) return;
+				why = refusal();
+				if (why) {
+					new Notice(why);
+					return;
+				}
 				const url = checkStringIsUrl(entered);
 				if (url?.protocol !== "http:" && url?.protocol !== "https:") {
 					new Notice("Enter the feed's http or https address.");
@@ -215,15 +224,11 @@ export function createLibraryActions({
 					new Notice("Enter a private feed address.");
 					return;
 				}
-				const taken = () => {
-					if (isPrivate) return false;
-					const saved = get(savedFeeds);
-					const other = savedKey(saved, url.href);
-					if (other === undefined || other === key) return false;
-					new Notice(`You already follow ${saved[other].title} at that address.`);
-					return true;
-				};
-				if (taken()) return;
+				why = refusal(url.href);
+				if (why) {
+					new Notice(why);
+					return;
+				}
 				try {
 					await feeds.channelAt({ url: url.href });
 				} catch {
@@ -232,7 +237,11 @@ export function createLibraryActions({
 					return;
 				}
 				// A sync can also save the address for another podcast while it loads.
-				if (changed() || offline() || taken()) return;
+				why = refusal(url.href);
+				if (why) {
+					new Notice(why);
+					return;
+				}
 				try {
 					if (isPrivate) setPrivateFeedAddress(feed, url.href, feedUrls);
 					else {
