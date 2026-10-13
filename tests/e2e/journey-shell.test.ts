@@ -88,12 +88,14 @@ async function savedViewStates(): Promise<unknown[]> {
 	})()`);
 }
 
+/** What the core Properties plugin shows in Obsidian's status bar, over the bottom right of the window. */
 async function propertiesItem(): Promise<string> {
 	return await getContext().obsidian.dev.evalJson<string>(
 		'document.querySelector(".status-bar .plugin-properties").innerText',
 	);
 }
 
+/** Opens a note with nine properties in the main area, so the status bar shows "9 properties". */
 async function showStatusBarItem(): Promise<void> {
 	const { obsidian, sandbox } = getContext();
 	const notePath = sandbox.path("Nine properties.md");

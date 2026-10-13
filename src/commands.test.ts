@@ -585,6 +585,7 @@ describe("Reorder Queue", () => {
 		});
 		plugin.navigation.replace({ kind: "playlists" });
 
+		// A check would hide it from the palette while the queue is short.
 		expect(commands.find(({ id }) => id === "reorder-queue")?.checkCallback).toBeUndefined();
 		run("reorder-queue");
 

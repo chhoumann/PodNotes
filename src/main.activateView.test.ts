@@ -245,6 +245,8 @@ describe("PodNotes.onLayoutReady", () => {
 
 			expect(rightLeaf.setViewState).not.toHaveBeenCalled();
 			expect(workspace.revealLeaf).not.toHaveBeenCalled();
+			// Detaching would move a leaf the user placed back to its default spot on
+			// the next load. Obsidian cleans up an unloaded view's leaves itself.
 			expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
 		});
 	});

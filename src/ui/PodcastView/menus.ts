@@ -276,6 +276,7 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 	];
 }
 
+/** The Queue page's options. The preference item asks for the opposite of what its menu showed. */
 export function queueMenu({
 	library,
 	actions,

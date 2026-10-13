@@ -110,6 +110,7 @@ export function registerCommands(plugin: PodNotes): void {
 		id: "reorder-queue",
 		name: "Reorder Queue",
 		icon: "list-ordered",
+		// A check would hide it from the palette while the queue is short.
 		// Reveal first: restoring the workspace while the view reveals would replace the page.
 		callback: () => {
 			void plugin
