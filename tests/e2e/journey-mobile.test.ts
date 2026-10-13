@@ -1,6 +1,7 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
+	assertNoRuntimeErrors,
 	click,
 	closePodNotes,
 	closeSettings,
@@ -10,14 +11,46 @@ import {
 	waitUntilShown,
 } from "./journey/actions";
 import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
-import { RELOAD_OPTIONS } from "./runtime";
+import { PLUGIN_ID, RELOAD_OPTIONS, waitForPodNotesReady } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-mobile");
 
 describe("mobile journeys", () => {
 	// Obsidian's mobile emulation on desktop: the plugin runs its mobile code paths and
 	// the mobile layout, but this is not an iOS or Android device.
-	test("J-ONB-02 on a mobile first launch PodNotes stays closed until its ribbon icon opens it", async () => {
+	test("J-ONB-02 a new install on mobile opens PodNotes once, on First run", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		await seedLibrary(context, null);
+		await setMobileEmulation(obsidian, true);
+		await closePodNotes(obsidian);
+		const dataFile = await obsidian.dev.evalJsonAsync<{ before: boolean }>(`(async () => {
+			const path = app.vault.configDir + "/plugins/${PLUGIN_ID}/data.json";
+			await app.workspace.saveLayout();
+			await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)});
+			await app.vault.adapter.remove(path);
+			const before = await app.vault.adapter.exists(path);
+			await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)});
+			return { before };
+		})()`);
+		expect(dataFile.before, "no data.json, as on a new install").toBe(false);
+		await waitForPodNotesReady(obsidian);
+
+		await waitUntilShown(obsidian, ui.firstRun);
+		const deadline = Date.now() + 1500;
+		const leaves = await obsidian.waitFor(
+			async () => {
+				const count = await playerLeafCount(obsidian);
+				return count !== 1 || Date.now() >= deadline ? { count } : false;
+			},
+			{ timeoutMs: 10_000, intervalMs: 100, message: "the view to stay a single leaf" },
+		);
+		expect(leaves.count).toBe(1);
+		expect((await readLibrary(plugin)).subscriptions).toEqual([]);
+		await assertNoRuntimeErrors(obsidian);
+	}, 120_000);
+
+	test("J-ONB-02 on a later mobile start PodNotes stays closed until its ribbon icon opens it", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		await seedLibrary(context, null);
