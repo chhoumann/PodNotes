@@ -19,8 +19,8 @@ PodNotes cannot sign in to providers that require a browser login. If PodNotes c
 
 The podcast syncs to your other devices, but its address does not. On each other device, enter the address once:
 
-1. If the device already has PodNotes, update it first, before you use PodNotes there. An older PodNotes can overwrite your library when sync brings the new one.
-2. Let your sync service bring your vault to the device. It must sync plugin settings, as [What syncs](/sync/#what-syncs) describes.
+1. If the device already has PodNotes, update it before you use PodNotes there. An older PodNotes does not merge, so it can overwrite the library that sync brings.
+2. Let your sync service bring your vault to the device. It must sync plugin settings. With Obsidian Sync, turn on **Installed community plugins** under **Vault configuration sync**, as [What syncs](/sync/#what-syncs) describes.
 3. If PodNotes is not on the device, install it. The podcast then appears on the device. Do not add it again from its address.
 4. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
 5. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item.
@@ -44,7 +44,7 @@ In these docs, a private feed is a feed with such an address. PodNotes does not 
 
 PodNotes 2.22.0 recognizes the hosts in [Private feed hosts](#private-feed-hosts), for example a Supercast address such as `https://myshow.supercast.com/feed/abc123.rss`. The first time PodNotes 2.22.0 starts, it moves the address of each matching podcast out of `data.json` into secret storage and shows "Moved private feed URLs out of data.json." The podcast keeps working on that device.
 
-Update PodNotes on every device first. An older PodNotes cannot load these podcasts, and because it does not merge, it can overwrite the changes from your other devices. Then, on each other device, enter the address of each moved podcast once with [Set feed address](#use-a-private-feed-on-another-device).
+Update PodNotes on every device first. An older PodNotes cannot load these podcasts, and because it does not [merge changes](/sync/#changes-on-two-devices), it can overwrite the changes from your other devices. Then, on each other device, enter the address of each moved podcast once with [Set feed address](#use-a-private-feed-on-another-device).
 
 Notes and links that you created before the update keep the address in their text. Those links still play on every device, because they hold the address itself. PodNotes does not rewrite them.
 

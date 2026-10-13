@@ -45,13 +45,13 @@ PodNotes inserts a timestamp link at the cursor, or shows "Play an episode to ca
 
 On Android, Obsidian does not pass headset buttons or lock screen controls to PodNotes, so they do not work there. To capture on Android, use [a capture button in the editor toolbar](#add-a-capture-button-to-the-editor-toolbar). On an iPhone or iPad, the controls should work as on a computer, but they are not tested yet.
 
-On a computer, these controls work while an episode is loaded, playing or paused:
+On a computer, these controls work while an episode is loaded, playing, or paused:
 
 | Control | What it does |
 | --- | --- |
 | Play and pause | Plays or pauses the episode. |
 | Skip backward and skip forward | Moves by **Skip backward length (s)** or **Skip forward length (s)**, 15 seconds by default. |
-| Next track | Jumps forward 30 seconds, whatever your skip lengths are. |
+| Next track | Jumps forward up to 30 seconds, whatever your skip lengths are. |
 | Previous track | Captures a timestamp. |
 | A point on the system's progress bar | Jumps to that point. |
 

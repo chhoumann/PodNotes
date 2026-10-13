@@ -28,10 +28,10 @@ PodNotes merges the changes your devices make, so you can switch devices without
 2. Note the time where you stopped.
 3. Wait until your sync service finishes uploading.
 4. On the device you are switching to, wait until sync finishes.
-5. If this device's player shows the episode at another time, move the progress bar to the time you noted.
+5. If this device's player shows the episode at another time, move the progress bar to the time you noted. If it shows another episode, select your episode in its podcast's list instead. It starts at the synced time.
 6. Play the episode.
 
-Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. The same happens when you moved the episode's position on that device before you played it. Other episodes start at their synced position when you play them.
+Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. This also happens when you moved the episode's position on that device without playing it. Other episodes start at their synced position when you play them.
 
 ## Changes on two devices
 
@@ -65,7 +65,7 @@ A device that starts PodNotes before sync delivers `data.json` starts a library 
 
 ## When PodNotes saves
 
-PodNotes saves a change as soon as you make it. During playback, it saves your position at most every 10 seconds.
+PodNotes saves a change as soon as you make it. During playback, it saves your position about every 10 seconds.
 
 PodNotes also saves your position at once when you pause, play another episode, or turn off PodNotes, when an episode ends, and when the Obsidian window is hidden, such as when you switch apps on a phone.
 To make sure PodNotes saves your latest position, pause before you quit Obsidian.
