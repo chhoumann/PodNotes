@@ -27,7 +27,6 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-/** A feed repository whose every fetch fails. */
 const unreachable = () =>
 	new FeedRepository({
 		load: () => Promise.reject(new Error("unreachable")),

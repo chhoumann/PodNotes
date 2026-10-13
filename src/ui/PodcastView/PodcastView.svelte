@@ -585,7 +585,6 @@
 			object-fit: cover;
 		}
 
-		/* The title stands in for artwork that is missing or fails to load. */
 		.pn-cover.is-text {
 			display: flex;
 			align-items: flex-end;

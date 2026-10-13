@@ -51,10 +51,7 @@ const OUT = path.join(root, ".obsidian-e2e-artifacts/screens");
 const DESIGN = path.join(os.homedir(), ".claude/orchestrate/podnotes/design/screens");
 const VIEW_TYPE = "podcast_player_view";
 const CALL_TIMEOUT_MS = 15000;
-/**
- * The design's widths and the size of its screens, view only (phone: the whole screen).
- * @type {Record<string, [number, number]>}
- */
+/** @type {Record<string, [number, number]>} */
 const WIDTHS = { sidebar: [320, 720], pane: [820, 680], phone: [390, 844] };
 /** @type {Record<string, string>} */
 const THEMES = { light: "moonstone", dark: "obsidian" };
@@ -142,10 +139,7 @@ async function obsidian(args) {
 	return stdout.trim();
 }
 
-/**
- * Runs `body` as an async function in the window and returns its JSON result.
- * @param {string} body
- */
+/** @param {string} body */
 async function evaluate(body) {
 	const output = await obsidian([
 		"eval",
@@ -170,8 +164,7 @@ async function cdp(method, params = {}) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Polls `body` until it returns true. Errors count as false, because the window
- * reloads under some of these waits.
+ * Errors count as false, because the window reloads under some of these waits.
  * @param {string} body @param {string} what @param {number} [timeoutMs]
  */
 async function waitFor(body, what, timeoutMs = 30000) {
@@ -398,11 +391,7 @@ async function go(page) {
 	`);
 }
 
-/**
- * Waits until the view shows `text`, its visible images have loaded, nothing in
- * it animates, and its markup stays the same for three checks in a row.
- * @param {string} [text]
- */
+/** @param {string} [text] */
 async function settle(text = "") {
 	const deadline = Date.now() + 20000;
 	let previous = "";
@@ -488,10 +477,7 @@ function pngSize(png) {
 	return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
-/**
- * Lays out rows of captioned images on one canvas with ffmpeg.
- * @param {{ file: string, caption: string }[][]} rows @param {string} out
- */
+/** @param {{ file: string, caption: string }[][]} rows @param {string} out */
 function contactSheet(rows, out) {
 	const GAP = 16;
 	const CAPTION = 28;
@@ -555,7 +541,6 @@ async function set(state, label, widths, themes) {
 			await theme(name);
 			await go(recipe.page(lib));
 			if (recipe.paste) {
-				// The search field of either design: "Search or enter feed URL..." or "Search or paste a link".
 				execFileSync(
 					process.execPath,
 					[UI, "fill", '.podcast-view input[placeholder^="Search"]', lib.add.url],

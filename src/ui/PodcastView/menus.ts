@@ -63,7 +63,6 @@ export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 	menu.showAtPosition(at, at.doc);
 }
 
-/** Plays the episode and opens the full player. The current episode only opens the player. */
 export function openEpisode(
 	{ player, navigation }: ShellServices,
 	episode: Episode,
@@ -78,10 +77,9 @@ export function openEpisode(
 }
 
 export interface EpisodeMenuOptions {
-	/** The full player's menu has no Play and no Mark as played. A queue row can reorder. */
 	readonly place: "list" | "queue" | "player";
 	readonly at: MenuAnchor;
-	/** False for a Played record whose episode left every feed: only Mark as played remains. */
+	/** False for a Played record whose episode left every feed. */
 	readonly available?: boolean;
 	/** A Played record stored under another key than the episode's. */
 	readonly playedKey?: string;
@@ -211,11 +209,6 @@ export function episodeMenu(
 	return entries;
 }
 
-/**
- * The podcast note, Set feed address while this device lacks a private feed's
- * address, and Remove podcast. Removing the open podcast first goes to the
- * Library, so nothing shows a podcast that is gone.
- */
 export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] {
 	const { library, feeds, actions, navigation } = services;
 	const feed = get(library.savedFeeds)[key];
@@ -244,6 +237,7 @@ export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] 
 			icon: "trash",
 			warning: true,
 			onClick: () => {
+				// Removing the open podcast first goes to the Library, so nothing shows a podcast that is gone.
 				const { page } = navigation.current;
 				if (page.kind === "feed" && page.key === key) navigation.goRoot("library");
 				actions.removePodcast(key);

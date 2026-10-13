@@ -9,7 +9,6 @@
 	import type { PodcastResult, SearchFailure } from "./podcastSearch";
 	import SearchField from "./SearchField.svelte";
 
-	/** First run is the empty library's page. Its first keystroke opens Add podcast, whose field is in the head. */
 	let { firstRun }: { firstRun: boolean } = $props();
 	const { app, navigation, library, actions, search } = useServices();
 	const { savedFeeds } = library;

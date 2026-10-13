@@ -229,7 +229,6 @@ describe("an episode's menu", () => {
 		expect(entry).toMatchObject({ disabled: true });
 	});
 
-	/** Chooses Add to playlist and reads the second menu it opens. */
 	function playlistMenu(entries: MenuEntry[]) {
 		const shown = vi.spyOn(obsidian.Menu.prototype, "showAtPosition");
 		const title = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");

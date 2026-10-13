@@ -43,7 +43,6 @@ const APPLE_LINK = "https://podcasts.apple.com/us/podcast/huberman-lab/id1545953
 let services: TestServices;
 let dispose: () => void;
 
-/** The view over the plugin's stores, with a feed repository that fetches through the network mocks. */
 function setUp(secrets = new obsidian.SecretStorage()) {
 	dispose?.();
 	const feedUrls = new FeedUrlRepository(secrets);
@@ -77,7 +76,6 @@ const field = () =>
 const type = (value: string) => fireEvent.input(field(), { target: { value } });
 const result = (name: string | RegExp) => screen.findByRole("button", { name });
 
-/** Opens Add podcast, as the Library's plus button does, and types `value`. */
 async function search(value: string) {
 	services.navigation.go({ kind: "add" });
 	render(PodcastView, { props: { services } });

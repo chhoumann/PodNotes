@@ -14,7 +14,6 @@
 		onmenu,
 	}: {
 		episode: Episode;
-		/** List pages across podcasts show the artwork and the podcast. */
 		cover?: boolean;
 		available?: boolean;
 		onplay(): void;

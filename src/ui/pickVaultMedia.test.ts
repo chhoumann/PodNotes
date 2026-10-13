@@ -8,7 +8,6 @@ vi.mock("src/playLocalFile", () => ({ playLocalFile: vi.fn(async () => {}) }));
 
 afterEach(() => vi.restoreAllMocks());
 
-/** Opens the picker over a vault of `paths` and returns it as Obsidian would show it. */
 function openOver(paths: string[]) {
 	const app = Object.assign(new App(), {
 		vault: { getFiles: () => paths.map((path) => Object.assign(new TFile(), { path })) },

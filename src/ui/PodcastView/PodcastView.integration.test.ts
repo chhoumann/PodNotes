@@ -29,7 +29,6 @@ vi.mock("./EpisodePlayer.svelte", () => ({
 
 import PodcastView from "./PodcastView.svelte";
 
-/** The view over the plugin's stores, which its actions change. */
 function renderView() {
 	const app = new obsidian.App();
 	const { feeds } = get(plugin);

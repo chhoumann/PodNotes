@@ -9,9 +9,7 @@
 	}: {
 		value: string;
 		placeholder: string;
-		/** With the caret after the text, so typing goes on where it left off. */
 		autofocus?: boolean;
-		/** Not while an input method composes, so a half-composed word is never searched. */
 		oninput(value: string): void;
 	} = $props();
 	let input: HTMLInputElement;

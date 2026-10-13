@@ -23,7 +23,6 @@ interface VaultListener {
 	callback(): void;
 }
 
-/** A vault of notes at their template paths, whose event refs work like Obsidian's. */
 function createVault() {
 	const notes = new Set<string>();
 	const listeners = new Set<VaultListener>();
@@ -175,7 +174,6 @@ describe("MainView episode notes", () => {
 		return created;
 	}
 
-	/** Whether the row shows its note icon, each time it looks again, as EpisodeRow does. */
 	function watchRow() {
 		const shown: boolean[] = [];
 		mountedServices().rowHasNote.subscribe((hasNote) => shown.push(hasNote(episode)));

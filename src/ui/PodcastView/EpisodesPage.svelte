@@ -25,7 +25,6 @@
 	import type { ListPage } from "./pages";
 	import SearchField from "./SearchField.svelte";
 
-	/** Every list of episodes. A podcast's page also has its hero and its feed's state. */
 	let { page }: { page: ListPage } = $props();
 	const services = useServices();
 	const { feeds, actions, library } = services;
@@ -71,7 +70,6 @@
 				played.map(({ episode }) => episode),
 			).flatMap((episode) => entryOf.get(episode) ?? []);
 		}
-		// A podcast or playlist that is gone lists nothing until the shell leaves its page.
 		const listed = createEpisodeListEntries(
 			searchEpisodes(
 				query,

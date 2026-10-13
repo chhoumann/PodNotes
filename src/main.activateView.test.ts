@@ -153,10 +153,6 @@ describe("PodNotes.onLayoutReady", () => {
 		});
 	});
 
-	/**
-	 * Starts PodNotes in the mobile app on a vault whose data.json holds `disk`, or none.
-	 * `disk()` reads the data.json the start left.
-	 */
 	async function startOnMobile(disk?: unknown, rightLeaf = makeLeaf()) {
 		Object.assign(Platform, {
 			isDesktop: false,

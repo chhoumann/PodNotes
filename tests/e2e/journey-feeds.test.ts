@@ -70,7 +70,6 @@ function feed(title: string, slug: string, episodeTitles: string[], artwork = tr
 
 const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title);
 
-/** Waits for Add podcast's results to be exactly `expected`, and returns them. */
 async function resultsBecome(
 	obsidian: Parameters<typeof shownResults>[0],
 	expected: Awaited<ReturnType<typeof shownResults>>,

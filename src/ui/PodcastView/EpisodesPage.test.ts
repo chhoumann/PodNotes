@@ -46,7 +46,6 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-/** Renders `page` over a library of its own, whose feeds `load` answers. */
 function renderPage(page: Page, feeds: PodcastFeed[] = [show]) {
 	const repository = new FeedRepository({
 		load: (url) => load(url),
@@ -66,7 +65,6 @@ function renderPage(page: Page, feeds: PodcastFeed[] = [show]) {
 	return services;
 }
 
-/** Renders a custom playlist of `episodes`, a list whose episodes the test controls. */
 function renderPlaylist(episodes: Episode[]) {
 	const shown = renderPage({ kind: "playlist", name: "Walks" });
 	setPlaylist(episodes);

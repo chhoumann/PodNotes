@@ -36,9 +36,7 @@ export interface ShellServices {
 	readonly feeds: FeedRepository;
 	readonly navigation: Navigation;
 	readonly library: Library;
-	/** The only way the view changes the library. */
 	readonly actions: LibraryActions;
-	/** The Add podcast query, which outlives the page that shows it. */
 	readonly search: PodcastSearch;
 	/** Current through a settings toggle or an import, which replaces the object. */
 	readonly settings: Readable<IPodNotesSettings>;

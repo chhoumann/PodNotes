@@ -323,10 +323,8 @@ export type ItunesResult = Readonly<{
 }>;
 
 /**
- * Answer iTunes searches with `results`, and lookups with the result whose
- * `collectionId` is the looked-up id, as Apple does. Obsidian's requestUrl goes
- * to the main process over the `request-url` IPC channel, so the stub sits
- * there; every other request passes through untouched.
+ * Obsidian's requestUrl goes to the main process over the `request-url` IPC
+ * channel, so the stub sits there; every other request passes through untouched.
  */
 export async function installItunesStub(
 	obsidian: ObsidianClient,

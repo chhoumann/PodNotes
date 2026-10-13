@@ -19,11 +19,8 @@ export interface RowState {
 	readonly available: boolean;
 }
 
-/** What an episode row shows, and the label that says it. */
 export interface EpisodeRowModel {
-	/** "Playing" or "Paused", the date, then the duration or the time left. */
 	readonly meta: readonly string[];
-	/** The share listened to, while in progress. */
 	readonly progress?: number;
 	readonly played: boolean;
 	readonly current: boolean;
@@ -47,7 +44,6 @@ function formatDate(value: Date | string | undefined): string | undefined {
 	return (date.getFullYear() === new Date().getFullYear() ? MONTH_DAY : FULL_DATE).format(date);
 }
 
-/** "48 min", "1 h 3 min". */
 export function formatMinutes(seconds: number): string {
 	const total = Math.max(1, Math.round(seconds / 60));
 	return total >= 60 ? `${Math.floor(total / 60)} h ${total % 60} min` : `${total} min`;

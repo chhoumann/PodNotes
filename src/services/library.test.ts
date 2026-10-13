@@ -35,7 +35,6 @@ function actionsOn(secrets: obsidian.SecretStorage) {
 	};
 }
 
-/** A private feed followed on another device: its reference is in data.json, its address is not here. */
 function followedElsewhere() {
 	const firstDevice = new obsidian.SecretStorage();
 	const saved = {
@@ -49,7 +48,6 @@ function followedElsewhere() {
 	return { saved, firstDevice, thisDevice, ...actionsOn(thisDevice) };
 }
 
-/** Answers the feed address dialog that `setting` opens. */
 async function enterAddress(setting: Promise<void>, address: string) {
 	const dialog = within(document.body);
 	await fireEvent.input(dialog.getByRole("textbox", { name: "Feed address" }), {

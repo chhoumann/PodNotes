@@ -1,5 +1,4 @@
 <script lang="ts">
-	/** Artwork, or the title on a plain tile when there is none or it fails to load. */
 	let { src, title }: { src: string | undefined; title: string } = $props();
 	let failed = $state<string>();
 </script>

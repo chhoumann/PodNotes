@@ -10,7 +10,6 @@ import type { FeedRepository } from "src/services/FeedRepository";
 import checkStringIsUrl from "src/utility/checkStringIsUrl";
 
 export interface PodcastResult extends DirectoryShow {
-	/** The source a pasted link resolved through. */
 	readonly via?: "RSS feed" | "podcasts.apple.com";
 }
 
@@ -25,10 +24,9 @@ export type SearchState = { readonly query: string } & (
 );
 
 /**
- * The Add podcast query and what it found. One lives as long as the view, so the
- * text typed on First run is still there when Add podcast opens. A name searches
- * after 300 ms of quiet and a link resolves at once. Only the newest input may
- * publish, so a slow answer to an earlier one never replaces it.
+ * One lives as long as the view, so the text typed on First run is still there
+ * when Add podcast opens. Only the newest input may publish, so a slow answer to
+ * an earlier one never replaces it.
  */
 export class PodcastSearch implements Readable<SearchState> {
 	private readonly state = writable<SearchState>({ query: "", status: "idle" });

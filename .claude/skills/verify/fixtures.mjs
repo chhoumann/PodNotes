@@ -328,10 +328,6 @@ function libraryArtwork({ title, label = title, colors: [from, to, ink], lower }
 </svg>`;
 }
 
-/**
- * The library as PodNotes saves it: each feed as it was added, and its episodes
- * as the feed lists them, ready for a queue or a playlist.
- */
 function libraryManifest() {
 	return {
 		feeds: LIBRARY.map((podcast) => {

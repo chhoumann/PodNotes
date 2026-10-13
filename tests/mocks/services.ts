@@ -47,8 +47,7 @@ export function createTestLibrary(): TestLibrary {
 }
 
 /**
- * The plugin's global stores, as MainView supplies them. For a test whose view
- * changes the library: `actions` changes these stores, as in the plugin.
+ * The plugin's global stores, as MainView supplies them.
  */
 export const pluginLibrary: TestLibrary = {
 	savedFeeds,
@@ -74,10 +73,10 @@ export type TestServices = ShellServices & {
  * The plugin services a view gets, with a real player over a fake media
  * element, an empty library of its own, and a feed repository that follows
  * the library's `savedFeeds` until `dispose`. `actions` changes the plugin's
- * stores, so a test that uses it passes `library: pluginLibrary`. Legacy components still read
- * the `plugin` store, so it is set too, and `settings` follows it as the
- * view's does. It stays set: views the test rendered unmount after `dispose`,
- * and still read it until then.
+ * stores, so a test that uses it passes `library: pluginLibrary`. Legacy
+ * components still read the `plugin` store, so it is set too, and `settings`
+ * follows it as the view's does. It stays set: views the test rendered unmount
+ * after `dispose`, and still read it until then.
  */
 export function createTestServices(
 	overrides: Partial<Omit<TestServices, "captureTimestamp" | "openSettings" | "hasNote">> = {},

@@ -115,7 +115,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	// window.setTimeout returns a number in the browser/Electron renderer.
 	private layoutReadyRetry: number | null = null;
 	private isUnloaded = false;
-	/** This start found no data.json: PodNotes was just enabled for the first time. */
 	private freshInstall = false;
 	private podcastViewMountEnabled = true;
 	private isReady = false;

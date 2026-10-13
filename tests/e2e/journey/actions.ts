@@ -88,7 +88,6 @@ export const ui = {
 		"Collapse player",
 		`${PLAYER_VIEW} section.pn-player button[aria-label="Collapse player"]`,
 	),
-	/** A Library card, named by its podcast, also while its feed did not load. */
 	podcastCard: (title: string): UiTarget => ({
 		name: `podcast card ${title}`,
 		elements: `[...document.querySelectorAll(${q(`${PLAYER_VIEW} button.pn-gridcard`)})].filter((button) => [${q(title)}, ${q(`${title}, feed didn't load`)}].includes(button.getAttribute("aria-label")))`,
@@ -330,7 +329,6 @@ export async function listedEpisodes(obsidian: ObsidianClient): Promise<string[]
 
 export type ShownResult = Readonly<{ label: string; title: string; via: string | null }>;
 
-/** Add podcast's results: each one's button label, title and the link chip it resolved through. */
 export async function shownResults(obsidian: ObsidianClient): Promise<ShownResult[]> {
 	return await obsidian.dev.evalJson<ShownResult[]>(
 		`[...document.querySelectorAll(${q(`${PLAYER_VIEW} button.pn-result`)})].map((el) => ({ label: el.getAttribute("aria-label"), title: el.querySelector(".t")?.textContent.trim() ?? "", via: el.querySelector(".pn-linkchip")?.textContent.trim() ?? null }))`,
@@ -339,14 +337,12 @@ export async function shownResults(obsidian: ObsidianClient): Promise<ShownResul
 
 export type ShownMenuItem = Readonly<{ title: string; checked: boolean }>;
 
-/** The items of the open menus, top to bottom. */
 export async function shownMenu(obsidian: ObsidianClient): Promise<ShownMenuItem[]> {
 	return await obsidian.dev.evalJson<ShownMenuItem[]>(
 		`[...document.querySelectorAll(".menu .menu-item")].filter((el) => el.getClientRects().length > 0).map((el) => ({ title: el.querySelector(".menu-item-title")?.textContent.trim() ?? "", checked: el.classList.contains("mod-checked") }))`,
 	);
 }
 
-/** Whether any saved podcast's feed is loading, by the feed repository the view reads. */
 export async function feedsLoading(obsidian: ObsidianClient): Promise<boolean> {
 	return await obsidian.dev.evalJson<boolean>(`(() => {
 		let states;
@@ -426,7 +422,6 @@ export async function openPodNotesSettings(obsidian: ObsidianClient): Promise<vo
 	await waitUntilShown(obsidian, ui.settingHeading("Playlists"));
 }
 
-/** Opens Add podcast as a user does: from the rail, else the Library's Add podcast. First run searches in place. */
 export async function showAddPodcast(obsidian: ObsidianClient): Promise<void> {
 	if (await isShown(obsidian, ui.firstRun)) return;
 	if (await isShown(obsidian, ui.rail)) await click(obsidian, ui.railSearch);
@@ -437,7 +432,6 @@ export async function showAddPodcast(obsidian: ObsidianClient): Promise<void> {
 	await waitUntilShown(obsidian, ui.podcastSearch);
 }
 
-/** Removes a podcast as a user does: its Library card's menu, then Remove podcast. */
 export async function removePodcast(obsidian: ObsidianClient, title: string): Promise<void> {
 	await showLibrary(obsidian);
 	await click(obsidian, ui.podcastCard(title), { button: "right" });

@@ -5,7 +5,6 @@ import { downloadedEpisodes, playedEpisodes, plugin } from "./store";
 import type { EpisodeMediaType } from "./types/Episode";
 import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 
-/** Plays a vault file in the full player and lists it in Local Files. */
 export async function playLocalFile(
 	app: App,
 	file: TFile,
@@ -20,8 +19,7 @@ export async function playLocalFile(
 		...(registeredHere && { title: registeredHere.title }),
 	};
 
-	// Local Files mirrors downloadedEpisodes, so this one write lists the file. Two
-	// files that share a basename share an entry, so the user hears which one won.
+	// Local Files mirrors downloadedEpisodes, so this one write lists the file.
 	const replacedFilePath = downloadedEpisodes.addEpisode(localEpisode, file.path, file.stat.size);
 	if (replacedFilePath) {
 		new Notice(
@@ -29,14 +27,11 @@ export async function playLocalFile(
 		);
 	}
 
-	// A finished file plays again from the start. playedEpisodes.get finds the
-	// record under the composite "local file::<basename>" key it is stored by.
 	if (playedEpisodes.get(localEpisode)?.finished) {
 		playedEpisodes.markAsUnplayed(localEpisode);
 	}
 
 	get(plugin).player.play(localEpisode);
 
-	// Playing opens no view, so a closed or hidden view would play to no visible player.
 	await get(plugin).showPlayer();
 }

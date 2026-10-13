@@ -15,7 +15,6 @@ interface iTunesResult {
 	trackCount?: number;
 }
 
-/** A show Apple Podcasts lists: the feed to save, and what the directory knows about it. */
 export interface DirectoryShow {
 	readonly feed: PodcastFeed;
 	readonly episodes?: number;
