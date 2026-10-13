@@ -48,6 +48,11 @@ export interface ShellServices {
 	openSettings(): void;
 	/** Whether the episode has a note: a vault lookup, so a caller decides when to ask again. */
 	hasNote(episode: Episode): boolean;
+	/**
+	 * Whether a row shows its episode's note: found by guid or at its template path only,
+	 * so every row can ask. A new lookup each time a note is created, deleted or renamed.
+	 */
+	readonly rowHasNote: Readable<(episode: Episode) => boolean>;
 }
 
 /** `useServices` throws outside a component tree that called `provideServices`. */

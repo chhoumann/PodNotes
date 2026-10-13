@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { MenuItem } from "obsidian";
 import { tick } from "svelte";
-import { derived, get, writable } from "svelte/store";
+import { derived, get, readable, writable } from "svelte/store";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "src/constants";
@@ -52,6 +52,7 @@ function renderPlayer(patch: Partial<PlayerState> = {}, target = document.body) 
 		// A queued episode's menu reads the plugin's queue, so the player shows that one.
 		library: pluginLibrary,
 		hasNote: () => false,
+		rowHasNote: readable(() => false),
 	} as never;
 	return {
 		...render(WithServices, { target, props: { services, component: EpisodePlayer } }),

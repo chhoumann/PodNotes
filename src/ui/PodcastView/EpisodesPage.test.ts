@@ -223,7 +223,7 @@ describe("an episode list", () => {
 				finished: false,
 			},
 		});
-		services.hasNote.mockImplementation(({ title }) => title === "New");
+		services.rowHasNote.set(({ title }) => title === "New");
 
 		expect(await screen.findByRole("button", { name: "Played, played" })).toBeInTheDocument();
 		expect(row("Played").closest(".pn-ep")).toHaveClass("is-played");
@@ -232,6 +232,15 @@ describe("an episode list", () => {
 			width: `${(840 / 2880) * 100}%`,
 		});
 		expect(row("New, has note")).toHaveTextContent("48 min");
+	});
+
+	test("shows that an episode has a note once its note is written", async () => {
+		renderPlaylist([episode("First")]);
+		await screen.findByRole("button", { name: "First" });
+
+		services.rowHasNote.set(() => true);
+
+		expect(await screen.findByRole("button", { name: "First, has note" })).toBeInTheDocument();
 	});
 
 	test("filters by a search and says when nothing matches", async () => {

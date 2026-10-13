@@ -6,8 +6,8 @@ import type { ShellServices } from "./context";
 import { pageKey, parsePage } from "./pages";
 import PodcastView from "./PodcastView.svelte";
 import { mount, unmount } from "svelte";
-import { derived } from "svelte/store";
-import { getPodcastNote } from "src/createPodcastNote";
+import { derived, writable } from "svelte/store";
+import { findExactPodcastNote, getPodcastNote } from "src/createPodcastNote";
 import { createLibraryActions } from "src/services/library";
 import {
 	downloadedEpisodes,
@@ -21,6 +21,7 @@ import {
 	queue,
 	savedFeeds,
 } from "src/store";
+import type { Episode } from "src/types/Episode";
 import { PodcastSearch } from "./podcastSearch";
 
 export class MainView extends ItemView {
@@ -84,9 +85,18 @@ export class MainView extends ItemView {
 	}
 
 	private services(): ShellServices {
-		const { plugin } = this;
+		const { plugin, app } = this;
+		const noteLookup = () => (episode: Episode) => findExactPodcastNote(episode) !== null;
+		const rowHasNote = writable(noteLookup());
+		const notesChanged = () => rowHasNote.set(noteLookup());
+		// Obsidian reports every file as created while it loads the vault.
+		app.workspace.onLayoutReady(() => {
+			this.registerEvent(app.vault.on("create", notesChanged));
+			this.registerEvent(app.vault.on("delete", notesChanged));
+			this.registerEvent(app.vault.on("rename", notesChanged));
+		});
 		return {
-			app: this.app,
+			app,
 			api: plugin.api,
 			player: plugin.player,
 			feeds: plugin.feeds,
@@ -103,7 +113,7 @@ export class MainView extends ItemView {
 				hidePlayedEpisodes,
 			},
 			actions: createLibraryActions({
-				app: this.app,
+				app,
 				feeds: plugin.feeds,
 				feedUrls: plugin.feedUrls,
 			}),
@@ -112,6 +122,7 @@ export class MainView extends ItemView {
 			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
 			hasNote: (episode) => getPodcastNote(episode) !== null,
+			rowHasNote,
 		};
 	}
 

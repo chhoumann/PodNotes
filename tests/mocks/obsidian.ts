@@ -143,6 +143,8 @@ export const normalizePath = (path: string): string => {
 
 export class WorkspaceLeaf {}
 export class ItemView {
+	registerEvent(_eventRef: unknown): void {}
+
 	getState(): Record<string, unknown> {
 		return {};
 	}

@@ -20,7 +20,7 @@
 		onplay(): void;
 		onmenu(at: MenuAnchor): void;
 	} = $props();
-	const { player, library, hasNote } = useServices();
+	const { player, library, rowHasNote } = useServices();
 	const { playedEpisodes, downloadedEpisodes } = library;
 	const playerState = player.state;
 	// The player's state changes many times a second; a row changes only with these.
@@ -28,8 +28,8 @@
 	const playing = $derived(
 		$playerState.status === "playing" || $playerState.status === "loading",
 	);
-	// A vault lookup, so it runs once per row, not on every change to the library.
-	const noted = $derived(hasNote(episode));
+	// A vault lookup, so it runs again only when notes change, not on every change to the library.
+	const noted = $derived($rowHasNote(episode));
 	const row = $derived(
 		episodeRowModel(episode, {
 			played: $playedEpisodes,

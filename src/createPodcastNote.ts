@@ -123,6 +123,14 @@ async function getTemplateChapters(
 }
 
 export function getPodcastNote(episode: Episode): TFile | null {
+	return findExactPodcastNote(episode) ?? findPodcastNoteByTitleOverlap(episode);
+}
+
+/**
+ * The note with the episode's guid, else the one at a path the template renders. It
+ * skips the title-overlap scan of the notes folder, so a list can ask for every row.
+ */
+export function findExactPodcastNote(episode: Episode): TFile | null {
 	const { vault } = get(plugin).app;
 
 	const identified = findPodcastNoteByGuid(episode);
@@ -135,7 +143,7 @@ export function getPodcastNote(episode: Episode): TFile | null {
 		}
 	}
 
-	return findPodcastNoteByTitleOverlap(episode);
+	return null;
 }
 
 interface IdentifiedNote {

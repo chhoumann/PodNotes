@@ -52,6 +52,7 @@ function renderView() {
 				captureTimestamp: async () => null,
 				openSettings: () => {},
 				hasNote: () => false,
+				rowHasNote: readable(() => false),
 			},
 		},
 	});
