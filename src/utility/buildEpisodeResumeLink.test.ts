@@ -97,6 +97,17 @@ describe("buildEpisodeResumeLink (#35)", () => {
 		expect(parsed.searchParams.has("time")).toBe(false);
 	});
 
+	test("omits an unsaved private feed link even when a download exists", () => {
+		const privateEpisode: Episode = {
+			...remoteEpisode,
+			feedUrl: "https://pod.example.com/feed.xml?auth=LINK_SENTINEL",
+		};
+
+		expect(buildEpisodeResumeLink(privateEpisode)).toBe("");
+		downloadedEpisodes.addEpisode(privateEpisode, "Downloads/ep1.mp3", 1);
+		expect(buildEpisodeResumeLink(privateEpisode)).toBe("");
+	});
+
 	test("returns an empty string when there is no feed URL or file path to address", () => {
 		const orphan: Episode = { ...remoteEpisode, feedUrl: undefined };
 

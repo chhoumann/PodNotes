@@ -110,6 +110,19 @@ describe("API.getPodcastSegmentFormatted", () => {
 		);
 	});
 
+	test("captures from a private feed this device has not saved are plain text", () => {
+		const { api, player } = setup();
+		player.restore({
+			...feedEpisode,
+			feedUrl: "https://pod.example.com/feed.xml?auth=CAPTURE_SENTINEL",
+		});
+
+		expect(api.getPodcastTimeFormatted("HH:mm:ss", true)).toBe("00:00:00");
+		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 115, 125, true)).toBe(
+			"00:01:55-00:02:05",
+		);
+	});
+
 	test("does not link invalid segment ranges", () => {
 		const { api, player } = setup();
 		player.restore(feedEpisode);

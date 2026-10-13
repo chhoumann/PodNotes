@@ -43,6 +43,22 @@ describe("renderTranscriptBody", () => {
 		);
 	});
 
+	test("plain times for a private feed this device has not saved", () => {
+		expect(
+			renderTranscriptBody(
+				{ kind: "timed", cues },
+				{
+					episode: {
+						...episode,
+						feedUrl: "https://pod.example.com/feed.xml?auth=TRANSCRIPT_SENTINEL",
+					},
+					speakerTemplate: "**{{speaker}}:** ",
+					timestamp: timestampStyle("- {{linktime}} "),
+				},
+			),
+		).toBe("00:00:00 **Justin:** Hello there. Still Justin.\n\n00:00:10 **Michael:** Hi!");
+	});
+
 	test("plain times when the timestamp template asks for {{time}}", () => {
 		expect(render("{{time}} ")).toBe(
 			"00:00:00 **Justin:** Hello there. Still Justin.\n\n00:00:10 **Michael:** Hi!",

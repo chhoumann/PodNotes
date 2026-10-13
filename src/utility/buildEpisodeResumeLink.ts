@@ -2,6 +2,7 @@ import type { Episode } from "src/types/Episode";
 import { downloadedEpisodes } from "src/store";
 import encodePodnotesURI from "./encodePodnotesURI";
 import { episodeLinkTarget } from "./episodeLinkTarget";
+import { vaultSafeLinkTarget } from "src/services/privateFeeds";
 
 /**
  * Build an `obsidian://podnotes` deep link that reopens `episode` in the PodNotes
@@ -14,11 +15,14 @@ import { episodeLinkTarget } from "./episodeLinkTarget";
  * (the player refetches the feed and matches by title); a local file is
  * addressed by its on-disk vault path. As a last resort either kind falls back
  * to a downloaded copy's path, so an episode whose snapshot predates `feedUrl`
- * still gets a working link instead of none. Returns "" only when nothing can
- * address it, so a template degrades to an empty value rather than a broken link.
+ * still gets a working link instead of none. Returns "" when nothing can address the
+ * episode, or the link would carry a private feed address (see vaultSafeLinkTarget).
  */
 export default function buildEpisodeResumeLink(episode: Episode): string {
-	const target = episodeLinkTarget(episode) ?? downloadedEpisodes.getEpisode(episode)?.filePath;
+	const target = vaultSafeLinkTarget(
+		episode,
+		episodeLinkTarget(episode) ?? downloadedEpisodes.getEpisode(episode)?.filePath,
+	);
 
 	// URIHandler rejects an empty episodeName, so without a title there is no
 	// working link to emit: degrade to "" rather than a dead link (UR-03).
