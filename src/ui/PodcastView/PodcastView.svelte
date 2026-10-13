@@ -671,6 +671,13 @@
 			text-align: center;
 		}
 
+		/* Obsidian's buttons keep their text on one line; these wrap their titles. */
+		.pn-result,
+		.pn-ep-main,
+		.pn-gridcard {
+			white-space: normal;
+		}
+
 		.pn-result,
 		.pn-ep-main {
 			display: flex;
