@@ -45,7 +45,8 @@ async function openPodcastPage(notes: string[]) {
 	const vault = {
 		on: (name: string, callback: () => void) => ({ e: vault, name, callback }),
 		offref: () => {},
-		getAbstractFileByPath: (path: string) => (notes.includes(path) ? new TFile(path) : null),
+		getAbstractFileByPath: (path: string) =>
+			notes.includes(path) ? Object.assign(Object.create(TFile.prototype), { path }) : null,
 		getMarkdownFiles: () => [],
 	};
 	const app = {
