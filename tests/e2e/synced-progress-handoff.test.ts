@@ -1,8 +1,10 @@
 import { expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness, type PodNotesData } from "./harness";
-import { click, showLibrary, showPodNotes, ui } from "./journey/actions";
+import { showLibrary, showPodNotes } from "./journey/actions";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
+import { click } from "./journey/input";
 import { observePlayback, seedLibrary, waitForPlayback } from "./journey/library";
+import { ui } from "./journey/targets";
 import { jsLiteral, PLUGIN_ID, WAIT_OPTS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("synced-progress-handoff");

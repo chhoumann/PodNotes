@@ -119,12 +119,6 @@ export class PlayerController {
 		this.placeElement();
 	}
 
-	/**
-	 * Shows the selected episode paused at its saved position, without loading it: at
-	 * startup, and again after a sync while nothing is loaded. Paused media goes to its
-	 * own episode's saved progress, which a sync may have changed. Other loaded media
-	 * stays, and so does a position the user moved and has not saved.
-	 */
 	restore(episode: Episode | undefined): void {
 		const { status, episode: shown, currentTime } = this.snapshot;
 		if (status === "paused" && shown && !this.moved) {
@@ -473,7 +467,6 @@ export class PlayerController {
 		this.session.preview = false;
 	}
 
-	/** Saves first: once paused, the position is no longer this device's to save. */
 	private settlePaused(): void {
 		this.persist();
 		this.setState(
@@ -602,8 +595,6 @@ export class PlayerController {
 		const { session } = this;
 		const { episode, duration, status } = this.snapshot;
 		if (!session || !this.holdsMedia() || session.preview || this.disposed || !episode) return;
-		// A paused or ended position is saved already, or came from a sync, possibly an
-		// older one than the saved progress: only playing or a seek makes it this device's.
 		if (status !== "playing" && !this.moved) return;
 		const time = this.el.currentTime;
 		playedEpisodes.setEpisodeTime(episode, time, duration, duration > 0 && time >= duration);
