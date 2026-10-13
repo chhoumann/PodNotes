@@ -11,6 +11,7 @@ const SETTER = /export function set_hydrating\(value\) \{\s*hydrating = value;\s
  * hydration branch would ship. Pinning the flag lets the minifier remove them.
  */
 export function svelteWithoutHydration(): Plugin {
+	let pinned = false;
 	return {
 		name: "podnotes-svelte-without-hydration",
 		transform(code, id) {
@@ -18,9 +19,13 @@ export function svelteWithoutHydration(): Plugin {
 			if (!code.includes(DECLARATION) || !SETTER.test(code)) {
 				throw new Error(`Svelte's hydration flag changed shape in ${id}.`);
 			}
+			pinned = true;
 			return code
 				.replace(DECLARATION, "export const hydrating = false;")
 				.replace(SETTER, "export function set_hydrating(value) {}");
+		},
+		buildEnd(error) {
+			if (!error && !pinned) throw new Error(`Svelte no longer has ${HYDRATION_MODULE}.`);
 		},
 	};
 }

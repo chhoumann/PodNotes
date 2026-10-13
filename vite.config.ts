@@ -106,8 +106,9 @@ export default defineConfig(({ mode }) => {
 					codeSplitting: false,
 					exports: "auto",
 					banner,
-					// Nothing bundles main.js again, so pure annotations are dead bytes.
-					comments: { annotation: false },
+					// Nothing bundles main.js again, so pure annotations are dead bytes. Vite drops
+					// legal comments once build.minify is set, so keep the license notices explicitly.
+					comments: { annotation: false, legal: true },
 					// Vite 8 dropped the esbuild transform (and with it
 					// esbuild.drop), so prod minification and console
 					// stripping both move to rolldown's oxc minifier.
