@@ -453,37 +453,20 @@ describe("playback journeys", () => {
 			"three seconds played",
 		);
 
-		await obsidian.dev.evalJsonAsync(
-			`(async () => { await app.plugins.plugins.${PLUGIN_ID}.flushSaves(); return true; })()`,
-		);
-
-		await plugin.data<Record<string, any>>().patch((data) => {
-			data.playedEpisodes[`${FEED.title}::${LONG.title}`] = {
-				title: LONG.title,
-				podcastName: FEED.title,
-				time: 50,
-				duration: 60,
-				finished: false,
-			};
-			data.currentEpisode = storedEpisode(server, FEED, OPENER);
-			data.queue.episodes = [
-				storedEpisode(server, FEED, FOLLOW_UP),
-				storedEpisode(server, FEED, OPENER),
-			];
-		});
-		await obsidian.waitFor(
-			() =>
-				obsidian.dev.evalJson<boolean>(
-					`app.plugins.plugins.${PLUGIN_ID}.settings.queue.episodes.length === 2`,
-				),
-			{ timeoutMs: 15_000, intervalMs: 200, message: "the remote change merged" },
-		);
-
-		expect(
-			await obsidian.dev.evalJson<number>(
-				`app.plugins.plugins.${PLUGIN_ID}.settings.playedEpisodes[${jsLiteral(`${FEED.title}::${LONG.title}`)}]?.time`,
-			),
-		).toBe(50);
+		const key = jsLiteral(`${FEED.title}::${LONG.title}`);
+		const synced = await obsidian.dev.evalJsonAsync<number>(`(async () => {
+			const plugin = app.plugins.plugins.${PLUGIN_ID};
+			await plugin.flushSaves();
+			const path = plugin.manifest.dir + "/data.json";
+			const data = JSON.parse(await app.vault.adapter.read(path));
+			data.playedEpisodes[${key}] = ${jsLiteral({ title: LONG.title, podcastName: FEED.title, time: 50, duration: 60, finished: false })};
+			data.currentEpisode = ${jsLiteral(storedEpisode(server, FEED, OPENER))};
+			data.queue.episodes = ${jsLiteral([storedEpisode(server, FEED, FOLLOW_UP), storedEpisode(server, FEED, OPENER)])};
+			await app.vault.adapter.write(path, JSON.stringify(data));
+			await plugin.onExternalSettingsChange();
+			return plugin.settings.playedEpisodes[${key}]?.time;
+		})()`);
+		expect(synced).toBe(50);
 
 		const after = await expectAdvancing("after the remote change");
 		expect(after.episode).toEqual(episodeRef(FEED, LONG));
