@@ -28,15 +28,15 @@ PodNotes merges the changes your devices make, so you can switch devices without
 2. Note the time where you stopped.
 3. Wait until your sync service finishes uploading.
 4. On the device you are switching to, wait until sync finishes.
-5. If this device's player shows the episode at another time, move the progress bar to the time you noted. If it shows another episode, select your episode in its podcast's list instead. It starts at the synced time.
+5. If this device's player shows the episode at another time, move the progress bar to the time you noted. If it shows another episode, select your episode in its podcast's list instead. It plays from the synced time, so skip step 6.
 6. Play the episode.
 
-Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. This also happens when you moved the episode's position on that device without playing it. Other episodes start at their synced position when you play them.
+Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. If you move the restored episode's position before you play it, playback starts from that position instead of the synced one. Other episodes start at their synced position when you play them.
 
 ## Changes on two devices
 
 Before each save, PodNotes reads `data.json` and merges it with the changes made on this device. When sync replaces `data.json` while PodNotes runs, PodNotes merges the new file into your library without a restart.
-Changes to different things all stay. For example, you add a podcast on your laptop while your phone saves your progress, and both changes stay.
+Changes to different things all stay, apart from the cases in [Limits of merging](#limits-of-merging). For example, you add a podcast on your laptop while your phone saves your progress, and both changes stay.
 
 When two devices change the same setting or the same item before either sees the other's change, the device that saves later keeps its own version. PodNotes takes these items whole, without mixing their parts:
 

@@ -24,26 +24,28 @@ If the notice also says that PodNotes started with default settings, see [A read
 
 ### A read error during a session
 
-Your changes stay in memory. If the notice "PodNotes could not save your changes." came first, fix its cause, such as disk space or permissions, and go to the last resort below. Waiting for sync does not help then.
+Your changes stay in memory. While you have unsaved changes, PodNotes reads the file again every 10 seconds. Without unsaved changes, it reads the file again when the file changes. When PodNotes can read the file again, the notice closes, and PodNotes saves your changes merged with the file. If you restart Obsidian before then, the changes in memory are lost.
 
-While you have unsaved changes, PodNotes reads the file again every 10 seconds. Without unsaved changes, it reads the file again when the file changes. When PodNotes can read the file again, the notice closes, and PodNotes saves your changes merged with the file.
+If the notice "PodNotes could not save your changes." came first, a failed save left the file unreadable, and waiting for sync is unlikely to help. Fix its cause, such as a full disk or a folder that does not allow writes, and go to the last resort below.
 
-If you restart Obsidian now, the changes in memory are lost. If the notice stays, try these steps:
+Otherwise, try these steps first:
 
 1. Let your sync service finish.
 2. Check the free disk space and the permissions of the file named in the notice.
 
 If the notice still stays, use the last resort below. It loses the changes that your other devices saved into the file since this device last read it.
 
-Obsidian does not show its configuration folder, so on a computer, use your system's file manager for these steps. On a phone, use a file manager app that can open the vault folder, or keep Obsidian open and repeat the steps above instead.
+Obsidian does not show its configuration folder. On a computer, use your system's file manager, with hidden files shown. On a phone, use a file manager app that can open the vault folder, or keep Obsidian open and repeat the steps above instead.
 
 1. While Obsidian is open, rename the file, for example to `data.json.broken`.
 2. In **Settings → PodNotes**, change any setting, such as **Default Playback Rate** to 1.5x, so that PodNotes has a change to save. Because no file is there now, PodNotes can write again. Within about 10 seconds, it tries to write a new `data.json` with your library from memory.
-3. Keep Obsidian open, and open the new `data.json` in a text editor. If it holds the setting you changed in step 2, such as `"defaultPlaybackRate": 1.5`, PodNotes saved your library from memory, with your recent changes.
-4. If the file is missing or empty, the write failed. Keep Obsidian open, and fix the cause, such as a full disk or a folder that does not allow writes. PodNotes tries again every 10 seconds. PodNotes shows its save-failure notice on the first failed write, and does not show it again until a save succeeds.
-5. If the file is cut off, the read notice returns. Fix the cause, then repeat steps 1 to 3 with another name, such as `data.json.broken2`.
+3. Keep Obsidian open, and open the new `data.json` in a text editor.
 
-Once the new `data.json` holds your library, as step 3 checks, delete `data.json.broken`.
+If the file holds the setting you changed in step 2, such as `"defaultPlaybackRate": 1.5`, PodNotes saved your library from memory, with your recent changes. Keep `data.json.broken` until you have checked your library on this device and your other devices, then delete it.
+
+If the file is missing or empty, the write failed. Keep Obsidian open, and fix the cause, such as a full disk or a folder that does not allow writes. PodNotes tries again every 10 seconds. It shows its save-failure notice on the first failed write, and does not show it again until a save succeeds.
+
+If the file is cut off, the read notice returns. Fix the cause, then repeat steps 1 to 3 with another name, such as `data.json.broken2`.
 
 ### A read error at startup
 

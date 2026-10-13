@@ -19,9 +19,9 @@ PodNotes cannot sign in to providers that require a browser login. If PodNotes c
 
 The podcast syncs to your other devices, but its address does not. On each other device, enter the address once:
 
-1. If the device already has PodNotes, update it before you use PodNotes there. An older PodNotes does not merge, so it can overwrite the library that sync brings.
-2. Let your sync service bring your vault to the device. It must sync plugin settings. With Obsidian Sync, turn on **Installed community plugins** under **Vault configuration sync**, as [What syncs](/sync/#what-syncs) describes.
-3. If PodNotes is not on the device, install it. The podcast then appears on the device. Do not add it again from its address.
+1. If the device already has PodNotes, update it before you use PodNotes there. An older PodNotes does not [merge changes](/sync/#changes-on-two-devices), so it can overwrite the library that sync brings.
+2. Let your sync service bring your vault to the device. It must sync plugins and their settings. With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync**, as [What syncs](/sync/#what-syncs) describes.
+3. If PodNotes is not on the device after sync, install it. The podcast then appears on the device. Do not add it again from its address.
 4. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
 5. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item.
 6. Paste the private feed address into **Feed address**, and select **Save**.
