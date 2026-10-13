@@ -186,15 +186,10 @@ describe("an episode's menu", () => {
 		]);
 	});
 
-	test("for a played episode that left every feed offers only its note, Favorites and played", () => {
+	test("for a played episode that left every feed offers only Mark as unplayed", () => {
 		playedEpisodes.markAsPlayed(episode);
 
-		expect(titles(menu(episode, { available: false }))).toEqual([
-			"Create note",
-			"Add to Favorites",
-			"---",
-			"Mark as unplayed",
-		]);
+		expect(titles(menu(episode, { available: false }))).toEqual(["Mark as unplayed"]);
 	});
 
 	test("marks a Played record unplayed under the key it is stored by", () => {

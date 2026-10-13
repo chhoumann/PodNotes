@@ -81,7 +81,7 @@ export interface EpisodeMenuOptions {
 	/** The full player's menu has no Play and no Mark as played. A queue row can reorder. */
 	readonly place: "list" | "queue" | "player";
 	readonly at: MenuAnchor;
-	/** False for a Played record whose episode left every feed: only note, favorites and played remain. */
+	/** False for a Played record whose episode left every feed: only Mark as played remains. */
 	readonly available?: boolean;
 	/** A Played record stored under another key than the episode's. */
 	readonly playedKey?: string;
@@ -98,49 +98,49 @@ export function episodeMenu(
 		icon,
 		onClick,
 	});
+	const played = get(library.playedEpisodes);
+	const finished =
+		(playedKey ? played[playedKey]?.finished : undefined) ?? isEpisodeFinished(episode, played);
+	const markPlayed = item(finished ? "Mark as unplayed" : "Mark as played", "check", () =>
+		actions.setPlayed(episode, !finished, playedKey),
+	);
+	if (!available) return [markPlayed];
+
 	const queue = get(library.queue).episodes;
 	const queued = queue.some((entry) => isSameEpisode(entry, episode));
 	const favorite = get(library.favorites).episodes.some((entry) =>
 		isSameStoredEpisode(entry, episode),
 	);
-	const played = get(library.playedEpisodes);
-	const finished =
-		(playedKey ? played[playedKey]?.finished : undefined) ?? isEpisodeFinished(episode, played);
 	const downloaded = isDownloaded(get(library.downloadedEpisodes), episode);
 	const lists = Object.values(get(library.playlists));
 	// An episode opened by a private feed's own address would put that secret in the link.
-	const link =
-		available && !isCredentialBearingUrl(episodeLinkTarget(episode) ?? "")
-			? buildEpisodeResumeLink(episode)
-			: "";
+	const link = isCredentialBearingUrl(episodeLinkTarget(episode) ?? "")
+		? ""
+		: buildEpisodeResumeLink(episode);
 	const entries: MenuEntry[] = [];
 
-	if (available) {
-		if (place !== "player") {
-			const current = isCurrentEpisode(get(player.state).episode, episode);
-			entries.push(
-				item(current ? "Open player" : "Play", "play", () =>
-					openEpisode(services, episode),
-				),
-			);
-		}
+	if (place !== "player") {
+		const current = isCurrentEpisode(get(player.state).episode, episode);
 		entries.push(
-			item(queued ? "Remove from queue" : "Add to queue", "list-end", () =>
-				actions.setQueued(episode, !queued),
-			),
+			item(current ? "Open player" : "Play", "play", () => openEpisode(services, episode)),
 		);
-		const moves = buildQueueReorderMenuItems(place === "queue", queue, episode);
-		if (moves.length > 0) {
-			entries.push(
-				"separator",
-				...moves.map(({ title, icon, kind }) =>
-					item(title, icon, () => actions.moveInQueue(episode, kind)),
-				),
-			);
-		}
-		entries.push("separator");
 	}
 	entries.push(
+		item(queued ? "Remove from queue" : "Add to queue", "list-end", () =>
+			actions.setQueued(episode, !queued),
+		),
+	);
+	const moves = buildQueueReorderMenuItems(place === "queue", queue, episode);
+	if (moves.length > 0) {
+		entries.push(
+			"separator",
+			...moves.map(({ title, icon, kind }) =>
+				item(title, icon, () => actions.moveInQueue(episode, kind)),
+			),
+		);
+	}
+	entries.push(
+		"separator",
 		services.hasNote(episode)
 			? item("Open note", "file-text", () => openPodcastNote(episode))
 			: item("Create note", "file-plus", () => {
@@ -149,39 +149,33 @@ export function episodeMenu(
 					else new Notice("Please set a note path and template in the settings.");
 				}),
 	);
-	if (available) {
-		if (isLocalFile(episode)) {
-			if (downloaded) {
-				// Removing a local file forgets it and never trashes it.
-				entries.push(
-					item(
-						"Remove from Local Files",
-						"trash",
-						() => void removeDownloadedEpisode(episode),
-					),
-				);
-			}
-		} else if (downloaded) {
+	if (isLocalFile(episode)) {
+		if (downloaded) {
+			// Removing a local file forgets it and never trashes it.
 			entries.push(
-				item("Remove download", "trash", () => void removeDownloadedEpisode(episode)),
-			);
-		} else {
-			entries.push(
-				item("Download", "download", () => {
-					downloadEpisodeWithNotice(episode, get(settings).download.path).catch((error) =>
-						console.error("PodNotes: download failed", error),
-					);
-				}),
+				item(
+					"Remove from Local Files",
+					"trash",
+					() => void removeDownloadedEpisode(episode),
+				),
 			);
 		}
+	} else if (downloaded) {
+		entries.push(item("Remove download", "trash", () => void removeDownloadedEpisode(episode)));
+	} else {
+		entries.push(
+			item("Download", "download", () => {
+				downloadEpisodeWithNotice(episode, get(settings).download.path).catch((error) =>
+					console.error("PodNotes: download failed", error),
+				);
+			}),
+		);
 	}
 	entries.push(
 		item(favorite ? "Remove from Favorites" : "Add to Favorites", "heart", () =>
 			actions.setFavorite(episode, !favorite),
 		),
-	);
-	if (available) {
-		entries.push({
+		{
 			title: "Add to playlist",
 			icon: "list-music",
 			disabled: lists.length === 0,
@@ -200,16 +194,10 @@ export function episodeMenu(
 					}),
 					at,
 				),
-		});
-	}
-	entries.push("separator");
-	if (place !== "player") {
-		entries.push(
-			item(finished ? "Mark as unplayed" : "Mark as played", "check", () =>
-				actions.setPlayed(episode, !finished, playedKey),
-			),
-		);
-	}
+		},
+		"separator",
+	);
+	if (place !== "player") entries.push(markPlayed);
 	if (link) {
 		entries.push(
 			item("Copy episode link", "link", () => {
