@@ -42,7 +42,14 @@ function addPlayLocalFileItem(
 			.setIcon("play")
 			.setTitle(title)
 			.onClick(async () => {
-				const localEpisode = localEpisodeFromFile(app, file, mediaType);
+				// A file renamed after it was registered keeps the title it was registered under.
+				const registeredHere = get(downloadedEpisodes)["local file"]?.find(
+					(episode) => episode.filePath === file.path,
+				);
+				const localEpisode = {
+					...localEpisodeFromFile(app, file, mediaType),
+					...(registeredHere && { title: registeredHere.title }),
+				};
 
 				// The Local Files playlist is mirrored from downloadedEpisodes
 				// (see localFiles.syncWithDownloaded), so this single write

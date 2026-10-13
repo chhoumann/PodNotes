@@ -738,6 +738,54 @@ describe("a timestamp link PodNotes wrote for the loaded episode", () => {
 	});
 });
 
+describe("a link to a vault file at its path", () => {
+	test("plays the file at the link's time when it is not in Local Files", async () => {
+		vaultFiles = ["Fixtures/Orphan.mp3"];
+
+		await link({ url: "Fixtures/Orphan.mp3", episodeName: "Orphan", time: "12" });
+		metadata();
+
+		expect(state().episode).toMatchObject({
+			title: "Orphan",
+			podcastName: "local file",
+			filePath: "Fixtures/Orphan.mp3",
+		});
+		expect(get(viewState)).toBe(ViewState.Player);
+		expect(media().src).toBe("app://resource/Fixtures/Orphan.mp3");
+		expect(media().currentTime).toBe(12);
+		expect(media().paused).toBe(false);
+		expect(mockEpisodesAt).not.toHaveBeenCalled();
+	});
+
+	test("plays an .mp4 registered as video at that path as video", async () => {
+		localFiles.set({ ...emptyLocalFiles, episodes: [clip("A", "mp4", "video")] });
+		vaultFiles = ["A/Clip.mp4"];
+
+		await link({ url: "A/Clip.mp4", episodeName: "Clip", time: "12" });
+		metadata();
+
+		expect(state().mediaType).toBe("video");
+		expect(media().tagName).toBe("VIDEO");
+		expect(media().src).toBe("app://resource/A/Clip.mp4");
+		expect(media().currentTime).toBe(12);
+	});
+
+	test("plays the file as it is registered at that path under another name", async () => {
+		const intro: LocalEpisode = { ...clip("A", "mp4", "video"), title: "Intro" };
+		localFiles.set({ ...emptyLocalFiles, episodes: [intro] });
+		vaultFiles = ["A/Clip.mp4"];
+
+		await link({ url: "A/Clip.mp4", episodeName: "Clip", time: "12" });
+		metadata();
+
+		expect(state().episode).toEqual(intro);
+		expect(state().mediaType).toBe("video");
+		expect(media().tagName).toBe("VIDEO");
+		expect(media().src).toBe("app://resource/A/Clip.mp4");
+		expect(media().currentTime).toBe(12);
+	});
+});
+
 describe("a link to a vault file that is no longer at its path", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();

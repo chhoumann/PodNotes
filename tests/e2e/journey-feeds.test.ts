@@ -175,7 +175,7 @@ describe("feed journeys", () => {
 				(await notices(obsidian)).find((text) => text.includes("OPML import complete.")),
 			{ timeoutMs: 15_000, intervalMs: 100, message: "the OPML import summary" },
 		);
-		expect(summary).toContain("Saved 2 new podcasts. Skipped 1 existing podcasts.");
+		expect(summary).toContain("Saved 2 podcasts. Skipped 1 existing podcast.");
 		const expected = [
 			{ title: "Journey Existing", url: server.feedUrl(existing) },
 			{ title: "Journey Import One", url: server.feedUrl(first) },

@@ -37,6 +37,9 @@ vi.mock("./store", () => ({
 						feedUrlSecrets.set("podnotes-feed-url", url);
 						return "podnotes-feed-url";
 					},
+					attach: (id: string, url: string) => {
+						feedUrlSecrets.set(id, url);
+					},
 					delete: (id: string) => feedUrlSecrets.delete(id),
 				},
 			});
@@ -230,7 +233,7 @@ describe("importOPML (IE-01)", () => {
 
 		expect(channelAt).not.toHaveBeenCalled();
 		expect(get(savedFeeds)).toEqual({ Private: saved });
-		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcast"))).toBe(true);
 	});
 
 	it("skips a saved private feed listed by its real url with an uppercase host", async () => {
@@ -250,15 +253,19 @@ describe("importOPML (IE-01)", () => {
 
 		expect(channelAt).not.toHaveBeenCalled();
 		expect(get(savedFeeds)).toEqual({ Private: saved });
-		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcast"))).toBe(true);
 	});
 
-	it("gives a saved private feed whose URL is not on this device the listed URL", async () => {
+	it("sets the listed private URL under the reference of a saved private feed missing on this device", async () => {
 		const privateUrl = "https://private.test/feed?auth=s3cret";
 		feedUrlSecrets.clear();
-		savedFeeds.set({
-			Private: { title: "Private", url: "podnotes-private-feed:Private", artworkUrl: "" },
-		});
+		const saved = {
+			title: "Private",
+			url: "podnotes-private-feed:Private",
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000001",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ Private: saved });
 		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
 			title: "Private",
 			url,
@@ -269,10 +276,61 @@ describe("importOPML (IE-01)", () => {
 			`<opml><body><outline text="Private" xmlUrl="${privateUrl}" /></body></opml>`,
 		);
 
-		const revived = get(savedFeeds).Private;
-		expect(Object.keys(get(savedFeeds))).toEqual(["Private"]);
-		expect(revived.url).toBe("podnotes-private-feed:Private");
-		expect(feedUrlSecrets.get(revived.urlSecretId as string)).toBe(privateUrl);
+		expect(get(savedFeeds)).toEqual({ Private: saved });
+		expect([...feedUrlSecrets]).toEqual([[saved.urlSecretId, privateUrl]]);
+	});
+
+	it("sets no address on a saved private feed a sync replaced while the import loaded", async () => {
+		const privateUrl = "https://private.test/feed?auth=s3cret";
+		feedUrlSecrets.clear();
+		const saved = {
+			title: "Private",
+			url: "podnotes-private-feed:Private",
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000001",
+			artworkUrl: "",
+		};
+		const replaced = {
+			...saved,
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000002",
+		};
+		savedFeeds.set({ Private: saved });
+		channelAt.mockImplementation(async ({ url }: { url: string }) => {
+			savedFeeds.set({ Private: replaced });
+			return { title: "Private", url, artworkUrl: "" };
+		});
+
+		await importOPML(
+			`<opml><body><outline text="Private" xmlUrl="${privateUrl}" /></body></opml>`,
+		);
+
+		expect(get(savedFeeds)).toEqual({ Private: replaced });
+		expect(feedUrlSecrets.size).toBe(0);
+	});
+
+	it("never replaces a saved private feed missing on this device with a public namesake", async () => {
+		feedUrlSecrets.clear();
+		const saved = {
+			title: "Private",
+			url: "podnotes-private-feed:Private",
+			urlSecretId: "podnotes-feed-url-00000000-0000-4000-8000-000000000001",
+			artworkUrl: "",
+		};
+		savedFeeds.set({ Private: saved });
+		channelAt.mockImplementation(async ({ url }: { url: string }) => ({
+			title: "Private",
+			url,
+			artworkUrl: "",
+		}));
+
+		await importOPML(
+			'<opml><body><outline text="Private" xmlUrl="https://public.test/feed" /></body></opml>',
+		);
+
+		expect(get(savedFeeds)).toEqual({ Private: saved });
+		expect(feedUrlSecrets.size).toBe(0);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
+			true,
+		);
 	});
 
 	it("never renders 'NaN%' when every feed is already subscribed", async () => {
@@ -294,7 +352,7 @@ describe("importOPML (IE-01)", () => {
 		// Nothing to fetch, so the 0/0 progress division must not surface as NaN.
 		expect(channelAt).not.toHaveBeenCalled();
 		expect(noticeMessages.some((m) => m.includes("NaN"))).toBe(false);
-		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Saved 0 podcasts"))).toBe(true);
 	});
 
 	it("reports the saved count, not the fetched count, on duplicate titles", async () => {
@@ -317,8 +375,8 @@ describe("importOPML (IE-01)", () => {
 		expect(channelAt).toHaveBeenCalledTimes(2);
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// Exactly one was written, so the summary must say "Saved 1", not "Saved 2".
-		expect(noticeMessages.some((m) => m.includes("Saved 1 new podcasts"))).toBe(true);
-		expect(noticeMessages.some((m) => m.includes("Saved 2 new podcasts"))).toBe(false);
+		expect(noticeMessages.some((m) => m.includes("Saved 1 podcast"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Saved 2 podcasts"))).toBe(false);
 		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
 			true,
 		);
@@ -351,7 +409,7 @@ describe("importOPML (IE-01)", () => {
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// The original feed must be preserved, not overwritten.
 		expect(get(savedFeeds)["Same Title"].url).toBe("https://old.test/feed");
-		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Saved 0 podcasts"))).toBe(true);
 		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
 			true,
 		);
@@ -385,8 +443,8 @@ describe("importOPML (IE-01)", () => {
 		expect(
 			noticeMessages.some(
 				(m) =>
-					m.includes("Saved 1 new podcasts") &&
-					m.includes("Skipped 1 existing podcasts") &&
+					m.includes("Saved 1 podcast") &&
+					m.includes("Skipped 1 existing podcast") &&
 					m.includes("Skipped 1 with duplicate titles"),
 			),
 		).toBe(true);

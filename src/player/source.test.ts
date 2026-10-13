@@ -34,6 +34,7 @@ describe("selectSource", () => {
 		expect(selectSource(episode, downloaded, vaultWith("Downloads/u.mp3"))).toEqual({
 			src: "app://resource/Downloads/u.mp3",
 			mediaType: "audio",
+			filePath: "Downloads/u.mp3",
 		});
 	});
 
@@ -57,7 +58,11 @@ describe("selectSource", () => {
 			vaultWith("folder-a/Episode.mp3", "folder-b/Episode.mp3"),
 		);
 
-		expect(source.src).toBe("app://resource/folder-b/Episode.mp3");
+		expect(source).toEqual({
+			src: "app://resource/folder-b/Episode.mp3",
+			mediaType: "audio",
+			filePath: "folder-b/Episode.mp3",
+		});
 	});
 
 	test("a missing file plays nothing rather than the stream", () => {
@@ -113,6 +118,7 @@ describe("selectSource", () => {
 			expect(selectSource(mp4, downloaded, vaultWith("Downloads/e.mp4"))).toEqual({
 				src: "app://resource/Downloads/e.mp4",
 				mediaType,
+				filePath: "Downloads/e.mp4",
 			});
 		},
 	);
@@ -126,6 +132,7 @@ describe("selectSource", () => {
 		expect(selectSource(extensionless, downloaded, vaultWith("Downloads/video.mp4"))).toEqual({
 			src: "app://resource/Downloads/video.mp4",
 			mediaType: "video",
+			filePath: "Downloads/video.mp4",
 		});
 	});
 });

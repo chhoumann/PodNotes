@@ -36,6 +36,7 @@ import {
 } from "./journey/fixtures";
 import {
 	clearFeedCache,
+	observePlayback,
 	playerLeafCount,
 	readVaultBytes,
 	readVaultText,
@@ -241,7 +242,7 @@ describe("resilience journeys", () => {
 	});
 
 	test.runIf(isolatedInstance)(
-		"J-EDGE-03 offline after a restart: cached episodes browse, the downloaded episode plays, an unloaded podcast fails cleanly",
+		"J-EDGE-03 download preserves playback (#389); offline after a restart: cached episodes browse, the downloaded episode plays, an unloaded podcast fails cleanly",
 		async () => {
 			const context = getContext();
 			const { obsidian, plugin } = context;
@@ -270,8 +271,19 @@ describe("resilience journeys", () => {
 				timeoutMs: 15_000,
 				message: "the podcast's episodes while online",
 			});
-			await click(obsidian, ui.episode("Offline Keeper"), { button: "right" });
-			await click(obsidian, ui.menuItem("Download"));
+			await click(obsidian, ui.episode("Offline Keeper"));
+			const streaming = await waitForPlayback(
+				obsidian,
+				(playback) =>
+					playback.episode?.title === "Offline Keeper" &&
+					playback.playing &&
+					playback.media !== null &&
+					!playback.media.paused &&
+					playback.media.seconds > 0,
+				"the episode streaming",
+			);
+			expect(streaming.media?.src).toBe(server.mediaUrl(show, keeper));
+			await runCommand(obsidian, `${PLUGIN_ID}:download-playing-episode`);
 			const downloaded = (
 				await waitForLibrary(
 					plugin,
@@ -280,6 +292,23 @@ describe("resilience journeys", () => {
 					"the download registered",
 				)
 			).downloads.find((entry) => entry.title === "Offline Keeper");
+			const registered = await observePlayback(obsidian);
+			const registeredMedia = registered.media;
+			if (!registeredMedia) throw new Error("The downloaded episode lost its media element");
+			const continued = await waitForPlayback(
+				obsidian,
+				(playback) =>
+					playback.playing &&
+					playback.media !== null &&
+					!playback.media.paused &&
+					playback.media.seconds > registeredMedia.seconds + 1,
+				"the stream advancing after its download completed",
+			);
+			expect(registeredMedia.seconds).toBeGreaterThanOrEqual(streaming.seconds);
+			expect(registeredMedia.src).toBe(streaming.media?.src);
+			expect(continued.media?.src).toBe(streaming.media?.src);
+			await click(obsidian, ui.playbackToggle);
+			await waitForPlayback(obsidian, (playback) => !playback.playing, "paused");
 			expect(downloaded?.podcast).toBe("Journey Offline");
 			expect(
 				(await readVaultBytes(obsidian, downloaded?.filePath ?? "")).equals(
@@ -338,12 +367,13 @@ describe("resilience journeys", () => {
 					playback.seconds > 0,
 				"the downloaded episode playing offline",
 			);
-			expect(playing.media?.src.startsWith("http")).toBe(false);
-			await waitForPlayback(
+			const advanced = await waitForPlayback(
 				obsidian,
 				(playback) => playback.seconds > playing.seconds + 1,
 				"the downloaded episode's media advancing",
 			);
+			expect(advanced.media?.src).toBeTruthy();
+			expect(advanced.media?.src.startsWith("http")).toBe(false);
 
 			await click(obsidian, ui.podcastGridTab);
 			await click(obsidian, ui.podcastCard("Journey Never Loaded"));
