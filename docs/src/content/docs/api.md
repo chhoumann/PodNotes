@@ -89,7 +89,7 @@ The duration of the loaded episode in seconds. Before the media loads, it is the
 
 Gets or sets the playback position in seconds. Before the media loads, it is the position where playback starts, such as the saved position of the episode PodNotes restored.
 Setting it cancels the end of an active segment, so playback no longer pauses there.
-PodNotes ignores a value that is negative or not a finite number. A position at or past the end moves to 0.25 seconds before the end, and playback pauses.
+PodNotes ignores a value that is negative or not a finite number. Once the media loads, a position at or past the end moves to 0.25 seconds before the end, and playback pauses.
 
 ## `volume`
 
@@ -139,7 +139,7 @@ getPodcastTimeFormatted(format: string, linkify?: boolean, offsetSeconds?: numbe
 
 Returns the current playback time, formatted with the [time tokens](/timestamps/#time-formats). `api.getPodcastTimeFormatted("HH:mm:ss", true)` returns a link such as `[00:12:41](obsidian://podnotes?...)`.
 
-- `linkify` defaults to `false`. With `true`, the result is a Markdown link that opens PodNotes at that time, with the episode's `guid` when it has one. The result stays plain text when the episode has no feed or local file to link to, or comes from a private feed that you have not added.
+- `linkify` defaults to `false`. With `true`, the result is a Markdown link that opens PodNotes at that time, with the episode's `guid` when it has one. The result stays plain text when the episode has no feed or local file to link to, or when a link would show a private feed's address, as for an episode of a private feed that you have not added.
 - `offsetSeconds` defaults to `0`. PodNotes subtracts it before formatting and linking, and never goes below zero.
 
 Throws `"No podcast loaded"` when no episode is loaded.
@@ -159,7 +159,7 @@ Returns a `start-end` range, formatted with the [time tokens](/timestamps/#time-
 
 - `startTime` and `endTime` are in seconds. Both must be finite. PodNotes raises negative values to zero, and the end must be after the start.
 - `linkify` defaults to `false`. With `true`, a valid range becomes a link with `time` and `endTime`, so playback pauses at the end.
-- An invalid range returns plain text. So does an episode with nothing to link to, or one from a private feed that you have not added.
+- An invalid range returns plain text. So do the cases in which `getPodcastTimeFormatted()` returns plain text.
 
 There is no offset parameter. Throws `"No podcast loaded"` when no episode is loaded.
 
@@ -175,6 +175,6 @@ Setting the speed does not change **Default Playback Rate**. The speed lasts unt
 - `stop()` pauses the current episode and saves its position.
 - `togglePlayback()` switches between playing and paused.
 - `skipBackward()` and `skipForward()` move by **Skip backward length (s)** and **Skip forward length (s)**. An invalid length falls back to 15 seconds.
-- A backward skip stops at the start. When the duration is known, a forward skip stops 0.25 seconds before the end, and never moves backward. Playback continues, so the episode then ends and the queue moves on.
+- A backward skip stops at the start. A skip keeps the episode playing or paused. When the duration is known, a forward skip that would pass the end stops 0.25 seconds before it, so a playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
 - `increasePlaybackRate()` and `decreasePlaybackRate()` change the current speed by `0.1`, within `0.5` to `4`.
 - `resetPlaybackRate()` sets the current speed to **Default Playback Rate**.

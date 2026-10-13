@@ -40,6 +40,7 @@ export const sidebar = [
 		label: "Your library",
 		items: [
 			{ label: "Sync between devices", slug: "sync" },
+			{ label: "Fix save problems", slug: "save-problems" },
 			{ label: "Import and export", slug: "import_export" },
 		],
 	},

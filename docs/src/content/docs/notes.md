@@ -48,7 +48,7 @@ The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts
 
 After you edit the path, a preview shows the result for one of your episodes. [File path tags](/templates/#file-path-tags) lists every tag a path accepts.
 
-PodNotes finds a note that has the `guid` and `feedUrl` properties wherever it is. It finds other notes only at the path, so move them to match. Otherwise PodNotes can create a second note for such an episode. See [How PodNotes finds a note](#how-podnotes-finds-a-note).
+PodNotes finds a note that has the `guid` and `feedUrl` properties wherever it is. It finds other notes, including every note created before PodNotes 2.22.0, only at the new path or by their title in its folder, so move them to match. Otherwise PodNotes can create a second note for such an episode. See [How PodNotes finds a note](#how-podnotes-finds-a-note).
 
 Feed notes and downloads have their own paths: **Feed note file path** under **Feed notes**, and **Episode download path** under **Downloads**.
 
@@ -117,18 +117,18 @@ The same lines also work as the content of a `.base` file, such as `PodNotes/Epi
 
 ## How PodNotes finds a note
 
-PodNotes adds two properties to each new episode note: `guid`, the episode's ID in its feed, and `feedUrl`, the address of its feed. To find an episode's note, PodNotes tries these in order:
+When the feed gives an episode an ID, PodNotes adds two properties to the episode's new note: `guid`, the episode's ID in its feed, and `feedUrl`, the address of its feed. To find an episode's note, PodNotes tries these in order:
 
 1. The one note in the vault whose `guid` and `feedUrl` match the episode.
 2. The note at the path that **Note creation file path** gives for the episode.
 3. The one note in that folder whose name matches the episode title.
 
-So a note with both properties keeps working after you rename it or move it to another folder.
+So a note with both properties keeps working after you rename it or move it to another folder. Notes created before PodNotes 2.22.0 do not have these properties, and PodNotes does not add them to existing notes. Keep such a note in the folder where PodNotes created it, with the episode's title as its name.
 
-PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. It adds neither property when the feed gives the episode no ID, or when the episode comes from a private feed that you have not added. For a private feed that you added, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. It adds neither property for a local file, when the feed gives the same ID to several episodes, when the template's properties are not valid YAML, or when the episode comes from a private feed that you have not added. For a private feed that you added, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 ## Limits of note creation
 
-- **PodNotes: Create episode note** needs both **Note creation file path** and **Note creation template**. With either one empty, the command is missing and the episode menu shows "Please set a note path and template in the settings."
-- A note without the `guid` and `feedUrl` properties, such as one created before PodNotes 2.22.0 or one for a local file, is found only by its path or by its title in the same folder. After you rename or move such a note, PodNotes can create a second note for the episode.
+- **PodNotes: Create episode note** needs both **Note creation file path** and **Note creation template**. With either one empty, the command is missing, and **Create note** in the episode menu shows "Please set a note path and template in the settings."
+- PodNotes finds a note without the `guid` and `feedUrl` properties, such as one created before PodNotes 2.22.0 or one for a local file, only by its path or by its title in the same folder. After you rename or move such a note, PodNotes can create a second note for the episode.
 - After you change **Feed note file path**, new episode notes link to the new path. Existing episode notes keep their old links.

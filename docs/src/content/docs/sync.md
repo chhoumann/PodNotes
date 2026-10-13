@@ -24,12 +24,15 @@ With Obsidian Sync, turn on **Active community plugin list** and **Installed com
 
 PodNotes merges the changes your devices make, so you can switch devices without restarting Obsidian. To continue an episode on another device:
 
-1. On the device you are leaving, pause playback. Pausing saves your position at once.
+1. On the device you are leaving, pause playback, and note the time where you stopped. Pausing saves your position at once.
 2. Wait until your sync service finishes uploading.
 3. On the device you are switching to, wait until sync finishes.
-4. Play the episode.
+4. If the episode is still in this device's player from an earlier listen, move to the time you noted on the progress bar.
+5. Play the episode.
 
-If that device has not played the episode since Obsidian started, the player shows the episode you played last on the other device, at the position you reached there. If it has, it keeps its own position, as [Changes on two devices](#changes-on-two-devices) explains.
+If this device has played nothing since Obsidian started, its player already shows the episode at the time you noted. Any other episode starts at its synced position when you play it.
+
+Step 4 matters because the episode in a device's player keeps that device's position. When that device saves its position, for example when you pause or switch apps, the older position replaces the progress from your other device.
 
 ## Changes on two devices
 
@@ -45,14 +48,14 @@ When two devices change the same setting or the same item before either sees the
 
 Episodes match by podcast name and title, so episodes with the same title from different podcasts stay apart.
 
-Sync never starts, pauses, or moves playback on this device. An episode that this device has played since Obsidian started keeps this device's position. When this device saves that position, for example when you pause or switch apps, it replaces the progress your other device saved for that episode.
+Sync never starts, pauses, or moves playback on this device. The episode in this device's player keeps this device's position, as step 4 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains.
 
 ### A device that starts before sync finishes
 
 Each library has an ID, `libraryId`, in `data.json`. A device that starts PodNotes before sync delivers `data.json` starts a library of its own. When the two files meet, PodNotes combines the two libraries:
 
 - Every podcast, progress record, playlist, and download from both libraries stays.
-- A setting changed from its default in only one library keeps that library's value.
+- A setting changed from its default in only one library keeps that library's value. A setting changed in both libraries keeps this device's value.
 - A podcast with different names in the two libraries appears twice, once under each name.
 - The combined library keeps the ID of the library that started first.
 
@@ -126,45 +129,8 @@ Your sync service decides whether the removal reaches other devices.
 
 Removing a download never deletes episode notes or timestamps.
 Timestamp links point at the feed and the episode, not at the file, so they play the episode online again while the feed still lists it.
-A link finds its episode by the ID the feed gives it, so it still works after the podcast renames the episode. A link without that ID, such as one captured before PodNotes 2.22.0, finds the episode by its title.
+A link to a local file needs the file in your vault on the current device. [Limits of capture and links](/timestamps/#limits-of-capture-and-links) lists the other cases.
 
-A link to a local file needs the file in your vault on the current device.
-A link to a private feed plays on each device where you set that feed's address.
-Links captured before PodNotes protected a private feed contain the original private address, and PodNotes does not rewrite them.
+## <span id="unreadable-plugin-data"></span>When PodNotes cannot save
 
-## <span id="unreadable-plugin-data"></span><span id="restore-saving-after-a-notice"></span>Fix a save problem
-
-When PodNotes cannot save your library, it shows a notice. Find the notice below.
-
-### PodNotes could not save your changes
-
-The write to `data.json` failed, for example because the disk is full or the folder does not allow writes.
-PodNotes keeps your changes and tries again every 10 seconds. It shows the notice once, and says nothing when a save succeeds again.
-If the notice comes back, free disk space, and check that your vault folder allows writes.
-
-### PodNotes could not read data.json
-
-The notice names the file's path. PodNotes leaves the file unchanged and saves nothing until it can read the file again, often after sync finishes writing it. The notice stays on screen until then.
-
-If the notice appears while you use PodNotes, your changes stay in memory. PodNotes tries again every 10 seconds while you have unsaved changes, and each new change tries again too. When the file reads again, the notice closes, and PodNotes saves your changes merged with the file.
-
-If the notice stays:
-
-1. Let sync finish.
-2. Check the free disk space and the permissions of the file named in the notice.
-3. Replace the file with a readable backup, if you have one.
-4. Restart Obsidian.
-
-If the notice says that PodNotes started with default settings, PodNotes could not read the file when it started. Changes you make before the file reads again are lost. To recover, replace the file with a readable backup, or let sync deliver a readable copy. When the file changes, PodNotes loads it as your library and saves again. If the notice stays, restart Obsidian.
-
-To start a new library instead, back up `data.json`, delete it, and restart Obsidian. A device that still has the old library combines it with the new one when sync delivers the new file.
-
-### data.json comes from an older or newer PodNotes
-
-If a device with an older PodNotes syncs its `data.json`, a notice says the file was replaced by a copy from an older version. PodNotes saves nothing until you restart Obsidian, which updates the file. Update PodNotes on every device, let sync finish, and restart Obsidian.
-
-If `data.json` uses a data format that is newer than this version of PodNotes, PodNotes does not start, and its notice asks you to update. Update PodNotes on every device that shares the vault.
-
-### A settings import or an API key fails to save
-
-A failed settings import or API key choice shows its own notice, such as "Could not import PodNotes settings." The notice says which settings PodNotes kept. Fix the save problem, then import the file or choose the key again.
+When PodNotes cannot save your library, it shows a notice, and in most cases it keeps your changes and tries again. [Fix save problems](/save-problems/) explains each notice and what to do.

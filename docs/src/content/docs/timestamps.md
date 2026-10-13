@@ -22,7 +22,7 @@ The capture commands work from anywhere, so you can capture while you browse epi
 
 1. The note you are editing, at the cursor. A note in reading view does not count.
 2. The note you edited last, at its cursor, if it is still open in editing view. A capture from the PodNotes view, or from a headset, usually goes here.
-3. The end of the episode's note. PodNotes creates the note if it does not exist, and does not open it. This needs **Note creation file path** and **Note creation template**.
+3. The end of the episode's note, found as [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note) describes. If PodNotes finds none, it creates the note, without opening it. This needs **Note creation file path** and **Note creation template**.
 
 ## Capture from a hotkey, the toolbar, or a headset
 
@@ -44,7 +44,7 @@ To mark a passage instead of a moment:
 2. In a note in editing view, place the cursor where the range goes.
 3. Run **PodNotes: Capture Last 10 Seconds** or **PodNotes: Capture Last 20 Seconds**.
 
-PodNotes inserts the range that ends at the current playback time, such as `00:12:31-00:12:41`. It does not cut an audio clip. With the default **Capture timestamp format**, the range is a link that plays that passage and pauses at its end. With a format that uses `{{time}}`, the range is plain text.
+PodNotes inserts the range that ends at the current playback time, such as `00:12:31-00:12:41`. It does not cut an audio clip. With the default **Capture timestamp format**, the range is a link that plays that passage and pauses at its end. While the range plays, PodNotes does not save your position in the episode. Playing on, or moving to another point, returns to normal playback. With a format that uses `{{time}}`, the range is plain text.
 
 The range commands insert a range in the style of your **Capture timestamp format**, as [Timestamp tags](#timestamp-tags) describes. [Commands](/commands/#capture-last-10-seconds--capture-last-20-seconds) lists when they are available.
 
@@ -55,7 +55,7 @@ If your captures come out as plain text with no link, your format most likely us
 1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end.
 
-New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the episode has no feed or local file to link to, or it comes from a private feed that you have not added. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the episode has no feed or local file to link to, or a link would show a private feed's address, as for a private feed that you have not added. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 ## Compensate for reaction time
 
@@ -76,7 +76,7 @@ Captures and links behave differently in these cases:
 
 - Without a loaded episode, a capture shows "Play an episode to capture". With an empty **Capture timestamp format**, it shows "Set a Capture timestamp format in settings to capture a timestamp."
 - When a capture goes to the episode's note and **Note creation file path** or **Note creation template** is empty, PodNotes shows "Set an episode note path and template to capture timestamps".
-- `{{linktime}}` and `{{linksegment}}` insert plain text when the episode has no feed or local file to link to, or comes from a private feed that you have not added.
+- `{{linktime}}` and `{{linksegment}}` insert plain text when the episode has no feed or local file to link to, or when a link would show a private feed's address.
 - At the very start of an episode, a range command shows "Play more of the episode before capturing a segment".
 - In a table cell, PodNotes escapes pipe characters and turns line breaks into spaces.
 - A link finds its episode by the ID the feed gives it, so it still works after the podcast renames the episode. A link without that ID, such as one captured before PodNotes 2.22.0, finds its episode by title, despite changes in case, punctuation, or word order. If the podcast renames such an episode with different words, the link shows "Episode not found".

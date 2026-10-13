@@ -18,7 +18,7 @@ On a phone, the player stays closed until you open it. See [Use PodNotes on your
 ### Why are some commands missing?
 
 Most commands appear only while an episode is loaded. A paused episode counts, and so does the episode PodNotes shows when Obsidian starts.
-**PodNotes: Reorder Queue** needs at least two episodes in the queue.
+**PodNotes: Create episode note** also appears once you added a podcast, and **PodNotes: Reorder Queue** needs at least two episodes in the queue.
 **PodNotes: Show player** and the capture commands are always available. [Commands](/commands/) lists what each command needs.
 
 ### How do I install a beta version or install manually?
@@ -86,7 +86,7 @@ Links to your own media files need only the file in your vault. See [Removed dow
 ### Does playback progress sync between devices?
 
 Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`, and merges the changes your devices make. When you switch devices, pause first and let sync finish. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
-If PodNotes shows a notice that it cannot save, see [Fix a save problem](/sync/#fix-a-save-problem).
+If PodNotes shows a notice that it cannot save, see [Fix save problems](/save-problems/).
 API keys and private feed addresses stay on each device. See [Sync between devices](/sync/).
 
 ## Transcription

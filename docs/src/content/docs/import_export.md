@@ -22,7 +22,7 @@ PodNotes fetches each feed and adds it to your podcasts, and a notice reports ho
 
 PodNotes saves the file at the root of your vault. To save it in an existing folder, include the folder in the name, such as `Exports/PodNotes_Export.opml`. If the name is taken, the export fails, so choose another name.
 
-The OPML file contains the real feed addresses, private ones included, and a notice reminds you of it. Delete the file after you import it into the other app. A private podcast whose address is not on this device is exported without an address.
+The OPML file contains the real feed addresses, private ones included, and a notice reminds you of it. Delete the file after you import it into the other app. PodNotes exports a private podcast whose address is not on this device with an empty address.
 
 ## <span id="settings-templates"></span><span id="settings--templates"></span>Back up or move your settings
 
@@ -43,7 +43,8 @@ PodNotes saves the file in your vault and never overwrites an existing file. If 
 3. In **Import PodNotes settings?**, read what the import replaces, and select **Import**.
 
 The import replaces your preferences, templates, saved podcasts, playlists, queue, and favorites. It adds the file's playback progress for episodes that this vault has not played, and keeps this vault's own progress, downloads, and local files.
-The current volume changes to the imported **Default Volume** at once. The imported **Default Playback Rate** applies from the next episode that loads.
+The current volume changes to the imported **Default Volume** at once. The imported **Default Playback Rate** applies when a different episode loads.
+If PodNotes cannot save the import, it keeps your previous settings and shows a notice. See [Fix save problems](/save-problems/#a-settings-import-or-an-api-key-fails-to-save).
 
 Private feeds in the file work on a device that already has their addresses. On another device, set each address with **Set feed address**, or import an OPML file that lists the feeds. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
 

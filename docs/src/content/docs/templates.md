@@ -72,7 +72,7 @@ PodNotes shortens a long folder or file name to fit file system limits, and keep
 | `{{duration}}` | Episode length from `<itunes:duration>`, or empty when the feed has none. |
 | `{{chapters}}` | Chapter list in Markdown, or empty when the episode has no visible chapters. |
 | `{{artwork}}` | Episode artwork URL, or empty when there is none or the address is blocked. |
-| `{{episodelink}}` | `obsidian://podnotes` link that resumes this episode, with its `guid` when it has one. Empty without a feed or local file to link to, and for a private feed that you have not added. |
+| `{{episodelink}}` | `obsidian://podnotes` link that resumes this episode, with its `guid` when it has one. Empty without a feed or local file to link to, and when the link would show a private feed's address, as for a private feed that you have not added. |
 
 `{{date}}` and `{{currentDate}}` accept a [date format](#date-formats). `{{episodeNumber:000}}` pads to three digits. Any other argument gives the number without padding.
 
@@ -130,7 +130,7 @@ favorite: false
 {{description}}
 ```
 
-PodNotes also adds the `guid` and `feedUrl` properties to each new episode note, so it finds the note after you rename or move it. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note).
+PodNotes also adds the `guid` and `feedUrl` properties to a new episode note when the feed gives the episode an ID, so it finds the note after you rename or move it. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note).
 
 Its properties work with Obsidian Bases. You fill in `status` and `rating`, and change `favorite` to `true` for the episodes you like. To build a table of episode notes, see [Browse your notes with Bases](/notes/#browse-your-notes-with-bases).
 

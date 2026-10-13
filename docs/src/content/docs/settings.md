@@ -19,7 +19,7 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Keep a queue of episodes you switch away from** | On | Puts the episode you switch away from at the top of the queue, and starts the next queued episode when one ends. See [Turn off the automatic queue](/playlists/#turn-off-the-automatic-queue). |
-| **Latest episodes per podcast** | 10 | Sets how many of each podcast's newest episodes **Latest Episodes** shows and searches, from 1 to 75. |
+| **Latest episodes per podcast** | 10 | Sets how many of each podcast's newest episodes **Latest episodes** shows and searches, from 1 to 75. |
 | **Default Playback Rate** | 1x | Sets the speed, from 0.5x to 4x, that PodNotes uses when Obsidian starts and whenever a different episode loads. Changing it does not change the speed of the episode that is playing. **PodNotes: Reset playback rate** returns to it. |
 | **Default Volume** | 1 (100%) | Sets the volume, from 0 to 1, and changes the current volume at once. The player's volume slider changes this setting too, so one volume applies to every episode. |
 | **Skip backward length (s)** | 15 | Sets how many seconds the skip backward button, the command, and the skip backward control of a headset or the lock screen move back. |
@@ -40,7 +40,7 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Feed note file path** | `PodNotes/Podcasts/{{podcast}}.md` | Sets where **PodNotes: Create podcast feed note** creates the note for a podcast. See [Create episode notes](/notes/). |
+| **Feed note file path** | `PodNotes/Podcasts/{{podcast}}.md` | Sets where **PodNotes: Create podcast feed note** and **Create podcast note** in the podcast's menu create the note for a podcast. See [Create episode notes](/notes/). |
 | **Feed note template** | [The default feed note template](/templates/#feed-note-tags) | Sets the content of a new feed note. |
 
 ## Downloads
@@ -62,7 +62,7 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Import OPML** | None | **Import** opens a file picker. PodNotes adds the podcasts in the `.opml` file you choose. See [Import podcasts from OPML](/import_export/#import-podcasts-from-opml). |
-| **Export OPML** | `PodNotes_Export.opml` | **Export** saves the podcasts you follow to an OPML file with this name in your vault. The file holds private feed addresses in plain text. See [Export podcasts to OPML](/import_export/#export-podcasts-to-opml). |
+| **Export OPML** | `PodNotes_Export.opml` | **Export** saves the podcasts you added to an OPML file with this name in your vault. The file holds private feed addresses in plain text. See [Export podcasts to OPML](/import_export/#export-podcasts-to-opml). |
 
 ## Preferences & templates
 

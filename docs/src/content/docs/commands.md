@@ -9,8 +9,8 @@ Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only whi
 | Command | ID | Available when |
 | --- | --- | --- |
 | [Show player](#show-player) | `podnotes:podnotes-show-leaf` | Always |
-| [Play Podcast](#play-podcast) | `podnotes:start-playing` | An episode is loaded and not playing |
-| [Stop Podcast](#stop-podcast) | `podnotes:stop-playing` | An episode is playing |
+| [Play Podcast](#play-podcast) | `podnotes:start-playing` | An episode is loaded, and it is not playing or starting to play |
+| [Stop Podcast](#stop-podcast) | `podnotes:stop-playing` | An episode is playing or starting to play |
 | [Toggle playback](#toggle-playback) | `podnotes:podnotes-toggle-playback` | An episode is loaded |
 | [Skip Backward](#skip-backward) | `podnotes:skip-backward` | An episode is loaded |
 | [Skip Forward](#skip-forward) | `podnotes:skip-forward` | An episode is loaded |
@@ -22,8 +22,8 @@ Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only whi
 | [Capture Timestamp](#capture-timestamp) | `podnotes:capture-timestamp` | Always |
 | [Capture Last 10 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-10s` | Always |
 | [Capture Last 20 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-20s` | Always |
-| [Create episode note](#create-episode-note) | `podnotes:create-podcast-note` | **Note creation file path** and **Note creation template** are set, and an episode is loaded or you follow at least one podcast |
-| [Create podcast feed note](#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You follow at least one podcast, and **Feed note file path** and **Feed note template** are set |
+| [Create episode note](#create-episode-note) | `podnotes:create-podcast-note` | **Note creation file path** and **Note creation template** are set, and an episode is loaded or you added at least one podcast |
+| [Create podcast feed note](#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You added at least one podcast, and **Feed note file path** and **Feed note template** are set |
 | [Copy universal episode link to clipboard](#copy-universal-episode-link-to-clipboard) | `podnotes:get-share-link-episode` | An episode is loaded |
 | [Transcribe current episode](#transcribe-current-episode) | `podnotes:podnotes-transcribe` | An audio episode is loaded |
 | [Transcribe current episode from audio](#transcribe-current-episode-from-audio) | `podnotes:podnotes-transcribe-audio` | An audio episode is loaded |
@@ -52,7 +52,7 @@ Moves back by **Skip backward length (s)**, 15 seconds by default. It never move
 
 ## Skip Forward
 
-Moves forward by **Skip forward length (s)**, 15 seconds by default. When the duration is known, a forward skip stops 0.25 seconds before the end and keeps playing, so the episode then ends and the queue moves on.
+Moves forward by **Skip forward length (s)**, 15 seconds by default, and keeps the episode playing or paused. When the duration is known, a skip that would pass the end stops 0.25 seconds before it. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
 
 ## Increase playback rate
 
@@ -95,13 +95,13 @@ The ID keeps the command's former name, Create Podcast Note. See [Create episode
 
 ## Create podcast feed note
 
-Opens a list of the podcasts you follow, with the playing episode's podcast first. Creates a note for the podcast you select, or opens the note if it exists.
+Opens a list of the podcasts you added, with the playing episode's podcast first. Creates a note for the podcast you select, or opens the note if it exists.
 No episode needs to be loaded. See [Create a feed note for a podcast](/notes/#create-a-feed-note-for-a-podcast).
 
 ## Copy universal episode link to clipboard
 
 Copies a pod.link URL for the loaded episode, to share with people who use other podcast apps. It is not a PodNotes timestamp link.
-PodNotes finds the show in the Apple Podcasts directory. If the show or the episode is not there, it shows a notice instead.
+PodNotes finds the show in the Apple Podcasts directory and the episode on pod.link. If either is missing, it shows a notice instead.
 
 ## Transcribe current episode
 
