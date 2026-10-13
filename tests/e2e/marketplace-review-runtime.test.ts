@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { Episode } from "../../src/types/Episode";
 import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 import { createPodNotesE2EHarness, evalJsonAsync, openPodNotesView } from "./harness";
-import { PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
+import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 
 type PodNotesData = Partial<IPodNotesSettings>;
 
@@ -29,7 +29,7 @@ describe("marketplace review runtime paths", () => {
 				renderedControls: number;
 			}>(`
 				(() => {
-					const tab = app.setting.pluginTabs.find((candidate) => candidate.id === ${JSON.stringify(PLUGIN_ID)});
+					const tab = app.setting.pluginTabs.find((candidate) => candidate.id === ${jsLiteral(PLUGIN_ID)});
 					const definitions = tab?.getSettingDefinitions?.() ?? [];
 					return {
 						definitionCount: definitions.length,
@@ -179,7 +179,7 @@ describe("marketplace review runtime paths", () => {
 				obsidian,
 				`(async () => {
 					app.setting.close();
-					const path = ${JSON.stringify(exportPath)};
+					const path = ${jsLiteral(exportPath)};
 					if (await app.vault.adapter.exists(path)) await app.vault.adapter.remove(path);
 					return true;
 				})()`,
@@ -225,10 +225,10 @@ describe("marketplace review runtime paths", () => {
 			}>(
 				obsidian,
 				`(async () => {
-					const file = app.vault.getAbstractFileByPath(${JSON.stringify(expectedPath)});
+					const file = app.vault.getAbstractFileByPath(${jsLiteral(expectedPath)});
 					if (!file) throw new Error("Downloaded file was not indexed.");
 					const bytes = new Uint8Array(await app.vault.readBinary(file));
-					const listing = await app.vault.adapter.list(${JSON.stringify(sandbox.path("downloads"))});
+					const listing = await app.vault.adapter.list(${jsLiteral(sandbox.path("downloads"))});
 					const calls = window.__podnotesReviewDownloadHooks.calls;
 					return {
 						appendCalls: calls.append.length,
@@ -285,7 +285,7 @@ describe("marketplace review runtime paths", () => {
 			await obsidian.waitFor(
 				async () =>
 					await obsidian.dev.evalJson<boolean>(
-						`Boolean(document.querySelector(${JSON.stringify(`.workspace-leaf.mod-active [aria-label="More options for ${episode.title}"]`)}))`,
+						`Boolean(document.querySelector(${jsLiteral(`.workspace-leaf.mod-active [aria-label="More options for ${episode.title}"]`)}))`,
 					),
 				WAIT_OPTS,
 			);
@@ -295,11 +295,11 @@ describe("marketplace review runtime paths", () => {
 			}>(`
 				(() => {
 					const overflow = document.querySelector(
-						${JSON.stringify(`.workspace-leaf.mod-active [aria-label="More options for ${episode.title}"]`)},
+						${jsLiteral(`.workspace-leaf.mod-active [aria-label="More options for ${episode.title}"]`)},
 					);
 					return {
 						episodeVisible: Array.from(document.querySelectorAll(".workspace-leaf.mod-active .pn-ep-title"))
-							.some((candidate) => candidate.textContent?.trim() === ${JSON.stringify(episode.title)}),
+							.some((candidate) => candidate.textContent?.trim() === ${jsLiteral(episode.title)}),
 						overflowVisible: overflow instanceof HTMLButtonElement && overflow.getBoundingClientRect().width > 0,
 					};
 				})()
@@ -330,11 +330,11 @@ describe("marketplace review runtime paths", () => {
 			await evalJsonAsync<boolean>(
 				obsidian,
 				`(async () => {
-					const folderPath = ${JSON.stringify(sandbox.path("notes"))};
+					const folderPath = ${jsLiteral(sandbox.path("notes"))};
 					if (!app.vault.getAbstractFileByPath(folderPath)) await app.vault.createFolder(folderPath);
 					await app.vault.create(
-						${JSON.stringify(renamedPath)},
-						${JSON.stringify("# Existing renamed note\n")},
+						${jsLiteral(renamedPath)},
+						${jsLiteral("# Existing renamed note\n")},
 					);
 					return true;
 				})()`,
@@ -344,7 +344,7 @@ describe("marketplace review runtime paths", () => {
 			await obsidian.waitFor(
 				async () =>
 					await obsidian.dev.evalJson<boolean>(
-						`app.workspace.getActiveFile()?.path === ${JSON.stringify(renamedPath)}`,
+						`app.workspace.getActiveFile()?.path === ${jsLiteral(renamedPath)}`,
 					),
 				WAIT_OPTS,
 			);
@@ -353,9 +353,9 @@ describe("marketplace review runtime paths", () => {
 				folderChildren: string[];
 			}>(`
 				(() => {
-					const folder = app.vault.getAbstractFileByPath(${JSON.stringify(sandbox.path("notes"))});
+					const folder = app.vault.getAbstractFileByPath(${jsLiteral(sandbox.path("notes"))});
 					return {
-						exactCreated: Boolean(app.vault.getAbstractFileByPath(${JSON.stringify(expectedPath)})),
+						exactCreated: Boolean(app.vault.getAbstractFileByPath(${jsLiteral(expectedPath)})),
 						folderChildren: (folder?.children ?? []).map((child) => child.path),
 					};
 				})()
@@ -367,8 +367,8 @@ describe("marketplace review runtime paths", () => {
 			await evalJsonAsync<boolean>(
 				obsidian,
 				`(async () => {
-					if (await app.vault.adapter.exists(${JSON.stringify(renamedPath)})) {
-						await app.vault.adapter.remove(${JSON.stringify(renamedPath)});
+					if (await app.vault.adapter.exists(${jsLiteral(renamedPath)})) {
+						await app.vault.adapter.remove(${jsLiteral(renamedPath)});
 					}
 					return true;
 				})()`,
@@ -531,7 +531,7 @@ async function openSettings(obsidian: Parameters<typeof evalJsonAsync>[0]): Prom
 		`(async () => {
 			app.setting.open();
 			app.setting.closeActiveTab();
-			app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+			app.setting.openTabById(${jsLiteral(PLUGIN_ID)});
 			await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 			return true;
 		})()`,
@@ -555,15 +555,15 @@ async function setSettingInputValue(
 		obsidian,
 		`(() => {
 			const setting = Array.from(document.querySelectorAll(".modal.mod-settings .setting-item")).find(
-				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${JSON.stringify(settingName)},
+				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${jsLiteral(settingName)},
 			);
 			const input = setting?.querySelector("input");
 			if (!(input instanceof HTMLInputElement)) {
-				throw new Error(${JSON.stringify(`Input not found for ${settingName}.`)});
+				throw new Error(${jsLiteral(`Input not found for ${settingName}.`)});
 			}
 			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
 			if (!setter) throw new Error("Native input value setter not found.");
-			setter.call(input, ${JSON.stringify(value)});
+			setter.call(input, ${jsLiteral(value)});
 			input.dispatchEvent(new Event("input", { bubbles: true }));
 			input.dispatchEvent(new Event("change", { bubbles: true }));
 			return true;
@@ -579,9 +579,9 @@ async function settingInputHasValue(
 	return await obsidian.dev.evalJson<boolean>(`
 		(() => {
 			const setting = Array.from(document.querySelectorAll(".modal.mod-settings .setting-item")).find(
-				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${JSON.stringify(settingName)},
+				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${jsLiteral(settingName)},
 			);
-			return setting?.querySelector("input")?.value === ${JSON.stringify(value)};
+			return setting?.querySelector("input")?.value === ${jsLiteral(value)};
 		})()
 	`);
 }
@@ -595,13 +595,13 @@ async function clickSettingButton(
 		obsidian,
 		`(() => {
 			const setting = Array.from(document.querySelectorAll(".modal.mod-settings .setting-item")).find(
-				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${JSON.stringify(settingName)},
+				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${jsLiteral(settingName)},
 			);
 			const button = Array.from(setting?.querySelectorAll("button") ?? []).find(
-				(candidate) => candidate.textContent?.trim() === ${JSON.stringify(buttonText)},
+				(candidate) => candidate.textContent?.trim() === ${jsLiteral(buttonText)},
 			);
 			if (!(button instanceof HTMLButtonElement)) {
-				throw new Error(${JSON.stringify(`${buttonText} button not found for ${settingName}.`)});
+				throw new Error(${jsLiteral(`${buttonText} button not found for ${settingName}.`)});
 			}
 			button.click();
 			return true;
@@ -622,7 +622,7 @@ async function installFilePickerResult(
 					return window.__podnotesReviewOriginalInputClick.call(this);
 				}
 				window.__podnotesReviewFileInputAttached = this.parentElement === activeDocument.body;
-				const file = new File([${JSON.stringify(contents)}], "PodNotes_Settings.json", {
+				const file = new File([${jsLiteral(contents)}], "PodNotes_Settings.json", {
 					type: "application/json",
 				});
 				Object.defineProperty(this, "files", { configurable: true, value: [file] });
@@ -668,12 +668,12 @@ async function installDownloadInstrumentation(
 				if (
 					channel === "request-url" &&
 					typeof replyChannel === "string" &&
-					request?.url === ${JSON.stringify(DOWNLOAD_URL)}
+					request?.url === ${jsLiteral(DOWNLOAD_URL)}
 				) {
 					const rangeHeader = request.headers?.Range ?? request.headers?.range ?? "";
 					calls.requests.push({ url: request.url, range: rangeHeader });
 					const match = /^bytes=(\\d+)-(\\d+)$/.exec(rangeHeader);
-					const bytes = Uint8Array.from(${JSON.stringify(Array.from(AUDIO_BYTES))});
+					const bytes = Uint8Array.from(${jsLiteral(Array.from(AUDIO_BYTES))});
 					const start = match ? Number(match[1]) : 0;
 					const end = match ? Math.min(start + 7, bytes.byteLength - 1) : bytes.byteLength - 1;
 					const body = bytes.slice(start, end + 1).buffer;

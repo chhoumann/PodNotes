@@ -11,7 +11,15 @@ import {
 	seedAudio,
 	waitForPlaybackState,
 } from "./harness";
-import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
+import {
+	jsLiteral,
+	PLUGIN_ID,
+	RELOAD_OPTIONS,
+	VIEW_TYPE,
+	WAIT_OPTS,
+	waitForPodNotesReady,
+} from "./runtime";
+import { collectRuntimeErrors, POPOUT_RESIZE_LOOP } from "./runtime-evidence";
 
 const getContext = createPodNotesE2EHarness("player-popout-save");
 const EPISODE_TITLE = "E2E Popout Episode";
@@ -25,11 +33,11 @@ async function moveViewToPopout(obsidian: Obsidian): Promise<void> {
 		await evalJsonAsync<boolean>(
 			obsidian,
 			`(async () => {
-				const leaf = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0];
+				const leaf = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
 				app.workspace.moveLeafToPopout(leaf);
 				for (let i = 0; i < 50; i++) {
 					await new Promise((resolve) => setTimeout(resolve, 100));
-					const moved = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0];
+					const moved = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
 					if (moved?.view.containerEl.ownerDocument !== document) return true;
 				}
 				return false;
@@ -65,7 +73,7 @@ async function closePopout(obsidian: Obsidian): Promise<void> {
 		await evalJsonAsync<boolean>(
 			obsidian,
 			`(async () => {
-				const leaf = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0];
+				const leaf = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
 				leaf.getContainer().win.close();
 				for (let i = 0; i < 50 && app.workspace.floatingSplit.children.length > 0; i++) {
 					await new Promise((resolve) => setTimeout(resolve, 100));
@@ -107,7 +115,7 @@ async function closePopoutAndReload(obsidian: Obsidian): Promise<void> {
 		obsidian,
 		`(async () => {
 			require("@electron/remote").getCurrentWindow().show();
-			const leaf = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0];
+			const leaf = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
 			leaf?.detach();
 			const windows = () => require("@electron/remote").BrowserWindow.getAllWindows().length;
 			for (let i = 0; i < 50 && (app.workspace.floatingSplit.children.length > 0 || windows() > 1); i++) {
@@ -119,6 +127,7 @@ async function closePopoutAndReload(obsidian: Obsidian): Promise<void> {
 		})()`,
 	);
 	await reloadObsidian(obsidian);
+	await collectRuntimeErrors(obsidian, POPOUT_RESIZE_LOOP);
 }
 
 // The audio lives in the main window, so a popout holding the player is only a view of it.
@@ -191,7 +200,7 @@ test("hiding the main window saves the playing position at once", async () => {
 				const podnotes = app.plugins.plugins.${PLUGIN_ID};
 				const file = app.vault.adapter.getFullPath(podnotes.manifest.dir + "/data.json");
 				const saved = () =>
-					JSON.parse(fs.readFileSync(file, "utf8")).playedEpisodes[${JSON.stringify(PROGRESS_KEY)}]?.time ?? null;
+					JSON.parse(fs.readFileSync(file, "utf8")).playedEpisodes[${jsLiteral(PROGRESS_KEY)}]?.time ?? null;
 				const mtime = fs.statSync(file).mtimeMs;
 				const waitStart = Date.now();
 				while (fs.statSync(file).mtimeMs === mtime) {

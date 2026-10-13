@@ -30,7 +30,7 @@ import {
 	waitForLibrary,
 	waitForPlayback,
 } from "./journey/library";
-import { VIEW_TYPE } from "./runtime";
+import { jsLiteral, VIEW_TYPE } from "./runtime";
 
 const LONG: FixtureEpisode = { title: "Shell Long Listen", seconds: 60, pubDate: pubDate(0) };
 const OTHER: FixtureEpisode = { title: "Shell Other Listen", seconds: 60, pubDate: pubDate(1) };
@@ -84,7 +84,7 @@ async function savedViewStates(): Promise<unknown[]> {
 		const layout = JSON.parse(await app.vault.adapter.read(app.vault.configDir + "/workspace.json"));
 		const states = [];
 		const walk = (node) => {
-			if (node?.state?.type === ${JSON.stringify(VIEW_TYPE)}) states.push(node.state.state);
+			if (node?.state?.type === ${jsLiteral(VIEW_TYPE)}) states.push(node.state.state);
 			for (const child of node?.children ?? []) walk(child);
 		};
 		[layout.main, layout.left, layout.right].forEach(walk);
@@ -294,13 +294,13 @@ describe("view shell journeys", () => {
 		await showPodNotes(obsidian);
 		await showLibrary(obsidian);
 		await obsidian.dev.evalJson(`(() => {
-			const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+			const view = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0].view;
 			view.__journeyShell = view.containerEl.querySelector(".podcast-view");
 			return true;
 		})()`);
 		const sameView = () =>
 			obsidian.dev.evalJson<{ width: number; layout: string; same: boolean }>(`(() => {
-				const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+				const view = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0].view;
 				const shell = view.containerEl.querySelector(".podcast-view");
 				return {
 					width: shell.clientWidth,

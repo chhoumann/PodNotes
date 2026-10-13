@@ -1,7 +1,6 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	assertNoRuntimeErrors,
 	click,
 	closePodNotes,
 	closeSettings,
@@ -14,7 +13,8 @@ import {
 } from "./journey/actions";
 import { type FixtureFeed, startFixtureServer } from "./journey/fixtures";
 import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
-import { PLUGIN_ID, RELOAD_OPTIONS, waitForPodNotesReady } from "./runtime";
+import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, waitForPodNotesReady } from "./runtime";
+import { assertNoNewRuntimeErrors } from "./runtime-evidence";
 
 const getContext = createPodNotesE2EHarness("journey-mobile");
 
@@ -62,7 +62,7 @@ describe("mobile journeys", () => {
 		await waitUntilFocused(obsidian, ui.podcastSearch);
 		await typeText(obsidian, server.feedUrl(show));
 		await waitUntilShown(obsidian, ui.addPodcast(show.title));
-		await assertNoRuntimeErrors(obsidian);
+		await assertNoNewRuntimeErrors(obsidian);
 	}, 120_000);
 
 	test("J-ONB-02 on a later mobile start PodNotes stays closed until its ribbon icon opens it", async () => {
@@ -111,7 +111,7 @@ describe("mobile journeys", () => {
 			},
 		});
 		await obsidian.dev.evalJson(
-			`app.saveLocalStorage("podnotes:feed-cache:v5", ${JSON.stringify(legacyCache)}), true`,
+			`app.saveLocalStorage("podnotes:feed-cache:v5", ${jsLiteral(legacyCache)}), true`,
 		);
 
 		await plugin.updateDataAndReload<Record<string, any>>((data) => {

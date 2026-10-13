@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ObsidianClient, PluginHandle, SandboxApi } from "obsidian-e2e";
 import e2eConfig from "../../../obsidian-e2e.config.mjs";
-import { PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE } from "../runtime";
+import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE } from "../runtime";
+import { collectRuntimeErrors } from "../runtime-evidence";
 import { assertSingleWindow, dismissNotices, setMobileEmulation } from "./actions";
 import type { FixtureEpisode, FixtureFeed, FixtureServer } from "./fixtures";
 
@@ -61,6 +62,12 @@ type JourneyContext = Readonly<{
 type Json = Record<string, any>;
 
 const FEED_CACHE_KEY = "podnotes:feed-cache:v6";
+const WORKSPACE_FILES = [
+	"workspace.json",
+	"workspace-mobile.json",
+	"core-plugins.json",
+	"app.json",
+];
 
 type JourneySnapshot = Readonly<{
 	cache: unknown;
@@ -70,105 +77,27 @@ type JourneySnapshot = Readonly<{
 	size: [number, number];
 	corePlugins: Record<string, boolean>;
 	coreConfig: Record<string, unknown>;
+	appConfig: Record<string, unknown>;
 	workspaceFiles: ReadonlyArray<{ path: string; bytes: Buffer | null }>;
 }>;
 
 const snapshots = new WeakMap<ObsidianClient, JourneySnapshot>();
 
-type ErrorRecorder = Readonly<{
-	id: string;
-	directory: string;
-	configPath: string;
-	configBytes: Buffer | null;
-	enabled: readonly string[];
-}>;
-
-const recorders = new WeakMap<ObsidianClient, ErrorRecorder>();
-
-export async function installJourneyErrorRecorder(obsidian: ObsidianClient): Promise<void> {
-	const vault = await obsidian.vaultPath();
-	const id = `podnotes-e2e-errors-${process.pid}`;
-	const directory = path.join(vault, ".obsidian", "plugins", id);
-	const configPath = path.join(vault, ".obsidian", "community-plugins.json");
-	const configBytes = await fs.readFile(configPath).catch((error: NodeJS.ErrnoException) => {
-		if (error.code !== "ENOENT") throw error;
-		return null;
-	});
-	const enabled = await obsidian.dev.evalJson<string[]>("[...app.plugins.enabledPlugins]");
-	await fs.mkdir(directory);
-	recorders.set(obsidian, { id, directory, configPath, configBytes, enabled });
-	await fs.writeFile(
-		path.join(directory, "manifest.json"),
-		JSON.stringify({
-			id,
-			name: "PodNotes E2E error recorder",
-			version: "1.0.0",
-			minAppVersion: "1.13.0",
-			description: "Capture uncaught errors before PodNotes starts.",
-			author: "PodNotes tests",
-		}),
-	);
-	// Obsidian initializes plugins before its CLI error buffer. Load this recorder first.
-	await fs.writeFile(
-		path.join(directory, "main.js"),
-		`
-		module.exports = class extends require("obsidian").Plugin {
-			onload() {
-				window.__podnotesJourneyEarlyErrors = [];
-				window.__podnotesJourneyRecorderBeforePodNotes = !this.app.plugins.plugins.podnotes?.api;
-				this.registerDomEvent(window, "error", (event) => window.__podnotesJourneyEarlyErrors.push({ source: "error", message: event.message }));
-				this.registerDomEvent(window, "unhandledrejection", (event) => window.__podnotesJourneyEarlyErrors.push({ source: "unhandledrejection", message: String(event.reason) }));
-			}
-			onunload() {
-				delete window.__podnotesJourneyEarlyErrors;
-				delete window.__podnotesJourneyRecorderBeforePodNotes;
-			}
-		};
-	`,
-	);
-	await obsidian.dev.evalJsonAsync(`(async () => {
-		await app.plugins.loadManifests();
-		await app.plugins.enablePlugin(${JSON.stringify(id)});
-		app.plugins.enabledPlugins = new Set(${JSON.stringify([id, ...enabled])});
-		await app.plugins.saveConfig();
-		return true;
-	})()`);
-}
-
-export async function removeJourneyErrorRecorder(obsidian: ObsidianClient): Promise<void> {
-	const recorder = recorders.get(obsidian);
-	if (!recorder) return;
-	await obsidian.dev.evalJsonAsync(`(async () => {
-		await app.plugins.disablePlugin(${JSON.stringify(recorder.id)});
-		app.plugins.enabledPlugins = new Set(${JSON.stringify(recorder.enabled)});
-		app.plugins.requestSaveConfig.cancel();
-		await app.plugins.saveConfig();
-		app.plugins.requestSaveConfig.cancel();
-		await app.vault.adapter.promise;
-		return true;
-	})()`);
-	if (recorder.configBytes === null) await fs.rm(recorder.configPath, { force: true });
-	else await fs.writeFile(recorder.configPath, recorder.configBytes);
-	await fs.rm(recorder.directory, { recursive: true });
-	await obsidian.dev.evalJsonAsync(
-		"(async () => { await app.plugins.loadManifests(); return true; })()",
-	);
-	recorders.delete(obsidian);
-}
 export async function snapshotJourneyState(obsidian: ObsidianClient): Promise<void> {
 	if (snapshots.has(obsidian)) throw new Error("Journey state was not restored.");
 	const runtime = await obsidian.dev.evalJson<Omit<JourneySnapshot, "workspaceFiles">>(`({
-		cache: app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}),
+		cache: app.loadLocalStorage(${jsLiteral(FEED_CACHE_KEY)}),
 		layout: app.workspace.getLayout(),
 		recentFiles: app.workspace.recentFileTracker.serialize(),
 		mobile: app.isMobile,
 		size: electronWindow.getSize(),
 		corePlugins: Object.fromEntries(Object.entries(app.internalPlugins.plugins).map(([id, plugin]) => [id, plugin.enabled])),
 		coreConfig: structuredClone(app.internalPlugins.config),
+		appConfig: structuredClone(app.vault.config),
 	})`);
 	const vault = await obsidian.vaultPath();
 	const workspaceFiles = await Promise.all(
-		["workspace.json", "workspace-mobile.json", "core-plugins.json"].map(async (name) => {
+		WORKSPACE_FILES.map(async (name) => {
 			const filePath = path.join(vault, ".obsidian", name);
 			const bytes = await fs.readFile(filePath).catch((error: NodeJS.ErrnoException) => {
 				if (error.code !== "ENOENT") throw error;
@@ -180,6 +109,26 @@ export async function snapshotJourneyState(obsidian: ObsidianClient): Promise<vo
 	snapshots.set(obsidian, { ...runtime, workspaceFiles });
 }
 
+export async function normalizeJourneyLayout(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		const left = app.workspace.leftSplit;
+		if (app.isMobile || (!left.collapsed && left.size >= 200)) return true;
+		left.expand();
+		left.setSize(280);
+		app.workspace.requestSaveLayout.cancel();
+		await app.workspace.saveLayout();
+		await app.vault.adapter.promise;
+		return true;
+	})()`);
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(
+				"app.isMobile || app.workspace.leftSplit.containerEl.getBoundingClientRect().width >= 200",
+			),
+		{ timeoutMs: 10_000, intervalMs: 100, message: "the left sidebar open" },
+	);
+}
+
 export function hasJourneySnapshot(obsidian: ObsidianClient): boolean {
 	return snapshots.has(obsidian);
 }
@@ -189,13 +138,14 @@ export async function restoreJourneyCache(obsidian: ObsidianClient): Promise<voi
 	if (!snapshot) return;
 	await restoreCorePlugins(obsidian, snapshot);
 	await obsidian.dev.evalJsonAsync(`(async () => {
-		await app.plugins.disablePluginAndSave(${JSON.stringify(PLUGIN_ID)});
+		await app.plugins.disablePluginAndSave(${jsLiteral(PLUGIN_ID)});
 		app.plugins.requestSaveConfig.cancel();
 		await app.plugins.saveConfig();
 		app.plugins.requestSaveConfig.cancel();
 		await app.vault.adapter.promise;
 		return true;
 	})()`);
+	await collectRuntimeErrors(obsidian);
 	await obsidian.dev.evalJson("window.__podnotesJourneyCacheReload = true");
 	await obsidian.exec("reload");
 	await obsidian.waitFor(
@@ -208,7 +158,7 @@ export async function restoreJourneyCache(obsidian: ObsidianClient): Promise<voi
 		{ timeoutMs: 30_000, intervalMs: 200, message: "the disabled plugin's renderer to reload" },
 	);
 	await obsidian.dev.evalJson(
-		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, ${JSON.stringify(snapshot.cache)}), true`,
+		`app.saveLocalStorage(${jsLiteral(FEED_CACHE_KEY)}, ${jsLiteral(snapshot.cache)}), true`,
 	);
 }
 
@@ -222,9 +172,11 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 			await setMobileEmulation(obsidian, snapshot.mobile);
 			await restoreCorePlugins(obsidian, snapshot);
 		}
+		// Obsidian writes app.json 1 s after a config change and reads it back only when
+		// it sees the file change, so the config is restored here and its save cancelled.
 		await obsidian.dev.evalJsonAsync(`(async () => {
-			await app.workspace.changeLayout(${JSON.stringify(snapshot.layout)});
-			app.workspace.recentFileTracker.load(${JSON.stringify(snapshot.recentFiles)});
+			await app.workspace.changeLayout(${jsLiteral(snapshot.layout)});
+			app.workspace.recentFileTracker.load(${jsLiteral(snapshot.recentFiles)});
 			electronWindow.setSize(${snapshot.size[0]}, ${snapshot.size[1]});
 			app.workspace.requestSaveLayout.cancel();
 			await app.workspace.saveLayout();
@@ -232,6 +184,8 @@ export async function restoreJourneyWorkspace(obsidian: ObsidianClient): Promise
 			app.internalPlugins.requestSaveConfig.cancel();
 			await app.internalPlugins.saveConfig();
 			app.internalPlugins.requestSaveConfig.cancel();
+			app.vault.requestSaveConfig.cancel();
+			app.vault.config = ${jsLiteral(snapshot.appConfig)};
 			await app.vault.adapter.promise;
 			return true;
 		})()`);
@@ -281,14 +235,14 @@ async function restoreCorePlugins(
 ): Promise<void> {
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		const manager = app.internalPlugins;
-		for (const [id, enabled] of Object.entries(${JSON.stringify(snapshot.corePlugins)})) {
+		for (const [id, enabled] of Object.entries(${jsLiteral(snapshot.corePlugins)})) {
 			const plugin = manager.getPluginById(id);
 			if (plugin.enabled === enabled) continue;
 			if (enabled) await plugin.enable(false);
 			else plugin.disable(false);
 		}
 		manager.requestSaveConfig.cancel();
-		manager.config = ${JSON.stringify(snapshot.coreConfig)};
+		manager.config = ${jsLiteral(snapshot.coreConfig)};
 		await manager.saveConfig();
 		manager.requestSaveConfig.cancel();
 		await app.vault.adapter.promise;
@@ -326,7 +280,7 @@ export async function seedLibrary(
 ): Promise<void> {
 	await clearFeedCache(obsidian);
 	await obsidian.dev.evalJsonAsync(`(async () => {
-		await app.workspace.detachLeavesOfType(${JSON.stringify(VIEW_TYPE)});
+		await app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)});
 		return true;
 	})()`);
 
@@ -385,15 +339,13 @@ export async function seedLibrary(
 
 export async function feedCacheText(obsidian: ObsidianClient): Promise<string> {
 	const cached = await obsidian.dev.evalJson<string | null>(
-		`app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)})`,
+		`app.loadLocalStorage(${jsLiteral(FEED_CACHE_KEY)})`,
 	);
 	return cached ?? "";
 }
 
 export async function clearFeedCache(obsidian: ObsidianClient): Promise<void> {
-	await obsidian.dev.evalJson(
-		`app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, null), true`,
-	);
+	await obsidian.dev.evalJson(`app.saveLocalStorage(${jsLiteral(FEED_CACHE_KEY)}, null), true`);
 }
 
 export async function feedCacheHolds(
@@ -405,16 +357,16 @@ export async function feedCacheHolds(
 
 export async function feedCachedAt(obsidian: ObsidianClient, feedUrl: string): Promise<number> {
 	return await obsidian.dev.evalJson<number>(
-		`JSON.parse(app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}) ?? "{}")[${JSON.stringify(feedUrl)}]?.updatedAt ?? 0`,
+		`JSON.parse(app.loadLocalStorage(${jsLiteral(FEED_CACHE_KEY)}) ?? "{}")[${jsLiteral(feedUrl)}]?.updatedAt ?? 0`,
 	);
 }
 
 /** Backdate every feed cache entry, as if it were saved `ms` milliseconds earlier. */
 export async function ageFeedCache(obsidian: ObsidianClient, ms: number): Promise<void> {
 	await obsidian.dev.evalJson(`(() => {
-		const cache = JSON.parse(app.loadLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}));
+		const cache = JSON.parse(app.loadLocalStorage(${jsLiteral(FEED_CACHE_KEY)}));
 		for (const entry of Object.values(cache)) entry.updatedAt -= ${ms};
-		app.saveLocalStorage(${JSON.stringify(FEED_CACHE_KEY)}, JSON.stringify(cache));
+		app.saveLocalStorage(${jsLiteral(FEED_CACHE_KEY)}, JSON.stringify(cache));
 		return true;
 	})()`);
 }
@@ -585,7 +537,7 @@ export async function writeVaultFile(
 	await obsidian.waitFor(
 		() =>
 			obsidian.dev.evalJson<boolean>(
-				`Boolean(app.vault.getAbstractFileByPath(${JSON.stringify(filePath)}))`,
+				`Boolean(app.vault.getAbstractFileByPath(${jsLiteral(filePath)}))`,
 			),
 		{ timeoutMs: 10_000, intervalMs: 100, message: `${filePath} indexed by Obsidian` },
 	);
@@ -593,6 +545,6 @@ export async function writeVaultFile(
 
 export async function playerLeafCount(obsidian: ObsidianClient): Promise<number> {
 	return await obsidian.dev.evalJson<number>(
-		`app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)}).length`,
+		`app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).length`,
 	);
 }

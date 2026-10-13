@@ -210,12 +210,31 @@ matches no test fails the run.
 - The suite fails when Obsidian has more than one window open, because a second
   vault window keeps Obsidian from quitting. Close it, or stop the instance,
   before you rerun.
-- The harness snapshots the workspace, the core plugins with
-  `core-plugins.json`, and PodNotes' `data.json` before each test, and restores
-  them after it. A test can turn on a core plugin, such as the file explorer,
-  and leave its restore to the harness.
-- An interrupted run can leave test fixtures in the vault's `data.json`. Reset
-  the vault with `npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults`.
+- The harness snapshots the workspace, app settings in `app.json`, the core
+  plugins with `core-plugins.json`, and PodNotes' `data.json` before each test,
+  and restores them after it. A test can turn on a core plugin, such as the file
+  explorer, and leave its restore to the harness.
+- A temporary plugin, loaded before PodNotes, writes every uncaught renderer
+  error to a journal that survives reloads and restarts. The harness fails the
+  test that raised the error, or the next test, or the suite when its final
+  cleanup raised it. The next run removes a recorder that an interrupted run
+  left behind.
+- A collapsed or narrow left sidebar opens at 280 px for the run. The suite
+  restores the original layout after its last test.
+- Settings must open in the main window. A test fails at once, naming the
+  `settingsPopoutWindow` config, when Obsidian would open it in a popout.
+  The harness reapplies the runner's required app settings on every restart.
+  V-446 traced its Settings cascade to `app.json` becoming `{}` at restart,
+  losing `settingsPopoutWindow: false`. This also matches V-427d's missing
+  main-window Settings controls. Workspace cleanup restores the original app
+  settings in memory and the exact `app.json` bytes.
+- Build code for Obsidian to evaluate with `jsLiteral` from
+  `tests/e2e/runtime.ts`, never with `JSON.stringify` alone.
+- `harness-lifecycle.test.ts` runs the suites in `tests/e2e/harness-fixtures`
+  in their own Vitest processes and checks how each run ends.
+- An interrupted run can leave test fixtures in the vault's `data.json`, the
+  280 px sidebar, and the interrupted test's layout. Reset the vault with
+  `npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults`.
 
 ### Evidence (Linux)
 Screenshots and recordings come from the same instance. Write them under the

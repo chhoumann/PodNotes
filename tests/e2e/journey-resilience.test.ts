@@ -49,7 +49,7 @@ import {
 	waitForLibrary,
 	waitForPlayback,
 } from "./journey/library";
-import { PLUGIN_ID } from "./runtime";
+import { jsLiteral, PLUGIN_ID } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-resilience");
 const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
@@ -105,7 +105,7 @@ async function transcribeAndTimeOpen(
 	await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
 	return await obsidian.dev.evalJsonAsync(
 		`(async () => {
-			const shows = (leaf) => leaf.view.file?.path === ${JSON.stringify(notePath)};
+			const shows = (leaf) => leaf.view.file?.path === ${jsLiteral(notePath)};
 			const deadline = Date.now() + 30000;
 			while (!app.workspace.getLeavesOfType("markdown").some(shows)) {
 				if (Date.now() > deadline) throw new Error("Transcribe did not open the note.");
@@ -133,7 +133,7 @@ async function transcribeAndTimeOpen(
 async function reopenAndTimeOpen(obsidian: ObsidianClient, notePath: string): Promise<number> {
 	return await obsidian.dev.evalJsonAsync<number>(
 		`(async () => {
-			const file = app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});
+			const file = app.vault.getAbstractFileByPath(${jsLiteral(notePath)});
 			for (const leaf of app.workspace.getLeavesOfType("markdown")) leaf.detach();
 			await new Promise((resolve) => setTimeout(resolve, 500));
 			${heartbeatStart};
@@ -407,17 +407,17 @@ describe("resilience journeys", () => {
 		const server = await serve(show);
 		const secretId = "podnotes-openai-api-key-424242";
 		const previousSecret = await obsidian.dev.evalJson<string | null>(
-			`app.secretStorage.getSecret(${JSON.stringify(secretId)})`,
+			`app.secretStorage.getSecret(${jsLiteral(secretId)})`,
 		);
 		onTestFinished(() =>
 			obsidian.dev.evalJson(
 				previousSecret === null
-					? `app.secretStorage.deleteSecret(${JSON.stringify(secretId)}), true`
-					: `app.secretStorage.setSecret(${JSON.stringify(secretId)}, ${JSON.stringify(previousSecret)}), true`,
+					? `app.secretStorage.deleteSecret(${jsLiteral(secretId)}), true`
+					: `app.secretStorage.setSecret(${jsLiteral(secretId)}, ${jsLiteral(previousSecret)}), true`,
 			),
 		);
 		await obsidian.dev.evalJson(
-			`app.secretStorage.setSecret(${JSON.stringify(secretId)}, "sk-journey-test"), true`,
+			`app.secretStorage.setSecret(${jsLiteral(secretId)}, "sk-journey-test"), true`,
 		);
 		await seedLibrary(context, server, {
 			subscriptions: [show],
@@ -563,17 +563,17 @@ describe("resilience journeys", () => {
 		const server = await serve(show);
 		const secretId = "podnotes-openai-api-key-434343";
 		const previousSecret = await obsidian.dev.evalJson<string | null>(
-			`app.secretStorage.getSecret(${JSON.stringify(secretId)})`,
+			`app.secretStorage.getSecret(${jsLiteral(secretId)})`,
 		);
 		onTestFinished(() =>
 			obsidian.dev.evalJson(
 				previousSecret === null
-					? `app.secretStorage.deleteSecret(${JSON.stringify(secretId)}), true`
-					: `app.secretStorage.setSecret(${JSON.stringify(secretId)}, ${JSON.stringify(previousSecret)}), true`,
+					? `app.secretStorage.deleteSecret(${jsLiteral(secretId)}), true`
+					: `app.secretStorage.setSecret(${jsLiteral(secretId)}, ${jsLiteral(previousSecret)}), true`,
 			),
 		);
 		await obsidian.dev.evalJson(
-			`app.secretStorage.setSecret(${JSON.stringify(secretId)}, "sk-journey-test"), true`,
+			`app.secretStorage.setSecret(${jsLiteral(secretId)}, "sk-journey-test"), true`,
 		);
 		await seedLibrary(context, server, {
 			subscriptions: [show],
@@ -648,7 +648,7 @@ describe("resilience journeys", () => {
 		});
 		const notePath = sandbox.path("Transcripts/Journey Marked Captions/Marked Episode.md");
 
-		const file = `app.vault.getAbstractFileByPath(${JSON.stringify(notePath)})`;
+		const file = `app.vault.getAbstractFileByPath(${jsLiteral(notePath)})`;
 
 		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
 		await sandbox.waitForExists("Transcripts/Journey Marked Captions/Marked Episode.md", {
