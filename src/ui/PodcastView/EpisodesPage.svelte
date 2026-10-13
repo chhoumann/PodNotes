@@ -9,7 +9,8 @@
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
 	import EpisodeList from "./EpisodeList.svelte";
-	import { selectFeedEpisodes, shownFailure } from "./episodeListSelection";
+	import { selectFeedEpisodes } from "./episodeListSelection";
+	import { shownFailure } from "./feedState";
 	import SearchField from "./SearchField.svelte";
 
 	/** A podcast's page, with its hero, its feed's state, and its episodes to search and filter. */

@@ -2,7 +2,7 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
-	import { shownFailure } from "./episodeListSelection";
+	import { shownFailure } from "./feedState";
 	import type { Layout } from "./layout";
 	import { anchorOf, podcastMenu, showMenu } from "./menus";
 	import { LIST_ROOTS, type RootCounts } from "./pages";
