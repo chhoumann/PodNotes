@@ -522,6 +522,17 @@ describe("capture", () => {
 			expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34\n");
 		});
 
+		it("offers no Undo for a capture that ends after the plugin unloaded", async () => {
+			const { plugin, read } = await loadPlugin(playing);
+			const capturing = plugin.capture.timestamp();
+			loaded.splice(loaded.indexOf(plugin), 1);
+			plugin.onunload();
+
+			expect(await capturing).toMatchObject({ destination: "note", created: true });
+			expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34\n");
+			expect(said()).toEqual([]);
+		});
+
 		it("does nothing once the plugin unloaded", async () => {
 			const { plugin, editor } = await intoEditor("Notes");
 			loaded.splice(loaded.indexOf(plugin), 1);

@@ -28,6 +28,7 @@ export class CaptureService {
 	private activeLeaf: WorkspaceLeaf | null;
 	// Clicking in the PodNotes view leaves workspace.activeEditor null.
 	private lastEditorLeaf: WorkspaceLeaf | null = null;
+	private disposed = false;
 
 	constructor(private readonly plugin: PodNotes) {
 		const { workspace } = plugin.app;
@@ -45,6 +46,11 @@ export class CaptureService {
 				if (!this.editingView(this.lastEditorLeaf)) this.lastEditorLeaf = null;
 			}),
 		);
+	}
+
+	/** An Undo is bound to the plugin instance, so a capture that ends after unload offers none. */
+	dispose(): void {
+		this.disposed = true;
 	}
 
 	timestamp(): Promise<Capture | null> {
@@ -142,6 +148,7 @@ export class CaptureService {
 	 * typed since, and returns false when it left the note as it is.
 	 */
 	private offer(file: TFile | null, created: boolean, undo: () => boolean | Promise<boolean>) {
+		if (this.disposed) return;
 		const name = file?.basename;
 		noticeWithUndo(
 			created ? `Created ${name}` : name ? `Timestamp added to ${name}` : "Timestamp added",
