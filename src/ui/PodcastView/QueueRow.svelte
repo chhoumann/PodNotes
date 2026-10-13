@@ -49,11 +49,13 @@
 	onmenu={(at) => showMenu(episodeMenu(episode, services, { place: "list", at }), at)}
 >
 	{#snippet leading()}
+		<!-- A touch that starts on the grip starts none of Obsidian's mobile swipes, such as the pull-down action. -->
 		<button
 			type="button"
 			class="pn-iconbtn pn-grip"
 			class:is-dragging={dragging}
 			data-queue-key={getEpisodeKey(episode)}
+			data-ignore-swipe="true"
 			aria-label="Reorder {episode.title}, position {index +
 				1} of {count}. Use arrow keys to move."
 			title="Drag or use arrow keys"

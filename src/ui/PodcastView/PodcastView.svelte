@@ -23,7 +23,7 @@
 	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
 	import PlayerOverlay from "./PlayerOverlay.svelte";
 	import PlaylistsPage from "./PlaylistsPage.svelte";
-	import QueuePage from "./QueuePage.svelte";
+	import QueueList from "./QueueList.svelte";
 	import Rail from "./Rail.svelte";
 	import SearchField from "./SearchField.svelte";
 
@@ -238,7 +238,7 @@
 						{:else if page.kind === "feed"}
 							<EpisodesPage key={page.key} />
 						{:else if page.kind === "queue"}
-							<QueuePage />
+							<QueueList empty="Nothing here yet" />
 						{:else}
 							<ListPage {page} />
 						{/if}
