@@ -177,6 +177,19 @@
 		padding: 0;
 	}
 
+	/* On a phone, Obsidian's navbar floats over the main area, and a mobile drawer
+	   fades the bottom of a leaf. Neither may cover the mini player. A tablet has no
+	   navbar. */
+	:global(.is-phone.is-floating-nav .mod-root .view-content:has(> .podcast-view)) {
+		padding-bottom: calc(var(--navbar-height) + var(--navbar-bottom-offset));
+	}
+
+	:global(
+		.is-mobile.is-floating-nav .workspace-drawer .workspace-leaf-content:has(.pn-mini)::after
+	) {
+		display: none;
+	}
+
 	/* A sidebar is secondary-colored. The mini player stands out from the page above it. */
 	:global(.mod-sidedock) .podcast-view {
 		--pn-bg: var(--background-secondary);
