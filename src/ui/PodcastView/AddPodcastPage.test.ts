@@ -132,6 +132,32 @@ describe("first run", () => {
 		expect(screen.getByRole("button", { name: "Back to Library" })).toBeInTheDocument();
 	});
 
+	test("Back starts it over, with an empty field and no search left to answer", async () => {
+		render(PodcastView, { props: { services } });
+		const answer = deferred<unknown>();
+		fetchJsonMock.mockReturnValue(answer.promise);
+		await type("planet money");
+		await settle();
+		expect(fetchJsonMock).toHaveBeenCalled();
+
+		await fireEvent.click(screen.getByRole("button", { name: "Back to Library" }));
+		answer.resolve(searchPlanetMoney);
+		await settle();
+
+		expect(screen.getByRole("heading", { name: "Add your first podcast" })).toBeInTheDocument();
+		expect(field()).toHaveValue("");
+		expect(get(services.search)).toEqual({ query: "", status: "idle" });
+	});
+
+	test("stays put on spaces alone", async () => {
+		render(PodcastView, { props: { services } });
+
+		await type("  ");
+
+		expect(services.navigation.current.page).toEqual({ kind: "library" });
+		expect(screen.getByRole("heading", { name: "Add your first podcast" })).toBeInTheDocument();
+	});
+
 	test("stays put while an input method composes", async () => {
 		render(PodcastView, { props: { services } });
 
