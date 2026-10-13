@@ -91,7 +91,7 @@
 		// A hidden leaf measures 0 wide; it keeps the layout it had.
 		if (width > 0) layout = layoutFor(width);
 	})}
-	{@attach observeStatusBar((inset) => (statusBar = inset))}
+	{@attach observeStatusBar((inset) => (statusBar = inset), services.app.workspace)}
 >
 	{#if firstRun}
 		<div class="pn-first-run" inert={overlaid}>

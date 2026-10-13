@@ -93,16 +93,36 @@ export class Keymap {
 	}
 }
 
+interface EventRef {
+	e: { offref(ref: EventRef): void };
+}
+
+/** The workspace's events, which a test triggers as Obsidian would. */
+export class Workspace {
+	private readonly refs = new Set<EventRef & { name: string; callback(): unknown }>();
+
+	on(name: string, callback: () => unknown): EventRef {
+		const ref = { e: this, name, callback };
+		this.refs.add(ref);
+		return ref;
+	}
+
+	offref(ref: EventRef): void {
+		this.refs.delete(ref as EventRef & { name: string; callback(): unknown });
+	}
+
+	trigger(name: string): void {
+		for (const ref of [...this.refs]) if (ref.name === name) ref.callback();
+	}
+}
+
 export class App {
 	secretStorage = new SecretStorage();
 	scope = new Scope();
 	keymap = new Keymap(this.scope);
+	workspace = new Workspace();
 }
 export class Plugin {}
-
-interface EventRef {
-	e: { offref(ref: EventRef): void };
-}
 
 /** Obsidian's lifecycle: a callback registered after unload never runs. */
 export class Component {

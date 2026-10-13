@@ -1,3 +1,4 @@
+import type { Workspace } from "obsidian";
 import type { Attachment } from "svelte/attachments";
 
 export type Layout = "compact" | "wide";
@@ -49,31 +50,43 @@ export function statusBarInset(view: Box, bar: Box): number {
 }
 
 /**
- * Reports how far Obsidian's status bar reaches up into the element, now and
- * whenever either of them resizes, as the bar's items come and go. The bar
- * floats over the bottom of the window, so it covers the bottom of a view
- * beneath it. Like `observeWidth`, it follows the element to a popout.
+ * Reports how far Obsidian's status bar reaches up into the element, now, whenever
+ * either of them resizes, as the bar's items come and go, and whenever the workspace
+ * layout changes, as when the view moves to a pane of the same size. The bar floats
+ * over the bottom of the window, so it covers the bottom of a view beneath it. Like
+ * `observeWidth`, it follows the element to a popout.
  */
-export function observeStatusBar(onInset: (inset: number) => void): Attachment<HTMLElement> {
+export function observeStatusBar(
+	onInset: (inset: number) => void,
+	workspace: Workspace,
+): Attachment<HTMLElement> {
 	return (el) => {
+		const bar = () => el.doc.querySelector(".status-bar");
+		const report = () => {
+			const shown = bar();
+			// A popout window has no status bar.
+			onInset(
+				shown
+					? statusBarInset(el.getBoundingClientRect(), shown.getBoundingClientRect())
+					: 0,
+			);
+		};
 		let observer: ResizeObserver | undefined;
 		const observe = (win: Window) => {
 			observer?.disconnect();
-			// A popout window has no status bar.
-			const bar = el.doc.querySelector(".status-bar");
-			if (!bar) return onInset(0);
-			const report = () =>
-				onInset(statusBarInset(el.getBoundingClientRect(), bar.getBoundingClientRect()));
 			observer = new (win as ObservableWindow).ResizeObserver(report);
 			observer.observe(el);
-			observer.observe(bar);
+			const shown = bar();
+			if (shown) observer.observe(shown);
 			report();
 		};
 		observe(el.win);
 		const stopFollowing = el.onWindowMigrated(observe);
+		const moved = workspace.on("layout-change", report);
 		return () => {
 			stopFollowing();
 			observer?.disconnect();
+			workspace.offref(moved);
 		};
 	};
 }
