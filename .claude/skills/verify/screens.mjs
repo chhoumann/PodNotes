@@ -685,7 +685,10 @@ async function seed(scene, extra) {
 		for (const add of all) await add(data, lib);
 	}
 	await evaluate(`
+		const plugin = app.plugins.plugins.podnotes;
 		await app.plugins.disablePlugin("podnotes");
+		// Unloading saves without waiting, and that save merges into the file written next.
+		await plugin?.flushSaves();
 		for (const key of Object.keys(localStorage)) {
 			if (key.includes("podnotes:feed-cache")) localStorage.removeItem(key);
 		}
