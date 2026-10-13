@@ -80,6 +80,9 @@ npm run test:tooling
 npm run docs:build
 ```
 
+The `Platforms` workflow runs `npm run test:unit` and `npm run test:tooling` on
+macOS and Windows for every PR and `master` push. It is not a required check.
+
 ## Testing
 Vitest runs in Node and aliases `obsidian` to `tests/mocks/obsidian.ts`. A test
 file that needs a DOM or loads Svelte code starts with
@@ -394,14 +397,14 @@ workflow from `master`, so the PR still reports the old name. `Prepare release`
 also matches the `Test` workflow by its top-level `name:`, so renaming the
 workflow stops release planning without failing any check.
 
-The `Test`, `Documentation`, `PR Title`, and `Dependency Review` workflows have
-no `concurrency` block, so GitHub does not cancel their runs. Duplicate events
-on one PR head, such as a reopen or an edit right after a push, start duplicate
-runs of the required checks, and every run must finish. A cancelled run on the
-head turns the commit's check rollup to `FAILURE`. Do not add a `concurrency`
-group to these workflows. By default a group cancels a pending run when a newer
-run joins it, even with `cancel-in-progress: false`. Runs for a superseded head
-also finish. They cost CI minutes but block nothing.
+The `Test`, `Documentation`, `PR Title`, `Dependency Review`, and `Platforms`
+workflows have no `concurrency` block, so GitHub does not cancel their runs.
+Duplicate events on one PR head, such as a reopen or an edit right after a
+push, start duplicate runs of the required checks, and every run must finish. A
+cancelled run on the head turns the commit's check rollup to `FAILURE`. Do not
+add a `concurrency` group to these workflows. By default a group cancels a
+pending run when a newer run joins it, even with `cancel-in-progress: false`.
+Runs for a superseded head also finish. They cost CI minutes but block nothing.
 
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit
