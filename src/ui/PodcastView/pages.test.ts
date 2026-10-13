@@ -70,7 +70,8 @@ describe("headFor", () => {
 		["wide", walks, show, { back: "The Show", pageTitle: "Walks" }],
 		["compact", { kind: "add" }, show, { back: "The Show", search: true }],
 		["compact", { kind: "add" }, undefined, { back: "Library", search: true }],
-		["wide", { kind: "add" }, show, { search: true }],
+		["wide", { kind: "add" }, { kind: "library" }, { back: "Library", search: true }],
+		["wide", { kind: "add" }, undefined, { search: true }],
 	])("%s %j after %j", (layout, page, previous, head) => {
 		expect(headFor(page, layout, previous, feeds)).toEqual(head);
 	});

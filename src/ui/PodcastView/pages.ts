@@ -93,8 +93,9 @@ export interface Head {
 
 /**
  * The wide rail reaches and names every root, so a root there has no Back and
- * its head takes the rail's name. A podcast's page is headed by its artwork and
- * title inside the list. `previous` is the page the user came from, if any.
+ * its head takes the rail's name. Add podcast keeps a Back to a page that led to
+ * it, such as First run. A podcast's page is headed by its artwork and title
+ * inside the list. `previous` is the page the user came from, if any.
  */
 export function headFor(
 	page: Page,
@@ -105,7 +106,7 @@ export function headFor(
 	const { kind } = page;
 	const search = kind === "add" || undefined;
 	if (layout === "wide" && isRoot(page)) {
-		if (search) return { search };
+		if (search) return previous ? { back: pageLabel(previous, feeds), search } : { search };
 		return {
 			title: rootItem(page.kind).label,
 			action: kind === "library" ? "refresh-all" : undefined,
