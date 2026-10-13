@@ -336,6 +336,35 @@ describe("an episode list", () => {
 		await waitFor(() => expect(listed()).toEqual(["Rerun", "Rerun", "Rerun"]));
 	});
 
+	test("of two episodes that share a podcast and a title, calls only the downloaded one downloaded", async () => {
+		const rerun = (n: number) => episode("Rerun", { streamUrl: `https://media.test/${n}.mp3` });
+		load.mockResolvedValue(feedDocument(show.title, [rerun(2), rerun(1)]));
+		renderPage({ kind: "feed", key: show.title });
+		services.library.downloadedEpisodes.set({
+			[show.title]: [{ ...rerun(2), filePath: "Downloads/Rerun.mp3", size: 1 }],
+		});
+		await waitFor(() => expect(listed()).toEqual(["Rerun", "Rerun"]));
+		const [downloaded, streamed] = screen.getAllByRole("listitem");
+		const menuOf = async (item: HTMLElement) => {
+			const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
+			await fireEvent.click(
+				within(item).getByRole("button", { name: "More options for Rerun" }),
+			);
+			const shown = titles.mock.calls.map(([title]) => title);
+			titles.mockRestore();
+			return shown;
+		};
+
+		expect(within(downloaded).getByRole("button", { name: "Rerun, downloaded" })).toBeVisible();
+		expect(downloaded.querySelector('[title="Downloaded"]')).not.toBeNull();
+		expect(within(streamed).getByRole("button", { name: "Rerun" })).toBeVisible();
+		expect(streamed.querySelector('[title="Downloaded"]')).toBeNull();
+		expect(await menuOf(downloaded)).toContain("Remove download");
+		const streamedMenu = await menuOf(streamed);
+		expect(streamedMenu).toContain("Download");
+		expect(streamedMenu).not.toContain("Remove download");
+	});
+
 	test("an episode that stays listed keeps its row, and its broken artwork, when an earlier one leaves", async () => {
 		const art = (title: string) =>
 			episode(title, { artworkUrl: `https://art.test/${title}.jpg` });
