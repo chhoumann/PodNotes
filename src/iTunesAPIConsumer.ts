@@ -17,7 +17,7 @@ interface iTunesResult {
 
 export interface DirectoryShow {
 	readonly feed: PodcastFeed;
-	readonly episodes?: number;
+	readonly episodeCount?: number;
 }
 
 interface iTunesResponse {
@@ -111,6 +111,6 @@ function toShow(result: iTunesResult): DirectoryShow | null {
 			collectionId: String(result.collectionId),
 			...(typeof result.artistName === "string" ? { author: result.artistName } : {}),
 		},
-		episodes: result.trackCount,
+		episodeCount: result.trackCount,
 	};
 }

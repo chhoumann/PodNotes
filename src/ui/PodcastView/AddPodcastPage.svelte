@@ -31,8 +31,10 @@
 	}
 
 	/** What follows the link chip: the author, and the episode count of a show search found. */
-	function details({ feed, episodes, via }: PodcastResult): string {
-		const count = episodes ? `${episodes} episode${episodes === 1 ? "" : "s"}` : undefined;
+	function details({ feed, episodeCount, via }: PodcastResult): string {
+		const count = episodeCount
+			? `${episodeCount} episode${episodeCount === 1 ? "" : "s"}`
+			: undefined;
 		return (via ? ["", feed.author] : [feed.author, count])
 			.filter((part) => part !== undefined)
 			.join(" · ");

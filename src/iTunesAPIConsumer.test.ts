@@ -73,7 +73,7 @@ describe("queryiTunesPodcasts", () => {
 					collectionId: "1577591053",
 					author: "Apple News",
 				},
-				episodes: 259,
+				episodeCount: 259,
 			},
 			{
 				feed: {
@@ -84,7 +84,7 @@ describe("queryiTunesPodcasts", () => {
 					collectionId: "74942331",
 					author: "Apple Inc.",
 				},
-				episodes: 1,
+				episodeCount: 1,
 			},
 		]);
 	});
@@ -173,7 +173,7 @@ describe("lookupiTunesPodcast", () => {
 				collectionId: "1545953110",
 				author: "Scicomm Media",
 			},
-			episodes: 448,
+			episodeCount: 448,
 		});
 		const url = requestedUrl();
 		expect(url.origin + url.pathname).toBe("https://itunes.apple.com/lookup");

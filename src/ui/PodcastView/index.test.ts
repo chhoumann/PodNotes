@@ -248,6 +248,19 @@ describe("MainView episode notes", () => {
 
 		expect(shown).toEqual([false, true]);
 	});
+
+	it("drops a look that is still waiting when the view closes", async () => {
+		const { view, vault } = createNotesView();
+		await openView(view);
+		const shown = watchRow();
+
+		vault.notes.add(notePath);
+		vault.trigger("create");
+		await closeView(view);
+		vi.runAllTimers();
+
+		expect(shown).toEqual([false]);
+	});
 });
 
 describe("MainView workspace state", () => {

@@ -94,6 +94,7 @@ export class MainView extends ItemView {
 		// Obsidian reports every file as created while it loads the vault, and a sync can
 		// bring a thousand at once, so the rows look their notes up once per burst.
 		const notesChangedSoon = debounce(notesChanged, 200, true);
+		this.register(() => notesChangedSoon.cancel());
 		const vaultChanged = () => {
 			if (app.workspace.layoutReady) notesChangedSoon();
 		};
