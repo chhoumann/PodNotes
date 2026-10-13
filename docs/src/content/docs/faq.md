@@ -56,7 +56,7 @@ See [Play your own audio and video](/local_files/#play-your-own-audio-and-video)
 
 Your **Capture timestamp format** uses `{{time}}`, which inserts plain text.
 Installs set up before PodNotes 2.21.0 keep the old default, which uses `{{time}}`. New installs use `{{linktime}}`, which inserts a link that plays the episode from that moment.
-In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed URL or local file to link to. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
+In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed or local file to link to, or it comes from a private feed that you have not added. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ### Can I take notes on an episode I listen to in another app?
 
@@ -66,8 +66,8 @@ For notes about a whole show, use a feed note. See [Create a feed note for a pod
 
 ### Do headset buttons control PodNotes?
 
-One button does. When your headset sends the previous-track action, PodNotes captures a timestamp. If a note is open in an editor, the timestamp goes in at the cursor. If no note is open in an editor, it goes at the end of the episode note.
-This works on a phone or a computer, but not every headset sends that action. PodNotes adds no other headset actions, so play, pause, and skip depend on your device. See [Capture with a headset](/mobile/#capture-with-a-headset).
+Yes, on a computer, while an episode is loaded. Play and pause work, the skip buttons jump by your skip lengths, and the previous-track action, often a triple press, captures a timestamp. Not every headset sends every action.
+On an iPhone or iPad, the same controls should work, but they are not tested yet. On Android, Obsidian does not pass headset buttons or lock screen controls to PodNotes. See [Control playback from a headset or the lock screen](/mobile/#control-playback-from-a-headset-or-the-lock-screen).
 
 ## Devices and sync
 
@@ -81,13 +81,13 @@ See [Downloads on another device](/sync/#downloads-on-another-device).
 
 Your notes and timestamps stay.
 Timestamp links point at the feed and the episode, so they stream the episode again while the feed still lists it.
-Links to your own media files need the file and its entry in **Local Files**. After **Remove from Local Files**, select **Play with PodNotes** on the file again to restore its links. See [Removed downloads and existing links](/sync/#removed-downloads-and-existing-links).
+Links to your own media files need only the file in your vault. See [Removed downloads and existing links](/sync/#removed-downloads-and-existing-links).
 
 ### Does playback progress sync between devices?
 
-Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`.
-PodNotes does not merge changes from two devices, so one device can overwrite the other's changes. Use one device at a time. When you switch, let sync finish, then restart Obsidian or turn PodNotes off and on before you use it. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
-API keys and protected private feeds stay on each device. See [Sync between devices](/sync/).
+Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`, and merges the changes your devices make. When you switch devices, pause first and let sync finish. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
+If PodNotes shows a notice that it cannot save, see [Fix a save problem](/sync/#fix-a-save-problem).
+API keys and private feed addresses stay on each device. See [Sync between devices](/sync/).
 
 ## Transcription
 

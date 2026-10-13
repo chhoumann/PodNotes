@@ -52,13 +52,9 @@ The **Queue** list under the player has none of these controls.
 
 ### When a feed cannot be reached
 
-When PodNotes tries to fetch a podcast's feed as you open the podcast or refresh its list, and the fetch fails, for example offline, PodNotes uses the first of these that has episodes:
+When PodNotes cannot fetch a podcast's feed, for example offline, the podcast's episode list shows **Feed didn't load** with a **Retry** button. PodNotes lists the episodes from the last copy of the feed on this device, however old the copy is. That copy is the one PodNotes fetched since Obsidian started, or the one it cached if **Cache podcast feeds** is on. Without a copy, PodNotes lists the podcast's downloaded episodes. If there are none, the list is empty.
 
-1. The podcast's downloaded episodes.
-2. The episodes PodNotes loaded for the podcast since Obsidian started.
-3. The cached copy of the feed, if **Cache podcast feeds** is on and the copy is younger than **Cache duration (hours)**.
-
-If none of them has episodes, the list is empty, and a notice asks you to check your connection and try again.
+For a private feed whose address is not on this device, the list shows **Address not on this device** and **Set feed address** instead. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 
 ## <span id="player"></span>Play an episode
 
@@ -70,7 +66,11 @@ The player opens and resumes where you stopped last time. To return to the playe
 
 - Select the artwork to play or pause. Select a point on the progress bar to jump there. The time on the left is how far you are, and the time on the right is how much is left.
 - The skip buttons jump 15 seconds. **Skip backward length (s)** and **Skip forward length (s)** change that.
-- The speed slider, below the volume slider, goes from 0.5x to 4x. Each time Obsidian starts, the speed resets to **Default Playback Rate**.
+- The speed slider, below the volume slider, goes from 0.5x to 4x. The speed resets to **Default Playback Rate** each time Obsidian starts and each time a different episode loads.
+- The episode keeps playing while you browse, change settings, or close the PodNotes view.
+- When Obsidian starts, the player shows the episode you played last, paused at its saved position. It plays when you play it.
+- A video plays in the player while the view is in the main window. When the view is in a popout window, the player there shows the episode's artwork, and the video keeps playing.
+- When an episode's media cannot load, the player shows "Could not load this episode's media."
 - **Chapters** lists the episode's chapters when it has them. Select a chapter to jump to it.
 
 ## <span id="playlists"></span><span id="reordering-the-queue"></span><span id="turning-off-the-queue"></span>Queue and playlists

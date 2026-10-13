@@ -18,7 +18,7 @@ PodNotes has no sync service of its own, so your vault sync service, such as Obs
 | The current playback speed | Not at all. PodNotes does not save it. Only **Default Playback Rate** syncs. |
 
 For your library to sync, your sync service must include PodNotes' plugin folder, `.obsidian/plugins/podnotes/`.
-With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** in **Settings → Sync**. The second one syncs each plugin's files and settings, which hold your PodNotes library. Obsidian keeps these settings per device, so change them on each device. [Sync settings in Obsidian Help](https://obsidian.md/help/sync/settings) describes them.
+With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** in **Settings → Sync**. The second one syncs each plugin's files and settings, which hold your PodNotes library. Obsidian keeps these settings per device, so change them on each device. [Sync settings in Obsidian Help](https://obsidian.md/help/sync/settings) describes them.
 
 ## Use PodNotes on two devices
 

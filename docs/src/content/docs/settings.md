@@ -6,9 +6,7 @@ description: Every PodNotes setting, in the order the settings tab shows it, wit
 
 Look up any PodNotes setting, its default, and what it does. The settings live in **Settings → PodNotes**, and the sections below follow the tab from top to bottom.
 
-## Search Podcasts
-
-The search box at the top finds podcasts by name, RSS feed URL, or Apple Podcasts link. With the box empty, it lists the podcasts you follow, each with a **Remove** button. See [Add a podcast](/podcasts/#add-a-podcast).
+<span id="search-podcasts"></span>You add and remove podcasts in the PodNotes view, not in the settings. See [Add a podcast](/podcasts/#add-a-podcast).
 
 ## Playlists
 
@@ -22,16 +20,16 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 | --- | --- | --- |
 | **Keep a queue of episodes you switch away from** | On | Puts the episode you switch away from at the top of the queue, and starts the next queued episode when one ends. See [Turn off the automatic queue](/playlists/#turn-off-the-automatic-queue). |
 | **Latest episodes per podcast** | 10 | Sets how many of each podcast's newest episodes **Latest Episodes** shows and searches, from 1 to 75. |
-| **Default Playback Rate** | 1x | Sets the speed the player uses when Obsidian starts, from 0.5x to 4x. **PodNotes: Reset playback rate** returns to it. |
-| **Default Volume** | 1 (100%) | Sets the volume when PodNotes starts, from 0 to 1. Changing this setting does not change the current volume. The player's volume slider updates this saved default too. |
-| **Skip backward length (s)** | 15 | Sets how many seconds the skip backward button and command move back. |
-| **Skip forward length (s)** | 15 | Sets how many seconds the skip forward button and command move forward. |
+| **Default Playback Rate** | 1x | Sets the speed, from 0.5x to 4x, that PodNotes uses when Obsidian starts and whenever a different episode loads. Changing it does not change the speed of the episode that is playing. **PodNotes: Reset playback rate** returns to it. |
+| **Default Volume** | 1 (100%) | Sets the volume, from 0 to 1, and changes the current volume at once. The player's volume slider changes this setting too, so one volume applies to every episode. |
+| **Skip backward length (s)** | 15 | Sets how many seconds the skip backward button, the command, and the skip backward control of a headset or the lock screen move back. |
+| **Skip forward length (s)** | 15 | Sets how many seconds the skip forward button, the command, and the skip forward control of a headset or the lock screen move forward. |
 
 ## Episode notes
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Capture timestamp format** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. A preview below the field shows the result for the loaded episode. See [Capture timestamps](/timestamps/). |
+| **Capture timestamp format** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. A preview below the field shows the result for the loaded episode. Its time tag also sets the times in transcripts that feeds publish. See [Capture timestamps](/timestamps/). |
 | **Timestamp offset (s)** | 0 | Subtracts this many seconds from each capture, to make up for reaction time. |
 | **Note creation file path** | `PodNotes/{{podcast}}/{{title}}.md` | Sets where PodNotes creates episode notes. See [Create episode notes](/notes/). |
 | **Note creation template** | [The default episode note template](/templates/#default-episode-note-template) | Sets the content of a new episode note. |
@@ -55,24 +53,24 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Cache podcast feeds** | On | Keeps recently fetched feeds on this device, outside your vault, so PodNotes starts faster. |
-| **Cache duration (hours)** | 6 | Sets how long PodNotes reuses a cached feed before it fetches the feed again, from 1 to 24. |
-| **Clear cached feeds** | None | **Clear cache** deletes the cached feeds. PodNotes fetches them again as needed. |
+| **Cache podcast feeds** | On | Keeps a copy of each saved feed, with up to its 75 newest episodes, on this device, outside your vault, so PodNotes starts faster. When a feed cannot be fetched, PodNotes uses this copy, however old it is. |
+| **Cache duration (hours)** | 6 | Sets how long PodNotes reuses a cached feed before it fetches the feed again, from 1 to 24. An older copy stays for when the feed cannot be fetched. |
+| **Clear cached feeds** | None | **Clear cache** deletes the cached feeds and fetches every saved feed again. |
 
 ## Import/Export
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Import OPML** | None | **Import** opens a file picker. PodNotes adds the podcasts in the `.opml` file you choose. See [Import podcasts from OPML](/import_export/#import-podcasts-from-opml). |
-| **Export OPML** | `PodNotes_Export.opml` | **Export** saves the podcasts you follow to an OPML file with this name in your vault. See [Export podcasts to OPML](/import_export/#export-podcasts-to-opml). |
+| **Export OPML** | `PodNotes_Export.opml` | **Export** saves the podcasts you follow to an OPML file with this name in your vault. The file holds private feed addresses in plain text. See [Export podcasts to OPML](/import_export/#export-podcasts-to-opml). |
 
 ## Preferences & templates
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Import settings** | None | **Import** opens a file picker. After you confirm, PodNotes applies the preferences, templates, feeds, and playlists in the file. Playback progress and downloads stay as they are. Protected private feeds need their private URLs again. See [Import your settings](/import_export/#import-your-settings). |
+| **Import settings** | None | **Import** opens a file picker. After you confirm, PodNotes replaces your preferences, templates, feeds, playlists, queue, and favorites with the ones in the file, and adds its playback progress for episodes this vault has not played. Your own progress, downloads, and local files stay. See [Import your settings](/import_export/#import-your-settings). |
 | **Include API keys** | Off | Adds the OpenAI and Deepgram keys on this device to the next export, in plain text. The export file sits in your vault, where sync and other plugins can read it. The toggle turns off again each time you open the tab. |
-| **Export settings** | `PodNotes_Settings.json` | **Export** saves your preferences, templates, feeds, and playlists to a file with this name in your vault. It does not overwrite an existing file. See [Export your settings](/import_export/#export-your-settings). |
+| **Export settings** | `PodNotes_Settings.json` | **Export** saves your preferences, templates, feeds, playlists, queue, favorites, and playback progress to a file with this name in your vault. Private feeds keep only their placeholder. It does not overwrite an existing file. See [Export your settings](/import_export/#export-your-settings). |
 
 ## Transcripts
 

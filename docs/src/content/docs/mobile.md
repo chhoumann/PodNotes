@@ -24,7 +24,7 @@ To add your first podcast, see [Add and play podcasts](/podcasts/). Most command
 
 ### Set up the button once
 
-1. In **Settings → Interface**, select **Configure mobile toolbar**.
+1. In **Settings → Interface**, select **Configure mobile toolbar**.
 2. Select **Add a command...** under **Manage toolbar options**.
 3. Find and select **PodNotes: Capture Timestamp**. Its button shows a clock.
 

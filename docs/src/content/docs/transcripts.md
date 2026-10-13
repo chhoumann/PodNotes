@@ -34,7 +34,7 @@ A transcript of the audio has no times, so its lines do not link to their moment
 To transcribe the audio without speaker labels, PodNotes sends it to OpenAI with your API key. A transcript that the feed publishes needs no key.
 
 1. Create a key on the [OpenAI API keys page](https://platform.openai.com/api-keys).
-2. In Obsidian, open **Settings → PodNotes**.
+2. In Obsidian, open **Settings → PodNotes**.
 3. Under **Transcripts**, select the secret picker next to **OpenAI API key**.
 4. Create a secret that holds your key, or select one that you saved before.
 
@@ -44,7 +44,7 @@ On each other device, select or create the secret again. See [API keys and priva
 
 To label who speaks in a transcript of the audio:
 
-1. Open **Settings → PodNotes**.
+1. Open **Settings → PodNotes**.
 2. Under **Transcripts**, turn on **Speaker diarization**.
 3. In **Diarization provider**, select **OpenAI (gpt-4o-transcribe-diarize)** or **Deepgram**.
 4. If you selected **Deepgram**, create a key in the [Deepgram console](https://console.deepgram.com/).
@@ -61,7 +61,7 @@ A transcript that the feed publishes uses the speaker names in the feed, whateve
 
 ### <span id="speaker-label-format"></span>Change the speaker label format
 
-1. In **Settings → PodNotes**, under **Transcripts**, turn on **Speaker diarization**. **Speaker label format** appears below it.
+1. In **Settings → PodNotes**, under **Transcripts**, turn on **Speaker diarization**. **Speaker label format** appears below it.
 2. Set **Speaker label format**, for example to `**Speaker {{speaker}}:**` with a space at the end.
 
 The format sets the text before each turn. The default, `**{{speaker}}:**` with a space at the end, starts a turn with **A:** in bold. With `**Speaker {{speaker}}:**`, a turn starts with **Speaker A:**. With Deepgram, the labels are numbers, as in **Speaker 1:**. The labeled text fills `{{transcript}}`, so **Transcript template** needs no change.
