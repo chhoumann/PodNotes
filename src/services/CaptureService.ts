@@ -17,20 +17,24 @@ export interface Capture {
 
 /** Puts a capture where the user writes: the editor they used last, else the episode note. */
 export class CaptureService {
+	private activeLeaf: WorkspaceLeaf | null;
 	// Clicking in the PodNotes view leaves workspace.activeEditor null.
-	private lastMarkdownLeaf: WorkspaceLeaf | null;
+	private lastEditorLeaf: WorkspaceLeaf | null = null;
 
 	constructor(private readonly plugin: PodNotes) {
 		const { workspace } = plugin.app;
-		this.lastMarkdownLeaf = workspace.getActiveViewOfType(MarkdownView)?.leaf ?? null;
+		this.activeLeaf = workspace.getActiveViewOfType(MarkdownView)?.leaf ?? null;
 		plugin.registerEvent(
 			workspace.on("active-leaf-change", (leaf) => {
-				if (leaf?.view instanceof MarkdownView) this.lastMarkdownLeaf = leaf;
+				// Switching a note between Reading view and editing fires no workspace event,
+				// so a note counts by the mode it has when focus leaves it.
+				if (this.editingView(this.activeLeaf)) this.lastEditorLeaf = this.activeLeaf;
+				this.activeLeaf = leaf;
 			}),
 		);
 		plugin.registerEvent(
 			workspace.on("layout-change", () => {
-				if (!this.lastMarkdownView()) this.lastMarkdownLeaf = null;
+				if (!this.editingView(this.lastEditorLeaf)) this.lastEditorLeaf = null;
 			}),
 		);
 	}
@@ -108,17 +112,19 @@ export class CaptureService {
 		}
 	}
 
-	/** The focused editor, which covers canvas and embedded editors, else the last markdown one. */
+	/** The focused editor, which covers canvas and embedded editors, else the one used last. */
 	private editorTarget(): MarkdownFileInfo | null {
 		const active = this.plugin.app.workspace.activeEditor;
-		const target = active?.editor ? active : this.lastMarkdownView();
 		// A note in Reading view keeps its hidden editor, where written text is lost.
-		return target instanceof MarkdownView && target.getMode() === "preview" ? null : target;
+		const reading = active instanceof MarkdownView && active.getMode() === "preview";
+		return active?.editor && !reading ? active : this.editingView(this.lastEditorLeaf);
 	}
 
-	private lastMarkdownView(): MarkdownView | null {
-		const leaf = this.lastMarkdownLeaf;
+	/** The leaf's note while it is open in Source or Live Preview mode. */
+	private editingView(leaf: WorkspaceLeaf | null): MarkdownView | null {
 		const open = leaf && this.plugin.app.workspace.getLeavesOfType("markdown").includes(leaf);
-		return open && leaf.view instanceof MarkdownView ? leaf.view : null;
+		return open && leaf.view instanceof MarkdownView && leaf.view.getMode() === "source"
+			? leaf.view
+			: null;
 	}
 }

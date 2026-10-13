@@ -117,21 +117,26 @@ function fakeWorkspace() {
 		getLeaf: () => ({ openFile: async (file: TFile) => opened.push(file.path) }),
 	};
 
+	/** Opens a note in a tab that takes focus. Its `mode` switches it between Reading view and editing. */
+	const openNote = (path: string, text: string, caret?: number, reading = false) => {
+		const leaf = {} as WorkspaceLeaf;
+		const editor = fakeEditor(text, caret);
+		const view = Object.assign(new MarkdownView(leaf), { editor, file: vaultFile(path) });
+		const mode = vi.spyOn(view, "getMode").mockReturnValue(reading ? "preview" : "source");
+		leaf.view = view;
+		open.push(leaf);
+		workspace.activeEditor = view;
+		trigger("active-leaf-change", leaf);
+		return { leaf, editor, mode };
+	};
+
 	return {
 		workspace,
 		/** Paths of the files opened in a tab. */
 		opened,
-		/** Opens a note and puts the caret in it. */
-		openNote(path: string, text: string, caret?: number) {
-			const leaf = {} as WorkspaceLeaf;
-			const editor = fakeEditor(text, caret);
-			const view = Object.assign(new MarkdownView(leaf), { editor, file: vaultFile(path) });
-			leaf.view = view;
-			open.push(leaf);
-			workspace.activeEditor = view;
-			trigger("active-leaf-change", leaf);
-			return { leaf, editor };
-		},
+		/** Opens a note in editing mode and puts the caret in it. */
+		openNote: (path: string, text: string, caret?: number) => openNote(path, text, caret),
+		openInReadingView: (path: string, text: string) => openNote(path, text, undefined, true),
 		/** A click in the PodNotes view: its leaf is active and no editor is. */
 		focusPodNotes() {
 			workspace.activeEditor = null;
@@ -245,14 +250,71 @@ describe("capture", () => {
 
 	it("goes to the episode note when the last note is in Reading view", async () => {
 		const { plugin, openNote, focusPodNotes, read } = await loadPlugin(playing);
-		const { leaf, editor } = openNote("Journal.md", "Notes");
-		vi.spyOn(leaf.view as MarkdownView, "getMode").mockReturnValue("preview");
+		const { mode, editor } = openNote("Journal.md", "Notes");
+		mode.mockReturnValue("preview");
 
 		expect(await plugin.capture.timestamp()).toMatchObject({ destination: "note" });
 		focusPodNotes();
 		expect(await plugin.capture.timestamp()).toMatchObject({ destination: "note" });
 
 		expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34\n- 00:20:34\n");
+		expect(editor.getValue()).toBe("Notes");
+	});
+
+	describe("past a note in Reading view", () => {
+		async function editorThenReading() {
+			const session = await loadPlugin(playing);
+			session.plugin.settings.timestamp.template = "- {{time}}\n";
+			const editing = session.openNote("Journal.md", "Before\nAfter", 7);
+			const reading = session.openInReadingView("Article.md", "Read only");
+			return { ...session, editing, reading };
+		}
+
+		it("lands at the caret of the editor used before it", async () => {
+			const { run, focusPodNotes, editing, reading, notes } = await editorThenReading();
+			focusPodNotes();
+
+			run("capture-timestamp");
+			run("capture-segment-10s");
+
+			expect(editing.editor.getValue()).toBe(
+				"Before\n- 00:20:34\n- 00:20:24-00:20:34\nAfter",
+			);
+			expect(reading.editor.getValue()).toBe("Read only");
+			expect(notes.size).toBe(0);
+		});
+
+		it("lands in the editor used before it while the Reading view has focus", async () => {
+			const { run, editing, reading, notes } = await editorThenReading();
+
+			run("capture-timestamp");
+
+			expect(editing.editor.getValue()).toBe("Before\n- 00:20:34\nAfter");
+			expect(reading.editor.getValue()).toBe("Read only");
+			expect(notes.size).toBe(0);
+		});
+
+		it("lands in that note once it is switched to editing while it has focus", async () => {
+			const { run, focusPodNotes, editing, reading } = await editorThenReading();
+			reading.mode.mockReturnValue("source");
+			focusPodNotes();
+
+			run("capture-timestamp");
+
+			expect(reading.editor.getValue()).toBe("Read only- 00:20:34\n");
+			expect(editing.editor.getValue()).toBe("Before\nAfter");
+		});
+	});
+
+	it("goes to the episode note once the editor used last is switched to Reading view", async () => {
+		const { run, openNote, focusPodNotes, read } = await loadPlugin(playing);
+		const { mode, editor } = openNote("Journal.md", "Notes");
+		focusPodNotes();
+		mode.mockReturnValue("preview");
+
+		run("capture-timestamp");
+
+		await vi.waitFor(() => expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34\n"));
 		expect(editor.getValue()).toBe("Notes");
 	});
 
