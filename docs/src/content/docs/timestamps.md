@@ -22,7 +22,7 @@ The capture commands work from anywhere, so you can capture while you browse epi
 
 1. The note you are editing, at the cursor. A note in reading view does not count.
 2. The note you edited last, at its cursor, if it is still open in editing view. A capture from the PodNotes view, or from a headset, usually goes here.
-3. The end of the episode's note, found as [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note) describes. If PodNotes finds none, it creates the note, without opening it. For an older note that you renamed or moved, that makes a second note. This needs **Note creation file path** and **Note creation template**.
+3. The end of the episode's note, found as [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note) describes. If PodNotes finds none, it creates the note, without opening it. For an older note that you renamed or moved, PodNotes then creates a second note. Creating the note needs **Note creation file path** and **Note creation template**.
 
 ## Capture from a hotkey, the toolbar, or a headset
 
@@ -55,7 +55,7 @@ If your captures come out as plain text with no link, your format most likely us
 1. Open **Settings → PodNotes**.
 2. Under **Episode notes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end.
 
-New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the episode has no feed or local file to link to, or a link would show a private feed's address, as for a private feed that you have not added. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+New captures are links. Timestamps that you captured before stay plain text. If the format already uses `{{linktime}}`, the cause is the episode. It has no feed or local file to link to, or a link would show a private feed's address, as for a private feed that you have not added. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 ## Compensate for reaction time
 

@@ -125,7 +125,14 @@ When the feed gives an episode an ID, PodNotes adds two properties to the episod
 
 So a note with both properties keeps working after you rename it or move it to another folder. If you used PodNotes before 2.22.0, your existing notes do not have these properties, and PodNotes does not add them. Keep such a note at the path that **Note creation file path** gives for the episode, or in that path's folder with the episode's title as its name. Otherwise PodNotes no longer finds it for the episode.
 
-PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. It adds neither property for a local file, for an episode whose ID the feed gives to several episodes, for a template whose properties PodNotes cannot extend, such as invalid YAML, or when the properties would show a private feed's address, as for a private feed that you have not added. For a private feed that you added, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. PodNotes adds neither property in these cases:
+
+- The episode is a local file.
+- The feed gives the same ID to several episodes.
+- PodNotes cannot extend the template's properties, as with invalid YAML.
+- The properties would show a private feed's address, as for a private feed that you have not added.
+
+For a private feed that you added, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 ## Limits of note creation
 

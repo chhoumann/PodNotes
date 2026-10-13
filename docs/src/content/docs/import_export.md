@@ -26,7 +26,7 @@ The OPML file contains the real feed addresses, private ones included, and a not
 
 ## <span id="settings-templates"></span><span id="settings--templates"></span>Back up or move your settings
 
-A settings file copies your PodNotes setup to another vault, or keeps a backup of it. It holds your preferences, your templates and paths, your saved podcasts, your queue, favorites, and playlists, and your playback progress and played status. It leaves out downloads, local files, and the current episode. It holds your API keys only if you turn on **Include API keys**, and it never holds the addresses of private feeds.
+A settings file copies your PodNotes setup to another vault, or keeps a backup of it. It holds your preferences, your templates and paths, your saved podcasts, your queue, favorites, and playlists, and your playback progress and played status. It leaves out downloads, local files, and the current episode. It holds your API keys only if you turn on **Include API keys**, and it never holds the private feed addresses that PodNotes [recognizes](/private-feeds/#which-addresses-podnotes-keeps-private).
 
 ### <span id="exporting-settings"></span>Export your settings
 

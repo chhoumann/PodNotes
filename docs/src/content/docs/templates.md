@@ -80,7 +80,7 @@ The episode number comes from `<itunes:episode>` when the feed has a valid one. 
 
 `{{description}}`, `{{content}}`, and `{{chapters}}` accept a prefix for every line, as in `{{description:> }}`. Descriptions and content keep ordinary Markdown formatting, links, and image alt text. PodNotes removes media elements, escapes Markdown embeds, and turns `dataview` and `dataviewjs` code blocks into `text` code blocks.
 
-PodNotes never writes a private feed's address into a note. When an episode's text, a file name, or your template quotes the address of a private feed that you added, PodNotes writes the feed's placeholder instead. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+PodNotes never writes a private feed address that it recognizes into a note. When an episode's text, a file name, or your template quotes the address of a private feed that you added, PodNotes writes the feed's placeholder instead. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 PodNotes percent-encodes URLs from a feed where they contain whitespace, control characters, quotes, backticks, brackets, parentheses, angle brackets, or backslashes. A local file's `{{url}}` stays a vault link. `{{artwork}}` and `{{stream}}` accept only public HTTP or HTTPS addresses without a user name or password. A device-only address, or a private or local IP address, gives an empty value.
 

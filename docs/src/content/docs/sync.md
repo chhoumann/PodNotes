@@ -1,7 +1,7 @@
 ---
 title: Sync between devices
 slug: sync
-description: What PodNotes saves in your vault, how it merges changes from your other devices, and how to switch devices.
+description: Keep one PodNotes library on several devices, and continue an episode on another device.
 ---
 
 Keep one PodNotes library on several devices by syncing your vault.
@@ -14,7 +14,7 @@ PodNotes has no sync service of its own, so your vault sync service, such as Obs
 | Your podcasts, progress, queue, playlists, templates, and settings | In `data.json`, if your sync service includes plugin data |
 | Episode notes, feed notes, and transcripts | As Markdown files |
 | Downloads | As media files, if your sync service includes them |
-| API keys and private feed addresses | Not at all. Each device keeps its own copy, and only a reference to it syncs. |
+| API keys and the private feed addresses that PodNotes recognizes | Not at all. Each device keeps its own copy, and only a reference to it syncs. |
 | The current playback speed | Not at all. PodNotes does not save it. Only **Default Playback Rate** syncs. |
 
 For your library to sync, your sync service must include PodNotes' plugin folder, `.obsidian/plugins/podnotes/`.
@@ -28,10 +28,10 @@ PodNotes merges the changes your devices make, so you can switch devices without
 2. Note the time where you stopped.
 3. Wait until your sync service finishes uploading.
 4. On the device you are switching to, wait until sync finishes.
-5. If this device's player shows the episode at another time, move to the time you noted on the progress bar.
+5. If this device's player shows the episode at another time, move the progress bar to the time you noted.
 6. Play the episode.
 
-Step 5 matters because the episode in a device's player keeps that device's position once the device has played it or you moved its position. When that device saves its position, for example when you pause or switch apps, the older position replaces the progress from your other device. Other episodes start at their synced position when you play them.
+Step 5 matters because a device's player keeps its own position for the episode in it, once you played that episode there or moved its position. When that device saves its position, for example when you pause or switch apps, the older position replaces the progress from your other device. Other episodes start at their synced position when you play them.
 
 ## Changes on two devices
 
@@ -47,21 +47,20 @@ When two devices change the same setting or the same item before either sees the
 
 Episodes match by podcast name and title, so episodes with the same title from different podcasts stay apart.
 
-Sync never starts, pauses, or moves the episode in this device's player once this device has played it or you moved its position. That episode keeps this device's position, as step 5 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains. Until then, the player shows the synced episode at its synced position.
+Sync never starts, pauses, or moves an episode once you play it on this device. That episode keeps this device's position, as step 5 of [Use PodNotes on two devices](#use-podnotes-on-two-devices) explains. Before you play anything after Obsidian starts, the player follows the episode and position that sync brings, unless you moved the position of that same episode.
 
 ### A device that starts before sync finishes
 
-Each library has an ID, `libraryId`, in `data.json`. A device that starts PodNotes before sync delivers `data.json` starts a library of its own. When the two files meet, PodNotes combines the two libraries:
+A device that starts PodNotes before sync delivers `data.json` starts a library of its own. When the two files meet, PodNotes combines the two libraries:
 
 - Every podcast, progress record, playlist, and download from both libraries stays.
 - A setting changed from its default in only one library keeps that library's value. A setting changed in both libraries keeps this device's value.
 - A podcast with different names in the two libraries appears twice, once under each name.
-- The combined library keeps the ID of the library that started first.
 
 ### Limits of merging
 
 - A change that arrives between PodNotes' read and its write can still be lost.
-- PodNotes writes `data.json` in place, so your sync service can pick up a partly written file. Another device then shows a notice that PodNotes could not read the file, until the complete file arrives. See [Fix save problems](/save-problems/).
+- PodNotes writes `data.json` in place, so your sync service can pick up a partly written file. Another device that picks up such a file shows a notice that PodNotes could not read the file, until the complete file arrives. See [Fix save problems](/save-problems/).
 - PodNotes 2.21.1 and earlier do not merge, so a device that runs one of them can overwrite the whole file. Update PodNotes on every device.
 
 ## When PodNotes saves
@@ -86,7 +85,7 @@ If your vault uses a different configuration folder, the path starts with that f
 - The list of downloaded episodes and local files, with their paths in the vault.
 - Your note, timestamp, transcript, and download templates.
 - Your playback, skip, and feed cache preferences.
-- References to your API keys and private feed addresses, but not the keys or addresses themselves.
+- References to your API keys and to the private feed addresses that PodNotes recognizes, but not the keys or those addresses themselves.
 - Your library's ID.
 
 Episode notes, feed notes, transcripts, and downloads are separate files in your vault. Your sync service transfers them separately from `data.json`.
@@ -100,7 +99,7 @@ PodNotes stores your OpenAI and Deepgram API keys in Obsidian's secret storage o
 Only a reference to the key syncs in `data.json`.
 Add the key on every device where you transcribe audio. See [Transcribe episodes](/transcripts/).
 
-PodNotes also keeps the address of each private feed in secret storage on each device.
+PodNotes also keeps each private feed address that it [recognizes](/private-feeds/#which-addresses-podnotes-keeps-private) in secret storage on each device.
 The podcast and a reference to its address sync, but the address does not. On each other device, enter the address once. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 
 ## Downloads on another device

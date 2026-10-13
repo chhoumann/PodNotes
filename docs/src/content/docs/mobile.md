@@ -73,6 +73,6 @@ Long-press a media file in the file explorer, where a computer uses a right-clic
 
 - A file that plays on a computer can fail on a phone that lacks its codec.
 - On Android, headset buttons and lock screen controls do not reach PodNotes.
-- API keys and private feed addresses stay on each device, so add them on your phone too. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
+- API keys and the private feed addresses that PodNotes recognizes stay on each device, so add them on your phone too. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 - A download made on another device plays only after its media file syncs to this one. See [Downloads on another device](/sync/#downloads-on-another-device).
-- Before you switch to your phone, pause on your other device and let sync finish. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
+- Before you switch to your phone, pause on your other device, note the time, and let sync finish. On your phone, check the episode's time before you play. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).

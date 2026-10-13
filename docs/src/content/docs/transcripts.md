@@ -9,21 +9,23 @@ Turn an episode into a transcript note. When the podcast's feed publishes a tran
 
 ## <span id="creating-a-transcript"></span>Transcribe an episode
 
+For a podcast you added to PodNotes, the command first uses the transcript the episode's feed publishes, at no cost. Without one, it transcribes the audio with your provider and API key, and your provider bills you for it.
+
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-PodNotes first looks for a transcript in the episode's feed, if you added the podcast to PodNotes. If it finds one, it saves that transcript. If not, it transcribes the audio with your provider and API key, and your provider bills you for it. To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key), or a Deepgram key for [speaker labels](#add-speaker-labels) with Deepgram.
+To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key), or a Deepgram key for [speaker labels](#add-speaker-labels) with Deepgram.
 
 A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
-To transcribe the audio even when the feed publishes a transcript, first rename or move any transcript note you saved for the episode, because PodNotes does not replace an existing transcript. Then run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key.
+To transcribe the audio even when the feed publishes a transcript, first rename or move any transcript note you saved for the episode, because PodNotes does not replace an existing transcript. Then run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key. A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:** with OpenAI or **1:** with Deepgram.
 
 ## Transcripts that feeds publish
 
 Some feeds list a transcript for each episode with the Podcasting 2.0 `<podcast:transcript>` tag. PodNotes uses it when you added the podcast to PodNotes and the feed still lists the episode.
 
 - When an episode lists several transcripts, PodNotes picks WebVTT, then SRT, then JSON, then HTML, then plain text.
-- In a transcript with times, each paragraph starts with the time it begins. The time uses the time format in **Capture timestamp format**. With the default format, `- {{linktime}} `, the time is a link that plays the episode from that moment. With `{{time}}`, it is plain text. PodNotes ignores the rest of the format, such as the `- ` list marker.
+- In a transcript with times, each paragraph starts with the time it begins. The time uses the time format in **Capture timestamp format**. With the default format, `- {{linktime}}` with a space at the end, the time is a link that plays the episode from that moment. With `{{time}}`, it is plain text. PodNotes ignores the rest of the format, such as the `-` list marker.
 - When the transcript names its speakers, each speaker's turn starts with **Speaker label format**, even with **Speaker diarization** off.
 - A plain text transcript, or an HTML transcript without times, has paragraphs but no times.
 
@@ -34,8 +36,6 @@ With the default settings, a transcript with times and speakers looks like this:
 
 [00:00:41](obsidian://podnotes?...) **David:** It started with two founders and one store.
 ```
-
-A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:**.
 
 ## <span id="setting-up"></span>Set up an OpenAI key
 

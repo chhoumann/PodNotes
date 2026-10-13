@@ -18,7 +18,7 @@ On a phone, the player stays closed until you open it. See [Use PodNotes on your
 ### Why are some commands missing?
 
 Most commands appear only while an episode is loaded. A paused episode counts, and so does the episode PodNotes shows when Obsidian starts.
-**PodNotes: Create episode note** also appears once you add a podcast, if **Note creation file path** and **Note creation template** are set, and **PodNotes: Reorder Queue** needs at least two episodes in the queue.
+**PodNotes: Create episode note** also appears once you add a podcast, if **Note creation file path** and **Note creation template** are set. **PodNotes: Reorder Queue** needs at least two episodes in the queue.
 **PodNotes: Show player** and the capture commands are always available. [Commands](/commands/) lists what each command needs.
 
 ### How do I install a beta version or install manually?
@@ -43,7 +43,7 @@ A show that exists only inside Spotify or another app has no feed to add. If the
 
 Yes, if your provider gives you a personal RSS feed address. Add the podcast with the whole address.
 PodNotes cannot sign in to providers that require a browser login.
-PodNotes keeps a private address on each device, out of your synced vault, so you enter it once on each other device with **Set feed address**. See [Use private feeds](/private-feeds/).
+PodNotes keeps the private addresses it recognizes on each device, out of your synced vault, so you enter such an address once on each other device with **Set feed address**. See [Use private feeds](/private-feeds/).
 
 ### Can I annotate my own audio or video?
 
@@ -56,7 +56,7 @@ See [Play your own audio and video](/local_files/#play-your-own-audio-and-video)
 
 Your **Capture timestamp format** uses `{{time}}`, which inserts plain text.
 Installs set up before PodNotes 2.21.0 keep the old default, which uses `{{time}}`. New installs use `{{linktime}}`, which inserts a link that plays the episode from that moment.
-In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the episode has no feed or local file to link to, or it comes from a private feed that you have not added. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
+In **Settings → PodNotes**, set **Capture timestamp format** to `- {{linktime}}` with a space at the end. If it already uses `{{linktime}}`, the cause is the episode. It has no feed or local file to link to, or it comes from a private feed that you have not added. See [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ### Can I take notes on an episode I listen to in another app?
 
@@ -87,7 +87,7 @@ Links to your own media files need only the file in your vault. See [Removed dow
 
 Yes, when your sync service syncs plugin data. PodNotes saves progress, podcasts, playlists, and settings in `data.json`, and merges the changes your devices make. When you switch devices, pause first and let sync finish. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
 If PodNotes shows a notice that it cannot save, see [Fix save problems](/save-problems/).
-API keys and private feed addresses stay on each device. See [Sync between devices](/sync/).
+API keys and the private feed addresses that PodNotes recognizes stay on each device. See [Sync between devices](/sync/).
 
 ## Transcription
 

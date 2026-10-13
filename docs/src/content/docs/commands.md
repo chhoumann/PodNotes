@@ -52,7 +52,7 @@ Moves back by **Skip backward length (s)**, 15 seconds by default. It never move
 
 ## Skip Forward
 
-Moves forward by **Skip forward length (s)**, 15 seconds by default, and keeps the episode playing or paused. When the duration is known, a skip never passes the end. It stops 0.25 seconds before the end, or stays where it is when it is already closer. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
+Moves forward by **Skip forward length (s)**, 15 seconds by default, and keeps the episode playing or paused. When the duration is known, a skip that would reach the last 0.25 seconds stops 0.25 seconds before the end, or stays where it is if it is already closer. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
 
 ## Increase playback rate
 
