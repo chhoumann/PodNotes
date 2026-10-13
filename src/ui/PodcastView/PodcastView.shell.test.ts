@@ -341,6 +341,27 @@ describe("mini player", () => {
 		expect(notice.mock.calls).toEqual([["Timestamp added to Episode 1 Launch"]]);
 	});
 
+	test("tells assistive technology its progress, compact or wide", async () => {
+		const { resize } = renderView(320);
+		services.player.play(episode);
+		doc.media.duration = 2700.4;
+		doc.media.emit("loadedmetadata");
+		doc.media.currentTime = 754.6;
+		doc.media.emit("timeupdate");
+		await tick();
+
+		for (const width of [320, 820]) {
+			resize(width);
+			await tick();
+			const bars = screen.getAllByRole("progressbar", { name: "Episode progress" });
+			expect(bars).toHaveLength(1);
+			expect(bars[0]).toHaveAttribute("aria-valuemin", "0");
+			expect(bars[0]).toHaveAttribute("aria-valuemax", "2700");
+			expect(bars[0]).toHaveAttribute("aria-valuenow", "754");
+			expect(bars[0]).toHaveAttribute("aria-valuetext", "12:34 of 45:00");
+		}
+	});
+
 	test("tells the minutes left, and nothing once none are left", async () => {
 		renderView();
 		playing();

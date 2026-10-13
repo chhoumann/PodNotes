@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Notice } from "obsidian";
-	import { formatSeconds } from "src/utility/formatSeconds";
+	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import type { Layout } from "./layout";
@@ -21,10 +21,6 @@
 	let failedArtworkUrl = $state("");
 	const id = $props.id();
 
-	function clock(seconds: number): string {
-		return formatSeconds(seconds, seconds >= 3600 ? "H:mm:ss" : "m:ss");
-	}
-
 	function minutes(seconds: number): string {
 		const total = Math.max(1, Math.round(seconds / 60));
 		return total >= 60 ? `${Math.floor(total / 60)} h ${total % 60} min` : `${total} min`;
@@ -36,13 +32,26 @@
 	}
 </script>
 
+{#snippet progress(kind: "pn-mini-prog" | "pn-mini-track")}
+	<div
+		class={kind}
+		role="progressbar"
+		aria-labelledby="{id}-progress"
+		aria-valuemin={0}
+		aria-valuemax={Math.floor(duration)}
+		aria-valuenow={Math.floor(elapsed)}
+		aria-valuetext="{formatDuration(elapsed)} of {formatDuration(duration)}"
+	>
+		<span style:width="{percent}%"></span>
+	</div>
+{/snippet}
+
 {#if episode}
 	<section class="pn-mini" class:is-wide={layout === "wide"} aria-labelledby="{id}-name">
 		<span id="{id}-name" hidden>Now playing</span>
+		<span id="{id}-progress" hidden>Episode progress</span>
 		{#if layout === "compact"}
-			<div class="pn-mini-prog" aria-hidden="true">
-				<span style:width="{percent}%"></span>
-			</div>
+			{@render progress("pn-mini-prog")}
 		{/if}
 		<button
 			type="button"
@@ -71,10 +80,10 @@
 			</span>
 		</button>
 		{#if layout === "wide"}
-			<div class="pn-mini-mid" aria-hidden="true">
-				<span>{clock(elapsed)}</span>
-				<span class="pn-mini-track"><span style:width="{percent}%"></span></span>
-				<span>-{clock(remaining)}</span>
+			<div class="pn-mini-mid">
+				<span aria-hidden="true">{formatDuration(elapsed)}</span>
+				{@render progress("pn-mini-track")}
+				<span aria-hidden="true">-{formatDuration(remaining)}</span>
 			</div>
 			<button type="button" class="pn-btn mod-cta" onclick={capture}>
 				<span class="pn-btn-icon" {@attach icon("clock-plus")}></span>
