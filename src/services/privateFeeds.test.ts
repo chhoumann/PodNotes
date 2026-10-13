@@ -312,7 +312,7 @@ describe("protectPrivateFeeds", () => {
 		expect(safe.queue.episodes[0].url).toBe(link);
 	});
 
-	it("reports feeds whose URL could not be protected and changes nothing", () => {
+	it("keeps a failed move available only for the session and redacts its snapshots", () => {
 		const { api, feedUrls } = repository();
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		(api.setSecret as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -327,7 +327,9 @@ describe("protectPrivateFeeds", () => {
 		});
 		const { failed, settings: result } = protectPrivateFeeds(input, feedUrls);
 		expect(failed).toEqual(["Patreon"]);
-		expect(result).toBe(input);
-		expect(result.savedFeeds.Patreon.url).toBe(PRIVATE_URL);
+		expect(JSON.stringify(result)).not.toContain(PRIVATE_URL);
+		expect(result.savedFeeds.Patreon.url).toBe("podnotes-private-feed:Patreon");
+		expect(resolveFeedUrl(result.savedFeeds.Patreon, feedUrls)).toBe(PRIVATE_URL);
+		expect(resolveFeedUrl(result.savedFeeds.Patreon, new FeedUrlRepository(api))).toBeNull();
 	});
 });

@@ -18,11 +18,15 @@ class FeedAddressModal extends Modal {
 			this.address = input?.value ?? null;
 			this.close();
 		};
-		new Setting(this.contentEl).setName("Feed address").addText((text) => {
+		const setting = new Setting(this.contentEl).setName("Feed address");
+		setting.nameEl.id = `podnotes-feed-address-${crypto.randomUUID()}`;
+		setting.addText((text) => {
 			input = text.inputEl;
-			input.setAttribute("aria-label", "Feed address");
+			input.setAttribute("aria-labelledby", setting.nameEl.id);
 			input.addEventListener("keydown", (event) => {
-				if (event.key === "Enter") save();
+				if (event.key !== "Enter") return;
+				event.preventDefault();
+				save();
 			});
 		});
 		new Setting(this.contentEl).addButton((button) =>

@@ -114,7 +114,7 @@ export function notifyPrivateFeedUnavailable(title: string): void {
 
 export interface PrivateFeedProtection {
 	settings: IPodNotesSettings;
-	/** Feeds whose URL could NOT be protected (SecretStorage failure); `settings` is then the input. */
+	/** Feeds whose addresses are available only for this session. */
 	failed: string[];
 }
 
@@ -132,11 +132,15 @@ export function protectPrivateFeeds(
 		} catch (error) {
 			console.error(`PodNotes: could not protect the private feed "${key}"`, error);
 			failed.push(key);
+			interned = {
+				...feed,
+				url: privateFeedPlaceholder(key),
+				urlSecretId: feedUrls.retainForSession(feed.url),
+			};
 		}
 		if (interned !== feed) moved = true;
 		savedFeeds[key] = interned;
 	}
-	if (failed.length > 0) return { settings, failed };
 	return {
 		settings: redactPrivateFeedAddresses(
 			moved ? { ...settings, savedFeeds } : settings,

@@ -117,7 +117,7 @@ export function decodePodNotesData(value: unknown): DecodedPodNotesData {
 /**
  * Serialize a validated runtime snapshot with canonical dates and schema. No
  * private feed address reaches the result. A saved feed's own private URL must
- * be in SecretStorage first: this throws rather than drop its only copy.
+ * have a stored or session-only reference first; raw addresses are refused.
  */
 export function encodePodNotesData(
 	settings: IPodNotesSettings,

@@ -17,6 +17,7 @@
 	} from "src/services/privateFeeds";
 	import type { PodcastFeed } from "src/types/PodcastFeed";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
+	import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 	import Text from "../obsidian/Text.svelte";
 	import { askFeedAddress } from "./FeedAddressModal";
 	import PodcastResultCard from "./PodcastResultCard.svelte";
@@ -184,6 +185,10 @@
 		const url = checkStringIsUrl(entered.trim());
 		if (url?.protocol !== "http:" && url?.protocol !== "https:") {
 			new Notice("Enter the feed's http or https address.");
+			return;
+		}
+		if (!isCredentialBearingUrl(url.href)) {
+			new Notice("Enter a private feed address.");
 			return;
 		}
 		try {

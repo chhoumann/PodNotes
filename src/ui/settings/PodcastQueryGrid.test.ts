@@ -288,6 +288,19 @@ describe("PodcastQueryGrid", () => {
 		).toBeInTheDocument();
 	});
 
+	test("refuses a public recovery address before fetching it", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { saved } = followPrivateShow();
+		const thisDevice = new obsidian.SecretStorage();
+		usePlugin(new FeedUrlRepository(thisDevice));
+		const view = renderGrid();
+		await setFeedAddress(view, "Private Show", "https://public.example/feed.xml");
+		expect(fetchTextMock).not.toHaveBeenCalled();
+		expect(notice).toHaveBeenCalledWith("Enter a private feed address.");
+		expect(thisDevice.listSecrets()).toEqual([]);
+		expect(get(savedFeeds)).toEqual({ "Private Show": saved });
+	});
+
 	test("keeps the reference when the feed at the entered address cannot be loaded", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => {});

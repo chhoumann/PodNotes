@@ -1,10 +1,11 @@
-import type { SecretStorage } from "obsidian";
+import { Notice, type SecretStorage } from "obsidian";
 import { isValidSecretId } from "src/types/Credentials";
 
 /**
  * Vault-local storage for private feed URLs, following CredentialRepository's
- * contract: runtime reads fail closed and never cache secret values; writes
- * return an ID only after the exact value reads back.
+ * contract: stored references resolve from SecretStorage; writes return an ID
+ * only after the exact value reads back. Failed moves from data.json can retain
+ * the address for this session under a separate, temporary reference.
  *
  * IDs are `podnotes-feed-url-<uuid>`. The UUID matters: `urlSecretId`
  * references sync through data.json while SecretStorage stays device-local,
@@ -24,12 +25,17 @@ export function isFeedUrlSecretId(value: string): boolean {
 }
 
 export class FeedUrlRepository {
+	private readonly sessionUrls = new Map<string, string>();
+	private warnedAboutStorage = false;
+
 	constructor(private readonly storage: SecretStorage) {}
 
 	/** The real feed URL, or null when the reference is invalid or absent on this device. */
 	resolve(urlSecretId: string): string | null {
 		const id = urlSecretId.trim();
 		if (!id || !isFeedUrlSecretId(id) || !isValidSecretId(id)) return null;
+		const sessionUrl = this.sessionUrls.get(id);
+		if (sessionUrl) return sessionUrl;
 		try {
 			const value = this.storage.getSecret(id);
 			return value?.trim() ? value.trim() : null;
@@ -43,6 +49,20 @@ export class FeedUrlRepository {
 	store(url: string): string {
 		const id = `podnotes-feed-url-${crypto.randomUUID()}`;
 		this.attach(id, url);
+		return id;
+	}
+
+	/** A failed move still removes the raw URL from disk and works until restart. */
+	retainForSession(url: string): string {
+		for (const [id, value] of this.sessionUrls) {
+			if (value === url) return id;
+		}
+		const id = `podnotes-feed-url-${crypto.randomUUID()}`;
+		this.sessionUrls.set(id, url);
+		if (!this.warnedAboutStorage) {
+			this.warnedAboutStorage = true;
+			new Notice("Could not store the private feed address on this device.");
+		}
 		return id;
 	}
 
@@ -72,6 +92,7 @@ export class FeedUrlRepository {
 	delete(urlSecretId: string): void {
 		const id = urlSecretId.trim();
 		if (!id || !isFeedUrlSecretId(id)) return;
+		this.sessionUrls.delete(id);
 		try {
 			this.storage.setSecret(id, "");
 		} catch (error) {

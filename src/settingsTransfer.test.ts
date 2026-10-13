@@ -18,6 +18,47 @@ function makeSettings(overrides: Partial<IPodNotesSettings> = {}): IPodNotesSett
 const NOW = "2026-06-14T00:00:00.000Z";
 
 describe("private feed reference transfer", () => {
+	it("puts no private feed address in a settings export, including quoted episode text", () => {
+		const address = "https://private.example/feed?auth=EXPORT_SENTINEL";
+		const placeholder = "podnotes-private-feed:Private";
+		const settings = makeSettings({
+			savedFeeds: {
+				Private: {
+					title: "Private",
+					url: placeholder,
+					artworkUrl: "",
+					urlSecretId: "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef",
+				},
+			},
+			favorites: {
+				...DEFAULT_SETTINGS.favorites,
+				episodes: [
+					{
+						title: "Private episode",
+						podcastName: "Private",
+						feedUrl: placeholder,
+						streamUrl: "https://media.example/audio.mp3?sig=KEEP_MEDIA",
+						url: "https://example.com/episode",
+						content: "",
+						description: `Your feed: ${address}`,
+					},
+				],
+			},
+		});
+		const envelope = serializeSettings(
+			settings,
+			{},
+			"2.21.1",
+			NOW,
+			new Map([[address, placeholder]]),
+		);
+		expect(JSON.stringify(envelope)).not.toContain("EXPORT_SENTINEL");
+		expect(envelope.settings.favorites?.episodes[0]).toMatchObject({
+			description: `Your feed: ${placeholder}`,
+			streamUrl: "https://media.example/audio.mp3?sig=KEEP_MEDIA",
+		});
+		expect(settings.favorites.episodes[0].description).toContain("EXPORT_SENTINEL");
+	});
 	it("drops a foreign secret reference instead of transferring it as a feed identity", () => {
 		const result = parseImport(
 			JSON.stringify({

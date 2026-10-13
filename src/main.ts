@@ -55,15 +55,12 @@ import { FeedRepository, loadFeed } from "./services/FeedRepository";
 type WriteRefusal =
 	| "unreadable-data-file"
 	| "older-data-file"
-	| "unprotected-private-feed"
 	| "window-unloading"
 	| "obsidian-closing";
 
 const WRITE_REFUSALS: Record<WriteRefusal, string> = {
 	"unreadable-data-file": "PodNotes does not save over a data.json it could not read.",
 	"older-data-file": "PodNotes does not save over a data.json from an older version.",
-	"unprotected-private-feed":
-		"PodNotes does not save while a private feed URL could not move into SecretStorage.",
 	"window-unloading": "PodNotes does not start a save while the window unloads.",
 	"obsidian-closing": "PodNotes does not start a save while Obsidian closes.",
 };
@@ -466,16 +463,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			this.feedUrls ??= new FeedUrlRepository(this.app.secretStorage);
 
 			const feedProtection = protectPrivateFeeds(decoded.settings, this.feedUrls);
-			if (feedProtection.failed.length > 0) {
-				this.settings = decoded.settings;
-				this.persistenceUnknownFields = decoded.unknownFields;
-				const { failed } = feedProtection;
-				this.refuseSaves(
-					"unprotected-private-feed",
-					`PodNotes could not move the private feed ${failed.length === 1 ? "URL" : "URLs"} for ${failed.join(", ")} into SecretStorage, so it saves nothing until you restart Obsidian.`,
-				);
-				return;
-			}
 			let settings = feedProtection.settings;
 			const movedFeeds = settings !== decoded.settings;
 
@@ -515,7 +502,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 						`Moved your ${migratedProviders.join(" and ")} API ${migratedProviders.length === 1 ? "key" : "keys"} into Obsidian SecretStorage.`,
 					);
 				}
-				if (movedFeeds) new Notice("Moved private feed URLs out of data.json.");
+				if (movedFeeds && feedProtection.failed.length === 0) {
+					new Notice("Moved private feed URLs out of data.json.");
+				}
 			}
 
 			this.feedUrls.sweepOrphans(data, settings);
@@ -583,7 +572,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	/** No save until `refusal` lifts, if it does, with a Notice saying why. */
 	private refuseSaves(
-		refusal: "unreadable-data-file" | "older-data-file" | "unprotected-private-feed",
+		refusal: "unreadable-data-file" | "older-data-file",
 		message: string,
 	): void {
 		// Closing refusals never lift; this one would.
@@ -650,11 +639,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				this.liftUnreadableRefusal();
 				// A private feed synced here raw is protected before it can be merged and written.
 				const protection = protectPrivateFeeds(decoded.settings, this.feedUrls);
-				if (protection.failed.length > 0) {
-					throw new Error(
-						`PodNotes could not move a private feed URL in ${path} into SecretStorage`,
-					);
-				}
 				const addresses = new Map([
 					...privateFeedAddresses(protection.settings.savedFeeds, this.feedUrls),
 					...privateFeedAddresses(this.settings.savedFeeds, this.feedUrls),

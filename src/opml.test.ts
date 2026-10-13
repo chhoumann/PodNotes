@@ -233,7 +233,7 @@ describe("importOPML (IE-01)", () => {
 
 		expect(channelAt).not.toHaveBeenCalled();
 		expect(get(savedFeeds)).toEqual({ Private: saved });
-		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcast"))).toBe(true);
 	});
 
 	it("skips a saved private feed listed by its real url with an uppercase host", async () => {
@@ -253,7 +253,7 @@ describe("importOPML (IE-01)", () => {
 
 		expect(channelAt).not.toHaveBeenCalled();
 		expect(get(savedFeeds)).toEqual({ Private: saved });
-		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Skipped 1 existing podcast"))).toBe(true);
 	});
 
 	it("sets the listed private URL under the reference of a saved private feed missing on this device", async () => {
@@ -352,7 +352,7 @@ describe("importOPML (IE-01)", () => {
 		// Nothing to fetch, so the 0/0 progress division must not surface as NaN.
 		expect(channelAt).not.toHaveBeenCalled();
 		expect(noticeMessages.some((m) => m.includes("NaN"))).toBe(false);
-		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Saved 0 podcasts"))).toBe(true);
 	});
 
 	it("reports the saved count, not the fetched count, on duplicate titles", async () => {
@@ -375,8 +375,8 @@ describe("importOPML (IE-01)", () => {
 		expect(channelAt).toHaveBeenCalledTimes(2);
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// Exactly one was written, so the summary must say "Saved 1", not "Saved 2".
-		expect(noticeMessages.some((m) => m.includes("Saved 1 new podcasts"))).toBe(true);
-		expect(noticeMessages.some((m) => m.includes("Saved 2 new podcasts"))).toBe(false);
+		expect(noticeMessages.some((m) => m.includes("Saved 1 podcast"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Saved 2 podcasts"))).toBe(false);
 		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
 			true,
 		);
@@ -409,7 +409,7 @@ describe("importOPML (IE-01)", () => {
 		expect(Object.keys(get(savedFeeds))).toEqual(["Same Title"]);
 		// The original feed must be preserved, not overwritten.
 		expect(get(savedFeeds)["Same Title"].url).toBe("https://old.test/feed");
-		expect(noticeMessages.some((m) => m.includes("Saved 0 new podcasts"))).toBe(true);
+		expect(noticeMessages.some((m) => m.includes("Saved 0 podcasts"))).toBe(true);
 		expect(noticeMessages.some((m) => m.includes("Skipped 1 with duplicate titles"))).toBe(
 			true,
 		);
@@ -443,8 +443,8 @@ describe("importOPML (IE-01)", () => {
 		expect(
 			noticeMessages.some(
 				(m) =>
-					m.includes("Saved 1 new podcasts") &&
-					m.includes("Skipped 1 existing podcasts") &&
+					m.includes("Saved 1 podcast") &&
+					m.includes("Skipped 1 existing podcast") &&
 					m.includes("Skipped 1 with duplicate titles"),
 			),
 		).toBe(true);

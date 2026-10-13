@@ -382,45 +382,60 @@ describe("PodNotes persistence integration", () => {
 		);
 	});
 
-	it("keeps data.json and every secret, and saves nothing, when a private feed URL cannot move", async () => {
-		const orphanId = "podnotes-feed-url-00000000-0000-4000-8000-000000000003";
-		const rawUrl = "https://private.example/feed.xml?auth=only-copy";
-		const values = new Map([[orphanId, "https://private.example/old.xml?auth=old"]]);
-		const storage = {
-			getSecret: vi.fn((id: string) => values.get(id) ?? null),
-			setSecret: vi.fn((id: string, value: string) => {
-				if (id.startsWith("podnotes-feed-url-") && value) throw new Error("locked");
-				values.set(id, value);
-			}),
-			listSecrets: vi.fn(() => [...values.keys()]),
-		} as unknown as SecretStorage;
-		const legacy = {
-			openAIApiKey: "sk-legacy",
-			savedFeeds: { Private: { title: "Private", url: rawUrl, artworkUrl: "" } },
-		};
-		const saveData = vi.fn().mockResolvedValue(undefined);
-		const plugin = makePlugin(saveData, { dataFileExists: true });
-		Object.assign(plugin, {
-			app: { ...plugin.app, secretStorage: storage },
-			credentials: new CredentialRepository(storage),
-			loadData: vi.fn().mockResolvedValue(structuredClone(legacy)),
-		});
-		const notice = vi.spyOn(obsidian, "Notice");
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
+	it.each(["throws", "drops the write"])(
+		"keeps saving with a session-only private feed when storage %s",
+		async (failure) => {
+			const rawUrl = "https://private.example/feed.xml?auth=SESSION_SENTINEL";
+			const { storage } = memorySecretStorage();
+			vi.mocked(storage.setSecret).mockImplementation(() => {
+				if (failure === "throws") throw new Error("locked");
+			});
+			const saveData = vi.fn().mockResolvedValue(undefined);
+			const plugin = makePlugin(saveData, { dataFileExists: true });
+			Object.assign(plugin, { app: { ...plugin.app, secretStorage: storage } });
+			const raw = {
+				...encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+				savedFeeds: { Private: { title: "Private", url: rawUrl, artworkUrl: "" } },
+			};
+			await plugin.saveData(raw);
+			saveData.mockClear();
+			const notice = vi.spyOn(obsidian, "Notice");
+			vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-		await plugin.loadSettings();
-		attachDataFileWriter(plugin);
-		plugin.settings.defaultVolume = 0.4;
+			await plugin.loadSettings();
+			attachDataFileWriter(plugin);
+			plugin.settings.defaultVolume = 0.4;
+			await plugin.saveSettingsStrict();
+			plugin.settings.skipForwardLength = 42;
+			await plugin.saveSettingsStrict();
 
-		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/private feed URL/);
-		expect(saveData).not.toHaveBeenCalled();
-		expect(values.get(orphanId)).toBe("https://private.example/old.xml?auth=old");
-		expect(resolveFeedUrl(plugin.settings.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
-		expect(notice).toHaveBeenCalledWith(
-			"PodNotes could not move the private feed URL for Private into SecretStorage, so it saves nothing until you restart Obsidian.",
-			0,
-		);
-	});
+			expect(resolveFeedUrl(plugin.settings.savedFeeds.Private, plugin.feedUrls)).toBe(
+				rawUrl,
+			);
+			const disk = await plugin.loadData();
+			expect(disk).toMatchObject({
+				defaultVolume: 0.4,
+				skipForwardLength: 42,
+				savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+			});
+			for (const [written] of saveData.mock.calls)
+				expect(JSON.stringify(written)).not.toContain("SESSION_SENTINEL");
+			expect(notice.mock.calls).toEqual([
+				["Could not store the private feed address on this device."],
+			]);
+
+			const restarted = makePlugin();
+			Object.assign(restarted, { app: { ...restarted.app, secretStorage: storage } });
+			await restarted.saveData(disk);
+			await restarted.loadSettings();
+			expect(restarted.settings.savedFeeds.Private).toEqual(
+				plugin.settings.savedFeeds.Private,
+			);
+			expect(
+				resolveFeedUrl(restarted.settings.savedFeeds.Private, restarted.feedUrls),
+			).toBeNull();
+		},
+	);
 
 	it("moves legacy API keys and private feed URLs out of data.json in one write", async () => {
 		const rawUrl = "https://private.example/feed.xml?auth=legacy";
@@ -474,7 +489,7 @@ describe("PodNotes persistence integration", () => {
 		expect(values.get("podnotes-openai-api-key")).toBe("sk-legacy");
 	});
 
-	it("never writes a private feed URL that arrives raw in a synced data.json it cannot protect", async () => {
+	it("saves other changes and a session-only reference when a synced private address cannot be stored", async () => {
 		const rawUrl = "https://private.example/feed.xml?auth=synced";
 		const values = new Map<string, string>();
 		let locked = false;
@@ -502,8 +517,13 @@ describe("PodNotes persistence integration", () => {
 
 		plugin.settings.defaultVolume = 0.4;
 
-		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/SecretStorage/);
-		expect(saveData).not.toHaveBeenCalled();
+		await plugin.saveSettingsStrict();
+		expect(await plugin.loadData()).toMatchObject({
+			defaultVolume: 0.4,
+			savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+		});
+		expect(resolveFeedUrl(plugin.settings.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
+		expect(JSON.stringify(saveData.mock.calls)).not.toContain(rawUrl);
 	});
 
 	it("names a renamed private feed's episodes by its saved key and leaves its URL nowhere", async () => {

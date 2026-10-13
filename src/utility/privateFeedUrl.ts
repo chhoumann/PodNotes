@@ -91,13 +91,36 @@ export function redactPrivateFeedAddresses<T>(
 		placeholders.set(canonical, kept);
 	};
 	for (const [url, placeholder] of known) add(url, placeholder);
+	const credentialed = new Map<string, boolean>();
 	visitRecords(document, ({ feedUrl, podcastName }) => {
-		if (typeof feedUrl !== "string" || !isCredentialBearingUrl(feedUrl)) return;
+		if (typeof feedUrl !== "string" || isPrivateFeedPlaceholder(feedUrl)) return;
+		let isPrivate = credentialed.get(feedUrl);
+		if (isPrivate === undefined) {
+			isPrivate = isCredentialBearingUrl(feedUrl);
+			credentialed.set(feedUrl, isPrivate);
+		}
+		if (!isPrivate) return;
 		add(feedUrl, privateFeedPlaceholder(typeof podcastName === "string" ? podcastName : ""));
 	});
 	if (placeholders.size === 0) return document;
-	const lookup = (address: string) => placeholders.get(canonicalUrl(address).split("#")[0]);
+	const hosts = [
+		...new Set([...placeholders.keys()].map((address) => new URL(address).hostname)),
+	];
+	// Encoded, numeric and non-ASCII authorities can normalize to a known host too.
+	const candidate = new RegExp(
+		hosts.map((host) => host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") +
+			String.raw`|https?:\/\/[^\s/?#]*[%\\\[\u0080-\uFFFF]|https?:\/\/(?:[^\s/?#@]*@)?[\d/\\]`,
+		"i",
+	);
+	const matches = new Map<string, string | undefined>();
+	const lookup = (address: string) => {
+		if (matches.has(address)) return matches.get(address);
+		const replacement = placeholders.get(canonicalUrl(address).split("#")[0]);
+		matches.set(address, replacement);
+		return replacement;
+	};
 	return replaceStrings(document, (value) => {
+		if (!value.includes("://") || !candidate.test(value)) return value;
 		if (/^https?:\/\/[^\s<>"'`]+$/i.test(value)) return lookup(value) ?? value;
 		return value.replace(/https?:\/\/[^\s<>"'`]+/gi, (address) => {
 			const whole = lookup(address);
@@ -118,26 +141,51 @@ function isPlainObjectOrArray(value: unknown): value is Record<string, unknown> 
 function visitRecords(value: unknown, visit: (record: Record<string, unknown>) => void): void {
 	if (!isPlainObjectOrArray(value)) return;
 	if (!Array.isArray(value)) visit(value);
-	for (const entry of Object.values(value)) visitRecords(entry, visit);
+	for (const key in value) {
+		if (Object.prototype.hasOwnProperty.call(value, key) && typeof value[key] === "object")
+			visitRecords(value[key], visit);
+	}
 }
 
 function replaceStrings<T>(value: T, replace: (value: string) => string): T {
 	if (typeof value === "string") return replace(value) as T;
 	if (!isPlainObjectOrArray(value)) return value;
-	let changed = false;
-	const keys = new Set<string>();
-	const entries = Object.entries(value).map(([key, entry]) => {
+	if (Array.isArray(value)) {
+		let copy: unknown[] | undefined;
+		for (let i = 0; i < value.length; i++) {
+			const replaced = replaceStrings(value[i], replace);
+			if (replaced !== value[i]) {
+				copy ??= value.slice();
+				copy[i] = replaced;
+			}
+		}
+		return (copy ?? value) as T;
+	}
+	let copy: Record<string, unknown> | undefined;
+	for (const key of Object.keys(value)) {
+		const entry = value[key];
 		const replacedKey = replace(key);
-		if (keys.has(replacedKey)) {
+		if (
+			replacedKey !== key &&
+			(Object.prototype.hasOwnProperty.call(value, replacedKey) ||
+				(copy && Object.prototype.hasOwnProperty.call(copy, replacedKey)))
+		) {
 			throw new Error("Private feed address protection would overwrite a saved field.");
 		}
-		keys.add(replacedKey);
 		const replaced = replaceStrings(entry, replace);
-		if (replacedKey !== key || replaced !== entry) changed = true;
-		return [replacedKey, replaced] as const;
-	});
-	if (!changed) return value;
-	if (Array.isArray(value)) return entries.map(([, entry]) => entry) as T;
-	// fromEntries defines each key as its own, so a key named __proto__ stays data.
-	return Object.setPrototypeOf(Object.fromEntries(entries), Object.getPrototypeOf(value)) as T;
+		if (replacedKey !== key || replaced !== entry) {
+			if (!copy) {
+				copy = { ...value };
+				Object.setPrototypeOf(copy, Object.getPrototypeOf(value));
+			}
+			if (replacedKey !== key) delete copy[key];
+			Object.defineProperty(copy, replacedKey, {
+				value: replaced,
+				enumerable: true,
+				configurable: true,
+				writable: true,
+			});
+		}
+	}
+	return (copy ?? value) as T;
 }

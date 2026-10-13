@@ -138,7 +138,7 @@ async function importOPML(opml: string): Promise<void> {
 		// were therefore silently dropped by the title-keyed store above.
 		const droppedDuplicateTitle = validPodcasts.length - savedCount - notStored.length;
 
-		let summary = `OPML import complete. Saved ${savedCount} new podcasts. Skipped ${skippedExisting} existing podcasts.`;
+		let summary = `OPML import complete. Saved ${savedCount} ${savedCount === 1 ? "podcast" : "podcasts"}. Skipped ${skippedExisting} existing ${skippedExisting === 1 ? "podcast" : "podcasts"}.`;
 		if (droppedDuplicateTitle > 0) {
 			summary += ` Skipped ${droppedDuplicateTitle} with duplicate titles.`;
 		}
