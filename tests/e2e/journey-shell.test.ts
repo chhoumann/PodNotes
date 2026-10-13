@@ -4,8 +4,10 @@ import {
 	click,
 	isShown,
 	listedEpisodes,
+	pageScrollTop,
 	pressEscape,
 	reloadObsidian,
+	scrollPage,
 	showLibrary,
 	showList,
 	showPodNotes,
@@ -38,10 +40,18 @@ const FEED: FixtureFeed = {
 	episodes: [LONG, OTHER],
 };
 
+/** Enough podcasts that the Library scrolls. */
+const SHELF: FixtureFeed[] = Array.from({ length: 11 }, (_, index) => ({
+	title: `Shell Shelf ${index + 1}`,
+	slug: `shelf-${index + 1}`,
+	artwork: true,
+	episodes: [{ title: `Shelf Listen ${index + 1}`, seconds: 5, pubDate: pubDate(2) }],
+}));
+
 const getContext = createPodNotesE2EHarness("journey-shell");
 
-async function serve(): Promise<FixtureServer> {
-	const server = await startFixtureServer([FEED]);
+async function serve(feeds: readonly FixtureFeed[] = [FEED]): Promise<FixtureServer> {
+	const server = await startFixtureServer(feeds);
 	onTestFinished(() => server.stop());
 	return server;
 }
@@ -92,7 +102,8 @@ describe("view shell journeys", () => {
 	test("audio keeps playing and the mini player keeps time while the user browses the pages", async () => {
 		const context = getContext();
 		const { obsidian } = context;
-		await seedLibrary(context, await serve(), { subscriptions: [FEED] });
+		const library = [FEED, ...SHELF];
+		await seedLibrary(context, await serve(library), { subscriptions: library });
 		await playFromList();
 		await click(obsidian, ui.collapsePlayer);
 		await waitUntilShown(obsidian, ui.miniPlayer);
@@ -103,6 +114,17 @@ describe("view shell journeys", () => {
 			await expectAdvancing(`on ${list}`);
 		}
 		await showLibrary(obsidian);
+		// To the bottom, where the last podcast shows whole and a click scrolls nothing.
+		const scrolled = await scrollPage(obsidian, 10_000);
+		await click(obsidian, ui.podcastCard(SHELF[SHELF.length - 1].title));
+		await waitUntilShown(obsidian, ui.backTo("Library"));
+		await expectAdvancing("on a podcast's page");
+		await click(obsidian, ui.backTo("Library"));
+		await waitUntilShown(obsidian, ui.libraryHead);
+		expect(await pageScrollTop(obsidian), "Back returns to where the Library was").toBe(
+			scrolled,
+		);
+
 		await click(obsidian, ui.podcastCard(FEED.title));
 		await expectAdvancing("on the podcast's page");
 

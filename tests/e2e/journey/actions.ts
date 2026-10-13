@@ -129,6 +129,7 @@ export const ui = {
 			`.modal.mod-settings button[aria-label=${q(`Remove ${title} podcast`)}]`,
 		),
 	podcastViewport: byCss("PodNotes view", PLAYER_VIEW),
+	pageScroller: byCss("page scroller", `${PLAYER_VIEW} .pn-scroll`),
 } as const;
 
 type Located =
@@ -224,6 +225,35 @@ export async function pressEscape(obsidian: ObsidianClient): Promise<void> {
 	const escape = { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 };
 	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...escape });
 	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...escape });
+}
+
+/** Where the page's scroller is scrolled to, in whole pixels. */
+export async function pageScrollTop(obsidian: ObsidianClient): Promise<number> {
+	return await obsidian.dev.evalJson<number>(
+		`Math.round(document.querySelector(${q(`${PLAYER_VIEW} .pn-scroll`)})?.scrollTop ?? -1)`,
+	);
+}
+
+/** Turns the mouse wheel over the page, as a user scrolls, and resolves to where it came to rest. */
+export async function scrollPage(obsidian: ObsidianClient, deltaY: number): Promise<number> {
+	const { x, y } = await settledPoint(obsidian, ui.pageScroller);
+	await cdp(obsidian, "Input.dispatchMouseEvent", {
+		type: "mouseWheel",
+		x,
+		y,
+		deltaX: 0,
+		deltaY,
+	});
+	let last = Number.NaN;
+	return await obsidian.waitFor(
+		async () => {
+			const top = await pageScrollTop(obsidian);
+			const settled = top > 0 && top === last;
+			last = top;
+			return settled ? top : false;
+		},
+		{ timeoutMs: 5_000, intervalMs: 150, message: "the page scrolled and came to rest" },
+	);
 }
 
 export async function isShown(obsidian: ObsidianClient, target: UiTarget): Promise<boolean> {
