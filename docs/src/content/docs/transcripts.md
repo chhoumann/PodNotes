@@ -9,7 +9,7 @@ Turn an episode into a transcript note. When you added the podcast and its feed 
 
 ## <span id="creating-a-transcript"></span>Transcribe an episode
 
-**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, when you added the podcast to PodNotes. For any other episode, and when the feed publishes none, it transcribes the audio with your provider and API key, and your provider bills you for it. On a device without the key your provider needs, the command never bills you. It saves only transcripts that feeds publish, and otherwise shows a notice that asks for a key.
+**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, when you added the podcast to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. On a device without the key your provider needs, the command never bills you. It saves only transcripts that feeds publish, and otherwise shows a notice that asks for a key.
 
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
@@ -20,7 +20,12 @@ A notice shows the progress, and you can keep listening. When the transcript is 
 
 ### Transcribe the audio instead
 
-To transcribe the audio even when the feed publishes a transcript, first rename, move, or delete any transcript note you saved for the episode, because PodNotes does not replace an existing transcript. Then run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key. A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:** with OpenAI or **1:** with Deepgram.
+To transcribe the audio even when the feed publishes a transcript:
+
+1. Rename, move, or delete any transcript note you saved for the episode. PodNotes does not replace an existing transcript.
+2. Run **PodNotes: Transcribe current episode from audio**.
+
+The command always uses your provider and your API key. A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:** with OpenAI or **1:** with Deepgram.
 
 ## Transcripts that feeds publish
 
