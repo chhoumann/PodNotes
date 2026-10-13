@@ -69,7 +69,8 @@ export default defineConfig(({ mode }) => {
 					cssHash: ({ hash, css }) => `pn-${hash(css)}`,
 				},
 			}),
-			svelteWithoutHydration(),
+			// Development builds keep their source maps, which this transform does not update.
+			isProd && svelteWithoutHydration(),
 			createBuildArtifactPlugin({ isProduction: isProd, outDir, rootDir }),
 		],
 		resolve: {
@@ -86,9 +87,10 @@ export default defineConfig(({ mode }) => {
 				formats: ["cjs"],
 				fileName: () => "main.js",
 			},
-			// Saving settings already needs structuredClone (Chromium 98, Safari 15.4), and
-			// every engine that has it also runs ES2022 syntax such as private methods.
-			target: "es2022",
+			// Saving settings needs structuredClone (Chromium 98), and the Obsidian iOS app
+			// needs iOS 15.6. Naming Safari 15 keeps class fields lowered, because it
+			// mis-scopes some field initializers (WebKit bug 236843); es2022 would not.
+			target: ["chrome98", "safari15.6"],
 			outDir,
 			emptyOutDir: true,
 			sourcemap: !isProd,
