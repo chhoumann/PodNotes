@@ -33,9 +33,10 @@ const ENDS_SENTENCE = /[.!?]["')\]]*$/;
  * Live Preview and Source mode take time superlinear in a line's escapes and
  * emphasis marks, and a note whose line takes minutes freezes Obsidian on every
  * launch that reopens it. A paragraph of real feed text stays under 1,900
- * characters, and a line of 4,000 escaped characters opens in under 0.7 s.
+ * characters. At 2,000, a note of 64,000 escaped `$`, the slowest escape, opens
+ * in Live Preview at 2560x1440 in about 1.4 s; at 4,000 it took over 4 s.
  */
-export const MAX_PARAGRAPH_LENGTH = 4000;
+export const MAX_PARAGRAPH_LENGTH = 2000;
 /** A speaker label repeats on each of its paragraphs. Real names stay under 20 characters. */
 const MAX_SPEAKER_LENGTH = 100;
 
