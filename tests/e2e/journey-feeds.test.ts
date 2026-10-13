@@ -13,7 +13,7 @@ import {
 	showList,
 	showPodNotes,
 } from "./journey/actions";
-import { chooseFile, click, typeInto, typeText } from "./journey/input";
+import { chooseFile, click, hover, typeInto, typeText } from "./journey/input";
 import { ui } from "./journey/targets";
 import {
 	eventually,
@@ -761,7 +761,7 @@ describe("feed journeys", () => {
 		expect(await eventually(obsidian, () => notices(obsidian), [])).toEqual([]);
 	});
 
-	test("J-FEED-05 Undo after removing a private podcast brings its address back from this device, and the address stays out of data.json and the page", async () => {
+	test("J-FEED-05 Undo after removing a private podcast brings its address back from this device, the address stays out of data.json and the page, and a reload ends the Undo", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
 		const sentinel = "UNDO_PRIVATE_SENTINEL";
@@ -837,6 +837,29 @@ describe("feed journeys", () => {
 				`document.documentElement.outerHTML.includes(${jsLiteral(sentinel)})`,
 			),
 		).toBe(false);
+
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(show.title), { button: "right" });
+		await click(obsidian, ui.menuItem("Remove podcast"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 0,
+			"the private podcast removed again",
+		);
+		// Obsidian keeps a notice up while the pointer rests on it, so only the unload can end it.
+		await hover(obsidian, ui.undo(`Removed ${show.title}`));
+		await plugin.reload(RELOAD_OPTIONS);
+
+		expect(
+			await eventually(
+				obsidian,
+				() => isShown(obsidian, ui.undo(`Removed ${show.title}`)),
+				false,
+			),
+			"the Undo offered before the reload",
+		).toBe(false);
+		expect(await secret()).toBe("");
+		expect((await readLibrary(plugin)).subscriptions).toEqual([]);
 	});
 
 	test("J-EDGE-03 offline with a cache older than its TTL still lists the podcast's episodes", async () => {

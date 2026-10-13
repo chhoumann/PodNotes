@@ -111,6 +111,14 @@ export async function pointOn(
 	return { x, y: part === "middle" ? y : y + (part === "top" ? -height / 4 : height / 4) };
 }
 
+/** Rests the mouse on `target`, as a user reading it does. */
+export async function hover(obsidian: ObsidianClient, target: UiTarget): Promise<void> {
+	await cdp(obsidian, "Input.dispatchMouseEvent", {
+		type: "mouseMoved",
+		...(await pointOn(obsidian, target)),
+	});
+}
+
 export type HeldMouse = Readonly<{
 	/** Moves the mouse in `steps` even steps, as a hand drags it. */
 	moveTo(to: Point, steps?: number): Promise<void>;
