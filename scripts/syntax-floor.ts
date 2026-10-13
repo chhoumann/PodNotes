@@ -10,8 +10,9 @@ const LOOKBEHIND = /\(\?<[=!]/;
  * regular expression lookbehind, which compilers cannot lower.
  */
 export function assertSupportedSyntax(fileName: string, code: string): void {
+	let ast: ReturnType<typeof parse>;
 	try {
-		parse(code, {
+		ast = parse(code, {
 			ecmaVersion: 2020,
 			sourceType: "script",
 			onToken(token) {
@@ -25,8 +26,26 @@ export function assertSupportedSyntax(fileName: string, code: string): void {
 		});
 	} catch (error) {
 		throw new Error(
-			`${fileName} uses syntax newer than ES2020 or Safari 15: ${(error as Error).message}`,
+			`${fileName} uses syntax newer than ES2020 or Safari 15: ${error instanceof Error ? error.message : String(error)}`,
 		);
+	}
+
+	const pending: unknown[] = [ast];
+	while (pending.length) {
+		const node = pending.pop();
+		if (typeof node !== "object" || node === null) continue;
+		if (
+			"type" in node &&
+			node.type === "TaggedTemplateExpression" &&
+			"start" in node &&
+			typeof node.start === "number"
+		) {
+			const offset = Buffer.byteLength(code.slice(0, node.start), "utf8");
+			throw new Error(
+				`${fileName} contains a tagged template at byte offset ${offset}: tagged templates disable Obsidian's eval cache for the whole plugin; use a plain string`,
+			);
+		}
+		pending.push(...Object.values(node));
 	}
 }
 
