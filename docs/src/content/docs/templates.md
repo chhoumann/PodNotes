@@ -130,7 +130,7 @@ favorite: false
 {{description}}
 ```
 
-PodNotes also adds the `guid` and `feedUrl` properties to a new episode note when the feed gives the episode an ID, so it finds the note after you rename or move it. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note).
+PodNotes also adds the `guid` and `feedUrl` properties to most new episode notes, so it finds a note after you rename or move it. [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note) lists the exceptions.
 
 Its properties work with Obsidian Bases. You fill in `status` and `rating`, and change `favorite` to `true` for the episodes you like. To build a table of episode notes, see [Browse your notes with Bases](/notes/#browse-your-notes-with-bases).
 

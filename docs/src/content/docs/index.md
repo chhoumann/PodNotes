@@ -48,4 +48,4 @@ hero:
 
 ## Free and open source
 
-PodNotes is MIT licensed, and your notes are Markdown files in your vault. [Read the FAQ](/faq/), [learn what syncs between devices](/sync/), or [report a problem on GitHub](https://github.com/chhoumann/PodNotes/issues).
+PodNotes is MIT licensed, and your notes are Markdown files in your vault. [Read the FAQ](/faq/), [learn what syncs between devices](/sync/), [fix save problems](/save-problems/), or [report a problem on GitHub](https://github.com/chhoumann/PodNotes/issues).

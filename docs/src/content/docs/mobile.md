@@ -4,7 +4,7 @@ slug: mobile
 description: Open the player, capture timestamps from the editor toolbar, control playback from a headset, and listen offline on iOS and Android.
 ---
 
-Listen and capture timestamps on your phone or tablet. You open the player yourself, and besides the command palette, you can capture from the editor toolbar.
+Listen and capture timestamps on your phone or tablet. You open the player yourself, and you capture from the command palette or from a button in the editor toolbar.
 To install PodNotes, follow [Install PodNotes](/getting-started/#install-podnotes). The steps are the same on a phone.
 
 ## <span id="enable-podnotes-and-open-the-player"></span>Open the player
@@ -57,7 +57,7 @@ Where your system passes them on, these controls work while an episode is loaded
 
 The lock screen and your system's media controls show the episode's title, the podcast's name, and the artwork. Which press sends which control depends on the headset. A triple press often sends previous track, and some headsets send none.
 
-A capture from a headset goes where a capture command goes. That is the note you are editing, else the last note you had in editing view if it is still open, else the end of the episode's note. See [Choose where a timestamp goes](/timestamps/#choose-where-a-timestamp-goes).
+A capture from a headset goes where a capture command goes. That is the note you are editing. Otherwise it is the last note you edited, if it is still open in editing view. Otherwise it is the end of the episode's note. See [Choose where a timestamp goes](/timestamps/#choose-where-a-timestamp-goes).
 
 ## Download an episode
 

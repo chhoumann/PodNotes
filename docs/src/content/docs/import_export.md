@@ -44,7 +44,7 @@ PodNotes saves the file in your vault and never overwrites an existing file. If 
 
 The import replaces your preferences, templates, saved podcasts, playlists, queue, and favorites. It adds the file's playback progress for episodes that this vault has not played, and keeps this vault's own progress, downloads, and local files.
 The current volume changes to the imported **Default Volume** at once. The imported **Default Playback Rate** applies when a different episode loads.
-If PodNotes cannot save the import, it keeps your previous settings and shows a notice. See [Fix save problems](/save-problems/#a-settings-import-or-an-api-key-fails-to-save).
+If PodNotes cannot save the import, a notice says which settings it kept, or asks you to change any setting to save again. See [Fix save problems](/save-problems/#failed-settings-imports-and-api-key-choices).
 
 Private feeds in the file work on a device that already has their addresses. On another device, set each address with **Set feed address**, or import an OPML file that lists the feeds. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
 

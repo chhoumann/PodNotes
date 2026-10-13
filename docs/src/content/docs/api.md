@@ -175,6 +175,6 @@ Setting the speed does not change **Default Playback Rate**. The speed lasts unt
 - `stop()` pauses the current episode and saves its position.
 - `togglePlayback()` switches between playing and paused.
 - `skipBackward()` and `skipForward()` move by **Skip backward length (s)** and **Skip forward length (s)**. An invalid length falls back to 15 seconds.
-- A backward skip stops at the start. A skip keeps the episode playing or paused. When the duration is known, a forward skip that would pass the end stops 0.25 seconds before it, so a playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
+- A backward skip stops at the start. A skip keeps the episode playing or paused. When the duration is known, a forward skip never passes the end. It stops 0.25 seconds before the end, or stays where it is when it is already closer. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
 - `increasePlaybackRate()` and `decreasePlaybackRate()` change the current speed by `0.1`, within `0.5` to `4`.
 - `resetPlaybackRate()` sets the current speed to **Default Playback Rate**.

@@ -53,7 +53,7 @@ Your notes and timestamp links stay. Links to a download stream the episode from
 
 When you move or rename a media file in Obsidian, PodNotes follows it in **Local Files**, the queue, **Favorites**, your playlists, and the player. It also follows the files of your downloads. The episode keeps its name in PodNotes, its position, and its note. A file that is playing keeps playing.
 
-Timestamp links in your notes keep the file's old path. After a move, such a link still plays the file if no other vault file has the same name. After a rename, capture the timestamp again.
+Timestamp links to a file you added yourself keep the file's old path. After a move, such a link still plays the file if no other vault file has the same name. After a rename, capture the timestamp again. Links to a download point at the feed episode, so they keep working.
 
 PodNotes does not see a move or a rename made while it is off or outside Obsidian. When a file is gone from its path, its episode shows "Could not load this episode's media." when you play it. To clear the entry, remove it as [Remove a download or a local file](#remove-a-download-or-a-local-file) describes.
 

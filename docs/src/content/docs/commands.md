@@ -52,7 +52,7 @@ Moves back by **Skip backward length (s)**, 15 seconds by default. It never move
 
 ## Skip Forward
 
-Moves forward by **Skip forward length (s)**, 15 seconds by default, and keeps the episode playing or paused. When the duration is known, a skip that would pass the end stops 0.25 seconds before it. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
+Moves forward by **Skip forward length (s)**, 15 seconds by default, and keeps the episode playing or paused. When the duration is known, a skip never passes the end. It stops 0.25 seconds before the end, or stays where it is when it is already closer. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
 
 ## Increase playback rate
 
@@ -95,7 +95,7 @@ The ID keeps the command's former name, Create Podcast Note. See [Create episode
 
 ## Create podcast feed note
 
-Opens a list of the podcasts you added, with the playing episode's podcast first. Creates a note for the podcast you select, or opens the note if it exists.
+Opens a list of the podcasts you added, with the loaded episode's podcast first. Creates a note for the podcast you select, or opens the note if it exists.
 No episode needs to be loaded. See [Create a feed note for a podcast](/notes/#create-a-feed-note-for-a-podcast).
 
 ## Copy universal episode link to clipboard

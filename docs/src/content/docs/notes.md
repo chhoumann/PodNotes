@@ -48,7 +48,7 @@ The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts
 
 After you edit the path, a preview shows the result for one of your episodes. [File path tags](/templates/#file-path-tags) lists every tag a path accepts.
 
-PodNotes finds a note that has the `guid` and `feedUrl` properties wherever it is. It finds other notes, including every note created before PodNotes 2.22.0, only at the new path or by their title in its folder, so move them to match. Otherwise PodNotes can create a second note for such an episode. See [How PodNotes finds a note](#how-podnotes-finds-a-note).
+PodNotes finds a note that has the `guid` and `feedUrl` properties wherever it is. It finds other notes, including every note created before PodNotes 2.22.0, only at the new path or by their title in that path's folder, so move them to match. Otherwise PodNotes can create a second note for such an episode. See [How PodNotes finds a note](#how-podnotes-finds-a-note).
 
 Feed notes and downloads have their own paths: **Feed note file path** under **Feed notes**, and **Episode download path** under **Downloads**.
 
@@ -123,9 +123,9 @@ When the feed gives an episode an ID, PodNotes adds two properties to the episod
 2. The note at the path that **Note creation file path** gives for the episode.
 3. The one note in that folder whose name matches the episode title.
 
-So a note with both properties keeps working after you rename it or move it to another folder. Notes created before PodNotes 2.22.0 do not have these properties, and PodNotes does not add them to existing notes. Keep such a note in the folder where PodNotes created it, with the episode's title as its name.
+So a note with both properties keeps working after you rename it or move it to another folder. If you used PodNotes before 2.22.0, your existing notes do not have these properties, and PodNotes does not add them. Keep such a note at the path that **Note creation file path** gives for the episode, or in that path's folder with the episode's title as its name. Otherwise PodNotes no longer finds it for the episode.
 
-PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. It adds neither property for a local file, when the feed gives the same ID to several episodes, when the template's properties are not valid YAML, or when the episode comes from a private feed that you have not added. For a private feed that you added, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. It adds neither property for a local file, for an episode whose ID the feed gives to several episodes, for a template whose properties PodNotes cannot extend, such as invalid YAML, or when the properties would show a private feed's address, as for a private feed that you have not added. For a private feed that you added, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
 
 ## Limits of note creation
 

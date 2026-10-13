@@ -12,18 +12,18 @@ Turn an episode into a transcript note. When the podcast's feed publishes a tran
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-PodNotes first looks for a transcript in the episode's feed. If it finds one, it saves that transcript. If not, it transcribes the audio with your API key, so [set up an OpenAI key](#set-up-an-openai-key) for those episodes.
+PodNotes first looks for a transcript in the episode's feed, if you added the podcast to PodNotes. If it finds one, it saves that transcript. If not, it transcribes the audio with your provider and API key, and your provider bills you for it. To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key), or a Deepgram key for [speaker labels](#add-speaker-labels) with Deepgram.
 
 A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
-To transcribe the audio even when the feed publishes a transcript, run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key. If you already saved a transcript of the episode, rename or move that note first, because PodNotes does not replace an existing transcript.
+To transcribe the audio even when the feed publishes a transcript, first rename or move any transcript note you saved for the episode, because PodNotes does not replace an existing transcript. Then run **PodNotes: Transcribe current episode from audio**. It always uses your provider and your API key.
 
 ## Transcripts that feeds publish
 
 Some feeds list a transcript for each episode with the Podcasting 2.0 `<podcast:transcript>` tag. PodNotes uses it when you added the podcast to PodNotes and the feed still lists the episode.
 
 - When an episode lists several transcripts, PodNotes picks WebVTT, then SRT, then JSON, then HTML, then plain text.
-- In a transcript with times, each paragraph starts with the time it begins. The time uses the time tag of **Capture timestamp format**. With the default format, `- {{linktime}} `, the time is a link that plays the episode from that moment. With `{{time}}`, it is plain text. PodNotes ignores the rest of the format, such as the `- ` list marker.
+- In a transcript with times, each paragraph starts with the time it begins. The time uses the time format in **Capture timestamp format**. With the default format, `- {{linktime}} `, the time is a link that plays the episode from that moment. With `{{time}}`, it is plain text. PodNotes ignores the rest of the format, such as the `- ` list marker.
 - When the transcript names its speakers, each speaker's turn starts with **Speaker label format**, even with **Speaker diarization** off.
 - A plain text transcript, or an HTML transcript without times, has paragraphs but no times.
 
@@ -35,7 +35,7 @@ With the default settings, a transcript with times and speakers looks like this:
 [00:00:41](obsidian://podnotes?...) **David:** It started with two founders and one store.
 ```
 
-A transcript of the audio has no times, so its lines do not link to their moment in the episode.
+A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:**.
 
 ## <span id="setting-up"></span>Set up an OpenAI key
 
@@ -96,7 +96,7 @@ These cases stop a transcription or change its result:
 - When PodNotes transcribes the audio and the provider's key is not on this device, a notice asks you to select or create it in the transcript settings.
 - When PodNotes cannot fetch or read the feed's transcript, a notice starts with "The published transcript could not be fetched" or "The published transcript could not be read." PodNotes does not transcribe the audio on its own. If your provider's key is on this device, the notice names **Transcribe current episode from audio**, which uses your API credit. To try the feed again, run **PodNotes: Transcribe current episode** again.
 - PodNotes waits 30 seconds for a feed's transcript and reads at most about 16 MB of it.
-- When a transcript note already exists at the path, a notice gives its path and PodNotes does nothing else. To transcribe again, delete the note first.
+- When a transcript note already exists at the path, a notice gives its path and PodNotes does nothing else. To transcribe again, rename, move, or delete the note first.
 - PodNotes sends long audio to OpenAI in parts of about 20 MB. In a transcript without speaker labels, a part that fails three times leaves the marker `[Error transcribing chunk N]`. With OpenAI speaker labels, the marker is `[Error diarizing chunk N]`. To retry, delete the note and run the command again. When every part fails, PodNotes saves no note.
 
 ## <span id="how-api-keys-are-stored"></span>API key storage
