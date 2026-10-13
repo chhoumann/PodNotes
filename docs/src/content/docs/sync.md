@@ -31,7 +31,7 @@ PodNotes merges the changes your devices make, so you can switch devices without
 5. If this device's player shows the episode at another time, move the progress bar to the time you noted. If it shows another episode, select your episode in its podcast's list instead. It plays from the synced time, so skip step 6.
 6. Play the episode.
 
-Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. If you move the restored episode's position before you play it, playback starts from that position instead of the synced one. Other episodes start at their synced position when you play them.
+Step 5 matters because a device that played the episode and still has it in its player keeps its own position for it. When that device saves, for example when you pause or switch apps, its older position replaces the progress from your other device. If you move the position of an episode that you have not played since Obsidian started, and then play it, it plays from that position instead of the synced one. Other episodes start at their synced position when you play them.
 
 ## Changes on two devices
 

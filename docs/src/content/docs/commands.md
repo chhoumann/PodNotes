@@ -77,7 +77,7 @@ If another episode's file already exists at that path, the download fails. See [
 
 ## Capture Timestamp
 
-Inserts a timestamp, formatted by **Capture timestamp format**, at the cursor of the note you are editing. With no note in editing view, it goes to the note you edited last, or else to the end of the episode's note. See [Choose where a timestamp goes](/timestamps/#choose-where-a-timestamp-goes).
+Inserts a timestamp, formatted by **Capture timestamp format**, at the cursor of the note you are editing. With no note in editing view, it goes to the note you edited last, if that note is still open in editing view, or else to the end of the episode's note. See [Choose where a timestamp goes](/timestamps/#choose-where-a-timestamp-goes).
 The default format is `- {{linktime}}` with a space at the end. It makes a list item with a timestamp link.
 Obsidian always lists the command, so you can add it to the mobile toolbar before you play anything. Without a loaded episode, it shows "Play an episode to capture". See [Capture timestamps](/timestamps/).
 
