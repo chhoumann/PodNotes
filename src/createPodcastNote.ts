@@ -108,7 +108,7 @@ export async function createPodcastNoteFileIfNotExists(
 				])
 			: content;
 
-	return { file: await createFileIfNotExists(filePathDotMd, identified), created: true };
+	return createFileIfNotExists(filePathDotMd, identified);
 }
 
 async function getTemplateChapters(
@@ -179,19 +179,22 @@ export function openPodcastNote(episode: Episode): void {
 	void get(plugin).app.workspace.getLeaf().openFile(file);
 }
 
-async function createFileIfNotExists(path: string, content: string): Promise<TFile> {
+async function createFileIfNotExists(
+	path: string,
+	content: string,
+): Promise<{ file: TFile; created: boolean }> {
 	const folderPath = path.split("/").slice(0, -1).join("/");
 	await ensureFolderExists(folderPath);
 
 	const { app } = get(plugin);
 	try {
-		return await app.vault.create(path, content);
+		return { file: await app.vault.create(path, content), created: true };
 	} catch (error) {
 		// A racing create may have won between the check and here; treat an
 		// already-existing file as success rather than surfacing an error.
 		const raced = app.vault.getAbstractFileByPath(path);
 		if (raced instanceof TFile) {
-			return raced;
+			return { file: raced, created: false };
 		}
 		throw error;
 	}

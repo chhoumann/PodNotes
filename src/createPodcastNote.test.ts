@@ -139,6 +139,55 @@ describe("createPodcastNote chapters template support (#47)", () => {
 	});
 });
 
+describe("a note another writer creates at the path first", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		plugin.set(undefined as never);
+	});
+
+	/** A vault where the note appears at its path just as PodNotes creates it there. */
+	function racedVault() {
+		let raced: TFile | null = null;
+		const leaf = { openFile: vi.fn() };
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === raced?.path ? raced : null,
+					),
+					createFolder: vi.fn(async () => {}),
+					create: vi.fn(async (path: string) => {
+						raced = Object.assign(Object.create(TFile.prototype), { path }) as TFile;
+						throw new Error("File already exists.");
+					}),
+				},
+				workspace: { getLeaf: vi.fn(() => leaf) },
+			},
+			settings: { note: { path: "PodNotes/{{title}}", template: "# {{title}}" } },
+		} as never);
+		return { leaf, raced: () => raced };
+	}
+
+	it("returns that note as not created", async () => {
+		const vault = racedVault();
+
+		const result = await createPodcastNoteFileIfNotExists(episode);
+
+		expect(result.file.path).toBe("PodNotes/Chaptered Episode.md");
+		expect(result).toEqual({ file: vault.raced(), created: false });
+	});
+
+	it("says the note already exists and opens it", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const vault = racedVault();
+
+		await createPodcastNote(episode);
+
+		expect(notice).toHaveBeenCalledWith('Note for "Chaptered Episode" already exists');
+		expect(vault.leaf.openFile).toHaveBeenCalledWith(vault.raced());
+	});
+});
+
 describe("getPodcastNote title fallbacks (#315)", () => {
 	const philosophizeEpisode: Episode = {
 		title: "Episode #001 ... Presocratic Philosophy - Ionian",
