@@ -755,7 +755,7 @@ describe("feed journeys", () => {
 		await click(obsidian, ui.undo(`Removed ${middle.title}`));
 
 		expect(await eventually(obsidian, () => shownPodcasts(obsidian), grid)).toEqual(grid);
-		const after = await savedFeeds();
+		const after = await eventually(obsidian, savedFeeds, before, 15_000);
 		expect(Object.keys(after)).toEqual(Object.keys(before));
 		expect(after).toEqual(before);
 		expect(await eventually(obsidian, () => notices(obsidian), [])).toEqual([]);
