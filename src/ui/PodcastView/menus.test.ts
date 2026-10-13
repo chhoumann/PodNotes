@@ -155,24 +155,6 @@ describe("an episode's menu", () => {
 		expect(titles(menu())).toContain("Remove from queue");
 	});
 
-	test("moves an episode in the queue only from a row of the queue", () => {
-		const second = { ...episode, title: "Second" };
-		queue.add(episode);
-		queue.add(second);
-
-		expect(titles(menu(second))).not.toContain("Move up in queue");
-		const fromQueue = menu(second, { place: "queue" });
-		expect(titles(fromQueue).slice(0, 5)).toEqual([
-			"Play",
-			"Remove from queue",
-			"---",
-			"Move to top of queue",
-			"Move up in queue",
-		]);
-		choose(fromQueue, "Move to top of queue");
-		expect(get(queue).episodes.map(({ title }) => title)).toEqual(["Second", "Episode"]);
-	});
-
 	test("in the full player offers neither Play nor Mark as played", () => {
 		expect(titles(menu(episode, { place: "player" }))).toEqual([
 			"Add to queue",

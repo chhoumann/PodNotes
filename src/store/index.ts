@@ -135,24 +135,32 @@ function markPlayedEpisodeAliasesAsUnplayed(
 	}
 }
 
-/**
- * Returns a new array with the episode at `from` moved to position `to`.
- *
- * Any out-of-range, negative, or equal index pair is treated as a no-op and the
- * original array reference is returned unchanged, so callers can cheaply detect
- * "nothing moved" and skip a store write. Guarding `from < 0` is essential: a
- * `findIndex` miss yields -1, and `splice(-1, 1)` would destructively remove the
- * last element.
- */
-export function reorderEpisodes(episodes: Episode[], from: number, to: number): Episode[] {
-	const length = episodes.length;
-	if (from < 0 || from >= length || to < 0 || to >= length || from === to) {
-		return episodes;
-	}
+/** Put `episode` right before or after `relativeTo`. Both are found by key when the move applies. */
+export interface QueuePlacement {
+	readonly episode: Episode;
+	readonly relativeTo: Episode;
+	readonly side: "before" | "after";
+}
 
-	const next = [...episodes];
-	const [moved] = next.splice(from, 1);
-	next.splice(to, 0, moved);
+/**
+ * The episodes with one moved beside another, keeping the stored objects. A move
+ * that changes nothing (either episode is missing, they are the same, or the
+ * episode is already there) returns `episodes` itself, so a caller can skip the write.
+ * Placing by entry, not by index, keeps a move right when the list changed since
+ * the gesture read it, and repeating it changes nothing.
+ */
+export function reorderEpisodes(
+	episodes: Episode[],
+	{ episode, relativeTo, side }: QueuePlacement,
+): Episode[] {
+	const from = episodes.findIndex((e) => isSameEpisode(e, episode));
+	const anchor = episodes.findIndex((e) => isSameEpisode(e, relativeTo));
+	const offset = side === "before" ? -1 : 1;
+	if (from < 0 || anchor < 0 || from === anchor || from === anchor + offset) return episodes;
+
+	const next = episodes.filter((_, index) => index !== from);
+	const at = next.findIndex((e) => isSameEpisode(e, relativeTo));
+	next.splice(side === "before" ? at : at + 1, 0, episodes[from]);
 	return next;
 }
 
@@ -176,8 +184,6 @@ export function dedupeEpisodesByKey(episodes: Episode[] = []): Episode[] {
 
 	return result;
 }
-
-export type QueueMove = "top" | "up" | "down" | "bottom";
 
 export const queue = (() => {
 	const store = writable<Playlist>({
@@ -228,16 +234,12 @@ export const queue = (() => {
 				return queue;
 			});
 		},
-		/** Finds the episode when the move applies, so a queue that changed since cannot move another. */
-		move: (episode: Episode, to: QueueMove) => {
+		/** Finds both episodes when the move applies, so a queue that changed since cannot move another. */
+		reorder: (move: QueuePlacement) => {
 			const { episodes } = get(store);
-			const from = episodes.findIndex((e) => isSameEpisode(e, episode));
-			const target = { top: 0, up: from - 1, down: from + 1, bottom: episodes.length - 1 }[
-				to
-			];
-			const reordered = reorderEpisodes(episodes, from, target);
+			const reordered = reorderEpisodes(episodes, move);
 
-			// No-op move: skip the store write so we don't churn saveSettings.
+			// An update that returns the same object still notifies, and saves.
 			if (reordered === episodes) return;
 
 			update((queue) => {

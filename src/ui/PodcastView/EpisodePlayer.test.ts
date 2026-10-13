@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { MenuItem } from "obsidian";
 import { tick } from "svelte";
 import { derived, get, readable, writable } from "svelte/store";
-import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "src/constants";
 import type { PlayerState } from "src/player/PlayerController";
 import { hidePlayedEpisodes, playedEpisodes, plugin, queue } from "src/store";
 import type { Episode } from "src/types/Episode";
-import { createTestServices, pluginLibrary } from "../../../tests/mocks/services";
+import { pluginLibrary } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
 import EpisodePlayer from "./EpisodePlayer.svelte";
 import { Navigation } from "./Navigation";
@@ -171,27 +170,6 @@ describe("EpisodePlayer", () => {
 
 		expect(screen.queryByText("Played Queued")).toBeNull();
 		expect(screen.getByText("New Queued")).toBeInTheDocument();
-	});
-
-	test("a queued episode's menu moves it up the queue", async () => {
-		const first = { ...episode, title: "First Queued" };
-		const second = { ...episode, title: "Second Queued" };
-		queue.set({ ...get(queue), episodes: [first, second] });
-		const { services, dispose } = createTestServices({ library: pluginLibrary });
-		onTestFinished(dispose);
-		services.player.play(episode);
-		const titles = vi.spyOn(MenuItem.prototype, "setTitle");
-		const clicks = vi.spyOn(MenuItem.prototype, "onClick");
-		render(WithServices, { props: { services, component: EpisodePlayer } });
-
-		await fireEvent.contextMenu(screen.getByText("Second Queued"));
-		const moveUp = titles.mock.calls.findIndex(([title]) => title === "Move up in queue");
-		(clicks.mock.calls[moveUp][0] as () => void)();
-
-		expect(get(queue).episodes.map(({ title }) => title)).toEqual([
-			"Second Queued",
-			"First Queued",
-		]);
 	});
 
 	test("an empty Queue follows queue automation as settings change or are imported (#108)", async () => {

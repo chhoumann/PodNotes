@@ -11,8 +11,6 @@ import {
 } from "obsidian";
 import type PodNotes from "../../main";
 import { pickFile } from "../pickFile";
-import PlaylistManager from "./PlaylistManager.svelte";
-import { mount, unmount } from "svelte";
 import {
 	DownloadPathTemplateEngine,
 	FeedFilePathTemplateEngine,
@@ -64,7 +62,6 @@ interface SecretReferenceSaveResult {
 type ImportMutationResult = "failed" | "applied" | "complete";
 
 const SETTINGS_SEARCH_ALIASES = [
-	"Playlists",
 	"Keep a queue",
 	"Latest episodes per podcast",
 	"Default playback rate",
@@ -227,7 +224,6 @@ function renderMarkdownPreview(app: App, markdown: string, el: HTMLElement): voi
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
-	private playlistManager: Record<string, unknown> | null = null;
 	private settingsMutationTail: Promise<void> = Promise.resolve();
 	private credentialSaveGenerations: Record<SecretReferenceKey, number> = {
 		openAISecretId: 0,
@@ -251,28 +247,16 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					settingEl.empty();
 					settingEl.classList.remove("setting-item");
 					this.renderSettings(settingEl);
-					return () => this.unmountSettingsComponents();
 				},
 			},
 		];
 	}
 
 	private renderSettings(containerEl: HTMLElement): void {
-		this.unmountSettingsComponents();
 		containerEl.empty();
 
 		const settingsContainer = containerEl.createDiv();
 		settingsContainer.classList.add("settings-container");
-
-		new Setting(settingsContainer)
-			.setName("Playlists")
-			.setHeading()
-			.setDesc("Add playlists to gather podcast episodes.");
-
-		const playlistManagerContainer = settingsContainer.createDiv();
-		this.playlistManager = mount(PlaylistManager, {
-			target: playlistManagerContainer,
-		});
 
 		this.addQueueSettings(settingsContainer);
 		this.addEpisodeListSettings(settingsContainer);
@@ -285,17 +269,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		this.addPerformanceSettings(settingsContainer);
 		this.addImportExportSettings(settingsContainer);
 		this.addTranscriptSettings(settingsContainer);
-	}
-
-	override hide(): void {
-		this.unmountSettingsComponents();
-	}
-
-	private unmountSettingsComponents(): void {
-		if (this.playlistManager) {
-			void unmount(this.playlistManager);
-			this.playlistManager = null;
-		}
 	}
 
 	private addQueueSettings(container: HTMLElement): void {

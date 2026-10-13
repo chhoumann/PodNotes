@@ -15,7 +15,6 @@ import { isLocalFile } from "src/utility/isLocalFile";
 import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
 import { isCurrentEpisode } from "./episodeRow";
-import { buildQueueReorderMenuItems } from "./queueReorderMenu";
 
 /** A menu item, or a separator. Menus are built as data, so tests read them as data. */
 export type MenuEntry =
@@ -78,7 +77,8 @@ export function openEpisode(
 }
 
 export interface EpisodeMenuOptions {
-	readonly place: "list" | "queue" | "player";
+	/** player: the full player's own episode, which has no Play. */
+	readonly place: "list" | "player";
 	readonly at: MenuAnchor;
 	/** False for a Played record whose episode left every feed. */
 	readonly available?: boolean;
@@ -105,8 +105,7 @@ export function episodeMenu(
 	);
 	if (!available) return [markPlayed];
 
-	const queue = get(library.queue).episodes;
-	const queued = queue.some((entry) => isSameEpisode(entry, episode));
+	const queued = get(library.queue).episodes.some((entry) => isSameEpisode(entry, episode));
 	const favorite = get(library.favorites).episodes.some((entry) =>
 		isSameStoredEpisode(entry, episode),
 	);
@@ -129,15 +128,6 @@ export function episodeMenu(
 			actions.setQueued(episode, !queued),
 		),
 	);
-	const moves = buildQueueReorderMenuItems(place === "queue", queue, episode);
-	if (moves.length > 0) {
-		entries.push(
-			"separator",
-			...moves.map(({ title, icon, kind }) =>
-				item(title, icon, () => actions.moveInQueue(episode, kind)),
-			),
-		);
-	}
 	entries.push(
 		"separator",
 		services.hasNote(episode)

@@ -575,3 +575,21 @@ describe("Create episode note", () => {
 		expect(command(commands)(true)).toBe(false);
 	});
 });
+
+describe("Reorder Queue", () => {
+	it("reveals the view, then opens the Queue page, with any queue", async () => {
+		const { plugin, commands, run } = await loadPlugin({ schemaVersion: 2 });
+		const order: string[] = [];
+		vi.spyOn(plugin, "activateView").mockImplementation(async () => {
+			order.push(`reveal on ${plugin.navigation.current.page.kind}`);
+		});
+		plugin.navigation.replace({ kind: "playlists" });
+
+		// A check would hide it from the palette while the queue is short.
+		expect(commands.find(({ id }) => id === "reorder-queue")?.checkCallback).toBeUndefined();
+		await run("reorder-queue");
+
+		expect(order).toEqual(["reveal on playlists"]);
+		expect(plugin.navigation.current.page).toEqual({ kind: "queue" });
+	});
+});

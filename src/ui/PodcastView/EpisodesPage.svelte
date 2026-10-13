@@ -188,7 +188,7 @@
 				onmenu={(at) =>
 					showMenu(
 						episodeMenu(episode, services, {
-							place: page.kind === "queue" ? "queue" : "list",
+							place: "list",
 							at,
 							available: isAvailable,
 							playedKey: entry.playedEpisodeKey,

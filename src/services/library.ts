@@ -1,9 +1,16 @@
 import { Notice, type App } from "obsidian";
 import { get } from "svelte/store";
-import { favorites, playedEpisodes, playlists, queue, savedFeeds, type QueueMove } from "src/store";
+import {
+	favorites,
+	playedEpisodes,
+	playlists,
+	queue,
+	savedFeeds,
+	type QueuePlacement,
+} from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
-import { askFeedAddress } from "src/ui/settings/FeedAddressModal";
+import { askText } from "src/ui/TextPrompt";
 import checkStringIsUrl from "src/utility/checkStringIsUrl";
 import { isSameStoredEpisode } from "src/utility/episodeKey";
 import { ownRecord } from "src/utility/ownRecord";
@@ -32,7 +39,8 @@ export interface LibraryActions {
 	/** Asks for a saved private feed's address, checks that it loads, and keeps it on this device. */
 	setFeedAddress(key: FeedKey): Promise<void>;
 	setQueued(episode: Episode, queued: boolean): void;
-	moveInQueue(episode: Episode, to: QueueMove): void;
+	/** Components may not import the queue store, so a gesture reorders it here. */
+	reorderQueue(move: QueuePlacement): void;
 	setFavorite(episode: Episode, favorite: boolean): void;
 	setInPlaylist(name: string, episode: Episode, member: boolean): void;
 	/** `playedKey` names a Played record stored under another key than the episode's. */
@@ -113,8 +121,12 @@ export function createLibraryActions({
 		async setFeedAddress(key) {
 			const feed = ownRecord(get(savedFeeds))[key];
 			if (!feed) return;
-			const entered = (await askFeedAddress(app, feed.title))?.trim();
-			if (!entered) return;
+			const entered = await askText(app, {
+				title: feed.title,
+				label: "Feed address",
+				cta: "Save",
+			});
+			if (entered === null) return;
 			const url = checkStringIsUrl(entered);
 			if (url?.protocol !== "http:" && url?.protocol !== "https:") {
 				new Notice("Enter the feed's http or https address.");
@@ -144,7 +156,7 @@ export function createLibraryActions({
 		},
 
 		setQueued: (episode, queued) => (queued ? queue.add(episode) : queue.remove(episode)),
-		moveInQueue: (episode, to) => queue.move(episode, to),
+		reorderQueue: (move) => queue.reorder(move),
 		setFavorite: (episode, favorite) =>
 			favorites.update((list) => ({
 				...list,
