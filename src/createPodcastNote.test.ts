@@ -320,3 +320,153 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 		expect(getPodcastNote(hubermanEpisode)).toBeNull();
 	});
 });
+
+describe("episode notes identified by guid (#349)", () => {
+	const feedUrl = "https://example.com/feed.xml";
+	const identified: Episode = {
+		title: "Season Finale",
+		streamUrl: "https://example.com/finale.mp3",
+		url: "https://example.com/finale",
+		description: "",
+		content: "",
+		podcastName: "The Show",
+		feedUrl,
+		guid: "finale-1",
+	};
+
+	afterEach(() => {
+		plugin.set(undefined as never);
+	});
+
+	interface Note {
+		path: string;
+		frontmatter?: Record<string, unknown>;
+	}
+
+	/** A vault holding `notes`, all in "podcasts", whose metadata cache knows their frontmatter. */
+	function vaultWith(notes: Note[], template = "# {{title}}") {
+		const files = notes.map(({ path }) =>
+			Object.assign(Object.create(TFile.prototype), { path, extension: "md" }),
+		) as TFile[];
+		const folder = Object.assign(Object.create(TFolder.prototype), {
+			path: "podcasts",
+			children: files,
+		}) as TFolder;
+		const created: Array<{ path: string; data: string }> = [];
+		plugin.set({
+			app: {
+				vault: {
+					getAbstractFileByPath: vi.fn((path: string) =>
+						path === "podcasts"
+							? folder
+							: (files.find((file) => file.path === path) ?? null),
+					),
+					getMarkdownFiles: () => files,
+					createFolder: vi.fn(async () => {}),
+					create: vi.fn(async (path: string, data: string) => {
+						created.push({ path, data });
+						return { path };
+					}),
+				},
+				metadataCache: {
+					getFileCache: (file: TFile) => ({
+						frontmatter: notes.find((note) => note.path === file.path)?.frontmatter,
+					}),
+				},
+				workspace: { getLeaf: vi.fn(() => ({ openFile: vi.fn() })) },
+			},
+			settings: { note: { path: "podcasts/{{title}}", template } },
+		} as never);
+		return { files, created };
+	}
+
+	it("adds quoted guid and feedUrl lines to the template's frontmatter", async () => {
+		const { created } = vaultWith([], '---\ntitle: "{{title}}"\n---\n# {{title}}');
+
+		await createPodcastNote(identified);
+
+		expect(created).toEqual([
+			{
+				path: "podcasts/Season Finale.md",
+				data: `---\ntitle: "Season Finale"\nguid: "finale-1"\nfeedUrl: "${feedUrl}"\n---\n# Season Finale`,
+			},
+		]);
+	});
+
+	it("adds a frontmatter block to a template without one", async () => {
+		const { created } = vaultWith([]);
+
+		await createPodcastNote(identified);
+
+		expect(created[0].data).toBe(
+			`---\nguid: "finale-1"\nfeedUrl: "${feedUrl}"\n---\n# Season Finale`,
+		);
+	});
+
+	it("does not repeat a feedUrl the template already renders", async () => {
+		const { created } = vaultWith([], '---\nfeedUrl: "{{feedurl}}"\n---\n');
+
+		await createPodcastNote(identified);
+
+		expect(created[0].data).toBe(`---\nfeedUrl: "${feedUrl}"\nguid: "finale-1"\n---\n`);
+	});
+
+	it("adds nothing for an episode without a guid", async () => {
+		const { created } = vaultWith([], '---\ntitle: "{{title}}"\n---\n');
+
+		await createPodcastNote({ ...identified, guid: undefined });
+
+		expect(created[0].data).toBe('---\ntitle: "Season Finale"\n---\n');
+	});
+
+	it("writes a guid with quotes, colons, newlines and control characters as an escaped string", async () => {
+		const guid = 'tag: "a"\nb\\c\u007f\u0085\ufffe 123';
+		const { created } = vaultWith([]);
+
+		await createPodcastNote({ ...identified, guid });
+
+		const line = created[0].data.split("\n")[1];
+		expect(line).toBe(String.raw`guid: "tag: \"a\"\nb\\c\u007f\u0085\ufffe 123"`);
+		expect(JSON.parse(line.slice("guid: ".length))).toBe(guid);
+	});
+
+	it("finds a retitled episode's note by its guid", async () => {
+		const { files, created } = vaultWith([
+			{ path: "podcasts/Old Title.md", frontmatter: { guid: "finale-1", feedUrl } },
+		]);
+
+		expect(getPodcastNote(identified)).toBe(files[0]);
+
+		await createPodcastNote(identified);
+		expect(created).toEqual([]);
+	});
+
+	it("prefers the note with the episode's guid over another episode's note at its path", () => {
+		const { files } = vaultWith([
+			{ path: "podcasts/Season Finale.md", frontmatter: { guid: "finale-0", feedUrl } },
+			{ path: "podcasts/Season Finale 2.md", frontmatter: { guid: "finale-1", feedUrl } },
+		]);
+
+		expect(getPodcastNote(identified)).toBe(files[1]);
+	});
+
+	it("falls back to the title when two notes have the episode's guid", () => {
+		const { files } = vaultWith([
+			{ path: "podcasts/Old Title.md", frontmatter: { guid: "finale-1", feedUrl } },
+			{ path: "podcasts/Season Finale.md", frontmatter: { guid: "finale-1", feedUrl } },
+		]);
+
+		expect(getPodcastNote(identified)).toBe(files[1]);
+	});
+
+	it("ignores a note with the episode's guid from another feed", () => {
+		vaultWith([
+			{
+				path: "podcasts/Old Title.md",
+				frontmatter: { guid: "finale-1", feedUrl: "https://other.example.com/feed.xml" },
+			},
+		]);
+
+		expect(getPodcastNote(identified)).toBeNull();
+	});
+});

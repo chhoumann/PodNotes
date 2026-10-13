@@ -14,6 +14,8 @@ import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
 import { fetchChapters } from "./utility/fetchChapters";
 import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
+import { findByGuid } from "./utility/findByGuid";
+import { addFrontmatterFields } from "./utility/noteFrontmatter";
 
 /**
  * Resolve the on-disk path of an episode's note from the configured template.
@@ -94,8 +96,15 @@ export async function createPodcastNoteFileIfNotExists(episode: Episode): Promis
 	const template = pluginInstance.settings.note.template;
 	const chapters = await getTemplateChapters(template, episode);
 	const content = NoteTemplateEngine(template, episode, { chapters });
+	const identified =
+		episode.guid && episode.feedUrl
+			? addFrontmatterFields(content, [
+					["guid", episode.guid],
+					["feedUrl", episode.feedUrl],
+				])
+			: content;
 
-	return await createFileIfNotExists(filePathDotMd, content, episode);
+	return await createFileIfNotExists(filePathDotMd, identified, episode);
 }
 
 async function getTemplateChapters(
@@ -112,6 +121,9 @@ async function getTemplateChapters(
 export function getPodcastNote(episode: Episode): TFile | null {
 	const { vault } = get(plugin).app;
 
+	const identified = findPodcastNoteByGuid(episode);
+	if (identified) return identified;
+
 	for (const filePath of getPodcastNotePathCandidates(episode)) {
 		const file = vault.getAbstractFileByPath(filePath);
 		if (file instanceof TFile) {
@@ -120,6 +132,16 @@ export function getPodcastNote(episode: Episode): TFile | null {
 	}
 
 	return findPodcastNoteByTitleOverlap(episode);
+}
+
+function findPodcastNoteByGuid({ guid, feedUrl }: Episode): TFile | undefined {
+	if (!guid || !feedUrl) return undefined;
+	const { vault, metadataCache } = get(plugin).app;
+	const notes = vault.getMarkdownFiles().flatMap((file) => {
+		const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
+		return frontmatter?.feedUrl === feedUrl ? [{ file, guid: frontmatter.guid }] : [];
+	});
+	return findByGuid(notes, guid)?.file;
 }
 
 function findPodcastNoteByTitleOverlap(episode: Episode): TFile | null {
@@ -140,11 +162,11 @@ function findPodcastNoteByTitleOverlap(episode: Episode): TFile | null {
 	);
 }
 
-export function openPodcastNote(epiosode: Episode): void {
-	const file = getPodcastNote(epiosode);
+export function openPodcastNote(episode: Episode): void {
+	const file = getPodcastNote(episode);
 
 	if (!file) {
-		new Notice(`Note for "${epiosode.title}" does not exist`);
+		new Notice(`Note for "${episode.title}" does not exist`);
 		return;
 	}
 
