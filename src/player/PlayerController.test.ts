@@ -897,7 +897,7 @@ describe("relocate", () => {
 		reach(media(), 42);
 		queue.set({ ...get(queue), episodes: [B] });
 
-		player.relocate("A/Clip.mp3", moved);
+		player.relocate("A/Clip.mp3", "B/Clip.mp3", moved);
 
 		expect(media().src).toBe("app://resource/B/Clip.mp3");
 		expect(state()).toMatchObject({ status: "loading", episode: NEW, currentTime: 42 });
@@ -917,7 +917,7 @@ describe("relocate", () => {
 		reach(media(), 42);
 		player.pause();
 
-		player.relocate("A/Clip.mp3", moved);
+		player.relocate("A/Clip.mp3", "B/Clip.mp3", moved);
 		metadata(media());
 
 		expect(media().src).toBe("app://resource/B/Clip.mp3");
@@ -934,7 +934,7 @@ describe("relocate", () => {
 		pausedByBrowser(media());
 		media().emit("ended");
 
-		player.relocate("A/Clip.mp3", moved);
+		player.relocate("A/Clip.mp3", "B/Clip.mp3", moved);
 
 		expect(state()).toMatchObject({ status: "ended", episode: NEW });
 		expect(media().src).toBe("");
@@ -955,7 +955,7 @@ describe("relocate", () => {
 		expect(media().src).toBe("app://resource/Downloads/A.mp3");
 
 		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Archive/A.mp3", size: 1 }] });
-		player.relocate("Downloads/A.mp3", (ep) => ep);
+		player.relocate("Downloads/A.mp3", "Archive/A.mp3", (ep) => ep);
 
 		expect(media().src).toBe("app://resource/Archive/A.mp3");
 		expect(state()).toMatchObject({ status: "loading", episode: A, currentTime: 42 });
@@ -974,7 +974,7 @@ describe("relocate", () => {
 		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Downloads/A.mp3", size: 1 }] });
 
 		downloadedEpisodes.set({ Show: [{ ...A, filePath: "Archive/A.mp3", size: 1 }] });
-		player.relocate("Downloads/A.mp3", (ep) => ep);
+		player.relocate("Downloads/A.mp3", "Archive/A.mp3", (ep) => ep);
 
 		expect(state()).toBe(before);
 		expect(media().src).toBe(A.streamUrl);
@@ -989,7 +989,7 @@ describe("relocate", () => {
 		reach(media(), 42);
 		const before = state();
 
-		player.relocate("A/Clip.mp3", moved);
+		player.relocate("A/Clip.mp3", "B/Clip.mp3", moved);
 
 		expect(state()).toBe(before);
 		expect(media().src).toBe(A.streamUrl);

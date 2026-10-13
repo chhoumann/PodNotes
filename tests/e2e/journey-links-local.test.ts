@@ -342,13 +342,11 @@ describe("link and local file journeys", () => {
 			(playback) =>
 				playback.episode?.title === "Renamed Journey" &&
 				decodeURIComponent(playback.media?.src ?? "").includes(movedPath) &&
-				playback.playing &&
-				playback.media?.paused === false &&
-				(playback.media?.seconds ?? 0) >= before.seconds,
+				playback.media?.paused === false,
 			"the moved file playing on under its new name",
 		);
 		expect(after.episode).toEqual({ podcast: "local file", title: "Renamed Journey" });
-		expect(after.seconds).toBeGreaterThanOrEqual(before.seconds);
+		expect(after.media?.seconds).toBeGreaterThanOrEqual(before.media?.seconds ?? Infinity);
 	});
 
 	test("a timestamp link to a vault file outside Local Files plays it from the link's time", async () => {

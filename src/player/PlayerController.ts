@@ -6,6 +6,7 @@ import type { Episode, EpisodeMediaType } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
+import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
 import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
@@ -137,12 +138,12 @@ export class PlayerController {
 	}
 
 	/**
-	 * Follows a vault file that moved away from `from`: shows the episode `moved` maps
-	 * the shown one to, and media loaded from that file reloads from where it is now,
-	 * with the same status, position and speed. A finished episode's session ends. Not
+	 * Follows a vault file that moved from `from` to `to`: shows the episode `moved` maps
+	 * the shown one to, and media loaded from that file reloads from `to`, with the same
+	 * status, position and speed. A finished episode's session ends. Not
 	 * an intent: nothing is selected, queued or saved, and a deferred play stays valid.
 	 */
-	relocate(from: string, moved: (episode: Episode) => Episode): void {
+	relocate(from: string, to: string, moved: (episode: Episode) => Episode): void {
 		const shown = this.snapshot.episode;
 		if (this.disposed || !shown) return;
 		const episode = moved(shown);
@@ -152,9 +153,8 @@ export class PlayerController {
 			this.holdsMedia() ? { episode, currentTime: this.el.currentTime } : { episode },
 		);
 		if (!session) return;
-		const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
-		session.src = source.src;
-		session.filePath = source.filePath;
+		session.src = createMediaUrlObjectFromFilePath(this.plugin.app.vault, to);
+		session.filePath = to;
 		this.el.setAttribute("aria-label", episode.title);
 		this.el.src = session.src;
 		// The element reports "emptied" only later, so the next intent would act on stale state.

@@ -8,7 +8,7 @@ import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { Episode } from "./types/Episode";
 import type { Playlist } from "./types/Playlist";
 import { getEpisodeKey } from "./utility/episodeKey";
-import { getPlayedEpisodeAliasKeys } from "./utility/episodeStatus";
+import { podcastNamesAgree } from "./utility/episodeStatus";
 import { isLocalFile } from "./utility/isLocalFile";
 import { localEpisodeFromFile } from "./utility/localEpisodeFromFile";
 import { getEpisodeMediaType } from "./utility/mediaType";
@@ -85,7 +85,7 @@ function followRename(plugin: PodNotes, file: TFile, oldPath: string): void {
 	const nextCurrent = current && moved(current);
 	if (nextCurrent !== current) writePlayerSettings(plugin, { currentEpisode: nextCurrent });
 
-	plugin.player.relocate(oldPath, moved);
+	plugin.player.relocate(oldPath, file.path, moved);
 
 	const [before] = localBefore;
 	if (before && before.title !== file.basename) moveProgress(before, file.basename);
@@ -96,8 +96,11 @@ function moveProgress(episode: Episode, title: string): void {
 	const record = playedEpisodes.get(episode);
 	if (!record) return;
 	playedEpisodes.update((played) => {
-		for (const key of getPlayedEpisodeAliasKeys(played, episode, getEpisodeKey(episode))) {
-			delete played[key];
+		// The keys playedEpisodes.get reads: the episode's own, then a legacy title-only one.
+		delete played[getEpisodeKey(episode)];
+		const legacy = played[episode.title];
+		if (legacy && podcastNamesAgree(legacy.podcastName, episode.podcastName)) {
+			delete played[episode.title];
 		}
 		played[getEpisodeKey({ ...episode, title })] = {
 			...record,
