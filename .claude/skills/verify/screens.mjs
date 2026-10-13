@@ -8,7 +8,7 @@
 //   node .claude/skills/verify/screens.mjs go '<page JSON>'     e.g. '{"kind":"feed","key":"Field Notes"}'
 //   node .claude/skills/verify/screens.mjs offline <on|off>
 //   node .claude/skills/verify/screens.mjs shot <file.png>
-//   node .claude/skills/verify/screens.mjs set <state|all> <label> [--widths sidebar,pane,phone] [--themes light,dark]
+//   node .claude/skills/verify/screens.mjs set <state|player|all> <label> [--widths sidebar,pane,phone] [--themes light,dark]
 //
 // place   sidebar: the view in the right sidebar, 320 x 720. pane: the view in the
 //         main area, 820 x 680, both sidebars collapsed. phone: mobile emulation on a
@@ -16,11 +16,12 @@
 //         exactly that. Any other place leaves the phone for the desktop.
 // seed    empty is a first run. library has the fixture library's eight podcasts (one
 //         feed answers 404), a queue of four, a playlist and some played episodes;
-//         episodes is the same vault. lists adds Favorites, three more playlists and
-//         a loaded, paused episode. local adds four media files in vault folders,
-//         registered as local files; offline adds four downloaded episodes instead.
-//         It rewrites data.json while PodNotes is disabled and clears its feed
-//         cache, as a user would have it after earlier use.
+//         episodes is the same vault. lists adds Favorites, three more playlists, a
+//         1.25x speed and a loaded, paused episode. local adds four media files in vault
+//         folders, registered as local files; offline adds four downloaded episodes
+//         instead. It rewrites data.json while PodNotes is disabled, deletes the episode
+//         notes under PodNotes/ and clears its feed cache, as a user would have it after
+//         earlier use.
 // offline on: the renderer goes offline through CDP, so navigator.onLine is false
 //         and the window fires `offline`, and the fixture server stops, so feed
 //         requests fail too: Obsidian sends them from its main process, which CDP
@@ -33,10 +34,19 @@
 //         Then <state>-sheet.png has a row per width: light, then dark, each shot
 //         followed by the prototype's screen when the design folder has one.
 //         States: first-run, add-podcast, library, episodes, error-feed, queue,
-//         playlists, playlist, latest, played, local-files, offline, status-bar.
+//         playlists, playlist, latest, played, local-files, offline, status-bar, and the
+//         player's: now-playing, mini-player, capture, chapters, up-next, up-next-empty,
+//         no-chapters, video, local-player, media-error. player runs the player's states
+//         and all runs every state; both go on past a failed state and fail at the end.
 //         status-bar is the queue with the mini player and a "9 properties" item in
 //         Obsidian's status bar, which that state's shots keep. It has no phone shot:
 //         Obsidian hides the status bar on mobile.
+//         A player state plays the scene's current episode until its media loads, then
+//         pauses it at a fixed second, and opens the full player over the Library;
+//         mini-player stays on the podcast's page. media-error waits for the load to
+//         fail instead. capture, chapters, up-next and up-next-empty then press the full
+//         player's Timestamp, Chapters or Up next button with real input, so they fail
+//         at once on a full player without a button that reads exactly that.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -78,7 +88,40 @@ const CURRENT_THEME = `(document.body.classList.contains("theme-dark") ? "dark" 
  * @typedef {(data: Data, library: Library) => void | Promise<void>} Ingredient
  */
 
-/** @type {Record<string, { scene: string, page: (library: Library) => Page, text?: (library: Library) => string, paste?: boolean, offline?: boolean, statusBar?: boolean }>} */
+/**
+ * @typedef {object} Recipe
+ * @property {string} scene
+ * @property {Ingredient} [extra] Applied after the scene's ingredients.
+ * @property {(library: Library) => Page} page
+ * @property {(library: Library) => string} [text] Text the view shows once it is ready.
+ * @property {boolean} [paste]
+ * @property {boolean} [offline]
+ * @property {boolean} [statusBar]
+ * @property {boolean} [open] Opens the full player.
+ * @property {number | "error"} [play] The second the current episode pauses at, or "error"
+ *   when its media fails to load.
+ * @property {boolean} [note] The episode note already holds a capture.
+ * @property {string} [press] The full player's button to press, by its text.
+ */
+
+/** The episode the listener is in the middle of, as in the prototype. @type {[string, string]} */
+const NOW_PLAYING = ["Field Notes", "#213"];
+const NOW_PLAYING_AT = 2294;
+/** @type {[string, string]} */
+const NO_CHAPTERS = ["Signal & Noise", "Ep. 87"];
+/** @type {[string, string]} */
+const VIDEO = ["Signal & Noise", "Ep. 86"];
+/** @type {[string, string]} */
+const BROKEN_MEDIA = ["Signal & Noise", "Ep. 85"];
+/** @type {Recipe} */
+const FULL_PLAYER = {
+	scene: "lists",
+	page: () => ({ kind: "library" }),
+	open: true,
+	play: NOW_PLAYING_AT,
+};
+
+/** @type {Record<string, Recipe>} */
 const STATES = {
 	"first-run": { scene: "empty", page: () => ({ kind: "library" }) },
 	"add-podcast": {
@@ -127,6 +170,62 @@ const STATES = {
 		text: () => QUEUE[0][1],
 		statusBar: true,
 	},
+	// The chapters load after the player opens. This one is #213's at NOW_PLAYING_AT.
+	"now-playing": { ...FULL_PLAYER, text: () => "The method of loci in practice" },
+	"mini-player": {
+		scene: "lists",
+		page: (library) => ({ kind: "feed", key: episode(library, NOW_PLAYING).podcastName }),
+		play: NOW_PLAYING_AT,
+		text: (library) => episode(library, NOW_PLAYING).title.slice(0, 40),
+	},
+	// The capture toast, which has to outlast the shot.
+	capture: { ...FULL_PLAYER, note: true, press: "Timestamp", text: () => "Timestamp added" },
+	// #213's last chapter.
+	chapters: { ...FULL_PLAYER, press: "Chapters", text: () => "Listener question" },
+	"up-next": { ...FULL_PLAYER, press: "Up next", text: () => QUEUE[0][1] },
+	"up-next-empty": {
+		...FULL_PLAYER,
+		extra: (data) => {
+			data.queue.episodes = [];
+		},
+		press: "Up next",
+	},
+	"no-chapters": {
+		...FULL_PLAYER,
+		extra: (data, library) => {
+			data.currentEpisode = episode(library, NO_CHAPTERS);
+		},
+		play: 1140,
+		text: () => NO_CHAPTERS[1],
+	},
+	video: {
+		...FULL_PLAYER,
+		extra: (data, library) => {
+			data.currentEpisode = episode(library, VIDEO);
+			data.queue.episodes = latest(library).slice(0, 14);
+		},
+		play: 4,
+		text: () => VIDEO[1],
+	},
+	"local-player": {
+		...FULL_PLAYER,
+		scene: "local",
+		extra: (data) => {
+			data.currentEpisode = data.downloadedEpisodes["local file"].find(
+				(/** @type {{ filePath: string }} */ file) => file.filePath === LOCAL_FILES[0][0],
+			);
+		},
+		play: 1283,
+		text: () => path.parse(LOCAL_FILES[0][0]).name,
+	},
+	"media-error": {
+		...FULL_PLAYER,
+		extra: (data, library) => {
+			data.currentEpisode = episode(library, BROKEN_MEDIA);
+		},
+		play: "error",
+		text: () => BROKEN_MEDIA[1],
+	},
 };
 const STATUS_ITEM = "podnotes-verify-status-item";
 
@@ -153,7 +252,7 @@ const PLAYLIST = {
 };
 /** @type {[[string, string], number | "finished"][]} */
 const PLAYED = [
-	[["Field Notes", "#213"], 2294],
+	[NOW_PLAYING, NOW_PLAYING_AT],
 	[["Field Notes", "#212"], "finished"],
 	[["Field Notes", "#210"], "finished"],
 	[["Field Notes", "#209"], 760],
@@ -191,8 +290,6 @@ const PLAYLISTS = [
 		],
 	},
 ];
-/** @type {[string, string]} */
-const NOW_PLAYING = ["Field Notes", "#213"];
 /** @type {[string, string][]} */
 const DOWNLOADS = [
 	["Field Notes", "#213"],
@@ -425,13 +522,17 @@ function missingFeed(lib) {
 	return feed;
 }
 
-/** The newest episode Latest episodes lists: Night Owl Science's feed answers 404. @param {Library} lib */
-function newestTitle(lib) {
+/** What Latest episodes lists, newest first: Night Owl Science's feed answers 404. @param {Library} lib */
+function latest(lib) {
 	return lib.feeds
 		.filter((feed) => !feed.missing)
 		.flatMap((feed) => feed.episodes)
-		.reduce((newest, episode) => (episode.episodeDate > newest.episodeDate ? episode : newest))
-		.title;
+		.sort((a, b) => b.episodeDate.localeCompare(a.episodeDate));
+}
+
+/** @param {Library} lib */
+function newestTitle(lib) {
+	return latest(lib)[0].title;
 }
 
 /** @param {Library} lib @param {[string, string]} reference */
@@ -485,6 +586,7 @@ function listening(data, lib) {
 	data.favorites.episodes = FAVORITES.map((reference) => episode(lib, reference));
 	for (const list of PLAYLISTS) data.playlists[list.name] = playlist(list, lib);
 	data.currentEpisode = episode(lib, NOW_PLAYING);
+	data.defaultPlaybackRate = 1.25;
 }
 
 /** The entries src/playLocalFile.ts writes, for media written into the vault. @type {Ingredient} */
@@ -571,20 +673,28 @@ function downloads(data, lib) {
 	}
 }
 
-/** @param {string} scene */
-async function seed(scene) {
+/** @param {string} scene @param {Ingredient} [extra] */
+async function seed(scene, extra) {
 	const ingredients = SCENES[scene];
 	if (!ingredients) throw new Error(`Usage: seed <${Object.keys(SCENES).join("|")}>`);
 	/** @type {Data} */
 	const data = structuredClone(/** @type {Data} */ (config.defaultData));
-	if (ingredients.length > 0) {
+	const all = extra ? [...ingredients, extra] : ingredients;
+	if (all.length > 0) {
 		const lib = await library();
-		for (const add of ingredients) await add(data, lib);
+		for (const add of all) await add(data, lib);
 	}
 	await evaluate(`
+		const plugin = app.plugins.plugins.podnotes;
 		await app.plugins.disablePlugin("podnotes");
+		// Unloading saves without waiting, and that save merges into the file written next.
+		await plugin?.flushSaves();
 		for (const key of Object.keys(localStorage)) {
 			if (key.includes("podnotes:feed-cache")) localStorage.removeItem(key);
+		}
+		// A note left by an earlier capture shows as Open note and as a note mark in lists.
+		for (const note of app.vault.getMarkdownFiles()) {
+			if (note.path.startsWith("PodNotes/")) await app.vault.delete(note);
 		}
 		return true;
 	`);
@@ -605,6 +715,86 @@ async function go(page) {
 		await plugin.activateView();
 		return true;
 	`);
+}
+
+const PLAYER_STATE = `let state;
+	app.plugins.plugins.podnotes.player.state.subscribe((value) => (state = value))();`;
+
+/**
+ * Plays the episode the scene restored and pauses it at `at` seconds once its media has
+ * loaded, saved there so lists show the same progress every time. "error" waits for the
+ * load to fail instead.
+ * @param {number | "error"} at
+ */
+async function playback(at) {
+	await evaluate(
+		`${PLAYER_STATE} app.plugins.plugins.podnotes.player.play(state.episode); return true;`,
+	);
+	if (at === "error") {
+		await waitFor(
+			`${PLAYER_STATE} return state.status === "error";`,
+			"The episode's media did not fail to load",
+		);
+		return;
+	}
+	await waitFor(
+		`${PLAYER_STATE} return state.status === "playing";`,
+		"The episode's media did not load and play",
+	);
+	await evaluate(`
+		const { player } = app.plugins.plugins.podnotes;
+		player.pause();
+		player.seek(${at});
+		return true;
+	`);
+	await waitFor(
+		`const media = document.querySelector(".podnotes-media");
+		return media.paused && !media.seeking && media.readyState >= 2 && media.currentTime === ${at};`,
+		`The episode did not pause at ${at} s`,
+	);
+	await evaluate("app.plugins.plugins.podnotes.player.save(); return true;");
+}
+
+/** Captures once without the UI, so the episode note exists, as after an earlier capture. */
+async function episodeNote() {
+	const capture = await evaluate(`
+		// The last note open in an editor would take the capture.
+		app.workspace.detachLeavesOfType("markdown");
+		return await app.plugins.plugins.podnotes.capture.timestamp();
+	`);
+	if (capture?.destination !== "note") {
+		throw new Error(`The capture went to ${JSON.stringify(capture)}, not the episode note.`);
+	}
+}
+
+/**
+ * Presses the full player's button that reads `text`, with real input. A panel switch or
+ * tab that is already on stays on. Fails at once without such a button.
+ * @param {string} text
+ */
+async function press(text) {
+	const button = `[...document.querySelectorAll("section.pn-player button")].find((button) =>
+		button.getBoundingClientRect().width > 0 && button.innerText.trim() === ${JSON.stringify(text)})`;
+	// "true" or "false" for a panel switch or tab.
+	const state = `((button) => !button ? "missing" :
+		button.getAttribute("aria-pressed") ?? button.getAttribute("aria-selected") ?? "action")(${button})`;
+	const kind = await evaluate(`return ${state};`);
+	if (kind === "missing") {
+		throw new Error(`No button in the full player (section.pn-player) reads "${text}".`);
+	}
+	if (kind === "true") return;
+	execFileSync(
+		process.execPath,
+		[UI, "click", "section.pn-player button", "--text", text, "--exact"],
+		{ stdio: "inherit" },
+	);
+	if (kind === "false") {
+		await waitFor(`return ${state} === "true";`, `"${text}" did not turn on`, 5000);
+		return;
+	}
+	// Timestamp reads "Added" for 1.2 s after a capture.
+	await sleep(1500);
+	await waitFor(`return Boolean(${button});`, `"${text}" did not come back`, 5000);
 }
 
 /** @param {boolean} on */
@@ -821,11 +1011,14 @@ function contactSheet(rows, out) {
 /** @param {string} state @param {string} label @param {string[]} widths @param {string[]} themes */
 async function set(state, label, widths, themes) {
 	const recipe = STATES[state];
-	if (!recipe)
-		throw new Error(`Unknown state ${state}; use all or ${Object.keys(STATES).join(", ")}.`);
+	if (!recipe) {
+		throw new Error(
+			`Unknown state ${state}; use all, player or ${Object.keys(STATES).join(", ")}.`,
+		);
+	}
 	const lib = await library();
 	const dir = path.join(OUT, label);
-	await seed(recipe.scene);
+	await seed(recipe.scene, recipe.extra);
 	/** @type {{ file: string, caption: string }[][]} */
 	const rows = [];
 	try {
@@ -835,6 +1028,12 @@ async function set(state, label, widths, themes) {
 			const row = [];
 			for (const name of themes) {
 				await go(recipe.page(lib));
+				if (recipe.open) {
+					await evaluate(
+						"app.plugins.plugins.podnotes.navigation.expand(); return true;",
+					);
+				}
+				if (recipe.play !== undefined) await playback(recipe.play);
 				if (recipe.paste) {
 					execFileSync(
 						process.execPath,
@@ -845,6 +1044,8 @@ async function set(state, label, widths, themes) {
 				if (recipe.offline) await offline(true);
 				await theme(name);
 				if (recipe.statusBar) await statusItem(true);
+				if (recipe.note) await episodeNote();
+				if (recipe.press) await press(recipe.press);
 				const file = path.join(dir, `${state}-${width}-${name}.png`);
 				await shot(file, recipe.text?.(lib), name, recipe.statusBar);
 				row.push({ file, caption: `${width} ${name} ${label}` });
@@ -886,9 +1087,25 @@ try {
 			...themes.filter((name) => !(name in THEMES)),
 		];
 		if (unknown.length > 0) throw new Error(`Unknown width or theme: ${unknown.join(", ")}.`);
-		for (const state of target === "all" ? Object.keys(STATES) : [target]) {
-			await set(state, rest[0], widths, themes);
+		const names = Object.keys(STATES);
+		const states =
+			target === "all"
+				? names
+				: target === "player"
+					? names.filter((name) => STATES[name].play !== undefined)
+					: [target];
+		const failed = [];
+		for (const state of states) {
+			try {
+				await set(state, rest[0], widths, themes);
+			} catch (error) {
+				console.error(
+					`${state}: ${error instanceof Error ? error.message : String(error)}`,
+				);
+				failed.push(state);
+			}
 		}
+		if (failed.length > 0) throw new Error(`Failed: ${failed.join(", ")}.`);
 	} else {
 		throw new Error(
 			"Usage: screens.mjs place|theme|seed|go|offline|shot|set ... (see the header of this file)",
