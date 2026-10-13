@@ -50,6 +50,7 @@
 		"@testing-library/svelte": "^5.4.2",
 		"@types/node": "^22.20.5",
 		"@typescript/native": "npm:typescript@7.0.2",
+		"acorn": "^8.18.0",
 		"eslint-plugin-obsidianmd": "^0.4.2",
 		"jsdom": "^30.1.2",
 		"obsidian": "1.14.4",
