@@ -23,7 +23,7 @@
 	const id = $props.id();
 
 	async function capture() {
-		const note = await captureTimestamp();
+		const note = (await captureTimestamp())?.path.split("/").pop()?.replace(/\.md$/, "");
 		if (note) new Notice(`Timestamp added to ${note}`);
 	}
 </script>

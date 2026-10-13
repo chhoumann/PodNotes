@@ -109,7 +109,7 @@ export class MainView extends ItemView {
 			}),
 			search: new PodcastSearch(plugin.feeds),
 			settings: derived(pluginStore, ($plugin) => $plugin.settings),
-			captureTimestamp: () => plugin.captureTimestampToEditorOrNote(),
+			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
 			hasNote: (episode) => getPodcastNote(episode) !== null,
 		};

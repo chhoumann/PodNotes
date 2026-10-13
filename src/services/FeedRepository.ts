@@ -10,6 +10,7 @@ import { DANGEROUS_KEYS, isPlainObject } from "src/persistence/codecUtils";
 import { decodeDate, newestFirst } from "src/persistence/dateCodec";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { findByGuid } from "src/utility/findByGuid";
 import { fetchTextWithTimeout } from "src/utility/networkRequest";
 
 /** A savedFeeds key, the only identity of a subscription. */
@@ -147,22 +148,18 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	 */
 	async episodesAt(url: string): Promise<Episode[]> {
 		const doc = await this.documentAt({ url }, "network");
-		const feed = channelFeed(doc.channel, url);
-		return doc.items.map((item) => projectEpisode(item, feed));
+		return projectEpisodes(doc.items, channelFeed(doc.channel, url));
 	}
 
 	/** Feed metadata that episodes do not carry, for one of a subscription's episodes. */
-	episodeMetadata(
-		key: FeedKey,
-		episode: Episode,
-	): { guid?: string; transcripts: TranscriptLink[] } | undefined {
+	episodeMetadata(key: FeedKey, episode: Episode): { transcripts: TranscriptLink[] } | undefined {
 		const feed = this.subscriptions.get(key);
+		const items = (feed && this.sources.get(feed.url)?.doc?.items) ?? [];
+		// A guid is unique only within its feed, and another feed can share the subscription's name.
 		const item =
-			feed &&
-			this.sources
-				.get(feed.url)
-				?.doc?.items.find(({ streamUrl }) => streamUrl === episode.streamUrl);
-		return item && { guid: item.guid, transcripts: item.transcripts ?? [] };
+			(feed?.url === episode.feedUrl ? findByGuid(items, episode.guid) : undefined) ??
+			items.find(({ streamUrl }) => streamUrl === episode.streamUrl);
+		return item && { transcripts: item.transcripts ?? [] };
 	}
 
 	itemUrl(key: FeedKey, reference: string): string | undefined {
@@ -290,7 +287,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 					doc,
 					title: feed.title,
 					artworkUrl: feed.artworkUrl,
-					episodes: doc?.items.map((item) => projectEpisode(item, feed)) ?? [],
+					episodes: doc ? projectEpisodes(doc.items, feed) : [],
 				};
 			}
 			projections.set(key, projection);
@@ -356,11 +353,12 @@ export async function loadFeed(url: string): Promise<ParsedFeedEpisodes> {
 	return parser.parseEpisodes(xml);
 }
 
-function projectEpisode(
-	item: ParsedEpisodeDocument,
+function projectEpisodes(
+	items: readonly ParsedEpisodeDocument[],
 	feed: Pick<PodcastFeed, "title" | "url" | "artworkUrl">,
-): Episode {
-	return {
+): Episode[] {
+	const repeated = repeatedGuids(items);
+	return items.map((item) => ({
 		title: item.title,
 		streamUrl: item.streamUrl,
 		url: item.itemLink || feed.url,
@@ -370,12 +368,14 @@ function projectEpisode(
 		artworkUrl: item.artworkUrl || feed.artworkUrl,
 		episodeDate: item.episodeDate,
 		feedUrl: feed.url,
+		// A guid that several items repeat identifies none of them, so notes and links never get it.
+		guid: item.guid && !repeated.has(item.guid) ? item.guid : undefined,
 		itunesTitle: item.itunesTitle || "",
 		episodeNumber: item.episodeNumber,
 		duration: item.duration,
 		chaptersUrl: item.chaptersUrl,
 		mediaType: item.mediaType,
-	};
+	}));
 }
 
 function channelFeed(channel: ParsedFeedDocument, url: string): PodcastFeed {
@@ -401,7 +401,22 @@ const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 function keepNewestItems(doc: FeedDocument): FeedDocument {
 	if (doc.items.length <= MAX_ITEMS_PER_FEED) return doc;
 	const kept = new Set([...doc.items].sort(newestFirst).slice(0, MAX_ITEMS_PER_FEED));
-	return { ...doc, items: doc.items.filter((item) => kept.has(item)), complete: false };
+	// The cut can drop one of two items that share a guid, which would make the other look unique.
+	const repeated = repeatedGuids(doc.items);
+	const items = doc.items
+		.filter((item) => kept.has(item))
+		.map((item) =>
+			item.guid && repeated.has(item.guid) ? { ...item, guid: undefined } : item,
+		);
+	return { ...doc, items, complete: false };
+}
+
+/** Guids that more than one item carries. */
+function repeatedGuids(items: readonly ParsedEpisodeDocument[]): Set<string> {
+	const seen = new Set<string>();
+	const repeated = new Set<string>();
+	for (const { guid } of items) if (guid) (seen.has(guid) ? repeated : seen).add(guid);
+	return repeated;
 }
 
 function evictOldest(

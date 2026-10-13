@@ -3,6 +3,7 @@ import { createContext } from "svelte";
 import type { Readable, Writable } from "svelte/store";
 import type { IAPI } from "src/API/IAPI";
 import type { PlayerController } from "src/player/PlayerController";
+import type { Capture } from "src/services/CaptureService";
 import type { FeedRepository } from "src/services/FeedRepository";
 import type { LibraryActions } from "src/services/library";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
@@ -41,8 +42,8 @@ export interface ShellServices {
 	readonly search: PodcastSearch;
 	/** Current through a settings toggle or an import, which replaces the object. */
 	readonly settings: Readable<IPodNotesSettings>;
-	/** Into the active note, else into the episode note. Resolves to that note's name, or null. */
-	captureTimestamp(): Promise<string | null>;
+	/** Into the note being written, else into the episode note. Null when nothing was captured. */
+	captureTimestamp(): Promise<Capture | null>;
 	/** Opens Obsidian's settings at the PodNotes tab. */
 	openSettings(): void;
 	/** Whether the episode has a note: a vault lookup, so a caller decides when to ask again. */

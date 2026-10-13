@@ -38,6 +38,7 @@ export function feedItem(episode: Episode): ParsedEpisodeDocument {
 	return {
 		title: episode.title,
 		streamUrl: episode.streamUrl,
+		guid: episode.guid,
 		itemLink: episode.url,
 		description: episode.description,
 		content: episode.content,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { orderFeedsByCurrent } from "./FeedSuggestModal";
+import { orderFeedsByCurrent } from "./PickerModal";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 
 const feed = (title: string): PodcastFeed => ({
