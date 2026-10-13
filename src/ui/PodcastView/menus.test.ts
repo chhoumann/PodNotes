@@ -14,6 +14,7 @@ import {
 } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
+import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import {
 	createTestServices,
 	pluginLibrary,
@@ -292,6 +293,20 @@ describe("an episode's menu", () => {
 			expect.stringMatching(
 				/^obsidian:\/\/podnotes\?episodeName=Episode&url=https%3A%2F%2Fshow\.test%2Ffeed\.xml/,
 			),
+		);
+	});
+
+	test("offers no episode link for an episode opened by a private feed's own address", () => {
+		const opened = { ...episode, feedUrl: "https://show.test/feed.xml?auth=s3cret" };
+		const subscribed = { ...episode, feedUrl: privateFeedPlaceholder("Podcast") };
+		const writeText = vi.fn(async () => {});
+		Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+		expect(titles(menu(opened))).not.toContain("Copy episode link");
+		choose(menu(subscribed), "Copy episode link");
+
+		expect(writeText).toHaveBeenCalledWith(
+			expect.stringContaining("url=podnotes-private-feed%3APodcast"),
 		);
 	});
 });

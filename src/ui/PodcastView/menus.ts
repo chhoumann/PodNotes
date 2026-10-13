@@ -8,8 +8,10 @@ import type { Episode } from "src/types/Episode";
 import type { IconType } from "src/types/IconType";
 import buildEpisodeResumeLink from "src/utility/buildEpisodeResumeLink";
 import { isSameEpisode, isSameStoredEpisode } from "src/utility/episodeKey";
+import { episodeLinkTarget } from "src/utility/episodeLinkTarget";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
+import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
 import { isDownloaded } from "./episodeRow";
 import { buildQueueReorderMenuItems } from "./queueReorderMenu";
@@ -107,7 +109,11 @@ export function episodeMenu(
 		(playedKey ? played[playedKey]?.finished : undefined) ?? isEpisodeFinished(episode, played);
 	const downloaded = isDownloaded(get(library.downloadedEpisodes), episode);
 	const lists = Object.values(get(library.playlists));
-	const link = available ? buildEpisodeResumeLink(episode) : "";
+	// An episode opened by a private feed's own address would put that secret in the link.
+	const link =
+		available && !isCredentialBearingUrl(episodeLinkTarget(episode) ?? "")
+			? buildEpisodeResumeLink(episode)
+			: "";
 	const entries: MenuEntry[] = [];
 
 	if (available) {
