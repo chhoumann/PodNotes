@@ -86,4 +86,4 @@ The last three settings appear only when **Speaker diarization** is on. **Deepgr
 | **Speaker diarization** | Off | Labels transcript segments by speaker. See [Add speaker labels](/transcripts/#add-speaker-labels). |
 | **Diarization provider** | **OpenAI (gpt-4o-transcribe-diarize)** | Chooses OpenAI, which uses your OpenAI API key, or **Deepgram**, which needs its own key and keeps speaker labels consistent across the episode. |
 | **Deepgram API key** | None | Selects the Obsidian secret that holds your Deepgram API key, or creates one. |
-| **Speaker label format** | `**{{speaker}}:**` with a space at the end | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker label. See [Change the speaker label format](/transcripts/#change-the-speaker-label-format). |
+| **Speaker label format** | `**{{speaker}}:**` with a space at the end | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker label. Transcripts that feeds publish use it too, even with **Speaker diarization** off. See [Change the speaker label format](/transcripts/#change-the-speaker-label-format). |

@@ -175,7 +175,7 @@ tags:
 
 ## <span id="transcript-and-timestamp-templates"></span>Transcript and timestamp tags
 
-**Transcript template** accepts `{{title}}`, `{{podcast}}`, `{{date}}`, `{{currentDate}}`, `{{episodeNumber}}`, `{{duration}}`, `{{transcript}}`, `{{description}}`, `{{url}}`, and `{{artwork}}`. `{{transcript}}` is the transcript text. `{{title}}` and `{{podcast}}` give names cleaned for a file name, as in paths, and accept a whitespace replacement. The other tags follow the episode note rules. `{{stream}}`, `{{chapters}}`, and `{{episodelink}}` are not available in transcripts.
+**Transcript template** accepts `{{title}}`, `{{podcast}}`, `{{date}}`, `{{currentDate}}`, `{{episodeNumber}}`, `{{duration}}`, `{{transcript}}`, `{{description}}`, `{{url}}`, and `{{artwork}}`. `{{transcript}}` is the transcript text. A transcript that the feed publishes starts each paragraph with its time when the feed gives times. A transcript of the audio has no times. `{{title}}` and `{{podcast}}` give names cleaned for a file name, as in paths, and accept a whitespace replacement. The other tags follow the episode note rules. `{{stream}}`, `{{chapters}}`, and `{{episodelink}}` are not available in transcripts.
 
 **Transcript template** starts as this template:
 

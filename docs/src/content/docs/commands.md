@@ -26,6 +26,7 @@ Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only whi
 | [Create podcast feed note](#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You follow at least one podcast, and **Feed note file path** and **Feed note template** are set |
 | [Copy universal episode link to clipboard](#copy-universal-episode-link-to-clipboard) | `podnotes:get-share-link-episode` | An episode is loaded |
 | [Transcribe current episode](#transcribe-current-episode) | `podnotes:podnotes-transcribe` | An audio episode is loaded |
+| [Transcribe current episode from audio](#transcribe-current-episode-from-audio) | `podnotes:podnotes-transcribe-audio` | An audio episode is loaded |
 
 A paused episode counts as loaded. Hotkeys and workflow plugins use the ID.
 
@@ -102,6 +103,10 @@ PodNotes finds the show in the Apple Podcasts directory. If the show or the epis
 
 ## Transcribe current episode
 
-Transcribes the loaded episode and saves the transcript at **Transcript file path**. It works for podcast episodes and local audio, but not for video.
+Saves a transcript of the loaded episode at **Transcript file path**. When the episode's feed publishes a transcript, PodNotes saves that one, with no API key. Otherwise, it transcribes the audio with the selected provider. It works for podcast episodes and local audio, but not for video.
 If the transcript file already exists, PodNotes keeps it and does not transcribe again.
-Without an API key for the selected provider, it shows a notice that names the key to add. See [Transcribe episodes](/transcripts/).
+When it transcribes the audio without an API key for the selected provider, it shows a notice that names the key to add. See [Transcribe episodes](/transcripts/).
+
+## Transcribe current episode from audio
+
+Transcribes the audio of the loaded episode with the selected provider and your API key, even when the feed publishes a transcript. Your provider bills your account for it. Otherwise it works like [Transcribe current episode](#transcribe-current-episode).
