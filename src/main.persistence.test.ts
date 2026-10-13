@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { get } from "svelte/store";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { Notice, type SecretStorage } from "obsidian";
 import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
@@ -867,6 +867,79 @@ describe("PodNotes persistence integration", () => {
 
 			expect(doc.media.currentTime).toBe(900);
 			plugin.player.dispose();
+		});
+	});
+
+	describe("while the loaded episode is paused at 17 s", () => {
+		async function paused() {
+			const plugin = makePlugin();
+			const episode = {
+				title: "A",
+				streamUrl: "https://pod.example.com/a.mp3",
+				url: "",
+				description: "",
+				content: "",
+				podcastName: "Pod",
+			};
+			let disk: unknown = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+			Object.assign(plugin, {
+				loadData: vi.fn(async () => structuredClone(disk)),
+				saveData: vi.fn(async (next: unknown) => {
+					disk = JSON.parse(JSON.stringify(next));
+				}),
+			});
+			Object.assign(plugin.app.vault.adapter, {
+				read: vi.fn(async () => dataFileText(disk)),
+			});
+			attachDataFileWriter(plugin);
+			(plugin as unknown as { setCollectionStores(): void }).setCollectionStores();
+			onTestFinished(bindStoresToSettings(plugin));
+			const doc = new FakeDocument();
+			plugin.player = new PlayerController(doc.asPlayerDocument(), plugin);
+			onTestFinished(() => plugin.player.dispose());
+			plugin.player.play(episode);
+			doc.media.duration = 3600;
+			doc.media.emit("loadedmetadata");
+			doc.media.currentTime = 17;
+			plugin.player.pause();
+			await plugin.flushSaves();
+			const saved = () =>
+				(disk as { playedEpisodes: Record<string, { time: number; finished: boolean }> })
+					.playedEpisodes["Pod::A"];
+			expect(saved()).toMatchObject({ time: 17, finished: false });
+			return {
+				plugin,
+				doc,
+				saved,
+				sync: async (time: number) => {
+					saved().time = time;
+					await plugin.onExternalSettingsChange();
+				},
+			};
+		}
+
+		it("shows the progress a sync brings and keeps it in data.json through a save", async () => {
+			const { plugin, doc, saved, sync } = await paused();
+
+			await sync(45);
+			plugin.player.save();
+			await plugin.flushSaves();
+
+			expect(saved()).toMatchObject({ time: 45, finished: false });
+			expect(get(plugin.player.state)).toMatchObject({ status: "paused", currentTime: 45 });
+			expect(doc.media.currentTime).toBe(45);
+		});
+
+		it("saves a seek made after the sync", async () => {
+			const { plugin, doc, saved, sync } = await paused();
+
+			await sync(45);
+			plugin.player.seek(25);
+			plugin.player.save();
+			await plugin.flushSaves();
+
+			expect(saved()).toMatchObject({ time: 25, finished: false });
+			expect(doc.media.currentTime).toBe(25);
 		});
 	});
 

@@ -121,11 +121,17 @@ export class PlayerController {
 
 	/**
 	 * Shows the selected episode paused at its saved position, without loading it: at
-	 * startup, and again after a sync while nothing is loaded. Loaded media stays, and
-	 * so does a position the user moved the same episode to.
+	 * startup, and again after a sync while nothing is loaded. Paused media goes to its
+	 * own episode's saved progress, which a sync may have changed. Other loaded media
+	 * stays, and so does a position the user moved and has not saved.
 	 */
 	restore(episode: Episode | undefined): void {
 		const { status, episode: shown, currentTime } = this.snapshot;
+		if (status === "paused" && shown && !this.moved) {
+			const time = this.resumeTime(shown);
+			if (time !== currentTime) this.moveTo(time);
+			return;
+		}
 		if (!episode || (status !== "empty" && status !== "restored")) return;
 		this.moved &&= !!shown && getEpisodeKey(shown) === getEpisodeKey(episode);
 		this.setState({
@@ -467,13 +473,14 @@ export class PlayerController {
 		this.session.preview = false;
 	}
 
+	/** Saves first: once paused, the position is no longer this device's to save. */
 	private settlePaused(): void {
+		this.persist();
 		this.setState(
 			this.holdsMedia()
 				? { status: "paused", currentTime: this.el.currentTime }
 				: { status: "paused" },
 		);
-		this.persist();
 	}
 
 	private onLoadedMetadata(): void {
@@ -593,8 +600,11 @@ export class PlayerController {
 
 	private persist(): void {
 		const { session } = this;
-		const { episode, duration } = this.snapshot;
+		const { episode, duration, status } = this.snapshot;
 		if (!session || !this.holdsMedia() || session.preview || this.disposed || !episode) return;
+		// A paused or ended position is saved already, or came from a sync, possibly an
+		// older one than the saved progress: only playing or a seek makes it this device's.
+		if (status !== "playing" && !this.moved) return;
 		const time = this.el.currentTime;
 		playedEpisodes.setEpisodeTime(episode, time, duration, duration > 0 && time >= duration);
 		this.moved = false;

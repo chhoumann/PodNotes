@@ -658,7 +658,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.persistenceUnknownFields = decoded.unknownFields;
 		this.setCollectionStores();
 		// A sync can land after startup, before anything loads. The restored episode
-		// follows it, and loaded media stays as it is.
+		// follows it, and so does paused media this device has not moved.
 		this.player?.restore(this.settings.currentEpisode);
 	}
 
