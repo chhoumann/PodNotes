@@ -12,6 +12,7 @@
  */
 
 import checkStringIsUrl from "./checkStringIsUrl";
+import { COMMON_NAMED_ENTITIES } from "./htmlEntities";
 
 const PLACEHOLDER_SCHEME = "podnotes-private-feed:";
 
@@ -98,6 +99,79 @@ export function canonicalUrl(url: string): string {
 	return parsed.href;
 }
 
+function redactionKey(address: string): string | undefined {
+	const url = checkStringIsUrl(address);
+	if (!url || !/^https?:$/.test(url.protocol)) return undefined;
+	url.protocol = "https:";
+	url.hostname = url.hostname.replace(/\.$/, "");
+	url.hash = "";
+	return url.href;
+}
+
+const HTML_ENTITY = /&(?:#(x[\da-f]+|\d+);?|([a-z]+);)/gi;
+// HTML also spells lt, gt and quot in capitals. decodeHtml takes amp in any case, so
+// an address escaped with a malformed &aMp; still matches its known address.
+const NAMED_ENTITIES = new Map(
+	Object.entries({
+		...COMMON_NAMED_ENTITIES,
+		LT: "<",
+		GT: ">",
+		QUOT: '"',
+		colon: ":",
+		sol: "/",
+		period: ".",
+		quest: "?",
+		equals: "=",
+		num: "#",
+		percnt: "%",
+		lowbar: "_",
+		commat: "@",
+		plus: "+",
+	}),
+);
+
+type Entity = [decodedStart: number, decodedEnd: number, sourceStart: number, sourceEnd: number];
+
+function decodeHtml(value: string): [text: string, entities: Entity[]] {
+	const entities: Entity[] = [];
+	if (!value.includes("&")) return [value, entities];
+	let shift = 0;
+	const text = value.replace(
+		HTML_ENTITY,
+		(entity: string, code: string | undefined, name: string | undefined, from: number) => {
+			const char = code
+				? String.fromCodePoint(
+						Math.min(Number(/^x/i.test(code) ? `0${code}` : code), 0x10ffff),
+					)
+				: NAMED_ENTITIES.get(name?.toLowerCase() === "amp" ? "amp" : (name ?? ""));
+			if (char === undefined) return entity;
+			entities.push([from - shift, from - shift + char.length, from, from + entity.length]);
+			shift += entity.length - char.length;
+			return char;
+		},
+	);
+	return [text, entities];
+}
+
+function sourceIndex(entities: Entity[], index: number): number {
+	let shift = 0;
+	for (const [at, end, from, to] of entities) {
+		if (index <= at) break;
+		if (index < end) return from;
+		shift = to - end;
+	}
+	return index + shift;
+}
+
+const ADDRESS_START =
+	/(podnotes-private-feed:[\w.!~*'()%-]*)|(https?%3a)|(?:feed|podcast|https?):|(?:^|[^\w.@/\\:%-])(?=([\w.-]+)[/?#:])/gi;
+const ADDRESS = /[^\s<>"'`]+/y;
+const ENCODED_ADDRESS = /[^\s<>"'`&#]+/y;
+// Encoded, numeric and non-ASCII authorities can normalize to a known host too.
+const UNUSUAL_AUTHORITY = /^https?:[/\\]*(?:[^/?#]*[%\\[\u0080-\uFFFF]|(?:[^/?#@]*@)?\d)/i;
+// A string the scan can redact holds one of these, or a known host.
+const ESCAPED_OR_UNUSUAL = /[&%@\\[\u0080-\uFFFF]|(?:https?|feed|podcast):\/*\d/i;
+
 /**
  * `document` with no private feed address left in it. A snapshot's
  * credential-bearing `feedUrl` is a private feed address, as is each key of
@@ -114,9 +188,8 @@ export function redactPrivateFeedAddresses<T>(
 ): T {
 	const placeholders = new Map<string, string>();
 	const add = (url: string, placeholder: string) => {
-		const canonical = canonicalUrl(url).split("#")[0];
-		const kept = placeholders.get(canonical) ?? placeholder;
-		placeholders.set(canonical, kept);
+		const key = redactionKey(url);
+		if (key && !placeholders.has(key)) placeholders.set(key, placeholder);
 	};
 	for (const [url, placeholder] of known) add(url, placeholder);
 	const credentialed = new Map<string, boolean>();
@@ -131,36 +204,88 @@ export function redactPrivateFeedAddresses<T>(
 		add(feedUrl, privateFeedPlaceholder(typeof podcastName === "string" ? podcastName : ""));
 	});
 	if (placeholders.size === 0) return document;
-	const hosts = [
-		...new Set([...placeholders.keys()].map((address) => new URL(address).hostname)),
-	];
-	// Encoded, numeric and non-ASCII authorities can normalize to a known host too.
-	// A tagged template anywhere in main.js prevents V8 from caching the eval-compiled
-	// plugin, so keep this untagged to let Obsidian reuse it across reloads.
-	const candidate = new RegExp(
-		hosts.map((host) => host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") +
-			"|https?:[/\\\\]*[^\\s/?#]*[%\\\\\\[\\u0080-\\uFFFF]|https?:[/\\\\]*(?:[^\\s/?#@]*@)?\\d",
-		"i",
-	);
+	const hosts = [...new Set([...placeholders.keys()].map((key) => new URL(key).hostname))];
+	// URL normalization keeps trailing punctuation, so a run longer than the
+	// longest address cannot end one.
+	const longest = Math.max(...[...placeholders.keys()].map((key) => key.length));
 	const matches = new Map<string, string | undefined>();
 	const lookup = (address: string) => {
-		if (matches.has(address)) return matches.get(address);
-		const replacement = placeholders.get(
-			canonicalUrl(address.replace(/&amp;/gi, "&")).split("#")[0],
-		);
-		matches.set(address, replacement);
-		return replacement;
+		if (!matches.has(address)) {
+			const key = redactionKey(address);
+			matches.set(address, key && placeholders.get(key));
+		}
+		return matches.get(address);
 	};
+	const spelledAddress = (quote: string, encoded: boolean) => {
+		if (!encoded)
+			return quote.replace(/^(?:feed|podcast):/i, "").replace(/^(?!https?:)\/*/i, "https://");
+		try {
+			return decodeURIComponent(quote);
+		} catch {
+			return "";
+		}
+	};
+	const matchAddress = (quote: string, encoded: boolean, isWholeString: boolean) => {
+		const spelled = spelledAddress(quote, encoded);
+		const lower = spelled.toLowerCase();
+		if (!hosts.some((host) => lower.includes(host)) && !UNUSUAL_AUTHORITY.test(spelled)) return;
+		let bare = quote.length;
+		while (!isWholeString && bare > 0 && ".,;:!?)]}".includes(quote[bare - 1])) bare--;
+		for (let end = bare; end <= Math.min(quote.length, bare + longest); end++) {
+			const placeholder = lookup(spelledAddress(quote.slice(0, end), encoded));
+			if (placeholder)
+				return { end, text: encoded ? encodeURIComponent(placeholder) : placeholder };
+		}
+	};
+	const redactText = (value: string) => {
+		const [text, entities] = decodeHtml(value);
+		let redacted = "";
+		let copied = 0;
+		// A failed address still gets searched for an encoded one in its query.
+		let failedUntil = 0;
+		ADDRESS_START.lastIndex = 0;
+		for (let match; (match = ADDRESS_START.exec(text));) {
+			const [start, placeholder, encodedScheme, host] = match;
+			// A host name at the very start matches empty.
+			if (!start) ADDRESS_START.lastIndex++;
+			const at = match.index + (host === undefined ? 0 : start.length);
+			if (placeholder || (host !== undefined && !hosts.includes(host.toLowerCase())))
+				continue;
+			if (!encodedScheme && at < failedUntil) continue;
+			const extent = encodedScheme ? ENCODED_ADDRESS : ADDRESS;
+			extent.lastIndex = at;
+			extent.test(text);
+			const end = extent.lastIndex;
+			const found = matchAddress(
+				text.slice(at, end),
+				Boolean(encodedScheme),
+				at === 0 && end === text.length,
+			);
+			if (found) {
+				redacted += value.slice(copied, sourceIndex(entities, at)) + found.text;
+				copied = sourceIndex(entities, at + found.end);
+				ADDRESS_START.lastIndex = at + found.end;
+			} else if (encodedScheme) {
+				ADDRESS_START.lastIndex = end;
+			} else {
+				failedUntil = end;
+			}
+		}
+		return copied ? redacted + value.slice(copied) : value;
+	};
+	const mayQuote = (value: string) => {
+		if (ESCAPED_OR_UNUSUAL.test(value)) return true;
+		const lower = value.toLowerCase();
+		return hosts.some((host) => lower.includes(host));
+	};
+	const results = new Map<string, string>();
 	return replaceStrings(document, (value) => {
-		if (!/https?:/i.test(value) || !candidate.test(value)) return value;
-		if (/^https?:[^\s<>"'`]+$/i.test(value)) return lookup(value) ?? value;
-		return value.replace(/https?:[^\s<>"'`]+/gi, (address) => {
-			const whole = lookup(address);
-			if (whole) return whole;
-			const bare = address.replace(/[.,;:!?)\]}]+$/, "");
-			const replacement = lookup(bare);
-			return replacement ? replacement + address.slice(bare.length) : address;
-		});
+		let result = results.get(value);
+		if (result === undefined) {
+			result = mayQuote(value) ? redactText(value) : value;
+			results.set(value, result);
+		}
+		return result;
 	});
 }
 

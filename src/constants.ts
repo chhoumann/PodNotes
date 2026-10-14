@@ -115,7 +115,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 			"---\n" +
 			"# {{title}}\n\n" +
 			"![]({{artwork}})\n\n" +
-			"[Resume in PodNotes]({{episodelink}})\n\n" +
+			"{{episodelink:Resume in PodNotes}}\n\n" +
 			"{{url}}\n\n" +
 			"{{description}}\n",
 	},
