@@ -158,6 +158,7 @@ export class CaptureService {
 		);
 	}
 
+	/** False, leaving the note as it is, once the note no longer ends with `suffix`. */
 	private async unappend(file: TFile, suffix: string): Promise<boolean> {
 		// An open editor's buffer is the note: a vault write behind it could lose what it
 		// has not saved yet.

@@ -273,6 +273,14 @@ describe("the full player", () => {
 		expect(button("Retry")).toBeEnabled();
 		expect(button("Up next")).toHaveAttribute("aria-pressed", "false");
 		expect(button("Up next")).toBeDisabled();
+
+		await fireEvent.click(button("Retry"));
+		await tick();
+
+		expect(within(player).queryByRole("alert")).toBeNull();
+		expect(button("Up next")).toBeEnabled();
+		expect(button("Up next")).toHaveAttribute("aria-pressed", "true");
+		expect(within(player).getByText("Queue is empty")).toBeInTheDocument();
 	});
 
 	test("Create note while the episode has none, Open note once it has one", async () => {

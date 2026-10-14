@@ -50,16 +50,12 @@
 	const duration = $derived($playerState.duration);
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
 	const panels = $derived<Panel[]>(chapters.length > 0 ? ["chapters", "queue"] : ["queue"]);
-	// At compact widths a media error takes the stage, so no panel shows meanwhile.
-	const shown = $derived(
-		failed && !wide
-			? undefined
-			: panel && panels.includes(panel)
-				? panel
-				: wide
-					? panels[0]
-					: undefined,
-	);
+	const shown = $derived.by(() => {
+		// At compact widths a media error takes the stage, so no panel shows meanwhile.
+		if (failed && !wide) return undefined;
+		if (panel && panels.includes(panel)) return panel;
+		return wide ? panels[0] : undefined;
+	});
 	const current = $derived(chapterAt(chapters, elapsed));
 	const back = $derived(normalizeSkipLength($settings.skipBackwardLength));
 	const forward = $derived(normalizeSkipLength($settings.skipForwardLength));
@@ -325,6 +321,7 @@
 								type="button"
 								class="pn-chapnow"
 								title="Chapters"
+								disabled={failed && !wide}
 								onclick={() => (panel = "chapters")}
 								>{chapters[current].title}</button
 							>
@@ -696,7 +693,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.pn-rate:hover span {
+	.pn-rate:hover:not(:disabled) span {
 		border-color: var(--background-modifier-border-focus);
 		color: var(--text-normal);
 	}
@@ -851,7 +848,7 @@
 		font-size: var(--font-ui-smaller);
 	}
 
-	.pn-player .pn-sw:hover {
+	.pn-player .pn-sw:hover:not(:disabled) {
 		background: var(--background-modifier-hover);
 		color: var(--text-normal);
 	}

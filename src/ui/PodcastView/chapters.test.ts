@@ -49,7 +49,7 @@ describe("chapters", () => {
 		expect(cachedChapters("https://pod.test/other.json")).toBeUndefined();
 	});
 
-	test("a slower load for an earlier episode keeps the latest episode's chapters", async () => {
+	test("each episode keeps the chapters it loaded, whichever load finishes first", async () => {
 		const earlier = "https://pod.test/earlier.json";
 		const latest = "https://pod.test/latest.json";
 		let finishEarlier: (loaded: typeof chapters) => void = () => {};
@@ -63,6 +63,6 @@ describe("chapters", () => {
 		await slow;
 
 		expect(cachedChapters(latest)).toEqual(chapters);
-		expect(cachedChapters(earlier)).toBeUndefined();
+		expect(cachedChapters(earlier)).toEqual([{ startTime: 0, title: "Earlier" }]);
 	});
 });
