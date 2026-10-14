@@ -231,8 +231,10 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,
   `type <css> <text>` (insert at the cursor), `fill <css> <text>` (replace),
   `key <Enter|Escape|Tab|ArrowUp|ArrowDown|Backspace|<char>|Ctrl+<char>>`,
-  `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `click`, `type`,
-  `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. They also
+  `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `--text` matches a
+  substring; with `--exact`, only an element whose visible text is exactly
+  `<s>`. `click`, `type`, `fill` and `wait` wait up to 10 s; `--timeout <ms>`
+  changes that. They also
   wait until nothing covers the element's center, and fail with
   `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
@@ -240,22 +242,33 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   are `place <sidebar|pane|phone>` (fails unless the view measures 320 x 720,
   820 x 680, or a 390 x 844 phone screen), `theme <light|dark>`,
   `seed <empty|library|episodes|lists|local|offline>` (replaces `data.json`
-  while PodNotes is disabled; `local` and `offline` also write media files into
-  the vault), `go '<page JSON>'`, `offline <on|off>`, `shot <file.png>`, and
-  `set <state|all> <label> [--widths ...] [--themes ...]`. `set` writes
+  while PodNotes is disabled and deletes the episode notes; `local` and
+  `offline` also write media files into the vault), `go '<page JSON>'`,
+  `offline <on|off>`, `shot <file.png>`, and
+  `set <state|player|all> <label> [--widths ...] [--themes ...]`. `set` writes
   `.obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png` and a
   `<state>-sheet.png` with the design prototype's screen beside each shot, when
   the design has one. The states are `first-run`, `add-podcast`, `library`,
   `episodes`, `error-feed`, `queue`, `playlists`, `playlist`, `latest`,
-  `played`, `local-files`, `offline` and `status-bar`. `set` opens each page
-  by its page JSON, so a state works on any version of the view. `shot` hides
-  Obsidian's status bar, except in `status-bar`, which puts a `9 properties`
-  item in it over the mini player and has no phone shot, because Obsidian hides
-  the status bar on mobile.
+  `played`, `local-files`, `offline` and `status-bar`, and the player's
+  `now-playing`, `mini-player`, `capture`, `chapters`, `up-next`,
+  `up-next-empty`, `no-chapters`, `video`, `local-player` and `media-error`.
+  `set player` runs the player's states and `set all` every state; both go on
+  past a failed state and fail at the end. `set` opens each page by its page
+  JSON, so a state works on any version of the view. A player state plays an
+  episode until its media loads and pauses it at a fixed second.
+  `capture`, `chapters`, `up-next` and `up-next-empty` then press the full
+  player's `Timestamp`, `Chapters` or `Up next` button, and fail at once
+  without a button that reads exactly that, as on a full player before v3.
+  `shot` hides Obsidian's status bar, except in `status-bar`, which puts a
+  `9 properties` item in it over the mini player and has no phone shot, because
+  Obsidian hides the status bar on mobile.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
   `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
-  one more feed to add. `retitle` renames the first feed's two episodes to
+  one more feed to add. Their episodes' media is silence as long as the feed
+  says. `#213` has chapters, and `Signal & Noise` has a 10 s video episode that
+  ffmpeg makes on its first request and one whose media answers 404. `retitle` renames the first feed's two episodes to
   `Renamed Opening Show` and `Renamed Closing Show`, keeping their GUIDs, until
   the server stops. `requests` prints the paths
   PodNotes fetched from the server. The feed URL uses the host `podnotes.test`,

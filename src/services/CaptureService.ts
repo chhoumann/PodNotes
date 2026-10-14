@@ -1,6 +1,14 @@
-import { MarkdownView, Notice, type MarkdownFileInfo, type WorkspaceLeaf } from "obsidian";
+import {
+	MarkdownView,
+	Notice,
+	type Editor,
+	type MarkdownFileInfo,
+	type TFile,
+	type WorkspaceLeaf,
+} from "obsidian";
 import { TimestampTemplateEngine } from "src/TemplateEngine";
 import { createPodcastNoteFileIfNotExists } from "src/createPodcastNote";
+import { noticeWithUndo } from "src/ui/undoNotice";
 import { prepareTimestampForInsertion } from "src/utility/prepareTimestampInsertion";
 import { createRecentPodcastSegment, getSegmentCaptureTemplate } from "src/utility/podcastSegment";
 import type PodNotes from "src/main";
@@ -15,11 +23,18 @@ export interface Capture {
 	created: boolean;
 }
 
+/** A note's text as a capture found it and as it left it. */
+interface Snapshot {
+	readonly before: string;
+	readonly after: string;
+}
+
 /** Puts a capture where the user writes: the editor they used last, else the episode note. */
 export class CaptureService {
 	private activeLeaf: WorkspaceLeaf | null;
 	// Clicking in the PodNotes view leaves workspace.activeEditor null.
 	private lastEditorLeaf: WorkspaceLeaf | null = null;
+	private disposed = false;
 
 	constructor(private readonly plugin: PodNotes) {
 		const { workspace } = plugin.app;
@@ -37,6 +52,11 @@ export class CaptureService {
 				if (!this.editingView(this.lastEditorLeaf)) this.lastEditorLeaf = null;
 			}),
 		);
+	}
+
+	/** An Undo is bound to the plugin instance, so a capture that ends after unload offers none. */
+	dispose(): void {
+		this.disposed = true;
 	}
 
 	timestamp(): Promise<Capture | null> {
@@ -74,7 +94,7 @@ export class CaptureService {
 
 		const target = this.editorTarget();
 		if (target?.editor) {
-			const { editor } = target;
+			const { editor, file } = target;
 			// replaceSelection lets the editor place the caret, which hand-computed
 			// positions get wrong in Live Preview table cells. Inside a table the text is
 			// escaped so pipes and newlines don't break the row (#165).
@@ -83,10 +103,22 @@ export class CaptureService {
 				lineCount: editor.lineCount(),
 				cursorLine: editor.getCursor("from").line,
 			});
+			const before = editor.getValue();
 			editor.replaceSelection(inserted);
+			const snapshot = { before, after: editor.getValue() };
+			// Outside a note's own view, as in a canvas card, the editor's text need not be
+			// its file's, so only that editor can take the capture back.
+			const undo =
+				target instanceof MarkdownView && file
+					? () => this.revert(file, snapshot)
+					: () =>
+							target.editor === editor &&
+							target.file === file &&
+							revertIn(editor, snapshot);
+			this.offer(file, false, undo);
 			return {
 				destination: "editor",
-				path: target.file?.path ?? "",
+				path: file?.path ?? "",
 				text: inserted,
 				created: false,
 			};
@@ -99,16 +131,57 @@ export class CaptureService {
 		try {
 			const { file, created } = await createPodcastNoteFileIfNotExists(episode);
 			const appended = text.endsWith("\n") ? text : `${text}\n`;
-			await this.plugin.app.vault.process(file, (content) =>
-				content.length > 0 && !content.endsWith("\n")
+			let before = "";
+			const after = await this.plugin.app.vault.process(file, (content) => {
+				before = content;
+				return content.length > 0 && !content.endsWith("\n")
 					? `${content}\n${appended}`
-					: `${content}${appended}`,
-			);
+					: `${content}${appended}`;
+			});
+			this.offer(file, created, () => this.revert(file, { before, after }));
 			return { destination: "note", path: file.path, text: appended, created };
 		} catch (error) {
 			console.error("PodNotes: failed to capture timestamp into episode note", error);
 			new Notice("Failed to capture timestamp into episode note");
 			return null;
+		}
+	}
+
+	/**
+	 * Says where the capture went, with an Undo that takes it back. `undo` returns false,
+	 * leaving the note as it is, unless the note is still exactly as the capture left it.
+	 */
+	private offer(file: TFile | null, created: boolean, undo: () => boolean | Promise<boolean>) {
+		if (this.disposed) return;
+		const name = file?.basename;
+		noticeWithUndo(
+			created ? `Created ${name}` : name ? `Timestamp added to ${name}` : "Timestamp added",
+			async () => {
+				if (!(await undo())) {
+					new Notice("The note isn't as the capture left it, so the timestamp stays");
+				}
+			},
+		);
+	}
+
+	/** Puts the note back as the capture found it, while it is exactly as the capture left it. */
+	private async revert(file: TFile, snapshot: Snapshot): Promise<boolean> {
+		// An open editor's buffer is the note: a vault write behind it could lose what it
+		// has not saved yet. Obsidian saves a note as it leaves editing, so once that save
+		// lands, a closed tab or one in Reading view leaves the file as the note.
+		const editing = this.plugin.app.workspace
+			.getLeavesOfType("markdown")
+			.map((leaf) => this.editingView(leaf))
+			.find((view) => view?.file === file);
+		if (editing) return revertIn(editing.editor, snapshot);
+		try {
+			await this.plugin.app.vault.process(file, (content) => {
+				if (content !== snapshot.after) throw new Error("The note changed");
+				return snapshot.before;
+			});
+			return true;
+		} catch {
+			return false;
 		}
 	}
 
@@ -127,4 +200,27 @@ export class CaptureService {
 			? leaf.view
 			: null;
 	}
+}
+
+/**
+ * Puts back only the stretch the capture changed, so the caret and the editor's own
+ * undo history stay.
+ */
+function revertIn(editor: Editor, { before, after }: Snapshot): boolean {
+	if (editor.getValue() !== after) return false;
+	let from = 0;
+	while (from < before.length && before[from] === after[from]) from++;
+	let tail = 0;
+	while (
+		tail < Math.min(before.length, after.length) - from &&
+		before[before.length - 1 - tail] === after[after.length - 1 - tail]
+	) {
+		tail++;
+	}
+	editor.replaceRange(
+		before.slice(from, before.length - tail),
+		editor.offsetToPos(from),
+		editor.offsetToPos(after.length - tail),
+	);
+	return true;
 }

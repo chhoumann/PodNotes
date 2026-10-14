@@ -126,7 +126,7 @@ export async function dismissNotice(obsidian: ObsidianClient, message: string): 
 		async () => {
 			const sample = await obsidian.dev.evalJson<Point | null>(`(() => {
 				const notice = [...document.querySelectorAll(".notice")].find((el) => el.textContent.trim().startsWith(${jsLiteral(message)}));
-				const body = notice?.querySelector(".notice-message") ?? notice;
+				const body = notice?.querySelector(".pn-undo-message") ?? notice?.querySelector(".notice-message") ?? notice;
 				const text = body && [...body.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
 				if (!text) return null;
 				const range = document.createRange();

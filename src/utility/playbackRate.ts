@@ -23,6 +23,7 @@ function clampPlaybackRate(value: number): number {
 	return Math.min(PLAYBACK_RATE_MAX, Math.max(PLAYBACK_RATE_MIN, roundToHundredths(value)));
 }
 
+// Hundredths, so the rate menu's quarter steps such as 1.25 survive.
 function roundToHundredths(value: number): number {
 	return Math.round(value * 100) / 100;
 }

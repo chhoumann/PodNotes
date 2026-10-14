@@ -179,7 +179,7 @@ describe("an episode list", () => {
 
 		expect(more.closest(".pn-ep-main")).toBeNull();
 		expect(more.previousElementSibling).toHaveClass("pn-ep-main");
-		expect(shown).toHaveBeenCalledWith({ x: 280, y: 90, doc: document }, document);
+		expect(shown).toHaveBeenCalledWith({ x: 280, y: 90, doc: document, el: more }, document);
 		expect(titles.mock.calls[0]).toEqual(["Play"]);
 	});
 
@@ -187,9 +187,13 @@ describe("an episode list", () => {
 		renderPlaylist([episode("First")]);
 		const shown = vi.spyOn(obsidian.Menu.prototype, "showAtPosition");
 
-		await fireEvent.contextMenu(await screen.findByText("First"), { clientX: 12, clientY: 34 });
+		const title = await screen.findByText("First");
+		await fireEvent.contextMenu(title, { clientX: 12, clientY: 34 });
 
-		expect(shown).toHaveBeenCalledWith({ x: 12, y: 34, doc: document }, document);
+		expect(shown).toHaveBeenCalledWith(
+			{ x: 12, y: 34, doc: document, el: title.closest(".pn-ep-main") },
+			document,
+		);
 	});
 
 	test("lists every episode, also two that share a podcast and a title", async () => {

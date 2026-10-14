@@ -194,14 +194,18 @@ export async function typeText(obsidian: ObsidianClient, text: string): Promise<
 	await cdp(obsidian, "Input.insertText", { text });
 }
 
-const KEY_CODES = { Tab: 9, Enter: 13, Escape: 27, ArrowUp: 38, ArrowDown: 40 } as const;
+const KEYS = {
+	Tab: { key: "Tab", windowsVirtualKeyCode: 9 },
+	Enter: { key: "Enter", windowsVirtualKeyCode: 13 },
+	Escape: { key: "Escape", windowsVirtualKeyCode: 27 },
+	ArrowUp: { key: "ArrowUp", windowsVirtualKeyCode: 38 },
+	ArrowDown: { key: "ArrowDown", windowsVirtualKeyCode: 40 },
+	Space: { key: " ", windowsVirtualKeyCode: 32, text: " " },
+} as const;
 
-/** Presses and releases `key` on whatever has focus. */
-export async function pressKey(
-	obsidian: ObsidianClient,
-	key: keyof typeof KEY_CODES,
-): Promise<void> {
-	const event = { key, code: key, windowsVirtualKeyCode: KEY_CODES[key] };
+/** Presses and releases the key with this `code` on whatever has focus. */
+export async function pressKey(obsidian: ObsidianClient, code: keyof typeof KEYS): Promise<void> {
+	const event = { code, ...KEYS[code] };
 	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...event });
 	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...event });
 }

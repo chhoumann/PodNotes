@@ -164,8 +164,11 @@ describe("an episode row", () => {
 	});
 });
 
-test("minutes round to whole minutes, at least one, and hours past 60", () => {
-	expect([20, 90, 48 * 60, 63 * 60].map(formatMinutes)).toEqual([
+test("under a minute shows seconds, at least one, then whole minutes, and hours past 60", () => {
+	expect([0.2, 20, 59.4, 59.6, 90, 48 * 60, 63 * 60].map(formatMinutes)).toEqual([
+		"1 s",
+		"20 s",
+		"59 s",
 		"1 min",
 		"2 min",
 		"48 min",

@@ -13,6 +13,7 @@ import { isSameEpisode, isSameStoredEpisode } from "src/utility/episodeKey";
 import { episodeLinkTarget } from "src/utility/episodeLinkTarget";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
+import { PLAYBACK_RATES } from "src/utility/playbackRate";
 import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
 import { availabilityOf, isCurrentEpisode } from "./episodeRow";
@@ -21,7 +22,7 @@ import { availabilityOf, isCurrentEpisode } from "./episodeRow";
 export type MenuEntry =
 	| {
 			readonly title: string;
-			readonly icon: IconType;
+			readonly icon?: IconType;
 			readonly checked?: boolean;
 			readonly warning?: boolean;
 			readonly disabled?: boolean;
@@ -29,11 +30,15 @@ export type MenuEntry =
 	  }
 	| "separator";
 
-/** Where a menu opens. The document is the one the pointer was in, which can be a popout's. */
+/**
+ * Where a menu opens, and the control that opened it. The document is the one the
+ * pointer was in, which can be a popout's.
+ */
 export interface MenuAnchor {
 	readonly x: number;
 	readonly y: number;
 	readonly doc: Document;
+	readonly el: HTMLElement;
 }
 
 /** A right-click or long press opens the menu at the pointer, a button under itself. */
@@ -41,27 +46,76 @@ export function anchorOf(event: MouseEvent): MenuAnchor {
 	const el = event.currentTarget as HTMLElement;
 	if (event.type === "contextmenu") {
 		event.preventDefault();
-		return { x: event.clientX, y: event.clientY, doc: el.doc };
+		return { x: event.clientX, y: event.clientY, doc: el.doc, el };
 	}
 	const { left, bottom } = el.getBoundingClientRect();
-	return { x: left, y: bottom, doc: el.doc };
+	return { x: left, y: bottom, doc: el.doc, el };
 }
 
+/**
+ * Focus goes back to the control that opened the menu, so the next Escape reaches
+ * the view. A picked item runs after that, so one that opens a note or a modal
+ * keeps the focus it sets. Obsidian runs an item before it hides the menu.
+ */
 export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 	const menu = new Menu();
+	let picked = false;
 	for (const entry of entries) {
 		if (entry === "separator") {
 			menu.addSeparator();
 			continue;
 		}
 		menu.addItem((item) => {
-			item.setTitle(entry.title).setIcon(entry.icon).onClick(entry.onClick);
+			item.setTitle(entry.title).onClick(() => {
+				picked = true;
+				at.el.focus();
+				entry.onClick();
+			});
+			if (entry.icon) item.setIcon(entry.icon);
 			if (entry.checked) item.setChecked(true);
 			if (entry.warning) item.setWarning(true);
 			if (entry.disabled) item.setDisabled(true);
 		});
 	}
+	menu.onHide(() => {
+		// Obsidian's menu passes on the Escape that closes it, and Obsidian sends focus from
+		// a sidebar to the main area on an Escape nothing handled. This one counts as handled.
+		// It works because the menu hides synchronously inside that keydown. On a phone the
+		// hide is animated, so the event is gone by then and this does nothing.
+		const closing = at.el.win.event;
+		if (closing?.type === "keydown" && "key" in closing && closing.key === "Escape")
+			closing.preventDefault();
+		if (!picked && at.el.isConnected) at.el.focus();
+	});
 	menu.showAtPosition(at, at.doc);
+}
+
+/** The rate pill's speeds. The live rate, which the commands step by 0.1, may be none of them. */
+export function rateMenu({ player }: ShellServices): MenuEntry[] {
+	const live = get(player.state).playbackRate;
+	return PLAYBACK_RATES.map((rate) => ({
+		title: `${rate}×`,
+		checked: rate === live,
+		onClick: () => player.setPlaybackRate(rate),
+	}));
+}
+
+/** Open note, or Create note from the template, which opens it. */
+export function noteEntry(
+	episode: Episode,
+	{ hasNote, settings }: ShellServices,
+): { readonly title: string; readonly icon: IconType; onClick(): void } {
+	return hasNote(episode)
+		? { title: "Open note", icon: "file-text", onClick: () => openPodcastNote(episode) }
+		: {
+				title: "Create note",
+				icon: "file-plus",
+				onClick: () => {
+					const { path, template } = get(settings).note;
+					if (path && template) void createPodcastNote(episode);
+					else new Notice("Please set a note path and template in the settings.");
+				},
+			};
 }
 
 function copy(text: string, what: string): void {
@@ -151,16 +205,7 @@ export function episodeMenu(
 			actions.setQueued(episode, !queued),
 		),
 	);
-	entries.push(
-		"separator",
-		services.hasNote(episode)
-			? item("Open note", "file-text", () => openPodcastNote(episode))
-			: item("Create note", "file-plus", () => {
-					const { path, template } = get(settings).note;
-					if (path && template) void createPodcastNote(episode);
-					else new Notice("Please set a note path and template in the settings.");
-				}),
-	);
+	entries.push("separator", noteEntry(episode, services));
 	if (isLocalFile(episode)) {
 		if (downloaded) {
 			// Removing a local file forgets it and never trashes it.

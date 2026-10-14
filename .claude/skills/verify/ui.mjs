@@ -2,17 +2,18 @@
 // Trusted input for this worktree's Obsidian instance: real mouse and keyboard
 // events sent through `obsidian dev:cdp`, aimed at an element found by CSS.
 //
-//   node .claude/skills/verify/ui.mjs click '<css>' [--text <substring>] [--right] [--timeout <ms>]
+//   node .claude/skills/verify/ui.mjs click '<css>' [--text <substring> [--exact]] [--right] [--timeout <ms>]
 //   node .claude/skills/verify/ui.mjs type '<css>' '<text>'    click, then insert at the cursor
 //   node .claude/skills/verify/ui.mjs fill '<css>' '<text>'    click, select all, then replace
 //   node .claude/skills/verify/ui.mjs key <Enter|Escape|Tab|ArrowDown|ArrowUp|Backspace|<char>|Ctrl+<char>>
-//   node .claude/skills/verify/ui.mjs wait '<css>' [--text <substring>] [--timeout <ms>]
+//   node .claude/skills/verify/ui.mjs wait '<css>' [--text <substring> [--exact]] [--timeout <ms>]
 //   node .claude/skills/verify/ui.mjs uri 'obsidian://podnotes?...'
 //
 // `click`, `type`, `fill` and `wait` wait up to 10 s until exactly one visible
 // element matches the selector and --text filter and nothing covers its center,
 // so they never act on a list still loading, on the wrong match, or through an
-// overlay. `key` and `uri` do not wait.
+// overlay. --exact matches only an element whose visible text is --text, so
+// "Chapters" does not also match "Chapters (8)". `key` and `uri` do not wait.
 import { fileURLToPath } from "node:url";
 import {
 	cliSocketExists,
@@ -78,9 +79,11 @@ async function locate(css, text) {
 	const output = await obsidian([
 		"eval",
 		`code=(() => {
+			const text = ${JSON.stringify(text ?? "")};
 			const matches = [...document.querySelectorAll(${JSON.stringify(css)})].filter((el) => {
 				const rect = el.getBoundingClientRect();
-				return rect.width > 0 && rect.height > 0 && (${JSON.stringify(text ?? "")} === "" || el.textContent.includes(${JSON.stringify(text ?? "")}));
+				return rect.width > 0 && rect.height > 0 && (text === "" ||
+					(${exact} ? el.innerText.trim() === text : el.textContent.includes(text)));
 			});
 			if (matches.length !== 1) return JSON.stringify({ count: matches.length });
 			matches[0].scrollIntoView({ block: "center", inline: "center" });
@@ -189,6 +192,7 @@ function flag(args, name) {
 
 const [verb, target, ...rest] = process.argv.slice(2);
 const text = flag(rest, "--text");
+const exact = rest.includes("--exact");
 const timeoutMs = Number(flag(rest, "--timeout") ?? 10000);
 try {
 	if (verb === "click" && target)

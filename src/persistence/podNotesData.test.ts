@@ -611,6 +611,21 @@ describe("PodNotes data schema", () => {
 		});
 	});
 
+	it.each([
+		["a 2.21.1 library's one-decimal default speed", 1.3],
+		["the rate menu's quarter speed as the default", 1.25],
+	])("loads and saves %s unchanged", (_case, rate) => {
+		const decoded = decodePodNotesData({
+			...structuredClone(released2211),
+			defaultPlaybackRate: rate,
+		});
+
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.changed).toBe(false);
+		expect(decoded.settings.defaultPlaybackRate).toBe(rate);
+		expect(encodePodNotesData(decoded.settings).defaultPlaybackRate).toBe(rate);
+	});
+
 	const storedDownload = (downloadedByPodNotes: unknown) => ({
 		...episode("Downloaded"),
 		episodeDate: episodeDate.toISOString(),

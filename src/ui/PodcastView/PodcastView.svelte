@@ -21,9 +21,9 @@
 	import { anchorOf, playlistMenu, podcastMenu, queueMenu, showMenu } from "./menus";
 	import MiniPlayer from "./MiniPlayer.svelte";
 	import { activeRoot, headFor, pageExists, pageKey, type RootCounts } from "./pages";
-	import PlayerOverlay from "./PlayerOverlay.svelte";
+	import Player from "./Player.svelte";
 	import PlaylistsPage from "./PlaylistsPage.svelte";
-	import QueuePage from "./QueuePage.svelte";
+	import QueueList from "./QueueList.svelte";
 	import Rail from "./Rail.svelte";
 	import SearchField from "./SearchField.svelte";
 
@@ -238,7 +238,7 @@
 						{:else if page.kind === "feed"}
 							<EpisodesPage key={page.key} />
 						{:else if page.kind === "queue"}
-							<QueuePage />
+							<QueueList empty="Nothing here yet" />
 						{:else}
 							<ListPage {page} />
 						{/if}
@@ -251,7 +251,7 @@
 		<MiniPlayer {layout} />
 	{/if}
 	{#if overlaid && root}
-		<PlayerOverlay viewRoot={root} />
+		<Player viewRoot={root} {layout} />
 	{/if}
 </div>
 
@@ -263,6 +263,9 @@
 		--pn-btn: 28px;
 		--pn-row: 28px;
 		--pn-head: 40px;
+		--pn-cap-h: 36px;
+		--pn-play: 52px;
+		--pn-skip: 40px;
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -277,8 +280,24 @@
 		padding: 0;
 	}
 
+	/* A long note or podcast name keeps an Undo notice to two lines, with Undo beside it. */
+	:global(.notice-message:has(> .pn-undo)) {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-2);
+	}
+
+	:global(.notice .pn-undo-message) {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+	}
+
 	:global(.notice .pn-undo) {
-		margin-left: var(--size-4-2);
+		flex: none;
 	}
 
 	/* A prompt's field takes the rest of its row, so a feed address shows whole. */
@@ -315,6 +334,8 @@
 	.podcast-view.is-wide {
 		--pn-pad: var(--size-4-6);
 		--pn-head: 44px;
+		--pn-cap-h: 38px;
+		--pn-play: 56px;
 	}
 
 	.podcast-view.is-phone {
@@ -322,6 +343,9 @@
 		--pn-btn: 44px;
 		--pn-row: 44px;
 		--pn-head: 52px;
+		--pn-cap-h: 48px;
+		--pn-play: 64px;
+		--pn-skip: 48px;
 	}
 
 	.pn-body {
@@ -811,6 +835,62 @@
 			display: flex;
 			--icon-size: 28px;
 			--icon-stroke: 1.5px;
+		}
+
+		.pn-panel {
+			width: 100%;
+			height: 100%;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.pn-panel-scroll {
+			flex: 1;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
+			overflow-y: auto;
+			padding: var(--size-4-2) 0 var(--size-4-4);
+			mask-image: linear-gradient(
+				to bottom,
+				transparent,
+				#000 12px,
+				#000 calc(100% - 20px),
+				transparent
+			);
+		}
+
+		.pn-panel-scroll > .pn-panel-empty {
+			margin: auto 0;
+		}
+
+		.pn-panel-head {
+			flex: none;
+			display: flex;
+			align-items: center;
+			gap: var(--size-4-2);
+			min-height: 32px;
+			padding-bottom: var(--size-2-2);
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			font-weight: var(--font-medium);
+			white-space: nowrap;
+		}
+
+		.pn-textbtn {
+			height: auto;
+			padding: var(--size-2-2) var(--size-4-2);
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-accent);
+			font-size: var(--font-ui-small);
+			font-weight: var(--font-medium);
+		}
+
+		.pn-textbtn:hover {
+			background: var(--background-modifier-hover);
 		}
 
 		/* Obsidian's buttons keep their text on one line; these wrap their titles. */
@@ -1319,7 +1399,9 @@
 		.pn-alt:focus-visible,
 		.pn-result:focus-visible,
 		.pn-railsearch:focus-visible,
-		.pn-mini-open:focus-visible {
+		.pn-mini-open:focus-visible,
+		.pn-textbtn:focus-visible,
+		.pn-player button:focus-visible {
 			outline: 2px solid var(--interactive-accent);
 			outline-offset: 1px;
 			box-shadow: none;
@@ -1343,6 +1425,14 @@
 	}
 
 	.is-wide :global {
+		.pn-player .pn-panel-scroll {
+			padding: var(--size-4-3) var(--size-4-4) var(--size-4-4);
+		}
+
+		.pn-player .pn-panel-head {
+			padding: var(--size-4-2) var(--size-4-4) 0 var(--size-4-6);
+		}
+
 		.pn-ep-meta {
 			flex-wrap: nowrap;
 			white-space: nowrap;
@@ -1395,6 +1485,10 @@
 	}
 
 	.is-phone :global {
+		.pn-panel-head {
+			min-height: 44px;
+		}
+
 		.pn-grid {
 			grid-template-columns: repeat(3, 1fr);
 			gap: var(--size-4-3);

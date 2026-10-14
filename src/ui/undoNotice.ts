@@ -6,8 +6,8 @@ const showing = new Set<() => void>();
 /** A Notice that ends in an Undo button. Undo runs at most once, and hides the notice. */
 export function noticeWithUndo(message: string, undo: () => void): void {
 	const fragment = activeDocument.createDocumentFragment();
+	fragment.createSpan({ cls: "pn-undo-message", text: message });
 	const button = fragment.createEl("button", { cls: "pn-undo", text: "Undo" });
-	fragment.prepend(message);
 	const notice = new Notice(fragment, 7000);
 	const dismiss = () => {
 		showing.delete(dismiss);

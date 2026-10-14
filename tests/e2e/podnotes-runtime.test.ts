@@ -297,7 +297,7 @@ describe("PodNotes runtime", () => {
 		expect(rate).toMatchObject({
 			api: 1.5,
 			audio: 1.5,
-			slider: "1.5",
+			pill: "1.5×",
 		});
 	});
 
@@ -1218,12 +1218,12 @@ async function getLevels(obsidian: {
 	`);
 }
 
-/** The rate as the API, the media element, the rate label and the rate slider show it. */
+/** The rate as the API, the media element and the full player's rate pill show it. */
 type PlaybackRates = {
 	api: number | null;
 	audio: number | null;
-	label: string | null;
-	slider: string | null;
+	pill: string | null;
+	name: string | null;
 };
 
 async function waitForPlaybackRate(
@@ -1234,19 +1234,18 @@ async function waitForPlaybackRate(
 	expected: number,
 ): Promise<PlaybackRates> {
 	const startedAt = Date.now();
-	let lastRate: PlaybackRates = { api: null, audio: null, label: null, slider: null };
+	let lastRate: PlaybackRates = { api: null, audio: null, pill: null, name: null };
 
 	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
 		lastRate = await obsidian.dev.evalJson<PlaybackRates>(`
 			(() => {
 				const audio = document.querySelector("audio.podnotes-media");
-				const label = document.querySelector(".playbackrate-container span");
-				const slider = document.querySelector(".playbackrate-container input");
+				const pill = document.querySelector(".pn-player button.pn-rate");
 				return {
 					api: app.plugins.plugins.${PLUGIN_ID}?.api?.playbackRate ?? null,
 					audio: audio?.playbackRate ?? null,
-					label: label?.textContent ?? null,
-					slider: slider?.value ?? null,
+					pill: pill?.textContent ?? null,
+					name: pill?.getAttribute("aria-label") ?? null,
 				};
 			})()
 		`);
@@ -1254,8 +1253,8 @@ async function waitForPlaybackRate(
 		if (
 			lastRate.api === expected &&
 			lastRate.audio === expected &&
-			lastRate.label === `${expected}x` &&
-			lastRate.slider === String(expected)
+			lastRate.pill === `${expected}×` &&
+			lastRate.name === `Playback speed ${expected}x`
 		) {
 			return lastRate;
 		}

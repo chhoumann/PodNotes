@@ -40,7 +40,7 @@ export async function waitUntilShown(
 
 export async function listedEpisodes(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>(
-		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".episode-player") && el.getClientRects().length > 0).map((el) => el.querySelector(".pn-ep-title")?.textContent.trim() ?? "")`,
+		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".pn-player") && el.getClientRects().length > 0).map((el) => el.querySelector(".pn-ep-title")?.textContent.trim() ?? "")`,
 	);
 }
 

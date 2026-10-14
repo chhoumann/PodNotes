@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Scope } from "obsidian";
 	import { onDestroy, tick } from "svelte";
 	import { get } from "svelte/store";
 	import { reorderEpisodes, type QueuePlacement } from "src/store";
@@ -8,7 +9,8 @@
 	import { useServices } from "./context";
 	import QueueRow from "./QueueRow.svelte";
 
-	const { actions, library } = useServices();
+	let { empty }: { empty: string } = $props();
+	const { actions, library, app } = useServices();
 	const { queue } = library;
 
 	let list: HTMLElement | undefined = $state();
@@ -53,13 +55,17 @@
 		const cancel = (cancelled: PointerEvent) => {
 			if (cancelled.pointerId === pointerId) end();
 		};
-		const escape = (key: KeyboardEvent) => {
-			if (key.key === "Escape") end();
-		};
+		// Obsidian's keymap gives Escape to the newest scope and stops it there, so a
+		// window listener would not hear an Escape the full player's scope takes.
+		const escape = new Scope(app.scope);
+		escape.register(null, "Escape", () => {
+			end();
+			return false;
+		});
+		app.keymap.pushScope(escape);
 		win.addEventListener("pointermove", move);
 		win.addEventListener("pointerup", release);
 		win.addEventListener("pointercancel", cancel);
-		win.addEventListener("keydown", escape);
 		drag = {
 			pointerId,
 			episode,
@@ -67,7 +73,7 @@
 				win.removeEventListener("pointermove", move);
 				win.removeEventListener("pointerup", release);
 				win.removeEventListener("pointercancel", cancel);
-				win.removeEventListener("keydown", escape);
+				app.keymap.popScope(escape);
 			},
 		};
 	}
@@ -127,6 +133,6 @@
 {:else}
 	<div class="pn-panel-empty">
 		<span class="pn-panel-empty-icon" {@attach icon("list-end")}></span>
-		<span>Nothing here yet</span>
+		<span>{empty}</span>
 	</div>
 {/if}
