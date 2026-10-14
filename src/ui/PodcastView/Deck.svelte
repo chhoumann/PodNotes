@@ -248,10 +248,21 @@
 			vertical-align: top;
 		}
 
-		button.pn-np-pod:hover,
-		.pn-chapnow:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
+		@media (hover: hover) {
+			button.pn-np-pod:hover,
+			.pn-chapnow:hover {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
+
+			.pn-rate:hover:not(:disabled) span {
+				border-color: var(--background-modifier-border-focus);
+				color: var(--text-normal);
+			}
+
+			:is(.pn-skip, .pn-vol):hover {
+				background: var(--background-modifier-hover);
+			}
 		}
 
 		.pn-scrubwrap {
@@ -310,20 +321,11 @@
 			font-variant-numeric: tabular-nums;
 		}
 
-		.pn-rate:hover:not(:disabled) span {
-			border-color: var(--background-modifier-border-focus);
-			color: var(--text-normal);
-		}
-
 		:is(.pn-skip, .pn-vol) {
 			position: relative;
 			width: var(--pn-skip);
 			height: var(--pn-skip);
 			border-radius: 50%;
-		}
-
-		:is(.pn-skip, .pn-vol):hover {
-			background: var(--background-modifier-hover);
 		}
 
 		.pn-skip {
@@ -425,9 +427,9 @@
 		}
 	}
 
+	/* Obsidian's header and navbar take a phone's height, so the deck gives the stage room. */
 	:global(.is-phone) .pn-deck {
-		gap: var(--size-4-4);
-		padding-bottom: var(--size-4-2);
+		padding-block: var(--size-4-2);
 	}
 
 	:global(.is-phone) .pn-deck :global {

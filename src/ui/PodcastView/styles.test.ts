@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import postcss from "postcss";
 import { describe, expect, test } from "vitest";
 import { componentCss, styled } from "../../../tests/mocks/componentCss";
 
@@ -68,4 +69,54 @@ describe("focus ring", () => {
 			["2px solid var(--interactive-accent)", "1px"],
 		]);
 	});
+});
+
+describe("hover", () => {
+	const TOUCHED = ["PodcastView", "EpisodeRow", "QueueRow", "Panel", "PlaylistsPage", "Deck"];
+	const HOVER = "(hover: hover)";
+
+	test("only a device that can hover lights up the view's controls and rows", () => {
+		const unguarded: string[] = [];
+		postcss.parse(componentCss(TOUCHED)).walkRules((rule) => {
+			const media = rule.parent?.type === "atrule" ? rule.parent : undefined;
+			if (rule.selector.includes(":hover") && media?.params !== HOVER)
+				unguarded.push(rule.selector);
+		});
+
+		expect(unguarded).toEqual([]);
+	});
+
+	// % in each markup is where a hovered element takes the `hover` class.
+	test.each([
+		[
+			"Back",
+			"PodcastView",
+			'<button class="pn-back%"></button>',
+			".pn-back",
+			"rgba(0, 0, 0, 0)",
+		],
+		["a row", "EpisodeRow", '<div class="pn-ep {}%"></div>', ".pn-ep", ""],
+		[
+			"the skip button",
+			"Deck",
+			'<div class="pn-deck {}"><button class="pn-skip%"></button></div>',
+			".pn-skip",
+			"",
+		],
+	])(
+		"%s keeps its resting background after a tap",
+		(_name, component, html, selector, resting) => {
+			const background = (hovered: boolean, media: string[] = []) => {
+				const css = componentCss(["PodcastView", component], { media, states: ["hover"] });
+				const markup = inView(component, html.replace("%", hovered ? " hover" : ""));
+				return getComputedStyle(styled(css, markup, selector)).background;
+			};
+
+			expect([background(false), background(true), background(true, [HOVER])]).toEqual([
+				resting,
+				resting,
+				"var(--background-modifier-hover)",
+			]);
+		},
+	);
 });

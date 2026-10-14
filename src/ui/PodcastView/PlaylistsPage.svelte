@@ -65,8 +65,10 @@
 			text-align: left;
 		}
 
-		.pn-plrow:hover {
-			background: var(--background-modifier-hover);
+		@media (hover: hover) {
+			.pn-plrow:hover {
+				background: var(--background-modifier-hover);
+			}
 		}
 
 		.pn-plicon {

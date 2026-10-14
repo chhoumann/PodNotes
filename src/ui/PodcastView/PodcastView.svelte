@@ -423,11 +423,6 @@
 			color: var(--text-muted);
 		}
 
-		.pn-back:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
-		}
-
 		.pn-back-icon {
 			display: flex;
 			flex: none;
@@ -550,10 +545,25 @@
 			opacity: var(--icon-opacity);
 		}
 
-		.pn-iconbtn:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
-			opacity: var(--icon-opacity-hover);
+		/* A touch screen keeps a tapped control hovered until the next tap elsewhere. */
+		@media (hover: hover) {
+			:is(.pn-back, .pn-iconbtn):hover {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
+
+			.pn-iconbtn:hover {
+				opacity: var(--icon-opacity-hover);
+			}
+
+			.pn-btn.mod-cta:hover {
+				background: var(--interactive-accent-hover);
+			}
+
+			.pn-navitem:hover {
+				background: var(--nav-item-background-hover);
+				color: var(--nav-item-color-hover);
+			}
 		}
 
 		.pn-iconbtn:disabled {
@@ -583,10 +593,6 @@
 			box-shadow: none;
 		}
 
-		.pn-btn.mod-cta:hover {
-			background: var(--interactive-accent-hover);
-		}
-
 		.pn-nav {
 			display: flex;
 			flex-direction: column;
@@ -610,11 +616,6 @@
 			font-size: var(--nav-item-size);
 			font-weight: inherit;
 			text-align: left;
-		}
-
-		.pn-navitem:hover {
-			background: var(--nav-item-background-hover);
-			color: var(--nav-item-color-hover);
 		}
 
 		.pn-navitem.is-active {

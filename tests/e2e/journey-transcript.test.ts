@@ -4,6 +4,7 @@ import { createPodNotesE2EHarness } from "./harness";
 import {
 	dismissNotices,
 	runCommand,
+	placePodNotes,
 	setMobileEmulation,
 	setOffline,
 	showAddPodcast,
@@ -142,6 +143,36 @@ async function takeNote(): Promise<string> {
 	})()`);
 	await dismissNotices(obsidian);
 	return text.replace(/^Date: .+$/m, "Date: <date>");
+}
+
+type Box = Readonly<{ top: number; bottom: number; width: number; height: number }>;
+type PhoneGeometry = Readonly<{
+	stage: Box;
+	art: Box | null;
+	panel: Box | null;
+	list: Box | null;
+	controls: number;
+	navbar: number;
+}>;
+
+/** Where the full player lays out its stage and deck on the phone, against Obsidian's navbar. */
+function phoneGeometry(): Promise<PhoneGeometry> {
+	return getContext().obsidian.dev.evalJson<PhoneGeometry>(`(() => {
+		const player = document.querySelector(${jsLiteral(`${PLAYER_VIEW} section.pn-player`)});
+		const box = (el) => {
+			if (!el) return null;
+			const { top, bottom, width, height } = el.getBoundingClientRect();
+			return { top, bottom, width, height };
+		};
+		return {
+			stage: box(player.querySelector(".pn-stage")),
+			art: box(player.querySelector(".pn-np-art")),
+			panel: box(player.querySelector(".pn-stage .pn-panel")),
+			list: box(player.querySelector(".pn-stage .pn-panel-scroll")),
+			controls: Math.max(...[...player.querySelectorAll(".pn-deck button")].map((button) => button.getBoundingClientRect().bottom)),
+			navbar: document.querySelector(".mobile-navbar").getBoundingClientRect().top,
+		};
+	})()`);
 }
 
 describe("transcript journeys", () => {
@@ -369,7 +400,7 @@ describe("transcript journeys", () => {
 		);
 	}, 120_000);
 
-	test("on a phone, Save, the Find field, Follow and Up next's Edit are 44 px tall, and Edit 44 px wide", async () => {
+	test("on a phone, the stage gets the room the deck can spare, and Save, the Find field, Follow and Edit are 44 px", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const phone = { width: 390, height: 844 };
@@ -394,15 +425,17 @@ describe("transcript journeys", () => {
 			current: storedEpisode(server, FEED, CAPTIONED),
 			queue: [storedEpisode(server, FEED, PLAIN)],
 		});
-		await showPodNotes(obsidian);
+		await placePodNotes(obsidian, "main area");
 		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
 		await waitUntilShown(obsidian, ui.fullPlayer);
+		const geometry = await phoneGeometry();
 		await click(obsidian, ui.playerPanel("Transcript"));
 		await eventually(
 			obsidian,
 			async () => (await shownTranscript()).lines.length,
 			LINES.length,
 		);
+		const transcriptPanel = await phoneGeometry();
 		const height = (target: UiTarget) =>
 			obsidian.dev.evalJson<number>(
 				`Math.round((${target.elements})[0]?.getBoundingClientRect().height ?? 0)`,
@@ -421,11 +454,30 @@ describe("transcript journeys", () => {
 		await click(obsidian, ui.playerPanel("Up next"));
 		await waitUntilShown(obsidian, panelButton("Edit"));
 		heights.edit = await height(panelButton("Edit"));
+		const upNextPanel = await phoneGeometry();
 		const editWidth = await obsidian.dev.evalJson<number>(
 			`(${panelButton("Edit").elements})[0].getBoundingClientRect().width`,
 		);
 
 		expect(heights).toEqual({ save: 44, follow: 44, find: 44, edit: 44 });
 		expect(editWidth).toBeGreaterThanOrEqual(44);
+		expect(geometry.stage.height, "the stage under Obsidian's header").toBeGreaterThanOrEqual(
+			275,
+		);
+		expect(geometry.art, "square artwork that fills the stage's height").toEqual({
+			top: geometry.stage.top + 4,
+			bottom: geometry.stage.bottom - 4,
+			width: geometry.stage.height - 8,
+			height: geometry.stage.height - 8,
+		});
+		for (const { controls, navbar } of [geometry, transcriptPanel, upNextPanel])
+			expect(controls, "the deck above Obsidian's navbar").toBeLessThanOrEqual(navbar);
+		for (const { stage, panel, list } of [transcriptPanel, upNextPanel]) {
+			expect([panel?.top, panel?.bottom], "a panel fills the stage").toEqual([
+				stage.top,
+				stage.bottom,
+			]);
+			expect(list?.bottom, "its list fills the stage under its head").toBe(stage.bottom);
+		}
 	}, 120_000);
 });

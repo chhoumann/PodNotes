@@ -128,8 +128,14 @@
 		border-radius: var(--radius-s);
 	}
 
-	.pn-ep:hover {
-		background: var(--background-modifier-hover);
+	@media (hover: hover) {
+		.pn-ep:hover {
+			background: var(--background-modifier-hover);
+		}
+
+		.pn-ep:hover :global(button.pn-ep-more) {
+			opacity: 1;
+		}
 	}
 
 	.pn-ep.is-queue {
@@ -282,10 +288,6 @@
 		.pn-bar {
 			display: none;
 		}
-	}
-
-	.pn-ep:hover :global(button.pn-ep-more) {
-		opacity: 1;
 	}
 
 	.pn-ep.is-played :global(.pn-ep-title) {

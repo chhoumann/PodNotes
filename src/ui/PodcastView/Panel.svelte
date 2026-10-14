@@ -96,9 +96,11 @@
 			white-space: normal;
 		}
 
-		button.pn-row:not(.is-now):hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
+		@media (hover: hover) {
+			button.pn-row:not(.is-now):hover {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
 		}
 
 		.pn-row.is-now {

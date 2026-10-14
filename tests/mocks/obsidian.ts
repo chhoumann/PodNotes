@@ -726,6 +726,8 @@ export class MenuItem {
 export class Menu {
 	/** Test only: the menu on screen, until it hides. */
 	static shown: Menu | null = null;
+	/** Test only: as on a phone, where Obsidian runs the hide callback after an animation. */
+	static hideDelayMs = 0;
 	items: Array<MenuItem | "separator"> = [];
 	private hideCallback: (() => unknown) | null = null;
 
@@ -759,7 +761,8 @@ export class Menu {
 		if (Menu.shown === this) Menu.shown = null;
 		const callback = this.hideCallback;
 		this.hideCallback = null;
-		callback?.();
+		if (Menu.hideDelayMs > 0) setTimeout(() => callback?.(), Menu.hideDelayMs);
+		else callback?.();
 		return this;
 	}
 

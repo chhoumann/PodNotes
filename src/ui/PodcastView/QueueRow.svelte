@@ -90,8 +90,13 @@
 		opacity: 0.55;
 	}
 
-	:global(.pn-ep:hover) button.pn-ep-x,
 	button.pn-iconbtn.pn-ep-x:focus-visible {
 		opacity: 1;
+	}
+
+	@media (hover: hover) {
+		:global(.pn-ep:hover) button.pn-ep-x {
+			opacity: 1;
+		}
 	}
 </style>

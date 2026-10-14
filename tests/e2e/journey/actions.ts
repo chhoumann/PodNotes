@@ -42,6 +42,35 @@ export async function showPodNotes(obsidian: ObsidianClient): Promise<void> {
 	await waitUntilShown(obsidian, ui.podcastViewport);
 }
 
+/**
+ * Shows PodNotes in one leaf in the right sidebar, `width` px wide, or in the main area,
+ * wherever an earlier test or tool left it, and closes the leaves elsewhere.
+ */
+export async function placePodNotes(
+	obsidian: ObsidianClient,
+	place: { sidebar: number } | "main area",
+): Promise<void> {
+	const sidebar = place !== "main area";
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		const { workspace } = app;
+		const inSidebar = (leaf) => leaf.getRoot() === workspace.rightSplit;
+		for (const leaf of workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}))
+			if (inSidebar(leaf) !== ${sidebar}) leaf.detach();
+		if (workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).length === 0) {
+			let leaf = ${sidebar} ? workspace.getRightLeaf(false) : undefined;
+			workspace.iterateRootLeaves((candidate) => {
+				if (!${sidebar} && (!leaf || candidate.view.getViewType() === "empty")) leaf = candidate;
+			});
+			await leaf.setViewState({ type: ${jsLiteral(VIEW_TYPE)} });
+		}
+		return true;
+	})()`);
+	await showPodNotes(obsidian);
+	if (sidebar) {
+		await obsidian.dev.evalJson(`app.workspace.rightSplit.setSize(${place.sidebar}), true`);
+	}
+}
+
 /** Goes to the Library as a user does: closes the full player, then Back until the Library shows. */
 export async function showLibrary(obsidian: ObsidianClient): Promise<void> {
 	if (await isShown(obsidian, ui.fullPlayer)) await click(obsidian, ui.collapsePlayer);
