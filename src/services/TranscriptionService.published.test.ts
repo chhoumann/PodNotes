@@ -139,7 +139,7 @@ describe("published transcripts", () => {
 
 		await new TranscriptionService(plugin).transcribeCurrentEpisode({ paid: false });
 
-		expect(noticeMessages).toEqual(["This episode's feed publishes no transcript."]);
+		expect(noticeMessages).toEqual(["No published transcript was found for this episode."]);
 		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});

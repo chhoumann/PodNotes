@@ -59,7 +59,7 @@ export class TranscriptionService {
 		this.plugin = plugin;
 	}
 
-	/** Without `paid`, an episode whose feed publishes no transcript is not sent to a provider. */
+	/** `paid: false` stops at a Notice when no published transcript is found, instead of sending the audio to the user's provider. */
 	async transcribeCurrentEpisode({ paid = true } = {}): Promise<void> {
 		if (this.disposed) return;
 		const episode = this.plugin.api.podcast;
@@ -81,7 +81,7 @@ export class TranscriptionService {
 		if (transcript) {
 			this.enqueue({ episode, source: { kind: "published", transcript } });
 		} else if (!paid) {
-			new Notice("This episode's feed publishes no transcript.");
+			new Notice("No published transcript was found for this episode.");
 		} else if (this.hasRequiredKey()) {
 			this.enqueue({ episode, source: { kind: "audio" } });
 		} else {

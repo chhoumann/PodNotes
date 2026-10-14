@@ -1,13 +1,25 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { SecretStorage } from "obsidian";
 import { tick } from "svelte";
 import { get } from "svelte/store";
-import { afterEach, beforeEach, describe, expect, type Mock, test, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	type Mock,
+	onTestFinished,
+	test,
+	vi,
+} from "vitest";
 import type { ParsedFeedEpisodes, TranscriptLink } from "src/parser/feedDocumentParser";
 import { FeedRepository } from "src/services/FeedRepository";
+import { FeedUrlRepository } from "src/services/FeedUrlRepository";
 import { plugin } from "src/store";
 import type { Episode } from "src/types/Episode";
 import { NetworkError } from "src/utility/networkRequest";
+import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import { feedItem, MemoryStorage } from "../../../tests/mocks/feeds";
 import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
@@ -325,6 +337,17 @@ describe("a published transcript", () => {
 		expect(within(list).queryAllByRole("button")).toEqual([]);
 		expect(list.querySelector("[aria-current]")).toBeNull();
 		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+
+		await fireEvent.click(button("Find in transcript"));
+		const field = screen.getByRole("searchbox", { name: "Find in transcript" });
+		await fireEvent.input(field, { target: { value: "paragraph" } });
+		await fireEvent.keyDown(field, { key: "Enter" });
+		expect(
+			screen
+				.getByRole("list", { name: "Transcript" })
+				.querySelector(".is-hit")
+				?.textContent?.trim(),
+		).toBe("Second paragraph.");
 	});
 
 	test("shows once loaded: back from Up next it neither loads again nor fetches again", async () => {
@@ -368,6 +391,40 @@ describe("a transcript that did not load", () => {
 
 		expect(container.innerHTML).not.toContain("s3cret");
 		expect(JSON.stringify(logged.map((spy) => spy.mock.calls))).not.toContain("s3cret");
+	});
+
+	test("never shows the private feed address a saved private feed's transcript quotes", async () => {
+		const feedUrls = new FeedUrlRepository(new SecretStorage());
+		const urlSecretId = feedUrls.store(SECRET);
+		const placeholder = privateFeedPlaceholder("Field Notes");
+		const host = get(plugin);
+		plugin.set({
+			...host,
+			feedUrls,
+			settings: {
+				...host.settings,
+				savedFeeds: {
+					"Field Notes": {
+						title: "Field Notes",
+						url: placeholder,
+						urlSecretId,
+						artworkUrl: "",
+					},
+				},
+			},
+		});
+		onTestFinished(() => plugin.set(host));
+		fetchTextMock.mockResolvedValue(
+			`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n<v Host>Your feed is ${SECRET}\n`,
+		);
+		const { container } = await openTranscript(
+			episodeOf([VTT_LINK], { feedUrl: placeholder }),
+			0,
+		);
+		await transcript();
+
+		expect(rows()).toEqual([`Host 0:00 Your feed is ${placeholder}`]);
+		expect(container.innerHTML).not.toContain("s3cret");
 	});
 
 	test("when the feed itself did not load, offers Retry, not the paid transcription", async () => {

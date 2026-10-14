@@ -190,7 +190,9 @@
 						<div class="pn-tx-spk">{line.speaker}</div>
 					{/if}
 					{#if line.start === undefined}
-						<p class="pn-row">{@render text(line.text)}</p>
+						<p class="pn-row" class:is-hit={needle && at === hit}>
+							{@render text(line.text)}
+						</p>
 					{:else}
 						{@const start = line.start}
 						<button
