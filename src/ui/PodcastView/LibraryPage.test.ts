@@ -142,7 +142,7 @@ describe("the Library's podcast grid", () => {
 		await repository.load(["Art Show"], "network");
 
 		services.online.set(true);
-		void repository.ensureAll();
+		void repository.ensureAll({ online: true });
 		await tick();
 
 		expect(card("Art Show").querySelector(".pn-badge")).toBeNull();

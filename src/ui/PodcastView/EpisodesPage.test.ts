@@ -256,7 +256,7 @@ describe("a podcast's page", () => {
 		const answer = deferred<ParsedFeedEpisodes>();
 		load.mockReturnValueOnce(answer.promise);
 		services.online.set(true);
-		void services.feeds.ensureAll();
+		void services.feeds.ensureAll({ online: true });
 		await tick();
 
 		expect(screen.queryByRole("alert")).toBeNull();
