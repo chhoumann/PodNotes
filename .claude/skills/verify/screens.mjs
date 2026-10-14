@@ -36,7 +36,7 @@
 //         States: first-run, add-podcast, library, episodes, error-feed, queue,
 //         playlists, playlist, latest, played, local-files, offline, status-bar, and the
 //         player's: now-playing, mini-player, capture, chapters, up-next, up-next-empty,
-//         no-chapters, video, local-player, media-error. player runs the player's states
+//         transcript, no-chapters, video, local-player, media-error. player runs the player's states
 //         and all runs every state; both go on past a failed state and fail at the end.
 //         status-bar is the queue with the mini player and a "9 properties" item in
 //         Obsidian's status bar, which that state's shots keep. It has no phone shot:
@@ -44,8 +44,8 @@
 //         A player state plays the scene's current episode until its media loads, then
 //         pauses it at a fixed second, and opens the full player over the Library;
 //         mini-player stays on the podcast's page. media-error waits for the load to
-//         fail instead. capture, chapters, up-next and up-next-empty then press the full
-//         player's Timestamp, Chapters or Up next button with real input, so they fail
+//         fail instead. capture, chapters, up-next, up-next-empty and transcript then press the full
+//         player's Timestamp, Chapters, Up next or Transcript button with real input, so they fail
 //         at once on a full player without a button that reads exactly that. capture
 //         keeps the "Timestamp added to" notice in its shots.
 import { execFileSync } from "node:child_process";

@@ -112,6 +112,12 @@ export const STATES = {
 	// #213's last chapter.
 	chapters: { ...FULL_PLAYER, press: "Chapters", text: () => "Listener question" },
 	"up-next": { ...FULL_PLAYER, press: "Up next", text: () => QUEUE[0][1] },
+	// #213's line at NOW_PLAYING_AT, in the line that starts at 38:01.
+	transcript: {
+		...FULL_PLAYER,
+		press: "Transcript",
+		text: () => "and he will only give you one of them.",
+	},
 	"up-next-empty": {
 		...FULL_PLAYER,
 		extra: (data) => {

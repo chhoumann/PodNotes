@@ -9,7 +9,7 @@
 //                                                          podcasts as PodNotes saves them (Night Owl Science's feed
 //                                                          answers 404) and one more feed to add. Each episode's
 //                                                          media is silence as long as its feed says. #213 has
-//                                                          chapters; Signal & Noise has a video episode, a 10 s
+//                                                          chapters and a WebVTT transcript with voices; Signal & Noise has a video episode, a 10 s
 //                                                          test pattern ffmpeg makes on first request, and an
 //                                                          episode whose media answers 404
 //   node .claude/skills/verify/fixtures.mjs retitle        rename the first feed's episodes, keeping their GUIDs, until the server stops
@@ -206,9 +206,86 @@ const transcript = (file) => fs.readFileSync(path.join(transcriptFixtures, file)
 /**
  * @typedef {object} EpisodeExtra
  * @property {[startTime: number, title: string][]} [chapters] Podcasting 2.0 JSON chapters.
+ * @property {[startTime: number, speaker: string, text: string][]} [transcript] A WebVTT transcript with voices.
  * @property {boolean} [video] The media is the test pattern.
  * @property {boolean} [missing] The media answers 404.
  */
+
+// The design prototype's transcript of #213, around the shots' 38:14.
+/** @type {[number, string, string][]} */
+const TRANSCRIPT_213 = [
+	[
+		2172,
+		"Maya Lind",
+		"Let's get practical. Someone is listening on a walk right now. What do they actually do?",
+	],
+	[
+		2179,
+		"Ana Ilić",
+		"Pick a place you know by heart. Your childhood home works for most people.",
+	],
+	[
+		2187,
+		"Ana Ilić",
+		"Not a place you visited once. A place you could walk through with your eyes closed.",
+	],
+	[2195, "Maya Lind", "Okay. I've got my grandmother's flat."],
+	[
+		2199,
+		"Ana Ilić",
+		"Perfect. Take the first idea from the book you're reading and put it at the front door.",
+	],
+	[
+		2207,
+		"Ana Ilić",
+		"But make it strange. Give it a smell or a sound. Make it too big for the doorway.",
+	],
+	[2216, "Ana Ilić", "The brain is lazy about ordinary things. It holds on to the absurd."],
+	[2224, "Maya Lind", "So the trick is that you're not memorizing a list."],
+	[2229, "Ana Ilić", "Exactly. You're walking through a place you already know."],
+	[
+		2236,
+		"Ana Ilić",
+		"Each room holds one idea, and the order of the rooms is the order of the argument.",
+	],
+	[2245, "Maya Lind", "And when you need it back?"],
+	[2248, "Ana Ilić", "You take the walk again. Hallway, kitchen, the stairs."],
+	[2256, "Ana Ilić", "People are always surprised how much comes back, and how fast."],
+	[
+		2264,
+		"Maya Lind",
+		"Does it hold up for abstract ideas, though? Arguments, not lists of things?",
+	],
+	[
+		2273,
+		"Ana Ilić",
+		"That's where it gets interesting. You have to turn the abstract into a scene.",
+	],
+	[2281, "Ana Ilić", "'Opportunity cost' becomes a man at your front door holding two keys,"],
+	[2287, "Ana Ilić", "and he will only give you one of them."],
+	[2297, "Maya Lind", "I'm never going to forget that man now."],
+	[2301, "Ana Ilić", "That's the point. The stranger the image, the longer it stays."],
+	[2308, "Ana Ilić", "Then spaced repetition does the rest. You revisit the walk a day later,"],
+	[2314, "Ana Ilić", "then a week later, then a month later."],
+	[2321, "Maya Lind", "Which brings us to the apps. Do you use any?"],
+	[2326, "Ana Ilić", "Honestly? Mostly a pen and the margins of the book."],
+	[2333, "Ana Ilić", "The app can schedule the walk. It can't take it for you."],
+];
+
+/** @param {number} seconds */
+function vttClock(seconds) {
+	const pad = (/** @type {number} */ n) => String(n).padStart(2, "0");
+	return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}.000`;
+}
+
+/** Each cue ends where the next starts. @param {[number, string, string][]} cues */
+function vtt(cues) {
+	const blocks = cues.map(([start, speaker, text], i) => {
+		const end = cues[i + 1]?.[0] ?? start + 7;
+		return `${vttClock(start)} --> ${vttClock(end)}\n<v ${speaker}>${text}`;
+	});
+	return `WEBVTT\n\n${blocks.join("\n\n")}\n`;
+}
 
 // The design prototype's sample library, so captures compare with its screens.
 /** @type {LibraryPodcast[]} */
@@ -225,6 +302,7 @@ const LIBRARY = [
 				"2026-10-02",
 				4350,
 				{
+					transcript: TRANSCRIPT_213,
 					chapters: [
 						[0, "Intro"],
 						[220, "Why we forget"],
@@ -371,6 +449,7 @@ function libraryMedia({ slug, episodes }, n) {
 			? { file: `${route}.mp4`, type: "video/mp4", length: 0 }
 			: { file: `${route}.wav`, type: "audio/wav", length: silentWav(seconds).length }),
 		chaptersUrl: extra?.chapters && `${base}${route}.json`,
+		transcriptUrl: extra?.transcript && `${base}${route}.vtt`,
 	};
 }
 
@@ -386,7 +465,7 @@ function libraryFeedXml(podcast) {
 			<pubDate>${new Date(`${date}T12:00:00Z`).toUTCString()}</pubDate>
 			<description>${xml(title)}.</description>
 			<enclosure url="${base}${media.file}" type="${media.type}" length="${media.length}"/>
-			<itunes:duration>${seconds}</itunes:duration>${media.chaptersUrl ? `\n\t\t\t<podcast:chapters url="${media.chaptersUrl}" type="application/json+chapters"/>` : ""}
+			<itunes:duration>${seconds}</itunes:duration>${media.chaptersUrl ? `\n\t\t\t<podcast:chapters url="${media.chaptersUrl}" type="application/json+chapters"/>` : ""}${media.transcriptUrl ? `\n\t\t\t<podcast:transcript url="${media.transcriptUrl}" type="text/vtt"/>` : ""}
 		</item>`;
 	});
 	return `<?xml version="1.0" encoding="UTF-8"?>
@@ -500,6 +579,12 @@ function serve() {
 				routes[`${route}.json`] = [
 					"application/json+chapters",
 					Buffer.from(JSON.stringify({ version: "1.2.0", chapters })),
+				];
+			}
+			if (extra?.transcript) {
+				routes[`${route}.vtt`] = [
+					"text/vtt; charset=utf-8",
+					Buffer.from(vtt(extra.transcript)),
 				];
 			}
 			if (extra?.video) {
