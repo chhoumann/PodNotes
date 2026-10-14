@@ -85,10 +85,10 @@ test("entity-escaped private descriptions stay out of data.json and the settings
 	const exported = await readVaultText(obsidian, sandbox.path(name));
 	const note = await readVaultText(obsidian, sandbox.path(notePath));
 	await mkdir(evidence, { recursive: true });
-	for (const [name, text] of Object.entries({ persisted, exported, note })) {
-		await writeFile(path.join(evidence, `${name}.txt`), text);
-		expect.soft(text, name).not.toContain("PRIV5_ENTITY_SENTINEL");
-		expect.soft(text, name).toContain("podnotes-private-feed:Entity%20Private");
+	for (const [artifact, text] of Object.entries({ persisted, exported, note })) {
+		await writeFile(path.join(evidence, `${artifact}.txt`), text);
+		expect.soft(text, artifact).not.toContain("PRIV5_ENTITY_SENTINEL");
+		expect.soft(text, artifact).toContain("podnotes-private-feed:Entity%20Private");
 	}
 	expect(persisted).toContain(publicText);
 	expect(exported).toContain(publicText);

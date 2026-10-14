@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import checkStringIsUrl from "./checkStringIsUrl";
 import {
 	isCredentialBearingUrl,
 	isPrivateFeedPlaceholder,
@@ -6,6 +7,11 @@ import {
 	privateFeedPlaceholder,
 	redactPrivateFeedAddresses,
 } from "./privateFeedUrl";
+
+vi.mock("./checkStringIsUrl", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./checkStringIsUrl")>();
+	return { default: vi.fn(actual.default) };
+});
 
 describe("isCredentialBearingUrl", () => {
 	it("detects userinfo credentials", () => {
@@ -128,6 +134,7 @@ describe("redactPrivateFeedAddresses", () => {
 	it.each([
 		["feed scheme", "feed://private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
 		["podcast scheme", "podcast://private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		["feed-wrapped URL", "feed:https://private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
 		["HTTP", "http://private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
 		["scheme-less", "private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
 		["entity escaped", "https&#58;&#x2F;&#x2F;private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
@@ -208,6 +215,78 @@ describe("redactPrivateFeedAddresses", () => {
 		expect(redactPrivateFeedAddresses(publicUrl, known)).toBe(publicUrl);
 	});
 
+	it("decodes an encoded query value once, so its path escapes stay significant", () => {
+		const address = "https://private.example.com/rss%2Fprivate?auth=PATH_SENTINEL";
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		expect(redactPrivateFeedAddresses(`?u=${encodeURIComponent(address)}`, known)).toBe(
+			"?u=podnotes-private-feed%3APaid",
+		);
+		const decodedPath = `?u=${encodeURIComponent(decodeURIComponent(address))}`;
+		expect(redactPrivateFeedAddresses(decodedPath, known)).toBe(decodedPath);
+	});
+
+	it.each([
+		["scheme letters", "&#104;ttps://private.example.com/rss?auth=ENTITY_SENTINEL"],
+		[
+			"hex scheme",
+			"&#x68;&#X74;&#x74;&#x70;&#x73;&#x3a;//private.example.com/rss?auth=ENTITY_SENTINEL",
+		],
+		[
+			"padded numbers",
+			"https&#0000058;&#x00002F;&#x2f;private.example.com/rss?auth=ENTITY_SENTINEL",
+		],
+		["semicolon-free numbers", "https&#58&#47&#47private.example.com/rss?auth=ENTITY_SENTINEL"],
+		["scheme-less host", "private&#46;example&#x2E;com/rss?auth=ENTITY_SENTINEL"],
+	])("redacts an address spelled with %s", (_, spelled) => {
+		const known = new Map([
+			["https://private.example.com/rss?auth=ENTITY_SENTINEL", "podnotes-private-feed:Paid"],
+		]);
+		expect(redactPrivateFeedAddresses(`Feed: ${spelled}&period; &amp;c`, known)).toBe(
+			"Feed: podnotes-private-feed:Paid&period; &amp;c",
+		);
+	});
+
+	it("never takes a known host inside another host name, path or user name", () => {
+		const known = new Map([
+			["https://private.example.com/rss?auth=HOST_SENTINEL", "podnotes-private-feed:Paid"],
+		]);
+		const publicText = [
+			"notprivate.example.com/rss?auth=HOST_SENTINEL",
+			"www.private.example.com/rss?auth=HOST_SENTINEL",
+			"https://user@private.example.com/rss?auth=HOST_SENTINEL",
+			"https://public.example/private.example.com/rss?auth=HOST_SENTINEL",
+			"https://public.example\\private.example.com/rss?auth=HOST_SENTINEL",
+			"feed://notprivate.example.com/rss?auth=HOST_SENTINEL",
+			"https%3A%2F%2Fnotprivate.example.com%2Frss%3Fauth%3DHOST_SENTINEL",
+		];
+		expect(redactPrivateFeedAddresses(publicText, known)).toBe(publicText);
+		expect(
+			redactPrivateFeedAddresses(`?u=private.example.com/rss?auth=HOST_SENTINEL`, known),
+		).toBe("?u=podnotes-private-feed:Paid");
+	});
+
+	it.each([
+		["percent escape", "https%3A%2F%2Fprivate.example.com%2Frss%3Fauth%3D%E0%A4%A"],
+		["character reference", "&#99999999999; &#x110000; &#xD800; private.example.com"],
+	])("skips a malformed %s and keeps redacting the rest", (_, malformed) => {
+		const address = "https://private.example.com/rss?auth=ESCAPE_SENTINEL";
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		expect(redactPrivateFeedAddresses({ malformed }, known)).toEqual({ malformed });
+		expect(redactPrivateFeedAddresses(`${malformed} ${address}`, known)).toBe(
+			`${malformed} podnotes-private-feed:Paid`,
+		);
+	});
+
+	it("leaves a saved placeholder alone even when its encoded name holds the address", () => {
+		const address = "https://private.example.com/rss?auth=NAME_SENTINEL";
+		const placeholder = privateFeedPlaceholder(address);
+		const document = { url: placeholder, quoted: encodeURIComponent(address) };
+		expect(redactPrivateFeedAddresses(document, new Map([[address, placeholder]]))).toEqual({
+			url: placeholder,
+			quoted: encodeURIComponent(placeholder),
+		});
+	});
+
 	it.each([
 		"https://private.example.com./rss?auth=ALIAS_SENTINEL",
 		"https:\\\\private.example.com/rss?auth=ALIAS_SENTINEL",
@@ -244,6 +323,45 @@ describe("redactPrivateFeedAddresses", () => {
 		expect(redactPrivateFeedAddresses({ description: html }, known)).toEqual({
 			description: '<a href="podnotes-private-feed:Paid">',
 		});
+	});
+
+	it("redacts addresses in markup escaped with the uppercase entities HTML defines", () => {
+		const known = new Map([
+			[
+				"https://private.example.com/rss?auth=CASE_SENTINEL&show=1",
+				"podnotes-private-feed:Paid",
+			],
+		]);
+		const alias = "https://private.example.com/rss?auth=CASE_SENTINEL&AMP;show=1";
+		const document = {
+			attribute: `<a href="${alias}">`,
+			escaped: `&LT;a href=&QUOT;${alias}&QUOT;&GT;${alias}&LT;/a&GT; &LT;${alias}&GT;`,
+		};
+		expect(redactPrivateFeedAddresses(document, known)).toEqual({
+			attribute: '<a href="podnotes-private-feed:Paid">',
+			escaped:
+				"&LT;a href=&QUOT;podnotes-private-feed:Paid&QUOT;&GT;podnotes-private-feed:Paid&LT;/a&GT; &LT;podnotes-private-feed:Paid&GT;",
+		});
+	});
+
+	it.each([
+		["schemes", "https://private.example.com/x"],
+		["encoded schemes", "https%3A%2F%2Fprivate.example.com%2Fx"],
+		["feed wrappers", "feed://private.example.com/x"],
+		["host query values", "=private.example.com/x"],
+		["trailing dots", "."],
+	])("parses a long run of repeated %s a bounded number of times", (_, unit) => {
+		const address = "https://private.example.com/rss?auth=WORK_SENTINEL";
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		const run = `https://private.example.com/rss${unit.repeat(2000)}`;
+		const parse = vi.mocked(checkStringIsUrl);
+		parse.mockClear();
+		expect(redactPrivateFeedAddresses(`Feed ${run} ${address}`, known)).toBe(
+			`Feed ${run} podnotes-private-feed:Paid`,
+		);
+		const parsed = parse.mock.calls.reduce((total, [url]) => total + url.length, 0);
+		expect(parse).toHaveBeenCalled();
+		expect(parsed).toBeLessThan(10 * run.length);
 	});
 
 	it.each([
