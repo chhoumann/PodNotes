@@ -8,6 +8,7 @@ import PodNotes from "./main";
 import * as privateFeedUrls from "./utility/privateFeedUrl";
 import * as persistenceMerge from "./persistence/merge";
 import { encodePodNotesData } from "./persistence/podNotesData";
+import * as podNotesData from "./persistence/podNotesData";
 import { PlayerController } from "./player/PlayerController";
 import { downloadedEpisodes, localFiles, plugin as pluginStore } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
@@ -85,6 +86,24 @@ async function saveInBackground(plugin: PodNotes): Promise<void> {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+});
+
+it("does not decode its own saved document again during a settings session", async () => {
+	const plugin = makePlugin();
+	const decode = vi.spyOn(podNotesData, "decodePodNotesData");
+	await plugin.loadSettings();
+	expect(decode).toHaveBeenCalledTimes(1);
+	decode.mockClear();
+
+	for (const seconds of [20, 30, 45]) {
+		plugin.settings.skipBackwardLength = seconds;
+		await plugin.saveSettingsStrict();
+		await plugin.onExternalSettingsChange();
+		expect(await plugin.loadData()).toMatchObject({ skipBackwardLength: seconds });
+	}
+
+	expect(plugin.settings.skipBackwardLength).toBe(45);
+	expect(decode).toHaveBeenCalledTimes(0);
 });
 
 describe("save refusal recovery", () => {

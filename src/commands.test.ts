@@ -341,6 +341,25 @@ describe("capture", () => {
 
 			expect(editor.getValue()).toBe("Notes\n");
 		});
+
+		it("falls back to the note editor when the cell's replaceSelection is not a function", async () => {
+			const { plugin, openNote, focusPodNotes } = await loadPlugin(playing);
+			const { editor } = openNote("Table.md", TABLE, TABLE.indexOf("anchor") + 6);
+			Object.assign(editor, {
+				editorComponent: { tableCell: { editor: { replaceSelection: "unavailable" } } },
+			});
+			focusPodNotes();
+
+			expect(await plugin.capture.timestamp()).toEqual({
+				destination: "editor",
+				path: "Table.md",
+				text: "- 00:20:34",
+				created: false,
+			});
+			expect(editor.getValue()).toBe(
+				"| Time | Note |\n| --- | --- |\n| Start | anchor- 00:20:34 |\nAfter",
+			);
+		});
 	});
 
 	it("goes to the episode note once the last editor's tab is closed", async () => {
