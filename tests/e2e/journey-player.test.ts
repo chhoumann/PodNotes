@@ -133,6 +133,90 @@ const focused = (target: UiTarget) =>
 	);
 
 describe("player journeys", () => {
+	test("the fullscreen button belongs to the video stage and hides while that stage is fullscreen", async () => {
+		const { obsidian } = getContext();
+		await openPlayer([], () => ({ mediaType: "video" }));
+		await click(obsidian, ui.playbackToggle);
+		await waitForPlayback(obsidian, (state) => state.playing, "video loaded");
+		const fullscreen: UiTarget = {
+			name: "video fullscreen",
+			elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-video button.pn-fs`)})]`,
+		};
+		expect(await isShown(obsidian, fullscreen)).toBe(true);
+		onTestFinished(async () => {
+			await obsidian.dev.evalJsonAsync(
+				"(async () => { if (document.fullscreenElement) await document.exitFullscreen(); return true; })()",
+			);
+		});
+
+		await click(obsidian, fullscreen);
+		expect(
+			await eventually(
+				obsidian,
+				() =>
+					obsidian.dev.evalJson<boolean>(
+						`document.fullscreenElement === document.querySelector(${jsLiteral(`${PLAYER_VIEW} .pn-video`)})`,
+					),
+				true,
+			),
+		).toBe(true);
+		expect(
+			await obsidian.dev.evalJson<string>(
+				`getComputedStyle((${fullscreen.elements})[0]).display`,
+			),
+		).toBe("none");
+
+		await pressKey(obsidian, "Escape");
+		expect(
+			await eventually(
+				obsidian,
+				() => obsidian.dev.evalJson<boolean>("document.fullscreenElement === null"),
+				true,
+			),
+		).toBe(true);
+	});
+
+	test.each(["theme-light", "theme-dark"])(
+		"mini-player component styles survive the shell stylesheet loading last in %s",
+		async (theme) => {
+			const { obsidian } = getContext();
+			await openPlayer([]);
+			await resizeView(320, "compact");
+			await click(obsidian, ui.collapsePlayer);
+			await waitUntilShown(obsidian, ui.miniPlayer);
+			await cdp(obsidian, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0 });
+			const styles = await obsidian.dev.evalJson<{
+				before: Record<string, string>[];
+				after: Record<string, string>[];
+			}>(`(() => {
+				const root = document.querySelector(${jsLiteral(PLAYER_VIEW)});
+				const sheet = [...document.head.querySelectorAll("style")].find(sheet => root.classList.contains(sheet.id));
+				if (!sheet) throw new Error("The shell stylesheet is missing");
+				const next = sheet.nextSibling;
+				const originalTheme = document.body.className;
+				const read = () => [...root.querySelectorAll(".pn-mini button.pn-iconbtn")].map(button => {
+					const style = getComputedStyle(button);
+					return Object.fromEntries(["color", "opacity", "height", "width", "background-color", "border-radius"].map(key => [key, style.getPropertyValue(key)]));
+				});
+				try {
+					document.body.classList.remove("theme-light", "theme-dark");
+					document.body.classList.add(${jsLiteral(theme)});
+					document.head.prepend(sheet);
+					const before = read();
+					document.head.append(sheet);
+					return { before, after: read() };
+				} finally {
+					document.head.insertBefore(sheet, next);
+					document.body.className = originalTheme;
+				}
+			})()`);
+
+			expect(styles.before).toHaveLength(2);
+			expect(styles.before.map((style) => style.opacity)).toEqual(["1", "1"]);
+			expect(styles.after).toEqual(styles.before);
+		},
+	);
+
 	test("a video with a long queue keeps its 16:9 frame, compact and wide, and after a panel covered it", async () => {
 		const { obsidian } = getContext();
 		await openPlayer(QUEUED, () => ({ mediaType: "video" }));

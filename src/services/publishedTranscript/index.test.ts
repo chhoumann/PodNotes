@@ -213,6 +213,32 @@ describe("findPublishedTranscript", () => {
 describe("fetchPublishedTranscript", () => {
 	const signal = new AbortController().signal;
 
+	test("preserves the quoted feed and transcript URLs of a public source", async () => {
+		const { feeds } = repository([]);
+		fetchTextMock.mockResolvedValue(
+			"WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n<v Host>Read https://show.test/feed.xml and https://show.test/transcripts/1.vtt for more.\n",
+		);
+
+		expect(
+			await fetchPublishedTranscript(
+				feeds,
+				episodeOf(show),
+				{ key: "Show", reference: "transcripts/1.vtt", format: "vtt" },
+				signal,
+			),
+		).toEqual({
+			kind: "timed",
+			cues: [
+				{
+					start: 0,
+					end: 5,
+					speaker: "Host",
+					text: "Read https://show.test/feed.xml and https://show.test/transcripts/1.vtt for more.",
+				},
+			],
+		});
+	});
+
 	test("fetches the link resolved against the feed, once, within the transcript limits", async () => {
 		const { feeds } = repository([]);
 		fetchTextMock.mockResolvedValue(transcriptFixture("build-your-saas.vtt"));
