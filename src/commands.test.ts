@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as obsidian from "obsidian";
-import { MarkdownView, TFile, TFolder, type EditorPosition, type WorkspaceLeaf } from "obsidian";
+import { MarkdownView, TFile, TFolder, type WorkspaceLeaf } from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import PodNotes from "./main";
@@ -10,6 +10,7 @@ import { PickerModal } from "./ui/PickerModal";
 import { fetchTextWithTimeout } from "./utility/networkRequest";
 import { privateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
+import { fakeEditor, editInTableCell } from "../tests/mocks/captureEditor";
 
 vi.mock("./utility/networkRequest", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./utility/networkRequest")>()),
@@ -49,46 +50,6 @@ function vaultFile(path: string): TFile {
 		basename: name.replace(/\.md$/, ""),
 		extension: "md",
 	});
-}
-
-/** Enough of CodeMirror for a capture and its Undo: text, a selection, offsets and ranges. */
-function fakeEditor(text: string, caret = text.length) {
-	let value = text;
-	let from = caret;
-	let to = caret;
-	const lines = () => value.split("\n");
-	const pos = (offset: number) => {
-		if (offset < 0 || offset > value.length)
-			throw new RangeError(`Offset ${offset} is outside`);
-		const before = value.slice(0, offset).split("\n");
-		return { line: before.length - 1, ch: before[before.length - 1].length };
-	};
-	const offset = ({ line, ch }: EditorPosition) =>
-		lines()
-			.slice(0, line)
-			.reduce((sum, text) => sum + text.length + 1, ch);
-	return {
-		getValue: () => value,
-		getLine: (line: number) => lines()[line] ?? "",
-		lineCount: () => lines().length,
-		getCursor: (side?: "from" | "to") => pos(side === "from" ? from : to),
-		getSelection: () => value.slice(from, to),
-		setSelection(anchor: EditorPosition, head = anchor) {
-			from = offset(anchor);
-			to = offset(head);
-		},
-		replaceSelection: (replacement: string) => {
-			value = value.slice(0, from) + replacement + value.slice(to);
-			from = to = from + replacement.length;
-		},
-		posToOffset: offset,
-		offsetToPos: pos,
-		getRange: (start: EditorPosition, end: EditorPosition) =>
-			value.slice(offset(start), offset(end)),
-		replaceRange(replacement: string, start: EditorPosition, end = start) {
-			value = value.slice(0, offset(start)) + replacement + value.slice(offset(end));
-		},
-	};
 }
 
 /**
@@ -310,6 +271,76 @@ describe("capture", () => {
 		run("capture-timestamp");
 
 		expect(editor.getValue()).toBe("| Time | Note |\n| --- | --- |\n| 00:20:34 \\| seen ");
+	});
+
+	it("captures before Obsidian delivers the leaf-change event after a player click", async () => {
+		const { plugin, openNote, workspace, read } = await loadPlugin(playing);
+		const { editor } = openNote("Journal.md", "Notes\n");
+		workspace.activeEditor = null;
+
+		expect(await plugin.capture.timestamp()).toMatchObject({
+			destination: "editor",
+			path: "Journal.md",
+		});
+		expect(editor.getValue()).toBe("Notes\n- 00:20:34");
+		expect(read(NOTE_PATH)).toBeUndefined();
+	});
+
+	describe("in Live Preview", () => {
+		const TABLE = "| Time | Note |\n| --- | --- |\n| Start | anchor |\nAfter";
+
+		async function inCell() {
+			const session = await loadPlugin(playing);
+			const tab = session.openNote("Table.md", TABLE);
+			const cell = editInTableCell(tab.editor, "anchor");
+			session.focusPodNotes();
+			return { ...session, ...tab, cell };
+		}
+
+		it("lands in a table cell's editor, which shows the pipes the note escapes", async () => {
+			const { plugin, editor, cell } = await inCell();
+			plugin.settings.timestamp.template = "{{time}} | a \\| b \\\\| c\n";
+
+			expect(await plugin.capture.timestamp()).toEqual({
+				destination: "editor",
+				path: "Table.md",
+				text: "00:20:34 \\| a \\| b \\\\\\| c ",
+				created: false,
+			});
+			expect(cell.getValue()).toBe("anchor00:20:34 | a | b \\\\| c ");
+			expect(editor.getValue()).toBe(
+				"| Time | Note |\n| --- | --- |\n| Start | anchor00:20:34 \\| a \\| b \\\\\\| c  |\nAfter",
+			);
+		});
+
+		it("keeps each capture in a table cell, and Undo takes out only the last", async () => {
+			const { run, editor, cell } = await inCell();
+			run("capture-timestamp");
+			const first = editor.getValue();
+			run("capture-segment-10s");
+			expect(cell.getValue()).toBe("anchor- 00:20:34- 00:20:24-00:20:34");
+
+			await undo();
+
+			expect(first).toBe(
+				"| Time | Note |\n| --- | --- |\n| Start | anchor- 00:20:34 |\nAfter",
+			);
+			expect(editor.getValue()).toBe(first);
+			expect(said()).toEqual(["Timestamp added to Table", "Timestamp added to Table"]);
+		});
+
+		it("writes outside a table through the note's editor", async () => {
+			const { run, openNote, focusPodNotes } = await loadPlugin(playing);
+			const { editor } = openNote("Journal.md", "Notes\n");
+			Object.assign(editor, { editorComponent: { tableCell: null } });
+			focusPodNotes();
+			run("capture-timestamp");
+			expect(editor.getValue()).toBe("Notes\n- 00:20:34");
+
+			await undo();
+
+			expect(editor.getValue()).toBe("Notes\n");
+		});
 	});
 
 	it("goes to the episode note once the last editor's tab is closed", async () => {

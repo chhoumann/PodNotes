@@ -17,7 +17,7 @@ export interface Capture {
 	destination: "editor" | "note";
 	/** Vault path of the note the text went into. */
 	path: string;
-	/** The text as inserted. */
+	/** The captured text as the note stores it. */
 	text: string;
 	/** The episode note did not exist and was created for this capture. */
 	created: boolean;
@@ -95,16 +95,15 @@ export class CaptureService {
 		const target = this.editorTarget();
 		if (target?.editor) {
 			const { editor, file } = target;
-			// replaceSelection lets the editor place the caret, which hand-computed
-			// positions get wrong in Live Preview table cells. Inside a table the text is
-			// escaped so pipes and newlines don't break the row (#165).
 			const inserted = prepareTimestampForInsertion(text, {
 				getLine: (line) => editor.getLine(line),
 				lineCount: editor.lineCount(),
 				cursorLine: editor.getCursor("from").line,
 			});
 			const before = editor.getValue();
-			editor.replaceSelection(inserted);
+			const cell = tableCellWriter(editor);
+			if (cell) cell(inserted);
+			else editor.replaceSelection(inserted);
 			const snapshot = { before, after: editor.getValue() };
 			// Outside a note's own view, as in a canvas card, the editor's text need not be
 			// its file's, so only that editor can take the capture back.
@@ -197,7 +196,10 @@ export class CaptureService {
 		const active = this.plugin.app.workspace.activeEditor;
 		// A note in Reading view keeps its hidden editor, where written text is lost.
 		const reading = active instanceof MarkdownView && active.getMode() === "preview";
-		return active?.editor && !reading ? active : this.editingView(this.lastEditorLeaf);
+		// Obsidian clears activeEditor before its deferred active-leaf-change event.
+		return active?.editor && !reading
+			? active
+			: (this.editingView(this.activeLeaf) ?? this.editingView(this.lastEditorLeaf));
 	}
 
 	/** The leaf's note while it is open in Source or Live Preview mode. */
@@ -224,10 +226,34 @@ function revertIn(editor: Editor, { before, after }: Snapshot): boolean {
 	) {
 		tail++;
 	}
+	// Obsidian holds back an edit that falls inside the table cell being edited and
+	// hands it to the cell's editor later, remapped against its decoded text.
+	// Starting before the cell bypasses that remap without moving the edit's end.
+	if (tableCellWriter(editor)) {
+		from = after.slice(0, from).lastIndexOf("\n") + 1;
+	}
 	editor.replaceRange(
 		before.slice(from, before.length - tail),
 		editor.offsetToPos(from),
 		editor.offsetToPos(after.length - tail),
 	);
 	return true;
+}
+
+/**
+ * Writes table cell text where Live Preview edits it: the cell has an editor of its own,
+ * outside Obsidian's API, that the note's editor reaches only late and remapped. The
+ * cell's editor shows a pipe unescaped and Obsidian escapes it again as it writes the
+ * cell to the note.
+ */
+function tableCellWriter(editor: Editor): ((escaped: string) => void) | null {
+	const cell = field(field(field(editor, "editorComponent"), "tableCell"), "editor");
+	const replaceSelection = field(cell, "replaceSelection");
+	return typeof replaceSelection === "function"
+		? (escaped) => replaceSelection.call(cell, escaped.replace(/\\\|/g, "|"))
+		: null;
+}
+
+function field(value: unknown, key: string): unknown {
+	return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
 }
