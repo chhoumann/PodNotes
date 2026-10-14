@@ -16,9 +16,12 @@ export const PODNOTES_DATA_SCHEMA_VERSION = 2;
 /** Plaintext fields accepted only as migration input and never persisted again. */
 const RETIRED_PLAINTEXT_SECRET_KEYS = new Set(["openAIApiKey", "diarizationApiKey"]);
 
+const RETIRED_SETTING_KEYS = ["feedCache"];
+
 const KNOWN_TOP_LEVEL_KEYS = new Set([
 	...Object.keys(DEFAULT_SETTINGS),
 	...RETIRED_PLAINTEXT_SECRET_KEYS,
+	...RETIRED_SETTING_KEYS,
 	"schemaVersion",
 ]);
 

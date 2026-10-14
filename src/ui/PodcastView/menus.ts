@@ -13,6 +13,7 @@ import { isSameEpisode, isSameStoredEpisode } from "src/utility/episodeKey";
 import { episodeLinkTarget } from "src/utility/episodeLinkTarget";
 import { isEpisodeFinished } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
+import { PLAYBACK_RATES } from "src/utility/playbackRate";
 import { isCredentialBearingUrl } from "src/utility/privateFeedUrl";
 import type { ShellServices } from "./context";
 import { availabilityOf, isCurrentEpisode } from "./episodeRow";
@@ -92,7 +93,7 @@ export function showMenu(entries: readonly MenuEntry[], at: MenuAnchor): void {
 /** The rate pill's speeds. The live rate, which the commands step by 0.1, may be none of them. */
 export function rateMenu({ player }: ShellServices): MenuEntry[] {
 	const live = get(player.state).playbackRate;
-	return [0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => ({
+	return PLAYBACK_RATES.map((rate) => ({
 		title: `${rate}×`,
 		checked: rate === live,
 		onClick: () => player.setPlaybackRate(rate),

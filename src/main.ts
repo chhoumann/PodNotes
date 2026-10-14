@@ -52,6 +52,7 @@ import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { privateFeedAddresses, protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
 import { redactPrivateFeedAddresses } from "./utility/privateFeedUrl";
 import { FeedRepository, loadFeed } from "./services/FeedRepository";
+import { fetchChapters } from "./utility/fetchChapters";
 import { onlineStatus } from "./services/online";
 
 type WriteRefusal =
@@ -153,7 +154,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			load: loadFeed,
 			resolveUrl: (feed) => resolveFeedUrl(feed, this.feedUrls),
 			storage: this.app,
-			cache: () => this.settings.feedCache,
 			now: Date.now,
 		});
 
@@ -237,9 +237,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			bindMediaSession(this.player, {
 				mediaSession: window.navigator.mediaSession,
 				MediaMetadata: window.MediaMetadata,
+				settings: () => this.settings,
 				captureTimestamp: () => void this.capture.timestamp(),
 				skipBackward: () => this.api.skipBackward(),
 				skipForward: () => this.api.skipForward(),
+				chapters: fetchChapters,
 			}),
 		);
 		this.isReady = true;

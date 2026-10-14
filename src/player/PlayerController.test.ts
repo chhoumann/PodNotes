@@ -1585,6 +1585,17 @@ describe("volume and rate", () => {
 		expect(host.saveSettings).toHaveBeenCalledTimes(1);
 	});
 
+	test("a new player starts at the volume saved last, which is what a restart reads", () => {
+		const { player, media, state } = setup({ defaultVolume: 0.35 });
+		expect(state().volume).toBe(0.35);
+
+		player.play(A);
+		metadata(media());
+
+		expect(media().volume).toBe(0.35);
+		expect(state().volume).toBe(0.35);
+	});
+
 	test("a new episode starts at the default speed as it is now, at the player's volume", () => {
 		const { player, host, media, state } = setup();
 		host.settings.defaultVolume = 0.4;

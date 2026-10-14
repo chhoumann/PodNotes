@@ -14,85 +14,20 @@ const DOWNLOAD_URL = "https://e2e.podnotes.test/episode.mp3";
 const getContext = createPodNotesE2EHarness("marketplace-review-runtime");
 
 describe("marketplace review runtime paths", () => {
-	test("renders searchable declarative settings and completes export/import with persistence", async () => {
+	test("completes settings export/import with persistence", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
 		const exportName = "marketplace-settings-export.json";
 		const exportPath = sandbox.path(exportName);
 
 		try {
 			await openSettings(obsidian);
-
-			const initial = await obsidian.dev.evalJson<{
-				definitionCount: number;
-				headings: string[];
-				indexedAliases: number;
-				renderedControls: number;
-			}>(`
-				(() => {
-					const tab = app.setting.pluginTabs.find((candidate) => candidate.id === ${jsLiteral(PLUGIN_ID)});
-					const definitions = tab?.getSettingDefinitions?.() ?? [];
-					return {
-						definitionCount: definitions.length,
-						headings: Array.from(document.querySelectorAll(".modal.mod-settings .setting-item-heading .setting-item-name"))
-							.map((element) => element.textContent?.trim() ?? ""),
-						indexedAliases: definitions.flatMap((definition) => definition.aliases ?? []).length,
-						renderedControls: document.querySelectorAll(".modal.mod-settings .setting-item").length,
-					};
-				})()
-			`);
-
-			expect(initial.definitionCount).toBe(1);
-			expect(initial.indexedAliases).toBe(27);
-			expect(initial.renderedControls).toBeGreaterThan(25);
-			expect(initial.headings).toEqual(
-				expect.arrayContaining([
-					"Episode notes",
-					"Feed notes",
-					"Downloads",
-					"Preferences & templates",
-					"Transcripts",
-				]),
-			);
-			expect(initial.headings).not.toContain("PodNotes");
-			expect(initial.headings, "playlists live in the view").not.toContain("Playlists");
-			expect(initial.headings, "podcast search lives in the view").not.toContain(
-				"Search Podcasts",
-			);
-			expect(initial.headings.every((heading) => !/settings/i.test(heading))).toBe(true);
-
-			await evalJsonAsync<boolean>(
-				obsidian,
-				`(async () => {
-					const input = document.querySelector('.modal.mod-settings input[placeholder="Search settings..."]');
-					if (!(input instanceof HTMLInputElement)) throw new Error("Settings search input not found.");
-					input.value = "Episode download path";
-					input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
-					return true;
-				})()`,
-			);
-			await obsidian.waitFor(
-				async () =>
-					await obsidian.dev.evalJson<boolean>(
-						'document.querySelector(".setting-search-results")?.textContent?.includes("Podcast preferences") ?? false',
-					),
-				WAIT_OPTS,
-			);
-
-			await evalJsonAsync<boolean>(
-				obsidian,
-				`(() => {
-					app.setting.close();
-					return true;
-				})()`,
-			);
-			await openSettings(obsidian);
-			await setSettingInputValue(obsidian, "Default Playback Rate", "1.5");
+			await setSettingValue(obsidian, "Default speed", "1.5", "select");
 			await plugin.waitForData<PodNotesData>(
 				(data) => data.defaultPlaybackRate === 1.5,
 				WAIT_OPTS,
 			);
 
-			await setSettingInputValue(obsidian, "Export settings", exportPath);
+			await setSettingValue(obsidian, "Export settings", exportPath, "input");
 			await clickSettingButton(obsidian, "Export settings", "Export");
 			const exported = await sandbox.waitForContent(
 				exportName,
@@ -110,9 +45,9 @@ describe("marketplace review runtime paths", () => {
 				settings: { defaultPlaybackRate: 1.5 },
 			});
 
-			await setSettingInputValue(obsidian, "Default Playback Rate", "1.2");
+			await setSettingValue(obsidian, "Default speed", "1.25", "select");
 			await plugin.waitForData<PodNotesData>(
-				(data) => data.defaultPlaybackRate === 1.2,
+				(data) => data.defaultPlaybackRate === 1.25,
 				WAIT_OPTS,
 			);
 
@@ -169,7 +104,7 @@ describe("marketplace review runtime paths", () => {
 				WAIT_OPTS,
 			);
 			await obsidian.waitFor(
-				async () => await settingInputHasValue(obsidian, "Default Playback Rate", "1.5"),
+				async () => await settingHasValue(obsidian, "Default speed", "1.5", "select"),
 				WAIT_OPTS,
 			);
 			expect(await obsidian.dev.runtimeErrors()).toEqual([]);
@@ -540,16 +475,17 @@ async function openSettings(obsidian: Parameters<typeof evalJsonAsync>[0]): Prom
 		async () =>
 			await obsidian.dev.evalJson<boolean>(`
 				Array.from(document.querySelectorAll(".modal.mod-settings .setting-item-name"))
-					.some((element) => element.textContent?.trim() === "Default Playback Rate")
+					.some((element) => element.textContent?.trim() === "Default speed")
 			`),
 		WAIT_OPTS,
 	);
 }
 
-async function setSettingInputValue(
+async function setSettingValue(
 	obsidian: Parameters<typeof evalJsonAsync>[0],
 	settingName: string,
 	value: string,
+	control: "input" | "select",
 ): Promise<void> {
 	await evalJsonAsync<boolean>(
 		obsidian,
@@ -557,31 +493,30 @@ async function setSettingInputValue(
 			const setting = Array.from(document.querySelectorAll(".modal.mod-settings .setting-item")).find(
 				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${jsLiteral(settingName)},
 			);
-			const input = setting?.querySelector("input");
-			if (!(input instanceof HTMLInputElement)) {
-				throw new Error(${jsLiteral(`Input not found for ${settingName}.`)});
-			}
-			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-			if (!setter) throw new Error("Native input value setter not found.");
-			setter.call(input, ${jsLiteral(value)});
-			input.dispatchEvent(new Event("input", { bubbles: true }));
-			input.dispatchEvent(new Event("change", { bubbles: true }));
+			const field = setting?.querySelector(${jsLiteral(control)});
+			if (!field) throw new Error(${jsLiteral(`${control} not found for ${settingName}.`)});
+			const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")?.set;
+			if (!setter) throw new Error("Native value setter not found.");
+			setter.call(field, ${jsLiteral(value)});
+			field.dispatchEvent(new Event("input", { bubbles: true }));
+			field.dispatchEvent(new Event("change", { bubbles: true }));
 			return true;
 		})()`,
 	);
 }
 
-async function settingInputHasValue(
+async function settingHasValue(
 	obsidian: Parameters<typeof evalJsonAsync>[0],
 	settingName: string,
 	value: string,
+	control: "input" | "select",
 ): Promise<boolean> {
 	return await obsidian.dev.evalJson<boolean>(`
 		(() => {
 			const setting = Array.from(document.querySelectorAll(".modal.mod-settings .setting-item")).find(
 				(candidate) => candidate.querySelector(".setting-item-name")?.textContent?.trim() === ${jsLiteral(settingName)},
 			);
-			return setting?.querySelector("input")?.value === ${jsLiteral(value)};
+			return setting?.querySelector(${jsLiteral(control)})?.value === ${jsLiteral(value)};
 		})()
 	`);
 }

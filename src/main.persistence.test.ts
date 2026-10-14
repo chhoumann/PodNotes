@@ -66,6 +66,16 @@ function makePlugin(
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+function savedByThisVersion(released: Record<string, unknown>): Record<string, unknown> {
+	const data: Record<string, unknown> = {
+		...structuredClone(released),
+		headsetPreviousTrack: "captureTimestamp",
+		headsetNextTrack: "skipForward",
+	};
+	delete data.feedCache;
+	return data;
+}
+
 async function saveInBackground(plugin: PodNotes): Promise<void> {
 	void plugin.saveSettings();
 	await settled();
@@ -376,7 +386,7 @@ describe("PodNotes persistence integration", () => {
 
 		expect(saveData).toHaveBeenCalledTimes(1);
 		expect(saveData.mock.calls[0][0]).toEqual({
-			...released,
+			...savedByThisVersion(released),
 			defaultVolume: 0.4,
 			libraryId: "",
 		});
@@ -411,7 +421,7 @@ describe("PodNotes persistence integration", () => {
 		const { urlSecretId } = written.savedFeeds["PRIV2 Both"];
 		expect(urlSecretId).toMatch(/^podnotes-feed-url-[0-9a-f-]{36}$/);
 		expect(written).toEqual({
-			...released2211,
+			...savedByThisVersion(released2211),
 			libraryId: "",
 			savedFeeds: { "PRIV2 Both": { ...released2211.savedFeeds["PRIV2 Both"], urlSecretId } },
 		});
@@ -782,6 +792,46 @@ describe("PodNotes persistence integration", () => {
 		plugin.settings.defaultVolume = 0.5;
 		await plugin.saveSettingsStrict();
 		expect(saveData.mock.lastCall?.[0].queue.episodes).toHaveLength(2);
+	});
+
+	it("drops a saved feed cache preference at the next save, even one an older device syncs back", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		const older = {
+			...structuredClone(released2211),
+			feedCache: { enabled: false, ttlHours: 1 },
+		};
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(structuredClone(older)) });
+
+		await plugin.loadSettings();
+		expect(saveData).not.toHaveBeenCalled();
+		attachDataFileWriter(plugin);
+		plugin.settings.defaultVolume = 0.4;
+		await plugin.saveSettingsStrict();
+		expect(saveData.mock.lastCall?.[0]).toEqual({
+			...savedByThisVersion(released2211),
+			defaultVolume: 0.4,
+			libraryId: "",
+		});
+
+		Object.assign(plugin, {
+			loadData: vi.fn().mockResolvedValue({
+				...structuredClone(older),
+				defaultVolume: 0.4,
+				skipForwardLength: 45,
+			}),
+		});
+		await plugin.onExternalSettingsChange();
+		plugin.settings.skipBackwardLength = 20;
+		await plugin.saveSettingsStrict();
+
+		expect(saveData.mock.lastCall?.[0]).toEqual({
+			...savedByThisVersion(released2211),
+			defaultVolume: 0.4,
+			skipForwardLength: 45,
+			skipBackwardLength: 20,
+			libraryId: "",
+		});
 	});
 
 	it("takes progress another device made even when the synced file had to repair another record", async () => {

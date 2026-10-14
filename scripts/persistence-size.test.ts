@@ -49,7 +49,6 @@ describe("persistence byte fixture", () => {
 			load: async () => parsed,
 			resolveUrl: (feed) => feed.url,
 			storage: new MemoryStorage(),
-			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
 		expect(await feeds.channelAt({ url: sample.source.url })).toEqual(sample.feed);
