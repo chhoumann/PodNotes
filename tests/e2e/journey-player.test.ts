@@ -318,6 +318,15 @@ describe("player journeys", () => {
 		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", text: "\r", ...enter });
 		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...enter });
 		await waitUntilShown(obsidian, ui.menuItem("Add to queue"));
+		// Obsidian gives a menu the keys a timer tick after it shows; an Escape before then
+		// goes to the view under it.
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					'(app.keymap.getWindowStack(activeWindow).scope.keys ?? []).some((key) => key.key === "ArrowDown")',
+				),
+			{ timeoutMs: 5_000, intervalMs: 50, message: "the menu to take the keys" },
+		);
 
 		await pressKey(obsidian, "Escape");
 		expect(
