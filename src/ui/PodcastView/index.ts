@@ -1,4 +1,4 @@
-import { debounce, ItemView } from "obsidian";
+import { debounce, ItemView, Scope } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
 import { VIEW_TYPE } from "../../constants";
@@ -116,6 +116,7 @@ export class MainView extends ItemView {
 			player: plugin.player,
 			feeds: plugin.feeds,
 			navigation: plugin.navigation,
+			scope: (this.scope = new Scope(app.scope)),
 			library: {
 				savedFeeds,
 				queue,

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Scope } from "obsidian";
 	import { tick } from "svelte";
 	import type { Chapter } from "src/types/Chapter";
 	import type { Episode } from "src/types/Episode";
@@ -22,7 +21,7 @@
 
 	let { viewRoot, layout }: { viewRoot: HTMLElement; layout: Layout } = $props();
 	const services = useServices();
-	const { app, api, player, navigation, settings, library, rowHasNote, captureTimestamp } =
+	const { api, player, navigation, settings, library, rowHasNote, captureTimestamp, scope } =
 		services;
 	const playerState = player.state;
 	const { savedFeeds } = library;
@@ -90,63 +89,33 @@
 		if (failed) volumeOpen = false;
 	});
 
-	// Obsidian's keymap gives a key to the newest scope, so a menu or modal opened
-	// over the player takes Escape first. It keeps one stack per window and pushes
-	// onto the active window's, so the scope goes onto the stack of the view's
-	// window once that window is active, and moves when the view moves to another
-	// window. It is pushed once: pushing it again on a later focus would lift it over
-	// a modal opened since. Keys typed elsewhere, as in an editor, stay there.
+	// The view's own scope gets the keys typed while focus is in the view, and a menu or
+	// modal opened over the player takes Escape first.
 	$effect(() => {
-		const scope = new Scope(app.scope);
-		const ours = (evt: KeyboardEvent) => {
-			const target = evt.target as Element | null;
-			return target === viewRoot.ownerDocument.body || viewRoot.contains(target);
-		};
-		scope.register(null, "Escape", (evt) => {
-			if (!ours(evt)) return true;
+		const escape = scope.register(null, "Escape", () => {
 			if (volumeOpen) {
 				volumeOpen = false;
 				volumeButton?.focus();
 			} else void collapse();
 			return false;
 		});
-		scope.register(null, " ", (evt) => {
-			const target = evt.target as Element | null;
+		const space = scope.register(null, " ", (evt) => {
 			const control = "input, textarea, select, button, a, [contenteditable], [role=slider]";
-			if (!ours(evt) || target?.closest?.(control)) return true;
+			if ((evt.target as Element | null)?.closest?.(control)) return true;
 			player.toggle();
 			return false;
 		});
-		let win = viewRoot.win;
-		let pushed = false;
-		// Obsidian's own focus listener runs first and makes the window active.
-		const push = () => {
-			if (pushed || activeWindow !== win) return;
-			app.keymap.pushScope(scope);
-			pushed = true;
-		};
-		const pop = () => {
-			app.keymap.popScope(scope);
-			pushed = false;
-		};
-		const follow = (next: Window) => {
-			win = next;
-			// The video plays in the main window, so a popout shows the artwork.
-			inMainWindow = next === window;
-			win.addEventListener("focus", push);
-			push();
-		};
-		follow(win);
-		const stopFollowing = viewRoot.onWindowMigrated((next) => {
-			win.removeEventListener("focus", push);
-			pop();
-			follow(next);
-		});
 		return () => {
-			stopFollowing();
-			win.removeEventListener("focus", push);
-			pop();
+			scope.unregister(escape);
+			scope.unregister(space);
 		};
+	});
+
+	$effect(() => {
+		// The video plays in the main window, so a popout shows the artwork.
+		const follow = (win: Window) => (inMainWindow = win === window);
+		follow(viewRoot.win);
+		return viewRoot.onWindowMigrated(follow);
 	});
 
 	/** A keyboard user who collapses the player lands on the mini player that opens it again. */

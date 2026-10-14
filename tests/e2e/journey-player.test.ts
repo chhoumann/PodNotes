@@ -1,7 +1,13 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
-import { closePodNotes, openInEditor, revealInFileExplorer, showPodNotes } from "./journey/actions";
-import { cdp, click, pointOn, pressKey, pressMouse } from "./journey/input";
+import {
+	clickInEditor,
+	closePodNotes,
+	openInEditor,
+	revealInFileExplorer,
+	showPodNotes,
+} from "./journey/actions";
+import { cdp, click, pointOn, pressKey, pressMouse, typeText } from "./journey/input";
 import { PLAYER_VIEW, ui, type UiTarget } from "./journey/targets";
 import { eventually, holdsFor, isShown, waitUntilFocused, waitUntilShown } from "./journey/wait";
 import {
@@ -336,5 +342,44 @@ describe("player journeys", () => {
 		await waitUntilShown(obsidian, ui.miniPlayer);
 		expect(await isShown(obsidian, ui.fullPlayer)).toBe(false);
 		await waitUntilFocused(obsidian, ui.openPlayer);
+	});
+
+	test("#467 keys typed in a note reach it while the full player is open", async () => {
+		const { obsidian, sandbox } = getContext();
+		const note = sandbox.path("Find in note.md");
+		await writeVaultFile(obsidian, note, "alpha one\nalpha two\nalpha three\n");
+		await openInEditor(obsidian, note);
+		await openPlayer([ONE]);
+		await clickInEditor(obsidian, note, 0, 0);
+		const search = () =>
+			obsidian.dev.evalJson<{ open: boolean; count: string | null }>(`(() => {
+				const leaf = app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(note)});
+				const bar = leaf.view.containerEl.querySelector(".document-search-container");
+				return { open: Boolean(bar), count: bar?.querySelector(".document-search-count")?.textContent ?? null };
+			})()`);
+		const find = {
+			key: "f",
+			code: "KeyF",
+			windowsVirtualKeyCode: 70,
+			modifiers: process.platform === "darwin" ? 4 : 2,
+		};
+		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...find });
+		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...find });
+		await typeText(obsidian, "alpha");
+		expect(await eventually(obsidian, search, { open: true, count: "1 / 3" })).toEqual({
+			open: true,
+			count: "1 / 3",
+		});
+
+		await pressKey(obsidian, "Enter");
+		expect(await eventually(obsidian, search, { open: true, count: "2 / 3" }), "Enter").toEqual(
+			{ open: true, count: "2 / 3" },
+		);
+		await pressKey(obsidian, "Escape");
+		expect(await eventually(obsidian, search, { open: false, count: null }), "Escape").toEqual({
+			open: false,
+			count: null,
+		});
+		expect(await isShown(obsidian, ui.fullPlayer), "the player stays open").toBe(true);
 	});
 });

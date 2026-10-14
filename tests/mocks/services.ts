@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, Scope } from "obsidian";
 import { vi } from "vitest";
 import { DEFAULT_EPISODE_LIST_LIMIT, DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
@@ -106,8 +106,12 @@ export function createTestServices(
 		now: Date.now,
 	});
 	const online = writable(true);
+	const scope = new Scope(app.scope);
+	// The view's leaf is active, as after a press in it.
+	app.workspace.activeLeaf = { view: { scope } } as never;
 	const services = {
 		app,
+		scope,
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() } as never,
 		player,
 		feeds,

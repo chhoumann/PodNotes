@@ -683,36 +683,40 @@ describe("full player", () => {
 			services.app.keymap.popScope(modal);
 		});
 
-		test("typed outside the view stays there", async () => {
-			const note = document.body.appendChild(document.createElement("textarea"));
-			renderView();
-			playing();
-			await tick();
-			note.focus();
+		/** A note's tab whose own keys, as its find bar's, record what reaches them. */
+		function noteLeaf() {
+			const scope = new obsidian.Scope(services.app.scope);
+			const keys: string[] = [];
+			for (const key of ["Enter", "Escape"]) {
+				scope.register(null, key, () => {
+					keys.push(key);
+					return false;
+				});
+			}
+			return { view: { scope }, keys };
+		}
+		const workspace = () => services.app.workspace as unknown as { activeLeaf: object | null };
+		const activate = (leaf: object | null) => (workspace().activeLeaf = leaf);
 
-			services.navigation.expand();
-			await tick();
-			expect(document.activeElement).toBe(note);
-
-			expect(await escape()).toBe(true);
-			expect(services.navigation.current.expanded).toBe(true);
-			note.remove();
-		});
-
-		test("from outside the view passes through, even with focus left in the player", async () => {
+		test("typed in a note reach the note, and the player stays open (#467)", async () => {
 			const note = document.body.appendChild(document.createElement("textarea"));
 			renderView();
 			playing();
 			await tick();
 			await fireEvent.click(button(`Open player: ${episode.title}`));
-			expect(document.activeElement).toBe(button("Collapse player"));
+			const tab = noteLeaf();
+			activate(tab);
+			note.focus();
 
-			expect(await escape(note)).toBe(true);
+			await fireEvent.keyDown(note, { key: "Enter" });
+			await escape(note);
+
+			expect(tab.keys).toEqual(["Enter", "Escape"]);
 			expect(services.navigation.current.expanded).toBe(true);
 			note.remove();
 		});
 
-		test("follows the player to a popout window, and Escape in the main window passes it by", async () => {
+		test("follows the player to a popout window, and a note's Escape in the main window passes it by", async () => {
 			const popout = openPopout();
 			popout.win.document.addEventListener("keydown", dispatch);
 			const note = document.body.appendChild(document.createElement("textarea"));
@@ -720,11 +724,16 @@ describe("full player", () => {
 			playing();
 			await tick();
 			await fireEvent.click(button(`Open player: ${episode.title}`));
+			const view = workspace().activeLeaf;
 
 			popout.moveIn(container);
-			expect(await escape(note)).toBe(true);
+			const tab = noteLeaf();
+			activate(tab);
+			await escape(note);
+			expect(tab.keys).toEqual(["Escape"]);
 			expect(services.navigation.current.expanded).toBe(true);
 
+			activate(view);
 			popout.focus();
 			const collapseButton = within(container).getByRole("button", {
 				name: "Collapse player",

@@ -1,4 +1,4 @@
-import type { App } from "obsidian";
+import type { App, Scope } from "obsidian";
 import { createContext } from "svelte";
 import type { Readable, Writable } from "svelte/store";
 import type { IAPI } from "src/API/IAPI";
@@ -35,6 +35,8 @@ export interface ShellServices {
 	readonly player: PlayerController;
 	readonly feeds: FeedRepository;
 	readonly navigation: Navigation;
+	/** The view's own keys. Obsidian gives them only the keys typed while focus is in the view. */
+	readonly scope: Scope;
 	readonly library: Library;
 	readonly actions: LibraryActions;
 	readonly search: PodcastSearch;
