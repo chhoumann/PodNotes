@@ -274,10 +274,10 @@ describe("a published transcript", () => {
 
 		press("Escape", field);
 		await tick();
+		expect(services.navigation.current.expanded, "the player stays open").toBe(true);
 		expect(screen.queryByRole("searchbox")).toBeNull();
 		expect(rows()).toHaveLength(10);
 		expect(button("Find in transcript")).toHaveFocus();
-		expect(services.navigation.current.expanded).toBe(true);
 
 		press("Escape");
 		await tick();
