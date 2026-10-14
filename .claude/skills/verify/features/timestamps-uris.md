@@ -9,7 +9,7 @@ moment.
 
 - `ts-capture` inserts the formatted current time at the cursor ("Capture Timestamp").
 - `ts-segment` inserts a linked range ending now ("Capture Last 10 Seconds", "Capture Last 20 Seconds").
-- `ts-undo` confirms every capture, from the player, the mini player, a command or the headset, in a Notice: `Timestamp added to <note>`, or `Created <note>` when it created the episode note. Its Undo removes exactly the inserted text while it is still where it was put, else the Notice `The note changed since, so the timestamp stays` says it was left. A created note is kept.
+- `ts-undo` confirms every capture, from the player, the mini player, a command or the headset, in a Notice: `Timestamp added to <note>`, or `Created <note>` when it created the episode note. Its Undo puts the note back as the capture found it, only while the note is still exactly as the capture left it; any later change, also a pending save, gets the Notice `The note isn't as the capture left it, so the timestamp stays`. A created note is kept.
 - `ts-format` applies the `Capture timestamp format` and `Timestamp offset (s)` settings.
 - `uri-open` reopens the linked episode at `time`, also after another episode played.
 - `uri-segment` plays a linked range and stops at its end (`endTime`).
