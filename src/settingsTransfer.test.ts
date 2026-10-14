@@ -394,6 +394,48 @@ describe("parseImport", () => {
 		}
 	});
 
+	it("carries the headset mapping, and imports an action a button does not have as its default", () => {
+		const settings = makeSettings({
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextChapter",
+		});
+		const exported = serializeSettings(settings, {}, "3.0.0", NOW, new Map());
+		const result = parseImport(
+			JSON.stringify({
+				...exported,
+				settings: { ...exported.settings, headsetNextTrack: "previousChapter" },
+			}),
+		);
+		expect(exported.settings).toMatchObject({
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextChapter",
+		});
+		if (!result.ok) throw new Error(result.error);
+		const merged = mergeImportedSettings(makeSettings(), result.settings);
+		expect([merged.headsetPreviousTrack, merged.headsetNextTrack]).toEqual([
+			"previousChapter",
+			"skipForward",
+		]);
+	});
+
+	it("drops an older export's feed cache preference, even caching off, and keeps the rest", () => {
+		const result = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				version: 2,
+				settings: { defaultVolume: 0.5, feedCache: { enabled: false, ttlHours: 1 } },
+			}),
+		);
+		expect(result).toMatchObject({ ok: true, settings: { defaultVolume: 0.5 } });
+		if (!result.ok) return;
+		expect(result.settings).not.toHaveProperty("feedCache");
+		const merged = mergeImportedSettings(makeSettings(), result.settings);
+		expect(merged).not.toHaveProperty("feedCache");
+		expect(serializeSettings(merged, {}, "3.0.0", NOW, new Map()).settings).not.toHaveProperty(
+			"feedCache",
+		);
+	});
+
 	it("drops unknown keys", () => {
 		const result = parseImport(JSON.stringify({ defaultVolume: 0.5, somethingElse: true }));
 		expect(result.ok).toBe(true);

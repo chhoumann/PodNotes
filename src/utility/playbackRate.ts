@@ -2,6 +2,7 @@ export const PLAYBACK_RATE_MIN = 0.5;
 export const PLAYBACK_RATE_MAX = 4;
 export const PLAYBACK_RATE_STEP = 0.1;
 export const DEFAULT_PLAYBACK_RATE = 1;
+export const PLAYBACK_RATES: readonly number[] = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
 export function normalizePlaybackRate(value: unknown, fallback = DEFAULT_PLAYBACK_RATE): number {
 	const numeric = typeof value === "number" ? value : Number(value);

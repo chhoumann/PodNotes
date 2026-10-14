@@ -155,6 +155,10 @@ export const ui = {
 			".workspace-leaf.mod-active .markdown-reading-view a",
 			text,
 		),
+	settingsSearch: byCss(
+		"Settings search",
+		'.modal.mod-settings input[placeholder="Search settings..."]',
+	),
 	settingsTab: (name: string) =>
 		byCss(`settings tab ${name}`, ".modal.mod-settings .vertical-tab-nav-item", name),
 	settingControl: (settingName: string, control: string): UiTarget => ({

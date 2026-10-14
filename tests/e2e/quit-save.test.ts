@@ -30,5 +30,9 @@ test.runIf(isolatedInstance)(
 		);
 
 		expect(onDisk?.defaultVolume).toBe(0.392);
+		expect(
+			await obsidian.dev.evalJson<number>(`app.plugins.plugins.${PLUGIN_ID}.api.volume`),
+			"the restarted player's volume",
+		).toBe(0.392);
 	},
 );

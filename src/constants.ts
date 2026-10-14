@@ -76,6 +76,8 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	playlists: ownRecord(),
 	skipBackwardLength: 15,
 	skipForwardLength: 15,
+	headsetPreviousTrack: "captureTimestamp",
+	headsetNextTrack: "skipForward",
 	currentEpisode: undefined,
 
 	timestamp: {
@@ -96,7 +98,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		// user to fill and give Bases columns to sort and filter on. The raw
 		// {{title}} (which may contain quotes/colons) and {{url}} (a feed URL, or for
 		// a local file a vault link whose name may contain a quote) live in the BODY,
-		// where YAML rules don't apply — keeping the verbatim, unescaped tag values
+		// where YAML rules don't apply, keeping the verbatim, unescaped tag values
 		// out of quoted frontmatter scalars so the frontmatter never fails to parse
 		// (issue #160 review). {{podcastlink}} ties each episode to its feed note
 		// (#163). See issue #160.
@@ -145,8 +147,8 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 
 	download: {
 		// Must include a per-episode token ({{title}}). An empty or token-less path
-		// resolves every episode to the same name — e.g. "" -> ".mp3", a hidden
-		// dotfile at the vault root that Obsidian never indexes — so the first
+		// resolves every episode to the same name (e.g. "" -> ".mp3", a hidden
+		// dotfile at the vault root that Obsidian never indexes), so the first
 		// download writes junk and the second throws "File already exists" (#183).
 		path: "PodNotes/{{podcast}}/{{title}}",
 	},
@@ -167,9 +169,5 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 			provider: "openai",
 			speakerTemplate: DEFAULT_SPEAKER_TEMPLATE,
 		},
-	},
-	feedCache: {
-		enabled: true,
-		ttlHours: 6,
 	},
 };

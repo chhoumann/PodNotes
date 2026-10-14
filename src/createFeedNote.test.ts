@@ -171,7 +171,6 @@ describe("createFeedNote", () => {
 			load,
 			resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 			storage: new MemoryStorage(),
-			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
 		feeds.setSubscriptions({ [saved.title]: saved });

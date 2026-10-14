@@ -78,7 +78,6 @@ describe("podNotesURIHandler with saved feeds", () => {
 			load,
 			resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 			storage: new MemoryStorage(),
-			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
 		const subscriptions = { [patron.title]: patron, [testEpisode.podcastName]: publicFeed };

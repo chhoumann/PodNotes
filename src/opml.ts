@@ -70,9 +70,10 @@ async function importOPML(opml: string): Promise<void> {
 				notice.update("No new podcasts to import.");
 				return;
 			}
-			const progress = ((completedImports / total) * 100).toFixed(1);
 			notice.update(
-				`Importing... ${completedImports}/${total} podcasts completed (${progress}%)`,
+				total === 1
+					? "Importing 1 podcast..."
+					: `Importing ${total} podcasts: ${completedImports} done.`,
 			);
 		};
 

@@ -31,7 +31,6 @@ function actionsOn(secrets: obsidian.SecretStorage) {
 		load: loadFeed,
 		resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
 	return {

@@ -4,7 +4,7 @@ A user transcribes the current episode. When its feed publishes a transcript
 (`<podcast:transcript>`), PodNotes writes it as timestamped paragraphs with no
 API key and no call to OpenAI or Deepgram. Otherwise, and always through
 `Transcribe current episode from audio`, it sends the audio to the configured
-provider with the user's key. The note goes to `Transcript file path`, filled
+provider with the user's key. The note goes to `Transcript path`, filled
 from `Transcript template`, and opens.
 
 ## Sub-features
@@ -19,7 +19,7 @@ from `Transcript template`, and opens.
 ## How to get to it (user POV)
 
 - With an audio episode loaded, run `PodNotes: Transcribe current episode` or `PodNotes: Transcribe current episode from audio` from the palette.
-- Set the path, template and API keys in Settings > PodNotes under `Transcripts`. Timestamps follow `Capture timestamp format` under `Episode notes`: links for `{{linktime}}`, plain times for `{{time}}`.
+- Set the path, template and API keys in Settings > PodNotes under `Transcripts`. Timestamps follow `Timestamp template` under `Notes`: links for `{{linktime}}`, plain times for `{{time}}`.
 
 ## Driving it with ui.mjs
 

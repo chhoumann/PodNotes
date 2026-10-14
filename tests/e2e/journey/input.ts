@@ -195,6 +195,7 @@ export async function typeText(obsidian: ObsidianClient, text: string): Promise<
 }
 
 const KEYS = {
+	Tab: { key: "Tab", windowsVirtualKeyCode: 9 },
 	Enter: { key: "Enter", windowsVirtualKeyCode: 13 },
 	Escape: { key: "Escape", windowsVirtualKeyCode: 27 },
 	ArrowUp: { key: "ArrowUp", windowsVirtualKeyCode: 38 },

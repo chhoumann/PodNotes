@@ -3,11 +3,8 @@ import { createPodNotesE2EHarness } from "./harness";
 import {
 	clickInEditor,
 	closePopoutTab,
-	closeSettings,
-	dismissNotices,
 	openInEditor,
 	openInReadingView,
-	openPodNotesSettings,
 	reloadAfterPopout,
 	runFromPalette,
 	showLibrary,
@@ -80,7 +77,7 @@ function hms(seconds: number): string {
 }
 
 /**
- * The default "Capture timestamp format", `- {{linktime}} `, for `episode` at `seconds`,
+ * The default "Timestamp template", `- {{linktime}} `, for `episode` at `seconds`,
  * or the segment from `seconds` to `end` that it captures as `- {{linksegment}} `.
  */
 function capture(
@@ -314,12 +311,9 @@ describe("episode note and capture journeys", () => {
 		);
 
 		server.retitle(show, ORIGINAL, RETITLED);
-		await openPodNotesSettings(obsidian);
-		await click(obsidian, ui.settingControl("Clear cached feeds", "button"));
-		await closeSettings(obsidian);
-		await dismissNotices(obsidian);
 		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(show.title));
+		await click(obsidian, ui.refreshEpisodes);
 		await waitUntilShown(obsidian, ui.episode(RETITLED));
 
 		await click(obsidian, ui.episodeMenu(RETITLED));

@@ -60,7 +60,6 @@ function repository(items: ParsedEpisodeDocument[], storage = new MemoryStorage(
 		load,
 		resolveUrl: (feed) => (feed.urlSecretId ? SECRET_URL : feed.url),
 		storage,
-		cache: () => ({ enabled: true, ttlHours: 6 }),
 		now: () => Date.UTC(2026, 9, 12),
 	});
 	feeds.setSubscriptions({ Show: show, Hidden: hidden });
