@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { get, readable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -159,7 +159,7 @@ async function cacheFeeds(...entries: [PodcastFeed, Episode[]][]) {
 		now: Date.now,
 	});
 	earlier.setSubscriptions(Object.fromEntries(entries.map(([feed]) => [feed.title, feed])));
-	await earlier.ensureAll();
+	await earlier.ensureAll({ online: true });
 }
 
 function respondByUrl(responses: Record<string, Episode[]>) {
@@ -200,6 +200,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	cleanup();
 	resetStores();
 	mockLoad.mockReset();
 	delete (globalThis as Record<string, unknown>).app;

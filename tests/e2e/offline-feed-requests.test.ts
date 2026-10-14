@@ -1,3 +1,4 @@
+import { mkdir } from "node:fs/promises";
 import http from "node:http";
 import { resolve } from "node:path";
 import { describe, expect, onTestFinished, test } from "vitest";
@@ -11,6 +12,7 @@ import { eventually, holdsFor, isDisabled, listedEpisodes, waitUntilShown } from
 import { jsLiteral, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("offline-feed-requests");
+const evidence = resolve(".obsidian-e2e-artifacts/feed2");
 
 describe("offline feed requests", () => {
 	test.each([false, true])("offline reopen and reconnect with held requests %s", async (hold) => {
@@ -108,9 +110,8 @@ describe("offline feed requests", () => {
 			}),
 		);
 		expect.soft(offline).toEqual([]);
-		await obsidian.dev.screenshot(
-			resolve(".obsidian-e2e-artifacts/feed2", `offline-${hold}.png`),
-		);
+		await mkdir(evidence, { recursive: true });
+		await obsidian.dev.screenshot(resolve(evidence, `offline-${hold}.png`));
 		await new Promise<void>((done) => recovered.listen(port, "127.0.0.1", done));
 		await setOffline(obsidian, false);
 		const refreshed = () =>
@@ -132,8 +133,6 @@ describe("offline feed requests", () => {
 			)
 			.toEqual(["Alpha updated", "Beta updated"]);
 		expect(await holdsFor(obsidian, refreshed, [...urls].sort())).toEqual([...urls].sort());
-		await obsidian.dev.screenshot(
-			resolve(".obsidian-e2e-artifacts/feed2", `reconnected-${hold}.png`),
-		);
+		await obsidian.dev.screenshot(resolve(evidence, `reconnected-${hold}.png`));
 	});
 });
