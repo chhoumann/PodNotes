@@ -8,7 +8,7 @@ Control playback from the mini player at the bottom of the PodNotes view, or fro
 
 ## Open the full player
 
-When you select an episode in a list, PodNotes plays it and opens the full player over the view. To open the full player again later, do one of these:
+When you select an episode in a list, PodNotes plays it and opens the full player over the view. When you select the episode that is already loaded, PodNotes opens the full player without playing, so select **Play** there. To open the full player again later, do one of these:
 
 - Select the mini player's episode title or artwork.
 - Run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
@@ -26,7 +26,7 @@ The capture button inserts a timestamp into your note. See [Capture timestamps](
 
 ## Control playback
 
-![The full player in the sidebar, with the episode artwork, its title, the progress bar split into chapters, the speed, skip, play, and volume buttons, Timestamp and Open note, and the Chapters, Transcript, and Up next buttons](/screenshots/player.webp)
+![The full player in the sidebar: artwork, title, a progress bar split into chapters, playback controls, Timestamp and Open note, and the panel buttons](/screenshots/player.webp)
 
 From top to bottom, the full player shows:
 
@@ -35,7 +35,7 @@ From top to bottom, the full player shows:
 - The elapsed time, the current chapter, and the time left. Select the chapter's title to open **Chapters**.
 - The speed, such as `1.25×`, the skip buttons, **Play** or **Pause**, and the volume button.
 - **Timestamp** and **Create note** or **Open note**.
-- **Chapters**, **Transcript**, and **Up next**. See [Use the panels](#use-the-panels).
+- **Chapters**, **Transcript**, and **Up next**. See [Use the panels](/player/#use-the-panels).
 
 The skip buttons show their length in seconds. They move back by **Skip back (s)** and forward by **Skip forward (s)**, 15 seconds by default. Change both under **Playback** in **Settings → PodNotes**.
 
@@ -80,7 +80,7 @@ The panel loads the transcript that the episode's feed publishes. Its top line r
 - To search, select **Find in transcript**, the magnifier, and type. The panel shows only the lines that match. Press `Enter` for the next match and `Shift+Enter` for the previous one. Press `Escape` or select **Close find** to show every line again.
 - **Save as note** saves the transcript as a note, as **PodNotes: Transcribe current episode** does. See [Transcribe episodes](/transcripts/#read-the-transcript-in-the-player).
 
-When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with OpenAI**, or **Transcribe with Deepgram** with Deepgram speaker labels, marked **Paid**. It transcribes the audio with your own API key, and your provider bills you for it. Offline, both buttons are turned off.
+When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers a button marked **Paid**: **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram. It transcribes the audio with your own API key, and your provider bills you for it. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key) and [What transcription costs](/transcripts/#what-transcription-costs). Offline, the transcribe button and **Save as note** are turned off.
 
 ### Up next
 
@@ -117,7 +117,7 @@ These keys work on the control that has focus:
 
 ## Watch video
 
-A video episode plays in the full player while the PodNotes view is in the main window. Select the video to play or pause. To watch it on the whole screen, select **Fullscreen**, the button at its bottom right. Press `Escape` to leave full screen.
+A video episode plays in the full player while the PodNotes view is in the main window. Select the video to play or pause. To watch it on the whole screen, select **Fullscreen**, the button at its bottom right. The button hides in full screen, so press `Escape` to leave it.
 
 When the PodNotes view is in a popout window, the player there shows the episode's artwork, and the video keeps playing. In a narrow view, an open panel takes the video's place while the video plays.
 

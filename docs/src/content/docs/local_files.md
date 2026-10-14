@@ -42,7 +42,7 @@ PodNotes plays MP3, M4A, AAC, OGG, WAV, FLAC, WMA, AMR, MP4, M4V, MOV, WebM, and
 
 ## <span id="find-your-files-in-local-files"></span>Find your files on the Local files page
 
-The **Local files** page lists every episode you have offline: your downloads and the files you played from your vault. In a narrow view, select **Local files** in the Library. In a wide view, select it in the list on the left. Your own files show their folder in the vault instead of a podcast's name.
+The **Local files** page lists every episode you have offline: your downloads and the files you played from your vault. In a narrow view, select **Local files** in the Library. In a wide view, select it in the list on the left. Your own files show a music or video icon instead of artwork, and their folder in the vault instead of a podcast's name.
 
 ## Remove a download or a local file
 
@@ -62,7 +62,7 @@ When you move or rename a media file in Obsidian, PodNotes follows it in **Local
 
 Timestamp links to a file you added yourself keep the file's old path. After a move, such a link still plays the file if no other vault file has the same name. After a rename, capture the timestamp again. Links to a download point at the feed episode, so they keep working.
 
-PodNotes does not see a move or a rename made while it is off or outside Obsidian. When a file is gone from its path, its episode shows "Could not load this episode's media." when you play it. To clear the entry, remove it as [Remove a download or a local file](#remove-a-download-or-a-local-file) describes.
+PodNotes does not see a move or a rename made while it is off or outside Obsidian. When a file is gone from its path, its episode shows "Could not load this episode's media." when you play it. To clear the entry, remove it as [Remove a download or a local file](/local_files/#remove-a-download-or-a-local-file) describes.
 
 ## Listen offline
 
@@ -77,6 +77,6 @@ Notes, timestamps, the queue, and playlists work offline.
 
 ## What works with local files
 
-A local file works like a podcast episode. You can capture timestamps, create an episode note, and resume where you stopped. Transcription works for local audio but not for video. The full player shows a file icon instead of artwork, and its **Transcript** panel says "No transcript yet".
+A local file works like a podcast episode. You can capture timestamps, create an episode note, and resume where you stopped. Transcription works for local audio but not for video. For a local audio file, the full player shows a music icon instead of artwork. A local video plays in the full player, as [Watch video](/player/#watch-video) describes. The **Transcript** panel says "No transcript yet".
 PodNotes uses `local file` as the podcast name, so `{{podcast}}` in a note path resolves to `local file`.
 A timestamp link to a local file plays on any device where the file is in your vault, whether or not it is in **Local files**. If the file is no longer at the link's path, PodNotes plays the one vault file with the same name. See [Limits of capture and links](/timestamps/#limits-of-capture-and-links).

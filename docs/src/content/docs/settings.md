@@ -8,7 +8,7 @@ Look up any PodNotes setting, its default, and what it does. The settings live i
 
 To find a setting, type its name in the search field at the top of Obsidian's settings window. Each PodNotes setting is its own result. `headset`, `lock screen`, and `media keys` find **Previous track** and **Next track**.
 
-A toggle or a dropdown saves at once. A text or number field takes effect as you type, and PodNotes saves it after you pause typing for half a second, or when you leave the field or close the settings. If you quit or reload Obsidian within that half second, the last characters you typed are lost.
+A toggle or a dropdown saves at once. A text or number field takes effect as you type, and PodNotes saves it after you pause typing for half a second, or when you leave the field or close the settings. If you quit or reload Obsidian before that save, PodNotes does not save what you typed since the last save.
 
 ## Playback
 
@@ -16,7 +16,7 @@ A toggle or a dropdown saves at once. A text or number field takes effect as you
 | --- | --- | --- |
 | **Skip back (s)** | 15 | Sets how many seconds the player's back button, **PodNotes: Skip Backward**, and the skip backward control of a headset or the lock screen move back. A whole number above 0. |
 | **Skip forward (s)** | 15 | Sets how many seconds the forward button, **PodNotes: Skip Forward**, and the skip forward control of a headset or the lock screen move forward. A whole number above 0. |
-| **Default speed** | `1×` | Sets the speed, from `0.75×` to `2×`, that PodNotes uses when Obsidian starts and whenever a different episode loads. Changing it does not change the speed of the episode that is playing. **PodNotes: Reset playback rate** returns to it. A speed saved by an older version, such as `1.3×`, stays as an extra choice until you pick another. |
+| **Default speed** | `1×` | Sets the speed, `0.75×`, `1×`, `1.25×`, `1.5×`, `1.75×`, or `2×`, that PodNotes uses when Obsidian starts and whenever a different episode loads. Changing it does not change the speed of the episode that is playing. **PodNotes: Reset playback rate** returns to it. A speed saved by an older version, such as `1.3×`, stays as an extra choice until you pick another. |
 | **Queue episodes I switch away from** | On | Puts the episode you switch away from at the top of the queue, and starts the next queued episode when one ends. The Queue page's **Queue options** menu has the same switch. See [Turn off the automatic queue](/playlists/#turn-off-the-automatic-queue). |
 
 ## Headset and lock screen
@@ -25,8 +25,8 @@ These settings decide what the previous-track and next-track buttons of a headse
 
 | Setting | Default | Choices |
 | --- | --- | --- |
-| **Previous track** | Capture timestamp | Capture timestamp, Back by the skip length, Previous chapter |
-| **Next track** | Forward by the skip length | Forward by the skip length, Next in queue, Next chapter, Capture timestamp |
+| **Previous track** | **Capture timestamp** | **Capture timestamp**, **Back by the skip length**, **Previous chapter** |
+| **Next track** | **Forward by the skip length** | **Forward by the skip length**, **Next in queue**, **Next chapter**, **Capture timestamp** |
 
 ## <span id="episode-notes"></span><span id="feed-notes"></span>Notes
 
@@ -77,14 +77,14 @@ These settings decide what the previous-track and next-track buttons of a headse
 
 ## <span id="search-podcasts"></span><span id="playlists"></span><span id="performance"></span>Settings that moved or were removed
 
-PodNotes 2.22.0 moved these out of the settings tab:
+PodNotes 2.22.0 moved these out of the settings tab. [Update to 2.22.0](/upgrade/) lists what else changes when you update.
 
 | Before 2.22.0 | Now |
 | --- | --- |
 | **Search Podcasts** | **Add podcast** in the PodNotes view. Remove a podcast from its page's **Podcast options** menu. See [Add and play podcasts](/podcasts/). |
 | **Playlists** | The Playlists page in the PodNotes view, with **New playlist**. A new playlist gets the default icon. See [Use the queue and playlists](/playlists/). |
-| **Default Volume** | The volume button in the full player. PodNotes keeps that volume for every episode. |
-| **Cache podcast feeds**, **Cache duration (hours)**, and **Clear cached feeds** | PodNotes always keeps a copy of each feed on this device and fetches it again after six hours. **Refresh episodes** and **Refresh all feeds** fetch at once. See [When a feed cannot be reached](/podcasts/#when-a-feed-cannot-be-reached). |
+| **Default Volume** | The volume button in the full player. PodNotes keeps that volume for every episode, and starts with the volume you saved before. |
+| **Cache podcast feeds**, **Cache duration (hours)**, and **Clear cached feeds** | PodNotes always keeps a copy of each feed on this device and fetches it again after six hours, even if you turned caching off before. **Refresh episodes** and **Refresh all feeds** fetch at once. See [When a feed cannot be reached](/podcasts/#when-a-feed-cannot-be-reached). |
 
 These settings have new names:
 

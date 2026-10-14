@@ -261,6 +261,13 @@ const BASES_TABLE = `() => {
 	return { x: box.x, y: top, width: Math.min(box.width, right - box.x + 24),
 		height: Math.min(innerHeight, last.bottom + 24) - top };
 }`;
+// The PodNotes view in a phone's right drawer, down to the full player's panel
+// buttons. The drawer's own tab switcher and file details sit below it.
+const DRAWER_PLAYER = `() => {
+			const view = document.querySelector(".workspace-drawer.mod-right .podcast-view").getBoundingClientRect();
+			const panels = document.querySelector(".workspace-drawer.mod-right section.pn-player .pn-switch").getBoundingClientRect();
+			return { x: view.x, y: view.y, width: view.width, height: panels.bottom + 12 - view.y };
+		}`;
 // PodNotes' own properties hold the fixture server's address, which says nothing
 // to a reader, so the note's shots hide them.
 const HIDE_ID_PROPERTIES =
@@ -477,6 +484,7 @@ async function recordDemo(heroNote, themeName) {
 		const artwork = lines.find((i) => editor.getLine(i).startsWith("!["));
 		editor.cm.scrollDOM.scrollTop = editor.cm.lineBlockAt(editor.cm.state.doc.line(artwork + 1).from).top - 16;
 		${API}.currentTime = ${plan.demo.at};
+		${API}.start();
 		return true;
 	`);
 	await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x: -10, y: -10 });
@@ -524,6 +532,7 @@ async function recordDemo(heroNote, themeName) {
 	});
 	console.log(`docs/public/screenshots/demo${themeName === "dark" ? "-dark" : ""}.gif`);
 	await evaluate(`
+		${API}.stop();
 		await app.vault.adapter.write(${JSON.stringify(heroNote)}, ${JSON.stringify(text)});
 		document.getElementById("docs-capture")?.remove();
 		app.workspace.leftSplit.expand();
@@ -609,7 +618,7 @@ async function main() {
 	await show({ kind: "library" }, true);
 	await openFile(heroNote);
 	for (const name of THEMES) await recordDemo(heroNote, name);
-	await evaluate(`${API}.currentTime = ${hero.playAt}; return true;`);
+	await playback(hero.playAt);
 
 	// Obsidian's phone layout.
 	await place("phone");
@@ -651,15 +660,9 @@ async function main() {
 		`return document.querySelector(".workspace-drawer.mod-right section.pn-player")?.getBoundingClientRect().width > 0;`,
 		"The full player did not open in the right drawer",
 	);
-	// The drawer's own tab switcher and file details sit below the player.
-	await capture(
-		"mobile-player",
-		`() => {
-			const view = document.querySelector(".workspace-drawer.mod-right .podcast-view").getBoundingClientRect();
-			const panels = document.querySelector(".workspace-drawer.mod-right section.pn-player .pn-switch").getBoundingClientRect();
-			return { x: view.x, y: view.y, width: view.width, height: panels.bottom + 12 - view.y };
-		}`,
-	);
+	await capture("mobile-player", DRAWER_PLAYER);
+	await press("Transcript");
+	await capture("transcript-phone", DRAWER_PLAYER);
 
 	// A new install: the empty library.
 	await seed("empty");

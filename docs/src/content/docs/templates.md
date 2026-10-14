@@ -25,8 +25,8 @@ These rules apply to every template except **Speaker label format**:
 | --- | --- | --- |
 | `{{title}}` | Episode title, cleaned for a file name. | Replaces whitespace, as in `{{title:_}}`. |
 | `{{podcast}}` | Podcast name, cleaned for a file name. | Replaces whitespace, as in `{{podcast:_}}`. |
-| `{{date}}` | Episode publication date, or empty when the feed has none. | [Date format](#date-formats). Default `YYYY-MM-DD`. |
-| `{{currentDate}}` | Date when PodNotes fills in the path. | [Date format](#date-formats). Default `YYYY-MM-DD`. |
+| `{{date}}` | Episode publication date, or empty when the feed has none. | [Date format](/templates/#date-formats). Default `YYYY-MM-DD`. |
+| `{{currentDate}}` | Date when PodNotes fills in the path. | [Date format](/templates/#date-formats). Default `YYYY-MM-DD`. |
 | `{{episodeNumber}}` | Episode number from the feed or the title, or empty. | Zero padding, as in `{{episodeNumber:000}}` for `042`. |
 
 `{{duration}}` is not available in paths.
@@ -74,7 +74,7 @@ PodNotes shortens a long folder or file name to fit file system limits, and keep
 | `{{artwork}}` | Episode artwork URL, or empty when there is none or the address is blocked. |
 | `{{episodelink}}` | `obsidian://podnotes` link that resumes this episode, with its `guid` when it has one. With a label, as in `{{episodelink:Resume in PodNotes}}`, a Markdown link with that text, with Markdown characters in the label escaped. Empty, label included, without a feed or local file to link to, and when the link would show a private feed's address, as for a private feed that you have not added. |
 
-`{{date}}` and `{{currentDate}}` accept a [date format](#date-formats). `{{episodeNumber:000}}` pads to three digits. Any other argument gives the number without padding.
+`{{date}}` and `{{currentDate}}` accept a [date format](/templates/#date-formats). `{{episodeNumber:000}}` pads to three digits. Any other argument gives the number without padding.
 
 The episode number comes from `<itunes:episode>` when the feed has a valid one. Otherwise PodNotes reads a number at the start of the title, such as `#12`, `Ep. 12`, `Episode 12`, or `12: Interview`. PodNotes can mistake a year at the start of a title, as in `2024: A year in review`, for episode number 2024.
 
@@ -155,7 +155,7 @@ The title and the URL are in the body, not the properties. An escaped title can 
 | `{{feedartwork}}` | Same as `{{artwork}}`. |
 | `{{author}}` | Author from `<itunes:author>`, with Markdown characters escaped. |
 | `{{description}}` | Podcast description, converted to Markdown. Accepts a line prefix. |
-| `{{date}}` | Current date. Accepts a [date format](#date-formats). |
+| `{{date}}` | Current date. Accepts a [date format](/templates/#date-formats). |
 
 `{{currentDate}}` is not available in podcast notes or their paths. The title, author, description, URL, and artwork tags follow the same rules as their episode note versions.
 

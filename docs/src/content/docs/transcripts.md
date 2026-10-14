@@ -16,7 +16,7 @@ Turn an episode into a transcript note. For a podcast you added, when its feed l
 
 The transcribe commands need a connection, so they are missing from the command palette while the device is offline.
 
-To transcribe audio, [set up an OpenAI key](#set-up-an-openai-key). For [speaker labels](#add-speaker-labels) from Deepgram, set up a Deepgram key instead.
+To transcribe audio, [set up an OpenAI key](/transcripts/#set-up-an-openai-key). For [speaker labels](/transcripts/#add-speaker-labels) from Deepgram, set up a Deepgram key instead.
 
 A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
@@ -24,7 +24,7 @@ A notice shows the progress, and you can keep listening. When the transcript is 
 
 To transcribe the audio even when the feed publishes a transcript:
 
-1. If this device has no key for your provider, set one up. See [Set up an OpenAI key](#set-up-an-openai-key), or [Add speaker labels](#add-speaker-labels) for Deepgram.
+1. If this device has no key for your provider, set one up. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key), or [Add speaker labels](/transcripts/#add-speaker-labels) for Deepgram.
 2. Rename, move, or delete any transcript note you saved for the episode. PodNotes does not replace an existing transcript.
 3. Run **PodNotes: Transcribe current episode from audio**.
 
@@ -35,11 +35,11 @@ The command always uses your provider and your API key. A transcript of the audi
 The full player's **Transcript** panel shows the transcript that the episode's feed publishes, for free, without saving a note. It reads **Feed transcript** and **Free** at the top.
 
 1. In the full player, select **Transcript**.
-2. Select a line to play the episode from that moment.
+2. Select a line with a time to play the episode from that moment. A transcript without times can only be read.
 
 The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. See [Read the transcript](/player/#read-the-transcript) for every control.
 
-When the feed publishes no transcript, the panel says "No transcript in this feed" and offers **Transcribe with OpenAI**, marked **Paid**, for an audio episode. With speaker labels from Deepgram, it reads **Transcribe with Deepgram**. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. Offline, the panel's buttons are turned off.
+When the feed publishes no transcript, the panel says "No transcript in this feed" and offers **Transcribe with OpenAI**, marked **Paid**, for an audio episode. With speaker labels from Deepgram, it reads **Transcribe with Deepgram**. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. Offline, the panel's transcribe button and **Save as note** are turned off.
 
 ## Transcripts that feeds publish
 

@@ -53,7 +53,7 @@ PodNotes inserts the playback time as a link, and a notice says "Timestamp added
 - [00:12:41](obsidian://podnotes?...)
 ```
 
-Select the link, in Live Preview or reading view, to play the episode from that moment. Capture works the same in any note. To take the timestamp back, select **Undo** in the notice.
+Select the link, in Live Preview or reading view, to play the episode from that moment. Capture works the same in any note. To take the timestamp back before you type more, select **Undo** in the notice. See [Undo a capture](/timestamps/#undo-a-capture).
 
 ## Other ways to install
 

@@ -44,7 +44,7 @@ hero:
 2. **Add a podcast.** In the PodNotes view, search for a show or paste its RSS feed URL, then select the show.
 3. **Capture a moment.** On the show's page, select an episode to play it. In a note, run **PodNotes: Capture Timestamp**.
 
-[Getting started](/getting-started/) walks through each step. To install a beta version or install by hand, see [Other ways to install](/getting-started/#other-ways-to-install).
+[Getting started](/getting-started/) walks through each step. To install a beta version or install by hand, see [Other ways to install](/getting-started/#other-ways-to-install). If you used PodNotes 2.21.1 or earlier, read [Update to 2.22.0](/upgrade/) first.
 
 ## Free and open source
 

@@ -16,6 +16,7 @@ export const sidebar = [
 		items: [
 			{ label: "Overview", slug: "index" },
 			{ label: "Getting started", slug: "getting-started" },
+			{ label: "Update to 2.22.0", slug: "upgrade" },
 			{ label: "Use PodNotes on your phone", slug: "mobile" },
 		],
 	},

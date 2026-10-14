@@ -13,13 +13,17 @@ Find short answers to the questions PodNotes users ask most. Each answer links t
 
 Run **PodNotes: Show player** from the command palette. It opens the PodNotes view, and the full player when an episode is loaded. **Show PodNotes**, the podcast icon in the ribbon, opens the view only.
 While an episode is loaded, the mini player at the bottom of the view shows it. Select the mini player to open the full player. See [Use the player](/player/).
-The view stays closed when Obsidian starts, except once on a new install. On a phone, see [Use PodNotes on your phone](/mobile/).
+PodNotes opens the view by itself only once, on a new install. After that, Obsidian keeps the layout you left. On a phone, see [Use PodNotes on your phone](/mobile/).
 
 ### Why are some commands missing?
 
 Most commands appear only while an episode is loaded. A paused episode counts, and so does the episode PodNotes shows when Obsidian starts.
 **PodNotes: Create episode note** needs **Episode note path** and **Episode note template**. With both set, it appears when an episode is loaded or you have added a podcast. The transcribe commands need an audio episode and a connection.
 **PodNotes: Show player**, **PodNotes: Reorder Queue**, and the capture commands are always available. [Commands](/commands/) lists what each command needs.
+
+### What changes when I update to 2.22.0?
+
+The PodNotes view, the player, and the settings are redesigned, and your devices merge their changes into one library. Update PodNotes on every device before you use it there. [Update to 2.22.0](/upgrade/) lists what to do.
 
 ### How do I install a beta version or install manually?
 

@@ -18,7 +18,7 @@ Search uses the Apple Podcasts directory and shows up to 20 shows. To add a show
 
 1. Copy its RSS feed URL or its Apple Podcasts show link. An RSS feed URL looks like `https://feeds.npr.org/510289/podcast.xml`.
 2. In **Add podcast**, paste it into the search field.
-3. Select the one result. Its second line reads **RSS feed** or **podcasts.apple.com**.
+3. Select the one result. Its second line starts with **RSS feed** or **podcasts.apple.com**.
 
 A podcast you already follow has a check mark instead of a plus, and selecting it opens its page. See [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) and [Use private feeds](/private-feeds/).
 
@@ -28,9 +28,9 @@ A podcast you already follow has a check mark instead of a plus, and selecting i
 2. Select **Podcast options**, the three-dot button at the top right.
 3. Select **Remove podcast**.
 
-You can also right-click the podcast's artwork in the Library and select **Remove podcast**. A notice says "Removed" and the podcast's name. To bring the podcast back, select **Undo** in the notice within seven seconds.
+You can also right-click the podcast's artwork in the Library and select **Remove podcast**. A notice says "Removed" and the podcast's name. To bring the podcast back, select **Undo** in the notice within seven seconds. If you miss the notice, [add the podcast](/podcasts/#add-a-podcast) again.
 
-PodNotes keeps the podcast's episode notes, downloads, played episodes, and its episodes in the queue and your playlists.
+PodNotes keeps the podcast's episode notes, downloads, played episodes and progress, and its episodes in the queue and your playlists. They come back when you add the podcast again.
 
 ## <span id="episode-list"></span>Browse episodes
 
@@ -53,11 +53,11 @@ Each episode shows its date and length, or the time left in it. A check mark mea
 Other pages list episodes from all your podcasts:
 
 - <span id="how-many-latest-episodes-are-shown"></span>**Latest episodes** shows the 10 newest episodes of each podcast, newest first. To show up to 75, raise **Latest episodes per podcast** under **Library** in **Settings → PodNotes**. **Refresh all feeds**, at the top of the page, fetches every feed again.
-- **Played** lists the episodes you finished, including ones that have left their feed. Such an episode is dimmed, and its menu only has **Mark as unplayed**.
+- **Played** lists the episodes you finished, including ones that have left their feed. An episode that PodNotes can no longer find in any feed or list is dimmed, and its menu only has **Mark as unplayed**.
 
 ### When a feed cannot be reached
 
-When PodNotes cannot fetch a podcast's feed, the podcast's page shows **Feed didn't load** with the feed's host name and a **Retry** button. In the Library, the podcast's artwork gets a warning badge.
+When PodNotes cannot fetch a podcast's feed, the podcast's page shows **Feed didn't load** with the feed's host name, or **Private feed** for a private feed, and a **Retry** button. In the Library, the podcast's artwork gets a warning badge.
 
 PodNotes then lists the episodes from the last copy of the feed on this device, however old the copy is. PodNotes keeps a copy of each feed on this device, with its 75 newest episodes, and fetches the feed again when the copy is more than six hours old. **Refresh episodes** and **Refresh all feeds** fetch at once. Without a copy, the page lists the podcast's downloaded episodes, and with none it shows **No episodes**.
 
@@ -69,7 +69,7 @@ For a private feed whose address is not on this device, **Feed didn't load** com
 
 1. Select an episode.
 
-PodNotes plays the episode from where you stopped and opens the full player over the view. [Use the player](/player/) covers the controls, the Chapters, Transcript, and Up next panels, and the mini player that stays at the bottom of the view.
+PodNotes plays the episode from where you stopped and opens the full player over the view. When you select the episode that is already loaded, PodNotes opens the full player without playing it. Select **Play** there. [Use the player](/player/) covers the controls, the Chapters, Transcript, and Up next panels, and the mini player that stays at the bottom of the view.
 
 ## <span id="playlists"></span><span id="reordering-the-queue"></span><span id="turning-off-the-queue"></span>Queue and playlists
 
@@ -79,11 +79,11 @@ The queue decides what plays next, and playlists collect episodes you want to ke
 
 ### <span id="context-menu"></span>Episode menu reference
 
-To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. The menu shows these items in this order:
+To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. Episodes in the queue have no **More options** button, so right-click them. The menu shows these items in this order:
 
 | Item | What it does |
 | --- | --- |
-| **Play** or **Open player** | Plays the episode. For the loaded episode, opens the full player. |
+| **Play** or **Open player** | Plays the episode and opens the full player. For the loaded episode, only opens the full player. |
 | **Add to queue** or **Remove from queue** | Adds the episode to the end of the queue, or removes it. |
 | **Create note** or **Open note** | Creates or opens the episode note. See [Create episode notes](/notes/). |
 | **Download**, **Remove download**, or **Remove from Local Files** | Downloads the episode. **Remove download** moves the downloaded file to the trash, and **Remove from Local Files** removes your own file from **Local files** and keeps the file. See [Downloads and local files](/local_files/). |

@@ -41,7 +41,8 @@ PodNotes needs Obsidian 1.13 or later.
 
 1. In Obsidian, open **Settings → Community plugins**. If you see **Exit Restricted mode**, select it. Select **Browse**, search for PodNotes, then select **Install** and **Enable**.
 2. In the PodNotes view, which opens in the right sidebar, search for a show or paste its RSS feed URL, then select the show.
-3. On the show's page, select an episode to play it. In a note in editing view, run **PodNotes: Capture Timestamp**, or select **Timestamp** in the player.
+3. On the show's page, select an episode to play it.
+4. In a note in editing view, run **PodNotes: Capture Timestamp**, or select **Timestamp** in the player.
 
 [Getting started](https://podnotes.obsidian.guide/getting-started/) walks through each step.
 

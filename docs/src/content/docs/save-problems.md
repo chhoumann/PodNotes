@@ -24,13 +24,13 @@ To fix the cause, free disk space, and check that PodNotes may write to its plug
 
 The file should hold the new value, such as `"skipForwardLength": 20`, and end with a closing `}`. If your editor checks JSON, it should report no errors.
 
-If the file still holds the old value, the cause is not fixed yet. PodNotes does not show the save notice again until a save succeeds, so fix the cause and check again. If the notice that PodNotes could not read the file appears instead, see [PodNotes could not read data.json](#podnotes-could-not-read-datajson).
+If the file still holds the old value, the cause is not fixed yet. PodNotes does not show the save notice again until a save succeeds, so fix the cause and check again. If the notice that PodNotes could not read the file appears instead, see [PodNotes could not read data.json](/save-problems/#podnotes-could-not-read-datajson).
 
 ## PodNotes could not read data.json
 
 The notice starts with "PodNotes could not read" and the file's path, such as `.obsidian/plugins/podnotes/data.json`. PodNotes leaves the file unchanged and saves nothing until it can read the file again. The usual cause is a sync service that is still writing the file. An earlier failed save can also leave the file unreadable. The notice stays on screen until PodNotes can read the file.
 
-If the notice also says that PodNotes started with default settings, see [A read error at startup](#a-read-error-at-startup). Otherwise, the error happened while you used PodNotes.
+If the notice also says that PodNotes started with default settings, see [A read error at startup](/save-problems/#a-read-error-at-startup). Otherwise, the error happened while you used PodNotes.
 
 ### A read error during a session
 
@@ -42,7 +42,7 @@ To make PodNotes read the file again:
 2. Check the free disk space.
 3. Check that the file named in the notice and its folder allow reads and writes.
 4. Fix any problem that you found in steps 2 and 3.
-5. Wait a minute. If the read notice is still there, go to [Write a new data.json](#write-a-new-datajson).
+5. Wait until your sync service has finished on every device. If the read notice is still there a few minutes later, go to [Write a new data.json](/save-problems/#write-a-new-datajson).
 
 If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. The read notice then usually stays until you write a new `data.json`.
 
@@ -80,7 +80,7 @@ If a synced `data.json` comes from a version of PodNotes before 2.18.0, a notice
 2. Let sync finish.
 3. Restart Obsidian.
 
-If a synced `data.json` comes from a newer version of PodNotes while you use it, a notice says that the file was written by a newer version of PodNotes. PodNotes then stops saving and reading the file, and changes you make afterwards are lost. Update PodNotes on this device, and on every device that shares the vault.
+If a synced `data.json` arrives in a data format newer than this version of PodNotes reads, a notice says that the file was written by a newer version of PodNotes. PodNotes then stops saving and reading the file, and changes you make afterwards are lost. Update PodNotes on this device, and on every device that shares the vault.
 
 If `data.json` is in a newer format when PodNotes starts, PodNotes does not start, and its notice says that the format requires a newer version of PodNotes. Update PodNotes on every device that shares the vault.
 

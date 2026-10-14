@@ -8,25 +8,25 @@ Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only whi
 
 | Command | ID | Available when |
 | --- | --- | --- |
-| [Show player](#show-player) | `podnotes:podnotes-show-leaf` | Always |
-| [Play Podcast](#play-podcast) | `podnotes:start-playing` | An episode is loaded, and it is not playing or starting to play |
-| [Stop Podcast](#stop-podcast) | `podnotes:stop-playing` | An episode is playing or starting to play |
-| [Toggle playback](#toggle-playback) | `podnotes:podnotes-toggle-playback` | An episode is loaded |
-| [Skip Backward](#skip-backward) | `podnotes:skip-backward` | An episode is loaded |
-| [Skip Forward](#skip-forward) | `podnotes:skip-forward` | An episode is loaded |
-| [Increase playback rate](#increase-playback-rate) | `podnotes:increase-playback-rate` | An episode is loaded |
-| [Decrease playback rate](#decrease-playback-rate) | `podnotes:decrease-playback-rate` | An episode is loaded |
-| [Reset playback rate](#reset-playback-rate) | `podnotes:reset-playback-rate` | An episode is loaded |
-| [Reorder Queue](#reorder-queue) | `podnotes:reorder-queue` | Always |
-| [Download Playing Episode](#download-playing-episode) | `podnotes:download-playing-episode` | An episode is loaded |
-| [Capture Timestamp](#capture-timestamp) | `podnotes:capture-timestamp` | Always |
-| [Capture Last 10 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-10s` | Always |
-| [Capture Last 20 Seconds](#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-20s` | Always |
-| [Create episode note](#create-episode-note) | `podnotes:create-podcast-note` | **Episode note path** and **Episode note template** are set, and an episode is loaded or you added at least one podcast |
-| [Create podcast feed note](#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You added at least one podcast, and **Podcast note path** and **Podcast note template** are set |
-| [Copy universal episode link to clipboard](#copy-universal-episode-link-to-clipboard) | `podnotes:get-share-link-episode` | An episode is loaded |
-| [Transcribe current episode](#transcribe-current-episode) | `podnotes:podnotes-transcribe` | An audio episode is loaded, and the device is online |
-| [Transcribe current episode from audio](#transcribe-current-episode-from-audio) | `podnotes:podnotes-transcribe-audio` | An audio episode is loaded, and the device is online |
+| [Show player](/commands/#show-player) | `podnotes:podnotes-show-leaf` | Always |
+| [Play Podcast](/commands/#play-podcast) | `podnotes:start-playing` | An episode is loaded, and it is not playing or starting to play |
+| [Stop Podcast](/commands/#stop-podcast) | `podnotes:stop-playing` | An episode is playing or starting to play |
+| [Toggle playback](/commands/#toggle-playback) | `podnotes:podnotes-toggle-playback` | An episode is loaded |
+| [Skip Backward](/commands/#skip-backward) | `podnotes:skip-backward` | An episode is loaded |
+| [Skip Forward](/commands/#skip-forward) | `podnotes:skip-forward` | An episode is loaded |
+| [Increase playback rate](/commands/#increase-playback-rate) | `podnotes:increase-playback-rate` | An episode is loaded |
+| [Decrease playback rate](/commands/#decrease-playback-rate) | `podnotes:decrease-playback-rate` | An episode is loaded |
+| [Reset playback rate](/commands/#reset-playback-rate) | `podnotes:reset-playback-rate` | An episode is loaded |
+| [Reorder Queue](/commands/#reorder-queue) | `podnotes:reorder-queue` | Always |
+| [Download Playing Episode](/commands/#download-playing-episode) | `podnotes:download-playing-episode` | An episode is loaded |
+| [Capture Timestamp](/commands/#capture-timestamp) | `podnotes:capture-timestamp` | Always |
+| [Capture Last 10 Seconds](/commands/#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-10s` | Always |
+| [Capture Last 20 Seconds](/commands/#capture-last-10-seconds--capture-last-20-seconds) | `podnotes:capture-segment-20s` | Always |
+| [Create episode note](/commands/#create-episode-note) | `podnotes:create-podcast-note` | **Episode note path** and **Episode note template** are set, and an episode is loaded or you added at least one podcast |
+| [Create podcast feed note](/commands/#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You added at least one podcast, and **Podcast note path** and **Podcast note template** are set |
+| [Copy universal episode link to clipboard](/commands/#copy-universal-episode-link-to-clipboard) | `podnotes:get-share-link-episode` | An episode is loaded |
+| [Transcribe current episode](/commands/#transcribe-current-episode) | `podnotes:podnotes-transcribe` | An audio episode is loaded, and the device is online |
+| [Transcribe current episode from audio](/commands/#transcribe-current-episode-from-audio) | `podnotes:podnotes-transcribe-audio` | An audio episode is loaded, and the device is online |
 
 A paused episode counts as loaded, and so does the episode that PodNotes restores, paused, when Obsidian starts. Hotkeys and workflow plugins use the ID.
 
@@ -36,7 +36,7 @@ Reveals the PodNotes view, or opens it in the right sidebar when it is not open.
 
 ## Play Podcast
 
-Plays the loaded episode from where it is. After Obsidian starts, that is the episode PodNotes restored, at its saved position. A finished episode starts over.
+Plays the loaded episode from where it is. After Obsidian starts, that is the episode PodNotes restored, at its saved position. A finished episode starts over, unless you moved its position after it ended, or another device synced a position before the end.
 
 ## Stop Podcast
 
@@ -84,7 +84,7 @@ Obsidian always lists the command, so you can add it to the mobile toolbar befor
 
 ## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds
 
-Inserts the last 10 or 20 seconds of playback as a range, in the style of **Timestamp template**, where [Capture Timestamp](#capture-timestamp) would insert a timestamp. With the default format, the range is a link that plays from the start of the range and pauses at its end.
+Inserts the last 10 or 20 seconds of playback as a range, in the style of **Timestamp template**, where [Capture Timestamp](/commands/#capture-timestamp) would insert a timestamp. With the default format, the range is a link that plays from the start of the range and pauses at its end.
 Obsidian always lists these commands. To add them to the mobile toolbar, see [Add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
 Without a loaded episode, they show "Play an episode to capture". Early in an episode, PodNotes shows a notice to play more first. See [Capture a range](/timestamps/#capture-a-range).
 
@@ -112,4 +112,4 @@ If PodNotes needs to transcribe the audio but this device has no API key for the
 
 ## Transcribe current episode from audio
 
-Transcribes the audio of the loaded episode with the selected provider and your API key, even when the feed publishes a transcript. Your provider bills your account for it. Otherwise it works like [Transcribe current episode](#transcribe-current-episode).
+Transcribes the audio of the loaded episode with the selected provider and your API key, even when the feed publishes a transcript. Your provider bills your account for it. Otherwise it works like [Transcribe current episode](/commands/#transcribe-current-episode).

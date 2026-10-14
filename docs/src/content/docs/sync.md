@@ -14,7 +14,7 @@ PodNotes has no sync service of its own, so your vault sync service, such as Obs
 | Your podcasts, progress, queue, playlists, templates, and settings | In `data.json`, if your sync service includes plugin data |
 | Episode notes, podcast notes, and transcripts | As Markdown files |
 | Downloads | As media files, if your sync service includes them |
-| API keys and the private feed addresses that PodNotes recognizes | Not at all. Each device keeps its own copy, and only a reference to it syncs. See [API keys and private feeds on each device](#api-keys-and-private-feeds-on-each-device). |
+| API keys and the private feed addresses that PodNotes recognizes | Not at all. Each device keeps its own copy, and only a reference to it syncs. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device). |
 | The current playback speed | Not at all. PodNotes does not save it. Only **Default speed** syncs. |
 
 For your library to sync, your sync service must include PodNotes' plugin folder, `.obsidian/plugins/podnotes/`.
@@ -22,7 +22,7 @@ With Obsidian Sync, turn on **Active community plugin list** and **Installed com
 
 ## Use PodNotes on two devices
 
-PodNotes merges the changes your devices make, so you can switch devices without restarting Obsidian. Every device needs PodNotes 2.22.0 or later, as [Limits of merging](#limits-of-merging) explains. To continue an episode on another device:
+PodNotes merges the changes your devices make, so you can switch devices without restarting Obsidian. Every device needs PodNotes 2.22.0 or later, as [Limits of merging](/sync/#limits-of-merging) explains. To continue an episode on another device:
 
 1. On the device you are leaving, pause playback. Pausing saves your position at once.
 2. Wait until your sync service finishes uploading.
@@ -42,7 +42,7 @@ An episode that ended on the device shows its end position until you play it. Th
 ## Changes on two devices
 
 Before each save, PodNotes reads `data.json` and merges it with the changes made on this device. When sync replaces `data.json` while PodNotes runs, PodNotes merges the new file into your library without a restart. This works also with sync services that keep the file's original modified time.
-Changes to different things all stay, apart from the cases in [Limits of merging](#limits-of-merging). For example, you add a podcast on your laptop while your phone saves your progress, and both changes stay.
+Changes to different things all stay, apart from the cases in [Limits of merging](/sync/#limits-of-merging). For example, you add a podcast on your laptop while your phone saves your progress, and both changes stay.
 
 When two devices change the same setting or the same item before either sees the other's change, the device that saves later keeps its own version. PodNotes takes these items whole, without mixing their parts:
 
@@ -53,7 +53,7 @@ When two devices change the same setting or the same item before either sees the
 
 Episodes match by podcast name and title, so episodes with the same title from different podcasts stay apart.
 
-Sync never starts or pauses playback on this device. A paused player takes the synced position of its episode, apart from the cases in [Use PodNotes on two devices](#use-podnotes-on-two-devices).
+Sync never starts or pauses playback on this device. A paused player takes the synced position of its episode, apart from the cases in [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
 
 ### A new device that starts before sync finishes
 
@@ -71,7 +71,7 @@ A new device that starts PodNotes before sync delivers `data.json` starts a libr
 
 ## When PodNotes saves
 
-PodNotes saves a change as soon as you make it. During playback, it saves your position about every 10 seconds.
+PodNotes saves a change as soon as you make it. A text or number setting saves after a short pause in typing, as [Settings](/settings/) explains. During playback, it saves your position about every 10 seconds.
 
 PodNotes also saves your position at once when you pause, play another episode, or turn off PodNotes, when an episode ends, and when the Obsidian window is hidden, such as when you switch apps on a phone.
 To make sure PodNotes saves your latest position, pause before you quit Obsidian.
@@ -91,10 +91,10 @@ If your vault uses a different configuration folder, the path starts with that f
 - The list of downloaded episodes and local files, with their paths in the vault.
 - Your note, timestamp, transcript, and download templates.
 - Your playback, skip, and headset preferences.
-- References to your API keys and to the private feed addresses that PodNotes recognizes, but not the keys or those addresses themselves. PodNotes also replaces a copy of such an address in an episode's text with the feed's placeholder, however the text spells it.
+- References to your API keys and to the private feed addresses that PodNotes recognizes, but not the keys or those addresses themselves. PodNotes also replaces a copy of such an address in an episode's text with the feed's placeholder, in the spellings that [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links) lists.
 - Your library's ID.
 
-Episode notes, podcast notes, transcripts, and downloads are separate files in your vault. The copy of each feed that PodNotes keeps stays on each device and does not sync. Your sync service transfers them separately from `data.json`.
+Episode notes, podcast notes, transcripts, and downloads are separate files in your vault. Your sync service transfers them separately from `data.json`. The copy of each feed that PodNotes keeps stays on each device and does not sync.
 
 PodNotes saves where you stopped, not a live session.
 Another device resumes from the saved position, but it cannot follow or control the player on this device.

@@ -6,7 +6,7 @@ description: Insert the current playback time into a note as a link that plays t
 
 Capture a timestamp while you listen, and PodNotes inserts the playback time at your cursor as a link back to that moment in the episode.
 
-![The Notes section of an episode note with three captured timestamp links, each followed by a note](/screenshots/timestamps.webp)
+![The Notes section of an episode note with four captured timestamp links, each followed by a note, and a Follow up list](/screenshots/timestamps.webp)
 
 ## <span id="capturing-timestamps"></span>Capture a timestamp
 
@@ -24,7 +24,7 @@ After each capture, a notice says "Timestamp added to" and the note's name, or "
 
 1. In the notice, select **Undo**.
 
-PodNotes puts the note back as the capture found it, but only while the note is exactly as the capture left it. If you typed in the note since, the notice says "The note isn't as the capture left it, so the timestamp stays", and the note stays as it is. To take back such a capture, use the editor's own undo, `Ctrl+Z` or `Command+Z` on macOS. Undo never deletes a note that the capture created. It removes only the timestamp.
+PodNotes puts the note back as the capture found it, but only while the note is exactly as the capture left it. If you typed in the note since, the notice says "The note isn't as the capture left it, so the timestamp stays", and the note stays as it is. Delete the timestamp by hand instead. The editor's own undo, `Ctrl+Z` or `Command+Z` on macOS, also works, but it takes back your typing first. Undo never deletes a note that the capture created. It removes only the timestamp.
 
 ## Choose where a timestamp goes
 
@@ -44,7 +44,7 @@ To capture from a hotkey:
 
 On a phone, [add a capture button to the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar).
 
-By default, a headset's previous-track button also captures, except on Android. You can give the capture to the next-track button instead, under **Headset and lock screen** in **Settings → PodNotes**. The timestamp goes where [a capture goes](#choose-where-a-timestamp-goes), and the same notice appears in Obsidian. See [Control playback from a headset or the lock screen](/mobile/#control-playback-from-a-headset-or-the-lock-screen).
+By default, a headset's previous-track button also captures, except on Android. You can give the capture to the next-track button too, or give either button another action, under **Headset and lock screen** in **Settings → PodNotes**. The timestamp goes where [a capture goes](/timestamps/#choose-where-a-timestamp-goes), and the same notice appears in Obsidian. See [Control playback from a headset or the lock screen](/mobile/#control-playback-from-a-headset-or-the-lock-screen).
 
 ## <span id="capturing-segments"></span>Capture a range
 
@@ -56,7 +56,7 @@ To mark a passage instead of a moment:
 
 PodNotes inserts the range that ends at the current playback time, such as `00:12:31-00:12:41`. It does not cut an audio clip. With the default **Timestamp template**, the range is a link that plays that passage and pauses at its end. While the range plays, PodNotes does not save your position in the episode. When a range reaches the end of the episode, PodNotes does not mark the episode played or start the next episode. After the range pauses, play the episode again to return to normal playback. Moving to another point does the same. With a template that uses `{{time}}`, the range is plain text.
 
-The range commands insert a range in the style of your **Timestamp template**, as [Timestamp tags](#timestamp-tags) describes. They show the same notice with **Undo**. [Commands](/commands/#capture-last-10-seconds--capture-last-20-seconds) lists when they are available.
+The range commands insert a range in the style of your **Timestamp template**, as [Timestamp tags](/timestamps/#timestamp-tags) describes. They show the same notice with **Undo**. [Commands](/commands/#capture-last-10-seconds--capture-last-20-seconds) lists when they are available.
 
 ## Make timestamps clickable
 
@@ -78,7 +78,7 @@ With an offset of `5`, a capture at `00:12:46` inserts `00:12:41`, and ranges mo
 
 ## <span id="settings"></span><span id="change-the-format"></span>Change what a capture inserts
 
-**Timestamp template** under **Notes** decides what a capture inserts. It can hold text, Markdown, and line breaks around the [timestamp tags](#timestamp-tags). While an episode is loaded, the setting shows the result below its name. See [Example templates](#example-templates).
+**Timestamp template** under **Notes** decides what a capture inserts. It can hold text, Markdown, and line breaks around the [timestamp tags](/timestamps/#timestamp-tags). While an episode is loaded, the setting shows the result below its name. See [Example templates](/timestamps/#example-templates).
 
 ## Limits of capture and links
 
@@ -107,7 +107,7 @@ Captures and links behave differently in these cases:
 | `{{segment}}` | A range as plain text. In a single capture, the playback time. |
 | `{{linksegment}}` | A range as a link. In a single capture, a link to the playback time. |
 
-Each tag uses `HH:mm:ss` unless you add a [time format](#time-formats) after a colon, as in `{{linktime:H:mm:ss}}`.
+Each tag uses `HH:mm:ss` unless you add a [time format](/timestamps/#time-formats) after a colon, as in `{{linktime:H:mm:ss}}`.
 
 The range commands adapt **Timestamp template** as follows. PodNotes uses a template that contains `{{segment}}` or `{{linksegment}}` unchanged. Otherwise `{{time}}` becomes `{{segment}}` and `{{linktime}}` becomes `{{linksegment}}`. A template with no time tag at all becomes `- {{linksegment}}`.
 

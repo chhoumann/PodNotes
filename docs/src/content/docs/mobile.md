@@ -9,16 +9,16 @@ To install PodNotes, follow [Install PodNotes](/getting-started/#install-podnote
 
 ## <span id="enable-podnotes-and-open-the-player"></span>Open the player
 
-On a new install, PodNotes opens its view once. After that, the view stays closed when Obsidian starts. To open it:
+On a new install, PodNotes opens its view once. After that, PodNotes opens the view only when you do, and Obsidian keeps the layout you left. To open it:
 
 1. Pull down on a note to open the command palette.
 2. Run **PodNotes: Show player**.
 
 You can also select **Show PodNotes** in the menu of the navigation bar at the bottom of the screen. The PodNotes view opens in the right sidebar. When you use the command and an episode is loaded, the full player opens in it. To see your lists, select **Collapse player**, the down arrow at the top left. To return to your note, select outside the sidebar.
 
-![The full player on a phone, with the episode artwork, its title, the progress bar, the speed, skip, and play buttons, Timestamp and Open note, and the Chapters, Transcript, and Up next buttons](/screenshots/mobile-player.webp)
+![The full player on a phone: artwork, title, a progress bar split into chapters, playback controls, Timestamp and Open note, and the panel buttons](/screenshots/mobile-player.webp)
 
-The full player works as on a computer. See [Use the player](/player/). To add your first podcast, see [Add and play podcasts](/podcasts/). Most commands appear only while an episode is loaded. When Obsidian starts, PodNotes restores the episode you played last, paused, so these commands work before you open the view. See [Commands](/commands/).
+The full player works as on a computer. See [Use the player](/player/). To reorder the queue, touch an episode's grip on the Queue page and drag it. See [Reorder the queue](/playlists/#reorder-the-queue). To add your first podcast, see [Add and play podcasts](/podcasts/). Most commands appear only while an episode is loaded. When Obsidian starts, PodNotes restores the episode you played last, paused, so these commands work before you open the view. See [Commands](/commands/).
 
 ## Add a capture button to the editor toolbar
 
@@ -37,13 +37,13 @@ To add a range button, repeat steps 2 and 3 with **PodNotes: Capture Last 10 Sec
 3. In editing view, place the cursor where the timestamp goes.
 4. In the editor toolbar, select the clock button.
 
-![A note on a phone with three captured timestamp links and the editor toolbar, whose first button is the clock that captures a timestamp](/screenshots/mobile-toolbar.webp)
+![A note on a phone with four captured timestamp links and the editor toolbar, whose first button is the clock that captures a timestamp](/screenshots/mobile-toolbar.webp)
 
 PodNotes inserts a timestamp link at the cursor and shows a notice with **Undo**, or shows "Play an episode to capture" when no episode is loaded. If your timestamps come out as plain text, see [Make timestamps clickable](/timestamps/#make-timestamps-clickable).
 
 ## <span id="capture-with-a-headset"></span>Control playback from a headset or the lock screen
 
-On Android, Obsidian does not pass headset buttons or lock screen controls to PodNotes, so they do not work there. To capture on Android, use [a capture button in the editor toolbar](#add-a-capture-button-to-the-editor-toolbar). On an iPhone or iPad, the controls should work as on a computer, but they are not tested yet.
+On Android, Obsidian does not pass headset buttons or lock screen controls to PodNotes, so they do not work there. To capture on Android, use [a capture button in the editor toolbar](/mobile/#add-a-capture-button-to-the-editor-toolbar). On an iPhone or iPad, the controls should work as on a computer, but they are not tested yet.
 
 On a computer, these controls work while an episode is loaded, playing, or paused:
 
@@ -60,7 +60,7 @@ To choose what the track buttons do:
 1. Open **Settings → PodNotes**.
 2. Under **Headset and lock screen**, set **Previous track** and **Next track**.
 
-**Previous track** can capture a timestamp, go back by the skip length, or go to the previous chapter. **Next track** can go forward by the skip length, play the next episode in the queue, go to the next chapter, or capture a timestamp. A chapter action does nothing for an episode without chapters. **Next in queue** plays the queue's next episode, and with the automatic queue on, the episode it leaves goes to the end of the queue.
+**Previous track** can capture a timestamp, go back by the skip length, or go to the previous chapter. **Next track** can go forward by the skip length, play the next episode in the queue, go to the next chapter, or capture a timestamp. A chapter action does nothing for an episode without chapters. **Next in queue** plays the queue's next episode. With the automatic queue on, the episode it leaves goes to the end of the queue, not the top, so each press moves on through the queue.
 
 The lock screen and your system's media controls show the episode's title, the podcast's name, and the artwork. Which press sends which control depends on the headset. A triple press often sends previous track, and some headsets send none.
 
@@ -82,4 +82,4 @@ Long-press a media file in the file explorer, where a computer uses a right-clic
 - On Android, headset buttons and lock screen controls do not reach PodNotes.
 - API keys and the private feed addresses that PodNotes recognizes stay on each device, so add them on your phone too. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 - A download made on another device plays only after its media file syncs to this one. See [Downloads on another device](/sync/#downloads-on-another-device).
-- Before you switch to your phone, pause on your other device and let sync finish. The phone's player then moves to the synced position. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).
+- Before you switch to your phone, pause on your other device and let sync finish. A paused player on the phone then moves to the synced position, unless you moved its position and PodNotes has not saved the move yet. An episode that ended on the phone plays from the synced position, if it is before the end, when you play it. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).

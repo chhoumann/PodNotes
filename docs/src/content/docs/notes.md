@@ -49,13 +49,13 @@ The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts
 
 Below the setting's name, a preview shows the result for one of your episodes. [File path tags](/templates/#file-path-tags) lists every tag a path accepts.
 
-PodNotes finds a note that has the `guid` and `feedUrl` properties wherever it is. It finds other notes, including every note created before PodNotes 2.22.0, only at the new path or by their title in that path's folder, so move them to match. Otherwise PodNotes can create a second note for such an episode. See [How PodNotes finds a note](#how-podnotes-finds-a-note).
+PodNotes finds a note that has the `guid` and `feedUrl` properties wherever it is. It finds other notes, including every note created before PodNotes 2.22.0, only at the new path or by their title in that path's folder, so move them to match. Otherwise PodNotes can create a second note for such an episode. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note).
 
 Podcast notes and downloads have their own paths: **Podcast note path** under **Notes**, and **Download path** under **Downloads**.
 
 ## Change what notes contain
 
-**Episode note template** under **Notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This example replaces the [default template](/templates/#default-episode-note-template). It adds the episode's duration, shows the artwork at 96 pixels wide, folds the description into a callout, and keeps the `status` and `rating` properties for [Bases](#browse-your-notes-with-bases). It leaves out the `# {{title}}` heading, the episode URL, and `favorite`. Obsidian still shows the file name as the note's title:
+**Episode note template** under **Notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This example replaces the [default template](/templates/#default-episode-note-template). It adds the episode's duration, shows the artwork at 96 pixels wide, folds the description into a callout, and keeps the `status` and `rating` properties for [Bases](/notes/#browse-your-notes-with-bases). It leaves out the `# {{title}}` heading, the episode URL, and `favorite`. Obsidian still shows the file name as the note's title:
 
 ```md
 ---
