@@ -45,3 +45,85 @@
 		<span class="txt"><span class="t">New playlist</span></span>
 	</button>
 </div>
+
+<style>
+	.pn-plrow {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-3);
+		width: 100%;
+		height: auto;
+		padding: var(--size-4-2);
+		border: 0;
+		border-radius: var(--radius-s);
+		background: none;
+		box-shadow: none;
+		color: var(--text-normal);
+		font-size: var(--font-ui-small);
+		font-weight: inherit;
+		text-align: left;
+		cursor: var(--cursor);
+	}
+
+	.pn-plrow:hover {
+		background: var(--background-modifier-hover);
+	}
+
+	.pn-plrow :global {
+		.pn-plicon {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex: none;
+			width: 44px;
+			height: 44px;
+			border-radius: 8px;
+			background: var(--background-modifier-border);
+			color: var(--text-muted);
+			--icon-size: 20px;
+		}
+
+		.pn-plicon.is-fav {
+			background: rgba(var(--color-pink-rgb), 0.16);
+			color: var(--color-pink);
+		}
+
+		.txt {
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.t {
+			font-weight: var(--font-medium);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.s {
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+		}
+
+		.pn-plchevron {
+			display: flex;
+			color: var(--text-muted);
+			--icon-size: 16px;
+		}
+	}
+
+	.pn-plrow.is-new :global {
+		.pn-plicon {
+			background: none;
+			border: 1px dashed var(--background-modifier-border-hover);
+		}
+
+		.t {
+			color: var(--text-muted);
+			font-weight: var(--font-normal);
+		}
+	}
+</style>

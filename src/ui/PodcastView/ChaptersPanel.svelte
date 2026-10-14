@@ -2,6 +2,7 @@
 	import type { Chapter } from "src/types/Chapter";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { chapterAt } from "./chapters";
+	import Panel from "./Panel.svelte";
 
 	let {
 		chapters,
@@ -13,7 +14,7 @@
 		onseek(time: number): void;
 	} = $props();
 
-	let list: HTMLOListElement | undefined = $state();
+	let list: HTMLElement | undefined = $state();
 	const current = $derived(chapterAt(chapters, position));
 
 	// Scrolls only the panel: scrollIntoView would also scroll the view and an editor around it.
@@ -25,32 +26,25 @@
 	});
 </script>
 
-<div class="pn-panel">
-	<ol class="pn-panel-scroll" aria-label="Chapters" bind:this={list}>
-		{#each chapters as chapter, index (index)}
-			<li>
-				<button
-					type="button"
-					class="pn-chap"
-					class:is-now={index === current}
-					aria-current={index === current || undefined}
-					onclick={() => onseek(chapter.startTime)}
-				>
-					<span class="tm">{formatDuration(chapter.startTime)}</span>
-					<span class="nm">{chapter.title}</span>
-				</button>
-			</li>
-		{/each}
-	</ol>
-</div>
+<Panel list="Chapters" bind:scroller={list}>
+	{#each chapters as chapter, index (index)}
+		<li>
+			<button
+				type="button"
+				class="pn-chap"
+				class:is-now={index === current}
+				aria-current={index === current || undefined}
+				onclick={() => onseek(chapter.startTime)}
+			>
+				<span class="tm">{formatDuration(chapter.startTime)}</span>
+				<span class="nm">{chapter.title}</span>
+			</button>
+		</li>
+	{/each}
+</Panel>
 
 <style>
-	ol {
-		margin: 0;
-		list-style: none;
-	}
-
-	.pn-panel .pn-chap {
+	.pn-chap {
 		display: flex;
 		align-items: baseline;
 		justify-content: flex-start;
@@ -68,32 +62,34 @@
 		white-space: normal;
 	}
 
-	.pn-panel .pn-chap:hover {
+	.pn-chap:hover {
 		background: var(--background-modifier-hover);
 		color: var(--text-normal);
 	}
 
-	.pn-panel .pn-chap.is-now {
+	.pn-chap.is-now {
 		background: hsla(var(--interactive-accent-hsl), 0.12);
 		color: var(--text-normal);
 	}
 
-	.tm {
-		flex: none;
-		width: 44px;
-		font-size: var(--font-ui-smaller);
-		font-variant-numeric: tabular-nums;
+	.pn-chap :global {
+		.tm {
+			flex: none;
+			width: 44px;
+			font-size: var(--font-ui-smaller);
+			font-variant-numeric: tabular-nums;
+		}
+
+		.nm {
+			font-weight: var(--font-medium);
+		}
 	}
 
-	.is-now .tm {
+	.pn-chap.is-now :global(.tm) {
 		color: var(--text-accent);
 	}
 
-	.nm {
-		font-weight: var(--font-medium);
-	}
-
-	:global(.is-phone) .pn-panel .pn-chap {
+	:global(.is-phone) .pn-chap {
 		min-height: 44px;
 		padding: 10px var(--size-4-2);
 	}

@@ -120,3 +120,125 @@
 		{query || $hidePlayedEpisodes ? "No episodes match" : "No episodes"}
 	</div>
 {/if}
+
+<style>
+	.pn-hero {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-3);
+		margin: var(--size-2-2) 0 var(--size-4-2);
+	}
+
+	.pn-hero :global {
+		.pn-cover {
+			width: 64px;
+			border-radius: 8px;
+		}
+
+		> div {
+			min-width: 0;
+		}
+
+		/* A long title takes two lines and breaks anywhere. */
+		h1 {
+			margin: 0;
+			font-size: var(--font-ui-medium);
+			font-weight: var(--font-semibold);
+			line-height: 1.3;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
+			overflow-wrap: anywhere;
+		}
+
+		.by {
+			margin-top: 2px;
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+	}
+
+	.pn-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--size-4-2);
+		margin: var(--size-4-2) 0;
+		padding: var(--size-4-2) var(--size-4-2) var(--size-4-2) var(--size-4-3);
+		border: 1px solid rgba(var(--color-red-rgb), 0.25);
+		border-radius: var(--radius-m);
+		background: rgba(var(--color-red-rgb), 0.08);
+	}
+
+	.pn-banner :global {
+		.pn-banner-icon {
+			display: flex;
+			margin-top: 6px;
+			color: var(--text-error);
+			--icon-size: var(--icon-s);
+		}
+
+		.txt {
+			flex: 1;
+			min-width: 0;
+			padding-top: 5px;
+		}
+
+		.h {
+			font-weight: var(--font-semibold);
+		}
+
+		.d {
+			margin-top: 2px;
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			font-family: var(--font-monospace);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+	}
+
+	.pn-filter {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: var(--size-2-2);
+		padding: var(--size-4-2) 0;
+		margin-bottom: var(--size-2-2);
+		background: var(--pn-bg);
+	}
+
+	:global(.is-wide) .pn-hero {
+		gap: var(--size-4-5);
+		margin: var(--size-4-2) 0 var(--size-4-3);
+	}
+
+	:global(.is-wide) .pn-hero :global {
+		.pn-cover {
+			width: 112px;
+			border-radius: 10px;
+		}
+
+		h1 {
+			font-size: var(--font-ui-large);
+			line-height: 1.25;
+			letter-spacing: -0.01em;
+		}
+
+		.by {
+			margin-top: var(--size-4-1);
+			font-size: var(--font-ui-small);
+		}
+	}
+
+	:global(.is-phone) .pn-hero :global(.pn-cover) {
+		width: 76px;
+	}
+</style>
