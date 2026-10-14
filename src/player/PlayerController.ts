@@ -119,13 +119,14 @@ export class PlayerController {
 		this.placeElement();
 	}
 
-	/**
-	 * Shows the selected episode paused at its saved position, without loading it: at
-	 * startup, and again after a sync while nothing is loaded. Loaded media stays, and
-	 * so does a position the user moved the same episode to.
-	 */
 	restore(episode: Episode | undefined): void {
+		this.noteStoppedMove();
 		const { status, episode: shown, currentTime } = this.snapshot;
+		if (status === "paused" && shown && !this.moved) {
+			const time = this.resumeTime(shown);
+			if (time !== currentTime) this.moveTo(time);
+			return;
+		}
 		if (!episode || (status !== "empty" && status !== "restored")) return;
 		this.moved &&= !!shown && getEpisodeKey(shown) === getEpisodeKey(episode);
 		this.setState({
@@ -172,6 +173,7 @@ export class PlayerController {
 		this.requests++;
 
 		const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
+		this.noteStoppedMove();
 		const { status, episode: outgoing, mediaType } = this.snapshot;
 		const sameEpisode = !!outgoing && getEpisodeKey(outgoing) === getEpisodeKey(episode);
 		this.select(episode);
@@ -194,9 +196,9 @@ export class PlayerController {
 			}
 			session.segmentEnd = endTime ?? null;
 			session.preview = endTime !== undefined;
-			if (time === undefined && status === "ended") this.moveTo(0);
+			const at = time ?? (status === "ended" ? this.resumeTime(episode) : undefined);
 			if (time !== undefined) this.moved = true;
-			if (time === undefined || this.moveTo(time)) this.start();
+			if (at === undefined || this.moveTo(at)) this.start();
 			return true;
 		}
 
@@ -215,18 +217,35 @@ export class PlayerController {
 		return true;
 	}
 
+	/**
+	 * Plays the queue's next episode other than the current one. The episode it leaves
+	 * goes last rather than first, so pressing again moves on through the queue.
+	 */
+	playNext(): void {
+		const outgoing = this.snapshot.episode;
+		const key = getEpisodeKey(outgoing);
+		const next = get(queue).episodes.find((episode) => getEpisodeKey(episode) !== key);
+		if (!next || !this.play(next) || !outgoing) return;
+		const [first] = get(queue).episodes;
+		if (first && getEpisodeKey(first) === key) {
+			queue.remove(first);
+			queue.add(first);
+		}
+	}
+
 	/** Continues the current episode without selecting it. */
 	resume(): void {
+		if (this.disposed) return;
+		this.noteStoppedMove();
 		const { status, episode } = this.snapshot;
-		if (this.disposed || !episode) return;
+		if (!episode) return;
 		this.requests++;
 		if (status === "playing" || status === "loading") return;
 		this.endPreview();
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
 			this.load(episode, source, this.restartTime(episode));
-		} else {
-			if (status === "ended") this.moveTo(0);
+		} else if (status !== "ended" || this.moveTo(this.resumeTime(episode))) {
 			this.start();
 		}
 	}
@@ -468,12 +487,12 @@ export class PlayerController {
 	}
 
 	private settlePaused(): void {
+		this.persist();
 		this.setState(
 			this.holdsMedia()
 				? { status: "paused", currentTime: this.el.currentTime }
 				: { status: "paused" },
 		);
-		this.persist();
 	}
 
 	private onLoadedMetadata(): void {
@@ -538,6 +557,7 @@ export class PlayerController {
 			return;
 		}
 
+		this.noteStoppedMove();
 		this.setState({ currentTime: time, duration: finiteOr0(this.el.duration) });
 		const now = Date.now();
 		if (now - session.lastCheckpoint < SAVE_POSITION_THROTTLE_MS) return;
@@ -591,10 +611,20 @@ export class PlayerController {
 		return !!this.session?.ready && this.el.readyState > HAVE_NOTHING;
 	}
 
+	private noteStoppedMove(): void {
+		const { status, currentTime } = this.snapshot;
+		const time = this.el.currentTime;
+		if (status === "playing" || !this.holdsMedia() || time === currentTime) return;
+		this.moved = true;
+		this.setState({ currentTime: time, status: status === "ended" ? "paused" : status });
+	}
+
 	private persist(): void {
 		const { session } = this;
-		const { episode, duration } = this.snapshot;
+		const { episode, duration, status } = this.snapshot;
 		if (!session || !this.holdsMedia() || session.preview || this.disposed || !episode) return;
+		this.noteStoppedMove();
+		if (status !== "playing" && !this.moved) return;
 		const time = this.el.currentTime;
 		playedEpisodes.setEpisodeTime(episode, time, duration, duration > 0 && time >= duration);
 		this.moved = false;

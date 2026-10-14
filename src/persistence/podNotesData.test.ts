@@ -64,6 +64,21 @@ function settingsWithEveryEpisodeContainer(): IPodNotesSettings {
 	};
 }
 
+function decodeFeedCacheAs2211(value: unknown): { enabled: boolean; ttlHours: number } {
+	const record =
+		typeof value === "object" && value !== null && !Array.isArray(value)
+			? (value as Record<string, unknown>)
+			: {};
+	const { enabled, ttlHours } = record;
+	return {
+		enabled: typeof enabled === "boolean" ? enabled : true,
+		ttlHours:
+			typeof ttlHours === "number" && Number.isFinite(ttlHours) && ttlHours > 0
+				? ttlHours
+				: 6,
+	};
+}
+
 describe("PodNotes data schema", () => {
 	it.each([
 		["query", "https://private.example/feed?auth=ENCODE_SENTINEL"],
@@ -534,14 +549,81 @@ describe("PodNotes data schema", () => {
 		expect(decoded.warnings).toEqual(["currentEpisode.guid: expected a string"]);
 	});
 
-	it("loads a 2.21.1 library unchanged", () => {
+	it("loads a 2.21.1 library unchanged, and saves it with the headset defaults and no feed cache preference", () => {
 		const decoded = decodePodNotesData(structuredClone(released2211));
+		const { feedCache, ...rest } = released2211;
 
 		expect(decoded.warnings).toEqual([]);
 		expect(decoded.changed).toBe(false);
+		expect(feedCache).toEqual({ enabled: true, ttlHours: 6 });
 		expect(
 			JSON.parse(JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields))),
-		).toEqual({ ...released2211, libraryId: "" });
+		).toEqual({
+			...rest,
+			headsetPreviousTrack: "captureTimestamp",
+			headsetNextTrack: "skipForward",
+			libraryId: "",
+		});
+	});
+
+	it("reads the headset mapping, and an action the button does not have as its default", () => {
+		const decoded = decodePodNotesData({
+			...structuredClone(released2211),
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextInQueue",
+		});
+		expect(decoded.warnings).toEqual([]);
+		expect([decoded.settings.headsetPreviousTrack, decoded.settings.headsetNextTrack]).toEqual([
+			"previousChapter",
+			"nextInQueue",
+		]);
+
+		for (const action of ["skipForward", "toString", "__proto__", 3]) {
+			const repaired = decodePodNotesData({
+				...structuredClone(released2211),
+				headsetPreviousTrack: action,
+			});
+			expect(repaired.settings.headsetPreviousTrack).toBe("captureTimestamp");
+			expect(repaired.warnings).toEqual(["headsetPreviousTrack: unknown value"]);
+		}
+	});
+
+	it("reads a feed cache turned off as no setting at all, keeping the fields it does not know", () => {
+		const decoded = decodePodNotesData({
+			...structuredClone(released2211),
+			feedCache: { enabled: false, ttlHours: 1 },
+			futureField: { kept: true },
+		});
+		const encoded = JSON.parse(
+			JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields)),
+		);
+
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.changed).toBe(false);
+		expect(decoded.unknownFields).toEqual({ futureField: { kept: true } });
+		expect(encoded).not.toHaveProperty("feedCache");
+		expect(encoded.futureField).toEqual({ kept: true });
+		expect(decodeFeedCacheAs2211(encoded.feedCache)).toEqual({ enabled: true, ttlHours: 6 });
+		expect(decodeFeedCacheAs2211(released2211.feedCache)).toEqual(released2211.feedCache);
+		expect(decodeFeedCacheAs2211({ enabled: false, ttlHours: 1 })).toEqual({
+			enabled: false,
+			ttlHours: 1,
+		});
+	});
+
+	it.each([
+		["a 2.21.1 library's one-decimal default speed", 1.3],
+		["the rate menu's quarter speed as the default", 1.25],
+	])("loads and saves %s unchanged", (_case, rate) => {
+		const decoded = decodePodNotesData({
+			...structuredClone(released2211),
+			defaultPlaybackRate: rate,
+		});
+
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.changed).toBe(false);
+		expect(decoded.settings.defaultPlaybackRate).toBe(rate);
+		expect(encodePodNotesData(decoded.settings).defaultPlaybackRate).toBe(rate);
 	});
 
 	const storedDownload = (downloadedByPodNotes: unknown) => ({

@@ -18,6 +18,38 @@ function makeSettings(overrides: Partial<IPodNotesSettings> = {}): IPodNotesSett
 const NOW = "2026-06-14T00:00:00.000Z";
 
 describe("private feed reference transfer", () => {
+	it("redacts entity-escaped descriptions at export without changing public bytes", () => {
+		const address = "https://private.example.com/rss?auth=EXPORT_ENTITY_SENTINEL";
+		const publicText = "Public https&#58;&#x2F;&#x2F;private.example.com/public?a=1&amp;b=2";
+		const settings = makeSettings({
+			savedFeeds: {
+				Paid: {
+					title: "Paid",
+					url: "podnotes-private-feed:Paid",
+					artworkUrl: "",
+					description: `${address.replace(":", "&#58;").replaceAll("/", "&#x2F;")}. ${publicText}`,
+				},
+				Public: {
+					title: "Public",
+					url: "https://public.example/rss",
+					artworkUrl: "",
+					description: publicText,
+				},
+			},
+		});
+		const { settings: exported } = serializeSettings(
+			settings,
+			{},
+			"2.21.1",
+			NOW,
+			new Map([[address, "podnotes-private-feed:Paid"]]),
+		);
+		expect(exported.savedFeeds?.Public).toEqual(settings.savedFeeds.Public);
+		expect(exported.savedFeeds?.Paid.description).toBe(
+			`podnotes-private-feed:Paid. ${publicText}`,
+		);
+	});
+
 	it("puts no private feed address in a settings export, including quoted episode text", () => {
 		const address = "https://private.example/feed?auth=EXPORT_SENTINEL";
 		const placeholder = "podnotes-private-feed:Private";
@@ -392,6 +424,48 @@ describe("parseImport", () => {
 				expect(result.settings).not.toHaveProperty(key as string);
 			}
 		}
+	});
+
+	it("carries the headset mapping, and imports an action a button does not have as its default", () => {
+		const settings = makeSettings({
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextChapter",
+		});
+		const exported = serializeSettings(settings, {}, "3.0.0", NOW, new Map());
+		const result = parseImport(
+			JSON.stringify({
+				...exported,
+				settings: { ...exported.settings, headsetNextTrack: "previousChapter" },
+			}),
+		);
+		expect(exported.settings).toMatchObject({
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextChapter",
+		});
+		if (!result.ok) throw new Error(result.error);
+		const merged = mergeImportedSettings(makeSettings(), result.settings);
+		expect([merged.headsetPreviousTrack, merged.headsetNextTrack]).toEqual([
+			"previousChapter",
+			"skipForward",
+		]);
+	});
+
+	it("drops an older export's feed cache preference, even caching off, and keeps the rest", () => {
+		const result = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				version: 2,
+				settings: { defaultVolume: 0.5, feedCache: { enabled: false, ttlHours: 1 } },
+			}),
+		);
+		expect(result).toMatchObject({ ok: true, settings: { defaultVolume: 0.5 } });
+		if (!result.ok) return;
+		expect(result.settings).not.toHaveProperty("feedCache");
+		const merged = mergeImportedSettings(makeSettings(), result.settings);
+		expect(merged).not.toHaveProperty("feedCache");
+		expect(serializeSettings(merged, {}, "3.0.0", NOW, new Map()).settings).not.toHaveProperty(
+			"feedCache",
+		);
 	});
 
 	it("drops unknown keys", () => {

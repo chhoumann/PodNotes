@@ -16,7 +16,7 @@ import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
  * The download path used to default to "" (empty). With an empty template the
- * Download command resolved every episode to ".mp3" at the vault root — a dotfile
+ * Download command resolved every episode to ".mp3" at the vault root: a dotfile
  * Obsidian never indexes, so the first download wrote junk and the second threw
  * "File already exists" (issue #183). Users who never customized the path have
  * this exact value persisted, so simply changing the default does not help them.
@@ -27,7 +27,7 @@ export const LEGACY_EMPTY_DOWNLOAD_PATH = "";
  * Upgrades the legacy empty download path to the current per-episode default.
  *
  * ONLY the exact legacy empty value (or an absent value) is migrated, so any
- * non-empty path the user deliberately configured is preserved untouched — even
+ * non-empty path the user deliberately configured is preserved untouched, even
  * an unusual one. An empty path is always broken (it can only ever write the
  * ".mp3" dotfile), so replacing it is strictly an improvement.
  *
@@ -63,10 +63,10 @@ type StoredNote = { path?: string | null; template?: string | null };
  * Upgrades the legacy empty episode-note settings to the current Bases-friendly
  * default, preserving any configuration the user made.
  *
- * The migration fires ONLY when the WHOLE note is the legacy default — both path
- * and template empty/absent — i.e. the exact value a never-configured install has
+ * The migration fires ONLY when the WHOLE note is the legacy default (both path
+ * and template empty/absent), i.e. the exact value a never-configured install has
  * persisted. The moment the user has set EITHER field, the note feature has been
- * engaged, so both fields are preserved verbatim — including a deliberately empty
+ * engaged, so both fields are preserved verbatim, including a deliberately empty
  * field a user relies on to keep "Create episode note" disabled (the command
  * gates on emptiness). This is the conservative reading of "migrate only when the
  * stored value is still the old default": a partially-configured note is not the

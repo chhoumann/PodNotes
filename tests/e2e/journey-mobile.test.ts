@@ -1,19 +1,18 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	closePodNotes,
 	closeSettings,
+	enableAsNewInstall,
 	reloadObsidian,
 	setMobileEmulation,
-	typeText,
-	ui,
-	waitUntilFocused,
-	waitUntilShown,
 } from "./journey/actions";
+import { click, typeText } from "./journey/input";
+import { ui } from "./journey/targets";
+import { holdsFor, waitUntilFocused, waitUntilShown } from "./journey/wait";
 import { type FixtureFeed, startFixtureServer } from "./journey/fixtures";
 import { playerLeafCount, readLibrary, seedLibrary } from "./journey/library";
-import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, waitForPodNotesReady } from "./runtime";
+import { jsLiteral, RELOAD_OPTIONS } from "./runtime";
 import { assertNoNewRuntimeErrors } from "./runtime-evidence";
 
 const getContext = createPodNotesE2EHarness("journey-mobile");
@@ -34,29 +33,10 @@ describe("mobile journeys", () => {
 		onTestFinished(() => server.stop());
 		await seedLibrary(context, null);
 		await setMobileEmulation(obsidian, true);
-		await closePodNotes(obsidian);
-		const dataFile = await obsidian.dev.evalJsonAsync<{ before: boolean }>(`(async () => {
-			const path = app.vault.configDir + ${jsLiteral(`/plugins/${PLUGIN_ID}/data.json`)};
-			await app.workspace.saveLayout();
-			await app.plugins.disablePlugin(${jsLiteral(PLUGIN_ID)});
-			await app.vault.adapter.remove(path);
-			const before = await app.vault.adapter.exists(path);
-			await app.plugins.enablePlugin(${jsLiteral(PLUGIN_ID)});
-			return { before };
-		})()`);
-		expect(dataFile.before, "no data.json, as on a new install").toBe(false);
-		await waitForPodNotesReady(obsidian);
+		await enableAsNewInstall(obsidian);
 
 		await waitUntilShown(obsidian, ui.firstRun);
-		const deadline = Date.now() + 1500;
-		const leaves = await obsidian.waitFor(
-			async () => {
-				const count = await playerLeafCount(obsidian);
-				return count !== 1 || Date.now() >= deadline ? { count } : false;
-			},
-			{ timeoutMs: 10_000, intervalMs: 100, message: "the view to stay a single leaf" },
-		);
-		expect(leaves.count).toBe(1);
+		expect(await holdsFor(obsidian, () => playerLeafCount(obsidian), 1)).toBe(1);
 		expect((await readLibrary(plugin)).subscriptions).toEqual([]);
 
 		await waitUntilFocused(obsidian, ui.podcastSearch);
@@ -76,15 +56,7 @@ describe("mobile journeys", () => {
 			"(async () => { await app.workspace.saveLayout(); return true; })()",
 		);
 		await reloadObsidian(obsidian);
-		const deadline = Date.now() + 1500;
-		const leaves = await obsidian.waitFor(
-			async () => {
-				const count = await playerLeafCount(obsidian);
-				return count > 0 || Date.now() >= deadline ? { count } : false;
-			},
-			{ timeoutMs: 10_000, intervalMs: 100, message: "the mobile player to remain closed" },
-		);
-		expect(leaves.count).toBe(0);
+		expect(await holdsFor(obsidian, () => playerLeafCount(obsidian), 0)).toBe(0);
 
 		await click(obsidian, ui.leftDrawerToggle);
 		await click(obsidian, ui.ribbonAction("Show PodNotes"));
@@ -94,7 +66,7 @@ describe("mobile journeys", () => {
 		await waitUntilShown(obsidian, ui.firstRun);
 		onTestFinished(() => closeSettings(obsidian));
 		await click(obsidian, ui.firstRunSettings);
-		await waitUntilShown(obsidian, ui.settingHeading("Playlists"));
+		await waitUntilShown(obsidian, ui.settingHeading("Notes"));
 	}, 120_000);
 
 	test("J-EDGE-13 a private feed URL moved to SecretStorage on a mobile start leaves no copy in the old feed cache", async () => {

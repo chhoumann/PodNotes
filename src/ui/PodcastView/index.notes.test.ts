@@ -38,7 +38,6 @@ async function openPodcastPage(notes: string[]) {
 		load: async () => feedDocument(show.title, [episode]),
 		resolveUrl: (feed) => feed.url,
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
 	const { services, dispose } = createTestServices({ feeds, library: pluginLibrary });
@@ -52,7 +51,10 @@ async function openPodcastPage(notes: string[]) {
 	const app = {
 		...services.app,
 		vault,
-		workspace: { layoutReady: true, onLayoutReady: (ready: () => void) => ready() },
+		workspace: Object.assign(services.app.workspace, {
+			layoutReady: true,
+			onLayoutReady: (ready: () => void) => ready(),
+		}),
 	};
 	const settings = structuredClone(DEFAULT_SETTINGS);
 	settings.note.path = "Notes/{{title}}.md";

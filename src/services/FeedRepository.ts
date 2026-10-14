@@ -48,7 +48,6 @@ export interface FeedRepositoryDeps {
 	/** The URL to fetch a feed from, or null when its private URL is not on this device. */
 	resolveUrl(feed: FeedAddress): string | null;
 	storage: FeedCacheStorage;
-	cache(): { enabled: boolean; ttlHours: number };
 	now(): number;
 }
 
@@ -137,8 +136,11 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		);
 	}
 
-	ensureAll(): Promise<boolean> {
-		return this.load(this.subscriptions.keys(), "cached");
+	ensureAll({ online }: { online: boolean }): Promise<boolean> {
+		this.hydrate();
+		if (online) return this.load(this.subscriptions.keys(), "cached");
+		for (const feed of this.subscriptions.values()) void this.request(feed, "cached", false);
+		return Promise.resolve(true);
 	}
 
 	/**
@@ -180,13 +182,6 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		return channelFeed((await this.documentAt(feed, "cached")).channel, feed.url);
 	}
 
-	clear(): void {
-		for (const source of this.sources.values()) source.doc = undefined;
-		this.deps.storage.saveLocalStorage(CACHE_KEY, null);
-		this.emit();
-		void this.ensureAll();
-	}
-
 	private async documentAt(feed: FeedAddress, mode: LoadMode): Promise<FeedDocument> {
 		this.hydrate();
 		const source = this.source(feed.url);
@@ -199,7 +194,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	}
 
 	/** Joins the feed's request in flight, or starts one when `mode` asks for it. */
-	private request(feed: FeedAddress, mode: LoadMode): Promise<void> | undefined {
+	private request(feed: FeedAddress, mode: LoadMode, online = true): Promise<void> | undefined {
 		const source = this.source(feed.url);
 		if (source.inflight || !this.needsFetch(source.doc, mode)) return source.inflight;
 		const url = this.deps.resolveUrl(feed);
@@ -208,7 +203,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			this.emit();
 			return undefined;
 		}
-		return this.fetch(feed.url, url);
+		return online ? this.fetch(feed.url, url) : undefined;
 	}
 
 	private source(url: string): Source {
@@ -227,9 +222,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	}
 
 	private isExpired(doc: FeedDocument): boolean {
-		return (
-			this.deps.now() - doc.updatedAt > Math.max(1, this.deps.cache().ttlHours) * 3_600_000
-		);
+		return this.deps.now() - doc.updatedAt > CACHE_TTL_MS;
 	}
 
 	/** `sourceUrl` keys the document; `url` is what to fetch, the secret one for a private feed. */
@@ -308,9 +301,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		this.hydrated = true;
 		let cached: [string, FeedDocument][] = [];
 		try {
-			if (this.deps.cache().enabled) {
-				cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
-			}
+			cached = decodeCache(this.deps.storage.loadLocalStorage(CACHE_KEY));
 		} catch (error) {
 			console.warn("PodNotes: could not read the feed cache", error);
 		}
@@ -322,7 +313,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 
 	/** Writes only subscribed feeds, so a removed one leaves the cache with the next write. */
 	private persist(): void {
-		if (!this.hydrated || !this.deps.cache().enabled) return;
+		if (!this.hydrated) return;
 		const entries: Record<string, FeedDocument> = {};
 		for (const url of this.urls) {
 			const doc = this.sources.get(url)?.doc;
@@ -392,6 +383,7 @@ function channelFeed(channel: ParsedFeedDocument, url: string): PodcastFeed {
 // v6 stores parsed documents instead of episodes projected for one subscription.
 // v1-v4 lived in the global localStorage, v5 in the vault-scoped one.
 const CACHE_KEY = "podnotes:feed-cache:v6";
+const CACHE_TTL_MS = 6 * 3_600_000;
 // Keep this >= MAX_EPISODE_LIST_LIMIT (src/constants.ts): Latest Episodes is built
 // from cached documents on a warm start.
 const MAX_ITEMS_PER_FEED = 75;

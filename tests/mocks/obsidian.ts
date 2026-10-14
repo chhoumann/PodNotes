@@ -28,7 +28,11 @@ export class Scope {
 	win: Window | null = null;
 	private handlers: KeymapEventHandler[] = [];
 
-	constructor(private readonly parent?: Scope) {}
+	/** `delegate`, as Obsidian's workspace scope has, gets every key while it gives a scope. */
+	constructor(
+		private readonly parent?: Scope,
+		private readonly delegate?: () => Scope | null,
+	) {}
 
 	register(_modifiers: string[] | null, key: string | null, func: KeymapEventListener) {
 		const handler = { key, func };
@@ -42,6 +46,8 @@ export class Scope {
 
 	/** As Obsidian: the first handler for the key decides, else the parent scope does. */
 	handleKey(evt: KeyboardEvent): unknown {
+		const delegated = this.delegate?.();
+		if (delegated) return delegated.handleKey(evt);
 		for (const { key, func } of this.handlers) {
 			if (key !== null && key !== evt.key) continue;
 			const result = func(evt, {});
@@ -93,16 +99,38 @@ export class Keymap {
 	}
 }
 
-export class App {
-	secretStorage = new SecretStorage();
-	scope = new Scope();
-	keymap = new Keymap(this.scope);
-}
-export class Plugin {}
-
 interface EventRef {
 	e: { offref(ref: EventRef): void };
 }
+
+export class Workspace {
+	/** Obsidian makes a leaf active on focus or a press in it. */
+	activeLeaf: { view: { scope: Scope | null } } | null = null;
+	private readonly refs = new Set<EventRef & { name: string; callback(): unknown }>();
+
+	on(name: string, callback: () => unknown): EventRef {
+		const ref = { e: this, name, callback };
+		this.refs.add(ref);
+		return ref;
+	}
+
+	offref(ref: EventRef): void {
+		this.refs.delete(ref as EventRef & { name: string; callback(): unknown });
+	}
+
+	trigger(name: string): void {
+		for (const ref of [...this.refs]) if (ref.name === name) ref.callback();
+	}
+}
+
+export class App {
+	secretStorage = new SecretStorage();
+	scope = new Scope();
+	workspace = new Workspace();
+	/** Each window's base scope, as Obsidian's workspace scope, hands keys to the active view's scope. */
+	keymap = new Keymap(new Scope(this.scope, () => this.workspace.activeLeaf?.view.scope ?? null));
+}
+export class Plugin {}
 
 /** Obsidian's lifecycle: a callback registered after unload never runs. */
 export class Component {
@@ -154,14 +182,21 @@ export class TFolder {
 }
 
 export class Notice {
-	constructor(public message?: string) {}
+	hidden = false;
 
-	setMessage(message: string): this {
+	constructor(
+		public message?: string | DocumentFragment,
+		public duration?: number,
+	) {}
+
+	setMessage(message: string | DocumentFragment): this {
 		this.message = message;
 		return this;
 	}
 
-	hide(): void {}
+	hide(): void {
+		this.hidden = true;
+	}
 }
 
 export const normalizePath = (path: string): string => {
@@ -176,6 +211,7 @@ export const normalizePath = (path: string): string => {
 
 export class WorkspaceLeaf {}
 export class ItemView extends Component {
+	scope: Scope | null = null;
 	/** Obsidian loads a view before onOpen and unloads it before onClose. */
 	async open(): Promise<void> {
 		this.load();
@@ -212,18 +248,21 @@ export class MarkdownView {
 export class Modal {
 	app: App;
 	containerEl: HTMLElement;
+	modalEl: HTMLElement;
 	contentEl: HTMLElement;
 	titleEl: HTMLElement;
 
 	constructor(app: App) {
 		this.app = app;
 		this.containerEl = document.createElement("div");
+		this.modalEl = document.createElement("div");
 		this.titleEl = document.createElement("div");
 		this.contentEl = document.createElement("div");
 		const closeButtonEl = document.createElement("div");
 		closeButtonEl.className = "modal-header-button";
 		closeButtonEl.addEventListener("click", () => this.close());
-		this.containerEl.append(closeButtonEl, this.titleEl, this.contentEl);
+		this.modalEl.append(closeButtonEl, this.titleEl, this.contentEl);
+		this.containerEl.append(this.modalEl);
 	}
 
 	open(): void {
@@ -344,16 +383,16 @@ export class DropdownComponent extends BaseInteractiveElement {
 		return this.element as HTMLSelectElement;
 	}
 
+	addOption(value: string, label: string) {
+		const option = document.createElement("option");
+		option.value = value;
+		option.textContent = label;
+		this.selectEl.appendChild(option);
+		return this;
+	}
+
 	addOptions(options: Record<string, string>) {
-		this.selectEl.innerHTML = "";
-
-		Object.entries(options).forEach(([value, label]) => {
-			const option = document.createElement("option");
-			option.value = value;
-			option.textContent = label;
-			this.selectEl.appendChild(option);
-		});
-
+		for (const [value, label] of Object.entries(options)) this.addOption(value, label);
 		return this;
 	}
 
@@ -369,6 +408,45 @@ export class DropdownComponent extends BaseInteractiveElement {
 
 	onChange(callback: (value: string) => void) {
 		this.selectEl.addEventListener("change", () => callback(this.selectEl.value));
+		return this;
+	}
+}
+
+/** As Obsidian's: setValue runs the change callback when the value changes. */
+export class ToggleComponent extends BaseInteractiveElement {
+	private on = false;
+	private changeCallback?: (on: boolean) => void;
+
+	constructor(container: HTMLElement) {
+		super("input", container);
+		this.toggleEl.type = "checkbox";
+		this.toggleEl.addEventListener("change", () => this.setValue(this.toggleEl.checked));
+	}
+
+	get toggleEl() {
+		return this.element as HTMLInputElement;
+	}
+
+	getValue() {
+		return this.on;
+	}
+
+	setValue(on: boolean) {
+		this.toggleEl.checked = on;
+		if (this.on !== on) {
+			this.on = on;
+			this.changeCallback?.(on);
+		}
+		return this;
+	}
+
+	setDisabled(disabled: boolean) {
+		this.toggleEl.disabled = disabled;
+		return this;
+	}
+
+	onChange(callback: (on: boolean) => void) {
+		this.changeCallback = callback;
 		return this;
 	}
 }
@@ -406,8 +484,8 @@ export class SliderComponent extends BaseInteractiveElement {
 }
 
 export class TextComponent extends BaseInteractiveElement {
-	constructor(container: HTMLElement) {
-		super("input", container);
+	constructor(container: HTMLElement, tag: "input" | "textarea" = "input") {
+		super(tag, container);
 	}
 
 	get inputEl() {
@@ -444,15 +522,25 @@ export class SecretComponent extends TextComponent {
 	}
 }
 
+interface Disableable {
+	setDisabled(disabled: boolean): unknown;
+}
+
 export class Setting {
 	settingEl: HTMLElement;
+	infoEl: HTMLElement;
 	nameEl: HTMLElement;
+	descEl: HTMLElement;
+	controlEl: HTMLElement;
+	errorEl: HTMLElement | null = null;
+	private components: Disableable[] = [];
 
 	constructor(containerEl: HTMLElement) {
-		this.settingEl = document.createElement("div");
-		this.nameEl = document.createElement("div");
-		this.settingEl.appendChild(this.nameEl);
-		containerEl.appendChild(this.settingEl);
+		this.settingEl = containerEl.createDiv({ cls: "setting-item" });
+		this.infoEl = this.settingEl.createDiv({ cls: "setting-item-info" });
+		this.nameEl = this.infoEl.createDiv({ cls: "setting-item-name" });
+		this.descEl = this.infoEl.createDiv({ cls: "setting-item-description" });
+		this.controlEl = this.settingEl.createDiv({ cls: "setting-item-control" });
 	}
 
 	setName(name: string) {
@@ -460,44 +548,88 @@ export class Setting {
 		return this;
 	}
 
-	setDesc() {
+	setDesc(desc: string) {
+		this.descEl.textContent = desc;
 		return this;
 	}
 
 	setHeading() {
+		this.settingEl.classList.add("setting-item-heading");
 		return this;
 	}
 
-	addText(callback: (component: TextComponent) => void) {
-		callback(new TextComponent(this.settingEl));
+	setDisabled(disabled: boolean) {
+		this.settingEl.classList.toggle("is-disabled", disabled);
+		for (const component of this.components) component.setDisabled(disabled);
 		return this;
 	}
 
-	addTextArea(callback: (component: TextComponent) => void) {
-		callback(new TextComponent(this.settingEl));
+	setErrorMessage(message: string | null) {
+		if (message) {
+			this.errorEl ??= this.controlEl.createDiv({ cls: "setting-item-error" });
+			this.errorEl.textContent = message;
+		} else {
+			this.errorEl?.remove();
+			this.errorEl = null;
+		}
 		return this;
 	}
 
-	addSlider(callback: (component: SliderComponent) => void) {
-		callback(new SliderComponent(this.settingEl));
+	private add<T extends Disableable>(component: T, callback: (component: T) => unknown) {
+		this.components.push(component);
+		callback(component);
 		return this;
 	}
 
-	addButton(callback: (component: ButtonComponent) => void) {
-		callback(new ButtonComponent(this.settingEl));
+	addText(callback: (component: TextComponent) => unknown) {
+		return this.add(new TextComponent(this.controlEl), callback);
+	}
+
+	addTextArea(callback: (component: TextComponent) => unknown) {
+		return this.add(new TextComponent(this.controlEl, "textarea"), callback);
+	}
+
+	addToggle(callback: (component: ToggleComponent) => unknown) {
+		return this.add(new ToggleComponent(this.controlEl), callback);
+	}
+
+	addDropdown(callback: (component: DropdownComponent) => unknown) {
+		return this.add(new DropdownComponent(this.controlEl), callback);
+	}
+
+	addSlider(callback: (component: SliderComponent) => unknown) {
+		callback(new SliderComponent(this.controlEl));
 		return this;
 	}
 
-	addComponent<T>(callback: (container: HTMLElement) => T) {
-		callback(this.settingEl);
+	addButton(callback: (component: ButtonComponent) => unknown) {
+		return this.add(new ButtonComponent(this.controlEl), callback);
+	}
+
+	addComponent<T extends Disableable>(callback: (container: HTMLElement) => T) {
+		this.components.push(callback(this.controlEl));
 		return this;
 	}
 }
 
+interface SettingDefinition {
+	type?: "group";
+	heading?: string;
+	items?: SettingDefinition[];
+	name?: string;
+	desc?: string;
+	render?: (setting: Setting, group: unknown) => void | (() => void);
+}
+
+/**
+ * Renders getSettingDefinitions() as Obsidian 1.14 does: every render runs the
+ * cleanups of the rows rendered before, and closing the tab runs them before hide().
+ */
 export class PluginSettingTab {
 	app: App;
 	plugin: Plugin;
 	containerEl: HTMLElement;
+	private cleanups: Array<() => void> = [];
 
 	constructor(app: App, plugin: Plugin) {
 		this.app = app;
@@ -505,9 +637,40 @@ export class PluginSettingTab {
 		this.containerEl = document.createElement("div");
 	}
 
-	display(): void {}
-	update(): void {}
+	getSettingDefinitions(): SettingDefinition[] {
+		return [];
+	}
+
+	display(): void {
+		this.cleanUp();
+		this.containerEl.empty();
+		for (const definition of this.getSettingDefinitions()) {
+			if (definition.heading)
+				new Setting(this.containerEl).setName(definition.heading).setHeading();
+			for (const row of definition.items ?? [definition]) {
+				const setting = new Setting(this.containerEl).setName(row.name ?? "");
+				if (row.desc) setting.setDesc(row.desc);
+				const cleanup = row.render?.(setting, definition);
+				if (cleanup) this.cleanups.push(cleanup);
+			}
+		}
+	}
+
+	update(): void {
+		this.display();
+	}
+
 	hide(): void {}
+
+	close(): void {
+		this.cleanUp();
+		this.containerEl.empty();
+		this.hide();
+	}
+
+	private cleanUp(): void {
+		for (const cleanup of this.cleanups.splice(0)) cleanup();
+	}
 }
 
 export const MarkdownRenderer = {
@@ -531,13 +694,21 @@ export const MarkdownRenderer = {
 };
 
 export class MenuItem {
-	setIcon() {
+	title = "";
+	icon: string | null = null;
+	checked: boolean | null = null;
+	callback: (() => void) | null = null;
+
+	setIcon(icon: string | null) {
+		this.icon = icon;
 		return this;
 	}
-	setTitle() {
+	setTitle(title: string) {
+		this.title = title;
 		return this;
 	}
-	setChecked(_checked: boolean | null) {
+	setChecked(checked: boolean | null) {
+		this.checked = checked;
 		return this;
 	}
 	setWarning(_warning: boolean) {
@@ -546,24 +717,65 @@ export class MenuItem {
 	setDisabled(_disabled: boolean) {
 		return this;
 	}
-	onClick(_callback: () => void) {
+	onClick(callback: () => void) {
+		this.callback = callback;
 		return this;
 	}
 }
 
 export class Menu {
+	/** Test only: the menu on screen, until it hides. */
+	static shown: Menu | null = null;
+	items: Array<MenuItem | "separator"> = [];
+	private hideCallback: (() => unknown) | null = null;
+
 	addItem(callback: (item: MenuItem) => void) {
-		callback(new MenuItem());
+		const item = new MenuItem();
+		this.items.push(item);
+		callback(item);
 		return this;
 	}
 
 	addSeparator() {
+		this.items.push("separator");
 		return this;
 	}
 
-	showAtMouseEvent() {}
+	onHide(callback: () => unknown) {
+		this.hideCallback = callback;
+	}
 
-	showAtPosition() {}
+	showAtMouseEvent() {
+		Menu.shown = this;
+		return this;
+	}
+
+	showAtPosition() {
+		Menu.shown = this;
+		return this;
+	}
+
+	hide() {
+		if (Menu.shown === this) Menu.shown = null;
+		const callback = this.hideCallback;
+		this.hideCallback = null;
+		callback?.();
+		return this;
+	}
+
+	close() {
+		this.hide();
+	}
+
+	/** Test only: as Obsidian, runs the item, then hides the menu. */
+	pick(title: string) {
+		const item = this.items.find(
+			(entry): entry is MenuItem => entry !== "separator" && entry.title === title,
+		);
+		if (!item) throw new Error(`No menu item ${title}`);
+		item.callback?.();
+		this.hide();
+	}
 }
 
 export const debounce = <T extends (...args: unknown[]) => unknown>(fn: T) => {

@@ -4,7 +4,6 @@ import * as obsidian from "obsidian";
 import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "src/constants";
 import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { FeedRepository } from "src/services/FeedRepository";
 import type { Episode } from "src/types/Episode";
@@ -14,7 +13,6 @@ import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feed
 import { createTestServices, type TestServices } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
 import EpisodesPage from "./EpisodesPage.svelte";
-import type { Page } from "./pages";
 
 const show: PodcastFeed = {
 	title: "Field Notes",
@@ -46,7 +44,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-function renderPage(page: Page, feeds: PodcastFeed[] = [show]) {
+function renderPage(key: string, feeds: PodcastFeed[] = [show], { online = true } = {}) {
 	const repository = new FeedRepository({
 		load: (url) => load(url),
 		resolveUrl: (feed) =>
@@ -56,35 +54,22 @@ function renderPage(page: Page, feeds: PodcastFeed[] = [show]) {
 					: null
 				: feed.url,
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
 	({ services, dispose } = createTestServices({ feeds: repository }));
 	services.library.savedFeeds.set(Object.fromEntries(feeds.map((feed) => [feed.title, feed])));
-	render(WithServices, { props: { services, component: EpisodesPage, props: { page } } });
+	services.online.set(online);
+	render(WithServices, { props: { services, component: EpisodesPage, props: { key } } });
 	return services;
-}
-
-function renderPlaylist(episodes: Episode[]) {
-	const shown = renderPage({ kind: "playlist", name: "Walks" });
-	setPlaylist(episodes);
-	return shown;
-}
-
-function setPlaylist(episodes: Episode[]) {
-	services.library.playlists.set({
-		Walks: { ...structuredClone(DEFAULT_SETTINGS.favorites), name: "Walks", episodes },
-	});
 }
 
 const listed = () =>
 	screen.queryAllByRole("listitem").map((row) => row.querySelector(".pn-ep-title")?.textContent);
-const row = (title: string) => screen.getByRole("button", { name: new RegExp(`^${title}`) });
 
 describe("a podcast's page", () => {
 	test("is headed by the podcast's artwork, title and author", async () => {
 		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
-		renderPage({ kind: "feed", key: show.title });
+		renderPage(show.title);
 
 		expect(screen.getByRole("heading", { name: "Field Notes" })).toBeInTheDocument();
 		expect(screen.getByText("Maya Lind")).toBeInTheDocument();
@@ -94,7 +79,7 @@ describe("a podcast's page", () => {
 	test("says it is loading until the feed answers", async () => {
 		const answer = deferred<ParsedFeedEpisodes>();
 		load.mockReturnValue(answer.promise);
-		renderPage({ kind: "feed", key: show.title });
+		renderPage(show.title);
 
 		expect(await screen.findByRole("status")).toHaveTextContent("Loading episodes");
 		answer.resolve(feedDocument(show.title, [episode("First")]));
@@ -106,7 +91,7 @@ describe("a podcast's page", () => {
 	test("keeps its episodes when the feed fails, names the server, and retries", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		load.mockResolvedValueOnce(feedDocument(show.title, [episode("First")]));
-		renderPage({ kind: "feed", key: show.title });
+		renderPage(show.title);
 		await screen.findByText("First");
 
 		load.mockRejectedValueOnce(
@@ -130,17 +115,7 @@ describe("a podcast's page", () => {
 
 	test("lists nothing for a podcast that is gone, not the latest episodes", async () => {
 		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
-		renderPage({ kind: "feed", key: "Gone" });
-
-		await services.feeds.load([show.title], "network");
-		await tick();
-
-		expect(listed()).toEqual([]);
-	});
-
-	test("lists nothing for a playlist that is gone, not the latest episodes", async () => {
-		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
-		renderPage({ kind: "playlist", name: "Gone" });
+		renderPage("Gone");
 
 		await services.feeds.load([show.title], "network");
 		await tick();
@@ -151,7 +126,7 @@ describe("a podcast's page", () => {
 	test("asks for a private feed's address where this device lacks it, instead of retrying", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		const patron = { ...show, title: "Patron", url: privateFeedPlaceholder("Patron") };
-		renderPage({ kind: "feed", key: "Patron" }, [patron]);
+		renderPage("Patron", [patron]);
 		const setFeedAddress = vi.spyOn(services.actions, "setFeedAddress").mockResolvedValue();
 
 		const banner = await screen.findByRole("alert");
@@ -173,97 +148,19 @@ describe("a podcast's page", () => {
 			url: privateFeedPlaceholder("Patron"),
 			urlSecretId: "podnotes-feed-url-1",
 		};
-		renderPage({ kind: "feed", key: "Patron" }, [patron]);
+		renderPage("Patron", [patron]);
 
 		const banner = await screen.findByRole("alert");
 		expect(banner).toHaveTextContent("Private feed");
 		expect(banner).not.toHaveTextContent("private.test");
 		expect(within(banner).getByRole("button", { name: "Retry" })).toBeInTheDocument();
 	});
-});
-
-describe("an episode list", () => {
-	test("plays a tapped episode and opens the full player", async () => {
-		renderPlaylist([episode("First"), episode("Second")]);
-		await waitFor(() => expect(listed()).toEqual(["First", "Second"]));
-
-		await fireEvent.click(row("Second"));
-
-		expect(get(services.player.state).episode).toMatchObject({ title: "Second" });
-		expect(services.navigation.current.expanded).toBe(true);
-	});
-
-	test("only opens the player for the episode it already has", async () => {
-		renderPlaylist([episode("First")]);
-		services.player.play(episode("First"));
-		services.navigation.collapse();
-		const play = vi.spyOn(services.player, "play");
-
-		await fireEvent.click(await screen.findByRole("button", { name: "First, playing" }));
-
-		expect(play).not.toHaveBeenCalled();
-		expect(services.navigation.current.expanded).toBe(true);
-	});
-
-	test("plays a same-titled episode with other media, and marks only the one playing", async () => {
-		const trailer = (n: number) =>
-			episode("Trailer", { streamUrl: `https://media.test/trailer-${n}.mp3` });
-		renderPlaylist([trailer(1), trailer(2)]);
-		const [first, second] = await screen.findAllByRole("button", { name: /^Trailer/ });
-		await fireEvent.click(first);
-		services.navigation.collapse();
-
-		await fireEvent.click(second);
-
-		expect(get(services.player.state).episode).toEqual(trailer(2));
-		expect(services.navigation.current.expanded).toBe(true);
-		expect([first, second].map((button) => button.getAttribute("aria-label"))).toEqual([
-			"Trailer",
-			"Trailer, playing",
-		]);
-	});
-
-	test("shows each episode's state in its row and its label", async () => {
-		const [played, inProgress, fresh] = [episode("Played"), episode("Halfway"), episode("New")];
-		renderPlaylist([played, inProgress, fresh]);
-		services.library.playedEpisodes.set({
-			"Field Notes::Played": {
-				title: "Played",
-				podcastName: show.title,
-				time: 2880,
-				duration: 2880,
-				finished: true,
-			},
-			"Field Notes::Halfway": {
-				title: "Halfway",
-				podcastName: show.title,
-				time: 840,
-				duration: 2880,
-				finished: false,
-			},
-		});
-		services.rowHasNote.set(({ title }) => title === "New");
-
-		expect(await screen.findByRole("button", { name: "Played, played" })).toBeInTheDocument();
-		expect(row("Played").closest(".pn-ep")).toHaveClass("is-played");
-		expect(row("Halfway, 34 min left")).toHaveTextContent("34 min left");
-		expect(row("Halfway").querySelector(".pn-bar span")).toHaveStyle({
-			width: `${(840 / 2880) * 100}%`,
-		});
-		expect(row("New, has note")).toHaveTextContent("48 min");
-	});
-
-	test("shows that an episode has a note once its note is written", async () => {
-		renderPlaylist([episode("First")]);
-		await screen.findByRole("button", { name: "First" });
-
-		services.rowHasNote.set(() => true);
-
-		expect(await screen.findByRole("button", { name: "First, has note" })).toBeInTheDocument();
-	});
 
 	test("filters by a search and says when nothing matches", async () => {
-		renderPlaylist([episode("Reading slowly"), episode("Margin notes")]);
+		load.mockResolvedValue(
+			feedDocument(show.title, [episode("Reading slowly"), episode("Margin notes")]),
+		);
+		renderPage(show.title);
 		await waitFor(() => expect(listed()).toHaveLength(2));
 
 		await fireEvent.input(screen.getByRole("searchbox", { name: "Search episodes" }), {
@@ -278,7 +175,8 @@ describe("an episode list", () => {
 	});
 
 	test("hides played episodes while hide played is pressed", async () => {
-		renderPlaylist([episode("Played"), episode("New")]);
+		load.mockResolvedValue(feedDocument(show.title, [episode("Played"), episode("New")]));
+		renderPage(show.title);
 		services.library.playedEpisodes.set({
 			"Field Notes::Played": {
 				title: "Played",
@@ -288,7 +186,8 @@ describe("an episode list", () => {
 				finished: true,
 			},
 		});
-		const toggle = await screen.findByRole("button", { name: "Hide played episodes" });
+		await waitFor(() => expect(listed()).toEqual(["Played", "New"]));
+		const toggle = screen.getByRole("button", { name: "Hide played episodes" });
 
 		await fireEvent.click(toggle);
 
@@ -300,46 +199,10 @@ describe("an episode list", () => {
 		expect(listed()).toEqual(["New"]);
 	});
 
-	test("opens an episode's menu under its More button, a button beside the title, not over it", async () => {
-		renderPlaylist([episode("A long title that would run under the button")]);
-		const shown = vi.spyOn(obsidian.Menu.prototype, "showAtPosition");
-		const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
-		const more = await screen.findByRole("button", {
-			name: "More options for A long title that would run under the button",
-		});
-		more.getBoundingClientRect = () => ({ left: 280, bottom: 90 }) as DOMRect;
-
-		await fireEvent.click(more);
-
-		expect(more.closest(".pn-ep-main")).toBeNull();
-		expect(more.previousElementSibling).toHaveClass("pn-ep-main");
-		expect(shown).toHaveBeenCalledWith({ x: 280, y: 90, doc: document }, document);
-		expect(titles.mock.calls[0]).toEqual(["Play"]);
-	});
-
-	test("opens the same menu where a row is right-clicked", async () => {
-		renderPlaylist([episode("First")]);
-		const shown = vi.spyOn(obsidian.Menu.prototype, "showAtPosition");
-
-		await fireEvent.contextMenu(await screen.findByText("First"), { clientX: 12, clientY: 34 });
-
-		expect(shown).toHaveBeenCalledWith({ x: 12, y: 34, doc: document }, document);
-	});
-
-	test("lists every episode, also two that share a podcast and a title", async () => {
-		const rerun = (n: number) => episode("Rerun", { streamUrl: `https://media.test/${n}.mp3` });
-		renderPlaylist([rerun(1), rerun(2)]);
-		await waitFor(() => expect(listed()).toEqual(["Rerun", "Rerun"]));
-
-		setPlaylist([rerun(3), rerun(2), rerun(1)]);
-
-		await waitFor(() => expect(listed()).toEqual(["Rerun", "Rerun", "Rerun"]));
-	});
-
 	test("of two episodes that share a podcast and a title, calls only the downloaded one downloaded", async () => {
 		const rerun = (n: number) => episode("Rerun", { streamUrl: `https://media.test/${n}.mp3` });
 		load.mockResolvedValue(feedDocument(show.title, [rerun(2), rerun(1)]));
-		renderPage({ kind: "feed", key: show.title });
+		renderPage(show.title);
 		services.library.downloadedEpisodes.set({
 			[show.title]: [{ ...rerun(2), filePath: "Downloads/Rerun.mp3", size: 1 }],
 		});
@@ -365,71 +228,71 @@ describe("an episode list", () => {
 		expect(streamedMenu).not.toContain("Remove download");
 	});
 
-	test("an episode that stays listed keeps its row, and its broken artwork, when an earlier one leaves", async () => {
-		const art = (title: string) =>
-			episode(title, { artworkUrl: `https://art.test/${title}.jpg` });
-		renderPage({ kind: "latest" });
-		load.mockResolvedValue(feedDocument(show.title, [art("First"), art("Second")]));
-		await services.feeds.load([show.title], "network");
-		const second = await screen.findByRole("button", { name: /^Second/ });
-		await fireEvent.error(second.querySelector("img")!);
-		expect(second.querySelector("img")).toBeNull();
+	test("offline, cannot refresh, and shows no failure, since the Offline strip says why", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		load.mockRejectedValue(new Error("down"));
+		renderPage(show.title);
+		await screen.findByRole("alert");
 
-		load.mockResolvedValue(feedDocument(show.title, [art("Second")]));
-		await services.feeds.load([show.title], "network");
+		services.online.set(false);
+		await tick();
 
-		await waitFor(() => expect(listed()).toEqual(["Second"]));
-		expect(row("Second")).toBe(second);
-		expect(second.querySelector("img")).toBeNull();
+		expect(screen.queryByRole("alert")).toBeNull();
+		expect(screen.getByRole("button", { name: "Refresh episodes" })).toBeDisabled();
+
+		services.online.set(true);
+		await tick();
+		expect(screen.getByRole("alert")).toHaveTextContent("Feed didn't load");
 	});
 
-	test("Played lists a search's best match first", async () => {
-		const long = episode("Reading slowly, again and again", {
-			episodeDate: new Date("2026-02-01"),
-		});
-		const short = episode("Reading", { episodeDate: new Date("2026-01-01") });
-		renderPage({ kind: "played" }, []);
-		services.library.favorites.update((list) => ({ ...list, episodes: [long, short] }));
-		services.library.playedEpisodes.set(
-			Object.fromEntries(
-				[long, short].map(({ title }) => [
-					`${show.title}::${title}`,
-					{ title, podcastName: show.title, time: 1, duration: 1, finished: true },
-				]),
-			),
-		);
-		await waitFor(() => expect(listed()).toEqual([long.title, short.title]));
+	test("back online, shows no failure while the feed loads again", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		load.mockRejectedValueOnce(new Error("down"));
+		renderPage(show.title);
+		await screen.findByRole("alert");
+		services.online.set(false);
+		await tick();
 
-		await fireEvent.input(screen.getByRole("searchbox", { name: "Search episodes" }), {
-			target: { value: "reading" },
-		});
+		const answer = deferred<ParsedFeedEpisodes>();
+		load.mockReturnValueOnce(answer.promise);
+		services.online.set(true);
+		void services.feeds.ensureAll({ online: true });
+		await tick();
 
-		expect(listed()).toEqual([short.title, long.title]);
+		expect(screen.queryByRole("alert")).toBeNull();
+		expect(screen.getByRole("status")).toHaveTextContent("Loading episodes");
+
+		answer.reject(new Error("down"));
+		expect(await screen.findByRole("alert")).toHaveTextContent("Feed didn't load");
 	});
 
-	test("a Played record whose episode left every feed is dimmed and says why it does not play", async () => {
-		const notice = vi.spyOn(obsidian, "Notice");
-		renderPage({ kind: "played" });
-		services.library.playedEpisodes.set({
-			"Gone Show::Old Episode": {
-				title: "Old Episode",
-				podcastName: "Gone Show",
-				time: 9,
-				duration: 9,
-				finished: true,
-			},
-		});
-		const gone = await screen.findByRole("button", {
-			name: "Old Episode, played, unavailable",
-		});
+	test("offline, still says a private feed's address is not on this device, and sets it once online", async () => {
+		const patron = { ...show, title: "Patron", url: privateFeedPlaceholder("Patron") };
+		renderPage("Patron", [patron]);
+		await screen.findByRole("alert");
 
-		await fireEvent.click(gone);
+		services.online.set(false);
+		await tick();
 
-		expect(gone).toHaveAttribute("aria-disabled", "true");
-		expect(get(services.player.state).episode).toBeUndefined();
-		expect(notice).toHaveBeenCalledWith(
-			"This played episode is no longer available in current feeds.",
-		);
-		expect(screen.queryByRole("button", { name: /^Hide played/ })).toBeNull();
+		const banner = screen.getByRole("alert");
+		expect(banner).toHaveTextContent("Address not on this device");
+		const setAddress = within(banner).getByRole("button", { name: "Set feed address" });
+		expect(setAddress).toBeDisabled();
+
+		services.online.set(true);
+		await tick();
+		expect(setAddress).toBeEnabled();
+	});
+
+	test("opened offline, loads its episodes once the connection returns", async () => {
+		load.mockResolvedValue(feedDocument(show.title, [episode("First")]));
+		renderPage(show.title, [show], { online: false });
+		await tick();
+		expect(load).not.toHaveBeenCalled();
+
+		services.online.set(true);
+
+		expect(await screen.findByText("First")).toBeInTheDocument();
+		expect(load.mock.calls).toEqual([[show.url]]);
 	});
 });

@@ -5,6 +5,8 @@ import { tick } from "svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "src/constants";
+import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
+import { FeedRepository } from "src/services/FeedRepository";
 import { favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
@@ -13,12 +15,14 @@ import {
 	type FakeResizeObservers,
 } from "../../../tests/mocks/resizeObserver";
 import {
+	activateLeaf,
 	createTestServices,
 	pluginLibrary,
 	type TestLibrary,
 	type TestServices,
 } from "../../../tests/mocks/services";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
+import { feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
 import { openPopout } from "../../../tests/mocks/popout";
 import PodcastView from "./PodcastView.svelte";
@@ -195,7 +199,7 @@ describe("library", () => {
 		expect(screen.getByText(episode.title)).toBeInTheDocument();
 		expect(screen.getByText(walk.title)).toBeInTheDocument();
 		await fireEvent.click(button(/^Playlists/));
-		await fireEvent.click(button("Walks"));
+		await fireEvent.click(button(/^Walks/));
 		expect(screen.getByRole("heading", { name: "Walks" })).toBeInTheDocument();
 		expect(screen.getByText(walk.title)).toBeInTheDocument();
 	});
@@ -235,38 +239,258 @@ describe("library", () => {
 		await fireEvent.click(button(/^Queue/));
 		expect(screen.queryByText(walk.title)).toBeNull();
 		await fireEvent.click(button(/^Playlists/));
-		expect(button("Favorites")).toBeInTheDocument();
-		expect(screen.queryByRole("button", { name: "Runs" })).toBeNull();
+		expect(button(/^Favorites/)).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Runs/ })).toBeNull();
 	});
 });
 
-describe("pages", () => {
-	test("an episode's menu can move it in the queue on the Queue page only", async () => {
-		// The menu reads the plugin's stores, so the view reads them too, as in the plugin.
+describe("list pages", () => {
+	test("the Queue's head shows its time left and opens the queue's options", async () => {
+		services.library.queue.update((list) => ({
+			...list,
+			episodes: [{ ...episode, duration: 45 * 60 }],
+		}));
+		const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
+		services.navigation.replace({ kind: "queue" });
+		renderView(820);
+		await tick();
+
+		expect(screen.getByRole("heading", { name: "Queue" }).nextElementSibling).toHaveTextContent(
+			"45 min",
+		);
+		await fireEvent.click(button("Queue options"));
+		expect(titles.mock.calls.map(([title]) => title)).toEqual([
+			"Queue episodes I switch away from",
+			"Clear queue",
+		]);
+	});
+
+	test("a playlist's title shows its count beside it in the sidebar", async () => {
+		services.library.playlists.set({
+			Walks: {
+				...structuredClone(DEFAULT_SETTINGS.favorites),
+				name: "Walks",
+				episodes: [episode],
+			},
+		});
+		services.navigation.replace({ kind: "playlist", name: "Walks" });
+		renderView(320);
+		await tick();
+
+		expect(screen.getByRole("heading", { name: "Walks" }).nextElementSibling).toHaveTextContent(
+			"1",
+		);
+		expect(document.querySelectorAll(".flair")).toHaveLength(1);
+	});
+
+	test("a playlist of the user's deletes from its head and leaves for Playlists; Favorites has no menu", async () => {
 		dispose();
 		({ services, doc, dispose } = createTestServices({ library: pluginLibrary }));
 		savedFeeds.set({ [feed.title]: feed });
-		const second = { ...episode, title: "Episode 2" };
-		queue.add(episode);
-		queue.add(second);
-		Object.assign(services.app, { vault: { getAbstractFileByPath: () => null } });
-		const titles = vi.spyOn(obsidian.MenuItem.prototype, "setTitle");
-		const menuOf = async (title: string) => {
-			titles.mockClear();
-			await fireEvent.contextMenu(screen.getByText(title));
-			return titles.mock.calls.map(([shown]) => shown);
-		};
-		renderView();
+		playlists.set({
+			Walks: { ...structuredClone(DEFAULT_SETTINGS.favorites), name: "Walks", episodes: [] },
+		});
+		services.navigation.replace({ kind: "playlist", name: "Favorites" });
+		renderView(320);
+		await tick();
+		expect(screen.queryByRole("button", { name: "Playlist options" })).toBeNull();
 
-		await fireEvent.click(button(/^Queue/));
-		expect(await menuOf("Episode 2")).toContain("Move up in queue");
+		services.navigation.go({ kind: "playlist", name: "Walks" });
+		await tick();
+		const clicks = vi.spyOn(obsidian.MenuItem.prototype, "onClick");
+		await fireEvent.click(button("Playlist options"));
+		(clicks.mock.calls[0][0] as () => void)();
+		await tick();
+
+		expect(services.navigation.current.page).toEqual({ kind: "playlists" });
+		expect(get(playlists)).toEqual({});
+		expect(button(/^Favorites/)).toBeInTheDocument();
+	});
+
+	test("Local files' head adds a vault file through the media picker", async () => {
+		const open = vi
+			.spyOn(obsidian.FuzzySuggestModal.prototype, "open")
+			.mockImplementation(() => {});
+		Object.assign(services.app, {
+			vault: {
+				getFiles: () => [Object.assign(new obsidian.TFile(), { path: "Talks/a.mp3" })],
+			},
+		});
+		services.navigation.replace({ kind: "local" });
+		renderView(320);
+		await tick();
+
+		await fireEvent.click(button("Add a vault file"));
+
+		const picker = open.mock
+			.contexts[0] as unknown as obsidian.FuzzySuggestModal<obsidian.TFile>;
+		expect(picker.getItems().map((file) => picker.getItemText(file))).toEqual(["Talks/a.mp3"]);
+	});
+
+	test("Latest's head refreshes every podcast", async () => {
+		const loads: unknown[] = [];
+		vi.spyOn(services.feeds, "load").mockImplementation(async (keys, mode) => {
+			loads.push([[...keys], mode]);
+			return true;
+		});
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+
+		await fireEvent.click(button("Refresh all feeds"));
+
+		expect(loads.at(-1)).toEqual([[feed.title], "network"]);
+	});
+});
+
+describe("offline", () => {
+	test("every page says so above its head, and Refresh all is off", async () => {
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		const { resize } = renderView(320);
+		await tick();
+
+		expect(screen.getByText("Offline").closest('[role="status"]')).toHaveClass("pn-strip");
+		expect(document.querySelector(".pn-strip + .pn-head")).not.toBeNull();
+		expect(button("Refresh all feeds")).toBeDisabled();
 
 		await fireEvent.click(button("Back to Library"));
-		await fireEvent.click(button(/^Playlists/));
-		await fireEvent.click(button("Favorites"));
-		favorites.update((playlist) => ({ ...playlist, episodes: [second] }));
+		resize(820);
 		await tick();
-		expect(await menuOf("Episode 2")).not.toContain("Move up in queue");
+		expect(screen.getByText("Offline").closest('[role="status"]')).toHaveClass("pn-strip");
+		expect(button("Refresh all feeds")).toBeDisabled();
+
+		services.online.set(true);
+		await tick();
+		expect(screen.queryByText("Offline")).toBeNull();
+		expect(button("Refresh all feeds")).toBeEnabled();
+	});
+
+	const second = { ...feed, title: "Second Podcast", url: "https://second.example.com/feed.xml" };
+	const secondEpisode = {
+		...episode,
+		title: "Second 1",
+		streamUrl: "https://second.example.com/1.mp3",
+		podcastName: second.title,
+	};
+
+	function viewWithOfflineRequestsHeld(storage = new MemoryStorage()) {
+		const documents: Record<string, ParsedFeedEpisodes> = {
+			[feed.url]: feedDocument(feed.title, [episode]),
+			[second.url]: feedDocument(second.title, [secondEpisode]),
+		};
+		const load = vi.fn<(url: string) => Promise<ParsedFeedEpisodes>>((url) =>
+			get(services.online) ? Promise.resolve(documents[url]) : new Promise(() => {}),
+		);
+		dispose();
+		({ services, doc, dispose } = createTestServices({
+			feeds: new FeedRepository({
+				load,
+				resolveUrl: (saved) => saved.url,
+				storage,
+				now: Date.now,
+			}),
+		}));
+		return load;
+	}
+
+	test("automatic loading follows the online store and reconnect starts a fresh request", async () => {
+		const load = viewWithOfflineRequestsHeld();
+		services.library.savedFeeds.set({ [feed.title]: feed });
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+		expect(navigator.onLine).toBe(true);
+		expect(load).not.toHaveBeenCalled();
+		expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
+
+		services.online.set(true);
+
+		expect(await screen.findByText(episode.title)).toBeInTheDocument();
+		expect(load.mock.calls).toEqual([[feed.url]]);
+	});
+
+	test("subscription changes load only when online", async () => {
+		const load = viewWithOfflineRequestsHeld();
+		services.library.savedFeeds.set({});
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+
+		services.library.savedFeeds.set({ [feed.title]: feed });
+		await tick();
+		expect(load).not.toHaveBeenCalled();
+
+		services.online.set(true);
+		expect(await screen.findByText(episode.title)).toBeInTheDocument();
+		services.library.savedFeeds.set({ [feed.title]: feed, [second.title]: second });
+
+		expect(await screen.findByText(secondEpisode.title)).toBeInTheDocument();
+		expect(load.mock.calls).toEqual([[feed.url], [second.url]]);
+	});
+
+	test("offline, an expired cache shows its episodes without a request, and Refresh stays off", async () => {
+		const storage = new MemoryStorage();
+		const earlier = new FeedRepository({
+			load: async () => feedDocument(feed.title, [episode]),
+			resolveUrl: (saved) => saved.url,
+			storage,
+			now: () => Date.now() - 7 * 3_600_000,
+		});
+		earlier.setSubscriptions({ [feed.title]: feed });
+		await earlier.ensureAll({ online: true });
+		const load = viewWithOfflineRequestsHeld(storage);
+		services.library.savedFeeds.set({ [feed.title]: feed });
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+
+		expect(screen.getByText(episode.title)).toBeInTheDocument();
+		expect(button("Refresh all feeds")).toBeDisabled();
+
+		services.navigation.replace({ kind: "feed", key: feed.title });
+		await tick();
+		expect(screen.getByText(episode.title)).toBeInTheDocument();
+		expect(button("Refresh episodes")).toBeDisabled();
+		expect(screen.queryByRole("alert")).toBeNull();
+		expect(load).not.toHaveBeenCalled();
+	});
+
+	test("First run has no strip", async () => {
+		services.library.savedFeeds.set({});
+		services.online.set(false);
+		renderView();
+		await tick();
+
+		expect(
+			screen.getByRole("searchbox", { name: "Search or paste a link" }),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Offline")).toBeNull();
+	});
+
+	test("the Queue keeps its order, and greys what needs a connection", async () => {
+		const later = {
+			...episode,
+			title: "Later",
+			streamUrl: "https://pod.example.com/later.mp3",
+		};
+		services.library.queue.update((list) => ({ ...list, episodes: [later, episode] }));
+		services.library.downloadedEpisodes.set({
+			[feed.title]: [{ ...episode, filePath: "PodNotes/Launch.mp3", size: 1 }],
+		});
+		services.online.set(false);
+		services.navigation.replace({ kind: "queue" });
+		renderView(320);
+		await tick();
+
+		expect(screen.queryByRole("heading", { name: "Available offline" })).toBeNull();
+		expect(
+			[...document.querySelectorAll(".pn-ep-title")].map((title) => title.textContent),
+		).toEqual(["Later", episode.title]);
+		expect(button("Later, not downloaded")).toHaveAttribute("aria-disabled", "true");
 	});
 });
 
@@ -340,24 +564,25 @@ describe("mini player", () => {
 		expect(button("Play")).toBeInTheDocument();
 	});
 
-	test("Timestamp names the note it added to", async () => {
+	test("Timestamp captures, compact or wide, and leaves saying where to the capture's notice", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		services.player.restore(episode);
-		renderView();
-
-		services.captureTimestamp.mockResolvedValueOnce(null);
-		await fireEvent.click(button("Capture timestamp"));
-		services.captureTimestamp.mockResolvedValueOnce({
+		const { resize } = renderView(320);
+		services.captureTimestamp.mockResolvedValue({
 			destination: "note",
 			path: "PodNotes/Pod/Episode 1 Launch.md",
 			text: "- 00:00:01\n",
 			created: false,
 		});
+
 		await fireEvent.click(button("Capture timestamp"));
+		resize(820);
+		await tick();
+		await fireEvent.click(button("Timestamp"));
 		await tick();
 
 		expect(services.captureTimestamp).toHaveBeenCalledTimes(2);
-		expect(notice.mock.calls).toEqual([["Timestamp added to Episode 1 Launch"]]);
+		expect(notice).not.toHaveBeenCalled();
 	});
 
 	test("tells assistive technology its progress, compact or wide", async () => {
@@ -391,6 +616,11 @@ describe("mini player", () => {
 		doc.media.emit("timeupdate");
 		await tick();
 		expect(nowPlaying()).toHaveTextContent(`${feed.title} · 10 min left`);
+
+		doc.media.currentTime = 3555;
+		doc.media.emit("timeupdate");
+		await tick();
+		expect(nowPlaying()).toHaveTextContent(`${feed.title} · 45 s left`);
 
 		doc.media.currentTime = 3600;
 		doc.media.emit("timeupdate");
@@ -501,52 +731,65 @@ describe("full player", () => {
 			expect(await escape()).toBe(true);
 		});
 
-		test("leaves a modal above the player when its window regains focus", async () => {
-			renderView();
-			playing();
-			await tick();
-			await fireEvent.click(button(`Open player: ${episode.title}`));
-			const modal = new obsidian.Scope(services.app.scope);
-			modal.register(null, "Escape", () => false);
-			services.app.keymap.pushScope(modal);
+		/** A note's tab whose own keys, as its find bar's, record what reaches them. */
+		function noteLeaf() {
+			const scope = new obsidian.Scope(services.app.scope);
+			const keys: string[] = [];
+			for (const key of ["Enter", "Escape"]) {
+				scope.register(null, key, () => {
+					keys.push(key);
+					return false;
+				});
+			}
+			return { scope, keys };
+		}
 
-			window.dispatchEvent(new Event("focus"));
-			await escape();
-
-			expect(services.navigation.current.expanded).toBe(true);
-			services.app.keymap.popScope(modal);
-		});
-
-		test("typed outside the view stays there", async () => {
+		test("typed in a note reach the note, and the player stays open (#467)", async () => {
 			const note = document.body.appendChild(document.createElement("textarea"));
 			renderView();
 			playing();
 			await tick();
+			await fireEvent.click(button(`Open player: ${episode.title}`));
+			const tab = noteLeaf();
+			activateLeaf(services.app, tab.scope);
 			note.focus();
 
-			services.navigation.expand();
-			await tick();
-			expect(document.activeElement).toBe(note);
+			await fireEvent.keyDown(note, { key: "Enter" });
+			await escape(note);
 
-			expect(await escape()).toBe(true);
+			expect(tab.keys).toEqual(["Enter", "Escape"]);
 			expect(services.navigation.current.expanded).toBe(true);
 			note.remove();
 		});
 
-		test("from outside the view passes through, even with focus left in the player", async () => {
-			const note = document.body.appendChild(document.createElement("textarea"));
-			renderView();
-			playing();
-			await tick();
-			await fireEvent.click(button(`Open player: ${episode.title}`));
-			expect(document.activeElement).toBe(button("Collapse player"));
+		test.each([
+			["a note's editor", "textarea", true],
+			["an empty tab", "div", false],
+		] as const)(
+			"typed in %s, which has no use for Escape or Space, leave the player open and playing (#467)",
+			async (_, tag, viewHasScope) => {
+				const at = document.body.appendChild(document.createElement(tag));
+				renderView();
+				playing();
+				await tick();
+				await fireEvent.click(button(`Open player: ${episode.title}`));
+				const pause = vi.spyOn(doc.media, "pause");
+				activateLeaf(
+					services.app,
+					viewHasScope ? new obsidian.Scope(services.app.scope) : null,
+				);
 
-			expect(await escape(note)).toBe(true);
-			expect(services.navigation.current.expanded).toBe(true);
-			note.remove();
-		});
+				await fireEvent.keyDown(at, { key: " " });
+				expect(get(services.player.state).status).toBe("playing");
+				expect(pause).not.toHaveBeenCalled();
 
-		test("follows the player to a popout window, and Escape in the main window passes it by", async () => {
+				await escape(at);
+				expect(services.navigation.current.expanded).toBe(true);
+				at.remove();
+			},
+		);
+
+		test("reach the player in a popout through that window's base scope, and a note's Escape passes it by", async () => {
 			const popout = openPopout();
 			popout.win.document.addEventListener("keydown", dispatch);
 			const note = document.body.appendChild(document.createElement("textarea"));
@@ -554,11 +797,14 @@ describe("full player", () => {
 			playing();
 			await tick();
 			await fireEvent.click(button(`Open player: ${episode.title}`));
-
 			popout.moveIn(container);
-			expect(await escape(note)).toBe(true);
+			const tab = noteLeaf();
+			activateLeaf(services.app, tab.scope);
+			await escape(note);
+			expect(tab.keys).toEqual(["Escape"]);
 			expect(services.navigation.current.expanded).toBe(true);
 
+			activateLeaf(services.app, services.scope);
 			popout.focus();
 			const collapseButton = within(container).getByRole("button", {
 				name: "Collapse player",

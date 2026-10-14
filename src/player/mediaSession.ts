@@ -1,21 +1,23 @@
 import { get, type Unsubscriber } from "svelte/store";
+import type { Chapter } from "src/types/Chapter";
 import type { Episode } from "src/types/Episode";
-import {
-	END_MARGIN_S,
-	type PlayerController,
-	type PlayerState,
-	type PlayerStatus,
-} from "./PlayerController";
+import type { NextTrackAction, PreviousTrackAction } from "src/types/Headset";
+import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
+import { getEpisodeKey } from "src/utility/episodeKey";
+import type { PlayerController, PlayerState, PlayerStatus } from "./PlayerController";
 
 interface MediaSessionHost {
 	mediaSession: MediaSession | undefined;
 	MediaMetadata: typeof MediaMetadata | undefined;
+	settings(): Pick<IPodNotesSettings, "headsetPreviousTrack" | "headsetNextTrack">;
 	captureTimestamp(): void;
 	skipBackward(): void;
 	skipForward(): void;
+	chapters(url: string): Promise<Chapter[]>;
 }
 
-const NEXT_TRACK_SKIP_S = 30;
+const CHAPTER_RESTART_S = 2;
+const CHAPTER_TOLERANCE_S = 0.25;
 
 const PLAYBACK_STATES: Record<PlayerStatus, MediaSessionPlaybackState> = {
 	empty: "none",
@@ -42,6 +44,22 @@ function attempt(call: () => void): boolean {
 
 const isPositive = (value: number) => Number.isFinite(value) && value > 0;
 
+export function chapterStart(
+	chapters: readonly Chapter[],
+	time: number,
+	direction: 1 | -1,
+): number | undefined {
+	if (direction === 1) {
+		return chapters.find(({ startTime }) => startTime > time + CHAPTER_TOLERANCE_S)?.startTime;
+	}
+	let start = 0;
+	for (const { startTime } of chapters) {
+		if (startTime > time - CHAPTER_RESTART_S) break;
+		start = startTime;
+	}
+	return start;
+}
+
 function positionOf({ currentTime, duration, playbackRate }: PlayerState) {
 	if (!isPositive(duration) || !isPositive(playbackRate) || !Number.isFinite(currentTime)) {
 		return undefined;
@@ -50,30 +68,51 @@ function positionOf({ currentTime, duration, playbackRate }: PlayerState) {
 }
 
 export function bindMediaSession(
-	player: Pick<PlayerController, "state" | "resume" | "pause" | "seek">,
+	player: Pick<PlayerController, "state" | "resume" | "pause" | "seek" | "playNext">,
 	host: MediaSessionHost,
 ): Unsubscriber {
 	if (!host.mediaSession) return () => {};
 	const { mediaSession, MediaMetadata } = host;
+	let episodeKey = "";
+	let activation = 0;
+	let chapters: { url: string; loading: Promise<Chapter[]> } | undefined;
+
+	async function seekChapter(direction: 1 | -1): Promise<void> {
+		const { episode } = get(player.state);
+		const url = episode?.chaptersUrl;
+		if (!url) return;
+		const requestedActivation = activation;
+		if (chapters?.url !== url) {
+			chapters = { url, loading: host.chapters(url).catch(() => []) };
+		}
+		const asked = chapters;
+		const loaded = await asked.loading;
+		if (loaded.length === 0) {
+			if (chapters === asked) chapters = undefined;
+			return;
+		}
+		const now = get(player.state);
+		if (unbound || activation !== requestedActivation) return;
+		const start = chapterStart(loaded, now.currentTime, direction);
+		if (start !== undefined) player.seek(start);
+	}
+
+	const run: Record<PreviousTrackAction | NextTrackAction, () => void> = {
+		captureTimestamp: () => host.captureTimestamp(),
+		skipBackward: () => host.skipBackward(),
+		skipForward: () => host.skipForward(),
+		previousChapter: () => void seekChapter(-1),
+		nextChapter: () => void seekChapter(1),
+		nextInQueue: () => player.playNext(),
+	};
 
 	const actions: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
 		["play", () => player.resume()],
 		["pause", () => player.pause()],
 		["seekbackward", () => host.skipBackward()],
 		["seekforward", () => host.skipForward()],
-		["previoustrack", () => host.captureTimestamp()],
-		[
-			"nexttrack",
-			() => {
-				const { currentTime, duration } = get(player.state);
-				const target = currentTime + NEXT_TRACK_SKIP_S;
-				player.seek(
-					duration > 0
-						? Math.max(currentTime, Math.min(target, duration - END_MARGIN_S))
-						: target,
-				);
-			},
-		],
+		["previoustrack", () => run[host.settings().headsetPreviousTrack]()],
+		["nexttrack", () => run[host.settings().headsetNextTrack]()],
 		[
 			"seekto",
 			({ seekTime }) => {
@@ -130,6 +169,11 @@ export function bindMediaSession(
 	}
 
 	function show(state: PlayerState): void {
+		const key = getEpisodeKey(state.episode);
+		if (key !== episodeKey) {
+			episodeKey = key;
+			activation++;
+		}
 		setHandlers(!!state.episode);
 		showMetadata(state.episode);
 		const playbackState = PLAYBACK_STATES[state.status];

@@ -1,4 +1,4 @@
-import { debounce, ItemView } from "obsidian";
+import { debounce, ItemView, Scope } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { IPodNotes } from "../../types/IPodNotes";
 import { VIEW_TYPE } from "../../constants";
@@ -110,12 +110,15 @@ export class MainView extends ItemView {
 				notesChangedSoon();
 			}),
 		);
+		const scope = new Scope(app.scope);
+		this.scope = scope;
 		return {
 			app,
 			api: plugin.api,
 			player: plugin.player,
 			feeds: plugin.feeds,
 			navigation: plugin.navigation,
+			scope,
 			library: {
 				savedFeeds,
 				queue,
@@ -131,11 +134,18 @@ export class MainView extends ItemView {
 				app,
 				feeds: plugin.feeds,
 				feedUrls: plugin.feedUrls,
+				online: plugin.online,
 			}),
-			search: new PodcastSearch(plugin.feeds),
+			search: new PodcastSearch(plugin.feeds, plugin.online),
+			online: plugin.online,
 			settings,
 			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
+			saveTranscriptNote: () =>
+				void plugin.getTranscriptionService().transcribeCurrentEpisode({ paid: false }),
+			transcribeFromAudio: () =>
+				plugin.getTranscriptionService().transcribeCurrentEpisodeFromAudio(),
+			setAutoQueue: (enabled) => plugin.setAutoQueue(enabled),
 			hasNote: (episode) => getPodcastNote(episode) !== null,
 			rowHasNote,
 		};

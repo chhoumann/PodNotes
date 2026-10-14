@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { get, readable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -14,7 +14,6 @@ import { hidePlayedEpisodes, playedEpisodes, plugin, savedFeeds } from "src/stor
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
-import EpisodePlayerStub from "../../../tests/mocks/EpisodePlayerStub.svelte";
 import { deferred, feedDocument, MemoryStorage } from "../../../tests/mocks/feeds";
 import { pluginLibrary } from "../../../tests/mocks/services";
 import { FakeDocument } from "../../../tests/mocks/fakeMedia";
@@ -22,10 +21,6 @@ import { DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
 import { Navigation } from "./Navigation";
 import { PodcastSearch } from "./podcastSearch";
-
-vi.mock("./EpisodePlayer.svelte", () => ({
-	default: EpisodePlayerStub,
-}));
 
 import PodcastView from "./PodcastView.svelte";
 
@@ -40,16 +35,22 @@ function renderView() {
 				player,
 				feeds,
 				navigation,
+				scope: new obsidian.Scope(app.scope),
 				library: pluginLibrary,
 				actions: createLibraryActions({
 					app,
 					feeds,
 					feedUrls: new FeedUrlRepository(app.secretStorage),
+					online: readable(true),
 				}),
-				search: new PodcastSearch(feeds),
+				search: new PodcastSearch(feeds, readable(true)),
+				online: readable(true),
 				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},
+				saveTranscriptNote: () => {},
+				transcribeFromAudio: () => {},
+				setAutoQueue: () => {},
 				hasNote: () => false,
 				rowHasNote: readable(() => false),
 			},
@@ -130,19 +131,17 @@ let storage = new MemoryStorage();
 let unsubscribeFeeds = () => {};
 
 /** Builds the plugin the view reads, with a repository fed by `mockLoad` and `storage`. */
-function usePlugin(fields: Record<string, unknown> = {}, cacheEnabled = false) {
+function usePlugin(fields: Record<string, unknown> = {}) {
 	const feedUrls = new FeedUrlRepository(new obsidian.SecretStorage());
 	const feeds = new FeedRepository({
 		load: (url) => mockLoad(url),
 		resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 		storage,
-		cache: () => ({ enabled: cacheEnabled, ttlHours: 6 }),
 		now: Date.now,
 	});
 	unsubscribeFeeds();
 	unsubscribeFeeds = savedFeeds.subscribe((saved) => feeds.setSubscriptions(saved));
 	plugin.set({
-		settings: { feedCache: { enabled: cacheEnabled, ttlHours: 6 } },
 		...fields,
 		feeds,
 		player,
@@ -159,11 +158,10 @@ async function cacheFeeds(...entries: [PodcastFeed, Episode[]][]) {
 		},
 		resolveUrl: (saved) => saved.url,
 		storage,
-		cache: () => ({ enabled: true, ttlHours: 6 }),
 		now: Date.now,
 	});
 	earlier.setSubscriptions(Object.fromEntries(entries.map(([feed]) => [feed.title, feed])));
-	await earlier.ensureAll();
+	await earlier.ensureAll({ online: true });
 }
 
 function respondByUrl(responses: Record<string, Episode[]>) {
@@ -204,6 +202,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	cleanup();
 	resetStores();
 	mockLoad.mockReset();
 	delete (globalThis as Record<string, unknown>).app;
@@ -324,37 +323,6 @@ describe("PodcastView integration flow", () => {
 		expect(screen.getByText("Played")).toBeInTheDocument();
 	});
 
-	test("does not apply a delayed played feed refresh after leaving the played view", async () => {
-		const playedEpisode = episode("Already Finished", testFeed, "2023-01-15T00:00:00.000Z");
-		const refresh = deferred<ParsedFeedEpisodes>();
-		respondByUrl({ [testFeed.url]: [testEpisode, playedEpisode] });
-		playedEpisodes.set({
-			[`${testFeed.title}::${playedEpisode.title}`]: {
-				title: playedEpisode.title,
-				podcastName: testFeed.title,
-				time: 100,
-				duration: 100,
-				finished: true,
-			},
-		});
-		usePlugin();
-
-		renderView();
-
-		await waitFor(() => expect(mockLoad).toHaveBeenCalledTimes(1));
-		await openList("Played");
-		expect(await screen.findByText("Already Finished")).toBeInTheDocument();
-
-		mockLoad.mockReturnValueOnce(refresh.promise);
-		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
-		await back();
-		await openList("Latest episodes");
-		refresh.resolve(feedDocument(testFeed.title, [testEpisode]));
-
-		await waitFor(() => expect(listed()).toEqual([testEpisode.title]));
-		expect(screen.getByRole("heading", { name: "Latest episodes" })).toBeInTheDocument();
-	});
-
 	test("Latest episodes shows episodes that loaded while the library was open (#375)", async () => {
 		usePlugin();
 
@@ -423,7 +391,7 @@ describe("PodcastView integration flow", () => {
 
 		savedFeeds.set({ [testFeed.title]: testFeed });
 		expect(await screen.findByRole("heading", { name: "Latest episodes" })).toBeInTheDocument();
-		await fireEvent.click(screen.getByLabelText("Refresh episodes"));
+		await fireEvent.click(screen.getByLabelText("Refresh all feeds"));
 
 		expect(mockLoad).toHaveBeenLastCalledWith(testFeed.url);
 		expect(await screen.findByText(testEpisode.title)).toBeInTheDocument();
@@ -510,7 +478,7 @@ describe("issue #174 feed cache cap regression", () => {
 	beforeEach(async () => {
 		await cacheFeeds([testFeed, fullFeed]);
 		respondByUrl({ [testFeed.url]: fullFeed });
-		usePlugin({}, true);
+		usePlugin();
 	});
 
 	test("opening a show bypasses the truncated cache and loads older episodes", async () => {
@@ -610,7 +578,7 @@ describe("issue #174 feed cache cap regression", () => {
 				finished: true,
 			},
 		});
-		usePlugin({}, true);
+		usePlugin();
 
 		renderView();
 

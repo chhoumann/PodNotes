@@ -47,6 +47,18 @@ export function templateHasTag(template: string, tag: Lowercase<string>): boolea
 	);
 }
 
+// A title names the placeholder only when it cannot spell the feed's address:
+// it holds no character reference or percent escape, and redaction leaves it
+// alone as text, where trailing punctuation cannot pass an address off as a
+// distinct whole-field URL.
+function feedRedactionContext(feed: PodcastFeed) {
+	const title = ` ${feed.title} `;
+	const named =
+		!/&#|&\w+;|%[\da-f]{2}/i.test(title) &&
+		withoutPrivateFeedAddresses([title, { feedUrl: feed.url }] as const)[0] === title;
+	return { feedUrl: feed.url, podcastName: named ? feed.title : "" };
+}
+
 function withoutFeedAddresses(feed: PodcastFeed): PodcastFeed {
 	return withoutPrivateFeedAddresses([feed, { feedUrl: feed.url }] as const)[0];
 }
@@ -373,7 +385,10 @@ export function NoteTemplateEngine(
 	// never been played). The resume point is resolved at click time, not baked
 	// in here, so a single templated link always jumps to where you left off.
 	// Empty when the episode has no feed/file URL to address it by. See issue #35.
-	addTag("episodelink", buildEpisodeResumeLink(liveEpisode));
+	addTag("episodelink", (label?: string) => {
+		const link = buildEpisodeResumeLink(liveEpisode);
+		return label === undefined || !link ? link : `[${escapeMarkdownText(label)}](${link})`;
+	});
 
 	return replacer(template);
 }
@@ -487,7 +502,8 @@ export function TranscriptTemplateEngine(
 
 export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) {
 	const [replacer, addTag] = useTemplateEngine();
-	const feed = withoutFeedAddresses(liveFeed);
+	const context = feedRedactionContext(liveFeed);
+	const [feed] = withoutPrivateFeedAddresses([liveFeed, context] as const);
 
 	const safeTitle = replaceIllegalFileNameCharactersInString(feed.title);
 
@@ -507,9 +523,10 @@ export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) 
 	addTag("feedartwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
 	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "", {
-			feedUrl: liveFeed.url,
-		}).replace(/\n{3,}/g, "\n\n");
+		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "", context).replace(
+			/\n{3,}/g,
+			"\n\n",
+		);
 		if (prependToLines) {
 			return sanitizeDescription
 				.split("\n")

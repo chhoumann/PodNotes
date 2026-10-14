@@ -67,6 +67,7 @@
 			value={$search.query}
 			placeholder="Search or paste a link"
 			autofocus
+			large
 			oninput={(value) => {
 				search.set(value);
 				if (value.trim()) navigation.go({ kind: "add" });
@@ -87,24 +88,200 @@
 		{$search.results.length}
 		{$search.results.length === 1 ? "show" : "shows"}
 	</div>
-	{#each $search.results as result (result.feed.url)}
-		{@const added = actions.savedKey($savedFeeds, result.feed.url) !== undefined}
-		<button
-			type="button"
-			class="pn-result"
-			aria-label="{added ? 'Open' : 'Add'} {result.feed.title}"
-			onclick={() => add(result)}
-		>
-			<Cover src={result.feed.artworkUrl} title={result.feed.title} />
-			<span class="txt">
-				<span class="t">{result.feed.title}</span>
-				<span class="s">
-					{#if result.via}<span class="pn-linkchip"
-							><span {@attach icon("link")}></span>{result.via}</span
-						>{/if}{details(result)}
+	<div class="pn-results">
+		{#each $search.results as result (result.feed.url)}
+			{@const added = actions.savedKey($savedFeeds, result.feed.url) !== undefined}
+			<button
+				type="button"
+				class="pn-result"
+				aria-label="{added ? 'Open' : 'Add'} {result.feed.title}"
+				onclick={() => add(result)}
+			>
+				<Cover src={result.feed.artworkUrl} title={result.feed.title} />
+				<span class="txt">
+					<span class="t">{result.feed.title}</span>
+					<span class="s">
+						{#if result.via}<span class="pn-linkchip"
+								><span {@attach icon("link")}></span>{result.via}</span
+							>{/if}{details(result)}
+					</span>
 				</span>
-			</span>
-			<span class="end" class:added {@attach icon(added ? "check" : "plus")}></span>
-		</button>
-	{/each}
+				<span class="end" class:added {@attach icon(added ? "check" : "plus")}></span>
+			</button>
+		{/each}
+	</div>
 {/if}
+
+<style>
+	.pn-empty {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: var(--size-4-6) var(--pn-pad) 72px;
+		text-align: center;
+	}
+
+	.pn-empty :global {
+		/* Centered, yet scrollable from its top when the view is short. */
+		> :first-child {
+			margin-top: auto;
+		}
+
+		> :last-child {
+			margin-bottom: auto;
+		}
+
+		.pn-empty-mark {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 56px;
+			height: 56px;
+			margin-bottom: var(--size-4-4);
+			border-radius: 16px;
+			background: hsla(var(--interactive-accent-hsl), 0.14);
+			color: var(--text-accent);
+			--icon-size: 28px;
+			--icon-stroke: 1.75px;
+		}
+
+		h1 {
+			margin: 0 0 var(--size-4-4);
+			font-size: var(--font-ui-large);
+			font-weight: var(--font-semibold);
+			letter-spacing: -0.01em;
+		}
+
+		.pn-alts {
+			align-items: center;
+			margin-top: var(--size-4-4);
+		}
+	}
+
+	.pn-alts {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--size-2-2);
+		margin-top: var(--size-4-2);
+	}
+
+	.pn-alts :global {
+		.pn-alt {
+			display: inline-flex;
+			align-items: center;
+			gap: var(--size-4-2);
+			height: var(--pn-btn);
+			padding: 0 var(--size-4-2);
+			border: 0;
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-muted);
+			font-size: var(--font-ui-small);
+			cursor: var(--cursor);
+		}
+
+		.pn-alt:hover {
+			background: var(--background-modifier-hover);
+			color: var(--text-normal);
+		}
+
+		.pn-alt > span {
+			display: flex;
+			--icon-size: var(--icon-s);
+			--icon-stroke: var(--icon-s-stroke-width);
+		}
+	}
+
+	.pn-results :global {
+		/* Obsidian's buttons keep their text on one line; this one wraps its title. */
+		.pn-result {
+			display: flex;
+			align-items: center;
+			gap: var(--size-4-3);
+			width: 100%;
+			height: auto;
+			padding: var(--size-4-2);
+			border: 0;
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-normal);
+			font-size: var(--font-ui-small);
+			text-align: left;
+			white-space: normal;
+			cursor: var(--cursor);
+		}
+
+		.pn-result:hover {
+			background: var(--background-modifier-hover);
+		}
+
+		.pn-result .pn-cover {
+			width: 44px;
+		}
+
+		.pn-result .txt {
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		/* A long title takes two lines and breaks anywhere, never under the mark beside it. */
+		.pn-result .t {
+			font-weight: var(--font-medium);
+			line-height: 1.35;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
+			overflow-wrap: anywhere;
+		}
+
+		.pn-result .s {
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.pn-result .end {
+			flex: none;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 28px;
+			height: 28px;
+			color: var(--text-muted);
+			--icon-size: 18px;
+		}
+
+		.pn-result .end.added {
+			color: var(--text-success);
+		}
+
+		.pn-result:hover .end:not(.added) {
+			color: var(--text-accent);
+		}
+
+		.pn-linkchip {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			vertical-align: bottom;
+			--icon-size: 12px;
+		}
+	}
+
+	:global(.is-phone) .pn-results :global(.pn-result .pn-cover) {
+		width: 52px;
+	}
+</style>

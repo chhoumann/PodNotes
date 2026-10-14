@@ -1,10 +1,16 @@
 import { describe, expect, test } from "vitest";
 
-import { DEFAULT_EPISODE_LIST_LIMIT } from "src/constants";
+import { DEFAULT_EPISODE_LIST_LIMIT, DEFAULT_SETTINGS } from "src/constants";
 import type { FeedState } from "src/services/FeedRepository";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
-import { selectFeedEpisodes, selectLatestEpisodes } from "./episodeListSelection";
+import {
+	selectFeedEpisodes,
+	selectLatestEpisodes,
+	selectListEntries,
+	splitOffline,
+	type ListSnapshot,
+} from "./episodeListSelection";
 
 // `ordinal` doubles as the day of the month, so a higher ordinal is newer.
 function episodes(
@@ -91,5 +97,91 @@ describe("selectFeedEpisodes", () => {
 		});
 
 		expect(titles(selectFeedEpisodes(stale, downloaded))).toEqual(["Show A #2", "Show A #1"]);
+	});
+});
+
+describe("selectListEntries", () => {
+	const [first, second] = episodes("Show A", 2);
+	const playlist = (name: string, list: Episode[]) => ({
+		...structuredClone(DEFAULT_SETTINGS.favorites),
+		name,
+		episodes: list,
+	});
+	const library: ListSnapshot = {
+		feeds: new Map(),
+		limit: DEFAULT_EPISODE_LIST_LIMIT,
+		played: {},
+		downloads: {},
+		queue: structuredClone(DEFAULT_SETTINGS.queue),
+		favorites: playlist("Favorites", [first]),
+		localFiles: { ...structuredClone(DEFAULT_SETTINGS.localFiles), episodes: [first] },
+		playlists: { Walks: playlist("Walks", [second, first]) },
+	};
+	const shown = (entries: { episode: Episode }[]) => entries.map(({ episode }) => episode.title);
+
+	test("lists Favorites by its name, a playlist by its key, and nothing for one that is gone", () => {
+		expect(shown(selectListEntries({ kind: "playlist", name: "Favorites" }, library))).toEqual([
+			"Show A #2",
+		]);
+		expect(shown(selectListEntries({ kind: "playlist", name: "Walks" }, library))).toEqual([
+			"Show A #1",
+			"Show A #2",
+		]);
+		expect(selectListEntries({ kind: "playlist", name: "Gone" }, library)).toEqual([]);
+	});
+
+	test("lists Local files as stored", () => {
+		expect(shown(selectListEntries({ kind: "local" }, library))).toEqual(["Show A #2"]);
+	});
+
+	test("resolves a Played record from a playlist, keeps its legacy key, and keeps a gone one", () => {
+		const record = (title: string) => ({
+			title,
+			podcastName: "Show A",
+			time: 1,
+			duration: 1,
+			finished: true,
+		});
+		const entries = selectListEntries(
+			{ kind: "played" },
+			{
+				...library,
+				played: { "Show A #1": record("Show A #1"), "Show A::Gone": record("Gone") },
+			},
+		);
+
+		expect(
+			entries.map(({ episode, isAvailable, playedEpisodeKey }) => [
+				episode.title,
+				isAvailable,
+				playedEpisodeKey,
+			]),
+		).toEqual([
+			["Show A #1", true, "Show A #1"],
+			["Gone", false, "Show A::Gone"],
+		]);
+		expect(entries[0].episode).toBe(second);
+	});
+});
+
+describe("splitOffline", () => {
+	const [newest, middle, oldest] = episodes("Show A", 3);
+	const downloads = {
+		"Show A": [newest, oldest].map((episode) => ({ ...episode, filePath: "a.mp3", size: 1 })),
+	};
+
+	test("puts the episodes that play offline first, each part in the order given", () => {
+		const entries = [middle, newest, oldest].map((episode) => ({ episode, isAvailable: true }));
+
+		const { offline, online } = splitOffline(entries, downloads);
+
+		expect(offline.map(({ episode }) => episode.title)).toEqual(["Show A #3", "Show A #1"]);
+		expect(online.map(({ episode }) => episode.title)).toEqual(["Show A #2"]);
+	});
+
+	test("a Played record whose episode left every feed needs a connection, and keeps its key", () => {
+		const gone = { episode: newest, isAvailable: false, playedEpisodeKey: "legacy" };
+
+		expect(splitOffline([gone], downloads)).toEqual({ offline: [], online: [gone] });
 	});
 });

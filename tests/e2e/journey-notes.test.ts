@@ -1,22 +1,18 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	clickInEditor,
 	closePopoutTab,
-	closeSettings,
-	dismissNotices,
-	isShown,
 	openInEditor,
 	openInReadingView,
-	openPodNotesSettings,
 	reloadAfterPopout,
 	runFromPalette,
 	showLibrary,
 	showPodNotes,
-	ui,
-	waitUntilShown,
 } from "./journey/actions";
+import { click } from "./journey/input";
+import { ui, type UiTarget } from "./journey/targets";
+import { eventually, isShown, notices, waitUntilShown } from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,
@@ -66,7 +62,6 @@ async function setUp(
 	const server = await startFixtureServer([show]);
 	onTestFinished(() => server.stop());
 	await seedLibrary(context, server, { subscriptions: [show], noteTemplate });
-	await context.obsidian.plugin("command-palette").enable({ filter: "core" });
 	return { server, show };
 }
 
@@ -82,7 +77,7 @@ function hms(seconds: number): string {
 }
 
 /**
- * The default "Capture timestamp format", `- {{linktime}} `, for `episode` at `seconds`,
+ * The default "Timestamp template", `- {{linktime}} `, for `episode` at `seconds`,
  * or the segment from `seconds` to `end` that it captures as `- {{linksegment}} `.
  */
 function capture(
@@ -219,6 +214,48 @@ async function properties(path: string): Promise<Record<string, unknown>> {
 	);
 }
 
+/** The text in the open editor of `path`, which runs ahead of the file it saves. */
+async function editorText(path: string): Promise<string | null> {
+	return await getContext().obsidian.dev.evalJson<string | null>(
+		`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)})?.view.editor.getValue() ?? null`,
+	);
+}
+
+const REFUSED = "The note isn't as the capture left it, so the timestamp stays";
+
+/** Opens `path` in Live Preview with the caret at `line` and `ch`, both zero-based. */
+async function writeIn(path: string, line: number, ch: number): Promise<void> {
+	const { obsidian } = getContext();
+	await openInEditor(obsidian, path);
+	expect(
+		await obsidian.dev.evalJson<unknown>(
+			`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.getState()`,
+		),
+		"Live Preview",
+	).toMatchObject({ mode: "source", source: false });
+	expect(await clickInEditor(obsidian, path, line, ch)).toEqual({ line, ch });
+}
+
+/**
+ * Clicks `timestamp`, waits until `read` shows `captured`, then clicks Undo on the Notice
+ * that says `message` and waits until `read` shows `before` again.
+ */
+async function captureThenUndo(
+	timestamp: UiTarget,
+	message: string,
+	read: () => Promise<string | null>,
+	{ before, captured }: { before: string; captured: string },
+): Promise<void> {
+	const { obsidian } = getContext();
+	await click(obsidian, timestamp);
+	expect(await eventually(obsidian, read, captured, 10_000), "captured").toBe(captured);
+	await click(obsidian, ui.undo(message));
+	expect(await eventually(obsidian, read, before, 10_000), "after Undo").toBe(before);
+	expect(await notices(obsidian), "Undo left nothing behind to say").not.toContainEqual(
+		expect.stringContaining(REFUSED),
+	);
+}
+
 async function detachMarkdownTabs(): Promise<void> {
 	await getContext().obsidian.dev.evalJson('app.workspace.detachLeavesOfType("markdown"), true');
 }
@@ -274,12 +311,9 @@ describe("episode note and capture journeys", () => {
 		);
 
 		server.retitle(show, ORIGINAL, RETITLED);
-		await openPodNotesSettings(obsidian);
-		await click(obsidian, ui.settingControl("Clear cached feeds", "button"));
-		await closeSettings(obsidian);
-		await dismissNotices(obsidian);
 		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(show.title));
+		await click(obsidian, ui.refreshEpisodes);
 		await waitUntilShown(obsidian, ui.episode(RETITLED));
 
 		await click(obsidian, ui.episodeMenu(RETITLED));
@@ -566,6 +600,333 @@ describe("episode note and capture journeys", () => {
 			]),
 		);
 		expect(note.endsWith(`\n${firstLine}\n${secondLine}\n`), note).toBe(true);
+	});
+
+	test("J-TS-12 the player's Timestamp goes into the note being written and into the episode note, and Undo leaves each as it was", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Player Capture");
+		const draft = sandbox.path("Player draft.md");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		const original = "Before the cut after the cut\nSecond line\n";
+		await writeVaultFile(obsidian, draft, original);
+		const timestamp = ui.playerTimestamp;
+		const label = () =>
+			obsidian.dev.evalJson<string>(`(${timestamp.elements})[0]?.textContent.trim() ?? ""`);
+
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 0, 14);
+		const paused = await pauseInView();
+		const line = capture(journey, ORIGINAL, paused.seconds);
+
+		await click(obsidian, timestamp);
+		expect(await eventually(obsidian, label, "Added", 1_000), "the button confirms").toBe(
+			"Added",
+		);
+		expect(await eventually(obsidian, label, "Timestamp", 3_000)).toBe("Timestamp");
+		const captured = `Before the cut${line} after the cut\nSecond line\n`;
+		expect(await eventually(obsidian, () => editorText(draft), captured)).toBe(captured);
+		await click(obsidian, ui.undo("Timestamp added to Player draft"));
+		expect(await eventually(obsidian, () => editorText(draft), original)).toBe(original);
+		await waitForText(draft, (text) => text === original, "the draft saved as it was");
+
+		await detachMarkdownTabs();
+		await click(obsidian, timestamp);
+		const created = await waitForText(
+			episodeNote,
+			(text) => text.endsWith(`\n${line}\n`),
+			"the capture in a new episode note",
+		);
+		await click(obsidian, ui.undo("Created Original Title"));
+		const kept = created.slice(0, -`${line}\n`.length);
+		await waitForText(
+			episodeNote,
+			(text) => text === kept,
+			"the created note kept, without the line",
+		);
+
+		const read = async () =>
+			(await exists(episodeNote)) ? await readVaultText(obsidian, episodeNote) : null;
+		await captureThenUndo(timestamp, "Timestamp added to Original Title", read, {
+			before: kept,
+			captured: `${kept}${line}\n`,
+		});
+		expect(await editorText(draft), "the draft is closed").toBeNull();
+		expect(await readVaultText(obsidian, draft)).toBe(original);
+	});
+
+	test("J-TS-13 the mini player's Timestamp goes into the note being written and into the episode note, and Undo leaves each as it was", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Mini Capture");
+		const draft = sandbox.path("Mini draft.md");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		const original = "First line\nSecond line\n";
+		const mine = "# My notes\nNo newline at the end";
+		await writeVaultFile(obsidian, draft, original);
+		await writeVaultFile(obsidian, episodeNote, mine);
+
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 1, 6);
+		await click(obsidian, ui.collapsePlayer);
+		await waitUntilShown(obsidian, ui.miniPlayer);
+		await click(obsidian, ui.miniPlayback);
+		const paused = await waitForPlayback(obsidian, (playback) => !playback.playing, "paused");
+		const line = capture(journey, ORIGINAL, paused.seconds);
+
+		await captureThenUndo(
+			ui.miniCapture,
+			"Timestamp added to Mini draft",
+			() => editorText(draft),
+			{
+				before: original,
+				captured: `First line\nSecond${line} line\n`,
+			},
+		);
+		await waitForText(draft, (text) => text === original, "the draft saved as it was");
+
+		await detachMarkdownTabs();
+		await captureThenUndo(
+			ui.miniCapture,
+			"Timestamp added to Original Title",
+			() => readVaultText(obsidian, episodeNote),
+			{ before: mine, captured: `${mine}\n${line}\n` },
+		);
+	});
+
+	test("J-TS-15 Undo leaves a note with a copy of its line pasted before it, and says so", async () => {
+		const { obsidian } = getContext();
+		const journey = await setUp("Journey Undo Pasted");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		await detachMarkdownTabs();
+		await playFromList(journey.show, ORIGINAL.title);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const created = await waitForText(
+			episodeNote,
+			(text) => text.endsWith(`\n${line}\n`),
+			"the capture in a new episode note",
+		);
+		const at = created.length - `${line}\n`.length;
+		const pasted = `${created.slice(0, at)}${line}\nA thought\n${created.slice(at)}`;
+		await obsidian.dev.evalJsonAsync(
+			`app.vault.modify(app.vault.getAbstractFileByPath(${jsLiteral(episodeNote)}), ${jsLiteral(pasted)}).then(() => true)`,
+		);
+		await waitForText(
+			episodeNote,
+			(text) => text === pasted,
+			"a copy pasted before the capture",
+		);
+		await click(obsidian, ui.undo("Created Original Title"));
+
+		await obsidian.waitFor(
+			async () =>
+				(await notices(obsidian)).includes(REFUSED) ||
+				(await readVaultText(obsidian, episodeNote)) !== pasted,
+			{ timeoutMs: 5_000, intervalMs: 100, message: "Undo to answer" },
+		);
+		expect(await readVaultText(obsidian, episodeNote), "the pasted copy and the capture").toBe(
+			pasted,
+		);
+		expect(await notices(obsidian)).toContain(REFUSED);
+	});
+
+	test("J-TS-16 Undo leaves a capture edited since, and says so", async () => {
+		const { obsidian } = getContext();
+		const journey = await setUp("Journey Undo Refused");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		await detachMarkdownTabs();
+		await playFromList(journey.show, ORIGINAL.title);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const created = await waitForText(
+			episodeNote,
+			(text) => text.endsWith(`\n${line}\n`),
+			"the capture in a new episode note",
+		);
+		const edited = `${created.slice(0, -1)}key point\n`;
+		await obsidian.dev.evalJsonAsync(
+			`app.vault.modify(app.vault.getAbstractFileByPath(${jsLiteral(episodeNote)}), ${jsLiteral(edited)}).then(() => true)`,
+		);
+		await waitForText(
+			episodeNote,
+			(text) => text === edited,
+			"a note added on the capture's line",
+		);
+		await click(obsidian, ui.undo("Created Original Title"));
+
+		await obsidian.waitFor(async () => (await notices(obsidian)).includes(REFUSED), {
+			timeoutMs: 5_000,
+			intervalMs: 100,
+			message: "the Notice that Undo left the note",
+		});
+		expect(await readVaultText(obsidian, episodeNote)).toBe(edited);
+	});
+
+	test("J-TS-17 Undo takes a capture out of a note whose tab closed unchanged", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Undo Closed");
+		const draft = sandbox.path("Closed draft.md");
+		const original = "First line\nSecond line\n";
+		await writeVaultFile(obsidian, draft, original);
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 0, 10);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const captured = `First line${line}\nSecond line\n`;
+		expect(await eventually(obsidian, () => editorText(draft), captured)).toBe(captured);
+		await detachMarkdownTabs();
+		await waitForText(
+			draft,
+			(text) => text === captured,
+			"the capture saved as the tab closed",
+		);
+		await click(obsidian, ui.undo("Timestamp added to Closed draft"));
+
+		await waitForText(draft, (text) => text === original, "the draft as it was");
+		expect(await notices(obsidian)).not.toContainEqual(expect.stringContaining(REFUSED));
+	});
+
+	test("J-TS-18 Undo in the same moment the note's tab closes leaves the capture, and says so", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Undo Race");
+		const draft = sandbox.path("Race draft.md");
+		const original = "First line\nSecond line\n";
+		await writeVaultFile(obsidian, draft, original);
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 0, 10);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const captured = `First line${line}\nSecond line\n`;
+		expect(await eventually(obsidian, () => editorText(draft), captured)).toBe(captured);
+		await obsidian.dev.evalJson(`(() => {
+			app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(draft)}).detach();
+			[...document.querySelectorAll(".notice button.pn-undo")].at(-1).click();
+			return true;
+		})()`);
+
+		await obsidian.waitFor(async () => (await notices(obsidian)).includes(REFUSED), {
+			timeoutMs: 5_000,
+			intervalMs: 100,
+			message: "the Notice that Undo left the note",
+		});
+		await waitForText(
+			draft,
+			(text) => text === captured,
+			"the closing tab's save, with the capture",
+		);
+	});
+
+	test("J-TS-19 Undo leaves an episode note changed on disk before Obsidian read it again, and says so", async () => {
+		const { obsidian } = getContext();
+		const journey = await setUp("Journey Undo Stale");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		await detachMarkdownTabs();
+		await playFromList(journey.show, ORIGINAL.title);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const created = await waitForText(
+			episodeNote,
+			(text) => text.endsWith(`\n${line}\n`),
+			"the capture in a new episode note",
+		);
+		const file = `app.vault.getAbstractFileByPath(${jsLiteral(episodeNote)})`;
+		expect(
+			await obsidian.dev.evalJsonAsync<string>(`app.vault.cachedRead(${file})`),
+			"Obsidian's cached text",
+		).toBe(created);
+		const newer = `External user edit\n${created}`;
+		// Written to the file and Undo clicked in one turn, before Obsidian's file watcher
+		// reports the change, so its cache still holds the text as the capture left it.
+		await obsidian.dev.evalJson(`(() => {
+			require("fs").writeFileSync(app.vault.adapter.getFullPath(${jsLiteral(episodeNote)}), ${jsLiteral(newer)});
+			[...document.querySelectorAll(".notice")]
+				.find((notice) => notice.textContent.startsWith("Created Original Title"))
+				.querySelector("button.pn-undo")
+				.click();
+			return true;
+		})()`);
+
+		await obsidian.waitFor(
+			async () =>
+				(await notices(obsidian)).includes(REFUSED) ||
+				(await readVaultText(obsidian, episodeNote)) !== newer,
+			{ timeoutMs: 5_000, intervalMs: 100, message: "Undo to answer" },
+		);
+		expect(await readVaultText(obsidian, episodeNote), "the newer text on disk").toBe(newer);
+		expect(await notices(obsidian)).toContain(REFUSED);
+	});
+
+	test("J-TS-20 Undo leaves a note open in two panes when the other pane changed in the same moment, and says so", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Undo Two Panes");
+		const draft = sandbox.path("Two pane draft.md");
+		await writeVaultFile(obsidian, draft, "First line\nSecond line\n");
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 0, 10);
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			const file = app.vault.getAbstractFileByPath(${jsLiteral(draft)});
+			await app.workspace.getLeaf("split").openFile(file, { state: { mode: "source" } });
+			return true;
+		})()`);
+		// The click lands in the first pane, which the capture then writes in.
+		expect(await clickInEditor(obsidian, draft, 0, 10)).toEqual({ line: 0, ch: 10 });
+		const panes = `app.workspace.getLeavesOfType("markdown").filter((leaf) => leaf.view.file?.path === ${jsLiteral(draft)})`;
+		const texts = () =>
+			obsidian.dev.evalJson<string[]>(`${panes}.map((leaf) => leaf.view.editor.getValue())`);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const captured = `First line${line}\nSecond line\n`;
+		expect(await eventually(obsidian, texts, [captured, captured]), "both panes").toEqual([
+			captured,
+			captured,
+		]);
+		// A pane other than the one the capture wrote in changes as Undo is pressed.
+		await obsidian.dev.evalJson(`(() => {
+			${panes}.at(-1).view.editor.replaceRange("Late ", { line: 0, ch: 0 });
+			[...document.querySelectorAll(".notice button.pn-undo")].at(-1).click();
+			return true;
+		})()`);
+
+		await obsidian.waitFor(async () => (await notices(obsidian)).includes(REFUSED), {
+			timeoutMs: 5_000,
+			intervalMs: 100,
+			message: "the Notice that Undo left the note",
+		});
+		const edited = `Late ${captured}`;
+		expect(await eventually(obsidian, texts, [edited, edited]), "both panes").toEqual([
+			edited,
+			edited,
+		]);
+		await waitForText(
+			draft,
+			(text) => text === edited,
+			"the late edit saved, with the capture",
+		);
+	});
+
+	test("J-TS-14 Capture Timestamp with nothing loaded says to play an episode, and writes nothing", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Nothing Loaded");
+		const draft = sandbox.path("Nothing loaded.md");
+		await writeVaultFile(obsidian, draft, "Notes\n");
+		await showPodNotes(obsidian);
+		expect(await loadedEpisode()).toBeNull();
+		expect(await isShown(obsidian, ui.miniPlayer), "no mini player").toBe(false);
+		await writeIn(draft, 0, 5);
+
+		await runFromPalette(obsidian, "Capture Timestamp");
+
+		await obsidian.waitFor(
+			async () => (await notices(obsidian)).includes("Play an episode to capture"),
+			{ timeoutMs: 5_000, intervalMs: 100, message: "the Play an episode to capture Notice" },
+		);
+		expect(await editorText(draft)).toBe("Notes\n");
+		expect(await exists(notePath(journey.show, ORIGINAL.title))).toBe(false);
 	});
 
 	test("J-TS-09 Capture Timestamp lands in a popout editor, then in the episode note once the popout closes", async () => {

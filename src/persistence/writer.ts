@@ -15,13 +15,27 @@ export class WriteRefusedError extends Error {
 	}
 }
 
+export interface Refusal {
+	/**
+	 * retry: a later read may succeed, as once a sync client finishes its write.
+	 * stop: the file has a schema this version must not write; only the next instance reads it.
+	 */
+	readonly recovery: "retry" | "stop";
+	readonly message: string;
+}
+
+export type ReadOutcome<Doc> =
+	| { readonly kind: "file"; readonly doc: Doc }
+	| { readonly kind: "missing" }
+	| { readonly kind: "refused"; readonly refusal: Refusal };
+
 /** How the writer reaches data.json and the in-memory state, as plain JSON documents. */
 export interface DataFileAccess<Doc> {
 	/**
-	 * The file now, or null when it does not exist. Rejects when it cannot be read.
-	 * Entries that had to be dropped to read it are reported as `base` has them.
+	 * The file now. Entries that had to be dropped to read it are reported as `base`
+	 * has them. Rejects only on a defect, which is not retried.
 	 */
-	read(base: Doc | null): Promise<Doc | null>;
+	read(base: Doc | null): Promise<ReadOutcome<Doc>>;
 	write(doc: Doc): Promise<void>;
 	/** The in-memory state as the document it would write. */
 	local(): Doc;
@@ -29,9 +43,23 @@ export interface DataFileAccess<Doc> {
 	publish(doc: Doc): void;
 }
 
+export type WriterStart<Doc> =
+	| { readonly base: Doc }
+	| { readonly base: null; readonly refusal: Refusal };
+
+export interface WriterEvents {
+	/** A refusal began or changed its reason, or ended (null). */
+	onRefusal(refusal: Refusal | null): void;
+	/** A save's write failed; once per failure streak. */
+	onWriteFailed(): void;
+}
+
 // Each save rewrites the whole file, and playback progress changes every few
 // seconds, so a progress checkpoint starts at least this long after the last save.
 const CHECKPOINT_INTERVAL_MS = 10_000;
+// A program writing data.json in place empties the file first. Obsidian waits as
+// long before its own check.
+const REPORT_SETTLE_MS = 50;
 
 /**
  * Writes data.json without clobbering changes another device synced in. Every
@@ -42,11 +70,17 @@ const CHECKPOINT_INTERVAL_MS = 10_000;
  * Obsidian's loadData and saveData offer no compare-and-swap, so a change that
  * lands between a save's read and its write is overwritten. The read happens
  * right before the write to keep that window short.
+ *
+ * A read that cannot be used refuses writes. Obsidian reports no rename, delete or
+ * permission change of the file, so a loaded library retries on the checkpoint
+ * interval and is written once a read succeeds, edited or not.
  */
 export class DataFileWriter<Doc> {
 	private chain: Promise<void> | null = null;
 	/** A checkpoint waiting for its interval. */
 	private timer: number | null = null;
+	/** A check of the file waiting for the changes reported to it to settle. */
+	private reportTimer: number | null = null;
 	/** A save is queued and has not started, so later changes are written by it. */
 	private saveQueued = false;
 	private unloaded = false;
@@ -57,23 +91,28 @@ export class DataFileWriter<Doc> {
 	private lastSaveAt = Number.NEGATIVE_INFINITY;
 	/** A write that failed, and the memory it was made from. It may have reached disk anyway. */
 	private failedWrite: { local: Doc; written: Doc } | null = null;
+	/** What PodNotes last loaded or wrote; null until a readable file was loaded. */
+	private base: Doc | null;
+	private refusal: Refusal | null;
 
 	constructor(
 		private readonly file: DataFileAccess<Doc>,
 		private readonly clock: Clock,
-		/** What PodNotes last loaded or wrote; null until a readable file was loaded. */
-		private base: Doc | null,
-		private readonly onWriteFailed: () => void = () => {},
-	) {}
+		start: WriterStart<Doc>,
+		private readonly events: WriterEvents,
+	) {
+		this.base = start.base;
+		this.refusal = "refusal" in start ? start.refusal : null;
+	}
 
 	/**
 	 * Save after any save already running; changes made until it starts share it.
-	 * Inside `checkpoint`, wait for the checkpoint interval instead.
+	 * Inside `checkpoint`, or while a read is refused, wait for the checkpoint interval instead.
 	 */
 	request(): void {
 		// Publishing sets stores, whose bindings ask for a save of what is already on disk.
 		if (this.publishing) return;
-		if (this.checkpointing) {
+		if (this.checkpointing || this.refusal) {
 			this.scheduleCheckpoint();
 			return;
 		}
@@ -93,21 +132,14 @@ export class DataFileWriter<Doc> {
 
 	/** Write what is not saved yet now. Resolves once queued work is done; never rejects. */
 	flush(): Promise<void> {
-		if (this.timer !== null || this.failedWrite || this.hasUnsavedEdits()) {
+		if (!this.blocked() && (this.timer !== null || this.pending())) {
 			this.cancelTimer();
 			if (!this.saveQueued) void this.saveLogged();
 		}
 		return (this.chain ?? Promise.resolve()).catch(() => undefined);
 	}
 
-	/** Retry pending work at the checkpoint interval; nothing before a file was loaded. */
-	retryPending(): void {
-		if (this.base !== null && (this.failedWrite || this.hasUnsavedEdits())) {
-			this.scheduleCheckpoint();
-		}
-	}
-
-	/** Save now. Rejects when the save fails; a failed write is the caller's to report. */
+	/** Save now. Rejects when the save fails or is refused; a failed write is the caller's to report. */
 	save(): Promise<void> {
 		this.cancelTimer();
 		return this.enqueue(() => this.persist(false)).catch((error: unknown) => {
@@ -126,10 +158,22 @@ export class DataFileWriter<Doc> {
 		});
 	}
 
+	/** data.json changed, maybe by PodNotes itself: check it once the changes stop. */
+	report(): void {
+		if (this.unloaded) return;
+		if (this.reportTimer !== null) this.clock.clearTimeout(this.reportTimer);
+		this.reportTimer = this.clock.setTimeout(() => {
+			this.reportTimer = null;
+			void this.onExternalChange();
+		}, REPORT_SETTLE_MS);
+	}
+
 	/** The next instance reads the file itself; the flushed save still merges with disk. */
 	unload(): Promise<void> {
 		this.memoryAtUnload = this.file.local();
 		this.unloaded = true;
+		if (this.reportTimer !== null) this.clock.clearTimeout(this.reportTimer);
+		this.reportTimer = null;
 		return this.flush();
 	}
 
@@ -152,7 +196,7 @@ export class DataFileWriter<Doc> {
 	}
 
 	private scheduleCheckpoint(): void {
-		if (this.unloaded) return;
+		if (this.unloaded || this.blocked()) return;
 		this.timer ??= this.clock.setTimeout(
 			() => {
 				this.timer = null;
@@ -160,6 +204,32 @@ export class DataFileWriter<Doc> {
 			},
 			Math.max(0, this.lastSaveAt + CHECKPOINT_INTERVAL_MS - this.clock.now()),
 		);
+	}
+
+	private blocked(): Refusal | null {
+		const refusal = this.refusal;
+		return refusal && (refusal.recovery === "stop" || this.base === null) ? refusal : null;
+	}
+
+	private pending(): boolean {
+		return this.refusal !== null || this.failedWrite !== null || this.hasUnsavedEdits();
+	}
+
+	private refuse(refusal: Refusal): void {
+		this.lastSaveAt = this.clock.now();
+		const replaces = this.base !== null || refusal.recovery === "stop";
+		if (replaces && this.refusal?.message !== refusal.message) {
+			this.refusal = refusal;
+			this.events.onRefusal(refusal);
+		}
+		if (this.blocked()) this.cancelTimer();
+		else this.scheduleCheckpoint();
+	}
+
+	private lift(): void {
+		if (!this.refusal) return;
+		this.refusal = null;
+		this.events.onRefusal(null);
 	}
 
 	private local(): Doc {
@@ -197,20 +267,23 @@ export class DataFileWriter<Doc> {
 	}
 
 	private async persist(warnOnFailure: boolean): Promise<void> {
-		// After a failed write the file is unknown, so memory equal to base proves nothing.
-		if (this.base && !this.failedWrite && !this.hasUnsavedEdits()) return;
-		// Before the read settles a failed write the file holds, which does not end its streak.
-		const reportFailure = warnOnFailure && !this.failedWrite;
+		const blocked = this.blocked();
+		if (blocked) throw new WriteRefusedError(blocked.message);
+		if (!this.pending()) return;
 
 		this.lastSaveAt = this.clock.now();
-		let disk: Doc | null;
-		try {
-			disk = await this.file.read(this.base);
-		} catch (error) {
-			// A failed read can refuse later saves until a read succeeds, so retry what is pending.
-			if (this.failedWrite || this.hasUnsavedEdits()) this.scheduleCheckpoint();
-			throw error;
+		const read = await this.file.read(this.base);
+		if (read.kind === "refused") {
+			this.refuse(read.refusal);
+			throw new WriteRefusedError(read.refusal.message);
 		}
+		await this.writeMerged(read.kind === "file" ? read.doc : null, warnOnFailure);
+	}
+
+	private async writeMerged(disk: Doc | null, warnOnFailure: boolean): Promise<void> {
+		this.lift();
+		// Before the read settles a failed write the file holds, which does not end its streak.
+		const reportFailure = warnOnFailure && !this.failedWrite;
 		this.settleFailedWrite(disk);
 		const base = this.base;
 		// Captured after the read, so edits made while it was in flight are written too.
@@ -228,7 +301,7 @@ export class DataFileWriter<Doc> {
 			await this.file.write(toWrite);
 		} catch (error) {
 			if (error instanceof WriteRefusedError) throw error;
-			if (reportFailure) this.onWriteFailed();
+			if (reportFailure) this.events.onWriteFailed();
 			this.failedWrite = { local, written: toWrite };
 			this.scheduleCheckpoint();
 			throw error;
@@ -260,16 +333,20 @@ export class DataFileWriter<Doc> {
 	}
 
 	private async applyExternalChange(): Promise<void> {
-		let disk: Doc | null;
-		try {
-			disk = await this.file.read(this.base);
-		} catch (error) {
-			// A sync client can leave a half-written file; its complete write calls again.
-			console.warn("PodNotes could not read its changed data.json", error);
+		if (this.refusal?.recovery === "stop") return;
+		const read = await this.file.read(this.base);
+		if (this.unloaded) return;
+		if (read.kind === "refused") {
+			this.refuse(read.refusal);
 			return;
 		}
-		// A missing file is not a request to reset everything.
-		if (!disk || this.unloaded) return;
+		const disk = read.kind === "file" ? read.doc : null;
+		if (this.refusal && this.base !== null) {
+			this.lastSaveAt = this.clock.now();
+			await this.writeMerged(disk, true);
+			return;
+		}
+		if (!disk) return;
 		this.settleFailedWrite(disk);
 
 		const base = this.base;
@@ -278,6 +355,7 @@ export class DataFileWriter<Doc> {
 		const local = this.local();
 		const merged = base ? mergeDataFile(base, local, disk) : structuredClone(disk);
 		this.base = disk;
+		this.lift();
 		if (!jsonValuesEqual(merged, local)) this.publish(merged);
 		if (jsonValuesEqual(merged, disk)) this.cancelTimer();
 		else this.request();

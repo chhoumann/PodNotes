@@ -74,7 +74,7 @@ describe("the guard reports", () => {
 
 	test("nothing for svelte/store or a type that is not a store", () => {
 		const source =
-			'import { get } from "svelte/store";\nimport type { QueueMove } from "src/store";';
+			'import { get } from "svelte/store";\nimport type { QueuePlacement } from "src/store";';
 		expect(libraryReads("Page.svelte", source)).toEqual([]);
 	});
 });

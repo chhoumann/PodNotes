@@ -1,7 +1,7 @@
 # Episode notes
 
 A user creates a note for the playing episode. PodNotes fills
-`Note creation template` and writes it to `Note creation file path`, by default
+`Episode note template` and writes it to `Episode note path`, by default
 `PodNotes/{{podcast}}/{{title}}.md`, then opens it. The note links back to the
 episode with a `Resume in PodNotes` URI.
 
@@ -18,7 +18,7 @@ episode with a `Resume in PodNotes` URI.
 - With an episode loaded, run `PodNotes: Create episode note` from the palette.
 - In an episode list, click the episode's `More options` button, or right-click the episode, then `Create note`.
 - On a podcast's page, click `...` (`Podcast options`), or right-click its Library card, then `Create podcast note`.
-- Edit the path and template in Settings > PodNotes under `Episode notes`.
+- Edit the path and template in Settings > PodNotes under `Notes`.
 
 ## Driving it with ui.mjs
 

@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, Scope } from "obsidian";
 import { vi } from "vitest";
 import { DEFAULT_EPISODE_LIST_LIMIT, DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
@@ -25,6 +25,17 @@ import { Navigation } from "src/ui/PodcastView/Navigation";
 import { PodcastSearch } from "src/ui/PodcastView/podcastSearch";
 import { FakeDocument } from "./fakeMedia";
 import { feedDocument, MemoryStorage } from "./feeds";
+
+/**
+ * Makes the leaf whose view has `scope` the active one, as focus or a press in it does
+ * in Obsidian, which hands that scope every key. A view with no scope, as a new tab's,
+ * leaves them to the app's scope.
+ */
+export function activateLeaf(app: App, scope: Scope | null): void {
+	(app.workspace as unknown as { activeLeaf: { view: { scope: Scope | null } } }).activeLeaf = {
+		view: { scope },
+	};
+}
 
 /** A library the test seeds, with the stores' setters. */
 export type TestLibrary = {
@@ -65,8 +76,12 @@ export type TestServices = ShellServices & {
 	readonly library: TestLibrary;
 	readonly captureTimestamp: ReturnType<typeof vi.fn<() => Promise<Capture | null>>>;
 	readonly openSettings: ReturnType<typeof vi.fn<() => void>>;
+	readonly saveTranscriptNote: ReturnType<typeof vi.fn<() => void>>;
+	readonly transcribeFromAudio: ReturnType<typeof vi.fn<() => void>>;
+	readonly setAutoQueue: ReturnType<typeof vi.fn<(enabled: boolean) => void>>;
 	readonly hasNote: ReturnType<typeof vi.fn<(episode: Episode) => boolean>>;
 	readonly rowHasNote: Writable<(episode: Episode) => boolean>;
+	readonly online: Writable<boolean>;
 };
 
 /**
@@ -79,7 +94,17 @@ export type TestServices = ShellServices & {
  * after `dispose`, and still read it until then.
  */
 export function createTestServices(
-	overrides: Partial<Omit<TestServices, "captureTimestamp" | "openSettings" | "hasNote">> = {},
+	overrides: Partial<
+		Omit<
+			TestServices,
+			| "captureTimestamp"
+			| "openSettings"
+			| "saveTranscriptNote"
+			| "transcribeFromAudio"
+			| "setAutoQueue"
+			| "hasNote"
+		>
+	> = {},
 ): {
 	services: TestServices;
 	doc: FakeDocument;
@@ -98,11 +123,15 @@ export function createTestServices(
 		load: async () => feedDocument("", []),
 		resolveUrl: (feed) => feed.url,
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
+	const online = writable(true);
+	const scope = new Scope(app.scope);
+	// The view's leaf is active, as after a press in it.
+	activateLeaf(app, scope);
 	const services = {
 		app,
+		scope,
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() } as never,
 		player,
 		feeds,
@@ -112,11 +141,19 @@ export function createTestServices(
 			app,
 			feeds,
 			feedUrls: new FeedUrlRepository(app.secretStorage),
+			online,
 		}),
-		search: new PodcastSearch(feeds),
+		search: new PodcastSearch(feeds, online),
+		online,
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),
+		saveTranscriptNote: vi.fn(),
+		transcribeFromAudio: vi.fn(),
+		setAutoQueue: vi.fn((enabled: boolean) => {
+			settings.autoQueue = enabled;
+			plugin.update((host) => host);
+		}),
 		hasNote: vi.fn(() => false),
 		rowHasNote: writable(() => false),
 		...overrides,

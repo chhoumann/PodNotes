@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import * as obsidian from "obsidian";
 import { tick } from "svelte";
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { FeedRepository, loadFeed } from "src/services/FeedRepository";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
@@ -46,6 +46,7 @@ const APPLE_LINK = "https://podcasts.apple.com/us/podcast/huberman-lab/id1545953
 
 let services: TestServices;
 let dispose: () => void;
+let online = writable(true);
 
 function setUp(secrets = new obsidian.SecretStorage()) {
 	dispose?.();
@@ -54,16 +55,17 @@ function setUp(secrets = new obsidian.SecretStorage()) {
 		load: loadFeed,
 		resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
 	const app = new obsidian.App();
+	online = writable(true);
 	({ services, dispose } = createTestServices({
 		app,
 		feeds,
 		library: pluginLibrary,
-		actions: createLibraryActions({ app, feeds, feedUrls }),
-		search: new PodcastSearch(feeds),
+		actions: createLibraryActions({ app, feeds, feedUrls, online }),
+		search: new PodcastSearch(feeds, online),
+		online,
 	}));
 	const unsubscribe = savedFeeds.subscribe((saved) => feeds.setSubscriptions(saved));
 	const disposeServices = dispose;
@@ -282,10 +284,21 @@ describe("search", () => {
 		expect(screen.getByRole("alert")).toHaveTextContent(/^Search didn't load$/);
 	});
 
-	test("says search needs a connection when it fails offline", async () => {
+	test("says search needs a connection offline, without asking the directory", async () => {
+		online.set(false);
+
+		await search("planet money");
+
+		expect(screen.getByRole("alert")).toHaveTextContent("Search needs a connection");
+		expect(fetchJsonMock).not.toHaveBeenCalled();
+	});
+
+	test("says search needs a connection when the connection drops during a search", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
-		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
-		fetchJsonMock.mockRejectedValue(new NetworkError("transport-failure"));
+		fetchJsonMock.mockImplementation(async () => {
+			online.set(false);
+			throw new NetworkError("transport-failure");
+		});
 
 		await search("planet money");
 

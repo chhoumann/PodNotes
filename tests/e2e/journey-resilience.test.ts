@@ -5,51 +5,66 @@ import type { ObsidianClient } from "obsidian-e2e";
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
 	closePodNotes,
 	closeSettings,
-	feedsLoading,
-	isShown,
-	listedEpisodes,
-	notices,
+	dismissNotice,
 	openPodNotesSettings,
 	reloadObsidian,
 	restartObsidian,
 	runCommand,
 	setMobileEmulation,
+	setOffline,
+	showAddPodcast,
 	showLibrary,
 	showList,
-	shownText,
 	showPodNotes,
-	typeInto,
-	ui,
-	waitUntilShown,
 } from "./journey/actions";
+import { click, pressKey, typeInto } from "./journey/input";
+import { ui } from "./journey/targets";
+import {
+	eventually,
+	feedsLoading,
+	holdsFor,
+	isDisabled,
+	isShown,
+	listedEpisodes,
+	listedEpisodesWithHeadings,
+	notices,
+	shownText,
+	waitUntilShown,
+} from "./journey/wait";
 import {
 	deepgramRequests,
 	type FixtureEpisode,
 	type FixtureFeed,
 	type FixtureServer,
 	installDeepgramTripwire,
+	installItunesStub,
 	installOpenAIStub,
+	itunesSearchTerms,
 	pubDate,
 	removeDeepgramTripwire,
+	removeItunesStub,
 	removeOpenAIStub,
 	startFixtureServer,
 	transcriptionUploads,
 } from "./journey/fixtures";
 import {
+	ageFeedCache,
 	clearFeedCache,
+	feedCacheHolds,
 	observePlayback,
 	playerLeafCount,
+	readLibrary,
 	readVaultBytes,
 	readVaultText,
 	seedLibrary,
 	storedEpisode,
 	waitForLibrary,
 	waitForPlayback,
+	writeVaultFile,
 } from "./journey/library";
-import { jsLiteral, PLUGIN_ID } from "./runtime";
+import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-resilience");
 const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
@@ -231,9 +246,10 @@ describe("resilience journeys", () => {
 		);
 
 		await openPodNotesSettings(obsidian);
-		await typeInto(obsidian, ui.settingControl("Skip backward length (s)", "input"), "42", {
+		await typeInto(obsidian, ui.settingControl("Skip back (s)", "input"), "42", {
 			replace: true,
 		});
+		await pressKey(obsidian, "Tab");
 		const saved = await waitForLibrary(
 			plugin,
 			(library) => library.skipBackwardSeconds === 42,
@@ -393,6 +409,183 @@ describe("resilience journeys", () => {
 		},
 		120_000,
 	);
+
+	test("J-OFF-01 offline, lists put what plays first, a downloaded episode plays from its file, one that needs a connection plays nothing, search sends nothing, and a failed feed shows no failure; online again, that episode plays and search finds shows", async () => {
+		const context = getContext();
+		const { obsidian, plugin, sandbox } = context;
+		const streamed: FixtureEpisode = {
+			title: "Offline Streamed",
+			seconds: 6,
+			pubDate: pubDate(0),
+		};
+		const saved: FixtureEpisode = { title: "Offline Saved", seconds: 6, pubDate: pubDate(1) };
+		const kept: FixtureEpisode = { title: "Offline Kept", seconds: 6, pubDate: pubDate(2) };
+		const later: FixtureEpisode = { title: "Offline Later", seconds: 6, pubDate: pubDate(3) };
+		const show: FixtureFeed = {
+			title: "Journey Offline",
+			slug: "offline",
+			artwork: true,
+			episodes: [streamed, saved, kept, later],
+		};
+		const elsewhere: FixtureFeed = {
+			title: "Journey Not Followed",
+			slug: "not-followed",
+			artwork: false,
+			episodes: [{ title: "Not Followed One", seconds: 6, pubDate: pubDate(0) }],
+		};
+		const server = await serve(show, elsewhere);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, saved),
+			queue: [storedEpisode(server, show, later)],
+		});
+		const filePath = (episode: FixtureEpisode) =>
+			sandbox.path(`Downloads/Journey Offline/${episode.title}.wav`);
+		for (const episode of [saved, kept])
+			await writeVaultFile(obsidian, filePath(episode), server.audio(show, episode));
+		await plugin.updateDataAndReload<Record<string, any>>((data) => {
+			data.downloadedEpisodes = {
+				[show.title]: [saved, kept].map((episode) => ({
+					...storedEpisode(server, show, episode),
+					filePath: filePath(episode),
+					size: server.audio(show, episode).length,
+				})),
+			};
+		}, RELOAD_OPTIONS);
+		await installItunesStub(obsidian, [
+			{
+				collectionName: elsewhere.title,
+				feedUrl: server.feedUrl(elsewhere),
+				artworkUrl100: server.artworkUrl(elsewhere),
+				collectionId: "4244",
+			},
+		]);
+		onTestFinished(() => removeItunesStub(obsidian));
+		const everyEpisode = [streamed.title, saved.title, kept.title, later.title];
+		const grouped = [
+			"Available offline",
+			saved.title,
+			kept.title,
+			"Needs a connection",
+			streamed.title,
+			later.title,
+		];
+
+		await showPodNotes(obsidian);
+		await showList(obsidian, "Latest episodes");
+		expect(
+			await eventually(obsidian, () => listedEpisodesWithHeadings(obsidian), everyEpisode),
+		).toEqual(everyEpisode);
+		await obsidian.waitFor(() => feedCacheHolds(obsidian, later.title), {
+			timeoutMs: 10_000,
+			message: "the feed cached online",
+		});
+		const recover = server.failFeed(show);
+		onTestFinished(recover);
+		await ageFeedCache(obsidian, 7 * 60 * 60 * 1000);
+		await plugin.reload(RELOAD_OPTIONS);
+		await showPodNotes(obsidian);
+		await showLibrary(obsidian);
+		await waitUntilShown(obsidian, ui.failedPodcastCard(show.title));
+
+		const reconnect = server.disconnect();
+		onTestFinished(reconnect);
+		await setOffline(obsidian, true);
+		onTestFinished(() => setOffline(obsidian, false));
+		await waitUntilShown(obsidian, ui.offlineStrip);
+		const badged = () => isShown(obsidian, ui.failedPodcastCard(show.title));
+		expect(await eventually(obsidian, badged, false)).toBe(false);
+		expect(await isShown(obsidian, ui.podcastCard(show.title))).toBe(true);
+		await showList(obsidian, "Latest episodes");
+		expect(
+			await eventually(obsidian, () => listedEpisodesWithHeadings(obsidian), grouped),
+		).toEqual(grouped);
+		expect(await isDisabled(obsidian, ui.headAction("Refresh all feeds"))).toBe(true);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(show.title));
+		await waitUntilShown(obsidian, ui.episode(streamed.title));
+		expect(await isShown(obsidian, ui.feedError)).toBe(false);
+		expect(await isDisabled(obsidian, ui.refreshEpisodes)).toBe(true);
+		expect(await listedEpisodesWithHeadings(obsidian)).toEqual(grouped);
+
+		await click(obsidian, ui.episode(streamed.title));
+		await obsidian.waitFor(async () => (await notices(obsidian)).includes("Not downloaded"), {
+			timeoutMs: 5_000,
+			message: "the Not downloaded Notice",
+		});
+		const refused = await observePlayback(obsidian);
+		expect(refused.episode).toEqual({ podcast: show.title, title: saved.title });
+		expect(refused.playing).toBe(false);
+		expect(await isShown(obsidian, ui.fullPlayer)).toBe(false);
+		expect((await readLibrary(plugin)).queue).toEqual([later.title]);
+		await dismissNotice(obsidian, "Not downloaded");
+
+		await click(obsidian, ui.episode(kept.title));
+		const fromFile = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === kept.title && playback.playing && playback.seconds > 0,
+			`${kept.title} playing offline`,
+		);
+		expect(decodeURIComponent(fromFile.media?.src ?? "")).toContain(filePath(kept));
+		await click(obsidian, ui.playbackToggle);
+		await waitForPlayback(obsidian, (playback) => !playback.playing, "paused");
+
+		const beforeSearch = server.requests().length;
+		await showAddPodcast(obsidian);
+		await typeInto(obsidian, ui.podcastSearch, "Journey");
+		await obsidian.waitFor(
+			async () => (await shownText(obsidian)).includes("Search needs a connection"),
+			{ timeoutMs: 5_000, message: "search saying it needs a connection" },
+		);
+		await typeInto(obsidian, ui.podcastSearch, server.feedUrl(elsewhere), { replace: true });
+		expect(
+			await holdsFor(obsidian, async () => server.requests().slice(beforeSearch), []),
+		).toEqual([]);
+		expect(await shownText(obsidian)).toContain("Search needs a connection");
+		expect(await itunesSearchTerms(obsidian)).toEqual([]);
+
+		recover();
+		reconnect();
+		await setOffline(obsidian, false);
+		await obsidian.waitFor(async () => !(await isShown(obsidian, ui.offlineStrip)), {
+			timeoutMs: 5_000,
+			message: "the Offline strip gone",
+		});
+		await showLibrary(obsidian);
+		await obsidian.waitFor(
+			async () =>
+				!(await feedsLoading(obsidian)) &&
+				(await isShown(obsidian, ui.podcastCard(show.title))) &&
+				!(await badged()),
+			{ timeoutMs: 15_000, message: "the failed feed loaded once online" },
+		);
+		await click(obsidian, ui.podcastCard(show.title));
+		expect(
+			await eventually(obsidian, () => listedEpisodesWithHeadings(obsidian), everyEpisode),
+		).toEqual(everyEpisode);
+		expect(await isShown(obsidian, ui.feedError)).toBe(false);
+		expect(await isDisabled(obsidian, ui.refreshEpisodes)).toBe(false);
+		await click(obsidian, ui.episode(streamed.title));
+		const streaming = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.episode?.title === streamed.title &&
+				playback.playing &&
+				playback.seconds > 0,
+			`${streamed.title} playing once online`,
+		);
+		expect(streaming.media?.src).toBe(server.mediaUrl(show, streamed));
+		await click(obsidian, ui.playbackToggle);
+		await waitForPlayback(obsidian, (playback) => !playback.playing, "paused");
+
+		await showAddPodcast(obsidian);
+		await typeInto(obsidian, ui.podcastSearch, elsewhere.title, { replace: true });
+		await waitUntilShown(obsidian, ui.addPodcast(elsewhere.title));
+		expect(await itunesSearchTerms(obsidian)).toEqual([elsewhere.title]);
+		await showList(obsidian, "Latest episodes");
+		expect(await listedEpisodesWithHeadings(obsidian)).toEqual(everyEpisode);
+	}, 120_000);
 
 	test("J-TR-02 transcribing the current episode writes its transcript note from the real audio", async () => {
 		const context = getContext();

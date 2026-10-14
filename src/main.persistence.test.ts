@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { get } from "svelte/store";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { Notice, type SecretStorage } from "obsidian";
 import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
+import * as privateFeedUrls from "./utility/privateFeedUrl";
+import * as persistenceMerge from "./persistence/merge";
 import { encodePodNotesData } from "./persistence/podNotesData";
+import * as podNotesData from "./persistence/podNotesData";
 import { PlayerController } from "./player/PlayerController";
-import { downloadedEpisodes, localFiles } from "./store";
+import { downloadedEpisodes, localFiles, plugin as pluginStore } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
 import {
@@ -66,6 +69,16 @@ function makePlugin(
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+function savedByThisVersion(released: Record<string, unknown>): Record<string, unknown> {
+	const data: Record<string, unknown> = {
+		...structuredClone(released),
+		headsetPreviousTrack: "captureTimestamp",
+		headsetNextTrack: "skipForward",
+	};
+	delete data.feedCache;
+	return data;
+}
+
 async function saveInBackground(plugin: PodNotes): Promise<void> {
 	void plugin.saveSettings();
 	await settled();
@@ -73,6 +86,218 @@ async function saveInBackground(plugin: PodNotes): Promise<void> {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+});
+
+it("does not decode its own saved document again during a settings session", async () => {
+	const plugin = makePlugin();
+	const decode = vi.spyOn(podNotesData, "decodePodNotesData");
+	await plugin.loadSettings();
+	expect(decode).toHaveBeenCalledTimes(1);
+	decode.mockClear();
+
+	for (const seconds of [20, 30, 45]) {
+		plugin.settings.skipBackwardLength = seconds;
+		await plugin.saveSettingsStrict();
+		await plugin.onExternalSettingsChange();
+		expect(await plugin.loadData()).toMatchObject({ skipBackwardLength: seconds });
+	}
+
+	expect(plugin.settings.skipBackwardLength).toBe(45);
+	expect(decode).toHaveBeenCalledTimes(0);
+});
+
+describe("save refusal recovery", () => {
+	function recovering() {
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		plugin.settings.savedFeeds = {
+			Recovery: {
+				title: "Recovery",
+				url: "https://example.com/recovery.xml",
+				artworkUrl: "",
+			},
+		};
+		const readable = encodePodNotesData(plugin.settings);
+		const state: { blocked: boolean; disk: unknown } = { blocked: false, disk: readable };
+		const loadData = vi.fn(async () => (state.blocked ? null : structuredClone(state.disk)));
+		Object.assign(plugin, {
+			loadData,
+			saveData: async (data: unknown) => {
+				await saveData(data);
+				state.disk = structuredClone(data);
+			},
+		});
+		Object.assign(plugin.app.vault.adapter, {
+			exists: vi.fn(async () => state.disk !== null),
+			read: vi.fn(async () => {
+				if (state.blocked) throw new Error("read outage");
+				return dataFileText(state.disk);
+			}),
+		});
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const notices = vi.spyOn(obsidian, "Notice");
+		return { plugin, state, readable, saveData, loadData, clock, notices };
+	}
+
+	it.each([1, 99])(
+		"#429 stops periodic reads for schema %s and reports the required action once",
+		async (schemaVersion) => {
+			const { plugin, state, readable, saveData, loadData, clock, notices } = recovering();
+			state.disk = { ...readable, schemaVersion };
+			plugin.settings.skipForwardLength = 25;
+			await saveInBackground(plugin);
+			const reads = loadData.mock.calls.length;
+			for (let i = 0; i < 6; i++) {
+				clock.advance(10_000);
+				clock.runAll();
+				await settled();
+			}
+			expect.soft(loadData).toHaveBeenCalledTimes(reads);
+			expect.soft(notices).toHaveBeenCalledTimes(1);
+			expect
+				.soft(notices.mock.calls[0]?.[0])
+				.toMatch(schemaVersion === 99 ? /updat.*PodNotes/i : /reload|restart/i);
+			expect(saveData).not.toHaveBeenCalled();
+			expect(state.disk).toEqual({ ...readable, schemaVersion });
+		},
+	);
+
+	it("#430 strict saves recover the read before rejecting an import or key selection", async () => {
+		const { plugin, state, saveData, notices } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		await plugin.onExternalSettingsChange();
+		expect(notices).toHaveBeenCalledTimes(1);
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		plugin.settings.openAISecretId = "podnotes-openai-api-key";
+		await plugin.saveSettingsStrict();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			openAISecretId: "podnotes-openai-api-key",
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+	});
+
+	it("#431 flushes a pending edit immediately once a runtime read recovers", async () => {
+		const { plugin, state, saveData } = recovering();
+		state.blocked = true;
+		plugin.settings.skipForwardLength = 25;
+		await saveInBackground(plugin);
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		await plugin.flushSaves();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({ skipForwardLength: 25 });
+	});
+
+	it("#431 restores the idle library once when the unreadable file is moved away", async () => {
+		const { plugin, state, saveData, clock } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		state.disk = null;
+		await plugin.onExternalSettingsChange();
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+	});
+
+	it("#431 recovers an idle read outage without a file event or an edit", async () => {
+		const { plugin, state, saveData, clock, notices } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(notices).toHaveBeenCalledTimes(1);
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+	});
+
+	it("#432 asks for readable startup data and a reload without writing defaults", async () => {
+		const { plugin, state, saveData, loadData, notices, clock } = recovering();
+		state.blocked = true;
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin, clock);
+		expect
+			.soft(notices.mock.calls[0]?.[0])
+			.toMatch(
+				/(?:make|restore)[^.]+(?:read|access)[^.]+(?:reload|restart)|(?:readable|read access)[^.]+(?:reload|restart)/i,
+			);
+		state.blocked = false;
+		loadData.mockClear();
+		plugin.settings.skipForwardLength = 25;
+		await saveInBackground(plugin);
+		await plugin.flushSaves();
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow();
+		expect(loadData).not.toHaveBeenCalled();
+		expect(saveData).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("retries a file with an invalid schema version until it reads, then writes the library once", async () => {
+		const { plugin, state, readable, saveData, clock, notices } = recovering();
+		state.disk = { ...readable, schemaVersion: "two" };
+		await plugin.onExternalSettingsChange();
+		expect(notices.mock.calls[0]?.[0]).toMatch(/could not read/);
+
+		state.disk = readable;
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+	});
+
+	it("starts no recovery write when the window unloads during its read", async () => {
+		const { plugin, state, saveData, loadData, clock, notices } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		state.blocked = false;
+		let release = () => {};
+		loadData.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => (release = resolve));
+			return structuredClone(state.disk);
+		});
+
+		const flushing = plugin.flushSaves();
+		await vi.waitFor(() => expect(loadData).toHaveBeenCalledTimes(2));
+		Object.assign(plugin, { closing: "window-unloading" });
+		release();
+		await flushing;
+
+		expect(saveData).not.toHaveBeenCalled();
+		expect(notices.mock.calls.map(([message]) => message)).toEqual([
+			"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.",
+		]);
+		expect(clock.pending()).toBe(0);
+	});
 });
 
 describe("PodNotes persistence integration", () => {
@@ -376,7 +601,7 @@ describe("PodNotes persistence integration", () => {
 
 		expect(saveData).toHaveBeenCalledTimes(1);
 		expect(saveData.mock.calls[0][0]).toEqual({
-			...released,
+			...savedByThisVersion(released),
 			defaultVolume: 0.4,
 			libraryId: "",
 		});
@@ -411,7 +636,7 @@ describe("PodNotes persistence integration", () => {
 		const { urlSecretId } = written.savedFeeds["PRIV2 Both"];
 		expect(urlSecretId).toMatch(/^podnotes-feed-url-[0-9a-f-]{36}$/);
 		expect(written).toEqual({
-			...released2211,
+			...savedByThisVersion(released2211),
 			libraryId: "",
 			savedFeeds: { "PRIV2 Both": { ...released2211.savedFeeds["PRIV2 Both"], urlSecretId } },
 		});
@@ -725,7 +950,7 @@ describe("PodNotes persistence integration", () => {
 		await vi.waitFor(() => expect(saveData).toHaveBeenCalledTimes(1));
 		plugin.settings.defaultVolume = 0.25;
 		const queued = plugin.saveSettingsStrict();
-		Object.assign(plugin, { writeRefusal: "window-unloading" });
+		Object.assign(plugin, { closing: "window-unloading" });
 		const late = plugin.saveSettingsStrict();
 		resolvers[0]();
 
@@ -745,7 +970,7 @@ describe("PodNotes persistence integration", () => {
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
 		plugin.settings.defaultVolume = 0.5;
-		Object.assign(plugin, { writeRefusal: "obsidian-closing" });
+		Object.assign(plugin, { closing: "obsidian-closing" });
 		await (plugin as unknown as { writer: { unload(): Promise<void> } }).writer.unload();
 
 		expect(plugin.loadData).toHaveBeenCalledTimes(1);
@@ -782,6 +1007,129 @@ describe("PodNotes persistence integration", () => {
 		plugin.settings.defaultVolume = 0.5;
 		await plugin.saveSettingsStrict();
 		expect(saveData.mock.lastCall?.[0].queue.episodes).toHaveLength(2);
+	});
+
+	it("does not rescan an equal repair just because restoration copied it", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		const rawUrl = "https://private.example/feed.xml?auth=EQUAL_REPAIR_SENTINEL";
+		const initial = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+		initial.savedFeeds = { Private: { title: "Private", url: rawUrl, artworkUrl: "" } };
+		await plugin.saveData(initial);
+		await plugin.loadSettings();
+		const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+		synced.savedFeeds.Private.url = rawUrl;
+		await plugin.saveData(synced);
+		saveData.mockClear();
+		const repairs = vi.spyOn(persistenceMerge, "restoreDropped");
+		const redactions = vi.spyOn(privateFeedUrls, "redactPrivateFeedAddresses");
+
+		plugin.settings.defaultVolume = 0.4;
+		await plugin.saveSettingsStrict();
+
+		expect(
+			repairs.mock.results.some(
+				(result, index) =>
+					result.type === "return" &&
+					result.value !== repairs.mock.calls[index][1] &&
+					persistenceMerge.jsonValuesEqual(result.value, repairs.mock.calls[index][1]),
+			),
+		).toBe(true);
+		expect(redactions).toHaveBeenCalledTimes(5);
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			defaultVolume: 0.4,
+			savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+		});
+		expect(JSON.stringify(saveData.mock.calls)).not.toContain("EQUAL_REPAIR_SENTINEL");
+	});
+
+	describe("when a synced private feed arrives with a queue that had to be repaired", () => {
+		const rawUrl = "https://private.example/feed.xml?auth=RESTORED_SENTINEL";
+		const episode = {
+			title: "Ep",
+			podcastName: "Pod",
+			streamUrl: "https://example.com/ep.mp3",
+			url: "",
+			content: "",
+		};
+
+		async function saveAfterSync(description: string) {
+			const saveData = vi.fn().mockResolvedValue(undefined);
+			const plugin = makePlugin(saveData, { dataFileExists: true });
+			await plugin.loadSettings();
+			plugin.settings.queue.episodes = [{ ...episode, description }];
+			attachDataFileWriter(plugin);
+			const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+			synced.queue = "not a playlist";
+			synced.savedFeeds = { Private: { title: "Private", url: rawUrl, artworkUrl: "" } };
+			await plugin.saveData(synced);
+			saveData.mockClear();
+
+			plugin.settings.defaultVolume = 0.4;
+			await plugin.saveSettingsStrict();
+			return saveData;
+		}
+
+		it("redacts the address in the entries it keeps from this device", async () => {
+			const saveData = await saveAfterSync(`Your feed: ${rawUrl}`);
+
+			const written = saveData.mock.lastCall?.[0];
+			expect(written.queue.episodes).toEqual([
+				{ ...episode, description: "Your feed: podnotes-private-feed:Private" },
+			]);
+			expect(written.savedFeeds.Private.url).toBe("podnotes-private-feed:Private");
+			expect(JSON.stringify(saveData.mock.calls)).not.toContain("RESTORED_SENTINEL");
+		});
+
+		it("keeps the entries unchanged when they quote no private address", async () => {
+			const saveData = await saveAfterSync("Public notes");
+
+			const written = saveData.mock.lastCall?.[0];
+			expect(written.queue.episodes).toEqual([{ ...episode, description: "Public notes" }]);
+			expect(written.savedFeeds.Private.url).toBe("podnotes-private-feed:Private");
+			expect(written.defaultVolume).toBe(0.4);
+		});
+	});
+
+	it("drops a saved feed cache preference at the next save, even one an older device syncs back", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		const older = {
+			...structuredClone(released2211),
+			feedCache: { enabled: false, ttlHours: 1 },
+		};
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(structuredClone(older)) });
+
+		await plugin.loadSettings();
+		expect(saveData).not.toHaveBeenCalled();
+		attachDataFileWriter(plugin);
+		plugin.settings.defaultVolume = 0.4;
+		await plugin.saveSettingsStrict();
+		expect(saveData.mock.lastCall?.[0]).toEqual({
+			...savedByThisVersion(released2211),
+			defaultVolume: 0.4,
+			libraryId: "",
+		});
+
+		Object.assign(plugin, {
+			loadData: vi.fn().mockResolvedValue({
+				...structuredClone(older),
+				defaultVolume: 0.4,
+				skipForwardLength: 45,
+			}),
+		});
+		await plugin.onExternalSettingsChange();
+		plugin.settings.skipBackwardLength = 20;
+		await plugin.saveSettingsStrict();
+
+		expect(saveData.mock.lastCall?.[0]).toEqual({
+			...savedByThisVersion(released2211),
+			defaultVolume: 0.4,
+			skipForwardLength: 45,
+			skipBackwardLength: 20,
+			libraryId: "",
+		});
 	});
 
 	it("takes progress another device made even when the synced file had to repair another record", async () => {
@@ -867,6 +1215,92 @@ describe("PodNotes persistence integration", () => {
 
 			expect(doc.media.currentTime).toBe(900);
 			plugin.player.dispose();
+		});
+	});
+
+	describe("while the loaded episode is paused at 17 s", () => {
+		async function paused() {
+			const plugin = makePlugin();
+			const episode = {
+				title: "A",
+				streamUrl: "https://pod.example.com/a.mp3",
+				url: "",
+				description: "",
+				content: "",
+				podcastName: "Pod",
+			};
+			let disk: unknown = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+			Object.assign(plugin, {
+				loadData: vi.fn(async () => structuredClone(disk)),
+				saveData: vi.fn(async (next: unknown) => {
+					disk = JSON.parse(JSON.stringify(next));
+				}),
+			});
+			Object.assign(plugin.app.vault.adapter, {
+				read: vi.fn(async () => dataFileText(disk)),
+			});
+			attachDataFileWriter(plugin);
+			(plugin as unknown as { setCollectionStores(): void }).setCollectionStores();
+			onTestFinished(bindStoresToSettings(plugin));
+			const doc = new FakeDocument();
+			plugin.player = new PlayerController(doc.asPlayerDocument(), plugin);
+			onTestFinished(() => plugin.player.dispose());
+			plugin.player.play(episode);
+			doc.media.duration = 3600;
+			doc.media.emit("loadedmetadata");
+			doc.media.currentTime = 17;
+			plugin.player.pause();
+			await plugin.flushSaves();
+			const saved = () =>
+				(disk as { playedEpisodes: Record<string, { time: number; finished: boolean }> })
+					.playedEpisodes["Pod::A"];
+			expect(saved()).toMatchObject({ time: 17, finished: false });
+			return {
+				plugin,
+				doc,
+				saved,
+				sync: async (time: number) => {
+					saved().time = time;
+					await plugin.onExternalSettingsChange();
+				},
+			};
+		}
+
+		it("shows the progress a sync brings and keeps it in data.json through a save", async () => {
+			const { plugin, doc, saved, sync } = await paused();
+
+			await sync(45);
+			plugin.player.save();
+			await plugin.flushSaves();
+
+			expect(saved()).toMatchObject({ time: 45, finished: false });
+			expect(get(plugin.player.state)).toMatchObject({ status: "paused", currentTime: 45 });
+			expect(doc.media.currentTime).toBe(45);
+		});
+
+		it("saves a seek made after the sync", async () => {
+			const { plugin, doc, saved, sync } = await paused();
+
+			await sync(45);
+			plugin.player.seek(25);
+			plugin.player.save();
+			await plugin.flushSaves();
+
+			expect(saved()).toMatchObject({ time: 25, finished: false });
+			expect(doc.media.currentTime).toBe(25);
+		});
+
+		it("saves a seek from the browser's own controls made after the sync", async () => {
+			const { plugin, doc, saved, sync } = await paused();
+
+			await sync(45);
+			doc.media.currentTime = 42;
+			for (const type of ["seeking", "timeupdate", "seeked"]) doc.media.emit(type);
+			plugin.player.save();
+			await plugin.flushSaves();
+
+			expect(saved()).toMatchObject({ time: 42, finished: false });
+			expect(get(plugin.player.state)).toMatchObject({ status: "paused", currentTime: 42 });
 		});
 	});
 
@@ -1037,7 +1471,7 @@ describe("PodNotes persistence integration", () => {
 		const plugin = makePlugin(saveData);
 		Object.assign(plugin, {
 			loadData: vi.fn().mockResolvedValue({ defaultVolume: 0.4 }),
-			writeRefusal: "window-unloading",
+			closing: "window-unloading",
 		});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -1124,7 +1558,7 @@ describe("PodNotes persistence integration", () => {
 
 	describe("while data.json cannot be read for a while", () => {
 		const refusal =
-			"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged and saves nothing until the file can be read again.";
+			"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.";
 
 		function setup() {
 			const file = { readable: true, writable: true };
@@ -1178,7 +1612,7 @@ describe("PodNotes persistence integration", () => {
 			expect(clock.delays).toEqual([10_000]);
 		});
 
-		it("saves an edit made once it reads again, after the edits it could not save were undone", async () => {
+		it("keeps retrying after the edits it could not save were undone, and saves an edit made once it reads again", async () => {
 			const { plugin, file, clock, notice, retry } = setup();
 			const hide = vi.spyOn(Notice.prototype, "hide");
 			file.readable = false;
@@ -1187,21 +1621,20 @@ describe("PodNotes persistence integration", () => {
 			plugin.settings.skipForwardLength = 15;
 			await saveInBackground(plugin);
 			await retry();
-			expect(clock.pending()).toBe(0);
+			expect(clock.pending()).toBe(1);
 
 			file.readable = true;
 			plugin.settings.skipBackwardLength = 33;
 			await saveInBackground(plugin);
 			await saveInBackground(plugin);
 			const armed = { pending: clock.pending(), delays: [...clock.delays] };
-			clock.runAll();
-			await settled();
+			await retry();
 
 			expect(await plugin.loadData()).toMatchObject({
 				skipForwardLength: 15,
 				skipBackwardLength: 33,
 			});
-			expect(armed).toEqual({ pending: 1, delays: [10_000, 0] });
+			expect(armed).toEqual({ pending: 1, delays: [10_000, 10_000] });
 			expect(notice.mock.calls).toEqual([[refusal, 0]]);
 			expect(hide).toHaveBeenCalledTimes(1);
 			expect(clock.pending()).toBe(0);
@@ -1325,7 +1758,7 @@ describe("PodNotes persistence integration", () => {
 			disk.full = false;
 			disk.text = '{"schemaVersion": 2, "savedFeeds": {"Other device';
 			await plugin.onExternalSettingsChange();
-			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 
 			disk.text = "";
 			await plugin.onExternalSettingsChange();
@@ -1342,7 +1775,7 @@ describe("PodNotes persistence integration", () => {
 			const before = disk.text;
 			await plugin.onExternalSettingsChange();
 			plugin.settings.defaultVolume = 0.25;
-			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 			expect(disk.text).toBe(before);
 
 			disk.denied = false;
@@ -1370,8 +1803,7 @@ describe("PodNotes persistence integration", () => {
 			disk.text = '{"schemaVersion": 2, "savedFeeds": {"Other device';
 			plugin.settings.defaultVolume = 0.25;
 			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
-			// Refused now, with the Notice up: no save even tries to read the file.
-			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 			const hideNotice = vi.spyOn(Notice.prototype, "hide");
 
 			disk.text = readable;
@@ -1617,7 +2049,7 @@ describe("a device that started before sync delivered its data.json", () => {
 		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
 	});
 
-	it("keeps the library when a device that could not read its file at start writes a new one", async () => {
+	it("keeps the library when a device that could not read its file at start finds it emptied, then synced", async () => {
 		const established = await startDevice(library);
 		const device = makePlugin();
 		let text = '{"schemaVersion": 2, "savedFeeds": {"Library Fe';
@@ -1638,10 +2070,36 @@ describe("a device that started before sync delivered its data.json", () => {
 		text = "";
 		await device.onExternalSettingsChange();
 		device.settings.defaultVolume = 0.5;
+		await expect(device.saveSettingsStrict()).rejects.toThrow(/could not read/);
+		expect(text).toBe("");
+
+		text = dataFileText(established.file());
+		await device.onExternalSettingsChange();
+		device.settings.defaultVolume = 0.5;
 		await device.saveSettingsStrict();
 		await established.receive(JSON.parse(text));
 
 		expect(Object.keys(established.plugin.settings.savedFeeds)).toEqual(["Library Feed"]);
 		expect(established.plugin.settings.defaultVolume).toBe(0.5);
+	});
+});
+
+describe("the auto-queue preference", () => {
+	it("has one writer, which tells the views and saves it once", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData);
+		const seen: boolean[] = [];
+		pluginStore.set(undefined as never);
+		const stop = pluginStore.subscribe((host) => host && seen.push(host.settings.autoQueue));
+
+		plugin.setAutoQueue(false);
+		plugin.setAutoQueue(false);
+		await settled();
+		stop();
+
+		expect(seen).toEqual([false]);
+		expect(
+			saveData.mock.calls.map(([data]) => (data as { autoQueue: boolean }).autoQueue),
+		).toEqual([false]);
 	});
 });

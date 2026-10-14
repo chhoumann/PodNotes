@@ -60,9 +60,9 @@ npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults && npm run start:e2e-ob
 
 A fresh vault already has a `data.json`, so it is a later start, not a new
 install. To meet PodNotes as a new user does, disable it, delete its
-`data.json`, close its view, then enable it. Turn on mobile emulation first to
-take the mobile start path, which keeps PodNotes closed on every start but a
-new install's:
+`data.json`, close its view, then enable it. Desktop and mobile both open the
+view on a new install only, and keep it closed on every later start. Turn on
+mobile emulation first to check the mobile start:
 
 ```bash
 npm run obsidian:e2e -- dev:mobile on    # optional; reloads Obsidian
@@ -71,9 +71,9 @@ npm run obsidian:e2e -- eval code='(async () => JSON.stringify({leaves: app.work
 ```
 
 Expect one leaf, `firstRun` `Add your first podcast`, and `saved` true. A
-later mobile start stays closed. Close the view, save the layout as above, and
-`npm run obsidian:e2e -- reload` leaves zero leaves. Run
-`npm run obsidian:e2e -- dev:mobile off` to return to the desktop.
+later start stays closed. Close the view, save the layout as above, and
+`npm run obsidian:e2e -- reload` leaves zero leaves. After mobile emulation,
+run `npm run obsidian:e2e -- dev:mobile off` to return to the desktop.
 
 ## Doctor
 
@@ -178,8 +178,19 @@ For a before/after comparison with the v3 design, capture the view at the
 design's widths (sidebar 320, pane 820, phone 390) in both themes:
 
 ```bash
-node .claude/skills/verify/screens.mjs set all <label>   # five states, plus a sheet each beside the prototype
+node .claude/skills/verify/screens.mjs set all <label>   # every state, plus a sheet each beside the prototype
 ```
+
+To see PodNotes offline, `screens.mjs offline on` makes the renderer offline
+through CDP `Network.emulateNetworkConditions`, so `navigator.onLine` is false
+and the window fires `offline`. Obsidian sends every `requestUrl` call, feeds
+included, from its main process. Neither CDP nor Electron's session emulation
+reaches that process, so `offline on` also stops the fixture server. It fails
+unless the event fired and the first saved feed is unreachable. The server
+lets artwork be cached for a day, so covers seen online still show offline.
+`offline off` restarts the server and goes back online. A window reload, such
+as entering or leaving mobile emulation, puts the renderer back online, so run
+`offline on` again after it.
 
 `screenshot` and `record` reveal the PodNotes view first and fail without
 capturing when it does not open. `record` then records the window while the driver runs.
@@ -220,24 +231,46 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,
   `type <css> <text>` (insert at the cursor), `fill <css> <text>` (replace),
   `key <Enter|Escape|Tab|ArrowUp|ArrowDown|Backspace|<char>|Ctrl+<char>>`,
-  `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `click`, `type`,
-  `fill` and `wait` wait up to 10 s; `--timeout <ms>` changes that. They also
+  `wait <css> [--text <s>]`, and `uri <obsidian://...>`. `--text` matches a
+  substring; with `--exact`, only an element whose visible text is exactly
+  `<s>`. `click`, `type`, `fill` and `wait` wait up to 10 s; `--timeout <ms>`
+  changes that. They also
   wait until nothing covers the element's center, and fail with
   `covered by <tag.class>` when it stays covered, as under the full player. `key` and
   `uri` do not wait. Each CLI call fails after 15 s without an answer.
 - `.claude/skills/verify/screens.mjs` captures pixels, not behavior. Its verbs
   are `place <sidebar|pane|phone>` (fails unless the view measures 320 x 720,
   820 x 680, or a 390 x 844 phone screen), `theme <light|dark>`,
-  `seed <empty|library|episodes>` (replaces `data.json` while PodNotes is
-  disabled), `go '<page JSON>'`, `shot <file.png>`, and
-  `set <state|all> <label> [--widths ...] [--themes ...]`. `set` writes
+  `seed <empty|library|episodes|lists|local|offline>` (replaces `data.json`
+  while PodNotes is disabled and deletes the episode notes; `local` and
+  `offline` also write media files into the vault), `go '<page JSON>'`,
+  `offline <on|off>`, `shot <file.png>`, and
+  `set <state|player|all> <label> [--widths ...] [--themes ...]`. `set` writes
   `.obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png` and a
-  `<state>-sheet.png` with the design prototype's screen beside each shot. The
-  states are `first-run`, `add-podcast`, `library`, `episodes` and `error-feed`.
+  `<state>-sheet.png` with the design prototype's screen beside each shot, when
+  the design has one. The states are `first-run`, `add-podcast`, `library`,
+  `episodes`, `error-feed`, `queue`, `playlists`, `playlist`, `latest`,
+  `played`, `local-files`, `offline` and `status-bar`, and the player's
+  `now-playing`, `mini-player`, `capture`, `chapters`, `up-next`, `transcript`,
+  `up-next-empty`, `no-chapters`, `video`, `local-player` and `media-error`.
+  `set player` runs the player's states and `set all` every state; both go on
+  past a failed state and fail at the end. `set` opens each page by its page
+  JSON, so a state works on any version of the view. A player state plays an
+  episode until its media loads and pauses it at a fixed second.
+  `capture`, `chapters`, `up-next`, `up-next-empty` and `transcript` then press the full
+  player's `Timestamp`, `Chapters`, `Up next` or `Transcript` button, and fail at once
+  without a button that reads exactly that, as on a full player before v3.
+  `shot` hides Obsidian's status bar, except in `status-bar`, which puts a
+  `9 properties` item in it over the mini player and has no phone shot, because
+  Obsidian hides the status bar on mobile. The states and their seeded data
+  live in `screens/scenes.mjs`, the instance calls in `screens/instance.mjs`,
+  and the contact sheet in `screens/sheet.mjs`.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
   `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
-  one more feed to add. `retitle` renames the first feed's two episodes to
+  one more feed to add. Their episodes' media is silence as long as the feed
+  says. `#213` has chapters and a WebVTT transcript, and `Signal & Noise` has a 10 s video episode that
+  ffmpeg makes on its first request and one whose media answers 404. `retitle` renames the first feed's two episodes to
   `Renamed Opening Show` and `Renamed Closing Show`, keeping their GUIDs, until
   the server stops. `requests` prints the paths
   PodNotes fetched from the server. The feed URL uses the host `podnotes.test`,

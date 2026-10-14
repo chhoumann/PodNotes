@@ -14,6 +14,7 @@ import {
 	internPrivateFeed,
 	notifyPrivateFeedUnavailable,
 	protectPrivateFeeds,
+	publicFeedUrl,
 	resolveFeedUrl,
 } from "./privateFeeds";
 
@@ -41,6 +42,25 @@ it("reports a missing device address in one sentence without destructive recover
 	expect(notice).toHaveBeenCalledWith(
 		'The private feed address for "My Show" is not available on this device.',
 	);
+});
+
+describe("publicFeedUrl", () => {
+	it("is a public feed's http or https address", () => {
+		expect(publicFeedUrl(feed())).toBe("https://feeds.example.com/rss");
+		expect(publicFeedUrl(feed({ url: "http://feeds.example.com/rss" }))).toBe(
+			"http://feeds.example.com/rss",
+		);
+	});
+
+	it.each([
+		["a private feed's placeholder", feed({ url: "podnotes-private-feed:My Show" })],
+		["a feed with a secret reference", feed({ urlSecretId: "podnotes-feed-url-1" })],
+		["a raw private address", feed({ url: PRIVATE_URL })],
+		["an address that is not http", feed({ url: "file:///feeds/rss.xml" })],
+		["no address", feed({ url: "not a url" })],
+	])("is nothing for %s", (_, saved) => {
+		expect(publicFeedUrl(saved)).toBeUndefined();
+	});
 });
 
 describe("internPrivateFeed", () => {
@@ -144,6 +164,31 @@ function episode(title: string, feedUrl: string) {
 }
 
 describe("protectPrivateFeeds", () => {
+	it("redacts entity-escaped descriptions before persistence without changing public bytes", () => {
+		const { feedUrls } = repository();
+		const address = "https://private.example.com/rss?auth=PERSIST_ENTITY_SENTINEL";
+		const escaped = address.replace(":", "&#58;").replaceAll("/", "&#x2F;");
+		const publicText = "Public https&#58;&#x2F;&#x2F;private.example.com/public?a=1&amp;b=2";
+		const nested = `https://redirect.example/?u=${encodeURIComponent(address)}&amp;x=1`;
+		const input = settings({
+			savedFeeds: {
+				Paid: feed({
+					title: "Paid",
+					url: address,
+					description: `${escaped}&period; ${nested} ${publicText}`,
+				}),
+				Public: feed({ description: publicText }),
+			},
+		});
+		const { settings: safe } = protectPrivateFeeds(input, feedUrls);
+		expect(safe.savedFeeds.Public).toEqual(input.savedFeeds.Public);
+		expect(safe.savedFeeds.Paid.description).toBe(
+			`podnotes-private-feed:Paid&period; https://redirect.example/?u=podnotes-private-feed%3APaid&amp;x=1 ${publicText}`,
+		);
+		expect(JSON.stringify(encodePodNotesData(safe))).not.toContain("PERSIST_ENTITY_SENTINEL");
+		expect(protectPrivateFeeds(safe, feedUrls).settings).toBe(safe);
+	});
+
 	it("moves only credential-bearing feeds", () => {
 		const { feedUrls, values } = repository();
 		const { settings: safe, failed } = protectPrivateFeeds(

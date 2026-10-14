@@ -1,28 +1,33 @@
 import { describe, expect, onTestFinished, test } from "vitest";
+import { SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	chooseFile,
-	click,
 	closePodNotes,
 	closeSettings,
-	feedsLoading,
-	isShown,
-	listedEpisodes,
-	notices,
+	enableAsNewInstall,
 	openPodNotesSettings,
 	removePodcast,
+	restartObsidian,
 	showAddPodcast,
 	showLibrary,
 	showList,
+	showPodNotes,
+} from "./journey/actions";
+import { chooseFile, click, hover, typeInto, typeText } from "./journey/input";
+import { ui } from "./journey/targets";
+import {
+	eventually,
+	feedsLoading,
+	holdsFor,
+	isShown,
+	listedEpisodes,
+	notices,
+	shownPodcasts,
 	shownResults,
 	shownText,
-	showPodNotes,
-	typeInto,
-	typeText,
-	ui,
 	waitUntilFocused,
 	waitUntilShown,
-} from "./journey/actions";
+} from "./journey/wait";
 import {
 	type FixtureFeed,
 	type FixtureServer,
@@ -39,15 +44,18 @@ import {
 	feedCachedAt,
 	feedCacheHolds,
 	observePlayback,
+	playerLeafCount,
+	playerLeafPlaces,
 	readLibrary,
 	seedLibrary,
 	waitForLibrary,
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
-import { RELOAD_OPTIONS } from "./runtime";
+import { jsLiteral, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-feeds");
+const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
 
 async function serve(...feeds: FixtureFeed[]): Promise<FixtureServer> {
 	const server = await startFixtureServer(feeds);
@@ -140,7 +148,7 @@ describe("feed journeys", () => {
 		expect(await listedEpisodes(obsidian)).toEqual(["Search Show Pilot"]);
 	});
 
-	test("J-ONB-01 first run: a feed address typed without a tap first, one tap to add the podcast and one to play", async () => {
+	test("J-ONB-01 the first enable opens PodNotes once, in the right sidebar on First run: a feed address typed without a tap first, one tap to add the podcast and one to play", async () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
 		const show = feed("Journey First Run", "first-run", [
@@ -149,9 +157,12 @@ describe("feed journeys", () => {
 		]);
 		const server = await serve(show);
 		await seedLibrary(context, server);
+		await enableAsNewInstall(obsidian);
 
-		await showPodNotes(obsidian);
 		await waitUntilShown(obsidian, ui.firstRun);
+		expect(
+			await holdsFor(obsidian, () => playerLeafPlaces(obsidian), ["right sidebar"]),
+		).toEqual(["right sidebar"]);
 		await waitUntilFocused(obsidian, ui.podcastSearch);
 		await typeText(obsidian, server.feedUrl(show));
 		await resultsBecome(obsidian, [
@@ -184,6 +195,29 @@ describe("feed journeys", () => {
 		);
 		expect(saved.subscriptions).toEqual([{ title: show.title, url: server.feedUrl(show) }]);
 	});
+
+	test.runIf(isolatedInstance)(
+		"J-ONB-01 a view closed after the first enable stays closed on the next start until the ribbon icon opens it",
+		async () => {
+			const context = getContext();
+			const { obsidian } = context;
+			await seedLibrary(context, null);
+			await enableAsNewInstall(obsidian);
+			await waitUntilShown(obsidian, ui.firstRun);
+
+			await closePodNotes(obsidian);
+			await obsidian.dev.evalJsonAsync(
+				"(async () => { await app.workspace.saveLayout(); return true; })()",
+			);
+			await restartObsidian(obsidian);
+			expect(await holdsFor(obsidian, () => playerLeafCount(obsidian), 0)).toBe(0);
+
+			await click(obsidian, ui.ribbonAction("Show PodNotes"));
+			await waitUntilShown(obsidian, ui.firstRun);
+			expect(await playerLeafPlaces(obsidian)).toEqual(["right sidebar"]);
+		},
+		120_000,
+	);
 
 	test("J-FEED-02 a pasted RSS link and a pasted Apple Podcasts link each resolve to their one show", async () => {
 		const context = getContext();
@@ -692,6 +726,140 @@ describe("feed journeys", () => {
 			timeoutMs: 15_000,
 			message: "the remaining podcast's episodes",
 		});
+	});
+
+	test("J-FEED-05 Undo after Remove podcast puts the podcast back in its place in the grid, with the same saved record", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const first = feed("Journey Undo First", "undo-first", ["Undo First One"]);
+		const middle = feed("Journey Undo Middle", "undo-middle", ["Undo Middle One"]);
+		const last = feed("Journey Undo Last", "undo-last", ["Undo Last One"]);
+		await seedLibrary(context, await serve(first, middle, last), {
+			subscriptions: [first, middle, last],
+		});
+		const savedFeeds = async () =>
+			(await plugin.data<{ savedFeeds: Record<string, unknown> }>().read()).savedFeeds;
+		const grid = [first.title, middle.title, last.title];
+
+		await showPodNotes(obsidian);
+		await showLibrary(obsidian);
+		expect(await shownPodcasts(obsidian)).toEqual(grid);
+		const before = await savedFeeds();
+		await click(obsidian, ui.podcastCard(middle.title), { button: "right" });
+		await click(obsidian, ui.menuItem("Remove podcast"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 2,
+			"the podcast removed",
+		);
+		await click(obsidian, ui.undo(`Removed ${middle.title}`));
+
+		expect(await eventually(obsidian, () => shownPodcasts(obsidian), grid)).toEqual(grid);
+		const after = await eventually(obsidian, savedFeeds, before, 15_000);
+		expect(Object.keys(after)).toEqual(Object.keys(before));
+		expect(after).toEqual(before);
+		expect(await eventually(obsidian, () => notices(obsidian), [])).toEqual([]);
+	});
+
+	test("J-FEED-05 Undo after removing a private podcast brings its address back from this device, the address stays out of data.json and the page, and a reload ends the Undo", async () => {
+		const context = getContext();
+		const { obsidian, plugin } = context;
+		const sentinel = "UNDO_PRIVATE_SENTINEL";
+		const feedPath = `/feeds/${sentinel}/feed.xml`;
+		const show: FixtureFeed = {
+			title: "Journey Undo Private",
+			slug: "undo-private",
+			host: SUPERCAST_FIXTURE_HOST,
+			path: feedPath,
+			artwork: false,
+			episodes: [{ title: "Private Undo One", seconds: 6, pubDate: pubDate(0) }],
+		};
+		const server = await serve(show);
+		await seedLibrary(context, server);
+		const address = server.feedUrl(show);
+		const feedRequests = () => server.requests().filter((path) => path === feedPath).length;
+
+		await showPodNotes(obsidian);
+		await showAddPodcast(obsidian);
+		await typeInto(obsidian, ui.podcastSearch, address);
+		await click(obsidian, ui.addPodcast(show.title));
+		await waitUntilShown(obsidian, ui.episode("Private Undo One"));
+		// The save is asynchronous, so the episodes can show before data.json holds the podcast.
+		const saved = (
+			await plugin.waitForData<{
+				savedFeeds: Record<string, { url: string; urlSecretId: string }>;
+			}>((data) => Boolean(data.savedFeeds[show.title]), {
+				timeoutMs: 15_000,
+				intervalMs: 200,
+			})
+		).savedFeeds[show.title];
+		const secret = () =>
+			obsidian.dev.evalJson<string | null>(
+				`app.secretStorage.getSecret(${jsLiteral(saved.urlSecretId)})`,
+			);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(
+				`app.secretStorage.setSecret(${jsLiteral(saved.urlSecretId)}, ""), true`,
+			),
+		);
+		expect(await secret()).toBe(address);
+
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(show.title), { button: "right" });
+		await click(obsidian, ui.menuItem("Remove podcast"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 0,
+			"the private podcast removed",
+		);
+		expect(await secret()).toBe("");
+		const fetched = feedRequests();
+		await click(obsidian, ui.undo(`Removed ${show.title}`));
+
+		await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 1,
+			"the private podcast back",
+		);
+		expect((await plugin.data<Record<string, any>>().read()).savedFeeds[show.title]).toEqual(
+			saved,
+		);
+		expect(await secret()).toBe(address);
+		await obsidian.waitFor(async () => feedRequests() > fetched, {
+			timeoutMs: 10_000,
+			message: "the feed loaded again from its address",
+		});
+		await click(obsidian, ui.podcastCard(show.title));
+		await waitUntilShown(obsidian, ui.episode("Private Undo One"));
+		expect(JSON.stringify(await plugin.data().read())).not.toContain(sentinel);
+		expect(
+			await obsidian.dev.evalJson<boolean>(
+				`document.documentElement.outerHTML.includes(${jsLiteral(sentinel)})`,
+			),
+		).toBe(false);
+
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(show.title), { button: "right" });
+		await click(obsidian, ui.menuItem("Remove podcast"));
+		await waitForLibrary(
+			plugin,
+			(library) => library.subscriptions.length === 0,
+			"the private podcast removed again",
+		);
+		// Obsidian keeps a notice up while the pointer rests on it, so only the unload can end it.
+		await hover(obsidian, ui.undo(`Removed ${show.title}`));
+		await plugin.reload(RELOAD_OPTIONS);
+
+		expect(
+			await eventually(
+				obsidian,
+				() => isShown(obsidian, ui.undo(`Removed ${show.title}`)),
+				false,
+			),
+			"the Undo offered before the reload",
+		).toBe(false);
+		expect(await secret()).toBe("");
+		expect((await readLibrary(plugin)).subscriptions).toEqual([]);
 	});
 
 	test("J-EDGE-03 offline with a cache older than its TTL still lists the podcast's episodes", async () => {

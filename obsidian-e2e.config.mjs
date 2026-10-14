@@ -59,6 +59,8 @@ export default {
 		playlists: {},
 		skipBackwardLength: 15,
 		skipForwardLength: 15,
+		headsetPreviousTrack: "captureTimestamp",
+		headsetNextTrack: "skipForward",
 		timestamp: {
 			template: "- {{linktime}} ",
 			offset: 0,
@@ -78,7 +80,7 @@ export default {
 				"---\n" +
 				"# {{title}}\n\n" +
 				"![]({{artwork}})\n\n" +
-				"[Resume in PodNotes]({{episodelink}})\n\n" +
+				"{{episodelink:Resume in PodNotes}}\n\n" +
 				"{{url}}\n\n" +
 				"{{description}}\n",
 		},
@@ -120,10 +122,6 @@ export default {
 				provider: "openai",
 				speakerTemplate: "**{{speaker}}:** ",
 			},
-		},
-		feedCache: {
-			enabled: true,
-			ttlHours: 6,
 		},
 	},
 	buildCommand: "npm run build",

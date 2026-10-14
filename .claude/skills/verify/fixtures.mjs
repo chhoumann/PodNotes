@@ -7,18 +7,24 @@
 //   node .claude/skills/verify/fixtures.mjs transcripts    same server, print a feed whose episodes publish transcripts
 //   node .claude/skills/verify/fixtures.mjs library        same server, print the URL of a JSON manifest of eight
 //                                                          podcasts as PodNotes saves them (Night Owl Science's feed
-//                                                          answers 404) and one more feed to add
+//                                                          answers 404) and one more feed to add. Each episode's
+//                                                          media is silence as long as its feed says. #213 has
+//                                                          chapters and a WebVTT transcript with voices; Signal & Noise has a video episode, a 10 s
+//                                                          test pattern ffmpeg makes on first request, and an
+//                                                          episode whose media answers 404
 //   node .claude/skills/verify/fixtures.mjs retitle        rename the first feed's episodes, keeping their GUIDs, until the server stops
 //   node .claude/skills/verify/fixtures.mjs requests       print the paths the server has answered, oldest first
 //   node .claude/skills/verify/fixtures.mjs audio [path]   write a 60 s WAV into this worktree's vault
 //                                                          (default path: "Fixtures/Local Fixture.wav")
 //   node .claude/skills/verify/fixtures.mjs stop           stop the feed server
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { Readable, pipeline } from "node:stream";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { loadRunnerConfig, resolveProvisionOptions } from "obsidian-e2e/runner";
 import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
 
@@ -36,30 +42,80 @@ const FEED_TITLE = "PodNotes Fixture";
 const FEED_B_TITLE = "PodNotes Fixture B";
 const TRANSCRIPTS_TITLE = "PodNotes Transcripts";
 const transcriptFixtures = path.join(root, "tests/fixtures/transcripts");
+// Media made here outlives the server; node_modules/.cache is where tools keep caches.
+const CACHE = path.join(root, "node_modules/.cache/podnotes-fixtures");
+const RATE = 8000;
+const SILENCE = Buffer.alloc(64 * 1024);
+
+/** @typedef {{ length: number, chunks: (start: number, end: number) => Iterable<Buffer> }} Stream */
+
+/** A 16-bit mono WAV header for `samples` samples at RATE. @param {number} samples */
+function wavHeader(samples) {
+	const header = Buffer.alloc(44);
+	header.write("RIFF", 0);
+	header.writeUInt32LE(36 + samples * 2, 4);
+	header.write("WAVEfmt ", 8);
+	header.writeUInt32LE(16, 16);
+	header.writeUInt16LE(1, 20);
+	header.writeUInt16LE(1, 22);
+	header.writeUInt32LE(RATE, 24);
+	header.writeUInt32LE(RATE * 2, 28);
+	header.writeUInt16LE(2, 32);
+	header.writeUInt16LE(16, 34);
+	header.write("data", 36);
+	header.writeUInt32LE(samples * 2, 40);
+	return header;
+}
 
 function wav(seconds = 60) {
-	const rate = 8000;
-	const samples = rate * seconds;
-	const buffer = Buffer.alloc(44 + samples * 2);
-	buffer.write("RIFF", 0);
-	buffer.writeUInt32LE(36 + samples * 2, 4);
-	buffer.write("WAVEfmt ", 8);
-	buffer.writeUInt32LE(16, 16);
-	buffer.writeUInt16LE(1, 20);
-	buffer.writeUInt16LE(1, 22);
-	buffer.writeUInt32LE(rate, 24);
-	buffer.writeUInt32LE(rate * 2, 28);
-	buffer.writeUInt16LE(2, 32);
-	buffer.writeUInt16LE(16, 34);
-	buffer.write("data", 36);
-	buffer.writeUInt32LE(samples * 2, 40);
+	const samples = RATE * seconds;
+	const data = Buffer.alloc(samples * 2);
 	for (let i = 0; i < samples; i++) {
-		buffer.writeInt16LE(
-			Math.round(3000 * Math.sin((2 * Math.PI * 440 * i) / rate)),
-			44 + i * 2,
-		);
+		data.writeInt16LE(Math.round(3000 * Math.sin((2 * Math.PI * 440 * i) / RATE)), i * 2);
 	}
-	return buffer;
+	return Buffer.concat([wavHeader(samples), data]);
+}
+
+/**
+ * Silence as long as an episode, made as it is sent, so an hour costs no memory and the
+ * player can seek anywhere in it with Range requests.
+ * @param {number} seconds @returns {Stream}
+ */
+function silentWav(seconds) {
+	const header = wavHeader(RATE * seconds);
+	return {
+		length: header.length + RATE * seconds * 2,
+		*chunks(start, end) {
+			if (start < header.length)
+				yield header.subarray(start, Math.min(end + 1, header.length));
+			for (let at = Math.max(start, header.length); at <= end; at += SILENCE.length) {
+				yield SILENCE.subarray(0, Math.min(SILENCE.length, end + 1 - at));
+			}
+		},
+	};
+}
+
+/**
+ * ffmpeg's test pattern, which prints its own time, kept in CACHE for later servers.
+ * @param {number} seconds
+ */
+async function testPattern(seconds) {
+	const file = path.join(CACHE, `test-pattern-${seconds}s.mp4`);
+	if (!fs.existsSync(file)) {
+		fs.mkdirSync(CACHE, { recursive: true });
+		const scratch = `${file}.${process.pid}.mp4`;
+		await promisify(execFile)("ffmpeg", [
+			..."-v error -y -f lavfi -i testsrc2=size=640x360:rate=25 -f lavfi -i anullsrc".split(
+				" ",
+			),
+			..."-c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 8k -movflags +faststart".split(" "),
+			"-t",
+			String(seconds),
+			scratch,
+		]);
+		fs.renameSync(scratch, file);
+	}
+	return fs.readFileSync(file);
 }
 
 const RETITLED = ["", "Renamed Opening Show", "Renamed Closing Show"];
@@ -144,8 +200,91 @@ const transcript = (file) => fs.readFileSync(path.join(transcriptFixtures, file)
  * @property {string} [label] The artwork's text, when the title is too long for it.
  * @property {boolean} [lower] Keep the artwork's text in mixed case.
  * @property {boolean} [missing] The feed answers 404.
- * @property {[title: string, date: string, seconds: number][]} episodes
+ * @property {[title: string, date: string, seconds: number, extra?: EpisodeExtra][]} episodes
  */
+
+/**
+ * @typedef {object} EpisodeExtra
+ * @property {[startTime: number, title: string][]} [chapters] Podcasting 2.0 JSON chapters.
+ * @property {[startTime: number, speaker: string, text: string][]} [transcript] A WebVTT transcript with voices.
+ * @property {boolean} [video] The media is the test pattern.
+ * @property {boolean} [missing] The media answers 404.
+ */
+
+/** @type {[number, string, string][]} */
+const TRANSCRIPT_213 = [
+	[
+		2172,
+		"Maya Lind",
+		"Let's get practical. Someone is listening on a walk right now. What do they actually do?",
+	],
+	[
+		2179,
+		"Ana Ilić",
+		"Pick a place you know by heart. Your childhood home works for most people.",
+	],
+	[
+		2187,
+		"Ana Ilić",
+		"Not a place you visited once. A place you could walk through with your eyes closed.",
+	],
+	[2195, "Maya Lind", "Okay. I've got my grandmother's flat."],
+	[
+		2199,
+		"Ana Ilić",
+		"Perfect. Take the first idea from the book you're reading and put it at the front door.",
+	],
+	[
+		2207,
+		"Ana Ilić",
+		"But make it strange. Give it a smell or a sound. Make it too big for the doorway.",
+	],
+	[2216, "Ana Ilić", "The brain is lazy about ordinary things. It holds on to the absurd."],
+	[2224, "Maya Lind", "So the trick is that you're not memorizing a list."],
+	[2229, "Ana Ilić", "Exactly. You're walking through a place you already know."],
+	[
+		2236,
+		"Ana Ilić",
+		"Each room holds one idea, and the order of the rooms is the order of the argument.",
+	],
+	[2245, "Maya Lind", "And when you need it back?"],
+	[2248, "Ana Ilić", "You take the walk again. Hallway, kitchen, the stairs."],
+	[2256, "Ana Ilić", "People are always surprised how much comes back, and how fast."],
+	[
+		2264,
+		"Maya Lind",
+		"Does it hold up for abstract ideas, though? Arguments, not lists of things?",
+	],
+	[
+		2273,
+		"Ana Ilić",
+		"That's where it gets interesting. You have to turn the abstract into a scene.",
+	],
+	[2281, "Ana Ilić", "'Opportunity cost' becomes a man at your front door holding two keys,"],
+	[2287, "Ana Ilić", "and he will only give you one of them."],
+	[2297, "Maya Lind", "I'm never going to forget that man now."],
+	[2301, "Ana Ilić", "That's the point. The stranger the image, the longer it stays."],
+	[2308, "Ana Ilić", "Then spaced repetition does the rest. You revisit the walk a day later,"],
+	[2314, "Ana Ilić", "then a week later, then a month later."],
+	[2321, "Maya Lind", "Which brings us to the apps. Do you use any?"],
+	[2326, "Ana Ilić", "Honestly? Mostly a pen and the margins of the book."],
+	[2333, "Ana Ilić", "The app can schedule the walk. It can't take it for you."],
+];
+
+/** @param {number} seconds */
+function vttClock(seconds) {
+	const pad = (/** @type {number} */ n) => String(n).padStart(2, "0");
+	return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}.000`;
+}
+
+/** @param {[number, string, string][]} cues */
+function vtt(cues) {
+	const blocks = cues.map(([start, speaker, text], i) => {
+		const end = cues[i + 1]?.[0] ?? start + 7;
+		return `${vttClock(start)} --> ${vttClock(end)}\n<v ${speaker}>${text}`;
+	});
+	return `WEBVTT\n\n${blocks.join("\n\n")}\n`;
+}
 
 // The design prototype's sample library, so captures compare with its screens.
 /** @type {LibraryPodcast[]} */
@@ -161,6 +300,19 @@ const LIBRARY = [
 				"#213 How to remember everything you read: memory palaces, spaced repetition and the surprising science of forgetting, with Dr. Ana Ilić",
 				"2026-10-02",
 				4350,
+				{
+					transcript: TRANSCRIPT_213,
+					chapters: [
+						[0, "Intro"],
+						[220, "Why we forget"],
+						[845, "The forgetting curve"],
+						[1650, "Memory palaces 101"],
+						[2172, "The method of loci in practice"],
+						[2990, "Spaced repetition without the apps"],
+						[3738, "Reading with a pen"],
+						[4180, "Listener question"],
+					],
+				},
 			],
 			["#212 The commonplace book, revisited", "2026-09-25", 3303],
 			["#211 Notes from the field: a week of walking in Kyoto", "2026-09-18", 2507],
@@ -208,6 +360,9 @@ const LIBRARY = [
 				3660,
 			],
 			["Ep. 87: The quiet economics of open source", "2026-09-23", 3420],
+			// Older than every other episode, so the list pages' first screens stay the prototype's.
+			["Ep. 86: Inside the radar room (video)", "2026-07-15", 10, { video: true }],
+			["Ep. 85: When the radio towers went quiet", "2026-07-01", 3480, { missing: true }],
 		],
 	},
 	{
@@ -279,22 +434,41 @@ function libraryFeed({ slug, title, author }) {
 	};
 }
 
-/** @param {LibraryPodcast} podcast @param {number} audioBytes */
-function libraryFeedXml(podcast, audioBytes) {
+/**
+ * Where an episode's media and chapters are served. The test pattern is made on request,
+ * so its enclosure length is 0, as RSS has it for a size not known in advance.
+ * @param {LibraryPodcast} podcast @param {number} n
+ */
+function libraryMedia({ slug, episodes }, n) {
+	const [, , seconds, extra] = episodes[n];
+	const route = `/library/${slug}/${n}`;
+	return {
+		route,
+		...(extra?.video
+			? { file: `${route}.mp4`, type: "video/mp4", length: 0 }
+			: { file: `${route}.wav`, type: "audio/wav", length: silentWav(seconds).length }),
+		chaptersUrl: extra?.chapters && `${base}${route}.json`,
+		transcriptUrl: extra?.transcript && `${base}${route}.vtt`,
+	};
+}
+
+/** @param {LibraryPodcast} podcast */
+function libraryFeedXml(podcast) {
 	const feed = libraryFeed(podcast);
-	const items = podcast.episodes.map(
-		([title, date, seconds], n) => `
+	const items = podcast.episodes.map(([title, date, seconds], n) => {
+		const media = libraryMedia(podcast, n);
+		return `
 		<item>
 			<title>${xml(title)}</title>
 			<guid isPermaLink="false">podnotes-library-${podcast.slug}-${n}</guid>
 			<pubDate>${new Date(`${date}T12:00:00Z`).toUTCString()}</pubDate>
 			<description>${xml(title)}.</description>
-			<enclosure url="${base}/library/${podcast.slug}/${n}.wav" type="audio/wav" length="${audioBytes}"/>
-			<itunes:duration>${seconds}</itunes:duration>
-		</item>`,
-	);
+			<enclosure url="${base}${media.file}" type="${media.type}" length="${media.length}"/>
+			<itunes:duration>${seconds}</itunes:duration>${media.chaptersUrl ? `\n\t\t\t<podcast:chapters url="${media.chaptersUrl}" type="application/json+chapters"/>` : ""}${media.transcriptUrl ? `\n\t\t\t<podcast:transcript url="${media.transcriptUrl}" type="text/vtt"/>` : ""}
+		</item>`;
+	});
 	return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
 	<channel>
 		<title>${xml(feed.title)}</title>
 		<link>${feed.link}</link>
@@ -335,20 +509,24 @@ function libraryManifest() {
 			return {
 				feed,
 				missing: podcast.missing === true,
-				episodes: podcast.episodes.map(([title, date, seconds], n) => ({
-					title,
-					streamUrl: `${base}/library/${podcast.slug}/${n}.wav`,
-					url: feed.url,
-					description: `${title}.`,
-					content: "",
-					podcastName: feed.title,
-					artworkUrl: feed.artworkUrl,
-					episodeDate: `${date}T12:00:00.000Z`,
-					feedUrl: feed.url,
-					itunesTitle: "",
-					duration: seconds,
-					mediaType: "audio",
-				})),
+				episodes: podcast.episodes.map(([title, date, seconds, extra], n) => {
+					const { file, chaptersUrl } = libraryMedia(podcast, n);
+					return {
+						title,
+						streamUrl: `${base}${file}`,
+						url: feed.url,
+						description: `${title}.`,
+						content: "",
+						podcastName: feed.title,
+						artworkUrl: feed.artworkUrl,
+						episodeDate: `${date}T12:00:00.000Z`,
+						feedUrl: feed.url,
+						itunesTitle: "",
+						duration: seconds,
+						...(chaptersUrl && { chaptersUrl }),
+						mediaType: extra?.video ? "video" : "audio",
+					};
+				}),
 			};
 		}),
 		add: libraryFeed(ADD_PODCAST),
@@ -357,7 +535,7 @@ function libraryManifest() {
 
 function serve() {
 	const audio = wav();
-	/** @type {Record<string, [string, Buffer]>} */
+	/** @type {Record<string, [string, Buffer | Stream]>} */
 	const routes = {
 		"/feed.xml": ["application/rss+xml", Buffer.from(feedXml(audio.length, FEED_TITLE, ""))],
 		"/artwork.svg": ["image/svg+xml", Buffer.from(artwork(FEED_TITLE, "#7c3aed"))],
@@ -379,6 +557,9 @@ function serve() {
 	};
 	for (let n = 1; n <= 5; n++) routes[`/t/episode-${n}.wav`] = ["audio/wav", audio];
 	routes["/library.json"] = ["application/json", Buffer.from(JSON.stringify(libraryManifest()))];
+	// Made on their first request, so the server starts without ffmpeg.
+	/** @type {Record<string, () => Promise<Buffer>>} */
+	const videos = {};
 	for (const podcast of [...LIBRARY, ADD_PODCAST]) {
 		routes[`/library/${podcast.slug}.svg`] = [
 			"image/svg+xml",
@@ -387,16 +568,41 @@ function serve() {
 		if (!podcast.missing) {
 			routes[`/library/${podcast.slug}.xml`] = [
 				"application/rss+xml",
-				Buffer.from(libraryFeedXml(podcast, audio.length)),
+				Buffer.from(libraryFeedXml(podcast)),
 			];
 		}
-		podcast.episodes.forEach((_, n) => {
-			routes[`/library/${podcast.slug}/${n}.wav`] = ["audio/wav", audio];
+		podcast.episodes.forEach(([, , seconds, extra], n) => {
+			const { route, file } = libraryMedia(podcast, n);
+			if (extra?.chapters) {
+				const chapters = extra.chapters.map(([startTime, title]) => ({ startTime, title }));
+				routes[`${route}.json`] = [
+					"application/json+chapters",
+					Buffer.from(JSON.stringify({ version: "1.2.0", chapters })),
+				];
+			}
+			if (extra?.transcript) {
+				routes[`${route}.vtt`] = [
+					"text/vtt; charset=utf-8",
+					Buffer.from(vtt(extra.transcript)),
+				];
+			}
+			if (extra?.video) {
+				/** @type {Promise<Buffer> | undefined} */
+				let made;
+				// A failed run is dropped, so the next request tries again.
+				videos[file] = () =>
+					(made ??= testPattern(seconds).catch((error) => {
+						made = undefined;
+						throw error;
+					}));
+			} else if (!extra?.missing) {
+				routes[file] = ["audio/wav", silentWav(seconds)];
+			}
 		});
 	}
 	/** @type {string[]} */
 	const requests = [];
-	const server = http.createServer((request, response) => {
+	const server = http.createServer(async (request, response) => {
 		if (request.method === "POST" && request.url === "/__retitle") {
 			routes["/feed.xml"][1] = Buffer.from(feedXml(audio.length, FEED_TITLE, "", true));
 			response.end();
@@ -414,12 +620,26 @@ function serve() {
 		}
 		const fromPodNotes = request.headers.host?.startsWith(host);
 		if (fromPodNotes) requests.push(`${request.method} ${request.url}`);
-		const route = routes[request.url ?? ""];
+		const url = request.url ?? "";
+		let route = routes[url];
+		if (!route && videos[url]) {
+			try {
+				route = ["video/mp4", await videos[url]()];
+			} catch (error) {
+				response.writeHead(500).end(String(error));
+				return;
+			}
+		}
 		if (!route) {
 			response.writeHead(404).end();
 			return;
 		}
 		const [type, body] = route;
+		/** @param {number} start @param {number} end */
+		const send = (start, end) =>
+			Buffer.isBuffer(body)
+				? response.end(body.subarray(start, end + 1))
+				: pipeline(Readable.from(body.chunks(start, end)), response, () => {});
 		// The player seeks with Range requests, so serve 206 partial content.
 		const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range ?? "");
 		if (!range) {
@@ -427,8 +647,10 @@ function serve() {
 				"Content-Type": type,
 				"Content-Length": body.length,
 				"Accept-Ranges": "bytes",
+				// As a podcast host serves artwork, so covers seen once still show offline.
+				...(type.startsWith("image/") && { "Cache-Control": "max-age=86400" }),
 			});
-			response.end(body);
+			send(0, body.length - 1);
 			return;
 		}
 		const start = range[1] ? Number(range[1]) : body.length - Number(range[2]);
@@ -440,7 +662,7 @@ function serve() {
 			"Content-Range": `bytes ${start}-${end}/${body.length}`,
 			"Accept-Ranges": "bytes",
 		});
-		response.end(body.subarray(start, end + 1));
+		send(start, end);
 	});
 	server.on("error", (error) => {
 		console.error(`The fixture feed cannot listen on 127.0.0.1:${port}: ${error.message}`);

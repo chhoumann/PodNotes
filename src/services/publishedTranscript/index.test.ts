@@ -60,7 +60,6 @@ function repository(items: ParsedEpisodeDocument[], storage = new MemoryStorage(
 		load,
 		resolveUrl: (feed) => (feed.urlSecretId ? SECRET_URL : feed.url),
 		storage,
-		cache: () => ({ enabled: true, ttlHours: 6 }),
 		now: () => Date.UTC(2026, 9, 12),
 	});
 	feeds.setSubscriptions({ Show: show, Hidden: hidden });
@@ -214,12 +213,39 @@ describe("findPublishedTranscript", () => {
 describe("fetchPublishedTranscript", () => {
 	const signal = new AbortController().signal;
 
+	test("preserves the quoted feed and transcript URLs of a public source", async () => {
+		const { feeds } = repository([]);
+		fetchTextMock.mockResolvedValue(
+			"WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n<v Host>Read https://show.test/feed.xml and https://show.test/transcripts/1.vtt for more.\n",
+		);
+
+		expect(
+			await fetchPublishedTranscript(
+				feeds,
+				episodeOf(show),
+				{ key: "Show", reference: "transcripts/1.vtt", format: "vtt" },
+				signal,
+			),
+		).toEqual({
+			kind: "timed",
+			cues: [
+				{
+					start: 0,
+					end: 5,
+					speaker: "Host",
+					text: "Read https://show.test/feed.xml and https://show.test/transcripts/1.vtt for more.",
+				},
+			],
+		});
+	});
+
 	test("fetches the link resolved against the feed, once, within the transcript limits", async () => {
 		const { feeds } = repository([]);
 		fetchTextMock.mockResolvedValue(transcriptFixture("build-your-saas.vtt"));
 
 		const transcript = await fetchPublishedTranscript(
 			feeds,
+			episodeOf(show),
 			{ key: "Show", reference: "transcripts/1.vtt", format: "vtt" },
 			signal,
 		);
@@ -243,6 +269,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Hidden", reference: "1.vtt", format: "vtt" },
 				signal,
 			),
@@ -269,6 +296,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Show", reference: "1.vtt", format: "vtt" },
 				controller.signal,
 			),
@@ -282,6 +310,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Show", reference: "1.json", format: "json" },
 				signal,
 			),
@@ -296,6 +325,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Gone", reference: "1.vtt", format: "vtt" },
 				signal,
 			),
@@ -312,7 +342,7 @@ describe("fetchPublishedTranscript", () => {
 		fetchTextMock.mockResolvedValue(transcriptFixture("build-your-saas.vtt"));
 
 		const source = await findPublishedTranscript(feeds, episodeOf(hidden));
-		await fetchPublishedTranscript(feeds, source!, signal);
+		await fetchPublishedTranscript(feeds, episodeOf(hidden), source!, signal);
 
 		const stored = [...storage.values.values()].map(String).join("\n");
 		expect(stored).toContain('"url":"1.vtt"');

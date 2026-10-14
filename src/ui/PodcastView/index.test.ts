@@ -122,6 +122,33 @@ describe("MainView mobile startup mounting", () => {
 		});
 	});
 
+	it("gives its components the view's own key scope, the one Obsidian hands keys to", async () => {
+		const { view } = createView({ shouldMount: true });
+
+		await openView(view);
+
+		expect(view.scope).not.toBeNull();
+		expect(mountedServices().scope).toBe(view.scope);
+	});
+
+	it("Save as note asks for the feed's transcript without the paid fallback; Transcribe uses the audio", async () => {
+		const { plugin, view } = createView({ shouldMount: true });
+		const transcription = {
+			transcribeCurrentEpisode: vi.fn(async () => {}),
+			transcribeCurrentEpisodeFromAudio: vi.fn(),
+		};
+		Object.assign(plugin, { getTranscriptionService: () => transcription });
+		await openView(view);
+
+		mountedServices().saveTranscriptNote();
+		mountedServices().transcribeFromAudio();
+
+		expect(transcription.transcribeCurrentEpisode).toHaveBeenCalledExactlyOnceWith({
+			paid: false,
+		});
+		expect(transcription.transcribeCurrentEpisodeFromAudio).toHaveBeenCalledExactlyOnceWith();
+	});
+
 	it("mountPodcastView wakes a dormant restored view exactly once", () => {
 		const { contentEl, plugin, view } = createView({ shouldMount: false });
 

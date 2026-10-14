@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { Notice } from "obsidian";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import { formatMinutes } from "./episodeRow";
+	import { formatMinutes, sourceOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
@@ -22,10 +21,7 @@
 	let failedArtworkUrl = $state("");
 	const id = $props.id();
 
-	async function capture() {
-		const note = (await captureTimestamp())?.path.split("/").pop()?.replace(/\.md$/, "");
-		if (note) new Notice(`Timestamp added to ${note}`);
-	}
+	const capture = () => void captureTimestamp();
 </script>
 
 {#snippet progress(kind: "pn-mini-prog" | "pn-mini-track")}
@@ -71,7 +67,7 @@
 			<span class="pn-mini-txt">
 				<span class="pn-mini-t">{episode.title}</span>
 				<span class="pn-mini-s">
-					{episode.podcastName}{left}
+					{sourceOf(episode)}{left}
 				</span>
 			</span>
 		</button>
@@ -107,6 +103,7 @@
 {/if}
 
 <style>
+	/* Its controls sit above Obsidian's status bar, which floats over the view's bottom. */
 	.pn-mini {
 		--pn-btn: 36px;
 		position: relative;
@@ -114,37 +111,22 @@
 		display: flex;
 		align-items: center;
 		gap: var(--size-2-2);
-		height: 56px;
-		padding: 0 var(--size-4-2) 0 var(--size-4-1);
+		height: calc(56px + var(--pn-status-bar));
+		padding: 0 var(--size-4-2) var(--pn-status-bar) var(--size-4-1);
 		background: var(--pn-surface);
 		border-top: 1px solid var(--background-modifier-border);
 	}
 
 	.pn-mini.is-wide {
-		height: 64px;
+		height: calc(64px + var(--pn-status-bar));
 		gap: var(--size-4-3);
-		padding: 0 var(--size-4-4) 0 var(--size-4-3);
+		padding: 0 var(--size-4-4) var(--pn-status-bar) var(--size-4-3);
 	}
 
 	:global(.is-phone) .pn-mini {
 		--pn-btn: 44px;
 		height: 64px;
 		padding: 0 var(--size-4-2);
-	}
-
-	.pn-mini-prog {
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: -1px;
-		height: 2px;
-	}
-
-	.pn-mini-prog span,
-	.pn-mini-track span {
-		display: block;
-		height: 100%;
-		background: var(--interactive-accent);
 	}
 
 	.pn-mini-open {
@@ -169,88 +151,109 @@
 		background: var(--background-modifier-hover);
 	}
 
-	.is-wide .pn-mini-open {
-		flex: 0 1 300px;
+	.pn-mini :global {
+		.pn-mini-prog {
+			position: absolute;
+			left: 0;
+			right: 0;
+			top: -1px;
+			height: 2px;
+		}
+
+		.pn-mini-prog span,
+		.pn-mini-track span {
+			display: block;
+			height: 100%;
+			background: var(--interactive-accent);
+		}
+
+		.pn-mini-cover {
+			flex: none;
+			width: 36px;
+			height: 36px;
+			border-radius: 5px;
+			object-fit: cover;
+		}
+
+		.pn-mini-txt {
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.pn-mini-t {
+			font-weight: var(--font-medium);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.pn-mini-s {
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			font-variant-numeric: tabular-nums;
+		}
+
+		.pn-mini-mid {
+			flex: 1;
+			display: flex;
+			align-items: center;
+			gap: var(--size-4-2);
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			font-variant-numeric: tabular-nums;
+		}
+
+		.pn-mini-track {
+			flex: 1;
+			height: 4px;
+			border-radius: 2px;
+			background: var(--background-modifier-border-hover);
+			overflow: hidden;
+		}
+
+		button.pn-iconbtn {
+			opacity: 1;
+			color: var(--text-normal);
+		}
+
+		button.pn-mini-capture {
+			color: var(--text-accent);
+		}
+
+		.pn-mini-toggle svg {
+			fill: currentColor;
+		}
+
+		.pn-btn-icon {
+			display: flex;
+			--icon-size: var(--icon-s);
+			--icon-stroke: var(--icon-s-stroke-width);
+		}
 	}
 
-	.pn-mini-cover {
-		flex: none;
-		width: 36px;
-		height: 36px;
-		border-radius: 5px;
-		object-fit: cover;
+	.pn-mini.is-wide :global {
+		.pn-mini-open {
+			flex: 0 1 300px;
+		}
+
+		.pn-mini-cover {
+			width: 44px;
+			height: 44px;
+		}
+
+		button.pn-btn {
+			height: 30px;
+		}
 	}
 
-	.is-wide .pn-mini-cover,
-	:global(.is-phone) .pn-mini-cover {
+	:global(.is-phone) .pn-mini :global(.pn-mini-cover) {
 		width: 44px;
 		height: 44px;
-	}
-
-	.pn-filetile {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--background-modifier-hover);
-		color: var(--text-muted);
-	}
-
-	.pn-mini-txt {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.pn-mini-t {
-		font-weight: var(--font-medium);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.pn-mini-s {
-		color: var(--text-muted);
-		font-size: var(--font-ui-smaller);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.pn-mini-mid {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		gap: var(--size-4-2);
-		color: var(--text-muted);
-		font-size: var(--font-ui-smaller);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.pn-mini-track {
-		flex: 1;
-		height: 4px;
-		border-radius: 2px;
-		background: var(--background-modifier-border-hover);
-		overflow: hidden;
-	}
-
-	.pn-mini .pn-iconbtn {
-		opacity: 1;
-		color: var(--text-normal);
-	}
-
-	.pn-mini .pn-mini-capture {
-		color: var(--text-accent);
-	}
-
-	.pn-mini-toggle :global(svg) {
-		fill: currentColor;
-	}
-
-	.is-wide .pn-btn {
-		height: 30px;
 	}
 </style>

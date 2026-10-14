@@ -78,7 +78,6 @@ describe("podNotesURIHandler with saved feeds", () => {
 			load,
 			resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 			storage: new MemoryStorage(),
-			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
 		const subscriptions = { [patron.title]: patron, [testEpisode.podcastName]: publicFeed };
@@ -152,7 +151,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 	test("a link to the playing private episode by its secret URL seeks it without loading the feed", async () => {
 		const { feeds } = follow();
 		load.mockResolvedValue(feedDocument("Patron Show", [first]));
-		await feeds.ensureAll();
+		await feeds.ensureAll({ online: true });
 		const [subscribed] = get(feeds).get("Patron Show")?.episodes ?? [];
 		player.play(subscribed);
 		load.mockClear();
@@ -258,7 +257,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 	async function lostPrivateUrl() {
 		const { feeds, feedUrls, patron } = follow();
 		load.mockResolvedValue(feedDocument("Patron Show", [first]));
-		await feeds.ensureAll();
+		await feeds.ensureAll({ online: true });
 		feedUrls.delete(patron.urlSecretId ?? "");
 		load.mockClear();
 	}
@@ -289,7 +288,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		const { feeds } = follow();
 		load.mockResolvedValue(feedDocument("Patron Show", [first]));
-		await feeds.ensureAll();
+		await feeds.ensureAll({ online: true });
 		load.mockRejectedValue(new Error("offline"));
 
 		await open(privateLink, second.title);
@@ -366,7 +365,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 		async (_, url, title) => {
 			const { feeds } = follow();
 			load.mockResolvedValue(feedDocument(title, [first]));
-			await feeds.ensureAll();
+			await feeds.ensureAll({ online: true });
 			load.mockResolvedValue(feedDocument(title, [second, first]));
 
 			await open(url, second.title);
@@ -384,7 +383,7 @@ describe("podNotesURIHandler with saved feeds", () => {
 			vi.spyOn(console, "error").mockImplementation(() => {});
 			const { feeds } = follow();
 			load.mockResolvedValue(feedDocument(title, [first]));
-			await feeds.ensureAll();
+			await feeds.ensureAll({ online: true });
 			load.mockRejectedValue(new Error("offline"));
 
 			await open(url, first.title);

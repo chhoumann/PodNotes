@@ -166,6 +166,27 @@ export function mapRecord<T, R>(
 	return result;
 }
 
+export function isOption<T extends string>(
+	options: Readonly<Record<T, unknown>>,
+	value: unknown,
+): value is T {
+	return typeof value === "string" && Object.prototype.hasOwnProperty.call(options, value);
+}
+
+export function readOption<T extends string>(
+	record: UnknownRecord,
+	key: string,
+	options: Readonly<Record<T, unknown>>,
+	fallback: T,
+	warnings: Set<string>,
+): T {
+	const value = record[key];
+	if (value === undefined) return fallback;
+	if (isOption(options, value)) return value;
+	warn(warnings, key, "unknown value");
+	return fallback;
+}
+
 export function isPlainObject(value: unknown): value is UnknownRecord {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

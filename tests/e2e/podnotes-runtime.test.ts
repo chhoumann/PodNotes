@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { PluginHandle, SandboxApi } from "obsidian-e2e";
-import { describe, expect, test } from "vitest";
+import { describe, expect, onTestFinished, test } from "vitest";
 import type DownloadedEpisode from "../../src/types/DownloadedEpisode";
 import type { Episode } from "../../src/types/Episode";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
@@ -24,6 +24,9 @@ import {
 	WAIT_OPTS,
 	waitForPodNotesReady,
 } from "./runtime";
+
+import { closeSettings, openPodNotesSettings } from "./journey/actions";
+import { startFixtureServer } from "./journey/fixtures";
 
 const getContext = createPodNotesE2EHarness("podnotes-runtime");
 
@@ -294,7 +297,7 @@ describe("PodNotes runtime", () => {
 		expect(rate).toMatchObject({
 			api: 1.5,
 			audio: 1.5,
-			slider: "1.5",
+			pill: "1.5×",
 		});
 	});
 
@@ -385,6 +388,83 @@ describe("PodNotes runtime", () => {
 		}
 	});
 
+	test("previous track follows the mapping chosen in Settings, with no reload", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const audioPath = await seedAudio(obsidian, sandbox);
+		const episode = createLocalEpisode("E2E Remapped Headset Episode", audioPath);
+		const notePath = sandbox.path("remapped-headset-target.md");
+
+		await seedRuntimeData(plugin, sandbox, episode, {
+			currentEpisode: episode,
+			timestampTemplate: "- {{linktime}}",
+		});
+		await installMediaSessionRecorder(obsidian);
+		try {
+			await waitForPodNotesReady(obsidian);
+			await openMarkdownFile(obsidian, notePath);
+			await setPlayback(obsidian, { currentTime: 95, paused: true });
+			await invokeRecordedMediaSessionAction(obsidian, "previoustrack");
+			await sandbox.waitForContent(
+				"remapped-headset-target.md",
+				(value) => value.includes(expectedTimestampLink("00:01:35", episode, 95)),
+				WAIT_OPTS,
+			);
+
+			await openPodNotesSettings(obsidian);
+			await chooseSettingOption(obsidian, "Previous track", "Back by the skip length");
+			await closeSettings(obsidian);
+			await plugin.waitForData<{ headsetPreviousTrack?: string }>(
+				(data) => data.headsetPreviousTrack === "skipBackward",
+				WAIT_OPTS,
+			);
+			const before = await sandbox.read("remapped-headset-target.md");
+
+			await invokeRecordedMediaSessionAction(obsidian, "previoustrack");
+
+			expect((await getPlaybackState(obsidian)).currentTime).toBe(80);
+			expect(await sandbox.read("remapped-headset-target.md")).toBe(before);
+		} finally {
+			await restoreMediaSessionRecorder(obsidian);
+		}
+	});
+
+	test("Previous chapter keeps the position when its chapter file cannot be loaded", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const server = await startFixtureServer([]);
+		onTestFinished(() => server.stop());
+		const audioPath = await seedAudio(obsidian, sandbox);
+		const episode = {
+			...createLocalEpisode("E2E Unavailable Chapters", audioPath),
+			chaptersUrl: server.feedUrl({
+				title: "Missing chapters",
+				slug: "missing-chapters",
+				artwork: false,
+				episodes: [],
+			}),
+		};
+		await seedRuntimeData(plugin, sandbox, episode, { currentEpisode: episode });
+		await installMediaSessionRecorder(obsidian);
+		try {
+			await waitForPodNotesReady(obsidian);
+			await setPlayback(obsidian, { currentTime: 95, paused: true });
+			await openPodNotesSettings(obsidian);
+			await chooseSettingOption(obsidian, "Previous track", "Previous chapter");
+			await closeSettings(obsidian);
+
+			await obsidian.waitFor(
+				async () => {
+					await invokeRecordedMediaSessionAction(obsidian, "previoustrack");
+					return server.requests().length >= 2;
+				},
+				{ ...WAIT_OPTS, message: "failed chapter request to finish and retry" },
+			);
+
+			expect((await getPlaybackState(obsidian)).currentTime).toBe(95);
+		} finally {
+			await restoreMediaSessionRecorder(obsidian);
+		}
+	});
+
 	test("the Media Session shows the episode, and each of its actions drives the player", async () => {
 		const { obsidian, plugin, sandbox } = getContext();
 		const audioPath = await seedAudio(obsidian, sandbox);
@@ -428,7 +508,7 @@ describe("PodNotes runtime", () => {
 			await invokeRecordedMediaSessionAction(obsidian, "seekbackward", { seekOffset: 99 });
 			expect((await getPlaybackState(obsidian)).currentTime).toBe(100);
 			await invokeRecordedMediaSessionAction(obsidian, "nexttrack");
-			expect((await getPlaybackState(obsidian)).currentTime).toBe(130);
+			expect((await getPlaybackState(obsidian)).currentTime).toBe(115);
 			await invokeRecordedMediaSessionAction(obsidian, "play");
 			await waitForPlaybackState(obsidian, (state) => state.isPlaying);
 
@@ -1072,6 +1152,27 @@ function episodeKey(episode: Episode): string {
 	return `${episode.podcastName}::${episode.title}`;
 }
 
+async function chooseSettingOption(
+	obsidian: Parameters<typeof evalJsonAsync>[0],
+	settingName: string,
+	label: string,
+): Promise<void> {
+	await evalJsonAsync<boolean>(
+		obsidian,
+		`(() => {
+			const row = [...document.querySelectorAll(".modal.mod-settings .setting-item")].find(
+				(candidate) => candidate.querySelector(".setting-item-name")?.textContent === ${jsLiteral(settingName)},
+			);
+			const select = row?.querySelector("select");
+			const option = [...(select?.options ?? [])].find((each) => each.textContent === ${jsLiteral(label)});
+			if (!select || !option) throw new Error(${jsLiteral(`No option ${label} in ${settingName}.`)});
+			select.value = option.value;
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+			return true;
+		})()`,
+	);
+}
+
 async function setPlayback(
 	obsidian: { dev: { evalJson: <T>(code: string) => Promise<T> } },
 	{ currentTime, paused }: { currentTime: number; paused: boolean },
@@ -1117,12 +1218,12 @@ async function getLevels(obsidian: {
 	`);
 }
 
-/** The rate as the API, the media element, the rate label and the rate slider show it. */
+/** The rate as the API, the media element and the full player's rate pill show it. */
 type PlaybackRates = {
 	api: number | null;
 	audio: number | null;
-	label: string | null;
-	slider: string | null;
+	pill: string | null;
+	name: string | null;
 };
 
 async function waitForPlaybackRate(
@@ -1133,19 +1234,18 @@ async function waitForPlaybackRate(
 	expected: number,
 ): Promise<PlaybackRates> {
 	const startedAt = Date.now();
-	let lastRate: PlaybackRates = { api: null, audio: null, label: null, slider: null };
+	let lastRate: PlaybackRates = { api: null, audio: null, pill: null, name: null };
 
 	while (Date.now() - startedAt < WAIT_OPTS.timeoutMs) {
 		lastRate = await obsidian.dev.evalJson<PlaybackRates>(`
 			(() => {
 				const audio = document.querySelector("audio.podnotes-media");
-				const label = document.querySelector(".playbackrate-container span");
-				const slider = document.querySelector(".playbackrate-container input");
+				const pill = document.querySelector(".pn-player button.pn-rate");
 				return {
 					api: app.plugins.plugins.${PLUGIN_ID}?.api?.playbackRate ?? null,
 					audio: audio?.playbackRate ?? null,
-					label: label?.textContent ?? null,
-					slider: slider?.value ?? null,
+					pill: pill?.textContent ?? null,
+					name: pill?.getAttribute("aria-label") ?? null,
 				};
 			})()
 		`);
@@ -1153,8 +1253,8 @@ async function waitForPlaybackRate(
 		if (
 			lastRate.api === expected &&
 			lastRate.audio === expected &&
-			lastRate.label === `${expected}x` &&
-			lastRate.slider === String(expected)
+			lastRate.pill === `${expected}×` &&
+			lastRate.name === `Playback speed ${expected}x`
 		) {
 			return lastRate;
 		}

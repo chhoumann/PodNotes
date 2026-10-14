@@ -110,6 +110,38 @@ describe("PodNotesSettingsTab settings import", () => {
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
 	});
 
+	it("keeps the import and says it saves later when only the final save fails", async () => {
+		const plugin = {
+			settings: structuredClone(DEFAULT_SETTINGS),
+			credentials: { storeValues: vi.fn(() => ({})) },
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+			saveSettingsStrict: vi
+				.fn()
+				.mockResolvedValueOnce(undefined)
+				.mockRejectedValueOnce(new Error("disk full")),
+		} as unknown as PodNotes;
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
+		vi.spyOn(tab, "update").mockImplementation(() => {});
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await (
+			tab as unknown as {
+				applyImportedSettings: (
+					imported: Partial<typeof DEFAULT_SETTINGS>,
+				) => Promise<void>;
+			}
+		).applyImportedSettings({ defaultPlaybackRate: 2.3 });
+
+		expect(plugin.settings.defaultPlaybackRate).toBe(2.3);
+		expect(notice.mock.calls).toEqual([
+			[
+				"Imported PodNotes settings, but could not save them yet. PodNotes saves them once it can.",
+				10000,
+			],
+		]);
+	});
+
 	it("puts back a feed named __proto__ when an import that removed it fails", async () => {
 		const showFeed = {
 			title: "__proto__",
@@ -776,11 +808,12 @@ describe("PodNotesSettingsTab settings import", () => {
 				clock.advance(10_000);
 				clock.runAll();
 				await settled();
-				expect(clock.pending()).toBe(0);
+				expect(clock.pending()).toBe(1);
 
 				readable = true;
 				savedFeeds.update((feeds) => ({ ...feeds, Later: feed("Later") }));
 				const armed = clock.pending();
+				clock.advance(10_000);
 				clock.runAll();
 				await settled();
 
@@ -793,7 +826,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				expect(clock.pending()).toBe(0);
 				expect(notice.mock.calls).toEqual([
 					[
-						"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged and saves nothing until the file can be read again.",
+						"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.",
 						0,
 					],
 					[

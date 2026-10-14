@@ -6,6 +6,7 @@ import {
 	migrateSkipLength,
 	migrateTranscriptSettings,
 } from "src/settingsMigrations";
+import { NEXT_TRACK_ACTIONS, PREVIOUS_TRACK_ACTIONS } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { isPodNotesSecretId, type CredentialKind } from "src/types/Credentials";
 import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
@@ -24,7 +25,7 @@ import {
 	readClampedNumber,
 	readFiniteNumber,
 	readNullableString,
-	readPositiveNumber,
+	readOption,
 	readString,
 	type UnknownRecord,
 	warn,
@@ -87,6 +88,20 @@ export function decodeSettings(
 			"skipForwardLength",
 			warnings,
 		),
+		headsetPreviousTrack: readOption(
+			root,
+			"headsetPreviousTrack",
+			PREVIOUS_TRACK_ACTIONS,
+			DEFAULT_SETTINGS.headsetPreviousTrack,
+			warnings,
+		),
+		headsetNextTrack: readOption(
+			root,
+			"headsetNextTrack",
+			NEXT_TRACK_ACTIONS,
+			DEFAULT_SETTINGS.headsetNextTrack,
+			warnings,
+		),
 		playlists: decodePlaylists(root.playlists, warnings),
 		queue: decodePlaylist(root.queue, DEFAULT_SETTINGS.queue, warnings, "queue"),
 		autoQueue: readBoolean(root, "autoQueue", DEFAULT_SETTINGS.autoQueue, warnings),
@@ -114,7 +129,6 @@ export function decodeSettings(
 		openAISecretId: decodeSecretId(root, "openAISecretId", warnings),
 		deepgramSecretId: decodeSecretId(root, "deepgramSecretId", warnings),
 		transcript: decodeTranscript(root.transcript, warnings),
-		feedCache: decodeFeedCache(root.feedCache, warnings),
 	};
 }
 
@@ -228,27 +242,6 @@ function decodeTranscript(value: unknown, warnings: Set<string>): IPodNotesSetti
 			...copySafeObject(diarization),
 			...migrated.diarization,
 		},
-	};
-}
-
-function decodeFeedCache(value: unknown, warnings: Set<string>): IPodNotesSettings["feedCache"] {
-	const record = optionalRecord(value, warnings, "feedCache");
-	return {
-		...copySafeObject(record),
-		enabled: readBoolean(
-			record,
-			"enabled",
-			DEFAULT_SETTINGS.feedCache.enabled,
-			warnings,
-			"feedCache",
-		),
-		ttlHours: readPositiveNumber(
-			record,
-			"ttlHours",
-			DEFAULT_SETTINGS.feedCache.ttlHours,
-			warnings,
-			"feedCache",
-		),
 	};
 }
 

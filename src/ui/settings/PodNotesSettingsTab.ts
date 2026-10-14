@@ -7,12 +7,13 @@ import {
 	PluginSettingTab,
 	SecretComponent,
 	Setting,
-	type SettingDefinitionItem,
+	type SettingDefinitionGroup,
+	type SettingDefinitionRender,
+	type TextAreaComponent,
+	type TextComponent,
 } from "obsidian";
 import type PodNotes from "../../main";
 import { pickFile } from "../pickFile";
-import PlaylistManager from "./PlaylistManager.svelte";
-import { mount, unmount } from "svelte";
 import {
 	DownloadPathTemplateEngine,
 	FeedFilePathTemplateEngine,
@@ -30,12 +31,14 @@ import {
 	sanitizeEpisodeListLimit,
 	savedFeeds,
 } from "src/store/index";
-import { DEFAULT_EPISODE_LIST_LIMIT, MAX_EPISODE_LIST_LIMIT } from "src/constants";
+import { DEFAULT_SETTINGS, MAX_EPISODE_LIST_LIMIT } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { NEXT_TRACK_ACTIONS, PREVIOUS_TRACK_ACTIONS } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
+import { isOption } from "src/persistence/codecUtils";
 import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import { privateFeedAddresses, protectPrivateFeeds } from "src/services/privateFeeds";
 import {
@@ -44,9 +47,9 @@ import {
 	parseImport,
 	serializeSettings,
 } from "src/settingsTransfer";
-import { DEFAULT_SPEAKER_TEMPLATE, type DiarizationProviderId } from "src/services/diarization";
 import type { CredentialKind, CredentialValues } from "src/types/Credentials";
 import { observePersistedStoreChanges } from "src/store/persistence";
+import { PLAYBACK_RATES } from "src/utility/playbackRate";
 
 type SecretReferenceKey = "openAISecretId" | "deepgramSecretId";
 type SettingsControl =
@@ -54,6 +57,7 @@ type SettingsControl =
 	| HTMLInputElement
 	| HTMLSelectElement
 	| HTMLTextAreaElement;
+type Diarization = IPodNotesSettings["transcript"]["diarization"];
 
 interface SecretReferenceSaveResult {
 	persistedId: string;
@@ -63,36 +67,31 @@ interface SecretReferenceSaveResult {
 
 type ImportMutationResult = "failed" | "applied" | "complete";
 
-const SETTINGS_SEARCH_ALIASES = [
-	"Playlists",
-	"Keep a queue",
-	"Latest episodes per podcast",
-	"Default playback rate",
-	"Default volume",
-	"Skip backward length",
-	"Skip forward length",
-	"Capture timestamp format",
-	"Timestamp offset",
-	"Note creation file path",
-	"Note creation template",
-	"Feed note file path",
-	"Feed note template",
-	"Episode download path",
-	"Cache podcast feeds",
-	"Cache duration",
-	"Clear cached feeds",
-	"Import OPML",
-	"Export OPML",
-	"Import preferences",
-	"Export preferences",
-	"OpenAI API key",
-	"Transcript file path",
-	"Transcript template",
-	"Speaker diarization",
-	"Diarization provider",
-	"Deepgram API key",
-	"Speaker label format",
-];
+interface TextField {
+	read(): string;
+	write(value: string): void;
+	placeholder?: string;
+	kind?: "number" | "area" | "template";
+	min?: number;
+	max?: number;
+	preview?(value: string, setting: Setting): void;
+}
+
+const DIARIZATION_PROVIDERS = {
+	openai: "OpenAI (gpt-4o-transcribe-diarize)",
+	deepgram: "Deepgram",
+};
+
+const TYPING_SAVE_DELAY_MS = 500;
+
+/** Search finds rows, not section headings. */
+const HEADSET_ALIASES = ["headset", "lock screen", "media keys"];
+
+const group = (heading: string, items: SettingDefinitionRender[]): SettingDefinitionGroup => ({
+	type: "group",
+	heading,
+	items,
+});
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -199,13 +198,6 @@ const CREDENTIAL_KIND_BY_REFERENCE: Record<SecretReferenceKey, CredentialKind> =
 	deepgramSecretId: "deepgram",
 };
 
-/**
- * Stack a Setting's control beneath its name, full width — the layout the
- * template/path text areas need. Obsidian's Setting has no built-in vertical
- * variant and the plugin ships no stylesheet (styles are injected per Svelte
- * component), so this sets the few inline styles in one place instead of the
- * seven hand-rolled copies this replaced.
- */
 function stackSettingVertically(setting: Setting): void {
 	setting.settingEl.setCssStyles({
 		flexDirection: "column",
@@ -214,20 +206,9 @@ function stackSettingVertically(setting: Setting): void {
 	});
 }
 
-/**
- * Render `markdown` into `el` as a small live preview, replacing any prior
- * content. Shared by the path/template demo fields that echo what the configured
- * template resolves to.
- */
-function renderMarkdownPreview(app: App, markdown: string, el: HTMLElement): void {
-	el.empty();
-	void MarkdownRenderer.render(app, markdown, el, "", new Component());
-}
-
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
-	private playlistManager: Record<string, unknown> | null = null;
 	private settingsMutationTail: Promise<void> = Promise.resolve();
 	private credentialSaveGenerations: Record<SecretReferenceKey, number> = {
 		openAISecretId: 0,
@@ -235,532 +216,540 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	};
 	private settingsInteractionLockCount = 0;
 	private settingsControlDisabledStates = new Map<SettingsControl, boolean>();
+	private readonly drafts = new Set<() => void>();
+	private readonly follows = new Set<() => void>();
+	private includeApiKeys = false;
 
 	constructor(app: App, plugin: PodNotes) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
-	override getSettingDefinitions(): SettingDefinitionItem[] {
+	override getSettingDefinitions(): SettingDefinitionGroup[] {
+		const diarization = () => this.plugin.settings.transcript.diarization;
+		const pathPreview =
+			(engine: (template: string, episode: Episode) => string, suffix = "") =>
+			(value: string, setting: Setting) =>
+				setting.setDesc(engine(value, this.demoEpisode()) + suffix);
+
 		return [
-			{
-				name: "Podcast preferences",
-				aliases: SETTINGS_SEARCH_ALIASES,
-				render: (setting) => {
-					const { settingEl } = setting;
-					settingEl.empty();
-					settingEl.classList.remove("setting-item");
-					this.renderSettings(settingEl);
-					return () => this.unmountSettingsComponents();
+			group("Playback", [
+				this.textRow("Skip back (s)", this.seconds("skipBackwardLength")),
+				this.textRow("Skip forward (s)", this.seconds("skipForwardLength")),
+				this.speedRow(),
+				{
+					name: "Queue episodes I switch away from",
+					desc: "When an episode ends, the next queued one plays.",
+					render: (setting) => {
+						let stop = () => {};
+						setting.addToggle((toggle) => {
+							stop = this.follow(setting, ({ autoQueue }) =>
+								toggle.setValue(autoQueue),
+							);
+							toggle.onChange((on) => this.plugin.setAutoQueue(on));
+						});
+						return stop;
+					},
 				},
-			},
+			]),
+			group("Headset and lock screen", [
+				{
+					...this.dropdownRow(
+						"Previous track",
+						PREVIOUS_TRACK_ACTIONS,
+						() => this.plugin.settings.headsetPreviousTrack,
+						(action) => {
+							this.plugin.settings.headsetPreviousTrack = action;
+						},
+					),
+					aliases: HEADSET_ALIASES,
+				},
+				{
+					...this.dropdownRow(
+						"Next track",
+						NEXT_TRACK_ACTIONS,
+						() => this.plugin.settings.headsetNextTrack,
+						(action) => {
+							this.plugin.settings.headsetNextTrack = action;
+						},
+					),
+					aliases: HEADSET_ALIASES,
+				},
+			]),
+			group("Notes", [
+				this.textRow("Timestamp template", {
+					...this.text((settings) => settings.timestamp, "template"),
+					kind: "area",
+					preview: (value, setting) => this.previewTimestamp(value, setting),
+				}),
+				this.textRow(
+					"Timestamp offset (s)",
+					{
+						kind: "number",
+						read: () => `${this.plugin.settings.timestamp.offset}`,
+						write: (value) => {
+							this.plugin.settings.timestamp.offset = Math.max(
+								0,
+								Number.parseInt(value, 10) || 0,
+							);
+						},
+					},
+					"Captures this many seconds earlier.",
+				),
+				this.textRow("Episode note path", {
+					...this.text((settings) => settings.note, "path"),
+					preview: pathPreview(FilePathTemplateEngine),
+				}),
+				this.textRow("Episode note template", {
+					...this.text((settings) => settings.note, "template"),
+					kind: "template",
+				}),
+				this.textRow("Podcast note path", {
+					...this.text((settings) => settings.feedNote, "path"),
+					preview: (value, setting) =>
+						setting.setDesc(FeedFilePathTemplateEngine(value, this.demoFeed())),
+				}),
+				this.textRow("Podcast note template", {
+					...this.text((settings) => settings.feedNote, "template"),
+					kind: "template",
+				}),
+			]),
+			group("Transcripts", [
+				this.secretRow("OpenAI API key", "openAISecretId"),
+				this.textRow("Transcript path", {
+					...this.text((settings) => settings.transcript, "path"),
+					preview: pathPreview(FilePathTemplateEngine),
+				}),
+				this.textRow("Transcript template", {
+					...this.text((settings) => settings.transcript, "template"),
+					kind: "template",
+				}),
+				{
+					name: "Speaker diarization",
+					desc: "Label transcript turns by speaker.",
+					render: (setting) =>
+						void setting.addToggle((toggle) =>
+							toggle.setValue(diarization().enabled).onChange((on) => {
+								diarization().enabled = on;
+								this.changed();
+							}),
+						),
+				},
+				this.whenDiarizing(
+					this.dropdownRow(
+						"Diarization provider",
+						DIARIZATION_PROVIDERS,
+						() => diarization().provider,
+						(provider) => {
+							diarization().provider = provider;
+						},
+						"Deepgram needs its own API key and keeps speaker labels consistent across long episodes.",
+					),
+					({ enabled }) => enabled,
+				),
+				this.whenDiarizing(
+					this.secretRow("Deepgram API key", "deepgramSecretId"),
+					({ enabled, provider }) => enabled && provider === "deepgram",
+				),
+				this.whenDiarizing(
+					this.textRow(
+						"Speaker label format",
+						this.text((settings) => settings.transcript.diarization, "speakerTemplate"),
+						"{{speaker}} is the speaker's label.",
+					),
+					({ enabled }) => enabled,
+				),
+			]),
+			group("Downloads", [
+				this.textRow("Download path", {
+					...this.text((settings) => settings.download, "path"),
+					preview: (value, setting) => {
+						pathPreview(DownloadPathTemplateEngine, ".mp3")(value, setting);
+						setting.setErrorMessage(
+							/\{\{title(:[^}]*)?\}\}/i.test(value)
+								? null
+								: "Without {{title}}, episodes share one file and downloads overwrite each other. Add it, for example PodNotes/{{podcast}}/{{title}}.",
+						);
+					},
+				}),
+			]),
+			group("Library", [
+				this.importRow("Import OPML", () =>
+					pickFile(".opml", importOPML, {
+						tooLargeMessage: "That file is too large to be an OPML file.",
+					}),
+				),
+				this.exportRow("Export OPML", "PodNotes_Export.opml", (fileName) => {
+					const feeds = Object.values(get(savedFeeds));
+					if (feeds.length === 0) new Notice("No podcasts to export.");
+					else void exportOPML(this.app, feeds, fileName);
+				}),
+				this.textRow("Latest episodes per podcast", {
+					kind: "number",
+					min: 1,
+					max: MAX_EPISODE_LIST_LIMIT,
+					read: () =>
+						`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`,
+					write: (value) => {
+						if (value.trim() === "" || !Number.isFinite(Number(value))) return;
+						const limit = sanitizeEpisodeListLimit(value);
+						this.plugin.settings.episodeListLimit = limit;
+						episodeListLimit.set(limit);
+					},
+				}),
+			]),
+			group("Import and export", [
+				this.importRow("Import settings", () =>
+					pickFile(".json", (contents) => this.handleSettingsImport(contents)),
+				),
+				{
+					name: "Include API keys",
+					desc: "Adds this device's OpenAI and Deepgram keys to the file as plain text. The file is in your vault, so it may sync to other devices and other plugins can read it.",
+					render: (setting) => {
+						this.includeApiKeys = false;
+						setting.addToggle((toggle) =>
+							toggle.setValue(false).onChange((on) => {
+								this.includeApiKeys = on;
+							}),
+						);
+					},
+				},
+				this.exportRow(
+					"Export settings",
+					"PodNotes_Settings.json",
+					(fileName) => void this.handleSettingsExport(fileName, this.includeApiKeys),
+				),
+			]),
 		];
 	}
 
-	private renderSettings(containerEl: HTMLElement): void {
-		this.unmountSettingsComponents();
-		containerEl.empty();
-
-		const settingsContainer = containerEl.createDiv();
-		settingsContainer.classList.add("settings-container");
-
-		new Setting(settingsContainer)
-			.setName("Playlists")
-			.setHeading()
-			.setDesc("Add playlists to gather podcast episodes.");
-
-		const playlistManagerContainer = settingsContainer.createDiv();
-		this.playlistManager = mount(PlaylistManager, {
-			target: playlistManagerContainer,
-		});
-
-		this.addQueueSettings(settingsContainer);
-		this.addEpisodeListSettings(settingsContainer);
-		this.addDefaultPlaybackRateSetting(settingsContainer);
-		this.addDefaultVolumeSetting(settingsContainer);
-		this.addSkipLengthSettings(settingsContainer);
-		this.addNoteSettings(settingsContainer);
-		this.addFeedNoteSettings(settingsContainer);
-		this.addDownloadSettings(settingsContainer);
-		this.addPerformanceSettings(settingsContainer);
-		this.addImportExportSettings(settingsContainer);
-		this.addTranscriptSettings(settingsContainer);
-	}
-
 	override hide(): void {
-		this.unmountSettingsComponents();
+		this.completeDrafts();
+		for (const stop of this.follows) stop();
+		super.hide();
 	}
 
-	private unmountSettingsComponents(): void {
-		if (this.playlistManager) {
-			void unmount(this.playlistManager);
-			this.playlistManager = null;
-		}
+	private changed(): void {
+		plugin.set(this.plugin);
+		void this.plugin.saveSettings();
 	}
 
-	private addQueueSettings(container: HTMLElement): void {
-		new Setting(container)
-			.setName("Keep a queue of episodes you switch away from")
-			.setDesc(
-				"When on, the episode you switch away from is kept at the top of the queue and playback automatically continues with the next queued episode when one ends. Turn this off to stop the queue from filling and advancing on its own — you can still add episodes to the queue manually.",
-			)
-			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.settings.autoQueue).onChange(async (value) => {
-					this.plugin.settings.autoQueue = value;
-					await this.plugin.saveSettings();
-					// Re-emit the plugin store so an open player/grid recomputes
-					// the Queue tile/list visibility immediately (issue #108).
-					plugin.set(this.plugin);
-				}),
-			);
+	private completeDrafts(): void {
+		for (const complete of this.drafts) complete();
 	}
 
-	private addEpisodeListSettings(container: HTMLElement): void {
-		new Setting(container)
-			.setName("Latest episodes per podcast")
-			.setDesc(
-				`How many of each podcast's most recent episodes appear in the Latest Episodes list, and how far back its search reaches. Raise this to find older episodes (1-${MAX_EPISODE_LIST_LIMIT}; default ${DEFAULT_EPISODE_LIST_LIMIT}).`,
-			)
-			.addText((textComponent) => {
-				textComponent.inputEl.type = "number";
-				textComponent.inputEl.min = "1";
-				textComponent.inputEl.max = `${MAX_EPISODE_LIST_LIMIT}`;
-				textComponent
-					.setValue(`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`)
-					.setPlaceholder(`${DEFAULT_EPISODE_LIST_LIMIT}`)
-					.onChange(async (value) => {
-						// Don't commit while the field is empty or mid-edit (e.g. cleared,
-						// or a lone "-"): sanitizing "" would silently overwrite the saved
-						// limit with the default. Wait for a parseable number, and skip
-						// redundant saves so typing doesn't churn data.json each keystroke.
-						const trimmed = value.trim();
-						if (trimmed === "" || !Number.isFinite(Number(trimmed))) return;
-						const sanitized = sanitizeEpisodeListLimit(trimmed);
-						if (sanitized === this.plugin.settings.episodeListLimit) return;
-						this.plugin.settings.episodeListLimit = sanitized;
-						episodeListLimit.set(sanitized);
-						await this.plugin.saveSettings();
-					});
-				// Reflect the clamped/sanitized value back once the user finishes
-				// editing, so an out-of-range or empty entry doesn't linger in the box.
-				textComponent.inputEl.addEventListener("blur", () => {
-					textComponent.setValue(
-						`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`,
+	private bindDraft(
+		input: HTMLInputElement | HTMLTextAreaElement,
+		apply: (value: string) => boolean,
+		show: () => void,
+	): () => void {
+		let { win, doc } = input;
+		// The main window's timer: a popout's stops when it closes.
+		let pendingSave: number | undefined;
+		const save = () => {
+			window.clearTimeout(pendingSave);
+			pendingSave = undefined;
+			this.changed();
+		};
+		const hidden = () => doc.visibilityState === "hidden" && complete();
+		const complete = () => {
+			if (!this.drafts.delete(complete)) return;
+			win.removeEventListener("pagehide", complete);
+			doc.removeEventListener("visibilitychange", hidden);
+			if (pendingSave !== undefined) save();
+			show();
+		};
+		input.addEventListener("input", () => {
+			if (apply(input.value) || pendingSave !== undefined) {
+				window.clearTimeout(pendingSave);
+				pendingSave = window.setTimeout(save, TYPING_SAVE_DELAY_MS);
+			}
+			if (this.drafts.has(complete)) return;
+			({ win, doc } = input);
+			this.drafts.add(complete);
+			win.addEventListener("pagehide", complete);
+			doc.addEventListener("visibilitychange", hidden);
+		});
+		input.addEventListener("change", complete);
+		input.addEventListener("blur", complete);
+		return complete;
+	}
+
+	private follow(setting: Setting, show: (settings: IPodNotesSettings) => void): () => void {
+		const { win } = setting.settingEl;
+		const unsubscribe = plugin.subscribe(() => show(this.plugin.settings));
+		const stop = () => {
+			if (!this.follows.delete(stop)) return;
+			win.removeEventListener("pagehide", stop);
+			unsubscribe();
+		};
+		this.follows.add(stop);
+		win.addEventListener("pagehide", stop);
+		return stop;
+	}
+
+	private text<K extends string>(
+		section: (settings: IPodNotesSettings) => Record<K, string>,
+		key: K,
+	): TextField {
+		return {
+			read: () => section(this.plugin.settings)[key],
+			write: (value) => {
+				section(this.plugin.settings)[key] = value;
+			},
+			placeholder: section(DEFAULT_SETTINGS)[key],
+		};
+	}
+
+	private seconds(key: "skipBackwardLength" | "skipForwardLength"): TextField {
+		return {
+			kind: "number",
+			read: () => `${this.plugin.settings[key]}`,
+			write: (value) => {
+				const seconds = Number.parseInt(value, 10);
+				if (seconds > 0) this.plugin.settings[key] = seconds;
+			},
+		};
+	}
+
+	private textRow(name: string, field: TextField, desc?: string): SettingDefinitionRender {
+		return {
+			name,
+			desc,
+			render: (setting) => {
+				let complete = () => {};
+				let stopPreview = () => {};
+				const bind = (control: TextComponent | TextAreaComponent) => {
+					control
+						.setValue(field.read())
+						.setPlaceholder(field.placeholder ?? "")
+						.onChange((value) => field.preview?.(value, setting));
+					complete = this.bindDraft(
+						control.inputEl,
+						(value) => {
+							const before = field.read();
+							field.write(value);
+							return field.read() !== before;
+						},
+						() => {
+							control.setValue(field.read());
+							field.preview?.(field.read(), setting);
+						},
 					);
-				});
-			});
+					const preview = field.preview;
+					if (preview) {
+						stopPreview = this.follow(setting, () =>
+							preview(control.inputEl.value, setting),
+						);
+					}
+				};
+				if (field.kind === "area" || field.kind === "template") {
+					stackSettingVertically(setting);
+					setting.addTextArea((area) => {
+						area.inputEl.setCssStyles({
+							width: "100%",
+							height: field.kind === "template" ? "25vh" : "",
+						});
+						bind(area);
+					});
+				} else {
+					if (!field.kind) stackSettingVertically(setting);
+					setting.addText((text) => {
+						if (field.kind === "number") {
+							text.inputEl.type = "number";
+							text.inputEl.min = field.min?.toString() ?? "";
+							text.inputEl.max = field.max?.toString() ?? "";
+						} else text.inputEl.setCssStyles({ width: "100%" });
+						bind(text);
+						// Desktop fires no change on Enter.
+						text.inputEl.addEventListener("keydown", (event) => {
+							if (event.key === "Enter" && !event.isComposing) complete();
+						});
+					});
+				}
+				return () => {
+					complete();
+					stopPreview();
+				};
+			},
+		};
 	}
 
-	private addDefaultPlaybackRateSetting(container: HTMLElement): void {
-		new Setting(container).setName("Default Playback Rate").addSlider((slider) =>
-			slider
-				.setLimits(0.5, 4, 0.1)
-				.setValue(this.plugin.settings.defaultPlaybackRate)
-				.onChange((value) => {
-					this.plugin.settings.defaultPlaybackRate = value;
-					void this.plugin.saveSettings();
+	private dropdownRow<T extends string>(
+		name: string,
+		options: Readonly<Record<T, string>>,
+		read: () => T,
+		write: (value: T) => void,
+		desc?: string,
+	): SettingDefinitionRender {
+		return {
+			name,
+			desc,
+			render: (setting) =>
+				void setting.addDropdown((dropdown) =>
+					dropdown
+						.addOptions(options)
+						.setValue(read())
+						.onChange((value) => {
+							if (!isOption(options, value)) return;
+							write(value);
+							this.changed();
+						}),
+				),
+		};
+	}
+
+	private speedRow(): SettingDefinitionRender {
+		return {
+			name: "Default speed",
+			render: (setting) =>
+				void setting.addDropdown((dropdown) => {
+					const saved = this.plugin.settings.defaultPlaybackRate;
+					const rates = PLAYBACK_RATES.includes(saved)
+						? PLAYBACK_RATES
+						: [...PLAYBACK_RATES, saved].sort((a, b) => a - b);
+					for (const rate of rates) dropdown.addOption(`${rate}`, `${rate}×`);
+					dropdown.setValue(`${saved}`).onChange((value) => {
+						this.plugin.settings.defaultPlaybackRate = Number(value);
+						this.changed();
+					});
 				}),
+		};
+	}
+
+	private whenDiarizing(
+		row: SettingDefinitionRender,
+		applies: (diarization: Diarization) => boolean,
+	): SettingDefinitionRender {
+		return {
+			...row,
+			render: (setting, settingGroup) => {
+				const end = row.render(setting, settingGroup);
+				const stop = this.follow(setting, ({ transcript }) => {
+					const off = !applies(transcript.diarization);
+					setting.setDisabled(off || this.settingsInteractionLockCount > 0);
+					// Obsidian dims only disabled action rows.
+					setting.settingEl.setCssStyles({ opacity: off ? "0.5" : "" });
+				});
+				return () => {
+					stop();
+					if (typeof end === "function") end();
+				};
+			},
+		};
+	}
+
+	private secretRow(name: string, key: SecretReferenceKey): SettingDefinitionRender {
+		return {
+			name,
+			render: (setting) => {
+				const describe = () =>
+					setting.setDesc(
+						this.plugin.credentials.status(
+							this.plugin.settings,
+							CREDENTIAL_KIND_BY_REFERENCE[key],
+						) === "missing"
+							? "The selected secret is not available on this device. Select an existing secret or create one."
+							: "",
+					);
+				describe();
+				setting.addComponent((element) => {
+					const secret = new SecretComponent(this.app, element).setValue(
+						this.plugin.settings[key],
+					);
+					secret.onChange((value) =>
+						this.handleSecretSelection(key, value, secret, describe),
+					);
+					return secret;
+				});
+			},
+		};
+	}
+
+	private importRow(name: string, pick: () => void): SettingDefinitionRender {
+		return {
+			name,
+			render: (setting) =>
+				void setting.addButton((button) => button.setButtonText("Import").onClick(pick)),
+		};
+	}
+
+	private exportRow(
+		name: string,
+		defaultName: string,
+		run: (fileName: string) => void,
+	): SettingDefinitionRender {
+		const extension = defaultName.slice(defaultName.lastIndexOf("."));
+		return {
+			name,
+			render: (setting) => {
+				let fileName = defaultName;
+				setting
+					.addText((text) =>
+						text
+							.setPlaceholder(defaultName)
+							.setValue(fileName)
+							.onChange((value) => {
+								fileName = value;
+							}),
+					)
+					.addButton((button) =>
+						button.setButtonText("Export").onClick(() => {
+							const chosen = fileName.trim() || defaultName;
+							run(chosen.endsWith(extension) ? chosen : `${chosen}${extension}`);
+						}),
+					);
+			},
+		};
+	}
+
+	private previewTimestamp(template: string, setting: Setting): void {
+		if (!this.plugin.api.podcast) {
+			setting.setDesc("Play an episode to preview the timestamp.");
+			return;
+		}
+		setting.descEl.empty();
+		void MarkdownRenderer.render(
+			this.app,
+			TimestampTemplateEngine(template),
+			setting.descEl,
+			"",
+			new Component(),
 		);
 	}
 
-	private addDefaultVolumeSetting(container: HTMLElement): void {
-		new Setting(container)
-			.setName("Default Volume")
-			.setDesc("Set the default playback volume.")
-			.addSlider((slider) =>
-				slider
-					.setLimits(0, 1, 0.05)
-					.setValue(this.plugin.settings.defaultVolume)
-					.onChange((value) => this.plugin.player.setVolume(value)),
-			);
+	private demoEpisode(): Episode {
+		for (const { episodes } of get(this.plugin.feeds).values()) {
+			if (episodes[0]) return episodes[0];
+		}
+		return {
+			title: "demo",
+			podcastName: "demo",
+			description: "demo",
+			content: "demo",
+			url: "demo",
+			artworkUrl: "demo",
+			streamUrl: "demo",
+			episodeDate: new Date(),
+			feedUrl: "demo",
+		};
 	}
 
-	private addSkipLengthSettings(container: HTMLElement): void {
-		new Setting(container).setName("Skip backward length (s)").addText((textComponent) => {
-			textComponent.inputEl.type = "number";
-			textComponent
-				.setValue(`${this.plugin.settings.skipBackwardLength}`)
-				.onChange((value) => {
-					// Ignore empty/invalid input instead of persisting NaN, which
-					// would corrupt the playback position when skipping (PB-02/ST-01).
-					const parsed = Number.parseInt(value, 10);
-					if (!Number.isFinite(parsed) || parsed <= 0) return;
-					this.plugin.settings.skipBackwardLength = parsed;
-					void this.plugin.saveSettings();
-				})
-				.setPlaceholder("seconds");
-		});
-
-		new Setting(container).setName("Skip forward length (s)").addText((textComponent) => {
-			textComponent.inputEl.type = "number";
-			textComponent
-				.setValue(`${this.plugin.settings.skipForwardLength}`)
-				.onChange((value) => {
-					const parsed = Number.parseInt(value, 10);
-					if (!Number.isFinite(parsed) || parsed <= 0) return;
-					this.plugin.settings.skipForwardLength = parsed;
-					void this.plugin.saveSettings();
-				})
-				.setPlaceholder("seconds");
-		});
-	}
-
-	private addNoteSettings(settingsContainer: HTMLDivElement) {
-		const container = settingsContainer.createDiv();
-
-		new Setting(container).setName("Episode notes").setHeading();
-
-		const timestampSetting = new Setting(container)
-			.setName("Capture timestamp format")
-			.setHeading()
-			.addTextArea((textArea) => {
-				textArea.setValue(this.plugin.settings.timestamp.template);
-				textArea.setPlaceholder("- {{linktime}} ");
-				textArea.onChange((value) => {
-					this.plugin.settings.timestamp.template = value;
-					void this.plugin.saveSettings();
-					updateTimestampDemo(value);
-				});
-				textArea.inputEl.setCssStyles({ width: "100%" });
-			});
-
-		stackSettingVertically(timestampSetting);
-
-		const timestampFormatDemoEl = container.createDiv();
-
-		const updateTimestampDemo = (value: string) => {
-			// Without a loaded episode there is no time to render; show a hint
-			// instead of leaving the preview blank so the control isn't mistaken
-			// for broken (TS-04).
-			if (!this.plugin.api.podcast) {
-				timestampFormatDemoEl.setText("Play an episode to preview the timestamp format.");
-				return;
+	private demoFeed(): PodcastFeed {
+		return (
+			Object.values(get(savedFeeds))[0] ?? {
+				title: "Demo Podcast",
+				url: "https://example.com/feed.xml",
+				artworkUrl: "https://example.com/artwork.jpg",
+				description: "A demo podcast feed.",
+				link: "https://example.com",
+				author: "Demo Author",
 			}
-
-			const demoVal = TimestampTemplateEngine(value);
-			renderMarkdownPreview(this.app, demoVal, timestampFormatDemoEl);
-		};
-
-		new Setting(container)
-			.setName("Timestamp offset (s)")
-			.setDesc(
-				"Subtract this many seconds when capturing a timestamp to compensate for reaction time.",
-			)
-			.addText((textComponent) => {
-				textComponent.inputEl.type = "number";
-				textComponent
-					.setValue(`${this.plugin.settings.timestamp.offset}`)
-					.onChange((value) => {
-						const parsedValue = Number.parseInt(value, 10);
-						this.plugin.settings.timestamp.offset = Number.isNaN(parsedValue)
-							? 0
-							: Math.max(0, parsedValue);
-						void this.plugin.saveSettings();
-						updateTimestampDemo(this.plugin.settings.timestamp.template);
-					})
-					.setPlaceholder("e.g. 5");
-			});
-
-		updateTimestampDemo(this.plugin.settings.timestamp.template);
-
-		const randomEpisode = getRandomEpisode();
-
-		const noteCreationFilePathSetting = new Setting(container)
-			.setName("Note creation file path")
-			.setHeading()
-			.addText((textComponent) => {
-				textComponent.setValue(this.plugin.settings.note.path);
-				textComponent.setPlaceholder("inputs/podcasts/{{podcast}} - {{title}}.md");
-				textComponent.onChange((value) => {
-					this.plugin.settings.note.path = value;
-					void this.plugin.saveSettings();
-					// An open episode list looks its notes up at the new path.
-					plugin.set(this.plugin);
-
-					const demoVal = FilePathTemplateEngine(value, randomEpisode);
-					renderMarkdownPreview(this.app, demoVal, noteCreationFilePathDemoEl);
-				});
-				textComponent.inputEl.setCssStyles({ width: "100%" });
-			});
-
-		stackSettingVertically(noteCreationFilePathSetting);
-
-		const noteCreationFilePathDemoEl = container.createDiv();
-
-		const noteCreationSetting = new Setting(container)
-			.setName("Note creation template")
-			.setHeading()
-			.addTextArea((textArea) => {
-				textArea.setValue(this.plugin.settings.note.template);
-				textArea.onChange((value) => {
-					this.plugin.settings.note.template = value;
-					void this.plugin.saveSettings();
-				});
-
-				textArea.inputEl.setCssStyles({ width: "100%", height: "25vh" });
-				// A Bases-friendly hint mirroring the shipped default: structured
-				// frontmatter properties Bases can query, with the raw title in the
-				// body where YAML rules don't apply.
-				textArea.setPlaceholder(
-					"---" +
-						"\ntype: podcastEpisode" +
-						'\npodcast: "{{podcastlink}}"' +
-						'\nurl: "{{url}}"' +
-						"\ndate: {{date:YYYY-MM-DD}}" +
-						"\ntags:" +
-						"\n  - podcastEpisode" +
-						"\n---" +
-						"\n# {{title}}" +
-						"\n\n![]({{artwork}})" +
-						"\n\n{{description}}",
-				);
-			});
-
-		stackSettingVertically(noteCreationSetting);
-	}
-
-	private addFeedNoteSettings(settingsContainer: HTMLDivElement) {
-		const container = settingsContainer.createDiv();
-
-		new Setting(container).setName("Feed notes").setHeading();
-
-		const desc = container.createEl("p", {
-			text:
-				"Create a note for a whole podcast (the feed), not a single episode. " +
-				'Run the "Create podcast feed note" command to pick a saved podcast. ' +
-				"Available tags: {{title}}, {{podcast}}, {{url}} (website), " +
-				"{{feedurl}} (RSS), {{artwork}}, {{author}}, {{description}}, {{date}}.",
-		});
-		desc.setCssStyles({
-			fontSize: "var(--font-ui-smaller)",
-			color: "var(--text-muted)",
-		});
-
-		const randomFeed = getRandomFeed();
-
-		const feedNotePathSetting = new Setting(container)
-			.setName("Feed note file path")
-			.setHeading()
-			.addText((textComponent) => {
-				textComponent.setValue(this.plugin.settings.feedNote.path);
-				textComponent.setPlaceholder("PodNotes/Podcasts/{{podcast}}.md");
-				textComponent.onChange((value) => {
-					this.plugin.settings.feedNote.path = value;
-					void this.plugin.saveSettings();
-					renderFeedPathDemo(value);
-				});
-				textComponent.inputEl.setCssStyles({ width: "100%" });
-			});
-
-		stackSettingVertically(feedNotePathSetting);
-
-		const feedNotePathDemoEl = container.createDiv();
-
-		const renderFeedPathDemo = (value: string) => {
-			const demoVal = FeedFilePathTemplateEngine(value, randomFeed);
-			renderMarkdownPreview(this.app, demoVal, feedNotePathDemoEl);
-		};
-
-		renderFeedPathDemo(this.plugin.settings.feedNote.path);
-
-		const feedNoteTemplateSetting = new Setting(container)
-			.setName("Feed note template")
-			.setHeading()
-			.addTextArea((textArea) => {
-				textArea.setValue(this.plugin.settings.feedNote.template);
-				textArea.onChange((value) => {
-					this.plugin.settings.feedNote.template = value;
-					void this.plugin.saveSettings();
-				});
-				textArea.inputEl.setCssStyles({ width: "100%", height: "25vh" });
-			});
-
-		stackSettingVertically(feedNoteTemplateSetting);
-	}
-
-	private addDownloadSettings(container: HTMLDivElement) {
-		new Setting(container).setName("Downloads").setHeading();
-
-		const randomEpisode = getRandomEpisode();
-
-		const downloadPathSetting = new Setting(container)
-			.setName("Episode download path")
-			.setDesc(
-				"The path where the episode will be downloaded to. Avoid setting an extension, as it will be added automatically.",
-			)
-			.setHeading()
-			.addText((textComponent) => {
-				textComponent.setValue(this.plugin.settings.download.path);
-				textComponent.setPlaceholder("inputs/podcasts/{{podcast}} - {{title}}");
-				textComponent.onChange((value) => {
-					this.plugin.settings.download.path = value;
-					void this.plugin.saveSettings();
-					refreshDownloadPathHints(value);
-				});
-				textComponent.inputEl.setCssStyles({ width: "100%" });
-			});
-
-		stackSettingVertically(downloadPathSetting);
-
-		const downloadFilePathDemoEl = container.createDiv();
-		const downloadFilePathWarningEl = container.createDiv();
-		downloadFilePathWarningEl.setCssStyles({ color: "var(--text-error)" });
-
-		// A download path without a per-episode token ({{title}}) resolves every
-		// episode to the same file, so downloads overwrite each other or fail; an
-		// empty path resolves to ".mp3" at the vault root (#183). Warn inline.
-		const refreshDownloadPathHints = (value: string) => {
-			const demoVal = DownloadPathTemplateEngine(value, randomEpisode);
-			renderMarkdownPreview(this.app, `${demoVal}.mp3`, downloadFilePathDemoEl);
-
-			// Match only the forms DownloadPathTemplateEngine actually resolves —
-			// {{title}} or {{title:...}}. A looser test (e.g. \s* after {{, or \b)
-			// would wrongly stay silent for "{{ title }}" / "{{title-ish}}", which the
-			// engine leaves literal so every episode still collides.
-			downloadFilePathWarningEl.toggle(!/\{\{title(:[^}]*)?\}\}/i.test(value));
-			downloadFilePathWarningEl.setText(
-				"⚠ This path has no {{title}}, so multiple episodes can resolve to the same file — downloads will overwrite each other or fail. Add {{title}}, e.g. PodNotes/{{podcast}}/{{title}}.",
-			);
-		};
-
-		refreshDownloadPathHints(this.plugin.settings.download.path);
-	}
-
-	private addPerformanceSettings(container: HTMLDivElement) {
-		new Setting(container).setName("Performance").setHeading();
-
-		new Setting(container)
-			.setName("Cache podcast feeds")
-			.setDesc("Store recently downloaded feeds locally for faster startup.")
-			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.settings.feedCache.enabled).onChange(async (value) => {
-					this.plugin.settings.feedCache.enabled = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-
-		new Setting(container)
-			.setName("Cache duration (hours)")
-			.setDesc("Choose how long to reuse cached feeds before fetching again.")
-			.addSlider((slider) =>
-				slider
-					.setLimits(1, 24, 1)
-					.setValue(this.plugin.settings.feedCache.ttlHours)
-					.onChange(async (value) => {
-						this.plugin.settings.feedCache.ttlHours = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(container)
-			.setName("Clear cached feeds")
-			.setDesc("Remove stored feed data. PodNotes will refetch feeds as needed.")
-			.addButton((button) =>
-				button.setButtonText("Clear cache").onClick(() => {
-					this.plugin.feeds.clear();
-					new Notice("Cleared cached podcast feeds.");
-				}),
-			);
-	}
-
-	private addImportExportSettings(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName("Import/Export").setHeading();
-
-		new Setting(containerEl)
-			.setName("Import OPML")
-			.setDesc("Import podcasts from an OPML file.")
-			.addButton((button) =>
-				button.setButtonText("Import").onClick(() => {
-					pickFile(".opml", importOPML, {
-						tooLargeMessage: "That file is too large to be an OPML file.",
-					});
-				}),
-			);
-
-		let exportFilePath = "PodNotes_Export.opml";
-
-		new Setting(containerEl)
-			.setName("Export OPML")
-			.setDesc("Export saved podcast feeds to an OPML file.")
-			.addText((text) =>
-				text
-					.setPlaceholder("Export file name")
-					.setValue(exportFilePath)
-					.onChange((value) => {
-						exportFilePath = value;
-					}),
-			)
-			.addButton((button) =>
-				button.setButtonText("Export").onClick(() => {
-					const feeds = Object.values(get(savedFeeds));
-					if (feeds.length === 0) {
-						new Notice("No podcasts to export.");
-						return;
-					}
-					void exportOPML(
-						this.app,
-						feeds,
-						exportFilePath.endsWith(".opml")
-							? exportFilePath
-							: `${exportFilePath}.opml`,
-					);
-				}),
-			);
-
-		this.addSettingsTransferControls(containerEl);
-	}
-
-	private addSettingsTransferControls(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName("Preferences & templates").setHeading();
-
-		new Setting(containerEl)
-			.setName("Import settings")
-			.setDesc(
-				"Import PodNotes preferences, templates, feeds, playlists, and playback progress from a settings file.",
-			)
-			.addButton((button) =>
-				button.setButtonText("Import").onClick(() => {
-					pickFile(".json", (contents) => this.handleSettingsImport(contents));
-				}),
-			);
-
-		let exportFileName = "PodNotes_Settings.json";
-		let includeSecret = false;
-
-		new Setting(containerEl)
-			.setName("Include API keys")
-			.setDesc(
-				"When enabled, a separate plaintext secrets payload is added for the OpenAI and Deepgram keys available on this device. The file is stored in your vault, so it may sync to other devices and be read by other plugins.",
-			)
-			.addToggle((toggle) =>
-				toggle.setValue(includeSecret).onChange((value) => {
-					includeSecret = value;
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Export settings")
-			.setDesc(
-				"Export PodNotes preferences, templates, feeds, playlists, and playback progress.",
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("Export file name")
-					.setValue(exportFileName)
-					.onChange((value) => {
-						exportFileName = value;
-					}),
-			)
-			.addButton((button) =>
-				button.setButtonText("Export").onClick(() => {
-					const name = exportFileName.trim() || "PodNotes_Settings.json";
-					const fileName = name.endsWith(".json") ? name : `${name}.json`;
-					void this.handleSettingsExport(fileName, includeSecret);
-				}),
-			);
+		);
 	}
 
 	private async handleSettingsExport(fileName: string, includeSecret: boolean): Promise<void> {
+		this.completeDrafts();
 		try {
 			const secrets = includeSecret
 				? this.plugin.credentials.exportValues(this.plugin.settings, {
@@ -837,6 +826,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		imported: Partial<IPodNotesSettings>,
 		secrets: CredentialValues = {},
 	): Promise<void> {
+		this.completeDrafts();
 		const unlockSettingsInteractions = this.lockSettingsInteractions();
 		try {
 			const result = await this.enqueueSettingsMutation(() =>
@@ -925,9 +915,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		}
 		concurrentStoreChanges.dispose();
 
-		// Re-hydrate the live stores so the running UI and the persistence
-		// bindings reflect the import. Keys without a store (templates, paths,
-		// skip lengths, feed cache) are applied via `merged` above.
 		savedFeeds.set(merged.savedFeeds);
 		playlists.set(merged.playlists);
 		favorites.set(merged.favorites);
@@ -945,7 +932,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			await this.plugin.saveSettingsStrict();
 		} catch (error) {
 			new Notice(
-				"Imported PodNotes settings, but could not finish saving normalized live state. Change any setting to retry.",
+				"Imported PodNotes settings, but could not save them yet. PodNotes saves them once it can.",
 				10000,
 			);
 			console.error("PodNotes: failed to persist normalized imported settings", error);
@@ -991,6 +978,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				control.disabled = wasDisabled;
 			}
 			this.settingsControlDisabledStates.clear();
+			plugin.set(this.plugin);
 		};
 	}
 
@@ -1082,205 +1070,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		secret.setValue(result.persistedId);
 		onLatestSettled();
 	}
-
-	private addTranscriptSettings(container: HTMLDivElement) {
-		new Setting(container).setName("Transcripts").setHeading();
-
-		const randomEpisode = getRandomEpisode();
-
-		const openAISetting = new Setting(container).setName("OpenAI API key");
-		const updateOpenAIDescription = () => {
-			openAISetting.setDesc(
-				this.plugin.credentials.status(this.plugin.settings, "openai") === "missing"
-					? "The selected secret is not available on this device. Select an existing secret or create one."
-					: "Select an existing Obsidian secret or create one for transcription.",
-			);
-		};
-		updateOpenAIDescription();
-		openAISetting.addComponent((element) => {
-			const secret = new SecretComponent(this.app, element).setValue(
-				this.plugin.settings.openAISecretId,
-			);
-			secret.onChange(async (value) => {
-				await this.handleSecretSelection(
-					"openAISecretId",
-					value,
-					secret,
-					updateOpenAIDescription,
-				);
-			});
-			return secret;
-		});
-
-		new Setting(container)
-			.setName("Transcript file path")
-			.setDesc("The path where transcripts will be saved. Use {{}} for dynamic values.")
-			.addText((text) => {
-				text.setPlaceholder("transcripts/{{podcast}}/{{title}}.md")
-					.setValue(this.plugin.settings.transcript.path)
-					.onChange(async (value) => {
-						this.plugin.settings.transcript.path = value;
-						await this.plugin.saveSettings();
-						updateTranscriptPathDemo(value);
-					});
-			});
-
-		const transcriptPathDemoEl = container.createDiv();
-
-		const updateTranscriptPathDemo = (value: string) => {
-			const demoVal = FilePathTemplateEngine(value, randomEpisode);
-			transcriptPathDemoEl.empty();
-			transcriptPathDemoEl.createEl("p", { text: `Example: ${demoVal}` });
-		};
-
-		updateTranscriptPathDemo(this.plugin.settings.transcript.path);
-
-		const transcriptTemplateSetting = new Setting(container)
-			.setName("Transcript template")
-			.setDesc("The template for the transcript file content.")
-			.setHeading()
-			.addTextArea((text) => {
-				text.setPlaceholder(
-					"# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\nURL: {{url}}\n\n## Description\n\n{{description}}\n\n## Transcript\n\n{{transcript}}",
-				)
-					.setValue(this.plugin.settings.transcript.template)
-					.onChange(async (value) => {
-						this.plugin.settings.transcript.template = value;
-						await this.plugin.saveSettings();
-					});
-				text.inputEl.setCssStyles({ width: "100%", height: "25vh" });
-			});
-
-		stackSettingVertically(transcriptTemplateSetting);
-
-		this.addDiarizationSettings(container);
-	}
-
-	/** Opt-in speaker diarization controls (issue #168). */
-	private addDiarizationSettings(container: HTMLElement): void {
-		const diarizationContainer = container.createDiv();
-		const diarization = this.plugin.settings.transcript.diarization;
-		let updateVisibility = () => {};
-
-		new Setting(diarizationContainer)
-			.setName("Speaker diarization")
-			.setDesc(
-				"Label transcript segments by speaker. Routes the episode audio to a diarization-capable provider instead of plain Whisper.",
-			)
-			.addToggle((toggle) =>
-				toggle.setValue(diarization.enabled).onChange(async (value) => {
-					this.plugin.settings.transcript.diarization.enabled = value;
-					await this.plugin.saveSettings();
-					updateVisibility();
-				}),
-			);
-
-		const providerSetting = new Setting(diarizationContainer)
-			.setName("Diarization provider")
-			.setDesc(
-				"OpenAI reuses your OpenAI API key above (long episodes are chunked, so speaker labels can reset across chunks). Deepgram needs its own key and keeps speaker labels consistent across the whole episode.",
-			)
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("openai", "OpenAI (gpt-4o-transcribe-diarize)")
-					.addOption("deepgram", "Deepgram")
-					.setValue(diarization.provider)
-					.onChange(async (value) => {
-						this.plugin.settings.transcript.diarization.provider =
-							value as DiarizationProviderId;
-						await this.plugin.saveSettings();
-						updateVisibility();
-					}),
-			);
-
-		const deepgramSetting = new Setting(diarizationContainer).setName("Deepgram API key");
-		const updateDeepgramDescription = () => {
-			deepgramSetting.setDesc(
-				this.plugin.credentials.status(this.plugin.settings, "deepgram") === "missing"
-					? "The selected secret is not available on this device. Select an existing secret or create one."
-					: "Select an Obsidian secret for Deepgram diarization, or create one at deepgram.com.",
-			);
-		};
-		updateDeepgramDescription();
-		deepgramSetting.addComponent((element) => {
-			const secret = new SecretComponent(this.app, element).setValue(
-				this.plugin.settings.deepgramSecretId,
-			);
-			secret.onChange(async (value) => {
-				await this.handleSecretSelection(
-					"deepgramSecretId",
-					value,
-					secret,
-					updateDeepgramDescription,
-				);
-			});
-			return secret;
-		});
-
-		const speakerSetting = new Setting(diarizationContainer)
-			.setName("Speaker label format")
-			.setDesc(
-				"Prefix added before each speaker's turn. Use {{speaker}} for the speaker label (OpenAI labels speakers A, B, …; Deepgram labels them 1, 2, …).",
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder(DEFAULT_SPEAKER_TEMPLATE)
-					.setValue(diarization.speakerTemplate)
-					.onChange(async (value) => {
-						this.plugin.settings.transcript.diarization.speakerTemplate = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		updateVisibility = () => {
-			// Read through the plugin: a sync replaces the settings it holds.
-			const { enabled, provider } = this.plugin.settings.transcript.diarization;
-			providerSetting.settingEl.toggle(enabled);
-			deepgramSetting.settingEl.toggle(enabled && provider === "deepgram");
-			speakerSetting.settingEl.toggle(enabled);
-		};
-		updateVisibility();
-	}
-}
-
-function getRandomEpisode(): Episode {
-	const fallbackDemoObj = {
-		description: "demo",
-		content: "demo",
-		podcastName: "demo",
-		title: "demo",
-		url: "demo",
-		artworkUrl: "demo",
-		streamUrl: "demo",
-		episodeDate: new Date(),
-		feedUrl: "demo",
-	};
-
-	const feedEpisodes = Array.from(get(get(plugin).feeds).values(), ({ episodes }) => episodes);
-	if (!feedEpisodes.length) return fallbackDemoObj;
-
-	const randomFeed = feedEpisodes[Math.floor(Math.random() * feedEpisodes.length)];
-	if (!randomFeed.length) return fallbackDemoObj;
-
-	const randomEpisode = randomFeed[Math.floor(Math.random() * randomFeed.length)];
-
-	return randomEpisode;
-}
-
-function getRandomFeed(): PodcastFeed {
-	const fallbackDemoFeed: PodcastFeed = {
-		title: "Demo Podcast",
-		url: "https://example.com/feed.xml",
-		artworkUrl: "https://example.com/artwork.jpg",
-		description: "A demo podcast feed.",
-		link: "https://example.com",
-		author: "Demo Author",
-	};
-
-	const feeds = Object.values(get(savedFeeds));
-	if (!feeds.length) return fallbackDemoFeed;
-
-	return feeds[Math.floor(Math.random() * feeds.length)];
 }
 
 class ConfirmModal extends Modal {

@@ -8,7 +8,8 @@ export type FixtureTranscript = Readonly<{
 	path: string;
 	type: string;
 	absolute?: boolean;
-	body?: string;
+	/** Or made from the server's port, for a body that quotes the server's own addresses. */
+	body?: string | ((port: number) => string);
 }>;
 
 export type FixtureEpisode = Readonly<{
@@ -40,6 +41,11 @@ export type FixtureServer = Readonly<{
 	holdFeed(feed: FixtureFeed): () => Promise<void>;
 	/** Answers the feed with a server error until the returned restore runs. */
 	failFeed(feed: FixtureFeed): () => void;
+	/**
+	 * Drops every request without an answer, as a network that is gone does, until the
+	 * returned function runs. `requests` still lists what was sent.
+	 */
+	disconnect(): () => void;
 	/** Serves `episode` under `title` from now on, with its GUID and media unchanged. */
 	retitle(feed: FixtureFeed, episode: FixtureEpisode, title: string): void;
 	requests(): readonly string[];
@@ -60,9 +66,14 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		{ ready: Promise<void>; release: () => void; done: Promise<void>; complete: () => void }
 	>();
 	const failing = new Set<string>();
+	let disconnected = false;
 	const server = http.createServer((request, response) => {
 		const path = request.url ?? "";
 		requests.push(path);
+		if (disconnected) {
+			request.socket.destroy();
+			return;
+		}
 		if (failing.has(path)) {
 			response.writeHead(503).end();
 			return;
@@ -129,11 +140,11 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 				const body = wav(episode.seconds, 300 + 40 * index + 7 * feed.slug.length);
 				routes.set(mediaPath(feed, episode), { type: "audio/wav", body });
 			}
-			for (const transcript of episode.transcripts ?? []) {
-				if (transcript.body === undefined) continue;
-				routes.set(`/${feed.slug}/${transcript.path}`, {
-					type: transcript.type,
-					body: Buffer.from(transcript.body),
+			for (const { path, type, body } of episode.transcripts ?? []) {
+				if (body === undefined) continue;
+				routes.set(`/${feed.slug}/${path}`, {
+					type,
+					body: Buffer.from(typeof body === "function" ? body(port) : body),
 				});
 			}
 		});
@@ -173,6 +184,12 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 			const path = feedPath(feed);
 			failing.add(path);
 			return () => failing.delete(path);
+		},
+		disconnect: () => {
+			disconnected = true;
+			return () => {
+				disconnected = false;
+			};
 		},
 		retitle: (feed, episode, title) => {
 			serveFeed({

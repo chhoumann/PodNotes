@@ -26,7 +26,6 @@ const originalPlatform = { ...Platform };
 
 afterEach(() => {
 	Object.assign(Platform, originalPlatform);
-	vi.useRealTimers();
 });
 
 function setupPlugin({
@@ -111,60 +110,34 @@ describe("PodNotes.activateView", () => {
 });
 
 describe("PodNotes.onLayoutReady", () => {
-	function setupLayoutPlugin({
-		existingLeaves = [] as ReturnType<typeof makeLeaf>[],
-		isMobile = false,
-		layoutReady = true,
-		rightLeaf = makeLeaf() as ReturnType<typeof makeLeaf> | null,
-	} = {}) {
+	type Runtime = "desktop" | "mobile";
+
+	async function load(
+		runtime: Runtime,
+		disk?: unknown,
+		{ existingLeaves = [] as ReturnType<typeof makeLeaf>[], rightLeaf = makeLeaf() } = {},
+	) {
+		if (runtime === "mobile") {
+			Object.assign(Platform, {
+				isDesktop: false,
+				isDesktopApp: false,
+				isMobile: true,
+				isMobileApp: true,
+				isPhone: true,
+			});
+		}
 		const workspace = {
-			layoutReady,
+			layoutReady: true,
 			getLeavesOfType: vi.fn().mockReturnValue(existingLeaves),
 			getRightLeaf: vi.fn().mockReturnValue(rightLeaf),
 			detachLeavesOfType: vi.fn(),
 			revealLeaf: vi.fn().mockResolvedValue(undefined),
 		};
-
 		const plugin = Object.create(PodNotes.prototype) as PodNotes;
-		Object.assign(plugin as unknown as Record<string, unknown>, {
-			isUnloaded: false,
-			layoutReadyAttempts: 0,
-			layoutReadyRetry: null,
-			maxLayoutReadyAttempts: 10,
-			storeUnsubscribers: [],
-			views: new Set(),
-		});
-		(plugin as unknown as { app: { isMobile: boolean; workspace: typeof workspace } }).app = {
-			isMobile,
-			workspace,
-		};
-
-		return { plugin, workspace, rightLeaf };
-	}
-
-	it("creates the startup view on desktop when no leaf exists", () => {
-		const { plugin, workspace, rightLeaf } = setupLayoutPlugin();
-
-		plugin.onLayoutReady();
-
-		expect(workspace.getRightLeaf).toHaveBeenCalledWith(false);
-		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({
-			type: VIEW_TYPE,
-		});
-	});
-
-	async function startOnMobile(disk?: unknown, rightLeaf = makeLeaf()) {
-		Object.assign(Platform, {
-			isDesktop: false,
-			isDesktopApp: false,
-			isMobile: true,
-			isMobileApp: true,
-			isPhone: true,
-		});
-		const started = setupLayoutPlugin({ rightLeaf });
-		Object.assign(started.plugin, {
+		Object.assign(plugin, {
 			app: {
-				...started.plugin.app,
+				isMobile: runtime === "mobile",
+				workspace,
 				secretStorage: new obsidian.SecretStorage(),
 				vault: {
 					adapter: {
@@ -174,9 +147,12 @@ describe("PodNotes.onLayoutReady", () => {
 				},
 			},
 			manifest: { dir: ".obsidian/plugins/podnotes" },
+			isUnloaded: false,
 			isReady: true,
+			storeUnsubscribers: [],
+			views: new Set(),
 			// onload leaves the view dormant in the mobile app.
-			podcastViewMountEnabled: false,
+			podcastViewMountEnabled: runtime === "desktop",
 			settings: structuredClone(DEFAULT_SETTINGS),
 			persistenceUnknownFields: {},
 			loadData: vi.fn(async () => structuredClone(disk) ?? null),
@@ -184,110 +160,110 @@ describe("PodNotes.onLayoutReady", () => {
 				disk = structuredClone(data);
 			}),
 		});
-		attachDataFileWriter(started.plugin);
-		await started.plugin.loadSettings();
-		started.plugin.onLayoutReady();
-		await tick();
-		return { ...started, disk: () => disk };
+		attachDataFileWriter(plugin);
+		await plugin.loadSettings();
+		return { plugin, workspace, rightLeaf, disk: () => disk };
 	}
 
-	it("opens the view once when the mobile app enables PodNotes for the first time", async () => {
-		const { workspace, rightLeaf, plugin } = await startOnMobile();
+	async function start(...args: Parameters<typeof load>) {
+		const loaded = await load(...args);
+		loaded.plugin.onLayoutReady();
+		await tick();
+		return loaded;
+	}
 
-		expect(rightLeaf?.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE, active: true });
-		expect(workspace.revealLeaf).toHaveBeenCalledWith(rightLeaf);
+	describe.each(["desktop", "mobile"] as const)("in the %s app", (runtime) => {
+		it("opens the view once in the right sidebar when PodNotes is enabled for the first time", async () => {
+			const { workspace, rightLeaf } = await start(runtime);
+
+			expect(workspace.getRightLeaf).toHaveBeenCalledWith(false);
+			expect(rightLeaf.setViewState.mock.calls).toEqual([
+				[{ type: VIEW_TYPE, active: true }],
+			]);
+			expect(workspace.revealLeaf.mock.calls).toEqual([[rightLeaf]]);
+		});
+
+		it("opens the view on the first start only, not on the next start from the data it saved", async () => {
+			const first = await start(runtime);
+			expect(first.rightLeaf.setViewState).toHaveBeenCalledWith({
+				type: VIEW_TYPE,
+				active: true,
+			});
+
+			const next = await start(runtime, first.disk());
+
+			expect(next.rightLeaf.setViewState).not.toHaveBeenCalled();
+			expect(next.workspace.revealLeaf).not.toHaveBeenCalled();
+		});
+
+		it("keeps PodNotes closed on a later start with no view open", async () => {
+			const { workspace, rightLeaf } = await start(
+				runtime,
+				encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+			);
+
+			expect(workspace.getRightLeaf).not.toHaveBeenCalled();
+			expect(rightLeaf.setViewState).not.toHaveBeenCalled();
+			expect(workspace.revealLeaf).not.toHaveBeenCalled();
+			expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
+		});
+
+		it("reveals a view the layout already holds on the first start instead of opening a second", async () => {
+			const restored = makeLeaf();
+			const { workspace, rightLeaf } = await start(runtime, undefined, {
+				existingLeaves: [restored],
+			});
+
+			expect(workspace.getRightLeaf).not.toHaveBeenCalled();
+			expect(rightLeaf.setViewState).not.toHaveBeenCalled();
+			expect(restored.setViewState).not.toHaveBeenCalled();
+			expect(workspace.revealLeaf.mock.calls).toEqual([[restored]]);
+		});
+
+		it("logs a failure to open the view on the first start", async () => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			onTestFinished(() => error.mockRestore());
+			const rightLeaf = makeLeaf();
+			rightLeaf.setViewState.mockRejectedValue(new Error("no leaf"));
+
+			await start(runtime, undefined, { rightLeaf });
+
+			await vi.waitFor(() =>
+				expect(error).toHaveBeenCalledWith(
+					"PodNotes: failed to initialize startup view",
+					expect.any(Error),
+				),
+			);
+		});
+
+		it("opens nothing once unloaded before the layout is ready, and leaves the view's leaves in place", async () => {
+			const { plugin, workspace, rightLeaf } = await load(runtime);
+
+			plugin.onunload();
+			plugin.onLayoutReady();
+			await tick();
+
+			expect(rightLeaf.setViewState).not.toHaveBeenCalled();
+			expect(workspace.revealLeaf).not.toHaveBeenCalled();
+			// Detaching would move a leaf the user placed back to its default spot on
+			// the next load. Obsidian cleans up an unloaded view's leaves itself.
+			expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
+		});
+	});
+
+	it("mounts the dormant view when the mobile app opens it on the first start", async () => {
+		const { plugin } = await start("mobile");
+
 		expect(plugin.shouldMountPodcastView()).toBe(true);
 	});
 
-	it("opens the view on the first mobile start only, not on the next start from the data it saved", async () => {
-		const first = await startOnMobile();
-		expect(first.rightLeaf?.setViewState).toHaveBeenCalledWith({
-			type: VIEW_TYPE,
-			active: true,
-		});
-
-		const next = await startOnMobile(first.disk());
-
-		expect(next.rightLeaf?.setViewState).not.toHaveBeenCalled();
-		expect(next.workspace.revealLeaf).not.toHaveBeenCalled();
-		expect(next.plugin.shouldMountPodcastView()).toBe(false);
-	});
-
-	it("logs a failure to open the view on the first mobile start", async () => {
-		const error = vi.spyOn(console, "error").mockImplementation(() => {});
-		onTestFinished(() => error.mockRestore());
-		const rightLeaf = makeLeaf();
-		rightLeaf.setViewState.mockRejectedValue(new Error("no leaf"));
-
-		await startOnMobile(undefined, rightLeaf);
-
-		await vi.waitFor(() =>
-			expect(error).toHaveBeenCalledWith(
-				"PodNotes: failed to initialize startup view",
-				expect.any(Error),
-			),
-		);
-	});
-
-	it("keeps PodNotes closed on a later mobile start", async () => {
-		const { workspace, rightLeaf, plugin } = await startOnMobile(
+	it("keeps the view dormant on a later mobile start", async () => {
+		const { plugin } = await start(
+			"mobile",
 			encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
 		);
 
-		expect(rightLeaf?.setViewState).not.toHaveBeenCalled();
-		expect(workspace.revealLeaf).not.toHaveBeenCalled();
 		expect(plugin.shouldMountPodcastView()).toBe(false);
-	});
-
-	it("does not auto-create the startup view in the mobile app", () => {
-		Object.assign(Platform, {
-			isDesktop: false,
-			isDesktopApp: false,
-			isIosApp: true,
-			isMobile: true,
-			isMobileApp: true,
-			isPhone: true,
-		});
-		const { plugin, workspace, rightLeaf } = setupLayoutPlugin();
-
-		plugin.onLayoutReady();
-
-		expect(workspace.getLeavesOfType).not.toHaveBeenCalled();
-		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
-		expect(rightLeaf?.setViewState).not.toHaveBeenCalled();
-		expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
-	});
-
-	it("does not auto-create the startup view when desktop Obsidian emulates mobile", () => {
-		const { plugin, workspace, rightLeaf } = setupLayoutPlugin({
-			isMobile: true,
-		});
-
-		plugin.onLayoutReady();
-
-		expect(workspace.getLeavesOfType).not.toHaveBeenCalled();
-		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
-		expect(rightLeaf?.setViewState).not.toHaveBeenCalled();
-		expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
-	});
-
-	it("cancels a pending startup retry on unload", () => {
-		vi.useFakeTimers();
-		const { plugin, workspace } = setupLayoutPlugin({ layoutReady: false });
-
-		plugin.onLayoutReady();
-		expect(vi.getTimerCount()).toBe(1);
-
-		plugin.onunload();
-		expect(vi.getTimerCount()).toBe(0);
-
-		vi.advanceTimersByTime(100);
-
-		expect(workspace.getRightLeaf).not.toHaveBeenCalled();
-		// onunload must NOT detach the view's leaves: doing so resets a leaf the
-		// user moved back to its default location on the next load. Obsidian cleans
-		// up an unloaded view's leaves itself (Obsidian plugin guideline).
-		expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
 	});
 });
 
@@ -346,7 +322,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerObsidianProtocolHandler: vi.fn(),
 			registerEvent: vi.fn(),
 			registerDomEvent: vi.fn(),
-			writeRefusal: null,
+			closing: null,
 			writeInFlight: null,
 			storeUnsubscribers: [],
 			views: new Set(),
@@ -361,6 +337,7 @@ describe("PodNotes onload wiring (#55)", () => {
 				},
 				vault: {
 					on: vi.fn(() => ({ e: { offref: () => {} } })),
+					getAbstractFileByPath: () => null,
 					adapter: {
 						exists: vi.fn(async () => true),
 						read: vi.fn(async () =>
@@ -371,6 +348,7 @@ describe("PodNotes onload wiring (#55)", () => {
 				workspace: {
 					onLayoutReady: vi.fn(),
 					on: vi.fn(() => ({})),
+					offref: vi.fn(),
 					getLeavesOfType: vi.fn(() => []),
 					getRightLeaf: vi.fn(() => null),
 					getActiveViewOfType: vi.fn(() => null),
@@ -509,12 +487,50 @@ describe("PodNotes onload wiring (#55)", () => {
 		vi.mocked(plugin.app.vault.adapter.read).mockResolvedValue("{ cut off");
 		vi.spyOn(console, "warn").mockImplementation(() => undefined);
 		await plugin.onExternalSettingsChange();
-		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 		const hide = vi.spyOn(Notice.prototype, "hide");
 
 		plugin.onunload();
 
 		expect(hide).toHaveBeenCalledTimes(1);
+	});
+
+	const syncedLibrary = () =>
+		encodePodNotesData({
+			...structuredClone(DEFAULT_SETTINGS),
+			savedFeeds: {
+				Synced: { title: "Synced", url: "https://example.com/synced.xml", artworkUrl: "" },
+			},
+		});
+	const pastReportSettle = () => new Promise((resolve) => window.setTimeout(resolve, 100));
+
+	it("takes a data.json change Obsidian reports only as a raw vault event", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+		const listeners = vi.mocked(plugin.app.vault.on).mock.calls as unknown as Array<
+			[string, (path: string) => void]
+		>;
+		const report = (path: string) => {
+			for (const [name, listener] of listeners) if (name === "raw") listener(path);
+		};
+		await pastReportSettle();
+		const loadData = vi.mocked(plugin.loadData);
+		loadData.mockResolvedValue(syncedLibrary());
+		const reads = loadData.mock.calls.length;
+
+		report(".obsidian/plugins/other-plugin/data.json");
+		await pastReportSettle();
+		expect(loadData).toHaveBeenCalledTimes(reads);
+
+		report(".obsidian/plugins/podnotes/data.json");
+		await vi.waitFor(() => expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Synced"]));
+	});
+
+	it("takes a data.json change that landed while it loaded", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+
+		vi.mocked(plugin.loadData).mockResolvedValue(syncedLibrary());
+
+		await vi.waitFor(() => expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Synced"]));
 	});
 
 	const savedEpisode: Episode = {
@@ -615,14 +631,19 @@ describe("PodNotes onload wiring (#55)", () => {
 
 	it("captures a timestamp into the active note and names that note", async () => {
 		const { plugin } = await loadPlugin(savedData);
+		const notice = vi.spyOn(obsidian, "Notice");
 		const editor = {
 			getCursor: () => ({ line: 0, ch: 0 }),
 			getLine: () => "",
 			lineCount: () => 1,
+			getValue: () => "",
 			replaceSelection: vi.fn(),
 		};
 		Object.assign(plugin.app.workspace, {
-			activeEditor: { editor, file: { path: "Journal/Daily note.md" } },
+			activeEditor: {
+				editor,
+				file: { path: "Journal/Daily note.md", basename: "Daily note" },
+			},
 		});
 
 		await expect(plugin.capture.timestamp()).resolves.toMatchObject({
@@ -630,6 +651,9 @@ describe("PodNotes onload wiring (#55)", () => {
 			path: "Journal/Daily note.md",
 		});
 		expect(editor.replaceSelection).toHaveBeenCalledWith(expect.stringContaining("00:20:34"));
+		expect((notice.mock.calls[0][0] as DocumentFragment).textContent).toBe(
+			"Timestamp added to Daily noteUndo",
+		);
 	});
 
 	it("says why a timestamp has nowhere to go when the episode note is not set up", async () => {
@@ -673,8 +697,10 @@ describe("PodNotes onload wiring (#55)", () => {
 		vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
 		const { plugin } = await loadPlugin(savedData);
 		plugin.api.start();
-		// jsdom loads no media; the browser would hold its metadata by now.
+		// jsdom loads no media and play() is stubbed; the browser would hold its metadata
+		// and be playing by now.
 		Object.defineProperty(media(), "readyState", { value: HTMLMediaElement.HAVE_METADATA });
+		Object.defineProperty(media(), "paused", { value: false });
 		media().dispatchEvent(new Event("loadedmetadata"));
 		media().currentTime = 1300;
 

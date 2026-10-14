@@ -1,4 +1,4 @@
-import type { App } from "obsidian";
+import type { App, Scope } from "obsidian";
 import { createContext } from "svelte";
 import type { Readable, Writable } from "svelte/store";
 import type { IAPI } from "src/API/IAPI";
@@ -35,9 +35,13 @@ export interface ShellServices {
 	readonly player: PlayerController;
 	readonly feeds: FeedRepository;
 	readonly navigation: Navigation;
+	/** The view's own keys. Obsidian hands them every key typed while the view's leaf is active. */
+	readonly scope: Scope;
 	readonly library: Library;
 	readonly actions: LibraryActions;
 	readonly search: PodcastSearch;
+	/** Whether the device has a connection. Network controls follow it, and lists group by it. */
+	readonly online: Readable<boolean>;
 	/**
 	 * Current through a settings toggle, the note path field and an import, which replaces
 	 * the object.
@@ -47,6 +51,12 @@ export interface ShellServices {
 	captureTimestamp(): Promise<Capture | null>;
 	/** Opens Obsidian's settings at the PodNotes tab. */
 	openSettings(): void;
+	/** Saves the feed's published transcript to the episode's note, never the paid transcription. */
+	saveTranscriptNote(): void;
+	/** "Transcribe current episode from audio", the paid transcription. */
+	transcribeFromAudio(): void;
+	/** Whether playback queues the episode the user switches from, and plays the queue on. */
+	setAutoQueue(enabled: boolean): void;
 	/** Whether the episode has a note: a vault lookup, so a caller decides when to ask again. */
 	hasNote(episode: Episode): boolean;
 	/**

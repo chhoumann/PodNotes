@@ -425,7 +425,7 @@ export async function getPlaybackState(obsidian: {
 			const plugin = app.plugins.plugins.${PLUGIN_ID};
 			return {
 				currentTime: plugin?.api?.currentTime ?? null,
-				hasPlayer: Boolean(document.querySelector(".episode-player")),
+				hasPlayer: Boolean(document.querySelector(".pn-player")),
 				isPlaying: Boolean(plugin?.api?.isPlaying),
 				title: plugin?.api?.podcast?.title ?? null,
 			};

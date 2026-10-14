@@ -1,20 +1,15 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	click,
-	isShown,
-	listedEpisodes,
-	pageScrollTop,
-	pressEscape,
+	openInEditor,
 	reloadObsidian,
-	scrollPage,
 	showLibrary,
 	showList,
-	shownMenu,
 	showPodNotes,
-	ui,
-	waitUntilShown,
 } from "./journey/actions";
+import { click, pressKey, scrollPage } from "./journey/input";
+import { ui } from "./journey/targets";
+import { isShown, listedEpisodes, pageScrollTop, shownMenu, waitUntilShown } from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,
@@ -29,6 +24,7 @@ import {
 	seedLibrary,
 	waitForLibrary,
 	waitForPlayback,
+	writeVaultFile,
 } from "./journey/library";
 import { jsLiteral, VIEW_TYPE } from "./runtime";
 
@@ -92,6 +88,55 @@ async function savedViewStates(): Promise<unknown[]> {
 	})()`);
 }
 
+/** What the core Properties plugin shows in Obsidian's status bar, over the bottom right of the window. */
+async function propertiesItem(): Promise<string> {
+	return await getContext().obsidian.dev.evalJson<string>(
+		'document.querySelector(".status-bar .plugin-properties").innerText',
+	);
+}
+
+/** Opens a note with nine properties in the main area, so the status bar shows "9 properties". */
+async function showStatusBarItem(): Promise<void> {
+	const { obsidian, sandbox } = getContext();
+	const notePath = sandbox.path("Nine properties.md");
+	const properties = Array.from({ length: 9 }, (_, index) => `field${index + 1}: ${index + 1}`);
+	await writeVaultFile(obsidian, notePath, `---\n${properties.join("\n")}\n---\n`);
+	await openInEditor(obsidian, notePath);
+	await obsidian.waitFor(async () => (await propertiesItem()) === "9 properties", {
+		timeoutMs: 5_000,
+		message: "Obsidian's core Properties plugin showing 9 properties in the status bar",
+	});
+}
+
+type Box = Readonly<{ top: number; bottom: number; left: number; right: number }>;
+
+async function expectPlaybackClearOfStatusBar(when: string): Promise<void> {
+	const { bar, control, atCenter } = await getContext().obsidian.dev.evalJson<{
+		bar: Box;
+		control: Box;
+		atCenter: boolean;
+	}>(`(() => {
+		const box = (el) => {
+			const { top, bottom, left, right } = el.getBoundingClientRect();
+			return { top, bottom, left, right };
+		};
+		const [control] = ${ui.miniPlayback.elements};
+		const { top, bottom, left, right } = box(control);
+		const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+		return { bar: box(document.querySelector(".status-bar")), control: box(control), atCenter: control.contains(hit) };
+	})()`);
+	expect(await propertiesItem(), `${when}: the Properties item`).toBe("9 properties");
+	expect(
+		bar.left < control.right && bar.right > control.left,
+		`${when}: the status bar spans the play/pause control`,
+	).toBe(true);
+	expect(
+		control.bottom,
+		`${when}: the play/pause control ends at or above the status bar's top`,
+	).toBeLessThanOrEqual(bar.top);
+	expect(atCenter, `${when}: the play/pause control is what its center shows`).toBe(true);
+}
+
 async function expectAdvancing(label: string): Promise<void> {
 	const [first, later] = await playbackOver(getContext().obsidian, 1500);
 	expect({ label, playing: later.playing }).toEqual({ label, playing: true });
@@ -151,7 +196,7 @@ describe("view shell journeys", () => {
 		expect(await isShown(obsidian, ui.miniPlayer)).toBe(false);
 		await expectAdvancing("opened from the mini player");
 
-		await pressEscape(obsidian);
+		await pressKey(obsidian, "Escape");
 		await waitUntilShown(obsidian, ui.miniPlayer);
 		expect(await isShown(obsidian, ui.fullPlayer)).toBe(false);
 		await expectAdvancing("collapsed by Escape");
@@ -161,6 +206,7 @@ describe("view shell journeys", () => {
 		const context = getContext();
 		const { obsidian, plugin } = context;
 		await seedLibrary(context, await serve(), { subscriptions: [FEED] });
+		await showStatusBarItem();
 		await playFromList();
 		await waitForPlayback(
 			obsidian,
@@ -168,6 +214,8 @@ describe("view shell journeys", () => {
 			"three seconds played",
 		);
 		await click(obsidian, ui.collapsePlayer);
+		await waitUntilShown(obsidian, ui.miniPlayer);
+		await expectPlaybackClearOfStatusBar("before the reload");
 		await click(obsidian, ui.miniPlayback);
 		const paused = await waitForPlayback(obsidian, (playback) => !playback.playing, "paused");
 		const saved = await waitForLibrary(
@@ -207,6 +255,7 @@ describe("view shell journeys", () => {
 		expect(later.playing).toBe(false);
 		expect(later.seconds).toBeCloseTo(position, 0);
 		expect(later.seconds - first.seconds).toBe(0);
+		await expectPlaybackClearOfStatusBar("after the reload");
 	});
 
 	test("J-CTX-01 J-CTX-02 J-CTX-09 an episode's menu opens from its button and by right-click, in the menu's order", async () => {
@@ -234,14 +283,17 @@ describe("view shell journeys", () => {
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await waitUntilShown(obsidian, ui.menuItem("Play"));
 		expect(await titles(), "the overflow button's menu").toEqual(order);
-		await pressEscape(obsidian);
+		await pressKey(obsidian, "Escape");
 		await click(obsidian, ui.episode(OTHER.title), { button: "right" });
 		await waitUntilShown(obsidian, ui.menuItem("Play"));
 		expect(await titles(), "the right-click menu").toEqual(order);
 
 		await click(obsidian, ui.menuItem("Add to playlist"));
 		await waitUntilShown(obsidian, ui.menuItem("Walks"));
-		expect(await shownMenu(obsidian)).toEqual([{ title: "Walks", checked: false }]);
+		expect(await shownMenu(obsidian)).toEqual([
+			{ title: "Walks", checked: false },
+			{ title: "New playlist", checked: false },
+		]);
 		await click(obsidian, ui.menuItem("Walks"));
 		await waitForLibrary(
 			plugin,
@@ -251,8 +303,11 @@ describe("view shell journeys", () => {
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await click(obsidian, ui.menuItem("Add to playlist"));
 		await waitUntilShown(obsidian, ui.menuItem("Walks"));
-		expect(await shownMenu(obsidian)).toEqual([{ title: "Walks", checked: true }]);
-		await pressEscape(obsidian);
+		expect(await shownMenu(obsidian)).toEqual([
+			{ title: "Walks", checked: true },
+			{ title: "New playlist", checked: false },
+		]);
+		await pressKey(obsidian, "Escape");
 
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await click(obsidian, ui.menuItem("Mark as played"));
@@ -265,7 +320,7 @@ describe("view shell journeys", () => {
 		await click(obsidian, ui.episodeMenu(OTHER.title));
 		await waitUntilShown(obsidian, ui.menuItem("Mark as unplayed"));
 		expect(await titles()).not.toContain("Mark as played");
-		await pressEscape(obsidian);
+		await pressKey(obsidian, "Escape");
 
 		await click(obsidian, ui.episode(LONG.title));
 		const started = await waitForPlayback(

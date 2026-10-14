@@ -1,12 +1,6 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { get } from "svelte/store";
-	import type { FeedState, LoadMode } from "src/services/FeedRepository";
-	import {
-		buildPlayedEpisodeListEntries,
-		createEpisodeListEntries,
-		type EpisodeListEntry,
-	} from "src/utility/episodeListEntry";
+	import type { FeedKey, FeedState } from "src/services/FeedRepository";
+	import { createEpisodeListEntries } from "src/utility/episodeListEntry";
 	import { isEpisodeFinished } from "src/utility/episodeStatus";
 	import checkStringIsUrl from "src/utility/checkStringIsUrl";
 	import { isPrivateFeedPlaceholder } from "src/utility/privateFeedUrl";
@@ -14,100 +8,44 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
-	import {
-		feedKeysWithPlayedEpisodes,
-		selectFeedEpisodes,
-		selectLatestEpisodes,
-	} from "./episodeListSelection";
-	import { rowKeys } from "./episodeRow";
-	import EpisodeRow from "./EpisodeRow.svelte";
-	import { episodeMenu, openEpisode, showMenu } from "./menus";
-	import type { ListPage } from "./pages";
+	import EpisodeList from "./EpisodeList.svelte";
+	import { selectFeedEpisodes } from "./episodeListSelection";
+	import { shownFailure } from "./feedState";
 	import SearchField from "./SearchField.svelte";
 
-	let { page }: { page: ListPage } = $props();
-	const services = useServices();
-	const { feeds, actions, library } = services;
-	const {
-		savedFeeds,
-		queue,
-		favorites,
-		playlists,
-		localFiles,
-		playedEpisodes,
-		downloadedEpisodes,
-		episodeListLimit,
-		hidePlayedEpisodes,
-	} = library;
+	/** A podcast's page, with its hero, its feed's state, and its episodes to search and filter. */
+	let { key }: { key: FeedKey } = $props();
+	const { feeds, actions, library, online } = useServices();
+	const { playedEpisodes, downloadedEpisodes, hidePlayedEpisodes } = library;
 	let query = $state("");
 
-	const feedState = $derived(page.kind === "feed" ? $feeds.get(page.key) : undefined);
-	const playlist = $derived(
-		page.kind === "queue"
-			? $queue
-			: page.kind === "local"
-				? $localFiles
-				: page.kind === "playlist"
-					? [$favorites, ...Object.values($playlists)].find(
-							({ name }) => name === page.name,
-						)
-					: undefined,
-	);
-	const entries: (EpisodeListEntry & { playedEpisodeKey?: string })[] = $derived.by(() => {
-		if (page.kind === "played") {
-			const played = buildPlayedEpisodeListEntries($playedEpisodes, [
-				...Array.from($feeds.values(), ({ episodes }) => episodes),
-				...Object.values($downloadedEpisodes),
-				$queue.episodes,
-				$favorites.episodes,
-				$localFiles.episodes,
-				...Object.values($playlists).map(({ episodes }) => episodes),
-			]);
-			// The search's order, best match first, not the Played order.
-			const entryOf = new Map(played.map((entry) => [entry.episode, entry]));
-			return searchEpisodes(
-				query,
-				played.map(({ episode }) => episode),
-			).flatMap((episode) => entryOf.get(episode) ?? []);
-		}
+	const feedState = $derived($feeds.get(key));
+	const entries = $derived.by(() => {
 		const listed = createEpisodeListEntries(
 			searchEpisodes(
 				query,
-				page.kind === "feed"
-					? feedState
-						? selectFeedEpisodes(feedState, $downloadedEpisodes)
-						: []
-					: page.kind === "latest"
-						? selectLatestEpisodes($feeds, $episodeListLimit)
-						: (playlist?.episodes ?? []),
+				feedState ? selectFeedEpisodes(feedState, $downloadedEpisodes) : [],
 			),
 		);
 		return $hidePlayedEpisodes
 			? listed.filter(({ episode }) => !isEpisodeFinished(episode, $playedEpisodes))
 			: listed;
 	});
-	const loading = $derived(
-		feedState
-			? feedState.status === "loading"
-			: (page.kind === "latest" || page.kind === "played") &&
-					Array.from($feeds.values()).some(({ status }) => status === "loading"),
+	const loading = $derived(feedState?.status === "loading");
+	const hideLabel = $derived(
+		$hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes",
 	);
 
-	// On mount, not on the click that opened the page, so a page restored at startup loads too.
-	onMount(() => {
-		if (page.kind === "feed") void feeds.load([page.key], "complete");
-		if (page.kind === "played") void loadPlayedFeeds("complete");
+	// Once open and online, not on the click that opened it, so a page restored at startup
+	// or opened offline loads too.
+	let loaded = false;
+	$effect(() => {
+		if (loaded || !$online) return;
+		loaded = true;
+		void feeds.load([key], "complete");
 	});
 
-	function loadPlayedFeeds(mode: LoadMode) {
-		return feeds.load(feedKeysWithPlayedEpisodes(get(savedFeeds), get(playedEpisodes)), mode);
-	}
-
-	function refresh() {
-		if (page.kind === "feed") void feeds.load([page.key], "network");
-		else if (page.kind === "played") void loadPlayedFeeds("network");
-		else void feeds.load(get(feeds).keys(), "network");
-	}
+	const refresh = () => void feeds.load([key], "network");
 
 	/** Which server failed, without the address: a private feed's address is a secret. */
 	function failedSource({ error, feed }: FeedState): string {
@@ -117,9 +55,9 @@
 	}
 </script>
 
-{#if feedState && page.kind === "feed"}
-	{@const { feed, channel, error } = feedState}
-	{@const key = page.key}
+{#if feedState}
+	{@const { feed, channel } = feedState}
+	{@const error = shownFailure(feedState, $online)}
 	<div class="pn-hero">
 		<Cover src={feed.artworkUrl} title={feed.title} />
 		<div>
@@ -135,13 +73,16 @@
 				<div class="d">{failedSource(feedState)}</div>
 			</div>
 			{#if error === "unavailable"}
-				<button type="button" class="pn-btn" onclick={() => actions.setFeedAddress(key)}>
+				<button
+					type="button"
+					class="pn-btn"
+					disabled={!$online}
+					onclick={() => actions.setFeedAddress(key)}
+				>
 					Set feed address
 				</button>
 			{:else}
-				<button type="button" class="pn-btn" disabled={loading} onclick={refresh}
-					>Retry</button
-				>
+				<button type="button" class="pn-btn" onclick={refresh}>Retry</button>
 			{/if}
 		</div>
 	{/if}
@@ -149,59 +90,153 @@
 
 <div class="pn-filter">
 	<SearchField value={query} placeholder="Search episodes" oninput={(value) => (query = value)} />
-	{#if page.kind !== "played"}
-		{@const label = $hidePlayedEpisodes ? "Show played episodes" : "Hide played episodes"}
-		<button
-			type="button"
-			class="pn-iconbtn"
-			aria-pressed={$hidePlayedEpisodes}
-			aria-label={label}
-			title={label}
-			onclick={() => hidePlayedEpisodes.update((hidden) => !hidden)}
-			{@attach icon("eye-off")}
-		></button>
-	{/if}
-	{#if page.kind === "feed" || page.kind === "latest" || page.kind === "played"}
-		<button
-			type="button"
-			class="pn-iconbtn"
-			aria-label="Refresh episodes"
-			title="Refresh episodes"
-			onclick={refresh}
-			{@attach icon("refresh-cw")}
-		></button>
-	{/if}
+	<button
+		type="button"
+		class="pn-iconbtn"
+		aria-pressed={$hidePlayedEpisodes}
+		aria-label={hideLabel}
+		title={hideLabel}
+		onclick={() => hidePlayedEpisodes.update((hidden) => !hidden)}
+		{@attach icon("eye-off")}
+	></button>
+	<button
+		type="button"
+		class="pn-iconbtn"
+		aria-label="Refresh episodes"
+		title="Refresh episodes"
+		disabled={!$online}
+		onclick={refresh}
+		{@attach icon("refresh-cw")}
+	></button>
 </div>
 
 {#if loading}
 	<div class="pn-count" role="status">Loading episodes</div>
 {/if}
 {#if entries.length > 0}
-	<div class="pn-list" role="list">
-		{#each rowKeys(entries) as [key, entry] (key)}
-			{@const { episode, isAvailable } = entry}
-			<EpisodeRow
-				{episode}
-				available={isAvailable}
-				cover={page.kind === "latest" || page.kind === "played"}
-				onplay={() => openEpisode(services, episode, isAvailable)}
-				onmenu={(at) =>
-					showMenu(
-						episodeMenu(episode, services, {
-							place: page.kind === "queue" ? "queue" : "list",
-							at,
-							available: isAvailable,
-							playedKey: entry.playedEpisodeKey,
-						}),
-						at,
-					)}
-			/>
-		{/each}
-	</div>
+	<EpisodeList {entries} />
 {:else if !loading}
 	<div class="pn-panel-empty">
-		{query || ($hidePlayedEpisodes && page.kind !== "played")
-			? "No episodes match"
-			: "No episodes"}
+		{query || $hidePlayedEpisodes ? "No episodes match" : "No episodes"}
 	</div>
 {/if}
+
+<style>
+	.pn-hero {
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-3);
+		margin: var(--size-2-2) 0 var(--size-4-2);
+	}
+
+	.pn-hero :global {
+		.pn-cover {
+			width: 64px;
+			border-radius: 8px;
+		}
+
+		> div {
+			min-width: 0;
+		}
+
+		/* A long title takes two lines and breaks anywhere. */
+		h1 {
+			margin: 0;
+			font-size: var(--font-ui-medium);
+			font-weight: var(--font-semibold);
+			line-height: 1.3;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
+			overflow-wrap: anywhere;
+		}
+
+		.by {
+			margin-top: 2px;
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+	}
+
+	.pn-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--size-4-2);
+		margin: var(--size-4-2) 0;
+		padding: var(--size-4-2) var(--size-4-2) var(--size-4-2) var(--size-4-3);
+		border: 1px solid rgba(var(--color-red-rgb), 0.25);
+		border-radius: var(--radius-m);
+		background: rgba(var(--color-red-rgb), 0.08);
+	}
+
+	.pn-banner :global {
+		.pn-banner-icon {
+			display: flex;
+			margin-top: 6px;
+			color: var(--text-error);
+			--icon-size: var(--icon-s);
+		}
+
+		.txt {
+			flex: 1;
+			min-width: 0;
+			padding-top: 5px;
+		}
+
+		.h {
+			font-weight: var(--font-semibold);
+		}
+
+		.d {
+			margin-top: 2px;
+			color: var(--text-muted);
+			font-size: var(--font-ui-smaller);
+			font-family: var(--font-monospace);
+			overflow-wrap: anywhere;
+		}
+	}
+
+	.pn-filter {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: var(--size-2-2);
+		padding: var(--size-4-2) 0;
+		margin-bottom: var(--size-2-2);
+		background: var(--pn-bg);
+	}
+
+	:global(.is-wide) .pn-hero {
+		gap: var(--size-4-5);
+		margin: var(--size-4-2) 0 var(--size-4-3);
+	}
+
+	:global(.is-wide) .pn-hero :global {
+		.pn-cover {
+			width: 112px;
+			border-radius: 10px;
+		}
+
+		h1 {
+			font-size: var(--font-ui-large);
+			line-height: 1.25;
+			letter-spacing: -0.01em;
+		}
+
+		.by {
+			margin-top: var(--size-4-1);
+			font-size: var(--font-ui-small);
+		}
+	}
+
+	:global(.is-phone) .pn-hero :global(.pn-cover) {
+		width: 76px;
+	}
+</style>

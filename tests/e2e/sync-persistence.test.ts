@@ -1,4 +1,4 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, utimes, writeFile } from "node:fs/promises";
 import type { PluginHandle } from "obsidian-e2e";
 import { describe, expect, onTestFinished, test } from "vitest";
 import type { Episode } from "../../src/types/Episode";
@@ -14,18 +14,12 @@ import {
 	seedAudio,
 	waitForPlaybackState,
 } from "./harness";
-import {
-	click,
-	closeSettings,
-	isShown,
-	listedEpisodes,
-	openPodNotesSettings,
-	showLibrary,
-	showPodNotes,
-	ui,
-} from "./journey/actions";
+import { closeSettings, openPodNotesSettings, showLibrary, showPodNotes } from "./journey/actions";
+import { click } from "./journey/input";
+import { ui } from "./journey/targets";
+import { isShown, listedEpisodes } from "./journey/wait";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
-import { seedLibrary, waitForLibrary } from "./journey/library";
+import { recordWrites, seedLibrary, waitForLibrary } from "./journey/library";
 import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, WAIT_OPTS, waitForPodNotesReady } from "./runtime";
 import { assertNoNewRuntimeErrors } from "./runtime-evidence";
 
@@ -218,6 +212,19 @@ describe("PodNotes data.json changed elsewhere", () => {
 
 	test("does not treat its own saves as external changes", async () => {
 		const { obsidian, plugin } = getContext();
+		await plugin.updateDataAndReload<PodNotesData>((data) => {
+			addSyncedChanges(data);
+			data.queue = queueOf([
+				{
+					title: "Queued Episode",
+					podcastName: "Synced Podcast",
+					streamUrl: "https://example.com/queued.mp3",
+					url: "https://example.com/queued",
+					description: "",
+					content: "",
+				},
+			]);
+		}, RELOAD_OPTIONS);
 		// The harness rewrites data.json before each test, which is a change made
 		// elsewhere. Let Obsidian report it before counting.
 		await obsidian.sleep(2_500);
@@ -231,6 +238,7 @@ describe("PodNotes data.json changed elsewhere", () => {
 			};
 			return true;
 		})()`);
+		const writes = await recordWrites(obsidian);
 
 		await setVolume(obsidian, 0.55);
 		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.55, WAIT_OPTS);
@@ -238,6 +246,12 @@ describe("PodNotes data.json changed elsewhere", () => {
 		await obsidian.sleep(2_500);
 
 		expect(await obsidian.dev.evalJson<number>("window.__podnotesExternalChanges")).toBe(0);
+		expect(await writes.stop()).toMatchObject({
+			attempted: 1,
+			completed: 1,
+			failed: 0,
+			intact: true,
+		});
 	});
 
 	test("saves an unsaved edit and keeps the change made elsewhere when disabled during their read", async () => {
@@ -384,6 +398,32 @@ describe("PodNotes data.json changed elsewhere", () => {
 			progress: 1234,
 			volume: 0.42,
 		});
+	});
+
+	test("shows a library synced in with the earlier modified time it had on the other device", async () => {
+		const { obsidian, plugin } = getContext();
+		const dataPath = await plugin.dataPath();
+		const synced = `${dataPath}.synced`;
+		onTestFinished(() => rm(synced, { force: true }));
+		const library = await plugin.data<PodNotesData>().read();
+		addSyncedChanges(library);
+		await startAsNewDevice(plugin);
+		await setVolume(obsidian, 0.42);
+		await plugin.waitForData<PodNotesData>((data) => data.defaultVolume === 0.42, WAIT_OPTS);
+
+		// A sync client that keeps modified times writes beside the file and moves it over.
+		const savedOnOtherDevice = new Date(Date.now() - 60_000);
+		await writeFile(synced, JSON.stringify(library));
+		await utimes(synced, savedOnOtherDevice, savedOnOtherDevice);
+		await rename(synced, dataPath);
+
+		const disk = await plugin.waitForData<PodNotesData>(
+			(data) => data.defaultVolume === 0.42 && Boolean(data.savedFeeds?.[SYNCED_FEED.title]),
+			WAIT_OPTS,
+		);
+		expect(disk.playedEpisodes?.["Synced Podcast::Synced Episode"]).toEqual(SYNCED_PROGRESS);
+		await showLibrary(obsidian);
+		await expect.poll(() => isShown(obsidian, ui.podcastCard("Synced Feed")), POLL).toBe(true);
 	});
 
 	test("shows both names when the library saved a podcast under an earlier name than a new device", async () => {
