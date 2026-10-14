@@ -25,15 +25,25 @@ const FEED: FixtureFeed = {
 const TABLE =
 	"# Captures\n\n| Moment | Notes |\n| --- | --- |\n| Start | anchor |\n\nAfter table\n";
 
-async function setUp({ content = TABLE, source = false } = {}): Promise<string> {
+const WIDE_TABLE = TABLE.replace(
+	"\n\nAfter table",
+	`\n| Kept | ${"wide ".repeat(40)} |\n\nAfter table`,
+);
+
+async function setUp({
+	content = TABLE,
+	source = false,
+	template = "{{time}} | cut\n",
+} = {}): Promise<string> {
 	const context = getContext();
 	const { obsidian, plugin, sandbox } = context;
 	const server = await startFixtureServer([FEED]);
 	onTestFinished(() => server.stop());
 	await seedLibrary(context, server, { subscriptions: [FEED] });
 	await plugin.updateDataAndReload<IPodNotesSettings>((data) => {
-		data.timestamp.template = "{{time}} | cut\n";
+		data.timestamp.template = template;
 	});
+
 	await showPodNotes(obsidian);
 	await showLibrary(obsidian);
 	await click(obsidian, ui.podcastCard(FEED.title));
@@ -56,8 +66,7 @@ async function setUp({ content = TABLE, source = false } = {}): Promise<string> 
 	}
 	await click(obsidian, {
 		name: "Notes table cell",
-		elements:
-			'[...document.querySelectorAll(".markdown-source-view td")].filter((el) => el.textContent === "anchor")',
+		elements: `[...app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.containerEl.querySelectorAll(".markdown-source-view td")].filter((el) => el.textContent === "anchor")`,
 	});
 	await cdp(obsidian, "Input.dispatchKeyEvent", {
 		type: "keyDown",
@@ -81,9 +90,9 @@ const lastUndo = {
 	elements: '[...document.querySelectorAll(".notice button.pn-undo")].slice(-1)',
 };
 
-async function cellText(): Promise<string> {
+async function cellText(path: string): Promise<string> {
 	return await getContext().obsidian.dev.evalJson<string>(
-		'app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.editor?.editorComponent?.tableCell)?.view.editor.editorComponent.tableCell.editor.getValue() ?? ""',
+		`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)})?.view.editor.editorComponent.tableCell.editor.getValue() ?? ""`,
 	);
 }
 
@@ -131,7 +140,7 @@ describe("Live Preview table captures", () => {
 		const beforeLast = await expectCell(path, second);
 		await obsidian.exec("command", { id: "podnotes:capture-segment-20s" });
 		await expectCell(path, `${second}00:00:10-00:00:30 \\| cut `);
-		expect(await cellText()).toBe(
+		expect(await cellText(path)).toBe(
 			"anchor00:00:30 | cut 00:00:20-00:00:30 | cut 00:00:10-00:00:30 | cut ",
 		);
 		await click(obsidian, lastUndo);
@@ -145,10 +154,12 @@ describe("Live Preview table captures", () => {
 				`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.editor.getValue()`,
 			),
 		).toBe(beforeLast);
+		await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+		await expectCell(path, `${second}00:00:30 \\| cut `);
 	}, 90_000);
 
 	test("#445 player, mini player and headset capture into the last focused cell", async () => {
-		const { obsidian, plugin } = getContext();
+		const { obsidian } = getContext();
 		await obsidian.dev.evalJson(`(() => {
 			const session = navigator.mediaSession;
 			const original = session.setActionHandler;
@@ -170,13 +181,23 @@ describe("Live Preview table captures", () => {
 		});
 		const path = await setUp();
 		await click(obsidian, ui.playerTimestamp);
+		expect(
+			await eventually(
+				obsidian,
+				() =>
+					obsidian.dev.evalJson<string>(
+						`(${ui.playerTimestamp.elements})[0].textContent.trim()`,
+					),
+				"Added",
+				2000,
+			),
+		).toBe("Added");
 		const first = "anchor00:00:30 \\| cut ";
 		await expectCell(path, first);
 		await click(obsidian, ui.collapsePlayer);
 		await click(obsidian, ui.miniCapture);
 		const second = `${first}00:00:30 \\| cut `;
 		await expectCell(path, second);
-		expect(await plugin.isEnabled()).toBe(true);
 		await obsidian.dev.evalJson(`(() => {
 			const handler = window.__note2Media.handlers.get("previoustrack");
 			if (!handler) throw new Error("The headset capture handler is not installed");
@@ -196,8 +217,7 @@ describe("Live Preview table captures", () => {
 		await expectCell(path, "anchor00:00:30 \\| cut ");
 		await click(obsidian, {
 			name: "Moment table cell",
-			elements:
-				'[...document.querySelectorAll(".markdown-source-view td")].filter((el) => el.textContent === "Start")',
+			elements: `[...app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.containerEl.querySelectorAll(".markdown-source-view td")].filter((el) => el.textContent === "Start")`,
 		});
 		await typeText(obsidian, "edited");
 		const edited = await obsidian.dev.evalJson<string>(
@@ -215,11 +235,7 @@ describe("Live Preview table captures", () => {
 
 	test("#445 Undo restores a capture inside a cell without changing the table width", async () => {
 		const { obsidian } = getContext();
-		const content = TABLE.replace(
-			"\n\nAfter table",
-			`\n| Kept | ${"wide".repeat(50)} |\n\nAfter table`,
-		);
-		const path = await setUp({ content });
+		const path = await setUp({ content: WIDE_TABLE });
 		const before = await obsidian.dev.evalJson<string>(
 			"app.workspace.activeEditor.editor.getValue()",
 		);
@@ -239,6 +255,94 @@ describe("Live Preview table captures", () => {
 		).toBe(before);
 		expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
 	}, 90_000);
+
+	test("#445 table captures preserve existing pipe escape parity", async () => {
+		const { obsidian } = getContext();
+		const path = await setUp({ template: "{{time}} | a \\| b \\\\| c\n" });
+		await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+		await expectCell(path, "anchor00:00:30 \\| a \\| b \\\\\\| c ");
+		expect(await cellText(path)).toBe("anchor00:00:30 | a | b \\\\| c ");
+	});
+
+	test("#445 leaving a cell preserves paragraph pipes, newlines and Undo", async () => {
+		const { obsidian } = getContext();
+		const path = await setUp();
+		await clickInEditor(obsidian, path, 6, 11);
+		const before = await obsidian.dev.evalJson<string>(
+			`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.editor.getValue()`,
+		);
+		await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+		const expected = before.replace("After table", "After table00:00:30 | cut\n");
+		expect(
+			await eventually(obsidian, () => readVaultText(obsidian, path), expected, 10_000),
+		).toBe(expected);
+		await click(obsidian, lastUndo);
+		expect(
+			await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
+		).toBe(before);
+	});
+
+	test.each(["split", "closed"])(
+		"#445 Undo restores the exact note with its captured tab %s",
+		async (state) => {
+			const { obsidian } = getContext();
+			const path = await setUp();
+			const before = await obsidian.dev.evalJson<string>(
+				`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.editor.getValue()`,
+			);
+			await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+			await expectCell(path, "anchor00:00:30 \\| cut ");
+			await obsidian.dev.evalJsonAsync(`(async () => {
+			const leaf = app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)});
+			if (${jsLiteral(state)} === "closed") leaf.detach();
+			else await app.workspace.getLeaf("split").openFile(leaf.view.file);
+			return true;
+		})()`);
+			await click(obsidian, lastUndo);
+			expect(
+				await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
+			).toBe(before);
+		},
+	);
+
+	test("#445 Undo restores both editors when the captured cell is in the second pane", async () => {
+		const { obsidian } = getContext();
+		const path = await setUp({ content: WIDE_TABLE });
+		await clickInEditor(obsidian, path, 7, 11);
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			const file = app.vault.getAbstractFileByPath(${jsLiteral(path)});
+			await app.workspace.getLeaf("split").openFile(file);
+			return true;
+		})()`);
+		const views = `app.workspace.getLeavesOfType("markdown").filter((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).map((leaf) => leaf.view)`;
+		await click(obsidian, {
+			name: "second pane's Notes cell",
+			elements: `[...(${views}).at(-1).containerEl.querySelectorAll(".markdown-source-view td")].filter((el) => el.textContent === "anchor")`,
+		});
+		expect(
+			await obsidian.dev.evalJson(
+				`${views}.map((view) => Boolean(view.editor.editorComponent.tableCell))`,
+			),
+		).toEqual([false, true]);
+		const before = await obsidian.dev.evalJson<string>(`(${views})[0].editor.getValue()`);
+		await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+		expect(
+			await eventually(
+				obsidian,
+				async () =>
+					rows(await readVaultText(obsidian, path))[2][1].includes("00:00:30 \\| cut"),
+				true,
+				10_000,
+			),
+		).toBe(true);
+		await click(obsidian, lastUndo);
+		expect(
+			await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
+		).toBe(before);
+		expect(
+			await obsidian.dev.evalJson(`${views}.map((view) => view.editor.getValue())`),
+		).toEqual([before, before]);
+	});
 
 	test("#445 Source mode still escapes table captures and preserves Undo", async () => {
 		const { obsidian } = getContext();

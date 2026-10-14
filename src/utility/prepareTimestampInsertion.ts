@@ -1,15 +1,3 @@
-// Helpers for inserting a captured timestamp at the editor cursor without
-// breaking the markdown around it. See issue #165: capturing a timestamp into a
-// markdown table cell would land the text in the wrong cell, scatter the cursor,
-// or break the row. The root causes were (1) deriving a position with
-// `getCursor()` and feeding it to `replaceRange` + a hand-computed `setCursor`,
-// which fights Obsidian's Live Preview table-editing widget, and (2) inserting
-// raw `|`/newline characters that are structural inside a table.
-//
-// The command now inserts with `editor.replaceSelection` (which lets CodeMirror
-// own cursor placement) and, when the cursor sits inside a table, runs the
-// capture through `escapeForTableCell` so pipes and newlines stay textual.
-
 /**
  * Strip a leading blockquote/callout marker chain (`>`, `> >`, ...) so a table
  * nested inside a callout or blockquote is detected the same as a top-level one.
@@ -95,7 +83,7 @@ export function escapeForTableCell(text: string): string {
 /**
  * Resolve the exact string to insert for a captured timestamp: the raw capture
  * everywhere except inside a table cell, where it is escaped so the row stays
- * intact. Callers insert the result with `editor.replaceSelection`.
+ * intact.
  */
 export function prepareTimestampForInsertion(
 	capture: string,
