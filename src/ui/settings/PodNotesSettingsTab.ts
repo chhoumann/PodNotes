@@ -932,7 +932,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			await this.plugin.saveSettingsStrict();
 		} catch (error) {
 			new Notice(
-				"Imported PodNotes settings, but could not save all of them. Change any setting to save again.",
+				"Imported PodNotes settings, but could not save them yet. PodNotes saves them once it can.",
 				10000,
 			);
 			console.error("PodNotes: failed to persist normalized imported settings", error);

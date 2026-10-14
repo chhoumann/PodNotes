@@ -110,6 +110,38 @@ describe("PodNotesSettingsTab settings import", () => {
 		expect(plugin.saveSettingsStrict).toHaveBeenCalledTimes(2);
 	});
 
+	it("keeps the import and says it saves later when only the final save fails", async () => {
+		const plugin = {
+			settings: structuredClone(DEFAULT_SETTINGS),
+			credentials: { storeValues: vi.fn(() => ({})) },
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+			saveSettingsStrict: vi
+				.fn()
+				.mockResolvedValueOnce(undefined)
+				.mockRejectedValueOnce(new Error("disk full")),
+		} as unknown as PodNotes;
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
+		vi.spyOn(tab, "update").mockImplementation(() => {});
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await (
+			tab as unknown as {
+				applyImportedSettings: (
+					imported: Partial<typeof DEFAULT_SETTINGS>,
+				) => Promise<void>;
+			}
+		).applyImportedSettings({ defaultPlaybackRate: 2.3 });
+
+		expect(plugin.settings.defaultPlaybackRate).toBe(2.3);
+		expect(notice.mock.calls).toEqual([
+			[
+				"Imported PodNotes settings, but could not save them yet. PodNotes saves them once it can.",
+				10000,
+			],
+		]);
+	});
+
 	it("puts back a feed named __proto__ when an import that removed it fails", async () => {
 		const showFeed = {
 			title: "__proto__",

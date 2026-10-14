@@ -60,7 +60,6 @@ function renderPage(
 					: null
 				: feed.url,
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
 	({ services, dispose } = createTestServices({ feeds: repository }));

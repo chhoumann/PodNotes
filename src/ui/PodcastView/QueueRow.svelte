@@ -45,6 +45,8 @@
 <EpisodeRow
 	{episode}
 	cover
+	queue
+	{dragging}
 	onplay={() => openEpisode(services, episode)}
 	onmenu={(at) => showMenu(episodeMenu(episode, services, { place: "list", at }), at)}
 >
@@ -75,3 +77,23 @@
 		></button>
 	{/snippet}
 </EpisodeRow>
+
+<style>
+	button.pn-iconbtn.pn-grip {
+		cursor: grab;
+		touch-action: none;
+		color: var(--text-muted);
+		opacity: 1;
+		--icon-size: 16px;
+	}
+
+	button.pn-iconbtn.pn-ep-x {
+		margin-right: var(--size-2-2);
+		opacity: 0.55;
+	}
+
+	:global(.pn-ep:hover) button.pn-ep-x,
+	button.pn-iconbtn.pn-ep-x:focus-visible {
+		opacity: 1;
+	}
+</style>

@@ -114,37 +114,39 @@
 		cursor: default;
 	}
 
-	.pn-segs {
-		display: flex;
-		gap: 2px;
-		width: 100%;
-		height: 4px;
-	}
+	.pn-scrub :global {
+		.pn-segs {
+			display: flex;
+			gap: 2px;
+			width: 100%;
+			height: 4px;
+		}
 
-	.pn-seg {
-		flex: 1 1 0;
-		min-width: 2px;
-		border-radius: 2px;
-		background: var(--background-modifier-border-hover);
-		overflow: hidden;
-	}
+		.pn-seg {
+			flex: 1 1 0;
+			min-width: 2px;
+			border-radius: 2px;
+			background: var(--background-modifier-border-hover);
+			overflow: hidden;
+		}
 
-	.pn-seg span {
-		display: block;
-		height: 100%;
-		background: var(--interactive-accent);
-	}
+		.pn-seg span {
+			display: block;
+			height: 100%;
+			background: var(--interactive-accent);
+		}
 
-	.pn-thumb {
-		position: absolute;
-		top: 50%;
-		width: 12px;
-		height: 12px;
-		margin: -6px 0 0 -6px;
-		border-radius: 50%;
-		background: var(--interactive-accent);
-		box-shadow: 0 0 0 2px var(--pn-bg);
-		pointer-events: none;
+		.pn-thumb {
+			position: absolute;
+			top: 50%;
+			width: 12px;
+			height: 12px;
+			margin: -6px 0 0 -6px;
+			border-radius: 50%;
+			background: var(--interactive-accent);
+			box-shadow: 0 0 0 2px var(--pn-bg);
+			pointer-events: none;
+		}
 	}
 
 	:global(.is-phone) .pn-scrub {
@@ -152,13 +154,15 @@
 		margin: -8px 0;
 	}
 
-	:global(.is-phone) .pn-segs {
-		height: 5px;
-	}
+	:global(.is-phone) .pn-scrub :global {
+		.pn-segs {
+			height: 5px;
+		}
 
-	:global(.is-phone) .pn-thumb {
-		width: 16px;
-		height: 16px;
-		margin: -8px 0 0 -8px;
+		.pn-thumb {
+			width: 16px;
+			height: 16px;
+			margin: -8px 0 0 -8px;
+		}
 	}
 </style>

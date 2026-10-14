@@ -129,19 +129,17 @@ let storage = new MemoryStorage();
 let unsubscribeFeeds = () => {};
 
 /** Builds the plugin the view reads, with a repository fed by `mockLoad` and `storage`. */
-function usePlugin(fields: Record<string, unknown> = {}, cacheEnabled = false) {
+function usePlugin(fields: Record<string, unknown> = {}) {
 	const feedUrls = new FeedUrlRepository(new obsidian.SecretStorage());
 	const feeds = new FeedRepository({
 		load: (url) => mockLoad(url),
 		resolveUrl: (feed) => resolveFeedUrl(feed, feedUrls),
 		storage,
-		cache: () => ({ enabled: cacheEnabled, ttlHours: 6 }),
 		now: Date.now,
 	});
 	unsubscribeFeeds();
 	unsubscribeFeeds = savedFeeds.subscribe((saved) => feeds.setSubscriptions(saved));
 	plugin.set({
-		settings: { feedCache: { enabled: cacheEnabled, ttlHours: 6 } },
 		...fields,
 		feeds,
 		player,
@@ -158,7 +156,6 @@ async function cacheFeeds(...entries: [PodcastFeed, Episode[]][]) {
 		},
 		resolveUrl: (saved) => saved.url,
 		storage,
-		cache: () => ({ enabled: true, ttlHours: 6 }),
 		now: Date.now,
 	});
 	earlier.setSubscriptions(Object.fromEntries(entries.map(([feed]) => [feed.title, feed])));
@@ -478,7 +475,7 @@ describe("issue #174 feed cache cap regression", () => {
 	beforeEach(async () => {
 		await cacheFeeds([testFeed, fullFeed]);
 		respondByUrl({ [testFeed.url]: fullFeed });
-		usePlugin({}, true);
+		usePlugin();
 	});
 
 	test("opening a show bypasses the truncated cache and loads older episodes", async () => {
@@ -578,7 +575,7 @@ describe("issue #174 feed cache cap regression", () => {
 				finished: true,
 			},
 		});
-		usePlugin({}, true);
+		usePlugin();
 
 		renderView();
 

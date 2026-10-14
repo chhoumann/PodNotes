@@ -37,7 +37,6 @@ const repositoryWith = ({
 		load,
 		resolveUrl,
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
 const unreachable = () => repositoryWith();

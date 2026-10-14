@@ -48,3 +48,67 @@
 		</button>
 	{/each}
 </div>
+
+<style>
+	.pn-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+		gap: var(--size-4-2);
+	}
+
+	.pn-grid :global {
+		.pn-gridcard {
+			position: relative;
+			display: block;
+			width: 100%;
+			height: auto;
+			padding: 0;
+			border: 0;
+			border-radius: 8px;
+			background: none;
+			box-shadow: none;
+			white-space: normal;
+			cursor: var(--cursor);
+			transition: transform 120ms ease;
+		}
+
+		.pn-gridcard .pn-cover {
+			border-radius: 8px;
+		}
+
+		.pn-gridcard:hover .pn-cover {
+			box-shadow: var(--shadow-s);
+		}
+
+		.pn-gridcard:active {
+			transform: scale(0.98);
+		}
+
+		.pn-badge {
+			position: absolute;
+			left: 6%;
+			top: 6%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 20px;
+			height: 20px;
+			border-radius: 50%;
+			background: var(--background-primary);
+			color: var(--text-error);
+			box-shadow: var(--shadow-s);
+			--icon-size: 12px;
+			--icon-stroke: 2.25px;
+		}
+	}
+
+	:global(.is-wide) .pn-grid {
+		grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+		gap: var(--size-4-4);
+	}
+
+	:global(.is-phone) .pn-grid {
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--size-4-3);
+	}
+</style>

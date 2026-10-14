@@ -1,5 +1,4 @@
 import { get, type Unsubscriber } from "svelte/store";
-import { queue } from "src/store";
 import type { Chapter } from "src/types/Chapter";
 import type { Episode } from "src/types/Episode";
 import type { NextTrackAction, PreviousTrackAction } from "src/types/Headset";
@@ -69,7 +68,7 @@ function positionOf({ currentTime, duration, playbackRate }: PlayerState) {
 }
 
 export function bindMediaSession(
-	player: Pick<PlayerController, "state" | "resume" | "pause" | "seek" | "play">,
+	player: Pick<PlayerController, "state" | "resume" | "pause" | "seek" | "playNext">,
 	host: MediaSessionHost,
 ): Unsubscriber {
 	if (!host.mediaSession) return () => {};
@@ -98,26 +97,13 @@ export function bindMediaSession(
 		if (start !== undefined) player.seek(start);
 	}
 
-	function playNextInQueue(): void {
-		const outgoing = get(player.state).episode;
-		const next = get(queue).episodes.find(
-			(episode) => getEpisodeKey(episode) !== getEpisodeKey(outgoing),
-		);
-		if (!next || !player.play(next) || !outgoing) return;
-		const [first] = get(queue).episodes;
-		if (first && getEpisodeKey(first) === getEpisodeKey(outgoing)) {
-			queue.remove(first);
-			queue.add(first);
-		}
-	}
-
 	const run: Record<PreviousTrackAction | NextTrackAction, () => void> = {
 		captureTimestamp: () => host.captureTimestamp(),
 		skipBackward: () => host.skipBackward(),
 		skipForward: () => host.skipForward(),
 		previousChapter: () => void seekChapter(-1),
 		nextChapter: () => void seekChapter(1),
-		nextInQueue: playNextInQueue,
+		nextInQueue: () => player.playNext(),
 	};
 
 	const actions: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
