@@ -16,6 +16,7 @@ import { click, typeInto } from "./journey/input";
 import { ui } from "./journey/targets";
 import {
 	eventually,
+	holdsFor,
 	isDisabled,
 	isShown,
 	notices,
@@ -24,6 +25,7 @@ import {
 } from "./journey/wait";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import {
+	ageFeedCache,
 	feedCacheHolds,
 	feedCacheText,
 	readLibrary,
@@ -98,6 +100,60 @@ test("a private feed first opened offline explains that its address is not on th
 	expect(
 		await obsidian.dev.evalJson<string | null>(`app.secretStorage.getSecret(${jsLiteral(id)})`),
 	).toBeFalsy();
+});
+
+test("a private feed whose address is on this device, opened offline hours later, lists the episodes it cached and no missing address", async () => {
+	const context = getContext();
+	const { obsidian, plugin } = context;
+	const show: FixtureFeed = {
+		title: "Private Kept",
+		slug: "private-kept",
+		query: "?auth=KEPT_SENTINEL",
+		artwork: false,
+		episodes: [{ title: "Kept episode", seconds: 6, pubDate: pubDate(0) }],
+	};
+	const server = await startFixtureServer([show]);
+	onTestFinished(() => server.stop());
+	await seedLibrary(context, server);
+	const id = "podnotes-feed-url-48200000-0000-4000-8000-000000000001";
+	await obsidian.dev.evalJson(
+		`app.secretStorage.setSecret(${jsLiteral(id)}, ${jsLiteral(server.feedUrl(show))}), true`,
+	);
+	onTestFinished(async () => {
+		await obsidian.dev.evalJson(`app.secretStorage.setSecret(${jsLiteral(id)}, ""), true`);
+		await setOffline(obsidian, false);
+	});
+	await plugin.updateDataAndReload<Record<string, unknown>>((data) => {
+		data.savedFeeds = {
+			[show.title]: {
+				title: show.title,
+				artworkUrl: "",
+				url: `podnotes-private-feed:${encodeURIComponent(show.title)}`,
+				urlSecretId: id,
+			},
+		};
+	}, RELOAD_OPTIONS);
+	await showPodNotes(obsidian);
+	await showLibrary(obsidian);
+	await click(obsidian, ui.podcastCard(show.title));
+	await waitUntilShown(obsidian, ui.episode("Kept episode"));
+	await obsidian.waitFor(() => feedCacheHolds(obsidian, "Kept episode"), {
+		timeoutMs: 10_000,
+		message: "the feed cached",
+	});
+	await closePodNotes(obsidian);
+	await ageFeedCache(obsidian, 7 * 60 * 60 * 1000);
+	server.disconnect();
+	await setOffline(obsidian, true);
+	await plugin.reload(RELOAD_OPTIONS);
+	await showPodNotes(obsidian);
+	await showLibrary(obsidian);
+	await click(obsidian, ui.podcastCard(show.title));
+	await waitUntilShown(obsidian, ui.offlineStrip);
+
+	expect(await isShown(obsidian, ui.episode("Kept episode"))).toBe(true);
+	expect(await holdsFor(obsidian, () => isShown(obsidian, ui.feedError), false)).toBe(false);
+	expect(await shownText(obsidian)).not.toContain("Address not on this device");
 });
 
 test("protects a Supercast subscription's address in data, cache keys and note links, then accepts it under the same reference", async () => {
