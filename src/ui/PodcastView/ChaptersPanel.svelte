@@ -31,7 +31,7 @@
 		<li>
 			<button
 				type="button"
-				class="pn-chap"
+				class="pn-row pn-chap"
 				class:is-now={index === current}
 				aria-current={index === current || undefined}
 				onclick={() => onseek(chapter.startTime)}
@@ -44,53 +44,7 @@
 </Panel>
 
 <style>
-	:global(.pn-panel) .pn-chap {
-		display: flex;
-		align-items: baseline;
-		justify-content: flex-start;
-		gap: var(--size-4-3);
-		width: 100%;
-		height: auto;
-		padding: 6px var(--size-4-2);
-		border-radius: var(--radius-s);
-		background: none;
-		box-shadow: none;
-		color: var(--text-muted);
-		font-size: inherit;
-		line-height: 1.45;
-		text-align: left;
-		white-space: normal;
-	}
-
-	:global(.pn-panel) .pn-chap:hover {
-		background: var(--background-modifier-hover);
-		color: var(--text-normal);
-	}
-
-	:global(.pn-panel) .pn-chap.is-now {
-		background: hsla(var(--interactive-accent-hsl), 0.12);
-		color: var(--text-normal);
-	}
-
-	.pn-chap :global {
-		.tm {
-			flex: none;
-			width: 44px;
-			font-size: var(--font-ui-smaller);
-			font-variant-numeric: tabular-nums;
-		}
-
-		.nm {
-			font-weight: var(--font-medium);
-		}
-	}
-
-	.pn-chap.is-now :global(.tm) {
-		color: var(--text-accent);
-	}
-
-	:global(.is-phone .pn-panel) .pn-chap {
-		min-height: 44px;
-		padding: 10px var(--size-4-2);
+	.pn-chap :global(.nm) {
+		font-weight: var(--font-medium);
 	}
 </style>

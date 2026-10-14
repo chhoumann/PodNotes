@@ -9,9 +9,16 @@
 	import Deck from "./Deck.svelte";
 	import type { Layout } from "./layout";
 	import { anchorOf, episodeMenu, showMenu } from "./menus";
+	import TranscriptPanel from "./TranscriptPanel.svelte";
 	import UpNextPanel from "./UpNextPanel.svelte";
 
-	type PanelKind = "chapters" | "queue";
+	type PanelKind = "chapters" | "transcript" | "queue";
+
+	const PANEL_LABELS: Record<PanelKind, string> = {
+		chapters: "Chapters",
+		transcript: "Transcript",
+		queue: "Up next",
+	};
 
 	/** Arrow keys, Home and End move between the wide player's tabs, each showing its panel. */
 	const TAB_KEYS: Record<string, (at: number, count: number) => number> = {
@@ -29,6 +36,7 @@
 
 	let section: HTMLElement | undefined = $state();
 	let deck: Deck | undefined = $state();
+	let transcript: TranscriptPanel | undefined = $state();
 	let videoFrame: HTMLElement | undefined = $state();
 	let inMainWindow = $state(true);
 	let chapters: readonly Chapter[] = $state([]);
@@ -44,12 +52,15 @@
 	const failed = $derived($playerState.status === "error");
 	const video = $derived($playerState.mediaType === "video");
 	const elapsed = $derived(Math.min($playerState.currentTime, $playerState.duration));
-	const panels = $derived<PanelKind[]>(chapters.length > 0 ? ["chapters", "queue"] : ["queue"]);
+	const panels = $derived<PanelKind[]>(
+		chapters.length > 0 ? ["chapters", "transcript", "queue"] : ["transcript", "queue"],
+	);
 	const shown = $derived.by(() => {
 		// At compact widths a media error takes the stage, so no panel shows meanwhile.
 		if (failed && !wide) return undefined;
 		if (panel && panels.includes(panel)) return panel;
-		return wide ? panels[0] : undefined;
+		// A transcript loads only when asked for, so the wide player never opens on it.
+		return wide ? (chapters.length > 0 ? "chapters" : "queue") : undefined;
 	});
 	const chaptersUrl = $derived(episode.chaptersUrl);
 
@@ -69,7 +80,7 @@
 	// or a press in the view makes it. A menu or modal over the player takes Escape first.
 	$effect(() => {
 		const escape = scope.register(null, "Escape", () => {
-			if (!deck?.closeVolume()) void collapse();
+			if (!deck?.closeVolume() && !transcript?.closeFind()) void collapse();
 			return false;
 		});
 		const space = scope.register(null, " ", (evt) => {
@@ -118,6 +129,11 @@
 		(tab as HTMLElement | undefined)?.focus();
 	}
 
+	function playFrom(time: number) {
+		player.seek(time);
+		player.resume();
+	}
+
 	function fullscreen() {
 		// iOS fullscreens only the media element itself.
 		const video = videoFrame?.querySelector("video") as
@@ -130,14 +146,9 @@
 
 {#snippet panelView(kind: PanelKind)}
 	{#if kind === "chapters"}
-		<ChaptersPanel
-			{chapters}
-			position={elapsed}
-			onseek={(time) => {
-				player.seek(time);
-				player.resume();
-			}}
-		/>
+		<ChaptersPanel {chapters} position={elapsed} onseek={playFrom} />
+	{:else if kind === "transcript"}
+		<TranscriptPanel bind:this={transcript} {episode} position={elapsed} onseek={playFrom} />
 	{:else}
 		<UpNextPanel />
 	{/if}
@@ -155,8 +166,7 @@
 				aria-controls="{id}-panel"
 				tabindex={shown === kind ? 0 : -1}
 				onclick={() => (panel = kind)}
-				onkeydown={(event) => moveTab(event, index)}
-				>{kind === "chapters" ? "Chapters" : "Up next"}</button
+				onkeydown={(event) => moveTab(event, index)}>{PANEL_LABELS[kind]}</button
 			>
 		{/each}
 	</div>
@@ -171,7 +181,7 @@
 				aria-pressed={shown === kind}
 				disabled={failed}
 				onclick={() => (panel = shown === kind ? undefined : kind)}
-				>{kind === "chapters" ? "Chapters" : "Up next"}</button
+				>{PANEL_LABELS[kind]}</button
 			>
 		{/each}
 	</div>

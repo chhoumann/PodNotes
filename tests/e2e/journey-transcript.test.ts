@@ -51,11 +51,10 @@ const FEED: FixtureFeed = {
 const NOTE_PATH = `Transcripts/${FEED.title}/${CAPTIONED.title}.md`;
 
 const TRANSCRIPT = `${PLAYER_VIEW} section.pn-player ol[aria-label="Transcript"]`;
-const panelButton = (label: string) =>
-	({
-		name: `transcript panel's ${label}`,
-		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} section.pn-player .pn-panel button`)})].filter((el) => el.getAttribute("aria-label") === ${jsLiteral(label)} || el.textContent.trim().startsWith(${jsLiteral(label)}))`,
-	}) satisfies UiTarget;
+const panelButton = (label: string): UiTarget => ({
+	name: `transcript panel's ${label}`,
+	elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} section.pn-player .pn-panel button`)})].filter((el) => el.getAttribute("aria-label") === ${jsLiteral(label)} || el.textContent.trim().startsWith(${jsLiteral(label)}))`,
+});
 const line = (text: string): UiTarget => ({
 	name: `transcript line ${text}`,
 	elements: `[...document.querySelectorAll(${jsLiteral(`${TRANSCRIPT} button`)})].filter((el) => el.lastElementChild?.textContent.trim() === ${jsLiteral(text)})`,
@@ -203,9 +202,9 @@ describe("transcript journeys", () => {
 
 		expect(
 			await obsidian.dev.evalJson<string>(
-				`(${transcribe.elements})[0].closest(".pn-panel").textContent.trim()`,
+				`(${transcribe.elements})[0].closest(".pn-panel").textContent.replace(/\\s+/g, " ").trim()`,
 			),
-		).toBe("No transcript in this feedTranscribe with OpenAIPaid");
+		).toBe("No transcript in this feed Transcribe with OpenAI Paid");
 		expect(await isDisabled(obsidian, transcribe)).toBe(false);
 	}, 60_000);
 

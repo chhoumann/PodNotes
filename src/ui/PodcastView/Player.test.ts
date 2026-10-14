@@ -382,12 +382,14 @@ describe("the player's panels", () => {
 		expect(player.querySelector(".pn-np-art")).not.toBeNull();
 	});
 
-	test("an episode without chapters offers no Chapters", async () => {
+	test("an episode without chapters offers its Transcript and Up next, no Chapters", async () => {
 		await openPlayer();
 
 		expect(
-			within(screen.getByRole("group", { name: "Player panels" })).getAllByRole("button"),
-		).toEqual([switchButton("Up next")]);
+			within(screen.getByRole("group", { name: "Player panels" }))
+				.getAllByRole("button")
+				.map((choice) => choice.textContent),
+		).toEqual(["Transcript", "Up next"]);
 	});
 
 	test("at wide width, the right column shows Chapters, or Up next without chapters", async () => {
@@ -411,7 +413,10 @@ describe("the player's panels", () => {
 		await tick();
 		await tick();
 
-		expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Up next"]);
+		expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+			"Transcript",
+			"Up next",
+		]);
 		expect(screen.getByRole("tab", { name: "Up next" })).toHaveAttribute(
 			"aria-selected",
 			"true",
@@ -421,7 +426,7 @@ describe("the player's panels", () => {
 
 	test("at wide width, arrow keys, Home and End move focus between the tabs and show each one's panel", async () => {
 		await openPlayer(withChapters, 820);
-		await vi.waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(2));
+		await vi.waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(3));
 		const tabs = () =>
 			screen.getAllByRole("tab").map((tab) => ({
 				name: tab.textContent,
@@ -437,16 +442,22 @@ describe("the player's panels", () => {
 		screen.getByRole("tab", { name: "Chapters" }).focus();
 
 		expect(await key("ArrowRight")).toEqual([
+			"Transcript",
+			screen.getByRole("tab", { name: "Transcript" }).id,
+		]);
+		expect(await key("ArrowRight")).toEqual([
 			"Up next",
 			screen.getByRole("tab", { name: "Up next" }).id,
 		]);
 		expect(tabs()).toEqual([
 			{ name: "Chapters", selected: "false", tabIndex: -1, focused: false },
+			{ name: "Transcript", selected: "false", tabIndex: -1, focused: false },
 			{ name: "Up next", selected: "true", tabIndex: 0, focused: true },
 		]);
 		expect(within(screen.getByRole("tabpanel")).getByText("Queue is empty")).toBeVisible();
 		expect((await key("ArrowRight"))[0]).toBe("Chapters");
 		expect((await key("ArrowLeft"))[0]).toBe("Up next");
+		expect((await key("ArrowLeft"))[0]).toBe("Transcript");
 		expect((await key("Home"))[0]).toBe("Chapters");
 		expect((await key("Home"))[0]).toBe("Chapters");
 		expect((await key("End"))[0]).toBe("Up next");

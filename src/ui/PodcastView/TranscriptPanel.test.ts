@@ -1,0 +1,419 @@
+// @vitest-environment jsdom
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { tick } from "svelte";
+import { get } from "svelte/store";
+import { afterEach, beforeEach, describe, expect, type Mock, test, vi } from "vitest";
+import type { ParsedFeedEpisodes, TranscriptLink } from "src/parser/feedDocumentParser";
+import { FeedRepository } from "src/services/FeedRepository";
+import { plugin } from "src/store";
+import type { Episode } from "src/types/Episode";
+import { NetworkError } from "src/utility/networkRequest";
+import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
+import { feedItem, MemoryStorage } from "../../../tests/mocks/feeds";
+import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
+import {
+	installResizeObserver,
+	type FakeResizeObservers,
+} from "../../../tests/mocks/resizeObserver";
+import { createTestServices, type TestServices } from "../../../tests/mocks/services";
+import PodcastView from "./PodcastView.svelte";
+
+const fetchTextMock = vi.hoisted(() => vi.fn());
+
+vi.mock("src/utility/networkRequest", async (importOriginal) => ({
+	...(await importOriginal<typeof import("src/utility/networkRequest")>()),
+	fetchTextWithTimeout: fetchTextMock,
+}));
+
+const CUES: ReadonlyArray<readonly [string, string]> = [
+	["Maya Lind", "Welcome back to Field Notes."],
+	["Maya Lind", "Today we build a memory palace together."],
+	["Ana Ilic", "Where does the palace start?"],
+	["Ana Ilic", "At your own front door."],
+	["Maya Lind", "Then every room holds one idea."],
+	["Maya Lind", "The stranger the image, the longer it stays."],
+	["Ana Ilic", "And spaced repetition does the rest."],
+	["Ana Ilic", "Walk the Palace again a day later."],
+	["Maya Lind", "Then a week later, then a month later."],
+	["Maya Lind", "That is the whole method."],
+];
+const LINES = CUES.map(([, text]) => text);
+const clock = (seconds: number) => `00:00:${String(seconds).padStart(2, "0")}.000`;
+const VTT = `WEBVTT\n\n${CUES.map(
+	([speaker, text], index) =>
+		`${clock(index * 6)} --> ${clock(index * 6 + 6)}\n<v ${speaker}>${text}`,
+).join("\n\n")}\n`;
+const VTT_LINK: TranscriptLink = { url: "1.vtt", type: "text/vtt" };
+const SECRET = "https://private.test/s3cret/feed.xml?auth=s3cret";
+
+let services: TestServices;
+let doc: FakeDocument;
+let dispose: () => void;
+let widths: FakeResizeObservers;
+let feeds: FeedRepository;
+let loadFeed: Mock<(url: string) => Promise<ParsedFeedEpisodes>>;
+let episodes: Array<{ episode: Episode; transcripts: TranscriptLink[] }>;
+let made = 0;
+
+/** A new episode of Field Notes, so the one-episode cache never carries over from a test before. */
+function episodeOf(transcripts: TranscriptLink[], overrides: Partial<Episode> = {}): Episode {
+	made++;
+	const episode: Episode = {
+		title: `Episode ${made}`,
+		streamUrl: `https://pod.test/${made}.mp3`,
+		url: "",
+		description: "",
+		content: "",
+		podcastName: "Field Notes",
+		feedUrl: "https://pod.test/feed.xml",
+		duration: 1800,
+		...overrides,
+	};
+	episodes.push({ episode, transcripts });
+	return episode;
+}
+
+beforeEach(() => {
+	episodes = [];
+	fetchTextMock.mockReset();
+	fetchTextMock.mockResolvedValue(VTT);
+	loadFeed = vi.fn(async () => ({
+		feed: { title: "Field Notes" },
+		episodes: episodes.map(({ episode, transcripts }) => ({
+			...feedItem(episode),
+			transcripts,
+		})),
+	}));
+	feeds = new FeedRepository({
+		load: loadFeed,
+		resolveUrl: (feed) => feed.url,
+		storage: new MemoryStorage(),
+		now: Date.now,
+	});
+	({ services, doc, dispose } = createTestServices({ feeds }));
+	services.library.savedFeeds.set({
+		"Field Notes": { title: "Field Notes", url: "https://pod.test/feed.xml", artworkUrl: "" },
+	});
+	widths = installResizeObserver();
+});
+
+afterEach(() => {
+	widths.uninstall();
+	dispose();
+	vi.restoreAllMocks();
+});
+
+/** The full player at `time` of `played`, paused, with its Transcript panel chosen. */
+async function openTranscript(played: Episode, time = 0, width = 320) {
+	const result = render(PodcastView, { props: { services } });
+	widths.resize(result.container.querySelector(".podcast-view")!, width);
+	services.player.play(played);
+	doc.media.duration = 1800;
+	doc.media.emit("loadedmetadata");
+	services.player.pause();
+	doc.media.currentTime = time;
+	doc.media.emit("timeupdate");
+	services.navigation.expand();
+	await tick();
+	await fireEvent.click(switchButton("Transcript"));
+	return result;
+}
+
+async function at(time: number) {
+	doc.media.currentTime = time;
+	doc.media.emit("timeupdate");
+	await tick();
+}
+
+const switchButton = (name: string) =>
+	within(screen.getByRole("group", { name: "Player panels" })).getByRole("button", { name });
+const button = (name: string | RegExp) => screen.getByRole("button", { name });
+const transcript = () => screen.findByRole("list", { name: "Transcript" });
+const lineButton = (text: string) =>
+	within(screen.getByRole("list", { name: "Transcript" })).getByRole("button", {
+		name: new RegExp(`${text}$`),
+	});
+const rows = () =>
+	within(screen.getByRole("list", { name: "Transcript" }))
+		.getAllByRole("listitem")
+		.map((row) => row.textContent?.replace(/\s+/g, " ").trim());
+const currentLine = () =>
+	within(screen.getByRole("list", { name: "Transcript" })).queryByRole("button", {
+		current: true,
+	})?.lastElementChild?.textContent;
+const hitLine = () =>
+	screen.getByRole("list", { name: "Transcript" }).querySelector(".is-hit")?.lastElementChild
+		?.textContent;
+const marks = () => [...document.querySelectorAll("mark")].map((mark) => mark.textContent);
+const keymap = () => services.app.keymap as unknown as FakeKeymap;
+const press = (key: string, target: Element = document.activeElement ?? document.body) => {
+	const event = new KeyboardEvent("keydown", { key, bubbles: true });
+	Object.defineProperty(event, "target", { value: target });
+	keymap().dispatch(event);
+};
+
+/**
+ * Lays the list's rows out 40 px apart in a list 120 px tall, as the browser would: its
+ * scroll position stays within the rows, and a change to it fires `scroll` soon after.
+ */
+function layOut(list: HTMLElement) {
+	let top = 0;
+	Object.defineProperty(list, "clientHeight", { configurable: true, value: 120 });
+	Object.defineProperty(list, "scrollTop", {
+		configurable: true,
+		get: () => top,
+		set: (value: number) => {
+			const next = Math.max(0, Math.min(value, list.children.length * 40 - 120));
+			if (next === top) return;
+			top = next;
+			queueMicrotask(() => list.dispatchEvent(new Event("scroll")));
+		},
+	});
+	vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+		this: Element,
+	) {
+		const y = this === list ? 0 : [...list.children].indexOf(this) * 40 - top;
+		return { top: y, bottom: y + 40, left: 0, right: 300 } as DOMRect;
+	});
+}
+
+describe("a published transcript", () => {
+	test("lists its lines with their times and speakers, and marks the line playing now", async () => {
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await transcript();
+
+		expect(rows()).toEqual([
+			"Maya Lind 0:00 Welcome back to Field Notes.",
+			"0:06 Today we build a memory palace together.",
+			"Ana Ilic 0:12 Where does the palace start?",
+			"0:18 At your own front door.",
+			"Maya Lind 0:24 Then every room holds one idea.",
+			"0:30 The stranger the image, the longer it stays.",
+			"Ana Ilic 0:36 And spaced repetition does the rest.",
+			"0:42 Walk the Palace again a day later.",
+			"Maya Lind 0:48 Then a week later, then a month later.",
+			"0:54 That is the whole method.",
+		]);
+		expect(currentLine()).toBe(LINES[0]);
+		await at(7);
+		expect(currentLine()).toBe(LINES[1]);
+		await at(43);
+		expect(currentLine()).toBe(LINES[7]);
+
+		await fireEvent.click(button("Find in transcript"));
+		await fireEvent.input(screen.getByRole("searchbox", { name: "Find in transcript" }), {
+			target: { value: "palace" },
+		});
+		expect(currentLine()).toBe(LINES[7]);
+	});
+
+	test("a tapped line plays from its start", async () => {
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await transcript();
+		expect(get(services.player.state).status).toBe("paused");
+
+		await fireEvent.click(lineButton(LINES[6]));
+
+		expect(get(services.player.state)).toMatchObject({ currentTime: 36, status: "playing" });
+		expect(currentLine()).toBe(LINES[6]);
+	});
+
+	test("follows the line playing now until the user scrolls, then Follow brings it back", async () => {
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		const list = await transcript();
+		layOut(list);
+
+		await at(13);
+		await tick();
+		expect(list.scrollTop, "row 2, a third down").toBe(40);
+		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+
+		list.scrollTop = 30;
+		await tick();
+		await tick();
+		const follow = button("Follow");
+		expect(follow.closest("[aria-live=polite]")).not.toBeNull();
+		await at(19);
+		await tick();
+		expect(list.scrollTop, "the reader stays where they scrolled").toBe(30);
+
+		await fireEvent.click(follow);
+		await tick();
+		expect(list.scrollTop, "row 3, a third down").toBe(80);
+		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+		expect(get(services.player.state).status).toBe("paused");
+	});
+
+	test("Find shows the lines with a word, Enter and Shift+Enter step through them, and Escape closes Find before the player", async () => {
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await transcript();
+		await fireEvent.click(button("Find in transcript"));
+		const field = screen.getByRole("searchbox", { name: "Find in transcript" });
+
+		await fireEvent.input(field, { target: { value: "PALACE" } });
+		expect(rows()).toEqual([
+			"Maya Lind 0:06 Today we build a memory palace together.",
+			"Ana Ilic 0:12 Where does the palace start?",
+			"0:42 Walk the Palace again a day later.",
+		]);
+		expect(marks()).toEqual(["palace", "palace", "Palace"]);
+		expect(hitLine()).toBe(LINES[1]);
+		const step = async (shiftKey: boolean) => {
+			await fireEvent.keyDown(field, { key: "Enter", shiftKey });
+			return hitLine();
+		};
+		expect([await step(false), await step(false), await step(false)]).toEqual([
+			LINES[2],
+			LINES[7],
+			LINES[1],
+		]);
+		expect([await step(true), await step(true)]).toEqual([LINES[7], LINES[2]]);
+
+		await fireEvent.input(field, { target: { value: "zebra" } });
+		expect(rows()).toEqual(["No lines match"]);
+
+		press("Escape", field);
+		await tick();
+		expect(screen.queryByRole("searchbox")).toBeNull();
+		expect(rows()).toHaveLength(10);
+		expect(button("Find in transcript")).toHaveFocus();
+		expect(services.navigation.current.expanded).toBe(true);
+
+		press("Escape");
+		await tick();
+		expect(services.navigation.current.expanded).toBe(false);
+	});
+
+	test("Save as note runs the transcribe command, which writes the note", async () => {
+		const vault = { create: vi.fn(), modify: vi.fn(), process: vi.fn() };
+		Object.assign(services.app, { vault });
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await transcript();
+
+		await fireEvent.click(button("Save as note"));
+
+		expect(services.saveTranscriptNote).toHaveBeenCalledExactlyOnceWith();
+		expect([vault.create, vault.modify, vault.process].map((spy) => spy.mock.calls)).toEqual([
+			[],
+			[],
+			[],
+		]);
+		expect(fetchTextMock).toHaveBeenCalledOnce();
+		services.online.set(false);
+		await tick();
+		expect(button("Save as note")).toBeDisabled();
+	});
+
+	test("Save as note is off for a video, as the command is", async () => {
+		await openTranscript(episodeOf([VTT_LINK], { mediaType: "video" }), 0);
+		await transcript();
+
+		expect(button("Save as note")).toBeDisabled();
+	});
+
+	test("an untimed transcript reads as paragraphs, with no time to play from or follow", async () => {
+		fetchTextMock.mockResolvedValue("First paragraph.\n\nSecond paragraph.");
+		await openTranscript(episodeOf([{ url: "1.txt", type: "text/plain" }]), 30);
+		const list = await transcript();
+
+		list.scrollTop = 30;
+		await fireEvent.scroll(list);
+
+		expect(rows()).toEqual(["First paragraph.", "Second paragraph."]);
+		expect(within(list).queryAllByRole("button")).toEqual([]);
+		expect(list.querySelector("[aria-current]")).toBeNull();
+		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+	});
+
+	test("shows once loaded: back from Up next it neither loads again nor fetches again", async () => {
+		let answer!: (text: string) => void;
+		fetchTextMock.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		expect(await screen.findByText("Loading transcript")).toHaveAttribute("role", "status");
+		answer(VTT);
+		await transcript();
+
+		await fireEvent.click(switchButton("Up next"));
+		await fireEvent.click(switchButton("Transcript"));
+
+		expect(screen.getByRole("list", { name: "Transcript" })).toBeInTheDocument();
+		expect(screen.queryByText("Loading transcript")).toBeNull();
+		expect(fetchTextMock).toHaveBeenCalledOnce();
+	});
+});
+
+describe("a transcript that did not load", () => {
+	test("offers Retry, which fetches it again", async () => {
+		fetchTextMock.mockRejectedValueOnce(new NetworkError("unexpected-status", 500));
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await screen.findByText("Transcript didn't load");
+
+		await fireEvent.click(button("Retry"));
+
+		await transcript();
+		expect(fetchTextMock).toHaveBeenCalledTimes(2);
+	});
+
+	test("never shows or logs a private feed's address from the failure", async () => {
+		const logged = (["error", "warn", "info", "log", "debug"] as const).map((level) =>
+			vi.spyOn(console, level),
+		);
+		vi.spyOn(feeds, "itemUrl").mockImplementation(() => {
+			throw new Error(`Could not resolve 1.vtt against ${SECRET}`);
+		});
+		const { container } = await openTranscript(episodeOf([VTT_LINK]), 0);
+		await screen.findByText("Transcript didn't load");
+
+		expect(container.innerHTML).not.toContain("s3cret");
+		expect(JSON.stringify(logged.map((spy) => spy.mock.calls))).not.toContain("s3cret");
+	});
+
+	test("when the feed itself did not load, offers Retry, not the paid transcription", async () => {
+		const served = loadFeed.getMockImplementation()!;
+		loadFeed.mockRejectedValue(new Error("offline"));
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+
+		await screen.findByText("Transcript didn't load");
+		expect(screen.queryByRole("button", { name: /^Transcribe with/ })).toBeNull();
+		loadFeed.mockImplementation(served);
+		await fireEvent.click(button("Retry"));
+		await transcript();
+	});
+});
+
+describe("an episode whose feed publishes no transcript", () => {
+	test("offers the paid transcription, off while offline", async () => {
+		await openTranscript(episodeOf([]), 0);
+		await screen.findByText("No transcript in this feed");
+		const paid = button("Transcribe with OpenAI Paid");
+
+		await fireEvent.click(paid);
+		expect(services.transcribeFromAudio).toHaveBeenCalledExactlyOnceWith();
+
+		services.online.set(false);
+		await tick();
+		expect(paid).toBeDisabled();
+	});
+
+	test("names Deepgram when diarization uses it", async () => {
+		const { settings } = get(plugin);
+		settings.transcript.diarization = {
+			...settings.transcript.diarization,
+			enabled: true,
+			provider: "deepgram",
+		};
+		plugin.update((host) => host);
+		await openTranscript(episodeOf([]), 0);
+
+		expect(
+			await screen.findByRole("button", { name: /^Transcribe with/ }),
+		).toHaveAccessibleName("Transcribe with Deepgram Paid");
+	});
+
+	test("offers no paid transcription for a video", async () => {
+		await openTranscript(episodeOf([], { mediaType: "video" }), 0);
+
+		await screen.findByText("No transcript in this feed");
+		expect(screen.queryByRole("button", { name: /^Transcribe with/ })).toBeNull();
+	});
+});
