@@ -386,9 +386,9 @@ describe("FeedRepository", () => {
 		const t = setup({ storage: seeded.storage });
 		t.advance(6 * HOUR);
 		t.repo.setSubscriptions({ Alpha: alpha });
-		await t.repo.ensureAll();
+		void t.repo.ensureAll();
 		expect(t.load).not.toHaveBeenCalled();
-		expect(t.feed("Alpha")?.status).toBe("ready");
+		expect(t.feed("Alpha")).toMatchObject({ status: "ready", episodes: [expect.anything()] });
 
 		t.advance(1);
 		void t.repo.ensureAll();

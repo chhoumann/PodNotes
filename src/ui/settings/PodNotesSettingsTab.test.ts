@@ -237,10 +237,11 @@ describe("text fields", () => {
 
 		type(field("Transcript path"), "x");
 		window.dispatchEvent(new Event("pagehide"));
-		tab.hide();
 
 		expect(await writes()).toBe(1);
 		expect((await disk()).transcript.path).toBe(`${DEFAULT_SETTINGS.transcript.path}x`);
+		tab.hide();
+		expect(await writes()).toBe(1);
 	});
 
 	test("an edit in progress saves once when the app goes to the background", async () => {
@@ -249,11 +250,12 @@ describe("text fields", () => {
 
 		type(field("Download path"), "/x");
 		document.dispatchEvent(new Event("visibilitychange"));
-		visibility.mockReturnValue("visible");
-		complete(field("Download path"));
 
 		expect(await writes()).toBe(1);
 		expect((await disk()).download.path).toBe(`${DEFAULT_SETTINGS.download.path}/x`);
+		visibility.mockReturnValue("visible");
+		complete(field("Download path"));
+		expect(await writes()).toBe(1);
 	});
 
 	test("a field nobody edited never puts back the value it showed", async () => {
