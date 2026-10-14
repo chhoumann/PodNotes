@@ -46,6 +46,6 @@ Preconditions:
 - Audio keeps playing on every page, with the full player collapsed, in settings, and with the view closed. The one media element is `audio.podnotes-media` (or `video.podnotes-media`) in the main window, not inside the view.
 - After a restart the view opens on its last page, and the mini player shows the last episode paused at its saved position. Nothing loads or plays until you press play. A sync that lands before then updates the shown episode and position, unless you moved the position.
 - A video plays in the main window only. With the view in a popout, the player shows the artwork and the video keeps playing hidden in the main window.
-- With `Keep a queue of episodes you switch away from` on (the default), switching episodes queues the previous one, and it plays again when the current one ends.
+- With `Queue episodes I switch away from` on (the default), switching episodes queues the previous one, and it plays again when the current one ends.
 - The skip buttons have no accessible name. Address them by position inside `.controls-container`.
 - Headless Obsidian plays to a null audio sink. Prove playback through `api.currentTime` advancing, not by sound.
