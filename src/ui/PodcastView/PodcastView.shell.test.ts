@@ -366,12 +366,12 @@ describe("offline", () => {
 		expect(button("Refresh all feeds")).toBeEnabled();
 	});
 
-	test("the feeds that could not load offline load when the connection returns", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		const load = vi
-			.fn<(url: string) => Promise<ParsedFeedEpisodes>>()
-			.mockRejectedValueOnce(new Error("offline"))
-			.mockResolvedValue(feedDocument(feed.title, [episode]));
+	test("automatic loading follows the online store and reconnect starts a fresh request", async () => {
+		const load = vi.fn<(url: string) => Promise<ParsedFeedEpisodes>>(() =>
+			get(services.online)
+				? Promise.resolve(feedDocument(feed.title, [episode]))
+				: new Promise(() => {}),
+		);
 		dispose();
 		({ services, doc, dispose } = createTestServices({
 			feeds: new FeedRepository({
@@ -385,14 +385,15 @@ describe("offline", () => {
 		services.online.set(false);
 		services.navigation.replace({ kind: "latest" });
 		renderView(320);
-		await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
 		await tick();
+		expect(navigator.onLine).toBe(true);
+		expect(load).not.toHaveBeenCalled();
 		expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
 
 		services.online.set(true);
 
 		expect(await screen.findByText(episode.title)).toBeInTheDocument();
-		expect(load.mock.calls).toEqual([[feed.url], [feed.url]]);
+		expect(load.mock.calls).toEqual([[feed.url]]);
 	});
 
 	test("First run has no strip", async () => {
