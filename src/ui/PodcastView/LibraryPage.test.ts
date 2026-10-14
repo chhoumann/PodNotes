@@ -178,7 +178,10 @@ describe("the Library's podcast grid", () => {
 			"Copy feed URL",
 			"Remove podcast",
 		]);
-		expect(shown).toHaveBeenCalledWith({ x: 40, y: 50, doc: document }, document);
+		expect(shown).toHaveBeenCalledWith(
+			{ x: 40, y: 50, doc: document, el: card("Art Show") },
+			document,
+		);
 	});
 
 	test("a compact Library lists its lists above the grid", () => {

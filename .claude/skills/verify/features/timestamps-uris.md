@@ -9,6 +9,7 @@ moment.
 
 - `ts-capture` inserts the formatted current time at the cursor ("Capture Timestamp").
 - `ts-segment` inserts a linked range ending now ("Capture Last 10 Seconds", "Capture Last 20 Seconds").
+- `ts-undo` confirms every capture, from the player, the mini player, a command or the headset, in a Notice: `Timestamp added to <note>`, or `Created <note>` when it created the episode note. Its Undo puts the note back as the capture found it, only while the note is still exactly as the capture left it; any later change, also a pending save, gets the Notice `The note isn't as the capture left it, so the timestamp stays`. A created note is kept.
 - `ts-format` applies the `Capture timestamp format` and `Timestamp offset (s)` settings.
 - `uri-open` reopens the linked episode at `time`, also after another episode played.
 - `uri-segment` plays a linked range and stops at its end (`endTime`).
@@ -31,6 +32,7 @@ Preconditions:
 - **Set a linked format.** Open Settings > PodNotes ([feeds.md](./feeds.md)), run `UI fill '.modal.mod-settings textarea[placeholder="- {{linktime}} "]' '* {{linktime}} - '`, then close Settings. `data.json` `timestamp.template` is `* {{linktime}} - `.
 - **Play.** Start `Fixture Episode 1` ([player.md](./player.md)) and wait about 5 s.
 - **Capture.** Run `UI click '.workspace-leaf-content[data-type="markdown"] .cm-content .cm-line:last-child'`, `UI key Ctrl+p`, `UI type .prompt-input 'Capture Timestamp'`, `UI click .suggestion-item --text 'Capture Timestamp'`. After about 2 s, `CLI read path='Verify/Timestamps.md'` has a line like `* [00:00:05](obsidian://podnotes?episodeName=Fixture%20Episode%201&url=...&time=5.73) - `.
+- **Undo.** Within 7 s of a capture, run `UI click '.notice button.pn-undo'`. The editor, then the file about 2 s later, reads as it did before the capture. Type into the captured line first, and Undo leaves it and shows the refusal Notice.
 - **Segment.** Run the same palette steps with `Capture Last 10 Seconds`. The line holds a range such as `00:00:05-00:00:15` and its URI has `time` and `endTime`.
 - **Open the link.** Let playback move on, run `CLI command id=markdown:toggle-preview` (Reading view), then `UI click '.markdown-reading-view a' --text '00:00:05'`. `api.podcast.title` is `Fixture Episode 1` and `api.currentTime` restarts from about 5.7 s. On Linux, the instance directory's `obsidian.log` (the parent of the private `HOME`) shows `Received callback URL` and `Processed URI`.
 - **Direct URI path.** Run `UI uri 'obsidian://podnotes?episodeName=Fixture%20Episode%201&url=<encoded feed URL>&time=30'`. `api.currentTime` jumps to about 30 s.

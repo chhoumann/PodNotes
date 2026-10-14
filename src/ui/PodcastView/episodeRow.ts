@@ -69,7 +69,8 @@ function formatDate(value: Date | string | undefined): string | undefined {
 }
 
 export function formatMinutes(seconds: number): string {
-	const total = Math.max(1, Math.round(seconds / 60));
+	if (seconds < 59.5) return `${Math.max(1, Math.round(seconds))} s`;
+	const total = Math.round(seconds / 60);
 	return total >= 60 ? `${Math.floor(total / 60)} h ${total % 60} min` : `${total} min`;
 }
 
@@ -114,6 +115,11 @@ export function secondsLeft(episodes: readonly Episode[], played: PlayedEpisodeM
 function folderOf(path: string): string {
 	const slash = path.lastIndexOf("/");
 	return slash > 0 ? path.slice(0, slash) : "/";
+}
+
+/** Where the episode comes from: its podcast, or the folder of a local file. */
+export function sourceOf(episode: Episode): string {
+	return isLocalFile(episode) ? folderOf(episode.filePath ?? "") : episode.podcastName;
 }
 
 export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowModel {

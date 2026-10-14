@@ -13,7 +13,8 @@ import {
 	type TestServices,
 } from "../../../tests/mocks/services";
 import WithServices from "../../../tests/mocks/WithServices.svelte";
-import QueuePage from "./QueuePage.svelte";
+import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
+import QueueList from "./QueueList.svelte";
 
 function episode(title: string, podcastName = "Field Notes"): Episode {
 	return {
@@ -44,7 +45,9 @@ afterEach(() => {
 
 function renderQueue(...episodes: Episode[]) {
 	queue.set({ ...structuredClone(DEFAULT_SETTINGS.queue), episodes });
-	return render(WithServices, { props: { services, component: QueuePage } });
+	return render(WithServices, {
+		props: { services, component: QueueList, props: { empty: "Nothing here yet" } },
+	});
 }
 
 const queued = () => get(queue).episodes.map(({ title, podcastName }) => `${podcastName}/${title}`);
@@ -52,6 +55,11 @@ const listed = () =>
 	screen.queryAllByRole("listitem").map((row) => row.querySelector(".pn-ep-title")?.textContent);
 const grip = (title: string) =>
 	screen.getByRole("button", { name: new RegExp(`^Reorder ${title},`) });
+/** An Escape as Obsidian delivers it: to the newest scope of the window's keymap. */
+const escape = () =>
+	(services.app.keymap as unknown as FakeKeymap).dispatch(
+		new KeyboardEvent("keydown", { key: "Escape" }),
+	);
 
 function layOutRows(shown = 1000) {
 	const rows = [...document.querySelectorAll<HTMLElement>(".pn-ep")];
@@ -69,7 +77,7 @@ function layOutRows(shown = 1000) {
 	};
 }
 
-describe("the Queue page", () => {
+describe("the queue list", () => {
 	test("lists the queue in its order, each with a grip that says where it is", () => {
 		renderQueue(a, b, c);
 
@@ -259,7 +267,9 @@ describe("dragging a grip", () => {
 
 	test("over a row of another Queue, as in a second PodNotes view, moves nothing", async () => {
 		renderQueue(a, b, c);
-		render(WithServices, { props: { services, component: QueuePage } });
+		render(WithServices, {
+			props: { services, component: QueueList, props: { empty: "Nothing here yet" } },
+		});
 		layOutRows();
 		const ownGrip = () => screen.getAllByRole("button", { name: /^Reorder A,/ })[0];
 
@@ -285,7 +295,8 @@ describe("dragging a grip", () => {
 		await fireEvent.pointerMove(window, at(70));
 		expect(listed()).toEqual(["B", "A", "C"]);
 
-		await fireEvent.keyDown(window, { key: "Escape" });
+		escape();
+		await tick();
 		expect(listed()).toEqual(["A", "B", "C"]);
 		layOutRows();
 		await fireEvent.pointerMove(window, at(110));
@@ -367,6 +378,8 @@ describe("dragging a grip", () => {
 		layOutRows();
 		const added = vi.spyOn(window, "addEventListener");
 		const removed = vi.spyOn(window, "removeEventListener");
+		const passedOn = vi.fn(() => false);
+		services.app.scope.register(null, "Escape", passedOn);
 
 		await fireEvent.pointerDown(grip("A"), { ...at(20), button: 0 });
 		await fireEvent.pointerMove(window, at(70));
@@ -379,10 +392,11 @@ describe("dragging a grip", () => {
 			"pointermove",
 			"pointerup",
 			"pointercancel",
-			"keydown",
 		]);
 		expect(removed.mock.calls.map(([type, listener]) => [type, listener])).toEqual(
 			expect.arrayContaining(listening),
 		);
+		escape();
+		expect(passedOn).toHaveBeenCalledTimes(1);
 	});
 });

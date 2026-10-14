@@ -36,6 +36,7 @@ export const ui = {
 	libraryHead: byCss("Library page", `${PLAYER_VIEW} h1.pn-head-title`, "Library"),
 	pageTitle: (title: string) =>
 		byCss(`${title} page`, `${PLAYER_VIEW} :is(h1.pn-head-title, .pn-title h1)`, title),
+	podcastPage: (title: string) => byCss(`${title}'s page`, `${PLAYER_VIEW} .pn-hero h1`, title),
 	back: byCss("Back button", `${PLAYER_VIEW} .pn-head button[aria-label^="Back to "]`),
 	backTo: (label: string) =>
 		byAttribute(`Back to ${label}`, `${PLAYER_VIEW} button`, "aria-label", `Back to ${label}`),
@@ -74,7 +75,7 @@ export const ui = {
 		),
 	episode: (title: string): UiTarget => ({
 		name: `episode ${title}`,
-		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".episode-player") && el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".pn-player") && el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
 	}),
 	episodeLoading: byCss(
 		"episode list loading",
@@ -95,8 +96,42 @@ export const ui = {
 			label,
 		),
 	playbackToggle: byCss(
-		"on-screen playback toggle",
-		`${PLAYER_VIEW} .episode-player button[aria-label="Toggle playback"]`,
+		"full player's play/pause",
+		`${PLAYER_VIEW} section.pn-player button.pn-play`,
+	),
+	playerControl: (label: string) =>
+		byAttribute(
+			`full player's ${label}`,
+			`${PLAYER_VIEW} section.pn-player button`,
+			"aria-label",
+			label,
+		),
+	playerTitle: byCss("full player's title", `${PLAYER_VIEW} section.pn-player h2.pn-np-title`),
+	playerPodcast: byCss(
+		"full player's podcast link",
+		`${PLAYER_VIEW} section.pn-player button.pn-np-pod`,
+	),
+	playerVolume: byCss("full player's volume", `${PLAYER_VIEW} section.pn-player button.pn-vol`),
+	/** It reads Timestamp, then Added for a moment after a capture. */
+	playerTimestamp: byCss(
+		"full player's Timestamp",
+		`${PLAYER_VIEW} section.pn-player button.pn-cap.mod-cta`,
+	),
+	volumeSlider: byCss(
+		"volume slider",
+		`${PLAYER_VIEW} section.pn-player input[type="range"][aria-label="Volume"]`,
+	),
+	playerPanel: (name: string) =>
+		byCss(
+			`player panel ${name}`,
+			`${PLAYER_VIEW} section.pn-player :is(.pn-sw, .pn-tab)`,
+			name,
+		),
+	miniCapture: byAttribute(
+		"mini player's Capture timestamp",
+		`${PLAYER_VIEW} section.pn-mini button`,
+		"aria-label",
+		"Capture timestamp",
 	),
 	episodeMenu: (title: string) =>
 		byAttribute(

@@ -206,6 +206,14 @@ describe("API playback rate controls", () => {
 		expect(api.playbackRate).toBe(0.5);
 	});
 
+	test("keeps a quarter rate, such as 1.25, set through the API", () => {
+		const { api, media } = setup();
+
+		api.playbackRate = 1.25;
+
+		expect([api.playbackRate, media().playbackRate]).toEqual([1.25, 1.25]);
+	});
+
 	test("resets playback rate to the configured default", () => {
 		const { api } = setup();
 

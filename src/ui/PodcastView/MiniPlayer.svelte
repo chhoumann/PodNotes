@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { Notice } from "obsidian";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import { formatMinutes } from "./episodeRow";
+	import { formatMinutes, sourceOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
@@ -22,10 +21,7 @@
 	let failedArtworkUrl = $state("");
 	const id = $props.id();
 
-	async function capture() {
-		const note = (await captureTimestamp())?.path.split("/").pop()?.replace(/\.md$/, "");
-		if (note) new Notice(`Timestamp added to ${note}`);
-	}
+	const capture = () => void captureTimestamp();
 </script>
 
 {#snippet progress(kind: "pn-mini-prog" | "pn-mini-track")}
@@ -71,7 +67,7 @@
 			<span class="pn-mini-txt">
 				<span class="pn-mini-t">{episode.title}</span>
 				<span class="pn-mini-s">
-					{episode.podcastName}{left}
+					{sourceOf(episode)}{left}
 				</span>
 			</span>
 		</button>
@@ -186,14 +182,6 @@
 	:global(.is-phone) .pn-mini-cover {
 		width: 44px;
 		height: 44px;
-	}
-
-	.pn-filetile {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--background-modifier-hover);
-		color: var(--text-muted);
 	}
 
 	.pn-mini-txt {
