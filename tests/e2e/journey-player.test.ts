@@ -1,7 +1,13 @@
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
-import { closePodNotes, openInEditor, revealInFileExplorer, showPodNotes } from "./journey/actions";
-import { cdp, click, pointOn, pressKey, pressMouse } from "./journey/input";
+import {
+	clickInEditor,
+	closePodNotes,
+	openInEditor,
+	revealInFileExplorer,
+	showPodNotes,
+} from "./journey/actions";
+import { cdp, click, pointOn, pressHotkey, pressKey, pressMouse, typeText } from "./journey/input";
 import { PLAYER_VIEW, ui, type UiTarget } from "./journey/targets";
 import { eventually, holdsFor, isShown, waitUntilFocused, waitUntilShown } from "./journey/wait";
 import {
@@ -13,6 +19,7 @@ import {
 	wav,
 } from "./journey/fixtures";
 import {
+	observePlayback,
 	readLibrary,
 	recordWrites,
 	seedLibrary,
@@ -311,6 +318,15 @@ describe("player journeys", () => {
 		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", text: "\r", ...enter });
 		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...enter });
 		await waitUntilShown(obsidian, ui.menuItem("Add to queue"));
+		// Obsidian gives a menu the keys a timer tick after it shows; an Escape before then
+		// goes to the view under it.
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					'(app.keymap.getWindowStack(activeWindow).scope.keys ?? []).some((key) => key.key === "ArrowDown")',
+				),
+			{ timeoutMs: 5_000, intervalMs: 50, message: "the menu to take the keys" },
+		);
 
 		await pressKey(obsidian, "Escape");
 		expect(
@@ -336,5 +352,84 @@ describe("player journeys", () => {
 		await waitUntilShown(obsidian, ui.miniPlayer);
 		expect(await isShown(obsidian, ui.fullPlayer)).toBe(false);
 		await waitUntilFocused(obsidian, ui.openPlayer);
+	});
+
+	test("#467 keys typed in a note reach it while the full player is open", async () => {
+		const { obsidian, sandbox } = getContext();
+		const note = sandbox.path("Find in note.md");
+		await writeVaultFile(obsidian, note, "alpha one\nalpha two\nalpha three\n");
+		await openInEditor(obsidian, note);
+		await openPlayer([ONE]);
+		await clickInEditor(obsidian, note, 0, 0);
+		const search = () =>
+			obsidian.dev.evalJson<{ open: boolean; count: string | null }>(`(() => {
+				const leaf = app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(note)});
+				const bar = leaf.view.containerEl.querySelector(".document-search-container");
+				return { open: Boolean(bar), count: bar?.querySelector(".document-search-count")?.textContent ?? null };
+			})()`);
+		await pressHotkey(obsidian, "f");
+		await typeText(obsidian, "alpha");
+		expect(await eventually(obsidian, search, { open: true, count: "1 / 3" })).toEqual({
+			open: true,
+			count: "1 / 3",
+		});
+
+		await pressKey(obsidian, "Enter");
+		expect(await eventually(obsidian, search, { open: true, count: "2 / 3" }), "Enter").toEqual(
+			{ open: true, count: "2 / 3" },
+		);
+		await pressKey(obsidian, "Escape");
+		expect(await eventually(obsidian, search, { open: false, count: null }), "Escape").toEqual({
+			open: false,
+			count: null,
+		});
+		expect(await isShown(obsidian, ui.fullPlayer), "the player stays open").toBe(true);
+	});
+
+	test("#467 Space and Escape typed in a plain note or a new tab leave the full player open and paused", async () => {
+		const { obsidian, sandbox } = getContext();
+		const note = sandbox.path("Plain note.md");
+		await writeVaultFile(obsidian, note, "A plain note\n");
+		await openInEditor(obsidian, note);
+		await openPlayer([ONE]);
+		expect(await clickInEditor(obsidian, note, 0, 12)).toEqual({ line: 0, ch: 12 });
+		const text = () =>
+			obsidian.dev.evalJson<string>(
+				`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(note)}).view.editor.getValue()`,
+			);
+		const activeView = () =>
+			obsidian.dev.evalJson<string>("app.workspace.activeLeaf.view.getViewType()");
+		const playerAsItWas = async (after: string) => {
+			expect(
+				await holdsFor(obsidian, () => isShown(obsidian, ui.fullPlayer), true, 1000),
+				`${after}: the player stays open`,
+			).toBe(true);
+			expect(
+				await holdsFor(
+					obsidian,
+					async () => (await observePlayback(obsidian)).playing,
+					false,
+					500,
+				),
+				`${after}: still paused`,
+			).toBe(false);
+		};
+
+		await pressKey(obsidian, "Space");
+		expect(await eventually(obsidian, text, "A plain note \n"), "Space types in the note").toBe(
+			"A plain note \n",
+		);
+		await playerAsItWas("Space in the note");
+		await pressKey(obsidian, "Escape");
+		await playerAsItWas("Escape in the note");
+
+		await pressHotkey(obsidian, "t");
+		expect(await eventually(obsidian, activeView, "empty")).toBe("empty");
+		await pressKey(obsidian, "Space");
+		await playerAsItWas("Space in the new tab");
+		await pressKey(obsidian, "Escape");
+		await playerAsItWas("Escape in the new tab");
+		expect(await activeView(), "the new tab stays active").toBe("empty");
+		expect(await text(), "the note is as Space left it").toBe("A plain note \n");
 	});
 });

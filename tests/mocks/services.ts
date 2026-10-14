@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, Scope } from "obsidian";
 import { vi } from "vitest";
 import { DEFAULT_EPISODE_LIST_LIMIT, DEFAULT_SETTINGS } from "src/constants";
 import { PlayerController } from "src/player/PlayerController";
@@ -25,6 +25,17 @@ import { Navigation } from "src/ui/PodcastView/Navigation";
 import { PodcastSearch } from "src/ui/PodcastView/podcastSearch";
 import { FakeDocument } from "./fakeMedia";
 import { feedDocument, MemoryStorage } from "./feeds";
+
+/**
+ * Makes the leaf whose view has `scope` the active one, as focus or a press in it does
+ * in Obsidian, which hands that scope every key. A view with no scope, as a new tab's,
+ * leaves them to the app's scope.
+ */
+export function activateLeaf(app: App, scope: Scope | null): void {
+	(app.workspace as unknown as { activeLeaf: { view: { scope: Scope | null } } }).activeLeaf = {
+		view: { scope },
+	};
+}
 
 /** A library the test seeds, with the stores' setters. */
 export type TestLibrary = {
@@ -105,8 +116,12 @@ export function createTestServices(
 		now: Date.now,
 	});
 	const online = writable(true);
+	const scope = new Scope(app.scope);
+	// The view's leaf is active, as after a press in it.
+	activateLeaf(app, scope);
 	const services = {
 		app,
+		scope,
 		api: { skipBackward: vi.fn(), skipForward: vi.fn() } as never,
 		player,
 		feeds,

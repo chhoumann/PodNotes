@@ -122,6 +122,15 @@ describe("MainView mobile startup mounting", () => {
 		});
 	});
 
+	it("gives its components the view's own key scope, the one Obsidian hands keys to", async () => {
+		const { view } = createView({ shouldMount: true });
+
+		await openView(view);
+
+		expect(view.scope).not.toBeNull();
+		expect(mountedServices().scope).toBe(view.scope);
+	});
+
 	it("mountPodcastView wakes a dormant restored view exactly once", () => {
 		const { contentEl, plugin, view } = createView({ shouldMount: false });
 

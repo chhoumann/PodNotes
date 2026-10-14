@@ -56,7 +56,7 @@
 			if (cancelled.pointerId === pointerId) end();
 		};
 		// Obsidian's keymap gives Escape to the newest scope and stops it there, so a
-		// window listener would not hear an Escape the full player's scope takes.
+		// window listener would not hear an Escape the view's scope takes.
 		const escape = new Scope(app.scope);
 		escape.register(null, "Escape", () => {
 			end();

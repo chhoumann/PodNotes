@@ -35,6 +35,7 @@ function renderView() {
 				player,
 				feeds,
 				navigation,
+				scope: new obsidian.Scope(app.scope),
 				library: pluginLibrary,
 				actions: createLibraryActions({
 					app,

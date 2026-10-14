@@ -5,7 +5,7 @@ export interface FakePopout {
 	readonly win: Window;
 	/** Moves `el` into the popout as Obsidian moves a leaf, telling the listeners in it. */
 	moveIn(el: HTMLElement): void;
-	/** Makes the popout the active window, as Obsidian's focus listener does, then fires `focus`. */
+	/** Makes the popout the active window, as Obsidian does when it gets focus. */
 	focus(): void;
 }
 
@@ -43,7 +43,6 @@ export function openPopout(): FakePopout {
 		},
 		focus() {
 			activeWindow = win;
-			win.dispatchEvent(new Event("focus"));
 		},
 	};
 }
