@@ -49,7 +49,7 @@ async function loadPlugin(secrets: obsidian.SecretStorage): Promise<PodNotes> {
 		registerObsidianProtocolHandler: vi.fn(),
 		registerEvent: vi.fn(),
 		registerDomEvent: vi.fn(),
-		writeRefusal: null,
+		closing: null,
 		writeInFlight: null,
 		storeUnsubscribers: [],
 		views: new Set(),

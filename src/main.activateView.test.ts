@@ -322,7 +322,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			registerObsidianProtocolHandler: vi.fn(),
 			registerEvent: vi.fn(),
 			registerDomEvent: vi.fn(),
-			writeRefusal: null,
+			closing: null,
 			writeInFlight: null,
 			storeUnsubscribers: [],
 			views: new Set(),
@@ -487,7 +487,7 @@ describe("PodNotes onload wiring (#55)", () => {
 		vi.mocked(plugin.app.vault.adapter.read).mockResolvedValue("{ cut off");
 		vi.spyOn(console, "warn").mockImplementation(() => undefined);
 		await plugin.onExternalSettingsChange();
-		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 		const hide = vi.spyOn(Notice.prototype, "hide");
 
 		plugin.onunload();
