@@ -249,7 +249,7 @@ describe("resilience journeys", () => {
 		await typeInto(obsidian, ui.settingControl("Skip back (s)", "input"), "42", {
 			replace: true,
 		});
-		await pressKey(obsidian, "Enter");
+		await pressKey(obsidian, "Tab");
 		const saved = await waitForLibrary(
 			plugin,
 			(library) => library.skipBackwardSeconds === 42,

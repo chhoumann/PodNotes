@@ -77,7 +77,7 @@ function hms(seconds: number): string {
 }
 
 /**
- * The default "Capture timestamp format", `- {{linktime}} `, for `episode` at `seconds`,
+ * The default "Timestamp template", `- {{linktime}} `, for `episode` at `seconds`,
  * or the segment from `seconds` to `end` that it captures as `- {{linksegment}} `.
  */
 function capture(

@@ -194,7 +194,7 @@ export async function typeText(obsidian: ObsidianClient, text: string): Promise<
 	await cdp(obsidian, "Input.insertText", { text });
 }
 
-const KEY_CODES = { Enter: 13, Escape: 27, ArrowUp: 38, ArrowDown: 40 } as const;
+const KEY_CODES = { Tab: 9, Enter: 13, Escape: 27, ArrowUp: 38, ArrowDown: 40 } as const;
 
 /** Presses and releases `key` on whatever has focus. */
 export async function pressKey(
