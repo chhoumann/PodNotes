@@ -154,6 +154,18 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 		await this.loadSettings();
 		this.writer = this.createWriter(MAIN_WINDOW_CLOCK);
+		// Obsidian calls onExternalSettingsChange only when data.json's modified time is later
+		// than PodNotes' last save. A sync client can keep the other device's earlier time, and
+		// a write right after a save can round to the same millisecond, so the writer checks
+		// every change Obsidian sees to the file, and once for a change made while it loaded.
+		const dataFile = this.dataFilePath();
+		const writer = this.writer;
+		this.registerEvent(
+			this.app.vault.on("raw", (path) => {
+				if (path === dataFile) writer.report();
+			}),
+		);
+		writer.report();
 
 		this.setCollectionStores();
 		// The media lives in the main window, so playback outlasts the view and popouts.
@@ -478,6 +490,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.writer?.flush() ?? Promise.resolve();
 	}
 
+	// Obsidian refreshes an open settings tab once this resolves.
 	override async onExternalSettingsChange(): Promise<void> {
 		if (!this.writer) return;
 		await this.writer.onExternalChange();
@@ -515,6 +528,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return {
 			read: async (base): Promise<ReadOutcome<PersistedPodNotesDataV2>> => {
 				const data: unknown = await this.loadData();
+				if (base && jsonValuesEqual(data, base))
+					return { kind: "file", doc: structuredClone(base) };
 				const path = this.dataFilePath();
 				const unreadable: ReadOutcome<PersistedPodNotesDataV2> = {
 					kind: "refused",

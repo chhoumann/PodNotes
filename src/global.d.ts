@@ -1,4 +1,4 @@
-import type { App } from "obsidian";
+import type { App, EventRef, Vault } from "obsidian";
 
 interface Manifest {
 	author: string;
@@ -33,6 +33,10 @@ interface App2 extends App {
 	setting: {
 		open(): void;
 		openTabById(id: string): void;
+	};
+	vault: Vault & {
+		/** Not in the public types: any change Obsidian sees to a path, config files included. */
+		on(name: "raw", callback: (path: string) => unknown): EventRef;
 	};
 }
 
