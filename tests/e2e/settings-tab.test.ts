@@ -168,6 +168,42 @@ describe("PodNotes settings tab", () => {
 		).toEqual(["Skip back (s)", saved]);
 	});
 
+	test("blur keeps an external setting received after the focused edit was saved", async () => {
+		const { obsidian, plugin } = getContext();
+		const local = "Local/{{title}}.md";
+		const remote = "Remote/{{title}}.md";
+		await openPodNotesSettings(obsidian);
+		onTestFinished(() => closeSettings(obsidian));
+		const path = ui.settingControl("Episode note path", "input");
+		await typeInto(obsidian, path, local, { replace: true });
+		await plugin.waitForData<PodNotesData>((data) => data.note?.path === local, {
+			timeoutMs: 5_000,
+			intervalMs: 100,
+		});
+		const synced = await plugin.data<PodNotesData>().read();
+		if (!synced.note) throw new Error("The saved episode note settings are missing");
+		synced.note.path = remote;
+		await plugin.data<PodNotesData>().write(synced);
+		await obsidian.dev.evalJsonAsync(
+			"app.plugins.plugins.podnotes.onExternalSettingsChange().then(() => true)",
+		);
+		expect(
+			await obsidian.dev.evalJson(`({
+			memory: app.plugins.plugins.podnotes.settings.note.path,
+			field: document.activeElement.value,
+			focused: (${path.elements}).includes(document.activeElement)
+		})`),
+		).toEqual({ memory: remote, field: local, focused: true });
+
+		await pressKey(obsidian, "Tab");
+		await obsidian.dev.evalJsonAsync(
+			"app.plugins.plugins.podnotes.flushSaves().then(() => true)",
+		);
+
+		expect(await settingValue(obsidian, "Episode note path")).toBe(remote);
+		expect((await plugin.data<PodNotesData>().read()).note?.path).toBe(remote);
+	});
+
 	test("leaving a field saves a return to its original text before the debounce", async () => {
 		const { obsidian, plugin } = getContext();
 		const initial = "Initial/{{title}}.md";
