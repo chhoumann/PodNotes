@@ -330,7 +330,7 @@
 		mark {
 			padding: 0 1px;
 			border-radius: 2px;
-			background: var(--text-highlight-bg);
+			background: var(--highlight-background, var(--text-highlight-bg));
 			color: inherit;
 		}
 
