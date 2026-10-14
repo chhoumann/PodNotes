@@ -338,13 +338,16 @@
 		}
 	}
 
-	@keyframes pn-eq {
-		0%,
-		100% {
-			transform: scaleY(0.4);
-		}
-		50% {
-			transform: scaleY(1);
+	/* Global, because a scoped keyframes rule scopes every element of the component. */
+	:global {
+		@keyframes pn-eq {
+			0%,
+			100% {
+				transform: scaleY(0.4);
+			}
+			50% {
+				transform: scaleY(1);
+			}
 		}
 	}
 </style>

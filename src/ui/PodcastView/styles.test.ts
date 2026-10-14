@@ -30,7 +30,7 @@ describe("reduced motion", () => {
 			"EpisodeRow",
 			'<div class="pn-ep {}"><span class="pn-eq"><i></i></span></div>',
 			".pn-eq i",
-			["", "pn-EpisodeRow-pn-eq 1s ease-in-out infinite"],
+			["", "pn-eq 1s ease-in-out infinite"],
 		],
 	])(
 		"%s stops moving when the user prefers reduced motion",
