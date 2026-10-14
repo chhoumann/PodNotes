@@ -23,13 +23,10 @@ export interface Capture {
 	created: boolean;
 }
 
-/** Where a capture put its text: `text` at `start`, in place of the `replaced` selection. */
-interface Insertion {
-	readonly start: number;
-	readonly text: string;
-	readonly replaced: string;
-	/** The newline put before `text` to start its line. */
-	readonly separated?: boolean;
+/** A note's text as a capture found it and as it left it. */
+interface Snapshot {
+	readonly before: string;
+	readonly after: string;
 }
 
 /** Puts a capture where the user writes: the editor they used last, else the episode note. */
@@ -106,21 +103,18 @@ export class CaptureService {
 				lineCount: editor.lineCount(),
 				cursorLine: editor.getCursor("from").line,
 			});
-			const insertion: Insertion = {
-				start: editor.posToOffset(editor.getCursor("from")),
-				text: inserted,
-				replaced: editor.getSelection(),
-			};
+			const before = editor.getValue();
 			editor.replaceSelection(inserted);
+			const snapshot = { before, after: editor.getValue() };
 			// Outside a note's own view, as in a canvas card, the editor's text need not be
 			// its file's, so only that editor can take the capture back.
 			const undo =
 				target instanceof MarkdownView && file
-					? () => this.revert(file, insertion)
+					? () => this.revert(file, snapshot)
 					: () =>
 							target.editor === editor &&
 							target.file === file &&
-							revertIn(editor, insertion);
+							revertIn(editor, snapshot);
 			this.offer(file, false, undo);
 			return {
 				destination: "editor",
@@ -137,15 +131,14 @@ export class CaptureService {
 		try {
 			const { file, created } = await createPodcastNoteFileIfNotExists(episode);
 			const appended = text.endsWith("\n") ? text : `${text}\n`;
-			let separated = false;
-			const written = await this.plugin.app.vault.process(file, (content) => {
-				separated = content.length > 0 && !content.endsWith("\n");
-				return `${content}${separated ? "\n" : ""}${appended}`;
+			let before = "";
+			const after = await this.plugin.app.vault.process(file, (content) => {
+				before = content;
+				return content.length > 0 && !content.endsWith("\n")
+					? `${content}\n${appended}`
+					: `${content}${appended}`;
 			});
-			const start = written.length - appended.length;
-			this.offer(file, created, () =>
-				this.revert(file, { start, text: appended, replaced: "", separated }),
-			);
+			this.offer(file, created, () => this.revert(file, { before, after }));
 			return { destination: "note", path: file.path, text: appended, created };
 		} catch (error) {
 			console.error("PodNotes: failed to capture timestamp into episode note", error);
@@ -155,9 +148,8 @@ export class CaptureService {
 	}
 
 	/**
-	 * Says where the capture went, with an Undo that takes it back. `undo` removes the text
-	 * only while it is still exactly where it was put, so it never removes what the user
-	 * typed since, and returns false when it left the note as it is.
+	 * Says where the capture went, with an Undo that takes it back. `undo` returns false,
+	 * leaving the note as it is, unless the note is still exactly as the capture left it.
 	 */
 	private offer(file: TFile | null, created: boolean, undo: () => boolean | Promise<boolean>) {
 		if (this.disposed) return;
@@ -165,30 +157,27 @@ export class CaptureService {
 		noticeWithUndo(
 			created ? `Created ${name}` : name ? `Timestamp added to ${name}` : "Timestamp added",
 			async () => {
-				if (!(await undo())) new Notice("The note changed since, so the timestamp stays");
+				if (!(await undo())) {
+					new Notice("The note isn't as the capture left it, so the timestamp stays");
+				}
 			},
 		);
 	}
 
-	/**
-	 * Takes the insertion out of the note, in an editor open on it, else in the saved
-	 * file. False, leaving the note as it is, once the text there is not exactly the
-	 * inserted text.
-	 */
-	private async revert(file: TFile, insertion: Insertion): Promise<boolean> {
+	/** Puts the note back as the capture found it, while it is exactly as the capture left it. */
+	private async revert(file: TFile, snapshot: Snapshot): Promise<boolean> {
 		// An open editor's buffer is the note: a vault write behind it could lose what it
-		// has not saved yet. Obsidian saves a note as it leaves editing, so a closed tab or
-		// one in Reading view leaves the file as the note.
+		// has not saved yet. Obsidian saves a note as it leaves editing, so once that save
+		// lands, a closed tab or one in Reading view leaves the file as the note.
 		const editing = this.plugin.app.workspace
 			.getLeavesOfType("markdown")
 			.map((leaf) => this.editingView(leaf))
 			.find((view) => view?.file === file);
-		if (editing) return revertIn(editing.editor, insertion);
+		if (editing) return revertIn(editing.editor, snapshot);
 		try {
 			await this.plugin.app.vault.process(file, (content) => {
-				const span = spanOf(content, insertion);
-				if (!span) throw new Error("The capture was edited");
-				return content.slice(0, span[0]) + insertion.replaced + content.slice(span[1]);
+				if (content !== snapshot.after) throw new Error("The note changed");
+				return snapshot.before;
 			});
 			return true;
 		} catch {
@@ -214,23 +203,24 @@ export class CaptureService {
 }
 
 /**
- * The insertion's range in `content` while its text is still exactly where it was put.
- * With nothing after it, the newline put before it goes too, so the note ends as it did.
+ * Puts back only the stretch the capture changed, so the caret and the editor's own
+ * undo history stay.
  */
-function spanOf(content: string, { start, text, separated }: Insertion): [number, number] | null {
-	const end = start + text.length;
-	if (content.slice(start, end) !== text) return null;
-	const trailing = separated && end === content.length && content[start - 1] === "\n";
-	return [trailing ? start - 1 : start, end];
-}
-
-function revertIn(editor: Editor, insertion: Insertion): boolean {
-	const span = spanOf(editor.getValue(), insertion);
-	if (!span) return false;
+function revertIn(editor: Editor, { before, after }: Snapshot): boolean {
+	if (editor.getValue() !== after) return false;
+	let from = 0;
+	while (from < before.length && before[from] === after[from]) from++;
+	let tail = 0;
+	while (
+		tail < Math.min(before.length, after.length) - from &&
+		before[before.length - 1 - tail] === after[after.length - 1 - tail]
+	) {
+		tail++;
+	}
 	editor.replaceRange(
-		insertion.replaced,
-		editor.offsetToPos(span[0]),
-		editor.offsetToPos(span[1]),
+		before.slice(from, before.length - tail),
+		editor.offsetToPos(from),
+		editor.offsetToPos(after.length - tail),
 	);
 	return true;
 }
