@@ -90,12 +90,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	private readonly state = writable<ReadonlyMap<FeedKey, FeedState>>(new Map());
 	private hydrated = false;
 
-	constructor(
-		private readonly deps: FeedRepositoryDeps & {
-			/** Ignored: feeds are always cached. Tests of the view still pass it. */
-			cache?: unknown;
-		},
-	) {
+	constructor(private readonly deps: FeedRepositoryDeps) {
 		// Earlier versions' caches can hold private feed URLs, so they go as soon as
 		// PodNotes loads, not when a feed first loads (on mobile the view may stay closed).
 		try {

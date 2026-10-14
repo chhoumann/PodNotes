@@ -378,7 +378,6 @@ describe("offline", () => {
 				load,
 				resolveUrl: (saved) => saved.url,
 				storage: new MemoryStorage(),
-				cache: () => ({ enabled: false, ttlHours: 6 }),
 				now: Date.now,
 			}),
 		}));
