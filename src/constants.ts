@@ -76,6 +76,8 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	playlists: ownRecord(),
 	skipBackwardLength: 15,
 	skipForwardLength: 15,
+	headsetPreviousTrack: "captureTimestamp",
+	headsetNextTrack: "skipForward",
 	currentEpisode: undefined,
 
 	timestamp: {

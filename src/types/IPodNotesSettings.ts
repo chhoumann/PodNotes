@@ -5,11 +5,13 @@ import type { Playlist } from "./Playlist";
 import type { Episode } from "./Episode";
 import type DownloadedEpisode from "./DownloadedEpisode";
 import type { DiarizationProviderId } from "src/services/diarization/types";
+import type { NextTrackAction, PreviousTrackAction } from "./Headset";
 
 export interface IPodNotesSettings {
 	savedFeeds: { [podcastName: string]: PodcastFeed };
 	podNotes: { [episodeName: string]: PodNote };
 	defaultPlaybackRate: number;
+	/** The player's volume as it was last set, which a new player starts at. */
 	defaultVolume: number;
 	hidePlayedEpisodes: boolean;
 	/**
@@ -21,6 +23,8 @@ export interface IPodNotesSettings {
 	playedEpisodes: { [episodeName: string]: PlayedEpisode };
 	skipBackwardLength: number;
 	skipForwardLength: number;
+	headsetPreviousTrack: PreviousTrackAction;
+	headsetNextTrack: NextTrackAction;
 	playlists: { [playlistName: string]: Playlist };
 	queue: Playlist;
 	/**

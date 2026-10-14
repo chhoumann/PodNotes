@@ -59,6 +59,8 @@ export default {
 		playlists: {},
 		skipBackwardLength: 15,
 		skipForwardLength: 15,
+		headsetPreviousTrack: "captureTimestamp",
+		headsetNextTrack: "skipForward",
 		timestamp: {
 			template: "- {{linktime}} ",
 			offset: 0,

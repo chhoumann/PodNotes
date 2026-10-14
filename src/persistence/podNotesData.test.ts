@@ -553,7 +553,7 @@ describe("PodNotes data schema", () => {
 		expect(decoded.warnings).toEqual(["currentEpisode.guid: expected a string"]);
 	});
 
-	it("loads a 2.21.1 library unchanged, and saves it without only its feed cache preference", () => {
+	it("loads a 2.21.1 library unchanged, and saves it with the headset defaults and no feed cache preference", () => {
 		const decoded = decodePodNotesData(structuredClone(released2211));
 		const { feedCache, ...rest } = released2211;
 
@@ -562,7 +562,34 @@ describe("PodNotes data schema", () => {
 		expect(feedCache).toEqual({ enabled: true, ttlHours: 6 });
 		expect(
 			JSON.parse(JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields))),
-		).toEqual({ ...rest, libraryId: "" });
+		).toEqual({
+			...rest,
+			headsetPreviousTrack: "captureTimestamp",
+			headsetNextTrack: "skipForward",
+			libraryId: "",
+		});
+	});
+
+	it("reads the headset mapping, and an action the button does not have as its default", () => {
+		const decoded = decodePodNotesData({
+			...structuredClone(released2211),
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextInQueue",
+		});
+		expect(decoded.warnings).toEqual([]);
+		expect([decoded.settings.headsetPreviousTrack, decoded.settings.headsetNextTrack]).toEqual([
+			"previousChapter",
+			"nextInQueue",
+		]);
+
+		for (const action of ["skipForward", "toString", "__proto__", 3]) {
+			const repaired = decodePodNotesData({
+				...structuredClone(released2211),
+				headsetPreviousTrack: action,
+			});
+			expect(repaired.settings.headsetPreviousTrack).toBe("captureTimestamp");
+			expect(repaired.warnings).toEqual(["headsetPreviousTrack: unknown value"]);
+		}
 	});
 
 	it("reads a feed cache turned off as no setting at all, keeping the fields it does not know", () => {

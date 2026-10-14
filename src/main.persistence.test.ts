@@ -66,9 +66,16 @@ function makePlugin(
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-/** A released library as this version writes it back: without the retired feed cache preference. */
-function withoutFeedCache(released: Record<string, unknown>): Record<string, unknown> {
-	const data: Record<string, unknown> = structuredClone(released);
+/**
+ * A released library as this version writes it back: with the headset mapping's defaults,
+ * and without the retired feed cache preference.
+ */
+function savedByThisVersion(released: Record<string, unknown>): Record<string, unknown> {
+	const data: Record<string, unknown> = {
+		...structuredClone(released),
+		headsetPreviousTrack: "captureTimestamp",
+		headsetNextTrack: "skipForward",
+	};
 	delete data.feedCache;
 	return data;
 }
@@ -383,7 +390,7 @@ describe("PodNotes persistence integration", () => {
 
 		expect(saveData).toHaveBeenCalledTimes(1);
 		expect(saveData.mock.calls[0][0]).toEqual({
-			...withoutFeedCache(released),
+			...savedByThisVersion(released),
 			defaultVolume: 0.4,
 			libraryId: "",
 		});
@@ -418,7 +425,7 @@ describe("PodNotes persistence integration", () => {
 		const { urlSecretId } = written.savedFeeds["PRIV2 Both"];
 		expect(urlSecretId).toMatch(/^podnotes-feed-url-[0-9a-f-]{36}$/);
 		expect(written).toEqual({
-			...withoutFeedCache(released2211),
+			...savedByThisVersion(released2211),
 			libraryId: "",
 			savedFeeds: { "PRIV2 Both": { ...released2211.savedFeeds["PRIV2 Both"], urlSecretId } },
 		});
@@ -806,7 +813,7 @@ describe("PodNotes persistence integration", () => {
 		plugin.settings.defaultVolume = 0.4;
 		await plugin.saveSettingsStrict();
 		expect(saveData.mock.lastCall?.[0]).toEqual({
-			...withoutFeedCache(released2211),
+			...savedByThisVersion(released2211),
 			defaultVolume: 0.4,
 			libraryId: "",
 		});
@@ -823,7 +830,7 @@ describe("PodNotes persistence integration", () => {
 		await plugin.saveSettingsStrict();
 
 		expect(saveData.mock.lastCall?.[0]).toEqual({
-			...withoutFeedCache(released2211),
+			...savedByThisVersion(released2211),
 			defaultVolume: 0.4,
 			skipForwardLength: 45,
 			skipBackwardLength: 20,

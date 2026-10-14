@@ -34,6 +34,7 @@ import {
 import { DEFAULT_SETTINGS } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { NEXT_TRACK_ACTIONS, PREVIOUS_TRACK_ACTIONS } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { get } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
@@ -80,6 +81,9 @@ const DIARIZATION_PROVIDERS = {
 	openai: "OpenAI (gpt-4o-transcribe-diarize)",
 	deepgram: "Deepgram",
 };
+
+/** Search finds rows, not section headings. */
+const HEADSET_ALIASES = ["headset", "lock screen", "media keys"];
 
 const group = (heading: string, items: SettingDefinitionRender[]): SettingDefinitionGroup => ({
 	type: "group",
@@ -252,6 +256,30 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						});
 						return stop;
 					},
+				},
+			]),
+			group("Headset and lock screen", [
+				{
+					...this.dropdownRow(
+						"Previous track",
+						PREVIOUS_TRACK_ACTIONS,
+						() => this.plugin.settings.headsetPreviousTrack,
+						(action) => {
+							this.plugin.settings.headsetPreviousTrack = action;
+						},
+					),
+					aliases: HEADSET_ALIASES,
+				},
+				{
+					...this.dropdownRow(
+						"Next track",
+						NEXT_TRACK_ACTIONS,
+						() => this.plugin.settings.headsetNextTrack,
+						(action) => {
+							this.plugin.settings.headsetNextTrack = action;
+						},
+					),
+					aliases: HEADSET_ALIASES,
 				},
 			]),
 			group("Notes", [

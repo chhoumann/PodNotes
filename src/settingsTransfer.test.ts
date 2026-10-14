@@ -394,6 +394,30 @@ describe("parseImport", () => {
 		}
 	});
 
+	it("carries the headset mapping, and imports an action a button does not have as its default", () => {
+		const settings = makeSettings({
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextChapter",
+		});
+		const exported = serializeSettings(settings, {}, "3.0.0", NOW, new Map());
+		const result = parseImport(
+			JSON.stringify({
+				...exported,
+				settings: { ...exported.settings, headsetNextTrack: "previousChapter" },
+			}),
+		);
+		expect(exported.settings).toMatchObject({
+			headsetPreviousTrack: "previousChapter",
+			headsetNextTrack: "nextChapter",
+		});
+		if (!result.ok) throw new Error(result.error);
+		const merged = mergeImportedSettings(makeSettings(), result.settings);
+		expect([merged.headsetPreviousTrack, merged.headsetNextTrack]).toEqual([
+			"previousChapter",
+			"skipForward",
+		]);
+	});
+
 	it("drops an older export's feed cache preference, even caching off, and keeps the rest", () => {
 		const result = parseImport(
 			JSON.stringify({

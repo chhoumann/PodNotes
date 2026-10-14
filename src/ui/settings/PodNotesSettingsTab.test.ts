@@ -154,6 +154,7 @@ describe("sections", () => {
 					"Queue episodes I switch away from",
 				],
 			],
+			["Headset and lock screen", ["Previous track", "Next track"]],
 			[
 				"Notes",
 				[
@@ -343,6 +344,35 @@ describe("Default speed", () => {
 		expect(options(speed)).toEqual(["0.75×", "1×", "1.25×", "1.3×", "1.5×", "1.75×", "2×"]);
 		expect(speed.value).toBe("1.3");
 		expect(await writes()).toBe(0);
+	});
+});
+
+describe("Headset and lock screen", () => {
+	test("offers each button's actions and saves the one chosen", async () => {
+		const { plugin, select, writes } = open();
+		const labels = (name: string) =>
+			[...select(name).options].map((option) => [option.value, option.textContent]);
+
+		expect(labels("Previous track")).toEqual([
+			["captureTimestamp", "Capture timestamp"],
+			["skipBackward", "Back by the skip length"],
+			["previousChapter", "Previous chapter"],
+		]);
+		expect(labels("Next track")).toEqual([
+			["skipForward", "Forward by the skip length"],
+			["nextInQueue", "Next in queue"],
+			["nextChapter", "Next chapter"],
+			["captureTimestamp", "Capture timestamp"],
+		]);
+		expect([select("Previous track").value, select("Next track").value]).toEqual([
+			"captureTimestamp",
+			"skipForward",
+		]);
+
+		choose(select("Next track"), "nextChapter");
+
+		expect(plugin.settings.headsetNextTrack).toBe("nextChapter");
+		expect(await writes()).toBe(1);
 	});
 });
 

@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { API } from "src/API/API";
 import { DEFAULT_SETTINGS } from "src/constants";
 import { downloadedEpisodes, playedEpisodes, plugin, queue } from "src/store";
+import type { Chapter } from "src/types/Chapter";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import { FakeDocument, type FakeMedia } from "../../tests/mocks/fakeMedia";
-import { bindMediaSession } from "./mediaSession";
+import { bindMediaSession, chapterStart } from "./mediaSession";
 import { PlayerController } from "./PlayerController";
 
 const A: Episode = {
@@ -84,6 +85,7 @@ class FakeMediaSession {
 function setup({
 	mediaSession = new FakeMediaSession() as FakeMediaSession | null,
 	Metadata = FakeMetadata as typeof FakeMetadata | null,
+	chapters = (_url: string): Promise<Chapter[]> => Promise.resolve([]),
 } = {}) {
 	const doc = new FakeDocument();
 	const host = {
@@ -99,9 +101,11 @@ function setup({
 	const unbind = bindMediaSession(player, {
 		mediaSession: (mediaSession ?? undefined) as unknown as MediaSession | undefined,
 		MediaMetadata: (Metadata ?? undefined) as unknown as typeof MediaMetadata | undefined,
+		settings: () => host.settings,
 		captureTimestamp: capture,
 		skipBackward: () => api.skipBackward(),
 		skipForward: () => api.skipForward(),
+		chapters,
 	});
 	unbinds.push(unbind);
 	return {
@@ -262,8 +266,9 @@ describe("actions", () => {
 		expect(context.media().currentTime).toBe(115);
 	});
 
-	test("nexttrack skips 30 seconds, stopping short of the end and never going back", () => {
+	test("nexttrack skips forward by the skip length, stopping short of the end and never going back", () => {
 		const context = setup();
+		context.host.settings.skipForwardLength = 30;
 		playing(context, 100, 200);
 
 		context.session.act("nexttrack");
@@ -279,8 +284,9 @@ describe("actions", () => {
 		expect(context.media().currentTime).toBe(199.9);
 	});
 
-	test("nexttrack skips the whole 30 seconds while the length is unknown", () => {
+	test("nexttrack skips the whole skip length while the episode's length is unknown", () => {
 		const context = setup();
+		context.host.settings.skipForwardLength = 30;
 		context.player.play(A, { time: 10 });
 
 		context.session.act("nexttrack");
@@ -295,6 +301,183 @@ describe("actions", () => {
 		context.session.act("previoustrack");
 
 		expect(context.capture).toHaveBeenCalledTimes(1);
+	});
+});
+
+const B: Episode = { ...A, title: "B", streamUrl: "https://cdn.example.com/B.mp3" };
+const C: Episode = { ...A, title: "C", streamUrl: "https://cdn.example.com/C.mp3" };
+const WITH_CHAPTERS: Episode = { ...A, chaptersUrl: "https://cdn.example.com/A.json" };
+const chapter = (startTime: number): Chapter => ({ startTime, title: `At ${startTime}` });
+const CHAPTERS = [chapter(0), chapter(60), chapter(120)];
+const titles = () => get(queue).episodes.map(({ title }) => title);
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("headset mapping", () => {
+	test("the default next track is forward by the skip length, previous track a capture", () => {
+		const context = setup();
+		playing(context, 100);
+
+		context.session.act("nexttrack");
+		context.session.act("previoustrack");
+
+		expect(context.media().currentTime).toBe(115);
+		expect(context.capture).toHaveBeenCalledTimes(1);
+	});
+
+	test("a mapping changed after binding applies at the next press", () => {
+		const context = setup();
+		playing(context, 100);
+
+		context.host.settings.headsetPreviousTrack = "skipBackward";
+		context.host.settings.headsetNextTrack = "captureTimestamp";
+		context.session.act("previoustrack");
+		context.session.act("nexttrack");
+
+		expect(context.media().currentTime).toBe(85);
+		expect(context.capture).toHaveBeenCalledTimes(1);
+	});
+
+	describe("Next in queue", () => {
+		test("goes through the queue, queueing each episode switched away from last", () => {
+			const context = setup();
+			context.host.settings.headsetNextTrack = "nextInQueue";
+			playing(context, 40);
+			queue.add(B);
+			queue.add(C);
+
+			context.session.act("nexttrack");
+			expect([context.state().episode?.title, titles()]).toEqual(["B", ["C", "A"]]);
+
+			context.session.act("nexttrack");
+			expect([context.state().episode?.title, titles()]).toEqual(["C", ["A", "B"]]);
+		});
+
+		test("with auto-queue off, plays the queue in order and queues nothing", () => {
+			const context = setup();
+			context.host.settings.headsetNextTrack = "nextInQueue";
+			context.host.settings.autoQueue = false;
+			playing(context, 40);
+			queue.add(B);
+			queue.add(C);
+
+			context.session.act("nexttrack");
+			context.session.act("nexttrack");
+
+			expect([context.state().episode?.title, titles()]).toEqual(["C", []]);
+		});
+
+		test("does nothing with an empty queue, or when the player cannot play", () => {
+			const context = setup();
+			context.host.settings.headsetNextTrack = "nextInQueue";
+			playing(context, 40);
+
+			context.session.act("nexttrack");
+			expect([context.state().episode?.title, context.state().currentTime]).toEqual([
+				"A",
+				40,
+			]);
+
+			queue.add(B);
+			vi.spyOn(context.player, "play").mockReturnValue(false);
+			context.session.act("nexttrack");
+			expect([context.state().episode?.title, titles()]).toEqual(["A", ["B"]]);
+		});
+	});
+
+	describe("chapters", () => {
+		test("next and previous chapter seek to the episode's chapter starts", async () => {
+			const chapters = vi.fn(() => Promise.resolve(CHAPTERS));
+			const context = setup({ chapters });
+			context.host.settings.headsetPreviousTrack = "previousChapter";
+			context.host.settings.headsetNextTrack = "nextChapter";
+			playing(context, 30, 3600, WITH_CHAPTERS);
+
+			context.session.act("nexttrack");
+			await flush();
+			expect(context.media().currentTime).toBe(60);
+
+			reach(context.media(), 61);
+			context.session.act("previoustrack");
+			await flush();
+			expect(context.media().currentTime).toBe(0);
+
+			reach(context.media(), 63);
+			context.session.act("previoustrack");
+			await flush();
+			expect(context.media().currentTime).toBe(60);
+
+			reach(context.media(), 130);
+			context.session.act("nexttrack");
+			await flush();
+			expect(context.media().currentTime).toBe(130);
+			expect(chapters.mock.calls).toEqual([[WITH_CHAPTERS.chaptersUrl]]);
+		});
+
+		test("chapters that arrive after the episode changed move nothing", async () => {
+			let resolve!: (chapters: Chapter[]) => void;
+			const context = setup({ chapters: () => new Promise((done) => (resolve = done)) });
+			context.host.settings.headsetNextTrack = "nextChapter";
+			playing(context, 30, 3600, WITH_CHAPTERS);
+
+			context.session.act("nexttrack");
+			playing(context, 10, 3600, B);
+			resolve(CHAPTERS);
+			await flush();
+
+			expect([context.state().episode?.title, context.media().currentTime]).toEqual([
+				"B",
+				10,
+			]);
+		});
+
+		test("no chapters loaded is a no-op the next press retries, and no chapters URL never asks", async () => {
+			const chapters = vi
+				.fn<(url: string) => Promise<Chapter[]>>()
+				.mockRejectedValueOnce(new Error("offline"))
+				.mockResolvedValueOnce([])
+				.mockResolvedValue(CHAPTERS);
+			const context = setup({ chapters });
+			context.host.settings.headsetNextTrack = "nextChapter";
+			playing(context, 30, 3600, WITH_CHAPTERS);
+
+			for (const expected of [30, 30, 60]) {
+				context.session.act("nexttrack");
+				await flush();
+				expect(context.media().currentTime).toBe(expected);
+			}
+
+			playing(context, 30, 3600, B);
+			context.session.act("nexttrack");
+			await flush();
+			expect(chapters).toHaveBeenCalledTimes(3);
+			expect(context.media().currentTime).toBe(30);
+		});
+
+		test("chapters that arrive after unbinding move nothing", async () => {
+			let resolve!: (chapters: Chapter[]) => void;
+			const context = setup({ chapters: () => new Promise((done) => (resolve = done)) });
+			context.host.settings.headsetNextTrack = "nextChapter";
+			playing(context, 30, 3600, WITH_CHAPTERS);
+
+			context.session.act("nexttrack");
+			context.unbind();
+			resolve(CHAPTERS);
+			await flush();
+
+			expect(context.media().currentTime).toBe(30);
+		});
+	});
+
+	test.each([
+		[1, 0, 60],
+		[1, 59.8, 120],
+		[1, 59.7, 60],
+		[1, 120, undefined],
+		[-1, 61.9, 0],
+		[-1, 62, 60],
+		[-1, 1, 0],
+	] as const)("chapterStart(%i) from %f s is %s", (direction, time, expected) => {
+		expect(chapterStart(CHAPTERS, time, direction)).toBe(expected);
 	});
 });
 

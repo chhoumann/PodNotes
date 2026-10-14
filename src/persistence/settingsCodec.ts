@@ -6,6 +6,7 @@ import {
 	migrateSkipLength,
 	migrateTranscriptSettings,
 } from "src/settingsMigrations";
+import { NEXT_TRACK_ACTIONS, PREVIOUS_TRACK_ACTIONS } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { isPodNotesSecretId, type CredentialKind } from "src/types/Credentials";
 import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
@@ -24,6 +25,7 @@ import {
 	readClampedNumber,
 	readFiniteNumber,
 	readNullableString,
+	readOption,
 	readString,
 	type UnknownRecord,
 	warn,
@@ -84,6 +86,20 @@ export function decodeSettings(
 			root.skipForwardLength,
 			DEFAULT_SETTINGS.skipForwardLength,
 			"skipForwardLength",
+			warnings,
+		),
+		headsetPreviousTrack: readOption(
+			root,
+			"headsetPreviousTrack",
+			PREVIOUS_TRACK_ACTIONS,
+			DEFAULT_SETTINGS.headsetPreviousTrack,
+			warnings,
+		),
+		headsetNextTrack: readOption(
+			root,
+			"headsetNextTrack",
+			NEXT_TRACK_ACTIONS,
+			DEFAULT_SETTINGS.headsetNextTrack,
 			warnings,
 		),
 		playlists: decodePlaylists(root.playlists, warnings),
