@@ -407,6 +407,11 @@
 			--icon-size: 16px;
 		}
 
+		/* Leaving fullscreen is Escape's job. */
+		.pn-video:fullscreen .pn-fs {
+			display: none;
+		}
+
 		.pn-np-right {
 			min-height: 0;
 			display: flex;
