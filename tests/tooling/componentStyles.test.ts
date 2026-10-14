@@ -66,6 +66,30 @@ function sharedOwners(sources: Sources): Record<string, string[]> {
 	return Object.fromEntries([...owners].filter(([, files]) => files.length > 1));
 }
 
+/** Elements with two tooltips: Obsidian shows an aria-label as one, and a title is another. */
+function doubleTooltips(sources: Sources): string[] {
+	const found: string[] = [];
+	const visit = (node: unknown, file: string): void => {
+		if (!node || typeof node !== "object") return;
+		const { type, name, attributes } = node as {
+			type?: string;
+			name?: string;
+			attributes?: Array<{ name?: string }>;
+		};
+		const names = attributes?.map((attribute) => attribute.name) ?? [];
+		if (
+			(type === "RegularElement" || type === "SvelteElement") &&
+			names.includes("aria-label") &&
+			names.includes("title")
+		)
+			found.push(`${file} <${name}>`);
+		for (const [key, value] of Object.entries(node)) if (key !== "metadata") visit(value, file);
+	};
+	for (const [file, source] of Object.entries(sources))
+		visit(parse(source, { filename: file, modern: true }).fragment, file);
+	return found;
+}
+
 describe("component style sheets", () => {
 	test("each of the view's classes is scoped by one component at most", () => {
 		expect(sharedOwners(components())).toEqual({});
@@ -89,5 +113,21 @@ describe("component style sheets", () => {
 				"C.svelte": `<div class="pn-c"></div><style>:global(.pn-a) .pn-c, .pn-c:global(.pn-a) { color: red; }</style>`,
 			}),
 		).toEqual({});
+	});
+});
+
+describe("tooltips", () => {
+	test("no element has both an aria-label and a title", () => {
+		expect(doubleTooltips(components())).toEqual([]);
+	});
+
+	test("finds an element with both, also in a block or a snippet, and not a component's props", () => {
+		expect(
+			doubleTooltips({
+				"A.svelte": `<button aria-label="Play" title="Play"></button><i title="Downloaded"></i>`,
+				"B.svelte": `{#if on}{#snippet row()}<span aria-label={label} title={label}></span>{/snippet}{/if}`,
+				"C.svelte": `<Cover title="Show" aria-label="Show" /><b aria-label="Name"></b>`,
+			}),
+		).toEqual(["A.svelte <button>", "B.svelte <span>"]);
 	});
 });

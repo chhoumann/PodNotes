@@ -60,7 +60,6 @@
 			data-ignore-swipe="true"
 			aria-label="Reorder {episode.title}, position {index +
 				1} of {count}. Use arrow keys to move."
-			title="Drag or use arrow keys"
 			onpointerdown={(event) => onstart(event, episode)}
 			onkeydown={nudge}
 			{@attach icon("grip-vertical")}
@@ -71,7 +70,6 @@
 			type="button"
 			class="pn-iconbtn pn-ep-x"
 			aria-label="Remove {episode.title} from queue"
-			title="Remove from queue"
 			onclick={() => actions.setQueued(episode, false)}
 			{@attach icon("x")}
 		></button>

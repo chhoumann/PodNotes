@@ -2,7 +2,8 @@
 	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import { formatMinutes, isPlaying, sourceOf } from "./episodeRow";
+	import Cover from "./Cover.svelte";
+	import { formatMinutes, isPlaying, sourceOf, tileOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
@@ -16,7 +17,6 @@
 	const remaining = $derived(Math.max(0, duration - elapsed));
 	const percent = $derived(duration > 0 ? (elapsed / duration) * 100 : 0);
 	const left = $derived(remaining > 0 ? ` · ${formatMinutes(remaining)} left` : "");
-	let failedArtworkUrl = $state("");
 	const id = $props.id();
 
 	const capture = () => void captureTimestamp();
@@ -49,19 +49,7 @@
 			aria-label="Open player: {episode.title}"
 			onclick={() => navigation.expand()}
 		>
-			{#if episode.artworkUrl && episode.artworkUrl !== failedArtworkUrl}
-				<img
-					class="pn-mini-cover"
-					src={episode.artworkUrl}
-					alt=""
-					onerror={() => (failedArtworkUrl = episode.artworkUrl ?? "")}
-				/>
-			{:else}
-				<span
-					class="pn-mini-cover pn-filetile"
-					{@attach icon($playerState.mediaType === "video" ? "video" : "music")}
-				></span>
-			{/if}
+			<Cover src={episode.artworkUrl} title={episode.podcastName} tile={tileOf(episode)} />
 			<span class="pn-mini-txt">
 				<span class="pn-mini-t">{episode.title}</span>
 				<span class="pn-mini-s">
@@ -84,7 +72,6 @@
 				type="button"
 				class="pn-iconbtn pn-mini-capture"
 				aria-label="Capture timestamp"
-				title="Capture timestamp"
 				onclick={capture}
 				{@attach icon("clock-plus")}
 			></button>
@@ -93,7 +80,6 @@
 			type="button"
 			class="pn-iconbtn pn-mini-toggle"
 			aria-label={playing ? "Pause" : "Play"}
-			title={playing ? "Pause" : "Play"}
 			onclick={() => player.toggle()}
 			{@attach icon(playing ? "pause" : "play")}
 		></button>
@@ -160,12 +146,9 @@
 			background: var(--interactive-accent);
 		}
 
-		.pn-mini-cover {
-			flex: none;
+		.pn-mini-open .pn-cover {
 			width: 36px;
-			height: 36px;
 			border-radius: 5px;
-			object-fit: cover;
 		}
 
 		.pn-mini-txt {
@@ -235,9 +218,8 @@
 			flex: 0 1 300px;
 		}
 
-		.pn-mini-cover {
+		.pn-mini-open .pn-cover {
 			width: 44px;
-			height: 44px;
 		}
 
 		button.pn-btn {
@@ -245,8 +227,7 @@
 		}
 	}
 
-	:global(.is-phone) .pn-mini :global(.pn-mini-cover) {
+	:global(.is-phone) .pn-mini :global(.pn-mini-open .pn-cover) {
 		width: 44px;
-		height: 44px;
 	}
 </style>

@@ -192,7 +192,6 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Collapse player"
-			title="Collapse player"
 			onclick={collapse}
 			{@attach icon("chevron-down")}
 			{@attach focusFromView}
@@ -202,7 +201,6 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Episode options"
-			title="Episode options"
 			aria-haspopup="menu"
 			onclick={(event) => {
 				const at = anchorOf(event);
@@ -238,7 +236,6 @@
 							type="button"
 							class="pn-fs"
 							aria-label="Fullscreen"
-							title="Fullscreen"
 							onclick={fullscreen}
 							{@attach icon("maximize")}
 						></button>
@@ -462,10 +459,6 @@
 		.pn-sw[aria-pressed="true"] {
 			background: var(--background-modifier-border);
 			color: var(--text-normal);
-		}
-
-		.pn-sw:disabled {
-			opacity: 0.35;
 		}
 
 		.pn-tabs {

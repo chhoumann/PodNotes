@@ -165,19 +165,21 @@ const press = (key: string, target: Element = document.activeElement ?? document
 /**
  * Lays the list's rows out 40 px apart in a list 120 px tall, as the browser would: its
  * scroll position stays within the rows, and a change to it fires `scroll` soon after.
+ * Returns a resize to `height`, which clamps the scroll position to the rows that are left.
  */
-function layOut(list: HTMLElement) {
+function layOut(list: HTMLElement): (height: number) => void {
 	let top = 0;
-	Object.defineProperty(list, "clientHeight", { configurable: true, value: 120 });
-	Object.defineProperty(list, "scrollTop", {
-		configurable: true,
-		get: () => top,
-		set: (value: number) => {
-			const next = Math.max(0, Math.min(value, list.children.length * 40 - 120));
-			if (next === top) return;
-			top = next;
-			queueMicrotask(() => list.dispatchEvent(new Event("scroll")));
-		},
+	let height = 120;
+	const scrollTo = (value: number) => {
+		const next = Math.max(0, Math.min(value, list.scrollHeight - height));
+		if (next === top) return;
+		top = next;
+		queueMicrotask(() => list.dispatchEvent(new Event("scroll")));
+	};
+	Object.defineProperties(list, {
+		clientHeight: { configurable: true, get: () => height },
+		scrollHeight: { configurable: true, get: () => list.children.length * 40 },
+		scrollTop: { configurable: true, get: () => top, set: scrollTo },
 	});
 	vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
 		this: Element,
@@ -185,6 +187,10 @@ function layOut(list: HTMLElement) {
 		const y = this === list ? 0 : [...list.children].indexOf(this) * 40 - top;
 		return { top: y, bottom: y + 40, left: 0, right: 300 } as DOMRect;
 	});
+	return (to) => {
+		height = to;
+		scrollTo(top);
+	};
 }
 
 describe("a published transcript", () => {
@@ -254,6 +260,26 @@ describe("a published transcript", () => {
 		expect(get(services.player.state).status).toBe("paused");
 	});
 
+	test("keeps following when a taller panel pulls the list back, and stops when the reader scrolls", async () => {
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		const list = await transcript();
+		const resize = layOut(list);
+		await at(43);
+		await tick();
+		expect(list.scrollTop, "row 7, a third down").toBe(240);
+
+		resize(200);
+		await tick();
+		await tick();
+		expect(list.scrollTop, "the last scroll position the rows leave").toBe(200);
+		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+
+		list.scrollTop = 150;
+		await tick();
+		await tick();
+		expect(button("Follow")).toBeVisible();
+	});
+
 	test("Find shows the lines with a word, Enter and Shift+Enter step through them, and Escape closes Find before the player", async () => {
 		await openTranscript(episodeOf([VTT_LINK]), 0);
 		await transcript();
@@ -292,6 +318,21 @@ describe("a published transcript", () => {
 		press("Escape");
 		await tick();
 		expect(services.navigation.current.expanded).toBe(false);
+	});
+
+	test("Find matches a dotted capital I as an i, and marks the letters it matched", async () => {
+		fetchTextMock.mockResolvedValue(
+			"WEBVTT\n\n00:00:00.000 --> 00:00:06.000\n\u0130stanbul calling, \u0130zmir next.\n",
+		);
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await transcript();
+		await fireEvent.click(button("Find in transcript"));
+		const field = screen.getByRole("searchbox", { name: "Find in transcript" });
+
+		await fireEvent.input(field, { target: { value: "stanbul" } });
+		expect(marks()).toEqual(["stanbul"]);
+		await fireEvent.input(field, { target: { value: "IZMIR" } });
+		expect(marks()).toEqual(["\u0130zmir"]);
 	});
 
 	test("another episode's transcript opens with Find closed and every line shown", async () => {

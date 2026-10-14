@@ -1,0 +1,151 @@
+import { expect, onTestFinished, test } from "vitest";
+import { createPodNotesE2EHarness } from "./harness";
+import { setOffline, showLibrary, showList, showPodNotes } from "./journey/actions";
+import { click } from "./journey/input";
+import { PLAYER_VIEW, ui } from "./journey/targets";
+import { eventually, waitUntilShown } from "./journey/wait";
+import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
+import { seedLibrary } from "./journey/library";
+import { jsLiteral, RELOAD_OPTIONS } from "./runtime";
+
+const getContext = createPodNotesE2EHarness("view-polish");
+
+const LONG: FixtureFeed = {
+	title: "The Remarkably Long Podcast Title That Keeps Going",
+	slug: "long-title",
+	artwork: false,
+	episodes: [{ title: "First Steps", seconds: 60, pubDate: pubDate(0) }],
+};
+const PRIVATE = "Missing Address";
+const SECRET_ID = "podnotes-feed-url-4b0c7e1a-2f6d-4c3b-9a8e-5d1f0e2c7b9a";
+
+async function atSidebarWidth(width: number): Promise<void> {
+	const { obsidian } = getContext();
+	await obsidian.dev.evalJson(`app.workspace.rightSplit.setSize(${width}), true`);
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(
+				`Math.round(document.querySelector(${jsLiteral(PLAYER_VIEW)}).getBoundingClientRect().width) === ${width}`,
+			),
+		{ timeoutMs: 5_000, intervalMs: 100, message: `the view ${width} px wide` },
+	);
+}
+
+type CoverText = Readonly<{
+	size: number;
+	firstInside: boolean;
+	bottomGap: number;
+	fontSize: number;
+}>;
+
+/** Where a text cover draws its title's first letter and its last line. */
+function coverText(selector: string): Promise<CoverText[]> {
+	return getContext().obsidian.dev.evalJson<CoverText[]>(`(() =>
+		[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} ${selector} .pn-cover.is-text`)})].map((cover) => {
+			const box = cover.getBoundingClientRect();
+			const text = cover.firstElementChild;
+			const range = document.createRange();
+			range.setStart(text.firstChild, 0);
+			range.setEnd(text.firstChild, 1);
+			const first = range.getBoundingClientRect();
+			return {
+				size: Math.round(box.width),
+				firstInside: first.top >= box.top && first.bottom <= box.bottom && first.left >= box.left,
+				bottomGap: Math.round(box.bottom - text.getBoundingClientRect().bottom),
+				fontSize: parseFloat(getComputedStyle(text).fontSize),
+			};
+		}))()`);
+}
+
+test("at 320 px, a podcast without artwork shows the start of its long name on its card and rows", async () => {
+	const context = getContext();
+	const server = await startFixtureServer([LONG]);
+	onTestFinished(() => server.stop());
+	await seedLibrary(context, server, { subscriptions: [LONG] });
+	await showPodNotes(context.obsidian);
+	await atSidebarWidth(320);
+	await showLibrary(context.obsidian);
+
+	const [card] = await coverText(".pn-gridcard");
+	expect(card).toMatchObject({ firstInside: true, bottomGap: 0 });
+	expect(card.fontSize).toBeGreaterThanOrEqual(10);
+
+	await showList(context.obsidian, "Latest episodes");
+	await waitUntilShown(context.obsidian, ui.episode("First Steps"));
+	const [row] = await coverText(".pn-ep-main");
+	expect(row).toMatchObject({ size: 40, firstInside: true, bottomGap: 0, fontSize: 10 });
+});
+
+type Look = Readonly<{ opacity: number; dimmedBy: number }>;
+
+/** A control's own opacity, and the opacity of everything it is drawn in. */
+function look(selector: string, text?: string): Promise<Look> {
+	return getContext().obsidian.dev.evalJson<Look>(`(() => {
+		const el = [...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} ${selector}`)})].find(
+			(el) => ${jsLiteral(text ?? null)} === null || el.textContent.trim() === ${jsLiteral(text ?? "")},
+		);
+		let dimmedBy = 1;
+		for (let at = el.parentElement; at; at = at.parentElement) dimmedBy *= Number(getComputedStyle(at).opacity);
+		return { opacity: Number(getComputedStyle(el).opacity), dimmedBy };
+	})()`);
+}
+
+test("a feed address missing from this device wraps in the banner, and offline every disabled control looks alike", async () => {
+	const context = getContext();
+	const { obsidian, plugin } = context;
+	const server = await startFixtureServer([LONG]);
+	onTestFinished(() => server.stop());
+	await seedLibrary(context, server, { subscriptions: [LONG] });
+	await obsidian.dev.evalJson(`app.secretStorage.setSecret(${jsLiteral(SECRET_ID)}, ""), true`);
+	await plugin.updateDataAndReload<Record<string, Record<string, unknown>>>((data) => {
+		data.savedFeeds[PRIVATE] = {
+			title: PRIVATE,
+			artworkUrl: "",
+			url: `podnotes-private-feed:${encodeURIComponent(PRIVATE)}`,
+			urlSecretId: SECRET_ID,
+		};
+	}, RELOAD_OPTIONS);
+	await showPodNotes(obsidian);
+	await atSidebarWidth(320);
+	await showList(obsidian, "Latest episodes");
+	await waitUntilShown(obsidian, ui.episode("First Steps"));
+	await showLibrary(obsidian);
+	await click(obsidian, ui.podcastCard(PRIVATE));
+	await waitUntilShown(obsidian, ui.feedErrorAction("Set feed address"));
+
+	const detail = await obsidian.dev.evalJson<{ text: string; mono: boolean; clipped: boolean }>(
+		`(() => {
+			const detail = document.querySelector(${jsLiteral(`${PLAYER_VIEW} .pn-banner .d`)});
+			const heading = detail.previousElementSibling;
+			return {
+				text: detail.textContent,
+				mono: getComputedStyle(detail).fontFamily !== getComputedStyle(heading).fontFamily,
+				clipped: detail.scrollWidth > detail.clientWidth,
+			};
+		})()`,
+	);
+	expect(detail).toEqual({ text: "Address not on this device", mono: false, clipped: false });
+
+	await setOffline(obsidian, true);
+	onTestFinished(() => setOffline(obsidian, false));
+	expect(
+		await eventually(
+			obsidian,
+			async () => [
+				await look(".pn-banner button", "Set feed address"),
+				await look('button[aria-label="Refresh episodes"]'),
+			],
+			[
+				{ opacity: 0.7, dimmedBy: 1 },
+				{ opacity: 0.7, dimmedBy: 1 },
+			],
+		),
+	).toEqual([
+		{ opacity: 0.7, dimmedBy: 1 },
+		{ opacity: 0.7, dimmedBy: 1 },
+	]);
+
+	await click(obsidian, ui.back);
+	await showList(obsidian, "Latest episodes");
+	expect(await look('.pn-ep-main[aria-disabled="true"]')).toEqual({ opacity: 0.7, dimmedBy: 1 });
+});

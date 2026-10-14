@@ -85,7 +85,6 @@ describe("the queue list", () => {
 		expect(grip("B")).toHaveAccessibleName(
 			"Reorder B, position 2 of 3. Use arrow keys to move.",
 		);
-		expect(grip("B")).toHaveAttribute("title", "Drag or use arrow keys");
 	});
 
 	test("says when the queue is empty", () => {

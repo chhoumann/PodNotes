@@ -52,9 +52,15 @@
 		container-type: inline-size;
 	}
 
-	/* cqw is the cover's width. A percentage padding on the cover is its row's. */
+	/* cqw is the cover's width. A percentage padding on the cover is its row's. Three
+	   lines keep a long title's beginning, at a size a row's small cover can show. */
 	.pn-cover.is-text > :global(span) {
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 		padding: 10cqw;
-		font-size: 12cqw;
+		font-size: max(10px, 12cqw);
 	}
 </style>

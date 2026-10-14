@@ -97,7 +97,6 @@
 				type="button"
 				class="pn-iconbtn pn-first-settings"
 				aria-label="PodNotes settings"
-				title="PodNotes settings"
 				onclick={openSettings}
 				{@attach icon("settings")}
 			></button>
@@ -121,7 +120,6 @@
 							type="button"
 							class={head.search ? "pn-iconbtn" : "pn-back"}
 							aria-label="Back to {head.back}"
-							title={head.search && `Back to ${head.back}`}
 							onclick={() => navigation.back()}
 						>
 							<span class="pn-back-icon" {@attach icon("chevron-left")}></span>
@@ -147,7 +145,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Add podcast"
-							title="Add podcast"
 							onclick={() => navigation.go({ kind: "add" })}
 							{@attach icon("plus")}
 						></button>
@@ -155,7 +152,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="PodNotes settings"
-							title="PodNotes settings"
 							onclick={openSettings}
 							{@attach icon("settings")}
 						></button>
@@ -164,7 +160,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Refresh all feeds"
-							title="Refresh all feeds"
 							disabled={!$online}
 							onclick={() => feeds.load($feeds.keys(), "network")}
 							{@attach icon("refresh-cw")}
@@ -175,7 +170,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Podcast options"
-							title="Podcast options"
 							aria-haspopup="menu"
 							onclick={(event) =>
 								showMenu(podcastMenu(key, services), anchorOf(event))}
@@ -186,7 +180,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Add a vault file"
-							title="Add a vault file"
 							onclick={() => pickVaultMedia(services.app)}
 							{@attach icon("plus")}
 						></button>
@@ -195,7 +188,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Queue options"
-							title="Queue options"
 							aria-haspopup="menu"
 							onclick={(event) => showMenu(queueMenu(services), anchorOf(event))}
 							{@attach icon("more-horizontal")}
@@ -206,7 +198,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Playlist options"
-							title="Playlist options"
 							aria-haspopup="menu"
 							onclick={(event) =>
 								showMenu(playlistMenu(name, services), anchorOf(event))}
@@ -559,8 +550,7 @@
 
 		.pn-iconbtn:disabled {
 			background: none;
-			opacity: 0.35;
-			cursor: default;
+			opacity: 0.7;
 		}
 
 		.pn-iconbtn[aria-pressed="true"] {

@@ -48,10 +48,10 @@
 	const refresh = () => void feeds.load([key], "network");
 
 	/** Which server failed, without the address: a private feed's address is a secret. */
-	function failedSource({ error, feed }: FeedState): string {
-		if (error === "unavailable") return "Address not on this device";
-		if (isPrivateFeedPlaceholder(feed.url)) return "Private feed";
-		return checkStringIsUrl(feed.url)?.host ?? "";
+	function failedSource({ error, feed }: FeedState): { text: string; host?: boolean } {
+		if (error === "unavailable") return { text: "Address not on this device" };
+		if (isPrivateFeedPlaceholder(feed.url)) return { text: "Private feed" };
+		return { text: checkStringIsUrl(feed.url)?.host ?? "", host: true };
 	}
 </script>
 
@@ -66,11 +66,12 @@
 		</div>
 	</div>
 	{#if error}
+		{@const source = failedSource(feedState)}
 		<div class="pn-banner" role="alert">
 			<span class="pn-banner-icon" {@attach icon("alert-triangle")}></span>
 			<div class="txt">
 				<div class="h">Feed didn't load</div>
-				<div class="d">{failedSource(feedState)}</div>
+				<div class="d" class:is-host={source.host}>{source.text}</div>
 			</div>
 			{#if error === "unavailable"}
 				<button
@@ -95,7 +96,6 @@
 		class="pn-iconbtn"
 		aria-pressed={$hidePlayedEpisodes}
 		aria-label={hideLabel}
-		title={hideLabel}
 		onclick={() => hidePlayedEpisodes.update((hidden) => !hidden)}
 		{@attach icon("eye-off")}
 	></button>
@@ -103,7 +103,6 @@
 		type="button"
 		class="pn-iconbtn"
 		aria-label="Refresh episodes"
-		title="Refresh episodes"
 		disabled={!$online}
 		onclick={refresh}
 		{@attach icon("refresh-cw")}
@@ -196,6 +195,9 @@
 			margin-top: 2px;
 			color: var(--text-muted);
 			font-size: var(--font-ui-smaller);
+		}
+
+		.d.is-host {
 			font-family: var(--font-monospace);
 			white-space: nowrap;
 			overflow: hidden;

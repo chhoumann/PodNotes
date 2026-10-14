@@ -138,7 +138,6 @@
 				type="button"
 				class="pn-bare pn-skip"
 				aria-label="Back {back} seconds"
-				title="Back {back} seconds"
 				disabled={failed}
 				onclick={() => api.skipBackward()}
 			>
@@ -148,7 +147,6 @@
 				type="button"
 				class="pn-play"
 				aria-label={playing ? "Pause" : "Play"}
-				title={playing ? "Pause" : "Play"}
 				disabled={failed}
 				onclick={() => player.toggle()}
 				{@attach icon(playing ? "pause" : "play")}
@@ -157,7 +155,6 @@
 				type="button"
 				class="pn-bare pn-skip"
 				aria-label="Forward {forward} seconds"
-				title="Forward {forward} seconds"
 				disabled={failed}
 				onclick={() => api.skipForward()}
 			>
@@ -168,7 +165,6 @@
 			type="button"
 			class="pn-bare pn-vol"
 			aria-label="Volume {Math.round($playerState.volume * 100)}%"
-			title="Volume"
 			aria-expanded={volumeOpen}
 			disabled={failed}
 			bind:this={volumeButton}
@@ -376,10 +372,6 @@
 			justify-self: end;
 			color: var(--text-muted);
 			--icon-size: 20px;
-		}
-
-		:is(.pn-rate, .pn-skip, .pn-vol, .pn-play):disabled {
-			opacity: 0.35;
 		}
 
 		.pn-pop {

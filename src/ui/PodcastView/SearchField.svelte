@@ -54,7 +54,6 @@
 			type="button"
 			class="pn-iconbtn pn-clear"
 			aria-label="Clear"
-			title="Clear"
 			onclick={() => {
 				oninput("");
 				input.focus();

@@ -63,7 +63,6 @@
 	class="pn-ep"
 	class:is-played={row.played}
 	class:is-current={row.current}
-	class:is-unavailable={row.unavailable}
 	class:is-queue={queue}
 	class:is-dragging={dragging}
 	role="listitem"
@@ -74,7 +73,6 @@
 		class="pn-bare pn-ep-main"
 		aria-label={row.label}
 		aria-disabled={row.unavailable || undefined}
-		title={episode.title}
 		onclick={onplay}
 		oncontextmenu={menu}
 	>
@@ -102,9 +100,9 @@
 				{#if row.unavailable}
 					<span {@attach icon("cloud-off")}></span>
 				{:else if row.downloaded}
-					<span title="Downloaded" {@attach icon("arrow-down-to-line")}></span>
+					<span {@attach icon("arrow-down-to-line")}></span>
 				{/if}
-				{#if row.hasNote}<span title="Has note" {@attach icon("file-text")}></span>{/if}
+				{#if row.hasNote}<span {@attach icon("file-text")}></span>{/if}
 			</span>
 		</span>
 	</button>
@@ -115,7 +113,6 @@
 			type="button"
 			class="pn-iconbtn pn-ep-more"
 			aria-label="More options for {episode.title}"
-			title="More options"
 			aria-haspopup="menu"
 			onclick={menu}
 			oncontextmenu={menu}
@@ -298,11 +295,6 @@
 
 	.pn-ep.is-current :global(:is(.pn-ep-title, .pn-ep-meta)) {
 		color: var(--text-accent);
-	}
-
-	.pn-ep.is-unavailable :global(.pn-ep-main) {
-		opacity: 0.45;
-		cursor: default;
 	}
 
 	@keyframes pn-eq {

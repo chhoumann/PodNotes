@@ -8,7 +8,13 @@
 	import { useServices } from "./context";
 	import Panel from "./Panel.svelte";
 	import SearchField from "./SearchField.svelte";
-	import { cachedTranscript, lineAt, loadTranscript, type Transcript } from "./transcript";
+	import {
+		cachedTranscript,
+		foldCase,
+		lineAt,
+		loadTranscript,
+		type Transcript,
+	} from "./transcript";
 
 	type Load =
 		| { kind: "loading" }
@@ -44,11 +50,11 @@
 			? lineAt(load.transcript.lines, position)
 			: -1,
 	);
-	const needle = $derived(finding ? query.toLowerCase() : "");
+	const needle = $derived(finding ? foldCase(query) : "");
 	const shown = $derived(
 		lines
 			.map((line, index) => ({ line, index }))
-			.filter(({ line }) => !needle || line.text.toLowerCase().includes(needle)),
+			.filter(({ line }) => !needle || foldCase(line.text).includes(needle)),
 	);
 	const audio = $derived(getEpisodeMediaType(episode) === "audio");
 	const provider = $derived.by(() => {
@@ -71,8 +77,10 @@
 	$effect(() => {
 		const scroller = list;
 		if (!scroller) return;
+		// A resize that lowers the list's last scroll position moves it without the reader.
 		const scrolled = () => {
-			if (Math.abs(scroller.scrollTop - ownScrollTop) > 1) following = false;
+			const own = Math.min(ownScrollTop, scroller.scrollHeight - scroller.clientHeight);
+			if (Math.abs(scroller.scrollTop - own) > 1) following = false;
 		};
 		scroller.addEventListener("scroll", scrolled);
 		return () => scroller.removeEventListener("scroll", scrolled);
@@ -130,7 +138,7 @@
 
 	function pieces(text: string): string[] {
 		const found: string[] = [];
-		const lower = text.toLowerCase();
+		const lower = foldCase(text);
 		let from = 0;
 		for (let at = lower.indexOf(needle); at >= 0; at = lower.indexOf(needle, from)) {
 			found.push(text.slice(from, at), text.slice(at, at + needle.length));
@@ -234,7 +242,6 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Close find"
-			title="Close find"
 			onclick={closeFind}
 			{@attach icon("x")}
 		></button>
@@ -247,7 +254,6 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Find in transcript"
-			title="Find in transcript"
 			bind:this={findButton}
 			onclick={() => (finding = true)}
 			{@attach icon("search")}
@@ -256,7 +262,6 @@
 			type="button"
 			class="pn-btn pn-tx-save"
 			aria-label="Save as note"
-			title="Save as note"
 			disabled={!$online}
 			onclick={() => saveTranscriptNote()}
 			><span class="pn-tx-icon" {@attach icon("file-plus")}></span><span>Save as note</span

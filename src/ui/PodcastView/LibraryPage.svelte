@@ -39,7 +39,6 @@
 			type="button"
 			class="pn-bare pn-gridcard"
 			aria-label={failed ? `${feed.title}, feed didn't load` : feed.title}
-			title={feed.title}
 			onclick={() => navigation.go({ kind: "feed", key })}
 			oncontextmenu={(event) => showMenu(podcastMenu(key, services), anchorOf(event))}
 		>
