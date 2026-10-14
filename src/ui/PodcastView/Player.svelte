@@ -13,6 +13,14 @@
 
 	type PanelKind = "chapters" | "queue";
 
+	/** Arrow keys, Home and End move between the wide player's tabs, each showing its panel. */
+	const TAB_KEYS: Record<string, (at: number, count: number) => number> = {
+		ArrowLeft: (at, count) => (at + count - 1) % count,
+		ArrowRight: (at, count) => (at + 1) % count,
+		Home: () => 0,
+		End: (_at, count) => count - 1,
+	};
+
 	let { viewRoot, layout }: { viewRoot: HTMLElement; layout: Layout } = $props();
 	const services = useServices();
 	const { player, navigation, scope } = services;
@@ -100,6 +108,16 @@
 		}
 	}
 
+	function moveTab(event: KeyboardEvent, at: number) {
+		const step = TAB_KEYS[event.key];
+		if (!step) return;
+		event.preventDefault();
+		const index = step(at, panels.length);
+		panel = panels[index];
+		const tab = (event.currentTarget as HTMLElement).parentElement?.children[index];
+		(tab as HTMLElement | undefined)?.focus();
+	}
+
 	function fullscreen() {
 		// iOS fullscreens only the media element itself.
 		const video = videoFrame?.querySelector("video") as
@@ -127,7 +145,7 @@
 
 {#snippet tabs()}
 	<div class="pn-tabs" role="tablist" aria-label="Player panels">
-		{#each panels as kind (kind)}
+		{#each panels as kind, index (kind)}
 			<button
 				type="button"
 				id="{id}-{kind}"
@@ -135,7 +153,9 @@
 				role="tab"
 				aria-selected={shown === kind}
 				aria-controls="{id}-panel"
+				tabindex={shown === kind ? 0 : -1}
 				onclick={() => (panel = kind)}
+				onkeydown={(event) => moveTab(event, index)}
 				>{kind === "chapters" ? "Chapters" : "Up next"}</button
 			>
 		{/each}

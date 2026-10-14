@@ -419,6 +419,39 @@ describe("the player's panels", () => {
 		expect(screen.getByRole("tabpanel", { name: "Up next" })).toBeInTheDocument();
 	});
 
+	test("at wide width, arrow keys, Home and End move focus between the tabs and show each one's panel", async () => {
+		await openPlayer(withChapters, 820);
+		await vi.waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(2));
+		const tabs = () =>
+			screen.getAllByRole("tab").map((tab) => ({
+				name: tab.textContent,
+				selected: tab.getAttribute("aria-selected"),
+				tabIndex: tab.tabIndex,
+				focused: tab === document.activeElement,
+			}));
+		const shown = () => screen.getByRole("tabpanel").getAttribute("aria-labelledby");
+		const key = async (key: string) => {
+			await fireEvent.keyDown(document.activeElement!, { key });
+			return [tabs().find((tab) => tab.focused)?.name, shown()];
+		};
+		screen.getByRole("tab", { name: "Chapters" }).focus();
+
+		expect(await key("ArrowRight")).toEqual([
+			"Up next",
+			screen.getByRole("tab", { name: "Up next" }).id,
+		]);
+		expect(tabs()).toEqual([
+			{ name: "Chapters", selected: "false", tabIndex: -1, focused: false },
+			{ name: "Up next", selected: "true", tabIndex: 0, focused: true },
+		]);
+		expect(within(screen.getByRole("tabpanel")).getByText("Queue is empty")).toBeVisible();
+		expect((await key("ArrowRight"))[0]).toBe("Chapters");
+		expect((await key("ArrowLeft"))[0]).toBe("Up next");
+		expect((await key("Home"))[0]).toBe("Chapters");
+		expect((await key("End"))[0]).toBe("Up next");
+		expect((await key("ArrowDown"))[0]).toBe("Up next");
+	});
+
 	test("a reopened player shows the chapters it loaded on its first frame", async () => {
 		await openPlayer({ ...episode, chaptersUrl: "https://pod.test/reopened.json" }, 820);
 		await vi.waitFor(() => expect(screen.getByRole("tab", { name: "Chapters" })).toBeVisible());
