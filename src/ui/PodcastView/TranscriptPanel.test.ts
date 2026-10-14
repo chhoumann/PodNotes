@@ -284,7 +284,7 @@ describe("a published transcript", () => {
 		expect(services.navigation.current.expanded).toBe(false);
 	});
 
-	test("Save as note runs the transcribe command, which writes the note", async () => {
+	test("Save as note hands the note to the transcribe command and writes nothing itself", async () => {
 		const vault = { create: vi.fn(), modify: vi.fn(), process: vi.fn() };
 		Object.assign(services.app, { vault });
 		await openTranscript(episodeOf([VTT_LINK]), 0);
@@ -304,11 +304,13 @@ describe("a published transcript", () => {
 		expect(button("Save as note")).toBeDisabled();
 	});
 
-	test("Save as note is off for a video, as the command is", async () => {
+	test("Save as note saves a video's feed transcript too, which needs no audio", async () => {
 		await openTranscript(episodeOf([VTT_LINK], { mediaType: "video" }), 0);
 		await transcript();
 
-		expect(button("Save as note")).toBeDisabled();
+		await fireEvent.click(button("Save as note"));
+
+		expect(services.saveTranscriptNote).toHaveBeenCalledExactlyOnceWith();
 	});
 
 	test("an untimed transcript reads as paragraphs, with no time to play from or follow", async () => {

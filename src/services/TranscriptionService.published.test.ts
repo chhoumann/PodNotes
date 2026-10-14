@@ -134,6 +134,16 @@ describe("published transcripts", () => {
 		expect(diarizeWithDeepgramMock).not.toHaveBeenCalled();
 	});
 
+	test("saving only the feed's transcript never sends the audio to a provider", async () => {
+		const plugin = createMockPlugin({ transcripts: [] });
+
+		await new TranscriptionService(plugin).transcribeCurrentEpisode({ paid: false });
+
+		expect(noticeMessages).toEqual(["This episode's feed publishes no transcript."]);
+		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	test("links of unknown types keep today's key notice", async () => {
 		const plugin = createMockPlugin({
 			openAIKey: "",

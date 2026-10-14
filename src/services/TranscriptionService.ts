@@ -59,7 +59,8 @@ export class TranscriptionService {
 		this.plugin = plugin;
 	}
 
-	async transcribeCurrentEpisode(): Promise<void> {
+	/** Without `paid`, an episode whose feed publishes no transcript is not sent to a provider. */
+	async transcribeCurrentEpisode({ paid = true } = {}): Promise<void> {
 		if (this.disposed) return;
 		const episode = this.plugin.api.podcast;
 		if (!episode) {
@@ -79,6 +80,8 @@ export class TranscriptionService {
 
 		if (transcript) {
 			this.enqueue({ episode, source: { kind: "published", transcript } });
+		} else if (!paid) {
+			new Notice("This episode's feed publishes no transcript.");
 		} else if (this.hasRequiredKey()) {
 			this.enqueue({ episode, source: { kind: "audio" } });
 		} else {

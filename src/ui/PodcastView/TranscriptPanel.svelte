@@ -261,7 +261,7 @@
 			class="pn-btn pn-tx-save"
 			aria-label="Save as note"
 			title="Save as note"
-			disabled={!$online || !audio}
+			disabled={!$online}
 			onclick={() => saveTranscriptNote()}
 			><span class="pn-tx-icon" {@attach icon("file-plus")}></span><span>Save as note</span
 			></button
@@ -277,6 +277,7 @@
 	}
 
 	.pn-tx :global {
+		/* Following compares exact scroll positions, so the list must not animate them. */
 		.pn-panel-scroll {
 			scroll-behavior: auto;
 			overflow-anchor: none;
@@ -320,6 +321,7 @@
 		}
 
 		p.pn-row {
+			display: block;
 			margin: 0;
 		}
 

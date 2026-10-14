@@ -142,7 +142,7 @@ export class MainView extends ItemView {
 			captureTimestamp: () => plugin.capture.timestamp(),
 			openSettings: () => plugin.openSettingsTab(),
 			saveTranscriptNote: () =>
-				void plugin.getTranscriptionService().transcribeCurrentEpisode(),
+				void plugin.getTranscriptionService().transcribeCurrentEpisode({ paid: false }),
 			transcribeFromAudio: () =>
 				plugin.getTranscriptionService().transcribeCurrentEpisodeFromAudio(),
 			setAutoQueue: (enabled) => plugin.setAutoQueue(enabled),

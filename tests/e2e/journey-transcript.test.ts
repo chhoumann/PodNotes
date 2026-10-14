@@ -50,14 +50,15 @@ const FEED: FixtureFeed = {
 };
 const NOTE_PATH = `Transcripts/${FEED.title}/${CAPTIONED.title}.md`;
 
-const TRANSCRIPT = `${PLAYER_VIEW} section.pn-player ol[aria-label="Transcript"]`;
+/** The player's list named "Transcript", found by its accessible name. */
+const TRANSCRIPT_LIST = `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} section.pn-player ol[aria-labelledby]`)})].find((ol) => document.getElementById(ol.getAttribute("aria-labelledby"))?.textContent === "Transcript")`;
 const panelButton = (label: string): UiTarget => ({
 	name: `transcript panel's ${label}`,
 	elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} section.pn-player .pn-panel button`)})].filter((el) => el.getAttribute("aria-label") === ${jsLiteral(label)} || el.textContent.trim().startsWith(${jsLiteral(label)}))`,
 });
 const line = (text: string): UiTarget => ({
 	name: `transcript line ${text}`,
-	elements: `[...document.querySelectorAll(${jsLiteral(`${TRANSCRIPT} button`)})].filter((el) => el.lastElementChild?.textContent.trim() === ${jsLiteral(text)})`,
+	elements: `[...(${TRANSCRIPT_LIST})?.querySelectorAll("button") ?? []].filter((el) => el.lastElementChild?.textContent.trim() === ${jsLiteral(text)})`,
 });
 const findField: UiTarget = {
 	name: "Find in transcript field",
@@ -74,7 +75,7 @@ type ShownTranscript = Readonly<{
 /** The panel's lines by their text, the current one, the Find hit, and the marked matches. */
 async function shownTranscript(): Promise<ShownTranscript> {
 	return await getContext().obsidian.dev.evalJson<ShownTranscript>(`(() => {
-		const list = document.querySelector(${jsLiteral(TRANSCRIPT)});
+		const list = ${TRANSCRIPT_LIST};
 		const text = (row) => row?.lastElementChild?.textContent.trim() ?? null;
 		const rows = list ? [...list.querySelectorAll("li > :last-child")] : [];
 		return {

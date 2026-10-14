@@ -38,19 +38,20 @@ function episode(number: number, transcripts: TranscriptLink[] = []) {
 	return { item, played };
 }
 
-function repository(items: ParsedEpisodeDocument[]) {
+function repository(items: ParsedEpisodeDocument[], url = "https://show.test/feed.xml") {
 	const load = vi.fn(async () => ({ feed: { title: "Show" }, episodes: items }));
+	const clock = { now: Date.UTC(2026, 9, 12) };
 	const feeds = new FeedRepository({
 		load,
 		resolveUrl: (feed) => feed.url,
 		storage: new MemoryStorage(),
-		now: () => Date.UTC(2026, 9, 12),
+		now: () => clock.now,
 	});
-	feeds.setSubscriptions({
-		Show: { title: "Show", url: "https://show.test/feed.xml", artworkUrl: "" },
-	});
-	return { feeds, load };
+	feeds.setSubscriptions({ Show: { title: "Show", url, artworkUrl: "" } });
+	return { feeds, load, clock };
 }
+
+const SEVEN_HOURS = 7 * 3_600_000;
 
 const vtt = (...cues: string[]) =>
 	`WEBVTT\n\n${cues.map((cue, index) => `00:00:0${index}.000 --> 00:00:0${index + 1}.000\n${cue}`).join("\n\n")}\n`;
@@ -153,6 +154,55 @@ describe("loadTranscript", () => {
 		});
 		expect(fetchTextMock).toHaveBeenCalledTimes(2);
 	});
+
+	test("an episode a cached feed lacks, when the feed fails to refresh, fails rather than reporting no transcript", async () => {
+		const { item, played } = episode(8, [{ url: "8.vtt", type: "text/vtt" }]);
+		const { feeds, load, clock } = repository([episode(9).item]);
+		await feeds.load(["Show"], "cached");
+		clock.now += SEVEN_HOURS;
+		load.mockRejectedValueOnce(new Error("offline"));
+
+		await expect(loadTranscript(feeds, played, signal)).rejects.toThrow();
+		expect(cachedTranscript(played)).toBeUndefined();
+
+		load.mockResolvedValueOnce({ feed: { title: "Show" }, episodes: [item] });
+		fetchTextMock.mockResolvedValue(vtt("Found once the feed loads."));
+		await expect(loadTranscript(feeds, played, signal)).resolves.toMatchObject({
+			kind: "timed",
+		});
+	});
+
+	test("an episode a cached feed lists without a transcript has none, though the feed failed to refresh", async () => {
+		const { item, played } = episode(10);
+		const { feeds, load, clock } = repository([item]);
+		await feeds.load(["Show"], "cached");
+		clock.now += SEVEN_HOURS;
+		load.mockRejectedValueOnce(new Error("offline"));
+
+		await expect(loadTranscript(feeds, played, signal)).resolves.toBeNull();
+	});
+
+	test.each([
+		[
+			"timed",
+			{ url: "11.vtt", type: "text/vtt" },
+			(feed: string) => vtt(`<v Host ${feed}>Your feed: ${feed}`),
+		],
+		["untimed", { url: "11.txt", type: "text/plain" }, (feed: string) => `Your feed: ${feed}`],
+	])(
+		"%s transcript text quoting the episode's private feed shows no address",
+		async (_, link, body) => {
+			const secret = "https://private.test/rss?auth=REVIEW%2FSENTINEL";
+			const { item, played } = episode(11, [link]);
+			const { feeds } = repository([item], secret);
+			fetchTextMock.mockResolvedValue(body(secret));
+
+			const shown = await loadTranscript(feeds, { ...played, feedUrl: secret }, signal);
+
+			expect(JSON.stringify(shown)).toContain("Your feed: podnotes-private-feed:Show");
+			expect(JSON.stringify(shown)).not.toContain("SENTINEL");
+		},
+	);
 
 	test("a feed that did not load fails rather than reporting no transcript", async () => {
 		const { item, played } = episode(7, [{ url: "7.vtt", type: "text/vtt" }]);
