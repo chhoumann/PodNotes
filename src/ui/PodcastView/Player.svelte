@@ -387,7 +387,6 @@
 		}
 
 		.pn-vplay.is-paused,
-		.pn-video:hover .pn-vplay,
 		.pn-vplay:focus-visible {
 			opacity: 1;
 		}
@@ -447,11 +446,6 @@
 			font-size: var(--font-ui-smaller);
 		}
 
-		.pn-sw:hover:not(:disabled) {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
-		}
-
 		.pn-sw[aria-pressed="true"] {
 			background: var(--background-modifier-border);
 			color: var(--text-normal);
@@ -472,7 +466,6 @@
 			border-radius: 0;
 		}
 
-		.pn-tab:hover,
 		.pn-tab[aria-selected="true"] {
 			color: var(--text-normal);
 		}
@@ -486,6 +479,21 @@
 			height: 2px;
 			border-radius: 1px;
 			background: var(--interactive-accent);
+		}
+
+		@media (hover: hover) {
+			.pn-video:hover .pn-vplay {
+				opacity: 1;
+			}
+
+			.pn-sw:hover:not(:disabled) {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
+
+			.pn-tab:hover {
+				color: var(--text-normal);
+			}
 		}
 
 		.is-phone & {

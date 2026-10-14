@@ -70,9 +70,11 @@
 		cursor: var(--cursor);
 	}
 
-	.pn-railsearch:hover {
-		border-color: var(--background-modifier-border-hover);
-		color: var(--text-normal);
+	@media (hover: hover) {
+		.pn-railsearch:hover {
+			border-color: var(--background-modifier-border-hover);
+			color: var(--text-normal);
+		}
 	}
 
 	.pn-railsearch-icon {

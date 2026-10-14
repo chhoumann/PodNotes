@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import postcss from "postcss";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import postcss, { type AtRule, type Node } from "postcss";
+import { compile } from "svelte/compiler";
 import { describe, expect, test } from "vitest";
 import { componentCss, styled } from "../../../tests/mocks/componentCss";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
+const UI = path.resolve(import.meta.dirname, "..");
 
 /** `html` in the view, with `{}` standing for the component's own scoping class. */
 const inView = (component: string, html: string) =>
@@ -72,16 +76,21 @@ describe("focus ring", () => {
 });
 
 describe("hover", () => {
-	const TOUCHED = ["PodcastView", "EpisodeRow", "QueueRow", "Panel", "PlaylistsPage", "Deck"];
 	const HOVER = "(hover: hover)";
 
-	test("only a device that can hover lights up the view's controls and rows", () => {
+	test("only a device that can hover lights up anything in the view", () => {
 		const unguarded: string[] = [];
-		postcss.parse(componentCss(TOUCHED)).walkRules((rule) => {
-			const media = rule.parent?.type === "atrule" ? rule.parent : undefined;
-			if (rule.selector.includes(":hover") && media?.params !== HOVER)
-				unguarded.push(rule.selector);
-		});
+		for (const file of readdirSync(UI, { recursive: true, encoding: "utf8" })) {
+			if (!file.endsWith(".svelte")) continue;
+			const { css } = compile(readFileSync(path.join(UI, file), "utf8"), { css: "external" });
+			postcss.parse(css?.code ?? "").walkRules((rule) => {
+				let guarded = false;
+				for (let at: Node | undefined = rule.parent; at; at = at.parent)
+					if (at.type === "atrule" && (at as AtRule).params === HOVER) guarded = true;
+				if (rule.selector.includes(":hover") && !guarded)
+					unguarded.push(`${file} ${rule.selector}`);
+			});
+		}
 
 		expect(unguarded).toEqual([]);
 	});
@@ -102,6 +111,13 @@ describe("hover", () => {
 			'<div class="pn-deck {}"><button class="pn-skip%"></button></div>',
 			".pn-skip",
 			"",
+		],
+		[
+			"the panel switch that is on",
+			"Player",
+			'<section class="pn-player {}"><button class="pn-sw%" aria-pressed="true"></button></section>',
+			".pn-sw",
+			"var(--background-modifier-border)",
 		],
 	])(
 		"%s keeps its resting background after a tap",

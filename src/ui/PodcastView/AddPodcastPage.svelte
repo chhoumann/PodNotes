@@ -176,9 +176,11 @@
 			color: var(--text-muted);
 		}
 
-		.pn-alt:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
+		@media (hover: hover) {
+			.pn-alt:hover {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
 		}
 
 		.pn-alt > span {
@@ -203,8 +205,14 @@
 			white-space: normal;
 		}
 
-		.pn-result:hover {
-			background: var(--background-modifier-hover);
+		@media (hover: hover) {
+			.pn-result:hover {
+				background: var(--background-modifier-hover);
+			}
+
+			.pn-result:hover .end:not(.added) {
+				color: var(--text-accent);
+			}
 		}
 
 		.pn-result .pn-cover {
@@ -252,10 +260,6 @@
 
 		.pn-result .end.added {
 			color: var(--text-success);
-		}
-
-		.pn-result:hover .end:not(.added) {
-			color: var(--text-accent);
 		}
 
 		.pn-linkchip {

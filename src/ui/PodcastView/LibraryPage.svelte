@@ -69,8 +69,10 @@
 			border-radius: 8px;
 		}
 
-		.pn-gridcard:hover .pn-cover {
-			box-shadow: var(--shadow-s);
+		@media (hover: hover) {
+			.pn-gridcard:hover .pn-cover {
+				box-shadow: var(--shadow-s);
+			}
 		}
 
 		.pn-gridcard:active {

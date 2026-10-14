@@ -37,7 +37,9 @@
 		font-weight: var(--font-medium);
 	}
 
-	:global(.pn-panel-head) .pn-textbtn:hover {
-		background: var(--background-modifier-hover);
+	@media (hover: hover) {
+		:global(.pn-panel-head) .pn-textbtn:hover {
+			background: var(--background-modifier-hover);
+		}
 	}
 </style>

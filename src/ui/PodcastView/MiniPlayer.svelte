@@ -125,8 +125,10 @@
 			text-align: left;
 		}
 
-		.pn-mini-open:hover {
-			background: var(--background-modifier-hover);
+		@media (hover: hover) {
+			.pn-mini-open:hover {
+				background: var(--background-modifier-hover);
+			}
 		}
 
 		.pn-mini-prog {

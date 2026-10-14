@@ -377,8 +377,10 @@
 			--icon-size: 14px;
 		}
 
-		.pn-tx-follow:hover {
-			background: var(--interactive-accent-hover);
+		@media (hover: hover) {
+			.pn-tx-follow:hover {
+				background: var(--interactive-accent-hover);
+			}
 		}
 
 		.is-compact:not(.is-phone) & .pn-panel-head {
