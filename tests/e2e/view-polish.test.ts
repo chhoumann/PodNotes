@@ -1,12 +1,18 @@
 import { expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
-import { setOffline, showLibrary, showList, showPodNotes } from "./journey/actions";
-import { click } from "./journey/input";
+import {
+	setMobileEmulation,
+	setOffline,
+	showLibrary,
+	showList,
+	showPodNotes,
+} from "./journey/actions";
+import { cdp, click, pressKey } from "./journey/input";
 import { PLAYER_VIEW, ui } from "./journey/targets";
-import { eventually, waitUntilShown } from "./journey/wait";
+import { eventually, isShown, waitUntilShown } from "./journey/wait";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import { seedLibrary } from "./journey/library";
-import { jsLiteral, RELOAD_OPTIONS } from "./runtime";
+import { jsLiteral, RELOAD_OPTIONS, VIEW_TYPE } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("view-polish");
 
@@ -161,4 +167,73 @@ test("a feed address missing from this device wraps in the banner, and offline e
 	await click(obsidian, ui.back);
 	await showList(obsidian, "Latest episodes");
 	expect(await look('.pn-ep-main[aria-disabled="true"]')).toEqual({ opacity: 0.7, dimmedBy: 1 });
+});
+
+test("on a phone, the Escape that closes a row's menu in the right drawer leaves focus on the row's More button", async () => {
+	const context = getContext();
+	const { obsidian } = context;
+	const phone = { width: 390, height: 844 };
+	await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
+		...phone,
+		deviceScaleFactor: 1,
+		mobile: true,
+		screenWidth: phone.width,
+		screenHeight: phone.height,
+	});
+	onTestFinished(async () => {
+		await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
+	});
+	await setMobileEmulation(obsidian, true);
+	const server = await startFixtureServer([LONG]);
+	onTestFinished(() => server.stop());
+	await seedLibrary(context, server, { subscriptions: [LONG] });
+	// Where PodNotes opens on a phone. Obsidian sends focus from a sidebar to the main area
+	// on an Escape nothing handled.
+	await obsidian.dev.evalJson(`app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)}), true`);
+	await showPodNotes(obsidian);
+	expect(
+		await obsidian.dev.evalJson<boolean>(
+			`Boolean(document.querySelector(${jsLiteral(PLAYER_VIEW)})?.closest(".workspace-drawer.mod-right"))`,
+		),
+		"in the right drawer",
+	).toBe(true);
+	await showList(obsidian, "Latest episodes");
+	await click(obsidian, ui.episodeMenu("First Steps"));
+	await waitUntilShown(obsidian, ui.menuItem("Add to queue"));
+	// Obsidian gives a menu the keys a timer tick after it shows.
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(
+				'(app.keymap.getWindowStack(activeWindow).scope.keys ?? []).some((key) => key.key === "ArrowDown")',
+			),
+		{ timeoutMs: 5_000, intervalMs: 50, message: "the menu to take the keys" },
+	);
+	// Where focus is in the task after the Escape, and 200 ms later, past the menu's 150 ms hide.
+	await obsidian.dev.evalJson(`(() => {
+		const more = (${ui.episodeMenu("First Steps").elements})[0];
+		const view = document.querySelector(${jsLiteral(PLAYER_VIEW)});
+		const at = () => ({ onMore: document.activeElement === more, inView: view.contains(document.activeElement) });
+		window.pnEscapeFocus = [];
+		activeWindow.addEventListener("keydown", (event) => {
+			if (event.key !== "Escape") return;
+			setTimeout(() => window.pnEscapeFocus.push(at()));
+			setTimeout(() => window.pnEscapeFocus.push(at()), 200);
+		}, { capture: true, once: true });
+		return true;
+	})()`);
+
+	await pressKey(obsidian, "Escape");
+
+	expect(
+		await eventually(obsidian, () => obsidian.dev.evalJson<unknown[]>("window.pnEscapeFocus"), [
+			{ onMore: true, inView: true },
+			{ onMore: true, inView: true },
+		]),
+	).toEqual([
+		{ onMore: true, inView: true },
+		{ onMore: true, inView: true },
+	]);
+	expect(
+		await eventually(obsidian, () => isShown(obsidian, ui.menuItem("Add to queue")), false),
+	).toBe(false);
 });
