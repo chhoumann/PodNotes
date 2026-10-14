@@ -8,7 +8,7 @@ Control playback from the mini player at the bottom of the PodNotes view, or fro
 
 ## Open the full player
 
-When you select an episode in a list, PodNotes plays it and opens the full player over the view. When you select the episode that is already loaded, PodNotes opens the full player without playing, so select **Play** there. To open the full player again later, do one of these:
+When you select an episode in a list, PodNotes plays it and opens the full player over the view. When you select the episode that is already loaded, PodNotes opens the full player without changing playback. If the episode is paused, select **Play** there. To open the full player again later, do one of these:
 
 - Select the mini player's episode title or artwork.
 - Run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
@@ -63,9 +63,9 @@ The full player has three panels:
 - **Transcript** shows the transcript that the episode's feed publishes.
 - **Up next** shows the queue.
 
-In a narrow view, the panel buttons are at the bottom of the full player. Select one to show its panel in place of the artwork, and select it again to hide the panel. In a wide view, such as a tab in the main area, the panels are tabs beside the player:
+In a narrow view, the panel buttons are at the bottom of the full player. Select one to show its panel in place of the artwork, and select it again to hide the panel. In a wide view, such as a tab in the main area, the panels are tabs beside the player.
 
-![The full player in a wide pane, with the Transcript tab open beside it, showing timed lines with speaker names and the current line highlighted](/screenshots/transcript.webp)
+![The Transcript panel of the full player, with timed lines, speaker names, and the current line highlighted](/screenshots/transcript.webp)
 
 ### Chapters
 
@@ -111,7 +111,7 @@ These keys work on the control that has focus:
 
 - An episode resumes where you stopped. An episode you finished starts from the beginning.
 - When Obsidian starts, the mini player shows the episode you played last, paused at its saved position. It plays when you play it.
-- When an episode ends, PodNotes marks it played and removes it from the queue and from your playlists. With **Queue episodes I switch away from** on, the first episode in the queue then starts.
+- When an episode ends, PodNotes marks it played and removes it from the queue and from your own playlists. It stays in **Favorites**. With **Queue episodes I switch away from** on, the first episode in the queue then starts.
 - A move to the very end pauses the episode 0.25 seconds before its end.
 - When you play an episode that ended, it starts from the beginning. It plays from a later position instead when you moved the position after it ended, or when another device synced a position before the end. See [Sync between devices](/sync/#use-podnotes-on-two-devices).
 

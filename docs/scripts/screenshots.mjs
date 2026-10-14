@@ -184,32 +184,33 @@ async function webp(png, name, themeName) {
 }
 
 /**
- * Shoots the PodNotes view, through the screens tooling, in both themes. `bottom`
- * is a page function, as source, that returns where to cut the shot, in CSS px
- * from the top of the view.
+ * Shoots the PodNotes view, through the screens tooling, in both themes. `crop` is
+ * a page function, as source, that returns `{ top, bottom }` in CSS px of the
+ * window, either of them optional, to cut the shot to.
  * @param {string} name @param {string} [text] Text the view shows once it is ready.
- * @param {string} [bottom]
+ * @param {string} [crop]
  */
-async function viewShot(name, text, bottom) {
+async function viewShot(name, text, crop) {
 	fs.mkdirSync(work, { recursive: true });
 	for (const name_ of THEMES) {
 		await theme(name_);
 		const png = path.join(work, `${name}-${name_}.png`);
 		await shot(png, text, name_);
-		if (bottom) {
-			const cut = await evaluate(`
-				const view = document.querySelector(".podcast-view").getBoundingClientRect();
-				return Math.round((${bottom})() - view.top);
-			`);
-			const { width } = await sharp(png).metadata();
-			const cropped = path.join(work, `${name}-${name_}-crop.png`);
-			await sharp(png)
-				.extract({ left: 0, top: 0, width, height: cut * 2 })
-				.toFile(cropped);
-			await webp(cropped, name, name_);
-		} else {
+		if (!crop) {
 			await webp(png, name, name_);
+			continue;
 		}
+		const { top, bottom } = await evaluate(`
+			const view = document.querySelector(".podcast-view").getBoundingClientRect();
+			const { top = view.top, bottom = view.bottom } = (${crop})();
+			return { top: Math.round(top - view.top), bottom: Math.round(bottom - view.top) };
+		`);
+		const { width } = await sharp(png).metadata();
+		const cropped = path.join(work, `${name}-${name_}-crop.png`);
+		await sharp(png)
+			.extract({ left: 0, top: top * 2, width, height: (bottom - top) * 2 })
+			.toFile(cropped);
+		await webp(cropped, name, name_);
 	}
 }
 
@@ -224,11 +225,16 @@ async function show(
 	);
 }
 
-/** The bottom edge of the last element matching `selector`, plus `pad`, as page source. */
+/** A crop down to the last element matching `selector`, plus `pad`, as page source. */
 const below = (/** @type {string} */ selector, pad = 16) =>
-	`() => Math.max(...[...document.querySelectorAll(${JSON.stringify(selector)})]
+	`() => ({ bottom: Math.max(...[...document.querySelectorAll(${JSON.stringify(selector)})]
 		.filter((el) => el.getClientRects().length > 0)
-		.map((el) => el.getBoundingClientRect().bottom)) + ${pad}`;
+		.map((el) => el.getBoundingClientRect().bottom)) + ${pad} })`;
+// The first-run screen centers a short block in a tall sidebar.
+const FIRST_RUN = `() => ({
+	top: document.querySelector(".pn-first-run .pn-empty-mark").getBoundingClientRect().top - 32,
+	bottom: document.querySelector(".pn-first-run .pn-alts").getBoundingClientRect().bottom + 32,
+})`;
 
 /** A crop of the open note's text column between two of its blocks, as page source. */
 const noteCrop = (/** @type {string} */ from, /** @type {string} */ to) => `() => {
@@ -669,7 +675,7 @@ async function main() {
 	await place("sidebar");
 	await hiDpi();
 	await show({ kind: "library" });
-	await viewShot("add-podcast", "Add your first podcast");
+	await viewShot("add-podcast", "Add your first podcast", FIRST_RUN);
 	await theme("light");
 	await cdp("Emulation.clearDeviceMetricsOverride");
 	console.log(`Wrote the screenshots to ${path.relative(root, outDir)}`);

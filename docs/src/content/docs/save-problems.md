@@ -24,7 +24,7 @@ To fix the cause, free disk space, and check that PodNotes may write to its plug
 
 The file should hold the new value, such as `"skipForwardLength": 20`, and end with a closing `}`. If your editor checks JSON, it should report no errors.
 
-If the file still holds the old value, the cause is not fixed yet. PodNotes does not show the save notice again until a save succeeds, so fix the cause and check again. If the notice that PodNotes could not read the file appears instead, see [PodNotes could not read data.json](/save-problems/#podnotes-could-not-read-datajson).
+If the file still holds the old value, the cause is not fixed yet. Fix it and check again. If the notice that PodNotes could not read the file appears instead, see [PodNotes could not read data.json](/save-problems/#podnotes-could-not-read-datajson).
 
 ## PodNotes could not read data.json
 

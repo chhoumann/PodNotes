@@ -80,7 +80,7 @@ rating:
 
 A note made with this template looks like this:
 
-![An episode note made with this template, with its properties, artwork, a Resume in PodNotes link, and the description folded into a callout](/screenshots/episode-note.webp)
+![An episode note made with this template, with its properties, artwork, and a Resume in PodNotes link](/screenshots/episode-note.webp)
 
 **Resume in PodNotes** continues the episode from where you stopped. `{{episodelink:Resume in PodNotes}}` makes that link, and leaves the line empty when the episode has nothing to link to. A changed template applies only to new notes. Podcast notes use **Podcast note template** under **Notes**. [Template tags](/templates/) lists every tag and the [default episode note template](/templates/#default-episode-note-template).
 

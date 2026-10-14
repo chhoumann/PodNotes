@@ -171,7 +171,7 @@ Setting the speed does not change **Default speed**. The speed lasts until a dif
 
 ## Playback controls
 
-- `start()` plays the current episode from where it is. After Obsidian starts, it plays the restored episode from its saved position, and a finished episode starts over, unless you moved its position after it finished.
+- `start()` plays the current episode from where it is. After Obsidian starts, it plays the restored episode from its saved position, and a finished episode starts over, unless you moved its position after it finished, or another device synced a position before the end.
 - `stop()` pauses the current episode and saves its position.
 - `togglePlayback()` switches between playing and paused.
 - `skipBackward()` and `skipForward()` move by **Skip back (s)** and **Skip forward (s)**. An invalid length falls back to 15 seconds.

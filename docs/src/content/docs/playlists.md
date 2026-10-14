@@ -8,7 +8,7 @@ The queue decides what plays next. Playlists collect episodes you want to keep t
 
 ## Manage the queue
 
-The Queue page lists what plays next and the total time left. With the automatic queue on, the default, the first episode in the queue starts when an episode ends, and the episode you switch away from goes to the top of the queue. To fill the queue only by hand, [turn off the automatic queue](/playlists/#turn-off-the-automatic-queue).
+The Queue page lists what plays next and the total time left. With the automatic queue on, the default, the first episode in the queue starts when an episode ends, and when you select another episode, the one you switch away from goes to the top of the queue. To fill the queue only by hand, [turn off the automatic queue](/playlists/#turn-off-the-automatic-queue).
 
 ![The Queue page in the sidebar with three episodes, each with a grip on its left and a cross on its right](/screenshots/queue.webp)
 
@@ -17,7 +17,7 @@ To add an episode to the end of the queue:
 1. Right-click the episode, or select its **More options** button, the three dots at the end of its row.
 2. Select **Add to queue**.
 
-When an episode ends, PodNotes removes it from the queue. Episodes on the Queue page have no **More options** button, so right-click one to open its menu. The full player's **Up next** panel shows the same queue. See [Up next](/player/#up-next).
+When an episode ends, PodNotes removes it from the queue. Episodes on the Queue page have no **More options** button, so right-click one to open its menu. On a phone, open the episode's menu from its podcast's page instead. The full player's **Up next** panel shows the same queue. See [Up next](/player/#up-next).
 
 ### Reorder the queue
 

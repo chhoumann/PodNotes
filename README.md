@@ -21,7 +21,7 @@
       <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/hero-phone-dark.webp">
       <source media="(max-width: 600px)" srcset="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/hero-phone.webp">
       <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/demo-dark.gif">
-      <img src="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/demo.gif" width="880" alt="An episode note in Obsidian with timestamp links captured while the episode plays in PodNotes">
+      <img src="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/demo.gif" width="880" alt="An episode note in Obsidian with timestamp links captured from the episode in PodNotes">
     </picture>
   </a>
 </p>

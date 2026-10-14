@@ -69,7 +69,7 @@ For a private feed whose address is not on this device, **Feed didn't load** com
 
 1. Select an episode.
 
-PodNotes plays the episode from where you stopped and opens the full player over the view. When you select the episode that is already loaded, PodNotes opens the full player without playing it. Select **Play** there. [Use the player](/player/) covers the controls, the Chapters, Transcript, and Up next panels, and the mini player that stays at the bottom of the view.
+PodNotes plays the episode from where you stopped and opens the full player over the view. When you select the episode that is already loaded, PodNotes opens the full player without changing playback. If the episode is paused, select **Play** there. [Use the player](/player/) covers the controls, the **Chapters**, **Transcript**, and **Up next** panels, and the mini player that stays at the bottom of the view.
 
 ## <span id="playlists"></span><span id="reordering-the-queue"></span><span id="turning-off-the-queue"></span>Queue and playlists
 
@@ -79,7 +79,7 @@ The queue decides what plays next, and playlists collect episodes you want to ke
 
 ### <span id="context-menu"></span>Episode menu reference
 
-To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. Episodes in the queue have no **More options** button, so right-click them. The menu shows these items in this order:
+To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. Episodes on the Queue page have no **More options** button, so right-click them, or open their menu from their podcast's page. The menu shows these items in this order:
 
 | Item | What it does |
 | --- | --- |
@@ -103,5 +103,5 @@ To open a podcast's menu, select **Podcast options** on its page, or right-click
 | **Create podcast note** or **Open podcast note** | Creates or opens the note for the whole podcast. See [Create a podcast note](/notes/#create-a-podcast-note). |
 | **Copy feed URL** | Copies the feed's address. Only for a feed that is not private. |
 | **Set feed address** | Asks for a private feed's address when it is not on this device. |
-| **Edit feed URL** | Changes the address of a feed that is not private, when PodNotes cannot fetch it. |
+| **Edit feed URL** | Changes the address of a feed that is not private, when PodNotes cannot load it. |
 | **Remove podcast** | Removes the podcast, with **Undo** in the notice. |

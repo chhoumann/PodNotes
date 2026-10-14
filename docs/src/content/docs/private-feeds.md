@@ -22,9 +22,11 @@ The podcast syncs to your other devices, but its address does not. On each other
 1. On a device that already has PodNotes, update it to 2.22.0 or later before you use PodNotes there. An older PodNotes does not [merge changes](/sync/#changes-on-two-devices), so it can overwrite the library that sync brings.
 2. Let your sync service bring your vault to the device. It must include PodNotes' plugin folder, as [What syncs](/sync/#what-syncs) describes. With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** on every device. On a new device, these two settings also bring PodNotes itself.
 3. If PodNotes is still not on the device, install it. The podcast then appears on the device. Do not add it again from its address.
-4. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
-5. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item. Setting the address needs a connection.
-6. Paste the private feed address into **Feed address**, and select **Save**. Copy the address from your podcast provider again, because PodNotes does not show it.
+4. Copy the private feed address from your podcast provider, such as your Supercast account. PodNotes does not show the address, so copy it there again.
+5. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
+6. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item. Setting the address needs a connection.
+7. Paste the address into **Feed address**.
+8. Select **Save**.
 
 PodNotes stores the address on this device and loads the feed. From then on, the podcast and its timestamp links work on this device too.
 
@@ -72,7 +74,7 @@ See [Import and export](/import_export/).
 - **Set feed address** accepts only an address from [Which addresses PodNotes keeps private](/private-feeds/#which-addresses-podnotes-keeps-private). For any other HTTP or HTTPS address, it says "Enter a private feed address." For an address that is not HTTP or HTTPS, it says "Enter the feed's http or https address." For a feed it cannot load, it says "Could not load the feed at that address." Offline, the page's button is turned off, and the menu item shows the notice "Setting a feed address needs a connection."
 - When you remove a private podcast and add it again, it gets a new reference. Your other devices then need **Set feed address** again.
 - When PodNotes starts on a `data.json` that no longer lists a private podcast, for example after your sync service brings back an older copy, it deletes this device's copy of that podcast's address. When the podcast comes back, use **Set feed address** again.
-- A settings file from PodNotes 2.21.1 or earlier holds no reference. After you import it, **Set feed address** fails with a notice that it could not store the private feed address. Remove the podcast and add it again with its address.
+- A settings file from PodNotes 2.21.1 or earlier holds a private feed's placeholder without its reference, or the address itself for a host that 2.21.1 did not recognize, such as Supercast. After you import it, a podcast whose address the file held works at once. The others show **Address not on this device**, so set their addresses with **Set feed address**. Either way, the podcast gets a new reference, so your other devices need **Set feed address** again.
 
 ## Reference
 

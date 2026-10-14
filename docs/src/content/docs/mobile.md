@@ -14,11 +14,11 @@ On a new install, PodNotes opens its view once. After that, PodNotes opens the v
 1. Pull down on a note to open the command palette.
 2. Run **PodNotes: Show player**.
 
-You can also select **Show PodNotes** in the menu of the navigation bar at the bottom of the screen. The PodNotes view opens in the right sidebar. When you use the command and an episode is loaded, the full player opens in it. To see your lists, select **Collapse player**, the down arrow at the top left. To return to your note, select outside the sidebar.
+You can also open the menu from the three-line button in the navigation bar at the bottom of the screen, and select **Show PodNotes**. The PodNotes view opens in the right sidebar. When you use the command and an episode is loaded, the full player opens in it. To see your lists, select **Collapse player**, the down arrow at the top left. To return to your note, select outside the sidebar.
 
 ![The full player on a phone: artwork, title, a progress bar split into chapters, playback controls, Timestamp and Open note, and the panel buttons](/screenshots/mobile-player.webp)
 
-The full player works as on a computer. See [Use the player](/player/). To reorder the queue, touch an episode's grip on the Queue page and drag it. See [Reorder the queue](/playlists/#reorder-the-queue). To add your first podcast, see [Add and play podcasts](/podcasts/). Most commands appear only while an episode is loaded. When Obsidian starts, PodNotes restores the episode you played last, paused, so these commands work before you open the view. See [Commands](/commands/).
+The full player works as on a computer. See [Use the player](/player/). The Queue page works by touch too. See [Reorder the queue](/playlists/#reorder-the-queue). To add your first podcast, see [Add and play podcasts](/podcasts/). Most commands appear only while an episode is loaded. When Obsidian starts, PodNotes restores the episode you played last, paused, so these commands work before you open the view. See [Commands](/commands/).
 
 ## Add a capture button to the editor toolbar
 

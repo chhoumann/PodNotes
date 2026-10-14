@@ -56,11 +56,11 @@ Moves forward by **Skip forward (s)**, 15 seconds by default, and keeps the epis
 
 ## Increase playback rate
 
-Raises the speed by 0.1x, up to 4x. The speed keeps hundredths, so `1.25×` becomes `1.35×`.
+Raises the speed by 0.1, up to `4×`. The speed keeps hundredths, so `1.25×` becomes `1.35×`.
 
 ## Decrease playback rate
 
-Lowers the speed by 0.1x, down to 0.5x.
+Lowers the speed by 0.1, down to `0.5×`.
 
 ## Reset playback rate
 
