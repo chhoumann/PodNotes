@@ -85,6 +85,160 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
+describe("save refusal recovery", () => {
+	function recovering() {
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		plugin.settings.savedFeeds = {
+			Recovery: {
+				title: "Recovery",
+				url: "https://example.com/recovery.xml",
+				artworkUrl: "",
+			},
+		};
+		const readable = encodePodNotesData(plugin.settings);
+		const state: { blocked: boolean; disk: unknown } = { blocked: false, disk: readable };
+		const loadData = vi.fn(async () => (state.blocked ? null : structuredClone(state.disk)));
+		Object.assign(plugin, {
+			loadData,
+			saveData: async (data: unknown) => {
+				await saveData(data);
+				state.disk = structuredClone(data);
+			},
+		});
+		Object.assign(plugin.app.vault.adapter, {
+			exists: vi.fn(async () => state.disk !== null),
+			read: vi.fn(async () => {
+				if (state.blocked) throw new Error("read outage");
+				return dataFileText(state.disk);
+			}),
+		});
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const notices = vi.spyOn(obsidian, "Notice");
+		return { plugin, state, readable, saveData, loadData, clock, notices };
+	}
+
+	it.each([1, 99])(
+		"#429 stops periodic reads for schema %s and reports the required action once",
+		async (schemaVersion) => {
+			const { plugin, state, readable, saveData, loadData, clock, notices } = recovering();
+			state.disk = { ...readable, schemaVersion };
+			plugin.settings.skipForwardLength = 25;
+			await saveInBackground(plugin);
+			const reads = loadData.mock.calls.length;
+			for (let i = 0; i < 6; i++) {
+				clock.advance(10_000);
+				clock.runAll();
+				await settled();
+			}
+			expect.soft(loadData).toHaveBeenCalledTimes(reads);
+			expect.soft(notices).toHaveBeenCalledTimes(1);
+			expect
+				.soft(notices.mock.calls[0]?.[0])
+				.toMatch(schemaVersion === 99 ? /updat.*PodNotes/i : /reload|restart/i);
+			expect(saveData).not.toHaveBeenCalled();
+			expect(state.disk).toEqual({ ...readable, schemaVersion });
+		},
+	);
+
+	it("#430 strict saves recover the read before rejecting an import or key selection", async () => {
+		const { plugin, state, saveData, notices } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		await plugin.onExternalSettingsChange();
+		expect(notices).toHaveBeenCalledTimes(1);
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		plugin.settings.openAISecretId = "recovered-key";
+		await plugin.saveSettingsStrict();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			openAISecretId: "recovered-key",
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+	});
+
+	it("#431 flushes a pending edit immediately once a runtime read recovers", async () => {
+		const { plugin, state, saveData } = recovering();
+		state.blocked = true;
+		plugin.settings.skipForwardLength = 25;
+		await saveInBackground(plugin);
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		await plugin.flushSaves();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({ skipForwardLength: 25 });
+	});
+
+	it("#431 restores the idle library once when the unreadable file is moved away", async () => {
+		const { plugin, state, saveData, clock } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		state.disk = null;
+		await plugin.onExternalSettingsChange();
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+	});
+
+	it("#431 recovers an idle read outage without a file event or an edit", async () => {
+		const { plugin, state, saveData, clock, notices } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(notices).toHaveBeenCalledTimes(1);
+		expect(saveData).not.toHaveBeenCalled();
+		state.blocked = false;
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+	});
+
+	it("#432 asks for readable startup data and a reload without writing defaults", async () => {
+		const { plugin, state, saveData, loadData, notices, clock } = recovering();
+		state.blocked = true;
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin, clock);
+		expect
+			.soft(notices.mock.calls[0]?.[0])
+			.toMatch(
+				/(?:make|restore)[^.]+(?:read|access)[^.]+(?:reload|restart)|(?:readable|read access)[^.]+(?:reload|restart)/i,
+			);
+		state.blocked = false;
+		loadData.mockClear();
+		plugin.settings.skipForwardLength = 25;
+		await saveInBackground(plugin);
+		await plugin.flushSaves();
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow();
+		expect(loadData).not.toHaveBeenCalled();
+		expect(saveData).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(0);
+	});
+});
+
 describe("PodNotes persistence integration", () => {
 	it("loads legacy JSON dates as Date instances", async () => {
 		const plugin = makePlugin();
