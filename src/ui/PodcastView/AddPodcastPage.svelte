@@ -88,26 +88,28 @@
 		{$search.results.length}
 		{$search.results.length === 1 ? "show" : "shows"}
 	</div>
-	{#each $search.results as result (result.feed.url)}
-		{@const added = actions.savedKey($savedFeeds, result.feed.url) !== undefined}
-		<button
-			type="button"
-			class="pn-result"
-			aria-label="{added ? 'Open' : 'Add'} {result.feed.title}"
-			onclick={() => add(result)}
-		>
-			<Cover src={result.feed.artworkUrl} title={result.feed.title} />
-			<span class="txt">
-				<span class="t">{result.feed.title}</span>
-				<span class="s">
-					{#if result.via}<span class="pn-linkchip"
-							><span {@attach icon("link")}></span>{result.via}</span
-						>{/if}{details(result)}
+	<div class="pn-results">
+		{#each $search.results as result (result.feed.url)}
+			{@const added = actions.savedKey($savedFeeds, result.feed.url) !== undefined}
+			<button
+				type="button"
+				class="pn-result"
+				aria-label="{added ? 'Open' : 'Add'} {result.feed.title}"
+				onclick={() => add(result)}
+			>
+				<Cover src={result.feed.artworkUrl} title={result.feed.title} />
+				<span class="txt">
+					<span class="t">{result.feed.title}</span>
+					<span class="s">
+						{#if result.via}<span class="pn-linkchip"
+								><span {@attach icon("link")}></span>{result.via}</span
+							>{/if}{details(result)}
+					</span>
 				</span>
-			</span>
-			<span class="end" class:added {@attach icon(added ? "check" : "plus")}></span>
-		</button>
-	{/each}
+				<span class="end" class:added {@attach icon(added ? "check" : "plus")}></span>
+			</button>
+		{/each}
+	</div>
 {/if}
 
 <style>
@@ -169,8 +171,23 @@
 
 	.pn-alts :global {
 		.pn-alt {
+			display: inline-flex;
+			align-items: center;
 			gap: var(--size-4-2);
+			height: var(--pn-btn);
 			padding: 0 var(--size-4-2);
+			border: 0;
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-muted);
+			font-size: var(--font-ui-small);
+			cursor: var(--cursor);
+		}
+
+		.pn-alt:hover {
+			background: var(--background-modifier-hover);
+			color: var(--text-normal);
 		}
 
 		.pn-alt > span {
@@ -180,35 +197,35 @@
 		}
 	}
 
-	/* Obsidian's buttons keep their text on one line; this one wraps its title. */
-	.pn-result {
-		display: flex;
-		align-items: center;
-		gap: var(--size-4-3);
-		width: 100%;
-		height: auto;
-		padding: var(--size-4-2);
-		border: 0;
-		border-radius: var(--radius-s);
-		background: none;
-		box-shadow: none;
-		color: var(--text-normal);
-		font-size: var(--font-ui-small);
-		text-align: left;
-		white-space: normal;
-		cursor: var(--cursor);
-	}
+	.pn-results :global {
+		/* Obsidian's buttons keep their text on one line; this one wraps its title. */
+		.pn-result {
+			display: flex;
+			align-items: center;
+			gap: var(--size-4-3);
+			width: 100%;
+			height: auto;
+			padding: var(--size-4-2);
+			border: 0;
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-normal);
+			font-size: var(--font-ui-small);
+			text-align: left;
+			white-space: normal;
+			cursor: var(--cursor);
+		}
 
-	.pn-result:hover {
-		background: var(--background-modifier-hover);
-	}
+		.pn-result:hover {
+			background: var(--background-modifier-hover);
+		}
 
-	.pn-result :global {
-		.pn-cover {
+		.pn-result .pn-cover {
 			width: 44px;
 		}
 
-		.txt {
+		.pn-result .txt {
 			flex: 1;
 			min-width: 0;
 			display: flex;
@@ -217,7 +234,7 @@
 		}
 
 		/* A long title takes two lines and breaks anywhere, never under the mark beside it. */
-		.t {
+		.pn-result .t {
 			font-weight: var(--font-medium);
 			line-height: 1.35;
 			display: -webkit-box;
@@ -228,7 +245,7 @@
 			overflow-wrap: anywhere;
 		}
 
-		.s {
+		.pn-result .s {
 			color: var(--text-muted);
 			font-size: var(--font-ui-smaller);
 			white-space: nowrap;
@@ -236,7 +253,7 @@
 			text-overflow: ellipsis;
 		}
 
-		.end {
+		.pn-result .end {
 			flex: none;
 			display: flex;
 			align-items: center;
@@ -247,8 +264,12 @@
 			--icon-size: 18px;
 		}
 
-		.end.added {
+		.pn-result .end.added {
 			color: var(--text-success);
+		}
+
+		.pn-result:hover .end:not(.added) {
+			color: var(--text-accent);
 		}
 
 		.pn-linkchip {
@@ -260,11 +281,7 @@
 		}
 	}
 
-	.pn-result:hover :global(.end:not(.added)) {
-		color: var(--text-accent);
-	}
-
-	:global(.is-phone) .pn-result :global(.pn-cover) {
+	:global(.is-phone) .pn-results :global(.pn-result .pn-cover) {
 		width: 52px;
 	}
 </style>

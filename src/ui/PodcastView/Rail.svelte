@@ -51,35 +51,33 @@
 		border-right: 1px solid var(--background-modifier-border);
 	}
 
-	.pn-rail :global {
-		.pn-railsearch {
-			display: flex;
-			align-items: center;
-			justify-content: flex-start;
-			gap: var(--size-4-2);
-			flex: none;
-			width: 100%;
-			height: var(--input-height);
-			padding: 0 var(--size-4-2);
-			border: 1px solid var(--background-modifier-border);
-			border-radius: var(--input-radius);
-			background: var(--background-modifier-form-field);
-			box-shadow: none;
-			color: var(--text-muted);
-			font-size: var(--font-ui-small);
-			text-align: left;
-			cursor: var(--cursor);
-		}
+	.pn-railsearch {
+		display: flex;
+		align-items: center;
+		justify-content: flex-start;
+		gap: var(--size-4-2);
+		flex: none;
+		width: 100%;
+		height: var(--input-height);
+		padding: 0 var(--size-4-2);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: var(--input-radius);
+		background: var(--background-modifier-form-field);
+		box-shadow: none;
+		color: var(--text-muted);
+		font-size: var(--font-ui-small);
+		text-align: left;
+		cursor: var(--cursor);
+	}
 
-		.pn-railsearch:hover {
-			border-color: var(--background-modifier-border-hover);
-			color: var(--text-normal);
-		}
+	.pn-railsearch:hover {
+		border-color: var(--background-modifier-border-hover);
+		color: var(--text-normal);
+	}
 
-		.pn-railsearch-icon {
-			display: flex;
-			--icon-size: var(--icon-xs);
-			--icon-stroke: var(--icon-xs-stroke-width);
-		}
+	.pn-railsearch-icon {
+		display: flex;
+		--icon-size: var(--icon-xs);
+		--icon-stroke: var(--icon-xs-stroke-width);
 	}
 </style>

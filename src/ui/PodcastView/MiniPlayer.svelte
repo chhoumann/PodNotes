@@ -129,6 +129,28 @@
 		padding: 0 var(--size-4-2);
 	}
 
+	.pn-mini-open {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: var(--size-4-3);
+		height: auto;
+		padding: var(--size-4-1);
+		border: 0;
+		border-radius: var(--radius-s);
+		background: none;
+		box-shadow: none;
+		color: var(--text-normal);
+		font-size: var(--font-ui-small);
+		text-align: left;
+		cursor: var(--cursor);
+	}
+
+	.pn-mini-open:hover {
+		background: var(--background-modifier-hover);
+	}
+
 	.pn-mini :global {
 		.pn-mini-prog {
 			position: absolute;
@@ -143,28 +165,6 @@
 			display: block;
 			height: 100%;
 			background: var(--interactive-accent);
-		}
-
-		.pn-mini-open {
-			flex: 1;
-			min-width: 0;
-			display: flex;
-			align-items: center;
-			gap: var(--size-4-3);
-			height: auto;
-			padding: var(--size-4-1);
-			border: 0;
-			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
-			color: var(--text-normal);
-			font-size: var(--font-ui-small);
-			text-align: left;
-			cursor: var(--cursor);
-		}
-
-		.pn-mini-open:hover {
-			background: var(--background-modifier-hover);
 		}
 
 		.pn-mini-cover {

@@ -448,6 +448,8 @@ describe("the player's panels", () => {
 		expect((await key("ArrowRight"))[0]).toBe("Chapters");
 		expect((await key("ArrowLeft"))[0]).toBe("Up next");
 		expect((await key("Home"))[0]).toBe("Chapters");
+		expect((await key("Home"))[0]).toBe("Chapters");
+		expect((await key("End"))[0]).toBe("Up next");
 		expect((await key("End"))[0]).toBe("Up next");
 		expect((await key("ArrowDown"))[0]).toBe("Up next");
 	});

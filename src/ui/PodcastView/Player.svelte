@@ -247,7 +247,11 @@
 					></span>
 				{/if}
 			</div>
-			<Deck bind:this={deck} {chapters} {wide} onchapters={() => (panel = "chapters")}>
+			<Deck
+				bind:this={deck}
+				{chapters}
+				onchapters={failed && !wide ? undefined : () => (panel = "chapters")}
+			>
 				{#if !wide}
 					{@render switcher()}
 				{/if}

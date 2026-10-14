@@ -27,7 +27,7 @@
 {/snippet}
 
 <style>
-	.pn-textbtn {
+	:global(.pn-panel-head) .pn-textbtn {
 		height: auto;
 		padding: var(--size-2-2) var(--size-4-2);
 		border-radius: var(--radius-s);
@@ -38,7 +38,7 @@
 		font-weight: var(--font-medium);
 	}
 
-	.pn-textbtn:hover {
+	:global(.pn-panel-head) .pn-textbtn:hover {
 		background: var(--background-modifier-hover);
 	}
 </style>

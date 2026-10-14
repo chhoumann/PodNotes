@@ -136,32 +136,3 @@
 		<span>{empty}</span>
 	</div>
 {/if}
-
-<style>
-	.pn-queue :global {
-		.pn-ep {
-			align-items: center;
-			gap: var(--size-2-2);
-		}
-
-		.pn-ep .pn-ep-main {
-			align-items: center;
-			padding-left: 0;
-		}
-
-		.pn-ep .pn-ep-main .pn-cover {
-			margin-top: 0;
-		}
-
-		.pn-ep .pn-bar {
-			display: none;
-		}
-
-		.pn-ep:has(.pn-grip.is-dragging) {
-			position: relative;
-			z-index: 2;
-			background: var(--pn-surface);
-			box-shadow: var(--shadow-s);
-		}
-	}
-</style>

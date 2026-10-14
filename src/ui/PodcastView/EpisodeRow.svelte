@@ -12,6 +12,8 @@
 		cover = false,
 		date = !cover,
 		resolved = true,
+		queue = false,
+		dragging = false,
 		onplay,
 		onmenu,
 		leading,
@@ -23,6 +25,10 @@
 		date?: boolean;
 		/** False for a Played record that matched no episode. */
 		resolved?: boolean;
+		/** A queue row: centered, flush left, without a progress bar. */
+		queue?: boolean;
+		/** Lifted while its grip drags it. */
+		dragging?: boolean;
 		onplay(): void;
 		onmenu(at: MenuAnchor): void;
 		/** Before the row's button, such as the queue's grip. */
@@ -60,6 +66,8 @@
 	class:is-played={row.played}
 	class:is-current={row.current}
 	class:is-unavailable={row.unavailable}
+	class:is-queue={queue}
+	class:is-dragging={dragging}
 	role="listitem"
 >
 	{@render leading?.()}
@@ -127,6 +135,18 @@
 
 	.pn-ep:hover {
 		background: var(--background-modifier-hover);
+	}
+
+	.pn-ep.is-queue {
+		align-items: center;
+		gap: var(--size-2-2);
+	}
+
+	.pn-ep.is-dragging {
+		position: relative;
+		z-index: 2;
+		background: var(--pn-surface);
+		box-shadow: var(--shadow-s);
 	}
 
 	.pn-ep :global {
@@ -256,6 +276,21 @@
 		.pn-eq.paused i {
 			animation: none;
 			transform: scaleY(0.6);
+		}
+	}
+
+	.pn-ep.is-queue :global {
+		.pn-ep-main {
+			align-items: center;
+			padding-left: 0;
+		}
+
+		.pn-ep-main .pn-cover {
+			margin-top: 0;
+		}
+
+		.pn-bar {
+			display: none;
 		}
 	}
 

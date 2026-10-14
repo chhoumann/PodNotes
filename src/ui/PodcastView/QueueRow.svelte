@@ -45,6 +45,8 @@
 <EpisodeRow
 	{episode}
 	cover
+	queue
+	{dragging}
 	onplay={() => openEpisode(services, episode)}
 	onmenu={(at) => showMenu(episodeMenu(episode, services, { place: "list", at }), at)}
 >

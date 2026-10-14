@@ -17,14 +17,12 @@
 	/** The full player under its stage: title, scrubber, transport and capture bar. */
 	let {
 		chapters,
-		wide,
 		onchapters,
 		children,
 	}: {
 		chapters: readonly Chapter[];
-		wide: boolean;
-		/** The current chapter's name opens the Chapters panel. */
-		onchapters(): void;
+		/** The current chapter's name opens the Chapters panel; none disables it. */
+		onchapters?: () => void;
 		/** Below the capture bar, such as the panel switch. */
 		children?: Snippet;
 	} = $props();
@@ -118,7 +116,7 @@
 					type="button"
 					class="pn-chapnow"
 					title="Chapters"
-					disabled={failed && !wide}
+					disabled={!onchapters}
 					onclick={onchapters}>{chapters[current].title}</button
 				>
 			{:else}

@@ -35,7 +35,7 @@
 	</button>
 {/snippet}
 
-<div class="pn-nav">
+<div class="pn-nav pn-playlists">
 	{@render row($favorites, "heart", true)}
 	{#each Object.values($playlists) as playlist (playlist.name)}
 		{@render row(playlist, playlist.icon, false)}
@@ -47,29 +47,29 @@
 </div>
 
 <style>
-	.pn-plrow {
-		display: flex;
-		align-items: center;
-		gap: var(--size-4-3);
-		width: 100%;
-		height: auto;
-		padding: var(--size-4-2);
-		border: 0;
-		border-radius: var(--radius-s);
-		background: none;
-		box-shadow: none;
-		color: var(--text-normal);
-		font-size: var(--font-ui-small);
-		font-weight: inherit;
-		text-align: left;
-		cursor: var(--cursor);
-	}
+	.pn-playlists :global {
+		.pn-plrow {
+			display: flex;
+			align-items: center;
+			gap: var(--size-4-3);
+			width: 100%;
+			height: auto;
+			padding: var(--size-4-2);
+			border: 0;
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-normal);
+			font-size: var(--font-ui-small);
+			font-weight: inherit;
+			text-align: left;
+			cursor: var(--cursor);
+		}
 
-	.pn-plrow:hover {
-		background: var(--background-modifier-hover);
-	}
+		.pn-plrow:hover {
+			background: var(--background-modifier-hover);
+		}
 
-	.pn-plrow :global {
 		.pn-plicon {
 			display: flex;
 			align-items: center;
@@ -88,7 +88,7 @@
 			color: var(--color-pink);
 		}
 
-		.txt {
+		.pn-plrow .txt {
 			flex: 1;
 			min-width: 0;
 			display: flex;
@@ -96,14 +96,14 @@
 			gap: 2px;
 		}
 
-		.t {
+		.pn-plrow .t {
 			font-weight: var(--font-medium);
 			white-space: nowrap;
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
 
-		.s {
+		.pn-plrow .s {
 			color: var(--text-muted);
 			font-size: var(--font-ui-smaller);
 		}
@@ -113,15 +113,13 @@
 			color: var(--text-muted);
 			--icon-size: 16px;
 		}
-	}
 
-	.pn-plrow.is-new :global {
-		.pn-plicon {
+		.pn-plrow.is-new .pn-plicon {
 			background: none;
 			border: 1px dashed var(--background-modifier-border-hover);
 		}
 
-		.t {
+		.pn-plrow.is-new .t {
 			color: var(--text-muted);
 			font-weight: var(--font-normal);
 		}

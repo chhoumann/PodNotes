@@ -44,7 +44,7 @@
 </Panel>
 
 <style>
-	.pn-chap {
+	:global(.pn-panel) .pn-chap {
 		display: flex;
 		align-items: baseline;
 		justify-content: flex-start;
@@ -62,12 +62,12 @@
 		white-space: normal;
 	}
 
-	.pn-chap:hover {
+	:global(.pn-panel) .pn-chap:hover {
 		background: var(--background-modifier-hover);
 		color: var(--text-normal);
 	}
 
-	.pn-chap.is-now {
+	:global(.pn-panel) .pn-chap.is-now {
 		background: hsla(var(--interactive-accent-hsl), 0.12);
 		color: var(--text-normal);
 	}
@@ -89,7 +89,7 @@
 		color: var(--text-accent);
 	}
 
-	:global(.is-phone) .pn-chap {
+	:global(.is-phone .pn-panel) .pn-chap {
 		min-height: 44px;
 		padding: 10px var(--size-4-2);
 	}
