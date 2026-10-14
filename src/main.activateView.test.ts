@@ -495,6 +495,44 @@ describe("PodNotes onload wiring (#55)", () => {
 		expect(hide).toHaveBeenCalledTimes(1);
 	});
 
+	const syncedLibrary = () =>
+		encodePodNotesData({
+			...structuredClone(DEFAULT_SETTINGS),
+			savedFeeds: {
+				Synced: { title: "Synced", url: "https://example.com/synced.xml", artworkUrl: "" },
+			},
+		});
+	const pastReportSettle = () => new Promise((resolve) => window.setTimeout(resolve, 100));
+
+	it("takes a data.json change Obsidian reports only as a raw vault event", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+		const listeners = vi.mocked(plugin.app.vault.on).mock.calls as unknown as Array<
+			[string, (path: string) => void]
+		>;
+		const report = (path: string) => {
+			for (const [name, listener] of listeners) if (name === "raw") listener(path);
+		};
+		await pastReportSettle();
+		const loadData = vi.mocked(plugin.loadData);
+		loadData.mockResolvedValue(syncedLibrary());
+		const reads = loadData.mock.calls.length;
+
+		report(".obsidian/plugins/other-plugin/data.json");
+		await pastReportSettle();
+		expect(loadData).toHaveBeenCalledTimes(reads);
+
+		report(".obsidian/plugins/podnotes/data.json");
+		await vi.waitFor(() => expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Synced"]));
+	});
+
+	it("takes a data.json change that landed while it loaded", async () => {
+		const { plugin } = await loadPlugin({ schemaVersion: 2 });
+
+		vi.mocked(plugin.loadData).mockResolvedValue(syncedLibrary());
+
+		await vi.waitFor(() => expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Synced"]));
+	});
+
 	const savedEpisode: Episode = {
 		title: "Saved Episode",
 		streamUrl: "https://example.com/saved.mp3",

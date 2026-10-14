@@ -492,6 +492,34 @@ describe("DataFileWriter changes made elsewhere", () => {
 		expect(events.onRefusal.mock.calls).toEqual([[UNREADABLE]]);
 	});
 
+	it("reads the file once the changes reported to it settle", async () => {
+		const { access, clock, state, writer } = setup();
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		writer.report();
+		writer.report();
+		expect(access.read).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(1);
+		clock.runAll();
+		await writer.flush();
+
+		expect(access.read).toHaveBeenCalledTimes(1);
+		expect(state.memory.savedFeeds.Synced).toEqual({ title: "Synced" });
+	});
+
+	it("reads nothing for a change reported before unload", async () => {
+		const { access, clock, state, writer } = setup();
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
+
+		writer.report();
+		await writer.unload();
+		writer.report();
+		clock.runAll();
+		await settled();
+
+		expect(access.read).not.toHaveBeenCalled();
+	});
+
 	it("adopts the file when it had nothing to merge against", async () => {
 		const { access, events, state, writer } = setup(doc(), { base: null, refusal: STARTUP });
 		state.memory.defaultVolume = 0.3;
