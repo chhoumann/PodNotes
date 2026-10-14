@@ -51,6 +51,10 @@ export interface ShellServices {
 	captureTimestamp(): Promise<Capture | null>;
 	/** Opens Obsidian's settings at the PodNotes tab. */
 	openSettings(): void;
+	/** Saves the feed's published transcript to the episode's note, never the paid transcription. */
+	saveTranscriptNote(): void;
+	/** "Transcribe current episode from audio", the paid transcription. */
+	transcribeFromAudio(): void;
 	/** Whether playback queues the episode the user switches from, and plays the queue on. */
 	setAutoQueue(enabled: boolean): void;
 	/** Whether the episode has a note: a vault lookup, so a caller decides when to ask again. */

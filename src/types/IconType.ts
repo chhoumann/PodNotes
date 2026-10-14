@@ -105,6 +105,7 @@ export const ICON_LIST = [
 	"calendar",
 	"camera-off",
 	"camera",
+	"captions",
 	"car",
 	"carrot",
 	"cast",

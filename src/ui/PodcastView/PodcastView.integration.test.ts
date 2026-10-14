@@ -48,6 +48,8 @@ function renderView() {
 				settings: readable(structuredClone(DEFAULT_SETTINGS)),
 				captureTimestamp: async () => null,
 				openSettings: () => {},
+				saveTranscriptNote: () => {},
+				transcribeFromAudio: () => {},
 				setAutoQueue: () => {},
 				hasNote: () => false,
 				rowHasNote: readable(() => false),
