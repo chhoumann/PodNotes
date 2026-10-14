@@ -92,6 +92,52 @@ test("an unsubscribed private episode writes no feed address and keeps its live 
 	expect(episode.feedUrl).toBe(address);
 });
 
+test("the default note omits an empty resume label and keeps public resume links", () => {
+	noteVault(false);
+	const publicEpisode = { ...episode, feedUrl: "https://public.example.com/rss" };
+	expect(NoteTemplateEngine(DEFAULT_SETTINGS.note.template, publicEpisode)).toContain(
+		`[Resume in PodNotes](${buildEpisodeResumeLink(publicEpisode)})`,
+	);
+	expect(NoteTemplateEngine(DEFAULT_SETTINGS.note.template, episode)).not.toContain(
+		"Resume in PodNotes",
+	);
+});
+
+test("an unsubscribed feed note names its safe placeholder and leaves a public feed alone", () => {
+	noteVault(false);
+	const feed = {
+		title: "Paid",
+		url: address,
+		artworkUrl: "",
+		description: `Your feed: ${address}.`,
+	};
+	const publicUrl = "https://public.example.com/rss";
+	expect(
+		FeedNoteTemplateEngine("{{description}}", {
+			...feed,
+			url: publicUrl,
+			description: `Your feed: ${publicUrl}.`,
+		}),
+	).toBe(`Your feed: ${publicUrl}.`);
+	expect(FeedNoteTemplateEngine("{{description}}", feed)).toBe(
+		"Your feed: podnotes-private-feed:Paid.",
+	);
+});
+
+test.each([address, address.replace(":", "&#58;"), encodeURIComponent(address)])(
+	"an unsubscribed feed placeholder never reflects its private address from its name: %s",
+	(title) => {
+		noteVault(false);
+		const rendered = FeedNoteTemplateEngine("{{description}}", {
+			title,
+			url: address,
+			artworkUrl: "",
+			description: `Your feed: ${address}.`,
+		});
+		expect(rendered).toBe("Your feed: podnotes-private-feed:.");
+	},
+);
+
 test.each([
 	address,
 	"https://user:API_SENTINEL@private.example.com/rss",

@@ -126,6 +126,89 @@ describe("isCredentialBearingUrl for publishers that put the secret in the addre
 
 describe("redactPrivateFeedAddresses", () => {
 	it.each([
+		["feed scheme", "feed://private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		["podcast scheme", "podcast://private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		["HTTP", "http://private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		["scheme-less", "private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		["entity escaped", "https&#58;&#x2F;&#x2F;private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		["named entities", "https&colon;&sol;&sol;private.example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		["entity in hostname", "https://private&#46;example.com/rss?auth=FOLLOWUP_SENTINEL"],
+		[
+			"encoded query",
+			"https://redirect.example/?url=https%3A%2F%2Fprivate.example.com%2Frss%3Fauth%3DFOLLOWUP_SENTINEL",
+		],
+	])("redacts the %s alias while preserving public text byte for byte", (_, alias) => {
+		const known = new Map([
+			[
+				"https://private.example.com/rss?auth=FOLLOWUP_SENTINEL",
+				"podnotes-private-feed:Paid",
+			],
+		]);
+		const publicText = alias
+			.replace("rss?auth=FOLLOWUP_SENTINEL", "public?show=1")
+			.replace("rss%3Fauth%3DFOLLOWUP_SENTINEL", "public%3Fshow%3D1");
+		const media = "https://private.example.com/audio.mp3?token=MEDIA_SIGNATURE";
+		const document = { quoted: `Your feed: ${alias}.`, publicText, media };
+		const safe = redactPrivateFeedAddresses(document, known);
+		expect(safe.publicText).toBe(publicText);
+		expect(safe.media).toBe(media);
+		expect(safe.quoted).not.toContain("FOLLOWUP_SENTINEL");
+		expect(safe.quoted).toContain("podnotes-private-feed");
+		expect(safe.quoted.endsWith(".")).toBe(true);
+	});
+
+	it("redacts entity-encoded secret characters without decoding surrounding public markup", () => {
+		const address = "https://private.example.com/rss?auth=FOLLOWUP_SENTINEL";
+		const publicText =
+			"&lt;b&gt;Public&lt;/b&gt; &amp; https://private.example.com/audio.mp3?token=MEDIA_SIGNATURE";
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		const text = `${publicText} ${address.replace("_", "&#95;")}.`;
+		expect(redactPrivateFeedAddresses(text, known)).toBe(
+			`${publicText} podnotes-private-feed:Paid.`,
+		);
+	});
+
+	it("preserves sentence punctuation after a host-only private address", () => {
+		const known = new Map([["https://private.example.com", "podnotes-private-feed:Paid"]]);
+		expect(redactPrivateFeedAddresses("Visit https://public.example.com.", known)).toBe(
+			"Visit https://public.example.com.",
+		);
+		expect(redactPrivateFeedAddresses("Visit https://private.example.com.", known)).toBe(
+			"Visit podnotes-private-feed:Paid.",
+		);
+	});
+
+	it("preserves the outer query bytes when its encoded private feed value is replaced", () => {
+		const address = "https://private.example.com/rss?auth=NESTED_SENTINEL";
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		const outer = `https://redirect.example/?url=${encodeURIComponent(address)}&keep=a%2fb+z`;
+		expect(redactPrivateFeedAddresses(outer, known)).toBe(
+			"https://redirect.example/?url=podnotes-private-feed%3APaid&keep=a%2fb+z",
+		);
+	});
+
+	it("keeps public path escapes and host-name suffixes distinct from a private address", () => {
+		const address = "https://private.example.com/rss/private?auth=PATH_SENTINEL";
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		const publicUrls = [
+			"https://private.example.com/rss%2Fprivate?auth=PATH_SENTINEL",
+			"https://notprivate.example.com/rss/private?auth=PATH_SENTINEL",
+			"https://public.example/path/private.example.com/rss/private?auth=PATH_SENTINEL",
+		];
+		expect(redactPrivateFeedAddresses(publicUrls, known)).toBe(publicUrls);
+	});
+
+	it("redacts a private feed with literal path escapes without changing the distinct decoded path", () => {
+		const address = "https://private.example.com/rss%2Fprivate?auth=PATH_SENTINEL";
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		expect(redactPrivateFeedAddresses(`Feed ${address}.`, known)).toBe(
+			"Feed podnotes-private-feed:Paid.",
+		);
+		const publicUrl = "https://private.example.com/rss/private?auth=PATH_SENTINEL";
+		expect(redactPrivateFeedAddresses(publicUrl, known)).toBe(publicUrl);
+	});
+
+	it.each([
 		"https://private.example.com./rss?auth=ALIAS_SENTINEL",
 		"https:\\\\private.example.com/rss?auth=ALIAS_SENTINEL",
 		"https:/\\private.example.com/rss?auth=ALIAS_SENTINEL",

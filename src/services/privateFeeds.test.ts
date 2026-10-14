@@ -164,6 +164,27 @@ function episode(title: string, feedUrl: string) {
 }
 
 describe("protectPrivateFeeds", () => {
+	it("redacts entity-escaped descriptions before persistence without changing public bytes", () => {
+		const { feedUrls } = repository();
+		const address = "https://private.example.com/rss?auth=PERSIST_ENTITY_SENTINEL";
+		const escaped = address.replace(":", "&#58;").replaceAll("/", "&#x2F;");
+		const publicText = "Public https&#58;&#x2F;&#x2F;private.example.com/public?a=1&amp;b=2";
+		const input = settings({
+			savedFeeds: {
+				Paid: feed({
+					title: "Paid",
+					url: address,
+					description: `${escaped}. ${publicText}`,
+				}),
+				Public: feed({ description: publicText }),
+			},
+		});
+		const { settings: safe } = protectPrivateFeeds(input, feedUrls);
+		expect(safe.savedFeeds.Public).toEqual(input.savedFeeds.Public);
+		expect(safe.savedFeeds.Paid.description).toBe(`podnotes-private-feed:Paid. ${publicText}`);
+		expect(JSON.stringify(encodePodNotesData(safe))).not.toContain("PERSIST_ENTITY_SENTINEL");
+	});
+
 	it("moves only credential-bearing feeds", () => {
 		const { feedUrls, values } = repository();
 		const { settings: safe, failed } = protectPrivateFeeds(
