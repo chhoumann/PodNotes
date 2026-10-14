@@ -129,6 +129,30 @@ async function expectCell(path: string, cell: string): Promise<string> {
 }
 
 describe("Live Preview table captures", () => {
+	test("captures in the cell when the PodNotes leaf takes focus in the same evaluation", async () => {
+		const { obsidian } = getContext();
+		const path = await setUp();
+		const result = await obsidian.dev.evalJsonAsync(`(async () => {
+			const leaf = app.workspace.getLeavesOfType("podcast_player_view")[0];
+			app.workspace.setActiveLeaf(leaf, { focus: true });
+			const activeEditorNull = app.workspace.activeEditor === null;
+			const capture = await app.plugins.plugins.podnotes.capture.timestamp();
+			return { activeEditorNull, capture };
+		})()`);
+
+		expect(result).toEqual({
+			activeEditorNull: true,
+			capture: {
+				destination: "editor",
+				path,
+				text: "00:00:30 \\| cut ",
+				created: false,
+			},
+		});
+		await expectCell(path, "anchor00:00:30 \\| cut ");
+		expect(await cellText(path)).toBe("anchor00:00:30 | cut ");
+	});
+
 	test("#445 three captures persist in one cell and Undo removes only the last", async () => {
 		const { obsidian } = getContext();
 		const path = await setUp();
