@@ -216,6 +216,22 @@ export class PlayerController {
 		return true;
 	}
 
+	/**
+	 * Plays the queue's next episode other than the current one. The episode it leaves
+	 * goes last rather than first, so pressing again moves on through the queue.
+	 */
+	playNext(): void {
+		const outgoing = this.snapshot.episode;
+		const key = getEpisodeKey(outgoing);
+		const next = get(queue).episodes.find((episode) => getEpisodeKey(episode) !== key);
+		if (!next || !this.play(next) || !outgoing) return;
+		const [first] = get(queue).episodes;
+		if (first && getEpisodeKey(first) === key) {
+			queue.remove(first);
+			queue.add(first);
+		}
+	}
+
 	/** Continues the current episode without selecting it. */
 	resume(): void {
 		const { status, episode } = this.snapshot;

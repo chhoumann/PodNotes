@@ -432,7 +432,6 @@ describe("a podcast's menu, by how its feed loaded", () => {
 						? null
 						: feed.url,
 			storage: new MemoryStorage(),
-			cache: () => ({ enabled: false, ttlHours: 6 }),
 			now: Date.now,
 		});
 		({ services, dispose } = createTestServices({ library: pluginLibrary, feeds }));

@@ -710,6 +710,47 @@ describe("switching episodes (#353)", () => {
 	});
 });
 
+describe("playNext", () => {
+	test("plays the next other queued episode and queues the one it leaves last", () => {
+		const { player, media, state } = setup();
+		player.play(A);
+		metadata(media());
+		reach(media(), 42);
+		queue.add(A);
+		queue.add(B);
+		queue.add(C);
+
+		player.playNext();
+
+		expect([state().episode?.title, queued(), progress(A)?.time]).toEqual([
+			"B",
+			["C", "A"],
+			42,
+		]);
+	});
+
+	test("with auto-queue off, plays the queue in order and queues nothing", () => {
+		const { player, state } = setup({ autoQueue: false });
+		player.play(A);
+		queue.add(B);
+		queue.add(C);
+
+		player.playNext();
+
+		expect([state().episode?.title, queued()]).toEqual(["B", ["C"]]);
+	});
+
+	test("does nothing when the queue holds only the current episode", () => {
+		const { player, state } = setup();
+		player.play(A);
+		queue.add(A);
+
+		player.playNext();
+
+		expect([state().episode?.title, queued()]).toEqual(["A", ["A"]]);
+	});
+});
+
 describe("a new load shows its own position and length until its metadata loads (#94)", () => {
 	test("after a switch away from a playing episode", () => {
 		saved(B, 300, 1800);
