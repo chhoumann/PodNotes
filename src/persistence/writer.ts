@@ -57,6 +57,9 @@ export interface WriterEvents {
 // Each save rewrites the whole file, and playback progress changes every few
 // seconds, so a progress checkpoint starts at least this long after the last save.
 const CHECKPOINT_INTERVAL_MS = 10_000;
+// A program writing data.json in place empties the file first. Obsidian waits as
+// long before its own check.
+const REPORT_SETTLE_MS = 50;
 
 /**
  * Writes data.json without clobbering changes another device synced in. Every
@@ -76,6 +79,8 @@ export class DataFileWriter<Doc> {
 	private chain: Promise<void> | null = null;
 	/** A checkpoint waiting for its interval. */
 	private timer: number | null = null;
+	/** A check of the file waiting for the changes reported to it to settle. */
+	private reportTimer: number | null = null;
 	/** A save is queued and has not started, so later changes are written by it. */
 	private saveQueued = false;
 	private unloaded = false;
@@ -153,10 +158,22 @@ export class DataFileWriter<Doc> {
 		});
 	}
 
+	/** data.json changed, maybe by PodNotes itself: check it once the changes stop. */
+	report(): void {
+		if (this.unloaded) return;
+		if (this.reportTimer !== null) this.clock.clearTimeout(this.reportTimer);
+		this.reportTimer = this.clock.setTimeout(() => {
+			this.reportTimer = null;
+			void this.onExternalChange();
+		}, REPORT_SETTLE_MS);
+	}
+
 	/** The next instance reads the file itself; the flushed save still merges with disk. */
 	unload(): Promise<void> {
 		this.memoryAtUnload = this.file.local();
 		this.unloaded = true;
+		if (this.reportTimer !== null) this.clock.clearTimeout(this.reportTimer);
+		this.reportTimer = null;
 		return this.flush();
 	}
 
