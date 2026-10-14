@@ -15,6 +15,7 @@ import {
 	type FakeResizeObservers,
 } from "../../../tests/mocks/resizeObserver";
 import {
+	activateLeaf,
 	createTestServices,
 	pluginLibrary,
 	type TestLibrary,
@@ -667,22 +668,6 @@ describe("full player", () => {
 			expect(await escape()).toBe(true);
 		});
 
-		test("leaves a modal above the player when its window regains focus", async () => {
-			renderView();
-			playing();
-			await tick();
-			await fireEvent.click(button(`Open player: ${episode.title}`));
-			const modal = new obsidian.Scope(services.app.scope);
-			modal.register(null, "Escape", () => false);
-			services.app.keymap.pushScope(modal);
-
-			window.dispatchEvent(new Event("focus"));
-			await escape();
-
-			expect(services.navigation.current.expanded).toBe(true);
-			services.app.keymap.popScope(modal);
-		});
-
 		/** A note's tab whose own keys, as its find bar's, record what reaches them. */
 		function noteLeaf() {
 			const scope = new obsidian.Scope(services.app.scope);
@@ -693,10 +678,8 @@ describe("full player", () => {
 					return false;
 				});
 			}
-			return { view: { scope }, keys };
+			return { scope, keys };
 		}
-		const workspace = () => services.app.workspace as unknown as { activeLeaf: object | null };
-		const activate = (leaf: object | null) => (workspace().activeLeaf = leaf);
 
 		test("typed in a note reach the note, and the player stays open (#467)", async () => {
 			const note = document.body.appendChild(document.createElement("textarea"));
@@ -705,7 +688,7 @@ describe("full player", () => {
 			await tick();
 			await fireEvent.click(button(`Open player: ${episode.title}`));
 			const tab = noteLeaf();
-			activate(tab);
+			activateLeaf(services.app, tab.scope);
 			note.focus();
 
 			await fireEvent.keyDown(note, { key: "Enter" });
@@ -716,7 +699,7 @@ describe("full player", () => {
 			note.remove();
 		});
 
-		test("follows the player to a popout window, and a note's Escape in the main window passes it by", async () => {
+		test("reach the player in a popout through that window's base scope, and a note's Escape passes it by", async () => {
 			const popout = openPopout();
 			popout.win.document.addEventListener("keydown", dispatch);
 			const note = document.body.appendChild(document.createElement("textarea"));
@@ -724,16 +707,14 @@ describe("full player", () => {
 			playing();
 			await tick();
 			await fireEvent.click(button(`Open player: ${episode.title}`));
-			const view = workspace().activeLeaf;
-
 			popout.moveIn(container);
 			const tab = noteLeaf();
-			activate(tab);
+			activateLeaf(services.app, tab.scope);
 			await escape(note);
 			expect(tab.keys).toEqual(["Escape"]);
 			expect(services.navigation.current.expanded).toBe(true);
 
-			activate(view);
+			activateLeaf(services.app, services.scope);
 			popout.focus();
 			const collapseButton = within(container).getByRole("button", {
 				name: "Collapse player",

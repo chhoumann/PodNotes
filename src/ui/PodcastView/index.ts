@@ -110,13 +110,15 @@ export class MainView extends ItemView {
 				notesChangedSoon();
 			}),
 		);
+		const scope = new Scope(app.scope);
+		this.scope = scope;
 		return {
 			app,
 			api: plugin.api,
 			player: plugin.player,
 			feeds: plugin.feeds,
 			navigation: plugin.navigation,
-			scope: (this.scope = new Scope(app.scope)),
+			scope,
 			library: {
 				savedFeeds,
 				queue,

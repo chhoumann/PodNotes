@@ -89,8 +89,8 @@
 		if (failed) volumeOpen = false;
 	});
 
-	// The view's own scope gets the keys typed while focus is in the view, and a menu or
-	// modal opened over the player takes Escape first.
+	// The view's own scope gets the keys typed while the view's leaf is active, which focus
+	// or a press in the view makes it. A menu or modal over the player takes Escape first.
 	$effect(() => {
 		const escape = scope.register(null, "Escape", () => {
 			if (volumeOpen) {

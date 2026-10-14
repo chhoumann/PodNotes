@@ -211,6 +211,7 @@ export const normalizePath = (path: string): string => {
 
 export class WorkspaceLeaf {}
 export class ItemView extends Component {
+	scope: Scope | null = null;
 	/** Obsidian loads a view before onOpen and unloads it before onClose. */
 	async open(): Promise<void> {
 		this.load();

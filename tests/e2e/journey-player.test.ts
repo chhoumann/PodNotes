@@ -7,7 +7,7 @@ import {
 	revealInFileExplorer,
 	showPodNotes,
 } from "./journey/actions";
-import { cdp, click, pointOn, pressKey, pressMouse, typeText } from "./journey/input";
+import { cdp, click, pointOn, pressHotkey, pressKey, pressMouse, typeText } from "./journey/input";
 import { PLAYER_VIEW, ui, type UiTarget } from "./journey/targets";
 import { eventually, holdsFor, isShown, waitUntilFocused, waitUntilShown } from "./journey/wait";
 import {
@@ -357,14 +357,7 @@ describe("player journeys", () => {
 				const bar = leaf.view.containerEl.querySelector(".document-search-container");
 				return { open: Boolean(bar), count: bar?.querySelector(".document-search-count")?.textContent ?? null };
 			})()`);
-		const find = {
-			key: "f",
-			code: "KeyF",
-			windowsVirtualKeyCode: 70,
-			modifiers: process.platform === "darwin" ? 4 : 2,
-		};
-		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...find });
-		await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...find });
+		await pressHotkey(obsidian, "f");
 		await typeText(obsidian, "alpha");
 		expect(await eventually(obsidian, search, { open: true, count: "1 / 3" })).toEqual({
 			open: true,

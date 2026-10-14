@@ -620,6 +620,19 @@ describe("capture", () => {
 			expect(said()).toEqual(["Timestamp added to Journal", REFUSED]);
 		});
 
+		it("takes the timestamp out when every open editor of the note holds it as captured", async () => {
+			const { editor, openNote } = await intoEditor("Notes\n");
+			const other = openNote("Journal.md", editor.getValue());
+
+			await undo();
+
+			expect([editor.getValue(), other.editor.getValue()]).toEqual([
+				"Notes\n",
+				"Notes\n- 00:20:34",
+			]);
+			expect(said()).toEqual(["Timestamp added to Journal"]);
+		});
+
 		it("takes the timestamp out through the episode note's open editor", async () => {
 			const { plugin, notes, openNote, read } = await loadPlugin(playing);
 			notes.set(NOTE_PATH, { file: vaultFile(NOTE_PATH), content: "# Mine\n" });

@@ -35,7 +35,7 @@ export interface ShellServices {
 	readonly player: PlayerController;
 	readonly feeds: FeedRepository;
 	readonly navigation: Navigation;
-	/** The view's own keys. Obsidian gives them only the keys typed while focus is in the view. */
+	/** The view's own keys. Obsidian hands them every key typed while the view's leaf is active. */
 	readonly scope: Scope;
 	readonly library: Library;
 	readonly actions: LibraryActions;

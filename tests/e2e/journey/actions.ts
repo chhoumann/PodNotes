@@ -11,7 +11,7 @@ import {
 } from "obsidian-e2e/runner";
 import { jsLiteral, PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../runtime";
 import { collectRuntimeErrors, POPOUT_RESIZE_LOOP } from "../runtime-evidence";
-import { cdp, click, clickAt, type Point, typeInto } from "./input";
+import { cdp, click, clickAt, type Point, pressHotkey, typeInto } from "./input";
 import { ui } from "./targets";
 import { isShown, waitUntilShown } from "./wait";
 
@@ -27,14 +27,7 @@ export async function dismissNotices(obsidian: ObsidianClient): Promise<void> {
  */
 export async function runFromPalette(obsidian: ObsidianClient, name: string): Promise<void> {
 	await obsidian.plugin("command-palette").enable({ filter: "core" });
-	const hotkey = {
-		key: "p",
-		code: "KeyP",
-		windowsVirtualKeyCode: 80,
-		modifiers: process.platform === "darwin" ? 4 : 2,
-	};
-	for (const type of ["keyDown", "keyUp"])
-		await cdp(obsidian, "Input.dispatchKeyEvent", { type, ...hotkey });
+	await pressHotkey(obsidian, "p");
 	await typeInto(obsidian, ui.promptInput, name);
 	await click(obsidian, ui.paletteCommand(name));
 }

@@ -202,6 +202,19 @@ const KEYS = {
 	Space: { key: " ", windowsVirtualKeyCode: 32, text: " " },
 } as const;
 
+/** Presses Mod, which is Cmd on macOS and Ctrl elsewhere, with the letter `key`, as a hotkey. */
+export async function pressHotkey(obsidian: ObsidianClient, key: string): Promise<void> {
+	const letter = key.toUpperCase();
+	const event = {
+		key,
+		code: `Key${letter}`,
+		windowsVirtualKeyCode: letter.charCodeAt(0),
+		modifiers: process.platform === "darwin" ? 4 : 2,
+	};
+	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyDown", ...event });
+	await cdp(obsidian, "Input.dispatchKeyEvent", { type: "keyUp", ...event });
+}
+
 /** Presses and releases the key with this `code` on whatever has focus. */
 export async function pressKey(obsidian: ObsidianClient, code: keyof typeof KEYS): Promise<void> {
 	const event = { code, ...KEYS[code] };

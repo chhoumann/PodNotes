@@ -26,6 +26,16 @@ import { PodcastSearch } from "src/ui/PodcastView/podcastSearch";
 import { FakeDocument } from "./fakeMedia";
 import { feedDocument, MemoryStorage } from "./feeds";
 
+/**
+ * Makes the leaf whose view has `scope` the active one, as focus or a press in it does
+ * in Obsidian; null for no leaf. Obsidian hands that view's scope every key.
+ */
+export function activateLeaf(app: App, scope: Scope | null): void {
+	(
+		app.workspace as unknown as { activeLeaf: { view: { scope: Scope | null } } | null }
+	).activeLeaf = scope && { view: { scope } };
+}
+
 /** A library the test seeds, with the stores' setters. */
 export type TestLibrary = {
 	readonly [K in keyof Library]: Library[K] extends Readable<infer T> ? Writable<T> : never;
@@ -108,7 +118,7 @@ export function createTestServices(
 	const online = writable(true);
 	const scope = new Scope(app.scope);
 	// The view's leaf is active, as after a press in it.
-	app.workspace.activeLeaf = { view: { scope } } as never;
+	activateLeaf(app, scope);
 	const services = {
 		app,
 		scope,

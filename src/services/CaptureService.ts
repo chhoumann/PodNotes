@@ -170,14 +170,15 @@ export class CaptureService {
 		// has not saved yet. Obsidian saves a note as it leaves editing, so once that save
 		// lands, a closed tab or one in Reading view leaves the file as the note.
 		// Every open editor of the note has to hold the text as the capture left it.
-		const editing = this.plugin.app.workspace
-			.getLeavesOfType("markdown")
-			.map((leaf) => this.editingView(leaf))
-			.filter((view) => view?.file === file);
-		if (editing[0]) {
+		const editing = this.plugin.app.workspace.getLeavesOfType("markdown").flatMap((leaf) => {
+			const view = this.editingView(leaf);
+			return view?.file === file ? [view] : [];
+		});
+		const [first] = editing;
+		if (first) {
 			return (
-				editing.every((view) => view?.editor.getValue() === snapshot.after) &&
-				revertIn(editing[0].editor, snapshot)
+				editing.every((view) => view.editor.getValue() === snapshot.after) &&
+				revertIn(first.editor, snapshot)
 			);
 		}
 		try {
