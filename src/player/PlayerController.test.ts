@@ -722,7 +722,11 @@ describe("playNext", () => {
 
 		player.playNext();
 
-		expect([state().episode?.title, queued(), progress(A)?.time]).toEqual(["B", ["C", "A"], 42]);
+		expect([state().episode?.title, queued(), progress(A)?.time]).toEqual([
+			"B",
+			["C", "A"],
+			42,
+		]);
 	});
 
 	test("with auto-queue off, plays the queue in order and queues nothing", () => {
