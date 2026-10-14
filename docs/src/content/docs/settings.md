@@ -4,69 +4,70 @@ slug: settings
 description: Every PodNotes setting, in the order the settings tab shows it, with its default and what it does.
 ---
 
-Look up any PodNotes setting, its default, and what it does. The settings live in **Settings → PodNotes**, and the sections below follow the tab from top to bottom.
+Look up any PodNotes setting, its default, and what it does. The settings live in **Settings → PodNotes**, and the sections below follow the tab from top to bottom. In the PodNotes view, **Settings** in the list on the left, or the **PodNotes settings** gear in a narrow view, opens the same tab.
 
-## Search Podcasts
+To find a setting, type its name in the search field at the top of Obsidian's settings window. Each PodNotes setting is its own result. `headset`, `lock screen`, and `media keys` find **Previous track** and **Next track**.
 
-The search box at the top finds podcasts by name, RSS feed URL, or Apple Podcasts link. With the box empty, it lists the podcasts you added, each with a **Remove** button. See [Add a podcast](/podcasts/#add-a-podcast).
-
-## Playlists
-
-The section lists **Queue**, **Favorites**, and your own playlists with their episode counts. Each playlist you made has a **Delete playlist** button, and the controls below the list add a playlist. See [Collect episodes in playlists](/playlists/#collect-episodes-in-playlists).
+A toggle or a dropdown saves at once. A text or number field takes effect as you type, and PodNotes saves it after you pause typing for half a second, or when you leave the field or close the settings. If you quit or reload Obsidian within that half second, the last characters you typed are lost.
 
 ## Playback
 
-These settings sit below **Playlists** in the tab, with no heading of their own.
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Skip back (s)** | 15 | Sets how many seconds the player's back button, **PodNotes: Skip Backward**, and the skip backward control of a headset or the lock screen move back. A whole number above 0. |
+| **Skip forward (s)** | 15 | Sets how many seconds the forward button, **PodNotes: Skip Forward**, and the skip forward control of a headset or the lock screen move forward. A whole number above 0. |
+| **Default speed** | `1×` | Sets the speed, from `0.75×` to `2×`, that PodNotes uses when Obsidian starts and whenever a different episode loads. Changing it does not change the speed of the episode that is playing. **PodNotes: Reset playback rate** returns to it. A speed saved by an older version, such as `1.3×`, stays as an extra choice until you pick another. |
+| **Queue episodes I switch away from** | On | Puts the episode you switch away from at the top of the queue, and starts the next queued episode when one ends. The Queue page's **Queue options** menu has the same switch. See [Turn off the automatic queue](/playlists/#turn-off-the-automatic-queue). |
+
+## Headset and lock screen
+
+These settings decide what the previous-track and next-track buttons of a headset or the lock screen do. See [Control playback from a headset or the lock screen](/mobile/#control-playback-from-a-headset-or-the-lock-screen).
+
+| Setting | Default | Choices |
+| --- | --- | --- |
+| **Previous track** | Capture timestamp | Capture timestamp, Back by the skip length, Previous chapter |
+| **Next track** | Forward by the skip length | Forward by the skip length, Next in queue, Next chapter, Capture timestamp |
+
+## <span id="episode-notes"></span><span id="feed-notes"></span>Notes
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Keep a queue of episodes you switch away from** | On | Puts the episode you switch away from at the top of the queue, and starts the next queued episode when one ends. See [Turn off the automatic queue](/playlists/#turn-off-the-automatic-queue). |
-| **Latest episodes per podcast** | 10 | Sets how many of each podcast's newest episodes **Latest episodes** shows and searches, from 1 to 75. |
-| **Default Playback Rate** | 1x | Sets the speed, from 0.5x to 4x, that PodNotes uses when Obsidian starts and whenever a different episode loads. Changing it does not change the speed of the episode that is playing. **PodNotes: Reset playback rate** returns to it. |
-| **Default Volume** | 1 (100%) | Sets the volume, from 0 to 1, and changes the current volume at once. The player's volume slider changes this setting too, so one volume applies to every episode. |
-| **Skip backward length (s)** | 15 | Sets how many seconds the skip backward button, the command, and the skip backward control of a headset or the lock screen move back. |
-| **Skip forward length (s)** | 15 | Sets how many seconds the skip forward button, the command, and the skip forward control of a headset or the lock screen move forward. |
-
-## Episode notes
-
-| Setting | Default | What it does |
-| --- | --- | --- |
-| **Capture timestamp format** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. A preview below the field shows the result for the loaded episode. Its time tag also sets the times in transcripts that feeds publish. See [Capture timestamps](/timestamps/). |
+| **Timestamp template** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. While an episode is loaded, the setting shows the result for it. Its time tag also sets the times in transcripts that feeds publish. See [Capture timestamps](/timestamps/). |
 | **Timestamp offset (s)** | 0 | Subtracts this many seconds from each capture, to make up for reaction time. |
-| **Note creation file path** | `PodNotes/{{podcast}}/{{title}}.md` | Sets where PodNotes creates episode notes. See [Create episode notes](/notes/). |
-| **Note creation template** | [The default episode note template](/templates/#default-episode-note-template) | Sets the content of a new episode note. |
+| **Episode note path** | `PodNotes/{{podcast}}/{{title}}.md` | Sets where PodNotes creates episode notes, and shows the path for one of your episodes. See [Create episode notes](/notes/). |
+| **Episode note template** | [The default episode note template](/templates/#default-episode-note-template) | Sets the content of a new episode note. |
+| **Podcast note path** | `PodNotes/Podcasts/{{podcast}}.md` | Sets where PodNotes creates the note for a whole podcast. See [Create a podcast note](/notes/#create-a-podcast-note). |
+| **Podcast note template** | [The default podcast note template](/templates/#podcast-note-tags) | Sets the content of a new podcast note. [Podcast note tags](/templates/#podcast-note-tags) lists the tags it accepts. |
 
-## Feed notes
+## Transcripts
 
-[Feed note tags](/templates/#feed-note-tags) lists the tags a feed note path and template accept.
+**Diarization provider**, **Deepgram API key**, and **Speaker label format** are turned off until **Speaker diarization** is on. **Deepgram API key** also needs **Diarization provider** set to **Deepgram**.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Feed note file path** | `PodNotes/Podcasts/{{podcast}}.md` | Sets where **PodNotes: Create podcast feed note** creates the note for a podcast. See [Create episode notes](/notes/). |
-| **Feed note template** | [The default feed note template](/templates/#feed-note-tags) | Sets the content of a new feed note. |
+| **OpenAI API key** | None | Selects the Obsidian secret that holds your OpenAI API key, or creates one. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key). |
+| **Transcript path** | `transcripts/{{podcast}}/{{title}}.md` | Sets where PodNotes saves transcripts. Keep `.md` at the end, because PodNotes does not add it. |
+| **Transcript template** | [The default transcript template](/templates/#transcript-and-timestamp-tags) | Sets the content of a new transcript note. |
+| **Speaker diarization** | Off | Labels transcript turns by speaker. See [Add speaker labels](/transcripts/#add-speaker-labels). |
+| **Diarization provider** | **OpenAI (gpt-4o-transcribe-diarize)** | Chooses OpenAI, which uses your OpenAI API key, or **Deepgram**, which needs its own key and keeps speaker labels consistent across long episodes. |
+| **Deepgram API key** | None | Selects the Obsidian secret that holds your Deepgram API key, or creates one. |
+| **Speaker label format** | `**{{speaker}}:**` with a space at the end | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker label. Transcripts that feeds publish use it too, even with **Speaker diarization** off. See [Change the speaker label format](/transcripts/#change-the-speaker-label-format). |
 
 ## Downloads
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Episode download path** | `PodNotes/{{podcast}}/{{title}}` | Sets where downloaded episodes go. PodNotes adds the file extension. A warning appears when the path has no `{{title}}`, because episodes would share one file. See [Download an episode](/local_files/#download-an-episode). |
+| **Download path** | `PodNotes/{{podcast}}/{{title}}` | Sets where downloaded episodes go. PodNotes adds the file extension. A warning appears when the path has no `{{title}}`, because episodes would share one file. See [Download an episode](/local_files/#download-an-episode). |
 
-## Performance
-
-| Setting | Default | What it does |
-| --- | --- | --- |
-| **Cache podcast feeds** | On | Keeps a copy of each saved feed, with up to its 75 newest episodes, on this device, outside your vault, so PodNotes starts faster. When a feed cannot be fetched, PodNotes uses this copy, however old it is. |
-| **Cache duration (hours)** | 6 | Sets how long PodNotes reuses a cached feed before it fetches the feed again, from 1 to 24. An older copy stays for when the feed cannot be fetched. |
-| **Clear cached feeds** | None | **Clear cache** deletes the cached feeds and fetches every saved feed again. |
-
-## Import/Export
+## <span id="importexport"></span>Library
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Import OPML** | None | **Import** opens a file picker. PodNotes adds the podcasts in the `.opml` file you choose. See [Import podcasts from OPML](/import_export/#import-podcasts-from-opml). |
 | **Export OPML** | `PodNotes_Export.opml` | **Export** saves the podcasts you added to an OPML file with this name in your vault. The file holds private feed addresses in plain text. See [Export podcasts to OPML](/import_export/#export-podcasts-to-opml). |
+| **Latest episodes per podcast** | 10 | Sets how many of each podcast's newest episodes **Latest episodes** shows, from 1 to 75. |
 
-## Preferences & templates
+## <span id="preferences--templates"></span>Import and export
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -74,16 +75,26 @@ These settings sit below **Playlists** in the tab, with no heading of their own.
 | **Include API keys** | Off | Adds the OpenAI and Deepgram keys on this device to the next export, in plain text. The export file sits in your vault, where sync and other plugins can read it. The toggle turns off again each time you open the tab. |
 | **Export settings** | `PodNotes_Settings.json` | **Export** saves your preferences, templates, feeds, playlists, queue, favorites, and playback progress to a file with this name in your vault. Private feeds that PodNotes recognizes keep only their placeholder, and other feed addresses stay as they are. It does not overwrite an existing file. See [Export your settings](/import_export/#export-your-settings). |
 
-## Transcripts
+## <span id="search-podcasts"></span><span id="playlists"></span><span id="performance"></span>Settings that moved or were removed
 
-The last three settings appear only when **Speaker diarization** is on. **Deepgram API key** also needs **Diarization provider** set to **Deepgram**.
+PodNotes 2.22.0 moved these out of the settings tab:
 
-| Setting | Default | What it does |
-| --- | --- | --- |
-| **OpenAI API key** | None | Selects the Obsidian secret that holds your OpenAI API key, or creates one. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key). |
-| **Transcript file path** | `transcripts/{{podcast}}/{{title}}.md` | Sets where PodNotes saves transcripts. Keep `.md` at the end, because PodNotes does not add it. |
-| **Transcript template** | [The default transcript template](/templates/#transcript-and-timestamp-tags) | Sets the content of a new transcript note. |
-| **Speaker diarization** | Off | Labels transcript segments by speaker. See [Add speaker labels](/transcripts/#add-speaker-labels). |
-| **Diarization provider** | **OpenAI (gpt-4o-transcribe-diarize)** | Chooses OpenAI, which uses your OpenAI API key, or **Deepgram**, which needs its own key and keeps speaker labels consistent across the episode. |
-| **Deepgram API key** | None | Selects the Obsidian secret that holds your Deepgram API key, or creates one. |
-| **Speaker label format** | `**{{speaker}}:**` with a space at the end | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker label. Transcripts that feeds publish use it too, even with **Speaker diarization** off. See [Change the speaker label format](/transcripts/#change-the-speaker-label-format). |
+| Before 2.22.0 | Now |
+| --- | --- |
+| **Search Podcasts** | **Add podcast** in the PodNotes view. Remove a podcast from its page's **Podcast options** menu. See [Add and play podcasts](/podcasts/). |
+| **Playlists** | The Playlists page in the PodNotes view, with **New playlist**. A new playlist gets the default icon. See [Use the queue and playlists](/playlists/). |
+| **Default Volume** | The volume button in the full player. PodNotes keeps that volume for every episode. |
+| **Cache podcast feeds**, **Cache duration (hours)**, and **Clear cached feeds** | PodNotes always keeps a copy of each feed on this device and fetches it again after six hours. **Refresh episodes** and **Refresh all feeds** fetch at once. See [When a feed cannot be reached](/podcasts/#when-a-feed-cannot-be-reached). |
+
+These settings have new names:
+
+| Before 2.22.0 | Now |
+| --- | --- |
+| **Skip backward length (s)**, **Skip forward length (s)** | **Skip back (s)**, **Skip forward (s)** |
+| **Default Playback Rate** | **Default speed** |
+| **Keep a queue of episodes you switch away from** | **Queue episodes I switch away from** |
+| **Capture timestamp format** | **Timestamp template** |
+| **Note creation file path**, **Note creation template** | **Episode note path**, **Episode note template** |
+| **Feed note file path**, **Feed note template** | **Podcast note path**, **Podcast note template** |
+| **Transcript file path** | **Transcript path** |
+| **Episode download path** | **Download path** |

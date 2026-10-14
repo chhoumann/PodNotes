@@ -4,67 +4,69 @@ slug: playlists
 description: Decide what plays next with the queue, and collect episodes in Favorites and your own playlists.
 ---
 
-The queue decides what plays next. Playlists collect episodes you want to keep together. Both show up in the podcast grid. To add podcasts and play episodes, see [Add and play podcasts](/podcasts/).
+The queue decides what plays next. Playlists collect episodes you want to keep together. Both have their own page in the PodNotes view: in a narrow view, select **Queue** or **Playlists** in the Library, and in a wide view, select them in the list on the left. To add podcasts and play episodes, see [Add and play podcasts](/podcasts/).
 
 ## Manage the queue
 
-The **Queue** list under the player shows what plays next. With the automatic queue on, the default, the top episode in the queue starts when an episode ends, and the episode you switch away from goes to the top of the queue. To fill it only by hand, [turn off the automatic queue](#turn-off-the-automatic-queue).
+The Queue page lists what plays next and the total time left. With the automatic queue on, the default, the first episode in the queue starts when an episode ends, and the episode you switch away from goes to the top of the queue. To fill the queue only by hand, [turn off the automatic queue](#turn-off-the-automatic-queue).
 
-To add an episode to the bottom of the queue:
+![The Queue page in the sidebar with three episodes, each with a grip on its left and a cross on its right](/screenshots/queue.webp)
 
-1. Right-click the episode, or select its three-dot **More options** button.
-2. Select **Add to Queue**.
+To add an episode to the end of the queue:
+
+1. Right-click the episode, or select its **More options** button, the three dots at the end of its row.
+2. Select **Add to queue**.
+
+When an episode ends, PodNotes removes it from the queue. The full player's **Up next** panel shows the same queue. See [Up next](/player/#up-next).
 
 ### Reorder the queue
 
-1. In the player's **Queue** list, right-click an episode, or select its **More options** button.
-2. Select **Move to top of queue**, **Move up in queue**, **Move down in queue**, or **Move to bottom of queue**.
+1. On the Queue page, drag an episode by its grip, the six dots on its left.
+2. Drop it where it should play.
 
-For a long queue, run **PodNotes: Reorder Queue**. It opens a list where you move each episode up, down, to the top, or to the bottom, and it needs two or more episodes in the queue.
+To use the keyboard, press `Tab` until an episode's grip has focus, then press `Up` or `Down` to move the episode one place. Press `Escape` during a drag to cancel it. **PodNotes: Reorder Queue** opens the Queue page from the command palette.
 
 ### Turn off the automatic queue
 
-To control the queue only by hand:
+1. On the Queue page, select **Queue options**, the three-dot button at the top right.
+2. Select **Queue episodes I switch away from** to remove its check mark.
 
-1. In **Settings → PodNotes**, turn off **Keep a queue of episodes you switch away from**.
+PodNotes then stops adding the episode you switch away from, and when an episode ends, the next one in the queue does not start. The same setting is under **Playback** in **Settings → PodNotes**.
 
-PodNotes then stops adding the episode you leave, and when an episode ends, the next one in the queue does not start. With the setting off, the podcast grid hides **Queue** while the queue is empty.
+To empty the queue, select **Clear queue** in the same menu. To bring the episodes back, select **Undo** in the notice.
 
 ## Collect episodes in playlists
 
-The podcast grid also shows three built-in playlists:
+The Playlists page lists **Favorites** first, then your own playlists, each with its number of episodes. Select a playlist to see its episodes. **Local files** and **Played** have their own pages. See [Downloads and local files](/local_files/) and [Browse episodes](/podcasts/#browse-episodes).
 
-- **Favorites** holds the episodes you add with **Add to Favorites**.
-- **Local Files** holds your downloads and your own media files. See [Downloads and local files](/local_files/).
-- **Played** lists the episodes you finished or marked as played, including ones that have left their feed.
+To add an episode to **Favorites**:
+
+1. Right-click the episode, or select its **More options** button.
+2. Select **Add to Favorites**.
 
 To make your own playlist:
 
-1. Open **Settings → PodNotes**.
-2. Under **Playlists**, select an icon in the icon dropdown.
-3. In **Playlist name**, type a name, such as `Commute`.
-4. Select **Add**.
+1. On the Playlists page, select **New playlist**.
+2. In **Playlist name**, type a name, such as `Commute`.
+3. Select **Create**.
 
-The playlist appears in the podcast grid. To add an episode to it:
+To add an episode to it:
 
 1. Right-click the episode, or select its **More options** button.
-2. Select **Add to Commute**.
+2. Select **Add to playlist**.
+3. Select **Commute**.
 
-Select the playlist in the podcast grid to see its episodes:
-
-![The Commute playlist with five episodes, below the search box and the played and refresh buttons](/screenshots/episode-list.webp)
+A playlist that holds the episode has a check mark in that list. To make a new playlist that holds the episode, select **New playlist** in the same list. When an episode ends, PodNotes removes it from your playlists. It stays in **Favorites**.
 
 ## Remove an episode from a list
 
-1. In the player's **Queue** list, in **Favorites**, or in a playlist, right-click the episode, or select its **More options** button.
-2. Select **Remove from Queue**, **Remove from Favorites**, or **Remove from** followed by the playlist's name.
-
-In the **PodNotes: Reorder Queue** list, **Remove from queue** next to an episode does the same.
+- From the queue, select the episode's **Remove from queue** button, the cross on the right of its row. **Remove from queue** in the episode's menu does the same.
+- From **Favorites**, select **Remove from Favorites** in the episode's menu.
+- From your own playlist, select **Add to playlist** in the episode's menu, then select the playlist, which has a check mark.
 
 ## Delete a playlist
 
-1. Open **Settings → PodNotes**.
-2. Under **Playlists**, select the playlist's **Delete playlist** button, the trash icon.
-3. Within two seconds, select **Confirm deletion**, the check icon.
+1. On the Playlists page, right-click the playlist. On the playlist's own page, select **Playlist options** instead.
+2. Select **Delete playlist**.
 
-The episodes stay in their podcasts and in your other lists.
+To bring the playlist back, select **Undo** in the notice within seven seconds. The episodes stay in their podcasts and in your other lists. You cannot delete **Favorites**.

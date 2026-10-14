@@ -1,94 +1,107 @@
 ---
 title: Add and play podcasts
 slug: podcasts
-description: Add podcasts by name, RSS feed URL, or Apple Podcasts link, then browse and play their episodes.
+description: Add podcasts by name, RSS feed URL, or Apple Podcasts link, then browse and play their episodes in the PodNotes view.
 ---
 
-Add podcasts to PodNotes, find their episodes, and play them.
+Add podcasts in the PodNotes view, find their episodes, and play them. To open the view, run **PodNotes: Show player** from the command palette, or select **Show PodNotes**, the podcast icon in the ribbon.
 
 ## <span id="adding-podcasts"></span>Add a podcast
 
-1. Open **Settings → PodNotes**.
-2. Under **Search Podcasts**, type a podcast's name, such as `the daily`. Results appear as you type.
-3. Next to the podcast, select **Add**.
+1. In the PodNotes view, select **Add podcast**. In a narrow view, such as the sidebar, it is the plus button at the top of the Library. In a wide view, it is at the top of the list on the left.
+2. Type a podcast's name, such as `the daily`. Results appear as you type.
+3. Select the podcast.
 
-Search uses the Apple Podcasts directory. To add a show by its address instead:
+PodNotes adds the podcast and opens its page. When your library is empty, the view shows **Add your first podcast** with the same search field.
+
+Search uses the Apple Podcasts directory and shows up to 20 shows. To add a show by its address instead:
 
 1. Copy its RSS feed URL or its Apple Podcasts show link. An RSS feed URL looks like `https://feeds.npr.org/510289/podcast.xml`.
-2. Paste it into **Search Podcasts**.
-3. Select **Add** on the one result that appears.
+2. In **Add podcast**, paste it into the search field.
+3. Select the one result. Its second line reads **RSS feed** or **podcasts.apple.com**.
 
-See [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) and [Can I use a private feed?](/faq/#can-i-use-a-private-feed)
+A podcast you already follow has a check mark instead of a plus, and selecting it opens its page. See [Which podcasts can I add?](/faq/#which-podcasts-can-i-add) and [Use private feeds](/private-feeds/).
 
 ## Remove a podcast
 
-1. Open **Settings → PodNotes**.
-2. Under **Search Podcasts**, clear the search box. It lists the podcasts you follow.
-3. Next to the podcast, select **Remove**.
+1. Open the podcast's page.
+2. Select **Podcast options**, the three-dot button at the top right.
+3. Select **Remove podcast**.
 
-PodNotes keeps the podcast's episode notes, downloads, and playlist entries.
+You can also right-click the podcast's artwork in the Library and select **Remove podcast**. A notice says "Removed" and the podcast's name. To bring the podcast back, select **Undo** in the notice within seven seconds.
+
+PodNotes keeps the podcast's episode notes, downloads, played episodes, and its episodes in the queue and your playlists.
 
 ## <span id="episode-list"></span>Browse episodes
 
-1. Run **PodNotes: Show player**, or select **Show PodNotes** in the ribbon.
-2. At the top of the PodNotes view, select **Podcast grid**, the first of the three buttons.
-3. Select a podcast's artwork, or select a playlist.
+The Library is the top of the PodNotes view. In a narrow view, it lists **Latest episodes**, **Queue**, **Playlists**, **Local files**, and **Played**, and below them, under **Podcasts**, the artwork of every podcast you added. In a wide view, the same pages are in a list on the left, where **Podcasts** opens the artwork grid.
 
-![The podcast grid with the Queue, Favorites, Local Files, Played, and Commute playlists beside podcast artwork tiles](/screenshots/podcast-grid.webp)
+![The PodNotes Library in the sidebar, with the Latest episodes, Queue, Playlists, Local files, and Played rows above the artwork of seven podcasts](/screenshots/podcast-grid.webp)
 
-The view then lists that podcast's or playlist's episodes. **Queue** is the exception: when it holds episodes, it opens the player, which shows the **Queue** list.
+To see a podcast's episodes, select its artwork. The podcast's page lists its episodes, newest first. To go back, select the back button at the top left, which names the page it returns to.
 
-To return to the last list you saw, select **Episode list**, the second button at the top of the view. If it shows a podcast or a playlist, select **Latest Episodes** at the top to see the newest episodes of every podcast.
+![A podcast's page with its artwork, the episode search field, and a list of episodes, one of them paused at 34 minutes left, above the mini player](/screenshots/episode-list.webp)
 
-Above each list:
+At the top of a podcast's page:
 
-- **Search episodes** filters the list.
-- **Refresh episodes** fetches new episodes in **Latest Episodes** and a podcast's list. In **Played**, it fetches the podcasts that have played episodes. In other playlists, it does nothing.
-- **Hide played episodes** hides the episodes that PodNotes strikes through as played, and **Show played episodes** brings them back. The **Played** list always shows them.
+- **Search episodes** filters the list by title.
+- **Hide played episodes** hides the episodes you finished, and **Show played episodes** brings them back. The choice applies to every podcast's page.
+- **Refresh episodes** fetches the feed again.
 
-The **Queue** list under the player has none of these controls.
+Each episode shows its date and length, or the time left in it. A check mark means you finished it. Icons after the length show that it is downloaded or has a note.
 
-<span id="how-many-latest-episodes-are-shown"></span>**Latest Episodes** shows and searches the 10 newest episodes of each podcast. To show up to 75, raise **Latest episodes per podcast** in **Settings → PodNotes**.
+Other pages list episodes from all your podcasts:
+
+- <span id="how-many-latest-episodes-are-shown"></span>**Latest episodes** shows the 10 newest episodes of each podcast, newest first. To show up to 75, raise **Latest episodes per podcast** under **Library** in **Settings → PodNotes**. **Refresh all feeds**, at the top of the page, fetches every feed again.
+- **Played** lists the episodes you finished, including ones that have left their feed. Such an episode is dimmed, and its menu only has **Mark as unplayed**.
 
 ### When a feed cannot be reached
 
-When PodNotes cannot fetch a podcast's feed, for example offline, the podcast's episode list shows **Feed didn't load** with a **Retry** button. PodNotes lists the episodes from the last copy of the feed on this device, however old the copy is. That copy is the one PodNotes fetched since Obsidian started, or the one it cached if **Cache podcast feeds** is on. Without a copy, PodNotes lists the podcast's downloaded episodes. If there are none, the list is empty.
+When PodNotes cannot fetch a podcast's feed, the podcast's page shows **Feed didn't load** with the feed's host name and a **Retry** button. In the Library, the podcast's artwork gets a warning badge.
 
-For a private feed whose address is not on this device, **Feed didn't load** comes with **Address not on this device** and a **Set feed address** button instead of **Retry**. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
+PodNotes then lists the episodes from the last copy of the feed on this device, however old the copy is. PodNotes keeps a copy of each feed on this device, with its 75 newest episodes, and fetches the feed again when the copy is more than six hours old. **Refresh episodes** and **Refresh all feeds** fetch at once. Without a copy, the page lists the podcast's downloaded episodes, and with none it shows **No episodes**.
+
+Offline, PodNotes fetches nothing. The view shows **Offline** at the top, lists the episodes from each copy, and turns off the refresh buttons. When the device is online again, PodNotes fetches the feeds that have no copy or an old one. [Listen offline](/local_files/#listen-offline) shows what plays offline.
+
+For a private feed whose address is not on this device, **Feed didn't load** comes with **Address not on this device** and a **Set feed address** button instead of **Retry**, also offline. Setting the address needs a connection. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 
 ## <span id="player"></span>Play an episode
 
-1. In an episode list, select an episode.
+1. Select an episode.
 
-The player opens and resumes where you stopped last time. To return to the player from a list, select **Player**, the third button at the top of the view.
-
-![The player with episode artwork, the episode title, the progress bar, and the skip buttons](/screenshots/player.webp)
-
-- Select the artwork to play or pause. Select a point on the progress bar to jump there. The time on the left is how far you are, and the time on the right is how much is left.
-- The skip buttons jump 15 seconds. **Skip backward length (s)** and **Skip forward length (s)** change that.
-- The speed slider, below the volume slider, goes from 0.5x to 4x. The speed resets to **Default Playback Rate** each time Obsidian starts and each time a different episode loads.
-- The episode keeps playing while you browse, change settings, or close the PodNotes view.
-- When Obsidian starts, the player shows the episode you played last, paused at its saved position. It plays when you play it.
-- A video plays in the player while the view is in the main window. When the view is in a popout window, the player there shows the episode's artwork, and the video keeps playing.
-- When an episode's media cannot load, the player shows "Could not load this episode's media."
-- **Chapters** lists the episode's chapters when it has them. Select a chapter to jump to it.
+PodNotes plays the episode from where you stopped and opens the full player over the view. [Use the player](/player/) covers the controls, the Chapters, Transcript, and Up next panels, and the mini player that stays at the bottom of the view.
 
 ## <span id="playlists"></span><span id="reordering-the-queue"></span><span id="turning-off-the-queue"></span>Queue and playlists
 
 The queue decides what plays next, and playlists collect episodes you want to keep together. [Use the queue and playlists](/playlists/) shows how to add and remove episodes, reorder the queue, and make your own playlists.
 
-## <span id="context-menu"></span>Episode menu reference
+## Reference
 
-To open an episode's menu, right-click the episode or select its **More options** button. The menu shows these items in this order:
+### <span id="context-menu"></span>Episode menu reference
+
+To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. The menu shows these items in this order:
 
 | Item | What it does |
 | --- | --- |
-| **Play** | Plays the episode. |
-| **Mark as Played** or **Mark as Unplayed** | Changes whether the episode counts as played. |
-| **Download**, **Remove file**, or **Remove from Local Files** | Downloads the episode. **Remove file** deletes a download to the trash, and **Remove from Local Files** removes your own file from the list and keeps the file. See [Downloads and local files](/local_files/). |
-| **Create Note** or **Open Note** | Creates or opens the episode note. See [Create episode notes](/notes/). |
-| **Create feed note** or **Open feed note** | Creates or opens the note for the whole podcast. |
-| **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites** or removes it. |
-| **Add to Queue** or **Remove from Queue** | Adds the episode to the bottom of the queue or removes it. |
-| **Move to top of queue**, **Move up in queue**, **Move down in queue**, **Move to bottom of queue** | Moves the episode within the queue. Shown only in the player's **Queue** list when the queue has two or more episodes, and only the directions the episode can move in. |
-| **Add to** *playlist* or **Remove from** *playlist* | Adds the episode to that playlist or removes it. One item per playlist you made. |
+| **Play** or **Open player** | Plays the episode. For the loaded episode, opens the full player. |
+| **Add to queue** or **Remove from queue** | Adds the episode to the end of the queue, or removes it. |
+| **Create note** or **Open note** | Creates or opens the episode note. See [Create episode notes](/notes/). |
+| **Download**, **Remove download**, or **Remove from Local Files** | Downloads the episode. **Remove download** moves the downloaded file to the trash, and **Remove from Local Files** removes your own file from **Local files** and keeps the file. See [Downloads and local files](/local_files/). |
+| **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites**, or removes it. |
+| **Add to playlist** | Opens a list of your playlists, with a check mark on each one that holds the episode. Select a playlist to add or remove the episode, or **New playlist** to make one that holds it. |
+| **Mark as played** or **Mark as unplayed** | Changes whether the episode counts as played. |
+| **Copy episode link** | Copies a link that resumes the episode in PodNotes. It is missing when the link would show a private feed's address. |
+
+The full player's **Episode options** menu has the same items, except **Play** and **Mark as played**.
+
+### Podcast menu reference
+
+To open a podcast's menu, select **Podcast options** on its page, or right-click its artwork in the Library. The menu shows these items in this order:
+
+| Item | What it does |
+| --- | --- |
+| **Create podcast note** or **Open podcast note** | Creates or opens the note for the whole podcast. See [Create a podcast note](/notes/#create-a-podcast-note). |
+| **Copy feed URL** | Copies the feed's address. Only for a feed that is not private. |
+| **Set feed address** | Asks for a private feed's address when it is not on this device. |
+| **Edit feed URL** | Changes the address of a feed that is not private, when PodNotes cannot fetch it. |
+| **Remove podcast** | Removes the podcast, with **Undo** in the notice. |

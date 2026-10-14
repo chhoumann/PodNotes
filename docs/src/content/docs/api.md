@@ -95,7 +95,7 @@ PodNotes ignores a value that is negative or not a finite number. Once the media
 
 Gets or sets the volume, from `0` to `1`.
 PodNotes clamps finite values to that range and ignores values that are not finite.
-Setting the volume also changes the saved **Default Volume** setting. PodNotes uses one volume for every episode.
+PodNotes uses one volume for every episode, the one the full player's volume button sets, and keeps it when Obsidian restarts.
 
 ## `transcript`
 
@@ -119,7 +119,7 @@ getTranscript(episode?: Episode): Promise<string | null>
 ```
 
 Reads the transcript note of `episode`, or of the current episode when you omit it.
-PodNotes finds the note at the **Transcript file path** rendered for that episode.
+PodNotes finds the note at the **Transcript path** rendered for that episode.
 It resolves to `null` when there is no episode or no note, and rejects when the note cannot be read.
 
 ```js
@@ -165,16 +165,16 @@ There is no offset parameter. Throws `"No podcast loaded"` when no episode is lo
 
 ## `playbackRate`
 
-Gets or sets the current playback speed, from `0.5` to `4`, rounded to tenths.
-A value that is not finite sets the speed to **Default Playback Rate**.
-Setting the speed does not change **Default Playback Rate**. The speed lasts until a different episode loads, which starts at **Default Playback Rate**.
+Gets or sets the current playback speed, from `0.5` to `4`, rounded to hundredths, so `1.25` stays `1.25`.
+A value that is not finite sets the speed to **Default speed**.
+Setting the speed does not change **Default speed**. The speed lasts until a different episode loads, which starts at **Default speed**.
 
 ## Playback controls
 
-- `start()` plays the current episode from where it is. After Obsidian starts, it plays the restored episode from its saved position, and a finished episode starts over.
+- `start()` plays the current episode from where it is. After Obsidian starts, it plays the restored episode from its saved position, and a finished episode starts over, unless you moved its position after it finished.
 - `stop()` pauses the current episode and saves its position.
 - `togglePlayback()` switches between playing and paused.
-- `skipBackward()` and `skipForward()` move by **Skip backward length (s)** and **Skip forward length (s)**. An invalid length falls back to 15 seconds.
-- A backward skip stops at the start. A skip keeps the episode playing or paused. When the duration is known, a forward skip that would reach the last 0.25 seconds stops 0.25 seconds before the end, or stays where it is when the position is already closer to the end. A playing episode then ends, and the next episode in the queue starts if the automatic queue is on.
+- `skipBackward()` and `skipForward()` move by **Skip back (s)** and **Skip forward (s)**. An invalid length falls back to 15 seconds.
+- A backward skip stops at the start. A skip keeps the episode playing or paused. When the duration is known, a forward skip that would reach the last 0.25 seconds stops 0.25 seconds before the end, or stays where it is when the position is already closer to the end. A playing episode then ends, and the next episode in the queue starts if **Queue episodes I switch away from** is on.
 - `increasePlaybackRate()` and `decreasePlaybackRate()` change the current speed by `0.1`, within `0.5` to `4`.
-- `resetPlaybackRate()` sets the current speed to **Default Playback Rate**.
+- `resetPlaybackRate()` sets the current speed to **Default speed**.
