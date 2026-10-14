@@ -96,7 +96,7 @@ export default defineConfig(({ mode }) => {
 			// before the Oxc minifier below, which mangles names and drops console calls.
 			minify: isProd ? "terser" : false,
 			// Reading a Svelte state property subscribes to it, so a read is not pure.
-			terserOptions: { compress: { pure_getters: false }, mangle: false },
+			terserOptions: { compress: { pure_getters: false, passes: 2 }, mangle: false },
 			rollupOptions: {
 				external,
 				output: {
