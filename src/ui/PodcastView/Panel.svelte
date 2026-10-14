@@ -117,6 +117,10 @@
 			color: var(--text-accent);
 		}
 
+		.pn-row .nm {
+			font-weight: var(--font-medium);
+		}
+
 		.is-wide & {
 			.pn-panel-scroll {
 				padding: var(--size-4-3) var(--size-4-4) var(--size-4-4);

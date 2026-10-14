@@ -31,7 +31,7 @@
 		<li>
 			<button
 				type="button"
-				class="pn-bare pn-row pn-chap"
+				class="pn-bare pn-row"
 				class:is-now={index === current}
 				aria-current={index === current || undefined}
 				onclick={() => onseek(chapter.startTime)}
@@ -42,9 +42,3 @@
 		</li>
 	{/each}
 </Panel>
-
-<style>
-	.pn-chap :global(.nm) {
-		font-weight: var(--font-medium);
-	}
-</style>
