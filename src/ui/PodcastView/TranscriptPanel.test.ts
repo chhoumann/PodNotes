@@ -412,7 +412,7 @@ describe("a transcript that did not load", () => {
 					},
 				},
 			},
-		});
+		} as never);
 		onTestFinished(() => plugin.set(host));
 		fetchTextMock.mockResolvedValue(
 			`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n<v Host>Your feed is ${SECRET}\n`,
