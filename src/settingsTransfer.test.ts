@@ -18,6 +18,38 @@ function makeSettings(overrides: Partial<IPodNotesSettings> = {}): IPodNotesSett
 const NOW = "2026-06-14T00:00:00.000Z";
 
 describe("private feed reference transfer", () => {
+	it("redacts entity-escaped descriptions at export without changing public bytes", () => {
+		const address = "https://private.example.com/rss?auth=EXPORT_ENTITY_SENTINEL";
+		const publicText = "Public https&#58;&#x2F;&#x2F;private.example.com/public?a=1&amp;b=2";
+		const settings = makeSettings({
+			savedFeeds: {
+				Paid: {
+					title: "Paid",
+					url: "podnotes-private-feed:Paid",
+					artworkUrl: "",
+					description: `${address.replace(":", "&#58;").replaceAll("/", "&#x2F;")}. ${publicText}`,
+				},
+				Public: {
+					title: "Public",
+					url: "https://public.example/rss",
+					artworkUrl: "",
+					description: publicText,
+				},
+			},
+		});
+		const { settings: exported } = serializeSettings(
+			settings,
+			{},
+			"2.21.1",
+			NOW,
+			new Map([[address, "podnotes-private-feed:Paid"]]),
+		);
+		expect(exported.savedFeeds?.Public).toEqual(settings.savedFeeds.Public);
+		expect(exported.savedFeeds?.Paid.description).toBe(
+			`podnotes-private-feed:Paid. ${publicText}`,
+		);
+	});
+
 	it("puts no private feed address in a settings export, including quoted episode text", () => {
 		const address = "https://private.example/feed?auth=EXPORT_SENTINEL";
 		const placeholder = "podnotes-private-feed:Private";

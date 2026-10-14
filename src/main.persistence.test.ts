@@ -5,6 +5,8 @@ import { Notice, type SecretStorage } from "obsidian";
 import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
+import * as privateFeedUrls from "./utility/privateFeedUrl";
+import * as persistenceMerge from "./persistence/merge";
 import { encodePodNotesData } from "./persistence/podNotesData";
 import * as podNotesData from "./persistence/podNotesData";
 import { PlayerController } from "./player/PlayerController";
@@ -1005,6 +1007,89 @@ describe("PodNotes persistence integration", () => {
 		plugin.settings.defaultVolume = 0.5;
 		await plugin.saveSettingsStrict();
 		expect(saveData.mock.lastCall?.[0].queue.episodes).toHaveLength(2);
+	});
+
+	it("does not rescan an equal repair just because restoration copied it", async () => {
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		const rawUrl = "https://private.example/feed.xml?auth=EQUAL_REPAIR_SENTINEL";
+		const initial = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+		initial.savedFeeds = { Private: { title: "Private", url: rawUrl, artworkUrl: "" } };
+		await plugin.saveData(initial);
+		await plugin.loadSettings();
+		const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+		synced.savedFeeds.Private.url = rawUrl;
+		await plugin.saveData(synced);
+		saveData.mockClear();
+		const repairs = vi.spyOn(persistenceMerge, "restoreDropped");
+		const redactions = vi.spyOn(privateFeedUrls, "redactPrivateFeedAddresses");
+
+		plugin.settings.defaultVolume = 0.4;
+		await plugin.saveSettingsStrict();
+
+		expect(
+			repairs.mock.results.some(
+				(result, index) =>
+					result.type === "return" &&
+					result.value !== repairs.mock.calls[index][1] &&
+					persistenceMerge.jsonValuesEqual(result.value, repairs.mock.calls[index][1]),
+			),
+		).toBe(true);
+		expect(redactions).toHaveBeenCalledTimes(5);
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			defaultVolume: 0.4,
+			savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+		});
+		expect(JSON.stringify(saveData.mock.calls)).not.toContain("EQUAL_REPAIR_SENTINEL");
+	});
+
+	describe("when a synced private feed arrives with a queue that had to be repaired", () => {
+		const rawUrl = "https://private.example/feed.xml?auth=RESTORED_SENTINEL";
+		const episode = {
+			title: "Ep",
+			podcastName: "Pod",
+			streamUrl: "https://example.com/ep.mp3",
+			url: "",
+			content: "",
+		};
+
+		async function saveAfterSync(description: string) {
+			const saveData = vi.fn().mockResolvedValue(undefined);
+			const plugin = makePlugin(saveData, { dataFileExists: true });
+			await plugin.loadSettings();
+			plugin.settings.queue.episodes = [{ ...episode, description }];
+			attachDataFileWriter(plugin);
+			const synced = JSON.parse(JSON.stringify(encodePodNotesData(plugin.settings)));
+			synced.queue = "not a playlist";
+			synced.savedFeeds = { Private: { title: "Private", url: rawUrl, artworkUrl: "" } };
+			await plugin.saveData(synced);
+			saveData.mockClear();
+
+			plugin.settings.defaultVolume = 0.4;
+			await plugin.saveSettingsStrict();
+			return saveData;
+		}
+
+		it("redacts the address in the entries it keeps from this device", async () => {
+			const saveData = await saveAfterSync(`Your feed: ${rawUrl}`);
+
+			const written = saveData.mock.lastCall?.[0];
+			expect(written.queue.episodes).toEqual([
+				{ ...episode, description: "Your feed: podnotes-private-feed:Private" },
+			]);
+			expect(written.savedFeeds.Private.url).toBe("podnotes-private-feed:Private");
+			expect(JSON.stringify(saveData.mock.calls)).not.toContain("RESTORED_SENTINEL");
+		});
+
+		it("keeps the entries unchanged when they quote no private address", async () => {
+			const saveData = await saveAfterSync("Public notes");
+
+			const written = saveData.mock.lastCall?.[0];
+			expect(written.queue.episodes).toEqual([{ ...episode, description: "Public notes" }]);
+			expect(written.savedFeeds.Private.url).toBe("podnotes-private-feed:Private");
+			expect(written.defaultVolume).toBe(0.4);
+		});
 	});
 
 	it("drops a saved feed cache preference at the next save, even one an older device syncs back", async () => {
