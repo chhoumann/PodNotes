@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { derived, readable } from "svelte/store";
+import { derived, get, readable } from "svelte/store";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import * as obsidian from "obsidian";
 
@@ -9,7 +9,7 @@ import PodNotes from "src/main";
 import { decodePodNotesData } from "src/persistence/podNotesData";
 import { PlayerController } from "src/player/PlayerController";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
-import { plugin as pluginStore } from "src/store";
+import { episodeListLimit, plugin as pluginStore } from "src/store";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { PodNotesSettingsTab } from "./PodNotesSettingsTab";
 import { attachDataFileWriter, dataFileText } from "../../../tests/mocks/dataFileWriter";
@@ -27,9 +27,16 @@ afterEach(() => {
 		tab.containerEl.remove();
 	}
 	openTabs.clear();
+	vi.useRealTimers();
 	vi.restoreAllMocks();
 	pluginStore.set(undefined as never);
 });
+
+/** The typing pause runs on fake time. Saves settle on real time. */
+const fakeTypingTime = () => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+/** Lets the saves already asked for finish without asking for one. */
+const settled = () => new Promise((resolve) => setImmediate(resolve));
 
 function open(saved: Partial<IPodNotesSettings> = {}) {
 	const settings = { ...structuredClone(DEFAULT_SETTINGS), ...structuredClone(saved) };
@@ -95,11 +102,11 @@ function open(saved: Partial<IPodNotesSettings> = {}) {
 			await plugin.onExternalSettingsChange();
 		},
 		writes: async () => {
-			await plugin.flushSaves();
+			await settled();
 			return writes;
 		},
 		disk: async () => {
-			await plugin.flushSaves();
+			await settled();
 			return disk as unknown as IPodNotesSettings;
 		},
 	};
@@ -124,6 +131,9 @@ function enter(field: HTMLInputElement | HTMLTextAreaElement, text: string): voi
 }
 
 const complete = (field: Element) => field.dispatchEvent(new Event("change"));
+
+const pressEnter = (field: Element) =>
+	field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 
 function choose(select: HTMLSelectElement, value: string): void {
 	select.value = value;
@@ -224,7 +234,8 @@ describe("text fields", () => {
 		expect(preview()).toBe("00:01:32");
 	});
 
-	test("typing saves nothing; the completed edit saves once and tells an open view", async () => {
+	test("each keystroke applies at once; the save waits for 500 ms without one and tells an open view", async () => {
+		fakeTypingTime();
 		const { plugin, field, writes, disk } = open();
 		const paths: string[] = [];
 		const stop = derived(pluginStore, ($plugin) => $plugin.settings.note.path).subscribe(
@@ -232,15 +243,96 @@ describe("text fields", () => {
 		);
 		const path = field("Episode note path");
 
-		retype(path, "UI3/My podcast note.md");
-		expect(await writes()).toBe(0);
-		expect(plugin.settings.note.path).toBe(DEFAULT_SETTINGS.note.path);
+		try {
+			enter(path, "");
+			for (const character of "UI3/My podcast note.md") {
+				vi.advanceTimersByTime(499);
+				type(path, character);
+				expect(plugin.settings.note.path).toBe(path.value);
+			}
+			vi.advanceTimersByTime(499);
+			expect(await writes()).toBe(0);
 
-		complete(path);
+			vi.advanceTimersByTime(1);
+			expect(await writes()).toBe(1);
+			expect((await disk()).note.path).toBe("UI3/My podcast note.md");
+
+			complete(path);
+			expect(await writes()).toBe(1);
+			expect(paths).toEqual([DEFAULT_SETTINGS.note.path, "UI3/My podcast note.md"]);
+		} finally {
+			stop();
+		}
+	});
+
+	test("completing an edit saves it at once and drops its pending save", async () => {
+		fakeTypingTime();
+		const { plugin, field, writes, disk } = open();
+		const template = field("Episode note template");
+
+		type(template, "\nmore");
+		expect(plugin.settings.note.template).toBe(`${DEFAULT_SETTINGS.note.template}\nmore`);
+		complete(template);
+
 		expect(await writes()).toBe(1);
-		expect((await disk()).note.path).toBe("UI3/My podcast note.md");
-		stop();
-		expect(paths).toEqual([DEFAULT_SETTINGS.note.path, "UI3/My podcast note.md"]);
+		expect(vi.getTimerCount()).toBe(0);
+		vi.advanceTimersByTime(1_000);
+		expect(await writes()).toBe(1);
+		expect((await disk()).note.template).toBe(`${DEFAULT_SETTINGS.note.template}\nmore`);
+	});
+
+	test("blur saves a return to the original text even without a change event", async () => {
+		fakeTypingTime();
+		const { field, writes, disk } = open();
+		const path = field("Episode note path");
+		type(path, "x");
+		vi.advanceTimersByTime(500);
+		expect(await writes()).toBe(1);
+
+		enter(path, DEFAULT_SETTINGS.note.path);
+		path.dispatchEvent(new Event("blur"));
+
+		expect(await writes()).toBe(2);
+		expect((await disk()).note.path).toBe(DEFAULT_SETTINGS.note.path);
+		vi.advanceTimersByTime(500);
+		expect(await writes()).toBe(2);
+	});
+
+	test("a sync after the pause's save wins over the field when the edit completes", async () => {
+		fakeTypingTime();
+		const { plugin, field, sync, writes, disk } = open();
+		const path = field("Episode note path");
+
+		type(path, "x");
+		vi.advanceTimersByTime(500);
+		expect(await writes()).toBe(1);
+		await sync({ note: { ...DEFAULT_SETTINGS.note, path: "Synced/{{title}}.md" } });
+		complete(path);
+
+		expect(await writes()).toBe(1);
+		expect([plugin.settings.note.path, path.value]).toEqual([
+			"Synced/{{title}}.md",
+			"Synced/{{title}}.md",
+		]);
+		expect((await disk()).note.path).toBe("Synced/{{title}}.md");
+	});
+
+	test("Enter completes a one-line edit; in a template it is a new line", async () => {
+		fakeTypingTime();
+		const { field, writes, disk } = open();
+		const path = field("Episode note path");
+		const template = field("Episode note template");
+
+		type(path, "x");
+		pressEnter(path);
+		expect(await writes()).toBe(1);
+		expect((await disk()).note.path).toBe(`${DEFAULT_SETTINGS.note.path}x`);
+
+		type(template, "\n");
+		pressEnter(template);
+		expect(await writes()).toBe(1);
+		vi.advanceTimersByTime(500);
+		expect(await writes()).toBe(2);
 	});
 
 	test("an edit in progress saves once when Settings closes", async () => {
@@ -342,20 +434,39 @@ describe("text fields", () => {
 		expect(select("Diarization provider").disabled).toBe(false);
 	});
 
-	test("a number field keeps the saved value for an entry it cannot use", async () => {
+	test("a number field applies a usable entry as typed and shows the saved value for one it cannot use once the edit completes", async () => {
+		fakeTypingTime();
 		const { plugin, field, writes } = open();
 		const skip = field("Skip back (s)");
 
 		for (const entry of ["", "0", "-5"]) {
 			enter(skip, entry);
-			complete(skip);
+			vi.advanceTimersByTime(500);
+			expect([skip.value, plugin.settings.skipBackwardLength]).toEqual([entry, 15]);
+			pressEnter(skip);
+			expect(skip.value).toBe("15");
 		}
-		expect(skip.value).toBe("15");
 		expect(await writes()).toBe(0);
 
+		enter(skip, "4");
+		expect(plugin.settings.skipBackwardLength).toBe(4);
 		enter(skip, "42");
 		complete(skip);
 		expect(plugin.settings.skipBackwardLength).toBe(42);
+		expect(await writes()).toBe(1);
+	});
+
+	test("the episode limit reaches the lists as typed and saves after the pause", async () => {
+		fakeTypingTime();
+		const { plugin, field, writes } = open();
+		const limit = field("Latest episodes per podcast");
+
+		enter(limit, "1");
+		enter(limit, "12");
+		expect([get(episodeListLimit), plugin.settings.episodeListLimit]).toEqual([12, 12]);
+		expect(await writes()).toBe(0);
+
+		vi.advanceTimersByTime(500);
 		expect(await writes()).toBe(1);
 	});
 

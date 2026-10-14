@@ -82,6 +82,8 @@ const DIARIZATION_PROVIDERS = {
 	deepgram: "Deepgram",
 };
 
+const TYPING_SAVE_DELAY_MS = 500;
+
 /** Search finds rows, not section headings. */
 const HEADSET_ALIASES = ["headset", "lock screen", "media keys"];
 
@@ -438,17 +440,30 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 
 	private bindDraft(
 		input: HTMLInputElement | HTMLTextAreaElement,
-		apply: (value: string) => void,
+		apply: (value: string) => boolean,
+		show: () => void,
 	): () => void {
 		let { win, doc } = input;
+		// The main window's timer: a popout's stops when it closes.
+		let pendingSave: number | undefined;
+		const save = () => {
+			window.clearTimeout(pendingSave);
+			pendingSave = undefined;
+			this.changed();
+		};
 		const hidden = () => doc.visibilityState === "hidden" && complete();
 		const complete = () => {
 			if (!this.drafts.delete(complete)) return;
 			win.removeEventListener("pagehide", complete);
 			doc.removeEventListener("visibilitychange", hidden);
-			apply(input.value);
+			if (pendingSave !== undefined) save();
+			show();
 		};
 		input.addEventListener("input", () => {
+			if (apply(input.value) || pendingSave !== undefined) {
+				window.clearTimeout(pendingSave);
+				pendingSave = window.setTimeout(save, TYPING_SAVE_DELAY_MS);
+			}
 			if (this.drafts.has(complete)) return;
 			({ win, doc } = input);
 			this.drafts.add(complete);
@@ -456,6 +471,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			doc.addEventListener("visibilitychange", hidden);
 		});
 		input.addEventListener("change", complete);
+		input.addEventListener("blur", complete);
 		return complete;
 	}
 
@@ -508,13 +524,18 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						.setValue(field.read())
 						.setPlaceholder(field.placeholder ?? "")
 						.onChange((value) => field.preview?.(value, setting));
-					complete = this.bindDraft(control.inputEl, (value) => {
-						const before = field.read();
-						field.write(value);
-						if (field.read() !== before) this.changed();
-						control.setValue(field.read());
-						field.preview?.(field.read(), setting);
-					});
+					complete = this.bindDraft(
+						control.inputEl,
+						(value) => {
+							const before = field.read();
+							field.write(value);
+							return field.read() !== before;
+						},
+						() => {
+							control.setValue(field.read());
+							field.preview?.(field.read(), setting);
+						},
+					);
 					const preview = field.preview;
 					if (preview) {
 						stopPreview = this.follow(setting, () =>
@@ -540,6 +561,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 							text.inputEl.max = field.max?.toString() ?? "";
 						} else text.inputEl.setCssStyles({ width: "100%" });
 						bind(text);
+						// Desktop fires no change on Enter.
+						text.inputEl.addEventListener("keydown", (event) => {
+							if (event.key === "Enter" && !event.isComposing) complete();
+						});
 					});
 				}
 				return () => {

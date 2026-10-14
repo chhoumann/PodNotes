@@ -119,31 +119,76 @@ describe("PodNotes settings tab", () => {
 		}
 	});
 
-	test("a text edit writes data.json once, when it completes", async () => {
+	test("a typing burst writes data.json once after it pauses, and completing it writes nothing more", async () => {
 		const { obsidian, plugin } = getContext();
 		const typed = "UI3/Typed note path.md";
 		await openPodNotesSettings(obsidian);
 		onTestFinished(() => closeSettings(obsidian));
 		const path = ui.settingControl("Episode note path", "input");
-		await typeInto(obsidian, path, "", { replace: true });
 
 		const typing = await recordWrites(obsidian);
+		await typeInto(obsidian, path, "", { replace: true });
 		for (const character of typed) await typeText(obsidian, character);
-		await obsidian.sleep(1_000);
-		expect(await typing.stop(), "writes while typing").toMatchObject({ attempted: 0 });
-
-		const completing = await recordWrites(obsidian);
-		await pressKey(obsidian, "Tab");
 		await plugin.waitForData<PodNotesData>((data) => data.note?.path === typed, {
 			timeoutMs: 5_000,
 			intervalMs: 100,
 		});
-		await obsidian.sleep(500);
-		expect(await completing.stop(), "writes for the completed edit").toMatchObject({
+		await obsidian.sleep(1_000);
+		expect(await typing.stop(), "writes for the burst").toMatchObject({
 			attempted: 1,
 			completed: 1,
 			failed: 0,
 		});
+
+		const completing = await recordWrites(obsidian);
+		await pressKey(obsidian, "Tab");
+		await obsidian.sleep(1_000);
+		expect(await completing.stop(), "writes for completing a saved edit").toMatchObject({
+			attempted: 0,
+		});
+	});
+
+	test("Enter completes an edit while its field keeps focus", async () => {
+		const { obsidian } = getContext();
+		await openPodNotesSettings(obsidian);
+		onTestFinished(() => closeSettings(obsidian));
+		const saved = await settingValue(obsidian, "Skip back (s)");
+
+		await typeInto(obsidian, ui.settingControl("Skip back (s)", "input"), "-", {
+			replace: true,
+		});
+		await pressKey(obsidian, "Enter");
+
+		expect(
+			await obsidian.dev.evalJson(`(() => {
+				const field = document.activeElement;
+				return [field?.closest(".setting-item")?.querySelector(".setting-item-name")?.textContent, field?.value];
+			})()`),
+			"the focused field shows the saved value for an entry it cannot use",
+		).toEqual(["Skip back (s)", saved]);
+	});
+
+	test("leaving a field saves a return to its original text before the debounce", async () => {
+		const { obsidian, plugin } = getContext();
+		const initial = "Initial/{{title}}.md";
+		const edited = "Paused/{{title}}.md";
+		await plugin.updateDataAndReload<PodNotesData>((data) => {
+			data.note = { path: initial, template: "# {{title}}" };
+		}, RELOAD_OPTIONS);
+		await openPodNotesSettings(obsidian);
+		onTestFinished(() => closeSettings(obsidian));
+		const path = ui.settingControl("Episode note path", "input");
+		await typeInto(obsidian, path, edited, { replace: true });
+		await plugin.waitForData<PodNotesData>((data) => data.note?.path === edited, {
+			timeoutMs: 5_000,
+			intervalMs: 100,
+		});
+
+		await typeInto(obsidian, path, initial, { replace: true });
+		await pressKey(obsidian, "Tab");
+		await obsidian.sleep(100);
+
+		expect((await plugin.data<PodNotesData>().read()).note?.path).toBe(initial);
 	});
 
 	test("an edit still in its field is saved when Settings closes", async () => {
