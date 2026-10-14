@@ -76,6 +76,8 @@ export type TestServices = ShellServices & {
 	readonly library: TestLibrary;
 	readonly captureTimestamp: ReturnType<typeof vi.fn<() => Promise<Capture | null>>>;
 	readonly openSettings: ReturnType<typeof vi.fn<() => void>>;
+	readonly saveTranscriptNote: ReturnType<typeof vi.fn<() => void>>;
+	readonly transcribeFromAudio: ReturnType<typeof vi.fn<() => void>>;
 	readonly setAutoQueue: ReturnType<typeof vi.fn<(enabled: boolean) => void>>;
 	readonly hasNote: ReturnType<typeof vi.fn<(episode: Episode) => boolean>>;
 	readonly rowHasNote: Writable<(episode: Episode) => boolean>;
@@ -93,7 +95,15 @@ export type TestServices = ShellServices & {
  */
 export function createTestServices(
 	overrides: Partial<
-		Omit<TestServices, "captureTimestamp" | "openSettings" | "setAutoQueue" | "hasNote">
+		Omit<
+			TestServices,
+			| "captureTimestamp"
+			| "openSettings"
+			| "saveTranscriptNote"
+			| "transcribeFromAudio"
+			| "setAutoQueue"
+			| "hasNote"
+		>
 	> = {},
 ): {
 	services: TestServices;
@@ -138,6 +148,8 @@ export function createTestServices(
 		settings: derived(plugin, ($plugin) => $plugin.settings),
 		captureTimestamp: vi.fn(async () => null),
 		openSettings: vi.fn(),
+		saveTranscriptNote: vi.fn(),
+		transcribeFromAudio: vi.fn(),
 		setAutoQueue: vi.fn((enabled: boolean) => {
 			settings.autoQueue = enabled;
 			plugin.update((host) => host);

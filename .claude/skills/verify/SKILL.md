@@ -251,14 +251,14 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   the design has one. The states are `first-run`, `add-podcast`, `library`,
   `episodes`, `error-feed`, `queue`, `playlists`, `playlist`, `latest`,
   `played`, `local-files`, `offline` and `status-bar`, and the player's
-  `now-playing`, `mini-player`, `capture`, `chapters`, `up-next`,
+  `now-playing`, `mini-player`, `capture`, `chapters`, `up-next`, `transcript`,
   `up-next-empty`, `no-chapters`, `video`, `local-player` and `media-error`.
   `set player` runs the player's states and `set all` every state; both go on
   past a failed state and fail at the end. `set` opens each page by its page
   JSON, so a state works on any version of the view. A player state plays an
   episode until its media loads and pauses it at a fixed second.
-  `capture`, `chapters`, `up-next` and `up-next-empty` then press the full
-  player's `Timestamp`, `Chapters` or `Up next` button, and fail at once
+  `capture`, `chapters`, `up-next`, `up-next-empty` and `transcript` then press the full
+  player's `Timestamp`, `Chapters`, `Up next` or `Transcript` button, and fail at once
   without a button that reads exactly that, as on a full player before v3.
   `shot` hides Obsidian's status bar, except in `status-bar`, which puts a
   `9 properties` item in it over the mini player and has no phone shot, because
@@ -269,7 +269,7 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
   one more feed to add. Their episodes' media is silence as long as the feed
-  says. `#213` has chapters, and `Signal & Noise` has a 10 s video episode that
+  says. `#213` has chapters and a WebVTT transcript, and `Signal & Noise` has a 10 s video episode that
   ffmpeg makes on its first request and one whose media answers 404. `retitle` renames the first feed's two episodes to
   `Renamed Opening Show` and `Renamed Closing Show`, keeping their GUIDs, until
   the server stops. `requests` prints the paths

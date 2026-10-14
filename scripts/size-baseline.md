@@ -12,6 +12,18 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
+The gzip budget is now 103,000 bytes. On 2026-10-14 it rose from 100,000 for
+the full player's Transcript panel, which the owner approved at about 1.9 KB
+and which measured 2,576 bytes. The coordinator set 103,000 to keep the
+panel's Find and Follow chip and to leave room for fixes in flight. The
+numbers above and the rejection proof below were measured against the old
+budget. With the panel:
+
+```text
+main.js raw: 320728 bytes; budget 330000 bytes; 9272 bytes remaining
+main.js gzip (level 9): 101619 bytes; budget 103000 bytes; 1381 bytes remaining
+```
+
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
 Budgets use decimal bytes. The brief's 96,533-byte reference is unexplained.
 This report fixes the compressor instead of comparing compressed sizes across

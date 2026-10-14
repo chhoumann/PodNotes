@@ -131,6 +131,24 @@ describe("MainView mobile startup mounting", () => {
 		expect(mountedServices().scope).toBe(view.scope);
 	});
 
+	it("Save as note asks for the feed's transcript without the paid fallback; Transcribe uses the audio", async () => {
+		const { plugin, view } = createView({ shouldMount: true });
+		const transcription = {
+			transcribeCurrentEpisode: vi.fn(async () => {}),
+			transcribeCurrentEpisodeFromAudio: vi.fn(),
+		};
+		Object.assign(plugin, { getTranscriptionService: () => transcription });
+		await openView(view);
+
+		mountedServices().saveTranscriptNote();
+		mountedServices().transcribeFromAudio();
+
+		expect(transcription.transcribeCurrentEpisode).toHaveBeenCalledExactlyOnceWith({
+			paid: false,
+		});
+		expect(transcription.transcribeCurrentEpisodeFromAudio).toHaveBeenCalledExactlyOnceWith();
+	});
+
 	it("mountPodcastView wakes a dormant restored view exactly once", () => {
 		const { contentEl, plugin, view } = createView({ shouldMount: false });
 

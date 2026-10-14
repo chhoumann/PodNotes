@@ -1,7 +1,13 @@
 import type { TranscriptLink } from "src/parser/feedDocumentParser";
 import type { FeedKey, FeedRepository } from "src/services/FeedRepository";
+import { withoutPrivateFeedAddresses } from "src/services/privateFeeds";
 import type { Episode } from "src/types/Episode";
 import { NetworkError, fetchTextWithTimeout } from "src/utility/networkRequest";
+import {
+	isCredentialBearingUrl,
+	privateFeedPlaceholder,
+	redactPrivateFeedAddresses,
+} from "src/utility/privateFeedUrl";
 import { type ParsedTranscript, parseTranscript, type TranscriptFormat } from "./parse";
 
 export { renderTranscriptBody, timestampStyle } from "./render";
@@ -58,8 +64,13 @@ export class PublishedTranscriptError extends Error {
 	}
 }
 
+/**
+ * The episode's published transcript. Its text keeps no private address, neither its private
+ * feed's nor its own when that carries a credential, so every reader of it gets the same text.
+ */
 export async function fetchPublishedTranscript(
 	feeds: Pick<FeedRepository, "itemUrl">,
+	episode: Episode,
 	source: PublishedTranscript,
 	signal: AbortSignal,
 ): Promise<ParsedTranscript> {
@@ -83,9 +94,15 @@ export async function fetchPublishedTranscript(
 			`The published transcript could not be fetched: ${error instanceof NetworkError ? error.message : "Network request failed."}`,
 		);
 	}
-	const transcript = parseTranscript(source.format, text);
-	if (!transcript) {
+	const parsed = parseTranscript(source.format, text);
+	if (!parsed) {
 		throw new PublishedTranscriptError("The published transcript could not be read.");
 	}
-	return transcript;
+	const [, transcript] = withoutPrivateFeedAddresses([episode, parsed] as const);
+	return isCredentialBearingUrl(url)
+		? redactPrivateFeedAddresses(
+				transcript,
+				new Map([[url, privateFeedPlaceholder(source.key)]]),
+			)
+		: transcript;
 }

@@ -14,6 +14,7 @@
 		scroller?: HTMLElement;
 		children: Snippet;
 	} = $props();
+	const id = $props.id();
 </script>
 
 <div class="pn-panel">
@@ -21,7 +22,11 @@
 		<div class="pn-panel-head">{@render head()}</div>
 	{/if}
 	{#if list}
-		<ol class="pn-panel-scroll" aria-label={list} bind:this={scroller}>{@render children()}</ol>
+		<!-- Obsidian shows an aria-label as a tooltip over the whole list. -->
+		<span id="{id}-list" hidden>{list}</span>
+		<ol class="pn-panel-scroll" aria-labelledby="{id}-list" bind:this={scroller}>
+			{@render children()}
+		</ol>
 	{:else}
 		<div class="pn-panel-scroll" bind:this={scroller}>{@render children()}</div>
 	{/if}
@@ -74,6 +79,45 @@
 		.pn-panel-scroll > .pn-panel-empty {
 			margin: auto 0;
 		}
+
+		.pn-row {
+			display: flex;
+			align-items: baseline;
+			justify-content: flex-start;
+			gap: var(--size-4-3);
+			width: 100%;
+			height: auto;
+			padding: 6px var(--size-4-2);
+			border-radius: var(--radius-s);
+			background: none;
+			box-shadow: none;
+			color: var(--text-muted);
+			font-size: inherit;
+			line-height: 1.45;
+			text-align: left;
+			white-space: normal;
+		}
+
+		button.pn-row:not(.is-now):hover {
+			background: var(--background-modifier-hover);
+			color: var(--text-normal);
+		}
+
+		.pn-row.is-now {
+			background: hsla(var(--interactive-accent-hsl), 0.12);
+			color: var(--text-normal);
+		}
+
+		.pn-row .tm {
+			flex: none;
+			width: 44px;
+			font-size: var(--font-ui-smaller);
+			font-variant-numeric: tabular-nums;
+		}
+
+		.pn-row.is-now .tm {
+			color: var(--text-accent);
+		}
 	}
 
 	:global(.is-wide) .pn-panel :global {
@@ -86,7 +130,15 @@
 		}
 	}
 
-	:global(.is-phone) .pn-panel :global(.pn-panel-head) {
-		min-height: 44px;
+	:global(.is-phone) .pn-panel :global {
+		.pn-panel-head,
+		.pn-panel-head :is(button, input) {
+			min-height: 44px;
+		}
+
+		.pn-row {
+			min-height: 44px;
+			padding: 10px var(--size-4-2);
+		}
 	}
 </style>

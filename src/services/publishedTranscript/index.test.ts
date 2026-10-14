@@ -219,6 +219,7 @@ describe("fetchPublishedTranscript", () => {
 
 		const transcript = await fetchPublishedTranscript(
 			feeds,
+			episodeOf(show),
 			{ key: "Show", reference: "transcripts/1.vtt", format: "vtt" },
 			signal,
 		);
@@ -242,6 +243,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Hidden", reference: "1.vtt", format: "vtt" },
 				signal,
 			),
@@ -268,6 +270,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Show", reference: "1.vtt", format: "vtt" },
 				controller.signal,
 			),
@@ -281,6 +284,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Show", reference: "1.json", format: "json" },
 				signal,
 			),
@@ -295,6 +299,7 @@ describe("fetchPublishedTranscript", () => {
 		await expect(
 			fetchPublishedTranscript(
 				feeds,
+				episodeOf(show),
 				{ key: "Gone", reference: "1.vtt", format: "vtt" },
 				signal,
 			),
@@ -311,7 +316,7 @@ describe("fetchPublishedTranscript", () => {
 		fetchTextMock.mockResolvedValue(transcriptFixture("build-your-saas.vtt"));
 
 		const source = await findPublishedTranscript(feeds, episodeOf(hidden));
-		await fetchPublishedTranscript(feeds, source!, signal);
+		await fetchPublishedTranscript(feeds, episodeOf(hidden), source!, signal);
 
 		const stored = [...storage.values.values()].map(String).join("\n");
 		expect(stored).toContain('"url":"1.vtt"');
