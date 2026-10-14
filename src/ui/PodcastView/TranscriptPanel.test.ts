@@ -67,7 +67,6 @@ let loadFeed: Mock<(url: string) => Promise<ParsedFeedEpisodes>>;
 let episodes: Array<{ episode: Episode; transcripts: TranscriptLink[] }>;
 let made = 0;
 
-/** A new episode of Field Notes, so the one-episode cache never carries over from a test before. */
 function episodeOf(transcripts: TranscriptLink[], overrides: Partial<Episode> = {}): Episode {
 	made++;
 	const episode: Episode = {
@@ -115,7 +114,6 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-/** The full player at `time` of `played`, paused, with its Transcript panel chosen. */
 async function openTranscript(played: Episode, time = 0, width = 320) {
 	const result = render(PodcastView, { props: { services } });
 	widths.resize(result.container.querySelector(".podcast-view")!, width);

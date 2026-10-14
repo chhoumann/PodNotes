@@ -211,7 +211,6 @@ const transcript = (file) => fs.readFileSync(path.join(transcriptFixtures, file)
  * @property {boolean} [missing] The media answers 404.
  */
 
-// The design prototype's transcript of #213, around the shots' 38:14.
 /** @type {[number, string, string][]} */
 const TRANSCRIPT_213 = [
 	[
@@ -278,7 +277,7 @@ function vttClock(seconds) {
 	return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}.000`;
 }
 
-/** Each cue ends where the next starts. @param {[number, string, string][]} cues */
+/** @param {[number, string, string][]} cues */
 function vtt(cues) {
 	const blocks = cues.map(([start, speaker, text], i) => {
 		const end = cues[i + 1]?.[0] ?? start + 7;

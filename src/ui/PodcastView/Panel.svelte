@@ -80,7 +80,6 @@
 			margin: auto 0;
 		}
 
-		/* A row that plays from its time: a chapter or a transcript line. */
 		.pn-row {
 			display: flex;
 			align-items: baseline;

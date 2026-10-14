@@ -51,7 +51,7 @@ export interface ShellServices {
 	captureTimestamp(): Promise<Capture | null>;
 	/** Opens Obsidian's settings at the PodNotes tab. */
 	openSettings(): void;
-	/** "Transcribe current episode" without its paid fallback, so a video works too: the feed's transcript into its note. */
+	/** Saves the feed's published transcript to the episode's note, never the paid transcription. */
 	saveTranscriptNote(): void;
 	/** "Transcribe current episode from audio", the paid transcription. */
 	transcribeFromAudio(): void;

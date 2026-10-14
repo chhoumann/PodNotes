@@ -59,7 +59,6 @@
 		// At compact widths a media error takes the stage, so no panel shows meanwhile.
 		if (failed && !wide) return undefined;
 		if (panel && panels.includes(panel)) return panel;
-		// A transcript loads only when asked for, so the wide player never opens on it.
 		return wide ? panels.find((kind) => kind !== "transcript") : undefined;
 	});
 	const chaptersUrl = $derived(episode.chaptersUrl);

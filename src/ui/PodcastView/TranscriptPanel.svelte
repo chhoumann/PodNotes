@@ -35,8 +35,7 @@
 	let query = $state("");
 	let hit = $state(0);
 	let following = $state(true);
-	/** Where the panel last scrolled its list. A scroll that leaves it elsewhere is the user's. */
-	let placed = 0;
+	let ownScrollTop = 0;
 	let controller = new AbortController();
 
 	const lines = $derived<readonly Line[]>(load.kind === "ready" ? load.transcript.lines : []);
@@ -73,13 +72,12 @@
 		const scroller = list;
 		if (!scroller) return;
 		const scrolled = () => {
-			if (Math.abs(scroller.scrollTop - placed) > 1) following = false;
+			if (Math.abs(scroller.scrollTop - ownScrollTop) > 1) following = false;
 		};
 		scroller.addEventListener("scroll", scrolled);
 		return () => scroller.removeEventListener("scroll", scrolled);
 	});
 
-	/** From the cache when it has the episode, so a return to the panel does not flash. */
 	function show(target: Episode) {
 		controller.abort();
 		const cached = cachedTranscript(target);
@@ -100,16 +98,13 @@
 		);
 	}
 
-	/**
-	 * Puts the row a third down the list. Scrolls only the list: scrollIntoView would also
-	 * scroll the view and an editor around it.
-	 */
+	/** Not scrollIntoView, which would also scroll the view and an editor around it. */
 	function reveal(at: number) {
 		const row = list?.children[at];
 		if (!list || !row) return;
 		const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top;
 		list.scrollTop += top - list.clientHeight / 3;
-		placed = list.scrollTop;
+		ownScrollTop = list.scrollTop;
 	}
 
 	function seek(time: number) {
@@ -123,7 +118,7 @@
 		hit = (hit + (event.shiftKey ? shown.length - 1 : 1)) % shown.length;
 	}
 
-	/** Whether Find was open. Closing it follows the current line again. */
+	/** Closes Find and returns whether it was open. */
 	export function closeFind(): boolean {
 		if (!finding) return false;
 		finding = false;
@@ -133,7 +128,6 @@
 		return true;
 	}
 
-	/** `text` cut around each match of the query: the odd pieces are the matches. */
 	function pieces(text: string): string[] {
 		const found: string[] = [];
 		const lower = text.toLowerCase();

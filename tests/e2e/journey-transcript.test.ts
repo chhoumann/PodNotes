@@ -50,7 +50,6 @@ const FEED: FixtureFeed = {
 };
 const NOTE_PATH = `Transcripts/${FEED.title}/${CAPTIONED.title}.md`;
 
-/** The player's list named "Transcript", found by its accessible name. */
 const TRANSCRIPT_LIST = `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} section.pn-player ol[aria-labelledby]`)})].find((ol) => document.getElementById(ol.getAttribute("aria-labelledby"))?.textContent === "Transcript")`;
 const panelButton = (label: string): UiTarget => ({
 	name: `transcript panel's ${label}`,
@@ -72,7 +71,6 @@ type ShownTranscript = Readonly<{
 	marks: string[];
 }>;
 
-/** The panel's lines by their text, the current one, the Find hit, and the marked matches. */
 async function shownTranscript(): Promise<ShownTranscript> {
 	return await getContext().obsidian.dev.evalJson<ShownTranscript>(`(() => {
 		const list = ${TRANSCRIPT_LIST};
@@ -93,7 +91,6 @@ async function serve(): Promise<FixtureServer> {
 	return server;
 }
 
-/** Restores `episode` paused at its start, opens the full player, and chooses Transcript. */
 async function openTranscript(episode: FixtureEpisode): Promise<FixtureServer> {
 	const context = getContext();
 	const server = await serve();
@@ -109,10 +106,6 @@ async function openTranscript(episode: FixtureEpisode): Promise<FixtureServer> {
 	return server;
 }
 
-/**
- * Waits for the transcript note and the notice that its transcription finished, reads the
- * note with its date normalized, and deletes it, so the next transcription writes it again.
- */
 async function takeNote(): Promise<string> {
 	const { obsidian, sandbox } = getContext();
 	await sandbox.waitForExists(NOTE_PATH, { timeoutMs: 30_000 });
