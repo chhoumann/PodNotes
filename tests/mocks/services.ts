@@ -102,7 +102,6 @@ export function createTestServices(
 		load: async () => feedDocument("", []),
 		resolveUrl: (feed) => feed.url,
 		storage: new MemoryStorage(),
-		cache: () => ({ enabled: false, ttlHours: 6 }),
 		now: Date.now,
 	});
 	const online = writable(true);

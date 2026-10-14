@@ -80,7 +80,6 @@ const NESTED_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"feedNote",
 	"download",
 	"transcript",
-	"feedCache",
 ];
 
 export interface SettingsEnvelope {

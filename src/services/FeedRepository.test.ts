@@ -37,7 +37,6 @@ function doc(title: string, items: ParsedEpisodeDocument[]): ParsedFeedEpisodes 
 function setup(
 	options: {
 		storage?: MemoryStorage;
-		enabled?: boolean;
 		resolveUrl?: (feed: PodcastFeed) => string | null;
 	} = {},
 ) {
@@ -54,7 +53,6 @@ function setup(
 		load,
 		resolveUrl: options.resolveUrl ?? ((feed) => feed.url),
 		storage,
-		cache: () => ({ enabled: options.enabled ?? true, ttlHours: 6 }),
 		now: () => clock,
 	});
 	return {
@@ -209,22 +207,6 @@ describe("FeedRepository", () => {
 		expect(t.requests.map((request) => request.url)).toEqual([alpha.url, moved.url]);
 		expect(t.titles("Alpha")).toEqual(["Episode 2"]);
 		expect(Object.keys(t.cached())).toEqual([moved.url]);
-	});
-
-	test("Clear cache drops every document but still applies a refresh in flight", async () => {
-		const t = setup();
-		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1)]));
-		const refresh = t.repo.load(["Alpha"], "network");
-
-		t.repo.clear();
-		expect(t.storage.loadLocalStorage(CACHE_KEY)).toBeNull();
-		expect(t.feed("Alpha")).toMatchObject({ status: "loading", episodes: [] });
-		t.requests[1].respond.resolve(doc("Alpha", [item(2)]));
-		await refresh;
-
-		expect(t.load).toHaveBeenCalledTimes(2);
-		expect(t.titles("Alpha")).toEqual(["Episode 2"]);
-		expect(Object.keys(t.cached())).toEqual([alpha.url]);
 	});
 
 	test("a cached slice of a long feed loads in full when opened, and only once", async () => {
@@ -397,21 +379,21 @@ describe("FeedRepository", () => {
 		expect(Object.keys(t.cached()).sort()).toEqual([feeds[1].url, feeds[2].url]);
 	});
 
-	test("with the cache off nothing is read or written, and documents still expire", async () => {
+	test("a document is fetched again once it is more than six hours old", async () => {
 		const seeded = setup();
 		await loaded(seeded, { Alpha: alpha }, doc("Alpha", [item(1)]));
-		const stored = seeded.storage.loadLocalStorage(CACHE_KEY);
 
-		const t = setup({ storage: seeded.storage, enabled: false });
-		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(2)]));
-		expect(t.titles("Alpha")).toEqual(["Episode 2"]);
-		expect(t.storage.loadLocalStorage(CACHE_KEY)).toBe(stored);
-
+		const t = setup({ storage: seeded.storage });
+		t.advance(6 * HOUR);
+		t.repo.setSubscriptions({ Alpha: alpha });
 		await t.repo.ensureAll();
-		expect(t.load).toHaveBeenCalledTimes(1);
-		t.advance(7 * HOUR);
+		expect(t.load).not.toHaveBeenCalled();
+		expect(t.feed("Alpha")?.status).toBe("ready");
+
+		t.advance(1);
 		void t.repo.ensureAll();
-		expect(t.load).toHaveBeenCalledTimes(2);
+		expect(t.load).toHaveBeenCalledTimes(1);
+		expect(t.feed("Alpha")).toMatchObject({ status: "loading", episodes: [expect.anything()] });
 	});
 
 	test("a private feed whose URL is not on this device is never fetched", async () => {
@@ -654,32 +636,23 @@ describe("FeedRepository", () => {
 		expect(t.repo.episodeMetadata("Alpha", second)?.transcripts).toEqual([]);
 	});
 
-	test.each([true, false])(
-		"removes the caches of earlier versions (cache on: %s)",
-		async (enabled) => {
-			const storage = new MemoryStorage();
-			storage.saveLocalStorage("podnotes:feed-cache:v5", "{}");
-			for (const version of [1, 2, 3, 4])
-				legacyStorage.set(`podnotes:feed-cache:v${version}`, "{}");
-			const t = setup({ storage, enabled });
-			t.repo.setSubscriptions({});
+	test("removes the caches of earlier versions", async () => {
+		const storage = new MemoryStorage();
+		storage.saveLocalStorage("podnotes:feed-cache:v5", "{}");
+		for (const version of [1, 2, 3, 4])
+			legacyStorage.set(`podnotes:feed-cache:v${version}`, "{}");
+		const t = setup({ storage });
+		t.repo.setSubscriptions({});
 
-			await t.repo.ensureAll();
+		await t.repo.ensureAll();
 
-			expect(storage.values.has("podnotes:feed-cache:v5")).toBe(false);
-			expect([...legacyStorage.keys()]).toEqual([]);
-		},
-	);
+		expect(storage.values.has("podnotes:feed-cache:v5")).toBe(false);
+		expect([...legacyStorage.keys()]).toEqual([]);
+	});
 
-	test.each([
-		{ enabled: true, failing: "saveLocalStorage" },
-		{ enabled: false, failing: "saveLocalStorage" },
-		{ enabled: true, failing: "removeItem" },
-		{ enabled: false, failing: "removeItem" },
-		{ enabled: true, failing: "loadLocalStorage" },
-	])(
-		"a feed loads when its storage throws (cache on: $enabled, $failing throws)",
-		async ({ enabled, failing }) => {
+	test.each(["saveLocalStorage", "removeItem", "loadLocalStorage"])(
+		"a feed loads when its storage throws (%s throws)",
+		async (failing) => {
 			vi.spyOn(console, "warn").mockImplementation(() => {});
 			const fail = () => {
 				throw new Error("storage unavailable");
@@ -688,7 +661,7 @@ describe("FeedRepository", () => {
 			if (failing === "saveLocalStorage") storage.saveLocalStorage = fail;
 			else if (failing === "loadLocalStorage") storage.loadLocalStorage = fail;
 			else vi.stubGlobal("window", { localStorage: { removeItem: fail } });
-			const t = setup({ storage, enabled });
+			const t = setup({ storage });
 
 			await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1)]));
 

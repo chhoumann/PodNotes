@@ -24,7 +24,6 @@ import {
 	readClampedNumber,
 	readFiniteNumber,
 	readNullableString,
-	readPositiveNumber,
 	readString,
 	type UnknownRecord,
 	warn,
@@ -114,7 +113,6 @@ export function decodeSettings(
 		openAISecretId: decodeSecretId(root, "openAISecretId", warnings),
 		deepgramSecretId: decodeSecretId(root, "deepgramSecretId", warnings),
 		transcript: decodeTranscript(root.transcript, warnings),
-		feedCache: decodeFeedCache(root.feedCache, warnings),
 	};
 }
 
@@ -228,27 +226,6 @@ function decodeTranscript(value: unknown, warnings: Set<string>): IPodNotesSetti
 			...copySafeObject(diarization),
 			...migrated.diarization,
 		},
-	};
-}
-
-function decodeFeedCache(value: unknown, warnings: Set<string>): IPodNotesSettings["feedCache"] {
-	const record = optionalRecord(value, warnings, "feedCache");
-	return {
-		...copySafeObject(record),
-		enabled: readBoolean(
-			record,
-			"enabled",
-			DEFAULT_SETTINGS.feedCache.enabled,
-			warnings,
-			"feedCache",
-		),
-		ttlHours: readPositiveNumber(
-			record,
-			"ttlHours",
-			DEFAULT_SETTINGS.feedCache.ttlHours,
-			warnings,
-			"feedCache",
-		),
 	};
 }
 

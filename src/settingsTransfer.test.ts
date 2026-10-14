@@ -394,6 +394,24 @@ describe("parseImport", () => {
 		}
 	});
 
+	it("drops an older export's feed cache preference, even caching off, and keeps the rest", () => {
+		const result = parseImport(
+			JSON.stringify({
+				type: SETTINGS_EXPORT_TYPE,
+				version: 2,
+				settings: { defaultVolume: 0.5, feedCache: { enabled: false, ttlHours: 1 } },
+			}),
+		);
+		expect(result).toMatchObject({ ok: true, settings: { defaultVolume: 0.5 } });
+		if (!result.ok) return;
+		expect(result.settings).not.toHaveProperty("feedCache");
+		const merged = mergeImportedSettings(makeSettings(), result.settings);
+		expect(merged).not.toHaveProperty("feedCache");
+		expect(serializeSettings(merged, {}, "3.0.0", NOW, new Map()).settings).not.toHaveProperty(
+			"feedCache",
+		);
+	});
+
 	it("drops unknown keys", () => {
 		const result = parseImport(JSON.stringify({ defaultVolume: 0.5, somethingElse: true }));
 		expect(result.ok).toBe(true);

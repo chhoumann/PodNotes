@@ -121,10 +121,6 @@ export default {
 				speakerTemplate: "**{{speaker}}:** ",
 			},
 		},
-		feedCache: {
-			enabled: true,
-			ttlHours: 6,
-		},
 	},
 	buildCommand: "npm run build",
 	// Emit legacy PODNOTES_E2E_* env aliases alongside the canonical OBSIDIAN_E2E_*

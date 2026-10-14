@@ -72,8 +72,4 @@ export interface IPodNotesSettings {
 			speakerTemplate: string;
 		};
 	};
-	feedCache: {
-		enabled: boolean;
-		ttlHours: number;
-	};
 }

@@ -168,8 +168,4 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 			speakerTemplate: DEFAULT_SPEAKER_TEMPLATE,
 		},
 	},
-	feedCache: {
-		enabled: true,
-		ttlHours: 6,
-	},
 };

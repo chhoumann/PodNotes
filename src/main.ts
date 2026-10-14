@@ -153,7 +153,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			load: loadFeed,
 			resolveUrl: (feed) => resolveFeedUrl(feed, this.feedUrls),
 			storage: this.app,
-			cache: () => this.settings.feedCache,
 			now: Date.now,
 		});
 
