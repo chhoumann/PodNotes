@@ -30,7 +30,7 @@ describe("bundle budget CLI", () => {
 		const result = check("gzip.js", randomBytes(110_000));
 		expect(result.status).toBe(1);
 		expect(result.stdout).toMatch(
-			/gzip \(level 9\): \d+ bytes; budget 100000 bytes; OVER by \d+ bytes/,
+			/gzip \(level 9\): \d+ bytes; budget 103000 bytes; OVER by \d+ bytes/,
 		);
 		expect(result.stdout).toContain("budget 330000 bytes; 220000 bytes remaining");
 	});
