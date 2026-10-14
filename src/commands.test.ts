@@ -115,8 +115,9 @@ function fakeVault() {
 	};
 }
 
-/** `fileAt` gives the vault's file for a path, so a note opened in a tab is that file. */
-function fakeWorkspace(fileAt: (path: string) => TFile) {
+/** A note opened in a tab is the vault's file, and saving the tab writes its text there. */
+function fakeWorkspace(notes: ReturnType<typeof fakeVault>["notes"]) {
+	const fileAt = (path: string) => notes.get(path)?.file ?? vaultFile(path);
 	const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
 	const trigger = (name: string, ...args: unknown[]) => {
 		for (const listener of listeners.get(name) ?? []) listener(...args);
@@ -142,7 +143,14 @@ function fakeWorkspace(fileAt: (path: string) => TFile) {
 	const openNote = (path: string, text: string, caret?: number, reading = false) => {
 		const leaf = {} as WorkspaceLeaf;
 		const editor = fakeEditor(text, caret);
-		const view = Object.assign(new MarkdownView(leaf), { editor, file: fileAt(path) });
+		const view = Object.assign(new MarkdownView(leaf), {
+			editor,
+			file: fileAt(path),
+			save: async () => {
+				const note = notes.get(view.file?.path ?? "");
+				if (note) note.content = editor.getValue();
+			},
+		});
 		const mode = vi.spyOn(view, "getMode").mockReturnValue(reading ? "preview" : "source");
 		leaf.view = view;
 		open.push(leaf);
@@ -163,7 +171,9 @@ function fakeWorkspace(fileAt: (path: string) => TFile) {
 			workspace.activeEditor = null;
 			trigger("active-leaf-change", podNotesLeaf);
 		},
+		/** Closes a tab, which saves its note first. */
 		close(leaf: WorkspaceLeaf) {
+			void (leaf.view as MarkdownView).save();
 			open.splice(open.indexOf(leaf), 1);
 			if (workspace.activeEditor === leaf.view) workspace.activeEditor = null;
 			trigger("layout-change");
@@ -176,7 +186,7 @@ const loaded: PodNotes[] = [];
 async function loadPlugin(data: Record<string, unknown>) {
 	const commands: obsidian.Command[] = [];
 	const { vault, read, notes } = fakeVault();
-	const workspace = fakeWorkspace((path) => notes.get(path)?.file ?? vaultFile(path));
+	const workspace = fakeWorkspace(notes);
 	const plugin = Object.create(PodNotes.prototype) as PodNotes;
 	Object.assign(plugin, {
 		loadData: vi.fn().mockResolvedValue(data),
@@ -411,6 +421,7 @@ describe("capture", () => {
 	describe("Undo", () => {
 		async function intoEditor(text: string, caret?: number) {
 			const session = await loadPlugin(playing);
+			session.notes.set("Journal.md", { file: vaultFile("Journal.md"), content: text });
 			const tab = session.openNote("Journal.md", text, caret);
 			session.focusPodNotes();
 			session.run("capture-timestamp");
@@ -465,16 +476,38 @@ describe("capture", () => {
 			["its tab was closed", (tab: Tab) => tab.close()],
 			[
 				"its tab shows another note",
-				(tab: Tab) => ((tab.leaf.view as MarkdownView).file = vaultFile("Other.md")),
+				async (tab: Tab) => {
+					const view = tab.leaf.view as MarkdownView;
+					await view.save();
+					view.file = vaultFile("Other.md");
+				},
 			],
-			["it was switched to Reading view", (tab: Tab) => tab.mode.mockReturnValue("preview")],
-		])("leaves an editor's timestamp once %s", async (_change, change) => {
-			const { editor, leaf, mode, close } = await intoEditor("Notes\n");
-			change({ leaf, mode, close: () => close(leaf) });
+			[
+				"it was switched to Reading view",
+				// Obsidian saves a note as it leaves editing.
+				async (tab: Tab) => {
+					await (tab.leaf.view as MarkdownView).save();
+					tab.mode.mockReturnValue("preview");
+				},
+			],
+		])("takes an editor's timestamp out of the saved note once %s", async (_change, change) => {
+			const { leaf, mode, close, read } = await intoEditor("Notes\n");
+			await change({ leaf, mode, close: () => close(leaf) });
 
 			await undo();
 
-			expect(editor.getValue()).toBe("Notes\n- 00:20:34");
+			expect(read("Journal.md")).toBe("Notes\n");
+			expect(said()).toEqual(["Timestamp added to Journal"]);
+		});
+
+		it("leaves the saved note's timestamp once the note changed there, and says so", async () => {
+			const { leaf, close, notes, read } = await intoEditor("Notes\n");
+			close(leaf);
+			notes.get("Journal.md")!.content = `Re: ${read("Journal.md")}`;
+
+			await undo();
+
+			expect(read("Journal.md")).toBe("Re: Notes\n- 00:20:34");
 			expect(said()).toEqual(["Timestamp added to Journal", REFUSED]);
 		});
 
@@ -500,26 +533,51 @@ describe("capture", () => {
 			expect(said()).toEqual(["Created Saved Episode"]);
 		});
 
-		it("leaves the episode note's timestamp once the user wrote after it, and says so", async () => {
+		it("keeps what the user wrote after the episode note's timestamp", async () => {
 			const { plugin, notes, read } = await loadPlugin(playing);
 			await plugin.capture.timestamp();
 			notes.get(NOTE_PATH)!.content += "My thought\n";
 
 			await undo();
 
-			expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34\nMy thought\n");
-			expect(said()).toEqual(["Created Saved Episode", REFUSED]);
+			expect(read(NOTE_PATH)).toBe("# Saved Episode\nMy thought\n");
+			expect(said()).toEqual(["Created Saved Episode"]);
 		});
 
-		it("takes the timestamp out through the episode note's editor while it is open", async () => {
-			const { plugin, openNote, read } = await loadPlugin(playing);
+		it("takes out its own timestamp, not an identical one written after it, in the saved note", async () => {
+			const { plugin, notes, read } = await loadPlugin(playing);
+			notes.set(NOTE_PATH, { file: vaultFile(NOTE_PATH), content: "# Mine\n" });
 			await plugin.capture.timestamp();
-			const { editor } = openNote(NOTE_PATH, `Unsaved draft\n${read(NOTE_PATH)}`);
+			notes.get(NOTE_PATH)!.content += "A thought\n- 00:20:34\n";
 
 			await undo();
 
-			expect(editor.getValue()).toBe("Unsaved draft\n# Saved Episode");
-			expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34\n");
+			expect(read(NOTE_PATH)).toBe("# Mine\nA thought\n- 00:20:34\n");
+			expect(said()).toEqual(["Timestamp added to Saved Episode"]);
+		});
+
+		it("takes out its own timestamp, not an identical one written after it, in the note's open editor", async () => {
+			const { plugin, notes, openNote, read } = await loadPlugin(playing);
+			notes.set(NOTE_PATH, { file: vaultFile(NOTE_PATH), content: "# Mine\n" });
+			await plugin.capture.timestamp();
+			const { editor } = openNote(NOTE_PATH, `${read(NOTE_PATH)}A thought\n- 00:20:34\n`);
+
+			await undo();
+
+			expect(editor.getValue()).toBe("# Mine\nA thought\n- 00:20:34\n");
+			expect(read(NOTE_PATH)).toBe("# Mine\n- 00:20:34\n");
+		});
+
+		it("leaves an episode note timestamp the user edited, and says so", async () => {
+			const { plugin, notes, read } = await loadPlugin(playing);
+			await plugin.capture.timestamp();
+			const note = notes.get(NOTE_PATH)!;
+			note.content = note.content.replace("00:20:34", "00:20:34 key point");
+
+			await undo();
+
+			expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:34 key point\n");
+			expect(said()).toEqual(["Created Saved Episode", REFUSED]);
 		});
 
 		it("offers no Undo for a capture that ends after the plugin unloaded", async () => {

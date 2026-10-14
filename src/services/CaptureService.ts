@@ -23,6 +23,15 @@ export interface Capture {
 	created: boolean;
 }
 
+/** Where a capture put its text: `text` at `start`, in place of the `replaced` selection. */
+interface Insertion {
+	readonly start: number;
+	readonly text: string;
+	readonly replaced: string;
+	/** The newline put before `text` to start its line. */
+	readonly separated?: boolean;
+}
+
 /** Puts a capture where the user writes: the editor they used last, else the episode note. */
 export class CaptureService {
 	private activeLeaf: WorkspaceLeaf | null;
@@ -97,21 +106,22 @@ export class CaptureService {
 				lineCount: editor.lineCount(),
 				cursorLine: editor.getCursor("from").line,
 			});
-			const start = editor.posToOffset(editor.getCursor("from"));
-			const replaced = editor.getSelection();
+			const insertion: Insertion = {
+				start: editor.posToOffset(editor.getCursor("from")),
+				text: inserted,
+				replaced: editor.getSelection(),
+			};
 			editor.replaceSelection(inserted);
-			// A closed tab or a note switched to Reading view no longer edits. Canvas and
-			// embedded editors have no mode.
-			this.offer(
-				file,
-				false,
-				() =>
-					(!(target instanceof MarkdownView) ||
-						this.editingView(target.leaf) === target) &&
-					target.editor === editor &&
-					target.file === file &&
-					replaceExactly(editor, start, inserted, replaced),
-			);
+			// Outside a note's own view, as in a canvas card, the editor's text need not be
+			// its file's, so only that editor can take the capture back.
+			const undo =
+				target instanceof MarkdownView && file
+					? () => this.revert(file, insertion)
+					: () =>
+							target.editor === editor &&
+							target.file === file &&
+							revertIn(editor, insertion);
+			this.offer(file, false, undo);
 			return {
 				destination: "editor",
 				path: file?.path ?? "",
@@ -127,13 +137,15 @@ export class CaptureService {
 		try {
 			const { file, created } = await createPodcastNoteFileIfNotExists(episode);
 			const appended = text.endsWith("\n") ? text : `${text}\n`;
-			// Exactly what the append adds: the newline it has to add first, then the text.
-			let suffix = appended;
-			await this.plugin.app.vault.process(file, (content) => {
-				suffix = content.length > 0 && !content.endsWith("\n") ? `\n${appended}` : appended;
-				return content + suffix;
+			let separated = false;
+			const written = await this.plugin.app.vault.process(file, (content) => {
+				separated = content.length > 0 && !content.endsWith("\n");
+				return `${content}${separated ? "\n" : ""}${appended}`;
 			});
-			this.offer(file, created, () => this.unappend(file, suffix));
+			const start = written.length - appended.length;
+			this.offer(file, created, () =>
+				this.revert(file, { start, text: appended, replaced: "", separated }),
+			);
 			return { destination: "note", path: file.path, text: appended, created };
 		} catch (error) {
 			console.error("PodNotes: failed to capture timestamp into episode note", error);
@@ -158,25 +170,25 @@ export class CaptureService {
 		);
 	}
 
-	/** False, leaving the note as it is, once the note no longer ends with `suffix`. */
-	private async unappend(file: TFile, suffix: string): Promise<boolean> {
+	/**
+	 * Takes the insertion out of the note, in an editor open on it, else in the saved
+	 * file. False, leaving the note as it is, once the text there is not exactly the
+	 * inserted text.
+	 */
+	private async revert(file: TFile, insertion: Insertion): Promise<boolean> {
 		// An open editor's buffer is the note: a vault write behind it could lose what it
-		// has not saved yet.
-		const view = this.plugin.app.workspace
+		// has not saved yet. Obsidian saves a note as it leaves editing, so a closed tab or
+		// one in Reading view leaves the file as the note.
+		const editing = this.plugin.app.workspace
 			.getLeavesOfType("markdown")
 			.map((leaf) => this.editingView(leaf))
 			.find((view) => view?.file === file);
-		if (view) {
-			const value = view.editor.getValue();
-			return (
-				value.endsWith(suffix) &&
-				replaceExactly(view.editor, value.length - suffix.length, suffix, "")
-			);
-		}
+		if (editing) return revertIn(editing.editor, insertion);
 		try {
 			await this.plugin.app.vault.process(file, (content) => {
-				if (!content.endsWith(suffix)) throw new Error("The capture was edited");
-				return content.slice(0, -suffix.length);
+				const span = spanOf(content, insertion);
+				if (!span) throw new Error("The capture was edited");
+				return content.slice(0, span[0]) + insertion.replaced + content.slice(span[1]);
 			});
 			return true;
 		} catch {
@@ -201,14 +213,24 @@ export class CaptureService {
 	}
 }
 
-function replaceExactly(editor: Editor, start: number, text: string, replacement: string): boolean {
-	try {
-		const from = editor.offsetToPos(start);
-		const to = editor.offsetToPos(start + text.length);
-		if (editor.getRange(from, to) !== text) return false;
-		editor.replaceRange(replacement, from, to);
-		return true;
-	} catch {
-		return false;
-	}
+/**
+ * The insertion's range in `content` while its text is still exactly where it was put.
+ * With nothing after it, the newline put before it goes too, so the note ends as it did.
+ */
+function spanOf(content: string, { start, text, separated }: Insertion): [number, number] | null {
+	const end = start + text.length;
+	if (content.slice(start, end) !== text) return null;
+	const trailing = separated && end === content.length && content[start - 1] === "\n";
+	return [trailing ? start - 1 : start, end];
+}
+
+function revertIn(editor: Editor, insertion: Insertion): boolean {
+	const span = spanOf(editor.getValue(), insertion);
+	if (!span) return false;
+	editor.replaceRange(
+		insertion.replaced,
+		editor.offsetToPos(span[0]),
+		editor.offsetToPos(span[1]),
+	);
+	return true;
 }
