@@ -112,6 +112,7 @@ async function serve(): Promise<FixtureServer> {
 	return server;
 }
 
+/** The full player wide, so every line shows and none needs a scroll that stops following. */
 async function openTranscript(episode: FixtureEpisode): Promise<FixtureServer> {
 	const context = getContext();
 	const server = await serve();
@@ -119,7 +120,7 @@ async function openTranscript(episode: FixtureEpisode): Promise<FixtureServer> {
 		subscriptions: [FEED],
 		current: storedEpisode(server, FEED, episode),
 	});
-	await showPodNotes(context.obsidian);
+	await placePodNotes(context.obsidian, { sidebar: 820 });
 	if (!(await isShown(context.obsidian, ui.fullPlayer)))
 		await click(context.obsidian, ui.openPlayer);
 	await waitUntilShown(context.obsidian, ui.fullPlayer);
@@ -194,9 +195,8 @@ describe("transcript journeys", () => {
 			current: storedEpisode(server, feed, CAPTIONED),
 			queue: [storedEpisode(server, feed, incoming)],
 		});
-		await showPodNotes(obsidian);
+		await placePodNotes(obsidian, { sidebar: 820 });
 		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
-		await obsidian.dev.evalJson("app.workspace.rightSplit.setSize(820), true");
 		await click(obsidian, ui.playerPanel("Transcript"));
 		expect(
 			await eventually(obsidian, async () => (await shownTranscript()).lines, LINES),

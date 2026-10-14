@@ -66,9 +66,22 @@ export async function placePodNotes(
 		return true;
 	})()`);
 	await showPodNotes(obsidian);
-	if (sidebar) {
-		await obsidian.dev.evalJson(`app.workspace.rightSplit.setSize(${place.sidebar}), true`);
-	}
+	if (!sidebar) return;
+	// A tool such as the verify skill's screens.mjs can leave the window too small for it.
+	await obsidian.dev.evalJson(`(() => {
+		const win = require("@electron/remote").getCurrentWindow();
+		const [width, height] = win.getContentSize();
+		win.setContentSize(Math.max(width, ${place.sidebar + 400}), Math.max(height, 760));
+		app.workspace.rightSplit.setSize(${place.sidebar});
+		return true;
+	})()`);
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(
+				`Math.round(document.querySelector(${jsLiteral(`.workspace-leaf-content[data-type="${VIEW_TYPE}"] .podcast-view`)})?.getBoundingClientRect().width ?? 0) === ${place.sidebar}`,
+			),
+		{ timeoutMs: 5_000, intervalMs: 100, message: `PodNotes ${place.sidebar} px wide` },
+	);
 }
 
 /** Goes to the Library as a user does: closes the full player, then Back until the Library shows. */
