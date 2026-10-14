@@ -860,6 +860,55 @@ describe("episode note and capture journeys", () => {
 		expect(await notices(obsidian)).toContain(REFUSED);
 	});
 
+	test("J-TS-20 Undo leaves a note open in two panes when the other pane changed in the same moment, and says so", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Undo Two Panes");
+		const draft = sandbox.path("Two pane draft.md");
+		await writeVaultFile(obsidian, draft, "First line\nSecond line\n");
+		await playFromList(journey.show, ORIGINAL.title);
+		await writeIn(draft, 0, 10);
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			const file = app.vault.getAbstractFileByPath(${jsLiteral(draft)});
+			await app.workspace.getLeaf("split").openFile(file, { state: { mode: "source" } });
+			return true;
+		})()`);
+		// The click lands in the first pane, which the capture then writes in.
+		expect(await clickInEditor(obsidian, draft, 0, 10)).toEqual({ line: 0, ch: 10 });
+		const panes = `app.workspace.getLeavesOfType("markdown").filter((leaf) => leaf.view.file?.path === ${jsLiteral(draft)})`;
+		const texts = () =>
+			obsidian.dev.evalJson<string[]>(`${panes}.map((leaf) => leaf.view.editor.getValue())`);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const captured = `First line${line}\nSecond line\n`;
+		expect(await eventually(obsidian, texts, [captured, captured]), "both panes").toEqual([
+			captured,
+			captured,
+		]);
+		// A pane other than the one the capture wrote in changes as Undo is pressed.
+		await obsidian.dev.evalJson(`(() => {
+			${panes}.at(-1).view.editor.replaceRange("Late ", { line: 0, ch: 0 });
+			[...document.querySelectorAll(".notice button.pn-undo")].at(-1).click();
+			return true;
+		})()`);
+
+		await obsidian.waitFor(async () => (await notices(obsidian)).includes(REFUSED), {
+			timeoutMs: 5_000,
+			intervalMs: 100,
+			message: "the Notice that Undo left the note",
+		});
+		const edited = `Late ${captured}`;
+		expect(await eventually(obsidian, texts, [edited, edited]), "both panes").toEqual([
+			edited,
+			edited,
+		]);
+		await waitForText(
+			draft,
+			(text) => text === edited,
+			"the late edit saved, with the capture",
+		);
+	});
+
 	test("J-TS-14 Capture Timestamp with nothing loaded says to play an episode, and writes nothing", async () => {
 		const { obsidian, sandbox } = getContext();
 		const journey = await setUp("Journey Nothing Loaded");

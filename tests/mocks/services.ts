@@ -28,12 +28,13 @@ import { feedDocument, MemoryStorage } from "./feeds";
 
 /**
  * Makes the leaf whose view has `scope` the active one, as focus or a press in it does
- * in Obsidian; null for no leaf. Obsidian hands that view's scope every key.
+ * in Obsidian, which hands that scope every key. A view with no scope, as a new tab's,
+ * leaves them to the app's scope.
  */
 export function activateLeaf(app: App, scope: Scope | null): void {
-	(
-		app.workspace as unknown as { activeLeaf: { view: { scope: Scope | null } } | null }
-	).activeLeaf = scope && { view: { scope } };
+	(app.workspace as unknown as { activeLeaf: { view: { scope: Scope | null } } }).activeLeaf = {
+		view: { scope },
+	};
 }
 
 /** A library the test seeds, with the stores' setters. */

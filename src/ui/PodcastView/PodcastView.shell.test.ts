@@ -699,6 +699,33 @@ describe("full player", () => {
 			note.remove();
 		});
 
+		test.each([
+			["a note's editor", "textarea", true],
+			["an empty tab", "div", false],
+		] as const)(
+			"typed in %s, which has no use for Escape or Space, leave the player open and playing (#467)",
+			async (_, tag, viewHasScope) => {
+				const at = document.body.appendChild(document.createElement(tag));
+				renderView();
+				playing();
+				await tick();
+				await fireEvent.click(button(`Open player: ${episode.title}`));
+				const pause = vi.spyOn(doc.media, "pause");
+				activateLeaf(
+					services.app,
+					viewHasScope ? new obsidian.Scope(services.app.scope) : null,
+				);
+
+				await fireEvent.keyDown(at, { key: " " });
+				expect(get(services.player.state).status).toBe("playing");
+				expect(pause).not.toHaveBeenCalled();
+
+				await escape(at);
+				expect(services.navigation.current.expanded).toBe(true);
+				at.remove();
+			},
+		);
+
 		test("reach the player in a popout through that window's base scope, and a note's Escape passes it by", async () => {
 			const popout = openPopout();
 			popout.win.document.addEventListener("keydown", dispatch);

@@ -19,6 +19,7 @@ import {
 	wav,
 } from "./journey/fixtures";
 import {
+	observePlayback,
 	readLibrary,
 	recordWrites,
 	seedLibrary,
@@ -374,5 +375,52 @@ describe("player journeys", () => {
 			count: null,
 		});
 		expect(await isShown(obsidian, ui.fullPlayer), "the player stays open").toBe(true);
+	});
+
+	test("#467 Space and Escape typed in a plain note or a new tab leave the full player open and paused", async () => {
+		const { obsidian, sandbox } = getContext();
+		const note = sandbox.path("Plain note.md");
+		await writeVaultFile(obsidian, note, "A plain note\n");
+		await openInEditor(obsidian, note);
+		await openPlayer([ONE]);
+		expect(await clickInEditor(obsidian, note, 0, 12)).toEqual({ line: 0, ch: 12 });
+		const text = () =>
+			obsidian.dev.evalJson<string>(
+				`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(note)}).view.editor.getValue()`,
+			);
+		const activeView = () =>
+			obsidian.dev.evalJson<string>("app.workspace.activeLeaf.view.getViewType()");
+		const playerAsItWas = async (after: string) => {
+			expect(
+				await holdsFor(obsidian, () => isShown(obsidian, ui.fullPlayer), true, 1000),
+				`${after}: the player stays open`,
+			).toBe(true);
+			expect(
+				await holdsFor(
+					obsidian,
+					async () => (await observePlayback(obsidian)).playing,
+					false,
+					500,
+				),
+				`${after}: still paused`,
+			).toBe(false);
+		};
+
+		await pressKey(obsidian, "Space");
+		expect(await eventually(obsidian, text, "A plain note \n"), "Space types in the note").toBe(
+			"A plain note \n",
+		);
+		await playerAsItWas("Space in the note");
+		await pressKey(obsidian, "Escape");
+		await playerAsItWas("Escape in the note");
+
+		await pressHotkey(obsidian, "t");
+		expect(await eventually(obsidian, activeView, "empty")).toBe("empty");
+		await pressKey(obsidian, "Space");
+		await playerAsItWas("Space in the new tab");
+		await pressKey(obsidian, "Escape");
+		await playerAsItWas("Escape in the new tab");
+		expect(await activeView(), "the new tab stays active").toBe("empty");
+		expect(await text(), "the note is as Space left it").toBe("A plain note \n");
 	});
 });
