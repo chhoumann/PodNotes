@@ -6,8 +6,9 @@
 	import { cachedChapters, loadChapters } from "./chapters";
 	import ChaptersPanel from "./ChaptersPanel.svelte";
 	import { useServices } from "./context";
+	import Cover from "./Cover.svelte";
 	import Deck from "./Deck.svelte";
-	import { isPlaying } from "./episodeRow";
+	import { isPlaying, tileOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 	import { anchorOf, episodeMenu, showMenu } from "./menus";
 	import TranscriptPanel from "./TranscriptPanel.svelte";
@@ -43,7 +44,6 @@
 	let chapters: readonly Chapter[] = $state([]);
 	/** The panel the user chose. None shows the artwork at compact widths. */
 	let panel = $state<PanelKind>();
-	let failedArtworkUrl = $state("");
 
 	const episode = $derived($playerState.episode as Episode);
 	const wide = $derived(layout === "wide");
@@ -240,16 +240,12 @@
 							{@attach icon("maximize")}
 						></button>
 					</div>
-				{:else if episode.artworkUrl && episode.artworkUrl !== failedArtworkUrl}
-					<img
-						class="pn-np-art"
-						src={episode.artworkUrl}
-						alt=""
-						onerror={() => (failedArtworkUrl = episode.artworkUrl ?? "")}
-					/>
 				{:else}
-					<span class="pn-np-art pn-filetile" {@attach icon(video ? "video" : "music")}
-					></span>
+					<Cover
+						src={episode.artworkUrl}
+						title={episode.podcastName}
+						tile={tileOf(episode)}
+					/>
 				{/if}
 			</div>
 			<Deck
@@ -323,16 +319,13 @@
 			container-type: size;
 		}
 
-		.pn-np-art {
-			flex: none;
+		.pn-stage .pn-cover {
 			width: min(100cqw, 100cqh - 8px, 300px);
-			aspect-ratio: 1;
 			border-radius: 12px;
 			box-shadow: var(--shadow-s);
-			object-fit: cover;
 		}
 
-		.pn-stage .pn-np-art.pn-filetile {
+		.pn-stage .pn-filetile {
 			color: var(--text-faint);
 			container-type: inline-size;
 			--icon-size: 25cqw;
@@ -494,7 +487,7 @@
 	}
 
 	:global(.is-phone) .pn-player :global {
-		.pn-np-art {
+		.pn-stage .pn-cover {
 			width: min(100cqw, 100cqh - 8px, 358px);
 		}
 

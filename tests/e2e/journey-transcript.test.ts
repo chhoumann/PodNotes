@@ -166,7 +166,7 @@ function phoneGeometry(): Promise<PhoneGeometry> {
 		};
 		return {
 			stage: box(player.querySelector(".pn-stage")),
-			art: box(player.querySelector(".pn-np-art")),
+			art: box(player.querySelector(".pn-stage > .pn-cover")),
 			panel: box(player.querySelector(".pn-stage .pn-panel")),
 			list: box(player.querySelector(".pn-stage .pn-panel-scroll")),
 			controls: Math.max(...[...player.querySelectorAll(".pn-deck button")].map((button) => button.getBoundingClientRect().bottom)),

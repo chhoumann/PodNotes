@@ -94,18 +94,20 @@ const press = (key: string, target: Element = document.activeElement ?? document
 const shownMenu = () => (obsidian.Menu as unknown as typeof FakeMenu).shown!;
 
 describe("the full player", () => {
-	test("shows the artwork, and a file tile for a local file or artwork that fails to load (#394)", async () => {
+	test("shows the artwork, and its podcast's name as rows do when the artwork fails to load (#394)", async () => {
 		const { player } = await openPlayer();
-		const art = player.querySelector("img.pn-np-art")!;
+		const art = player.querySelector(".pn-stage img")!;
 		expect(art).toHaveAttribute("src", episode.artworkUrl);
 
 		await fireEvent.error(art);
 
 		expect(player.querySelector("img")).toBeNull();
-		expect(player.querySelector(".pn-np-art.pn-filetile")).toHaveAttribute(
-			"data-icon",
-			"music",
-		);
+		expect(player.querySelector(".pn-stage")).toHaveTextContent(episode.podcastName);
+
+		services.player.play({ ...queued("No artwork"), artworkUrl: undefined });
+		await tick();
+		expect(player.querySelector(".pn-stage [data-icon]"), "no tile").toBeNull();
+		expect(player.querySelector(".pn-stage")).toHaveTextContent(episode.podcastName);
 	});
 
 	test("a local file shows a file tile, and its folder links to Local files", async () => {
@@ -118,7 +120,7 @@ describe("the full player", () => {
 		const { player } = await openPlayer(local);
 
 		expect(player.querySelector("img")).toBeNull();
-		expect(player.querySelector(".pn-np-art.pn-filetile")).toHaveAttribute(
+		expect(player.querySelector(".pn-stage > [data-icon]")).toHaveAttribute(
 			"data-icon",
 			"music",
 		);
@@ -360,7 +362,7 @@ describe("the full player", () => {
 		await tick();
 
 		expect(player.querySelector(".pn-video")).toBeNull();
-		expect(player.querySelector("img.pn-np-art")).not.toBeNull();
+		expect(player.querySelector(".pn-stage img")).not.toBeNull();
 	});
 });
 
@@ -371,15 +373,15 @@ describe("the player's panels", () => {
 	test("at compact width, a panel replaces the artwork until it is chosen again", async () => {
 		const { player } = await openPlayer(withChapters);
 		await vi.waitFor(() => expect(switchButton("Chapters")).toBeInTheDocument());
-		expect(player.querySelector(".pn-np-art")).not.toBeNull();
+		expect(player.querySelector(".pn-stage > .pn-cover")).not.toBeNull();
 
 		await fireEvent.click(switchButton("Up next"));
 		expect(switchButton("Up next")).toHaveAttribute("aria-pressed", "true");
-		expect(player.querySelector(".pn-np-art")).toBeNull();
+		expect(player.querySelector(".pn-stage > .pn-cover")).toBeNull();
 		expect(within(player).getByText("Queue is empty")).toBeInTheDocument();
 
 		await fireEvent.click(switchButton("Up next"));
-		expect(player.querySelector(".pn-np-art")).not.toBeNull();
+		expect(player.querySelector(".pn-stage > .pn-cover")).not.toBeNull();
 	});
 
 	test("an episode without chapters offers its Transcript and Up next, no Chapters", async () => {
@@ -492,7 +494,7 @@ describe("the player's panels", () => {
 		await vi.waitFor(() => expect(switchButton("Chapters")).toBeInTheDocument());
 
 		expect(switchButton("Chapters")).toHaveAttribute("aria-pressed", "false");
-		expect(player.querySelector(".pn-np-art")).not.toBeNull();
+		expect(player.querySelector(".pn-stage > .pn-cover")).not.toBeNull();
 	});
 
 	test("the current chapter is named under the scrubber, opens Chapters, and is marked there", async () => {
