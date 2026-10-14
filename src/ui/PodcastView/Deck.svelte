@@ -9,7 +9,7 @@
 	import { icon } from "../obsidian/icon";
 	import { chapterAt } from "./chapters";
 	import { useServices } from "./context";
-	import { sourceOf } from "./episodeRow";
+	import { isPlaying, sourceOf } from "./episodeRow";
 	import { anchorOf, noteEntry, rateMenu, showMenu } from "./menus";
 	import type { Page } from "./pages";
 	import Scrubber from "./Scrubber.svelte";
@@ -37,9 +37,7 @@
 	let addedTimer: number | undefined;
 
 	const episode = $derived($playerState.episode as Episode);
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	const failed = $derived($playerState.status === "error");
 	const duration = $derived($playerState.duration);
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
@@ -94,7 +92,7 @@
 		<h2 class="pn-np-title" title={episode.title}>{episode.title}</h2>
 		{#if sourcePage}
 			{@const page = sourcePage}
-			<button type="button" class="pn-np-pod" onclick={() => navigation.go(page)}
+			<button type="button" class="pn-bare pn-np-pod" onclick={() => navigation.go(page)}
 				>{source}</button
 			>
 		{:else}
@@ -114,7 +112,7 @@
 			{#if current >= 0}
 				<button
 					type="button"
-					class="pn-chapnow"
+					class="pn-bare pn-chapnow"
 					title="Chapters"
 					disabled={!onchapters}
 					onclick={onchapters}>{chapters[current].title}</button
@@ -128,7 +126,7 @@
 	<div class="pn-transport">
 		<button
 			type="button"
-			class="pn-rate"
+			class="pn-bare pn-rate"
 			aria-label="Playback speed {$playerState.playbackRate}x"
 			aria-haspopup="menu"
 			disabled={failed}
@@ -138,7 +136,7 @@
 		<div class="mid">
 			<button
 				type="button"
-				class="pn-skip"
+				class="pn-bare pn-skip"
 				aria-label="Back {back} seconds"
 				title="Back {back} seconds"
 				disabled={failed}
@@ -157,7 +155,7 @@
 			></button>
 			<button
 				type="button"
-				class="pn-skip"
+				class="pn-bare pn-skip"
 				aria-label="Forward {forward} seconds"
 				title="Forward {forward} seconds"
 				disabled={failed}
@@ -168,7 +166,7 @@
 		</div>
 		<button
 			type="button"
-			class="pn-vol"
+			class="pn-bare pn-vol"
 			aria-label="Volume {Math.round($playerState.volume * 100)}%"
 			title="Volume"
 			aria-expanded={volumeOpen}
@@ -242,8 +240,6 @@
 			height: auto;
 			padding: 1px var(--size-2-3);
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
 			font-size: inherit;
 			white-space: nowrap;
@@ -297,8 +293,6 @@
 
 		:is(.pn-rate, .pn-skip, .pn-vol, .pn-play) {
 			padding: 0;
-			background: none;
-			box-shadow: none;
 		}
 
 		.pn-rate {
@@ -360,6 +354,7 @@
 			height: var(--pn-play);
 			border-radius: 50%;
 			background: var(--text-normal);
+			box-shadow: none;
 			color: var(--pn-bg);
 			transition: transform 120ms ease;
 			--icon-size: calc(var(--pn-play) * 0.4);

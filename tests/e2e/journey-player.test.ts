@@ -114,7 +114,7 @@ async function expectVideoFrame(when: string, minWidth: number): Promise<void> {
 /** The titles in the player's Up next panel, in order. */
 async function upNext(): Promise<string[]> {
 	return await getContext().obsidian.dev.evalJson<string[]>(
-		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-player .pn-queue .pn-ep-title`)})].map((el) => el.textContent.trim())`,
+		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-player [role="list"][aria-label="Queue"] .pn-ep-title`)})].map((el) => el.textContent.trim())`,
 	);
 }
 

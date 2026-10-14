@@ -428,13 +428,8 @@
 			max-width: 70%;
 			height: var(--pn-btn);
 			padding: 0 var(--size-4-2) 0 var(--size-2-1);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
-			font-size: var(--font-ui-small);
-			cursor: var(--cursor);
 		}
 
 		.pn-back:hover {
@@ -533,6 +528,16 @@
 			margin-top: var(--size-4-1);
 		}
 
+		/* Undoes Obsidian's button skin, for a button drawn as its content. */
+		.pn-bare,
+		.pn-back,
+		.pn-iconbtn,
+		.pn-navitem {
+			border: 0;
+			background: none;
+			box-shadow: none;
+		}
+
 		.pn-iconbtn {
 			display: inline-flex;
 			align-items: center;
@@ -541,13 +546,9 @@
 			width: var(--pn-btn);
 			height: var(--pn-btn);
 			padding: 0;
-			border: 0;
 			border-radius: var(--radius-s);
-			background: transparent;
-			box-shadow: none;
 			color: var(--icon-color);
 			opacity: var(--icon-opacity);
-			cursor: var(--cursor);
 		}
 
 		.pn-iconbtn:hover {
@@ -574,11 +575,8 @@
 			gap: var(--size-4-2);
 			height: var(--input-height);
 			padding: 0 var(--size-4-3);
-			border: 0;
 			border-radius: var(--button-radius);
-			font-size: var(--font-ui-small);
 			white-space: nowrap;
-			cursor: var(--cursor);
 		}
 
 		.pn-btn.mod-cta {
@@ -609,15 +607,11 @@
 			height: auto;
 			min-height: var(--pn-row);
 			padding: var(--size-4-1) var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--nav-item-color);
 			font-size: var(--nav-item-size);
 			font-weight: inherit;
 			text-align: left;
-			cursor: var(--cursor);
 		}
 
 		.pn-navitem:hover {
@@ -701,19 +695,7 @@
 			--icon-size: 18px;
 		}
 
-		.pn-iconbtn:focus-visible,
-		.pn-btn:focus-visible,
-		.pn-ep-main:focus-visible,
-		.pn-gridcard:focus-visible,
-		.pn-navitem:focus-visible,
-		.pn-plrow:focus-visible,
-		.pn-back:focus-visible,
-		.pn-alt:focus-visible,
-		.pn-result:focus-visible,
-		.pn-railsearch:focus-visible,
-		.pn-mini-open:focus-visible,
-		.pn-textbtn:focus-visible,
-		.pn-player button:focus-visible {
+		button:focus-visible {
 			outline: 2px solid var(--interactive-accent);
 			outline-offset: 1px;
 			box-shadow: none;

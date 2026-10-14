@@ -31,7 +31,7 @@
 		<li>
 			<button
 				type="button"
-				class="pn-row pn-chap"
+				class="pn-bare pn-row pn-chap"
 				class:is-now={index === current}
 				aria-current={index === current || undefined}
 				onclick={() => onseek(chapter.startTime)}

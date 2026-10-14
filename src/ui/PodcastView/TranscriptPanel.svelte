@@ -191,7 +191,7 @@
 						{@const start = line.start}
 						<button
 							type="button"
-							class="pn-row"
+							class="pn-bare pn-row"
 							class:is-now={index === current}
 							class:is-hit={needle && at === hit}
 							aria-current={index === current || undefined}

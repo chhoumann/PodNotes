@@ -1,3 +1,4 @@
+import type { PlayerStatus } from "src/player/PlayerController";
 import { downloadedCopy, offlinePlayable } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
@@ -6,6 +7,11 @@ import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, type PlayedEpisodeMap } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
 import { getEpisodeMediaType, isSameMediaSource } from "src/utility/mediaType";
+
+/** A loading episode plays once ready, so it already shows Pause. */
+export function isPlaying(status: PlayerStatus): boolean {
+	return status === "playing" || status === "loading";
+}
 
 export type Downloads = Readonly<Record<string, readonly DownloadedEpisode[]>>;
 

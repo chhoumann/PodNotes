@@ -4,7 +4,7 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
-	import { availabilityOf, episodeRowModel } from "./episodeRow";
+	import { availabilityOf, episodeRowModel, isPlaying } from "./episodeRow";
 	import { anchorOf, type MenuAnchor } from "./menus";
 
 	let {
@@ -41,9 +41,7 @@
 	const playerState = player.state;
 	// The player's state changes many times a second; a row changes only with these.
 	const now = $derived($playerState.episode);
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	// A vault lookup, so it runs again only when notes change, not on every change to the library.
 	const noted = $derived($rowHasNote(episode));
 	const row = $derived(
@@ -73,7 +71,7 @@
 	{@render leading?.()}
 	<button
 		type="button"
-		class="pn-ep-main"
+		class="pn-bare pn-ep-main"
 		aria-label={row.label}
 		aria-disabled={row.unavailable || undefined}
 		title={episode.title}
@@ -159,15 +157,10 @@
 			gap: var(--size-4-3);
 			height: auto;
 			padding: var(--size-4-2) 0 var(--size-4-2) var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-normal);
-			font-size: var(--font-ui-small);
 			text-align: left;
 			white-space: normal;
-			cursor: var(--cursor);
 		}
 
 		.pn-ep-main .pn-cover {

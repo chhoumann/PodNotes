@@ -7,6 +7,7 @@
 	import ChaptersPanel from "./ChaptersPanel.svelte";
 	import { useServices } from "./context";
 	import Deck from "./Deck.svelte";
+	import { isPlaying } from "./episodeRow";
 	import type { Layout } from "./layout";
 	import { anchorOf, episodeMenu, showMenu } from "./menus";
 	import TranscriptPanel from "./TranscriptPanel.svelte";
@@ -46,9 +47,7 @@
 
 	const episode = $derived($playerState.episode as Episode);
 	const wide = $derived(layout === "wide");
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	const failed = $derived($playerState.status === "error");
 	const video = $derived($playerState.mediaType === "video");
 	const elapsed = $derived(Math.min($playerState.currentTime, $playerState.duration));
@@ -159,7 +158,7 @@
 			<button
 				type="button"
 				id="{id}-{kind}"
-				class="pn-tab"
+				class="pn-bare pn-tab"
 				role="tab"
 				aria-selected={shown === kind}
 				aria-controls="{id}-panel"
@@ -176,7 +175,7 @@
 		{#each panels as kind (kind)}
 			<button
 				type="button"
-				class="pn-sw"
+				class="pn-bare pn-sw"
 				aria-pressed={shown === kind}
 				disabled={failed}
 				onclick={() => (panel = shown === kind ? undefined : kind)}
@@ -229,7 +228,7 @@
 					<div class="pn-video" use:player.videoStage bind:this={videoFrame}>
 						<button
 							type="button"
-							class="pn-vplay"
+							class="pn-bare pn-vplay"
 							class:is-paused={!playing}
 							aria-label={playing ? "Pause" : "Play"}
 							onclick={() => player.toggle()}
@@ -382,8 +381,6 @@
 			height: auto;
 			padding: 0;
 			border-radius: 0;
-			background: none;
-			box-shadow: none;
 			opacity: 0;
 		}
 
@@ -447,8 +444,6 @@
 
 		:is(.pn-sw, .pn-tab) {
 			padding: 0 var(--size-4-3);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
 			font-weight: var(--font-medium);
 		}
@@ -490,7 +485,6 @@
 
 		.pn-tab:hover,
 		.pn-tab[aria-selected="true"] {
-			background: none;
 			color: var(--text-normal);
 		}
 

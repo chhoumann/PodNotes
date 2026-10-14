@@ -89,8 +89,6 @@
 			height: auto;
 			padding: 6px var(--size-4-2);
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
 			font-size: inherit;
 			line-height: 1.45;

@@ -2,7 +2,7 @@
 	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import { formatMinutes, sourceOf } from "./episodeRow";
+	import { formatMinutes, isPlaying, sourceOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
@@ -10,9 +10,7 @@
 	const playerState = player.state;
 
 	const episode = $derived($playerState.episode);
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	const duration = $derived($playerState.duration);
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
 	const remaining = $derived(Math.max(0, duration - elapsed));
@@ -47,7 +45,7 @@
 		{/if}
 		<button
 			type="button"
-			class="pn-mini-open"
+			class="pn-bare pn-mini-open"
 			aria-label="Open player: {episode.title}"
 			onclick={() => navigation.expand()}
 		>
@@ -129,29 +127,24 @@
 		padding: 0 var(--size-4-2);
 	}
 
-	.pn-mini-open {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: var(--size-4-3);
-		height: auto;
-		padding: var(--size-4-1);
-		border: 0;
-		border-radius: var(--radius-s);
-		background: none;
-		box-shadow: none;
-		color: var(--text-normal);
-		font-size: var(--font-ui-small);
-		text-align: left;
-		cursor: var(--cursor);
-	}
-
-	.pn-mini-open:hover {
-		background: var(--background-modifier-hover);
-	}
-
 	.pn-mini :global {
+		.pn-mini-open {
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			align-items: center;
+			gap: var(--size-4-3);
+			height: auto;
+			padding: var(--size-4-1);
+			border-radius: var(--radius-s);
+			color: var(--text-normal);
+			text-align: left;
+		}
+
+		.pn-mini-open:hover {
+			background: var(--background-modifier-hover);
+		}
+
 		.pn-mini-prog {
 			position: absolute;
 			left: 0;

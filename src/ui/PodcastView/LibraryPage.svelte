@@ -37,7 +37,7 @@
 		{@const failed = feedState !== undefined && shownFailure(feedState, $online) !== undefined}
 		<button
 			type="button"
-			class="pn-gridcard"
+			class="pn-bare pn-gridcard"
 			aria-label={failed ? `${feed.title}, feed didn't load` : feed.title}
 			title={feed.title}
 			onclick={() => navigation.go({ kind: "feed", key })}
@@ -63,12 +63,8 @@
 			width: 100%;
 			height: auto;
 			padding: 0;
-			border: 0;
 			border-radius: 8px;
-			background: none;
-			box-shadow: none;
 			white-space: normal;
-			cursor: var(--cursor);
 			transition: transform 120ms ease;
 		}
 

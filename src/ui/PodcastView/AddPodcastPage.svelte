@@ -43,12 +43,12 @@
 
 {#snippet alternatives()}
 	<div class="pn-alts">
-		<button type="button" class="pn-alt" onclick={() => pickVaultMedia(app)}>
+		<button type="button" class="pn-bare pn-alt" onclick={() => pickVaultMedia(app)}>
 			<span {@attach icon("folder")}></span>Play a vault file
 		</button>
 		<button
 			type="button"
-			class="pn-alt"
+			class="pn-bare pn-alt"
 			onclick={() =>
 				pickFile(".opml", importOPML, {
 					tooLargeMessage: "That file is too large to be an OPML file.",
@@ -93,7 +93,7 @@
 			{@const added = actions.savedKey($savedFeeds, result.feed.url) !== undefined}
 			<button
 				type="button"
-				class="pn-result"
+				class="pn-bare pn-result"
 				aria-label="{added ? 'Open' : 'Add'} {result.feed.title}"
 				onclick={() => add(result)}
 			>
@@ -176,13 +176,8 @@
 			gap: var(--size-4-2);
 			height: var(--pn-btn);
 			padding: 0 var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
-			font-size: var(--font-ui-small);
-			cursor: var(--cursor);
 		}
 
 		.pn-alt:hover {
@@ -206,15 +201,10 @@
 			width: 100%;
 			height: auto;
 			padding: var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-normal);
-			font-size: var(--font-ui-small);
 			text-align: left;
 			white-space: normal;
-			cursor: var(--cursor);
 		}
 
 		.pn-result:hover {
