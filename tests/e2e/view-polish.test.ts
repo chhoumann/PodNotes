@@ -36,9 +36,10 @@ type CoverText = Readonly<{
 	firstInside: boolean;
 	bottomGap: number;
 	fontSize: number;
+	lines: number;
 }>;
 
-/** Where a text cover draws its title's first letter and its last line. */
+/** Where a text cover draws its title's first letter and its last line, and how many lines show. */
 function coverText(selector: string): Promise<CoverText[]> {
 	return getContext().obsidian.dev.evalJson<CoverText[]>(`(() =>
 		[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} ${selector} .pn-cover.is-text`)})].map((cover) => {
@@ -48,16 +49,25 @@ function coverText(selector: string): Promise<CoverText[]> {
 			range.setStart(text.firstChild, 0);
 			range.setEnd(text.firstChild, 1);
 			const first = range.getBoundingClientRect();
+			range.selectNodeContents(text);
+			const shown = text.getBoundingClientRect();
+			const bottom = Math.min(shown.bottom, box.bottom);
+			const lines = new Set(
+				[...range.getClientRects()]
+					.map((line) => Math.round((line.top + line.bottom) / 2))
+					.filter((middle) => middle > shown.top && middle < bottom),
+			);
 			return {
 				size: Math.round(box.width),
 				firstInside: first.top >= box.top && first.bottom <= box.bottom && first.left >= box.left,
 				bottomGap: Math.round(box.bottom - text.getBoundingClientRect().bottom),
 				fontSize: parseFloat(getComputedStyle(text).fontSize),
+				lines: lines.size,
 			};
 		}))()`);
 }
 
-test("at 320 px, a podcast without artwork shows the start of its long name on its card and rows", async () => {
+test("at 320 px, a podcast without artwork shows the start of its long name in three lines on its card and rows", async () => {
 	const context = getContext();
 	const server = await startFixtureServer([LONG]);
 	onTestFinished(() => server.stop());
@@ -67,13 +77,23 @@ test("at 320 px, a podcast without artwork shows the start of its long name on i
 	await showLibrary(context.obsidian);
 
 	const [card] = await coverText(".pn-gridcard");
-	expect(card).toMatchObject({ firstInside: true, bottomGap: 0 });
+	expect(card).toMatchObject({
+		firstInside: true,
+		bottomGap: Math.round(card.size / 10),
+		lines: 3,
+	});
 	expect(card.fontSize).toBeGreaterThanOrEqual(10);
 
 	await showList(context.obsidian, "Latest episodes");
 	await waitUntilShown(context.obsidian, ui.episode("First Steps"));
 	const [row] = await coverText(".pn-ep-main");
-	expect(row).toMatchObject({ size: 40, firstInside: true, bottomGap: 0, fontSize: 10 });
+	expect(row).toMatchObject({
+		size: 40,
+		firstInside: true,
+		bottomGap: 4,
+		fontSize: 10,
+		lines: 3,
+	});
 });
 
 type Look = Readonly<{ opacity: number; dimmedBy: number }>;
