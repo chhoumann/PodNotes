@@ -3,6 +3,7 @@
 	import type { Episode } from "src/types/Episode";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { isLocalFile } from "src/utility/isLocalFile";
+	import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 	import { getEpisodeMediaType } from "src/utility/mediaType";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
@@ -32,7 +33,8 @@
 		position: number;
 		onseek(time: number): void;
 	} = $props();
-	const { feeds, online, settings, saveTranscriptNote, transcribeFromAudio } = useServices();
+	const { app, feeds, online, settings, rowHasNote, saveTranscriptNote, transcribeFromAudio } =
+		useServices();
 
 	let load = $state.raw<Load>({ kind: "loading" });
 	let list: HTMLElement | undefined = $state();
@@ -57,6 +59,14 @@
 			.filter(({ line }) => !needle || foldCase(line.text).includes(needle)),
 	);
 	const audio = $derived(getEpisodeMediaType(episode) === "audio");
+	// The note saved before, which the command would refuse to save again. A note made, moved or
+	// deleted since changes rowHasNote, and the transcript path is a setting.
+	const note = $derived.by(() => {
+		void $rowHasNote;
+		return app.vault.getFileByPath(
+			getEpisodeTranscriptPath(episode, $settings.transcript.path),
+		);
+	});
 	const provider = $derived.by(() => {
 		const { diarization } = $settings.transcript;
 		return diarization?.enabled && diarization.provider === "deepgram" ? "Deepgram" : "OpenAI";
@@ -258,13 +268,16 @@
 			onclick={() => (finding = true)}
 			{@attach icon("search")}
 		></button>
+		{@const label = note ? "Open note" : "Save as note"}
 		<button
 			type="button"
 			class="pn-btn pn-tx-save"
-			aria-label="Save as note"
-			disabled={!$online}
-			onclick={() => saveTranscriptNote()}
-			><span class="pn-tx-icon" {@attach icon("file-plus")}></span><span>Save as note</span
+			aria-label={label}
+			disabled={!note && !$online}
+			onclick={() =>
+				note ? app.workspace.getLeaf(false).openFile(note) : saveTranscriptNote()}
+			><span class="pn-tx-icon" {@attach icon(note ? "file-text" : "file-plus")}></span><span
+				>{label}</span
 			></button
 		>
 	{/if}

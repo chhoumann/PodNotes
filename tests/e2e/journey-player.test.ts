@@ -133,47 +133,42 @@ const focused = (target: UiTarget) =>
 	);
 
 describe("player journeys", () => {
-	test("the fullscreen button belongs to the video stage and hides while that stage is fullscreen", async () => {
+	test("in a video's fullscreen, the first Escape only leaves it, and its own button leaves it too", async () => {
 		const { obsidian } = getContext();
 		await openPlayer([], () => ({ mediaType: "video" }));
 		await click(obsidian, ui.playbackToggle);
 		await waitForPlayback(obsidian, (state) => state.playing, "video loaded");
-		const fullscreen: UiTarget = {
-			name: "video fullscreen",
-			elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-video button.pn-fs`)})]`,
-		};
-		expect(await isShown(obsidian, fullscreen)).toBe(true);
+		const control = (label: string): UiTarget => ({
+			name: `video ${label}`,
+			elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-video button.pn-fs[aria-label="${label}"]`)})]`,
+		});
+		const frameIsFullscreen = () =>
+			obsidian.dev.evalJson<boolean>(
+				`document.fullscreenElement === document.querySelector(${jsLiteral(`${PLAYER_VIEW} .pn-video`)})`,
+			);
 		onTestFinished(async () => {
 			await obsidian.dev.evalJsonAsync(
 				"(async () => { if (document.fullscreenElement) await document.exitFullscreen(); return true; })()",
 			);
 		});
 
-		await click(obsidian, fullscreen);
-		expect(
-			await eventually(
-				obsidian,
-				() =>
-					obsidian.dev.evalJson<boolean>(
-						`document.fullscreenElement === document.querySelector(${jsLiteral(`${PLAYER_VIEW} .pn-video`)})`,
-					),
-				true,
-			),
-		).toBe(true);
-		expect(
-			await obsidian.dev.evalJson<string>(
-				`getComputedStyle((${fullscreen.elements})[0]).display`,
-			),
-		).toBe("none");
+		await click(obsidian, control("Fullscreen"));
+		expect(await eventually(obsidian, frameIsFullscreen, true)).toBe(true);
+		await waitUntilShown(obsidian, control("Exit fullscreen"));
+		await pressKey(obsidian, "Escape");
+		expect(await eventually(obsidian, frameIsFullscreen, false)).toBe(false);
+		expect(await holdsFor(obsidian, () => isShown(obsidian, ui.fullPlayer), true)).toBe(true);
 
+		await click(obsidian, control("Fullscreen"));
+		expect(await eventually(obsidian, frameIsFullscreen, true)).toBe(true);
+		await click(obsidian, control("Exit fullscreen"));
+		expect(await eventually(obsidian, frameIsFullscreen, false)).toBe(false);
+		await waitUntilShown(obsidian, control("Fullscreen"));
 		await pressKey(obsidian, "Escape");
 		expect(
-			await eventually(
-				obsidian,
-				() => obsidian.dev.evalJson<boolean>("document.fullscreenElement === null"),
-				true,
-			),
-		).toBe(true);
+			await eventually(obsidian, () => isShown(obsidian, ui.fullPlayer), false),
+			"the next Escape closes the player",
+		).toBe(false);
 	});
 
 	test.each(["theme-light", "theme-dark"])(

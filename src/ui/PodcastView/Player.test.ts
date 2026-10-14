@@ -340,6 +340,70 @@ describe("the full player", () => {
 		).toBeInTheDocument();
 	});
 
+	test("in fullscreen, an Escape only leaves it, and the frame's button leaves it too", async () => {
+		const { player } = await openPlayer({ ...episode, mediaType: "video" });
+		const frame = player.querySelector<HTMLElement>(".pn-video")!;
+		let fullscreenElement: Element | null = null;
+		const change = (to: Element | null) => {
+			fullscreenElement = to;
+			document.dispatchEvent(new Event("fullscreenchange"));
+		};
+		const exit = vi.fn(async () => change(null));
+		Object.defineProperties(document, {
+			fullscreenElement: { configurable: true, get: () => fullscreenElement },
+			exitFullscreen: { configurable: true, value: exit },
+		});
+		onTestFinished(() => {
+			for (const key of ["fullscreenElement", "exitFullscreen"])
+				delete (document as unknown as Record<string, unknown>)[key];
+		});
+		frame.requestFullscreen = vi.fn(async () => change(frame));
+		const expanded = () => services.navigation.current.expanded;
+
+		await fireEvent.click(button("Fullscreen"));
+		expect(button("Exit fullscreen")).toBeInTheDocument();
+		press("Escape");
+		await tick();
+		expect(exit, "the first Escape leaves fullscreen").toHaveBeenCalledOnce();
+		expect(expanded(), "and leaves the player open").toBe(true);
+
+		await fireEvent.click(button("Fullscreen"));
+		await fireEvent.click(button("Exit fullscreen"));
+		expect(exit).toHaveBeenCalledTimes(2);
+		expect(button("Fullscreen")).toBeInTheDocument();
+		press("Escape");
+		await tick();
+		expect(expanded(), "an Escape after fullscreen").toBe(false);
+	});
+
+	test("an Escape closes the player after the next episode, audio, took fullscreen's frame away", async () => {
+		const { player } = await openPlayer({ ...episode, mediaType: "video" });
+		let fullscreenElement: Element | null = null;
+		Object.defineProperty(document, "fullscreenElement", {
+			configurable: true,
+			get: () => fullscreenElement,
+		});
+		onTestFinished(() => {
+			delete (document as unknown as Record<string, unknown>).fullscreenElement;
+		});
+		fullscreenElement = player.querySelector(".pn-video");
+		document.dispatchEvent(new Event("fullscreenchange"));
+
+		services.player.play({
+			...episode,
+			title: "Audio next",
+			streamUrl: "https://pod.test/next.mp3",
+		});
+		await tick();
+		fullscreenElement = null;
+		document.dispatchEvent(new Event("fullscreenchange"));
+		await tick();
+		press("Escape");
+		await tick();
+
+		expect(services.navigation.current.expanded).toBe(false);
+	});
+
 	test("the video frame plays and pauses on its own, as it does in fullscreen", async () => {
 		const { player } = await openPlayer({ ...episode, mediaType: "video" });
 		const frame = within(player.querySelector<HTMLElement>(".pn-video")!);

@@ -41,6 +41,7 @@
 	let transcript: TranscriptPanel | undefined = $state();
 	let videoFrame: HTMLElement | undefined = $state();
 	let inMainWindow = $state(true);
+	let isFullscreen = $state(false);
 	let chapters: readonly Chapter[] = $state([]);
 	/** The panel the user chose. None shows the artwork at compact widths. */
 	let panel = $state<PanelKind>();
@@ -78,7 +79,9 @@
 	// or a press in the view makes it. A menu or modal over the player takes Escape first.
 	$effect(() => {
 		const escape = scope.register(null, "Escape", () => {
-			if (!deck?.closeVolume() && !transcript?.closeFind()) void collapse();
+			// The first Escape leaves a video's fullscreen, which Obsidian's window keeps otherwise.
+			if (isFullscreen) void viewRoot.doc.exitFullscreen();
+			else if (!deck?.closeVolume() && !transcript?.closeFind()) void collapse();
 			return false;
 		});
 		const space = scope.register(null, " ", (evt) => {
@@ -141,6 +144,12 @@
 		else video?.webkitEnterFullscreen?.();
 	}
 </script>
+
+<!-- Also when the frame goes, as when the next episode in the queue is audio. -->
+<svelte:document
+	onfullscreenchange={() =>
+		(isFullscreen = !!videoFrame && viewRoot.doc.fullscreenElement === videoFrame)}
+/>
 
 {#snippet panelView(kind: PanelKind)}
 	{#if kind === "chapters"}
@@ -235,9 +244,10 @@
 						<button
 							type="button"
 							class="pn-fs"
-							aria-label="Fullscreen"
-							onclick={fullscreen}
-							{@attach icon("maximize")}
+							aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+							onclick={() =>
+								isFullscreen ? viewRoot.doc.exitFullscreen() : fullscreen()}
+							{@attach icon(isFullscreen ? "minimize" : "maximize")}
 						></button>
 					</div>
 				{:else}
@@ -405,11 +415,6 @@
 			background: var(--background-primary);
 			box-shadow: var(--shadow-s);
 			--icon-size: 16px;
-		}
-
-		/* Leaving fullscreen is Escape's job. */
-		.pn-video:fullscreen .pn-fs {
-			display: none;
 		}
 
 		.pn-np-right {

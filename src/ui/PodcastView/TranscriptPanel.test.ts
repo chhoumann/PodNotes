@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
-import { SecretStorage } from "obsidian";
+import { SecretStorage, TFile } from "obsidian";
 import { tick } from "svelte";
 import { get } from "svelte/store";
 import {
@@ -354,7 +354,12 @@ describe("a published transcript", () => {
 	});
 
 	test("Save as note hands the note to the transcribe command and writes nothing itself", async () => {
-		const vault = { create: vi.fn(), modify: vi.fn(), process: vi.fn() };
+		const vault = {
+			getFileByPath: () => null,
+			create: vi.fn(),
+			modify: vi.fn(),
+			process: vi.fn(),
+		};
 		Object.assign(services.app, { vault });
 		await openTranscript(episodeOf([VTT_LINK]), 0);
 		await transcript();
@@ -371,6 +376,45 @@ describe("a published transcript", () => {
 		services.online.set(false);
 		await tick();
 		expect(button("Save as note")).toBeDisabled();
+	});
+
+	test("opens the note saved before, also offline, instead of saving it again, as long as it is there", async () => {
+		const { settings } = get(plugin);
+		settings.transcript.path = "Transcripts/{{title}}.md";
+		plugin.set(get(plugin));
+		const notes = new Map<string, TFile>();
+		const note = (folder: string, { title }: Episode) =>
+			Object.assign(new TFile(), { path: `${folder}/${title}.md` });
+		Object.assign(services.app, {
+			vault: { getFileByPath: (path: string) => notes.get(path) ?? null },
+		});
+		const openFile = vi.fn((_file: TFile) => {});
+		Object.assign(services.app.workspace, { getLeaf: vi.fn(() => ({ openFile })) });
+		const played = episodeOf([VTT_LINK]);
+		const saved = note("Transcripts", played);
+		notes.set(saved.path, saved);
+		await openTranscript(played, 0);
+		await transcript();
+		services.online.set(false);
+		await tick();
+
+		expect(button("Open note")).toBeEnabled();
+		await fireEvent.click(button("Open note"));
+		expect(openFile).toHaveBeenCalledExactlyOnceWith(saved);
+		expect(services.saveTranscriptNote).not.toHaveBeenCalled();
+
+		notes.clear();
+		services.rowHasNote.set(() => false);
+		await tick();
+		expect(button("Save as note"), "deleted, and offline").toBeDisabled();
+
+		const moved = note("Elsewhere", played);
+		notes.set(moved.path, moved);
+		settings.transcript.path = "Elsewhere/{{title}}.md";
+		plugin.set(get(plugin));
+		await tick();
+		await fireEvent.click(button("Open note"));
+		expect(openFile).toHaveBeenLastCalledWith(moved);
 	});
 
 	test("Save as note saves a video's feed transcript too, which needs no audio", async () => {

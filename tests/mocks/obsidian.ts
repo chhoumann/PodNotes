@@ -124,6 +124,8 @@ export class Workspace {
 }
 
 export class App {
+	/** No file: a test that needs one puts its own vault in. */
+	vault = { getFileByPath: (_path: string): TFile | null => null };
 	secretStorage = new SecretStorage();
 	scope = new Scope();
 	workspace = new Workspace();

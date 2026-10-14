@@ -272,15 +272,17 @@ export function episodeMenu(
 }
 
 export function podcastMenu(key: FeedKey, services: ShellServices): MenuEntry[] {
-	const { library, feeds, actions, navigation } = services;
+	const { library, feeds, actions, navigation, online } = services;
 	const feed = get(library.savedFeeds)[key];
 	if (!feed) return [];
 	const note = getFeedNote(feed);
 	const error = get(feeds).get(key)?.error;
 	const isPublic = publicFeedUrl(feed) !== undefined;
+	// An address is checked by loading its feed.
 	const address = (title: string): MenuEntry => ({
 		title,
 		icon: "rss",
+		disabled: !get(online),
 		onClick: () => void actions.setFeedAddress(key),
 	});
 	return [

@@ -473,6 +473,18 @@ describe("a podcast's menu, by how its feed loaded", () => {
 		expect(titles(podcastMenu(key, services))).toEqual(items);
 	});
 
+	test("Set feed address waits for a connection, which checks the address", () => {
+		const setFeedAddress = (podcast: string) =>
+			podcastMenu(podcast, services).find(
+				(entry) => entry !== "separator" && entry.title === "Set feed address",
+			);
+
+		services.online.set(false);
+		expect(setFeedAddress("Patron")).toMatchObject({ disabled: true });
+		services.online.set(true);
+		expect(setFeedAddress("Patron")).toMatchObject({ disabled: false });
+	});
+
 	test("Edit feed URL asks for the failed feed's address", () => {
 		const setFeedAddress = vi.spyOn(services.actions, "setFeedAddress").mockResolvedValue();
 

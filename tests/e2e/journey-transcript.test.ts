@@ -27,6 +27,7 @@ import {
 	storedEpisode,
 	waitForLibrary,
 	waitForPlayback,
+	writeVaultFile,
 } from "./journey/library";
 import { jsLiteral, PLUGIN_ID } from "./runtime";
 
@@ -292,6 +293,39 @@ describe("transcript journeys", () => {
 		expect(fromPanel).toContain("Today we build a memory palace together.");
 		expect(fromPanel).toBe(fromCommand);
 	}, 120_000);
+
+	test("J-TR-04 a transcript saved before opens from the panel, offline too, unchanged and with no download", async () => {
+		const { obsidian, sandbox } = getContext();
+		const server = await openTranscript(CAPTIONED);
+		await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+		const saved = "# Memory Palaces\n\nSaved before, by hand.\n";
+		await writeVaultFile(obsidian, sandbox.path(NOTE_PATH), saved);
+		onTestFinished(() =>
+			obsidian.dev.evalJsonAsync(`(async () => {
+				await app.vault.delete(app.vault.getFileByPath(${jsLiteral(sandbox.path(NOTE_PATH))}));
+				return true;
+			})()`),
+		);
+		await waitUntilShown(obsidian, panelButton("Open note"));
+		const requests = server.requests().length;
+		await setOffline(obsidian, true);
+		onTestFinished(() => setOffline(obsidian, false));
+
+		await click(obsidian, panelButton("Open note"));
+
+		expect(
+			await eventually(
+				obsidian,
+				() =>
+					obsidian.dev.evalJson<string | null>(
+						"app.workspace.getActiveFile()?.path ?? null",
+					),
+				sandbox.path(NOTE_PATH),
+			),
+		).toBe(sandbox.path(NOTE_PATH));
+		expect(await readVaultText(obsidian, sandbox.path(NOTE_PATH))).toBe(saved);
+		expect(server.requests().length, "no request").toBe(requests);
+	});
 
 	test("an episode whose feed publishes no transcript offers the paid transcription", async () => {
 		const { obsidian } = getContext();
