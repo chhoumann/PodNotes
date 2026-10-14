@@ -108,6 +108,7 @@ function fakeWorkspace(notes: ReturnType<typeof fakeVault>["notes"]) {
 			return {};
 		}),
 		getLeavesOfType: (type: string) => (type === "markdown" ? [...open] : []),
+		iterateAllLeaves: vi.fn(),
 		getActiveViewOfType: () => null,
 		getRightLeaf: () => null,
 		revealLeaf: vi.fn(),

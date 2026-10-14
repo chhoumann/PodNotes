@@ -70,6 +70,7 @@ async function loadPlugin(secrets: obsidian.SecretStorage): Promise<PodNotes> {
 				on: vi.fn(() => ({})),
 				offref: vi.fn(),
 				getLeavesOfType: vi.fn(() => []),
+				iterateAllLeaves: vi.fn(),
 				getActiveViewOfType: vi.fn(() => null),
 			},
 		},
