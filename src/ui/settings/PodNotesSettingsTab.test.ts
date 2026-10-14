@@ -191,11 +191,11 @@ describe("sections", () => {
 		]);
 	});
 
-	test("each field is named after its row, without an aria-label Obsidian would show as a tooltip", () => {
+	test("each field is named after its row where it takes focus, without an aria-label Obsidian would show as a tooltip", () => {
 		const { tab } = open();
 		const fields = [
 			...tab.containerEl.querySelectorAll(
-				".setting-item-control :is(input, select, textarea)",
+				'.setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"])',
 			),
 		];
 		const rowOf = (field: Element) =>

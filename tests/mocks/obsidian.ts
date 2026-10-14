@@ -415,18 +415,24 @@ export class DropdownComponent extends BaseInteractiveElement {
 }
 
 /** As Obsidian's: setValue runs the change callback when the value changes. */
+/** Obsidian 1.14's markup: the focusable label holds a checkbox that takes no focus. */
 export class ToggleComponent extends BaseInteractiveElement {
 	private on = false;
 	private changeCallback?: (on: boolean) => void;
+	private readonly inputEl = document.createElement("input");
 
 	constructor(container: HTMLElement) {
-		super("input", container);
-		this.toggleEl.type = "checkbox";
-		this.toggleEl.addEventListener("change", () => this.setValue(this.toggleEl.checked));
+		super("label", container);
+		this.toggleEl.className = "checkbox-container";
+		this.toggleEl.tabIndex = 0;
+		this.inputEl.type = "checkbox";
+		this.inputEl.tabIndex = -1;
+		this.toggleEl.appendChild(this.inputEl);
+		this.inputEl.addEventListener("change", () => this.setValue(this.inputEl.checked));
 	}
 
 	get toggleEl() {
-		return this.element as HTMLInputElement;
+		return this.element as HTMLLabelElement;
 	}
 
 	getValue() {
@@ -434,7 +440,7 @@ export class ToggleComponent extends BaseInteractiveElement {
 	}
 
 	setValue(on: boolean) {
-		this.toggleEl.checked = on;
+		this.inputEl.checked = on;
 		if (this.on !== on) {
 			this.on = on;
 			this.changeCallback?.(on);
@@ -443,7 +449,8 @@ export class ToggleComponent extends BaseInteractiveElement {
 	}
 
 	setDisabled(disabled: boolean) {
-		this.toggleEl.disabled = disabled;
+		this.inputEl.disabled = disabled;
+		this.toggleEl.classList.toggle("is-disabled", disabled);
 		return this;
 	}
 

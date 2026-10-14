@@ -65,12 +65,12 @@ async function settingValue(obsidian: ObsidianClient, name: string): Promise<unk
 }
 
 describe("PodNotes settings tab", () => {
-	test("names each field after its row", async () => {
+	test("names each field after its row where it takes focus", async () => {
 		const { obsidian } = getContext();
 		await openPodNotesSettings(obsidian);
 		onTestFinished(() => closeSettings(obsidian));
 		const fields = await obsidian.dev.evalJson<Array<{ row: string; name: string }>>(`(() =>
-			[...document.querySelectorAll(".modal.mod-settings .setting-item-control :is(input, select, textarea):not([aria-hidden])")].map((field) => ({
+			[...document.querySelectorAll('.modal.mod-settings .setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"]):not([aria-hidden])')].map((field) => ({
 				row: field.closest(".setting-item").querySelector(".setting-item-name").textContent,
 				name: field.getAttribute("aria-label") ?? document.getElementById(field.getAttribute("aria-labelledby"))?.textContent ?? "",
 			})))()`);
