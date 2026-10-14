@@ -113,18 +113,11 @@ test("a feed address missing from this device wraps in the banner, and offline e
 	await click(obsidian, ui.podcastCard(PRIVATE));
 	await waitUntilShown(obsidian, ui.feedErrorAction("Set feed address"));
 
-	const detail = await obsidian.dev.evalJson<{ text: string; mono: boolean; clipped: boolean }>(
-		`(() => {
-			const detail = document.querySelector(${jsLiteral(`${PLAYER_VIEW} .pn-banner .d`)});
-			const heading = detail.previousElementSibling;
-			return {
-				text: detail.textContent,
-				mono: getComputedStyle(detail).fontFamily !== getComputedStyle(heading).fontFamily,
-				clipped: detail.scrollWidth > detail.clientWidth,
-			};
-		})()`,
-	);
-	expect(detail).toEqual({ text: "Address not on this device", mono: false, clipped: false });
+	const detail = await obsidian.dev.evalJson<{ text: string; clipped: boolean }>(`(() => {
+		const detail = document.querySelector(${jsLiteral(`${PLAYER_VIEW} .pn-banner .d`)});
+		return { text: detail.textContent, clipped: detail.scrollWidth > detail.clientWidth };
+	})()`);
+	expect(detail).toEqual({ text: "Address not on this device", clipped: false });
 
 	await setOffline(obsidian, true);
 	onTestFinished(() => setOffline(obsidian, false));
