@@ -72,7 +72,7 @@ interface TextField {
 	/** Takes the completed text. A value it rejects leaves the setting as it was. */
 	write(value: string): void;
 	placeholder?: string;
-	/** "area" is a short multi-line field, "template" a long one under the row's name. */
+	/** Multi-line fields under the row's name: "area" short, "template" tall. */
 	kind?: "number" | "area" | "template";
 	preview?(value: string, setting: Setting): void;
 }
@@ -531,14 +531,15 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						field.preview?.(field.read(), setting);
 					});
 				};
-				if (field.kind === "template") {
+				if (field.kind === "area" || field.kind === "template") {
 					stackSettingVertically(setting);
 					setting.addTextArea((area) => {
-						area.inputEl.setCssStyles({ width: "100%", height: "25vh" });
+						area.inputEl.setCssStyles({
+							width: "100%",
+							height: field.kind === "template" ? "25vh" : "",
+						});
 						bind(area);
 					});
-				} else if (field.kind === "area") {
-					setting.addTextArea(bind);
 				} else {
 					setting.addText((text) => {
 						if (field.kind === "number") text.inputEl.type = "number";
@@ -603,9 +604,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			...row,
 			render: (setting, settingGroup) => {
 				const end = row.render(setting, settingGroup);
-				const stop = this.follow(setting, ({ transcript }) =>
-					setting.setDisabled(!applies(transcript.diarization)),
-				);
+				const stop = this.follow(setting, ({ transcript }) => {
+					const off = !applies(transcript.diarization);
+					setting.setDisabled(off);
+					// Obsidian dims only disabled action rows.
+					setting.settingEl.setCssStyles({ opacity: off ? "0.5" : "" });
+				});
 				return () => {
 					stop();
 					if (typeof end === "function") end();
