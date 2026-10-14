@@ -109,11 +109,11 @@ function redactionKey(address: string): string | undefined {
 }
 
 const HTML_ENTITY = /&(?:#(x[\da-f]+|\d+);?|([a-z]+);)/gi;
-// These four common entity names also have uppercase HTML forms.
+// HTML also spells lt, gt and quot in capitals. decodeHtml takes amp in any case, so
+// an address escaped with a malformed &aMp; still matches its known address.
 const NAMED_ENTITIES = new Map(
 	Object.entries({
 		...COMMON_NAMED_ENTITIES,
-		AMP: "&",
 		LT: "<",
 		GT: ">",
 		QUOT: '"',
@@ -143,7 +143,7 @@ function decodeHtml(value: string): [text: string, entities: Entity[]] {
 				? String.fromCodePoint(
 						Math.min(Number(/^x/i.test(code) ? `0${code}` : code), 0x10ffff),
 					)
-				: NAMED_ENTITIES.get(name ?? "");
+				: NAMED_ENTITIES.get(name?.toLowerCase() === "amp" ? "amp" : (name ?? ""));
 			if (char === undefined) return entity;
 			entities.push([from - shift, from - shift + char.length, from, from + entity.length]);
 			shift += entity.length - char.length;
@@ -169,7 +169,19 @@ const ADDRESS = /[^\s<>"'`]+/y;
 const ENCODED_ADDRESS = /[^\s<>"'`&#]+/y;
 // Encoded, numeric and non-ASCII authorities can normalize to a known host too.
 const UNUSUAL_AUTHORITY = /^https?:[/\\]*(?:[^/?#]*[%\\[\u0080-\uFFFF]|(?:[^/?#@]*@)?\d)/i;
+// A string the scan can redact holds one of these, or a known host.
+const ESCAPED_OR_UNUSUAL = /[&%@\\[\u0080-\uFFFF]|(?:https?|feed|podcast):\/*\d/i;
 
+/**
+ * `document` with no private feed address left in it. A snapshot's
+ * credential-bearing `feedUrl` is a private feed address, as is each key of
+ * `known` (saved private feeds' real URLs, mapped to their placeholders). Every
+ * string anywhere that is one of these addresses, or quotes one as written,
+ * gets its placeholder instead, so the address cannot stay behind in a
+ * description or a field this version does not know. Signed media and an
+ * episode's own link are other URLs and stay as they are. Returns `document`
+ * itself when nothing changed; never mutates it.
+ */
 export function redactPrivateFeedAddresses<T>(
 	document: T,
 	known: ReadonlyMap<string, string> = new Map(),
@@ -225,7 +237,7 @@ export function redactPrivateFeedAddresses<T>(
 				return { end, text: encoded ? encodeURIComponent(placeholder) : placeholder };
 		}
 	};
-	return replaceStrings(document, (value) => {
+	const redactText = (value: string) => {
 		const [text, entities] = decodeHtml(value);
 		let redacted = "";
 		let copied = 0;
@@ -260,6 +272,20 @@ export function redactPrivateFeedAddresses<T>(
 			}
 		}
 		return copied ? redacted + value.slice(copied) : value;
+	};
+	const mayQuote = (value: string) => {
+		if (ESCAPED_OR_UNUSUAL.test(value)) return true;
+		const lower = value.toLowerCase();
+		return hosts.some((host) => lower.includes(host));
+	};
+	const results = new Map<string, string>();
+	return replaceStrings(document, (value) => {
+		let result = results.get(value);
+		if (result === undefined) {
+			result = mayQuote(value) ? redactText(value) : value;
+			results.set(value, result);
+		}
+		return result;
 	});
 }
 

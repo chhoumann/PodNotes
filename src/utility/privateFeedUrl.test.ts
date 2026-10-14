@@ -425,3 +425,197 @@ describe("private feed placeholder", () => {
 		expect(parsePrivateFeedPlaceholder("podnotes-private-feed:%E0%A4%A")).toBeNull();
 	});
 });
+
+describe("candidate filtering preserves every covered address spelling", () => {
+	const address = "https://private.example/rss?auth=FILTER_SENTINEL";
+	const numeric = "https://127.0.0.1/rss?auth=FILTER_SENTINEL";
+	const spellings: [name: string, knownAddress: string, spelling: string][] = [
+		["plain", address, address],
+		["HTTP", address, "http://private.example/rss?auth=FILTER_SENTINEL"],
+		["feed wrapper", address, `feed:${address}`],
+		["podcast wrapper", address, `podcast:${address}`],
+		["scheme-less", address, "private.example/rss?auth=FILTER_SENTINEL"],
+		["host case", address, "https://PRIVATE.EXAMPLE/rss?auth=FILTER_SENTINEL"],
+		[
+			"numeric entities",
+			address,
+			"https&#58;&#47;&#47;private&#46;example/rss?auth=FILTER_SENTINEL",
+		],
+		[
+			"hex entities",
+			address,
+			"https&#X3A;&#x2f;&#x2f;private&#x2e;example/rss?auth=FILTER_SENTINEL",
+		],
+		[
+			"named entities",
+			address,
+			"https&colon;&sol;&sol;private&period;example/rss?auth=FILTER_SENTINEL",
+		],
+		["percent-encoded host", address, "https://%70rivate.example/rss?auth=FILTER_SENTINEL"],
+		["Unicode host", address, "https://ｐｒｉｖａｔｅ.example/rss?auth=FILTER_SENTINEL"],
+		["backslashes", address, "https:\\\\private.example/rss?auth=FILTER_SENTINEL"],
+		[
+			"numeric feed authority",
+			"https://127.0.0.1/rss?auth=FILTER_SENTINEL",
+			"feed://2130706433/rss?auth=FILTER_SENTINEL",
+		],
+		[
+			"numeric podcast authority",
+			"https://127.0.0.1/rss?auth=FILTER_SENTINEL",
+			"podcast://0x7f000001/rss?auth=FILTER_SENTINEL",
+		],
+		[
+			"IPv6",
+			"https://[::1]/rss?auth=FILTER_SENTINEL",
+			"https://[0:0:0:0:0:0:0:1]/rss?auth=FILTER_SENTINEL",
+		],
+		[
+			"ampersand in the host",
+			"https://a&b.example/rss?auth=FILTER_SENTINEL",
+			"https://a&amp;b.example/rss?auth=FILTER_SENTINEL",
+		],
+		["malformed mixed-case amp", `${address}&show=1`, `${address}&aMp;show=1`],
+		[
+			"malformed mixed-case amp in the host",
+			"https://a&b.example/rss?auth=FILTER_SENTINEL",
+			"https://a&aMp;b.example/rss?auth=FILTER_SENTINEL",
+		],
+		["numeric HTTP authority", numeric, "http://0x7f.1/rss?auth=FILTER_SENTINEL"],
+		[
+			"numeric authority with backslashes",
+			numeric,
+			"https:\\\\2130706433/rss?auth=FILTER_SENTINEL",
+		],
+		[
+			"numeric authority after user info",
+			"https://user@127.0.0.1/rss?auth=FILTER_SENTINEL",
+			"https://user@2130706433/rss?auth=FILTER_SENTINEL",
+		],
+		[
+			"uppercase punycode",
+			"https://xn--bcher-kva.example/rss?auth=FILTER_SENTINEL",
+			"https://XN--BCHER-KVA.EXAMPLE/rss?auth=FILTER_SENTINEL",
+		],
+	];
+	it.each(spellings)(
+		"redacts %s and preserves its distinct public address",
+		(_name, knownAddress, spelling) => {
+			const known = new Map([[knownAddress, "podnotes-private-feed:Paid"]]);
+			const input = `Subscribe at ${spelling}.`;
+			const publicText = input.replaceAll("FILTER_SENTINEL", "PUBLIC_VALUE");
+			expect(redactPrivateFeedAddresses(input, known)).toBe(
+				"Subscribe at podnotes-private-feed:Paid.",
+			);
+			expect(redactPrivateFeedAddresses(publicText, known)).toBe(publicText);
+		},
+	);
+
+	it("redacts an encoded query with no literal hostname and preserves a public query", () => {
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		const input =
+			"Visit https://redirect.example/?feed=https%3A%2F%2Fprivate%2Eexample%2Frss%3Fauth%3DFILTER_SENTINEL&next=1.";
+		expect(redactPrivateFeedAddresses(input, known)).toBe(
+			"Visit https://redirect.example/?feed=podnotes-private-feed%3APaid&next=1.",
+		);
+		const publicText = input.replaceAll("FILTER_SENTINEL", "PUBLIC_VALUE");
+		expect(redactPrivateFeedAddresses(publicText, known)).toBe(publicText);
+	});
+
+	it("redacts an object key and leaves its own output unchanged", () => {
+		for (const [, knownAddress, spelling] of spellings) {
+			const known = new Map([[knownAddress, "podnotes-private-feed:Paid"]]);
+			const publicText = spelling.replaceAll("FILTER_SENTINEL", "PUBLIC_VALUE");
+			const safe = redactPrivateFeedAddresses(
+				{ [`Subscribe at ${spelling}.`]: publicText },
+				known,
+			);
+			expect(safe).toEqual({ "Subscribe at podnotes-private-feed:Paid.": publicText });
+			expect(redactPrivateFeedAddresses(safe, known)).toBe(safe);
+		}
+	});
+
+	it("decodes amp in any case, but no other entity name HTML lacks in capitals", () => {
+		const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+		const capitals = "Subscribe at https&COLON;//private.example/rss?auth=FILTER_SENTINEL.";
+		expect(redactPrivateFeedAddresses(capitals, known)).toBe(capitals);
+	});
+});
+
+describe("redacting a document with repeated text", () => {
+	const address = "https://private.example/rss?auth=REPEAT_SENTINEL";
+	const known = new Map([[address, "podnotes-private-feed:Paid"]]);
+	const prose = `Feed ${address}.`;
+	// A whole field ending in a period is a distinct resource address.
+	const field = `${address}.`;
+
+	it("redacts every copy and keeps a whole field apart from prose quoting the same text", () => {
+		expect(redactPrivateFeedAddresses([field, prose, field, prose], known)).toEqual([
+			field,
+			"Feed podnotes-private-feed:Paid.",
+			field,
+			"Feed podnotes-private-feed:Paid.",
+		]);
+		expect(redactPrivateFeedAddresses({ a: prose, b: field, [prose]: field }, known)).toEqual({
+			a: "Feed podnotes-private-feed:Paid.",
+			b: field,
+			"Feed podnotes-private-feed:Paid.": field,
+		});
+	});
+
+	it("returns an unchanged document itself and never mutates one it copies", () => {
+		const publicText = prose.replace("REPEAT_SENTINEL", "PUBLIC_VALUE");
+		const unchanged = { a: [publicText, publicText], b: { [publicText]: publicText } };
+		expect(redactPrivateFeedAddresses(unchanged, known)).toBe(unchanged);
+
+		const document = { a: [prose, prose], b: { [prose]: prose }, c: publicText };
+		const before = structuredClone(document);
+		expect(redactPrivateFeedAddresses(document, known)).toEqual({
+			a: ["Feed podnotes-private-feed:Paid.", "Feed podnotes-private-feed:Paid."],
+			b: { "Feed podnotes-private-feed:Paid.": "Feed podnotes-private-feed:Paid." },
+			c: publicText,
+		});
+		expect(document).toEqual(before);
+	});
+
+	it("refuses a key collision on a repeated key", () => {
+		expect(() =>
+			redactPrivateFeedAddresses(
+				{ a: { [prose]: 1 }, b: { [prose]: 2, "Feed podnotes-private-feed:Paid.": 3 } },
+				known,
+			),
+		).toThrow("Private feed address protection would overwrite a saved field.");
+		expect(redactPrivateFeedAddresses({ a: { [prose]: 1 }, b: { [prose]: 2 } }, known)).toEqual(
+			{
+				a: { "Feed podnotes-private-feed:Paid.": 1 },
+				b: { "Feed podnotes-private-feed:Paid.": 2 },
+			},
+		);
+	});
+
+	it("takes each call's own addresses and placeholders, never an earlier call's", () => {
+		const other = "https://other.example/rss?auth=OTHER_SENTINEL";
+		const placeholder = (name: string) => new Map([[address, `podnotes-private-feed:${name}`]]);
+		expect(redactPrivateFeedAddresses(prose, placeholder("Old"))).toBe(
+			"Feed podnotes-private-feed:Old.",
+		);
+		expect(redactPrivateFeedAddresses(prose, placeholder("New"))).toBe(
+			"Feed podnotes-private-feed:New.",
+		);
+		expect(
+			redactPrivateFeedAddresses(prose, new Map([[other, "podnotes-private-feed:Other"]])),
+		).toBe(prose);
+
+		const snapshot = { podcastName: "Found", feedUrl: address, description: prose };
+		expect(redactPrivateFeedAddresses([snapshot, prose])).toEqual([
+			{
+				podcastName: "Found",
+				feedUrl: "podnotes-private-feed:Found",
+				description: "Feed podnotes-private-feed:Found.",
+			},
+			"Feed podnotes-private-feed:Found.",
+		]);
+		expect(
+			redactPrivateFeedAddresses([prose], new Map([[other, "podnotes-private-feed:Other"]])),
+		).toEqual([prose]);
+	});
+});
