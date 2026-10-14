@@ -1,7 +1,16 @@
 import { describe, expect, onTestFinished, test } from "vitest";
+import { FIXTURE_HOST, SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
-import { dismissNotices, runCommand, setOffline, showPodNotes } from "./journey/actions";
-import { click, pressKey, typeText } from "./journey/input";
+import {
+	dismissNotices,
+	runCommand,
+	setMobileEmulation,
+	setOffline,
+	showAddPodcast,
+	showLibrary,
+	showPodNotes,
+} from "./journey/actions";
+import { cdp, click, pressKey, typeInto, typeText } from "./journey/input";
 import { PLAYER_VIEW, ui, type UiTarget } from "./journey/targets";
 import { eventually, isDisabled, isShown, notices, waitUntilShown } from "./journey/wait";
 import {
@@ -11,7 +20,13 @@ import {
 	pubDate,
 	startFixtureServer,
 } from "./journey/fixtures";
-import { readVaultText, seedLibrary, storedEpisode, waitForPlayback } from "./journey/library";
+import {
+	readVaultText,
+	seedLibrary,
+	storedEpisode,
+	waitForLibrary,
+	waitForPlayback,
+} from "./journey/library";
 import { jsLiteral, PLUGIN_ID } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-transcript");
@@ -59,6 +74,10 @@ const line = (text: string): UiTarget => ({
 	name: `transcript line ${text}`,
 	elements: `[...(${TRANSCRIPT_LIST})?.querySelectorAll("button") ?? []].filter((el) => el.lastElementChild?.textContent.trim() === ${jsLiteral(text)})`,
 });
+const followChip: UiTarget = {
+	name: "Follow chip",
+	elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} section.pn-player .pn-tx-follow`)})]`,
+};
 const findField: UiTarget = {
 	name: "Find in transcript field",
 	elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} section.pn-player input[aria-label="Find in transcript"]`)})]`,
@@ -217,4 +236,137 @@ describe("transcript journeys", () => {
 			false,
 		);
 	}, 60_000);
+	test("a private feed's transcript that quotes its own token and the feed's address shows and saves neither", async () => {
+		const context = getContext();
+		const { obsidian, plugin, sandbox } = context;
+		const captions = "caption.vtt?token=E2E_TX_SENTINEL";
+		const quoting: FixtureEpisode = {
+			title: "Quoting Episode",
+			seconds: 60,
+			pubDate: pubDate(0),
+			guid: "quoting",
+			transcripts: [
+				{
+					path: captions,
+					type: "text/vtt",
+					absolute: true,
+					body: (port) =>
+						`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n<v Host>Your feed is http://${SUPERCAST_FIXTURE_HOST}:${port}/feeds/E2E_FEED_SENTINEL/feed.xml and these captions are http://${FIXTURE_HOST}:${port}/quoting-private/${captions}\n`,
+				},
+			],
+		};
+		const show: FixtureFeed = {
+			title: "Quoting Private",
+			slug: "quoting-private",
+			host: SUPERCAST_FIXTURE_HOST,
+			path: "/feeds/E2E_FEED_SENTINEL/feed.xml",
+			artwork: false,
+			episodes: [quoting],
+		};
+		const server = await startFixtureServer([show]);
+		onTestFinished(() => server.stop());
+		await seedLibrary(context, server);
+		await showPodNotes(obsidian);
+		await showAddPodcast(obsidian);
+		await typeInto(obsidian, ui.podcastSearch, server.feedUrl(show));
+		await click(obsidian, ui.addPodcast(show.title));
+		await waitForLibrary(plugin, (library) => library.subscriptions.length === 1, "subscribed");
+		const secretId = await obsidian.dev.evalJson<string>(
+			`app.plugins.plugins.${PLUGIN_ID}.settings.savedFeeds[${jsLiteral(show.title)}].urlSecretId`,
+		);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(`app.secretStorage.setSecret(${jsLiteral(secretId)}, ""), true`),
+		);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(show.title));
+		await click(obsidian, ui.episode(quoting.title));
+		await waitForPlayback(obsidian, (playback) => playback.playing, "playing");
+		await click(obsidian, ui.playbackToggle);
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await click(obsidian, ui.playerPanel("Transcript"));
+
+		const hidden = "podnotes-private-feed:Quoting%20Private";
+		const line = `Your feed is ${hidden} and these captions are ${hidden}`;
+		expect(
+			await eventually(obsidian, async () => (await shownTranscript()).lines, [line]),
+			"the panel's line",
+		).toEqual([line]);
+		expect(server.requests()).toContain(`/quoting-private/${captions}`);
+		const view = await obsidian.dev.evalJson<string>(
+			`document.querySelector(${jsLiteral(PLAYER_VIEW)}).innerHTML`,
+		);
+		expect(view).not.toMatch(/E2E_TX_SENTINEL|E2E_FEED_SENTINEL/);
+
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Save as note"));
+		const notePath = `Transcripts/${show.title}/${quoting.title}.md`;
+		await sandbox.waitForExists(notePath, { timeoutMs: 30_000 });
+		const note = await obsidian.waitFor(
+			async () => {
+				const text = await readVaultText(obsidian, sandbox.path(notePath));
+				return text.includes("Your feed is") && text;
+			},
+			{ timeoutMs: 10_000, intervalMs: 100, message: "the saved note's text" },
+		);
+		expect(note).not.toMatch(/E2E_TX_SENTINEL|E2E_FEED_SENTINEL/);
+		expect(note).toContain(
+			"Your feed is podnotes-private-feed:Quoting\\%20Private and these captions are podnotes-private-feed:Quoting\\%20Private",
+		);
+	}, 120_000);
+
+	test("on a phone, Save, the Find field, Follow and Up next's Edit are 44 px tall", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const phone = { width: 390, height: 844 };
+		await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
+			...phone,
+			deviceScaleFactor: 1,
+			mobile: true,
+			screenWidth: phone.width,
+			screenHeight: phone.height,
+		});
+		onTestFinished(async () => {
+			await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
+		});
+		await setMobileEmulation(obsidian, true);
+		expect(
+			await obsidian.dev.evalJson<boolean>('document.body.classList.contains("is-phone")'),
+			"a phone",
+		).toBe(true);
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+			queue: [storedEpisode(server, FEED, PLAIN)],
+		});
+		await showPodNotes(obsidian);
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		await click(obsidian, ui.playerPanel("Transcript"));
+		await eventually(
+			obsidian,
+			async () => (await shownTranscript()).lines.length,
+			LINES.length,
+		);
+		const height = (target: UiTarget) =>
+			obsidian.dev.evalJson<number>(
+				`Math.round((${target.elements})[0]?.getBoundingClientRect().height ?? 0)`,
+			);
+
+		const heights: Record<string, number> = { save: await height(panelButton("Save as note")) };
+		await obsidian.dev.evalJson(
+			`((list) => ((list.scrollTop = list.scrollHeight), true))(${TRANSCRIPT_LIST})`,
+		);
+		await waitUntilShown(obsidian, followChip);
+		heights.follow = await height(followChip);
+		await click(obsidian, panelButton("Find in transcript"));
+		await waitUntilShown(obsidian, findField);
+		heights.find = await height(findField);
+		await pressKey(obsidian, "Escape");
+		await click(obsidian, ui.playerPanel("Up next"));
+		await waitUntilShown(obsidian, panelButton("Edit"));
+		heights.edit = await height(panelButton("Edit"));
+
+		expect(heights).toEqual({ save: 44, follow: 44, find: 44, edit: 44 });
+	}, 120_000);
 });

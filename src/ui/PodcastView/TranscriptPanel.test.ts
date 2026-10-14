@@ -294,6 +294,24 @@ describe("a published transcript", () => {
 		expect(services.navigation.current.expanded).toBe(false);
 	});
 
+	test("another episode's transcript opens with Find closed and every line shown", async () => {
+		const second = episodeOf([VTT_LINK]);
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await transcript();
+		await fireEvent.click(button("Find in transcript"));
+		await fireEvent.input(screen.getByRole("searchbox", { name: "Find in transcript" }), {
+			target: { value: "palace" },
+		});
+		expect(rows()).toHaveLength(3);
+
+		services.player.play(second);
+		await tick();
+
+		await vi.waitFor(() => expect(rows()).toHaveLength(LINES.length));
+		expect(screen.queryByRole("searchbox", { name: "Find in transcript" })).toBeNull();
+		expect(marks()).toEqual([]);
+	});
+
 	test("Save as note hands the note to the transcribe command and writes nothing itself", async () => {
 		const vault = { create: vi.fn(), modify: vi.fn(), process: vi.fn() };
 		Object.assign(services.app, { vault });
