@@ -8,6 +8,7 @@
 		autofocus = false,
 		large = false,
 		oninput,
+		onkeydown,
 	}: {
 		value: string;
 		placeholder: string;
@@ -15,6 +16,7 @@
 		/** The first run's wider, taller field. */
 		large?: boolean;
 		oninput(value: string): void;
+		onkeydown?(event: KeyboardEvent): void;
 	} = $props();
 	let input: HTMLInputElement;
 </script>
@@ -34,6 +36,7 @@
 			if (!(event as Event as InputEvent).isComposing) oninput(event.currentTarget.value);
 		}}
 		oncompositionend={(event) => oninput(event.currentTarget.value)}
+		{onkeydown}
 		{@attach (el) => {
 			if (!autofocus) return;
 			// A view mounts before Obsidian reveals its leaf, and a hidden field cannot take focus.

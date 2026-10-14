@@ -25,9 +25,14 @@ export interface TranscriptParagraph {
 	readonly text: string;
 }
 
+/** From `soft` seconds on, a sentence end breaks; no group spans `hard` seconds or more. */
+export interface GroupLimits {
+	readonly soft: number;
+	readonly hard: number;
+}
+
 const PARAGRAPH_GAP_SECONDS = 5;
-const PARAGRAPH_SOFT_SECONDS = 30;
-const PARAGRAPH_HARD_SECONDS = 60;
+const PARAGRAPHS: GroupLimits = { soft: 30, hard: 60 };
 const ENDS_SENTENCE = /[.!?]["')\]]*$/;
 
 /**
@@ -41,12 +46,15 @@ export const MAX_PARAGRAPH_LENGTH = 2000;
 /** A speaker label repeats on each of its paragraphs. Real names stay under 20 characters. */
 const MAX_SPEAKER_LENGTH = 100;
 
-export function groupCues(cues: readonly TranscriptCue[]): TranscriptParagraph[] {
+export function groupCues(
+	cues: readonly TranscriptCue[],
+	limits = PARAGRAPHS,
+): TranscriptParagraph[] {
 	const paragraphs: TranscriptParagraph[] = [];
 	for (const cue of cues) {
 		const end = cue.end ?? cue.start;
 		const last = paragraphs[paragraphs.length - 1];
-		if (last && continues(last, cue)) {
+		if (last && continues(last, cue, limits)) {
 			paragraphs[paragraphs.length - 1] = {
 				...last,
 				end: Math.max(last.end, end),
@@ -59,13 +67,17 @@ export function groupCues(cues: readonly TranscriptCue[]): TranscriptParagraph[]
 	return paragraphs;
 }
 
-function continues(paragraph: TranscriptParagraph, cue: TranscriptCue): boolean {
+function continues(
+	paragraph: TranscriptParagraph,
+	cue: TranscriptCue,
+	{ soft, hard }: GroupLimits,
+): boolean {
 	const span = paragraph.end - paragraph.start;
 	return (
 		(cue.speaker === undefined || cue.speaker === paragraph.speaker) &&
 		cue.start - paragraph.end < PARAGRAPH_GAP_SECONDS &&
-		span < PARAGRAPH_HARD_SECONDS &&
-		!(span >= PARAGRAPH_SOFT_SECONDS && ENDS_SENTENCE.test(paragraph.text)) &&
+		span < hard &&
+		!(span >= soft && ENDS_SENTENCE.test(paragraph.text)) &&
 		paragraph.text.length + 1 + cue.text.length <= MAX_PARAGRAPH_LENGTH
 	);
 }
