@@ -372,18 +372,10 @@
 	}
 
 	:global(.is-phone) .pn-tx :global {
-		.pn-panel-head .pn-btn {
-			height: 40px;
-		}
-
-		.pn-panel-head .pn-input {
-			height: 40px;
-		}
-
 		.pn-tx-follow {
-			height: 40px;
+			height: 44px;
 			padding: 0 var(--size-4-4);
-			border-radius: 20px;
+			border-radius: 22px;
 			font-size: var(--font-ui-small);
 		}
 	}
