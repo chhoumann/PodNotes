@@ -156,7 +156,7 @@
 		{#if load.kind === "loading"}
 			<div class="pn-panel-empty" role="status">Loading transcript</div>
 		{:else if load.kind === "error"}
-			<div class="pn-panel-empty">
+			<div class="pn-panel-empty" role="alert">
 				<span class="pn-panel-empty-icon" {@attach icon("alert-triangle")}></span>
 				<span>Transcript didn't load</span>
 				<button type="button" class="pn-btn" onclick={() => show(episode)}>Retry</button>
@@ -260,6 +260,7 @@
 			type="button"
 			class="pn-btn pn-tx-save"
 			aria-label="Save as note"
+			title="Save as note"
 			disabled={!$online || !audio}
 			onclick={() => saveTranscriptNote()}
 			><span class="pn-tx-icon" {@attach icon("file-plus")}></span><span>Save as note</span
