@@ -28,7 +28,7 @@
 	} = $props();
 	const { feeds, online, settings, saveTranscriptNote, transcribeFromAudio } = useServices();
 
-	let load = $state<Load>({ kind: "loading" });
+	let load = $state.raw<Load>({ kind: "loading" });
 	let list: HTMLElement | undefined = $state();
 	let findButton: HTMLButtonElement | undefined = $state();
 	let finding = $state(false);

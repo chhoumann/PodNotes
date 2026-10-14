@@ -14,6 +14,7 @@
 		scroller?: HTMLElement;
 		children: Snippet;
 	} = $props();
+	const id = $props.id();
 </script>
 
 <div class="pn-panel">
@@ -21,7 +22,11 @@
 		<div class="pn-panel-head">{@render head()}</div>
 	{/if}
 	{#if list}
-		<ol class="pn-panel-scroll" aria-label={list} bind:this={scroller}>{@render children()}</ol>
+		<!-- Obsidian shows an aria-label as a tooltip over the whole list. -->
+		<span id="{id}-list" hidden>{list}</span>
+		<ol class="pn-panel-scroll" aria-labelledby="{id}-list" bind:this={scroller}>
+			{@render children()}
+		</ol>
 	{:else}
 		<div class="pn-panel-scroll" bind:this={scroller}>{@render children()}</div>
 	{/if}
