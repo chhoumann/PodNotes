@@ -91,8 +91,18 @@ function fakeEditor(text: string, caret = text.length) {
 	};
 }
 
+/**
+ * `notes` is what is on disk. Like Obsidian's, `cachedRead` answers from a cache that a
+ * change on disk outside the vault does not update; `process` reads the disk.
+ */
 function fakeVault() {
 	const notes = new Map<string, { file: TFile; content: string }>();
+	const cache = new Map<string, string>();
+	const write = (file: TFile, content: string) => {
+		notes.get(file.path)!.content = content;
+		cache.set(file.path, content);
+		return content;
+	};
 	return {
 		notes,
 		read: (path: string) => notes.get(path)?.content,
@@ -106,11 +116,16 @@ function fakeVault() {
 				notes.set(path, { file, content });
 				return file;
 			},
-			process: async (file: TFile, change: (content: string) => string) => {
-				const note = notes.get(file.path)!;
-				note.content = change(note.content);
-				return note.content;
+			read: async (file: TFile) => notes.get(file.path)!.content,
+			cachedRead: async (file: TFile) => {
+				if (!cache.has(file.path)) cache.set(file.path, notes.get(file.path)!.content);
+				return cache.get(file.path)!;
 			},
+			modify: async (file: TFile, content: string) => {
+				write(file, content);
+			},
+			process: async (file: TFile, change: (content: string) => string) =>
+				write(file, change(notes.get(file.path)!.content)),
 		},
 	};
 }
@@ -604,6 +619,20 @@ describe("capture", () => {
 
 			expect(editor.getValue()).toBe("# Mine\n");
 			expect(read(NOTE_PATH)).toBe("on disk only");
+		});
+
+		it("leaves the episode note's timestamp once a change on disk is newer than Obsidian's cache, and says so", async () => {
+			const { plugin, notes, read } = await loadPlugin(playing);
+			await plugin.capture.timestamp();
+			const note = notes.get(NOTE_PATH)!;
+			await plugin.app.vault.cachedRead(note.file);
+			note.content = `External user edit\n${note.content}`;
+			const newer = note.content;
+
+			await undo();
+
+			expect(read(NOTE_PATH)).toBe(newer);
+			expect(said()).toEqual(["Created Saved Episode", REFUSED]);
 		});
 
 		it("leaves an episode note timestamp the user edited, and says so", async () => {

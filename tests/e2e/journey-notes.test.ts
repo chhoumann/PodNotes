@@ -825,6 +825,47 @@ describe("episode note and capture journeys", () => {
 		);
 	});
 
+	test("J-TS-19 Undo leaves an episode note changed on disk before Obsidian read it again, and says so", async () => {
+		const { obsidian } = getContext();
+		const journey = await setUp("Journey Undo Stale");
+		const episodeNote = notePath(journey.show, ORIGINAL.title);
+		await detachMarkdownTabs();
+		await playFromList(journey.show, ORIGINAL.title);
+		const line = capture(journey, ORIGINAL, (await pauseInView()).seconds);
+
+		await click(obsidian, ui.playerTimestamp);
+		const created = await waitForText(
+			episodeNote,
+			(text) => text.endsWith(`\n${line}\n`),
+			"the capture in a new episode note",
+		);
+		const file = `app.vault.getAbstractFileByPath(${jsLiteral(episodeNote)})`;
+		expect(
+			await obsidian.dev.evalJsonAsync<string>(`app.vault.cachedRead(${file})`),
+			"Obsidian's cached text",
+		).toBe(created);
+		const newer = `External user edit\n${created}`;
+		// Written to the file and Undo clicked in one turn, before Obsidian's file watcher
+		// reports the change, so its cache still holds the text as the capture left it.
+		await obsidian.dev.evalJson(`(() => {
+			require("fs").writeFileSync(app.vault.adapter.getFullPath(${jsLiteral(episodeNote)}), ${jsLiteral(newer)});
+			[...document.querySelectorAll(".notice")]
+				.find((notice) => notice.textContent.startsWith("Created Original Title"))
+				.querySelector("button.pn-undo")
+				.click();
+			return true;
+		})()`);
+
+		await obsidian.waitFor(
+			async () =>
+				(await notices(obsidian)).includes(REFUSED) ||
+				(await readVaultText(obsidian, episodeNote)) !== newer,
+			{ timeoutMs: 5_000, intervalMs: 100, message: "Undo to answer" },
+		);
+		expect(await readVaultText(obsidian, episodeNote), "the newer text on disk").toBe(newer);
+		expect(await notices(obsidian)).toContain(REFUSED);
+	});
+
 	test("J-TS-14 Capture Timestamp with nothing loaded says to play an episode, and writes nothing", async () => {
 		const { obsidian, sandbox } = getContext();
 		const journey = await setUp("Journey Nothing Loaded");
