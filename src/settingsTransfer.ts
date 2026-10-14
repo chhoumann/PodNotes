@@ -55,7 +55,7 @@ const SECRET_KEY_LABELS: Record<keyof CredentialValues, string> = {
 /**
  * The human-facing labels for the secrets actually present (non-empty) in a
  * settings object. Used to keep the export toggle, the export notice, and the
- * import confirmation honest about which keys are involved — so a Deepgram-only
+ * import confirmation honest about which keys are involved, so a Deepgram-only
  * user is never told only "OpenAI API key" (and vice versa). See issue #168.
  */
 export function describeSecrets(secrets: CredentialValues): string[] {

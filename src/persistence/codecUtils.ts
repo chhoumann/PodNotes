@@ -166,6 +166,14 @@ export function mapRecord<T, R>(
 	return result;
 }
 
+/** Whether `value` is one of the keys of `options`, and not one it inherits. */
+export function isOption<T extends string>(
+	options: Readonly<Record<T, unknown>>,
+	value: unknown,
+): value is T {
+	return typeof value === "string" && Object.prototype.hasOwnProperty.call(options, value);
+}
+
 export function isPlainObject(value: unknown): value is UnknownRecord {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

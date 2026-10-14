@@ -373,16 +373,16 @@ export class DropdownComponent extends BaseInteractiveElement {
 		return this.element as HTMLSelectElement;
 	}
 
+	addOption(value: string, label: string) {
+		const option = document.createElement("option");
+		option.value = value;
+		option.textContent = label;
+		this.selectEl.appendChild(option);
+		return this;
+	}
+
 	addOptions(options: Record<string, string>) {
-		this.selectEl.innerHTML = "";
-
-		Object.entries(options).forEach(([value, label]) => {
-			const option = document.createElement("option");
-			option.value = value;
-			option.textContent = label;
-			this.selectEl.appendChild(option);
-		});
-
+		for (const [value, label] of Object.entries(options)) this.addOption(value, label);
 		return this;
 	}
 
@@ -398,6 +398,45 @@ export class DropdownComponent extends BaseInteractiveElement {
 
 	onChange(callback: (value: string) => void) {
 		this.selectEl.addEventListener("change", () => callback(this.selectEl.value));
+		return this;
+	}
+}
+
+/** As Obsidian's: setValue runs the change callback when the value changes. */
+export class ToggleComponent extends BaseInteractiveElement {
+	private on = false;
+	private changeCallback?: (on: boolean) => void;
+
+	constructor(container: HTMLElement) {
+		super("input", container);
+		this.toggleEl.type = "checkbox";
+		this.toggleEl.addEventListener("change", () => this.setValue(this.toggleEl.checked));
+	}
+
+	get toggleEl() {
+		return this.element as HTMLInputElement;
+	}
+
+	getValue() {
+		return this.on;
+	}
+
+	setValue(on: boolean) {
+		this.toggleEl.checked = on;
+		if (this.on !== on) {
+			this.on = on;
+			this.changeCallback?.(on);
+		}
+		return this;
+	}
+
+	setDisabled(disabled: boolean) {
+		this.toggleEl.disabled = disabled;
+		return this;
+	}
+
+	onChange(callback: (on: boolean) => void) {
+		this.changeCallback = callback;
 		return this;
 	}
 }
@@ -435,8 +474,8 @@ export class SliderComponent extends BaseInteractiveElement {
 }
 
 export class TextComponent extends BaseInteractiveElement {
-	constructor(container: HTMLElement) {
-		super("input", container);
+	constructor(container: HTMLElement, tag: "input" | "textarea" = "input") {
+		super(tag, container);
 	}
 
 	get inputEl() {
@@ -473,15 +512,25 @@ export class SecretComponent extends TextComponent {
 	}
 }
 
+interface Disableable {
+	setDisabled(disabled: boolean): unknown;
+}
+
 export class Setting {
 	settingEl: HTMLElement;
+	infoEl: HTMLElement;
 	nameEl: HTMLElement;
+	descEl: HTMLElement;
+	controlEl: HTMLElement;
+	errorEl: HTMLElement | null = null;
+	private components: Disableable[] = [];
 
 	constructor(containerEl: HTMLElement) {
-		this.settingEl = document.createElement("div");
-		this.nameEl = document.createElement("div");
-		this.settingEl.appendChild(this.nameEl);
-		containerEl.appendChild(this.settingEl);
+		this.settingEl = containerEl.createDiv({ cls: "setting-item" });
+		this.infoEl = this.settingEl.createDiv({ cls: "setting-item-info" });
+		this.nameEl = this.infoEl.createDiv({ cls: "setting-item-name" });
+		this.descEl = this.infoEl.createDiv({ cls: "setting-item-description" });
+		this.controlEl = this.settingEl.createDiv({ cls: "setting-item-control" });
 	}
 
 	setName(name: string) {
@@ -489,44 +538,88 @@ export class Setting {
 		return this;
 	}
 
-	setDesc() {
+	setDesc(desc: string) {
+		this.descEl.textContent = desc;
 		return this;
 	}
 
 	setHeading() {
+		this.settingEl.classList.add("setting-item-heading");
 		return this;
 	}
 
-	addText(callback: (component: TextComponent) => void) {
-		callback(new TextComponent(this.settingEl));
+	setDisabled(disabled: boolean) {
+		this.settingEl.classList.toggle("is-disabled", disabled);
+		for (const component of this.components) component.setDisabled(disabled);
 		return this;
 	}
 
-	addTextArea(callback: (component: TextComponent) => void) {
-		callback(new TextComponent(this.settingEl));
+	setErrorMessage(message: string | null) {
+		if (message) {
+			this.errorEl ??= this.controlEl.createDiv({ cls: "setting-item-error" });
+			this.errorEl.textContent = message;
+		} else {
+			this.errorEl?.remove();
+			this.errorEl = null;
+		}
 		return this;
 	}
 
-	addSlider(callback: (component: SliderComponent) => void) {
-		callback(new SliderComponent(this.settingEl));
+	private add<T extends Disableable>(component: T, callback: (component: T) => unknown) {
+		this.components.push(component);
+		callback(component);
 		return this;
 	}
 
-	addButton(callback: (component: ButtonComponent) => void) {
-		callback(new ButtonComponent(this.settingEl));
+	addText(callback: (component: TextComponent) => unknown) {
+		return this.add(new TextComponent(this.controlEl), callback);
+	}
+
+	addTextArea(callback: (component: TextComponent) => unknown) {
+		return this.add(new TextComponent(this.controlEl, "textarea"), callback);
+	}
+
+	addToggle(callback: (component: ToggleComponent) => unknown) {
+		return this.add(new ToggleComponent(this.controlEl), callback);
+	}
+
+	addDropdown(callback: (component: DropdownComponent) => unknown) {
+		return this.add(new DropdownComponent(this.controlEl), callback);
+	}
+
+	addSlider(callback: (component: SliderComponent) => unknown) {
+		callback(new SliderComponent(this.controlEl));
 		return this;
 	}
 
-	addComponent<T>(callback: (container: HTMLElement) => T) {
-		callback(this.settingEl);
+	addButton(callback: (component: ButtonComponent) => unknown) {
+		return this.add(new ButtonComponent(this.controlEl), callback);
+	}
+
+	addComponent<T extends Disableable>(callback: (container: HTMLElement) => T) {
+		this.components.push(callback(this.controlEl));
 		return this;
 	}
 }
 
+interface SettingDefinition {
+	type?: "group";
+	heading?: string;
+	items?: SettingDefinition[];
+	name?: string;
+	desc?: string;
+	render?: (setting: Setting, group: unknown) => void | (() => void);
+}
+
+/**
+ * Renders getSettingDefinitions() as Obsidian 1.14 does: every render runs the
+ * cleanups of the rows rendered before, and closing the tab runs them before hide().
+ */
 export class PluginSettingTab {
 	app: App;
 	plugin: Plugin;
 	containerEl: HTMLElement;
+	private cleanups: Array<() => void> = [];
 
 	constructor(app: App, plugin: Plugin) {
 		this.app = app;
@@ -534,9 +627,41 @@ export class PluginSettingTab {
 		this.containerEl = document.createElement("div");
 	}
 
-	display(): void {}
-	update(): void {}
+	getSettingDefinitions(): SettingDefinition[] {
+		return [];
+	}
+
+	display(): void {
+		this.cleanUp();
+		this.containerEl.empty();
+		for (const definition of this.getSettingDefinitions()) {
+			if (definition.heading)
+				new Setting(this.containerEl).setName(definition.heading).setHeading();
+			for (const row of definition.items ?? [definition]) {
+				const setting = new Setting(this.containerEl).setName(row.name ?? "");
+				if (row.desc) setting.setDesc(row.desc);
+				const cleanup = row.render?.(setting, definition);
+				if (cleanup) this.cleanups.push(cleanup);
+			}
+		}
+	}
+
+	update(): void {
+		this.display();
+	}
+
 	hide(): void {}
+
+	/** Test only: Obsidian closing Settings, or opening another tab. */
+	close(): void {
+		this.cleanUp();
+		this.containerEl.empty();
+		this.hide();
+	}
+
+	private cleanUp(): void {
+		for (const cleanup of this.cleanups.splice(0)) cleanup();
+	}
 }
 
 export const MarkdownRenderer = {

@@ -102,7 +102,7 @@ export async function openPodNotesSettings(obsidian: ObsidianClient): Promise<vo
 	await assertSettingsOpenInMainWindow(obsidian);
 	await runCommand(obsidian, "app:open-settings");
 	await click(obsidian, ui.settingsTab("PodNotes"));
-	await waitUntilShown(obsidian, ui.settingHeading("Episode notes"));
+	await waitUntilShown(obsidian, ui.settingHeading("Notes"));
 }
 
 export async function showAddPodcast(obsidian: ObsidianClient): Promise<void> {

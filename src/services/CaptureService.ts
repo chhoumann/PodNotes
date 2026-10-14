@@ -66,7 +66,7 @@ export class CaptureService {
 			return null;
 		}
 		if (!settings.timestamp.template) {
-			new Notice("Set a Capture timestamp format in settings to capture a timestamp.");
+			new Notice("Set a Timestamp template in settings to capture a timestamp.");
 			return null;
 		}
 		const text = render(settings.timestamp.template);

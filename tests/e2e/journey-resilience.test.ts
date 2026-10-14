@@ -19,7 +19,7 @@ import {
 	showList,
 	showPodNotes,
 } from "./journey/actions";
-import { click, typeInto } from "./journey/input";
+import { click, pressKey, typeInto } from "./journey/input";
 import { ui } from "./journey/targets";
 import {
 	eventually,
@@ -246,9 +246,10 @@ describe("resilience journeys", () => {
 		);
 
 		await openPodNotesSettings(obsidian);
-		await typeInto(obsidian, ui.settingControl("Skip backward length (s)", "input"), "42", {
+		await typeInto(obsidian, ui.settingControl("Skip back (s)", "input"), "42", {
 			replace: true,
 		});
+		await pressKey(obsidian, "Enter");
 		const saved = await waitForLibrary(
 			plugin,
 			(library) => library.skipBackwardSeconds === 42,
