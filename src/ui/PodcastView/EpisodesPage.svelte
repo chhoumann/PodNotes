@@ -199,9 +199,7 @@
 
 		.d.is-host {
 			font-family: var(--font-monospace);
-			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis;
+			overflow-wrap: anywhere;
 		}
 	}
 

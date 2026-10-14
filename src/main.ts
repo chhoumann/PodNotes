@@ -585,14 +585,21 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				// An entry the codec dropped while repairing a value (an invalid episode, a
 				// collection reset) is not a deletion on the other device. Keep it.
 				const raw = data as Record<string, unknown>;
+				let restored = false;
 				for (const [key, value] of Object.entries(base ?? {})) {
-					if (!jsonValuesEqual(raw[key], doc[key])) {
-						doc[key] = restoreDropped(value, doc[key], raw[key], [key]);
-					}
+					if (jsonValuesEqual(raw[key], doc[key])) continue;
+					const kept = restoreDropped(value, doc[key], raw[key], [key]);
+					if (jsonValuesEqual(kept, doc[key])) continue;
+					doc[key] = kept;
+					restored = true;
 				}
+				// toDocument redacted the rest. A restored entry can quote a private address,
+				// or name a private feed whose address other fields quote.
 				return {
 					kind: "file",
-					doc: redactPrivateFeedAddresses(doc, addresses) as PersistedPodNotesDataV2,
+					doc: (restored
+						? redactPrivateFeedAddresses(doc, addresses)
+						: doc) as PersistedPodNotesDataV2,
 				};
 			},
 			write: (doc) =>

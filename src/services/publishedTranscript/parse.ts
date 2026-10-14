@@ -1,4 +1,5 @@
 import { isPlainObject } from "src/persistence/codecUtils";
+import { COMMON_NAMED_ENTITIES } from "src/utility/htmlEntities";
 
 export type TranscriptFormat = "vtt" | "srt" | "json" | "html" | "text";
 
@@ -165,16 +166,9 @@ function toSeconds(value: unknown): number | undefined {
 	return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 }
 
-const NAMED_ENTITIES = new Map([
-	["amp", "&"],
-	["lt", "<"],
-	["gt", ">"],
-	["quot", '"'],
-	["apos", "'"],
-	["nbsp", "\u00a0"],
-	["lrm", "\u200e"],
-	["rlm", "\u200f"],
-]);
+const NAMED_ENTITIES = new Map(
+	Object.entries({ ...COMMON_NAMED_ENTITIES, lrm: "\u200e", rlm: "\u200f" }),
+);
 
 function decodeEntities(text: string): string {
 	return text.replace(/&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi, (match, decimal, hex, name) => {
