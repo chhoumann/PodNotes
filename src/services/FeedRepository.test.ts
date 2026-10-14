@@ -76,7 +76,7 @@ async function loaded(
 	response: ParsedFeedEpisodes,
 ) {
 	t.repo.setSubscriptions(feeds);
-	const loading = t.repo.ensureAll();
+	const loading = t.repo.ensureAll({ online: true });
 	for (const request of t.requests) request.respond.resolve(response);
 	await loading;
 }
@@ -99,7 +99,7 @@ describe("FeedRepository", () => {
 			"Alpha Alias": { ...alpha, title: "Alpha Alias" },
 		});
 
-		const loading = t.repo.ensureAll();
+		const loading = t.repo.ensureAll({ online: true });
 		expect(t.load).toHaveBeenCalledTimes(1);
 		t.requests[0].respond.resolve(doc("Alpha Channel", [item(1)]));
 		await loading;
@@ -118,7 +118,7 @@ describe("FeedRepository", () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Alpha: alpha });
 
-		const first = t.repo.ensureAll();
+		const first = t.repo.ensureAll({ online: true });
 		const refresh = t.repo.load(["Alpha"], "network");
 		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
 		await expect(Promise.all([first, refresh])).resolves.toEqual([true, true]);
@@ -130,7 +130,7 @@ describe("FeedRepository", () => {
 	test("refreshes keep the shown episodes until they answer, in whatever order they answer", async () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Alpha: alpha, Beta: beta });
-		const first = t.repo.ensureAll();
+		const first = t.repo.ensureAll({ online: true });
 		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
 		t.requests[1].respond.resolve(doc("Beta", [item(2)]));
 		await first;
@@ -152,7 +152,7 @@ describe("FeedRepository", () => {
 		await loaded(t, { Alpha: alpha }, doc("Alpha", [item(1)]));
 		t.advance(7 * HOUR);
 
-		const refresh = t.repo.ensureAll();
+		const refresh = t.repo.ensureAll({ online: true });
 		expect(t.load).toHaveBeenCalledTimes(2);
 		expect(t.titles("Alpha")).toEqual(["Episode 1"]);
 		t.requests[1].respond.reject(new Error("offline"));
@@ -166,7 +166,7 @@ describe("FeedRepository", () => {
 	test("a feed that never loaded reports the failure", async () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Alpha: alpha });
-		const loading = t.repo.ensureAll();
+		const loading = t.repo.ensureAll({ online: true });
 		t.requests[0].respond.reject(new Error("offline"));
 		await expect(loading).resolves.toBe(false);
 
@@ -176,7 +176,7 @@ describe("FeedRepository", () => {
 	test("a response for a podcast removed while it loads is dropped and not cached", async () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Alpha: alpha, Beta: beta });
-		const loading = t.repo.ensureAll();
+		const loading = t.repo.ensureAll({ online: true });
 		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
 
 		t.repo.setSubscriptions({ Alpha: alpha });
@@ -188,7 +188,7 @@ describe("FeedRepository", () => {
 
 		t.repo.setSubscriptions({ Alpha: alpha, Beta: beta });
 		expect(t.titles("Beta")).toEqual([]);
-		void t.repo.ensureAll();
+		void t.repo.ensureAll({ online: true });
 		expect(t.load).toHaveBeenCalledTimes(3);
 	});
 
@@ -196,10 +196,10 @@ describe("FeedRepository", () => {
 		const t = setup();
 		const moved = { ...alpha, url: "https://alpha.test/moved.xml" };
 		t.repo.setSubscriptions({ Alpha: alpha });
-		const before = t.repo.ensureAll();
+		const before = t.repo.ensureAll({ online: true });
 
 		t.repo.setSubscriptions({ Alpha: moved });
-		const after = t.repo.ensureAll();
+		const after = t.repo.ensureAll({ online: true });
 		t.requests[1].respond.resolve(doc("Alpha", [item(2)]));
 		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
 		await Promise.all([before, after]);
@@ -218,7 +218,7 @@ describe("FeedRepository", () => {
 
 		const t = setup({ storage: first.storage });
 		t.repo.setSubscriptions({ Alpha: alpha });
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 		expect(t.load).not.toHaveBeenCalled();
 		expect(t.titles("Alpha")).toHaveLength(75);
 
@@ -269,7 +269,7 @@ describe("FeedRepository", () => {
 
 		const t = setup({ storage: first.storage });
 		t.repo.setSubscriptions({ Alpha: alpha });
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 
 		expect(t.feed("Alpha")?.episodes).toEqual(first.feed("Alpha")?.episodes);
 		expect(t.feed("Alpha")?.episodes[0].episodeDate).toEqual(episode.episodeDate);
@@ -291,7 +291,7 @@ describe("FeedRepository", () => {
 
 		const t = setup({ storage: first.storage });
 		t.repo.setSubscriptions({ Alpha: alpha });
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 
 		expect(t.load).not.toHaveBeenCalled();
 		expect(Object.keys(t.cached())).toEqual([alpha.url]);
@@ -386,14 +386,59 @@ describe("FeedRepository", () => {
 		const t = setup({ storage: seeded.storage });
 		t.advance(6 * HOUR);
 		t.repo.setSubscriptions({ Alpha: alpha });
-		void t.repo.ensureAll();
+		void t.repo.ensureAll({ online: true });
 		expect(t.load).not.toHaveBeenCalled();
 		expect(t.feed("Alpha")).toMatchObject({ status: "ready", episodes: [expect.anything()] });
 
 		t.advance(1);
-		void t.repo.ensureAll();
+		void t.repo.ensureAll({ online: true });
 		expect(t.load).toHaveBeenCalledTimes(1);
 		expect(t.feed("Alpha")).toMatchObject({ status: "loading", episodes: [expect.anything()] });
+	});
+
+	test("offline, an expired cache shows without a request", async () => {
+		const seeded = setup();
+		await loaded(seeded, { Alpha: alpha }, doc("Alpha", [item(1)]));
+
+		const t = setup({ storage: seeded.storage });
+		t.advance(7 * HOUR);
+		t.repo.setSubscriptions({ Alpha: alpha });
+		const loading = t.repo.ensureAll({ online: false });
+
+		expect(t.load).not.toHaveBeenCalled();
+		await expect(loading).resolves.toBe(true);
+		expect(t.feed("Alpha")).toMatchObject({ status: "stale", error: undefined });
+		expect(t.titles("Alpha")).toEqual(["Episode 1"]);
+	});
+
+	test("offline, a feed with no document waits idle without a request", async () => {
+		const t = setup();
+		t.repo.setSubscriptions({ Alpha: alpha });
+		const loading = t.repo.ensureAll({ online: false });
+
+		expect(t.load).not.toHaveBeenCalled();
+		await expect(loading).resolves.toBe(true);
+		expect(t.feed("Alpha")).toMatchObject({ status: "idle", error: undefined, episodes: [] });
+	});
+
+	test("reconnecting after an offline start fetches each URL once", async () => {
+		const t = setup();
+		t.repo.setSubscriptions({
+			Alpha: alpha,
+			"Alpha Alias": { ...alpha, title: "Alpha Alias" },
+			Beta: beta,
+		});
+		void t.repo.ensureAll({ online: false });
+		expect(t.load).not.toHaveBeenCalled();
+
+		const reconnect = t.repo.ensureAll({ online: true });
+		expect(t.requests.map(({ url }) => url)).toEqual([alpha.url, beta.url]);
+		t.requests[0].respond.resolve(doc("Alpha", [item(1)]));
+		t.requests[1].respond.resolve(doc("Beta", [item(2)]));
+		await expect(reconnect).resolves.toBe(true);
+
+		expect(t.titles("Alpha Alias")).toEqual(["Episode 1"]);
+		expect(t.titles("Beta")).toEqual(["Episode 2"]);
 	});
 
 	test("a private feed whose URL is not on this device is never fetched", async () => {
@@ -402,7 +447,7 @@ describe("FeedRepository", () => {
 		const placeholder = privateFeedPlaceholder("Private");
 		t.repo.setSubscriptions({ Private: { ...alpha, url: placeholder, urlSecretId: "id" } });
 
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 
 		expect(t.load).not.toHaveBeenCalled();
 		expect(t.feed("Private")).toMatchObject({ status: "error", error: "unavailable" });
@@ -416,7 +461,7 @@ describe("FeedRepository", () => {
 		const resolveUrl = vi.fn(() => null);
 		const t = setup({ storage: seeded.storage, resolveUrl });
 		t.repo.setSubscriptions({ Private: privateFeed });
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 
 		expect(resolveUrl).not.toHaveBeenCalled();
 		expect(t.titles("Private")).toEqual(["Episode 1"]);
@@ -492,7 +537,7 @@ describe("FeedRepository", () => {
 
 		const t = setup({ storage: first.storage });
 		t.repo.setSubscriptions({ Alpha: alpha });
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 
 		expect(t.load).not.toHaveBeenCalled();
 		const guids = new Map(t.feed("Alpha")!.episodes.map(({ title, guid }) => [title, guid]));
@@ -550,7 +595,7 @@ describe("FeedRepository", () => {
 		await loaded(t, { Alpha: alpha, Beta: beta }, doc("Show", [item(1)]));
 		const episodes = t.feed("Alpha")?.episodes;
 
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 		expect(t.feed("Alpha")?.episodes).toBe(episodes);
 
 		t.repo.setSubscriptions({ Alpha: { ...alpha, title: "Alpha Renamed" }, Beta: beta });
@@ -572,7 +617,7 @@ describe("FeedRepository", () => {
 			storage.saveLocalStorage(CACHE_KEY, stored);
 			const t = setup({ storage });
 			t.repo.setSubscriptions({ Alpha: alpha });
-			void t.repo.ensureAll();
+			void t.repo.ensureAll({ online: true });
 			expect(t.load).toHaveBeenCalledTimes(1);
 		}
 
@@ -585,7 +630,7 @@ describe("FeedRepository", () => {
 		);
 		const t = setup({ storage });
 		t.repo.setSubscriptions({ Alpha: alpha });
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 
 		expect(t.load).not.toHaveBeenCalled();
 		expect(t.feed("Alpha")?.episodes).toEqual([
@@ -626,7 +671,7 @@ describe("FeedRepository", () => {
 		);
 		const t = setup({ storage });
 		t.repo.setSubscriptions({ Alpha: alpha });
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 		const [first, second] = t.feed("Alpha")!.episodes;
 
 		expect(t.load).not.toHaveBeenCalled();
@@ -644,7 +689,7 @@ describe("FeedRepository", () => {
 		const t = setup({ storage });
 		t.repo.setSubscriptions({});
 
-		await t.repo.ensureAll();
+		await t.repo.ensureAll({ online: true });
 
 		expect(storage.values.has("podnotes:feed-cache:v5")).toBe(false);
 		expect([...legacyStorage.keys()]).toEqual([]);
@@ -695,7 +740,7 @@ describe("FeedRepository", () => {
 		const t = setup({ storage });
 		t.repo.setSubscriptions({ Alpha: alpha });
 
-		void t.repo.ensureAll();
+		void t.repo.ensureAll({ online: true });
 
 		expect(t.load).not.toHaveBeenCalled();
 		expect(t.titles("Alpha")).toEqual(["Episode 1"]);
@@ -732,7 +777,7 @@ describe("FeedRepository", () => {
 	test("a feed link for a subscribed feed shares its request", async () => {
 		const t = setup();
 		t.repo.setSubscriptions({ Alpha: alpha });
-		const loading = t.repo.ensureAll();
+		const loading = t.repo.ensureAll({ online: true });
 
 		const episodes = t.repo.episodesAt(alpha.url);
 		t.requests[0].respond.resolve(doc("Alpha Channel", [item(1)]));

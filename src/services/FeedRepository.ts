@@ -136,7 +136,9 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 		);
 	}
 
-	ensureAll(): Promise<boolean> {
+	ensureAll({ online }: { online: boolean }): Promise<boolean> {
+		this.hydrate();
+		if (!online) return Promise.resolve(true);
 		return this.load(this.subscriptions.keys(), "cached");
 	}
 
