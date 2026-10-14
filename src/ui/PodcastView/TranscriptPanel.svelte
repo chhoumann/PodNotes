@@ -172,6 +172,7 @@
 				<span class="pn-panel-empty-icon" {@attach icon("alert-triangle")}></span>
 				<span>Transcript didn't load</span>
 				<button type="button" class="pn-btn" onclick={() => show(episode)}>Retry</button>
+				{#if note}{@render saveNote()}{/if}
 			</div>
 		{:else if load.kind === "none"}
 			<div class="pn-panel-empty">
@@ -181,7 +182,9 @@
 						? "No transcript yet"
 						: "No transcript in this feed"}</span
 				>
-				{#if audio}
+				{#if note}
+					{@render saveNote()}
+				{:else if audio}
 					<button
 						type="button"
 						class="pn-btn"
@@ -268,19 +271,22 @@
 			onclick={() => (finding = true)}
 			{@attach icon("search")}
 		></button>
-		{@const label = note ? "Open note" : "Save as note"}
-		<button
-			type="button"
-			class="pn-btn pn-tx-save"
-			aria-label={label}
-			disabled={!note && !$online}
-			onclick={() =>
-				note ? app.workspace.getLeaf(false).openFile(note) : saveTranscriptNote()}
-			><span class="pn-tx-icon" {@attach icon(note ? "file-text" : "file-plus")}></span><span
-				>{label}</span
-			></button
-		>
+		{@render saveNote()}
 	{/if}
+{/snippet}
+
+{#snippet saveNote()}
+	{@const label = note ? "Open note" : "Save as note"}
+	<button
+		type="button"
+		class="pn-btn pn-tx-save"
+		aria-label={label}
+		disabled={!note && !$online}
+		onclick={() => (note ? app.workspace.getLeaf(false).openFile(note) : saveTranscriptNote())}
+		><span class="pn-tx-icon" {@attach icon(note ? "file-text" : "file-plus")}></span><span
+			>{label}</span
+		></button
+	>
 {/snippet}
 
 <style>
@@ -375,7 +381,7 @@
 			background: var(--interactive-accent-hover);
 		}
 
-		.is-compact:not(.is-phone) & {
+		.is-compact:not(.is-phone) & .pn-panel-head {
 			.pn-tx-save {
 				width: 28px;
 				padding: 0;

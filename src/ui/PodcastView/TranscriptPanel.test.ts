@@ -129,6 +129,20 @@ async function openTranscript(played: Episode, time = 0, width = 320) {
 	return result;
 }
 
+/** A transcript note saved before for `played`, and the spy that opens a note. */
+function noteSavedBefore(played: Episode) {
+	const { settings } = get(plugin);
+	settings.transcript.path = "Transcripts/{{title}}.md";
+	plugin.set(get(plugin));
+	const saved = Object.assign(new TFile(), { path: `Transcripts/${played.title}.md` });
+	Object.assign(services.app, {
+		vault: { getFileByPath: (path: string) => (path === saved.path ? saved : null) },
+	});
+	const openFile = vi.fn((_file: TFile) => {});
+	Object.assign(services.app.workspace, { getLeaf: vi.fn(() => ({ openFile })) });
+	return { saved, openFile };
+}
+
 async function at(time: number) {
 	doc.media.currentTime = time;
 	doc.media.emit("timeupdate");
@@ -528,6 +542,22 @@ describe("a transcript that did not load", () => {
 		expect(container.innerHTML).not.toContain("s3cret");
 	});
 
+	test("with a note saved before, offers Open note beside Retry, also offline", async () => {
+		fetchTextMock.mockRejectedValueOnce(new NetworkError("unexpected-status", 500));
+		const played = episodeOf([VTT_LINK]);
+		const { saved, openFile } = noteSavedBefore(played);
+		await openTranscript(played, 0);
+		await screen.findByText("Transcript didn't load");
+		services.online.set(false);
+		await tick();
+
+		await fireEvent.click(button("Open note"));
+
+		expect(openFile).toHaveBeenCalledExactlyOnceWith(saved);
+		expect(services.saveTranscriptNote).not.toHaveBeenCalled();
+		expect(button("Retry")).toBeVisible();
+	});
+
 	test("when the feed itself did not load, offers Retry, not the paid transcription", async () => {
 		const served = loadFeed.getMockImplementation()!;
 		loadFeed.mockRejectedValue(new Error("offline"));
@@ -553,6 +583,20 @@ describe("an episode whose feed publishes no transcript", () => {
 		services.online.set(false);
 		await tick();
 		expect(paid).toBeDisabled();
+	});
+
+	test("with a transcript note saved before, offers Open note instead of the paid transcription", async () => {
+		const played = episodeOf([]);
+		const { saved, openFile } = noteSavedBefore(played);
+		await openTranscript(played, 0);
+		await screen.findByText("No transcript in this feed");
+
+		await fireEvent.click(button("Open note"));
+
+		expect(openFile).toHaveBeenCalledExactlyOnceWith(saved);
+		expect(screen.queryByRole("button", { name: /^Transcribe with/ })).toBeNull();
+		expect(services.transcribeFromAudio).not.toHaveBeenCalled();
+		expect(services.saveTranscriptNote).not.toHaveBeenCalled();
 	});
 
 	test("names Deepgram when diarization uses it", async () => {

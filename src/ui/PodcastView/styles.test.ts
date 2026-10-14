@@ -120,3 +120,21 @@ describe("hover", () => {
 		},
 	);
 });
+
+describe("the transcript's note button", () => {
+	test("shows only its icon in a compact panel's head, and its label in an empty panel", () => {
+		const css = componentCss(["PodcastView", "TranscriptPanel"]);
+		const button =
+			'<button class="pn-btn pn-tx-save"><span></span><span>Open note</span></button>';
+		styled(
+			css,
+			`<div class="podcast-view is-compact pn-PodcastView"><div class="pn-tx pn-TranscriptPanel"><div class="pn-panel-head">${button}</div><div class="pn-panel-empty">${button}</div></div></div>`,
+			".pn-tx",
+		);
+		const label = (place: string) =>
+			getComputedStyle(document.querySelector(`.${place} .pn-tx-save span:last-child`)!)
+				.display;
+
+		expect([label("pn-panel-head"), label("pn-panel-empty")]).toEqual(["none", "inline"]);
+	});
+});
