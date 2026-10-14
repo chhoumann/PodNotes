@@ -776,11 +776,12 @@ describe("PodNotesSettingsTab settings import", () => {
 				clock.advance(10_000);
 				clock.runAll();
 				await settled();
-				expect(clock.pending()).toBe(0);
+				expect(clock.pending()).toBe(1);
 
 				readable = true;
 				savedFeeds.update((feeds) => ({ ...feeds, Later: feed("Later") }));
 				const armed = clock.pending();
+				clock.advance(10_000);
 				clock.runAll();
 				await settled();
 
@@ -793,7 +794,7 @@ describe("PodNotesSettingsTab settings import", () => {
 				expect(clock.pending()).toBe(0);
 				expect(notice.mock.calls).toEqual([
 					[
-						"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged and saves nothing until the file can be read again.",
+						"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.",
 						0,
 					],
 					[

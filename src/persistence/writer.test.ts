@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { manualClock } from "../../tests/mocks/dataFileWriter";
-import { type DataFileAccess, DataFileWriter } from "./writer";
+import {
+	type DataFileAccess,
+	DataFileWriter,
+	type ReadOutcome,
+	type Refusal,
+	type WriterStart,
+} from "./writer";
 
 type Doc = {
 	defaultVolume: number;
@@ -16,6 +22,20 @@ function doc(): Doc {
 	};
 }
 
+const STARTUP: Refusal = { recovery: "retry", message: "could not read at startup" };
+const UNREADABLE: Refusal = { recovery: "retry", message: "could not read" };
+const NEWER: Refusal = { recovery: "stop", message: "update PodNotes" };
+
+function found(disk: Doc | null): ReadOutcome<Doc> {
+	return disk ? { kind: "file", doc: structuredClone(disk) } : { kind: "missing" };
+}
+
+function refused(refusal: Refusal): ReadOutcome<Doc> {
+	return { kind: "refused", refusal };
+}
+
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 /** data.json and the in-memory state as two plain documents. */
 function memoryFile(initial: Doc = doc()) {
 	const state = {
@@ -26,7 +46,7 @@ function memoryFile(initial: Doc = doc()) {
 		onPublish: () => {},
 	};
 	const access = {
-		read: vi.fn(async (): Promise<Doc | null> => structuredClone(state.disk)),
+		read: vi.fn(async (): Promise<ReadOutcome<Doc>> => found(state.disk)),
 		write: vi.fn(async (next: Doc) => {
 			state.writes.push(structuredClone(next));
 			state.disk = structuredClone(next);
@@ -41,11 +61,12 @@ function memoryFile(initial: Doc = doc()) {
 	return { state, access };
 }
 
-function setup(initial: Doc = doc()) {
+function setup(initial: Doc = doc(), start: WriterStart<Doc> = { base: structuredClone(initial) }) {
 	const file = memoryFile(initial);
 	const clock = manualClock();
-	const writer = new DataFileWriter<Doc>(file.access, clock, structuredClone(initial));
-	return { ...file, clock, writer };
+	const events = { onRefusal: vi.fn(), onWriteFailed: vi.fn() };
+	const writer = new DataFileWriter<Doc>(file.access, clock, start, events);
+	return { ...file, clock, events, writer };
 }
 
 afterEach(() => {
@@ -182,10 +203,7 @@ describe("DataFileWriter saves", () => {
 		await writer.save();
 		let releaseRead = () => {};
 		access.read.mockImplementationOnce(
-			() =>
-				new Promise(
-					(resolve) => (releaseRead = () => resolve(structuredClone(state.disk))),
-				),
+			() => new Promise((resolve) => (releaseRead = () => resolve(found(state.disk)))),
 		);
 		const external = writer.onExternalChange();
 		await vi.waitFor(() => expect(access.read).toHaveBeenCalledTimes(2));
@@ -358,45 +376,15 @@ describe("DataFileWriter saves", () => {
 	});
 
 	it("writes nothing over a file it cannot read, even after a failed write", async () => {
-		const { access, state, writer } = setup();
+		const { access, clock, state, writer } = setup();
 		access.write.mockRejectedValueOnce(new Error("disk full"));
 		state.memory.defaultVolume = 0.5;
 		await expect(writer.save()).rejects.toThrow("disk full");
 
-		access.read.mockRejectedValue(new Error("newer schema"));
-		await expect(writer.save()).rejects.toThrow("newer schema");
+		access.read.mockResolvedValue(refused(NEWER));
+		await expect(writer.save()).rejects.toThrow("update PodNotes");
 
 		expect(access.write).toHaveBeenCalledTimes(1);
-	});
-
-	it("schedules no retry of a failed read before anything was loaded", async () => {
-		const file = memoryFile();
-		const clock = manualClock();
-		const writer = new DataFileWriter<Doc>(file.access, clock, null);
-		file.access.read.mockRejectedValue(new Error("busy"));
-
-		await expect(writer.save()).rejects.toThrow("busy");
-
-		expect(clock.pending()).toBe(0);
-	});
-
-	it("retries pending work once, 10 s after the last save, and nothing when nothing is pending", async () => {
-		const { access, clock, state, writer } = setup();
-		writer.retryPending();
-		expect(clock.pending()).toBe(0);
-
-		state.memory.defaultVolume = 0.5;
-		await writer.save();
-		clock.advance(4_000);
-		state.memory.defaultVolume = 0.25;
-		writer.retryPending();
-		writer.retryPending();
-		expect(clock.delays).toEqual([6_000]);
-
-		clock.advance(6_000);
-		clock.runAll();
-		await vi.waitFor(() => expect(state.disk?.defaultVolume).toBe(0.25));
-		expect(access.write).toHaveBeenCalledTimes(2);
 		expect(clock.pending()).toBe(0);
 	});
 
@@ -492,29 +480,199 @@ describe("DataFileWriter changes made elsewhere", () => {
 	});
 
 	it("leaves memory alone when the file is missing or cannot be read", async () => {
-		const { access, state, writer } = setup();
-		const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const { access, events, state, writer } = setup();
 		state.disk = null;
 		await writer.onExternalChange();
 
-		access.read.mockRejectedValueOnce(new SyntaxError("Unexpected end of JSON input"));
+		access.read.mockResolvedValueOnce(refused(UNREADABLE));
 		await writer.onExternalChange();
 
 		expect(state.published).toHaveLength(0);
-		expect(consoleWarn).toHaveBeenCalledTimes(1);
+		expect(state.writes).toHaveLength(0);
+		expect(events.onRefusal.mock.calls).toEqual([[UNREADABLE]]);
 	});
 
 	it("adopts the file when it had nothing to merge against", async () => {
-		const file = memoryFile();
-		const writer = new DataFileWriter<Doc>(file.access, manualClock(), null);
-		file.state.memory.defaultVolume = 0.3;
-		file.state.disk!.savedFeeds.Synced = { title: "Synced" };
+		const { access, events, state, writer } = setup(doc(), { base: null, refusal: STARTUP });
+		state.memory.defaultVolume = 0.3;
+		state.disk!.savedFeeds.Synced = { title: "Synced" };
 
 		await writer.onExternalChange();
 
-		expect(file.state.memory).toEqual(file.state.disk);
+		expect(state.memory).toEqual(state.disk);
+		expect(events.onRefusal.mock.calls).toEqual([[null]]);
 		await writer.save();
-		expect(file.access.write).not.toHaveBeenCalled();
+		expect(access.write).not.toHaveBeenCalled();
+	});
+});
+
+describe("DataFileWriter refusals", () => {
+	it("reads and writes nothing before a file was loaded, even when flushed or unloaded", async () => {
+		const { access, clock, state, writer } = setup(doc(), { base: null, refusal: STARTUP });
+		state.memory.defaultVolume = 0.5;
+
+		writer.request();
+		writer.checkpoint(() => writer.request());
+		await writer.flush();
+		expect(clock.pending()).toBe(0);
+		await expect(writer.save()).rejects.toThrow("could not read at startup");
+		await writer.unload();
+
+		expect(access.read).not.toHaveBeenCalled();
+		expect(state.writes).toHaveLength(0);
+	});
+
+	it("keeps refusing before a file was loaded when the file is missing, empty or unreadable", async () => {
+		const { access, events, state, writer } = setup(doc(), { base: null, refusal: STARTUP });
+		state.memory.defaultVolume = 0.5;
+		state.disk = null;
+		await writer.onExternalChange();
+		access.read.mockResolvedValueOnce(refused(UNREADABLE));
+		await writer.onExternalChange();
+
+		await expect(writer.save()).rejects.toThrow("could not read at startup");
+		await writer.flush();
+		expect(access.read).toHaveBeenCalledTimes(2);
+		expect(state.writes).toHaveLength(0);
+		expect(events.onRefusal).not.toHaveBeenCalled();
+	});
+
+	it("replaces startup protection with a schema stop and reads no further", async () => {
+		const { access, clock, events, state, writer } = setup(doc(), {
+			base: null,
+			refusal: STARTUP,
+		});
+		state.memory.defaultVolume = 0.5;
+		access.read.mockResolvedValue(refused(NEWER));
+		await writer.onExternalChange();
+		await writer.onExternalChange();
+		writer.request();
+		await writer.flush();
+
+		await expect(writer.save()).rejects.toThrow("update PodNotes");
+		expect(access.read).toHaveBeenCalledTimes(1);
+		expect(state.writes).toHaveLength(0);
+		expect(clock.pending()).toBe(0);
+		expect(events.onRefusal.mock.calls).toEqual([[NEWER]]);
+	});
+
+	it("retries a refused read 10 s after the last attempt, also with edits, and writes once it reads", async () => {
+		const { access, clock, events, state, writer } = setup();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		access.read.mockResolvedValue(refused(UNREADABLE));
+		clock.advance(60_000);
+		await writer.onExternalChange();
+		expect(clock.delays).toEqual([10_000]);
+
+		clock.advance(5_000);
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		await settled();
+		expect(access.read).toHaveBeenCalledTimes(1);
+
+		clock.advance(5_000);
+		clock.runAll();
+		await settled();
+		expect(access.read).toHaveBeenCalledTimes(2);
+		expect(clock.delays).toEqual([10_000, 10_000]);
+
+		access.read.mockImplementation(async () => found(state.disk));
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(state.writes).toEqual([{ ...doc(), defaultVolume: 0.5 }]);
+		expect(events.onRefusal.mock.calls).toEqual([[UNREADABLE], [null]]);
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("writes the library once when the file reads as missing again, even without an edit", async () => {
+		const { access, clock, state, writer } = setup();
+		access.read.mockResolvedValueOnce(refused(UNREADABLE));
+		await writer.onExternalChange();
+		state.disk = null;
+
+		await writer.onExternalChange();
+		expect(state.writes).toEqual([doc()]);
+
+		clock.advance(10_000);
+		clock.runAll();
+		await writer.flush();
+		await writer.onExternalChange();
+		expect(access.write).toHaveBeenCalledTimes(1);
+	});
+
+	it("writes the library again when its recovery write fails", async () => {
+		const { access, clock, events, state, writer } = setup();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		access.read.mockResolvedValueOnce(refused(UNREADABLE));
+		await writer.onExternalChange();
+		state.disk = null;
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(state.disk).toBeNull();
+		expect(events.onWriteFailed).toHaveBeenCalledTimes(1);
+
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(state.disk).toEqual(doc());
+		expect(access.write).toHaveBeenCalledTimes(2);
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("reports a refusal once per streak, and again after a recovery", async () => {
+		const { access, events, state, writer } = setup();
+		access.read.mockResolvedValue(refused(UNREADABLE));
+		await writer.onExternalChange();
+		await writer.onExternalChange();
+		await expect(writer.save()).rejects.toThrow("could not read");
+
+		access.read.mockImplementation(async () => found(state.disk));
+		await writer.save();
+		access.read.mockResolvedValue(refused(UNREADABLE));
+		await writer.onExternalChange();
+
+		expect(events.onRefusal.mock.calls).toEqual([[UNREADABLE], [null], [UNREADABLE]]);
+	});
+
+	it("stops for a schema it must not write: no checkpoint, read or write until the next instance", async () => {
+		const { access, clock, events, state, writer } = setup();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		access.read.mockResolvedValueOnce(refused(UNREADABLE));
+		await writer.onExternalChange();
+		let release = () => {};
+		access.read.mockImplementationOnce(
+			() => new Promise((resolve) => (release = () => resolve(refused(NEWER)))),
+		);
+		const external = writer.onExternalChange();
+		const queuedSave = writer.save();
+		const queuedExternal = writer.onExternalChange();
+		await vi.waitFor(() => expect(access.read).toHaveBeenCalledTimes(2));
+		state.memory.playedEpisodes["Pod::Ep"] = { time: 20 };
+		writer.checkpoint(() => writer.request());
+		expect(clock.pending()).toBe(1);
+		release();
+		await external;
+		await expect(queuedSave).rejects.toThrow("update PodNotes");
+		await queuedExternal;
+		expect(clock.pending()).toBe(0);
+
+		state.memory.defaultVolume = 0.5;
+		writer.request();
+		writer.checkpoint(() => writer.request());
+		await writer.flush();
+		await writer.onExternalChange();
+		expect(clock.pending()).toBe(0);
+		await expect(writer.save()).rejects.toThrow("update PodNotes");
+		await writer.unload();
+
+		expect(access.read).toHaveBeenCalledTimes(2);
+		expect(state.writes).toHaveLength(0);
+		expect(clock.pending()).toBe(0);
+		expect(events.onRefusal.mock.calls).toEqual([[UNREADABLE], [NEWER]]);
 	});
 });
 
@@ -525,7 +683,7 @@ describe("DataFileWriter lifecycle", () => {
 		const held = new Promise<void>((resolve) => (release = resolve));
 		access.read.mockImplementationOnce(async () => {
 			await held;
-			return structuredClone(state.disk);
+			return found(state.disk);
 		});
 		state.disk!.savedFeeds.Synced = { title: "Synced" };
 		const external = writer.onExternalChange();
@@ -543,7 +701,7 @@ describe("DataFileWriter lifecycle", () => {
 		const held = new Promise<void>((resolve) => (release = resolve));
 		access.read.mockImplementationOnce(async () => {
 			await held;
-			return structuredClone(state.disk);
+			return found(state.disk);
 		});
 		state.memory.defaultVolume = 0.5;
 
@@ -563,7 +721,7 @@ describe("DataFileWriter lifecycle", () => {
 		const held = new Promise<void>((resolve) => (release = resolve));
 		access.read.mockImplementationOnce(async () => {
 			await held;
-			return structuredClone(state.disk);
+			return found(state.disk);
 		});
 		state.memory.defaultVolume = 0.5;
 		writer.request();
@@ -611,7 +769,7 @@ describe("DataFileWriter lifecycle", () => {
 	it("writes an edit whose save could not read the file when flushed", async () => {
 		const { access, state, writer } = setup();
 		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-		access.read.mockRejectedValueOnce(new Error("busy"));
+		access.read.mockResolvedValueOnce(refused(UNREADABLE));
 		state.memory.defaultVolume = 0.5;
 		writer.request();
 		await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());

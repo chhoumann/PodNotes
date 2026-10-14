@@ -219,7 +219,7 @@ async function loadPlugin(data: Record<string, unknown>) {
 		registerObsidianProtocolHandler: vi.fn(),
 		registerEvent: vi.fn(),
 		registerDomEvent: vi.fn(),
-		writeRefusal: null,
+		closing: null,
 		writeInFlight: null,
 		storeUnsubscribers: [],
 		views: new Set(),
