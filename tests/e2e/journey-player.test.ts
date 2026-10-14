@@ -49,13 +49,13 @@ async function serve(): Promise<FixtureServer> {
 /** Restores `NOW` paused with `queue` queued, and shows PodNotes with the full player open. */
 async function openPlayer(
 	queue: readonly FixtureEpisode[],
-	current: Record<string, unknown> = {},
+	current: (server: FixtureServer) => Record<string, unknown> = () => ({}),
 ): Promise<FixtureServer> {
 	const context = getContext();
 	const server = await serve();
 	await seedLibrary(context, server, {
 		subscriptions: [FEED],
-		current: { ...storedEpisode(server, FEED, NOW), ...current },
+		current: { ...storedEpisode(server, FEED, NOW), ...current(server) },
 		queue: queue.map((episode) => storedEpisode(server, FEED, episode)),
 	});
 	await showPodNotes(context.obsidian);
@@ -128,7 +128,7 @@ const focused = (target: UiTarget) =>
 describe("player journeys", () => {
 	test("a video with a long queue keeps its 16:9 frame, compact and wide, and after a panel covered it", async () => {
 		const { obsidian } = getContext();
-		await openPlayer(QUEUED, { mediaType: "video" });
+		await openPlayer(QUEUED, () => ({ mediaType: "video" }));
 		await click(obsidian, ui.playbackToggle);
 		await waitForPlayback(
 			obsidian,
@@ -235,6 +235,40 @@ describe("player journeys", () => {
 		expect(mini).toMatchObject({ images: 0, broken: 0 });
 		expect(mini.tile?.icon).toContain("lucide-music");
 		expect(mini.tile?.width).toBe(mini.tile?.height);
+	});
+
+	test("a media error offers Retry in place of the artwork and turns the transport off", async () => {
+		const { obsidian } = getContext();
+		await openPlayer([ONE], (server) => ({
+			streamUrl: `${server.mediaUrl(FEED, NOW)}.missing`,
+		}));
+		const state = () =>
+			obsidian.dev.evalJson<{
+				alert: string;
+				retry: boolean;
+				transportOff: boolean[];
+			}>(`(() => {
+				const player = document.querySelector(${jsLiteral(`${PLAYER_VIEW} section.pn-player`)});
+				return {
+					alert: player.querySelector('[role="alert"] > span:not(:has(svg))')?.textContent.trim() ?? "",
+					retry: [...player.querySelectorAll("button")].some((button) => button.textContent.trim() === "Retry" && !button.disabled),
+					transportOff: [...player.querySelectorAll(".pn-transport button")].map((button) => button.disabled),
+				};
+			})()`);
+		expect(await state(), "before the load").toEqual({
+			alert: "",
+			retry: false,
+			transportOff: [false, false, false, false, false],
+		});
+
+		await click(obsidian, ui.playbackToggle);
+
+		const failed = {
+			alert: "Could not load this episode's media.",
+			retry: true,
+			transportOff: [true, true, true, true, true],
+		};
+		expect(await eventually(obsidian, state, failed, 10_000)).toEqual(failed);
 	});
 
 	test("Space pauses and plays with the focus on the player's text, and the podcast's name opens its page", async () => {
