@@ -173,6 +173,7 @@ export class PlayerController {
 		this.requests++;
 
 		const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
+		this.noteStoppedMove();
 		const { status, episode: outgoing, mediaType } = this.snapshot;
 		const sameEpisode = !!outgoing && getEpisodeKey(outgoing) === getEpisodeKey(episode);
 		this.select(episode);
@@ -234,8 +235,10 @@ export class PlayerController {
 
 	/** Continues the current episode without selecting it. */
 	resume(): void {
+		if (this.disposed) return;
+		this.noteStoppedMove();
 		const { status, episode } = this.snapshot;
-		if (this.disposed || !episode) return;
+		if (!episode) return;
 		this.requests++;
 		if (status === "playing" || status === "loading") return;
 		this.endPreview();
@@ -613,7 +616,7 @@ export class PlayerController {
 		const time = this.el.currentTime;
 		if (status === "playing" || !this.holdsMedia() || time === currentTime) return;
 		this.moved = true;
-		this.setState({ currentTime: time });
+		this.setState({ currentTime: time, status: status === "ended" ? "paused" : status });
 	}
 
 	private persist(): void {

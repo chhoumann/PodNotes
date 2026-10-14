@@ -366,33 +366,97 @@ describe("offline", () => {
 		expect(button("Refresh all feeds")).toBeEnabled();
 	});
 
-	test("the feeds that could not load offline load when the connection returns", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		const load = vi
-			.fn<(url: string) => Promise<ParsedFeedEpisodes>>()
-			.mockRejectedValueOnce(new Error("offline"))
-			.mockResolvedValue(feedDocument(feed.title, [episode]));
+	const second = { ...feed, title: "Second Podcast", url: "https://second.example.com/feed.xml" };
+	const secondEpisode = {
+		...episode,
+		title: "Second 1",
+		streamUrl: "https://second.example.com/1.mp3",
+		podcastName: second.title,
+	};
+
+	function viewWithOfflineRequestsHeld(storage = new MemoryStorage()) {
+		const documents: Record<string, ParsedFeedEpisodes> = {
+			[feed.url]: feedDocument(feed.title, [episode]),
+			[second.url]: feedDocument(second.title, [secondEpisode]),
+		};
+		const load = vi.fn<(url: string) => Promise<ParsedFeedEpisodes>>((url) =>
+			get(services.online) ? Promise.resolve(documents[url]) : new Promise(() => {}),
+		);
 		dispose();
 		({ services, doc, dispose } = createTestServices({
 			feeds: new FeedRepository({
 				load,
 				resolveUrl: (saved) => saved.url,
-				storage: new MemoryStorage(),
+				storage,
 				now: Date.now,
 			}),
 		}));
+		return load;
+	}
+
+	test("automatic loading follows the online store and reconnect starts a fresh request", async () => {
+		const load = viewWithOfflineRequestsHeld();
 		services.library.savedFeeds.set({ [feed.title]: feed });
 		services.online.set(false);
 		services.navigation.replace({ kind: "latest" });
 		renderView(320);
-		await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
 		await tick();
+		expect(navigator.onLine).toBe(true);
+		expect(load).not.toHaveBeenCalled();
 		expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
 
 		services.online.set(true);
 
 		expect(await screen.findByText(episode.title)).toBeInTheDocument();
-		expect(load.mock.calls).toEqual([[feed.url], [feed.url]]);
+		expect(load.mock.calls).toEqual([[feed.url]]);
+	});
+
+	test("subscription changes load only when online", async () => {
+		const load = viewWithOfflineRequestsHeld();
+		services.library.savedFeeds.set({});
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+
+		services.library.savedFeeds.set({ [feed.title]: feed });
+		await tick();
+		expect(load).not.toHaveBeenCalled();
+
+		services.online.set(true);
+		expect(await screen.findByText(episode.title)).toBeInTheDocument();
+		services.library.savedFeeds.set({ [feed.title]: feed, [second.title]: second });
+
+		expect(await screen.findByText(secondEpisode.title)).toBeInTheDocument();
+		expect(load.mock.calls).toEqual([[feed.url], [second.url]]);
+	});
+
+	test("offline, an expired cache shows its episodes without a request, and Refresh stays off", async () => {
+		const storage = new MemoryStorage();
+		const earlier = new FeedRepository({
+			load: async () => feedDocument(feed.title, [episode]),
+			resolveUrl: (saved) => saved.url,
+			storage,
+			now: () => Date.now() - 7 * 3_600_000,
+		});
+		earlier.setSubscriptions({ [feed.title]: feed });
+		await earlier.ensureAll({ online: true });
+		const load = viewWithOfflineRequestsHeld(storage);
+		services.library.savedFeeds.set({ [feed.title]: feed });
+		services.online.set(false);
+		services.navigation.replace({ kind: "latest" });
+		renderView(320);
+		await tick();
+
+		expect(screen.getByText(episode.title)).toBeInTheDocument();
+		expect(button("Refresh all feeds")).toBeDisabled();
+
+		services.navigation.replace({ kind: "feed", key: feed.title });
+		await tick();
+		expect(screen.getByText(episode.title)).toBeInTheDocument();
+		expect(button("Refresh episodes")).toBeDisabled();
+		expect(screen.queryByRole("alert")).toBeNull();
+		expect(load).not.toHaveBeenCalled();
 	});
 
 	test("First run has no strip", async () => {

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { Platform } from "obsidian";
-	import { onMount } from "svelte";
 
 	import { getFinishedPlayedEpisodeRecords } from "src/utility/episodeStatus";
 	import { icon } from "../obsidian/icon";
@@ -67,10 +66,9 @@
 		}),
 	);
 
-	onMount(() => savedFeeds.subscribe(() => void feeds.ensureAll()));
-	// Offline, a feed due for a refresh fails to load, so the connection's return loads it.
 	$effect(() => {
-		if ($online) void feeds.ensureAll();
+		void $savedFeeds;
+		void feeds.ensureAll({ online: $online });
 	});
 
 	// A podcast or playlist removed while its page is open, or since the page was saved.
