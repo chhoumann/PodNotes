@@ -9,7 +9,6 @@ import {
 	groupCues,
 	type TranscriptParagraph,
 } from "src/services/publishedTranscript/render";
-import { withoutPrivateFeedAddresses } from "src/services/privateFeeds";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeKey } from "src/utility/episodeKey";
 
@@ -47,8 +46,7 @@ export async function loadTranscript(
 	const feedFailedBeforeTheEpisode =
 		!source && !feeds.episodeMetadata(key, episode) && get(feeds).get(key)?.error;
 	if (feedFailedBeforeTheEpisode) throw new Error("The feed did not load.");
-	const fetched = source && (await fetchPublishedTranscript(feeds, source, signal));
-	const [, parsed] = withoutPrivateFeedAddresses([episode, fetched] as const);
+	const parsed = source && (await fetchPublishedTranscript(feeds, episode, source, signal));
 	const transcript: Transcript | null = !parsed
 		? null
 		: parsed.kind === "timed"

@@ -204,6 +204,30 @@ describe("loadTranscript", () => {
 		},
 	);
 
+	test("transcript text quoting the transcript's own credential-bearing address shows no credential", async () => {
+		const captions = "https://show.test/12.vtt?token=TX_SENTINEL";
+		const { item, played } = episode(12, [
+			{ url: "12.vtt?token=TX_SENTINEL", type: "text/vtt" },
+		]);
+		const { feeds } = repository([item]);
+		fetchTextMock.mockResolvedValue(vtt(`<v Host ${captions}>Read along at ${captions}`));
+
+		const shown = await loadTranscript(feeds, played, signal);
+
+		expect(fetchTextMock).toHaveBeenCalledWith(captions, expect.anything());
+		expect(shown).toEqual({
+			kind: "timed",
+			lines: [
+				{
+					start: 0,
+					end: 1,
+					speaker: "Host podnotes-private-feed:Show",
+					text: "Read along at podnotes-private-feed:Show",
+				},
+			],
+		});
+	});
+
 	test("a feed that did not load fails rather than reporting no transcript", async () => {
 		const { item, played } = episode(7, [{ url: "7.vtt", type: "text/vtt" }]);
 		const { feeds, load } = repository([item]);

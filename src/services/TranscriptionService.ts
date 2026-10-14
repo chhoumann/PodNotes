@@ -238,6 +238,7 @@ export class TranscriptionService {
 		const parsed = await this.waitForLifecycle(
 			fetchPublishedTranscript(
 				this.plugin.feeds,
+				episode,
 				transcript,
 				this.lifetimeAbortController.signal,
 			),

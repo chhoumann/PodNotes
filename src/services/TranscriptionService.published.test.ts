@@ -134,6 +134,31 @@ describe("published transcripts", () => {
 		expect(diarizeWithDeepgramMock).not.toHaveBeenCalled();
 	});
 
+	test("a transcript quoting its own credential-bearing address and its private feed's keeps neither in the note", async () => {
+		const feed = "https://private.example.com/rss?auth=FEED_SENTINEL";
+		const captions = "https://private.example.com/caption.vtt?token=TX_SENTINEL";
+		fetchTextMock.mockResolvedValue(
+			`WEBVTT\n\n00:00:00.480 --> 00:00:04.410\n<v Host ${captions}>Feed ${feed} and captions ${captions}\n`,
+		);
+		const plugin = createMockPlugin({
+			openAIKey: "",
+			podcast: { ...mockEpisode, feedUrl: feed },
+			feedUrl: feed,
+			transcripts: [{ url: "caption.vtt?token=TX_SENTINEL", type: "text/vtt" }],
+		});
+		const service = new TranscriptionService(plugin);
+
+		await service.transcribeCurrentEpisode();
+		await finished(service, "Saved the transcript the feed publishes.");
+
+		expect(fetchTextMock).toHaveBeenCalledWith(captions, expect.anything());
+		const hidden = "podnotes-private-feed:Test\\%20Podcast";
+		expect(plugin.app.vault.create).toHaveBeenCalledExactlyOnceWith(
+			"Transcripts/Test Podcast/Test Episode.md",
+			`# Test Episode\n\n00:00:00 **Host ${hidden}:** Feed ${hidden} and captions ${hidden}`,
+		);
+	});
+
 	test("saving only the feed's transcript never sends the audio to a provider", async () => {
 		const plugin = createMockPlugin({ transcripts: [] });
 
