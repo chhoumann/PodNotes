@@ -7,7 +7,7 @@ import { createPodNotesE2EHarness, type PodNotesData } from "./harness";
 import { closeSettings, openPodNotesSettings } from "./journey/actions";
 import { chooseFile, click, typeInto } from "./journey/input";
 import { ui } from "./journey/targets";
-import { RELOAD_OPTIONS, waitForPodNotesReady } from "./runtime";
+import { jsLiteral, RELOAD_OPTIONS, waitForPodNotesReady } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("save-refusal-recovery");
 const POLL = { timeout: 15_000, interval: 200 };
@@ -222,6 +222,7 @@ describe("save refusal recovery", () => {
 
 	test("#430 links an API key immediately after a read outage clears", async () => {
 		const { obsidian, plugin } = await seed();
+		const initialIds = await obsidian.dev.evalJson<string[]>("app.secretStorage.listSecrets()");
 		await obsidian.dev.evalJson(
 			'app.secretStorage.setSecret("podnotes-pers4-recovery", "sk-podnotes-e2e-recovery"), true',
 		);
@@ -243,14 +244,22 @@ describe("save refusal recovery", () => {
 			});
 			await obsidian.sleep(500);
 			await sample(obsidian, "key-recovered", await plugin.dataPath());
-			expect((await plugin.data<PodNotesData>().read()).openAISecretId).toBe(
-				"podnotes-pers4-recovery",
-			);
+			const savedId = (await plugin.data<PodNotesData>().read()).openAISecretId;
+			expect(savedId).toMatch(/^podnotes-openai-api-key(?:-\d+)?$/);
+			expect(
+				await obsidian.dev.evalJson(
+					`app.secretStorage.getSecret(${jsLiteral(savedId)}) === "sk-podnotes-e2e-recovery"`,
+				),
+			).toBe(true);
 		} finally {
 			await closeSettings(obsidian);
-			await obsidian.dev.evalJson(
-				'app.secretStorage.setSecret("podnotes-pers4-recovery", null), true',
-			);
+			await obsidian.dev.evalJson(`(() => {
+				const initial = ${jsLiteral(initialIds)};
+				for (const id of app.secretStorage.listSecrets()) {
+					if (!initial.includes(id)) app.secretStorage.setSecret(id, null);
+				}
+				return true;
+			})()`);
 		}
 	});
 

@@ -152,11 +152,11 @@ describe("save refusal recovery", () => {
 		expect(notices).toHaveBeenCalledTimes(1);
 		expect(saveData).not.toHaveBeenCalled();
 		state.blocked = false;
-		plugin.settings.openAISecretId = "recovered-key";
+		plugin.settings.openAISecretId = "podnotes-openai-api-key";
 		await plugin.saveSettingsStrict();
 		expect(saveData).toHaveBeenCalledTimes(1);
 		expect(saveData.mock.lastCall?.[0]).toMatchObject({
-			openAISecretId: "recovered-key",
+			openAISecretId: "podnotes-openai-api-key",
 			savedFeeds: { Recovery: { title: "Recovery" } },
 		});
 	});
@@ -235,6 +235,46 @@ describe("save refusal recovery", () => {
 		await expect(plugin.saveSettingsStrict()).rejects.toThrow();
 		expect(loadData).not.toHaveBeenCalled();
 		expect(saveData).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("retries a file with an invalid schema version until it reads, then writes the library once", async () => {
+		const { plugin, state, readable, saveData, clock, notices } = recovering();
+		state.disk = { ...readable, schemaVersion: "two" };
+		await plugin.onExternalSettingsChange();
+		expect(notices.mock.calls[0]?.[0]).toMatch(/could not read/);
+
+		state.disk = readable;
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.lastCall?.[0]).toMatchObject({
+			savedFeeds: { Recovery: { title: "Recovery" } },
+		});
+	});
+
+	it("starts no recovery write when the window unloads during its read", async () => {
+		const { plugin, state, saveData, loadData, clock, notices } = recovering();
+		state.blocked = true;
+		await plugin.onExternalSettingsChange();
+		state.blocked = false;
+		let release = () => {};
+		loadData.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => (release = resolve));
+			return structuredClone(state.disk);
+		});
+
+		const flushing = plugin.flushSaves();
+		await vi.waitFor(() => expect(loadData).toHaveBeenCalledTimes(2));
+		Object.assign(plugin, { closing: "window-unloading" });
+		release();
+		await flushing;
+
+		expect(saveData).not.toHaveBeenCalled();
+		expect(notices.mock.calls.map(([message]) => message)).toEqual([
+			"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.",
+		]);
 		expect(clock.pending()).toBe(0);
 	});
 });
@@ -889,7 +929,7 @@ describe("PodNotes persistence integration", () => {
 		await vi.waitFor(() => expect(saveData).toHaveBeenCalledTimes(1));
 		plugin.settings.defaultVolume = 0.25;
 		const queued = plugin.saveSettingsStrict();
-		Object.assign(plugin, { writeRefusal: "window-unloading" });
+		Object.assign(plugin, { closing: "window-unloading" });
 		const late = plugin.saveSettingsStrict();
 		resolvers[0]();
 
@@ -909,7 +949,7 @@ describe("PodNotes persistence integration", () => {
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
 		plugin.settings.defaultVolume = 0.5;
-		Object.assign(plugin, { writeRefusal: "obsidian-closing" });
+		Object.assign(plugin, { closing: "obsidian-closing" });
 		await (plugin as unknown as { writer: { unload(): Promise<void> } }).writer.unload();
 
 		expect(plugin.loadData).toHaveBeenCalledTimes(1);
@@ -1327,7 +1367,7 @@ describe("PodNotes persistence integration", () => {
 		const plugin = makePlugin(saveData);
 		Object.assign(plugin, {
 			loadData: vi.fn().mockResolvedValue({ defaultVolume: 0.4 }),
-			writeRefusal: "window-unloading",
+			closing: "window-unloading",
 		});
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -1414,7 +1454,7 @@ describe("PodNotes persistence integration", () => {
 
 	describe("while data.json cannot be read for a while", () => {
 		const refusal =
-			"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged and saves nothing until the file can be read again.";
+			"PodNotes could not read .obsidian/plugins/podnotes/data.json, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.";
 
 		function setup() {
 			const file = { readable: true, writable: true };
@@ -1468,7 +1508,7 @@ describe("PodNotes persistence integration", () => {
 			expect(clock.delays).toEqual([10_000]);
 		});
 
-		it("saves an edit made once it reads again, after the edits it could not save were undone", async () => {
+		it("keeps retrying after the edits it could not save were undone, and saves an edit made once it reads again", async () => {
 			const { plugin, file, clock, notice, retry } = setup();
 			const hide = vi.spyOn(Notice.prototype, "hide");
 			file.readable = false;
@@ -1477,21 +1517,20 @@ describe("PodNotes persistence integration", () => {
 			plugin.settings.skipForwardLength = 15;
 			await saveInBackground(plugin);
 			await retry();
-			expect(clock.pending()).toBe(0);
+			expect(clock.pending()).toBe(1);
 
 			file.readable = true;
 			plugin.settings.skipBackwardLength = 33;
 			await saveInBackground(plugin);
 			await saveInBackground(plugin);
 			const armed = { pending: clock.pending(), delays: [...clock.delays] };
-			clock.runAll();
-			await settled();
+			await retry();
 
 			expect(await plugin.loadData()).toMatchObject({
 				skipForwardLength: 15,
 				skipBackwardLength: 33,
 			});
-			expect(armed).toEqual({ pending: 1, delays: [10_000, 0] });
+			expect(armed).toEqual({ pending: 1, delays: [10_000, 10_000] });
 			expect(notice.mock.calls).toEqual([[refusal, 0]]);
 			expect(hide).toHaveBeenCalledTimes(1);
 			expect(clock.pending()).toBe(0);
@@ -1615,7 +1654,7 @@ describe("PodNotes persistence integration", () => {
 			disk.full = false;
 			disk.text = '{"schemaVersion": 2, "savedFeeds": {"Other device';
 			await plugin.onExternalSettingsChange();
-			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 
 			disk.text = "";
 			await plugin.onExternalSettingsChange();
@@ -1632,7 +1671,7 @@ describe("PodNotes persistence integration", () => {
 			const before = disk.text;
 			await plugin.onExternalSettingsChange();
 			plugin.settings.defaultVolume = 0.25;
-			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 			expect(disk.text).toBe(before);
 
 			disk.denied = false;
@@ -1660,8 +1699,7 @@ describe("PodNotes persistence integration", () => {
 			disk.text = '{"schemaVersion": 2, "savedFeeds": {"Other device';
 			plugin.settings.defaultVolume = 0.25;
 			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
-			// Refused now, with the Notice up: no save even tries to read the file.
-			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/does not save over/);
+			await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not read/);
 			const hideNotice = vi.spyOn(Notice.prototype, "hide");
 
 			disk.text = readable;
@@ -1907,7 +1945,7 @@ describe("a device that started before sync delivered its data.json", () => {
 		expect(newDevice.plugin.settings).toEqual(established.plugin.settings);
 	});
 
-	it("keeps the library when a device that could not read its file at start writes a new one", async () => {
+	it("keeps the library when a device that could not read its file at start finds it emptied, then synced", async () => {
 		const established = await startDevice(library);
 		const device = makePlugin();
 		let text = '{"schemaVersion": 2, "savedFeeds": {"Library Fe';
@@ -1926,6 +1964,12 @@ describe("a device that started before sync delivered its data.json", () => {
 		attachDataFileWriter(device);
 
 		text = "";
+		await device.onExternalSettingsChange();
+		device.settings.defaultVolume = 0.5;
+		await expect(device.saveSettingsStrict()).rejects.toThrow(/could not read/);
+		expect(text).toBe("");
+
+		text = dataFileText(established.file());
 		await device.onExternalSettingsChange();
 		device.settings.defaultVolume = 0.5;
 		await device.saveSettingsStrict();
