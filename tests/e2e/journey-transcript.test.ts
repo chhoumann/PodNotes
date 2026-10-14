@@ -145,6 +145,61 @@ async function takeNote(): Promise<string> {
 }
 
 describe("transcript journeys", () => {
+	test("switching episodes clears Find and shows every line of the incoming transcript", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const incoming: FixtureEpisode = {
+			title: "Second Transcript",
+			seconds: 60,
+			pubDate: pubDate(2),
+			transcripts: [{ path: "2.vtt", type: "text/vtt", body: VTT }],
+		};
+		const feed = { ...FEED, episodes: [...FEED.episodes, incoming] };
+		const server = await startFixtureServer([feed]);
+		onTestFinished(() => server.stop());
+		await seedLibrary(context, server, {
+			subscriptions: [feed],
+			current: storedEpisode(server, feed, CAPTIONED),
+			queue: [storedEpisode(server, feed, incoming)],
+		});
+		await showPodNotes(obsidian);
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await obsidian.dev.evalJson("app.workspace.rightSplit.setSize(820), true");
+		await click(obsidian, ui.playerPanel("Transcript"));
+		expect(
+			await eventually(obsidian, async () => (await shownTranscript()).lines, LINES),
+		).toEqual(LINES);
+		await click(obsidian, panelButton("Find in transcript"));
+		await typeText(obsidian, "palace");
+		expect(
+			await eventually(obsidian, async () => (await shownTranscript()).marks, [
+				"palace",
+				"palace",
+				"Palace",
+			]),
+		).toEqual(["palace", "palace", "Palace"]);
+
+		await obsidian.dev.evalJson(
+			`app.plugins.plugins.podnotes.player.play(${jsLiteral(storedEpisode(server, feed, incoming))}), true`,
+		);
+		await waitForPlayback(
+			obsidian,
+			(state) => state.episode?.title === incoming.title && state.playing,
+			"incoming episode playing",
+		);
+		expect(
+			await eventually(obsidian, shownTranscript, {
+				lines: LINES,
+				current: LINES[0],
+				hit: null,
+				marks: [],
+			}),
+		).toEqual({ lines: LINES, current: LINES[0], hit: null, marks: [] });
+		expect(await isShown(obsidian, findField)).toBe(false);
+		await click(obsidian, panelButton("Find in transcript"));
+		expect(await obsidian.dev.evalJson(`(${findField.elements})[0].value`)).toBe("");
+	});
+
 	test("the feed's transcript follows playback, seeks where tapped, finds a word, and saves the command's note", async () => {
 		const { obsidian } = getContext();
 		await openTranscript(CAPTIONED);
