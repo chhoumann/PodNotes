@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import * as obsidian from "obsidian";
 
 import { DEFAULT_SETTINGS } from "src/constants";
+import { API } from "src/API/API";
 import PodNotes from "src/main";
 import { decodePodNotesData } from "src/persistence/podNotesData";
 import { PlayerController } from "src/player/PlayerController";
@@ -16,7 +17,6 @@ import { FakeDocument } from "../../../tests/mocks/fakeMedia";
 
 const openTabs = new Set<PodNotesSettingsTab>();
 
-/** Obsidian closing Settings: the rows' cleanups, then hide(). The mock tab does it. */
 function close(tab: PodNotesSettingsTab): void {
 	(tab as unknown as { close(): void }).close();
 }
@@ -31,7 +31,6 @@ afterEach(() => {
 	pluginStore.set(undefined as never);
 });
 
-/** The tab of a plugin whose saves go through the real writer to a counted data.json. */
 function open(saved: Partial<IPodNotesSettings> = {}) {
 	const settings = { ...structuredClone(DEFAULT_SETTINGS), ...structuredClone(saved) };
 	let disk: Record<string, unknown> = { ...structuredClone(settings), schemaVersion: 2 };
@@ -39,7 +38,7 @@ function open(saved: Partial<IPodNotesSettings> = {}) {
 	const plugin = Object.create(PodNotes.prototype) as PodNotes;
 	Object.assign(plugin, {
 		settings,
-		api: {},
+		api: new API(),
 		feeds: readable(new Map()),
 		credentials: {
 			storeValues: vi.fn(() => ({})),
@@ -91,12 +90,10 @@ function open(saved: Partial<IPodNotesSettings> = {}) {
 			control<HTMLInputElement | HTMLTextAreaElement>(name, "input, textarea"),
 		select: (name: string) => control<HTMLSelectElement>(name, "select"),
 		toggle: (name: string) => control<HTMLInputElement>(name, "input[type=checkbox]"),
-		/** A change synced in from another device. */
 		sync: async (change: Partial<IPodNotesSettings>) => {
 			disk = { ...disk, ...structuredClone(change) };
 			await plugin.onExternalSettingsChange();
 		},
-		/** data.json writes, once every save asked for has run. */
 		writes: async () => {
 			await plugin.flushSaves();
 			return writes;
@@ -203,6 +200,30 @@ describe("sections", () => {
 });
 
 describe("text fields", () => {
+	test("the timestamp preview follows a completed offset change", () => {
+		const { plugin, tab, row, field } = open();
+		plugin.player.restore({
+			title: "Episode",
+			podcastName: "Show",
+			streamUrl: "https://example.com/audio.mp3",
+			url: "",
+			description: "",
+			content: "",
+		});
+		plugin.player.seek(95);
+		tab.update();
+		enter(field("Timestamp template"), "{{time}}");
+		complete(field("Timestamp template"));
+		const preview = () =>
+			row("Timestamp template").querySelector(".setting-item-description")?.textContent;
+		expect(preview()).toBe("00:01:35");
+
+		enter(field("Timestamp offset (s)"), "3");
+		complete(field("Timestamp offset (s)"));
+
+		expect(preview()).toBe("00:01:32");
+	});
+
 	test("typing saves nothing; the completed edit saves once and tells an open view", async () => {
 		const { plugin, field, writes, disk } = open();
 		const paths: string[] = [];
@@ -286,6 +307,39 @@ describe("text fields", () => {
 			template: "# {{title}}",
 		});
 		expect(field("Episode note path").value).toBe("Imported/{{title}}.md");
+	});
+
+	test("diarization controls stay locked during import and unlock with the imported applicability", async () => {
+		const { plugin, tab, select } = open({
+			transcript: {
+				...DEFAULT_SETTINGS.transcript,
+				diarization: { ...DEFAULT_SETTINGS.transcript.diarization, enabled: true },
+			},
+		});
+		let release!: () => void;
+		vi.spyOn(plugin, "saveSettingsStrict")
+			.mockImplementationOnce(
+				() =>
+					new Promise<void>((resolve) => {
+						release = resolve;
+					}),
+			)
+			.mockResolvedValue(undefined);
+		const importing = (
+			tab as unknown as {
+				applyImportedSettings(imported: Partial<IPodNotesSettings>): Promise<void>;
+			}
+		).applyImportedSettings({ defaultPlaybackRate: 1.25 });
+		await Promise.resolve();
+		expect(select("Diarization provider").disabled).toBe(true);
+
+		plugin.setAutoQueue(!plugin.settings.autoQueue);
+		const disabledDuringImport = select("Diarization provider").disabled;
+		release();
+		await importing;
+
+		expect(disabledDuringImport).toBe(true);
+		expect(select("Diarization provider").disabled).toBe(false);
 	});
 
 	test("a number field keeps the saved value for an entry it cannot use", async () => {

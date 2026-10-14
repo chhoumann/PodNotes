@@ -16,11 +16,6 @@ export const PODNOTES_DATA_SCHEMA_VERSION = 2;
 /** Plaintext fields accepted only as migration input and never persisted again. */
 const RETIRED_PLAINTEXT_SECRET_KEYS = new Set(["openAIApiKey", "diarizationApiKey"]);
 
-/**
- * Settings PodNotes no longer has. They are not kept as unknown fields, so the next
- * save drops them. Feeds are always cached, and earlier releases read a missing
- * `feedCache` as caching on with a six-hour lifetime.
- */
 const RETIRED_SETTING_KEYS = ["feedCache"];
 
 const KNOWN_TOP_LEVEL_KEYS = new Set([

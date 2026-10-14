@@ -10,18 +10,14 @@ import type { PlayerController, PlayerState, PlayerStatus } from "./PlayerContro
 interface MediaSessionHost {
 	mediaSession: MediaSession | undefined;
 	MediaMetadata: typeof MediaMetadata | undefined;
-	/** Read on each press, so a mapping changed in Settings or synced in needs no rebind. */
 	settings(): Pick<IPodNotesSettings, "headsetPreviousTrack" | "headsetNextTrack">;
 	captureTimestamp(): void;
 	skipBackward(): void;
 	skipForward(): void;
-	/** The episode's chapters, in order, or none when they cannot be loaded. */
 	chapters(url: string): Promise<Chapter[]>;
 }
 
-/** Previous chapter restarts the current one until this far into it. */
 const CHAPTER_RESTART_S = 2;
-/** Next chapter skips a start this close ahead, where a seek to a chapter can land. */
 const CHAPTER_TOLERANCE_S = 0.25;
 
 const PLAYBACK_STATES: Record<PlayerStatus, MediaSessionPlaybackState> = {
@@ -49,7 +45,6 @@ function attempt(call: () => void): boolean {
 
 const isPositive = (value: number) => Number.isFinite(value) && value > 0;
 
-/** Where next (1) or previous (-1) chapter goes from `time`, or nowhere. */
 export function chapterStart(
 	chapters: readonly Chapter[],
 	time: number,
@@ -79,31 +74,35 @@ export function bindMediaSession(
 ): Unsubscriber {
 	if (!host.mediaSession) return () => {};
 	const { mediaSession, MediaMetadata } = host;
-	/** One episode's chapters, loading or loaded. */
+	let episodeKey = "";
+	let activation = 0;
 	let chapters: { url: string; loading: Promise<Chapter[]> } | undefined;
 
 	async function seekChapter(direction: 1 | -1): Promise<void> {
 		const { episode } = get(player.state);
 		const url = episode?.chaptersUrl;
 		if (!url) return;
+		const requestedActivation = activation;
 		if (chapters?.url !== url) {
 			chapters = { url, loading: host.chapters(url).catch(() => []) };
 		}
 		const asked = chapters;
 		const loaded = await asked.loading;
-		// None loaded, as offline: the next press asks again.
-		if (loaded.length === 0 && chapters === asked) chapters = undefined;
-		const now = get(player.state);
-		if (unbound || !now.episode || getEpisodeKey(now.episode) !== getEpisodeKey(episode))
+		if (loaded.length === 0) {
+			if (chapters === asked) chapters = undefined;
 			return;
+		}
+		const now = get(player.state);
+		if (unbound || activation !== requestedActivation) return;
 		const start = chapterStart(loaded, now.currentTime, direction);
 		if (start !== undefined) player.seek(start);
 	}
 
-	/** Plays the queue's first episode. The one switched away from goes last, so presses go through the queue. */
 	function playNextInQueue(): void {
-		const [next] = get(queue).episodes;
 		const outgoing = get(player.state).episode;
+		const next = get(queue).episodes.find(
+			(episode) => getEpisodeKey(episode) !== getEpisodeKey(outgoing),
+		);
 		if (!next || !player.play(next) || !outgoing) return;
 		const [first] = get(queue).episodes;
 		if (first && getEpisodeKey(first) === getEpisodeKey(outgoing)) {
@@ -184,6 +183,11 @@ export function bindMediaSession(
 	}
 
 	function show(state: PlayerState): void {
+		const key = getEpisodeKey(state.episode);
+		if (key !== episodeKey) {
+			episodeKey = key;
+			activation++;
+		}
 		setHandlers(!!state.episode);
 		showMetadata(state.episode);
 		const playbackState = PLAYBACK_STATES[state.status];

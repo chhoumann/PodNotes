@@ -166,7 +166,6 @@ export function mapRecord<T, R>(
 	return result;
 }
 
-/** Whether `value` is one of the keys of `options`, and not one it inherits. */
 export function isOption<T extends string>(
 	options: Readonly<Record<T, unknown>>,
 	value: unknown,

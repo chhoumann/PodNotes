@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { PluginHandle, SandboxApi } from "obsidian-e2e";
-import { describe, expect, test } from "vitest";
+import { describe, expect, onTestFinished, test } from "vitest";
 import type DownloadedEpisode from "../../src/types/DownloadedEpisode";
 import type { Episode } from "../../src/types/Episode";
 import type { LocalEpisode } from "../../src/types/LocalEpisode";
@@ -26,6 +26,7 @@ import {
 } from "./runtime";
 
 import { closeSettings, openPodNotesSettings } from "./journey/actions";
+import { startFixtureServer } from "./journey/fixtures";
 
 const getContext = createPodNotesE2EHarness("podnotes-runtime");
 
@@ -422,6 +423,43 @@ describe("PodNotes runtime", () => {
 
 			expect((await getPlaybackState(obsidian)).currentTime).toBe(80);
 			expect(await sandbox.read("remapped-headset-target.md")).toBe(before);
+		} finally {
+			await restoreMediaSessionRecorder(obsidian);
+		}
+	});
+
+	test("Previous chapter keeps the position when its chapter file cannot be loaded", async () => {
+		const { obsidian, plugin, sandbox } = getContext();
+		const server = await startFixtureServer([]);
+		onTestFinished(() => server.stop());
+		const audioPath = await seedAudio(obsidian, sandbox);
+		const episode = {
+			...createLocalEpisode("E2E Unavailable Chapters", audioPath),
+			chaptersUrl: server.feedUrl({
+				title: "Missing chapters",
+				slug: "missing-chapters",
+				artwork: false,
+				episodes: [],
+			}),
+		};
+		await seedRuntimeData(plugin, sandbox, episode, { currentEpisode: episode });
+		await installMediaSessionRecorder(obsidian);
+		try {
+			await waitForPodNotesReady(obsidian);
+			await setPlayback(obsidian, { currentTime: 95, paused: true });
+			await openPodNotesSettings(obsidian);
+			await chooseSettingOption(obsidian, "Previous track", "Previous chapter");
+			await closeSettings(obsidian);
+
+			await obsidian.waitFor(
+				async () => {
+					await invokeRecordedMediaSessionAction(obsidian, "previoustrack");
+					return server.requests().length >= 2;
+				},
+				{ ...WAIT_OPTS, message: "failed chapter request to finish and retry" },
+			);
+
+			expect((await getPlaybackState(obsidian)).currentTime).toBe(95);
 		} finally {
 			await restoreMediaSessionRecorder(obsidian);
 		}
@@ -1114,7 +1152,6 @@ function episodeKey(episode: Episode): string {
 	return `${episode.podcastName}::${episode.title}`;
 }
 
-/** Picks the option labelled `label` in the dropdown of the setting named `settingName`. */
 async function chooseSettingOption(
 	obsidian: Parameters<typeof evalJsonAsync>[0],
 	settingName: string,

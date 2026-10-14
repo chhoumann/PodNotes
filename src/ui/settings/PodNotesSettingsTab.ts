@@ -31,7 +31,7 @@ import {
 	sanitizeEpisodeListLimit,
 	savedFeeds,
 } from "src/store/index";
-import { DEFAULT_SETTINGS } from "src/constants";
+import { DEFAULT_SETTINGS, MAX_EPISODE_LIST_LIMIT } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { NEXT_TRACK_ACTIONS, PREVIOUS_TRACK_ACTIONS } from "src/types/Headset";
@@ -69,11 +69,11 @@ type ImportMutationResult = "failed" | "applied" | "complete";
 
 interface TextField {
 	read(): string;
-	/** Takes the completed text. A value it rejects leaves the setting as it was. */
 	write(value: string): void;
 	placeholder?: string;
-	/** Multi-line fields under the row's name: "area" short, "template" tall. */
 	kind?: "number" | "area" | "template";
+	min?: number;
+	max?: number;
 	preview?(value: string, setting: Setting): void;
 }
 
@@ -196,11 +196,6 @@ const CREDENTIAL_KIND_BY_REFERENCE: Record<SecretReferenceKey, CredentialKind> =
 	deepgramSecretId: "deepgram",
 };
 
-/**
- * Stack a Setting's control beneath its name, full width, as the template text
- * areas need. Obsidian's Setting has no vertical variant and the plugin ships no
- * stylesheet, so this sets the few inline styles.
- */
 function stackSettingVertically(setting: Setting): void {
 	setting.settingEl.setCssStyles({
 		flexDirection: "column",
@@ -219,9 +214,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	};
 	private settingsInteractionLockCount = 0;
 	private settingsControlDisabledStates = new Map<SettingsControl, boolean>();
-	/** Completes the edit of each field that has one. */
 	private readonly drafts = new Set<() => void>();
-	/** Stops each rendered row that follows the settings. */
 	private readonly follows = new Set<() => void>();
 	private includeApiKeys = false;
 
@@ -248,11 +241,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					render: (setting) => {
 						let stop = () => {};
 						setting.addToggle((toggle) => {
-							toggle.onChange((on) => this.plugin.setAutoQueue(on));
-							// The Queue page menu changes it too.
 							stop = this.follow(setting, ({ autoQueue }) =>
 								toggle.setValue(autoQueue),
 							);
+							toggle.onChange((on) => this.plugin.setAutoQueue(on));
 						});
 						return stop;
 					},
@@ -371,7 +363,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					...this.text((settings) => settings.download, "path"),
 					preview: (value, setting) => {
 						pathPreview(DownloadPathTemplateEngine, ".mp3")(value, setting);
-						// Only these forms resolve: without one, every episode gets the same file.
 						setting.setErrorMessage(
 							/\{\{title(:[^}]*)?\}\}/i.test(value)
 								? null
@@ -393,6 +384,8 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				}),
 				this.textRow("Latest episodes per podcast", {
 					kind: "number",
+					min: 1,
+					max: MAX_EPISODE_LIST_LIMIT,
 					read: () =>
 						`${sanitizeEpisodeListLimit(this.plugin.settings.episodeListLimit)}`,
 					write: (value) => {
@@ -434,7 +427,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		super.hide();
 	}
 
-	/** Tells open views and the rows that follow settings, then saves. */
 	private changed(): void {
 		plugin.set(this.plugin);
 		void this.plugin.saveSettings();
@@ -444,12 +436,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		for (const complete of this.drafts) complete();
 	}
 
-	/**
-	 * Typing changes only the field. The edit applies once it completes: on change
-	 * (blur or Enter), when its row or the tab closes, or when its window hides or
-	 * unloads, which closes a Settings popout without its rows' cleanups. A field
-	 * with no edit never writes, so it cannot undo a newer value.
-	 */
 	private bindDraft(
 		input: HTMLInputElement | HTMLTextAreaElement,
 		apply: (value: string) => void,
@@ -473,7 +459,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		return complete;
 	}
 
-	/** Shows the settings in `setting` now and after each change, until the row ends. */
 	private follow(setting: Setting, show: (settings: IPodNotesSettings) => void): () => void {
 		const { win } = setting.settingEl;
 		const unsubscribe = plugin.subscribe(() => show(this.plugin.settings));
@@ -487,7 +472,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		return stop;
 	}
 
-	/** A string setting of whichever settings object is live, with its default as placeholder. */
 	private text<K extends string>(
 		section: (settings: IPodNotesSettings) => Record<K, string>,
 		key: K,
@@ -518,6 +502,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			desc,
 			render: (setting) => {
 				let complete = () => {};
+				let stopPreview = () => {};
 				const bind = (control: TextComponent | TextAreaComponent) => {
 					control
 						.setValue(field.read())
@@ -530,6 +515,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						control.setValue(field.read());
 						field.preview?.(field.read(), setting);
 					});
+					const preview = field.preview;
+					if (preview) {
+						stopPreview = this.follow(setting, () =>
+							preview(control.inputEl.value, setting),
+						);
+					}
 				};
 				if (field.kind === "area" || field.kind === "template") {
 					stackSettingVertically(setting);
@@ -541,13 +532,20 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						bind(area);
 					});
 				} else {
+					if (!field.kind) stackSettingVertically(setting);
 					setting.addText((text) => {
-						if (field.kind === "number") text.inputEl.type = "number";
+						if (field.kind === "number") {
+							text.inputEl.type = "number";
+							text.inputEl.min = field.min?.toString() ?? "";
+							text.inputEl.max = field.max?.toString() ?? "";
+						} else text.inputEl.setCssStyles({ width: "100%" });
 						bind(text);
 					});
 				}
-				field.preview?.(field.read(), setting);
-				return complete;
+				return () => {
+					complete();
+					stopPreview();
+				};
 			},
 		};
 	}
@@ -576,7 +574,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 	}
 
-	/** The player's speeds, and a saved speed that is none of them. Nothing saves until a change. */
 	private speedRow(): SettingDefinitionRender {
 		return {
 			name: "Default speed",
@@ -595,7 +592,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 	}
 
-	/** A diarization row, disabled while it does not apply. */
 	private whenDiarizing(
 		row: SettingDefinitionRender,
 		applies: (diarization: Diarization) => boolean,
@@ -606,7 +602,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				const end = row.render(setting, settingGroup);
 				const stop = this.follow(setting, ({ transcript }) => {
 					const off = !applies(transcript.diarization);
-					setting.setDisabled(off);
+					setting.setDisabled(off || this.settingsInteractionLockCount > 0);
 					// Obsidian dims only disabled action rows.
 					setting.settingEl.setCssStyles({ opacity: off ? "0.5" : "" });
 				});
@@ -653,7 +649,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 	}
 
-	/** A file name, the default when left empty, with the default's extension added if missing. */
 	private exportRow(
 		name: string,
 		defaultName: string,
@@ -698,7 +693,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		);
 	}
 
-	/** An episode for the path examples: the first loaded one, or a stand-in. */
 	private demoEpisode(): Episode {
 		for (const { episodes } of get(this.plugin.feeds).values()) {
 			if (episodes[0]) return episodes[0];
@@ -807,7 +801,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		imported: Partial<IPodNotesSettings>,
 		secrets: CredentialValues = {},
 	): Promise<void> {
-		// An edit not completed yet would otherwise apply over the import when its row re-renders.
 		this.completeDrafts();
 		const unlockSettingsInteractions = this.lockSettingsInteractions();
 		try {
@@ -897,9 +890,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		}
 		concurrentStoreChanges.dispose();
 
-		// Re-hydrate the live stores so the running UI and the persistence
-		// bindings reflect the import. Keys without a store (templates, paths,
-		// skip lengths) are applied via `merged` above.
 		savedFeeds.set(merged.savedFeeds);
 		playlists.set(merged.playlists);
 		favorites.set(merged.favorites);
@@ -963,6 +953,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				control.disabled = wasDisabled;
 			}
 			this.settingsControlDisabledStates.clear();
+			plugin.set(this.plugin);
 		};
 	}
 

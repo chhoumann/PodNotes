@@ -64,10 +64,6 @@ function settingsWithEveryEpisodeContainer(): IPodNotesSettings {
 	};
 }
 
-/**
- * How 2.21.1 read the feed cache preference, frozen from its settingsCodec: an
- * absent or malformed field is caching on for six hours. Downgrades read this.
- */
 function decodeFeedCacheAs2211(value: unknown): { enabled: boolean; ttlHours: number } {
 	const record =
 		typeof value === "object" && value !== null && !Array.isArray(value)

@@ -385,7 +385,6 @@ function channelFeed(channel: ParsedFeedDocument, url: string): PodcastFeed {
 // v6 stores parsed documents instead of episodes projected for one subscription.
 // v1-v4 lived in the global localStorage, v5 in the vault-scoped one.
 const CACHE_KEY = "podnotes:feed-cache:v6";
-/** Refresh fetches a feed sooner. */
 const CACHE_TTL_MS = 6 * 3_600_000;
 // Keep this >= MAX_EPISODE_LIST_LIMIT (src/constants.ts): Latest Episodes is built
 // from cached documents on a warm start.

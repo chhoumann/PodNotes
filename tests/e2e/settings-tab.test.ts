@@ -4,7 +4,6 @@ import { createPodNotesE2EHarness, type PodNotesData } from "./harness";
 import {
 	closeSettings,
 	openPodNotesSettings,
-	runCommand,
 	showLibrary,
 	showList,
 	showPodNotes,
@@ -25,10 +24,6 @@ const FEED: FixtureFeed = {
 	episodes: [{ title: "Cached Episode", seconds: 6, pubDate: pubDate(1), guid: "cached" }],
 };
 
-/**
- * The names of the PodNotes rows Settings search lists for `query`. Results update a
- * moment after typing, so this waits for a list other than the previous query's.
- */
 async function searchResults(
 	obsidian: ObsidianClient,
 	query: string,
@@ -53,7 +48,6 @@ async function searchResults(
 	return last;
 }
 
-/** Every row name Settings search lists right now, from any tab. */
 async function listedNow(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>(
 		`[...document.querySelectorAll(".modal.mod-settings .setting-search-result-item .vertical-tab-nav-item-title")].map((item) => item.textContent)`,
@@ -73,8 +67,21 @@ async function settingValue(obsidian: ObsidianClient, name: string): Promise<unk
 describe("PodNotes settings tab", () => {
 	test("search finds a row of each section by name, and none of the removed rows", async () => {
 		const { obsidian } = getContext();
-		await runCommand(obsidian, "app:open-settings");
+		await openPodNotesSettings(obsidian);
 		onTestFinished(() => closeSettings(obsidian));
+		expect(
+			await obsidian.dev.evalJson<string[]>(
+				`[...document.querySelectorAll(".modal.mod-settings .setting-item-heading .setting-item-name")].map(element => element.textContent.trim())`,
+			),
+		).toEqual([
+			"Playback",
+			"Headset and lock screen",
+			"Notes",
+			"Transcripts",
+			"Downloads",
+			"Library",
+			"Import and export",
+		]);
 
 		const found: Record<string, string[]> = {};
 		let previous: string[] = [];

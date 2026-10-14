@@ -66,10 +66,6 @@ function makePlugin(
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-/**
- * A released library as this version writes it back: with the headset mapping's defaults,
- * and without the retired feed cache preference.
- */
 function savedByThisVersion(released: Record<string, unknown>): Record<string, unknown> {
 	const data: Record<string, unknown> = {
 		...structuredClone(released),

@@ -652,7 +652,6 @@ export class PluginSettingTab {
 
 	hide(): void {}
 
-	/** Test only: Obsidian closing Settings, or opening another tab. */
 	close(): void {
 		this.cleanUp();
 		this.containerEl.empty();

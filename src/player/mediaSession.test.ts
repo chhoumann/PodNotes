@@ -338,6 +338,36 @@ describe("headset mapping", () => {
 	});
 
 	describe("Next in queue", () => {
+		test.each([true, false])(
+			"skips a queued copy of the current episode with auto-queue %s",
+			(autoQueue) => {
+				const context = setup();
+				context.host.settings.headsetNextTrack = "nextInQueue";
+				context.host.settings.autoQueue = autoQueue;
+				playing(context, 40);
+				queue.add(A);
+				queue.add(B);
+				queue.add(C);
+
+				context.session.act("nexttrack");
+
+				expect([context.state().episode?.title, titles()]).toEqual(["B", ["C", "A"]]);
+			},
+		);
+
+		test("leaves a queue containing only the current episode alone", () => {
+			const context = setup();
+			context.host.settings.headsetNextTrack = "nextInQueue";
+			playing(context, 40);
+			queue.add(A);
+
+			context.session.act("nexttrack");
+
+			expect([context.state().episode?.title, context.state().currentTime, titles()]).toEqual(
+				["A", 40, ["A"]],
+			);
+		});
+
 		test("goes through the queue, queueing each episode switched away from last", () => {
 			const context = setup();
 			context.host.settings.headsetNextTrack = "nextInQueue";
@@ -385,6 +415,21 @@ describe("headset mapping", () => {
 	});
 
 	describe("chapters", () => {
+		test("ignores a chapter request after switching away and back", async () => {
+			let resolve!: (chapters: Chapter[]) => void;
+			const context = setup({ chapters: () => new Promise((done) => (resolve = done)) });
+			context.host.settings.headsetNextTrack = "nextChapter";
+			playing(context, 30, 3600, WITH_CHAPTERS);
+			context.session.act("nexttrack");
+			playing(context, 10, 3600, B);
+			playing(context, 45, 3600, WITH_CHAPTERS);
+
+			resolve(CHAPTERS);
+			await flush();
+
+			expect(context.media().currentTime).toBe(45);
+		});
+
 		test("next and previous chapter seek to the episode's chapter starts", async () => {
 			const chapters = vi.fn(() => Promise.resolve(CHAPTERS));
 			const context = setup({ chapters });
@@ -430,28 +475,32 @@ describe("headset mapping", () => {
 			]);
 		});
 
-		test("no chapters loaded is a no-op the next press retries, and no chapters URL never asks", async () => {
-			const chapters = vi
-				.fn<(url: string) => Promise<Chapter[]>>()
-				.mockRejectedValueOnce(new Error("offline"))
-				.mockResolvedValueOnce([])
-				.mockResolvedValue(CHAPTERS);
-			const context = setup({ chapters });
-			context.host.settings.headsetNextTrack = "nextChapter";
-			playing(context, 30, 3600, WITH_CHAPTERS);
+		test.each(["nexttrack", "previoustrack"])(
+			"%s with no chapters is a no-op and retries",
+			async (action) => {
+				const chapters = vi
+					.fn<(url: string) => Promise<Chapter[]>>()
+					.mockRejectedValueOnce(new Error("offline"))
+					.mockResolvedValueOnce([])
+					.mockResolvedValue(CHAPTERS);
+				const context = setup({ chapters });
+				context.host.settings.headsetNextTrack = "nextChapter";
+				context.host.settings.headsetPreviousTrack = "previousChapter";
+				playing(context, 30, 3600, WITH_CHAPTERS);
 
-			for (const expected of [30, 30, 60]) {
-				context.session.act("nexttrack");
+				for (const expected of [30, 30, action === "nexttrack" ? 60 : 0]) {
+					context.session.act(action);
+					await flush();
+					expect(context.media().currentTime).toBe(expected);
+				}
+
+				playing(context, 30, 3600, B);
+				context.session.act(action);
 				await flush();
-				expect(context.media().currentTime).toBe(expected);
-			}
-
-			playing(context, 30, 3600, B);
-			context.session.act("nexttrack");
-			await flush();
-			expect(chapters).toHaveBeenCalledTimes(3);
-			expect(context.media().currentTime).toBe(30);
-		});
+				expect(chapters).toHaveBeenCalledTimes(3);
+				expect(context.media().currentTime).toBe(30);
+			},
+		);
 
 		test("chapters that arrive after unbinding move nothing", async () => {
 			let resolve!: (chapters: Chapter[]) => void;
