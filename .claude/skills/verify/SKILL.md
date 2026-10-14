@@ -262,7 +262,9 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   without a button that reads exactly that, as on a full player before v3.
   `shot` hides Obsidian's status bar, except in `status-bar`, which puts a
   `9 properties` item in it over the mini player and has no phone shot, because
-  Obsidian hides the status bar on mobile.
+  Obsidian hides the status bar on mobile. The states and their seeded data
+  live in `screens/scenes.mjs`, the instance calls in `screens/instance.mjs`,
+  and the contact sheet in `screens/sheet.mjs`.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
   `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
