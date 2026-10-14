@@ -28,7 +28,11 @@ export class Scope {
 	win: Window | null = null;
 	private handlers: KeymapEventHandler[] = [];
 
-	constructor(private readonly parent?: Scope) {}
+	/** `delegate`, as Obsidian's workspace scope has, gets every key while it gives a scope. */
+	constructor(
+		private readonly parent?: Scope,
+		private readonly delegate?: () => Scope | null,
+	) {}
 
 	register(_modifiers: string[] | null, key: string | null, func: KeymapEventListener) {
 		const handler = { key, func };
@@ -42,6 +46,8 @@ export class Scope {
 
 	/** As Obsidian: the first handler for the key decides, else the parent scope does. */
 	handleKey(evt: KeyboardEvent): unknown {
+		const delegated = this.delegate?.();
+		if (delegated) return delegated.handleKey(evt);
 		for (const { key, func } of this.handlers) {
 			if (key !== null && key !== evt.key) continue;
 			const result = func(evt, {});
@@ -98,6 +104,8 @@ interface EventRef {
 }
 
 export class Workspace {
+	/** Obsidian makes a leaf active on focus or a press in it. */
+	activeLeaf: { view: { scope: Scope | null } } | null = null;
 	private readonly refs = new Set<EventRef & { name: string; callback(): unknown }>();
 
 	on(name: string, callback: () => unknown): EventRef {
@@ -118,8 +126,9 @@ export class Workspace {
 export class App {
 	secretStorage = new SecretStorage();
 	scope = new Scope();
-	keymap = new Keymap(this.scope);
 	workspace = new Workspace();
+	/** Each window's base scope, as Obsidian's workspace scope, hands keys to the active view's scope. */
+	keymap = new Keymap(new Scope(this.scope, () => this.workspace.activeLeaf?.view.scope ?? null));
 }
 export class Plugin {}
 
@@ -202,6 +211,7 @@ export const normalizePath = (path: string): string => {
 
 export class WorkspaceLeaf {}
 export class ItemView extends Component {
+	scope: Scope | null = null;
 	/** Obsidian loads a view before onOpen and unloads it before onClose. */
 	async open(): Promise<void> {
 		this.load();

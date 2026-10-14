@@ -15,6 +15,7 @@ import {
 	type FakeResizeObservers,
 } from "../../../tests/mocks/resizeObserver";
 import {
+	activateLeaf,
 	createTestServices,
 	pluginLibrary,
 	type TestLibrary,
@@ -667,52 +668,65 @@ describe("full player", () => {
 			expect(await escape()).toBe(true);
 		});
 
-		test("leaves a modal above the player when its window regains focus", async () => {
-			renderView();
-			playing();
-			await tick();
-			await fireEvent.click(button(`Open player: ${episode.title}`));
-			const modal = new obsidian.Scope(services.app.scope);
-			modal.register(null, "Escape", () => false);
-			services.app.keymap.pushScope(modal);
+		/** A note's tab whose own keys, as its find bar's, record what reaches them. */
+		function noteLeaf() {
+			const scope = new obsidian.Scope(services.app.scope);
+			const keys: string[] = [];
+			for (const key of ["Enter", "Escape"]) {
+				scope.register(null, key, () => {
+					keys.push(key);
+					return false;
+				});
+			}
+			return { scope, keys };
+		}
 
-			window.dispatchEvent(new Event("focus"));
-			await escape();
-
-			expect(services.navigation.current.expanded).toBe(true);
-			services.app.keymap.popScope(modal);
-		});
-
-		test("typed outside the view stays there", async () => {
+		test("typed in a note reach the note, and the player stays open (#467)", async () => {
 			const note = document.body.appendChild(document.createElement("textarea"));
 			renderView();
 			playing();
 			await tick();
+			await fireEvent.click(button(`Open player: ${episode.title}`));
+			const tab = noteLeaf();
+			activateLeaf(services.app, tab.scope);
 			note.focus();
 
-			services.navigation.expand();
-			await tick();
-			expect(document.activeElement).toBe(note);
+			await fireEvent.keyDown(note, { key: "Enter" });
+			await escape(note);
 
-			expect(await escape()).toBe(true);
+			expect(tab.keys).toEqual(["Enter", "Escape"]);
 			expect(services.navigation.current.expanded).toBe(true);
 			note.remove();
 		});
 
-		test("from outside the view passes through, even with focus left in the player", async () => {
-			const note = document.body.appendChild(document.createElement("textarea"));
-			renderView();
-			playing();
-			await tick();
-			await fireEvent.click(button(`Open player: ${episode.title}`));
-			expect(document.activeElement).toBe(button("Collapse player"));
+		test.each([
+			["a note's editor", "textarea", true],
+			["an empty tab", "div", false],
+		] as const)(
+			"typed in %s, which has no use for Escape or Space, leave the player open and playing (#467)",
+			async (_, tag, viewHasScope) => {
+				const at = document.body.appendChild(document.createElement(tag));
+				renderView();
+				playing();
+				await tick();
+				await fireEvent.click(button(`Open player: ${episode.title}`));
+				const pause = vi.spyOn(doc.media, "pause");
+				activateLeaf(
+					services.app,
+					viewHasScope ? new obsidian.Scope(services.app.scope) : null,
+				);
 
-			expect(await escape(note)).toBe(true);
-			expect(services.navigation.current.expanded).toBe(true);
-			note.remove();
-		});
+				await fireEvent.keyDown(at, { key: " " });
+				expect(get(services.player.state).status).toBe("playing");
+				expect(pause).not.toHaveBeenCalled();
 
-		test("follows the player to a popout window, and Escape in the main window passes it by", async () => {
+				await escape(at);
+				expect(services.navigation.current.expanded).toBe(true);
+				at.remove();
+			},
+		);
+
+		test("reach the player in a popout through that window's base scope, and a note's Escape passes it by", async () => {
 			const popout = openPopout();
 			popout.win.document.addEventListener("keydown", dispatch);
 			const note = document.body.appendChild(document.createElement("textarea"));
@@ -720,11 +734,14 @@ describe("full player", () => {
 			playing();
 			await tick();
 			await fireEvent.click(button(`Open player: ${episode.title}`));
-
 			popout.moveIn(container);
-			expect(await escape(note)).toBe(true);
+			const tab = noteLeaf();
+			activateLeaf(services.app, tab.scope);
+			await escape(note);
+			expect(tab.keys).toEqual(["Escape"]);
 			expect(services.navigation.current.expanded).toBe(true);
 
+			activateLeaf(services.app, services.scope);
 			popout.focus();
 			const collapseButton = within(container).getByRole("button", {
 				name: "Collapse player",
