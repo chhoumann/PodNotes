@@ -608,6 +608,18 @@ describe("capture", () => {
 			expect(said()).toEqual(["Timestamp added to Saved Episode", REFUSED]);
 		});
 
+		it("leaves the timestamp once another open editor of the note holds other text, and says so", async () => {
+			const { editor, openNote, read } = await intoEditor("Notes\n");
+			const other = openNote("Journal.md", "Notes\nUnsaved in the other pane");
+
+			await undo();
+
+			expect(editor.getValue()).toBe("Notes\n- 00:20:34");
+			expect(other.editor.getValue()).toBe("Notes\nUnsaved in the other pane");
+			expect(read("Journal.md")).toBe("Notes\n");
+			expect(said()).toEqual(["Timestamp added to Journal", REFUSED]);
+		});
+
 		it("takes the timestamp out through the episode note's open editor", async () => {
 			const { plugin, notes, openNote, read } = await loadPlugin(playing);
 			notes.set(NOTE_PATH, { file: vaultFile(NOTE_PATH), content: "# Mine\n" });
