@@ -138,8 +138,9 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 
 	ensureAll({ online }: { online: boolean }): Promise<boolean> {
 		this.hydrate();
-		if (!online) return Promise.resolve(true);
-		return this.load(this.subscriptions.keys(), "cached");
+		if (online) return this.load(this.subscriptions.keys(), "cached");
+		for (const feed of this.subscriptions.values()) void this.request(feed, "cached", false);
+		return Promise.resolve(true);
 	}
 
 	/**
@@ -193,7 +194,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 	}
 
 	/** Joins the feed's request in flight, or starts one when `mode` asks for it. */
-	private request(feed: FeedAddress, mode: LoadMode): Promise<void> | undefined {
+	private request(feed: FeedAddress, mode: LoadMode, online = true): Promise<void> | undefined {
 		const source = this.source(feed.url);
 		if (source.inflight || !this.needsFetch(source.doc, mode)) return source.inflight;
 		const url = this.deps.resolveUrl(feed);
@@ -202,7 +203,7 @@ export class FeedRepository implements Readable<ReadonlyMap<FeedKey, FeedState>>
 			this.emit();
 			return undefined;
 		}
-		return this.fetch(feed.url, url);
+		return online ? this.fetch(feed.url, url) : undefined;
 	}
 
 	private source(url: string): Source {

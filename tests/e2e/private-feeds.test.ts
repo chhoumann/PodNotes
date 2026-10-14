@@ -1,11 +1,27 @@
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { ObsidianClient } from "obsidian-e2e";
 import { expect, onTestFinished, test } from "vitest";
 import { SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
-import { runCommand, showAddPodcast, showLibrary, showPodNotes } from "./journey/actions";
+import {
+	closePodNotes,
+	runCommand,
+	setOffline,
+	showAddPodcast,
+	showLibrary,
+	showPodNotes,
+} from "./journey/actions";
 import { click, typeInto } from "./journey/input";
 import { ui } from "./journey/targets";
-import { isShown, notices, waitUntilShown } from "./journey/wait";
+import {
+	eventually,
+	isDisabled,
+	isShown,
+	notices,
+	shownText,
+	waitUntilShown,
+} from "./journey/wait";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import {
 	feedCacheHolds,
@@ -24,6 +40,65 @@ const closeFeedAddressDialog = (obsidian: ObsidianClient) =>
 	obsidian.dev.evalJson(
 		'document.querySelectorAll(".modal-container:not(:has(.mod-settings)) .modal-close-button").forEach(el => el.click()), true',
 	);
+
+test("a private feed first opened offline explains that its address is not on this device", async () => {
+	const context = getContext();
+	const { obsidian, plugin } = context;
+	await seedLibrary(context, null);
+	const id = "podnotes-feed-url-47600000-0000-4000-8000-000000000000";
+	await obsidian.dev.evalJson(`app.secretStorage.setSecret(${jsLiteral(id)}, ""), true`);
+	onTestFinished(async () => {
+		await closePodNotes(obsidian);
+		await setOffline(obsidian, false);
+	});
+	await setOffline(obsidian, true);
+	await plugin.updateDataAndReload<Record<string, unknown>>((data) => {
+		data.savedFeeds = {
+			Private: {
+				title: "Private",
+				artworkUrl: "",
+				url: "podnotes-private-feed:Private",
+				urlSecretId: id,
+			},
+		};
+	}, RELOAD_OPTIONS);
+	await showPodNotes(obsidian);
+	await showLibrary(obsidian);
+	await click(obsidian, ui.podcastCard("Private"));
+	await waitUntilShown(obsidian, ui.offlineStrip);
+	const actionShown = await eventually(
+		obsidian,
+		() => isShown(obsidian, ui.feedErrorAction("Set feed address")),
+		true,
+	);
+	const text = await shownText(obsidian);
+	console.log("FIX476 offline", JSON.stringify({ text, actionShown }));
+	const evidence = resolve(".obsidian-e2e-artifacts/fix476");
+	await mkdir(evidence, { recursive: true });
+	await obsidian.dev.screenshot(resolve(evidence, "missing-address-offline.png"));
+	expect.soft(text).toContain("Address not on this device");
+	expect.soft(actionShown).toBe(true);
+	expect.soft(await isDisabled(obsidian, ui.feedErrorAction("Set feed address"))).toBe(true);
+	expect
+		.soft(
+			await obsidian.dev.evalJson<boolean>(`(() => {
+		const description = document.querySelector(".podcast-view .pn-banner .d");
+		return !!description && description.scrollWidth <= description.clientWidth;
+	})()`),
+		)
+		.toBe(true);
+
+	await setOffline(obsidian, false);
+	await waitUntilShown(obsidian, ui.feedErrorAction("Set feed address"));
+	expect(await isDisabled(obsidian, ui.feedErrorAction("Set feed address"))).toBe(false);
+	expect(await shownText(obsidian)).toContain("Address not on this device");
+	expect((await readLibrary(plugin)).subscriptions).toEqual([
+		{ title: "Private", url: "podnotes-private-feed:Private" },
+	]);
+	expect(
+		await obsidian.dev.evalJson<string | null>(`app.secretStorage.getSecret(${jsLiteral(id)})`),
+	).toBeFalsy();
+});
 
 test("protects a Supercast subscription's address in data, cache keys and note links, then accepts it under the same reference", async () => {
 	const context = getContext();

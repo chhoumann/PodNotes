@@ -441,30 +441,67 @@ describe("FeedRepository", () => {
 		expect(t.titles("Beta")).toEqual(["Episode 2"]);
 	});
 
-	test("a private feed whose URL is not on this device is never fetched", async () => {
-		const resolveUrl = vi.fn(() => null);
-		const t = setup({ resolveUrl });
-		const placeholder = privateFeedPlaceholder("Private");
-		t.repo.setSubscriptions({ Private: { ...alpha, url: placeholder, urlSecretId: "id" } });
+	test.each([false, true])(
+		"a private feed whose URL is not on this device is unavailable with online %s",
+		async (online) => {
+			const resolveUrl = vi.fn(() => null);
+			const t = setup({ resolveUrl });
+			const placeholder = privateFeedPlaceholder("Private");
+			t.repo.setSubscriptions({ Private: { ...alpha, url: placeholder, urlSecretId: "id" } });
 
-		await t.repo.ensureAll({ online: true });
+			await t.repo.ensureAll({ online });
 
-		expect(t.load).not.toHaveBeenCalled();
-		expect(t.feed("Private")).toMatchObject({ status: "error", error: "unavailable" });
-	});
+			expect(t.load).not.toHaveBeenCalled();
+			expect(t.feed("Private")).toMatchObject({ status: "error", error: "unavailable" });
+		},
+	);
 
-	test("a fresh cached private feed does not ask for its URL", async () => {
+	test.each([false, true])(
+		"a fresh cached private feed does not ask for its URL with online %s",
+		async (online) => {
+			const privateFeed = {
+				...alpha,
+				url: privateFeedPlaceholder("Private"),
+				urlSecretId: "id",
+			};
+			const seeded = setup({ resolveUrl: () => "https://private.test/feed.xml?auth=s3cret" });
+			await loaded(seeded, { Private: privateFeed }, doc("Private", [item(1)]));
+
+			const resolveUrl = vi.fn(() => null);
+			const t = setup({ storage: seeded.storage, resolveUrl });
+			t.repo.setSubscriptions({ Private: privateFeed });
+			await t.repo.ensureAll({ online });
+
+			expect(resolveUrl).not.toHaveBeenCalled();
+			expect(t.titles("Private")).toEqual(["Episode 1"]);
+		},
+	);
+
+	test("offline, an expired private cache shows its episodes and missing address", async () => {
 		const privateFeed = { ...alpha, url: privateFeedPlaceholder("Private"), urlSecretId: "id" };
 		const seeded = setup({ resolveUrl: () => "https://private.test/feed.xml?auth=s3cret" });
 		await loaded(seeded, { Private: privateFeed }, doc("Private", [item(1)]));
-
-		const resolveUrl = vi.fn(() => null);
-		const t = setup({ storage: seeded.storage, resolveUrl });
+		const t = setup({ storage: seeded.storage, resolveUrl: () => null });
+		t.advance(7 * HOUR);
 		t.repo.setSubscriptions({ Private: privateFeed });
-		await t.repo.ensureAll({ online: true });
 
-		expect(resolveUrl).not.toHaveBeenCalled();
+		await t.repo.ensureAll({ online: false });
+
+		expect(t.load).not.toHaveBeenCalled();
+		expect(t.feed("Private")).toMatchObject({ status: "stale", error: "unavailable" });
 		expect(t.titles("Private")).toEqual(["Episode 1"]);
+	});
+
+	test("offline, a private feed with its address on this device waits without an error or request", async () => {
+		const t = setup({ resolveUrl: () => "https://private.test/feed.xml?auth=s3cret" });
+		t.repo.setSubscriptions({
+			Private: { ...alpha, url: privateFeedPlaceholder("Private"), urlSecretId: "id" },
+		});
+
+		await t.repo.ensureAll({ online: false });
+
+		expect(t.load).not.toHaveBeenCalled();
+		expect(t.feed("Private")).toMatchObject({ status: "idle", error: undefined, episodes: [] });
 	});
 
 	test("a private feed's URL reaches neither the cache nor its episodes", async () => {
