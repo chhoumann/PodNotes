@@ -197,9 +197,7 @@
 			color: var(--text-muted);
 			font-size: var(--font-ui-smaller);
 			font-family: var(--font-monospace);
-			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis;
+			overflow-wrap: anywhere;
 		}
 	}
 
