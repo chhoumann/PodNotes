@@ -131,6 +131,7 @@
 	:global(.is-phone) .pn-panel :global {
 		.pn-panel-head,
 		.pn-panel-head :is(button, input) {
+			min-width: 44px;
 			min-height: 44px;
 		}
 

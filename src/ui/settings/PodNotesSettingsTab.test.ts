@@ -191,6 +191,48 @@ describe("sections", () => {
 		]);
 	});
 
+	test("each field is named after its row, without an aria-label Obsidian would show as a tooltip", () => {
+		const { tab } = open();
+		const fields = [
+			...tab.containerEl.querySelectorAll(
+				".setting-item-control :is(input, select, textarea)",
+			),
+		];
+		const rowOf = (field: Element) =>
+			field.closest(".setting-item")?.querySelector(".setting-item-name")?.textContent;
+
+		expect(fields.map(rowOf)).toEqual([
+			"Skip back (s)",
+			"Skip forward (s)",
+			"Default speed",
+			"Queue episodes I switch away from",
+			"Previous track",
+			"Next track",
+			"Timestamp template",
+			"Timestamp offset (s)",
+			"Episode note path",
+			"Episode note template",
+			"Podcast note path",
+			"Podcast note template",
+			"OpenAI API key",
+			"Transcript path",
+			"Transcript template",
+			"Speaker diarization",
+			"Diarization provider",
+			"Deepgram API key",
+			"Speaker label format",
+			"Download path",
+			"Export OPML",
+			"Latest episodes per podcast",
+			"Include API keys",
+			"Export settings",
+		]);
+		for (const field of fields) {
+			expect(field).toHaveAccessibleName(rowOf(field));
+			expect(field).not.toHaveAttribute("aria-label");
+		}
+	});
+
 	test("each row renders under its own name, and the speaker rows apply only with diarization", () => {
 		const { row, toggle, select } = open();
 		const disabled = (name: string) => row(name).classList.contains("is-disabled");

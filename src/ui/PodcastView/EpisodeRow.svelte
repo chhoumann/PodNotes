@@ -307,12 +307,6 @@
 		}
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.pn-ep :global(.pn-eq i) {
-			animation: none;
-		}
-	}
-
 	:global(.is-wide) .pn-ep :global {
 		.pn-ep-meta {
 			flex-wrap: nowrap;

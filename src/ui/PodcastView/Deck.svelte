@@ -425,12 +425,6 @@
 		}
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.pn-deck :global(.pn-play) {
-			transition: none;
-		}
-	}
-
 	:global(.is-phone) .pn-deck {
 		gap: var(--size-4-4);
 		padding-bottom: var(--size-4-2);

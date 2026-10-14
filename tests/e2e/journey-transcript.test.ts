@@ -369,7 +369,7 @@ describe("transcript journeys", () => {
 		);
 	}, 120_000);
 
-	test("on a phone, Save, the Find field, Follow and Up next's Edit are 44 px tall", async () => {
+	test("on a phone, Save, the Find field, Follow and Up next's Edit are 44 px tall, and Edit 44 px wide", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const phone = { width: 390, height: 844 };
@@ -421,7 +421,11 @@ describe("transcript journeys", () => {
 		await click(obsidian, ui.playerPanel("Up next"));
 		await waitUntilShown(obsidian, panelButton("Edit"));
 		heights.edit = await height(panelButton("Edit"));
+		const editWidth = await obsidian.dev.evalJson<number>(
+			`(${panelButton("Edit").elements})[0].getBoundingClientRect().width`,
+		);
 
 		expect(heights).toEqual({ save: 44, follow: 44, find: 44, edit: 44 });
+		expect(editWidth).toBeGreaterThanOrEqual(44);
 	}, 120_000);
 });

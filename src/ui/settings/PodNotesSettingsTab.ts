@@ -87,10 +87,26 @@ const TYPING_SAVE_DELAY_MS = 500;
 /** Search finds rows, not section headings. */
 const HEADSET_ALIASES = ["headset", "lock screen", "media keys"];
 
+let settingNames = 0;
+
+/**
+ * Obsidian names no row's field after the row, and shows an aria-label as a tooltip, so
+ * each field is labelled by the row's name.
+ */
 const group = (heading: string, items: SettingDefinitionRender[]): SettingDefinitionGroup => ({
 	type: "group",
 	heading,
-	items,
+	items: items.map((item) => ({
+		...item,
+		render: (setting, settingGroup) => {
+			const end = item.render(setting, settingGroup);
+			const { nameEl, controlEl } = setting;
+			if (!nameEl.id) nameEl.id = `podnotes-setting-${++settingNames}`;
+			for (const field of controlEl.querySelectorAll("input, select, textarea"))
+				field.setAttribute("aria-labelledby", nameEl.id);
+			return end;
+		},
+	})),
 });
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

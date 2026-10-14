@@ -65,6 +65,43 @@ async function settingValue(obsidian: ObsidianClient, name: string): Promise<unk
 }
 
 describe("PodNotes settings tab", () => {
+	test("names each field after its row", async () => {
+		const { obsidian } = getContext();
+		await openPodNotesSettings(obsidian);
+		onTestFinished(() => closeSettings(obsidian));
+		const fields = await obsidian.dev.evalJson<Array<{ row: string; name: string }>>(`(() =>
+			[...document.querySelectorAll(".modal.mod-settings .setting-item-control :is(input, select, textarea):not([aria-hidden])")].map((field) => ({
+				row: field.closest(".setting-item").querySelector(".setting-item-name").textContent,
+				name: field.getAttribute("aria-label") ?? document.getElementById(field.getAttribute("aria-labelledby"))?.textContent ?? "",
+			})))()`);
+
+		expect(fields.map(({ row }) => row)).toEqual([
+			"Skip back (s)",
+			"Skip forward (s)",
+			"Default speed",
+			"Queue episodes I switch away from",
+			"Previous track",
+			"Next track",
+			"Timestamp template",
+			"Timestamp offset (s)",
+			"Episode note path",
+			"Episode note template",
+			"Podcast note path",
+			"Podcast note template",
+			"Transcript path",
+			"Transcript template",
+			"Speaker diarization",
+			"Diarization provider",
+			"Speaker label format",
+			"Download path",
+			"Export OPML",
+			"Latest episodes per podcast",
+			"Include API keys",
+			"Export settings",
+		]);
+		expect(fields.filter(({ row, name }) => name !== row)).toEqual([]);
+	});
+
 	test("search finds a row of each section by name, and none of the removed rows", async () => {
 		const { obsidian } = getContext();
 		await openPodNotesSettings(obsidian);

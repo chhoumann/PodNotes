@@ -480,6 +480,14 @@
 		}
 	}
 
+	/* Less motion stops every transition and animation in the view, whatever rule set it. */
+	@media (prefers-reduced-motion: reduce) {
+		.podcast-view :global(*) {
+			transition: none !important;
+			animation: none !important;
+		}
+	}
+
 	/* Without the mini player, a page ends under Obsidian's status bar. */
 	.podcast-view:not(:has(> :global(.pn-mini))) :global(.pn-scroll) {
 		padding-bottom: calc(var(--size-4-6) + var(--pn-status-bar));
