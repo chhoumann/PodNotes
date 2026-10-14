@@ -245,25 +245,6 @@
 </div>
 
 <style>
-	.podcast-view {
-		--pn-bg: var(--background-primary);
-		--pn-surface: var(--background-secondary);
-		--pn-pad: var(--size-4-3);
-		--pn-btn: 28px;
-		--pn-row: 28px;
-		--pn-head: 40px;
-		--pn-cap-h: 36px;
-		--pn-play: 52px;
-		--pn-skip: 40px;
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		overflow: hidden;
-		font-size: var(--font-ui-small);
-		line-height: var(--line-height-tight);
-	}
-
 	/* The shell lays out the whole view, edge to edge. */
 	:global(.view-content:has(> .podcast-view)) {
 		padding: 0;
@@ -311,33 +292,50 @@
 		display: none;
 	}
 
-	/* A sidebar is secondary-colored. The mini player stands out from the page above it. */
-	:global(.mod-sidedock) .podcast-view {
-		--pn-bg: var(--background-secondary);
-	}
-
-	:global(.mod-sidedock) .podcast-view.is-compact {
-		--pn-surface: var(--background-primary);
-	}
-
-	.podcast-view.is-wide {
-		--pn-pad: var(--size-4-6);
-		--pn-head: 44px;
-		--pn-cap-h: 38px;
-		--pn-play: 56px;
-	}
-
-	.podcast-view.is-phone {
-		--pn-pad: var(--size-4-4);
-		--pn-btn: 44px;
-		--pn-row: 44px;
-		--pn-head: 52px;
-		--pn-cap-h: 48px;
-		--pn-play: 64px;
-		--pn-skip: 48px;
-	}
-
 	.podcast-view :global {
+		--pn-bg: var(--background-primary);
+		--pn-surface: var(--background-secondary);
+		--pn-pad: var(--size-4-3);
+		--pn-btn: 28px;
+		--pn-row: 28px;
+		--pn-head: 40px;
+		--pn-cap-h: 36px;
+		--pn-play: 52px;
+		--pn-skip: 40px;
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		overflow: hidden;
+		font-size: var(--font-ui-small);
+		line-height: var(--line-height-tight);
+
+		/* A sidebar is secondary-colored. The mini player stands out from the page above it. */
+		.mod-sidedock & {
+			--pn-bg: var(--background-secondary);
+		}
+
+		.mod-sidedock &.is-compact {
+			--pn-surface: var(--background-primary);
+		}
+
+		&.is-wide {
+			--pn-pad: var(--size-4-6);
+			--pn-head: 44px;
+			--pn-cap-h: 38px;
+			--pn-play: 56px;
+		}
+
+		&.is-phone {
+			--pn-pad: var(--size-4-4);
+			--pn-btn: 44px;
+			--pn-row: 44px;
+			--pn-head: 52px;
+			--pn-cap-h: 48px;
+			--pn-play: 64px;
+			--pn-skip: 48px;
+		}
+
 		.pn-body {
 			position: relative;
 			flex: 1;
@@ -473,40 +471,38 @@
 			top: var(--size-4-1);
 			right: var(--size-4-2);
 		}
-	}
 
-	/* Less motion stops every transition and animation in the view, whatever rule set it. */
-	@media (prefers-reduced-motion: reduce) {
-		.podcast-view :global(*) {
-			transition: none !important;
-			animation: none !important;
-		}
-	}
-
-	/* Without the mini player, a page ends under Obsidian's status bar. */
-	.podcast-view:not(:has(> :global(.pn-mini))) :global(.pn-scroll) {
-		padding-bottom: calc(var(--size-4-6) + var(--pn-status-bar));
-	}
-
-	.is-wide :global {
-		.pn-head {
-			padding: 0 var(--size-4-4) 0 var(--size-4-3);
+		/* Less motion stops every transition and animation in the view, whatever rule set it. */
+		@media (prefers-reduced-motion: reduce) {
+			* {
+				transition: none !important;
+				animation: none !important;
+			}
 		}
 
-		.pn-split .pn-head {
-			height: 60px;
-			padding-top: var(--size-4-1);
+		/* Without the mini player, a page ends under Obsidian's status bar. */
+		&:not(:has(> .pn-mini)) .pn-scroll {
+			padding-bottom: calc(var(--size-4-6) + var(--pn-status-bar));
 		}
 
-		.pn-head-title {
-			margin-left: var(--size-4-3);
-			font-size: var(--font-ui-large);
-			letter-spacing: -0.01em;
-		}
-	}
+		&.is-wide {
+			.pn-head {
+				padding: 0 var(--size-4-4) 0 var(--size-4-3);
+			}
 
-	/* Classes that several of the view's components share. */
-	.podcast-view :global {
+			.pn-split .pn-head {
+				height: 60px;
+				padding-top: var(--size-4-1);
+			}
+
+			.pn-head-title {
+				margin-left: var(--size-4-3);
+				font-size: var(--font-ui-large);
+				letter-spacing: -0.01em;
+			}
+		}
+
+		/* Classes that several of the view's components share. */
 		.pn-spacer {
 			flex: 1;
 		}

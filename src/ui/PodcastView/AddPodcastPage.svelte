@@ -113,7 +113,7 @@
 {/if}
 
 <style>
-	.pn-empty {
+	.pn-empty :global {
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
@@ -122,9 +122,7 @@
 		align-items: center;
 		padding: var(--size-4-6) var(--pn-pad) 72px;
 		text-align: center;
-	}
 
-	.pn-empty :global {
 		/* Centered, yet scrollable from its top when the view is short. */
 		> :first-child {
 			margin-top: auto;
@@ -161,15 +159,13 @@
 		}
 	}
 
-	.pn-alts {
+	.pn-alts :global {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--size-2-2);
 		margin-top: var(--size-4-2);
-	}
 
-	.pn-alts :global {
 		.pn-alt {
 			display: inline-flex;
 			align-items: center;
@@ -269,9 +265,9 @@
 			vertical-align: bottom;
 			--icon-size: 12px;
 		}
-	}
 
-	:global(.is-phone) .pn-results :global(.pn-result .pn-cover) {
-		width: 52px;
+		.is-phone & .pn-result .pn-cover {
+			width: 52px;
+		}
 	}
 </style>

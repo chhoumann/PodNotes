@@ -200,15 +200,13 @@
 </div>
 
 <style>
-	.pn-deck {
+	.pn-deck :global {
 		flex: none;
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-4-3);
 		padding: var(--size-4-3) var(--pn-pad);
-	}
 
-	.pn-deck :global {
 		.pn-tb {
 			min-width: 0;
 			text-align: center;
@@ -425,43 +423,41 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
-	}
 
-	/* Obsidian's header and navbar take a phone's height, so the deck gives the stage room. */
-	:global(.is-phone) .pn-deck {
-		padding-block: var(--size-4-2);
-	}
+		/* Obsidian's header and navbar take a phone's height, so the deck gives the stage room. */
+		.is-phone & {
+			padding-block: var(--size-4-2);
 
-	:global(.is-phone) .pn-deck :global {
-		.pn-rate span {
-			height: 30px;
-			padding: 0 var(--size-4-3);
-			border-radius: 15px;
+			.pn-rate span {
+				height: 30px;
+				padding: 0 var(--size-4-3);
+				border-radius: 15px;
+			}
+
+			.pn-skip {
+				--icon-size: 30px;
+			}
+
+			.pn-skip b {
+				font-size: 10px;
+			}
+
+			button.pn-cap {
+				--icon-size: 20px;
+			}
 		}
 
-		.pn-skip {
-			--icon-size: 30px;
+		.is-wide & {
+			gap: var(--size-4-4);
+			padding: var(--size-4-4) var(--size-4-6) 0;
+
+			.pn-np-title {
+				font-size: var(--font-ui-large);
+				line-height: 1.25;
+				letter-spacing: -0.01em;
+				-webkit-line-clamp: 3;
+				line-clamp: 3;
+			}
 		}
-
-		.pn-skip b {
-			font-size: 10px;
-		}
-
-		button.pn-cap {
-			--icon-size: 20px;
-		}
-	}
-
-	:global(.is-wide) .pn-deck {
-		gap: var(--size-4-4);
-		padding: var(--size-4-4) var(--size-4-6) 0;
-	}
-
-	:global(.is-wide) .pn-deck :global(.pn-np-title) {
-		font-size: var(--font-ui-large);
-		line-height: 1.25;
-		letter-spacing: -0.01em;
-		-webkit-line-clamp: 3;
-		line-clamp: 3;
 	}
 </style>

@@ -88,7 +88,7 @@
 
 <style>
 	/* Its controls sit above Obsidian's status bar, which floats over the view's bottom. */
-	.pn-mini {
+	.pn-mini :global {
 		--pn-btn: 36px;
 		position: relative;
 		flex: none;
@@ -99,21 +99,19 @@
 		padding: 0 var(--size-4-2) var(--pn-status-bar) var(--size-4-1);
 		background: var(--pn-surface);
 		border-top: 1px solid var(--background-modifier-border);
-	}
 
-	.pn-mini.is-wide {
-		height: calc(64px + var(--pn-status-bar));
-		gap: var(--size-4-3);
-		padding: 0 var(--size-4-4) var(--pn-status-bar) var(--size-4-3);
-	}
+		&.is-wide {
+			height: calc(64px + var(--pn-status-bar));
+			gap: var(--size-4-3);
+			padding: 0 var(--size-4-4) var(--pn-status-bar) var(--size-4-3);
+		}
 
-	:global(.is-phone) .pn-mini {
-		--pn-btn: 44px;
-		height: 64px;
-		padding: 0 var(--size-4-2);
-	}
+		.is-phone & {
+			--pn-btn: 44px;
+			height: 64px;
+			padding: 0 var(--size-4-2);
+		}
 
-	.pn-mini :global {
 		.pn-mini-open {
 			flex: 1;
 			min-width: 0;
@@ -211,23 +209,23 @@
 			--icon-size: var(--icon-s);
 			--icon-stroke: var(--icon-s-stroke-width);
 		}
-	}
 
-	.pn-mini.is-wide :global {
-		.pn-mini-open {
-			flex: 0 1 300px;
+		&.is-wide {
+			.pn-mini-open {
+				flex: 0 1 300px;
+			}
+
+			.pn-mini-open .pn-cover {
+				width: 44px;
+			}
+
+			button.pn-btn {
+				height: 30px;
+			}
 		}
 
-		.pn-mini-open .pn-cover {
+		.is-phone & .pn-mini-open .pn-cover {
 			width: 44px;
 		}
-
-		button.pn-btn {
-			height: 30px;
-		}
-	}
-
-	:global(.is-phone) .pn-mini :global(.pn-mini-open .pn-cover) {
-		width: 44px;
 	}
 </style>

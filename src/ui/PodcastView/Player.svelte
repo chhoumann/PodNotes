@@ -285,16 +285,14 @@
 </section>
 
 <style>
-	.pn-player {
+	.pn-player :global {
 		position: absolute;
 		inset: 0;
 		z-index: 10;
 		display: flex;
 		flex-direction: column;
 		background: var(--pn-bg);
-	}
 
-	.pn-player :global {
 		.pn-np-head {
 			flex: none;
 			display: flex;
@@ -489,36 +487,36 @@
 			border-radius: 1px;
 			background: var(--interactive-accent);
 		}
-	}
 
-	:global(.is-phone) .pn-player :global {
-		.pn-stage .pn-cover {
-			width: min(100cqw, 100cqh - 8px, 358px);
+		.is-phone & {
+			.pn-stage .pn-cover {
+				width: min(100cqw, 100cqh - 8px, 358px);
+			}
+
+			.pn-sw {
+				height: 44px;
+				border-radius: 22px;
+				padding: 0 var(--size-4-4);
+			}
 		}
 
-		.pn-sw {
-			height: 44px;
-			border-radius: 22px;
-			padding: 0 var(--size-4-4);
-		}
-	}
+		&.is-wide {
+			.pn-np-head {
+				padding: 0 var(--size-4-3);
+			}
 
-	.pn-player.is-wide :global {
-		.pn-np-head {
-			padding: 0 var(--size-4-3);
-		}
+			.pn-np-body {
+				display: grid;
+				grid-template-columns: 360px minmax(0, 1fr);
+			}
 
-		.pn-np-body {
-			display: grid;
-			grid-template-columns: 360px minmax(0, 1fr);
-		}
+			.pn-np-left {
+				padding-bottom: var(--size-4-4);
+			}
 
-		.pn-np-left {
-			padding-bottom: var(--size-4-4);
-		}
-
-		.pn-stage {
-			padding: var(--size-4-1) var(--size-4-6) 0;
+			.pn-stage {
+				padding: var(--size-4-1) var(--size-4-6) 0;
+			}
 		}
 	}
 </style>

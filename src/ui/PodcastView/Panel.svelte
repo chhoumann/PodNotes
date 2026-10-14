@@ -33,15 +33,13 @@
 </div>
 
 <style>
-	.pn-panel {
+	.pn-panel :global {
 		width: 100%;
 		height: 100%;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-	}
 
-	.pn-panel :global {
 		.pn-panel-head {
 			flex: none;
 			display: flex;
@@ -118,28 +116,28 @@
 		.pn-row.is-now .tm {
 			color: var(--text-accent);
 		}
-	}
 
-	:global(.is-wide) .pn-panel :global {
-		.pn-panel-scroll {
-			padding: var(--size-4-3) var(--size-4-4) var(--size-4-4);
+		.is-wide & {
+			.pn-panel-scroll {
+				padding: var(--size-4-3) var(--size-4-4) var(--size-4-4);
+			}
+
+			.pn-panel-head {
+				padding: var(--size-4-2) var(--size-4-4) 0 var(--size-4-6);
+			}
 		}
 
-		.pn-panel-head {
-			padding: var(--size-4-2) var(--size-4-4) 0 var(--size-4-6);
-		}
-	}
+		.is-phone & {
+			.pn-panel-head,
+			.pn-panel-head :is(button, input) {
+				min-width: 44px;
+				min-height: 44px;
+			}
 
-	:global(.is-phone) .pn-panel :global {
-		.pn-panel-head,
-		.pn-panel-head :is(button, input) {
-			min-width: 44px;
-			min-height: 44px;
-		}
-
-		.pn-row {
-			min-height: 44px;
-			padding: 10px var(--size-4-2);
+			.pn-row {
+				min-height: 44px;
+				padding: 10px var(--size-4-2);
+			}
 		}
 	}
 </style>

@@ -77,26 +77,28 @@
 </EpisodeRow>
 
 <style>
-	button.pn-iconbtn.pn-grip {
-		cursor: grab;
-		touch-action: none;
-		color: var(--text-muted);
-		opacity: 1;
-		--icon-size: 16px;
-	}
-
-	button.pn-iconbtn.pn-ep-x {
-		margin-right: var(--size-2-2);
-		opacity: 0.55;
-	}
-
-	button.pn-iconbtn.pn-ep-x:focus-visible {
-		opacity: 1;
-	}
-
-	@media (hover: hover) {
-		:global(.pn-ep:hover) button.pn-ep-x {
+	button.pn-iconbtn :global {
+		&.pn-grip {
+			cursor: grab;
+			touch-action: none;
+			color: var(--text-muted);
 			opacity: 1;
+			--icon-size: 16px;
+		}
+
+		&.pn-ep-x {
+			margin-right: var(--size-2-2);
+			opacity: 0.55;
+		}
+
+		&.pn-ep-x:focus-visible {
+			opacity: 1;
+		}
+
+		@media (hover: hover) {
+			.pn-ep:hover &.pn-ep-x {
+				opacity: 1;
+			}
 		}
 	}
 </style>

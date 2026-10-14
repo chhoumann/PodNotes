@@ -122,35 +122,33 @@
 </div>
 
 <style>
-	.pn-ep {
+	.pn-ep :global {
 		display: flex;
 		align-items: flex-start;
 		border-radius: var(--radius-s);
-	}
 
-	@media (hover: hover) {
-		.pn-ep:hover {
-			background: var(--background-modifier-hover);
+		@media (hover: hover) {
+			&:hover {
+				background: var(--background-modifier-hover);
+			}
+
+			&:hover button.pn-ep-more {
+				opacity: 1;
+			}
 		}
 
-		.pn-ep:hover :global(button.pn-ep-more) {
-			opacity: 1;
+		&.is-queue {
+			align-items: center;
+			gap: var(--size-2-2);
 		}
-	}
 
-	.pn-ep.is-queue {
-		align-items: center;
-		gap: var(--size-2-2);
-	}
+		&.is-dragging {
+			position: relative;
+			z-index: 2;
+			background: var(--pn-surface);
+			box-shadow: var(--shadow-s);
+		}
 
-	.pn-ep.is-dragging {
-		position: relative;
-		z-index: 2;
-		background: var(--pn-surface);
-		box-shadow: var(--shadow-s);
-	}
-
-	.pn-ep :global {
 		/* Obsidian's buttons keep their text on one line; this one wraps its title. */
 		.pn-ep-main {
 			flex: 1;
@@ -273,30 +271,71 @@
 			animation: none;
 			transform: scaleY(0.6);
 		}
-	}
 
-	.pn-ep.is-queue :global {
-		.pn-ep-main {
-			align-items: center;
-			padding-left: 0;
+		&.is-queue {
+			.pn-ep-main {
+				align-items: center;
+				padding-left: 0;
+			}
+
+			.pn-ep-main .pn-cover {
+				margin-top: 0;
+			}
+
+			.pn-bar {
+				display: none;
+			}
 		}
 
-		.pn-ep-main .pn-cover {
-			margin-top: 0;
+		&.is-played .pn-ep-title {
+			color: var(--text-muted);
+			font-weight: var(--font-normal);
 		}
 
-		.pn-bar {
-			display: none;
+		&.is-current :is(.pn-ep-title, .pn-ep-meta) {
+			color: var(--text-accent);
 		}
-	}
 
-	.pn-ep.is-played :global(.pn-ep-title) {
-		color: var(--text-muted);
-		font-weight: var(--font-normal);
-	}
+		.is-wide & {
+			.pn-ep-meta {
+				flex-wrap: nowrap;
+				white-space: nowrap;
+			}
 
-	.pn-ep.is-current :global(:is(.pn-ep-title, .pn-ep-meta)) {
-		color: var(--text-accent);
+			.pn-ep-meta > * {
+				flex: none;
+			}
+
+			.pn-ep-meta .pod {
+				flex: 0 1 auto;
+				min-width: 24px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.pn-brk {
+				display: none;
+			}
+
+			.pn-brk + .sep {
+				display: inline;
+			}
+		}
+
+		.is-phone & {
+			.pn-ep-main {
+				padding-top: var(--size-4-3);
+				padding-bottom: var(--size-4-3);
+			}
+
+			.pn-ep-main .pn-cover {
+				width: 48px;
+			}
+
+			button.pn-ep-more {
+				margin-top: var(--size-4-1);
+			}
+		}
 	}
 
 	@keyframes pn-eq {
@@ -306,47 +345,6 @@
 		}
 		50% {
 			transform: scaleY(1);
-		}
-	}
-
-	:global(.is-wide) .pn-ep :global {
-		.pn-ep-meta {
-			flex-wrap: nowrap;
-			white-space: nowrap;
-		}
-
-		.pn-ep-meta > * {
-			flex: none;
-		}
-
-		.pn-ep-meta .pod {
-			flex: 0 1 auto;
-			min-width: 24px;
-			overflow: hidden;
-			text-overflow: ellipsis;
-		}
-
-		.pn-brk {
-			display: none;
-		}
-
-		.pn-brk + .sep {
-			display: inline;
-		}
-	}
-
-	:global(.is-phone) .pn-ep :global {
-		.pn-ep-main {
-			padding-top: var(--size-4-3);
-			padding-bottom: var(--size-4-3);
-		}
-
-		.pn-ep-main .pn-cover {
-			width: 48px;
-		}
-
-		button.pn-ep-more {
-			margin-top: var(--size-4-1);
 		}
 	}
 </style>

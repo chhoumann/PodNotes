@@ -49,13 +49,11 @@
 </div>
 
 <style>
-	.pn-grid {
+	.pn-grid :global {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
 		gap: var(--size-4-2);
-	}
 
-	.pn-grid :global {
 		.pn-gridcard {
 			position: relative;
 			display: block;
@@ -95,15 +93,15 @@
 			--icon-size: 12px;
 			--icon-stroke: 2.25px;
 		}
-	}
 
-	:global(.is-wide) .pn-grid {
-		grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-		gap: var(--size-4-4);
-	}
+		.is-wide & {
+			grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+			gap: var(--size-4-4);
+		}
 
-	:global(.is-phone) .pn-grid {
-		grid-template-columns: repeat(3, 1fr);
-		gap: var(--size-4-3);
+		.is-phone & {
+			grid-template-columns: repeat(3, 1fr);
+			gap: var(--size-4-3);
+		}
 	}
 </style>

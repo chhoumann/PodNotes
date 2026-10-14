@@ -120,14 +120,12 @@
 {/if}
 
 <style>
-	.pn-hero {
+	.pn-hero :global {
 		display: flex;
 		align-items: center;
 		gap: var(--size-4-3);
 		margin: var(--size-2-2) 0 var(--size-4-2);
-	}
 
-	.pn-hero :global {
 		.pn-cover {
 			width: 64px;
 			border-radius: 8px;
@@ -159,9 +157,34 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
+
+		.is-wide & {
+			gap: var(--size-4-5);
+			margin: var(--size-4-2) 0 var(--size-4-3);
+
+			.pn-cover {
+				width: 112px;
+				border-radius: 10px;
+			}
+
+			h1 {
+				font-size: var(--font-ui-large);
+				line-height: 1.25;
+				letter-spacing: -0.01em;
+			}
+
+			.by {
+				margin-top: var(--size-4-1);
+				font-size: var(--font-ui-small);
+			}
+		}
+
+		.is-phone & .pn-cover {
+			width: 76px;
+		}
 	}
 
-	.pn-banner {
+	.pn-banner :global {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--size-4-2);
@@ -170,9 +193,7 @@
 		border: 1px solid rgba(var(--color-red-rgb), 0.25);
 		border-radius: var(--radius-m);
 		background: rgba(var(--color-red-rgb), 0.08);
-	}
 
-	.pn-banner :global {
 		.pn-banner-icon {
 			display: flex;
 			margin-top: 6px;
@@ -209,32 +230,5 @@
 		padding: var(--size-4-2) 0;
 		margin-bottom: var(--size-2-2);
 		background: var(--pn-bg);
-	}
-
-	:global(.is-wide) .pn-hero {
-		gap: var(--size-4-5);
-		margin: var(--size-4-2) 0 var(--size-4-3);
-	}
-
-	:global(.is-wide) .pn-hero :global {
-		.pn-cover {
-			width: 112px;
-			border-radius: 10px;
-		}
-
-		h1 {
-			font-size: var(--font-ui-large);
-			line-height: 1.25;
-			letter-spacing: -0.01em;
-		}
-
-		.by {
-			margin-top: var(--size-4-1);
-			font-size: var(--font-ui-small);
-		}
-	}
-
-	:global(.is-phone) .pn-hero :global(.pn-cover) {
-		width: 76px;
 	}
 </style>

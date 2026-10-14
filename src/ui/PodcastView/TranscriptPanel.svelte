@@ -284,13 +284,11 @@
 {/snippet}
 
 <style>
-	.pn-tx {
+	.pn-tx :global {
 		position: relative;
 		width: 100%;
 		height: 100%;
-	}
 
-	.pn-tx :global {
 		/* Following compares exact scroll positions, so the list must not animate them. */
 		.pn-panel-scroll {
 			scroll-behavior: auto;
@@ -376,21 +374,19 @@
 		.pn-tx-follow:hover {
 			background: var(--interactive-accent-hover);
 		}
-	}
 
-	:global(.is-compact:not(.is-phone)) .pn-tx :global {
-		.pn-tx-save {
-			width: 28px;
-			padding: 0;
+		.is-compact:not(.is-phone) & {
+			.pn-tx-save {
+				width: 28px;
+				padding: 0;
+			}
+
+			.pn-tx-save span:last-child {
+				display: none;
+			}
 		}
 
-		.pn-tx-save span:last-child {
-			display: none;
-		}
-	}
-
-	:global(.is-phone) .pn-tx :global {
-		.pn-tx-follow {
+		.is-phone & .pn-tx-follow {
 			height: 44px;
 			padding: 0 var(--size-4-4);
 			border-radius: 22px;
