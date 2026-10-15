@@ -429,12 +429,10 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	// FIRST '.ext' followed by '?'/'#'/end, which need not be the trailing one, so
 	// a positional `.replace(ext, "")` could corrupt a folder name that happens to
 	// contain the same string earlier in the path (#DL-04).
+	// getUrlExtension returns letters and digits only, so the extension needs no escaping.
 	const templateExtension = getUrlExtension(template);
 	const templateWithoutExtension = templateExtension
-		? template.replace(
-				new RegExp(`\\.${templateExtension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-				"",
-			)
+		? template.replace(new RegExp(`\\.${templateExtension}$`, "i"), "")
 		: template;
 
 	const [replacer, addTag] = useTemplateEngine();
