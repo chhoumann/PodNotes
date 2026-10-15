@@ -1,5 +1,7 @@
 import { requestUrl, type RequestUrlResponse } from "obsidian";
+import { isPlainObject } from "src/persistence/codecUtils";
 import { assertFetchableUrl } from "./assertFetchableUrl";
+import { ownRecord } from "./ownRecord";
 
 const DEFAULT_NETWORK_TIMEOUT_MS = 30_000;
 export const MAX_NETWORK_TIMEOUT_MS = 2_147_483_647;
@@ -228,12 +230,12 @@ function arrayBufferByteLength(value: unknown): number | undefined {
 
 function copyHeaders(value: unknown): Record<string, string> | undefined {
 	if (value === undefined) return undefined;
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (!isPlainObject(value)) {
 		throw invalidOptions();
 	}
 
 	try {
-		const headers = Object.create(null) as Record<string, string>;
+		const headers = ownRecord<string>();
 		for (const [name, headerValue] of Object.entries(value)) {
 			if (typeof headerValue !== "string") throw invalidOptions();
 			headers[name] = headerValue;
@@ -252,7 +254,7 @@ function readFields<K extends string>(value: object, keys: readonly K[]): Record
 }
 
 function snapshotOptions(value: unknown): NetworkRequestOptionsSnapshot {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (!isPlainObject(value)) {
 		throw invalidOptions();
 	}
 
@@ -504,12 +506,12 @@ function createCommonResponseSnapshot(
 }
 
 function copyResponseHeaders(value: unknown): Record<string, string> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (!isPlainObject(value)) {
 		throw new NetworkError("invalid-response");
 	}
 
 	try {
-		const headers = Object.create(null) as Record<string, string>;
+		const headers = ownRecord<string>();
 		for (const [name, headerValue] of Object.entries(value)) {
 			if (typeof headerValue !== "string") {
 				throw new NetworkError("invalid-response");
