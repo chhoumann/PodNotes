@@ -384,14 +384,19 @@
 			}
 		}
 
-		.is-compact:not(.is-phone) & .pn-panel-head {
-			.pn-tx-save {
-				width: 28px;
-				padding: 0;
-			}
+		/* Save keeps its label where the head has room for it, wherever the panel is. */
+		.pn-panel-head {
+			container-type: inline-size;
 
-			.pn-tx-save span:last-child {
-				display: none;
+			@container (width < 340px) {
+				.pn-tx-save {
+					width: 28px;
+					padding: 0;
+				}
+
+				.pn-tx-save span:last-child {
+					display: none;
+				}
 			}
 		}
 

@@ -177,6 +177,32 @@ function phoneGeometry(): Promise<PhoneGeometry> {
 	})()`);
 }
 
+type TranscriptHead = Readonly<{
+	panel: number;
+	saveInside: boolean;
+	label: boolean;
+	headFits: boolean;
+}>;
+
+/** How the transcript panel's head fits the panel: Save inside it, with its label or without. */
+function transcriptHead(): Promise<TranscriptHead> {
+	return getContext().obsidian.dev.evalJson<TranscriptHead>(`(() => {
+		const panel = document.querySelector(${jsLiteral(`${PLAYER_VIEW} section.pn-player .pn-panel`)});
+		const head = panel.querySelector(".pn-panel-head");
+		const save = head.querySelector(".pn-tx-save");
+		const label = save.lastElementChild;
+		const shown = label.getClientRects().length > 0;
+		const box = panel.getBoundingClientRect();
+		const right = Math.max(save.getBoundingClientRect().right, shown ? label.getBoundingClientRect().right : 0);
+		return {
+			panel: Math.round(box.width),
+			saveInside: right <= box.right + 0.5,
+			label: shown,
+			headFits: head.scrollWidth <= head.clientWidth,
+		};
+	})()`);
+}
+
 describe("transcript journeys", () => {
 	test("switching episodes clears Find and shows every line of the incoming transcript", async () => {
 		const context = getContext();
@@ -513,5 +539,50 @@ describe("transcript journeys", () => {
 			]);
 			expect(list?.bottom, "its list fills the stage under its head").toBe(stage.bottom);
 		}
+	}, 120_000);
+	test("the panel's head fits Save, without its label in a 320 px sidebar and a phone's drawer, with it in a phone's main area", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+		});
+		const openPanel = async () => {
+			if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+			await waitUntilShown(obsidian, ui.fullPlayer);
+			await click(obsidian, ui.playerPanel("Transcript"));
+			await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+			return await transcriptHead();
+		};
+		await placePodNotes(obsidian, { sidebar: 320 });
+		const sidebar = await openPanel();
+
+		const phone = { width: 390, height: 844 };
+		await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
+			...phone,
+			deviceScaleFactor: 1,
+			mobile: true,
+			screenWidth: phone.width,
+			screenHeight: phone.height,
+		});
+		onTestFinished(async () => {
+			await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
+		});
+		await setMobileEmulation(obsidian, true);
+		await obsidian.dev.evalJson(
+			`app.workspace.detachLeavesOfType("podcast_player_view"), true`,
+		);
+		await showPodNotes(obsidian);
+		const drawer = await openPanel();
+		await placePodNotes(obsidian, "main area");
+		const mainArea = await openPanel();
+
+		const narrow = { saveInside: true, label: false, headFits: true };
+		expect({ sidebar, drawer, mainArea }).toMatchObject({
+			sidebar: narrow,
+			drawer: narrow,
+			mainArea: { saveInside: true, label: true, headFits: true },
+		});
 	}, 120_000);
 });

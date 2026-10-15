@@ -9,9 +9,9 @@ const COMPONENTS = path.resolve(import.meta.dirname, "../../src/ui/PodcastView")
  * The CSS of the view's components as jsdom cascades it. Each component is scoped by the
  * class `pn-<Component>`, so markup takes that class where its own sheet scopes an element.
  * Nesting is flattened, which jsdom lacks, and sheets keep the order given: shell first, as
- * it mounts first. jsdom applies no media query but `all`, so `media` names the queries that
- * match, as the user's device or setting would make them. `states` turns pseudo-classes such
- * as `:focus-visible` into classes a test can set.
+ * it mounts first. jsdom applies no media or container query but `all`, so `media` names the
+ * queries that match, as the user's device, setting or the container's size would make them.
+ * `states` turns pseudo-classes such as `:focus-visible` into classes a test can set.
  */
 export function componentCss(
 	files: readonly string[],
@@ -35,7 +35,7 @@ export function componentCss(
 					postcss.rule({ selectors: own, nodes: declarations.map((d) => d.clone()) }),
 				);
 			for (const child of node.nodes) if (child.type !== "decl") visit(child, own, within);
-		} else if (node.type === "atrule" && node.name === "media") {
+		} else if (node.type === "atrule" && (node.name === "media" || node.name === "container")) {
 			const query = media.includes(node.params) ? "all" : node.params;
 			const copy = postcss.atRule({ name: "media", params: query });
 			within.append(copy);
