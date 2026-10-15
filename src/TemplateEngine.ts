@@ -283,7 +283,6 @@ function feedHtmlToMarkdown(html: string, source: object): string {
 	);
 }
 
-/** The lines, each after `prependToLines` when the tag has one. */
 function joinLines(lines: string[], prependToLines?: string): string {
 	return (prependToLines ? lines.map((line) => `${prependToLines}${line}`) : lines).join("\n");
 }
