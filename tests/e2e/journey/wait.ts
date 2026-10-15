@@ -44,6 +44,13 @@ export async function listedEpisodes(obsidian: ObsidianClient): Promise<string[]
 	);
 }
 
+/** The shown episode rows' accessible names, which carry played, time left and playing state. */
+export async function listedEpisodeLabels(obsidian: ObsidianClient): Promise<string[]> {
+	return await obsidian.dev.evalJson<string[]>(
+		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".pn-player") && el.getClientRects().length > 0).map((el) => el.getAttribute("aria-label") ?? "")`,
+	);
+}
+
 export async function listedEpisodesWithHeadings(obsidian: ObsidianClient): Promise<string[]> {
 	return await obsidian.dev.evalJson<string[]>(
 		`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-scroll :is(h2.pn-h2, .pn-ep-main .pn-ep-title)`)})].filter((el) => el.getClientRects().length > 0).map((el) => el.textContent.trim())`,
