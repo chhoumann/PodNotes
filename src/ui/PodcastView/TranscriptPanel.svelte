@@ -380,6 +380,7 @@
 		.pn-panel-head {
 			container-type: inline-size;
 
+			/* 340 px: a phone's icon, title, Free tag, 44 px Find and labelled Save. */
 			@container (width < 340px) {
 				.pn-tx-save {
 					width: 28px;
