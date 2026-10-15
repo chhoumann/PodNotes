@@ -608,6 +608,19 @@ describe("transcript journeys", () => {
 		deleteWhenDone([transcript, stacked]);
 		await writeVaultFile(obsidian, stacked, "A note stacked with the view.\n");
 		await placePodNotes(obsidian, "main area");
+		// The design's pane width, where a stack scrolled to the note leaves the player's controls
+		// out of the window.
+		const size = await obsidian.dev.evalJson<[number, number]>(`(() => {
+			const win = require("@electron/remote").getCurrentWindow();
+			const size = win.getContentSize();
+			win.setContentSize(864, Math.max(size[1], 760));
+			return size;
+		})()`);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(
+				`require("@electron/remote").getCurrentWindow().setContentSize(${size[0]}, ${size[1]}), true`,
+			),
+		);
 		const viewTabs = `app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0].parent`;
 		await obsidian.dev.evalJsonAsync(`(async () => {
 			const { workspace } = app;
