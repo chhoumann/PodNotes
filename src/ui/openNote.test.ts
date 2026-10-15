@@ -19,7 +19,7 @@ interface FakeLeaf {
 const mainArea = {};
 const mainWindow = {};
 
-function leaf(name: string, parent: Group, type = "markdown"): FakeLeaf {
+function leaf(name: string, parent: Group, type = "markdown", pinned = false): FakeLeaf {
 	const view = Object.assign(Object.create(ItemView.prototype) as ItemView, {
 		navigation: type !== VIEW_TYPE,
 		getViewType: () => type,
@@ -34,7 +34,7 @@ function leaf(name: string, parent: Group, type = "markdown"): FakeLeaf {
 		opened,
 		getRoot: () => mainArea,
 		getContainer: () => mainWindow,
-		getViewState: () => ({ type, pinned: false }),
+		getViewState: () => ({ type, pinned }),
 		openFile: async (file) => void opened.push(file.path),
 	};
 }
@@ -93,4 +93,21 @@ describe("a note PodNotes opens while its view is stacked with notes", () => {
 
 		expect([stacked.opened, beside.opened, splits]).toEqual([[], [note.path], []]);
 	});
+});
+
+test("a note PodNotes opens goes to a split beside the view, not to a pinned note beside it", async () => {
+	const tabs = { stacked: false };
+	const pinned = leaf("pinned note", { stacked: false }, "markdown", true);
+	// Obsidian passes over a pinned note and adds a tab to the view's group.
+	const { app, splits } = workspace(
+		[leaf("view", tabs, VIEW_TYPE), pinned],
+		leaf("new tab over the view", tabs),
+	);
+
+	await openNote(app, note);
+
+	expect(pinned.opened).toEqual([]);
+	expect(splits.map((split) => [split.name, split.opened])).toEqual([
+		["split beside view", [note.path]],
+	]);
 });

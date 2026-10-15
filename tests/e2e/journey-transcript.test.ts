@@ -635,6 +635,55 @@ describe("transcript journeys", () => {
 		expect(await placement([transcript]), "Open note after the stacked note").toEqual(beside);
 	});
 
+	test("with a pinned note beside the view, Save as note and Open note leave it and open beside the view", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+		});
+		const transcript = sandbox.path(NOTE_PATH);
+		const pinned = sandbox.path("Pinned beside the view.md");
+		deleteWhenDone([transcript, pinned]);
+		await writeVaultFile(obsidian, pinned, "A pinned note beside the view.\n");
+		await placePodNotes(obsidian, "main area");
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			const { workspace } = app;
+			const view = workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+			const others = [];
+			workspace.iterateRootLeaves((leaf) => {
+				if (leaf !== view) others.push(leaf);
+			});
+			for (const leaf of others) leaf.detach();
+			const beside = workspace.createLeafBySplit(view);
+			await beside.openFile(app.vault.getFileByPath(${jsLiteral(pinned)}));
+			beside.setPinned(true);
+			workspace.setActiveLeaf(view, { focus: true });
+			return true;
+		})()`);
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		await click(obsidian, ui.playerPanel("Transcript"));
+		await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+		const beside = {
+			view: true,
+			notes: [
+				{ path: transcript, where: "beside the view", shown: true },
+				{ path: pinned, where: "beside the view", shown: true },
+			],
+		};
+
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Save as note"));
+		await waitForOpened(transcript);
+		expect(await placement([transcript, pinned]), "Save as note").toEqual(beside);
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Open note"));
+		await waitForOpened(transcript);
+		expect(await placement([transcript, pinned]), "Open note").toEqual(beside);
+	});
+
 	test("in a popout, a note PodNotes opens goes beside the view, not to a note in another popout, and a later one reuses that split", async () => {
 		const context = getContext();
 		const { obsidian, sandbox } = context;
