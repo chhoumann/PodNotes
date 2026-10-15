@@ -16,7 +16,7 @@ PodNotes keeps your changes in memory and tries again every 10 seconds. The chan
 
 PodNotes shows the notice once and gives no sign when a save succeeds. If the notice appears again after a while, saving failed again after it had worked.
 
-To fix the cause, free disk space, and check that PodNotes may write to its plugin folder, `.obsidian/plugins/podnotes/`. Keep Obsidian open until you have fixed it, so that your changes stay safe. Then check that saving works again:
+To fix the cause, free disk space, and check that PodNotes may write to its plugin folder, `.obsidian/plugins/podnotes/`. If a sync service replaced the file, wait until sync finishes on every device. Keep Obsidian open until you have fixed it, so that your changes stay safe. Then check that saving works again:
 
 1. In **Settings → PodNotes**, under **Playback**, set **Skip forward (s)** to a new value, such as 20. You can set it back once saving works.
 2. Wait about 10 seconds.

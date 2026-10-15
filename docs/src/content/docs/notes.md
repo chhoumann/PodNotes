@@ -32,19 +32,19 @@ A podcast note describes a whole podcast, with its artwork, author, description,
 2. Select **Podcast options**, the three-dot button at the top right.
 3. Select **Create podcast note**.
 
-PodNotes creates the note and opens it. Once the note exists, the item reads **Open podcast note**. With the default settings, the podcast note for Acquired is `PodNotes/Podcasts/Acquired.md`. **PodNotes: Create podcast feed note** does the same from the command palette. Select the podcast, and if an episode is loaded, its podcast is first in the list.
+PodNotes creates the note and opens it, as [Where a note opens](/notes/#where-a-note-opens) describes. Once the note exists, the item reads **Open podcast note**. With the default settings, the podcast note for Acquired is `PodNotes/Podcasts/Acquired.md`. **PodNotes: Create podcast feed note** does the same from the command palette. Select the podcast, and if an episode is loaded, its podcast is first in the list.
 
 The default episode note template links each episode note to its podcast note in the `podcast` property, such as `[[PodNotes/Podcasts/Acquired|Acquired]]`, even when you create the podcast note later.
 
 ## Where a note opens
 
-PodNotes opens each note that you create or open from its view, such as with **Create note** or **Save as note**, so that the view stays in sight:
+Where an episode note, a podcast note, or a transcript opens depends on where the PodNotes view is:
 
-- With the view in a sidebar, the note opens in the main area.
-- With the view in the main area or in a popout window, the note opens next to the view, never in a tab over it. If a note is shown next to the view, the new note opens in that note's tab. Otherwise, it opens in a new split beside the view.
-- On a phone, which shows one tab at a time, the note opens where Obsidian opens a link.
+- With the view in a sidebar, the note opens in the main area, in the last tab you used there, as a link does.
+- With the view in the main area or in a popout window, the note opens next to the view, never in a tab over it. If an unpinned note or other file is shown next to the view, the note opens in its tab. Otherwise, the note opens in a new split beside the view.
+- On a phone, which shows one tab at a time, the note opens in the last tab you used, as a link does.
 
-If you are in another tab when the note opens, such as when a transcript finishes while you edit a note, the note opens where Obsidian opens a link.
+These cases apply while you are in the PodNotes view, as when you select **Create note** or **Save as note**. If you are in another tab when the note opens, the note opens in that tab, as a link does. For example, when you run **PodNotes: Create episode note** while you edit a note, the episode note opens in that note's tab. A transcript that finishes while you edit a note opens there too.
 
 ## Change where notes go
 

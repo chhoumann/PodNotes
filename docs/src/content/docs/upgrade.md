@@ -30,6 +30,7 @@ Each other device needs each such address once, copied again from your podcast p
 - The queue and your playlists have their own pages, and you make and delete playlists there. See [Use the queue and playlists](/playlists/).
 - The mini player sits at the bottom of the view, and the full player opens over it, with the **Chapters**, **Transcript**, and **Up next** panels. See [Use the player](/player/).
 - PodNotes opens its view by itself only once, on a new install. To open it, run **PodNotes: Show player**.
+- Except on a phone, a note that you open from the view opens next to it, so the view stays in sight. See [Where a note opens](/notes/#where-a-note-opens).
 
 ## Check your settings
 

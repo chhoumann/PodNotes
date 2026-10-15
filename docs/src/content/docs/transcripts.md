@@ -37,7 +37,7 @@ The full player's **Transcript** panel shows the transcript that the episode's f
 1. In the full player, select **Transcript**.
 2. Select a line with a time to play the episode from that moment. A transcript without times can only be read.
 
-The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Where the panel is narrow, such as on a phone, the button shows only its icon, a page with a plus sign. Once the note exists, the button reads **Open note** and opens it. See [Read the transcript](/player/#read-the-transcript) for every control.
+The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Where the panel is narrow, such as in the sidebar or on a phone, the button shows only its icon, a page with a plus sign. Once the note exists, the button reads **Open note** and opens it. The note opens as [Where a note opens](/notes/#where-a-note-opens) describes. See [Read the transcript](/player/#read-the-transcript) for every control.
 
 This clip opens **Transcript**, selects a line to play from it, and finds the word "walk":
 

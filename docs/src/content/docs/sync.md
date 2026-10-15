@@ -44,7 +44,7 @@ An episode that ended on the device shows its end position until you play it. Th
 Before each save, PodNotes reads `data.json` and merges it with the changes made on this device. When sync replaces `data.json` while PodNotes runs, PodNotes merges the new file into your library without a restart. This also works with sync services that keep the file's original modified time.
 Changes to different things all stay, apart from the cases in [Limits of merging](/sync/#limits-of-merging). For example, you add a podcast on your laptop while your phone saves your progress, and both changes stay.
 
-PodNotes reads `data.json` back after each save. When sync replaces the file between the save and that read, PodNotes merges the new file without a notice. If your changes are not in it yet, PodNotes saves again. When a save fails, or PodNotes cannot read the file back, it shows "PodNotes could not save your changes." See [Fix save problems](/save-problems/).
+PodNotes reads `data.json` back after each save. When sync replaces the file with new changes between the save and that read, PodNotes merges the new file without a notice. If your changes are not in it yet, PodNotes saves again. When a save fails, or PodNotes cannot read the file back, PodNotes shows "PodNotes could not save your changes." See [Fix save problems](/save-problems/).
 
 When two devices change the same setting or the same item before either sees the other's change, the device that saves later keeps its own version. PodNotes takes these items whole, without mixing their parts:
 
@@ -67,7 +67,7 @@ A new device that starts PodNotes before sync delivers `data.json` starts a libr
 
 ### Limits of merging
 
-- A change that sync delivers after PodNotes reads `data.json` and before it writes the file can still be lost.
+- A change from another device that sync delivers after PodNotes reads `data.json` and before it writes the file can still be lost. PodNotes writes over it and shows no notice.
 - PodNotes writes `data.json` in place, so your sync service can pick up a partly written file. When another device picks up such a file and it is not empty, that device shows a notice that PodNotes could not read the file, until the complete file arrives. See [Fix save problems](/save-problems/).
 - PodNotes 2.21.1 and earlier do not merge, so a device that runs one of them can overwrite the whole file. Update PodNotes on every device.
 
