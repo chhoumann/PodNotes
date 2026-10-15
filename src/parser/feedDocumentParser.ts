@@ -43,6 +43,8 @@ export interface ParsedEpisodeDocument {
 	duration?: number;
 	chaptersUrl?: string;
 	guid?: string;
+	/** In the feed cache: another item of the full feed has this title, though the cut may have dropped it. */
+	sharedTitle?: true;
 	transcripts?: TranscriptLink[];
 	mediaType: EpisodeMediaType;
 }

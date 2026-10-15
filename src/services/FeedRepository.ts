@@ -362,7 +362,7 @@ function projectEpisodes(
 		feedUrl: feed.url,
 		// A guid that several items repeat identifies none of them, so notes and links never get it.
 		guid: item.guid && !repeated.has(item.guid) ? item.guid : undefined,
-		sharedTitle: sharedTitles.has(item.title) || undefined,
+		sharedTitle: item.sharedTitle === true || sharedTitles.has(item.title) || undefined,
 		itunesTitle: item.itunesTitle || "",
 		episodeNumber: item.episodeNumber,
 		duration: item.duration,
@@ -395,13 +395,16 @@ const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 function keepNewestItems(doc: FeedDocument): FeedDocument {
 	if (doc.items.length <= MAX_ITEMS_PER_FEED) return doc;
 	const kept = new Set([...doc.items].sort(newestFirst).slice(0, MAX_ITEMS_PER_FEED));
-	// The cut can drop one of two items that share a guid, which would make the other look unique.
+	// The cut can drop one of two items that share a guid or a title, which would make the other look unique.
 	const repeated = repeatedValues(doc.items, "guid");
+	const sharedTitles = repeatedValues(doc.items, "title");
 	const items = doc.items
 		.filter((item) => kept.has(item))
-		.map((item) =>
-			item.guid && repeated.has(item.guid) ? { ...item, guid: undefined } : item,
-		);
+		.map((item) => ({
+			...item,
+			guid: item.guid && !repeated.has(item.guid) ? item.guid : undefined,
+			sharedTitle: sharedTitles.has(item.title) || undefined,
+		}));
 	return { ...doc, items, complete: false };
 }
 
