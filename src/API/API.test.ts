@@ -421,7 +421,7 @@ describe("API volume (AP-07)", () => {
 describe("API transcript access", () => {
 	function setTranscriptVault(files: Record<string, string>) {
 		const createTFile = (path: string): TFile => Object.assign(new TFile(), { path });
-		const getAbstractFileByPath = vi.fn((path: string) =>
+		const getFileByPath = vi.fn((path: string) =>
 			Object.prototype.hasOwnProperty.call(files, path) ? createTFile(path) : null,
 		);
 		const read = vi.fn(async (file: TFile) => files[file.path] ?? "");
@@ -432,10 +432,10 @@ describe("API transcript access", () => {
 					path: "Transcripts/{{podcast}}/{{title}}.md",
 				},
 			},
-			{ getAbstractFileByPath, read } as unknown as Partial<Vault>,
+			{ getFileByPath, read } as unknown as Partial<Vault>,
 		);
 
-		return { api, player, getAbstractFileByPath, read };
+		return { api, player, getFileByPath, read };
 	}
 
 	test("returns null when no episode is loaded", async () => {
@@ -445,14 +445,12 @@ describe("API transcript access", () => {
 	});
 
 	test("returns null when the current episode has no generated transcript file", async () => {
-		const { api, player, getAbstractFileByPath, read } = setTranscriptVault({});
+		const { api, player, getFileByPath, read } = setTranscriptVault({});
 		player.restore(feedEpisode);
 
 		await expect(api.getTranscript()).resolves.toBeNull();
 
-		expect(getAbstractFileByPath).toHaveBeenCalledWith(
-			"Transcripts/Feed Podcast/Feed Episode.md",
-		);
+		expect(getFileByPath).toHaveBeenCalledWith("Transcripts/Feed Podcast/Feed Episode.md");
 		expect(read).not.toHaveBeenCalled();
 	});
 
@@ -475,15 +473,13 @@ describe("API transcript access", () => {
 
 	test("reads the generated transcript note for an explicit episode", async () => {
 		const transcript = "Local episode transcript";
-		const { api, player, getAbstractFileByPath } = setTranscriptVault({
+		const { api, player, getFileByPath } = setTranscriptVault({
 			"Transcripts/local file/Local Episode.md": transcript,
 		});
 		player.restore(feedEpisode);
 
 		await expect(api.getTranscript(localEpisode)).resolves.toBe(transcript);
 
-		expect(getAbstractFileByPath).toHaveBeenCalledWith(
-			"Transcripts/local file/Local Episode.md",
-		);
+		expect(getFileByPath).toHaveBeenCalledWith("Transcripts/local file/Local Episode.md");
 	});
 });

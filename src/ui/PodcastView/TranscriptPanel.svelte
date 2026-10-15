@@ -3,7 +3,7 @@
 	import type { Episode } from "src/types/Episode";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { isLocalFile } from "src/utility/isLocalFile";
-	import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
+	import { transcriptNote } from "src/services/TranscriptionService";
 	import { getEpisodeMediaType } from "src/utility/mediaType";
 	import { icon } from "../obsidian/icon";
 	import { openNote } from "../openNote";
@@ -64,9 +64,7 @@
 	// deleted since changes rowHasNote, and the transcript path is a setting.
 	const note = $derived.by(() => {
 		void $rowHasNote;
-		return app.vault.getFileByPath(
-			getEpisodeTranscriptPath(episode, $settings.transcript.path),
-		);
+		return transcriptNote(app.vault, $settings, episode);
 	});
 	const provider = $derived.by(() => {
 		const { diarization } = $settings.transcript;

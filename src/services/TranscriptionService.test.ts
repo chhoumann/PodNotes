@@ -70,6 +70,20 @@ describe("TranscriptionService", () => {
 			]);
 		});
 
+		test("refuses an episode whose note is already at the transcript path", async () => {
+			const path = "Transcripts/Test Podcast/Test Episode.md";
+			const service = new TranscriptionService(
+				createMockPlugin({ existingTranscriptPath: path }),
+			);
+
+			await service.transcribeCurrentEpisode();
+
+			expect(noticeMessages).toEqual([
+				`You've already transcribed this episode - found ${path}.`,
+			]);
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+		});
+
 		test("shows notice when no episode is playing", async () => {
 			const mockPlugin = createMockPlugin({ podcast: null });
 			const service = new TranscriptionService(mockPlugin);

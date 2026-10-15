@@ -1,3 +1,4 @@
+import { TFile } from "obsidian";
 import { afterEach, beforeEach, vi } from "vitest";
 import type PodNotes from "src/main";
 import type { TranscriptLink } from "src/parser/feedDocumentParser";
@@ -77,6 +78,9 @@ export function createMockPlugin(
 		loadFeed = async () => true,
 	} = overrides;
 
+	const existing = (path: string) =>
+		path === existingTranscriptPath ? Object.assign(new TFile(), { path }) : null;
+
 	return {
 		settings: {
 			openAISecretId: openAIKey ? "openai-secret" : "",
@@ -111,12 +115,8 @@ export function createMockPlugin(
 		},
 		app: {
 			vault: {
-				getAbstractFileByPath: vi.fn((path: string) => {
-					if (existingTranscriptPath && path === existingTranscriptPath) {
-						return { path };
-					}
-					return null;
-				}),
+				getFileByPath: vi.fn(existing),
+				getAbstractFileByPath: vi.fn(existing),
 				readBinary: vi.fn(),
 				create: vi.fn(),
 				createFolder: vi.fn(),
