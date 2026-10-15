@@ -86,6 +86,81 @@ describe("playedEpisodes store", () => {
 		expect(stored[episode.title]?.finished).toBe(false);
 		expect(stored["Design Podcast::Shared title"]?.finished).toBe(false);
 	});
+
+	test("keeps apart two podcasts' episodes that carry one guid", () => {
+		playedEpisodes.setEpisodeTime({ ...episode, guid: "1" }, 30, 60, false);
+		playedEpisodes.markAsPlayed({ ...episode, podcastName: "Other Podcast", guid: "1" });
+
+		expect(playedEpisodes.get({ ...episode, guid: "1" })).toMatchObject({
+			time: 30,
+			finished: false,
+		});
+	});
+
+	describe("for two episodes of one feed with one title", () => {
+		const twinA: Episode = { ...episode, guid: "guid-a", sharedTitle: true };
+		const twinB: Episode = { ...episode, guid: "guid-b", sharedTitle: true };
+		const unshared: Episode = { ...episode, guid: "guid-own" };
+		const legacy: PlayedEpisode = {
+			title: episode.title,
+			podcastName: "Design Podcast",
+			time: 45,
+			duration: 120,
+			finished: false,
+		};
+
+		test("keeps each one's own progress and finished state", () => {
+			playedEpisodes.setEpisodeTime(twinA, 30, 60, false);
+			playedEpisodes.markAsPlayed(twinB);
+
+			expect(Object.keys(get(playedEpisodes))).toHaveLength(2);
+			expect(playedEpisodes.get(twinA)).toEqual({ ...legacy, time: 30, duration: 60 });
+			expect(playedEpisodes.get(twinB)).toEqual({
+				...legacy,
+				time: 0,
+				duration: 0,
+				finished: true,
+			});
+		});
+
+		test.each([
+			[
+				"saving a position",
+				() => playedEpisodes.setEpisodeTime(unshared, 50, 120, false),
+				{ ...legacy, time: 50 },
+			],
+			[
+				"marking it played",
+				() => playedEpisodes.markAsPlayed(unshared),
+				{ ...legacy, time: 120, finished: true },
+			],
+		])(
+			"lends the record saved under the title to neither, and to an unshared episode until %s",
+			(_, write, written) => {
+				playedEpisodes.set({ "Design Podcast::Shared title": { ...legacy } });
+
+				expect(playedEpisodes.get(twinA)).toBeUndefined();
+				expect(playedEpisodes.get(twinB)).toBeUndefined();
+				expect(playedEpisodes.get(unshared)).toEqual(legacy);
+
+				write();
+
+				expect(get(playedEpisodes)["Design Podcast::Shared title"]).toEqual(legacy);
+				expect(Object.keys(get(playedEpisodes))).toHaveLength(2);
+				expect(playedEpisodes.get(unshared)).toEqual(written);
+			},
+		);
+
+		test("marking one unplayed leaves the other played", () => {
+			playedEpisodes.markAsPlayed(twinA);
+			playedEpisodes.markAsPlayed(twinB);
+
+			playedEpisodes.markAsUnplayed(twinA);
+
+			expect(playedEpisodes.get(twinA)?.finished).toBe(false);
+			expect(playedEpisodes.get(twinB)?.finished).toBe(true);
+		});
+	});
 });
 
 function downloadedEpisode(

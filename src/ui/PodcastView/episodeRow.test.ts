@@ -98,6 +98,18 @@ describe("an episode row", () => {
 		);
 	});
 
+	test("is not current for another item of its feed with its title and media", () => {
+		const twin = (guid: string): Episode => ({ ...episode, guid, sharedTitle: true });
+		expect(row({ now: twin("original"), playing: true }, twin("rerun")).current).toBe(false);
+	});
+
+	test("shows a Played row's own record when its episode cannot find it", () => {
+		const played = {
+			"guid record": { ...record(60, 60, true)["Field Notes::#214 Reading slowly"] },
+		};
+		expect(row({ played, playedKey: "guid record" }).played).toBe(true);
+	});
+
 	test("says it is downloaded and has a note", () => {
 		const downloads = { "Field Notes": [{ ...episode, filePath: "a.mp3", size: 1 }] };
 		expect(row({ downloads, hasNote: true })).toMatchObject({

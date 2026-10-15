@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
+import { getProgressKey } from "./episodeKey";
 import { buildPlayedEpisodeListEntries } from "./episodeListEntry";
 
 function episode(title: string, podcastName: string, episodeDate: string): Episode {
@@ -78,6 +79,36 @@ describe("episodeListEntry", () => {
 
 		expect(entries.map((entry) => entry.episode.title)).toEqual(["Newer", "Older", "Missing"]);
 	});
+
+	test("lists two played episodes of one feed with one title apart, without the title's record", () => {
+		const first = {
+			...episode("Rerun", "Design Podcast", "2024-01-01T00:00:00.000Z"),
+			guid: "guid-a",
+			sharedTitle: true as const,
+		};
+		const second = {
+			...episode("Rerun", "Design Podcast", "2024-03-01T00:00:00.000Z"),
+			guid: "guid-b",
+			sharedTitle: true as const,
+		};
+
+		const entries = buildPlayedEpisodeListEntries(
+			{
+				"Design Podcast::Rerun": played("Rerun", "Design Podcast"),
+				[getProgressKey(first)]: played("Rerun", "Design Podcast"),
+				[getProgressKey(second)]: played("Rerun", "Design Podcast"),
+			},
+			[[first, second]],
+		);
+
+		expect(entries.map(({ episode, playedEpisodeKey }) => [episode, playedEpisodeKey])).toEqual(
+			[
+				[second, getProgressKey(second)],
+				[first, getProgressKey(first)],
+			],
+		);
+	});
+
 	describe("a legacy record keyed by its title", () => {
 		const showA = episode("Shared episode", "Show A", "2024-02-01T00:00:00.000Z");
 		const showB = episode("Shared episode", "Show B", "2024-02-01T00:00:00.000Z");

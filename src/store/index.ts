@@ -6,7 +6,7 @@ import type { Playlist } from "src/types/Playlist";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import { FAVORITES_SETTINGS, LOCAL_FILES_SETTINGS, QUEUE_SETTINGS } from "src/constants";
-import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
+import { getEpisodeKey, getProgressKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
 import { recordStore } from "./recordStore";
 
@@ -42,7 +42,7 @@ export const playedEpisodes = (() => {
 			if (!episode) return;
 
 			update((playedEpisodes) => {
-				const key = getEpisodeKey(episode);
+				const key = getProgressKey(episode);
 				if (!key) return playedEpisodes;
 
 				playedEpisodes[key] = {
@@ -60,21 +60,17 @@ export const playedEpisodes = (() => {
 			if (!episode) return;
 
 			update((playedEpisodes) => {
-				const key = getEpisodeKey(episode);
+				const key = getProgressKey(episode);
 				if (!key) return playedEpisodes;
 
-				const playedEpisode = getPlayedEpisode(playedEpisodes, episode) || {
+				const duration = getPlayedEpisode(playedEpisodes, episode)?.duration ?? 0;
+				playedEpisodes[key] = {
 					title: episode.title,
 					podcastName: episode.podcastName,
-					time: 0,
-					duration: 0,
-					finished: false,
+					time: duration,
+					duration,
+					finished: true,
 				};
-
-				playedEpisode.time = playedEpisode.duration;
-				playedEpisode.finished = true;
-
-				playedEpisodes[key] = playedEpisode;
 				return playedEpisodes;
 			});
 		},
@@ -82,7 +78,7 @@ export const playedEpisodes = (() => {
 			if (!episode) return;
 
 			update((playedEpisodes) => {
-				const key = getEpisodeKey(episode);
+				const key = getProgressKey(episode);
 				if (!key) return playedEpisodes;
 
 				markPlayedEpisodeAliasesAsUnplayed(

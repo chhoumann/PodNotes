@@ -348,7 +348,8 @@ function projectEpisodes(
 	items: readonly ParsedEpisodeDocument[],
 	feed: Pick<PodcastFeed, "title" | "url" | "artworkUrl">,
 ): Episode[] {
-	const repeated = repeatedGuids(items);
+	const repeated = repeatedValues(items, "guid");
+	const sharedTitles = repeatedValues(items, "title");
 	return items.map((item) => ({
 		title: item.title,
 		streamUrl: item.streamUrl,
@@ -361,6 +362,7 @@ function projectEpisodes(
 		feedUrl: feed.url,
 		// A guid that several items repeat identifies none of them, so notes and links never get it.
 		guid: item.guid && !repeated.has(item.guid) ? item.guid : undefined,
+		sharedTitle: item.sharedTitle === true || sharedTitles.has(item.title) || undefined,
 		itunesTitle: item.itunesTitle || "",
 		episodeNumber: item.episodeNumber,
 		duration: item.duration,
@@ -393,21 +395,28 @@ const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 function keepNewestItems(doc: FeedDocument): FeedDocument {
 	if (doc.items.length <= MAX_ITEMS_PER_FEED) return doc;
 	const kept = new Set([...doc.items].sort(newestFirst).slice(0, MAX_ITEMS_PER_FEED));
-	// The cut can drop one of two items that share a guid, which would make the other look unique.
-	const repeated = repeatedGuids(doc.items);
+	// The cut can drop one of two items that share a guid or a title, which would make the other look unique.
+	const repeated = repeatedValues(doc.items, "guid");
+	const sharedTitles = repeatedValues(doc.items, "title");
 	const items = doc.items
 		.filter((item) => kept.has(item))
-		.map((item) =>
-			item.guid && repeated.has(item.guid) ? { ...item, guid: undefined } : item,
-		);
+		.map((item) => ({
+			...item,
+			guid: item.guid && !repeated.has(item.guid) ? item.guid : undefined,
+			sharedTitle: sharedTitles.has(item.title) || undefined,
+		}));
 	return { ...doc, items, complete: false };
 }
 
-/** Guids that more than one item carries. */
-function repeatedGuids(items: readonly ParsedEpisodeDocument[]): Set<string> {
+/** Values of `field` that more than one item carries. */
+function repeatedValues(
+	items: readonly ParsedEpisodeDocument[],
+	field: "guid" | "title",
+): Set<string> {
 	const seen = new Set<string>();
 	const repeated = new Set<string>();
-	for (const { guid } of items) if (guid) (seen.has(guid) ? repeated : seen).add(guid);
+	for (const { [field]: value } of items)
+		if (value) (seen.has(value) ? repeated : seen).add(value);
 	return repeated;
 }
 
