@@ -6,7 +6,7 @@ import type { Episode, EpisodeMediaType } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
-import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
+import { getEpisodeKey, isSameEpisode, isSameStoredEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
@@ -150,7 +150,7 @@ export class PlayerController {
 			return;
 		}
 		if (!episode || (status !== "empty" && status !== "restored")) return;
-		this.moved &&= !!shown && getEpisodeKey(shown) === getEpisodeKey(episode);
+		this.moved &&= !!shown && isSameEpisode(shown, episode);
 		this.setState({
 			status: "restored",
 			episode,
@@ -197,7 +197,7 @@ export class PlayerController {
 		const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
 		this.noteStoppedMove();
 		const { status, episode: outgoing, mediaType } = this.snapshot;
-		const sameEpisode = !!outgoing && getEpisodeKey(outgoing) === getEpisodeKey(episode);
+		const sameEpisode = !!outgoing && isSameEpisode(outgoing, episode);
 		this.select(episode);
 
 		const session = this.session;
@@ -372,7 +372,7 @@ export class PlayerController {
 		const shown = this.snapshot.episode;
 		// Reloading the shown episode, as on its first play after a restart, keeps the user's speed.
 		const playbackRate =
-			shown && getEpisodeKey(shown) === getEpisodeKey(episode)
+			shown && isSameEpisode(shown, episode)
 				? this.snapshot.playbackRate
 				: normalizePlaybackRate(this.plugin.settings.defaultPlaybackRate);
 		if (!source.src) {
