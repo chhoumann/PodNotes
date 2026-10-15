@@ -2,7 +2,10 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	clickInEditor,
+	clickInNoteWindow,
 	closePopoutTab,
+	focusNoteWindow,
+	noticesBeside,
 	openInEditor,
 	openInReadingView,
 	reloadAfterPopout,
@@ -988,6 +991,48 @@ describe("episode note and capture journeys", () => {
 				"app.workspace.floatingSplit.children.length",
 			);
 			if (popouts > 0) await closePopoutTab(obsidian, draft);
+			await obsidian.dev.evalJsonAsync(`(async () => {
+				app.workspace.requestSaveLayout.cancel();
+				await app.workspace.saveLayout();
+				return true;
+			})()`);
+			await reloadAfterPopout(obsidian);
+		}
+	});
+
+	test("J-TS-21 Capture Timestamp with a popout focused says so there, and its Undo takes the capture back", async () => {
+		const { obsidian, sandbox } = getContext();
+		const journey = await setUp("Journey Popout Focused");
+		const draft = sandbox.path("Focused draft.md");
+		await writeVaultFile(obsidian, draft, "Popout notes\n");
+		await detachMarkdownTabs();
+		await playFromList(journey.show, ORIGINAL.title);
+		const paused = await pauseInView();
+		try {
+			await obsidian.dev.evalJsonAsync(`(async () => {
+				const leaf = app.workspace.openPopoutLeaf();
+				await leaf.openFile(app.vault.getAbstractFileByPath(${jsLiteral(draft)}), { state: { mode: "source" } });
+				return true;
+			})()`);
+			expect(await clickInEditor(obsidian, draft, 0, 12)).toEqual({ line: 0, ch: 12 });
+			await focusNoteWindow(obsidian, draft);
+
+			await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+
+			const captured = `Popout notes${capture(journey, ORIGINAL, paused.seconds)}\n`;
+			await waitForText(
+				draft,
+				(text) => text === captured,
+				"the capture in the popout draft",
+			);
+			expect(await noticesBeside(obsidian, draft)).toEqual([
+				{ message: "Timestamp added to Focused draft", button: "Undo" },
+			]);
+			await clickInNoteWindow(obsidian, draft, ".notice button.pn-undo");
+			await waitForText(draft, (text) => text === "Popout notes\n", "the draft as it was");
+		} finally {
+			if (await obsidian.dev.evalJson<number>("app.workspace.floatingSplit.children.length"))
+				await closePopoutTab(obsidian, draft);
 			await obsidian.dev.evalJsonAsync(`(async () => {
 				app.workspace.requestSaveLayout.cancel();
 				await app.workspace.saveLayout();

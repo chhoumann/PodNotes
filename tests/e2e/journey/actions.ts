@@ -285,6 +285,55 @@ export async function clickInEditor(
 	})()`);
 }
 
+/** Gives the window holding the open editor of `notePath` the OS focus, as a click into it does. */
+export async function focusNoteWindow(obsidian: ObsidianClient, notePath: string): Promise<void> {
+	const focused = await obsidian.dev.evalJsonAsync<boolean>(`(async () => {
+		${inNoteWindow(notePath)}
+		win.focus();
+		for (let i = 0; i < 50 && activeDocument !== leaf.view.containerEl.ownerDocument; i++)
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		return activeDocument === leaf.view.containerEl.ownerDocument;
+	})()`);
+	if (!focused) throw new Error(`The window showing ${notePath} did not take focus.`);
+}
+
+/**
+ * Clicks the last element `selector` matches, with `text` when given, in the window holding
+ * the open editor of `notePath`.
+ */
+export async function clickInNoteWindow(
+	obsidian: ObsidianClient,
+	notePath: string,
+	selector: string,
+	text?: string,
+): Promise<void> {
+	const clicked = await obsidian.dev.evalJson<boolean>(`(() => {
+		${inNoteWindow(notePath)}
+		const target = [...leaf.view.containerEl.ownerDocument.querySelectorAll(${jsLiteral(selector)})]
+			.filter((each) => ${jsLiteral(text ?? null)} === null || each.textContent === ${jsLiteral(text ?? null)})
+			.at(-1);
+		if (!target) return false;
+		const box = target.getBoundingClientRect();
+		press(box.left + box.width / 2, box.top + box.height / 2);
+		return true;
+	})()`);
+	if (!clicked) throw new Error(`Nothing matches ${selector} beside ${notePath}.`);
+}
+
+/** The text and Undo button of each Notice in the window holding the open editor of `notePath`. */
+export async function noticesBeside(
+	obsidian: ObsidianClient,
+	notePath: string,
+): Promise<Array<{ message: string; button: string | null }>> {
+	return await obsidian.dev.evalJson(`(() => {
+		${inNoteWindow(notePath)}
+		return [...leaf.view.containerEl.ownerDocument.querySelectorAll(".notice")].map((notice) => ({
+			message: (notice.querySelector(".pn-undo-message") ?? notice).textContent.trim(),
+			button: notice.querySelector("button.pn-undo")?.textContent ?? null,
+		}));
+	})()`);
+}
+
 /** Clicks the close button of the popout tab showing `notePath`, which closes its window. */
 export async function closePopoutTab(obsidian: ObsidianClient, notePath: string): Promise<void> {
 	const closed = await obsidian.dev.evalJsonAsync<boolean>(`(async () => {

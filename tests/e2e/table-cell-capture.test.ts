@@ -2,7 +2,11 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	clickInEditor,
+	clickInNoteWindow,
+	closePopoutTab,
+	focusNoteWindow,
 	openInEditor,
+	reloadAfterPopout,
 	runFromPalette,
 	showLibrary,
 	showPodNotes,
@@ -482,6 +486,140 @@ describe("Live Preview table captures", () => {
 		).toBe(before);
 		expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
 	});
+
+	test.each(["in view", "scrolled out of view"])(
+		"#499 after Undo of a capture that widened its column, with the table %s, the next capture lands in the same cell",
+		async (where) => {
+			const { obsidian } = getContext();
+			const table = TABLE.replace(
+				"| Start | anchor |",
+				"| Start | anchor |\n| Later | other |",
+			);
+			const below = Array.from({ length: 2000 }, (_, line) => `Paragraph ${line}.`).join(
+				"\n",
+			);
+			const path = await setUp({ content: `${table}${below}\n` });
+			const editor = `app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.editor`;
+			await typeText(obsidian, "USER_EDIT");
+			if (where === "scrolled out of view") {
+				await obsidian.dev.evalJson(
+					`(() => { const { scrollDOM } = ${editor}.cm; scrollDOM.scrollTop = scrollDOM.scrollHeight; return true; })()`,
+				);
+				await obsidian.waitFor(
+					() => obsidian.dev.evalJson<boolean>(`${editor}.cm.viewport.from > 1000`),
+					{
+						timeoutMs: 5_000,
+						intervalMs: 100,
+						message: "the table out of the editor's viewport",
+					},
+				);
+			}
+			const before = await obsidian.dev.evalJson<string>(`${editor}.getValue()`);
+			await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+			const captured = await obsidian.dev.evalJson<string>(`${editor}.getValue()`);
+			expect(rows(captured).slice(2)).toEqual([
+				["Start", "anchorUSER_EDIT00:00:30 \\| cut"],
+				["Later", "other"],
+			]);
+			await click(obsidian, lastUndo);
+			expect(
+				await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
+			).toBe(before);
+
+			await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+
+			const unpadded = (text: string) => text.replace(/ *\| */g, "|").replace(/-+/g, "-");
+			expect(
+				await eventually(
+					obsidian,
+					async () => unpadded(await readVaultText(obsidian, path)),
+					unpadded(captured),
+					10_000,
+				),
+			).toBe(unpadded(captured));
+		},
+		90_000,
+	);
+
+	test("#473 a capture into a stale cell of a note in a focused popout keeps the table, and Undo there puts it back", async () => {
+		const { obsidian } = getContext();
+		const table =
+			"# Captures\n\n| Moment | Notes  |\n| ------ | ------ |\n| Start  | anchor |\n| Later  | other  |\n\nAfter table\n";
+		const path = await setUp({ content: table });
+		const view = `app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view`;
+		try {
+			await obsidian.dev.evalJsonAsync(`(async () => {
+				const main = ${view}.leaf;
+				await app.workspace.openPopoutLeaf().openFile(main.view.file, { state: { mode: "source", source: false } });
+				main.detach();
+				return true;
+			})()`);
+			await focusNoteWindow(obsidian, path);
+			await clickInNoteWindow(obsidian, path, ".markdown-source-view td", "anchor");
+			await obsidian.dev.evalJson(`(() => {
+				const remote = require("@electron/remote");
+				const main = remote.getCurrentWindow();
+				const popout = remote.BrowserWindow.getAllWindows().find((win) => win.id !== main.id);
+				for (const type of ["keyDown", "keyUp"]) popout.webContents.sendInputEvent({ type, keyCode: "End" });
+				return true;
+			})()`);
+			expect(
+				await eventually(
+					obsidian,
+					() =>
+						obsidian.dev.evalJson(
+							`${view}.editor.editorComponent.tableCell?.containerEl.ownerDocument === ${view}.containerEl.ownerDocument && ${view}.containerEl.ownerDocument !== document`,
+						),
+					true,
+				),
+				"a cell editor open in the popout",
+			).toBe(true);
+			await obsidian.exec("command", { id: "editor:toggle-source" });
+			await obsidian.dev.evalJsonAsync(
+				`app.vault.process(app.vault.getAbstractFileByPath(${jsLiteral(path)}), (text) => text.replace("| other  |", "| other, edited elsewhere |")).then(() => true)`,
+			);
+			const before = table.replace("| other  |", "| other, edited elsewhere |");
+			expect(
+				await eventually(
+					obsidian,
+					() => obsidian.dev.evalJson<string>(`${view}.editor.getValue()`),
+					before,
+					10_000,
+				),
+			).toBe(before);
+			expect(
+				await obsidian.dev.evalJson(
+					`${view}.editor.editorComponent.tableCell?.containerEl.isConnected ?? null`,
+				),
+				"Obsidian still holds a cell no longer in the document",
+			).toBe(false);
+			const caret = await obsidian.dev.evalJson<number>(
+				`${view}.editor.posToOffset(${view}.editor.getCursor())`,
+			);
+
+			await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+
+			const captured = `${before.slice(0, caret)}00:00:30 \\| cut ${before.slice(caret)}`;
+			expect(rows(captured)[2]).toEqual(["Start", "anchor00:00:30 \\| cut"]);
+			expect(
+				await eventually(obsidian, () => readVaultText(obsidian, path), captured, 10_000),
+			).toBe(captured);
+			await clickInNoteWindow(obsidian, path, ".notice button.pn-undo");
+			expect(
+				await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
+			).toBe(before);
+			expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
+		} finally {
+			if (await obsidian.dev.evalJson<number>("app.workspace.floatingSplit.children.length"))
+				await closePopoutTab(obsidian, path);
+			await obsidian.dev.evalJsonAsync(`(async () => {
+				app.workspace.requestSaveLayout.cancel();
+				await app.workspace.saveLayout();
+				return true;
+			})()`);
+			await reloadAfterPopout(obsidian);
+		}
+	}, 90_000);
 
 	test("#445 Source mode still escapes table captures and preserves Undo", async () => {
 		const { obsidian } = getContext();
