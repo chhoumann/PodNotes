@@ -203,11 +203,12 @@ function transcriptHead(): Promise<TranscriptHead> {
 	})()`);
 }
 
-type Followed = Readonly<{ line: string; clear: boolean; rows: number[] }>;
+type Followed = Readonly<{ line: string; clear: boolean; cut: boolean; rows: number[] }>;
 
 /**
- * The line playing now, and whether it and the line before it show whole: below the list's
- * faded top 12 px and above its faded bottom 20 px.
+ * The line playing now, whether it and the line before it show whole, below the list's faded
+ * top 12 px and above its faded bottom 20 px, and whether a line shows cut where the top fade
+ * ends.
  */
 function followed(): Promise<Followed> {
 	return getContext().obsidian.dev.evalJson<Followed>(`(() => {
@@ -218,6 +219,10 @@ function followed(): Promise<Followed> {
 		return {
 			line: now.lastElementChild.lastElementChild.textContent.trim(),
 			clear: before.top - top > 11.5 && after.bottom - top < list.clientHeight - 19.5,
+			cut: [...list.children].some((row) => {
+				const box = row.getBoundingClientRect();
+				return box.top - top < 11.5 && box.bottom - top > 12.5;
+			}),
 			rows: [before.top - top, after.top - top, after.bottom - top, list.clientHeight].map(Math.round),
 		};
 	})()`);
@@ -610,7 +615,7 @@ describe("transcript journeys", () => {
 		});
 	}, 120_000);
 
-	test("following shows the line playing now and the line before it whole, in a 320 px sidebar and a phone's drawer", async () => {
+	test("following shows the line playing now and the line before it whole, and no line cut under the top fade, in a 320 px sidebar and a phone's drawer", async () => {
 		const context = getContext();
 		const { obsidian } = context;
 		const server = await serve();
@@ -620,7 +625,7 @@ describe("transcript journeys", () => {
 			progress: [
 				{
 					episode: { podcastName: FEED.title, title: CAPTIONED.title },
-					seconds: 33,
+					seconds: 19,
 					duration: 60,
 					finished: false,
 				},
@@ -632,11 +637,18 @@ describe("transcript journeys", () => {
 		await asPhone();
 		await inRightDrawer();
 		await openTranscriptPanel();
+		await obsidian.dev.evalJson(`app.plugins.plugins.${PLUGIN_ID}.api.currentTime = 33, true`);
+		await eventually(obsidian, async () => (await followed()).line, LINES[5]);
 		const drawer = await followed();
 
-		const line = LINES[5];
-		expect([sidebar.line, drawer.line]).toEqual([line, line]);
-		expect(sidebar.clear, `sidebar rows ${sidebar.rows.join(", ")}`).toBe(true);
-		expect(drawer.clear, `drawer rows ${drawer.rows.join(", ")}`).toBe(true);
+		expect([sidebar.line, drawer.line]).toEqual([LINES[3], LINES[5]]);
+		expect(sidebar, `sidebar rows ${sidebar.rows.join(", ")}`).toMatchObject({
+			clear: true,
+			cut: false,
+		});
+		expect(drawer, `drawer rows ${drawer.rows.join(", ")}`).toMatchObject({
+			clear: true,
+			cut: false,
+		});
 	}, 120_000);
 });

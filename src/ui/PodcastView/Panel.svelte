@@ -1,3 +1,31 @@
+<script module lang="ts">
+	/**
+	 * Scrolls `list` to show its row at index `at` under as many whole rows as fit in the top
+	 * third, starting where the faded top edge ends, so no row shows cut there, and under the
+	 * whole row before it even when that one does not fit. The row never reaches into the faded
+	 * bottom edge, and never starts under the faded top edge. Not scrollIntoView, which would
+	 * also scroll the view and an editor around it.
+	 */
+	export function reveal(list: HTMLElement, at: number) {
+		const row = list.children[at];
+		if (!row) return;
+		const style = list.win.getComputedStyle(list);
+		// The band between the faded edges, from the list's top.
+		const top = parseFloat(style.scrollPaddingTop);
+		const bottom = list.clientHeight - parseFloat(style.scrollPaddingBottom);
+		const box = row.getBoundingClientRect();
+		// Whole rows above it, from where the top fade ends, as long as they fit in the top third.
+		let y = top;
+		for (let above = row.previousElementSibling; above; above = above.previousElementSibling) {
+			const start = top + box.top - above.getBoundingClientRect().top;
+			if (start > list.clientHeight / 3 && above !== row.previousElementSibling) break;
+			y = start;
+		}
+		y = Math.max(top, Math.min(y, bottom - box.height));
+		list.scrollTop += box.top - list.getBoundingClientRect().top - y;
+	}
+</script>
+
 <script lang="ts">
 	import type { Snippet } from "svelte";
 
@@ -60,13 +88,13 @@
 			flex-direction: column;
 			overflow-y: auto;
 			padding: var(--size-4-2) 0 var(--size-4-4);
-			/* A line in the faded top edge is not in view. */
-			scroll-padding-top: 12px;
+			--pn-fade-top: 12px;
+			--pn-fade-bottom: 20px;
+			/* A line in a faded edge is not in view. */
+			scroll-padding: var(--pn-fade-top) 0 var(--pn-fade-bottom);
 			mask-image: linear-gradient(
-				to bottom,
 				transparent,
-				#000 12px,
-				#000 calc(100% - 20px),
+				#000 var(--pn-fade-top) calc(100% - var(--pn-fade-bottom)),
 				transparent
 			);
 		}

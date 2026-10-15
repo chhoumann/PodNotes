@@ -7,7 +7,7 @@
 	import { getEpisodeMediaType } from "src/utility/mediaType";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import Panel from "./Panel.svelte";
+	import Panel, { reveal } from "./Panel.svelte";
 	import SearchField from "./SearchField.svelte";
 	import {
 		cachedTranscript,
@@ -81,7 +81,10 @@
 	});
 
 	$effect(() => {
-		if (finding ? needle : following) reveal(finding ? hit : current);
+		if (list && (finding ? needle : following)) {
+			reveal(list, finding ? hit : current);
+			ownScrollTop = list.scrollTop;
+		}
 	});
 
 	$effect(() => {
@@ -114,22 +117,6 @@
 				if (!signal.aborted) load = { kind: "error" };
 			},
 		);
-	}
-
-	/**
-	 * A third of the way down, under the whole line before it, and in the upper half when that
-	 * line is long. Not scrollIntoView, which would also scroll the view and an editor around it.
-	 */
-	function reveal(at: number) {
-		const row = list?.children[at];
-		if (!list || !row) return;
-		const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top;
-		const before =
-			(row.previousElementSibling?.getBoundingClientRect().height ?? 0) +
-			(parseFloat(list.win.getComputedStyle(list).scrollPaddingTop) || 0);
-		const height = list.clientHeight;
-		list.scrollTop += top - Math.min(Math.max(height / 3, before), height / 2);
-		ownScrollTop = list.scrollTop;
 	}
 
 	function seek(time: number) {

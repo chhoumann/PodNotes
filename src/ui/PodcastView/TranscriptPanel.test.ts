@@ -23,6 +23,7 @@ import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import { feedItem, MemoryStorage } from "../../../tests/mocks/feeds";
 import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
+import { currentRowTop, layOut } from "../../../tests/mocks/panelLayout";
 import {
 	installResizeObserver,
 	type FakeResizeObservers,
@@ -176,42 +177,6 @@ const press = (key: string, target: Element = document.activeElement ?? document
 	keymap().dispatch(event);
 };
 
-/**
- * Lays the list's rows out in a list 120 px tall, as the browser would, each 40 px tall or as
- * `tall` sets it: its scroll position stays within the rows, and a change to it fires `scroll`
- * soon after. Returns a resize to `height`, which clamps the scroll position to the rows left.
- */
-function layOut(list: HTMLElement, tall: Record<number, number> = {}): (height: number) => void {
-	let top = 0;
-	let height = 120;
-	const rowHeight = (index: number) => tall[index] ?? 40;
-	const rowTop = (index: number) =>
-		Array.from({ length: index }, (_, at) => rowHeight(at)).reduce((sum, h) => sum + h, 0);
-	const scrollTo = (value: number) => {
-		const next = Math.max(0, Math.min(value, list.scrollHeight - height));
-		if (next === top) return;
-		top = next;
-		queueMicrotask(() => list.dispatchEvent(new Event("scroll")));
-	};
-	Object.defineProperties(list, {
-		clientHeight: { configurable: true, get: () => height },
-		scrollHeight: { configurable: true, get: () => rowTop(list.children.length) },
-		scrollTop: { configurable: true, get: () => top, set: scrollTo },
-	});
-	vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
-		this: Element,
-	) {
-		const index = [...list.children].indexOf(this);
-		const y = this === list ? 0 : rowTop(index) - top;
-		const h = this === list ? height : rowHeight(index);
-		return { top: y, bottom: y + h, height: h, left: 0, right: 300 } as DOMRect;
-	});
-	return (to) => {
-		height = to;
-		scrollTo(top);
-	};
-}
-
 describe("a published transcript", () => {
 	test("lists its lines with their times and speakers, and marks the line playing now", async () => {
 		await openTranscript(episodeOf([VTT_LINK]), 0);
@@ -260,37 +225,48 @@ describe("a published transcript", () => {
 
 		await at(13);
 		await tick();
-		expect(list.scrollTop, "row 2, a third down").toBe(40);
+		expect(list.scrollTop, "row 2, under row 1 and the faded edge").toBe(28);
 		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
 
-		list.scrollTop = 30;
+		list.scrollTop = 10;
 		await tick();
 		await tick();
 		const follow = button("Follow");
 		expect(follow.closest("[aria-live=polite]")).not.toBeNull();
 		await at(19);
 		await tick();
-		expect(list.scrollTop, "the reader stays where they scrolled").toBe(30);
+		expect(list.scrollTop, "the reader stays where they scrolled").toBe(10);
 
 		await fireEvent.click(follow);
 		await tick();
-		expect(list.scrollTop, "row 3, a third down").toBe(80);
+		expect(list.scrollTop, "row 3, under row 2 and the faded edge").toBe(68);
 		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
 		expect(get(services.player.state).status).toBe("paused");
 	});
 
-	test("follows a line under the whole line before it, and in the upper half after a long one", async () => {
+	// Each case lists the panel's height, the rows' heights by index where not 40 px, and where
+	// row 5, the line at 0:31, starts. The faded edges are 12 px at the top and 20 px at the bottom.
+	test.each([
+		["under the whole lines that fit in the panel's top third", 248, { 3: 30, 4: 30 }, 72],
+		[
+			"under just the line before it, where a third of the way down would cut the line above that",
+			270,
+			{ 4: 60 },
+			72,
+		],
+		["lower, under the whole of a line before it that is taller", 248, { 4: 140, 5: 63 }, 152],
+		["higher, above the faded bottom edge, when it is long too", 248, { 4: 100, 5: 140 }, 88],
+		["just under the faded top edge when it is taller than the panel", 248, { 5: 300 }, 12],
+	])("follows a line %s", async (_name, height, tall, top) => {
 		await openTranscript(episodeOf([VTT_LINK]), 0);
 		const list = await transcript();
-		layOut(list, { 2: 55, 5: 200 });
+		layOut(list, { height, tall });
 
-		await at(19);
+		await at(31);
 		await tick();
-		expect(list.scrollTop, "row 3 at 135, under row 2 from its top").toBe(80);
 
-		await at(37);
-		await tick();
-		expect(list.scrollTop, "row 6 at 415, half way down").toBe(355);
+		expect(currentLine()).toBe(LINES[5]);
+		expect(currentRowTop(list)).toBe(top);
 	});
 
 	test("keeps following when a taller panel pulls the list back, and stops when the reader scrolls", async () => {
@@ -299,7 +275,7 @@ describe("a published transcript", () => {
 		const resize = layOut(list);
 		await at(43);
 		await tick();
-		expect(list.scrollTop, "row 7, a third down").toBe(240);
+		expect(list.scrollTop, "row 7, under row 6 and the faded edge").toBe(228);
 
 		resize(200);
 		await tick();

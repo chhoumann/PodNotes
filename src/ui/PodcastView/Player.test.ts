@@ -10,6 +10,7 @@ import type { Episode } from "src/types/Episode";
 import { isLocalFile } from "src/utility/isLocalFile";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import type { Keymap as FakeKeymap, Menu as FakeMenu } from "../../../tests/mocks/obsidian";
+import { currentRowTop, layOut } from "../../../tests/mocks/panelLayout";
 import { openPopout } from "../../../tests/mocks/popout";
 import {
 	installResizeObserver,
@@ -589,6 +590,24 @@ describe("the player's panels", () => {
 		await fireEvent.click(screen.getByRole("button", { name: /^0:00 Intro/ }));
 
 		expect(get(services.player.state)).toMatchObject({ currentTime: 0, status: "playing" });
+	});
+
+	test("Chapters keeps a long chapter playing now above the panel's faded bottom edge", async () => {
+		await openPlayer(withChapters);
+		await vi.waitFor(() => expect(switchButton("Chapters")).toBeInTheDocument());
+		await fireEvent.click(switchButton("Chapters"));
+		const list = screen.getByRole("list", { name: "Chapters" });
+		layOut(list, { height: 160, tall: { 0: 80, 1: 100 } });
+		const playAt = async (time: number) => {
+			doc.media.currentTime = time;
+			doc.media.emit("timeupdate");
+			await tick();
+		};
+
+		await playAt(0);
+		await playAt(650);
+
+		expect(currentRowTop(list), "its 100 px end where the 20 px fade starts").toBe(40);
 	});
 
 	describe("Up next", () => {
