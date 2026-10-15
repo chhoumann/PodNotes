@@ -42,8 +42,9 @@ export function fakeEditor(text: string, caret = text.length) {
 
 /**
  * A Live Preview cell has an editor of its own that holds its pipes unescaped, and Obsidian escapes
- * them as it writes the cell to the note. An edit made through the note's editor inside
- * the cell reaches the cell only later, so here it never lands.
+ * them as it writes the cell to the note at the offsets the cell had when it opened. An edit
+ * made through the note's editor inside the cell reaches the cell only later, so here it
+ * is dropped until Obsidian ends the cell.
  */
 export function editInTableCell(note: ReturnType<typeof fakeEditor>, cell: string) {
 	const start = note.getValue().indexOf(cell);
@@ -52,7 +53,7 @@ export function editInTableCell(note: ReturnType<typeof fakeEditor>, cell: strin
 		text.replace(/(\\*)\|/g, (pipe, slashes: string) =>
 			slashes.length % 2 ? pipe : `${slashes}\\|`,
 		);
-	const write = note.replaceRange;
+	const { replaceSelection, replaceRange: write } = note;
 	const cellEditor = {
 		text: cell,
 		getValue() {
@@ -67,12 +68,20 @@ export function editInTableCell(note: ReturnType<typeof fakeEditor>, cell: strin
 	const inCell = (from: EditorPosition, to: EditorPosition) =>
 		note.posToOffset(from) >= start &&
 		note.posToOffset(to) <= start + escape(cellEditor.text).length;
+	const tableCell = { editor: cellEditor, containerEl: { isConnected: true } };
+	const editorComponent = {
+		tableCell: tableCell as typeof tableCell | null,
+		destroyTableCell() {
+			editorComponent.tableCell = null;
+			Object.assign(note, { replaceSelection, replaceRange: write });
+		},
+	};
 	Object.assign(note, {
-		editorComponent: { tableCell: { editor: cellEditor } },
+		editorComponent,
 		replaceSelection: () => {},
 		replaceRange(text: string, from: EditorPosition, to = from) {
 			if (!inCell(from, to)) write(text, from, to);
 		},
 	});
-	return cellEditor;
+	return tableCell;
 }

@@ -308,7 +308,7 @@ describe("capture", () => {
 				text: "00:20:34 \\| a \\| b \\\\\\| c ",
 				created: false,
 			});
-			expect(cell.getValue()).toBe("anchor00:20:34 | a | b \\\\| c ");
+			expect(cell.editor.getValue()).toBe("anchor00:20:34 | a | b \\\\| c ");
 			expect(editor.getValue()).toBe(
 				"| Time | Note |\n| --- | --- |\n| Start | anchor00:20:34 \\| a \\| b \\\\\\| c  |\nAfter",
 			);
@@ -319,7 +319,7 @@ describe("capture", () => {
 			run("capture-timestamp");
 			const first = editor.getValue();
 			run("capture-segment-10s");
-			expect(cell.getValue()).toBe("anchor- 00:20:34- 00:20:24-00:20:34");
+			expect(cell.editor.getValue()).toBe("anchor- 00:20:34- 00:20:24-00:20:34");
 
 			await undo();
 
@@ -343,6 +343,36 @@ describe("capture", () => {
 			expect(editor.getValue()).toBe("Notes\n");
 		});
 
+		it("ends a cell no longer in the document, and writes at the note's caret with an exact Undo", async () => {
+			const { plugin, editor, cell } = await inCell();
+			plugin.settings.timestamp.template = "{{time}} | cut\n";
+			cell.containerEl.isConnected = false;
+			editor.replaceRange("Synced\n", editor.offsetToPos(0));
+			editor.setSelection(editor.offsetToPos(editor.getValue().indexOf("anchor") + 6));
+			const before = editor.getValue();
+
+			expect(await plugin.capture.timestamp()).toMatchObject({ text: "00:20:34 \\| cut " });
+
+			expect(editor.getValue()).toBe(
+				"Synced\n| Time | Note |\n| --- | --- |\n| Start | anchor00:20:34 \\| cut  |\nAfter",
+			);
+			expect(cell.editor.getValue()).toBe("anchor");
+			await undo();
+			expect(editor.getValue()).toBe(before);
+		});
+
+		it("ends a detached cell whose old range covers the capture before Undo puts the note back", async () => {
+			const { run, openNote, focusPodNotes } = await loadPlugin(playing);
+			const { editor } = openNote("Journal.md", "Notes\n");
+			focusPodNotes();
+			run("capture-timestamp");
+			editInTableCell(editor, "Notes\n- 00:20:34").containerEl.isConnected = false;
+
+			await undo();
+
+			expect(editor.getValue()).toBe("Notes\n");
+		});
+
 		it("falls back to the note editor when the cell's replaceSelection is not a function", async () => {
 			const { plugin, openNote, focusPodNotes } = await loadPlugin(playing);
 			const { editor } = openNote("Table.md", TABLE, TABLE.indexOf("anchor") + 6);
@@ -360,6 +390,16 @@ describe("capture", () => {
 			expect(editor.getValue()).toBe(
 				"| Time | Note |\n| --- | --- |\n| Start | anchor- 00:20:34 |\nAfter",
 			);
+		});
+
+		it("still writes through a cell no longer in the document when Obsidian has no destroyTableCell", async () => {
+			const { run, editor, cell } = await inCell();
+			cell.containerEl.isConnected = false;
+			Reflect.deleteProperty(Reflect.get(editor, "editorComponent"), "destroyTableCell");
+
+			run("capture-timestamp");
+
+			expect(cell.editor.getValue()).toBe("anchor- 00:20:34");
 		});
 	});
 
