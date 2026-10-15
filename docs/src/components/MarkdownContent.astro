@@ -40,8 +40,8 @@ const hasClips = html.includes('<video class="clip');
 					for (const clip of clips) {
 						const shown = clip.getClientRects().length > 0;
 						clip.controls = still.matches;
-						if (!shown) clip.pause();
-						else if (!still.matches) clip.play().catch(() => (clip.controls = true));
+						if (!shown || still.matches) clip.pause();
+						else clip.play().catch(() => (clip.controls = true));
 					}
 				};
 				sync();

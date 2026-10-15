@@ -41,7 +41,7 @@ The panel highlights the line being spoken and follows it. To search the transcr
 
 This clip opens **Transcript**, selects a line to play from it, and finds the word "walk":
 
-![The full player's Transcript panel: a selected line plays from 38:28, and a search for walk shows only the lines that contain it](/videos/transcript.mp4)
+![The full player's Transcript panel: a selected line plays from its time, and a search for walk shows only the lines that contain it](/videos/transcript.mp4)
 
 When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram, with a **Paid** tag. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. When the episode's transcript note already exists, the panel offers **Open note** in place of that button. Offline, the panel's transcribe button and **Save as note** are turned off, and **Open note** still works.
 

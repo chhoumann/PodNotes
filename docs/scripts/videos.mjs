@@ -85,7 +85,10 @@ const POINTER = `(() => {
 	const arrow = layer.querySelector(".arrow");
 	const finger = layer.querySelector(".finger");
 	const put = (el, { clientX, clientY }) => (el.style.translate = clientX + "px " + clientY + "px");
-	addEventListener("pointermove", (event) => put(event.pointerType === "touch" ? finger : arrow, event), true);
+	addEventListener("pointermove", (event) => {
+		if (event.pointerType !== "touch") arrow.classList.add("is-on");
+		put(event.pointerType === "touch" ? finger : arrow, event);
+	}, true);
 	addEventListener("pointerdown", (event) => {
 		if (event.pointerType === "touch") {
 			put(finger, event);
@@ -115,6 +118,7 @@ const POINTER_CSS = `
 #docs-pointer > * { position: absolute; left: 0; top: 0; }
 #docs-pointer .arrow { margin: -2px 0 0 -3px; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.35));
 	transition: scale 0.08s; transform-origin: 3px 2px; }
+#docs-pointer .arrow:not(.is-on) { display: none; }
 #docs-pointer .arrow.is-down { scale: 0.88; }
 #docs-pointer .finger { width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%;
 	background: rgb(128 128 128 / 0.45); border: 2px solid rgb(255 255 255 / 0.85);
@@ -235,6 +239,16 @@ function hand(client) {
 			await sleep(350);
 			await touch("touchEnd", []);
 		},
+		/** Swipes a finger `dy` px from the element's center, to scroll. @param {string} css @param {string} text @param {number} dy */
+		async swipe(css, text, dy) {
+			const start = center(await locate(client, css, text));
+			at = start;
+			await touch("touchStart", [start]);
+			await glide({ x: start.x, y: start.y + dy }, 700, (point) =>
+				touch("touchMove", [point]),
+			);
+			await touch("touchEnd", []);
+		},
 		/** Types into the focused field at a steady pace. @param {string} text */
 		async type(text) {
 			await typeText(client, text, { delayMs: 110 });
@@ -272,7 +286,7 @@ async function record(name, clip, lib) {
 		/** @type {Rect} */
 		const rect = await evaluate(`return (${clip.frame})();`);
 		const input = hand(client);
-		await input.rest(clip.rest(rect));
+		if (clip.rest) await input.rest(clip.rest(rect));
 		await sleep(500);
 		let started = 0;
 		let posterAt = 0;
@@ -317,21 +331,14 @@ async function encode(master, rect, name, posterAt) {
 	const crop = `crop=${width}:${height}:${x}:${y}`;
 	const out = path.join(outDir, `${name}.mp4`);
 	// The screencast's frames are JPEGs, in full range.
-	const video = `-an -vf ${crop},scale=in_range=pc:out_range=tv,format=yuv420p -c:v libx264 -preset veryslow -crf 30 -tune animation -color_range tv -movflags +faststart`;
-	execFileSync("ffmpeg", ["-v", "error", "-y", "-i", master, ...video.split(" "), out]);
+	const filters = `${crop},scale=in_range=pc:out_range=tv,format=yuv420p`;
+	const h264 = ["-c:v", "libx264", "-preset", "veryslow", "-crf", "30", "-tune", "animation"];
+	const web = ["-color_range", "tv", "-movflags", "+faststart"];
+	const source = ["-i", master, "-an", "-vf", filters];
+	execFileSync("ffmpeg", ["-v", "error", "-y", ...source, ...h264, ...web, out]);
 	const still = path.join(work, `${name}-poster.png`);
-	const frame = `-frames:v 1 -vf ${crop}`.split(" ");
-	execFileSync("ffmpeg", [
-		"-v",
-		"error",
-		"-y",
-		"-ss",
-		`${posterAt}`,
-		"-i",
-		master,
-		...frame,
-		still,
-	]);
+	const at = ["-ss", `${posterAt}`, "-i", master, "-frames:v", "1"];
+	execFileSync("ffmpeg", ["-v", "error", "-y", ...at, "-vf", crop, still]);
 	await sharp(still)
 		.webp({ quality: 86 })
 		.toFile(path.join(outDir, `${name}.webp`));
@@ -362,6 +369,7 @@ const PLAYING = `let state; app.plugins.plugins.podnotes.player.state.subscribe(
  */
 const network = (shows, aliases) => `(() => {
 	const ipc = window.electron.ipcRenderer;
+	// Staging again replaces the stub instead of wrapping the last one.
 	ipc.send = window.__docsSend ??= ipc.send;
 	const send = ipc.send;
 	const shows = ${JSON.stringify(shows)};
@@ -424,13 +432,14 @@ const restLow = (rect) => ({ x: rect.x + rect.width * 0.78, y: rect.y + rect.hei
 /**
  * A clip on a docs page. `themes` are the themes its page shows screenshots in.
  * `setup` runs before the recording, `ready` once the window renders at 2x, and
- * `act` during the recording. `act` marks the poster's moment.
+ * `act` during the recording. `act` marks the poster's moment. `rest` places the
+ * mouse in the frame before it starts, and a touch clip has none.
  * @typedef {{
  *   themes: ("light" | "dark")[],
  *   setup: (lib: Library) => Promise<void>,
  *   ready?: () => Promise<void>,
  *   frame: string,
- *   rest: (rect: Rect) => Point,
+ *   rest?: (rect: Rect) => Point,
  *   act: (input: ReturnType<typeof hand>, mark: () => void, lib: Library) => Promise<void>,
  * }} Clip
  */
@@ -569,7 +578,6 @@ const CLIPS = {
 			await waitForText("Ep. 88");
 		},
 		frame: `() => ({ x: 0, y: 0, width: innerWidth, height: innerHeight })`,
-		rest: () => ({ x: -50, y: -50 }),
 		async act(input, mark) {
 			await sleep(1200);
 			await input.drag(
@@ -580,9 +588,12 @@ const CLIPS = {
 			await input.tap(".podcast-view button.pn-mini-open");
 			await sleep(1500);
 			await input.tap("section.pn-player button", "Up next");
-			await sleep(1500);
+			await sleep(1100);
 			mark();
-			await sleep(2000);
+			await sleep(300);
+			// The panel shows two episodes at a time.
+			await input.swipe(".pn-panel-scroll .pn-ep-main", "The case for boredom", -120);
+			await sleep(2200);
 		},
 	},
 	// Use private feeds: on another device, a private podcast shows Address not
@@ -611,8 +622,10 @@ const CLIPS = {
 			await input.click(".modal input");
 			await sleep(300);
 			await input.paste(PRIVATE_ADDRESS);
+			// After the click's ring fades.
+			await sleep(600);
 			mark();
-			await sleep(1200);
+			await sleep(700);
 			await input.click(".modal button.mod-cta", "Save");
 			await waitFor(
 				`return !document.querySelector(".podcast-view")?.innerText.includes("Feed didn't load") &&

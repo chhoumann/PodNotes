@@ -82,7 +82,7 @@ The panel loads the transcript that the episode's feed publishes. Its top line r
 
 This clip opens **Transcript**, selects a line to play from it, and finds the word "walk":
 
-![The full player's Transcript panel: a selected line plays from 38:28, and a search for walk shows only the lines that contain it](/videos/transcript.mp4)
+![The full player's Transcript panel: a selected line plays from its time, and a search for walk shows only the lines that contain it](/videos/transcript.mp4)
 
 When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram, with a **Paid** tag:
 

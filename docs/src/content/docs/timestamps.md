@@ -28,7 +28,7 @@ PodNotes takes the timestamp out, and puts back any selected text that it replac
 
 This clip captures a timestamp with **Timestamp** in the full player while the episode plays, then takes it back with **Undo** in the notice:
 
-![An episode note beside the full player: Timestamp adds a 00:38:19 link to the note, and Undo in the notice removes it](/videos/capture-undo.mp4)
+![An episode note beside the full player: Timestamp adds a timestamp link to the note, and Undo in the notice removes it](/videos/capture-undo.mp4)
 
 ## Choose where a timestamp goes
 

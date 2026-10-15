@@ -92,7 +92,8 @@ other than the home page.
 - [ ] `docs/scripts/videos.mjs` records every clip from the same fixtures.
       Never add one by hand. Rerun the script after a UI change.
 - [ ] One sentence before the clip says what it shows, and its alt text names
-      it in under 150 characters.
+      it in under 150 characters. Alt text leaves out times such as 38:28,
+      because the site's directive syntax drops the `:28` from an alt.
 - [ ] Each clip is under about 1.5 MB.
 
 ## Before you merge
