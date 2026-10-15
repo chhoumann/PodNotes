@@ -289,8 +289,8 @@ function createNoticeDoc(title: string) {
 
 	return {
 		doc,
-		update: (updateFn: (bodyEl: HTMLDivElement) => void, empty = true) => {
-			if (empty) bodyEl.empty();
+		update: (updateFn: (bodyEl: HTMLDivElement) => void) => {
+			bodyEl.empty();
 			updateFn(bodyEl);
 		},
 	};
