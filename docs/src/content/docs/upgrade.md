@@ -15,7 +15,7 @@ PodNotes 2.22.0 merges the changes your devices make, but 2.21.1 and earlier ove
 3. Select **Check for updates**.
 4. Next to PodNotes, select **Update**.
 
-Do this on a device before you use PodNotes there. With Obsidian Sync's **Active community plugin list** and **Installed community plugins** on, sync can bring the update to a device before you update it there. Either way, check that **Settings → Community plugins** shows version 2.22.0 under PodNotes before you use PodNotes on that device. Then let your sync service finish on every device. See [Sync between devices](/sync/).
+Do this on a device before you use PodNotes there. With Obsidian Sync's **Active community plugin list** and **Installed community plugins** on, sync may already have updated PodNotes on a device by the time you get to it. Either way, check that **Settings → Community plugins** shows version 2.22.0 under PodNotes before you use PodNotes on that device. Then let your sync service finish on every device. See [Sync between devices](/sync/).
 
 ## Set private feed addresses on your other devices
 

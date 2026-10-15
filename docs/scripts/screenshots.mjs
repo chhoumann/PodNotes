@@ -247,7 +247,14 @@ const noteCrop = (/** @type {string} */ from, /** @type {string} */ to) => `() =
 	// On a phone the header floats over the note, and the navigation bar sits over its bottom.
 	const navbar = document.querySelector(".mobile-navbar")?.getBoundingClientRect().top ?? innerHeight;
 	const top = Math.max(pane.top, header.bottom + 12, (${from})(blocks).getBoundingClientRect().top - 16);
-	const bottom = Math.min(pane.bottom, navbar - 12, (${to})(blocks).getBoundingClientRect().bottom + 12);
+	const cap = Math.min(pane.bottom, navbar - 12);
+	const last = (${to})(blocks).getBoundingClientRect().bottom;
+	const rects = blocks.map((el) => el.getBoundingClientRect());
+	const shown = blocks.filter((el) => el.textContent.trim() || el.querySelector("img")).map((el) => el.getBoundingClientRect());
+	// Ends below the last block that fits whole and above the next, so the edge never cuts a line of text.
+	const end = Math.max(...rects.map((rect) => rect.bottom).filter((edge) => edge <= last && edge + 12 <= cap));
+	const next = Math.min(...shown.map((rect) => rect.top).filter((edge) => edge >= end - 0.5));
+	const bottom = end === last ? end + 12 : Math.min(end + 12, next);
 	const left = Math.max(pane.left, column.x - 16);
 	const right = Math.min(pane.right, column.right + 16);
 	return { x: left, y: top, width: right - left, height: bottom - top };

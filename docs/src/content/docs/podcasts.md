@@ -8,7 +8,9 @@ Add podcasts in the PodNotes view, find their episodes, and play them. To open t
 
 ## <span id="adding-podcasts"></span>Add a podcast
 
-1. When your library is empty, the PodNotes view shows **Add your first podcast** with a search field, so go to step 2. Otherwise, in the PodNotes view, select **Add podcast**. In a narrow view, such as the sidebar, it is the plus button at the top of the Library. In a wide view, it is at the top of the list on the left.
+When your library is empty, the PodNotes view shows **Add your first podcast** with a search field, so start at step 2.
+
+1. In the PodNotes view, select **Add podcast**. In a narrow view, such as the sidebar, it is the plus button at the top of the Library. In a wide view, it is at the top of the list on the left.
 2. Type a podcast's name, such as `the daily`. Results appear as you type.
 3. Select the podcast.
 
@@ -30,7 +32,7 @@ A podcast you already follow has a check mark instead of a plus, and selecting i
 
 You can also right-click the podcast's artwork in the Library and select **Remove podcast**. A notice says "Removed" and the podcast's name. To bring the podcast back, select **Undo** in the notice within seven seconds. If you miss the notice, [add the podcast](/podcasts/#add-a-podcast) again.
 
-PodNotes keeps the podcast's episode notes, downloads, played episodes and progress, and its episodes in the queue and your playlists. They come back when you add the podcast again.
+Removing a podcast removes nothing else. Its episode notes and downloaded files stay in your vault, and its episodes stay in the queue and your playlists. PodNotes also keeps your progress and played episodes, so they are there when you add the podcast again.
 
 ## <span id="episode-list"></span>Browse episodes
 
@@ -79,7 +81,7 @@ The queue decides what plays next, and playlists collect episodes you want to ke
 
 ### <span id="context-menu"></span>Episode menu reference
 
-To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. Episodes on the Queue page have no **More options** button, so right-click them, or open their menu from another list that holds them. The menu shows these items in this order:
+To open an episode's menu, right-click the episode, or select the three-dot button at the end of its row. Episodes on the Queue page and in **Up next** have no three-dot button, so right-click them, open their menu from another list that holds them, or use **Episode options** in the full player while the episode is loaded. The menu shows these items in this order:
 
 | Item | What it does |
 | --- | --- |

@@ -9,7 +9,7 @@ Turn an episode into a transcript note. For a podcast you added, when its feed l
 
 ## <span id="creating-a-transcript"></span>Transcribe an episode
 
-**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, for a podcast you added to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. Without your provider's key on the device, the command never bills you. It saves a transcript that the feed publishes, and for any other episode it shows a notice that asks for the key.
+**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, for a podcast you added to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. Without your provider's key on the device, the command never bills you. It saves a transcript that the feed publishes. For an episode without one, it shows a notice that asks for the key.
 
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
@@ -37,9 +37,9 @@ The full player's **Transcript** panel shows the transcript that the episode's f
 1. In the full player, select **Transcript**.
 2. Select a line with a time to play the episode from that moment. A transcript without times can only be read.
 
-The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Once the note exists, the button reads **Open note** and opens it. See [Read the transcript](/player/#read-the-transcript) for every control.
+The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Where the panel is narrow, such as on a phone, the button shows only its icon, a page with a plus sign. Once the note exists, the button reads **Open note** and opens it. See [Read the transcript](/player/#read-the-transcript) for every control.
 
-When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers a button marked **Paid**: **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. When the episode's transcript note already exists, the panel offers **Open note** instead. Offline, the panel's transcribe button and **Save as note** are turned off, and **Open note** still works.
+When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram, with a **Paid** tag. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. When the episode's transcript note already exists, the panel offers **Open note** in place of that button. Offline, the panel's transcribe button and **Save as note** are turned off, and **Open note** still works.
 
 ## Transcripts that feeds publish
 

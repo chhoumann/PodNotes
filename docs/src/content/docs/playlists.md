@@ -14,10 +14,10 @@ The Queue page lists what plays next and the total time left. The automatic queu
 
 To add an episode to the end of the queue:
 
-1. Right-click the episode, or select its **More options** button, the three dots at the end of its row.
+1. Right-click the episode, or select the three-dot button at the end of its row.
 2. Select **Add to queue**.
 
-When an episode ends, PodNotes removes it from the queue. Episodes on the Queue page and in **Up next** have no **More options** button, so right-click one to open its menu. On a phone, open the episode's menu from another list that holds it, such as its podcast's page, or use **Episode options** in the full player while the episode is loaded. The full player's **Up next** panel shows the same queue. See [Up next](/player/#up-next).
+When an episode ends, PodNotes removes it from the queue. Episodes on the Queue page and in **Up next** have no three-dot button, so right-click one to open its menu. On a phone, open the episode's menu from another list that holds it, such as its podcast's page, or use **Episode options** in the full player while the episode is loaded. The full player's **Up next** panel shows the same queue. See [Up next](/player/#up-next).
 
 ### Reorder the queue
 
@@ -43,7 +43,7 @@ The Playlists page lists **Favorites** first, then your own playlists, each with
 
 To add an episode to **Favorites**:
 
-1. Right-click the episode, or select its **More options** button.
+1. Right-click the episode, or select the three-dot button at the end of its row.
 2. Select **Add to Favorites**.
 
 To make your own playlist:
@@ -54,7 +54,7 @@ To make your own playlist:
 
 To add an episode to it:
 
-1. Right-click the episode, or select its **More options** button.
+1. Right-click the episode, or select the three-dot button at the end of its row.
 2. Select **Add to playlist**.
 3. Select **Commute**.
 
@@ -62,7 +62,7 @@ A playlist that holds the episode has a check mark in that list. To make a new p
 
 ## Remove an episode from a list
 
-- From the queue, select the episode's **Remove from queue** button, the cross on the right of its row. **Remove from queue** in the episode's menu does the same.
+- From the queue, select the cross on the right of the episode's row. **Remove from queue** in the episode's menu does the same.
 - From **Favorites**, select **Remove from Favorites** in the episode's menu.
 - From your own playlist, select **Add to playlist** in the episode's menu, then select the playlist, which has a check mark.
 

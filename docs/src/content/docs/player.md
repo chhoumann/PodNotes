@@ -78,16 +78,22 @@ The panel loads the transcript that the episode's feed publishes. Its top line r
 - Select a line to play from that moment. Lines without a time cannot be selected.
 - The panel highlights the line being spoken and scrolls with it. When you scroll yourself, it stops following. Select **Follow** to go back to the current line.
 - To search, select **Find in transcript**, the magnifier, and type. The panel shows only the lines that match. Press `Enter` for the next match and `Shift+Enter` for the previous one. Press `Escape` or select **Close find** to show every line again.
-- **Save as note** saves the feed's transcript as a note, as **PodNotes: Transcribe current episode** does. It never transcribes the audio. Once the episode's transcript note exists, the button reads **Open note** and opens it. In a narrow sidebar, the button shows only its icon. See [Transcribe episodes](/transcripts/#read-the-transcript-in-the-player).
+- **Save as note** saves the feed's transcript as a note, as **PodNotes: Transcribe current episode** does. It never transcribes the audio. Once the episode's transcript note exists, the button reads **Open note** and opens it. Where the panel is narrow, such as in the sidebar or on a phone, the button shows only its icon: a page with a plus sign for **Save as note**, or a page with lines for **Open note**. See [Transcribe episodes](/transcripts/#read-the-transcript-in-the-player).
 
-When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers a button marked **Paid**: **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram. It transcribes the audio with your own API key, and your provider bills you for it. Without the key on this device, a notice asks you to add it. The result is a transcript note, which PodNotes opens. The panel shows only transcripts that feeds publish. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key) and [What transcription costs](/transcripts/#what-transcription-costs). When the episode's transcript note already exists, the panel offers **Open note** instead, also next to **Retry** when the transcript did not load. Offline, the transcribe button and **Save as note** are turned off, and **Open note** still works.
+When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram, with a **Paid** tag:
+
+- The button transcribes the audio with your own API key, and your provider bills you for it. See [What transcription costs](/transcripts/#what-transcription-costs).
+- Without the key on this device, a notice asks you to add it. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key).
+- The result is a transcript note, which PodNotes opens. The panel shows only transcripts that feeds publish, so it does not show the note's lines.
+- Once the episode's transcript note exists, the panel offers **Open note** in place of the paid button, and also next to **Retry** when the transcript did not load.
+- Offline, the paid button and **Save as note** are turned off, and **Open note** still works.
 
 ### Up next
 
 The panel shows the episodes in the queue and their total time left. Select an episode to play it.
 
 - To reorder, drag an episode by its grip, the six dots on its left. With the keyboard, move the focus to the grip and press `Up` or `Down`.
-- To remove an episode, select its **Remove from queue** button, the cross on its right.
+- To remove an episode, select the cross on the right of its row.
 - **Edit** opens the Queue page. See [Use the queue and playlists](/playlists/).
 
 ## Use the keyboard
@@ -119,7 +125,7 @@ If your system is set to reduce motion, the PodNotes view turns off its animatio
 
 ## Watch video
 
-A video episode plays in the full player while the PodNotes view is in the main window. Select the video to play or pause. To watch it on the whole screen, select **Fullscreen**, the button at its bottom right. To leave full screen, select the same button, now **Exit fullscreen**, or press `Escape`. That first `Escape` only leaves full screen and keeps the full player open. On an iPhone or iPad, the video plays in the system's own full-screen player.
+A video episode plays in the full player while the PodNotes view is in the main window. Select the video to play or pause. To watch it on the whole screen, select **Fullscreen**, the button at its bottom right. To leave full screen, select the same button, now **Exit fullscreen**, or press `Escape`. That first `Escape` only leaves full screen and keeps the full player open. On an iPhone, **Fullscreen** opens the video in the system's own full-screen player, which you leave with that player's own control.
 
 When the PodNotes view is in a popout window, the player there shows the episode's artwork, and the video keeps playing. In a narrow view, an open panel takes the video's place while the video plays.
 

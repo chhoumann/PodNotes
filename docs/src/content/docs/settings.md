@@ -6,7 +6,7 @@ description: Every PodNotes setting, in the order the settings tab shows it, wit
 
 Look up any PodNotes setting, its default, and what it does. The settings live in **Settings → PodNotes**, and the sections below follow the tab from top to bottom. In the PodNotes view, **Settings** in the list on the left, or the **PodNotes settings** gear in a narrow view, opens the same tab.
 
-To find a setting, type its name in the search field at the top of Obsidian's settings window. Each PodNotes setting is its own result. `headset`, `lock screen`, and `media keys` find **Previous track** and **Next track**.
+To find a setting, type its name in the search field at the top of Obsidian's settings window. Each PodNotes setting is its own result. Searching for `headset`, `lock screen`, or `media keys` finds **Previous track** and **Next track**.
 
 A toggle or a dropdown saves at once. A text or number field takes effect as you type, and PodNotes saves it after you pause typing for half a second, or when you leave the field or close the settings. If you quit or reload Obsidian before that save, PodNotes does not save what you typed since the last save.
 

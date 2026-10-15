@@ -14,7 +14,7 @@ To download the episode in the player:
 
 To download any other episode:
 
-1. Right-click the episode, or select its **More options** button, the three dots at the end of its row.
+1. Right-click the episode, or select the three-dot button at the end of its row.
 2. Select **Download**.
 
 A notice shows the progress. PodNotes saves the file in your vault at **Download path**, `PodNotes/{{podcast}}/{{title}}` by default, and adds the file extension.
@@ -46,7 +46,7 @@ The **Local files** page lists every episode you have offline: your downloads an
 
 ## Remove a download or a local file
 
-1. Right-click the episode, or select its **More options** button.
+1. Right-click the episode, or select the three-dot button at the end of its row.
 2. Select **Remove download** for a download, or **Remove from Local files** for your own file.
 
 **Remove from Local files** keeps your file in the vault. **Remove download** removes the episode from **Local files** and moves its file to the trash.

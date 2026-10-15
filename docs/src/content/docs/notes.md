@@ -17,7 +17,7 @@ Create a note for the episode you are listening to, with the episode's details a
 
 The episode does not have to play.
 
-1. In an episode list, right-click the episode, or select its **More options** button, the three dots at the end of its row.
+1. In an episode list, right-click the episode, or select the three-dot button at the end of its row.
 2. Select **Create note**. Once the note exists, the item reads **Open note**.
 
 The [episode menu reference](/podcasts/#episode-menu-reference) lists the other items.

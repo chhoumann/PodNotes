@@ -68,7 +68,7 @@ A capture from a headset goes where a capture command goes, and shows the same n
 
 ## Download an episode
 
-Download episodes while you are online, and wait for the notice that says each download succeeded. On a phone, the episode menu opens from the **More options** button, the three dots at the end of an episode's row. See [Download an episode](/local_files/#download-an-episode).
+Download episodes while you are online, and wait for the notice that says each download succeeded. On a phone, the episode menu opens from the three-dot button at the end of an episode's row. See [Download an episode](/local_files/#download-an-episode).
 
 If the episode is playing when its download finishes, it keeps playing without a break. PodNotes plays the downloaded file the next time it loads the episode. Offline, the view shows **Offline** at the top and splits lists into **Available offline** and **Needs a connection**. See [Listen offline](/local_files/#listen-offline).
 

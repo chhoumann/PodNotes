@@ -22,13 +22,15 @@ The podcast syncs to your other devices, but its address does not. On each other
 1. On a device that already has PodNotes, update it to 2.22.0 or later before you use PodNotes there. An older PodNotes does not [merge changes](/sync/#changes-on-two-devices), so it can overwrite the library that sync brings.
 2. Let your sync service bring your vault to the device. It must include PodNotes' plugin folder, as [What syncs](/sync/#what-syncs) describes. With Obsidian Sync, turn on **Active community plugin list** and **Installed community plugins** under **Vault configuration sync** on every device. On a new device, these two settings also bring PodNotes itself.
 3. If PodNotes is still not on the device, install it. The podcast then appears on the device. Do not add it again from its address.
-4. Copy the private feed address from your podcast provider again, such as from your Supercast account. PodNotes does not show it.
+4. Copy the private feed address from your podcast provider again, such as from your Supercast account. The PodNotes view does not show it.
 5. In the PodNotes view, open the podcast. Its page shows **Feed didn't load** and **Address not on this device**.
 6. Select **Set feed address**. The podcast's menu, from its **Podcast options** button, has the same item.
 7. Paste the address into **Feed address**.
 8. Select **Save**.
 
 PodNotes stores the address on this device and loads the feed. From then on, the podcast and its timestamp links work on this device too.
+
+To set many addresses at once, export an OPML file on a device where the podcasts play, and import it on this one. The file holds the addresses in plain text, so delete it afterwards. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
 
 PodNotes does not check that the address belongs to the same show, so paste the address of that podcast. If you try to add the podcast again from its address instead, a notice says, for example, `The private feed address for "Members Show" is not available on this device.` Use **Set feed address** instead.
 

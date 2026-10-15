@@ -24,7 +24,7 @@ After each capture, a notice says "Timestamp added to" and the note's name, or "
 
 1. In the notice, select **Undo**.
 
-PodNotes takes the timestamp out and puts the note back as the capture found it, but only while the note is exactly as the capture left it. If you typed in the note since, the notice says "The note isn't as the capture left it, so the timestamp stays", and the note stays as it is. Delete the timestamp by hand instead. The editor's own undo, `Ctrl+Z` or `Command+Z` on macOS, also works, but it takes back your typing first. Undo never deletes a note that the capture created. It removes only the timestamp.
+PodNotes takes the timestamp out, and puts back any selected text that it replaced, but only while the note is exactly as the capture left it. If you typed in the note since, the notice says "The note isn't as the capture left it, so the timestamp stays", and the note stays as it is. Delete the timestamp by hand instead. The editor's own undo, `Ctrl+Z` or `Command+Z` on macOS, also works, but it takes back your typing first. Undo never deletes a note that the capture created. It removes only the timestamp.
 
 ## Choose where a timestamp goes
 
