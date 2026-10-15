@@ -625,6 +625,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			doc: (restored
 				? redactPrivateFeedAddresses(doc, addresses)
 				: doc) as PersistedPodNotesDataV2,
+			rewrite: redactPrivateFeedAddresses(data, addresses) !== data,
 		};
 	}
 

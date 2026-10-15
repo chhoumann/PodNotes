@@ -1,10 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, test } from "vitest";
+import { expect, onTestFinished, test } from "vitest";
+import { SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import released2211 from "../fixtures/persistence/released-2.21.1.json";
 import { createPodNotesE2EHarness } from "./harness";
 import { showLibrary, showPodNotes } from "./journey/actions";
 import { recordWrites } from "./journey/library";
+import { type FixtureFeed, startFixtureServer } from "./journey/fixtures";
 import { holdsFor, shownPodcasts } from "./journey/wait";
 import { jsLiteral, RELOAD_OPTIONS, WAIT_OPTS } from "./runtime";
 
@@ -21,10 +23,26 @@ test.each(["raw event", "external settings handler"])(
 		await showPodNotes(obsidian);
 		const path = await plugin.dataPath();
 		const sentinel = "FIX488_ADOPTED_SENTINEL";
-		const address = `https://priv3.supercast.com/feeds/${sentinel}`;
+		const feed: FixtureFeed = {
+			title: "Private",
+			slug: "adopted-private",
+			host: SUPERCAST_FIXTURE_HOST,
+			path: `/feeds/${sentinel}`,
+			artwork: true,
+			episodes: [],
+		};
+		const server = await startFixtureServer([feed]);
+		onTestFinished(() => server.stop());
+		const address = server.feedUrl(feed);
 		const data: Record<string, unknown> = {
 			...structuredClone(released2211),
-			savedFeeds: { Private: { title: "Private", url: address, artworkUrl: "" } },
+			savedFeeds: {
+				Private: {
+					title: "Private",
+					url: address,
+					artworkUrl: server.artworkUrl(feed),
+				},
+			},
 			copiedNote: `from ${address}`,
 		};
 		delete data.currentEpisode;

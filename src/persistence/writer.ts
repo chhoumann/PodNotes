@@ -24,8 +24,9 @@ export interface Refusal {
 	readonly message: string;
 }
 
+/** `rewrite`: the file still holds a private address that `doc` protects. */
 export type ReadOutcome<Doc> =
-	| { readonly kind: "file"; readonly doc: Doc }
+	| { readonly kind: "file"; readonly doc: Doc; readonly rewrite?: boolean }
 	| { readonly kind: "missing" }
 	| { readonly kind: "refused"; readonly refusal: Refusal };
 
@@ -103,6 +104,7 @@ export class DataFileWriter<Doc> {
 	private lastSaveAt = Number.NEGATIVE_INFINITY;
 	/** A write that failed, and the memory it was made from. It may have reached disk anyway. */
 	private failedWrite: { local: Doc; written: Doc } | null = null;
+	private rewritePending = false;
 	/** What PodNotes last loaded or wrote; null until a readable file was loaded. */
 	private base: Doc | null;
 	private refusal: Refusal | null;
@@ -224,7 +226,12 @@ export class DataFileWriter<Doc> {
 	}
 
 	private pending(): boolean {
-		return this.refusal !== null || this.failedWrite !== null || this.hasUnsavedEdits();
+		return (
+			this.rewritePending ||
+			this.refusal !== null ||
+			this.failedWrite !== null ||
+			this.hasUnsavedEdits()
+		);
 	}
 
 	private refuse(refusal: Refusal): void {
@@ -330,6 +337,7 @@ export class DataFileWriter<Doc> {
 				this.scheduleCheckpoint();
 				throw error;
 			}
+			this.rewritePending = false;
 			if (outcome.kind === "verified") {
 				this.failedWrite = null;
 				this.settle(local, toWrite);
@@ -371,6 +379,7 @@ export class DataFileWriter<Doc> {
 			this.refuse(read.refusal);
 			return;
 		}
+		this.rewritePending = read.kind === "file" && read.rewrite === true;
 		const disk = read.kind === "file" ? read.doc : null;
 		if (this.refusal && this.base !== null) {
 			this.lastSaveAt = this.clock.now();
@@ -379,10 +388,13 @@ export class DataFileWriter<Doc> {
 		}
 		if (!disk) return;
 		this.settleFailedWrite(disk);
-		if (this.base && jsonValuesEqual(disk, this.base)) return;
+		if (this.base && jsonValuesEqual(disk, this.base)) {
+			if (this.rewritePending) this.request();
+			return;
+		}
 
 		const merged = this.adopt(disk, this.local());
-		if (jsonValuesEqual(merged, disk)) this.cancelTimer();
+		if (!this.rewritePending && jsonValuesEqual(merged, disk)) this.cancelTimer();
 		else this.request();
 	}
 

@@ -286,7 +286,7 @@ describe("private addresses adopted from sync", () => {
 		expect(save).toHaveBeenCalledTimes(1);
 	});
 
-	it("does not rewrite a 2.21.1 document for codec normalization alone", async () => {
+	it("does not rewrite a 2.21.1 document just to add its library id", async () => {
 		const plugin = makePlugin();
 		await plugin.loadSettings();
 		attachDataFileWriter(plugin);
@@ -1321,7 +1321,7 @@ describe("PodNotes persistence integration", () => {
 					persistenceMerge.jsonValuesEqual(result.value, repairs.mock.calls[index][1]),
 			),
 		).toBe(true);
-		expect(redactions).toHaveBeenCalledTimes(5);
+		expect(redactions).toHaveBeenCalledTimes(6);
 		expect(saveData).toHaveBeenCalledTimes(1);
 		expect(saveData.mock.lastCall?.[0]).toMatchObject({
 			defaultVolume: 0.4,

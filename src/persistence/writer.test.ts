@@ -97,6 +97,10 @@ describe("adopted documents that need a rewrite", () => {
 	it("rereads before writing and waits when the file becomes unreadable", async () => {
 		const { access, clock, state, writer } = setup();
 		const protectedRead = { kind: "file" as const, doc: doc(), rewrite: true };
+		state.disk = withFeed(doc(), "Raw");
+		access.read.mockImplementation(async () =>
+			state.disk?.savedFeeds.Raw ? protectedRead : found(state.disk),
+		);
 		access.read.mockResolvedValueOnce(protectedRead).mockResolvedValueOnce(refused(UNREADABLE));
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -115,6 +119,10 @@ describe("adopted documents that need a rewrite", () => {
 	it("keeps rewrite work through a failed write and retries it once", async () => {
 		const { access, clock, state, writer } = setup();
 		const protectedRead = { kind: "file" as const, doc: doc(), rewrite: true };
+		state.disk = withFeed(doc(), "Raw");
+		access.read.mockImplementation(async () =>
+			state.disk?.savedFeeds.Raw ? protectedRead : found(state.disk),
+		);
 		access.read.mockResolvedValueOnce(protectedRead).mockResolvedValueOnce(protectedRead);
 		access.write.mockRejectedValueOnce(new Error("disk full"));
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -128,6 +136,8 @@ describe("adopted documents that need a rewrite", () => {
 		clock.runAll();
 		await settled();
 		expect(state.writes).toEqual([doc()]);
+		await writer.flush();
+		expect(access.write).toHaveBeenCalledTimes(2);
 		await writer.onExternalChange();
 		await writer.flush();
 		expect(access.write).toHaveBeenCalledTimes(2);
