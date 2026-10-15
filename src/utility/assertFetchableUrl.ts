@@ -129,7 +129,6 @@ function parseIpv6(value: string): bigint | undefined {
 	}
 
 	const combined = [...left, ...right];
-	if (combined.some((piece) => piece.includes("."))) return undefined;
 	if (combined.some((piece) => !/^[0-9a-f]{1,4}$/.test(piece))) return undefined;
 	if (compressionIndex === -1 && combined.length !== 8) return undefined;
 	if (compressionIndex !== -1 && combined.length >= 8) return undefined;
@@ -139,7 +138,6 @@ function parseIpv6(value: string): bigint | undefined {
 		compressionIndex === -1
 			? combined
 			: [...left, ...Array.from({ length: missing }, () => "0"), ...right];
-	if (hextets.length !== 8) return undefined;
 
 	let address = 0n;
 	for (const hextet of hextets) address = (address << 16n) | BigInt(`0x${hextet}`);
@@ -204,11 +202,7 @@ function containsUnsafeCodePoint(value: string): boolean {
 		if (codeUnit < 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) return true;
 		if (
 			codeUnit === 0x061c ||
-			codeUnit === 0x200b ||
-			codeUnit === 0x200c ||
-			codeUnit === 0x200d ||
-			codeUnit === 0x200e ||
-			codeUnit === 0x200f ||
+			(codeUnit >= 0x200b && codeUnit <= 0x200f) ||
 			(codeUnit >= 0x2028 && codeUnit <= 0x202e) ||
 			(codeUnit >= 0x2066 && codeUnit <= 0x2069) ||
 			codeUnit === 0xfeff
@@ -231,14 +225,9 @@ function classifyHostname(hostname: string): HostClassification {
 		labels.length === 1 ||
 		labels.some((label) => label.length === 0 || label.length > 63) ||
 		hostname.length > 253 ||
-		hostname === "localhost" ||
-		hostname.endsWith(".localhost") ||
-		hostname === "local" ||
-		hostname.endsWith(".local") ||
-		hostname === "internal" ||
-		hostname.endsWith(".internal") ||
-		hostname === "home.arpa" ||
-		hostname.endsWith(".home.arpa")
+		["localhost", "local", "internal", "home.arpa"].some(
+			(domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+		)
 	) {
 		return "non-public-or-special-literal";
 	}

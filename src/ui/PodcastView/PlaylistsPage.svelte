@@ -1,3 +1,7 @@
+<!-- Without a rune, Svelte compiles a component in legacy mode, and one such component keeps
+     Svelte's legacy runtime in main.js. -->
+<svelte:options runes />
+
 <script lang="ts">
 	import type { IconType } from "src/types/IconType";
 	import type { Playlist } from "src/types/Playlist";

@@ -27,7 +27,7 @@ export async function fetchChapters(chaptersUrl: string): Promise<Chapter[]> {
 
 		const data: ChaptersData = JSON.parse(responseText);
 
-		if (!data.chapters || !Array.isArray(data.chapters)) {
+		if (!Array.isArray(data.chapters)) {
 			return [];
 		}
 

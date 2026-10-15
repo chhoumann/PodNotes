@@ -2,6 +2,7 @@ import {
 	MarkdownView,
 	Notice,
 	type Editor,
+	type EditorSelection,
 	type MarkdownFileInfo,
 	type TFile,
 	type WorkspaceLeaf,
@@ -23,10 +24,11 @@ export interface Capture {
 	created: boolean;
 }
 
-/** A note's text as a capture found it and as it left it. */
+/** A note's text as a capture found it and as it left it, and the caret it found in its editor. */
 interface Snapshot {
 	readonly before: string;
 	readonly after: string;
+	readonly caret?: { readonly editor: Editor; readonly selections: EditorSelection[] };
 }
 
 /** Puts a capture where the user writes: the editor they used last, else the episode note. */
@@ -101,11 +103,12 @@ export class CaptureService {
 				cursorLine: editor.getCursor("from").line,
 			});
 			const before = editor.getValue();
+			const caret = { editor, selections: editor.listSelections() };
 			endDetachedTableCell(editor);
 			const cell = tableCellWriter(editor);
 			if (cell) cell(inserted);
 			else editor.replaceSelection(inserted);
-			const snapshot = { before, after: editor.getValue() };
+			const snapshot = { before, after: editor.getValue(), caret };
 			// Outside a note's own view, as in a canvas card, the editor's text need not be
 			// its file's, so only that editor can take the capture back.
 			const undo =
@@ -212,11 +215,8 @@ export class CaptureService {
 	}
 }
 
-/**
- * Puts back only the stretch the capture changed, so the caret and the editor's own
- * undo history stay.
- */
-function revertIn(editor: Editor, { before, after }: Snapshot): boolean {
+/** Puts back only the stretch the capture changed, so the editor's own undo history stays. */
+function revertIn(editor: Editor, { before, after, caret }: Snapshot): boolean {
 	if (editor.getValue() !== after) return false;
 	endDetachedTableCell(editor);
 	let from = 0;
@@ -239,6 +239,9 @@ function revertIn(editor: Editor, { before, after }: Snapshot): boolean {
 		editor.offsetToPos(from),
 		editor.offsetToPos(after.length - tail),
 	);
+	// When Obsidian padded the table around the cell, the stretch holds the caret, and the
+	// edit moves it to the stretch's start, before the table.
+	if (caret?.editor === editor) editor.setSelections(caret.selections);
 	return true;
 }
 

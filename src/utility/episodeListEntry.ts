@@ -47,18 +47,9 @@ function createPlayedEpisodeListEntry(
 ): PlayedEpisodeListEntry {
 	const episode = resolvePlayedEpisode(key, playedEpisode, episodeLookup);
 
-	if (episode) {
-		return {
-			episode,
-			isAvailable: true,
-			playedEpisode,
-			playedEpisodeKey: key,
-		};
-	}
-
 	return {
-		episode: createPlayedEpisodePlaceholder(playedEpisode),
-		isAvailable: false,
+		episode: episode ?? createPlayedEpisodePlaceholder(playedEpisode),
+		isAvailable: !!episode,
 		playedEpisode,
 		playedEpisodeKey: key,
 	};

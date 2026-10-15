@@ -138,6 +138,19 @@ describe("API.getPodcastSegmentFormatted", () => {
 		);
 	});
 
+	test("formats the numeric strings that JavaScript workflows pass as times", () => {
+		const { api, player } = setup();
+		player.restore(feedEpisode);
+		const seconds = (value: string) => value as unknown as number;
+
+		expect(
+			api.getPodcastSegmentFormatted("HH:mm:ss", seconds("115"), seconds("125"), true),
+		).toBe("00:01:55-00:02:05");
+		expect(api.getPodcastSegmentFormatted("HH:mm:ss", 115, seconds("125"))).toBe(
+			"00:01:55-00:02:05",
+		);
+	});
+
 	test("seeking through the public API ends a segment link's stop", () => {
 		const { api, player, media } = setup();
 		player.play(feedEpisode, { time: 115, endTime: 125 });

@@ -59,6 +59,14 @@ function chunkErrorPlaceholder(index: number): string {
 }
 const CHUNK_ERROR_PLACEHOLDER_PATTERN = /\[Error transcribing chunk \d+\]/g;
 
+const MAX_RETRIES = 3;
+const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
+const MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
+
+function queueKey(episode: Episode): string {
+	return `${episode.podcastName}:${episode.title}`;
+}
+
 interface TranscriptionJob {
 	readonly episode: Episode;
 	readonly source:
@@ -70,10 +78,8 @@ export class TranscriptionService {
 	private plugin: PodNotes;
 	private disposed = false;
 	private readonly lifetimeAbortController = new AbortController();
+	private readonly signal = this.lifetimeAbortController.signal;
 	private readonly activeNotices = new Set<ReturnType<typeof TimerNotice>>();
-	private MAX_RETRIES = 3;
-	private readonly MAX_CONCURRENT_TRANSCRIPTIONS = 2;
-	private readonly MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
 	private pendingJobs: TranscriptionJob[] = [];
 	private activeTranscriptions = new Set<string>();
 
@@ -96,7 +102,7 @@ export class TranscriptionService {
 				findPublishedTranscript(this.plugin.feeds, episode),
 			);
 		} catch (error) {
-			if (this.disposed || this.lifetimeAbortController.signal.aborted) return;
+			if (this.disposed || this.signal.aborted) return;
 			throw error;
 		}
 
@@ -157,11 +163,10 @@ export class TranscriptionService {
 			return;
 		}
 
-		const episodeKey = this.getEpisodeKey(job.episode);
+		const episodeKey = queueKey(job.episode);
 		const isAlreadyQueued =
-			this.pendingJobs.some(
-				(pending) => this.getEpisodeKey(pending.episode) === episodeKey,
-			) || this.activeTranscriptions.has(episodeKey);
+			this.pendingJobs.some((pending) => queueKey(pending.episode) === episodeKey) ||
+			this.activeTranscriptions.has(episodeKey);
 
 		if (isAlreadyQueued) {
 			new Notice("This episode is already queued or transcribing.");
@@ -179,7 +184,7 @@ export class TranscriptionService {
 			return;
 		}
 		while (
-			this.activeTranscriptions.size < this.MAX_CONCURRENT_TRANSCRIPTIONS &&
+			this.activeTranscriptions.size < MAX_CONCURRENT_TRANSCRIPTIONS &&
 			this.pendingJobs.length > 0
 		) {
 			const job = this.pendingJobs.shift();
@@ -187,7 +192,7 @@ export class TranscriptionService {
 				return;
 			}
 
-			const episodeKey = this.getEpisodeKey(job.episode);
+			const episodeKey = queueKey(job.episode);
 			this.activeTranscriptions.add(episodeKey);
 
 			void this.transcribeEpisode(job).finally(() => {
@@ -195,10 +200,6 @@ export class TranscriptionService {
 				if (!this.disposed) this.drainQueue();
 			});
 		}
-	}
-
-	private getEpisodeKey(episode: Episode): string {
-		return `${episode.podcastName}:${episode.title}`;
 	}
 
 	private async transcribeEpisode({ episode, source }: TranscriptionJob): Promise<void> {
@@ -230,7 +231,7 @@ export class TranscriptionService {
 			notice.stop();
 			updateNotice(completion);
 		} catch (error) {
-			if (this.disposed || this.lifetimeAbortController.signal.aborted) return;
+			if (this.disposed || this.signal.aborted) return;
 			console.error("Transcription error:", error);
 			notice.stop();
 			updateNotice(
@@ -256,12 +257,7 @@ export class TranscriptionService {
 	): Promise<{ body: string; completion: string }> {
 		updateNotice("Fetching the published transcript...");
 		const parsed = await this.waitForLifecycle(
-			fetchPublishedTranscript(
-				this.plugin.feeds,
-				episode,
-				transcript,
-				this.lifetimeAbortController.signal,
-			),
+			fetchPublishedTranscript(this.plugin.feeds, episode, transcript, this.signal),
 		);
 		const { timestamp, transcript: settings } = this.plugin.settings;
 		const body = renderTranscriptBody(parsed, {
@@ -379,7 +375,7 @@ export class TranscriptionService {
 					audio,
 					apiKey,
 					onProgress: updateNotice,
-					signal: this.lifetimeAbortController.signal,
+					signal: this.signal,
 				}),
 			);
 			this.assertActive();
@@ -395,9 +391,9 @@ export class TranscriptionService {
 		const segments = await diarizeWithOpenAI({
 			apiKey: this.getApiKey(),
 			chunkFiles,
-			maxRetries: this.MAX_RETRIES,
+			maxRetries: MAX_RETRIES,
 			onProgress: updateNotice,
-			signal: this.lifetimeAbortController.signal,
+			signal: this.signal,
 		});
 		this.assertActive();
 		return segments;
@@ -430,13 +426,13 @@ export class TranscriptionService {
 				const file = files[index];
 
 				let retries = 0;
-				while (retries < this.MAX_RETRIES) {
+				while (retries < MAX_RETRIES) {
 					this.assertActive();
 					try {
 						const result = await createTranscription(
 							apiKey,
 							{ model: "whisper-1", file },
-							this.lifetimeAbortController.signal,
+							this.signal,
 						);
 						this.assertActive();
 						const text = (result as { text?: unknown } | null)?.text;
@@ -450,9 +446,9 @@ export class TranscriptionService {
 					} catch (error) {
 						this.assertActive();
 						retries++;
-						if (retries >= this.MAX_RETRIES) {
+						if (retries >= MAX_RETRIES) {
 							console.error(
-								`Failed to transcribe chunk ${index} after ${this.MAX_RETRIES} attempts:`,
+								`Failed to transcribe chunk ${index} after ${MAX_RETRIES} attempts:`,
 								error,
 							);
 							transcriptions[index] = chunkErrorPlaceholder(index);
@@ -467,7 +463,7 @@ export class TranscriptionService {
 			}
 		};
 
-		const workerCount = Math.min(this.MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS, files.length);
+		const workerCount = Math.min(MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS, files.length);
 		const workers = Array.from({ length: workerCount }, () => worker());
 
 		await Promise.all(workers);
@@ -478,7 +474,7 @@ export class TranscriptionService {
 
 	private waitForRetry(delayMs: number): Promise<void> {
 		this.assertActive();
-		const signal = this.lifetimeAbortController.signal;
+		const { signal } = this;
 
 		return new Promise((resolve, reject) => {
 			const timeout = window.setTimeout(() => {
@@ -498,42 +494,17 @@ export class TranscriptionService {
 
 	private waitForLifecycle<T>(operation: Promise<T>): Promise<T> {
 		this.assertActive();
-		const signal = this.lifetimeAbortController.signal;
+		const { signal } = this;
 
 		return new Promise((resolve, reject) => {
-			let settled = false;
-			const cleanup = () => signal.removeEventListener("abort", onAbort);
-			const onAbort = () => {
-				if (settled) return;
-				settled = true;
-				cleanup();
+			const onAbort = () =>
 				reject(toError(this.getAbortReason(), "PodNotes transcription was aborted."));
-			};
-
 			signal.addEventListener("abort", onAbort, { once: true });
-			void operation.then(
-				(value) => {
-					if (settled) return;
-					if (signal.aborted) {
-						onAbort();
-						return;
-					}
-					settled = true;
-					cleanup();
-					resolve(value);
-				},
-				(error) => {
-					if (settled) return;
-					if (signal.aborted) {
-						onAbort();
-						return;
-					}
-					settled = true;
-					cleanup();
-					reject(toError(error, "PodNotes transcription failed."));
-				},
-			);
-			if (signal.aborted) onAbort();
+			void operation
+				.then(resolve, (error: unknown) =>
+					reject(toError(error, "PodNotes transcription failed.")),
+				)
+				.finally(() => signal.removeEventListener("abort", onAbort));
 		});
 	}
 
@@ -595,14 +566,14 @@ export class TranscriptionService {
 	}
 
 	private assertActive(): void {
-		if (this.disposed || this.lifetimeAbortController.signal.aborted) {
+		if (this.disposed || this.signal.aborted) {
 			throw this.getAbortReason();
 		}
 	}
 
 	private getAbortReason(): unknown {
 		return (
-			this.lifetimeAbortController.signal.reason ??
+			this.signal.reason ??
 			new DOMException("PodNotes was unloaded during transcription.", "AbortError")
 		);
 	}

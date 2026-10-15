@@ -50,7 +50,6 @@ interface DownloadedFile {
 	 */
 	data: ArrayBuffer;
 	contentType: string;
-	byteLength: number;
 }
 
 function downloadRequestError(error: unknown): Error {
@@ -74,10 +73,9 @@ async function downloadFile(url: string): Promise<DownloadedFile> {
 		throw downloadRequestError(error);
 	}
 
-	const data = response.arrayBuffer;
 	const contentType = response.headers["content-type"] ?? response.headers["Content-Type"] ?? "";
 
-	return { data, contentType, byteLength: data.byteLength };
+	return { data: response.arrayBuffer, contentType };
 }
 
 function parentFolderPath(filePath: string): string {
@@ -291,8 +289,8 @@ function createNoticeDoc(title: string) {
 
 	return {
 		doc,
-		update: (updateFn: (bodyEl: HTMLDivElement) => void, empty = true) => {
-			if (empty) bodyEl.empty();
+		update: (updateFn: (bodyEl: HTMLDivElement) => void) => {
+			bodyEl.empty();
 			updateFn(bodyEl);
 		},
 	};
@@ -594,7 +592,7 @@ export async function getEpisodeAudioBuffer(
 	if (episodeMediaType !== "audio") {
 		throw new Error("Transcription supports audio episodes only.");
 	}
-	const audioContainerHint = getAudioContainerHint(episode, episodeMediaType);
+	const audioContainerHint = getAudioContainerHint(episode);
 
 	if (isLocalFile(episode)) {
 		const localFilePath = resolveLocalEpisodeFilePath(episode);
@@ -604,7 +602,7 @@ export async function getEpisodeAudioBuffer(
 			);
 		}
 
-		return readVaultAudio(localFilePath, episodeMediaType);
+		return readVaultAudio(localFilePath);
 	}
 
 	// Reuse a previously downloaded file only when the registry entry is the SAME
@@ -626,7 +624,7 @@ export async function getEpisodeAudioBuffer(
 
 		const existingFile = app.vault.getAbstractFileByPath(registered.filePath);
 		if (existingFile instanceof TFile) {
-			return readVaultAudio(registered.filePath, registeredMediaType);
+			return readVaultAudio(registered.filePath);
 		}
 	}
 
@@ -649,11 +647,7 @@ export async function getEpisodeAudioBuffer(
 	}
 }
 
-function getAudioContainerHint(
-	episode: Episode,
-	episodeMediaType: EpisodeMediaType,
-): EpisodeMediaType | undefined {
-	if (episodeMediaType !== "audio") return undefined;
+function getAudioContainerHint(episode: Episode): EpisodeMediaType | undefined {
 	if (episode.mediaType === "audio") return "audio";
 
 	return isAudioContainerExtension(getUrlExtension(episode.streamUrl)) ? "audio" : undefined;
@@ -661,7 +655,6 @@ function getAudioContainerHint(
 
 async function readVaultAudio(
 	filePath: string,
-	mediaTypeHint?: EpisodeMediaType,
 ): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
 	const { app } = get(plugin);
 	const file = app.vault.getAbstractFileByPath(filePath);
@@ -670,10 +663,7 @@ async function readVaultAudio(
 	}
 
 	const fileExtension = file.extension || getUrlExtension(file.path || filePath) || "";
-	const explicitAudioContainer =
-		mediaTypeHint === "audio" &&
-		(fileExtension.toLowerCase() === "mp4" || fileExtension.toLowerCase() === "webm");
-	const mediaType = explicitAudioContainer
+	const mediaType = isAudioContainerExtension(fileExtension)
 		? "audio"
 		: (getMediaTypeFromExtension(fileExtension) ?? getMediaTypeFromPath(file.path || filePath));
 	if (mediaType !== "audio") {
@@ -683,10 +673,7 @@ async function readVaultAudio(
 	const buffer = await app.vault.readBinary(file);
 	return {
 		buffer,
-		extension:
-			mediaTypeHint === "audio" && fileExtension.toLowerCase() === "mp4"
-				? "m4a"
-				: fileExtension,
+		extension: fileExtension.toLowerCase() === "mp4" ? "m4a" : fileExtension,
 		basename: file.basename || getFileBasename(file.path || filePath),
 	};
 }

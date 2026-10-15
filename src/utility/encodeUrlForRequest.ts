@@ -1,9 +1,3 @@
-const PARENTHESIS_REGEXP = /[()]/g;
-const PARENTHESIS_LOOKUP: Record<string, string> = {
-	"(": "%28",
-	")": "%29",
-};
-
 /**
  * Ensures URLs are safe to send over the network by percent-encoding
  * whitespace plus characters that certain private feed hosts require,
@@ -20,8 +14,7 @@ export function encodeUrlForRequest(rawUrl: string): string {
 		normalized = encodeWhitespace(trimmed);
 	}
 
-	const encoded = normalized;
-	return encoded.replace(PARENTHESIS_REGEXP, (char) => PARENTHESIS_LOOKUP[char] ?? char);
+	return normalized.replace(/\(/g, "%28").replace(/\)/g, "%29");
 }
 
 function encodeWhitespace(value: string): string {
