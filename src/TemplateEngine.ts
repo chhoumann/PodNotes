@@ -270,6 +270,11 @@ function feedHtmlToMarkdown(html: string, source: object): string {
 	);
 }
 
+/** The lines, each after `prependToLines` when the tag has one. */
+function joinLines(lines: string[], prependToLines?: string): string {
+	return (prependToLines ? lines.map((line) => `${prependToLines}${line}`) : lines).join("\n");
+}
+
 function formatTemplateChapters(chapters: Chapter[] | undefined, prependToLines?: string): string {
 	const lines = normalizeChapters(chapters ?? []).map((chapter) => {
 		const title = formatChapterTitle(chapter.title);
@@ -278,11 +283,7 @@ function formatTemplateChapters(chapters: Chapter[] | undefined, prependToLines?
 		return `- ${formatDuration(chapter.startTime)}${escapedTitle}`;
 	});
 
-	if (!prependToLines) {
-		return lines.join("\n");
-	}
-
-	return lines.map((line) => `${prependToLines}${line}`).join("\n");
+	return joinLines(lines, prependToLines);
 }
 
 /**
@@ -317,31 +318,18 @@ export function NoteTemplateEngine(
 	const episodeUrl = resolveEpisodeUrl(episode);
 
 	addTag("title", escapeMarkdownBodyText(episode.title));
-	addTag("description", (prependToLines?: string) => {
-		// reduce multiple new lines
-		const sanitizeDescription = feedHtmlToMarkdown(episode.description, liveEpisode).replace(
-			/\n{3,}/g,
-			"\n\n",
-		);
-		if (prependToLines) {
-			return sanitizeDescription
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return sanitizeDescription;
-	});
-	addTag("content", (prependToLines?: string) => {
-		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.content, liveEpisode)
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return feedHtmlToMarkdown(episode.content, liveEpisode);
-	});
+	addTag("description", (prependToLines?: string) =>
+		joinLines(
+			// reduce multiple new lines
+			feedHtmlToMarkdown(episode.description, liveEpisode)
+				.replace(/\n{3,}/g, "\n\n")
+				.split("\n"),
+			prependToLines,
+		),
+	);
+	addTag("content", (prependToLines?: string) =>
+		joinLines(feedHtmlToMarkdown(episode.content, liveEpisode).split("\n"), prependToLines),
+	);
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
 	addTag("stream", sanitizePortableResourceUrl(episode.streamUrl));
 	addTag("url", episodeUrl);
@@ -484,16 +472,9 @@ export function TranscriptTemplateEngine(
 		episode.duration !== undefined ? formatDuration(episode.duration, format) : "",
 	);
 	addTag("transcript", transcription);
-	addTag("description", (prependToLines?: string) => {
-		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.description, liveEpisode)
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return feedHtmlToMarkdown(episode.description, liveEpisode);
-	});
+	addTag("description", (prependToLines?: string) =>
+		joinLines(feedHtmlToMarkdown(episode.description, liveEpisode).split("\n"), prependToLines),
+	);
 	addTag("url", resolveEpisodeUrl(episode));
 	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
 
@@ -522,20 +503,14 @@ export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) 
 	addTag("artwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("feedartwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
-	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "", context).replace(
-			/\n{3,}/g,
-			"\n\n",
-		);
-		if (prependToLines) {
-			return sanitizeDescription
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return sanitizeDescription;
-	});
+	addTag("description", (prependToLines?: string) =>
+		joinLines(
+			feedHtmlToMarkdown(feed.description ?? "", context)
+				.replace(/\n{3,}/g, "\n\n")
+				.split("\n"),
+			prependToLines,
+		),
+	);
 	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
 
 	return replacer(template);
