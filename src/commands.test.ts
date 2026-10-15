@@ -391,6 +391,16 @@ describe("capture", () => {
 				"| Time | Note |\n| --- | --- |\n| Start | anchor- 00:20:34 |\nAfter",
 			);
 		});
+
+		it("still writes through a cell no longer in the document when Obsidian has no destroyTableCell", async () => {
+			const { run, editor, cell } = await inCell();
+			cell.containerEl.isConnected = false;
+			Reflect.deleteProperty(Reflect.get(editor, "editorComponent"), "destroyTableCell");
+
+			run("capture-timestamp");
+
+			expect(cell.editor.getValue()).toBe("anchor- 00:20:34");
+		});
 	});
 
 	it("goes to the episode note once the last editor's tab is closed", async () => {

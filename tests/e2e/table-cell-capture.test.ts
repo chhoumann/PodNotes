@@ -421,6 +421,24 @@ describe("Live Preview table captures", () => {
 		90_000,
 	);
 
+	test("#473 a capture into a cell of a note in a background tab keeps that cell open", async () => {
+		const { obsidian } = getContext();
+		const path = await setUp();
+		await obsidian.exec("command", { id: "workspace:new-tab" });
+		expect(
+			await obsidian.dev.evalJson(`(() => {
+				const cell = app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.editor.editorComponent.tableCell;
+				return { attached: cell.containerEl.isConnected, shown: cell.containerEl.isShown() };
+			})()`),
+			"the cell is in the document but not on screen",
+		).toEqual({ attached: true, shown: false });
+
+		await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+
+		await expectCell(path, "anchor00:00:30 \\| cut ");
+		expect(await cellText(path)).toBe("anchor00:00:30 | cut ");
+	});
+
 	test("#473 Undo puts the note back after a cell of another note in its tab went stale", async () => {
 		const { obsidian, sandbox } = getContext();
 		const wide = sandbox.path("Wide header.md");
