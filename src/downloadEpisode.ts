@@ -50,7 +50,6 @@ interface DownloadedFile {
 	 */
 	data: ArrayBuffer;
 	contentType: string;
-	byteLength: number;
 }
 
 function downloadRequestError(error: unknown): Error {
@@ -74,10 +73,9 @@ async function downloadFile(url: string): Promise<DownloadedFile> {
 		throw downloadRequestError(error);
 	}
 
-	const data = response.arrayBuffer;
 	const contentType = response.headers["content-type"] ?? response.headers["Content-Type"] ?? "";
 
-	return { data, contentType, byteLength: data.byteLength };
+	return { data: response.arrayBuffer, contentType };
 }
 
 function parentFolderPath(filePath: string): string {
