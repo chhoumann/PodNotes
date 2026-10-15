@@ -54,7 +54,6 @@
 			type="button"
 			class="pn-iconbtn pn-clear"
 			aria-label="Clear"
-			title="Clear"
 			onclick={() => {
 				oninput("");
 				input.focus();
@@ -65,13 +64,11 @@
 </div>
 
 <style>
-	.pn-search {
+	.pn-search :global {
 		position: relative;
 		flex: 1;
 		min-width: 0;
-	}
 
-	.pn-search :global {
 		.pn-search-icon {
 			position: absolute;
 			left: var(--size-4-2);
@@ -93,10 +90,6 @@
 			color: var(--text-muted);
 		}
 
-		.pn-input::-webkit-search-cancel-button {
-			display: none;
-		}
-
 		button.pn-clear {
 			position: absolute;
 			right: 2px;
@@ -105,45 +98,43 @@
 			width: 24px;
 			height: 24px;
 		}
-	}
 
-	:global(.is-phone) .pn-search :global {
-		.pn-input {
-			height: 44px;
-			padding-left: 34px;
+		.is-phone & {
+			.pn-input {
+				height: 44px;
+				padding: 0 44px 0 34px;
+			}
+
+			.pn-search-icon {
+				left: 12px;
+				--icon-size: 16px;
+			}
+
+			button.pn-clear {
+				right: 0;
+				width: 44px;
+				height: 44px;
+			}
 		}
 
-		.pn-search-icon {
-			left: 12px;
-			--icon-size: 16px;
+		&.is-large {
+			flex: none;
+			width: 100%;
+			max-width: 360px;
+
+			.pn-input {
+				height: 36px;
+				padding-left: 32px;
+			}
+
+			.pn-search-icon {
+				left: 10px;
+			}
 		}
 
-		button.pn-clear {
-			right: 0;
-			width: 44px;
-			height: 44px;
+		.is-phone &.is-large .pn-input {
+			height: 48px;
+			padding-left: 36px;
 		}
-	}
-
-	.pn-search.is-large {
-		flex: none;
-		width: 100%;
-		max-width: 360px;
-	}
-
-	.pn-search.is-large :global {
-		.pn-input {
-			height: 36px;
-			padding-left: 32px;
-		}
-
-		.pn-search-icon {
-			left: 10px;
-		}
-	}
-
-	:global(.is-phone) .pn-search.is-large :global(.pn-input) {
-		height: 48px;
-		padding-left: 36px;
 	}
 </style>

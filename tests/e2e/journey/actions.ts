@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchPodNotesInstance } from "../../../scripts/e2e-instance.mjs";
 import type { ObsidianClient } from "obsidian-e2e";
+import { onTestFinished } from "vitest";
 import {
 	loadRunnerConfig,
 	resolveInstanceOptions,
@@ -12,7 +13,7 @@ import {
 import { jsLiteral, PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../runtime";
 import { collectRuntimeErrors, POPOUT_RESIZE_LOOP } from "../runtime-evidence";
 import { cdp, click, clickAt, type Point, pressHotkey, typeInto } from "./input";
-import { ui } from "./targets";
+import { PLAYER_VIEW, ui } from "./targets";
 import { isShown, waitUntilShown } from "./wait";
 
 export async function dismissNotices(obsidian: ObsidianClient): Promise<void> {
@@ -40,6 +41,63 @@ export async function runCommand(obsidian: ObsidianClient, id: string): Promise<
 export async function showPodNotes(obsidian: ObsidianClient): Promise<void> {
 	await runCommand(obsidian, `${PLUGIN_ID}:podnotes-show-leaf`);
 	await waitUntilShown(obsidian, ui.podcastViewport);
+}
+
+/**
+ * Shows PodNotes in one leaf in the right sidebar, `width` px wide, in the main area,
+ * wherever an earlier test or tool left it, or in the right drawer, where it opens on a
+ * phone, and closes the leaves elsewhere.
+ */
+export async function placePodNotes(
+	obsidian: ObsidianClient,
+	place: { sidebar: number } | "main area" | "right drawer",
+): Promise<void> {
+	if (place === "right drawer") {
+		await obsidian.dev.evalJson(
+			`app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)}), true`,
+		);
+		await showPodNotes(obsidian);
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					`Boolean(document.querySelector(${jsLiteral(PLAYER_VIEW)})?.closest(".workspace-drawer.mod-right"))`,
+				),
+			{ timeoutMs: 5_000, intervalMs: 100, message: "PodNotes in the right drawer" },
+		);
+		return;
+	}
+	const sidebar = place !== "main area";
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		const { workspace } = app;
+		const inSidebar = (leaf) => leaf.getRoot() === workspace.rightSplit;
+		for (const leaf of workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}))
+			if (inSidebar(leaf) !== ${sidebar}) leaf.detach();
+		if (workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)}).length === 0) {
+			let leaf = ${sidebar} ? workspace.getRightLeaf(false) : undefined;
+			workspace.iterateRootLeaves((candidate) => {
+				if (!${sidebar} && (!leaf || candidate.view.getViewType() === "empty")) leaf = candidate;
+			});
+			await leaf.setViewState({ type: ${jsLiteral(VIEW_TYPE)} });
+		}
+		return true;
+	})()`);
+	await showPodNotes(obsidian);
+	if (!sidebar) return;
+	// A tool such as the verify skill's screens.mjs can leave the window too small for it.
+	await obsidian.dev.evalJson(`(() => {
+		const win = require("@electron/remote").getCurrentWindow();
+		const [width, height] = win.getContentSize();
+		win.setContentSize(Math.max(width, ${place.sidebar + 400}), Math.max(height, 760));
+		app.workspace.rightSplit.setSize(${place.sidebar});
+		return true;
+	})()`);
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(
+				`Math.round(document.querySelector(${jsLiteral(PLAYER_VIEW)})?.getBoundingClientRect().width ?? 0) === ${place.sidebar}`,
+			),
+		{ timeoutMs: 5_000, intervalMs: 100, message: `PodNotes ${place.sidebar} px wide` },
+	);
 }
 
 /** Goes to the Library as a user does: closes the full player, then Back until the Library shows. */
@@ -240,6 +298,40 @@ export async function closePopoutTab(obsidian: ObsidianClient, notePath: string)
 	if (!closed) throw new Error(`The popout showing ${notePath} did not close.`);
 }
 
+/** Moves the PodNotes view into a new popout window, as the tab menu's "Move to new window" does. */
+export async function moveViewToPopout(obsidian: ObsidianClient): Promise<void> {
+	const moved = await obsidian.dev.evalJsonAsync<boolean>(`(async () => {
+		const leaf = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+		app.workspace.moveLeafToPopout(leaf);
+		for (let i = 0; i < 50; i++) {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			const moved = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+			if (moved?.view.containerEl.ownerDocument !== document) return true;
+		}
+		return false;
+	})()`);
+	if (!moved) throw new Error("The PodNotes view did not move to a popout.");
+}
+
+// Closes a popout left open, saves the layout so no reload reopens it, and reloads:
+// closing a popout leaves Obsidian's layout observers looping in the main window for a
+// while, and a fresh window keeps later tests clean.
+export async function closePopoutAndReload(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJsonAsync<boolean>(`(async () => {
+		require("@electron/remote").getCurrentWindow().show();
+		const leaf = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+		leaf?.detach();
+		const windows = () => require("@electron/remote").BrowserWindow.getAllWindows().length;
+		for (let i = 0; i < 50 && (app.workspace.floatingSplit.children.length > 0 || windows() > 1); i++) {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+		app.workspace.requestSaveLayout.cancel();
+		await app.workspace.saveLayout();
+		return true;
+	})()`);
+	await reloadAfterPopout(obsidian);
+}
+
 export async function revealInFileExplorer(
 	obsidian: ObsidianClient,
 	filePath: string,
@@ -422,6 +514,22 @@ export async function setOffline(obsidian: ObsidianClient, offline: boolean): Pr
 			message: `the renderer ${offline ? "offline" : "online"}`,
 		},
 	);
+}
+
+/** Obsidian's phone layout on a 390 x 844 screen, until the test ends. */
+export async function asPhone(obsidian: ObsidianClient): Promise<void> {
+	await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
+		width: 390,
+		height: 844,
+		deviceScaleFactor: 1,
+		mobile: true,
+		screenWidth: 390,
+		screenHeight: 844,
+	});
+	onTestFinished(async () => {
+		await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
+	});
+	await setMobileEmulation(obsidian, true);
 }
 
 /** Switches Obsidian's mobile emulation, which reloads the app, and waits for PodNotes. */

@@ -20,6 +20,7 @@ import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
 import { Navigation } from "src/ui/PodcastView/Navigation";
 import { dismissUndoNotices } from "src/ui/undoNotice";
+import { removePreviousStyles } from "src/ui/removePreviousStyles";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import type { IPodNotes } from "./types/IPodNotes";
 import type PartialAppExtension from "./global";
@@ -127,6 +128,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private persistenceUnknownFields: Record<string, unknown> = {};
 
 	override async onload() {
+		// Before registerView, where the views Obsidian restores mount and append their sheets.
+		removePreviousStyles(this.app.workspace);
 		this.isUnloaded = false;
 		this.podcastViewMountEnabled = !this.isMobileRuntime();
 		this.registerDomEvent(window, "pagehide", () => {

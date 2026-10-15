@@ -2,7 +2,7 @@
 	import type { Chapter } from "src/types/Chapter";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { chapterAt } from "./chapters";
-	import Panel from "./Panel.svelte";
+	import Panel, { reveal } from "./Panel.svelte";
 
 	let {
 		chapters,
@@ -17,12 +17,8 @@
 	let list: HTMLElement | undefined = $state();
 	const current = $derived(chapterAt(chapters, position));
 
-	// Scrolls only the panel: scrollIntoView would also scroll the view and an editor around it.
 	$effect(() => {
-		const row = list?.children[current];
-		if (!list || !row) return;
-		const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top;
-		list.scrollTop += top - list.clientHeight / 3;
+		if (list) reveal(list, current);
 	});
 </script>
 
@@ -31,7 +27,7 @@
 		<li>
 			<button
 				type="button"
-				class="pn-row pn-chap"
+				class="pn-bare pn-row"
 				class:is-now={index === current}
 				aria-current={index === current || undefined}
 				onclick={() => onseek(chapter.startTime)}
@@ -42,9 +38,3 @@
 		</li>
 	{/each}
 </Panel>
-
-<style>
-	.pn-chap :global(.nm) {
-		font-weight: var(--font-medium);
-	}
-</style>

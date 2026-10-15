@@ -83,11 +83,11 @@ async function openPodcastPage(notes: string[]) {
 test("a listed episode shows its note as soon as the note path setting finds it", async () => {
 	const { rows, settings } = await openPodcastPage(["Elsewhere/Episode One.md"]);
 	const row = await rows.findByRole("button", { name: "Episode One" });
-	expect(row.querySelector('[title="Has note"]')).toBeNull();
+	expect(row.querySelector('[data-icon="file-text"]')).toBeNull();
 
 	settings.note.path = "Elsewhere/{{title}}.md";
 	pluginStore.set(get(pluginStore));
 
 	expect(await rows.findByRole("button", { name: "Episode One, has note" })).toBe(row);
-	expect(row.querySelector('[title="Has note"]')).not.toBeNull();
+	expect(row.querySelector('[data-icon="file-text"]')).not.toBeNull();
 });

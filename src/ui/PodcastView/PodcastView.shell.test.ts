@@ -9,6 +9,7 @@ import type { ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { FeedRepository } from "src/services/FeedRepository";
 import { favorites, localFiles, playedEpisodes, playlists, queue, savedFeeds } from "src/store";
 import type { Episode } from "src/types/Episode";
+import type { LocalEpisode } from "src/types/LocalEpisode";
 import type { Playlist } from "src/types/Playlist";
 import {
 	installResizeObserver,
@@ -169,7 +170,7 @@ describe("library", () => {
 		name,
 		episodes,
 	});
-	const flair = (name: RegExp) => button(name).querySelector(".flair")?.textContent;
+	const flair = (name: RegExp) => button(name).querySelector(".pn-flair")?.textContent;
 
 	test("is the one the view's services hold", async () => {
 		const { library } = services;
@@ -280,7 +281,7 @@ describe("list pages", () => {
 		expect(screen.getByRole("heading", { name: "Walks" }).nextElementSibling).toHaveTextContent(
 			"1",
 		);
-		expect(document.querySelectorAll(".flair")).toHaveLength(1);
+		expect(document.querySelectorAll(".pn-flair")).toHaveLength(1);
 	});
 
 	test("a playlist of the user's deletes from its head and leaves for Playlists; Favorites has no menu", async () => {
@@ -562,6 +563,29 @@ describe("mini player", () => {
 		expect(screen.getByRole("region", { name: "Now playing" })).toBeInTheDocument();
 		expect(button(`Open player: ${episode.title}`)).toBeInTheDocument();
 		expect(button("Play")).toBeInTheDocument();
+	});
+
+	test("covers an episode without artwork as its rows do: its podcast's name, or a local file's tile", async () => {
+		renderView(320);
+		const cover = () => button(/^Open player/).querySelector(".pn-cover");
+
+		services.player.restore({ ...episode, artworkUrl: undefined });
+		await tick();
+		expect(cover()).toHaveTextContent(feed.title);
+		expect(cover()).not.toHaveAttribute("data-icon");
+
+		const talk: LocalEpisode = {
+			...episode,
+			podcastName: "local file",
+			description: "",
+			content: "",
+			filePath: "Clips/Talk.mp4",
+			mediaType: "video",
+		};
+		services.player.restore(talk);
+		await tick();
+		expect(cover()).toHaveTextContent("");
+		expect(cover()).toHaveAttribute("data-icon", "video");
 	});
 
 	test("Timestamp captures, compact or wide, and leaves saying where to the capture's notice", async () => {

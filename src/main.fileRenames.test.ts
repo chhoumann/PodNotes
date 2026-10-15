@@ -103,6 +103,7 @@ async function loadPlugin(data: Record<string, unknown>): Promise<PodNotes> {
 				onLayoutReady: vi.fn(),
 				on: vi.fn(() => ({})),
 				getLeavesOfType: vi.fn(() => []),
+				iterateAllLeaves: vi.fn(),
 				getRightLeaf: vi.fn(() => null),
 				getActiveViewOfType: vi.fn(() => null),
 				revealLeaf: vi.fn(),

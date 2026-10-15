@@ -21,8 +21,10 @@
 		)}
 	</span>
 	<span class="pn-spacer"></span>
-	<button type="button" class="pn-textbtn" onclick={() => navigation.go({ kind: "queue" })}
-		>Edit</button
+	<button
+		type="button"
+		class="pn-bare pn-textbtn"
+		onclick={() => navigation.go({ kind: "queue" })}>Edit</button
 	>
 {/snippet}
 
@@ -31,14 +33,13 @@
 		height: auto;
 		padding: var(--size-2-2) var(--size-4-2);
 		border-radius: var(--radius-s);
-		background: none;
-		box-shadow: none;
 		color: var(--text-accent);
-		font-size: var(--font-ui-small);
 		font-weight: var(--font-medium);
 	}
 
-	:global(.pn-panel-head) .pn-textbtn:hover {
-		background: var(--background-modifier-hover);
+	@media (hover: hover) {
+		:global(.pn-panel-head) .pn-textbtn:hover {
+			background: var(--background-modifier-hover);
+		}
 	}
 </style>

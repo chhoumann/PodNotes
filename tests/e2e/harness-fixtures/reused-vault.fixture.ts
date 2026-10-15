@@ -3,8 +3,9 @@ import { createPodNotesE2EHarness } from "../harness";
 
 const getContext = createPodNotesE2EHarness("harness-reused-vault");
 
-test("opens the collapsed left sidebar and loads only its own recorder, before PodNotes", async () => {
+test("opens the collapsed left sidebar, is online and loads only its own recorder, before PodNotes", async () => {
 	const { obsidian } = getContext();
+	expect(await obsidian.dev.evalJson<boolean>("navigator.onLine"), "online").toBe(true);
 	const left = await obsidian.dev.evalJson<{
 		collapsed: boolean;
 		size: number;

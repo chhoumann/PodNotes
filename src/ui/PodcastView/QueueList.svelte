@@ -119,7 +119,7 @@
 </script>
 
 {#if $queue.episodes.length > 0}
-	<div class="pn-list pn-queue" role="list" aria-label="Queue" bind:this={list}>
+	<div class="pn-list" role="list" aria-label="Queue" bind:this={list}>
 		{#each shown as episode, index (getEpisodeKey(episode))}
 			<QueueRow
 				{episode}

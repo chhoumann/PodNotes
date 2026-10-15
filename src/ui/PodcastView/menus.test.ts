@@ -204,7 +204,7 @@ describe("an episode's menu", () => {
 		expect(titles(menu(local))).not.toContain("Download");
 
 		downloadedEpisodes.addEpisode(local, "Recordings/Interview.wav", 4);
-		expect(titles(menu(local))).toContain("Remove from Local Files");
+		expect(titles(menu(local))).toContain("Remove from Local files");
 	});
 
 	test("Favorites asks for the state the menu showed, so a second click changes nothing", () => {
@@ -473,6 +473,18 @@ describe("a podcast's menu, by how its feed loaded", () => {
 		expect(titles(podcastMenu(key, services))).toEqual(items);
 	});
 
+	test("Set feed address waits for a connection, which checks the address", () => {
+		const setFeedAddress = (podcast: string) =>
+			podcastMenu(podcast, services).find(
+				(entry) => entry !== "separator" && entry.title === "Set feed address",
+			);
+
+		services.online.set(false);
+		expect(setFeedAddress("Patron")).toMatchObject({ disabled: true });
+		services.online.set(true);
+		expect(setFeedAddress("Patron")).toMatchObject({ disabled: false });
+	});
+
 	test("Edit feed URL asks for the failed feed's address", () => {
 		const setFeedAddress = vi.spyOn(services.actions, "setFeedAddress").mockResolvedValue();
 
@@ -621,6 +633,42 @@ describe("a menu", () => {
 		expect(escape(), "the Escape that closes the menu").toBe(true);
 		expect(trigger, "focus back on the control").toHaveFocus();
 		expect(escape(), "an Escape once the menu is gone").toBe(false);
+	});
+
+	test("on a phone, where it hides after 150 ms, the Escape that closes it is handled and focus is back at once", () => {
+		const menus = obsidian.Menu as unknown as typeof FakeMenu;
+		vi.useFakeTimers();
+		menus.hideDelayMs = 150;
+		onTestFinished(() => {
+			menus.hideDelayMs = 0;
+			vi.useRealTimers();
+		});
+		const keymap = (event: KeyboardEvent) => {
+			if (event.key === "Escape") menus.shown?.hide();
+		};
+		window.addEventListener("keydown", keymap, true);
+		onTestFinished(() => window.removeEventListener("keydown", keymap, true));
+		const escape = () => {
+			const event = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+			document.body.dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+		const note = document.body.appendChild(document.createElement("textarea"));
+		onTestFinished(() => note.remove());
+
+		showMenu([{ title: "Item", onClick: () => {} }], at);
+		note.focus();
+		expect(escape(), "the Escape that closes the menu").toBe(true);
+		expect(trigger, "focus back before the animation ends").toHaveFocus();
+		note.focus();
+		vi.advanceTimersByTime(150);
+		expect(note, "the animation's end moves no focus").toHaveFocus();
+		expect(escape(), "an Escape once the menu is gone").toBe(false);
+
+		showMenu([{ title: "Open", onClick: () => note.focus() }], at);
+		menus.shown!.pick("Open");
+		vi.advanceTimersByTime(150);
+		expect(note, "a picked item keeps the focus it set").toHaveFocus();
 	});
 
 	describe("gives focus back to the control that opened it", () => {

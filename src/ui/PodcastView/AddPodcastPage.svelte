@@ -43,12 +43,12 @@
 
 {#snippet alternatives()}
 	<div class="pn-alts">
-		<button type="button" class="pn-alt" onclick={() => pickVaultMedia(app)}>
+		<button type="button" class="pn-bare pn-alt" onclick={() => pickVaultMedia(app)}>
 			<span {@attach icon("folder")}></span>Play a vault file
 		</button>
 		<button
 			type="button"
-			class="pn-alt"
+			class="pn-bare pn-alt"
 			onclick={() =>
 				pickFile(".opml", importOPML, {
 					tooLargeMessage: "That file is too large to be an OPML file.",
@@ -93,7 +93,7 @@
 			{@const added = actions.savedKey($savedFeeds, result.feed.url) !== undefined}
 			<button
 				type="button"
-				class="pn-result"
+				class="pn-bare pn-result"
 				aria-label="{added ? 'Open' : 'Add'} {result.feed.title}"
 				onclick={() => add(result)}
 			>
@@ -113,7 +113,7 @@
 {/if}
 
 <style>
-	.pn-empty {
+	.pn-empty :global {
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
@@ -122,9 +122,7 @@
 		align-items: center;
 		padding: var(--size-4-6) var(--pn-pad) 72px;
 		text-align: center;
-	}
 
-	.pn-empty :global {
 		/* Centered, yet scrollable from its top when the view is short. */
 		> :first-child {
 			margin-top: auto;
@@ -161,33 +159,26 @@
 		}
 	}
 
-	.pn-alts {
+	.pn-alts :global {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--size-2-2);
 		margin-top: var(--size-4-2);
-	}
 
-	.pn-alts :global {
 		.pn-alt {
-			display: inline-flex;
-			align-items: center;
 			gap: var(--size-4-2);
 			height: var(--pn-btn);
 			padding: 0 var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
-			font-size: var(--font-ui-small);
-			cursor: var(--cursor);
 		}
 
-		.pn-alt:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
+		@media (hover: hover) {
+			.pn-alt:hover {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
 		}
 
 		.pn-alt > span {
@@ -201,24 +192,24 @@
 		/* Obsidian's buttons keep their text on one line; this one wraps its title. */
 		.pn-result {
 			display: flex;
-			align-items: center;
 			gap: var(--size-4-3);
 			width: 100%;
 			height: auto;
 			padding: var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-normal);
-			font-size: var(--font-ui-small);
 			text-align: left;
 			white-space: normal;
-			cursor: var(--cursor);
 		}
 
-		.pn-result:hover {
-			background: var(--background-modifier-hover);
+		@media (hover: hover) {
+			.pn-result:hover {
+				background: var(--background-modifier-hover);
+			}
+
+			.pn-result:hover .end:not(.added) {
+				color: var(--text-accent);
+			}
 		}
 
 		.pn-result .pn-cover {
@@ -268,10 +259,6 @@
 			color: var(--text-success);
 		}
 
-		.pn-result:hover .end:not(.added) {
-			color: var(--text-accent);
-		}
-
 		.pn-linkchip {
 			display: inline-flex;
 			align-items: center;
@@ -279,9 +266,9 @@
 			vertical-align: bottom;
 			--icon-size: 12px;
 		}
-	}
 
-	:global(.is-phone) .pn-results :global(.pn-result .pn-cover) {
-		width: 52px;
+		.is-phone & .pn-result .pn-cover {
+			width: 52px;
+		}
 	}
 </style>

@@ -18,6 +18,7 @@ function byAttribute(name: string, selector: string, attribute: string, value: s
 	};
 }
 
+const QUEUE = '[role="list"][aria-label="Queue"]';
 export const PLAYER_VIEW = `.workspace-leaf-content[data-type="${VIEW_TYPE}"] .podcast-view`;
 
 function navItem(name: string, nav: string, label: string): UiTarget {
@@ -194,11 +195,11 @@ export const ui = {
 	offlineStrip: byCss("Offline strip", `${PLAYER_VIEW} .pn-strip[role="status"]`, "Offline"),
 	queueRow: (title: string): UiTarget => ({
 		name: `queue row ${title}`,
-		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-queue .pn-ep`)})].filter((el) => el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} ${QUEUE} .pn-ep`)})].filter((el) => el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
 	}),
 	queueGrip: (title: string): UiTarget => ({
 		name: `grip of ${title}`,
-		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-queue button.pn-grip`)})].filter((el) => el.getAttribute("aria-label").startsWith(${jsLiteral(`Reorder ${title}, position `)}))`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} ${QUEUE} button.pn-grip`)})].filter((el) => el.getAttribute("aria-label").startsWith(${jsLiteral(`Reorder ${title}, position `)}))`,
 	}),
 	playlistRow: (name: string): UiTarget => ({
 		name: `playlist row ${name}`,

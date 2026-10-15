@@ -291,7 +291,10 @@ describe("PodNotes onload wiring (#55)", () => {
 		vi.restoreAllMocks();
 	});
 
-	async function loadPlugin(loadedData: Record<string, unknown> = {}) {
+	async function loadPlugin(
+		loadedData: Record<string, unknown> = {},
+		own: Partial<Record<"loadData" | "registerView", unknown>> = {},
+	) {
 		const activateSpy = vi
 			.spyOn(PodNotes.prototype, "activateView")
 			.mockResolvedValue(undefined);
@@ -350,12 +353,14 @@ describe("PodNotes onload wiring (#55)", () => {
 					on: vi.fn(() => ({})),
 					offref: vi.fn(),
 					getLeavesOfType: vi.fn(() => []),
+					iterateAllLeaves: vi.fn(),
 					getRightLeaf: vi.fn(() => null),
 					getActiveViewOfType: vi.fn(() => null),
 					revealLeaf: vi.fn(),
 					detachLeavesOfType: vi.fn(),
 				},
 			},
+			...own,
 		});
 
 		await plugin.onload();
@@ -363,6 +368,33 @@ describe("PodNotes onload wiring (#55)", () => {
 
 		return { commands, ribbonCalls, activateSpy, plugin };
 	}
+
+	it("removes an earlier build's sheets before it loads anything, and keeps those its views append", async () => {
+		const sheet = (id: string) =>
+			document.head.appendChild(Object.assign(document.createElement("style"), { id }));
+		const shown = () => [...document.head.querySelectorAll("style")].map((style) => style.id);
+		sheet("pn-earlier");
+		const seen: Record<string, string[]> = {};
+		onTestFinished(() => document.head.replaceChildren());
+
+		await loadPlugin(
+			{ schemaVersion: 2 },
+			{
+				loadData: vi.fn(async () => {
+					seen.loadData = shown();
+					return { schemaVersion: 2 };
+				}),
+				// Obsidian mounts the restored views here, and each appends its sheet.
+				registerView: vi.fn(() => {
+					seen.registerView = shown();
+					sheet("pn-mounted");
+				}),
+			},
+		);
+
+		expect(seen).toEqual({ loadData: [], registerView: [] });
+		expect(shown()).toEqual(["pn-mounted"]);
+	});
 
 	it("starts no save once the window fires pagehide", async () => {
 		const { plugin } = await loadPlugin({ schemaVersion: 2 });
