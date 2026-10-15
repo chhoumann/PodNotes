@@ -260,6 +260,9 @@ describe("PodNotes settings tab", () => {
 			timeoutMs: 5_000,
 			intervalMs: 100,
 		});
+		await obsidian.dev.evalJsonAsync(
+			"app.plugins.plugins.podnotes.flushSaves().then(() => true)",
+		);
 		const synced = await plugin.data<PodNotesData>().read();
 		if (!synced.note) throw new Error("The saved episode note settings are missing");
 		synced.note.path = remote;
