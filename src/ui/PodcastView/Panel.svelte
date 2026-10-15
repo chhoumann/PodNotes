@@ -60,6 +60,8 @@
 			flex-direction: column;
 			overflow-y: auto;
 			padding: var(--size-4-2) 0 var(--size-4-4);
+			/* A line in the faded top edge is not in view. */
+			scroll-padding-top: 12px;
 			mask-image: linear-gradient(
 				to bottom,
 				transparent,

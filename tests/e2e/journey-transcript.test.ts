@@ -29,7 +29,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
-import { jsLiteral, PLUGIN_ID } from "./runtime";
+import { jsLiteral, PLUGIN_ID, VIEW_TYPE } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-transcript");
 
@@ -201,6 +201,59 @@ function transcriptHead(): Promise<TranscriptHead> {
 			headFits: head.scrollWidth <= head.clientWidth,
 		};
 	})()`);
+}
+
+type Followed = Readonly<{ line: string; clear: boolean; rows: number[] }>;
+
+/**
+ * The line playing now, and whether it and the line before it show whole: below the list's
+ * faded top 12 px and above its faded bottom 20 px.
+ */
+function followed(): Promise<Followed> {
+	return getContext().obsidian.dev.evalJson<Followed>(`(() => {
+		const list = ${TRANSCRIPT_LIST};
+		const top = list.getBoundingClientRect().top;
+		const now = list.querySelector("[aria-current='true']").closest("li");
+		const [before, after] = [now.previousElementSibling, now].map((row) => row.getBoundingClientRect());
+		return {
+			line: now.lastElementChild.lastElementChild.textContent.trim(),
+			clear: before.top - top > 11.5 && after.bottom - top < list.clientHeight - 19.5,
+			rows: [before.top - top, after.top - top, after.bottom - top, list.clientHeight].map(Math.round),
+		};
+	})()`);
+}
+
+/** Obsidian's phone layout on a 390 x 844 screen, until the test ends. */
+async function asPhone(): Promise<void> {
+	const { obsidian } = getContext();
+	await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
+		width: 390,
+		height: 844,
+		deviceScaleFactor: 1,
+		mobile: true,
+		screenWidth: 390,
+		screenHeight: 844,
+	});
+	onTestFinished(async () => {
+		await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
+	});
+	await setMobileEmulation(obsidian, true);
+}
+
+/** PodNotes where it opens on a phone, the right drawer. */
+async function inRightDrawer(): Promise<void> {
+	const { obsidian } = getContext();
+	await obsidian.dev.evalJson(`app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)}), true`);
+	await showPodNotes(obsidian);
+}
+
+/** The full player's Transcript panel, once it lists every line. */
+async function openTranscriptPanel(): Promise<void> {
+	const { obsidian } = getContext();
+	if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+	await waitUntilShown(obsidian, ui.fullPlayer);
+	await click(obsidian, ui.playerPanel("Transcript"));
+	await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
 }
 
 describe("transcript journeys", () => {
@@ -463,18 +516,7 @@ describe("transcript journeys", () => {
 	test("on a phone, the stage gets the room the deck can spare, and Save, the Find field, Follow and Edit are 44 px", async () => {
 		const context = getContext();
 		const { obsidian } = context;
-		const phone = { width: 390, height: 844 };
-		await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
-			...phone,
-			deviceScaleFactor: 1,
-			mobile: true,
-			screenWidth: phone.width,
-			screenHeight: phone.height,
-		});
-		onTestFinished(async () => {
-			await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
-		});
-		await setMobileEmulation(obsidian, true);
+		await asPhone();
 		expect(
 			await obsidian.dev.evalJson<boolean>('document.body.classList.contains("is-phone")'),
 			"a phone",
@@ -540,6 +582,7 @@ describe("transcript journeys", () => {
 			expect(list?.bottom, "its list fills the stage under its head").toBe(stage.bottom);
 		}
 	}, 120_000);
+
 	test("the panel's head fits Save, without its label in a 320 px sidebar and a phone's drawer, with it in a phone's main area", async () => {
 		const context = getContext();
 		const { obsidian } = context;
@@ -548,35 +591,16 @@ describe("transcript journeys", () => {
 			subscriptions: [FEED],
 			current: storedEpisode(server, FEED, CAPTIONED),
 		});
-		const openPanel = async () => {
-			if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
-			await waitUntilShown(obsidian, ui.fullPlayer);
-			await click(obsidian, ui.playerPanel("Transcript"));
-			await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
-			return await transcriptHead();
-		};
 		await placePodNotes(obsidian, { sidebar: 320 });
-		const sidebar = await openPanel();
-
-		const phone = { width: 390, height: 844 };
-		await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
-			...phone,
-			deviceScaleFactor: 1,
-			mobile: true,
-			screenWidth: phone.width,
-			screenHeight: phone.height,
-		});
-		onTestFinished(async () => {
-			await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
-		});
-		await setMobileEmulation(obsidian, true);
-		await obsidian.dev.evalJson(
-			`app.workspace.detachLeavesOfType("podcast_player_view"), true`,
-		);
-		await showPodNotes(obsidian);
-		const drawer = await openPanel();
+		await openTranscriptPanel();
+		const sidebar = await transcriptHead();
+		await asPhone();
+		await inRightDrawer();
+		await openTranscriptPanel();
+		const drawer = await transcriptHead();
 		await placePodNotes(obsidian, "main area");
-		const mainArea = await openPanel();
+		await openTranscriptPanel();
+		const mainArea = await transcriptHead();
 
 		const narrow = { saveInside: true, label: false, headFits: true };
 		expect({ sidebar, drawer, mainArea }).toMatchObject({
@@ -584,5 +608,35 @@ describe("transcript journeys", () => {
 			drawer: narrow,
 			mainArea: { saveInside: true, label: true, headFits: true },
 		});
+	}, 120_000);
+
+	test("following shows the line playing now and the line before it whole, in a 320 px sidebar and a phone's drawer", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+			progress: [
+				{
+					episode: { podcastName: FEED.title, title: CAPTIONED.title },
+					seconds: 33,
+					duration: 60,
+					finished: false,
+				},
+			],
+		});
+		await placePodNotes(obsidian, { sidebar: 320 });
+		await openTranscriptPanel();
+		const sidebar = await followed();
+		await asPhone();
+		await inRightDrawer();
+		await openTranscriptPanel();
+		const drawer = await followed();
+
+		const line = LINES[5];
+		expect([sidebar.line, drawer.line]).toEqual([line, line]);
+		expect(sidebar.clear, `sidebar rows ${sidebar.rows.join(", ")}`).toBe(true);
+		expect(drawer.clear, `drawer rows ${drawer.rows.join(", ")}`).toBe(true);
 	}, 120_000);
 });
