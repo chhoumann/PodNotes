@@ -18,7 +18,7 @@ PodNotes shows the notice once and gives no sign when a save succeeds. If the no
 
 To fix the cause, free disk space, and check that PodNotes may write to its plugin folder, `.obsidian/plugins/podnotes/`. Keep Obsidian open until you have fixed it, so that your changes stay safe. Then check that saving works again:
 
-1. In **Settings → PodNotes**, under **Playback**, set **Skip forward (s)** to a new value, such as 20.
+1. In **Settings → PodNotes**, under **Playback**, set **Skip forward (s)** to a new value, such as 20. You can set it back once saving works.
 2. Wait about 10 seconds.
 3. Open `data.json` in a text editor.
 
@@ -38,11 +38,10 @@ Your changes stay in memory. PodNotes reads the file again every 10 seconds, and
 
 To make PodNotes read the file again:
 
-1. Let your sync service finish writing the file.
-2. Check the free disk space.
-3. Check that the file named in the notice and its folder allow reads and writes.
-4. Fix any problem that you found in steps 2 and 3.
-5. Wait until your sync service has finished on every device. If the read notice is still there a few minutes later, go to [Write a new data.json](/save-problems/#write-a-new-datajson).
+1. Wait until your sync service has finished writing the file on every device.
+2. Check the free disk space, and free some if the disk is full.
+3. Check that the file named in the notice and its folder allow reads and writes, and fix them if they do not.
+4. Wait a few minutes. If the read notice is still there, go to [Write a new data.json](/save-problems/#write-a-new-datajson).
 
 If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. The read notice then usually stays until you write a new `data.json`.
 

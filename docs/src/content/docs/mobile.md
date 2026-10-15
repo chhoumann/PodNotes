@@ -5,7 +5,7 @@ description: Open the player, capture timestamps from the editor toolbar, contro
 ---
 
 Listen and capture timestamps on your phone or tablet. You open the player yourself, and you capture from the command palette or from a button in the editor toolbar.
-To install PodNotes, follow [Install PodNotes](/getting-started/#install-podnotes). The steps are the same on a phone.
+To install PodNotes, follow [Install PodNotes](/getting-started/#install-podnotes). The steps are the same on a phone. If your vault syncs from another device, a private podcast needs its address on the phone once. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 
 ## <span id="enable-podnotes-and-open-the-player"></span>Open the player
 

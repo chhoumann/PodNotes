@@ -23,6 +23,8 @@ hero:
       icon: external
 ---
 
+If you used PodNotes 2.21.1 or earlier, read [Update to 2.22.0](/upgrade/) before you update.
+
 ## <span id="features"></span><span id="screenshots"></span><span id="demo"></span>What you can do
 
 - <span id="podcast-search"></span><span id="podcast-grid"></span><span id="episode-list"></span><span id="player"></span>[Add and play podcasts](/podcasts/)
@@ -44,7 +46,7 @@ hero:
 2. **Add a podcast.** In the PodNotes view, search for a show or paste its RSS feed URL, then select the show.
 3. **Capture a moment.** On the show's page, select an episode to play it. In a note, run **PodNotes: Capture Timestamp**.
 
-[Getting started](/getting-started/) walks through each step. To install a beta version or install by hand, see [Other ways to install](/getting-started/#other-ways-to-install). If you used PodNotes 2.21.1 or earlier, read [Update to 2.22.0](/upgrade/) first.
+[Getting started](/getting-started/) walks through each step. To install a beta version or install by hand, see [Other ways to install](/getting-started/#other-ways-to-install).
 
 ## Free and open source
 

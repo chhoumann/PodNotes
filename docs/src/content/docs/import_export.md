@@ -26,7 +26,7 @@ The OPML file contains the real feed addresses, private ones included, and a not
 
 ## <span id="settings-templates"></span><span id="settings--templates"></span>Back up or move your settings
 
-A settings file copies your PodNotes setup to another vault, or keeps a backup of it. It holds your preferences, your templates and paths, your saved podcasts, your queue, favorites, and playlists, and your playback progress and played status. It leaves out downloads, local files, and the current episode. It holds your API keys only if you turn on **Include API keys**, and it never holds the private feed addresses that PodNotes [recognizes](/private-feeds/#which-addresses-podnotes-keeps-private), nor copies of them quoted in an episode's text, in the spellings that [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links) lists.
+A settings file copies your PodNotes setup to another vault, or keeps a backup of it. It holds your preferences, your templates and paths, your saved podcasts, your queue, favorites, and playlists, and your playback progress and played status. It leaves out downloads, local files, and the current episode. It holds your API keys only if you turn on **Include API keys**. It never holds the private feed addresses that PodNotes [recognizes](/private-feeds/#which-addresses-podnotes-keeps-private). It also replaces copies of them quoted in an episode's text, in the spellings that [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links) lists.
 
 ### <span id="exporting-settings"></span>Export your settings
 
@@ -46,7 +46,7 @@ The import replaces your preferences, templates, saved podcasts, playlists, queu
 The player's volume changes to the imported volume at once. The imported **Default speed** applies when a different episode loads.
 If PodNotes cannot save the import, a notice says which settings it kept, or that PodNotes saves them once it can. See [Fix save problems](/save-problems/#failed-settings-imports-and-api-key-choices).
 
-Private feeds that PodNotes recognizes work on a device that already has their addresses. On another device, set each address with **Set feed address**, or import an OPML file that lists the feeds. A settings file from PodNotes 2.21.1 or earlier works a little differently, as [Limits of private feeds](/private-feeds/#limits-of-private-feeds) explains. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
+Private feeds that PodNotes recognizes work on a device that already has their addresses. On another device, set each address with **Set feed address**, or import an OPML file that lists the feeds. After you import a settings file from PodNotes 2.21.1 or earlier, some private podcasts need **Set feed address** on this device too, as [Limits of private feeds](/private-feeds/#limits-of-private-feeds) explains. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
 
 PodNotes also imports settings files from older versions and a copy of `data.json`. It rejects a file in a newer format than this version supports and asks you to update.
 

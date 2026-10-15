@@ -272,7 +272,7 @@ const BASES_TABLE = `() => {
 const DRAWER_PLAYER = `() => {
 			const view = document.querySelector(".workspace-drawer.mod-right .podcast-view").getBoundingClientRect();
 			const panels = document.querySelector(".workspace-drawer.mod-right section.pn-player .pn-switch").getBoundingClientRect();
-			return { x: view.x, y: view.y, width: view.width, height: panels.bottom + 12 - view.y };
+			return { x: view.x, y: view.y, width: view.width, height: panels.bottom + 4 - view.y };
 		}`;
 // PodNotes' own properties hold the fixture server's address, which says nothing
 // to a reader, so the note's shots hide them.
@@ -575,7 +575,8 @@ async function main() {
 	await show({ kind: "library" });
 	await viewShot("podcast-grid", "Podcasts", below(".podcast-view .pn-grid"));
 	await show({ kind: "feed", key: episode(lib, hero.podcast, hero.title).podcastName });
-	await viewShot("episode-list", hero.title);
+	// The view keeps room below the mini player for Obsidian's status bar, which shots hide.
+	await viewShot("episode-list", hero.title, below(".podcast-view .pn-mini", 0));
 	await show({ kind: "queue" });
 	await viewShot("queue", "Queue", below(".podcast-view .pn-queue"));
 	await show({ kind: "library" }, true);

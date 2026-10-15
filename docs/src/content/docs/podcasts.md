@@ -8,11 +8,11 @@ Add podcasts in the PodNotes view, find their episodes, and play them. To open t
 
 ## <span id="adding-podcasts"></span>Add a podcast
 
-1. In the PodNotes view, select **Add podcast**. In a narrow view, such as the sidebar, it is the plus button at the top of the Library. In a wide view, it is at the top of the list on the left.
+1. In the PodNotes view, select **Add podcast**. In a narrow view, such as the sidebar, it is the plus button at the top of the Library. In a wide view, it is at the top of the list on the left. When your library is empty, use the search field of **Add your first podcast** instead.
 2. Type a podcast's name, such as `the daily`. Results appear as you type.
 3. Select the podcast.
 
-PodNotes adds the podcast and opens its page. When your library is empty, the view shows **Add your first podcast** with the same search field.
+PodNotes adds the podcast and opens its page.
 
 Search uses the Apple Podcasts directory and shows up to 20 shows. To add a show by its address instead:
 
@@ -59,7 +59,7 @@ Other pages list episodes from all your podcasts:
 
 When PodNotes cannot fetch a podcast's feed, the podcast's page shows **Feed didn't load** with the feed's host name, or **Private feed** for a private feed, and a **Retry** button. In the Library, the podcast's artwork gets a warning badge.
 
-PodNotes then lists the episodes from the last copy of the feed on this device, however old the copy is. PodNotes keeps a copy of each feed on this device, with its 75 newest episodes, and fetches the feed again when the copy is more than six hours old. **Refresh episodes** and **Refresh all feeds** fetch at once. Without a copy, the page lists the podcast's downloaded episodes, and with none it shows **No episodes**.
+PodNotes then lists the episodes from the last copy of the feed on this device, however old the copy is. PodNotes keeps a copy of each feed on this device, with its 75 newest episodes, and fetches the feed again when the copy is more than six hours old. With many podcasts, PodNotes keeps copies only of the feeds that changed most recently. **Refresh episodes** and **Refresh all feeds** fetch at once. Without a copy, the page lists the podcast's downloaded episodes, and with none it shows **No episodes**.
 
 Offline, PodNotes fetches nothing. The view shows **Offline** at the top, lists the episodes from each copy, and turns off the refresh buttons. When the device is online again, PodNotes fetches the feeds that have no copy or an old one. [Listen offline](/local_files/#listen-offline) shows what plays offline.
 
@@ -79,7 +79,7 @@ The queue decides what plays next, and playlists collect episodes you want to ke
 
 ### <span id="context-menu"></span>Episode menu reference
 
-To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. Episodes on the Queue page have no **More options** button, so right-click them, or open their menu from their podcast's page. The menu shows these items in this order:
+To open an episode's menu, right-click the episode, or select its **More options** button, the three dots at the end of its row. Episodes on the Queue page have no **More options** button, so right-click them, or open their menu from another list that holds them. The menu shows these items in this order:
 
 | Item | What it does |
 | --- | --- |

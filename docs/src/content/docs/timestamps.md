@@ -6,13 +6,13 @@ description: Insert the current playback time into a note as a link that plays t
 
 Capture a timestamp while you listen, and PodNotes inserts the playback time at your cursor as a link back to that moment in the episode.
 
-![The Notes section of an episode note with four captured timestamp links, each followed by a note, and a Follow up list](/screenshots/timestamps.webp)
-
 ## <span id="capturing-timestamps"></span>Capture a timestamp
 
 1. Play an episode in PodNotes. You can pause it before you capture.
 2. In a note in editing view, place the cursor where you want the timestamp.
 3. Run **PodNotes: Capture Timestamp** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
+
+![The Notes section of an episode note with four captured timestamp links, each followed by a note, and a Follow up list](/screenshots/timestamps.webp)
 
 PodNotes inserts a list item with a link such as `00:12:41`, followed by a space for your note. A capture replaces any selected text. Select the link, in Live Preview or reading view, to play the episode from that moment. To keep your timestamps in one note per episode, see [Create episode notes](/notes/).
 

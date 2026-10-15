@@ -14,7 +14,7 @@ PodNotes 2.22.0 merges the changes your devices make, but 2.21.1 and earlier ove
 2. Select **Check for updates**.
 3. Next to PodNotes, select **Update**.
 
-Do this on a device before you play anything there. With Obsidian Sync's **Installed community plugins** on, sync can also bring the update, so check the version under PodNotes in **Settings → Community plugins** before you play. Then let your sync service finish on every device. See [Sync between devices](/sync/).
+Do this on a device before you use PodNotes there. With Obsidian Sync's **Active community plugin list** and **Installed community plugins** on, sync can also bring the update, so check the version under PodNotes in **Settings → Community plugins** first. Then let your sync service finish on every device. See [Sync between devices](/sync/).
 
 ## Set private feed addresses on your other devices
 
@@ -35,7 +35,7 @@ Each other device needs each such address once, copied again from your podcast p
 The settings tab has seven new sections, and many settings have new names. [Settings that moved or were removed](/settings/#settings-that-moved-or-were-removed) lists each change. In short:
 
 - **Default Volume** is gone. The full player's volume button sets one volume for every episode. PodNotes starts with the **Default Volume** you set in 2.21.1.
-- The feed cache settings are gone. PodNotes always keeps a copy of each feed on the device, and fetches the feed again when the copy is more than six hours old, even if you turned caching off before.
+- The feed cache settings are gone. PodNotes always caches feeds on the device, and fetches a feed again when its copy is more than six hours old, even if you turned caching off before.
 - The headset's next-track button moves forward by **Skip forward (s)**. Under **Headset and lock screen**, you choose what the previous-track and next-track buttons do.
 - A text or number setting saves half a second after you stop typing.
 
@@ -44,7 +44,7 @@ The settings tab has seven new sections, and many settings have new names. [Sett
 - Notes you created before 2.22.0 lack the `guid` and `feedUrl` properties, so PodNotes finds them only at their path, or by their title in that path's folder. Before you rename or move such a note, see [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note).
 - Your saved episode note template keeps its old resume line. To leave out empty resume links, see [Update the resume link in an existing template](/notes/#update-the-resume-link-in-an-existing-template).
 - A capture no longer needs a note open, and it shows a notice with **Undo**. See [Capture timestamps](/timestamps/).
-- **PodNotes: Transcribe current episode** saves the transcript that the feed publishes, for free, when there is one. Only otherwise does it transcribe the audio with your provider. See [Transcribe episodes](/transcripts/).
+- For a podcast you added, **PodNotes: Transcribe current episode** saves the transcript that the feed publishes, for free, when the feed has one in a format PodNotes reads. Otherwise it transcribes the audio with your provider. See [Transcribe episodes](/transcripts/).
 
 ## Check your backups
 

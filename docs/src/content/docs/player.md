@@ -78,9 +78,9 @@ The panel loads the transcript that the episode's feed publishes. Its top line r
 - Select a line to play from that moment. Lines without a time cannot be selected.
 - The panel highlights the line being spoken and scrolls with it. When you scroll yourself, it stops following. Select **Follow** to go back to the current line.
 - To search, select **Find in transcript**, the magnifier, and type. The panel shows only the lines that match. Press `Enter` for the next match and `Shift+Enter` for the previous one. Press `Escape` or select **Close find** to show every line again.
-- **Save as note** saves the transcript as a note, as **PodNotes: Transcribe current episode** does. See [Transcribe episodes](/transcripts/#read-the-transcript-in-the-player).
+- **Save as note** saves the feed's transcript as a note, as **PodNotes: Transcribe current episode** does. It never transcribes the audio. See [Transcribe episodes](/transcripts/#read-the-transcript-in-the-player).
 
-When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers a button marked **Paid**: **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram. It transcribes the audio with your own API key, and your provider bills you for it. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key) and [What transcription costs](/transcripts/#what-transcription-costs). Offline, the transcribe button and **Save as note** are turned off.
+When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers a button marked **Paid**: **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram. It transcribes the audio with your own API key, and your provider bills you for it. Without the key on this device, a notice asks you to add it. The result is a transcript note, which PodNotes opens. The panel shows only transcripts that feeds publish. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key) and [What transcription costs](/transcripts/#what-transcription-costs). Offline, the transcribe button and **Save as note** are turned off.
 
 ### Up next
 
