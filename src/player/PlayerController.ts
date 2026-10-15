@@ -133,7 +133,7 @@ export class PlayerController {
 			currentTime: 0,
 			duration: 0,
 			playbackRate: normalizePlaybackRate(defaultPlaybackRate),
-			volume: Number.isFinite(defaultVolume) ? Math.min(1, Math.max(0, defaultVolume)) : 1,
+			volume: defaultVolume,
 		};
 		this.store = writable(this.snapshot);
 		this.state = { subscribe: this.store.subscribe };
