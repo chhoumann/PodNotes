@@ -1,4 +1,4 @@
-import type { EditorPosition } from "obsidian";
+import type { EditorPosition, EditorSelection } from "obsidian";
 
 /** Enough of CodeMirror for a capture and its Undo: text, a selection, offsets and ranges. */
 export function fakeEditor(text: string, caret = text.length) {
@@ -23,6 +23,11 @@ export function fakeEditor(text: string, caret = text.length) {
 		getCursor: (side?: "from" | "to") => pos(side === "from" ? from : to),
 		getSelection: () => value.slice(from, to),
 		setSelection(anchor: EditorPosition, head = anchor) {
+			from = offset(anchor);
+			to = offset(head);
+		},
+		listSelections: (): EditorSelection[] => [{ anchor: pos(from), head: pos(to) }],
+		setSelections([{ anchor, head }]: EditorSelection[]) {
 			from = offset(anchor);
 			to = offset(head);
 		},
