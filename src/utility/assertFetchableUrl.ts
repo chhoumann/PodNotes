@@ -202,11 +202,7 @@ function containsUnsafeCodePoint(value: string): boolean {
 		if (codeUnit < 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) return true;
 		if (
 			codeUnit === 0x061c ||
-			codeUnit === 0x200b ||
-			codeUnit === 0x200c ||
-			codeUnit === 0x200d ||
-			codeUnit === 0x200e ||
-			codeUnit === 0x200f ||
+			(codeUnit >= 0x200b && codeUnit <= 0x200f) ||
 			(codeUnit >= 0x2028 && codeUnit <= 0x202e) ||
 			(codeUnit >= 0x2066 && codeUnit <= 0x2069) ||
 			codeUnit === 0xfeff
