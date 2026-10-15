@@ -13,28 +13,41 @@ export function layoutFor(width: number): Layout {
 }
 
 /**
- * Reports the element's width now and on every resize. The observer comes from
- * the element's own window and is made again when Obsidian moves the element to
- * a popout: an observer from another window stops reporting there.
+ * Watches the element, and `also()` when there is one, with an observer from the element's own
+ * window, made again when Obsidian moves the element to a popout: an observer from another
+ * window stops reporting there. Calls `start` at once and after each move. Returns the stop.
  */
-export function observeWidth(onWidth: (width: number) => void): Attachment<HTMLElement> {
-	return (el) => {
-		let observer: ResizeObserver | undefined;
-		const observe = (win: Window) => {
-			observer?.disconnect();
-			observer = new (win as ObservableWindow).ResizeObserver(([entry]) =>
-				onWidth(entry.contentRect.width),
-			);
-			observer.observe(el);
-			onWidth(el.clientWidth);
-		};
-		observe(el.win);
-		const stopFollowing = el.onWindowMigrated(observe);
-		return () => {
-			stopFollowing();
-			observer?.disconnect();
-		};
+function followResizes(
+	el: HTMLElement,
+	onResize: ResizeObserverCallback,
+	start: () => void,
+	also?: () => Element | null,
+): () => void {
+	let observer: ResizeObserver | undefined;
+	const observe = (win: Window) => {
+		observer?.disconnect();
+		observer = new (win as ObservableWindow).ResizeObserver(onResize);
+		observer.observe(el);
+		const other = also?.();
+		if (other) observer.observe(other);
+		start();
 	};
+	observe(el.win);
+	const stopFollowing = el.onWindowMigrated(observe);
+	return () => {
+		stopFollowing();
+		observer?.disconnect();
+	};
+}
+
+/** Reports the element's width now and on every resize, also in a popout. */
+export function observeWidth(onWidth: (width: number) => void): Attachment<HTMLElement> {
+	return (el) =>
+		followResizes(
+			el,
+			([entry]) => onWidth(entry.contentRect.width),
+			() => onWidth(el.clientWidth),
+		);
 }
 
 type Box = Pick<DOMRectReadOnly, "top" | "bottom" | "left" | "right">;
@@ -73,22 +86,11 @@ export function observeStatusBar(
 					: 0,
 			);
 		};
-		let observer: ResizeObserver | undefined;
-		const observe = (win: Window) => {
-			observer?.disconnect();
-			observer = new (win as ObservableWindow).ResizeObserver(report);
-			observer.observe(el);
-			const shown = bar();
-			if (shown) observer.observe(shown);
-			report();
-		};
-		observe(el.win);
-		const stopFollowing = el.onWindowMigrated(observe);
+		const stopObserving = followResizes(el, report, report, bar);
 		const moved = workspace.on("resize", report);
 		const restyled = workspace.on("css-change", report);
 		return () => {
-			stopFollowing();
-			observer?.disconnect();
+			stopObserving();
 			workspace.offref(moved);
 			workspace.offref(restyled);
 		};
