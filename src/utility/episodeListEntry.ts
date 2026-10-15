@@ -1,6 +1,6 @@
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
-import { getEpisodeKey } from "src/utility/episodeKey";
+import { getEpisodeKey, getProgressKey, isGuidProgressKey } from "src/utility/episodeKey";
 import {
 	getFinishedPlayedEpisodeRecords,
 	getPlayedEpisodeRecordKey,
@@ -60,7 +60,10 @@ function resolvePlayedEpisode(
 	playedEpisode: PlayedEpisode,
 	episodeLookup: Map<string, Episode>,
 ): Episode | undefined {
-	const lookupKeys = [getPlayedEpisodeRecordKey(playedEpisode), key, playedEpisode.title];
+	// A guid record's title can be its twin's.
+	const lookupKeys = isGuidProgressKey(key)
+		? [key]
+		: [getPlayedEpisodeRecordKey(playedEpisode), key, playedEpisode.title];
 
 	for (const lookupKey of lookupKeys) {
 		const episode = episodeLookup.get(lookupKey);
@@ -77,6 +80,7 @@ function buildEpisodeLookup(episodes: Episode[]): Map<string, Episode> {
 
 	for (const episode of episodes) {
 		const keys = [
+			getProgressKey(episode),
 			getEpisodeKey(episode),
 			episode.podcastName ? `${episode.podcastName}::${episode.title}` : "",
 			episode.title,

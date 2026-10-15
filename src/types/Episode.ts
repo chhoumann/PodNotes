@@ -8,8 +8,10 @@ export interface Episode {
 	content: string;
 	podcastName: string;
 	feedUrl?: string;
-	/** The feed item's `<guid>`. It finds the episode within its feed for links and notes, and is not a storage key. */
+	/** The feed item's `<guid>`. It finds the episode within its feed for links and notes, and keys its progress. */
 	guid?: string;
+	/** Another item of its feed has its title, so a record saved under the title alone cannot be told apart for it. */
+	sharedTitle?: true;
 	artworkUrl?: string;
 	episodeDate?: Date;
 	itunesTitle?: string;

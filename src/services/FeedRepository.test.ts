@@ -562,6 +562,20 @@ describe("FeedRepository", () => {
 			]);
 	});
 
+	test("marks each item whose title another item of the feed has", async () => {
+		const t = setup();
+		const items = [item(1, { title: "Rerun" }), item(2), item(3, { title: "Rerun" })];
+		await loaded(t, { Alpha: alpha }, doc("Alpha", items));
+
+		expect(
+			t.feed("Alpha")!.episodes.map(({ title, sharedTitle }) => [title, sharedTitle]),
+		).toEqual([
+			["Rerun", true],
+			["Episode 2", undefined],
+			["Rerun", true],
+		]);
+	});
+
 	test("a guid whose twin the cache cut identifies no episode after a restart", async () => {
 		const first = setup();
 		const items = Array.from({ length: 76 }, (_, index) =>

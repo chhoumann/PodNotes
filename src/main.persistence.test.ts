@@ -6,11 +6,14 @@ import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import * as privateFeedUrls from "./utility/privateFeedUrl";
+import { getProgressKey } from "./utility/episodeKey";
+import { getPlayedEpisode } from "./utility/episodeStatus";
+import type { Episode } from "./types/Episode";
 import * as persistenceMerge from "./persistence/merge";
 import { encodePodNotesData } from "./persistence/podNotesData";
 import * as podNotesData from "./persistence/podNotesData";
 import { PlayerController } from "./player/PlayerController";
-import { downloadedEpisodes, localFiles, plugin as pluginStore } from "./store";
+import { downloadedEpisodes, localFiles, playedEpisodes, plugin as pluginStore } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
 import {
@@ -340,6 +343,8 @@ describe("private addresses adopted from sync", () => {
 		await settled();
 
 		expect(plugin.settings.playedEpisodes["PRIV2 Both::PRIV2 Episode"].time).toBe(30);
+		const fromFeed = { ...plugin.settings.currentEpisode!, guid: "priv2-episode" };
+		expect(getPlayedEpisode(plugin.settings.playedEpisodes, fromFeed)?.time).toBe(30);
 		expect(await plugin.loadData()).toEqual(released2211);
 		expect(save).not.toHaveBeenCalled();
 	});
@@ -936,6 +941,66 @@ describe("PodNotes persistence integration", () => {
 		expect(resolveFeedUrl(plugin.settings.savedFeeds["PRIV2 Both"], plugin.feedUrls)).toBe(
 			secretUrl,
 		);
+	});
+
+	it("lends a 2.21.1 library's progress to its episode but not to two that share a title, and a write adds one key", async () => {
+		const fromFeed = (title: string, guid: string, sharedTitle?: true): Episode => ({
+			title,
+			podcastName: "PRIV2 Both",
+			guid,
+			sharedTitle,
+			streamUrl: "",
+			url: "",
+			description: "",
+			content: "",
+		});
+		const released = {
+			...structuredClone(released2211),
+			playedEpisodes: {
+				...released2211.playedEpisodes,
+				"PRIV2 Both::Rerun": {
+					title: "Rerun",
+					podcastName: "PRIV2 Both",
+					time: 180,
+					duration: 180,
+					finished: true,
+				},
+			},
+		};
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(structuredClone(released)) });
+		const episode = fromFeed("PRIV2 Episode", "priv2-episode");
+
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		(plugin as unknown as { setCollectionStores(): void }).setCollectionStores();
+		onTestFinished(bindStoresToSettings(plugin));
+
+		expect(playedEpisodes.get(episode)).toEqual(
+			released.playedEpisodes["PRIV2 Both::PRIV2 Episode"],
+		);
+		expect(playedEpisodes.get(fromFeed("Rerun", "rerun-1", true))).toBeUndefined();
+		expect(playedEpisodes.get(fromFeed("Rerun", "rerun-2", true))).toBeUndefined();
+
+		playedEpisodes.setEpisodeTime(episode, 40, 180, false);
+		await plugin.flushSaves();
+
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.calls[0][0]).toEqual({
+			...savedByThisVersion(released),
+			libraryId: "",
+			playedEpisodes: {
+				...released.playedEpisodes,
+				[getProgressKey(episode)]: {
+					title: "PRIV2 Episode",
+					podcastName: "PRIV2 Both",
+					time: 40,
+					duration: 180,
+					finished: false,
+				},
+			},
+		});
 	});
 
 	it("moves a 2.21.1 library's path-secret feed address into SecretStorage once, for each device to set", async () => {
