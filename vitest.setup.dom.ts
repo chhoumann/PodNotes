@@ -58,6 +58,19 @@ if (typeof (globalThis as { activeDocument?: unknown }).activeDocument === "unde
 	});
 }
 
+// Obsidian's `createFragment` builds in the main window's document.
+if (typeof (globalThis as { createFragment?: unknown }).createFragment === "undefined") {
+	(
+		globalThis as {
+			createFragment?: (build?: (fragment: DocumentFragment) => void) => DocumentFragment;
+		}
+	).createFragment = (build) => {
+		const fragment = document.createDocumentFragment();
+		build?.(fragment);
+		return fragment;
+	};
+}
+
 // Obsidian points `activeWindow` at the focused window. Tests that open a second
 // window set it as Obsidian's focus listeners would.
 if (typeof (globalThis as { activeWindow?: unknown }).activeWindow === "undefined") {
