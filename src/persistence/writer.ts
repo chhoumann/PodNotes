@@ -29,6 +29,14 @@ export type ReadOutcome<Doc> =
 	| { readonly kind: "missing" }
 	| { readonly kind: "refused"; readonly refusal: Refusal };
 
+/**
+ * What the file held right after a write. `rewrite`: reading the file changed it, as
+ * by protecting a private feed URL, so `doc` still has to be written.
+ */
+export type WriteOutcome<Doc> =
+	| { readonly kind: "verified" }
+	| { readonly kind: "different"; readonly doc: Doc; readonly rewrite?: boolean };
+
 /** How the writer reaches data.json and the in-memory state, as plain JSON documents. */
 export interface DataFileAccess<Doc> {
 	/**
@@ -36,7 +44,11 @@ export interface DataFileAccess<Doc> {
 	 * has them. Rejects only on a defect, which is not retried.
 	 */
 	read(base: Doc | null): Promise<ReadOutcome<Doc>>;
-	write(doc: Doc): Promise<void>;
+	/**
+	 * Rejects when the write fails, leaves the file as the last read found it, or leaves
+	 * a file that does not read as a document without repairs.
+	 */
+	write(doc: Doc): Promise<WriteOutcome<Doc>>;
 	/** The in-memory state as the document it would write. */
 	local(): Doc;
 	/** Replace the in-memory state with a document that came from disk. */
@@ -269,45 +281,64 @@ export class DataFileWriter<Doc> {
 	private async persist(warnOnFailure: boolean): Promise<void> {
 		const blocked = this.blocked();
 		if (blocked) throw new WriteRefusedError(blocked.message);
-		if (!this.pending()) return;
+		if (this.pending()) await this.writeMerged(await this.readForWrite(), warnOnFailure);
+	}
 
+	private async readForWrite(): Promise<Doc | null> {
 		this.lastSaveAt = this.clock.now();
 		const read = await this.file.read(this.base);
 		if (read.kind === "refused") {
 			this.refuse(read.refusal);
 			throw new WriteRefusedError(read.refusal.message);
 		}
-		await this.writeMerged(read.kind === "file" ? read.doc : null, warnOnFailure);
+		return read.kind === "file" ? read.doc : null;
 	}
 
 	private async writeMerged(disk: Doc | null, warnOnFailure: boolean): Promise<void> {
 		this.lift();
 		// Before the read settles a failed write the file holds, which does not end its streak.
 		const reportFailure = warnOnFailure && !this.failedWrite;
-		this.settleFailedWrite(disk);
-		const base = this.base;
-		// Captured after the read, so edits made while it was in flight are written too.
-		const local = this.local();
-		let toWrite = local;
-		if (disk && base) {
-			toWrite = mergeDataFile(base, local, disk);
-		} else if (!disk && this.failedWrite) {
-			// A failed write that left nothing on disk held the changes made elsewhere:
-			// write them again, with the edits made here since.
-			const { local: before, written } = this.failedWrite;
-			toWrite = threeWayMergeSettings(before, local, written);
+		for (;;) {
+			this.settleFailedWrite(disk);
+			const base = this.base;
+			// Captured after the read, so edits made while it was in flight are written too.
+			const local = this.local();
+			let toWrite = local;
+			if (disk && base) {
+				toWrite = mergeDataFile(base, local, disk);
+			} else if (!disk && this.failedWrite) {
+				// A failed write that left nothing on disk held the changes made elsewhere:
+				// write them again, with the edits made here since.
+				const { local: before, written } = this.failedWrite;
+				toWrite = threeWayMergeSettings(before, local, written);
+			}
+			let outcome: WriteOutcome<Doc>;
+			try {
+				outcome = await this.file.write(toWrite);
+				// A file that needs a rewrite can read as `disk` only once reading changed it.
+				if (
+					outcome.kind === "different" &&
+					!outcome.rewrite &&
+					jsonValuesEqual(outcome.doc, disk)
+				) {
+					throw new Error("PodNotes could not write data.json.");
+				}
+			} catch (error) {
+				if (error instanceof WriteRefusedError) throw error;
+				if (reportFailure) this.events.onWriteFailed();
+				this.failedWrite = { local, written: toWrite };
+				this.scheduleCheckpoint();
+				throw error;
+			}
+			if (outcome.kind === "verified") {
+				this.failedWrite = null;
+				this.settle(local, toWrite);
+				return;
+			}
+			this.adopt(outcome.doc, local);
+			if (!outcome.rewrite && !this.pending()) return;
+			disk = await this.readForWrite();
 		}
-		try {
-			await this.file.write(toWrite);
-		} catch (error) {
-			if (error instanceof WriteRefusedError) throw error;
-			if (reportFailure) this.events.onWriteFailed();
-			this.failedWrite = { local, written: toWrite };
-			this.scheduleCheckpoint();
-			throw error;
-		}
-		this.failedWrite = null;
-		this.settle(local, toWrite);
 	}
 
 	/**
@@ -348,16 +379,22 @@ export class DataFileWriter<Doc> {
 		}
 		if (!disk) return;
 		this.settleFailedWrite(disk);
+		if (this.base && jsonValuesEqual(disk, this.base)) return;
 
-		const base = this.base;
-		if (base && jsonValuesEqual(disk, base)) return;
-
-		const local = this.local();
-		const merged = base ? mergeDataFile(base, local, disk) : structuredClone(disk);
-		this.base = disk;
-		this.lift();
-		if (!jsonValuesEqual(merged, local)) this.publish(merged);
+		const merged = this.adopt(disk, this.local());
 		if (jsonValuesEqual(merged, disk)) this.cancelTimer();
 		else this.request();
+	}
+
+	private adopt(disk: Doc, captured: Doc): Doc {
+		const current = this.local();
+		const external = this.base
+			? mergeDataFile(this.base, captured, disk)
+			: structuredClone(disk);
+		const merged = threeWayMergeSettings(captured, current, external);
+		this.base = disk;
+		this.lift();
+		if (!jsonValuesEqual(merged, current)) this.publish(merged);
+		return merged;
 	}
 }

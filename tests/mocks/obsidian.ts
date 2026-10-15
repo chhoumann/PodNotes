@@ -106,6 +106,11 @@ interface EventRef {
 export class Workspace {
 	/** Obsidian makes a leaf active on focus or a press in it. */
 	activeLeaf: { view: { scope: Scope | null } } | null = null;
+
+	getActiveViewOfType<T>(type: abstract new (...args: never[]) => T): T | null {
+		const view = this.activeLeaf?.view;
+		return view instanceof type ? view : null;
+	}
 	private readonly refs = new Set<EventRef & { name: string; callback(): unknown }>();
 
 	on(name: string, callback: () => unknown): EventRef {
@@ -522,12 +527,33 @@ export class TextComponent extends BaseInteractiveElement {
 	}
 }
 
-export class SecretComponent extends TextComponent {
+/** Obsidian's secret picker: a button that reads Change while its secret is on this device, else Link... */
+export class SecretComponent {
+	private readonly buttonEl: HTMLButtonElement;
+
 	constructor(
 		public app: App,
 		container: HTMLElement,
 	) {
-		super(container);
+		container
+			.createDiv({ cls: "clickable-icon mod-warning" })
+			.setAttribute("aria-label", "Secrets are not encrypted");
+		container.createDiv({ cls: "setting-secret-value" });
+		this.buttonEl = container.createEl("button", { text: "Link..." });
+	}
+
+	setValue(value: string) {
+		this.buttonEl.textContent = this.app.secretStorage.getSecret(value) ? "Change" : "Link...";
+		return this;
+	}
+
+	setDisabled(disabled: boolean) {
+		this.buttonEl.disabled = disabled;
+		return this;
+	}
+
+	onChange(_callback: (value: string) => unknown) {
+		return this;
 	}
 }
 

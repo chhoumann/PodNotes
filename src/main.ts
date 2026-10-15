@@ -49,6 +49,7 @@ import {
 	DataFileWriter,
 	type ReadOutcome,
 	type Refusal,
+	type WriteOutcome,
 	WriteRefusedError,
 } from "./persistence/writer";
 import { CredentialRepository } from "./services/CredentialRepository";
@@ -72,15 +73,6 @@ const MAIN_WINDOW_CLOCK: Clock = {
 	clearTimeout: (id) => window.clearTimeout(id),
 	now: () => window.performance.now(),
 };
-
-/** Whether data.json's text holds this data. */
-function holdsData(text: string, data: unknown): boolean {
-	try {
-		return jsonValuesEqual(JSON.parse(text), JSON.parse(JSON.stringify(data)));
-	} catch {
-		return false;
-	}
-}
 
 class PodNotesSchemaMigrationError extends Error {
 	constructor(
@@ -420,10 +412,11 @@ export default class PodNotes extends Plugin implements IPodNotes {
 							: {};
 					settings = { ...settings, ...references };
 					const addresses = privateFeedAddresses(settings.savedFeeds, this.feedUrls);
-					await this.writeProtectedDataFile(
+					const written = await this.writeProtectedDataFile(
 						encodePodNotesData(settings, decoded.unknownFields, addresses),
 						addresses,
 					);
+					if (written.kind !== "verified") throw this.writeFailure();
 				} catch (error) {
 					throw new PodNotesSchemaMigrationError(
 						error,
@@ -528,87 +521,110 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	private dataFileAccess(): DataFileAccess<PersistedPodNotesDataV2> {
+		// As found: reading a private feed URL again stores it under a new reference, so
+		// the same file never reads as the same document twice.
+		let lastRead: unknown;
 		return {
 			read: async (base): Promise<ReadOutcome<PersistedPodNotesDataV2>> => {
 				const data: unknown = await this.loadData();
+				lastRead = data;
 				if (base && jsonValuesEqual(data, base))
 					return { kind: "file", doc: structuredClone(base) };
-				const path = this.dataFilePath();
-				const unreadable: ReadOutcome<PersistedPodNotesDataV2> = {
-					kind: "refused",
-					refusal: {
-						recovery: "retry",
-						message: `PodNotes could not read ${path}, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.`,
-					},
-				};
-				if (data == null) {
-					return (await this.dataFileHoldsNothing()) ? { kind: "missing" } : unreadable;
-				}
-				let decoded: DecodedPodNotesData;
-				try {
-					decoded = decodePodNotesData(data);
-				} catch (error) {
-					if (!(error instanceof PodNotesDataError)) throw error;
-					if (error.code === "invalid-data") return unreadable;
-					return {
-						kind: "refused",
-						refusal: {
-							recovery: "stop",
-							message: `${path} was written by a newer version of PodNotes, likely synced from another device. PodNotes saves nothing until you update PodNotes.`,
-						},
-					};
-				}
-				// Only startup moves an older file's API keys into SecretStorage; a save now
-				// would drop them.
-				if (decoded.sourceVersion !== PODNOTES_DATA_SCHEMA_VERSION) {
-					return {
-						kind: "refused",
-						refusal: {
-							recovery: "stop",
-							message: `${path} was replaced by a copy from an older version of PodNotes, likely synced from another device. PodNotes saves nothing until you restart Obsidian, which updates the file and keeps its API keys.`,
-						},
-					};
-				}
-				// With nothing loaded, an entry the codec drops has nothing to be kept from.
-				if (!base && decoded.changed) return unreadable;
-				// A private feed synced here raw is protected before it can be merged and written.
-				const protection = protectPrivateFeeds(decoded.settings, this.feedUrls);
-				const addresses = new Map([
-					...privateFeedAddresses(protection.settings.savedFeeds, this.feedUrls),
-					...privateFeedAddresses(this.settings.savedFeeds, this.feedUrls),
-				]);
-				const doc: Record<string, unknown> = toDocument(
-					protection.settings,
-					decoded.unknownFields,
-					addresses,
-				);
-				// An entry the codec dropped while repairing a value (an invalid episode, a
-				// collection reset) is not a deletion on the other device. Keep it.
-				const raw = data as Record<string, unknown>;
-				let restored = false;
-				for (const [key, value] of Object.entries(base ?? {})) {
-					if (jsonValuesEqual(raw[key], doc[key])) continue;
-					const kept = restoreDropped(value, doc[key], raw[key], [key]);
-					if (jsonValuesEqual(kept, doc[key])) continue;
-					doc[key] = kept;
-					restored = true;
-				}
-				// toDocument redacted the rest. A restored entry can quote a private address,
-				// or name a private feed whose address other fields quote.
-				return {
-					kind: "file",
-					doc: (restored
-						? redactPrivateFeedAddresses(doc, addresses)
-						: doc) as PersistedPodNotesDataV2,
-				};
+				return this.decodeDataFile(data, base);
 			},
-			write: (doc) =>
-				this.writeProtectedDataFile(
+			write: async (doc) => {
+				const written = await this.writeProtectedDataFile(
 					doc,
 					privateFeedAddresses(this.settings.savedFeeds, this.feedUrls),
-				),
+				);
+				if (written.kind === "verified") return written;
+				if (jsonValuesEqual(written.doc, lastRead)) throw this.writeFailure();
+				// Without a base, a file that needs a repair is unreadable, so a damaged file
+				// never passes for one another writer saved.
+				const read = await this.decodeDataFile(written.doc, null);
+				if (read.kind !== "file") throw this.writeFailure();
+				return {
+					kind: "different",
+					doc: read.doc,
+					rewrite: !jsonValuesEqual(read.doc, written.doc),
+				};
+			},
 			local: () => this.localDocument(),
 			publish: (doc) => this.publishDocument(doc),
+		};
+	}
+
+	private async decodeDataFile(
+		data: unknown,
+		base: PersistedPodNotesDataV2 | null,
+	): Promise<ReadOutcome<PersistedPodNotesDataV2>> {
+		const path = this.dataFilePath();
+		const unreadable: ReadOutcome<PersistedPodNotesDataV2> = {
+			kind: "refused",
+			refusal: {
+				recovery: "retry",
+				message: `PodNotes could not read ${path}, so it leaves the file unchanged. It tries again automatically and saves your changes once the file can be read.`,
+			},
+		};
+		if (data == null) {
+			return (await this.dataFileHoldsNothing()) ? { kind: "missing" } : unreadable;
+		}
+		let decoded: DecodedPodNotesData;
+		try {
+			decoded = decodePodNotesData(data);
+		} catch (error) {
+			if (!(error instanceof PodNotesDataError)) throw error;
+			if (error.code === "invalid-data") return unreadable;
+			return {
+				kind: "refused",
+				refusal: {
+					recovery: "stop",
+					message: `${path} was written by a newer version of PodNotes, likely synced from another device. PodNotes saves nothing until you update PodNotes.`,
+				},
+			};
+		}
+		// Only startup moves an older file's API keys into SecretStorage; a save now
+		// would drop them.
+		if (decoded.sourceVersion !== PODNOTES_DATA_SCHEMA_VERSION) {
+			return {
+				kind: "refused",
+				refusal: {
+					recovery: "stop",
+					message: `${path} was replaced by a copy from an older version of PodNotes, likely synced from another device. PodNotes saves nothing until you restart Obsidian, which updates the file and keeps its API keys.`,
+				},
+			};
+		}
+		// With nothing loaded, an entry the codec drops has nothing to be kept from.
+		if (!base && decoded.changed) return unreadable;
+		// A private feed synced here raw is protected before it can be merged and written.
+		const protection = protectPrivateFeeds(decoded.settings, this.feedUrls);
+		const addresses = new Map([
+			...privateFeedAddresses(protection.settings.savedFeeds, this.feedUrls),
+			...privateFeedAddresses(this.settings.savedFeeds, this.feedUrls),
+		]);
+		const doc: Record<string, unknown> = toDocument(
+			protection.settings,
+			decoded.unknownFields,
+			addresses,
+		);
+		// An entry the codec dropped while repairing a value (an invalid episode, a
+		// collection reset) is not a deletion on the other device. Keep it.
+		const raw = data as Record<string, unknown>;
+		let restored = false;
+		for (const [key, value] of Object.entries(base ?? {})) {
+			if (jsonValuesEqual(raw[key], doc[key])) continue;
+			const kept = restoreDropped(value, doc[key], raw[key], [key]);
+			if (jsonValuesEqual(kept, doc[key])) continue;
+			doc[key] = kept;
+			restored = true;
+		}
+		// toDocument redacted the rest. A restored entry can quote a private address,
+		// or name a private feed whose address other fields quote.
+		return {
+			kind: "file",
+			doc: (restored
+				? redactPrivateFeedAddresses(doc, addresses)
+				: doc) as PersistedPodNotesDataV2,
 		};
 	}
 
@@ -655,7 +671,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	private async writeProtectedDataFile(
 		data: unknown,
 		privateFeedAddresses: ReadonlyMap<string, string>,
-	): Promise<void> {
+	): Promise<WriteOutcome<unknown>> {
 		if (this.closing) throw new WriteRefusedError(CLOSING_REFUSALS[this.closing]);
 		if (redactPrivateFeedAddresses(data, privateFeedAddresses) !== data) {
 			throw new Error("PodNotes does not write a private feed URL to data.json.");
@@ -669,10 +685,19 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		}
 		// saveData resolves even when the write failed (Obsidian's writeJson swallows the
 		// error), so read the file back.
-		const text = await this.app.vault.adapter.read(this.dataFilePath()).catch(() => null);
-		if (text === null || !holdsData(text, data)) {
-			throw new Error(`PodNotes could not write ${this.dataFilePath()}.`);
+		let found: unknown;
+		try {
+			found = JSON.parse(await this.app.vault.adapter.read(this.dataFilePath()));
+		} catch {
+			throw this.writeFailure();
 		}
+		return jsonValuesEqual(found, JSON.parse(JSON.stringify(data)))
+			? { kind: "verified" }
+			: { kind: "different", doc: found };
+	}
+
+	private writeFailure(): Error {
+		return new Error(`PodNotes could not write ${this.dataFilePath()}.`);
 	}
 
 	private dataFilePath(): string {

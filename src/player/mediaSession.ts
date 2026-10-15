@@ -4,7 +4,12 @@ import type { Episode } from "src/types/Episode";
 import type { NextTrackAction, PreviousTrackAction } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { getEpisodeKey } from "src/utility/episodeKey";
-import type { PlayerController, PlayerState, PlayerStatus } from "./PlayerController";
+import {
+	isPlaying,
+	type PlayerController,
+	type PlayerState,
+	type PlayerStatus,
+} from "./PlayerController";
 
 interface MediaSessionHost {
 	mediaSession: MediaSession | undefined;
@@ -19,11 +24,12 @@ interface MediaSessionHost {
 const CHAPTER_RESTART_S = 2;
 const CHAPTER_TOLERANCE_S = 0.25;
 
-const PLAYBACK_STATES: Record<PlayerStatus, MediaSessionPlaybackState> = {
+const IDLE_PLAYBACK_STATES: Record<
+	Exclude<PlayerStatus, "playing" | "loading">,
+	MediaSessionPlaybackState
+> = {
 	empty: "none",
 	restored: "none",
-	loading: "playing",
-	playing: "playing",
 	paused: "paused",
 	ended: "paused",
 	error: "none",
@@ -176,7 +182,9 @@ export function bindMediaSession(
 		}
 		setHandlers(!!state.episode);
 		showMetadata(state.episode);
-		const playbackState = PLAYBACK_STATES[state.status];
+		const playbackState = isPlaying(state.status)
+			? "playing"
+			: IDLE_PLAYBACK_STATES[state.status];
 		attempt(() => {
 			mediaSession.playbackState = playbackState;
 		});

@@ -1,11 +1,13 @@
-import { Notice, TFile } from "obsidian";
+import { Notice, TFile, type Vault } from "obsidian";
 import type PodNotes from "../main";
 import { getEpisodeAudioBuffer } from "../downloadEpisode";
-import { TranscriptTemplateEngine } from "../TemplateEngine";
+import { FilePathTemplateEngine, TranscriptTemplateEngine } from "../TemplateEngine";
+import { enforceMaxPathLength, lastSegmentExtension } from "../utility/enforceMaxPathLength";
 import { ensureFolderExists } from "../utility/ensureFolderExists";
 import { toError } from "../utility/toError";
 import type { Episode } from "src/types/Episode";
-import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
+import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
+import { openNote } from "src/ui/openNote";
 import { TimerNotice } from "src/ui/TimerNotice";
 import { createChunkFiles, getMimeType } from "./audioChunker";
 import { createTranscription, retryDelayMs } from "./openaiTranscription";
@@ -28,6 +30,26 @@ import {
 } from "./publishedTranscript";
 
 export const TRANSCRIBE_FROM_AUDIO_COMMAND = "Transcribe current episode from audio";
+
+type TranscriptSettings = Pick<IPodNotesSettings, "transcript">;
+
+/**
+ * Where an episode's transcript note goes, capped so a long title can't trip ENAMETOOLONG.
+ * The extension comes from the transcript path, so a custom one is kept.
+ */
+function transcriptPath(settings: TranscriptSettings, episode: Episode): string {
+	const rendered = FilePathTemplateEngine(settings.transcript.path, episode);
+	return enforceMaxPathLength(rendered, lastSegmentExtension(rendered));
+}
+
+/** The episode's transcript note, if one is at the transcript path. */
+export function transcriptNote(
+	vault: Vault,
+	settings: TranscriptSettings,
+	episode: Episode,
+): TFile | null {
+	return vault.getFileByPath(transcriptPath(settings, episode));
+}
 
 // A chunk that exhausts its retries leaves this placeholder in its transcript
 // slot; the pattern matches it so buildTranscriptBody can tell real speech apart
@@ -129,10 +151,9 @@ export class TranscriptionService {
 	}
 
 	private enqueue(job: TranscriptionJob): void {
-		const transcriptPath = this.getTranscriptPath(job.episode);
-		const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
-		if (existingFile instanceof TFile) {
-			new Notice(`You've already transcribed this episode - found ${transcriptPath}.`);
+		const existing = transcriptNote(this.plugin.app.vault, this.plugin.settings, job.episode);
+		if (existing) {
+			new Notice(`You've already transcribed this episode - found ${existing.path}.`);
 			return;
 		}
 
@@ -189,11 +210,10 @@ export class TranscriptionService {
 		};
 
 		try {
-			const transcriptPath = this.getTranscriptPath(episode);
-			const existingFile = this.plugin.app.vault.getAbstractFileByPath(transcriptPath);
-			if (existingFile instanceof TFile) {
+			const existing = transcriptNote(this.plugin.app.vault, this.plugin.settings, episode);
+			if (existing) {
 				notice.stop();
-				updateNotice(`Transcript already exists - skipped (${transcriptPath}).`);
+				updateNotice(`Transcript already exists - skipped (${existing.path}).`);
 				return;
 			}
 
@@ -517,20 +537,9 @@ export class TranscriptionService {
 		});
 	}
 
-	/**
-	 * The on-disk path of an episode's transcript note, capped so a long title
-	 * can't trip ENAMETOOLONG (#22). Used for the existence checks and the write
-	 * alike so they always agree on the same path. The extension comes from the
-	 * configured template (not forced to ".md") so a custom transcript path keeps
-	 * the user's chosen suffix.
-	 */
-	private getTranscriptPath(episode: Episode): string {
-		return getEpisodeTranscriptPath(episode, this.plugin.settings.transcript.path);
-	}
-
 	private async saveTranscription(episode: Episode, transcriptBody: string): Promise<void> {
 		this.assertActive();
-		const transcriptPath = this.getTranscriptPath(episode);
+		const path = transcriptPath(this.plugin.settings, episode);
 		const transcriptContent = TranscriptTemplateEngine(
 			this.plugin.settings.transcript.template,
 			episode,
@@ -543,21 +552,21 @@ export class TranscriptionService {
 		// "Folder already exists" thrown when a case-insensitive lookup misses an
 		// existing folder, which the old hand-rolled loop surfaced as a spurious
 		// failure (the #87 class of bug).
-		const directory = transcriptPath.substring(0, transcriptPath.lastIndexOf("/"));
+		const directory = path.substring(0, path.lastIndexOf("/"));
 		await ensureFolderExists(directory, vault, () => this.assertActive());
 		this.assertActive();
 
-		const file = vault.getAbstractFileByPath(transcriptPath);
+		const file = vault.getAbstractFileByPath(path);
 
 		if (!file) {
 			this.assertActive();
-			const newFile = await vault.create(transcriptPath, transcriptContent);
+			const newFile = await vault.create(path, transcriptContent);
 			this.assertActive();
-			await this.plugin.app.workspace.getLeaf().openFile(newFile);
+			await openNote(this.plugin.app, newFile);
 		} else if (file instanceof TFile) {
 			// File already exists - open it without overwriting
 			this.assertActive();
-			await this.plugin.app.workspace.getLeaf().openFile(file);
+			await openNote(this.plugin.app, file);
 		} else {
 			throw new Error("Expected a file but found a folder at transcript path.");
 		}

@@ -17,6 +17,7 @@ import { findUniqueTitleMatch } from "./utility/episodeTitleMatch";
 import { findByGuid } from "./utility/findByGuid";
 import { addFrontmatterFields } from "./utility/noteFrontmatter";
 import { vaultSafeLinkTarget } from "./services/privateFeeds";
+import { openNote } from "./ui/openNote";
 
 /**
  * Resolve the on-disk path of an episode's note from the configured template.
@@ -79,7 +80,7 @@ export default async function createPodcastNote(episode: Episode): Promise<void>
 		const { file, created } = await createPodcastNoteFileIfNotExists(episode);
 		if (!created) new Notice(`Note for "${episode.title}" already exists`);
 
-		void get(plugin).app.workspace.getLeaf().openFile(file);
+		void openNote(get(plugin).app, file);
 	} catch (error) {
 		console.error(error);
 		new Notice(`Failed to create note: "${getPodcastNotePath(episode)}"`);
@@ -206,7 +207,7 @@ export function openPodcastNote(episode: Episode): void {
 		return;
 	}
 
-	void get(plugin).app.workspace.getLeaf().openFile(file);
+	void openNote(get(plugin).app, file);
 }
 
 async function createFileIfNotExists(
