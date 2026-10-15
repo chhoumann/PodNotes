@@ -83,6 +83,23 @@ const isTime = (value: number) => Number.isFinite(value) && value >= 0;
 const isOptionalTime = (value: number | undefined) => value === undefined || isTime(value);
 const finiteOr0 = (value: number) => (Number.isFinite(value) ? value : 0);
 
+function savedProgress(episode: Episode): PlayedEpisode | undefined {
+	return getPlayedEpisode(get(playedEpisodes), episode);
+}
+
+function resumeTime(episode: Episode): number {
+	const saved = savedProgress(episode);
+	if (!saved || saved.finished || (saved.duration > 0 && saved.time >= saved.duration)) {
+		return 0;
+	}
+	return saved.time;
+}
+
+/** The length shown until the metadata loads. */
+function startDuration(episode: Episode): number {
+	return savedProgress(episode)?.duration || episode.duration || 0;
+}
+
 /**
  * Owns the one media element, in the main window, from plugin load to unload.
  * Views render `state` and call the intents.
@@ -128,7 +145,7 @@ export class PlayerController {
 		this.noteStoppedMove();
 		const { status, episode: shown, currentTime } = this.snapshot;
 		if (status === "paused" && shown && !this.moved) {
-			const time = this.resumeTime(shown);
+			const time = resumeTime(shown);
 			if (time !== currentTime) this.moveTo(time);
 			return;
 		}
@@ -138,8 +155,8 @@ export class PlayerController {
 			status: "restored",
 			episode,
 			mediaType: getEpisodeMediaType(episode),
-			currentTime: this.moved ? currentTime : this.resumeTime(episode),
-			duration: this.startDuration(episode),
+			currentTime: this.moved ? currentTime : resumeTime(episode),
+			duration: startDuration(episode),
 		});
 	}
 
@@ -201,7 +218,7 @@ export class PlayerController {
 			}
 			session.segmentEnd = endTime ?? null;
 			session.preview = endTime !== undefined;
-			const at = time ?? (status === "ended" ? this.resumeTime(episode) : undefined);
+			const at = time ?? (status === "ended" ? resumeTime(episode) : undefined);
 			if (time !== undefined) this.moved = true;
 			if (at === undefined || this.moveTo(at)) this.start();
 			return true;
@@ -216,7 +233,7 @@ export class PlayerController {
 		) {
 			queue.prepend(outgoing);
 		}
-		const resumeAt = sameEpisode ? this.restartTime(episode) : this.resumeTime(episode);
+		const resumeAt = sameEpisode ? this.restartTime(episode) : resumeTime(episode);
 		this.load(episode, source, time ?? resumeAt, endTime);
 		this.moved = time !== undefined || (sameEpisode && this.moved);
 		return true;
@@ -250,7 +267,7 @@ export class PlayerController {
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
 			this.load(episode, source, this.restartTime(episode));
-		} else if (status !== "ended" || this.moveTo(this.resumeTime(episode))) {
+		} else if (status !== "ended" || this.moveTo(resumeTime(episode))) {
 			this.start();
 		}
 	}
@@ -351,7 +368,7 @@ export class PlayerController {
 
 	private load(episode: Episode, source: PlaybackSource, time: number, endTime?: number): void {
 		this.session = null;
-		const duration = this.startDuration(episode);
+		const duration = startDuration(episode);
 		const shown = this.snapshot.episode;
 		// Reloading the shown episode, as on its first play after a restart, keeps the user's speed.
 		const playbackRate =
@@ -600,7 +617,7 @@ export class PlayerController {
 		this.load(
 			next,
 			selectSource(next, get(downloadedEpisodes), this.plugin.app.vault),
-			this.resumeTime(next),
+			resumeTime(next),
 		);
 	}
 
@@ -635,10 +652,6 @@ export class PlayerController {
 		this.moved = false;
 	}
 
-	private savedProgress(episode: Episode): PlayedEpisode | undefined {
-		return getPlayedEpisode(get(playedEpisodes), episode);
-	}
-
 	/**
 	 * Where the shown episode starts on a new load: where it is while a session holds it
 	 * or after the user moved it, else at its saved progress, which a sync may have changed.
@@ -646,20 +659,7 @@ export class PlayerController {
 	private restartTime(episode: Episode): number {
 		const { status, currentTime } = this.snapshot;
 		const live = status !== "ended" && (!!this.session || this.moved);
-		return live ? currentTime : this.resumeTime(episode);
-	}
-
-	private resumeTime(episode: Episode): number {
-		const saved = this.savedProgress(episode);
-		if (!saved || saved.finished || (saved.duration > 0 && saved.time >= saved.duration)) {
-			return 0;
-		}
-		return saved.time;
-	}
-
-	/** The length shown until the metadata loads. */
-	private startDuration(episode: Episode): number {
-		return this.savedProgress(episode)?.duration || episode.duration || 0;
+		return live ? currentTime : resumeTime(episode);
 	}
 
 	private setState(patch: Partial<PlayerState>): void {
