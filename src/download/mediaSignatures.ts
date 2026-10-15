@@ -76,29 +76,13 @@ export function detectAudioFileExtension(data: ArrayBuffer): string | null {
 		return isoBmffExtension;
 	}
 
-	for (const { signature, mask, fileExtension } of audioSignatures) {
-		if (signature.length > arr.length) {
-			continue;
-		}
-
-		let matches = true;
-		for (let i = 0; i < signature.length; i++) {
-			if (mask) {
-				if ((arr[i] & mask[i]) !== (signature[i] & mask[i])) {
-					matches = false;
-					break;
-				}
-			} else {
-				if (arr[i] !== signature[i]) {
-					matches = false;
-					break;
-				}
-			}
-		}
-		if (matches) {
-			return fileExtension;
-		}
-	}
-
-	return null;
+	const match = audioSignatures.find(
+		({ signature, mask }) =>
+			signature.length <= arr.length &&
+			signature.every((byte, i) => {
+				const bits = mask?.[i] ?? 0xff;
+				return (arr[i] & bits) === (byte & bits);
+			}),
+	);
+	return match?.fileExtension ?? null;
 }
