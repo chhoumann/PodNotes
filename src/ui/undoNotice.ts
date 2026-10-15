@@ -5,7 +5,8 @@ const showing = new Set<() => void>();
 
 /** A Notice that ends in an Undo button. Undo runs at most once, and hides the notice. */
 export function noticeWithUndo(message: string, undo: () => void): void {
-	const fragment = activeDocument.createDocumentFragment();
+	// Obsidian's Notice takes only a main window fragment, also where it shows in a popout.
+	const fragment = createFragment();
 	fragment.createSpan({ cls: "pn-undo-message", text: message });
 	const button = fragment.createEl("button", { cls: "pn-undo", text: "Undo" });
 	const notice = new Notice(fragment, 7000);
@@ -20,9 +21,10 @@ export function noticeWithUndo(message: string, undo: () => void): void {
 	};
 	button.addEventListener("click", run);
 	showing.add(dismiss);
-	// Obsidian keeps a notice up past its time while the pointer rests on it.
+	// Obsidian keeps a notice up past its time while the pointer rests on it, and a popout
+	// that closes keeps it in its document.
 	const forget = () => {
-		if (button.isConnected) window.setTimeout(forget, 1000);
+		if (button.isConnected && button.doc.defaultView) window.setTimeout(forget, 1000);
 		else showing.delete(dismiss);
 	};
 	window.setTimeout(forget, 7000);

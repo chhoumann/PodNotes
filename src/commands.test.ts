@@ -602,6 +602,19 @@ describe("capture", () => {
 			await undo();
 
 			expect(editor.getValue()).toBe("Heard: draft line");
+			expect(editor.getSelection()).toBe("draft line");
+		});
+
+		it("takes the timestamp out of the note's other tab once the tab it went into closed, leaving that tab's caret", async () => {
+			const { leaf, editor, close, openNote } = await intoEditor("Notes\nLater", 5);
+			const other = openNote("Journal.md", editor.getValue(), 0);
+			close(leaf);
+
+			await undo();
+
+			expect(other.editor.getValue()).toBe("Notes\nLater");
+			expect(other.editor.getCursor()).toEqual({ line: 0, ch: 0 });
+			expect(said()).toEqual(["Timestamp added to Journal"]);
 		});
 
 		it.each([
