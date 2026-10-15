@@ -273,15 +273,13 @@
 {/snippet}
 
 {#snippet saveNote()}
-	{@const label = note ? "Open note" : "Save as note"}
 	<button
 		type="button"
 		class="pn-btn pn-tx-save"
-		aria-label={label}
 		disabled={!note && !$online}
 		onclick={() => (note ? app.workspace.getLeaf(false).openFile(note) : saveTranscriptNote())}
 		><span class="pn-tx-icon" {@attach icon(note ? "file-text" : "file-plus")}></span><span
-			>{label}</span
+			>{note ? "Open note" : "Save as note"}</span
 		></button
 	>
 {/snippet}
@@ -388,8 +386,13 @@
 					padding: 0;
 				}
 
+				/* Folded out of sight, the label still names the button. */
 				.pn-tx-save span:last-child {
-					display: none;
+					position: absolute;
+					width: 1px;
+					height: 1px;
+					overflow: hidden;
+					clip-path: inset(50%);
 				}
 			}
 		}

@@ -372,6 +372,10 @@ describe("a published transcript", () => {
 		Object.assign(services.app, { vault });
 		await openTranscript(episodeOf([VTT_LINK]), 0);
 		await transcript();
+		expect(
+			button("Save as note"),
+			"named by its label, with no aria-label that Obsidian would show as a tooltip",
+		).not.toHaveAttribute("aria-label");
 
 		await fireEvent.click(button("Save as note"));
 
@@ -592,6 +596,9 @@ describe("an episode whose feed publishes no transcript", () => {
 		const { saved, openFile } = noteSavedBefore(played);
 		await openTranscript(played, 0);
 		await screen.findByText("No transcript in this feed");
+		expect(button("Open note"), "named by its label, with no tooltip").not.toHaveAttribute(
+			"aria-label",
+		);
 
 		await fireEvent.click(button("Open note"));
 

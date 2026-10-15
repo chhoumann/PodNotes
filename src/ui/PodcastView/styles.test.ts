@@ -138,7 +138,7 @@ describe("hover", () => {
 });
 
 describe("the transcript's note button", () => {
-	test("shows only its icon in a narrow panel's head, and its label in an empty panel", () => {
+	test("in a narrow panel's head, clips its label out of sight but keeps it as its name, and shows it in an empty panel", () => {
 		const css = componentCss(["PodcastView", "TranscriptPanel"], {
 			media: ["(width < 340px)"],
 		});
@@ -149,10 +149,21 @@ describe("the transcript's note button", () => {
 			`<div class="podcast-view pn-PodcastView"><div class="pn-tx pn-TranscriptPanel"><div class="pn-panel-head">${button}</div><div class="pn-panel-empty">${button}</div></div></div>`,
 			".pn-tx",
 		);
-		const label = (place: string) =>
-			getComputedStyle(document.querySelector(`.${place} .pn-tx-save span:last-child`)!)
-				.display;
+		const label = (place: string) => {
+			const { display, visibility, position, clipPath } = getComputedStyle(
+				document.querySelector(`.${place} .pn-tx-save span:last-child`)!,
+			);
+			return { display, visibility, position, clipPath };
+		};
 
-		expect([label("pn-panel-head"), label("pn-panel-empty")]).toEqual(["none", "inline"]);
+		expect([label("pn-panel-head"), label("pn-panel-empty")]).toEqual([
+			{
+				display: "inline",
+				visibility: "visible",
+				position: "absolute",
+				clipPath: "inset(50%)",
+			},
+			{ display: "inline", visibility: "visible", position: "static", clipPath: "none" },
+		]);
 	});
 });
