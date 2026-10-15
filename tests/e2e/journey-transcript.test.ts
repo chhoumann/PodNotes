@@ -3,7 +3,9 @@ import { FIXTURE_HOST, SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	asPhone,
+	closePopoutAndReload,
 	dismissNotices,
+	moveViewToPopout,
 	runCommand,
 	placePodNotes,
 	setOffline,
@@ -119,21 +121,23 @@ type Placement = Readonly<{
 
 /**
  * Whether the view is in sight, and each leaf that shows one of `paths`: in the view's own tab
- * group, beside the view in the main area, in the main area while the view is in a sidebar,
- * or in a sidebar.
+ * group, beside the view in its window or sidebar, else in the main area, another popout or a
+ * sidebar.
  */
 async function placement(paths: readonly string[]): Promise<Placement> {
 	return await getContext().obsidian.dev.evalJson<Placement>(`(() => {
 		const { workspace } = app;
 		const view = workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
 		const where = (leaf) =>
-			leaf.getRoot() !== workspace.rootSplit
-				? "sidebar"
-				: leaf.parent === view.parent
+			leaf.getContainer() === view.getContainer() && leaf.getRoot() === view.getRoot()
+				? leaf.parent === view.parent
 					? "the view's tabs"
-					: view.getRoot() === workspace.rootSplit
-						? "beside the view"
-						: "main area";
+					: "beside the view"
+				: leaf.getRoot() === workspace.rootSplit
+					? "main area"
+					: leaf.getRoot() === workspace.floatingSplit
+						? "another popout"
+						: "sidebar";
 		const notes = [];
 		workspace.iterateAllLeaves((leaf) => {
 			const path = leaf.view.file?.path;
@@ -142,6 +146,19 @@ async function placement(paths: readonly string[]): Promise<Placement> {
 		});
 		return { view: view.view.containerEl.isShown(), notes };
 	})()`);
+}
+
+/** Deletes the notes at `paths` once the test ends. */
+function deleteWhenDone(paths: readonly string[]): void {
+	onTestFinished(() =>
+		getContext().obsidian.dev.evalJsonAsync(`(async () => {
+			for (const path of ${jsLiteral(paths)}) {
+				const file = app.vault.getFileByPath(path);
+				if (file) await app.vault.delete(file);
+			}
+			return true;
+		})()`),
+	);
 }
 
 /** Waits until the leaf in focus shows `path`, as once a note opens. */
@@ -154,6 +171,34 @@ async function waitForOpened(path: string): Promise<void> {
 			),
 		{ timeoutMs: 30_000, intervalMs: 100, message: `${path} opened` },
 	);
+}
+
+/** Presses what `selector` matches in the PodNotes view's popout window, with real input. */
+async function pressInPopout(selector: string, text = ""): Promise<void> {
+	const pressed = await getContext().obsidian.dev.evalJsonAsync<boolean>(`(async () => {
+		const remote = require("@electron/remote");
+		const view = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+		const doc = view.view.containerEl.ownerDocument;
+		let win;
+		for (const each of remote.BrowserWindow.getAllWindows())
+			if (await each.webContents.executeJavaScript(${jsLiteral(`Boolean(document.querySelector(${jsLiteral(PLAYER_VIEW)}))`)})) win = each;
+		for (let i = 0; i < 50; i++) {
+			const target = [...doc.querySelectorAll(${jsLiteral(selector)})].find(
+				(each) => each.offsetParent && (!${jsLiteral(text)} || each.textContent.trim() === ${jsLiteral(text)}),
+			);
+			if (target) {
+				const box = target.getBoundingClientRect();
+				const point = { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
+				win.webContents.sendInputEvent({ type: "mouseMove", ...point });
+				for (const type of ["mouseDown", "mouseUp"])
+					win.webContents.sendInputEvent({ type, ...point, button: "left", clickCount: 1 });
+				return true;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+		return false;
+	})()`);
+	if (!pressed) throw new Error(`Nothing to press at ${selector} ${text} in the popout.`);
 }
 
 /** Closes every leaf that shows `path`, as a user closes its tab. */
@@ -465,6 +510,7 @@ describe("transcript journeys", () => {
 		const episodeNote = sandbox.path(`PodNotes/${FEED.title}/${CAPTIONED.title}.md`);
 		const podcastNote = sandbox.path(`PodNotes/Podcasts/${FEED.title}.md`);
 		const behind = sandbox.path("Behind the view.md");
+		deleteWhenDone([transcript, episodeNote, podcastNote, behind]);
 		await writeVaultFile(obsidian, behind, "A note in a tab behind the view.\n");
 		await placePodNotes(obsidian, "main area");
 		await obsidian.dev.evalJsonAsync(`(async () => {
@@ -529,6 +575,90 @@ describe("transcript journeys", () => {
 			notes: [{ path: episodeNote, where: "main area", shown: true }],
 		});
 	}, 120_000);
+
+	test("in a popout, a note PodNotes opens goes beside the view, not to a note in another popout, and a later one reuses that split", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const server = await serve();
+		await seedLibrary(context, server, { subscriptions: [FEED] });
+		const podcastNote = sandbox.path(`PodNotes/Podcasts/${FEED.title}.md`);
+		const elsewhere = sandbox.path("In another popout.md");
+		deleteWhenDone([podcastNote, elsewhere]);
+		await writeVaultFile(obsidian, podcastNote, `# ${FEED.title}\n`);
+		await writeVaultFile(obsidian, elsewhere, "A note in another popout.\n");
+		await placePodNotes(obsidian, "main area");
+		await click(obsidian, ui.podcastCard(FEED.title));
+		await waitUntilShown(obsidian, ui.podcastOptions);
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			await app.workspace.openPopoutLeaf().openFile(app.vault.getFileByPath(${jsLiteral(elsewhere)}));
+			return true;
+		})()`);
+		await moveViewToPopout(obsidian);
+		const beside = {
+			view: true,
+			notes: [
+				{ path: elsewhere, where: "another popout", shown: true },
+				{ path: podcastNote, where: "beside the view", shown: true },
+			],
+		};
+
+		try {
+			for (const time of ["first", "again"]) {
+				await pressInPopout('button[aria-label="Podcast options"]');
+				await pressInPopout(".menu .menu-item", "Open podcast note");
+				await waitForOpened(podcastNote);
+				expect(
+					await placement([podcastNote, elsewhere]),
+					`Open podcast note ${time}`,
+				).toEqual(beside);
+			}
+		} finally {
+			// A note left in a popout keeps it open after the view leaves.
+			await closeNote(elsewhere);
+			await closeNote(podcastNote);
+			await closePopoutAndReload(obsidian);
+		}
+	});
+
+	test("on a phone, Save as note and Open note show the transcript note in a tab, as Obsidian opens a link", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		await asPhone(obsidian);
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+		});
+		await placePodNotes(obsidian, "main area");
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		await click(obsidian, ui.playerPanel("Transcript"));
+		await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+		const transcript = sandbox.path(NOTE_PATH);
+		deleteWhenDone([transcript]);
+
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Save as note"));
+		await waitForOpened(transcript);
+		expect(await placement([transcript]), "Save as note").toEqual({
+			view: false,
+			notes: [{ path: transcript, where: "the view's tabs", shown: true }],
+		});
+
+		await obsidian.dev.evalJson(
+			`app.workspace.setActiveLeaf(app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0], { focus: true }), true`,
+		);
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Open note"));
+		await waitForOpened(transcript);
+		expect(await placement([transcript]), "Open note opens a tab of its own").toEqual({
+			view: false,
+			notes: [
+				{ path: transcript, where: "the view's tabs", shown: false },
+				{ path: transcript, where: "the view's tabs", shown: true },
+			],
+		});
+	});
 
 	test("an episode whose feed publishes no transcript offers the paid transcription", async () => {
 		const { obsidian } = getContext();
