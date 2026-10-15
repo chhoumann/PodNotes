@@ -78,6 +78,7 @@ export class TranscriptionService {
 	private plugin: PodNotes;
 	private disposed = false;
 	private readonly lifetimeAbortController = new AbortController();
+	private readonly signal = this.lifetimeAbortController.signal;
 	private readonly activeNotices = new Set<ReturnType<typeof TimerNotice>>();
 	private pendingJobs: TranscriptionJob[] = [];
 	private activeTranscriptions = new Set<string>();
@@ -101,7 +102,7 @@ export class TranscriptionService {
 				findPublishedTranscript(this.plugin.feeds, episode),
 			);
 		} catch (error) {
-			if (this.disposed || this.lifetimeAbortController.signal.aborted) return;
+			if (this.disposed || this.signal.aborted) return;
 			throw error;
 		}
 
@@ -230,7 +231,7 @@ export class TranscriptionService {
 			notice.stop();
 			updateNotice(completion);
 		} catch (error) {
-			if (this.disposed || this.lifetimeAbortController.signal.aborted) return;
+			if (this.disposed || this.signal.aborted) return;
 			console.error("Transcription error:", error);
 			notice.stop();
 			updateNotice(
@@ -256,12 +257,7 @@ export class TranscriptionService {
 	): Promise<{ body: string; completion: string }> {
 		updateNotice("Fetching the published transcript...");
 		const parsed = await this.waitForLifecycle(
-			fetchPublishedTranscript(
-				this.plugin.feeds,
-				episode,
-				transcript,
-				this.lifetimeAbortController.signal,
-			),
+			fetchPublishedTranscript(this.plugin.feeds, episode, transcript, this.signal),
 		);
 		const { timestamp, transcript: settings } = this.plugin.settings;
 		const body = renderTranscriptBody(parsed, {
@@ -379,7 +375,7 @@ export class TranscriptionService {
 					audio,
 					apiKey,
 					onProgress: updateNotice,
-					signal: this.lifetimeAbortController.signal,
+					signal: this.signal,
 				}),
 			);
 			this.assertActive();
@@ -397,7 +393,7 @@ export class TranscriptionService {
 			chunkFiles,
 			maxRetries: MAX_RETRIES,
 			onProgress: updateNotice,
-			signal: this.lifetimeAbortController.signal,
+			signal: this.signal,
 		});
 		this.assertActive();
 		return segments;
@@ -436,7 +432,7 @@ export class TranscriptionService {
 						const result = await createTranscription(
 							apiKey,
 							{ model: "whisper-1", file },
-							this.lifetimeAbortController.signal,
+							this.signal,
 						);
 						this.assertActive();
 						const text = (result as { text?: unknown } | null)?.text;
@@ -478,7 +474,7 @@ export class TranscriptionService {
 
 	private waitForRetry(delayMs: number): Promise<void> {
 		this.assertActive();
-		const signal = this.lifetimeAbortController.signal;
+		const { signal } = this;
 
 		return new Promise((resolve, reject) => {
 			const timeout = window.setTimeout(() => {
@@ -498,7 +494,7 @@ export class TranscriptionService {
 
 	private waitForLifecycle<T>(operation: Promise<T>): Promise<T> {
 		this.assertActive();
-		const signal = this.lifetimeAbortController.signal;
+		const { signal } = this;
 
 		return new Promise((resolve, reject) => {
 			const onAbort = () =>
@@ -570,14 +566,14 @@ export class TranscriptionService {
 	}
 
 	private assertActive(): void {
-		if (this.disposed || this.lifetimeAbortController.signal.aborted) {
+		if (this.disposed || this.signal.aborted) {
 			throw this.getAbortReason();
 		}
 	}
 
 	private getAbortReason(): unknown {
 		return (
-			this.lifetimeAbortController.signal.reason ??
+			this.signal.reason ??
 			new DOMException("PodNotes was unloaded during transcription.", "AbortError")
 		);
 	}
