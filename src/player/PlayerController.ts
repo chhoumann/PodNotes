@@ -333,20 +333,18 @@ export class PlayerController {
 	}
 
 	/**
-	 * A Svelte action for the view's video stage. The video plays inside the stage
+	 * A Svelte attachment for the view's video stage. The video plays inside the stage
 	 * while the stage is in the main window, and hidden in the main window otherwise.
 	 */
-	readonly videoStage = (stage: HTMLElement): { destroy(): void } => {
+	readonly videoStage = (stage: HTMLElement): (() => void) => {
 		this.stage = stage;
 		this.placeElement();
 		const stopFollowingWindow = stage.onWindowMigrated?.(() => this.placeElement());
-		return {
-			destroy: () => {
-				stopFollowingWindow?.();
-				if (this.stage !== stage) return;
-				this.stage = null;
-				this.placeElement();
-			},
+		return () => {
+			stopFollowingWindow?.();
+			if (this.stage !== stage) return;
+			this.stage = null;
+			this.placeElement();
 		};
 	};
 

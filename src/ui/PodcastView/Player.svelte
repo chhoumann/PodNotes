@@ -233,11 +233,7 @@
 				{:else if !wide && shown}
 					{@render panelView(shown)}
 				{:else if video && inMainWindow}
-					<div
-						class="pn-video"
-						{@attach (frame) => player.videoStage(frame).destroy}
-						bind:this={videoFrame}
-					>
+					<div class="pn-video" {@attach player.videoStage} bind:this={videoFrame}>
 						<button
 							type="button"
 							class="pn-bare pn-vplay"
