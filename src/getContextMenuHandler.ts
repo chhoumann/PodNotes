@@ -7,18 +7,15 @@ import { getMediaTypeFromPath, isAudioContainerExtension } from "./utility/media
 export default function getContextMenuHandler(app: App): EventRef {
 	return app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
 		if (!(file instanceof TFile)) return;
-		const mediaType = getMediaTypeFromPath(file.path);
-		const isAmbiguousContainer = isAudioContainerExtension(file.extension);
-		if (!mediaType && !isAmbiguousContainer) return;
 
-		if (isAmbiguousContainer) {
-			addPlayLocalFileItem(menu, app, file, "audio");
-			addPlayLocalFileItem(menu, app, file, "video");
+		if (isAudioContainerExtension(file.extension)) {
+			addPlayLocalFileItem(menu, app, file, "audio", "Play as audio with PodNotes");
+			addPlayLocalFileItem(menu, app, file, "video", "Play as video with PodNotes");
 			return;
 		}
 
-		if (!mediaType) return;
-		addPlayLocalFileItem(menu, app, file, mediaType);
+		const mediaType = getMediaTypeFromPath(file.path);
+		if (mediaType) addPlayLocalFileItem(menu, app, file, mediaType, "Play with PodNotes");
 	});
 }
 
@@ -27,12 +24,8 @@ function addPlayLocalFileItem(
 	app: App,
 	file: TFile,
 	mediaType: EpisodeMediaType,
+	title: string,
 ): void {
-	const isAmbiguousContainer = isAudioContainerExtension(file.extension);
-	const title = isAmbiguousContainer
-		? `Play as ${mediaType} with PodNotes`
-		: "Play with PodNotes";
-
 	menu.addItem((item) =>
 		item
 			.setIcon("play")

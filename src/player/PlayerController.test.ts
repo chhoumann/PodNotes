@@ -2143,7 +2143,7 @@ describe("video stage", () => {
 		const { player, doc } = setup();
 		const stage = new FakeParent(doc);
 		player.play(VIDEO);
-		const action = player.videoStage(stage as unknown as HTMLElement);
+		const detach = player.videoStage(stage as unknown as HTMLElement);
 
 		expect(stage.children).toEqual([doc.media]);
 		expect(doc.media.hidden).toBe(false);
@@ -2155,7 +2155,7 @@ describe("video stage", () => {
 		stage.migrateTo(doc);
 		expect(stage.children).toEqual([doc.media]);
 
-		action.destroy();
+		detach();
 		expect(doc.body.children).toEqual([doc.media]);
 		expect(doc.media.hidden).toBe(true);
 	});
@@ -2177,11 +2177,11 @@ describe("video stage", () => {
 	test("an older stage's teardown leaves the video in the newer stage", () => {
 		const { player, doc } = setup();
 		player.play(VIDEO);
-		const older = player.videoStage(new FakeParent(doc) as unknown as HTMLElement);
+		const detachOlder = player.videoStage(new FakeParent(doc) as unknown as HTMLElement);
 		const newer = new FakeParent(doc);
 		player.videoStage(newer as unknown as HTMLElement);
 
-		older.destroy();
+		detachOlder();
 
 		expect(newer.children).toEqual([doc.media]);
 	});

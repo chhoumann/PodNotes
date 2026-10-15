@@ -2,6 +2,7 @@ import { TFile, type EventRef, type TAbstractFile } from "obsidian";
 import { get } from "svelte/store";
 import type PodNotes from "./main";
 import { downloadedEpisodes, favorites, playlists, queue } from "./store";
+import { mapRecord } from "./persistence/codecUtils";
 import { writePlayerSettings } from "./store/persistence";
 import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { Episode } from "./types/Episode";
@@ -97,14 +98,10 @@ function followRenames(plugin: PodNotes, renamed: Map<string, TFile>): void {
 			? { ...playlist, episodes: playlist.episodes.map(moved) }
 			: playlist;
 
-	if (inDownloads) downloadedEpisodes.set(mapValues(downloads, movedList));
+	if (inDownloads) downloadedEpisodes.set(mapRecord(downloads, movedList));
 	if (inQueue) queue.set(movedPlaylist(queued));
 	if (inFavorites) favorites.set(movedPlaylist(favorited));
-	if (inPlaylists) playlists.set(mapValues(lists, movedPlaylist));
+	if (inPlaylists) playlists.set(mapRecord(lists, movedPlaylist));
 	if (isCurrent) writePlayerSettings(plugin, { currentEpisode: moved(current) });
 	for (const [from, file] of renamed) plugin.player.relocate(from, file.path, moved);
-}
-
-function mapValues<T>(record: Record<string, T>, map: (value: T) => T): Record<string, T> {
-	return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, map(value)]));
 }

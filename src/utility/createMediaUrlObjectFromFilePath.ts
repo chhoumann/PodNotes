@@ -18,7 +18,5 @@ import { TFile, type Vault } from "obsidian";
  */
 export function createMediaUrlObjectFromFilePath(vault: Vault, filePath: string): string {
 	const file = vault.getAbstractFileByPath(filePath);
-	if (!file || !(file instanceof TFile)) return "";
-
-	return vault.getResourcePath(file);
+	return file instanceof TFile ? vault.getResourcePath(file) : "";
 }

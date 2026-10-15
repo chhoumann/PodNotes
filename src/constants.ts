@@ -23,7 +23,7 @@ export const DEFAULT_EPISODE_LIST_LIMIT = 10;
  */
 export const MAX_EPISODE_LIST_LIMIT = 75;
 
-type PlaylistSettings = Pick<
+export type PlaylistSettings = Pick<
 	Playlist,
 	"icon" | "name" | "shouldEpisodeRemoveAfterPlay" | "shouldRepeat"
 >;

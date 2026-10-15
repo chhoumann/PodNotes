@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Scope } from "obsidian";
-	import { onDestroy, tick } from "svelte";
+	import { tick } from "svelte";
 	import { get } from "svelte/store";
 	import { reorderEpisodes, type QueuePlacement } from "src/store";
 	import type { Episode } from "src/types/Episode";
@@ -116,7 +116,8 @@
 		const dragged = drag?.episode;
 		if (dragged && !$queue.episodes.some((entry) => isSameEpisode(entry, dragged))) end();
 	});
-	onDestroy(end);
+	// A drag under way ends with the list.
+	$effect(() => end);
 </script>
 
 {#if $queue.episodes.length > 0}

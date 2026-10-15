@@ -6,7 +6,7 @@ import type { Episode, EpisodeMediaType } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { createMediaUrlObjectFromFilePath } from "src/utility/createMediaUrlObjectFromFilePath";
-import { getEpisodeKey, isSameStoredEpisode } from "src/utility/episodeKey";
+import { getEpisodeKey, isSameEpisode, isSameStoredEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
@@ -83,6 +83,23 @@ const isTime = (value: number) => Number.isFinite(value) && value >= 0;
 const isOptionalTime = (value: number | undefined) => value === undefined || isTime(value);
 const finiteOr0 = (value: number) => (Number.isFinite(value) ? value : 0);
 
+function savedProgress(episode: Episode): PlayedEpisode | undefined {
+	return getPlayedEpisode(get(playedEpisodes), episode);
+}
+
+function resumeTime(episode: Episode): number {
+	const saved = savedProgress(episode);
+	if (!saved || saved.finished || (saved.duration > 0 && saved.time >= saved.duration)) {
+		return 0;
+	}
+	return saved.time;
+}
+
+/** The length shown until the metadata loads. */
+function startDuration(episode: Episode): number {
+	return savedProgress(episode)?.duration || episode.duration || 0;
+}
+
 /**
  * Owns the one media element, in the main window, from plugin load to unload.
  * Views render `state` and call the intents.
@@ -116,7 +133,7 @@ export class PlayerController {
 			currentTime: 0,
 			duration: 0,
 			playbackRate: normalizePlaybackRate(defaultPlaybackRate),
-			volume: Number.isFinite(defaultVolume) ? Math.min(1, Math.max(0, defaultVolume)) : 1,
+			volume: defaultVolume,
 		};
 		this.store = writable(this.snapshot);
 		this.state = { subscribe: this.store.subscribe };
@@ -128,18 +145,18 @@ export class PlayerController {
 		this.noteStoppedMove();
 		const { status, episode: shown, currentTime } = this.snapshot;
 		if (status === "paused" && shown && !this.moved) {
-			const time = this.resumeTime(shown);
+			const time = resumeTime(shown);
 			if (time !== currentTime) this.moveTo(time);
 			return;
 		}
 		if (!episode || (status !== "empty" && status !== "restored")) return;
-		this.moved &&= !!shown && getEpisodeKey(shown) === getEpisodeKey(episode);
+		this.moved &&= !!shown && isSameEpisode(shown, episode);
 		this.setState({
 			status: "restored",
 			episode,
 			mediaType: getEpisodeMediaType(episode),
-			currentTime: this.moved ? currentTime : this.resumeTime(episode),
-			duration: this.startDuration(episode),
+			currentTime: this.moved ? currentTime : resumeTime(episode),
+			duration: startDuration(episode),
 		});
 	}
 
@@ -180,7 +197,7 @@ export class PlayerController {
 		const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
 		this.noteStoppedMove();
 		const { status, episode: outgoing, mediaType } = this.snapshot;
-		const sameEpisode = !!outgoing && getEpisodeKey(outgoing) === getEpisodeKey(episode);
+		const sameEpisode = !!outgoing && isSameEpisode(outgoing, episode);
 		this.select(episode);
 
 		const session = this.session;
@@ -201,7 +218,7 @@ export class PlayerController {
 			}
 			session.segmentEnd = endTime ?? null;
 			session.preview = endTime !== undefined;
-			const at = time ?? (status === "ended" ? this.resumeTime(episode) : undefined);
+			const at = time ?? (status === "ended" ? resumeTime(episode) : undefined);
 			if (time !== undefined) this.moved = true;
 			if (at === undefined || this.moveTo(at)) this.start();
 			return true;
@@ -216,7 +233,7 @@ export class PlayerController {
 		) {
 			queue.prepend(outgoing);
 		}
-		const resumeAt = sameEpisode ? this.restartTime(episode) : this.resumeTime(episode);
+		const resumeAt = sameEpisode ? this.restartTime(episode) : resumeTime(episode);
 		this.load(episode, source, time ?? resumeAt, endTime);
 		this.moved = time !== undefined || (sameEpisode && this.moved);
 		return true;
@@ -245,12 +262,12 @@ export class PlayerController {
 		const { status, episode } = this.snapshot;
 		if (!episode) return;
 		this.requests++;
-		if (status === "playing" || status === "loading") return;
+		if (isPlaying(status)) return;
 		this.endPreview();
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
 			this.load(episode, source, this.restartTime(episode));
-		} else if (status !== "ended" || this.moveTo(this.resumeTime(episode))) {
+		} else if (status !== "ended" || this.moveTo(resumeTime(episode))) {
 			this.start();
 		}
 	}
@@ -259,14 +276,14 @@ export class PlayerController {
 		if (this.disposed) return;
 		this.requests++;
 		const { status } = this.snapshot;
-		if (status !== "playing" && status !== "loading") return;
+		if (!isPlaying(status)) return;
 		this.el.pause();
 		this.settlePaused();
 	}
 
 	toggle(): void {
 		const { status } = this.snapshot;
-		if (status === "playing" || status === "loading") this.pause();
+		if (isPlaying(status)) this.pause();
 		else this.resume();
 	}
 
@@ -316,20 +333,18 @@ export class PlayerController {
 	}
 
 	/**
-	 * A Svelte action for the view's video stage. The video plays inside the stage
+	 * A Svelte attachment for the view's video stage. The video plays inside the stage
 	 * while the stage is in the main window, and hidden in the main window otherwise.
 	 */
-	readonly videoStage = (stage: HTMLElement): { destroy(): void } => {
+	readonly videoStage = (stage: HTMLElement): (() => void) => {
 		this.stage = stage;
 		this.placeElement();
 		const stopFollowingWindow = stage.onWindowMigrated?.(() => this.placeElement());
-		return {
-			destroy: () => {
-				stopFollowingWindow?.();
-				if (this.stage !== stage) return;
-				this.stage = null;
-				this.placeElement();
-			},
+		return () => {
+			stopFollowingWindow?.();
+			if (this.stage !== stage) return;
+			this.stage = null;
+			this.placeElement();
 		};
 	};
 
@@ -351,11 +366,11 @@ export class PlayerController {
 
 	private load(episode: Episode, source: PlaybackSource, time: number, endTime?: number): void {
 		this.session = null;
-		const duration = this.startDuration(episode);
+		const duration = startDuration(episode);
 		const shown = this.snapshot.episode;
 		// Reloading the shown episode, as on its first play after a restart, keeps the user's speed.
 		const playbackRate =
-			shown && getEpisodeKey(shown) === getEpisodeKey(episode)
+			shown && isSameEpisode(shown, episode)
 				? this.snapshot.playbackRate
 				: normalizePlaybackRate(this.plugin.settings.defaultPlaybackRate);
 		if (!source.src) {
@@ -444,7 +459,7 @@ export class PlayerController {
 	/** play() unpauses the element at once, so the next intent can act on the new status. */
 	private start(): void {
 		const { status } = this.snapshot;
-		if (status === "playing" || status === "loading") return;
+		if (isPlaying(status)) return;
 		this.setState({ status: this.holdsMedia() ? "playing" : "loading" });
 		this.playElement();
 	}
@@ -457,7 +472,7 @@ export class PlayerController {
 			// A play that has since started, such as the next load's, keeps playing.
 			const { status } = this.snapshot;
 			if (this.disposed || !this.el.paused) return;
-			if (status === "loading" || status === "playing") this.settlePaused();
+			if (isPlaying(status)) this.settlePaused();
 		});
 	}
 
@@ -537,14 +552,14 @@ export class PlayerController {
 		const { status } = this.snapshot;
 		if (!this.holdsMedia() || this.el.paused) return;
 		// A play the player did not start, such as from a media key, is the user's.
-		if (status !== "playing" && status !== "loading") this.requests++;
+		if (!isPlaying(status)) this.requests++;
 		this.setState({ status: "playing" });
 	}
 
 	/** A reset pauses without this event (see onEmptied), so a pause while loading is a real one. */
 	private onPause(): void {
 		const { status } = this.snapshot;
-		if ((status !== "playing" && status !== "loading") || !this.el.paused) return;
+		if (!isPlaying(status) || !this.el.paused) return;
 		// A pause the player did not make and no natural end made, such as from a media key.
 		if (!this.el.ended) this.requests++;
 		this.settlePaused();
@@ -600,7 +615,7 @@ export class PlayerController {
 		this.load(
 			next,
 			selectSource(next, get(downloadedEpisodes), this.plugin.app.vault),
-			this.resumeTime(next),
+			resumeTime(next),
 		);
 	}
 
@@ -635,10 +650,6 @@ export class PlayerController {
 		this.moved = false;
 	}
 
-	private savedProgress(episode: Episode): PlayedEpisode | undefined {
-		return getPlayedEpisode(get(playedEpisodes), episode);
-	}
-
 	/**
 	 * Where the shown episode starts on a new load: where it is while a session holds it
 	 * or after the user moved it, else at its saved progress, which a sync may have changed.
@@ -646,20 +657,7 @@ export class PlayerController {
 	private restartTime(episode: Episode): number {
 		const { status, currentTime } = this.snapshot;
 		const live = status !== "ended" && (!!this.session || this.moved);
-		return live ? currentTime : this.resumeTime(episode);
-	}
-
-	private resumeTime(episode: Episode): number {
-		const saved = this.savedProgress(episode);
-		if (!saved || saved.finished || (saved.duration > 0 && saved.time >= saved.duration)) {
-			return 0;
-		}
-		return saved.time;
-	}
-
-	/** The length shown until the metadata loads. */
-	private startDuration(episode: Episode): number {
-		return this.savedProgress(episode)?.duration || episode.duration || 0;
+		return live ? currentTime : resumeTime(episode);
 	}
 
 	private setState(patch: Partial<PlayerState>): void {
