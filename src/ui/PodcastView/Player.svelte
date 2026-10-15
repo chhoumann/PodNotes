@@ -327,13 +327,14 @@
 			container-type: size;
 		}
 
-		.pn-stage .pn-cover {
+		/* The stage's own artwork, not the covers of a panel's rows shown in it. */
+		.pn-stage > .pn-cover {
 			width: min(100cqw, 100cqh - 8px, 300px);
 			border-radius: 12px;
 			box-shadow: var(--shadow-s);
 		}
 
-		.pn-stage .pn-filetile {
+		.pn-stage > .pn-filetile {
 			color: var(--text-faint);
 			container-type: inline-size;
 			--icon-size: 25cqw;
@@ -497,7 +498,7 @@
 		}
 
 		.is-phone & {
-			.pn-stage .pn-cover {
+			.pn-stage > .pn-cover {
 				width: min(100cqw, 100cqh - 8px, 358px);
 			}
 

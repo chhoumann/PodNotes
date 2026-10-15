@@ -188,3 +188,24 @@ describe("on a tablet", () => {
 		expect(padding).toBe("0px 8px");
 	});
 });
+
+describe("the player's stage", () => {
+	test("dresses its own artwork, not the covers of a panel's rows shown in it", () => {
+		const css = componentCss(["PodcastView", "Player", "EpisodeRow"]);
+		const tile = (id: string) => `<span id="${id}" class="pn-cover pn-filetile"></span>`;
+		styled(
+			css,
+			`<div class="podcast-view pn-PodcastView"><section class="pn-player pn-Player"><div class="pn-stage">${tile("art")}<div class="pn-panel"><div class="pn-ep pn-EpisodeRow"><button class="pn-ep-main">${tile("row")}</button></div></div></div></section></div>`,
+			"#art",
+		);
+		const look = (id: string) => {
+			const style = getComputedStyle(document.getElementById(id)!);
+			return { shadow: style.boxShadow, icon: style.getPropertyValue("--icon-size") };
+		};
+
+		expect([look("art"), look("row")]).toEqual([
+			{ shadow: "var(--shadow-s)", icon: "25cqw" },
+			{ shadow: "", icon: "18px" },
+		]);
+	});
+});
