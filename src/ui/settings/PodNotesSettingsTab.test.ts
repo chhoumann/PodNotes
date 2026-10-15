@@ -520,7 +520,7 @@ describe("text fields", () => {
 
 		retype(path, "PodNotes/{{podcast}}");
 		expect(warning()).toBe(
-			"Without {{title}}, episodes share one file and downloads overwrite each other. Add it, for example PodNotes/{{podcast}}/{{title}}.",
+			"Without {{title}}, episodes share a file name and a second download to it fails. Add it, for example PodNotes/{{podcast}}/{{title}}.",
 		);
 		type(path, "/{{title}}");
 		expect(warning()).toBeUndefined();

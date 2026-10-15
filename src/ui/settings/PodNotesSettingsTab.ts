@@ -387,7 +387,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						setting.setErrorMessage(
 							/\{\{title(:[^}]*)?\}\}/i.test(value)
 								? null
-								: "Without {{title}}, episodes share one file and downloads overwrite each other. Add it, for example PodNotes/{{podcast}}/{{title}}.",
+								: "Without {{title}}, episodes share a file name and a second download to it fails. Add it, for example PodNotes/{{podcast}}/{{title}}.",
 						);
 					},
 				}),
