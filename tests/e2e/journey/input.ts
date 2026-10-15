@@ -197,6 +197,30 @@ export async function drag(
 	await mouse.release();
 }
 
+/** Drags a finger from `from` to `to` at a hand's pace: a short hold, then `steps` even steps. */
+export async function touchDrag(
+	obsidian: ObsidianClient,
+	from: Point,
+	to: Point,
+	steps = 8,
+): Promise<void> {
+	const touch = (type: string, points: Point[]) =>
+		cdp(obsidian, "Input.dispatchTouchEvent", { type, touchPoints: points });
+	const pause = () => new Promise((resolve) => setTimeout(resolve, 120));
+	await touch("touchStart", [from]);
+	await pause();
+	for (let step = 1; step <= steps; step++) {
+		await touch("touchMove", [
+			{
+				x: from.x + ((to.x - from.x) * step) / steps,
+				y: from.y + ((to.y - from.y) * step) / steps,
+			},
+		]);
+		await pause();
+	}
+	await touch("touchEnd", []);
+}
+
 export async function typeInto(
 	obsidian: ObsidianClient,
 	target: UiTarget,
