@@ -244,24 +244,31 @@ function copyHeaders(value: unknown): Record<string, string> | undefined {
 	}
 }
 
+/** Each field read once, in order, so a getter cannot answer differently later. */
+function readFields<K extends string>(value: object, keys: readonly K[]): Record<K, unknown> {
+	const fields = {} as Record<K, unknown>;
+	for (const key of keys) fields[key] = Reflect.get(value, key);
+	return fields;
+}
+
 function snapshotOptions(value: unknown): NetworkRequestOptionsSnapshot {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		throw invalidOptions();
 	}
 
 	try {
-		return {
-			timeoutMs: Reflect.get(value, "timeoutMs"),
-			maxRequestBodyBytes: Reflect.get(value, "maxRequestBodyBytes"),
-			maxResponseBytes: Reflect.get(value, "maxResponseBytes"),
-			acceptedStatuses: Reflect.get(value, "acceptedStatuses"),
-			signal: Reflect.get(value, "signal"),
-			method: Reflect.get(value, "method"),
-			contentType: Reflect.get(value, "contentType"),
-			headers: Reflect.get(value, "headers"),
-			body: Reflect.get(value, "body"),
-			request: Reflect.get(value, "request"),
-		};
+		return readFields(value, [
+			"timeoutMs",
+			"maxRequestBodyBytes",
+			"maxResponseBytes",
+			"acceptedStatuses",
+			"signal",
+			"method",
+			"contentType",
+			"headers",
+			"body",
+			"request",
+		]);
 	} catch {
 		throw invalidOptions();
 	}
@@ -472,11 +479,7 @@ interface TextResponseFields {
 
 function snapshotBinaryResponseFields(value: object): BinaryResponseFields {
 	try {
-		return {
-			status: Reflect.get(value, "status"),
-			headers: Reflect.get(value, "headers"),
-			arrayBuffer: Reflect.get(value, "arrayBuffer"),
-		};
+		return readFields(value, ["status", "headers", "arrayBuffer"]);
 	} catch {
 		throw new NetworkError("invalid-response");
 	}
@@ -484,11 +487,7 @@ function snapshotBinaryResponseFields(value: object): BinaryResponseFields {
 
 function snapshotTextResponseFields(value: object): TextResponseFields {
 	try {
-		return {
-			status: Reflect.get(value, "status"),
-			arrayBuffer: Reflect.get(value, "arrayBuffer"),
-			text: Reflect.get(value, "text"),
-		};
+		return readFields(value, ["status", "arrayBuffer", "text"]);
 	} catch {
 		throw new NetworkError("invalid-response");
 	}
