@@ -59,13 +59,12 @@ export function decodeEpisode(
 	setOptionalFiniteNumber(decoded, value, "duration", warnings, path, 0);
 	setOptionalFiniteNumber(decoded, value, "size", warnings, path, 0);
 
-	if (value.mediaType === undefined) {
+	// The copy keeps a valid value as it is.
+	if (value.mediaType !== "audio" && value.mediaType !== "video") {
 		delete decoded.mediaType;
-	} else if (value.mediaType === "audio" || value.mediaType === "video") {
-		decoded.mediaType = value.mediaType;
-	} else {
-		delete decoded.mediaType;
-		warn(warnings, `${path}.mediaType`, "expected audio or video");
+		if (value.mediaType !== undefined) {
+			warn(warnings, `${path}.mediaType`, "expected audio or video");
+		}
 	}
 
 	if (value.episodeDate === undefined || value.episodeDate === null || value.episodeDate === "") {
@@ -143,13 +142,11 @@ export function decodePlaylist(
 	if (currentEpisode) decoded.currentEpisode = currentEpisode;
 	else delete decoded.currentEpisode;
 
-	if (value.isVirtual === undefined) {
+	if (typeof value.isVirtual !== "boolean") {
 		delete decoded.isVirtual;
-	} else if (typeof value.isVirtual === "boolean") {
-		decoded.isVirtual = value.isVirtual;
-	} else {
-		delete decoded.isVirtual;
-		warn(warnings, `${path}.isVirtual`, "expected a boolean");
+		if (value.isVirtual !== undefined) {
+			warn(warnings, `${path}.isVirtual`, "expected a boolean");
+		}
 	}
 
 	return decoded as unknown as Playlist;
