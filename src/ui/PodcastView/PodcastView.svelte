@@ -118,7 +118,8 @@
 					{#if head.back}
 						<button
 							type="button"
-							class={head.search ? "pn-iconbtn" : "pn-back"}
+							class:pn-iconbtn={head.search}
+							class:pn-back={!head.search}
 							aria-label="Back to {head.back}"
 							onclick={() => navigation.back()}
 						>
