@@ -47,9 +47,9 @@ The **Local files** page lists every episode you have offline: your downloads an
 ## Remove a download or a local file
 
 1. Right-click the episode, or select its **More options** button.
-2. Select **Remove download** for a download, or **Remove from Local Files** for your own file.
+2. Select **Remove download** for a download, or **Remove from Local files** for your own file.
 
-**Remove from Local Files** keeps your file in the vault. **Remove download** removes the episode from **Local files** and moves its file to the trash.
+**Remove from Local files** keeps your file in the vault. **Remove download** removes the episode from **Local files** and moves its file to the trash.
 Where a trashed file goes depends on Obsidian's **Deleted files** setting in **Settings → Files and links**. If that setting deletes files permanently, so does PodNotes.
 
 If PodNotes cannot confirm that it downloaded a file, as with downloads from older versions, it asks first. Select **Keep file** to leave the file in your vault, or **Delete file** to move it to the trash. Either way, the episode leaves **Local files**.

@@ -57,7 +57,7 @@ These settings decide what the previous-track and next-track buttons of a headse
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Download path** | `PodNotes/{{podcast}}/{{title}}` | Sets where downloaded episodes go. PodNotes adds the file extension. A warning appears when the path has no `{{title}}`, because episodes would share one file. See [Download an episode](/local_files/#download-an-episode). |
+| **Download path** | `PodNotes/{{podcast}}/{{title}}` | Sets where downloaded episodes go. PodNotes adds the file extension. When the path has no `{{title}}`, a warning says that episodes would share a file name and a second download to it fails. See [Download an episode](/local_files/#download-an-episode). |
 
 ## <span id="importexport"></span>Library
 

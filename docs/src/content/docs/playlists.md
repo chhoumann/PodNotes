@@ -17,7 +17,7 @@ To add an episode to the end of the queue:
 1. Right-click the episode, or select its **More options** button, the three dots at the end of its row.
 2. Select **Add to queue**.
 
-When an episode ends, PodNotes removes it from the queue. Episodes on the Queue page have no **More options** button, so right-click one to open its menu. On a phone, open the episode's menu from another list that holds it, such as its podcast's page, or use **Episode options** in the full player while the episode is loaded. The full player's **Up next** panel shows the same queue. See [Up next](/player/#up-next).
+When an episode ends, PodNotes removes it from the queue. Episodes on the Queue page and in **Up next** have no **More options** button, so right-click one to open its menu. On a phone, open the episode's menu from another list that holds it, such as its podcast's page, or use **Episode options** in the full player while the episode is loaded. The full player's **Up next** panel shows the same queue. See [Up next](/player/#up-next).
 
 ### Reorder the queue
 

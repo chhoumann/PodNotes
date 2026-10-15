@@ -37,9 +37,9 @@ The full player's **Transcript** panel shows the transcript that the episode's f
 1. In the full player, select **Transcript**.
 2. Select a line with a time to play the episode from that moment. A transcript without times can only be read.
 
-The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. See [Read the transcript](/player/#read-the-transcript) for every control.
+The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Once the note exists, the button reads **Open note** and opens it. See [Read the transcript](/player/#read-the-transcript) for every control.
 
-When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers a button marked **Paid**: **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. Offline, the panel's transcribe button and **Save as note** are turned off.
+When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers a button marked **Paid**: **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. When the episode's transcript note already exists, the panel offers **Open note** instead. Offline, the panel's transcribe button and **Save as note** are turned off, and **Open note** still works.
 
 ## Transcripts that feeds publish
 

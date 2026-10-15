@@ -86,7 +86,7 @@ To open an episode's menu, right-click the episode, or select its **More options
 | **Play** or **Open player** | Plays the episode and opens the full player. For the loaded episode, only opens the full player. |
 | **Add to queue** or **Remove from queue** | Adds the episode to the end of the queue, or removes it. |
 | **Create note** or **Open note** | Creates or opens the episode note. See [Create episode notes](/notes/). |
-| **Download**, **Remove download**, or **Remove from Local Files** | Downloads the episode. **Remove download** moves the downloaded file to the trash, and **Remove from Local Files** removes your own file from **Local files** and keeps the file. See [Downloads and local files](/local_files/). |
+| **Download**, **Remove download**, or **Remove from Local files** | Downloads the episode. **Remove download** moves the downloaded file to the trash, and **Remove from Local files** removes your own file from **Local files** and keeps the file. See [Downloads and local files](/local_files/). |
 | **Add to Favorites** or **Remove from Favorites** | Adds the episode to **Favorites**, or removes it. |
 | **Add to playlist** | Opens a list of your playlists, with a check mark on each one that holds the episode. Select a playlist to add or remove the episode, or **New playlist** to make one that holds it. |
 | **Mark as played** or **Mark as unplayed** | Changes whether the episode counts as played. |
@@ -102,6 +102,6 @@ To open a podcast's menu, select **Podcast options** on its page, or right-click
 | --- | --- |
 | **Create podcast note** or **Open podcast note** | Creates or opens the note for the whole podcast. See [Create a podcast note](/notes/#create-a-podcast-note). |
 | **Copy feed URL** | Copies the feed's address. Only for a feed that is not private. |
-| **Set feed address** | Asks for a private feed's address when it is not on this device. |
-| **Edit feed URL** | Changes the address of a feed that is not private, when PodNotes cannot load it. |
+| **Set feed address** | Asks for a private feed's address when it is not on this device. Turned off offline. |
+| **Edit feed URL** | Changes the address of a feed that is not private, when PodNotes cannot load it. Turned off offline. |
 | **Remove podcast** | Removes the podcast, with **Undo** in the notice. |
