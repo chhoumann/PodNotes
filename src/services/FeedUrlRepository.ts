@@ -19,8 +19,8 @@ import { isValidSecretId } from "src/types/Credentials";
  *
  * SecretStorage's API has no delete, so a cleared ID stays listed for good.
  * Storing a URL this device already holds therefore returns the ID holding it.
- * Only an ID whose value here is exactly the URL qualifies. A cleared ID stays
- * retired, since another device may still reference it.
+ * Only a PodNotes ID that resolves here to that URL qualifies. A cleared ID
+ * stays retired, since another device may still reference it.
  */
 const FEED_URL_SECRET_ID =
 	/^podnotes-feed-url-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -52,15 +52,9 @@ export class FeedUrlRepository {
 
 	/** Store a private feed URL under its ID here, else a fresh one, and verify the readback. */
 	store(url: string): string {
-		const value = url.trim();
-		const held =
-			value &&
-			this.storage
-				.listSecrets()
-				.find(
-					(candidate) =>
-						isFeedUrlSecretId(candidate) && this.storage.getSecret(candidate) === value,
-				);
+		const held = this.storage
+			.listSecrets()
+			.find((candidate) => this.resolve(candidate) === url.trim());
 		if (held) return held;
 		const id = `podnotes-feed-url-${crypto.randomUUID()}`;
 		this.attach(id, url);
