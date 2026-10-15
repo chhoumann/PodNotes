@@ -101,6 +101,7 @@ export class CaptureService {
 				cursorLine: editor.getCursor("from").line,
 			});
 			const before = editor.getValue();
+			endDetachedTableCell(editor);
 			const cell = tableCellWriter(editor);
 			if (cell) cell(inserted);
 			else editor.replaceSelection(inserted);
@@ -217,6 +218,7 @@ export class CaptureService {
  */
 function revertIn(editor: Editor, { before, after }: Snapshot): boolean {
 	if (editor.getValue() !== after) return false;
+	endDetachedTableCell(editor);
 	let from = 0;
 	while (from < before.length && before[from] === after[from]) from++;
 	let tail = 0;
@@ -252,6 +254,21 @@ function tableCellWriter(editor: Editor): ((escaped: string) => void) | null {
 	return typeof replaceSelection === "function"
 		? (escaped) => replaceSelection.call(cell, escaped.replace(/\\\|/g, "|"))
 		: null;
+}
+
+/**
+ * Obsidian keeps a table cell's editor once its table leaves the note's view, as in Source
+ * mode or after the tab showed another note. That cell rewrites the table from its old copy
+ * at its old place, and takes over the note editor's edits there, so it is ended as Obsidian
+ * ends it when the note's editor takes focus.
+ */
+function endDetachedTableCell(editor: Editor): void {
+	const component = field(editor, "editorComponent");
+	const cell = field(component, "tableCell");
+	const end = field(component, "destroyTableCell");
+	if (cell && !field(field(cell, "containerEl"), "isConnected") && typeof end === "function") {
+		end.call(component);
+	}
 }
 
 function field(value: unknown, key: string): unknown {
