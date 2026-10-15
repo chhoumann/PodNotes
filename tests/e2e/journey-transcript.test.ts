@@ -122,7 +122,8 @@ type Placement = Readonly<{
 /**
  * Whether the view is in sight, and each leaf that shows one of `paths`: in the view's own tab
  * group, beside the view in its window or sidebar, else in the main area, another popout or a
- * sidebar.
+ * sidebar. In sight means shown, and inside its window: a stacked tab group shows every tab,
+ * scrolled out of the window or not.
  */
 async function placement(paths: readonly string[]): Promise<Placement> {
 	return await getContext().obsidian.dev.evalJson<Placement>(`(() => {
@@ -138,13 +139,18 @@ async function placement(paths: readonly string[]): Promise<Placement> {
 					: leaf.getRoot() === workspace.floatingSplit
 						? "another popout"
 						: "sidebar";
+		const inSight = (leaf) => {
+			const el = leaf.view.containerEl;
+			const box = el.getBoundingClientRect();
+			return el.isShown() && box.width > 0 && box.left >= 0 && box.right <= el.win.innerWidth + 1;
+		};
 		const notes = [];
 		workspace.iterateAllLeaves((leaf) => {
 			const path = leaf.view.file?.path;
 			if (${jsLiteral(paths)}.includes(path))
-				notes.push({ path, where: where(leaf), shown: leaf.view.containerEl.isShown() });
+				notes.push({ path, where: where(leaf), shown: inSight(leaf) });
 		});
-		return { view: view.view.containerEl.isShown(), notes };
+		return { view: inSight(view), notes };
 	})()`);
 }
 
@@ -575,6 +581,59 @@ describe("transcript journeys", () => {
 			notes: [{ path: episodeNote, where: "main area", shown: true }],
 		});
 	}, 120_000);
+
+	test("with the view stacked with a note, a note PodNotes opens goes beside the view and keeps it in sight, also when the stacked note was active last", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+		});
+		const transcript = sandbox.path(NOTE_PATH);
+		const stacked = sandbox.path("Stacked with the view.md");
+		deleteWhenDone([transcript, stacked]);
+		await writeVaultFile(obsidian, stacked, "A note stacked with the view.\n");
+		await placePodNotes(obsidian, "main area");
+		const viewTabs = `app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0].parent`;
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			const { workspace } = app;
+			const view = workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+			const others = [];
+			workspace.iterateRootLeaves((leaf) => {
+				if (leaf !== view) others.push(leaf);
+			});
+			for (const leaf of others) leaf.detach();
+			const tab = workspace.createLeafInParent(view.parent, 0);
+			await tab.openFile(app.vault.getFileByPath(${jsLiteral(stacked)}));
+			view.parent.setStacked(true);
+			workspace.setActiveLeaf(view, { focus: true });
+			return true;
+		})()`);
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		await click(obsidian, ui.playerPanel("Transcript"));
+		await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+		const beside = {
+			view: true,
+			notes: [{ path: transcript, where: "beside the view", shown: true }],
+		};
+
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Save as note"));
+		await waitForOpened(transcript);
+		expect(await placement([transcript]), "Save as note").toEqual(beside);
+
+		await obsidian.dev.evalJson(`(() => {
+			const stack = ${viewTabs};
+			app.workspace.setActiveLeaf(stack.children.find((leaf) => leaf.view.file?.path === ${jsLiteral(stacked)}));
+			return true;
+		})()`);
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Open note"));
+		await waitForOpened(transcript);
+		expect(await placement([transcript]), "Open note after the stacked note").toEqual(beside);
+	});
 
 	test("in a popout, a note PodNotes opens goes beside the view, not to a note in another popout, and a later one reuses that split", async () => {
 		const context = getContext();
