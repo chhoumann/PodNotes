@@ -2,10 +2,10 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	clickInEditor,
-	clickInNoteWindow,
+	clickLastInNoteWindow,
 	closePopoutTab,
 	focusNoteWindow,
-	noticesBeside,
+	noticesInNoteWindow,
 	openInEditor,
 	openInReadingView,
 	reloadAfterPopout,
@@ -1025,10 +1025,10 @@ describe("episode note and capture journeys", () => {
 				(text) => text === captured,
 				"the capture in the popout draft",
 			);
-			expect(await noticesBeside(obsidian, draft)).toEqual([
+			expect(await noticesInNoteWindow(obsidian, draft)).toEqual([
 				{ message: "Timestamp added to Focused draft", button: "Undo" },
 			]);
-			await clickInNoteWindow(obsidian, draft, ".notice button.pn-undo");
+			await clickLastInNoteWindow(obsidian, draft, ".notice button.pn-undo");
 			await waitForText(draft, (text) => text === "Popout notes\n", "the draft as it was");
 		} finally {
 			if (await obsidian.dev.evalJson<number>("app.workspace.floatingSplit.children.length"))

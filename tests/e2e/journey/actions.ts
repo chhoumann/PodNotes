@@ -285,7 +285,7 @@ export async function clickInEditor(
 	})()`);
 }
 
-/** Gives the window holding the open editor of `notePath` the OS focus, as a click into it does. */
+/** Gives the window holding the open editor of `notePath` the OS focus, which input sent to it does not. */
 export async function focusNoteWindow(obsidian: ObsidianClient, notePath: string): Promise<void> {
 	const focused = await obsidian.dev.evalJsonAsync<boolean>(`(async () => {
 		${inNoteWindow(notePath)}
@@ -297,11 +297,7 @@ export async function focusNoteWindow(obsidian: ObsidianClient, notePath: string
 	if (!focused) throw new Error(`The window showing ${notePath} did not take focus.`);
 }
 
-/**
- * Clicks the last element `selector` matches, with `text` when given, in the window holding
- * the open editor of `notePath`.
- */
-export async function clickInNoteWindow(
+export async function clickLastInNoteWindow(
 	obsidian: ObsidianClient,
 	notePath: string,
 	selector: string,
@@ -317,11 +313,10 @@ export async function clickInNoteWindow(
 		press(box.left + box.width / 2, box.top + box.height / 2);
 		return true;
 	})()`);
-	if (!clicked) throw new Error(`Nothing matches ${selector} beside ${notePath}.`);
+	if (!clicked) throw new Error(`Nothing matches ${selector} in the window of ${notePath}.`);
 }
 
-/** The text and Undo button of each Notice in the window holding the open editor of `notePath`. */
-export async function noticesBeside(
+export async function noticesInNoteWindow(
 	obsidian: ObsidianClient,
 	notePath: string,
 ): Promise<Array<{ message: string; button: string | null }>> {

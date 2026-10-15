@@ -21,9 +21,10 @@ export function noticeWithUndo(message: string, undo: () => void): void {
 	};
 	button.addEventListener("click", run);
 	showing.add(dismiss);
-	// Obsidian keeps a notice up past its time while the pointer rests on it.
+	// Obsidian keeps a notice up past its time while the pointer rests on it, and a popout
+	// that closes keeps it in its document.
 	const forget = () => {
-		if (button.isConnected) window.setTimeout(forget, 1000);
+		if (button.isConnected && button.doc.defaultView) window.setTimeout(forget, 1000);
 		else showing.delete(dismiss);
 	};
 	window.setTimeout(forget, 7000);

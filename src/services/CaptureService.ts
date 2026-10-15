@@ -24,12 +24,11 @@ export interface Capture {
 	created: boolean;
 }
 
-/** A note's text as a capture found it and as it left it. */
+/** A note's text as a capture found it and as it left it, and the caret it found in its editor. */
 interface Snapshot {
 	readonly before: string;
 	readonly after: string;
-	/** The selections of the editor the capture went into, as it found them. */
-	readonly selections?: EditorSelection[];
+	readonly caret?: { readonly editor: Editor; readonly selections: EditorSelection[] };
 }
 
 /** Puts a capture where the user writes: the editor they used last, else the episode note. */
@@ -104,17 +103,17 @@ export class CaptureService {
 				cursorLine: editor.getCursor("from").line,
 			});
 			const before = editor.getValue();
-			const selections = editor.listSelections();
+			const caret = { editor, selections: editor.listSelections() };
 			endDetachedTableCell(editor);
 			const cell = tableCellWriter(editor);
 			if (cell) cell(inserted);
 			else editor.replaceSelection(inserted);
-			const snapshot = { before, after: editor.getValue(), selections };
+			const snapshot = { before, after: editor.getValue(), caret };
 			// Outside a note's own view, as in a canvas card, the editor's text need not be
 			// its file's, so only that editor can take the capture back.
 			const undo =
 				target instanceof MarkdownView && file
-					? () => this.revert(file, snapshot, editor)
+					? () => this.revert(file, snapshot)
 					: () =>
 							target.editor === editor &&
 							target.file === file &&
@@ -168,11 +167,8 @@ export class CaptureService {
 		);
 	}
 
-	/**
-	 * Puts the note back as the capture found it, while it is exactly as the capture left it,
-	 * in `editor` while it still edits the note.
-	 */
-	private async revert(file: TFile, snapshot: Snapshot, editor?: Editor): Promise<boolean> {
+	/** Puts the note back as the capture found it, while it is exactly as the capture left it. */
+	private async revert(file: TFile, snapshot: Snapshot): Promise<boolean> {
 		// An open editor's buffer is the note: a vault write behind it could lose what it
 		// has not saved yet. Obsidian saves a note as it leaves editing, so once that save
 		// lands, a closed tab or one in Reading view leaves the file as the note.
@@ -185,7 +181,7 @@ export class CaptureService {
 		if (first) {
 			return (
 				editing.every((view) => view.editor.getValue() === snapshot.after) &&
-				revertIn((editing.find((view) => view.editor === editor) ?? first).editor, snapshot)
+				revertIn(first.editor, snapshot)
 			);
 		}
 		try {
@@ -219,11 +215,8 @@ export class CaptureService {
 	}
 }
 
-/**
- * Puts back only the stretch the capture changed, so the editor's own undo history stays,
- * and the selections the capture found.
- */
-function revertIn(editor: Editor, { before, after, selections }: Snapshot): boolean {
+/** Puts back only the stretch the capture changed, so the editor's own undo history stays. */
+function revertIn(editor: Editor, { before, after, caret }: Snapshot): boolean {
 	if (editor.getValue() !== after) return false;
 	endDetachedTableCell(editor);
 	let from = 0;
@@ -248,7 +241,7 @@ function revertIn(editor: Editor, { before, after, selections }: Snapshot): bool
 	);
 	// When Obsidian padded the table around the cell, the stretch holds the caret, and the
 	// edit moves it to the stretch's start, before the table.
-	if (selections) editor.setSelections(selections);
+	if (caret?.editor === editor) editor.setSelections(caret.selections);
 	return true;
 }
 

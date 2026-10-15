@@ -2,7 +2,7 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
 	clickInEditor,
-	clickInNoteWindow,
+	clickLastInNoteWindow,
 	closePopoutTab,
 	focusNoteWindow,
 	openInEditor,
@@ -506,11 +506,11 @@ describe("Live Preview table captures", () => {
 			const editor = `app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view.editor`;
 			await typeText(obsidian, "USER_EDIT");
 			if (where === "scrolled out of view") {
-				await obsidian.dev.evalJson(
-					`(() => { const { scrollDOM } = ${editor}.cm; scrollDOM.scrollTop = scrollDOM.scrollHeight; return true; })()`,
-				);
 				await obsidian.waitFor(
-					() => obsidian.dev.evalJson<boolean>(`${editor}.cm.viewport.from > 1000`),
+					() =>
+						obsidian.dev.evalJson<boolean>(
+							`(() => { const { scrollDOM, viewport } = ${editor}.cm; scrollDOM.scrollTop = scrollDOM.scrollHeight; return viewport.from > 1000; })()`,
+						),
 					{
 						timeoutMs: 5_000,
 						intervalMs: 100,
@@ -559,7 +559,7 @@ describe("Live Preview table captures", () => {
 				return true;
 			})()`);
 			await focusNoteWindow(obsidian, path);
-			await clickInNoteWindow(obsidian, path, ".markdown-source-view td", "anchor");
+			await clickLastInNoteWindow(obsidian, path, ".markdown-source-view td", "anchor");
 			await obsidian.dev.evalJson(`(() => {
 				const remote = require("@electron/remote");
 				const main = remote.getCurrentWindow();
@@ -608,7 +608,7 @@ describe("Live Preview table captures", () => {
 			expect(
 				await eventually(obsidian, () => readVaultText(obsidian, path), captured, 10_000),
 			).toBe(captured);
-			await clickInNoteWindow(obsidian, path, ".notice button.pn-undo");
+			await clickLastInNoteWindow(obsidian, path, ".notice button.pn-undo");
 			expect(
 				await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
 			).toBe(before);
