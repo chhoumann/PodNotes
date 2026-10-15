@@ -110,7 +110,7 @@ export default async function podNotesURIHandler(
 			return;
 		}
 		// One guard ahead of both the segment and plain paths: a negative time is
-		// never valid (the segment path's own requestedTime < 0 check is now redundant).
+		// never valid.
 		if (requestedTime < 0) {
 			new Notice("Timestamp must be zero or greater");
 			return;
@@ -299,11 +299,6 @@ function parseSegmentEndTime(
 
 	if (!hasExplicitTime) {
 		new Notice("Segment links require a start timestamp");
-		return null;
-	}
-
-	if (requestedTime < 0) {
-		new Notice("Segment start time must be zero or greater");
 		return null;
 	}
 
