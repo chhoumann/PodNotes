@@ -48,7 +48,7 @@
 			if (moved.pointerType === "mouse" && moved.buttons === 0) return drop();
 			place(moved.clientX, moved.clientY);
 			// Moving the row's node takes focus from its grip.
-			void tick().then(() => grip.focus({ preventScroll: true, focusVisible: false }));
+			void tick().then(() => grip.focus({ preventScroll: true }));
 		};
 		const release = (released: PointerEvent) => {
 			if (released.pointerId === pointerId) drop();
