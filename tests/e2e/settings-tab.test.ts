@@ -9,7 +9,7 @@ import {
 	showPodNotes,
 } from "./journey/actions";
 import { pubDate, startFixtureServer, type FixtureFeed } from "./journey/fixtures";
-import { click, pressKey, typeInto, typeText } from "./journey/input";
+import { accessibleName, click, pressKey, typeInto, typeText } from "./journey/input";
 import { feedCacheHolds, recordWrites, seedLibrary } from "./journey/library";
 import { PLAYER_VIEW, ui } from "./journey/targets";
 import { eventually, waitUntilShown } from "./journey/wait";
@@ -64,16 +64,39 @@ async function settingValue(obsidian: ObsidianClient, name: string): Promise<unk
 	})()`);
 }
 
+type Field = Readonly<{ row: string; name: string; from?: string }>;
+
+/**
+ * The settings field that has focus, as a screen reader reads it: its row's name, and the name
+ * Chromium computes for it and where from. Undefined when focus is on anything else, such as
+ * a button.
+ */
+async function focusedField(obsidian: ObsidianClient): Promise<Field | undefined> {
+	const named = await accessibleName(
+		obsidian,
+		`document.activeElement.matches(".modal.mod-settings .setting-item-control :is(input, select, textarea, [tabindex='0'])") ? document.activeElement : null`,
+	);
+	if (named === undefined) return undefined;
+	const row = await obsidian.dev.evalJson<string>(
+		'document.activeElement.closest(".setting-item").querySelector(".setting-item-name").textContent',
+	);
+	return { row, ...named };
+}
+
 describe("PodNotes settings tab", () => {
-	test("names each field after its row where it takes focus", async () => {
+	test("names each field by its row's name where Tab takes focus", async () => {
 		const { obsidian } = getContext();
 		await openPodNotesSettings(obsidian);
 		onTestFinished(() => closeSettings(obsidian));
-		const fields = await obsidian.dev.evalJson<Array<{ row: string; name: string }>>(`(() =>
-			[...document.querySelectorAll('.modal.mod-settings .setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"]):not([aria-hidden])')].map((field) => ({
-				row: field.closest(".setting-item").querySelector(".setting-item-name").textContent,
-				name: field.getAttribute("aria-label") ?? document.getElementById(field.getAttribute("aria-labelledby"))?.textContent ?? "",
-			})))()`);
+		// The diarization rows take focus only while diarization is on.
+		await click(obsidian, ui.settingControl("Speaker diarization", ".checkbox-container"));
+		await click(obsidian, ui.settingControl("Skip back (s)", "input"));
+		const fields: Field[] = [];
+		for (let presses = 0; presses < 60 && fields.at(-1)?.row !== "Export settings"; presses++) {
+			if (presses > 0) await pressKey(obsidian, "Tab");
+			const field = await focusedField(obsidian);
+			if (field) fields.push(field);
+		}
 
 		expect(fields.map(({ row }) => row)).toEqual([
 			"Skip back (s)",
@@ -99,7 +122,10 @@ describe("PodNotes settings tab", () => {
 			"Include API keys",
 			"Export settings",
 		]);
-		expect(fields.filter(({ row, name }) => name !== row)).toEqual([]);
+		// A focused toggle's label would also take the name of the checkbox inside it.
+		expect(
+			fields.filter(({ row, name, from }) => name !== row || from !== "aria-labelledby"),
+		).toEqual([]);
 	});
 
 	test("search finds a row of each section by name, and none of the removed rows", async () => {

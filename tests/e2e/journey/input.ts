@@ -73,6 +73,37 @@ export async function cdp(
 	return output ? JSON.parse(output) : undefined;
 }
 
+export type AccessibleName = Readonly<{ name: string; from?: string }>;
+
+type NameSource = Readonly<{
+	type: string;
+	attribute?: string;
+	value?: { value?: string };
+	superseded?: boolean;
+}>;
+
+/**
+ * The name Chromium computes for the element `expression` evaluates to, which a screen reader
+ * announces, and what it took the name from, such as `aria-labelledby` or `contents`.
+ * Undefined when the expression evaluates to no element.
+ */
+export async function accessibleName(
+	obsidian: ObsidianClient,
+	expression: string,
+): Promise<AccessibleName | undefined> {
+	const { result } = (await cdp(obsidian, "Runtime.evaluate", { expression })) as {
+		result: { objectId?: string };
+	};
+	if (!result.objectId) return undefined;
+	const { nodes } = (await cdp(obsidian, "Accessibility.getPartialAXTree", {
+		objectId: result.objectId,
+		fetchRelatives: false,
+	})) as { nodes: Array<{ name?: { value?: string; sources?: NameSource[] } }> };
+	const { value = "", sources = [] } = nodes[0]?.name ?? {};
+	const source = sources.find((candidate) => candidate.value?.value && !candidate.superseded);
+	return { name: value, from: source && (source.attribute ?? source.type) };
+}
+
 export async function click(
 	obsidian: ObsidianClient,
 	target: UiTarget,
