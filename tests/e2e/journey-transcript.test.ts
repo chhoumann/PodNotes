@@ -29,7 +29,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
-import { jsLiteral, PLUGIN_ID } from "./runtime";
+import { jsLiteral, PLUGIN_ID, VIEW_TYPE } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-transcript");
 
@@ -110,6 +110,62 @@ async function serve(): Promise<FixtureServer> {
 	const server = await startFixtureServer([FEED]);
 	onTestFinished(() => server.stop());
 	return server;
+}
+
+type Placement = Readonly<{
+	view: boolean;
+	notes: ReadonlyArray<Readonly<{ path: string; where: string; shown: boolean }>>;
+}>;
+
+/**
+ * Whether the view is in sight, and each leaf that shows one of `paths`: in the view's own tab
+ * group, beside the view in the main area, in the main area while the view is in a sidebar,
+ * or in a sidebar.
+ */
+async function placement(paths: readonly string[]): Promise<Placement> {
+	return await getContext().obsidian.dev.evalJson<Placement>(`(() => {
+		const { workspace } = app;
+		const view = workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+		const where = (leaf) =>
+			leaf.getRoot() !== workspace.rootSplit
+				? "sidebar"
+				: leaf.parent === view.parent
+					? "the view's tabs"
+					: view.getRoot() === workspace.rootSplit
+						? "beside the view"
+						: "main area";
+		const notes = [];
+		workspace.iterateAllLeaves((leaf) => {
+			const path = leaf.view.file?.path;
+			if (${jsLiteral(paths)}.includes(path))
+				notes.push({ path, where: where(leaf), shown: leaf.view.containerEl.isShown() });
+		});
+		return { view: view.view.containerEl.isShown(), notes };
+	})()`);
+}
+
+/** Waits until the leaf in focus shows `path`, as once a note opens. */
+async function waitForOpened(path: string): Promise<void> {
+	const { obsidian } = getContext();
+	await obsidian.waitFor(
+		() =>
+			obsidian.dev.evalJson<boolean>(
+				`app.workspace.activeLeaf?.view.file?.path === ${jsLiteral(path)}`,
+			),
+		{ timeoutMs: 30_000, intervalMs: 100, message: `${path} opened` },
+	);
+}
+
+/** Closes every leaf that shows `path`, as a user closes its tab. */
+async function closeNote(path: string): Promise<void> {
+	await getContext().obsidian.dev.evalJson(`(() => {
+		const leaves = [];
+		app.workspace.iterateAllLeaves((leaf) => {
+			if (leaf.view.file?.path === ${jsLiteral(path)}) leaves.push(leaf);
+		});
+		for (const leaf of leaves) leaf.detach();
+		return true;
+	})()`);
 }
 
 /** The full player wide, so every line shows and none needs a scroll that stops following. */
@@ -396,6 +452,83 @@ describe("transcript journeys", () => {
 		expect(await readVaultText(obsidian, sandbox.path(NOTE_PATH))).toBe(saved);
 		expect(server.requests().length, "no request").toBe(requests);
 	});
+
+	test("in the main area, a note PodNotes opens goes beside the view, which stays in sight, and in a sidebar to the main area", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+		});
+		const transcript = sandbox.path(NOTE_PATH);
+		const episodeNote = sandbox.path(`PodNotes/${FEED.title}/${CAPTIONED.title}.md`);
+		const podcastNote = sandbox.path(`PodNotes/Podcasts/${FEED.title}.md`);
+		const behind = sandbox.path("Behind the view.md");
+		await writeVaultFile(obsidian, behind, "A note in a tab behind the view.\n");
+		await placePodNotes(obsidian, "main area");
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			const { workspace } = app;
+			const view = workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
+			const others = [];
+			workspace.iterateRootLeaves((leaf) => {
+				if (leaf !== view) others.push(leaf);
+			});
+			for (const leaf of others) leaf.detach();
+			const tab = workspace.createLeafInParent(view.parent, 0);
+			await tab.openFile(app.vault.getFileByPath(${jsLiteral(behind)}), { active: false });
+			workspace.setActiveLeaf(view, { focus: true });
+			return true;
+		})()`);
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		await click(obsidian, ui.playerPanel("Transcript"));
+		await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+		const notes = [transcript, episodeNote, podcastNote];
+		const beside = (path: string) => ({
+			view: true,
+			notes: [{ path, where: "beside the view", shown: true }],
+		});
+
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Save as note"));
+		await waitForOpened(transcript);
+		expect(await placement(notes), "Save as note").toEqual(beside(transcript));
+		await dismissNotices(obsidian);
+		await click(obsidian, panelButton("Open note"));
+		await waitForOpened(transcript);
+		expect(await placement(notes), "Open note reuses the split").toEqual(beside(transcript));
+
+		await closeNote(transcript);
+		await click(obsidian, panelButton("Open note"));
+		await waitForOpened(transcript);
+		expect(await placement(notes), "Open note").toEqual(beside(transcript));
+
+		await closeNote(transcript);
+		await click(obsidian, ui.playerControl("Episode options"));
+		await click(obsidian, ui.menuItem("Create note"));
+		await waitForOpened(episodeNote);
+		expect(await placement(notes), "Create note").toEqual(beside(episodeNote));
+
+		await closeNote(episodeNote);
+		await click(obsidian, ui.collapsePlayer);
+		await click(obsidian, ui.podcastCard(FEED.title));
+		await click(obsidian, ui.podcastOptions);
+		await click(obsidian, ui.menuItem("Create podcast note"));
+		await waitForOpened(podcastNote);
+		expect(await placement(notes), "Create podcast note").toEqual(beside(podcastNote));
+
+		await closeNote(podcastNote);
+		await placePodNotes(obsidian, { sidebar: 320 });
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await click(obsidian, ui.playerControl("Episode options"));
+		await click(obsidian, ui.menuItem("Open note"));
+		await waitForOpened(episodeNote);
+		expect(await placement(notes), "Open note in a sidebar").toEqual({
+			view: true,
+			notes: [{ path: episodeNote, where: "main area", shown: true }],
+		});
+	}, 120_000);
 
 	test("an episode whose feed publishes no transcript offers the paid transcription", async () => {
 		const { obsidian } = getContext();
