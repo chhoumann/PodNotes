@@ -370,6 +370,10 @@ describe("Live Preview table captures", () => {
 		expect(
 			await obsidian.dev.evalJson(`${views}.map((view) => view.editor.getValue())`),
 		).toEqual([before, before]);
+		expect(
+			await obsidian.dev.evalJson(`(${views})[0].editor.getCursor()`),
+			"the first pane's caret stays",
+		).toEqual({ line: 7, ch: 11 });
 	});
 
 	test.each(["Source mode", "the tab showed another note"])(

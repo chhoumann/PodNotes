@@ -602,6 +602,7 @@ describe("capture", () => {
 			await undo();
 
 			expect(editor.getValue()).toBe("Heard: draft line");
+			expect(editor.getSelection()).toBe("draft line");
 		});
 
 		it.each([
