@@ -268,7 +268,11 @@ describe("PodNotes settings tab", () => {
 		synced.note.path = remote;
 		await plugin.data<PodNotesData>().write(synced);
 		await obsidian.dev.evalJsonAsync(
-			"app.plugins.plugins.podnotes.onExternalSettingsChange().then(() => true)",
+			`(async () => {
+				await app.plugins.plugins.podnotes.onExternalSettingsChange();
+				app.setting.pluginTabs.find(tab => tab.id === "podnotes").update();
+				return true;
+			})()`,
 		);
 		expect(
 			await obsidian.dev.evalJson(`({
@@ -286,6 +290,77 @@ describe("PodNotes settings tab", () => {
 		expect(await settingValue(obsidian, "Episode note path")).toBe(remote);
 		expect((await plugin.data<PodNotesData>().read()).note?.path).toBe(remote);
 	});
+
+	test.each([
+		{
+			name: "Episode note path",
+			key: "path",
+			other: "Episode note template",
+			selector: "input",
+		},
+		{
+			name: "Episode note template",
+			key: "template",
+			other: "Episode note path",
+			selector: "textarea",
+		},
+	] as const)(
+		"native sync preserves focused $name and a click completes it",
+		async ({ name, key, other, selector }) => {
+			const { obsidian, plugin } = getContext();
+			await openPodNotesSettings(obsidian);
+			onTestFinished(() => closeSettings(obsidian));
+			const target = ui.settingControl(name, selector);
+			await typeInto(obsidian, target, "Local draft", { replace: true });
+			await plugin.waitForData<PodNotesData>((data) => data.note?.[key] === "Local draft", {
+				timeoutMs: 5_000,
+				intervalMs: 100,
+			});
+			await obsidian.dev.evalJsonAsync(
+				"app.plugins.plugins.podnotes.flushSaves().then(() => true)",
+			);
+			await obsidian.dev.evalJson(
+				'document.activeElement.setSelectionRange(1, 4, "backward"), true',
+			);
+
+			for (const remote of ["First sync", "Second sync"]) {
+				const synced = await plugin.data<PodNotesData>().read();
+				synced.note = { path: remote, template: remote };
+				synced.autoQueue = true;
+				await plugin.data<PodNotesData>().write(synced);
+				expect(
+					await eventually(obsidian, () => settingValue(obsidian, other), remote),
+				).toBe(remote);
+				expect(
+					await obsidian.dev.evalJson(`({
+				memory: app.plugins.plugins.podnotes.settings.note[${jsLiteral(key)}],
+				field: document.activeElement.value,
+				focused: (${target.elements}).includes(document.activeElement),
+				selection: [document.activeElement.selectionStart, document.activeElement.selectionEnd, document.activeElement.selectionDirection]
+			})`),
+				).toEqual({
+					memory: remote,
+					field: "Local draft",
+					focused: true,
+					selection: [1, 4, "backward"],
+				});
+			}
+
+			await click(
+				obsidian,
+				ui.settingControl("Queue episodes I switch away from", ".checkbox-container"),
+			);
+			expect(await settingValue(obsidian, "Queue episodes I switch away from")).toBe(false);
+			expect(await settingValue(obsidian, name)).toBe("Second sync");
+			await obsidian.dev.evalJsonAsync(
+				"app.plugins.plugins.podnotes.flushSaves().then(() => true)",
+			);
+			expect((await plugin.data<PodNotesData>().read()).note?.[key]).toBe("Second sync");
+			await closeSettings(obsidian);
+			await openPodNotesSettings(obsidian);
+			expect(await settingValue(obsidian, name)).toBe("Second sync");
+		},
+	);
 
 	test("leaving a field saves a return to its original text before the debounce", async () => {
 		const { obsidian, plugin } = getContext();

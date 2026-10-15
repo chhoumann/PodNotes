@@ -677,9 +677,10 @@ export class PluginSettingTab {
 	}
 
 	display(): void {
+		const definitions = this.getSettingDefinitions();
 		this.cleanUp();
 		this.containerEl.empty();
-		for (const definition of this.getSettingDefinitions()) {
+		for (const definition of definitions) {
 			if (definition.heading)
 				new Setting(this.containerEl).setName(definition.heading).setHeading();
 			for (const row of definition.items ?? [definition]) {
