@@ -319,7 +319,9 @@ describe("PodNotes settings tab", () => {
 			await obsidian.dev.evalJsonAsync(
 				"app.plugins.plugins.podnotes.flushSaves().then(() => true)",
 			);
-			await obsidian.dev.evalJson("document.activeElement.setSelectionRange(1, 4), true");
+			await obsidian.dev.evalJson(
+				'document.activeElement.setSelectionRange(1, 4, "backward"), true',
+			);
 
 			for (const remote of ["First sync", "Second sync"]) {
 				const synced = await plugin.data<PodNotesData>().read();
@@ -334,13 +336,13 @@ describe("PodNotes settings tab", () => {
 				memory: app.plugins.plugins.podnotes.settings.note[${jsLiteral(key)}],
 				field: document.activeElement.value,
 				focused: (${target.elements}).includes(document.activeElement),
-				selection: [document.activeElement.selectionStart, document.activeElement.selectionEnd]
+				selection: [document.activeElement.selectionStart, document.activeElement.selectionEnd, document.activeElement.selectionDirection]
 			})`),
 				).toEqual({
 					memory: remote,
 					field: "Local draft",
 					focused: true,
-					selection: [1, 4],
+					selection: [1, 4, "backward"],
 				});
 			}
 
@@ -354,6 +356,9 @@ describe("PodNotes settings tab", () => {
 				"app.plugins.plugins.podnotes.flushSaves().then(() => true)",
 			);
 			expect((await plugin.data<PodNotesData>().read()).note?.[key]).toBe("Second sync");
+			await closeSettings(obsidian);
+			await openPodNotesSettings(obsidian);
+			expect(await settingValue(obsidian, name)).toBe("Second sync");
 		},
 	);
 

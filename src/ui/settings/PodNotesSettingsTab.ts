@@ -477,10 +477,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 		const hidden = () => doc.visibilityState === "hidden" && complete();
 		const complete = () => {
-			if (!this.drafts.delete(complete)) return show();
-			win.removeEventListener("pagehide", complete);
-			doc.removeEventListener("visibilitychange", hidden);
-			if (pendingSave !== undefined) save();
+			if (this.drafts.delete(complete)) {
+				win.removeEventListener("pagehide", complete);
+				doc.removeEventListener("visibilitychange", hidden);
+				if (pendingSave !== undefined) save();
+			}
 			show();
 		};
 		input.addEventListener("input", () => {
@@ -540,9 +541,14 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		const active = this.containerEl.querySelector<HTMLInputElement | HTMLTextAreaElement>(
 			"input:focus,textarea:focus",
 		);
-		const draft =
+		let draft =
 			active?.name === name
-				? { value: active.value, start: active.selectionStart, end: active.selectionEnd }
+				? {
+						value: active.value,
+						start: active.selectionStart,
+						end: active.selectionEnd,
+						direction: active.selectionDirection,
+					}
 				: undefined;
 		return {
 			name,
@@ -557,7 +563,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						.setPlaceholder(field.placeholder ?? "")
 						.onChange((value) => field.preview?.(value, setting));
 					if (draft?.start != null)
-						control.inputEl.setSelectionRange(draft.start, draft.end);
+						control.inputEl.setSelectionRange(
+							draft.start,
+							draft.end,
+							draft.direction ?? undefined,
+						);
+					draft = undefined;
 					complete = this.bindDraft(
 						control.inputEl,
 						(value) => {
