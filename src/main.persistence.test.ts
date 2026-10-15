@@ -69,6 +69,34 @@ function makePlugin(
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+it("merges a valid readback replacement without a failure Notice and writes once more", async () => {
+	const notice = vi.spyOn(obsidian, "Notice");
+	vi.spyOn(console, "error").mockImplementation(() => undefined);
+	const plugin = makePlugin();
+	const clock = manualClock();
+	attachDataFileWriter(plugin, clock);
+	const external = encodePodNotesData(structuredClone(DEFAULT_SETTINGS));
+	external.savedFeeds = {
+		Synced: { title: "Synced", url: "https://example.com/synced.xml", artworkUrl: "" },
+	};
+	const write = plugin.saveData.bind(plugin);
+	const save = vi.fn(write).mockImplementationOnce(async () => write(external));
+	Object.assign(plugin, { saveData: save });
+	plugin.settings.skipForwardLength = 25;
+
+	await saveInBackground(plugin);
+	await plugin.flushSaves();
+
+	expect(notice).not.toHaveBeenCalled();
+	expect(await plugin.loadData()).toMatchObject({
+		skipForwardLength: 25,
+		savedFeeds: external.savedFeeds,
+	});
+	expect(plugin.settings.savedFeeds).toEqual(external.savedFeeds);
+	expect(save).toHaveBeenCalledTimes(2);
+	expect(clock.pending()).toBe(0);
+});
+
 function savedByThisVersion(released: Record<string, unknown>): Record<string, unknown> {
 	const data: Record<string, unknown> = {
 		...structuredClone(released),
