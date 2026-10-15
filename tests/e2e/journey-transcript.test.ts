@@ -183,14 +183,14 @@ type TranscriptHead = Readonly<{
 	label: boolean;
 	headFits: boolean;
 	name?: string;
-	tooltip: boolean;
+	ariaLabel: boolean;
 }>;
 
 const SAVE = `document.querySelector(${jsLiteral(`${PLAYER_VIEW} section.pn-player .pn-panel-head .pn-tx-save`)})`;
 
 /**
  * How the transcript panel's head fits the panel: Save inside it, with its label in sight or
- * not, the name Chromium gives Save, and whether Obsidian would show a tooltip over it.
+ * not, the name Chromium gives Save, and whether it has an aria-label, which Obsidian shows as a tooltip.
  */
 async function transcriptHead(): Promise<TranscriptHead> {
 	const { obsidian } = getContext();
@@ -207,7 +207,7 @@ async function transcriptHead(): Promise<TranscriptHead> {
 			saveInside: right <= box.right + 0.5,
 			label: shown,
 			headFits: head.scrollWidth <= head.clientWidth,
-			tooltip: save.hasAttribute("aria-label"),
+			ariaLabel: save.hasAttribute("aria-label"),
 		};
 	})()`);
 	return { ...head, name: (await accessibleName(obsidian, SAVE))?.name };
@@ -593,7 +593,7 @@ describe("transcript journeys", () => {
 		await openTranscriptPanel();
 		const mainArea = await transcriptHead();
 
-		const fits = { saveInside: true, headFits: true, name: "Save as note", tooltip: false };
+		const fits = { saveInside: true, headFits: true, name: "Save as note", ariaLabel: false };
 		expect({ sidebar, drawer, mainArea }).toMatchObject({
 			sidebar: { ...fits, label: false },
 			drawer: { ...fits, label: false },

@@ -89,7 +89,9 @@ describe("PodNotes settings tab", () => {
 		await openPodNotesSettings(obsidian);
 		onTestFinished(() => closeSettings(obsidian));
 		// The diarization rows take focus only while diarization is on.
-		await click(obsidian, ui.settingControl("Speaker diarization", ".checkbox-container"));
+		if ((await settingValue(obsidian, "Speaker diarization")) !== true) {
+			await click(obsidian, ui.settingControl("Speaker diarization", ".checkbox-container"));
+		}
 		await click(obsidian, ui.settingControl("Skip back (s)", "input"));
 		const fields: Field[] = [];
 		for (let presses = 0; presses < 60 && fields.at(-1)?.row !== "Export settings"; presses++) {
