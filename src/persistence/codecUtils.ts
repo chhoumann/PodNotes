@@ -1,4 +1,4 @@
-import { isPlainObject } from "src/utility/isPlainObject";
+import { ownRecord } from "src/utility/ownRecord";
 
 export type UnknownRecord = Record<string, unknown>;
 
@@ -157,6 +157,15 @@ export function copySafeObject(value: UnknownRecord): UnknownRecord {
 	return copy;
 }
 
+export function mapRecord<T, R>(
+	value: Record<string, T>,
+	mapper: (entry: T) => R,
+): Record<string, R> {
+	const result = ownRecord<R>();
+	for (const [key, entry] of Object.entries(value)) result[key] = mapper(entry);
+	return result;
+}
+
 export function isOption<T extends string>(
 	options: Readonly<Record<T, unknown>>,
 	value: unknown,
@@ -176,6 +185,10 @@ export function readOption<T extends string>(
 	if (isOption(options, value)) return value;
 	warn(warnings, key, "unknown value");
 	return fallback;
+}
+
+export function isPlainObject(value: unknown): value is UnknownRecord {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function warn(warnings: Set<string>, path: string, reason: string): void {

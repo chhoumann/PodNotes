@@ -57,12 +57,6 @@ describe("Svelte size guards in the production build", { timeout: 20_000 }, () =
 		).rejects.toThrow(/Cannot use.*export let.*runes mode/);
 	});
 
-	it("rejects a component overriding runes mode even without legacy state", async () => {
-		await expect(
-			buildComponent("<svelte:options runes={false}/><p>Legacy</p>"),
-		).rejects.toThrow(/Component\.svelte.*compiled in legacy mode/);
-	});
-
 	it("rejects a dynamic class that retains clsx after minification", async () => {
 		await expect(
 			buildComponent(

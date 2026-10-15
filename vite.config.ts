@@ -108,15 +108,6 @@ export default defineConfig(({ mode }) => {
 			terserOptions: { compress: { pure_getters: false, passes: 2 }, mangle: false },
 			rollupOptions: {
 				external,
-				treeshake: {
-					moduleSideEffects: [
-						{
-							// ES2020 lowering makes this class's static field look effectful even when unused.
-							test: /[\\/]svelte[\\/]src[\\/]internal[\\/]client[\\/]dom[\\/]elements[\\/]bindings[\\/]size\.js$/,
-							sideEffects: false,
-						},
-					],
-				},
 				output: {
 					entryFileNames: "main.js",
 					codeSplitting: false,

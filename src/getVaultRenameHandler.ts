@@ -2,7 +2,7 @@ import { TFile, type EventRef, type TAbstractFile } from "obsidian";
 import { get } from "svelte/store";
 import type PodNotes from "./main";
 import { downloadedEpisodes, favorites, playlists, queue } from "./store";
-import { mapRecord } from "src/utility/mapRecord";
+import { mapRecord } from "./persistence/codecUtils";
 import { writePlayerSettings } from "./store/persistence";
 import type DownloadedEpisode from "./types/DownloadedEpisode";
 import type { Episode } from "./types/Episode";

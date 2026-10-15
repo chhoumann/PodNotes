@@ -1,9 +1,9 @@
 import type { PlaylistSettings } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
-import { isPlainObject } from "src/utility/isPlainObject";
 import {
 	copySafeObject,
+	isPlainObject,
 	readBoolean,
 	readString,
 	setOptionalFiniteNumber,

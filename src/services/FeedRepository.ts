@@ -6,8 +6,7 @@ import FeedDocumentParser, {
 	type ParsedFeedEpisodes,
 	type TranscriptLink,
 } from "src/parser/feedDocumentParser";
-import { isPlainObject } from "src/utility/isPlainObject";
-import { DANGEROUS_KEYS } from "src/persistence/codecUtils";
+import { DANGEROUS_KEYS, isPlainObject } from "src/persistence/codecUtils";
 import { decodeDate, newestFirst } from "src/persistence/dateCodec";
 import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";

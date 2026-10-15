@@ -1,4 +1,4 @@
-import { isPlainObject } from "src/utility/isPlainObject";
+import { isPlainObject } from "src/persistence/codecUtils";
 import { COMMON_NAMED_ENTITIES } from "src/utility/htmlEntities";
 
 export type TranscriptFormat = "vtt" | "srt" | "json" | "html" | "text";

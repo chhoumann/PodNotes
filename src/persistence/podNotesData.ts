@@ -1,8 +1,6 @@
 import { DEFAULT_SETTINGS } from "src/constants";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
-import { isPlainObject } from "src/utility/isPlainObject";
-import { mapRecord } from "src/utility/mapRecord";
-import { DANGEROUS_KEYS, type UnknownRecord } from "./codecUtils";
+import { DANGEROUS_KEYS, isPlainObject, mapRecord, type UnknownRecord } from "./codecUtils";
 import {
 	encodeEpisode,
 	encodePlaylist,

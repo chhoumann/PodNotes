@@ -1,7 +1,5 @@
 import { DEFAULT_SETTINGS } from "./constants";
-import { isPlainObject } from "src/utility/isPlainObject";
-import { mapRecord } from "src/utility/mapRecord";
-import { DANGEROUS_KEYS } from "./persistence/codecUtils";
+import { DANGEROUS_KEYS, isPlainObject, mapRecord } from "./persistence/codecUtils";
 import {
 	decodePodNotesData,
 	encodePodNotesData,

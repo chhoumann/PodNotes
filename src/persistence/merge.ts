@@ -2,8 +2,7 @@ import { DEFAULT_SETTINGS } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import { ownRecord } from "src/utility/ownRecord";
-import { isPlainObject } from "src/utility/isPlainObject";
-import type { UnknownRecord } from "./codecUtils";
+import { isPlainObject, type UnknownRecord } from "./codecUtils";
 import { toDocument } from "./podNotesData";
 
 /**
