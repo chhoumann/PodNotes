@@ -562,7 +562,7 @@
 			opacity: 0.4;
 		}
 
-		.pn-iconbtn[aria-pressed="true"] {
+		.pn-iconbtn[aria-pressed="true"]:not(:disabled) {
 			color: var(--icon-color-active);
 			opacity: 1;
 		}

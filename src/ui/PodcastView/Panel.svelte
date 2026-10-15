@@ -15,10 +15,11 @@
 		const bottom = list.clientHeight - parseFloat(style.scrollPaddingBottom);
 		const box = row.getBoundingClientRect();
 		// Whole rows above it, from where the top fade ends, as long as they fit in the top third.
+		const third = list.clientHeight / 3;
 		let y = top;
 		for (let above = row.previousElementSibling; above; above = above.previousElementSibling) {
 			const start = top + box.top - above.getBoundingClientRect().top;
-			if (start > list.clientHeight / 3 && above !== row.previousElementSibling) break;
+			if (y > top && start > third) break;
 			y = start;
 		}
 		y = Math.max(top, Math.min(y, bottom - box.height));

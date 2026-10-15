@@ -223,6 +223,7 @@ describe("a disabled control", () => {
 			css,
 			`<div class="podcast-view pn-PodcastView">
 				<button id="icon" class="pn-iconbtn hover" disabled></button>
+				<button id="pressed" class="pn-iconbtn" aria-pressed="true" disabled></button>
 				<button id="cta" class="pn-btn mod-cta hover" disabled></button>
 				<section class="pn-player pn-Player"><button id="switch" class="pn-sw hover" aria-pressed="true" disabled></button></section>
 				<div class="pn-ep pn-EpisodeRow hover"><button id="row" class="pn-bare pn-ep-main" aria-disabled="true"><span id="cover" class="pn-cover"></span></button></div>
@@ -237,8 +238,8 @@ describe("a disabled control", () => {
 			return Math.round(opacity * 100) / 100;
 		};
 
-		expect(["icon", "cta", "switch", "row", "cover", "scrub"].map(shown)).toEqual([
-			0.4, 0.4, 0.4, 0.4, 0.4, 0.5,
+		expect(["icon", "pressed", "cta", "switch", "row", "cover", "scrub"].map(shown)).toEqual([
+			0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5,
 		]);
 	});
 });
