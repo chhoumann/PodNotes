@@ -45,10 +45,10 @@ function measure(value: string, mode: FilenameLimit["mode"]): number {
  * could, for heavily multibyte titles, exceed the destination's limit.
  */
 export function getPlatformFilenameLimit(): FilenameLimit {
-	if (Platform.isWin || Platform.isMacOS || Platform.isIosApp) {
-		return { mode: "utf16", max: MAX_FILENAME_UNITS };
-	}
-	return { mode: "bytes", max: MAX_FILENAME_UNITS };
+	return {
+		mode: Platform.isWin || Platform.isMacOS || Platform.isIosApp ? "utf16" : "bytes",
+		max: MAX_FILENAME_UNITS,
+	};
 }
 
 /**
@@ -85,14 +85,9 @@ function trimSegmentEdges(segment: string): string {
 }
 
 function capFolderName(segment: string, limit: FilenameLimit): string {
-	const capped =
-		measure(segment, limit.mode) <= limit.max
-			? segment
-			: truncateToLimit(segment, limit.max, limit.mode);
-
 	// Trim even when under the cap: a literal template folder like "Notes. " has
 	// a trailing space/dot that is illegal on Windows regardless of length.
-	return trimSegmentEdges(capped) || FALLBACK_BASENAME;
+	return trimSegmentEdges(truncateToLimit(segment, limit.max, limit.mode)) || FALLBACK_BASENAME;
 }
 
 function capFileName(segment: string, extension: string, limit: FilenameLimit): string {
