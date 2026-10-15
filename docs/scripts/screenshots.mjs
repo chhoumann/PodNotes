@@ -16,10 +16,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { connectCapture, videoToGif, withRecording, typeText } from "obsidian-e2e/capture";
-import { execObsidian, obsidianCommandArgs, resolveInstanceOptions } from "obsidian-e2e/runner";
 import sharp from "sharp";
 import {
-	config,
 	evaluate,
 	go,
 	place,
@@ -33,39 +31,19 @@ import {
 	waitFor,
 } from "../../.claude/skills/verify/screens/instance.mjs";
 import { library, seed } from "../../.claude/skills/verify/screens/scenes.mjs";
+import { API, cdp, docsLibrary, episode, instance, plan, seedDir, writeNote } from "./scene.mjs";
 
-const docsDir = fileURLToPath(new URL("..", import.meta.url));
-const seedDir = path.join(docsDir, "screenshots");
-const outDir = path.join(docsDir, "public", "screenshots");
+const outDir = fileURLToPath(new URL("../public/screenshots", import.meta.url));
 const work = path.join(root, ".obsidian-e2e-artifacts", "docs-screenshots");
-const plan = JSON.parse(fs.readFileSync(path.join(seedDir, "seed.json"), "utf8"));
-const instance = resolveInstanceOptions(provision, {}, config, root);
 const THEMES = /** @type {const} */ (["light", "dark"]);
 const HERO = { width: 1440, height: 900, sidebar: 360 };
 const DEMO = { width: 1200, height: 900, sidebar: 360 };
-const API = "app.plugins.plugins.podnotes.api";
 // Linux draws scrollbars that macOS hides until you scroll, and window buttons
 // that belong to the operating system, not to Obsidian.
 const CAPTURE_CSS = "::-webkit-scrollbar, .titlebar-button-container { display: none; }";
 
 /** @param {number} ms */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** The instance's own CDP channel, the one the screens tooling emulates through. */
-async function cdp(/** @type {string} */ method, params = {}) {
-	const { stdout } = await execObsidian(
-		instance,
-		obsidianCommandArgs(instance.vaultName, [
-			"dev:cdp",
-			`method=${method}`,
-			`params=${JSON.stringify(params)}`,
-		]),
-		{},
-		{ timeout: 15000 },
-	);
-	if (!stdout.trim().startsWith("{")) throw new Error(`${method}: ${stdout}`);
-	return JSON.parse(stdout);
-}
 
 /** Renders the current layout at 2x without moving anything. */
 async function hiDpi() {
@@ -286,33 +264,6 @@ const DRAWER_PLAYER = `() => {
 const HIDE_ID_PROPERTIES =
 	'.metadata-property:is([data-property-key="guid" i], [data-property-key="feedurl" i]) { display: none; }';
 
-/** @param {Awaited<ReturnType<typeof library>>} lib @param {string} podcast @param {string} title */
-function episode(lib, podcast, title) {
-	const found = lib.feeds
-		.find(({ feed }) => feed.title.startsWith(podcast))
-		?.episodes.find((candidate) => candidate.title.startsWith(title));
-	if (!found) throw new Error(`The fixture library has no episode "${title}" in ${podcast}.`);
-	return found;
-}
-
-/**
- * The verify skill's listening library without its podcast whose feed answers
- * 404, and with the docs' note template.
- * @type {import("../../.claude/skills/verify/screens/scenes.mjs").Ingredient}
- */
-function docsLibrary(data, lib) {
-	const missing = new Set(lib.feeds.filter((feed) => feed.missing).map(({ feed }) => feed.title));
-	const kept = (/** @type {{ podcastName: string }} */ item) => !missing.has(item.podcastName);
-	for (const title of missing) delete data.savedFeeds[title];
-	data.queue.episodes = data.queue.episodes.filter(kept);
-	data.favorites.episodes = data.favorites.episodes.filter(kept);
-	for (const list of Object.values(data.playlists)) list.episodes = list.episodes.filter(kept);
-	for (const [key, record] of Object.entries(data.playedEpisodes)) {
-		if (!kept(record)) delete data.playedEpisodes[key];
-	}
-	data.note.template = plan.noteTemplate;
-}
-
 /** Replaces the instance vault's files with docs/screenshots/vault and sets up Obsidian for it. */
 async function prepareVault() {
 	for (const entry of fs.readdirSync(provision.vaultPath)) {
@@ -355,68 +306,6 @@ async function load(/** @type {{ title: string, podcastName: string }} */ item) 
 		`${item.title} did not play`,
 	);
 	await evaluate(`app.plugins.plugins.podnotes.player.pause(); return true;`);
-}
-
-/**
- * Creates the loaded episode's note with Create episode note, fills in its
- * properties, and writes its notes, capturing each `{{at h:mm:ss}}` line with
- * PodNotes' own capture.
- * @param {{ title: string, notes?: string, status: string, rating?: number, rename?: string }} entry
- */
-async function writeNote(entry) {
-	const before = await evaluate(`return app.workspace.getActiveFile()?.path ?? null;`);
-	await evaluate(`app.commands.executeCommandById("podnotes:create-podcast-note"); return true;`);
-	await waitFor(
-		`const file = app.workspace.getActiveFile()?.path;
-		return Boolean(file) && file !== ${JSON.stringify(before)} && file.startsWith("PodNotes/");`,
-		`The note for ${entry.title} did not open`,
-	);
-	await evaluate(`
-		await app.fileManager.processFrontMatter(app.workspace.getActiveFile(), (fm) => {
-			fm.status = ${JSON.stringify(entry.status)};
-			if (${JSON.stringify(entry.rating ?? null)} !== null) fm.rating = ${JSON.stringify(entry.rating ?? null)};
-		});
-		return true;
-	`);
-	await waitFor(
-		`return app.workspace.activeEditor?.editor?.getValue().includes(${JSON.stringify(`status: ${entry.status}`)});`,
-		`The properties of ${entry.title} did not reach the editor`,
-	);
-	const lines = entry.notes
-		? fs
-				.readFileSync(path.join(seedDir, "notes", entry.notes), "utf8")
-				.trimEnd()
-				.split("\n")
-		: [];
-	for (const line of lines) {
-		const at = line.match(/^\{\{at (\d+):(\d\d):(\d\d)\}\} (.*)$/);
-		await evaluate(`
-			const editor = app.workspace.activeEditor.editor;
-			editor.focus();
-			editor.setCursor(editor.lastLine(), editor.getLine(editor.lastLine()).length);
-			return true;
-		`);
-		if (at) {
-			const seconds = Number(at[1]) * 3600 + Number(at[2]) * 60 + Number(at[3]);
-			const result = await evaluate(`
-				${API}.currentTime = ${seconds};
-				return await app.plugins.plugins.podnotes.capture.timestamp();
-			`);
-			if (result?.destination !== "editor") {
-				throw new Error(`The capture went to ${JSON.stringify(result)}, not the note.`);
-			}
-		}
-		await evaluate(
-			`app.workspace.activeEditor.editor.replaceSelection(${JSON.stringify(`${at ? at[4] : line}\n`)}); return true;`,
-		);
-	}
-	await evaluate(`await app.workspace.activeEditor.save(); return true;`);
-	if (!entry.rename) return await evaluate(`return app.workspace.getActiveFile().path;`);
-	return await evaluate(`
-		const file = app.workspace.getActiveFile();
-		await app.fileManager.renameFile(file, file.parent.path + "/" + ${JSON.stringify(`${entry.rename}.md`)});
-		return file.path;
-	`);
 }
 
 /** Creates a podcast's feed note with Create podcast feed note and its picker. */
