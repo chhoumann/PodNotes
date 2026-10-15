@@ -33,6 +33,7 @@
 //         shoots .obsidian-e2e-artifacts/screens/<label>/<state>-<width>-<theme>.png.
 //         Then <state>-sheet.png has a row per width: light, then dark, each shot
 //         followed by the prototype's screen when the design folder has one.
+//         Restores the desktop pane after captures, including when a state fails.
 //         States: first-run, add-podcast, library, episodes, error-feed, queue,
 //         playlists, playlist, latest, played, local-files, offline, status-bar, and the
 //         player's: now-playing, mini-player, capture, chapters, up-next, up-next-empty,
@@ -167,15 +168,19 @@ try {
 					? names.filter((name) => STATES[name].play !== undefined)
 					: [target];
 		const failed = [];
-		for (const state of states) {
-			try {
-				await set(state, rest[0], widths, themes);
-			} catch (error) {
-				console.error(
-					`${state}: ${error instanceof Error ? error.message : String(error)}`,
-				);
-				failed.push(state);
+		try {
+			for (const state of states) {
+				try {
+					await set(state, rest[0], widths, themes);
+				} catch (error) {
+					console.error(
+						`${state}: ${error instanceof Error ? error.message : String(error)}`,
+					);
+					failed.push(state);
+				}
 			}
+		} finally {
+			await place("pane");
 		}
 		if (failed.length > 0) throw new Error(`Failed: ${failed.join(", ")}.`);
 	} else {
