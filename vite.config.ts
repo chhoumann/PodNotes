@@ -7,6 +7,7 @@ import { createBuildArtifactPlugin } from "./scripts/build-artifacts.ts";
 import { stripCssComments } from "./scripts/css-comments.ts";
 import { compactCss } from "./scripts/compact-css.ts";
 import { svelteWithoutHydration } from "./scripts/svelte-without-hydration.ts";
+import { svelteSizeGuards } from "./scripts/svelte-size-guards.ts";
 import { syntaxFloor } from "./scripts/syntax-floor.ts";
 
 // Obsidian's Android app sets no WebView minimum and its own code is ES2020, and its
@@ -68,6 +69,7 @@ export default defineConfig(({ mode }) => {
 					},
 				},
 				compilerOptions: {
+					runes: true,
 					css: "injected",
 					discloseVersion: false,
 					// Svelte skips a style whose id is already in the document, and Obsidian
@@ -77,6 +79,7 @@ export default defineConfig(({ mode }) => {
 			}),
 			// Development builds keep their source maps, which this transform does not update.
 			isProd && svelteWithoutHydration(),
+			svelteSizeGuards(),
 			syntaxFloor(),
 			createBuildArtifactPlugin({ isProduction: isProd, outDir, rootDir }),
 		],
@@ -105,6 +108,15 @@ export default defineConfig(({ mode }) => {
 			terserOptions: { compress: { pure_getters: false, passes: 2 }, mangle: false },
 			rollupOptions: {
 				external,
+				treeshake: {
+					moduleSideEffects: [
+						{
+							// ES2020 lowering makes this class's static field look effectful even when unused.
+							test: /[\\/]svelte[\\/]src[\\/]internal[\\/]client[\\/]dom[\\/]elements[\\/]bindings[\\/]size\.js$/,
+							sideEffects: false,
+						},
+					],
+				},
 				output: {
 					entryFileNames: "main.js",
 					codeSplitting: false,
