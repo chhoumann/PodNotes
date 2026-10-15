@@ -87,6 +87,16 @@ describe("playedEpisodes store", () => {
 		expect(stored["Design Podcast::Shared title"]?.finished).toBe(false);
 	});
 
+	test("keeps apart two podcasts' episodes that carry one guid", () => {
+		playedEpisodes.setEpisodeTime({ ...episode, guid: "1" }, 30, 60, false);
+		playedEpisodes.markAsPlayed({ ...episode, podcastName: "Other Podcast", guid: "1" });
+
+		expect(playedEpisodes.get({ ...episode, guid: "1" })).toMatchObject({
+			time: 30,
+			finished: false,
+		});
+	});
+
 	describe("for two episodes of one feed with one title", () => {
 		const twinA: Episode = { ...episode, guid: "guid-a", sharedTitle: true };
 		const twinB: Episode = { ...episode, guid: "guid-b", sharedTitle: true };
