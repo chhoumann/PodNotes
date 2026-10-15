@@ -25,15 +25,15 @@ interface iTunesResponse {
 }
 
 export async function queryiTunesPodcasts(query: string): Promise<DirectoryShow[]> {
-	const url = new URL("https://itunes.apple.com/search");
-	url.searchParams.append("term", query);
-	url.searchParams.append("media", "podcast");
-	url.searchParams.append("limit", "20");
-	url.searchParams.append("kind", "podcast");
-
+	const found = await fetchShows("search", {
+		term: query,
+		media: "podcast",
+		limit: "20",
+		kind: "podcast",
+	});
 	// Search can list one feed under several shows; keep the best-ranked one.
 	const shows = new Map<string, DirectoryShow>();
-	for (const show of await fetchShows(url)) {
+	for (const show of found) {
 		if (!shows.has(show.feed.url)) shows.set(show.feed.url, show);
 	}
 	return [...shows.values()];
@@ -41,11 +41,8 @@ export async function queryiTunesPodcasts(query: string): Promise<DirectoryShow[
 
 /** Resolve an Apple Podcasts show id to its public RSS feed, or null when it has none. */
 export async function lookupiTunesPodcast(id: string): Promise<DirectoryShow | null> {
-	const url = new URL("https://itunes.apple.com/lookup");
-	url.searchParams.append("id", id);
-	url.searchParams.append("entity", "podcast");
 	// An artist id returns the artist's shows, none of which is the linked show.
-	const shows = await fetchShows(url);
+	const shows = await fetchShows("lookup", { id, entity: "podcast" });
 	return shows.find(({ feed }) => feed.collectionId === id) ?? null;
 }
 
@@ -75,9 +72,13 @@ export function parseApplePodcastsId(input: string): string | null {
 	return id && /^\d+$/.test(id) ? id : null;
 }
 
-async function fetchShows(url: URL): Promise<DirectoryShow[]> {
+async function fetchShows(
+	endpoint: "search" | "lookup",
+	params: Record<string, string>,
+): Promise<DirectoryShow[]> {
+	const url = `https://itunes.apple.com/${endpoint}?${new URLSearchParams(params)}`;
 	try {
-		const data = await fetchJsonWithTimeout<iTunesResponse>(url.href, {
+		const data = await fetchJsonWithTimeout<iTunesResponse>(url, {
 			timeoutMs: ITUNES_REQUEST_TIMEOUT_MS,
 			maxResponseBytes: MAX_ITUNES_RESPONSE_BYTES,
 			acceptedStatuses: [200],
