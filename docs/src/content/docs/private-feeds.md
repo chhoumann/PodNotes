@@ -30,6 +30,10 @@ The podcast syncs to your other devices, but its address does not. On each other
 
 PodNotes stores the address on this device and loads the feed. From then on, the podcast and its timestamp links work on this device too.
 
+This clip opens a private podcast that shows **Address not on this device**, pastes a made-up address into **Feed address**, and saves it, so the episodes load:
+
+![A private podcast's page shows Feed didn't load and Address not on this device until Set feed address saves its address](/videos/set-feed-address.mp4)
+
 To set many addresses at once, export an OPML file on a device where the podcasts play, and import it on this one. The file holds the addresses in plain text, so delete it afterwards. See [Move private feeds with settings and OPML files](/private-feeds/#move-private-feeds-with-settings-and-opml-files).
 
 PodNotes does not check that the address belongs to the same show, so paste the address of that podcast. If you try to add the podcast again from its address instead, a notice says, for example, `The private feed address for "Members Show" is not available on this device.` Use **Set feed address** instead.

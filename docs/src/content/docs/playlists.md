@@ -26,6 +26,10 @@ When an episode ends, PodNotes removes it from the queue. Episodes on the Queue 
 
 To use the keyboard, press `Tab` until an episode's grip has focus, then press `Up` or `Down` to move the episode one place. Press `Escape` during a drag to cancel it. **PodNotes: Reorder Queue** opens the Queue page from the command palette.
 
+This clip, on a phone, drags an episode by its grip to the top of the queue, then opens **Up next** in the full player, which lists the new order:
+
+![On a phone, Ep. 88 moves from the bottom of the Queue page to the top, and the full player's Up next panel lists it first](/videos/queue-reorder.mp4)
+
 ### Turn off the automatic queue
 
 With the automatic queue off, PodNotes stops adding the episode you switch away from, and when an episode ends, the next one in the queue does not start.

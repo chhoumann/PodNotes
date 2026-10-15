@@ -36,6 +36,10 @@ You can also paste the show's RSS feed URL or its Apple Podcasts link into the s
 
 The episode starts, and the full player opens over the view. Select **Play** or **Pause** to pause and play again. To see your lists again, select **Collapse player**, the down arrow at the top left. The episode keeps playing in the mini player at the bottom of the view. [Use the player](/player/) covers every control.
 
+This clip searches for "archive", adds Notes from the Archive, and plays its first episode:
+
+![A search for archive in the empty PodNotes view adds Notes from the Archive, and its first episode plays in the full player](/videos/add-and-play.mp4)
+
 ## Create an episode note
 
 1. In the full player, select **Create note**, beside **Timestamp**.

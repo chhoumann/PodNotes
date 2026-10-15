@@ -31,30 +31,37 @@ plugin's dependencies.
 - `public/` holds static assets served as-is. Older images live in
   `public/resources/` and stay for existing links.
 
-## Screenshots
+## Screenshots and clips
 
-Every screenshot in `public/screenshots/` comes from one script. From the repo
-root, after `npm run build`:
+Every screenshot in `public/screenshots/` and every clip in `public/videos/`
+comes from a script that drives this worktree's isolated Obsidian (see
+AGENTS.md) with the verify skill's screens tooling and its fixture podcasts.
+From the repo root:
 
 ```sh
+npm run build && npm run start:e2e-obsidian
 node docs/scripts/screenshots.mjs
+node docs/scripts/videos.mjs
 ```
 
-It builds a vault from `screenshots/` (the notes, a Bases file, the PodNotes
-settings in `seed.json`, and the Minimal theme), opens it in a private Obsidian
-capture instance at 2x, adds the podcast feeds through Settings, plays the
-episodes, creates notes and captures timestamps with PodNotes' own commands, and
-writes each shot as `<name>.webp` and `<name>-dark.webp`, with a
-`<name>-phone.webp` crop where the desktop shot is unreadable on a phone, plus
-the README demo
-GIFs and the social preview `og.png`. It needs network access for the feeds,
-their artwork, and the theme. The episodes in `seed.json` must still be among
-each feed's latest episodes. If one has left, pick a newer one and update its
-notes in `screenshots/notes/`.
+`screenshots.mjs` copies the notes in `screenshots/vault/` into the vault,
+creates episode notes and captures timestamps with PodNotes' own commands, as
+`screenshots/seed.json` plans them, and writes each shot at 2x as
+`<name>.webp` and `<name>-dark.webp`. Where the desktop shot is unreadable on a
+phone, it adds a `<name>-phone.webp` crop. It also writes the README demo GIFs
+and the social preview `og.png`.
+
+`videos.mjs` records each clip with real mouse or touch input at 2x, and writes
+`<name>.mp4`, a `<name>.webp` poster, and `-dark` twins for pages whose
+screenshots have them. Pass clip names to record only those, such as
+`node docs/scripts/videos.mjs transcript`.
 
 To show a screenshot on a page, write
 `![What it shows](/screenshots/<name>.webp)`. The site adds the size, lazy
-loading, the dark twin, and the phone crop if there is one.
+loading, the dark twin, and the phone crop if there is one. To show a clip,
+write `![What it shows](/videos/<name>.mp4)` after a sentence that says what
+the clip shows. The site plays it muted on a loop, or shows its poster with
+controls to readers who prefer reduced motion.
 
 ## Brand
 

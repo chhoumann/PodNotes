@@ -80,6 +80,10 @@ The panel loads the transcript that the episode's feed publishes. Its top line r
 - To search, select **Find in transcript**, the magnifier, and type. The panel shows only the lines that match. Press `Enter` for the next match and `Shift+Enter` for the previous one. Press `Escape` or select **Close find** to show every line again.
 - **Save as note** saves the feed's transcript as a note, as **PodNotes: Transcribe current episode** does. It never transcribes the audio. Once the episode's transcript note exists, the button reads **Open note** and opens it. Where the panel is narrow, such as in the sidebar or on a phone, the button shows only its icon: a page with a plus sign for **Save as note**, or a page with lines for **Open note**. See [Transcribe episodes](/transcripts/#read-the-transcript-in-the-player).
 
+This clip opens **Transcript**, selects a line to play from it, and finds the word "walk":
+
+![The full player's Transcript panel: a selected line plays from 38:28, and a search for walk shows only the lines that contain it](/videos/transcript.mp4)
+
 When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram, with a **Paid** tag:
 
 - The button transcribes the audio with your own API key, and your provider bills you for it. See [What transcription costs](/transcripts/#what-transcription-costs).
