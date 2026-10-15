@@ -501,39 +501,14 @@ export class TranscriptionService {
 		const signal = this.lifetimeAbortController.signal;
 
 		return new Promise((resolve, reject) => {
-			let settled = false;
-			const cleanup = () => signal.removeEventListener("abort", onAbort);
-			const onAbort = () => {
-				if (settled) return;
-				settled = true;
-				cleanup();
+			const onAbort = () =>
 				reject(toError(this.getAbortReason(), "PodNotes transcription was aborted."));
-			};
-
 			signal.addEventListener("abort", onAbort, { once: true });
-			void operation.then(
-				(value) => {
-					if (settled) return;
-					if (signal.aborted) {
-						onAbort();
-						return;
-					}
-					settled = true;
-					cleanup();
-					resolve(value);
-				},
-				(error) => {
-					if (settled) return;
-					if (signal.aborted) {
-						onAbort();
-						return;
-					}
-					settled = true;
-					cleanup();
-					reject(toError(error, "PodNotes transcription failed."));
-				},
-			);
-			if (signal.aborted) onAbort();
+			void operation
+				.then(resolve, (error: unknown) =>
+					reject(toError(error, "PodNotes transcription failed.")),
+				)
+				.finally(() => signal.removeEventListener("abort", onAbort));
 		});
 	}
 
