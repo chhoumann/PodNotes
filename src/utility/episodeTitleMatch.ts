@@ -69,20 +69,10 @@ export function findUniqueTitleMatch<T>(
 	getTitle: (candidate: T) => string,
 	minSimilarity = MIN_TITLE_SIMILARITY,
 ): T | undefined {
-	const scored: Array<{ candidate: T; score: number }> = [];
-
-	for (const candidate of candidates) {
+	const matches = candidates.filter((candidate) => {
 		const title = getTitle(candidate);
-		let score = 0;
-		for (const target of targets) {
-			score = Math.max(score, titleTokenSimilarity(target, title));
-		}
-		if (score >= minSimilarity) {
-			scored.push({ candidate, score });
-		}
-	}
+		return targets.some((target) => titleTokenSimilarity(target, title) >= minSimilarity);
+	});
 
-	if (scored.length !== 1) return undefined;
-
-	return scored[0].candidate;
+	return matches.length === 1 ? matches[0] : undefined;
 }
