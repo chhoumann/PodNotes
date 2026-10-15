@@ -60,7 +60,6 @@
 			data-ignore-swipe="true"
 			aria-label="Reorder {episode.title}, position {index +
 				1} of {count}. Use arrow keys to move."
-			title="Drag or use arrow keys"
 			onpointerdown={(event) => onstart(event, episode)}
 			onkeydown={nudge}
 			{@attach icon("grip-vertical")}
@@ -71,7 +70,6 @@
 			type="button"
 			class="pn-iconbtn pn-ep-x"
 			aria-label="Remove {episode.title} from queue"
-			title="Remove from queue"
 			onclick={() => actions.setQueued(episode, false)}
 			{@attach icon("x")}
 		></button>
@@ -79,21 +77,28 @@
 </EpisodeRow>
 
 <style>
-	button.pn-iconbtn.pn-grip {
-		cursor: grab;
-		touch-action: none;
-		color: var(--text-muted);
-		opacity: 1;
-		--icon-size: 16px;
-	}
+	button.pn-iconbtn :global {
+		&.pn-grip {
+			cursor: grab;
+			touch-action: none;
+			color: var(--text-muted);
+			opacity: 1;
+			--icon-size: 16px;
+		}
 
-	button.pn-iconbtn.pn-ep-x {
-		margin-right: var(--size-2-2);
-		opacity: 0.55;
-	}
+		&.pn-ep-x {
+			margin-right: var(--size-2-2);
+			opacity: 0.55;
+		}
 
-	:global(.pn-ep:hover) button.pn-ep-x,
-	button.pn-iconbtn.pn-ep-x:focus-visible {
-		opacity: 1;
+		&.pn-ep-x:focus-visible {
+			opacity: 1;
+		}
+
+		@media (hover: hover) {
+			.pn-ep:hover &.pn-ep-x {
+				opacity: 1;
+			}
+		}
 	}
 </style>

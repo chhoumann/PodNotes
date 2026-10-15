@@ -5,6 +5,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vite";
 import { createBuildArtifactPlugin } from "./scripts/build-artifacts.ts";
 import { stripCssComments } from "./scripts/css-comments.ts";
+import { compactCss } from "./scripts/compact-css.ts";
 import { svelteWithoutHydration } from "./scripts/svelte-without-hydration.ts";
 import { syntaxFloor } from "./scripts/syntax-floor.ts";
 
@@ -60,7 +61,12 @@ export default defineConfig(({ mode }) => {
 		plugins: [
 			svelte({
 				// Svelte copies style comments verbatim into the CSS it injects from main.js.
-				preprocess: { style: ({ content }) => ({ code: stripCssComments(content) }) },
+				preprocess: {
+					style: ({ content }) => {
+						const css = stripCssComments(content);
+						return { code: isProd ? compactCss(css) : css };
+					},
+				},
 				compilerOptions: {
 					css: "injected",
 					discloseVersion: false,
@@ -96,7 +102,7 @@ export default defineConfig(({ mode }) => {
 			// before the Oxc minifier below, which mangles names and drops console calls.
 			minify: isProd ? "terser" : false,
 			// Reading a Svelte state property subscribes to it, so a read is not pure.
-			terserOptions: { compress: { pure_getters: false }, mangle: false },
+			terserOptions: { compress: { pure_getters: false, passes: 2 }, mangle: false },
 			rollupOptions: {
 				external,
 				output: {

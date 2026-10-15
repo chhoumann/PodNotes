@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createObsidianClient, resolveObsidianEnvOptions } from "obsidian-e2e";
 import { acquireVaultRunLock } from "obsidian-e2e/vitest";
 import { beforeAll, expect, test } from "vitest";
+import { setOffline } from "./journey/actions";
 import { jsLiteral, runAllSteps } from "./runtime";
 import {
 	assertNoNewRuntimeErrors,
@@ -303,7 +304,7 @@ test.each([
 );
 
 test.for([true, false])(
-	"recovers a stale recorder and collapsed sidebar with PodNotes initially enabled=%s",
+	"recovers a stale recorder, a collapsed sidebar and an offline renderer with PodNotes initially enabled=%s",
 	{ timeout: 120_000 },
 	async (initiallyEnabled, { signal }) => {
 		const dir = await obsidianDir();
@@ -351,6 +352,7 @@ test.for([true, false])(
 				await app.vault.adapter.promise;
 				return true;
 			})()`);
+				await setOffline(obsidian, true);
 				return {
 					config: await fs.readFile(path.join(dir, "community-plugins.json"), "utf8"),
 					workspace: await fs.readFile(workspacePath),
@@ -379,6 +381,7 @@ test.for([true, false])(
 		} finally {
 			await withVaultLock(() =>
 				runAllSteps(
+					() => setOffline(obsidian, false),
 					() =>
 						obsidian.dev.evalJsonAsync(`(async () => {
 						await app.plugins.disablePlugin(${jsLiteral(stale)});

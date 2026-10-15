@@ -64,7 +64,7 @@ describe("local files runtime", () => {
 				);
 				await showList(obsidian, "Local files");
 				await clickInPodNotesView(obsidian, `[aria-label="More options for ${title}"]`);
-				const removalMenu = await clickMenuItem(obsidian, "Remove from Local Files");
+				const removalMenu = await clickMenuItem(obsidian, "Remove from Local files");
 				expect(removalMenu).not.toContain("Remove download");
 				await plugin.waitForData<PodNotesData>(
 					(data) => !inDownloads(data) && !inLocalFiles(data),
@@ -205,7 +205,7 @@ describe("local files runtime", () => {
 			);
 
 			await clickInPodNotesView(obsidian, `[aria-label="More options for ${legacy}"]`);
-			await clickMenuItem(obsidian, "Remove from Local Files");
+			await clickMenuItem(obsidian, "Remove from Local files");
 			await plugin.waitForData<PodNotesData>(
 				(data) => !inDownloads(data, "local file", legacy),
 				WAIT_OPTS,

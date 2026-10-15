@@ -97,7 +97,6 @@
 				type="button"
 				class="pn-iconbtn pn-first-settings"
 				aria-label="PodNotes settings"
-				title="PodNotes settings"
 				onclick={openSettings}
 				{@attach icon("settings")}
 			></button>
@@ -121,7 +120,6 @@
 							type="button"
 							class={head.search ? "pn-iconbtn" : "pn-back"}
 							aria-label="Back to {head.back}"
-							title={head.search && `Back to ${head.back}`}
 							onclick={() => navigation.back()}
 						>
 							<span class="pn-back-icon" {@attach icon("chevron-left")}></span>
@@ -138,7 +136,7 @@
 					{:else}
 						{#if head.title}
 							<h1 class="pn-head-title">{head.title}</h1>
-							{#if head.flair}<span class="flair">{head.flair}</span>{/if}
+							{#if head.flair}<span class="pn-flair">{head.flair}</span>{/if}
 						{/if}
 						<span class="pn-spacer"></span>
 					{/if}
@@ -147,7 +145,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Add podcast"
-							title="Add podcast"
 							onclick={() => navigation.go({ kind: "add" })}
 							{@attach icon("plus")}
 						></button>
@@ -155,7 +152,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="PodNotes settings"
-							title="PodNotes settings"
 							onclick={openSettings}
 							{@attach icon("settings")}
 						></button>
@@ -164,7 +160,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Refresh all feeds"
-							title="Refresh all feeds"
 							disabled={!$online}
 							onclick={() => feeds.load($feeds.keys(), "network")}
 							{@attach icon("refresh-cw")}
@@ -175,7 +170,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Podcast options"
-							title="Podcast options"
 							aria-haspopup="menu"
 							onclick={(event) =>
 								showMenu(podcastMenu(key, services), anchorOf(event))}
@@ -186,7 +180,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Add a vault file"
-							title="Add a vault file"
 							onclick={() => pickVaultMedia(services.app)}
 							{@attach icon("plus")}
 						></button>
@@ -195,7 +188,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Queue options"
-							title="Queue options"
 							aria-haspopup="menu"
 							onclick={(event) => showMenu(queueMenu(services), anchorOf(event))}
 							{@attach icon("more-horizontal")}
@@ -206,7 +198,6 @@
 							type="button"
 							class="pn-iconbtn"
 							aria-label="Playlist options"
-							title="Playlist options"
 							aria-haspopup="menu"
 							onclick={(event) =>
 								showMenu(playlistMenu(name, services), anchorOf(event))}
@@ -224,7 +215,7 @@
 						{#if head.pageTitle}
 							<div class="pn-title">
 								<h1>{head.pageTitle}</h1>
-								{#if head.flair}<span class="flair">{head.flair}</span>{/if}
+								{#if head.flair}<span class="pn-flair">{head.flair}</span>{/if}
 							</div>
 						{/if}
 						{#if page.kind === "library"}
@@ -254,25 +245,6 @@
 </div>
 
 <style>
-	.podcast-view {
-		--pn-bg: var(--background-primary);
-		--pn-surface: var(--background-secondary);
-		--pn-pad: var(--size-4-3);
-		--pn-btn: 28px;
-		--pn-row: 28px;
-		--pn-head: 40px;
-		--pn-cap-h: 36px;
-		--pn-play: 52px;
-		--pn-skip: 40px;
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		overflow: hidden;
-		font-size: var(--font-ui-small);
-		line-height: var(--line-height-tight);
-	}
-
 	/* The shell lays out the whole view, edge to edge. */
 	:global(.view-content:has(> .podcast-view)) {
 		padding: 0;
@@ -320,33 +292,50 @@
 		display: none;
 	}
 
-	/* A sidebar is secondary-colored. The mini player stands out from the page above it. */
-	:global(.mod-sidedock) .podcast-view {
-		--pn-bg: var(--background-secondary);
-	}
-
-	:global(.mod-sidedock) .podcast-view.is-compact {
-		--pn-surface: var(--background-primary);
-	}
-
-	.podcast-view.is-wide {
-		--pn-pad: var(--size-4-6);
-		--pn-head: 44px;
-		--pn-cap-h: 38px;
-		--pn-play: 56px;
-	}
-
-	.podcast-view.is-phone {
-		--pn-pad: var(--size-4-4);
-		--pn-btn: 44px;
-		--pn-row: 44px;
-		--pn-head: 52px;
-		--pn-cap-h: 48px;
-		--pn-play: 64px;
-		--pn-skip: 48px;
-	}
-
 	.podcast-view :global {
+		--pn-bg: var(--background-primary);
+		--pn-surface: var(--background-secondary);
+		--pn-pad: var(--size-4-3);
+		--pn-btn: 28px;
+		--pn-row: 28px;
+		--pn-head: 40px;
+		--pn-cap-h: 36px;
+		--pn-play: 52px;
+		--pn-skip: 40px;
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		overflow: hidden;
+		font-size: var(--font-ui-small);
+		line-height: var(--line-height-tight);
+
+		/* A sidebar is secondary-colored. The mini player stands out from the page above it. */
+		.mod-sidedock & {
+			--pn-bg: var(--background-secondary);
+		}
+
+		.mod-sidedock &.is-compact {
+			--pn-surface: var(--background-primary);
+		}
+
+		&.is-wide {
+			--pn-pad: var(--size-4-6);
+			--pn-head: 44px;
+			--pn-cap-h: 38px;
+			--pn-play: 56px;
+		}
+
+		&.is-phone {
+			--pn-pad: var(--size-4-4);
+			--pn-btn: 44px;
+			--pn-row: 44px;
+			--pn-head: 52px;
+			--pn-cap-h: 48px;
+			--pn-play: 64px;
+			--pn-skip: 48px;
+		}
+
 		.pn-body {
 			position: relative;
 			flex: 1;
@@ -410,7 +399,7 @@
 			text-overflow: ellipsis;
 		}
 
-		.pn-head .flair {
+		.pn-head .pn-flair {
 			align-self: center;
 			margin-left: var(--size-4-2);
 			padding-top: 3px;
@@ -421,25 +410,13 @@
 		}
 
 		.pn-back {
-			display: inline-flex;
-			align-items: center;
 			gap: var(--size-2-1);
 			min-width: 0;
 			max-width: 70%;
 			height: var(--pn-btn);
 			padding: 0 var(--size-4-2) 0 var(--size-2-1);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
-			font-size: var(--font-ui-small);
-			cursor: var(--cursor);
-		}
-
-		.pn-back:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
 		}
 
 		.pn-back-icon {
@@ -492,32 +469,38 @@
 			top: var(--size-4-1);
 			right: var(--size-4-2);
 		}
-	}
 
-	/* Without the mini player, a page ends under Obsidian's status bar. */
-	.podcast-view:not(:has(> :global(.pn-mini))) :global(.pn-scroll) {
-		padding-bottom: calc(var(--size-4-6) + var(--pn-status-bar));
-	}
-
-	.is-wide :global {
-		.pn-head {
-			padding: 0 var(--size-4-4) 0 var(--size-4-3);
+		/* Less motion stops every transition and animation in the view, whatever rule set it. */
+		@media (prefers-reduced-motion: reduce) {
+			* {
+				transition: none !important;
+				animation: none !important;
+			}
 		}
 
-		.pn-split .pn-head {
-			height: 60px;
-			padding-top: var(--size-4-1);
+		/* Without the mini player, a page ends under Obsidian's status bar. */
+		&:not(:has(> .pn-mini)) .pn-scroll {
+			padding-bottom: calc(var(--size-4-6) + var(--pn-status-bar));
 		}
 
-		.pn-head-title {
-			margin-left: var(--size-4-3);
-			font-size: var(--font-ui-large);
-			letter-spacing: -0.01em;
-		}
-	}
+		&.is-wide {
+			.pn-head {
+				padding: 0 var(--size-4-4) 0 var(--size-4-3);
+			}
 
-	/* Classes that several of the view's components share. */
-	.podcast-view :global {
+			.pn-split .pn-head {
+				height: 60px;
+				padding-top: var(--size-4-1);
+			}
+
+			.pn-head-title {
+				margin-left: var(--size-4-3);
+				font-size: var(--font-ui-large);
+				letter-spacing: -0.01em;
+			}
+		}
+
+		/* Classes that several of the view's components share. */
 		.pn-spacer {
 			flex: 1;
 		}
@@ -533,62 +516,66 @@
 			margin-top: var(--size-4-1);
 		}
 
+		/* Undoes Obsidian's button skin, for a button drawn as its content. */
+		.pn-bare,
+		.pn-back,
+		.pn-iconbtn,
+		.pn-navitem {
+			border: 0;
+			background: none;
+			box-shadow: none;
+		}
+
 		.pn-iconbtn {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
 			flex: none;
 			width: var(--pn-btn);
 			height: var(--pn-btn);
 			padding: 0;
-			border: 0;
 			border-radius: var(--radius-s);
-			background: transparent;
-			box-shadow: none;
 			color: var(--icon-color);
 			opacity: var(--icon-opacity);
-			cursor: var(--cursor);
 		}
 
-		.pn-iconbtn:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
-			opacity: var(--icon-opacity-hover);
+		/* A touch screen keeps a tapped control hovered until the next tap elsewhere. */
+		@media (hover: hover) {
+			:is(.pn-back, .pn-iconbtn):hover:not(:disabled) {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
+
+			.pn-iconbtn:hover:not(:disabled) {
+				opacity: var(--icon-opacity-hover);
+			}
+
+			.pn-btn.mod-cta:hover:not(:disabled) {
+				background: var(--interactive-accent-hover);
+			}
+
+			.pn-navitem:hover {
+				background: var(--nav-item-background-hover);
+				color: var(--nav-item-color-hover);
+			}
 		}
 
-		.pn-iconbtn:disabled {
-			background: none;
-			opacity: 0.35;
-			cursor: default;
+		/* Obsidian's 0.7 for a disabled button reads as enabled; its disabled icons use 0.4. */
+		button:is(:disabled, [aria-disabled="true"]) {
+			opacity: 0.4;
 		}
 
-		.pn-iconbtn[aria-pressed="true"] {
+		.pn-iconbtn[aria-pressed="true"]:not(:disabled) {
 			color: var(--icon-color-active);
 			opacity: 1;
 		}
 
 		.pn-btn {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
 			gap: var(--size-4-2);
-			height: var(--input-height);
 			padding: 0 var(--size-4-3);
-			border: 0;
-			border-radius: var(--button-radius);
-			font-size: var(--font-ui-small);
-			white-space: nowrap;
-			cursor: var(--cursor);
 		}
 
 		.pn-btn.mod-cta {
 			background: var(--interactive-accent);
 			color: var(--text-on-accent);
 			box-shadow: none;
-		}
-
-		.pn-btn.mod-cta:hover {
-			background: var(--interactive-accent-hover);
 		}
 
 		.pn-nav {
@@ -603,26 +590,16 @@
 
 		.pn-navitem {
 			display: flex;
-			align-items: center;
 			gap: var(--size-4-2);
 			width: 100%;
 			height: auto;
 			min-height: var(--pn-row);
 			padding: var(--size-4-1) var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--nav-item-color);
 			font-size: var(--nav-item-size);
 			font-weight: inherit;
 			text-align: left;
-			cursor: var(--cursor);
-		}
-
-		.pn-navitem:hover {
-			background: var(--nav-item-background-hover);
-			color: var(--nav-item-color-hover);
 		}
 
 		.pn-navitem.is-active {
@@ -646,21 +623,15 @@
 			text-overflow: ellipsis;
 		}
 
-		/* Obsidian styles .flair as an uppercase tag; here it is plain muted text. */
-		.flair {
+		.pn-flair {
 			flex: none;
-			margin-inline-start: 0;
-			padding: 0;
-			background: none;
-			letter-spacing: normal;
-			text-transform: none;
 			color: var(--text-muted);
 			font-size: var(--font-ui-small);
 			white-space: nowrap;
 			font-variant-numeric: tabular-nums;
 		}
 
-		.pn-navitem .flair {
+		.pn-navitem .pn-flair {
 			font-size: var(--font-ui-smaller);
 		}
 
@@ -701,19 +672,7 @@
 			--icon-size: 18px;
 		}
 
-		.pn-iconbtn:focus-visible,
-		.pn-btn:focus-visible,
-		.pn-ep-main:focus-visible,
-		.pn-gridcard:focus-visible,
-		.pn-navitem:focus-visible,
-		.pn-plrow:focus-visible,
-		.pn-back:focus-visible,
-		.pn-alt:focus-visible,
-		.pn-result:focus-visible,
-		.pn-railsearch:focus-visible,
-		.pn-mini-open:focus-visible,
-		.pn-textbtn:focus-visible,
-		.pn-player button:focus-visible {
+		button:focus-visible {
 			outline: 2px solid var(--interactive-accent);
 			outline-offset: 1px;
 			box-shadow: none;

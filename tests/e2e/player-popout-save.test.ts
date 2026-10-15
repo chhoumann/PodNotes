@@ -11,7 +11,7 @@ import {
 	seedAudio,
 	waitForPlaybackState,
 } from "./harness";
-import { reloadAfterPopout } from "./journey/actions";
+import { closePopoutAndReload, moveViewToPopout } from "./journey/actions";
 import {
 	jsLiteral,
 	PLUGIN_ID,
@@ -27,24 +27,6 @@ const PROGRESS_KEY = `local file::${EPISODE_TITLE}`;
 
 type Obsidian = Parameters<typeof evalJsonAsync>[0];
 type Order = "opened in a popout" | "moved to a popout while playing" | "in the main window";
-
-async function moveViewToPopout(obsidian: Obsidian): Promise<void> {
-	expect(
-		await evalJsonAsync<boolean>(
-			obsidian,
-			`(async () => {
-				const leaf = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
-				app.workspace.moveLeafToPopout(leaf);
-				for (let i = 0; i < 50; i++) {
-					await new Promise((resolve) => setTimeout(resolve, 100));
-					const moved = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
-					if (moved?.view.containerEl.ownerDocument !== document) return true;
-				}
-				return false;
-			})()`,
-		),
-	).toBe(true);
-}
 
 async function play(order: Order): Promise<void> {
 	const { obsidian, plugin, sandbox } = getContext();
@@ -105,28 +87,6 @@ async function reloadObsidian(obsidian: Obsidian): Promise<void> {
 		{ ...WAIT_OPTS, message: "Obsidian did not finish reloading." },
 	);
 	await waitForPodNotesReady(obsidian);
-}
-
-// Closes a popout left open, saves the layout so no reload reopens it, and reloads:
-// closing a popout leaves Obsidian's layout observers looping in the main window for a
-// while, and a fresh window keeps later tests clean.
-async function closePopoutAndReload(obsidian: Obsidian): Promise<void> {
-	await evalJsonAsync<boolean>(
-		obsidian,
-		`(async () => {
-			require("@electron/remote").getCurrentWindow().show();
-			const leaf = app.workspace.getLeavesOfType(${jsLiteral(VIEW_TYPE)})[0];
-			leaf?.detach();
-			const windows = () => require("@electron/remote").BrowserWindow.getAllWindows().length;
-			for (let i = 0; i < 50 && (app.workspace.floatingSplit.children.length > 0 || windows() > 1); i++) {
-				await new Promise((resolve) => setTimeout(resolve, 100));
-			}
-			app.workspace.requestSaveLayout.cancel();
-			await app.workspace.saveLayout();
-			return true;
-		})()`,
-	);
-	await reloadAfterPopout(obsidian);
 }
 
 // The audio lives in the main window, so a popout holding the player is only a view of it.

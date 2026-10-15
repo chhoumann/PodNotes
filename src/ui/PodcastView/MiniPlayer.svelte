@@ -2,7 +2,8 @@
 	import { formatDuration } from "src/utility/formatDuration";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import { formatMinutes, sourceOf } from "./episodeRow";
+	import Cover from "./Cover.svelte";
+	import { formatMinutes, isPlaying, sourceOf, tileOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();
@@ -10,15 +11,12 @@
 	const playerState = player.state;
 
 	const episode = $derived($playerState.episode);
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	const duration = $derived($playerState.duration);
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
 	const remaining = $derived(Math.max(0, duration - elapsed));
 	const percent = $derived(duration > 0 ? (elapsed / duration) * 100 : 0);
 	const left = $derived(remaining > 0 ? ` · ${formatMinutes(remaining)} left` : "");
-	let failedArtworkUrl = $state("");
 	const id = $props.id();
 
 	const capture = () => void captureTimestamp();
@@ -47,23 +45,11 @@
 		{/if}
 		<button
 			type="button"
-			class="pn-mini-open"
+			class="pn-bare pn-mini-open"
 			aria-label="Open player: {episode.title}"
 			onclick={() => navigation.expand()}
 		>
-			{#if episode.artworkUrl && episode.artworkUrl !== failedArtworkUrl}
-				<img
-					class="pn-mini-cover"
-					src={episode.artworkUrl}
-					alt=""
-					onerror={() => (failedArtworkUrl = episode.artworkUrl ?? "")}
-				/>
-			{:else}
-				<span
-					class="pn-mini-cover pn-filetile"
-					{@attach icon($playerState.mediaType === "video" ? "video" : "music")}
-				></span>
-			{/if}
+			<Cover src={episode.artworkUrl} title={episode.podcastName} tile={tileOf(episode)} />
 			<span class="pn-mini-txt">
 				<span class="pn-mini-t">{episode.title}</span>
 				<span class="pn-mini-s">
@@ -86,7 +72,6 @@
 				type="button"
 				class="pn-iconbtn pn-mini-capture"
 				aria-label="Capture timestamp"
-				title="Capture timestamp"
 				onclick={capture}
 				{@attach icon("clock-plus")}
 			></button>
@@ -95,7 +80,6 @@
 			type="button"
 			class="pn-iconbtn pn-mini-toggle"
 			aria-label={playing ? "Pause" : "Play"}
-			title={playing ? "Pause" : "Play"}
 			onclick={() => player.toggle()}
 			{@attach icon(playing ? "pause" : "play")}
 		></button>
@@ -104,7 +88,7 @@
 
 <style>
 	/* Its controls sit above Obsidian's status bar, which floats over the view's bottom. */
-	.pn-mini {
+	.pn-mini :global {
 		--pn-btn: 36px;
 		position: relative;
 		flex: none;
@@ -115,43 +99,37 @@
 		padding: 0 var(--size-4-2) var(--pn-status-bar) var(--size-4-1);
 		background: var(--pn-surface);
 		border-top: 1px solid var(--background-modifier-border);
-	}
 
-	.pn-mini.is-wide {
-		height: calc(64px + var(--pn-status-bar));
-		gap: var(--size-4-3);
-		padding: 0 var(--size-4-4) var(--pn-status-bar) var(--size-4-3);
-	}
+		&.is-wide {
+			height: calc(64px + var(--pn-status-bar));
+			gap: var(--size-4-3);
+			padding: 0 var(--size-4-4) var(--pn-status-bar) var(--size-4-3);
+		}
 
-	:global(.is-phone) .pn-mini {
-		--pn-btn: 44px;
-		height: 64px;
-		padding: 0 var(--size-4-2);
-	}
+		.is-phone & {
+			--pn-btn: 44px;
+			height: 64px;
+			padding: 0 var(--size-4-2);
+		}
 
-	.pn-mini-open {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: var(--size-4-3);
-		height: auto;
-		padding: var(--size-4-1);
-		border: 0;
-		border-radius: var(--radius-s);
-		background: none;
-		box-shadow: none;
-		color: var(--text-normal);
-		font-size: var(--font-ui-small);
-		text-align: left;
-		cursor: var(--cursor);
-	}
+		.pn-mini-open {
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			gap: var(--size-4-3);
+			height: auto;
+			padding: var(--size-4-1);
+			border-radius: var(--radius-s);
+			color: var(--text-normal);
+			text-align: left;
+		}
 
-	.pn-mini-open:hover {
-		background: var(--background-modifier-hover);
-	}
+		@media (hover: hover) {
+			.pn-mini-open:hover {
+				background: var(--background-modifier-hover);
+			}
+		}
 
-	.pn-mini :global {
 		.pn-mini-prog {
 			position: absolute;
 			left: 0;
@@ -167,12 +145,9 @@
 			background: var(--interactive-accent);
 		}
 
-		.pn-mini-cover {
-			flex: none;
+		.pn-mini-open .pn-cover {
 			width: 36px;
-			height: 36px;
 			border-radius: 5px;
-			object-fit: cover;
 		}
 
 		.pn-mini-txt {
@@ -235,25 +210,23 @@
 			--icon-size: var(--icon-s);
 			--icon-stroke: var(--icon-s-stroke-width);
 		}
-	}
 
-	.pn-mini.is-wide :global {
-		.pn-mini-open {
-			flex: 0 1 300px;
+		&.is-wide {
+			.pn-mini-open {
+				flex: 0 1 300px;
+			}
+
+			.pn-mini-open .pn-cover {
+				width: 44px;
+			}
+
+			button.pn-btn {
+				height: 30px;
+			}
 		}
 
-		.pn-mini-cover {
+		.is-phone & .pn-mini-open .pn-cover {
 			width: 44px;
-			height: 44px;
 		}
-
-		button.pn-btn {
-			height: 30px;
-		}
-	}
-
-	:global(.is-phone) .pn-mini :global(.pn-mini-cover) {
-		width: 44px;
-		height: 44px;
 	}
 </style>

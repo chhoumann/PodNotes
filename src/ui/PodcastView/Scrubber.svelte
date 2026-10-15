@@ -94,27 +94,25 @@
 </div>
 
 <style>
-	.pn-scrub {
+	.pn-scrub :global {
 		position: relative;
 		height: 16px;
 		display: flex;
 		align-items: center;
 		cursor: pointer;
 		touch-action: none;
-	}
 
-	.pn-scrub:focus-visible {
-		outline: 2px solid var(--interactive-accent);
-		outline-offset: 3px;
-		border-radius: 4px;
-	}
+		&:focus-visible {
+			outline: 2px solid var(--interactive-accent);
+			outline-offset: 3px;
+			border-radius: 4px;
+		}
 
-	.pn-scrub[aria-disabled="true"] {
-		opacity: 0.5;
-		cursor: default;
-	}
+		&[aria-disabled="true"] {
+			opacity: 0.5;
+			cursor: default;
+		}
 
-	.pn-scrub :global {
 		.pn-segs {
 			display: flex;
 			gap: 2px;
@@ -147,22 +145,20 @@
 			box-shadow: 0 0 0 2px var(--pn-bg);
 			pointer-events: none;
 		}
-	}
 
-	:global(.is-phone) .pn-scrub {
-		height: 44px;
-		margin: -8px 0;
-	}
+		.is-phone & {
+			height: 44px;
+			margin: -8px 0;
 
-	:global(.is-phone) .pn-scrub :global {
-		.pn-segs {
-			height: 5px;
-		}
+			.pn-segs {
+				height: 5px;
+			}
 
-		.pn-thumb {
-			width: 16px;
-			height: 16px;
-			margin: -8px 0 0 -8px;
+			.pn-thumb {
+				width: 16px;
+				height: 16px;
+				margin: -8px 0 0 -8px;
+			}
 		}
 	}
 </style>

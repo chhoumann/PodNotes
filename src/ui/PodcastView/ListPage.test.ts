@@ -376,7 +376,6 @@ describe("offline", () => {
 		expect(listed()).toEqual(["Kept", "Streamed", "Later"]);
 		const greyed = row("Streamed, not downloaded");
 		expect(greyed).toHaveAttribute("aria-disabled", "true");
-		expect(greyed.closest(".pn-ep")).toHaveClass("is-unavailable");
 		expect(row("Kept, downloaded")).not.toHaveAttribute("aria-disabled");
 	});
 

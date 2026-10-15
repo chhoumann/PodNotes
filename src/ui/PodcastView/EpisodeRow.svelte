@@ -4,7 +4,7 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
-	import { availabilityOf, episodeRowModel } from "./episodeRow";
+	import { availabilityOf, episodeRowModel, isPlaying } from "./episodeRow";
 	import { anchorOf, type MenuAnchor } from "./menus";
 
 	let {
@@ -41,9 +41,7 @@
 	const playerState = player.state;
 	// The player's state changes many times a second; a row changes only with these.
 	const now = $derived($playerState.episode);
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	// A vault lookup, so it runs again only when notes change, not on every change to the library.
 	const noted = $derived($rowHasNote(episode));
 	const row = $derived(
@@ -65,7 +63,6 @@
 	class="pn-ep"
 	class:is-played={row.played}
 	class:is-current={row.current}
-	class:is-unavailable={row.unavailable}
 	class:is-queue={queue}
 	class:is-dragging={dragging}
 	role="listitem"
@@ -73,10 +70,9 @@
 	{@render leading?.()}
 	<button
 		type="button"
-		class="pn-ep-main"
+		class="pn-bare pn-ep-main"
 		aria-label={row.label}
 		aria-disabled={row.unavailable || undefined}
-		title={episode.title}
 		onclick={onplay}
 		oncontextmenu={menu}
 	>
@@ -104,9 +100,9 @@
 				{#if row.unavailable}
 					<span {@attach icon("cloud-off")}></span>
 				{:else if row.downloaded}
-					<span title="Downloaded" {@attach icon("arrow-down-to-line")}></span>
+					<span {@attach icon("arrow-down-to-line")}></span>
 				{/if}
-				{#if row.hasNote}<span title="Has note" {@attach icon("file-text")}></span>{/if}
+				{#if row.hasNote}<span {@attach icon("file-text")}></span>{/if}
 			</span>
 		</span>
 	</button>
@@ -117,7 +113,6 @@
 			type="button"
 			class="pn-iconbtn pn-ep-more"
 			aria-label="More options for {episode.title}"
-			title="More options"
 			aria-haspopup="menu"
 			onclick={menu}
 			oncontextmenu={menu}
@@ -127,29 +122,33 @@
 </div>
 
 <style>
-	.pn-ep {
+	.pn-ep :global {
 		display: flex;
 		align-items: flex-start;
 		border-radius: var(--radius-s);
-	}
 
-	.pn-ep:hover {
-		background: var(--background-modifier-hover);
-	}
+		@media (hover: hover) {
+			&:hover {
+				background: var(--background-modifier-hover);
+			}
 
-	.pn-ep.is-queue {
-		align-items: center;
-		gap: var(--size-2-2);
-	}
+			&:hover button.pn-ep-more {
+				opacity: 1;
+			}
+		}
 
-	.pn-ep.is-dragging {
-		position: relative;
-		z-index: 2;
-		background: var(--pn-surface);
-		box-shadow: var(--shadow-s);
-	}
+		&.is-queue {
+			align-items: center;
+			gap: var(--size-2-2);
+		}
 
-	.pn-ep :global {
+		&.is-dragging {
+			position: relative;
+			z-index: 2;
+			background: var(--pn-surface);
+			box-shadow: var(--shadow-s);
+		}
+
 		/* Obsidian's buttons keep their text on one line; this one wraps its title. */
 		.pn-ep-main {
 			flex: 1;
@@ -159,15 +158,10 @@
 			gap: var(--size-4-3);
 			height: auto;
 			padding: var(--size-4-2) 0 var(--size-4-2) var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-normal);
-			font-size: var(--font-ui-small);
 			text-align: left;
 			white-space: normal;
-			cursor: var(--cursor);
 		}
 
 		.pn-ep-main .pn-cover {
@@ -277,95 +271,83 @@
 			animation: none;
 			transform: scaleY(0.6);
 		}
-	}
 
-	.pn-ep.is-queue :global {
-		.pn-ep-main {
-			align-items: center;
-			padding-left: 0;
+		&.is-queue {
+			.pn-ep-main {
+				align-items: center;
+				padding-left: 0;
+			}
+
+			.pn-ep-main .pn-cover {
+				margin-top: 0;
+			}
+
+			.pn-bar {
+				display: none;
+			}
 		}
 
-		.pn-ep-main .pn-cover {
-			margin-top: 0;
+		&.is-played .pn-ep-title {
+			color: var(--text-muted);
+			font-weight: var(--font-normal);
 		}
 
-		.pn-bar {
-			display: none;
-		}
-	}
-
-	.pn-ep:hover :global(button.pn-ep-more) {
-		opacity: 1;
-	}
-
-	.pn-ep.is-played :global(.pn-ep-title) {
-		color: var(--text-muted);
-		font-weight: var(--font-normal);
-	}
-
-	.pn-ep.is-current :global(:is(.pn-ep-title, .pn-ep-meta)) {
-		color: var(--text-accent);
-	}
-
-	.pn-ep.is-unavailable :global(.pn-ep-main) {
-		opacity: 0.45;
-		cursor: default;
-	}
-
-	@keyframes pn-eq {
-		0%,
-		100% {
-			transform: scaleY(0.4);
-		}
-		50% {
-			transform: scaleY(1);
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.pn-ep :global(.pn-eq i) {
-			animation: none;
-		}
-	}
-
-	:global(.is-wide) .pn-ep :global {
-		.pn-ep-meta {
-			flex-wrap: nowrap;
-			white-space: nowrap;
+		&.is-current :is(.pn-ep-title, .pn-ep-meta) {
+			color: var(--text-accent);
 		}
 
-		.pn-ep-meta > * {
-			flex: none;
+		.is-wide & {
+			.pn-ep-meta {
+				flex-wrap: nowrap;
+				white-space: nowrap;
+			}
+
+			.pn-ep-meta > * {
+				flex: none;
+			}
+
+			.pn-ep-meta .pod {
+				flex: 0 1 auto;
+				min-width: 24px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.pn-brk {
+				display: none;
+			}
+
+			.pn-brk + .sep {
+				display: inline;
+			}
 		}
 
-		.pn-ep-meta .pod {
-			flex: 0 1 auto;
-			min-width: 24px;
-			overflow: hidden;
-			text-overflow: ellipsis;
-		}
+		.is-phone & {
+			.pn-ep-main {
+				padding-top: var(--size-4-3);
+				padding-bottom: var(--size-4-3);
+			}
 
-		.pn-brk {
-			display: none;
-		}
+			.pn-ep-main .pn-cover {
+				width: 48px;
+			}
 
-		.pn-brk + .sep {
-			display: inline;
+			button.pn-ep-more {
+				margin-top: var(--size-4-1);
+			}
 		}
 	}
 
-	:global(.is-phone) .pn-ep :global {
-		.pn-ep-main {
-			padding-top: var(--size-4-3);
-			padding-bottom: var(--size-4-3);
-		}
-
-		.pn-ep-main .pn-cover {
-			width: 48px;
-		}
-
-		button.pn-ep-more {
-			margin-top: var(--size-4-1);
+	/* Global, because a scoped keyframes rule scopes every element of the component. */
+	:global {
+		@keyframes pn-eq {
+			0%,
+			100% {
+				transform: scaleY(0.4);
+			}
+			50% {
+				transform: scaleY(1);
+			}
 		}
 	}
 </style>

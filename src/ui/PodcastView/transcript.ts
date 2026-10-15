@@ -25,6 +25,14 @@ export function lineAt(lines: readonly { start: number }[], time: number): numbe
 	return at;
 }
 
+/**
+ * Lower case for Find that keeps the text's length, so a match's place in the folded text is
+ * its place in the text: "İ" lowercases to two characters, so it folds to "i".
+ */
+export function foldCase(text: string): string {
+	return text.replace(/\u0130/g, "i").toLowerCase();
+}
+
 let cached: { key: string; transcript: Transcript | null } | undefined;
 
 /** Undefined when not cached; null when the episode's feed publishes no transcript. */

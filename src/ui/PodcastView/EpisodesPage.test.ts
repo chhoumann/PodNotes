@@ -219,9 +219,9 @@ describe("a podcast's page", () => {
 		};
 
 		expect(within(downloaded).getByRole("button", { name: "Rerun, downloaded" })).toBeVisible();
-		expect(downloaded.querySelector('[title="Downloaded"]')).not.toBeNull();
+		expect(downloaded.querySelector('[data-icon="arrow-down-to-line"]')).not.toBeNull();
 		expect(within(streamed).getByRole("button", { name: "Rerun" })).toBeVisible();
-		expect(streamed.querySelector('[title="Downloaded"]')).toBeNull();
+		expect(streamed.querySelector('[data-icon="arrow-down-to-line"]')).toBeNull();
 		expect(await menuOf(downloaded)).toContain("Remove download");
 		const streamedMenu = await menuOf(streamed);
 		expect(streamedMenu).toContain("Download");

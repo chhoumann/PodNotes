@@ -1,3 +1,4 @@
+import type { PlayerStatus } from "src/player/PlayerController";
 import { downloadedCopy, offlinePlayable } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
@@ -6,6 +7,11 @@ import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, type PlayedEpisodeMap } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
 import { getEpisodeMediaType, isSameMediaSource } from "src/utility/mediaType";
+
+/** A loading episode plays once ready, so it already shows Pause. */
+export function isPlaying(status: PlayerStatus): boolean {
+	return status === "playing" || status === "loading";
+}
 
 export type Downloads = Readonly<Record<string, readonly DownloadedEpisode[]>>;
 
@@ -117,6 +123,12 @@ function folderOf(path: string): string {
 	return slash > 0 ? path.slice(0, slash) : "/";
 }
 
+/** A local file's tile, which stands in for the artwork it never has. */
+export function tileOf(episode: Episode): "music" | "video" | undefined {
+	if (!isLocalFile(episode)) return undefined;
+	return getEpisodeMediaType(episode) === "video" ? "video" : "music";
+}
+
 /** Where the episode comes from: its podcast, or the folder of a local file. */
 export function sourceOf(episode: Episode): string {
 	return isLocalFile(episode) ? folderOf(episode.filePath ?? "") : episode.podcastName;
@@ -164,12 +176,7 @@ export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowMo
 				: local
 					? filePath && folderOf(filePath)
 					: episode.podcastName,
-		tile:
-			state.cover && local
-				? getEpisodeMediaType(episode) === "video"
-					? "video"
-					: "music"
-				: undefined,
+		tile: state.cover ? tileOf(episode) : undefined,
 		meta,
 		progress: left !== undefined && record ? record.time / record.duration : undefined,
 		played,

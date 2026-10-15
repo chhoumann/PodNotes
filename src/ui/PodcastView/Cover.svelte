@@ -30,31 +30,38 @@
 {/if}
 
 <style>
-	.pn-cover {
+	.pn-cover :global {
 		display: block;
 		flex: none;
 		width: 100%;
 		aspect-ratio: 1;
 		border-radius: 6px;
 		object-fit: cover;
-	}
 
-	.pn-cover.is-text {
-		display: flex;
-		align-items: flex-end;
-		overflow: hidden;
-		background: var(--background-modifier-border);
-		color: var(--text-muted);
-		font-weight: var(--font-bold);
-		line-height: 1;
-		text-align: left;
-		overflow-wrap: anywhere;
-		container-type: inline-size;
-	}
+		&.is-text {
+			display: flex;
+			align-items: flex-end;
+			overflow: hidden;
+			background: var(--background-modifier-border);
+			color: var(--text-muted);
+			font-weight: var(--font-bold);
+			line-height: 1;
+			text-align: left;
+			overflow-wrap: anywhere;
+			container-type: inline-size;
 
-	/* cqw is the cover's width. A percentage padding on the cover is its row's. */
-	.pn-cover.is-text > :global(span) {
-		padding: 10cqw;
-		font-size: 12cqw;
+			/* cqw is the cover's width. Three lines keep a long title's beginning, at a size a
+			   row's small cover can show. A padding would show the fourth line in it, above the
+			   clip edge; a margin keeps that edge under the third. */
+			> span {
+				display: -webkit-box;
+				-webkit-line-clamp: 3;
+				line-clamp: 3;
+				-webkit-box-orient: vertical;
+				overflow: hidden;
+				margin: 10cqw;
+				font-size: max(10px, 12cqw);
+			}
+		}
 	}
 </style>

@@ -9,7 +9,7 @@
 	import { icon } from "../obsidian/icon";
 	import { chapterAt } from "./chapters";
 	import { useServices } from "./context";
-	import { sourceOf } from "./episodeRow";
+	import { isPlaying, sourceOf } from "./episodeRow";
 	import { anchorOf, noteEntry, rateMenu, showMenu } from "./menus";
 	import type { Page } from "./pages";
 	import Scrubber from "./Scrubber.svelte";
@@ -37,9 +37,7 @@
 	let addedTimer: number | undefined;
 
 	const episode = $derived($playerState.episode as Episode);
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	const failed = $derived($playerState.status === "error");
 	const duration = $derived($playerState.duration);
 	const elapsed = $derived(Math.min($playerState.currentTime, duration));
@@ -94,7 +92,7 @@
 		<h2 class="pn-np-title" title={episode.title}>{episode.title}</h2>
 		{#if sourcePage}
 			{@const page = sourcePage}
-			<button type="button" class="pn-np-pod" onclick={() => navigation.go(page)}
+			<button type="button" class="pn-bare pn-np-pod" onclick={() => navigation.go(page)}
 				>{source}</button
 			>
 		{:else}
@@ -114,7 +112,7 @@
 			{#if current >= 0}
 				<button
 					type="button"
-					class="pn-chapnow"
+					class="pn-bare pn-chapnow"
 					title="Chapters"
 					disabled={!onchapters}
 					onclick={onchapters}>{chapters[current].title}</button
@@ -128,7 +126,7 @@
 	<div class="pn-transport">
 		<button
 			type="button"
-			class="pn-rate"
+			class="pn-bare pn-rate"
 			aria-label="Playback speed {$playerState.playbackRate}x"
 			aria-haspopup="menu"
 			disabled={failed}
@@ -138,9 +136,8 @@
 		<div class="mid">
 			<button
 				type="button"
-				class="pn-skip"
+				class="pn-bare pn-skip"
 				aria-label="Back {back} seconds"
-				title="Back {back} seconds"
 				disabled={failed}
 				onclick={() => api.skipBackward()}
 			>
@@ -150,16 +147,14 @@
 				type="button"
 				class="pn-play"
 				aria-label={playing ? "Pause" : "Play"}
-				title={playing ? "Pause" : "Play"}
 				disabled={failed}
 				onclick={() => player.toggle()}
 				{@attach icon(playing ? "pause" : "play")}
 			></button>
 			<button
 				type="button"
-				class="pn-skip"
+				class="pn-bare pn-skip"
 				aria-label="Forward {forward} seconds"
-				title="Forward {forward} seconds"
 				disabled={failed}
 				onclick={() => api.skipForward()}
 			>
@@ -168,9 +163,8 @@
 		</div>
 		<button
 			type="button"
-			class="pn-vol"
+			class="pn-bare pn-vol"
 			aria-label="Volume {Math.round($playerState.volume * 100)}%"
-			title="Volume"
 			aria-expanded={volumeOpen}
 			disabled={failed}
 			bind:this={volumeButton}
@@ -206,15 +200,13 @@
 </div>
 
 <style>
-	.pn-deck {
+	.pn-deck :global {
 		flex: none;
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-4-3);
 		padding: var(--size-4-3) var(--pn-pad);
-	}
 
-	.pn-deck :global {
 		.pn-tb {
 			min-width: 0;
 			text-align: center;
@@ -242,8 +234,6 @@
 			height: auto;
 			padding: 1px var(--size-2-3);
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
 			font-size: inherit;
 			white-space: nowrap;
@@ -256,10 +246,21 @@
 			vertical-align: top;
 		}
 
-		button.pn-np-pod:hover,
-		.pn-chapnow:hover {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
+		@media (hover: hover) {
+			button.pn-np-pod:hover,
+			.pn-chapnow:hover {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
+
+			.pn-rate:hover:not(:disabled) span {
+				border-color: var(--background-modifier-border-focus);
+				color: var(--text-normal);
+			}
+
+			:is(.pn-skip, .pn-vol):hover {
+				background: var(--background-modifier-hover);
+			}
 		}
 
 		.pn-scrubwrap {
@@ -297,8 +298,6 @@
 
 		:is(.pn-rate, .pn-skip, .pn-vol, .pn-play) {
 			padding: 0;
-			background: none;
-			box-shadow: none;
 		}
 
 		.pn-rate {
@@ -320,20 +319,11 @@
 			font-variant-numeric: tabular-nums;
 		}
 
-		.pn-rate:hover:not(:disabled) span {
-			border-color: var(--background-modifier-border-focus);
-			color: var(--text-normal);
-		}
-
 		:is(.pn-skip, .pn-vol) {
 			position: relative;
 			width: var(--pn-skip);
 			height: var(--pn-skip);
 			border-radius: 50%;
-		}
-
-		:is(.pn-skip, .pn-vol):hover {
-			background: var(--background-modifier-hover);
 		}
 
 		.pn-skip {
@@ -360,6 +350,7 @@
 			height: var(--pn-play);
 			border-radius: 50%;
 			background: var(--text-normal);
+			box-shadow: none;
 			color: var(--pn-bg);
 			transition: transform 120ms ease;
 			--icon-size: calc(var(--pn-play) * 0.4);
@@ -381,10 +372,6 @@
 			justify-self: end;
 			color: var(--text-muted);
 			--icon-size: 20px;
-		}
-
-		:is(.pn-rate, .pn-skip, .pn-vol, .pn-play):disabled {
-			opacity: 0.35;
 		}
 
 		.pn-pop {
@@ -436,49 +423,41 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
-	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.pn-deck :global(.pn-play) {
-			transition: none;
-		}
-	}
+		/* Obsidian's header and navbar take a phone's height, so the deck gives the stage room. */
+		.is-phone & {
+			padding-block: var(--size-4-2);
 
-	:global(.is-phone) .pn-deck {
-		gap: var(--size-4-4);
-		padding-bottom: var(--size-4-2);
-	}
+			.pn-rate span {
+				height: 30px;
+				padding: 0 var(--size-4-3);
+				border-radius: 15px;
+			}
 
-	:global(.is-phone) .pn-deck :global {
-		.pn-rate span {
-			height: 30px;
-			padding: 0 var(--size-4-3);
-			border-radius: 15px;
-		}
+			.pn-skip {
+				--icon-size: 30px;
+			}
 
-		.pn-skip {
-			--icon-size: 30px;
-		}
+			.pn-skip b {
+				font-size: 10px;
+			}
 
-		.pn-skip b {
-			font-size: 10px;
+			button.pn-cap {
+				--icon-size: 20px;
+			}
 		}
 
-		button.pn-cap {
-			--icon-size: 20px;
+		.is-wide & {
+			gap: var(--size-4-4);
+			padding: var(--size-4-4) var(--size-4-6) 0;
+
+			.pn-np-title {
+				font-size: var(--font-ui-large);
+				line-height: 1.25;
+				letter-spacing: -0.01em;
+				-webkit-line-clamp: 3;
+				line-clamp: 3;
+			}
 		}
-	}
-
-	:global(.is-wide) .pn-deck {
-		gap: var(--size-4-4);
-		padding: var(--size-4-4) var(--size-4-6) 0;
-	}
-
-	:global(.is-wide) .pn-deck :global(.pn-np-title) {
-		font-size: var(--font-ui-large);
-		line-height: 1.25;
-		letter-spacing: -0.01em;
-		-webkit-line-clamp: 3;
-		line-clamp: 3;
 	}
 </style>

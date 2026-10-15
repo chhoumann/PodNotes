@@ -3,12 +3,19 @@
 	import type { Episode } from "src/types/Episode";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { isLocalFile } from "src/utility/isLocalFile";
+	import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 	import { getEpisodeMediaType } from "src/utility/mediaType";
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
-	import Panel from "./Panel.svelte";
+	import Panel, { reveal } from "./Panel.svelte";
 	import SearchField from "./SearchField.svelte";
-	import { cachedTranscript, lineAt, loadTranscript, type Transcript } from "./transcript";
+	import {
+		cachedTranscript,
+		foldCase,
+		lineAt,
+		loadTranscript,
+		type Transcript,
+	} from "./transcript";
 
 	type Load =
 		| { kind: "loading" }
@@ -26,7 +33,8 @@
 		position: number;
 		onseek(time: number): void;
 	} = $props();
-	const { feeds, online, settings, saveTranscriptNote, transcribeFromAudio } = useServices();
+	const { app, feeds, online, settings, rowHasNote, saveTranscriptNote, transcribeFromAudio } =
+		useServices();
 
 	let load = $state.raw<Load>({ kind: "loading" });
 	let list: HTMLElement | undefined = $state();
@@ -44,13 +52,21 @@
 			? lineAt(load.transcript.lines, position)
 			: -1,
 	);
-	const needle = $derived(finding ? query.toLowerCase() : "");
+	const needle = $derived(finding ? foldCase(query) : "");
 	const shown = $derived(
 		lines
 			.map((line, index) => ({ line, index }))
-			.filter(({ line }) => !needle || line.text.toLowerCase().includes(needle)),
+			.filter(({ line }) => !needle || foldCase(line.text).includes(needle)),
 	);
 	const audio = $derived(getEpisodeMediaType(episode) === "audio");
+	// The note saved before, which the command would refuse to save again. A note made, moved or
+	// deleted since changes rowHasNote, and the transcript path is a setting.
+	const note = $derived.by(() => {
+		void $rowHasNote;
+		return app.vault.getFileByPath(
+			getEpisodeTranscriptPath(episode, $settings.transcript.path),
+		);
+	});
 	const provider = $derived.by(() => {
 		const { diarization } = $settings.transcript;
 		return diarization?.enabled && diarization.provider === "deepgram" ? "Deepgram" : "OpenAI";
@@ -65,14 +81,19 @@
 	});
 
 	$effect(() => {
-		if (finding ? needle : following) reveal(finding ? hit : current);
+		if (list && (finding ? needle : following)) {
+			reveal(list, finding ? hit : current);
+			ownScrollTop = list.scrollTop;
+		}
 	});
 
 	$effect(() => {
 		const scroller = list;
 		if (!scroller) return;
+		// A resize that lowers the list's last scroll position moves it without the reader.
 		const scrolled = () => {
-			if (Math.abs(scroller.scrollTop - ownScrollTop) > 1) following = false;
+			const own = Math.min(ownScrollTop, scroller.scrollHeight - scroller.clientHeight);
+			if (Math.abs(scroller.scrollTop - own) > 1) following = false;
 		};
 		scroller.addEventListener("scroll", scrolled);
 		return () => scroller.removeEventListener("scroll", scrolled);
@@ -98,15 +119,6 @@
 		);
 	}
 
-	/** Not scrollIntoView, which would also scroll the view and an editor around it. */
-	function reveal(at: number) {
-		const row = list?.children[at];
-		if (!list || !row) return;
-		const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top;
-		list.scrollTop += top - list.clientHeight / 3;
-		ownScrollTop = list.scrollTop;
-	}
-
 	function seek(time: number) {
 		following = true;
 		onseek(time);
@@ -130,7 +142,7 @@
 
 	function pieces(text: string): string[] {
 		const found: string[] = [];
-		const lower = text.toLowerCase();
+		const lower = foldCase(text);
 		let from = 0;
 		for (let at = lower.indexOf(needle); at >= 0; at = lower.indexOf(needle, from)) {
 			found.push(text.slice(from, at), text.slice(at, at + needle.length));
@@ -149,21 +161,27 @@
 	>
 		{#if load.kind === "loading"}
 			<div class="pn-panel-empty" role="status">Loading transcript</div>
-		{:else if load.kind === "error"}
-			<div class="pn-panel-empty" role="alert">
-				<span class="pn-panel-empty-icon" {@attach icon("alert-triangle")}></span>
-				<span>Transcript didn't load</span>
-				<button type="button" class="pn-btn" onclick={() => show(episode)}>Retry</button>
-			</div>
-		{:else if load.kind === "none"}
-			<div class="pn-panel-empty">
-				<span class="pn-panel-empty-icon" {@attach icon("captions")}></span>
+		{:else if load.kind !== "ready"}
+			{@const failed = load.kind === "error"}
+			<div class="pn-panel-empty" role={failed ? "alert" : undefined}>
 				<span
-					>{isLocalFile(episode)
-						? "No transcript yet"
-						: "No transcript in this feed"}</span
+					class="pn-panel-empty-icon"
+					{@attach icon(failed ? "alert-triangle" : "captions")}
+				></span>
+				<span
+					>{failed
+						? "Transcript didn't load"
+						: isLocalFile(episode)
+							? "No transcript yet"
+							: "No transcript in this feed"}</span
 				>
-				{#if audio}
+				{#if failed}
+					<button type="button" class="pn-btn" onclick={() => show(episode)}>Retry</button
+					>
+				{/if}
+				{#if note}
+					{@render saveNote()}
+				{:else if !failed && audio}
 					<button
 						type="button"
 						class="pn-btn"
@@ -191,7 +209,7 @@
 						{@const start = line.start}
 						<button
 							type="button"
-							class="pn-row"
+							class="pn-bare pn-row"
 							class:is-now={index === current}
 							class:is-hit={needle && at === hit}
 							aria-current={index === current || undefined}
@@ -234,7 +252,6 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Close find"
-			title="Close find"
 			onclick={closeFind}
 			{@attach icon("x")}
 		></button>
@@ -247,32 +264,32 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Find in transcript"
-			title="Find in transcript"
 			bind:this={findButton}
 			onclick={() => (finding = true)}
 			{@attach icon("search")}
 		></button>
-		<button
-			type="button"
-			class="pn-btn pn-tx-save"
-			aria-label="Save as note"
-			title="Save as note"
-			disabled={!$online}
-			onclick={() => saveTranscriptNote()}
-			><span class="pn-tx-icon" {@attach icon("file-plus")}></span><span>Save as note</span
-			></button
-		>
+		{@render saveNote()}
 	{/if}
 {/snippet}
 
+{#snippet saveNote()}
+	<button
+		type="button"
+		class="pn-btn pn-tx-save"
+		disabled={!note && !$online}
+		onclick={() => (note ? app.workspace.getLeaf(false).openFile(note) : saveTranscriptNote())}
+		><span class="pn-tx-icon" {@attach icon(note ? "file-text" : "file-plus")}></span><span
+			>{note ? "Open note" : "Save as note"}</span
+		></button
+	>
+{/snippet}
+
 <style>
-	.pn-tx {
+	.pn-tx :global {
 		position: relative;
 		width: 100%;
 		height: 100%;
-	}
 
-	.pn-tx :global {
 		/* Following compares exact scroll positions, so the list must not animate them. */
 		.pn-panel-scroll {
 			scroll-behavior: auto;
@@ -341,8 +358,6 @@
 		}
 
 		.pn-tx-follow {
-			display: inline-flex;
-			align-items: center;
 			gap: 6px;
 			height: 28px;
 			padding: 0 var(--size-4-3);
@@ -355,24 +370,35 @@
 			--icon-size: 14px;
 		}
 
-		.pn-tx-follow:hover {
-			background: var(--interactive-accent-hover);
-		}
-	}
-
-	:global(.is-compact:not(.is-phone)) .pn-tx :global {
-		.pn-tx-save {
-			width: 28px;
-			padding: 0;
+		@media (hover: hover) {
+			.pn-tx-follow:hover {
+				background: var(--interactive-accent-hover);
+			}
 		}
 
-		.pn-tx-save span:last-child {
-			display: none;
-		}
-	}
+		/* Save keeps its label where the head has room for it, wherever the panel is. */
+		.pn-panel-head {
+			container-type: inline-size;
 
-	:global(.is-phone) .pn-tx :global {
-		.pn-tx-follow {
+			/* 340 px: a phone's icon, title, Free tag, 44 px Find and labelled Save. */
+			@container (width < 340px) {
+				.pn-tx-save {
+					width: 28px;
+					padding: 0;
+				}
+
+				/* Folded out of sight, the label still names the button. */
+				.pn-tx-save span:last-child {
+					position: absolute;
+					width: 1px;
+					height: 1px;
+					overflow: hidden;
+					clip-path: inset(50%);
+				}
+			}
+		}
+
+		.is-phone & .pn-tx-follow {
 			height: 44px;
 			padding: 0 var(--size-4-4);
 			border-radius: 22px;

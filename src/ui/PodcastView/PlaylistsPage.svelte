@@ -20,7 +20,7 @@
 {#snippet row(playlist: Playlist, tile: IconType, favorite: boolean)}
 	<button
 		type="button"
-		class="pn-plrow"
+		class="pn-bare pn-plrow"
 		onclick={() => navigation.go({ kind: "playlist", name: playlist.name })}
 		oncontextmenu={favorite
 			? undefined
@@ -40,7 +40,11 @@
 	{#each Object.values($playlists) as playlist (playlist.name)}
 		{@render row(playlist, playlist.icon, false)}
 	{/each}
-	<button type="button" class="pn-plrow is-new" onclick={() => void actions.createPlaylist()}>
+	<button
+		type="button"
+		class="pn-bare pn-plrow is-new"
+		onclick={() => void actions.createPlaylist()}
+	>
 		<span class="pn-plicon" {@attach icon("plus")}></span>
 		<span class="txt"><span class="t">New playlist</span></span>
 	</button>
@@ -50,24 +54,20 @@
 	.pn-playlists :global {
 		.pn-plrow {
 			display: flex;
-			align-items: center;
 			gap: var(--size-4-3);
 			width: 100%;
 			height: auto;
 			padding: var(--size-4-2);
-			border: 0;
 			border-radius: var(--radius-s);
-			background: none;
-			box-shadow: none;
 			color: var(--text-normal);
-			font-size: var(--font-ui-small);
 			font-weight: inherit;
 			text-align: left;
-			cursor: var(--cursor);
 		}
 
-		.pn-plrow:hover {
-			background: var(--background-modifier-hover);
+		@media (hover: hover) {
+			.pn-plrow:hover {
+				background: var(--background-modifier-hover);
+			}
 		}
 
 		.pn-plicon {

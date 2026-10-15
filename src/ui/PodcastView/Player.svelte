@@ -6,7 +6,9 @@
 	import { cachedChapters, loadChapters } from "./chapters";
 	import ChaptersPanel from "./ChaptersPanel.svelte";
 	import { useServices } from "./context";
+	import Cover from "./Cover.svelte";
 	import Deck from "./Deck.svelte";
+	import { isPlaying, tileOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 	import { anchorOf, episodeMenu, showMenu } from "./menus";
 	import TranscriptPanel from "./TranscriptPanel.svelte";
@@ -39,16 +41,14 @@
 	let transcript: TranscriptPanel | undefined = $state();
 	let videoFrame: HTMLElement | undefined = $state();
 	let inMainWindow = $state(true);
+	let isFullscreen = $state(false);
 	let chapters: readonly Chapter[] = $state([]);
 	/** The panel the user chose. None shows the artwork at compact widths. */
 	let panel = $state<PanelKind>();
-	let failedArtworkUrl = $state("");
 
 	const episode = $derived($playerState.episode as Episode);
 	const wide = $derived(layout === "wide");
-	const playing = $derived(
-		$playerState.status === "playing" || $playerState.status === "loading",
-	);
+	const playing = $derived(isPlaying($playerState.status));
 	const failed = $derived($playerState.status === "error");
 	const video = $derived($playerState.mediaType === "video");
 	const elapsed = $derived(Math.min($playerState.currentTime, $playerState.duration));
@@ -79,7 +79,9 @@
 	// or a press in the view makes it. A menu or modal over the player takes Escape first.
 	$effect(() => {
 		const escape = scope.register(null, "Escape", () => {
-			if (!deck?.closeVolume() && !transcript?.closeFind()) void collapse();
+			// The first Escape leaves a video's fullscreen, which Obsidian's window keeps otherwise.
+			if (isFullscreen) void viewRoot.doc.exitFullscreen();
+			else if (!deck?.closeVolume() && !transcript?.closeFind()) void collapse();
 			return false;
 		});
 		const space = scope.register(null, " ", (evt) => {
@@ -143,6 +145,12 @@
 	}
 </script>
 
+<!-- Also when the frame goes, as when the next episode in the queue is audio. -->
+<svelte:document
+	onfullscreenchange={() =>
+		(isFullscreen = !!videoFrame && viewRoot.doc.fullscreenElement === videoFrame)}
+/>
+
 {#snippet panelView(kind: PanelKind)}
 	{#if kind === "chapters"}
 		<ChaptersPanel {chapters} position={elapsed} onseek={playFrom} />
@@ -159,7 +167,7 @@
 			<button
 				type="button"
 				id="{id}-{kind}"
-				class="pn-tab"
+				class="pn-bare pn-tab"
 				role="tab"
 				aria-selected={shown === kind}
 				aria-controls="{id}-panel"
@@ -176,7 +184,7 @@
 		{#each panels as kind (kind)}
 			<button
 				type="button"
-				class="pn-sw"
+				class="pn-bare pn-sw"
 				aria-pressed={shown === kind}
 				disabled={failed}
 				onclick={() => (panel = shown === kind ? undefined : kind)}
@@ -193,7 +201,6 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Collapse player"
-			title="Collapse player"
 			onclick={collapse}
 			{@attach icon("chevron-down")}
 			{@attach focusFromView}
@@ -203,7 +210,6 @@
 			type="button"
 			class="pn-iconbtn"
 			aria-label="Episode options"
-			title="Episode options"
 			aria-haspopup="menu"
 			onclick={(event) => {
 				const at = anchorOf(event);
@@ -229,7 +235,7 @@
 					<div class="pn-video" use:player.videoStage bind:this={videoFrame}>
 						<button
 							type="button"
-							class="pn-vplay"
+							class="pn-bare pn-vplay"
 							class:is-paused={!playing}
 							aria-label={playing ? "Pause" : "Play"}
 							onclick={() => player.toggle()}
@@ -238,22 +244,18 @@
 						<button
 							type="button"
 							class="pn-fs"
-							aria-label="Fullscreen"
-							title="Fullscreen"
-							onclick={fullscreen}
-							{@attach icon("maximize")}
+							aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+							onclick={() =>
+								isFullscreen ? viewRoot.doc.exitFullscreen() : fullscreen()}
+							{@attach icon(isFullscreen ? "minimize" : "maximize")}
 						></button>
 					</div>
-				{:else if episode.artworkUrl && episode.artworkUrl !== failedArtworkUrl}
-					<img
-						class="pn-np-art"
-						src={episode.artworkUrl}
-						alt=""
-						onerror={() => (failedArtworkUrl = episode.artworkUrl ?? "")}
-					/>
 				{:else}
-					<span class="pn-np-art pn-filetile" {@attach icon(video ? "video" : "music")}
-					></span>
+					<Cover
+						src={episode.artworkUrl}
+						title={episode.podcastName}
+						tile={tileOf(episode)}
+					/>
 				{/if}
 			</div>
 			<Deck
@@ -283,16 +285,14 @@
 </section>
 
 <style>
-	.pn-player {
+	.pn-player :global {
 		position: absolute;
 		inset: 0;
 		z-index: 10;
 		display: flex;
 		flex-direction: column;
 		background: var(--pn-bg);
-	}
 
-	.pn-player :global {
 		.pn-np-head {
 			flex: none;
 			display: flex;
@@ -327,16 +327,14 @@
 			container-type: size;
 		}
 
-		.pn-np-art {
-			flex: none;
+		/* The stage's own artwork, not the covers of a panel's rows shown in it. */
+		.pn-stage > .pn-cover {
 			width: min(100cqw, 100cqh - 8px, 300px);
-			aspect-ratio: 1;
 			border-radius: 12px;
 			box-shadow: var(--shadow-s);
-			object-fit: cover;
 		}
 
-		.pn-stage .pn-np-art.pn-filetile {
+		.pn-stage > .pn-filetile {
 			color: var(--text-faint);
 			container-type: inline-size;
 			--icon-size: 25cqw;
@@ -382,8 +380,6 @@
 			height: auto;
 			padding: 0;
 			border-radius: 0;
-			background: none;
-			box-shadow: none;
 			opacity: 0;
 		}
 
@@ -392,7 +388,6 @@
 		}
 
 		.pn-vplay.is-paused,
-		.pn-video:hover .pn-vplay,
 		.pn-vplay:focus-visible {
 			opacity: 1;
 		}
@@ -420,11 +415,6 @@
 			--icon-size: 16px;
 		}
 
-		/* Leaving fullscreen is Escape's job. */
-		.pn-video:fullscreen .pn-fs {
-			display: none;
-		}
-
 		.pn-np-right {
 			min-height: 0;
 			display: flex;
@@ -447,8 +437,6 @@
 
 		:is(.pn-sw, .pn-tab) {
 			padding: 0 var(--size-4-3);
-			background: none;
-			box-shadow: none;
 			color: var(--text-muted);
 			font-weight: var(--font-medium);
 		}
@@ -459,18 +447,9 @@
 			font-size: var(--font-ui-smaller);
 		}
 
-		.pn-sw:hover:not(:disabled) {
-			background: var(--background-modifier-hover);
-			color: var(--text-normal);
-		}
-
 		.pn-sw[aria-pressed="true"] {
 			background: var(--background-modifier-border);
 			color: var(--text-normal);
-		}
-
-		.pn-sw:disabled {
-			opacity: 0.35;
 		}
 
 		.pn-tabs {
@@ -488,9 +467,7 @@
 			border-radius: 0;
 		}
 
-		.pn-tab:hover,
 		.pn-tab[aria-selected="true"] {
-			background: none;
 			color: var(--text-normal);
 		}
 
@@ -504,36 +481,51 @@
 			border-radius: 1px;
 			background: var(--interactive-accent);
 		}
-	}
 
-	:global(.is-phone) .pn-player :global {
-		.pn-np-art {
-			width: min(100cqw, 100cqh - 8px, 358px);
+		@media (hover: hover) {
+			.pn-video:hover .pn-vplay {
+				opacity: 1;
+			}
+
+			.pn-sw:hover:not(:disabled) {
+				background: var(--background-modifier-hover);
+				color: var(--text-normal);
+			}
+
+			.pn-tab:hover {
+				color: var(--text-normal);
+			}
 		}
 
-		.pn-sw {
-			height: 44px;
-			border-radius: 22px;
-			padding: 0 var(--size-4-4);
-		}
-	}
+		.is-phone & {
+			.pn-stage > .pn-cover {
+				width: min(100cqw, 100cqh - 8px, 358px);
+			}
 
-	.pn-player.is-wide :global {
-		.pn-np-head {
-			padding: 0 var(--size-4-3);
-		}
-
-		.pn-np-body {
-			display: grid;
-			grid-template-columns: 360px minmax(0, 1fr);
+			.pn-sw {
+				height: 44px;
+				border-radius: 22px;
+				padding: 0 var(--size-4-4);
+			}
 		}
 
-		.pn-np-left {
-			padding-bottom: var(--size-4-4);
-		}
+		&.is-wide {
+			.pn-np-head {
+				padding: 0 var(--size-4-3);
+			}
 
-		.pn-stage {
-			padding: var(--size-4-1) var(--size-4-6) 0;
+			.pn-np-body {
+				display: grid;
+				grid-template-columns: 360px minmax(0, 1fr);
+			}
+
+			.pn-np-left {
+				padding-bottom: var(--size-4-4);
+			}
+
+			.pn-stage {
+				padding: var(--size-4-1) var(--size-4-6) 0;
+			}
 		}
 	}
 </style>

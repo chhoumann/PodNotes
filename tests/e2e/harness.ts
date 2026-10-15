@@ -20,6 +20,7 @@ import {
 	assertSettingsOpenInMainWindow,
 	assertSingleWindow,
 	dismissNotices,
+	setOffline,
 } from "./journey/actions";
 import {
 	hasJourneySnapshot,
@@ -86,6 +87,9 @@ export function createPodNotesE2EHarness(testName: string) {
 					'app.saveLocalStorage("secrets-encryption-warning-dismissed", "1"), true',
 				);
 				await dismissNotices(suiteClient);
+				// The verify skill's `screens.mjs offline on` leaves the renderer offline through
+				// CDP, where no feed loads, and the instance stays up for the next run.
+				await setOffline(suiteClient, false);
 				const resolver = await suiteClient.dev.evalJson<string>(
 					'require("@electron/remote").app.commandLine.getSwitchValue("host-resolver-rules")',
 				);

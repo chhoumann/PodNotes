@@ -2,15 +2,16 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { FIXTURE_HOST, SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
 import {
+	asPhone,
 	dismissNotices,
 	runCommand,
-	setMobileEmulation,
+	placePodNotes,
 	setOffline,
 	showAddPodcast,
 	showLibrary,
 	showPodNotes,
 } from "./journey/actions";
-import { cdp, click, pressKey, typeInto, typeText } from "./journey/input";
+import { accessibleName, click, pressKey, typeInto, typeText } from "./journey/input";
 import { PLAYER_VIEW, ui, type UiTarget } from "./journey/targets";
 import { eventually, isDisabled, isShown, notices, waitUntilShown } from "./journey/wait";
 import {
@@ -26,6 +27,7 @@ import {
 	storedEpisode,
 	waitForLibrary,
 	waitForPlayback,
+	writeVaultFile,
 } from "./journey/library";
 import { jsLiteral, PLUGIN_ID } from "./runtime";
 
@@ -110,6 +112,7 @@ async function serve(): Promise<FixtureServer> {
 	return server;
 }
 
+/** The full player wide, so every line shows and none needs a scroll that stops following. */
 async function openTranscript(episode: FixtureEpisode): Promise<FixtureServer> {
 	const context = getContext();
 	const server = await serve();
@@ -117,7 +120,7 @@ async function openTranscript(episode: FixtureEpisode): Promise<FixtureServer> {
 		subscriptions: [FEED],
 		current: storedEpisode(server, FEED, episode),
 	});
-	await showPodNotes(context.obsidian);
+	await placePodNotes(context.obsidian, { sidebar: 820 });
 	if (!(await isShown(context.obsidian, ui.fullPlayer)))
 		await click(context.obsidian, ui.openPlayer);
 	await waitUntilShown(context.obsidian, ui.fullPlayer);
@@ -144,6 +147,106 @@ async function takeNote(): Promise<string> {
 	return text.replace(/^Date: .+$/m, "Date: <date>");
 }
 
+type Box = Readonly<{ top: number; bottom: number; width: number; height: number }>;
+type PhoneGeometry = Readonly<{
+	stage: Box;
+	art: Box | null;
+	panel: Box | null;
+	list: Box | null;
+	controls: number;
+	navbar: number;
+}>;
+
+/** Where the full player lays out its stage and deck on the phone, against Obsidian's navbar. */
+function phoneGeometry(): Promise<PhoneGeometry> {
+	return getContext().obsidian.dev.evalJson<PhoneGeometry>(`(() => {
+		const player = document.querySelector(${jsLiteral(`${PLAYER_VIEW} section.pn-player`)});
+		const box = (el) => {
+			if (!el) return null;
+			const { top, bottom, width, height } = el.getBoundingClientRect();
+			return { top, bottom, width, height };
+		};
+		return {
+			stage: box(player.querySelector(".pn-stage")),
+			art: box(player.querySelector(".pn-stage > .pn-cover")),
+			panel: box(player.querySelector(".pn-stage .pn-panel")),
+			list: box(player.querySelector(".pn-stage .pn-panel-scroll")),
+			controls: Math.max(...[...player.querySelectorAll(".pn-deck button")].map((button) => button.getBoundingClientRect().bottom)),
+			navbar: document.querySelector(".mobile-navbar").getBoundingClientRect().top,
+		};
+	})()`);
+}
+
+type TranscriptHead = Readonly<{
+	panel: number;
+	saveInside: boolean;
+	label: boolean;
+	headFits: boolean;
+	name?: string;
+	ariaLabel: boolean;
+}>;
+
+const SAVE = `document.querySelector(${jsLiteral(`${PLAYER_VIEW} section.pn-player .pn-panel-head .pn-tx-save`)})`;
+
+/**
+ * How the transcript panel's head fits the panel: Save inside it, with its label in sight or
+ * not, the name Chromium gives Save, and whether it has an aria-label, which Obsidian shows as a tooltip.
+ */
+async function transcriptHead(): Promise<TranscriptHead> {
+	const { obsidian } = getContext();
+	const head = await obsidian.dev.evalJson<TranscriptHead>(`(() => {
+		const save = ${SAVE};
+		const panel = save.closest(".pn-panel");
+		const head = save.parentElement;
+		const label = save.lastElementChild.getBoundingClientRect();
+		const shown = label.width > 1;
+		const box = panel.getBoundingClientRect();
+		const right = Math.max(save.getBoundingClientRect().right, shown ? label.right : 0);
+		return {
+			panel: Math.round(box.width),
+			saveInside: right <= box.right + 0.5,
+			label: shown,
+			headFits: head.scrollWidth <= head.clientWidth,
+			ariaLabel: save.hasAttribute("aria-label"),
+		};
+	})()`);
+	return { ...head, name: (await accessibleName(obsidian, SAVE))?.name };
+}
+
+type Followed = Readonly<{ line: string; clear: boolean; cut: boolean; rows: number[] }>;
+
+/**
+ * The line playing now, whether it and the line before it show whole, below the list's faded
+ * top 12 px and above its faded bottom 20 px, and whether a line shows cut where the top fade
+ * ends.
+ */
+function followed(): Promise<Followed> {
+	return getContext().obsidian.dev.evalJson<Followed>(`(() => {
+		const list = ${TRANSCRIPT_LIST};
+		const top = list.getBoundingClientRect().top;
+		const now = list.querySelector("[aria-current='true']").closest("li");
+		const [before, after] = [now.previousElementSibling, now].map((row) => row.getBoundingClientRect());
+		return {
+			line: now.lastElementChild.lastElementChild.textContent.trim(),
+			clear: before.top - top > 11.5 && after.bottom - top < list.clientHeight - 19.5,
+			cut: [...list.children].some((row) => {
+				const box = row.getBoundingClientRect();
+				return box.top - top < 11.5 && box.bottom - top > 12.5;
+			}),
+			rows: [before.top - top, after.top - top, after.bottom - top, list.clientHeight].map(Math.round),
+		};
+	})()`);
+}
+
+/** The full player's Transcript panel, once it lists every line. */
+async function openTranscriptPanel(): Promise<void> {
+	const { obsidian } = getContext();
+	if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+	await waitUntilShown(obsidian, ui.fullPlayer);
+	await click(obsidian, ui.playerPanel("Transcript"));
+	await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+}
+
 describe("transcript journeys", () => {
 	test("switching episodes clears Find and shows every line of the incoming transcript", async () => {
 		const context = getContext();
@@ -162,9 +265,8 @@ describe("transcript journeys", () => {
 			current: storedEpisode(server, feed, CAPTIONED),
 			queue: [storedEpisode(server, feed, incoming)],
 		});
-		await showPodNotes(obsidian);
+		await placePodNotes(obsidian, { sidebar: 820 });
 		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
-		await obsidian.dev.evalJson("app.workspace.rightSplit.setSize(820), true");
 		await click(obsidian, ui.playerPanel("Transcript"));
 		expect(
 			await eventually(obsidian, async () => (await shownTranscript()).lines, LINES),
@@ -261,6 +363,39 @@ describe("transcript journeys", () => {
 		expect(fromPanel).toContain("Today we build a memory palace together.");
 		expect(fromPanel).toBe(fromCommand);
 	}, 120_000);
+
+	test("J-TR-04 a transcript saved before opens from the panel, offline too, unchanged and with no download", async () => {
+		const { obsidian, sandbox } = getContext();
+		const server = await openTranscript(CAPTIONED);
+		await eventually(obsidian, async () => (await shownTranscript()).lines, LINES, 15_000);
+		const saved = "# Memory Palaces\n\nSaved before, by hand.\n";
+		await writeVaultFile(obsidian, sandbox.path(NOTE_PATH), saved);
+		onTestFinished(() =>
+			obsidian.dev.evalJsonAsync(`(async () => {
+				await app.vault.delete(app.vault.getFileByPath(${jsLiteral(sandbox.path(NOTE_PATH))}));
+				return true;
+			})()`),
+		);
+		await waitUntilShown(obsidian, panelButton("Open note"));
+		const requests = server.requests().length;
+		await setOffline(obsidian, true);
+		onTestFinished(() => setOffline(obsidian, false));
+
+		await click(obsidian, panelButton("Open note"));
+
+		expect(
+			await eventually(
+				obsidian,
+				() =>
+					obsidian.dev.evalJson<string | null>(
+						"app.workspace.getActiveFile()?.path ?? null",
+					),
+				sandbox.path(NOTE_PATH),
+			),
+		).toBe(sandbox.path(NOTE_PATH));
+		expect(await readVaultText(obsidian, sandbox.path(NOTE_PATH))).toBe(saved);
+		expect(server.requests().length, "no request").toBe(requests);
+	});
 
 	test("an episode whose feed publishes no transcript offers the paid transcription", async () => {
 		const { obsidian } = getContext();
@@ -369,21 +504,10 @@ describe("transcript journeys", () => {
 		);
 	}, 120_000);
 
-	test("on a phone, Save, the Find field, Follow and Up next's Edit are 44 px tall", async () => {
+	test("on a phone, the stage gets the room the deck can spare, and Save, the Find field, Follow and Edit are 44 px", async () => {
 		const context = getContext();
 		const { obsidian } = context;
-		const phone = { width: 390, height: 844 };
-		await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
-			...phone,
-			deviceScaleFactor: 1,
-			mobile: true,
-			screenWidth: phone.width,
-			screenHeight: phone.height,
-		});
-		onTestFinished(async () => {
-			await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
-		});
-		await setMobileEmulation(obsidian, true);
+		await asPhone(obsidian);
 		expect(
 			await obsidian.dev.evalJson<boolean>('document.body.classList.contains("is-phone")'),
 			"a phone",
@@ -394,15 +518,17 @@ describe("transcript journeys", () => {
 			current: storedEpisode(server, FEED, CAPTIONED),
 			queue: [storedEpisode(server, FEED, PLAIN)],
 		});
-		await showPodNotes(obsidian);
+		await placePodNotes(obsidian, "main area");
 		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
 		await waitUntilShown(obsidian, ui.fullPlayer);
+		const geometry = await phoneGeometry();
 		await click(obsidian, ui.playerPanel("Transcript"));
 		await eventually(
 			obsidian,
 			async () => (await shownTranscript()).lines.length,
 			LINES.length,
 		);
+		const transcriptPanel = await phoneGeometry();
 		const height = (target: UiTarget) =>
 			obsidian.dev.evalJson<number>(
 				`Math.round((${target.elements})[0]?.getBoundingClientRect().height ?? 0)`,
@@ -421,7 +547,94 @@ describe("transcript journeys", () => {
 		await click(obsidian, ui.playerPanel("Up next"));
 		await waitUntilShown(obsidian, panelButton("Edit"));
 		heights.edit = await height(panelButton("Edit"));
+		const upNextPanel = await phoneGeometry();
+		const editWidth = await obsidian.dev.evalJson<number>(
+			`(${panelButton("Edit").elements})[0].getBoundingClientRect().width`,
+		);
 
 		expect(heights).toEqual({ save: 44, follow: 44, find: 44, edit: 44 });
+		expect(editWidth).toBeGreaterThanOrEqual(44);
+		expect(geometry.stage.height, "the stage under Obsidian's header").toBeGreaterThanOrEqual(
+			275,
+		);
+		expect(geometry.art, "square artwork that fills the stage's height").toEqual({
+			top: geometry.stage.top + 4,
+			bottom: geometry.stage.bottom - 4,
+			width: geometry.stage.height - 8,
+			height: geometry.stage.height - 8,
+		});
+		for (const { controls, navbar } of [geometry, transcriptPanel, upNextPanel])
+			expect(controls, "the deck above Obsidian's navbar").toBeLessThanOrEqual(navbar);
+		for (const { stage, panel, list } of [transcriptPanel, upNextPanel]) {
+			expect([panel?.top, panel?.bottom], "a panel fills the stage").toEqual([
+				stage.top,
+				stage.bottom,
+			]);
+			expect(list?.bottom, "its list fills the stage under its head").toBe(stage.bottom);
+		}
+	}, 120_000);
+
+	test("the panel's head fits Save, its label out of sight but naming it in a 320 px sidebar and a phone's drawer, in sight in a phone's main area", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+		});
+		await placePodNotes(obsidian, { sidebar: 320 });
+		await openTranscriptPanel();
+		const sidebar = await transcriptHead();
+		await asPhone(obsidian);
+		await placePodNotes(obsidian, "right drawer");
+		await openTranscriptPanel();
+		const drawer = await transcriptHead();
+		await placePodNotes(obsidian, "main area");
+		await openTranscriptPanel();
+		const mainArea = await transcriptHead();
+
+		const fits = { saveInside: true, headFits: true, name: "Save as note", ariaLabel: false };
+		expect({ sidebar, drawer, mainArea }).toMatchObject({
+			sidebar: { ...fits, label: false },
+			drawer: { ...fits, label: false },
+			mainArea: { ...fits, label: true },
+		});
+	}, 120_000);
+
+	test("following shows the line playing now and the line before it whole, and no line cut under the top fade, in a 320 px sidebar and a phone's drawer", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			current: storedEpisode(server, FEED, CAPTIONED),
+			progress: [
+				{
+					episode: { podcastName: FEED.title, title: CAPTIONED.title },
+					seconds: 19,
+					duration: 60,
+					finished: false,
+				},
+			],
+		});
+		await placePodNotes(obsidian, { sidebar: 320 });
+		await openTranscriptPanel();
+		const sidebar = await followed();
+		await asPhone(obsidian);
+		await placePodNotes(obsidian, "right drawer");
+		await openTranscriptPanel();
+		await obsidian.dev.evalJson(`app.plugins.plugins.${PLUGIN_ID}.api.currentTime = 33, true`);
+		await eventually(obsidian, async () => (await followed()).line, LINES[5]);
+		const drawer = await followed();
+
+		expect([sidebar.line, drawer.line]).toEqual([LINES[3], LINES[5]]);
+		expect(sidebar, `sidebar rows ${sidebar.rows.join(", ")}`).toMatchObject({
+			clear: true,
+			cut: false,
+		});
+		expect(drawer, `drawer rows ${drawer.rows.join(", ")}`).toMatchObject({
+			clear: true,
+			cut: false,
+		});
 	}, 120_000);
 });

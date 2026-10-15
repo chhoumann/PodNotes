@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
-import { SecretStorage } from "obsidian";
+import { SecretStorage, TFile } from "obsidian";
 import { tick } from "svelte";
 import { get } from "svelte/store";
 import {
@@ -23,6 +23,7 @@ import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import type { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import { feedItem, MemoryStorage } from "../../../tests/mocks/feeds";
 import type { Keymap as FakeKeymap } from "../../../tests/mocks/obsidian";
+import { currentRowTop, layOut } from "../../../tests/mocks/panelLayout";
 import {
 	installResizeObserver,
 	type FakeResizeObservers,
@@ -129,6 +130,20 @@ async function openTranscript(played: Episode, time = 0, width = 320) {
 	return result;
 }
 
+/** A transcript note saved before for `played`, and the spy that opens a note. */
+function noteSavedBefore(played: Episode) {
+	const { settings } = get(plugin);
+	settings.transcript.path = "Transcripts/{{title}}.md";
+	plugin.set(get(plugin));
+	const saved = Object.assign(new TFile(), { path: `Transcripts/${played.title}.md` });
+	Object.assign(services.app, {
+		vault: { getFileByPath: (path: string) => (path === saved.path ? saved : null) },
+	});
+	const openFile = vi.fn((_file: TFile) => {});
+	Object.assign(services.app.workspace, { getLeaf: vi.fn(() => ({ openFile })) });
+	return { saved, openFile };
+}
+
 async function at(time: number) {
 	doc.media.currentTime = time;
 	doc.media.emit("timeupdate");
@@ -161,31 +176,6 @@ const press = (key: string, target: Element = document.activeElement ?? document
 	Object.defineProperty(event, "target", { value: target });
 	keymap().dispatch(event);
 };
-
-/**
- * Lays the list's rows out 40 px apart in a list 120 px tall, as the browser would: its
- * scroll position stays within the rows, and a change to it fires `scroll` soon after.
- */
-function layOut(list: HTMLElement) {
-	let top = 0;
-	Object.defineProperty(list, "clientHeight", { configurable: true, value: 120 });
-	Object.defineProperty(list, "scrollTop", {
-		configurable: true,
-		get: () => top,
-		set: (value: number) => {
-			const next = Math.max(0, Math.min(value, list.children.length * 40 - 120));
-			if (next === top) return;
-			top = next;
-			queueMicrotask(() => list.dispatchEvent(new Event("scroll")));
-		},
-	});
-	vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
-		this: Element,
-	) {
-		const y = this === list ? 0 : [...list.children].indexOf(this) * 40 - top;
-		return { top: y, bottom: y + 40, left: 0, right: 300 } as DOMRect;
-	});
-}
 
 describe("a published transcript", () => {
 	test("lists its lines with their times and speakers, and marks the line playing now", async () => {
@@ -235,23 +225,68 @@ describe("a published transcript", () => {
 
 		await at(13);
 		await tick();
-		expect(list.scrollTop, "row 2, a third down").toBe(40);
+		expect(list.scrollTop, "row 2, under row 1 and the faded edge").toBe(28);
 		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
 
-		list.scrollTop = 30;
+		list.scrollTop = 10;
 		await tick();
 		await tick();
 		const follow = button("Follow");
 		expect(follow.closest("[aria-live=polite]")).not.toBeNull();
 		await at(19);
 		await tick();
-		expect(list.scrollTop, "the reader stays where they scrolled").toBe(30);
+		expect(list.scrollTop, "the reader stays where they scrolled").toBe(10);
 
 		await fireEvent.click(follow);
 		await tick();
-		expect(list.scrollTop, "row 3, a third down").toBe(80);
+		expect(list.scrollTop, "row 3, under row 2 and the faded edge").toBe(68);
 		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
 		expect(get(services.player.state).status).toBe("paused");
+	});
+
+	// Each case lists the panel's height, the rows' heights by index where not 40 px, and where
+	// row 5, the line at 0:31, starts. The faded edges are 12 px at the top and 20 px at the bottom.
+	test.each([
+		["under the whole lines that fit in the panel's top third", 248, { 3: 30, 4: 30 }, 72],
+		[
+			"under just the line before it, where a third of the way down would cut the line above that",
+			270,
+			{ 4: 60 },
+			72,
+		],
+		["lower, under the whole of a line before it that is taller", 248, { 4: 140, 5: 63 }, 152],
+		["higher, above the faded bottom edge, when it is long too", 248, { 4: 100, 5: 140 }, 88],
+		["just under the faded top edge when it is taller than the panel", 248, { 5: 300 }, 12],
+	])("follows a line %s", async (_name, height, tall, top) => {
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		const list = await transcript();
+		layOut(list, { height, tall });
+
+		await at(31);
+		await tick();
+
+		expect(currentLine()).toBe(LINES[5]);
+		expect(currentRowTop(list)).toBe(top);
+	});
+
+	test("keeps following when a taller panel pulls the list back, and stops when the reader scrolls", async () => {
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		const list = await transcript();
+		const resize = layOut(list);
+		await at(43);
+		await tick();
+		expect(list.scrollTop, "row 7, under row 6 and the faded edge").toBe(228);
+
+		resize(200);
+		await tick();
+		await tick();
+		expect(list.scrollTop, "the last scroll position the rows leave").toBe(200);
+		expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+
+		list.scrollTop = 150;
+		await tick();
+		await tick();
+		expect(button("Follow")).toBeVisible();
 	});
 
 	test("Find shows the lines with a word, Enter and Shift+Enter step through them, and Escape closes Find before the player", async () => {
@@ -294,6 +329,21 @@ describe("a published transcript", () => {
 		expect(services.navigation.current.expanded).toBe(false);
 	});
 
+	test("Find matches a dotted capital I as an i, and marks the letters it matched", async () => {
+		fetchTextMock.mockResolvedValue(
+			"WEBVTT\n\n00:00:00.000 --> 00:00:06.000\n\u0130stanbul calling, \u0130zmir next.\n",
+		);
+		await openTranscript(episodeOf([VTT_LINK]), 0);
+		await transcript();
+		await fireEvent.click(button("Find in transcript"));
+		const field = screen.getByRole("searchbox", { name: "Find in transcript" });
+
+		await fireEvent.input(field, { target: { value: "stanbul" } });
+		expect(marks()).toEqual(["stanbul"]);
+		await fireEvent.input(field, { target: { value: "IZMIR" } });
+		expect(marks()).toEqual(["\u0130zmir"]);
+	});
+
 	test("another episode's transcript opens with Find closed and every line shown", async () => {
 		const second = episodeOf([VTT_LINK]);
 		await openTranscript(episodeOf([VTT_LINK]), 0);
@@ -313,10 +363,19 @@ describe("a published transcript", () => {
 	});
 
 	test("Save as note hands the note to the transcribe command and writes nothing itself", async () => {
-		const vault = { create: vi.fn(), modify: vi.fn(), process: vi.fn() };
+		const vault = {
+			getFileByPath: () => null,
+			create: vi.fn(),
+			modify: vi.fn(),
+			process: vi.fn(),
+		};
 		Object.assign(services.app, { vault });
 		await openTranscript(episodeOf([VTT_LINK]), 0);
 		await transcript();
+		expect(
+			button("Save as note"),
+			"named by its label, with no aria-label that Obsidian would show as a tooltip",
+		).not.toHaveAttribute("aria-label");
 
 		await fireEvent.click(button("Save as note"));
 
@@ -330,6 +389,45 @@ describe("a published transcript", () => {
 		services.online.set(false);
 		await tick();
 		expect(button("Save as note")).toBeDisabled();
+	});
+
+	test("opens the note saved before, also offline, instead of saving it again, as long as it is there", async () => {
+		const { settings } = get(plugin);
+		settings.transcript.path = "Transcripts/{{title}}.md";
+		plugin.set(get(plugin));
+		const notes = new Map<string, TFile>();
+		const note = (folder: string, { title }: Episode) =>
+			Object.assign(new TFile(), { path: `${folder}/${title}.md` });
+		Object.assign(services.app, {
+			vault: { getFileByPath: (path: string) => notes.get(path) ?? null },
+		});
+		const openFile = vi.fn((_file: TFile) => {});
+		Object.assign(services.app.workspace, { getLeaf: vi.fn(() => ({ openFile })) });
+		const played = episodeOf([VTT_LINK]);
+		const saved = note("Transcripts", played);
+		notes.set(saved.path, saved);
+		await openTranscript(played, 0);
+		await transcript();
+		services.online.set(false);
+		await tick();
+
+		expect(button("Open note")).toBeEnabled();
+		await fireEvent.click(button("Open note"));
+		expect(openFile).toHaveBeenCalledExactlyOnceWith(saved);
+		expect(services.saveTranscriptNote).not.toHaveBeenCalled();
+
+		notes.clear();
+		services.rowHasNote.set(() => false);
+		await tick();
+		expect(button("Save as note"), "deleted, and offline").toBeDisabled();
+
+		const moved = note("Elsewhere", played);
+		notes.set(moved.path, moved);
+		settings.transcript.path = "Elsewhere/{{title}}.md";
+		plugin.set(get(plugin));
+		await tick();
+		await fireEvent.click(button("Open note"));
+		expect(openFile).toHaveBeenLastCalledWith(moved);
 	});
 
 	test("Save as note saves a video's feed transcript too, which needs no audio", async () => {
@@ -388,6 +486,10 @@ describe("a transcript that did not load", () => {
 		fetchTextMock.mockRejectedValueOnce(new NetworkError("unexpected-status", 500));
 		await openTranscript(episodeOf([VTT_LINK]), 0);
 		await screen.findByText("Transcript didn't load");
+		expect(screen.getByRole("alert").querySelector("[data-icon]")).toHaveAttribute(
+			"data-icon",
+			"alert-triangle",
+		);
 
 		await fireEvent.click(button("Retry"));
 
@@ -443,6 +545,22 @@ describe("a transcript that did not load", () => {
 		expect(container.innerHTML).not.toContain("s3cret");
 	});
 
+	test("with a note saved before, offers Open note beside Retry, also offline", async () => {
+		fetchTextMock.mockRejectedValueOnce(new NetworkError("unexpected-status", 500));
+		const played = episodeOf([VTT_LINK]);
+		const { saved, openFile } = noteSavedBefore(played);
+		await openTranscript(played, 0);
+		await screen.findByText("Transcript didn't load");
+		services.online.set(false);
+		await tick();
+
+		await fireEvent.click(button("Open note"));
+
+		expect(openFile).toHaveBeenCalledExactlyOnceWith(saved);
+		expect(services.saveTranscriptNote).not.toHaveBeenCalled();
+		expect(button("Retry")).toBeVisible();
+	});
+
 	test("when the feed itself did not load, offers Retry, not the paid transcription", async () => {
 		const served = loadFeed.getMockImplementation()!;
 		loadFeed.mockRejectedValue(new Error("offline"));
@@ -459,7 +577,10 @@ describe("a transcript that did not load", () => {
 describe("an episode whose feed publishes no transcript", () => {
 	test("offers the paid transcription, off while offline", async () => {
 		await openTranscript(episodeOf([]), 0);
-		await screen.findByText("No transcript in this feed");
+		const empty = (await screen.findByText("No transcript in this feed")).parentElement!;
+		expect(empty).not.toHaveAttribute("role");
+		expect(empty.querySelector("[data-icon]")).toHaveAttribute("data-icon", "captions");
+		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 		const paid = button("Transcribe with OpenAI Paid");
 
 		await fireEvent.click(paid);
@@ -468,6 +589,23 @@ describe("an episode whose feed publishes no transcript", () => {
 		services.online.set(false);
 		await tick();
 		expect(paid).toBeDisabled();
+	});
+
+	test("with a transcript note saved before, offers Open note instead of the paid transcription", async () => {
+		const played = episodeOf([]);
+		const { saved, openFile } = noteSavedBefore(played);
+		await openTranscript(played, 0);
+		await screen.findByText("No transcript in this feed");
+		expect(button("Open note"), "named by its label, with no tooltip").not.toHaveAttribute(
+			"aria-label",
+		);
+
+		await fireEvent.click(button("Open note"));
+
+		expect(openFile).toHaveBeenCalledExactlyOnceWith(saved);
+		expect(screen.queryByRole("button", { name: /^Transcribe with/ })).toBeNull();
+		expect(services.transcribeFromAudio).not.toHaveBeenCalled();
+		expect(services.saveTranscriptNote).not.toHaveBeenCalled();
 	});
 
 	test("names Deepgram when diarization uses it", async () => {
