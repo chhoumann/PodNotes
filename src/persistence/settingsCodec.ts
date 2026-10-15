@@ -43,14 +43,12 @@ export function decodeSettings(
 	warnings: Set<string>,
 	sourceVersion: PodNotesDataSchemaVersion = 2,
 ): IPodNotesSettings {
-	const defaultPlaybackRate = normalizePlaybackRate(root.defaultPlaybackRate);
-	if (
-		root.defaultPlaybackRate !== undefined &&
-		(typeof root.defaultPlaybackRate !== "number" ||
-			root.defaultPlaybackRate !== defaultPlaybackRate)
-	) {
-		warn(warnings, "defaultPlaybackRate", "value was normalized");
-	}
+	const defaultPlaybackRate = decodeNormalized(
+		root,
+		"defaultPlaybackRate",
+		normalizePlaybackRate,
+		warnings,
+	);
 
 	const defaultVolume = readClampedNumber(
 		root,
@@ -60,13 +58,12 @@ export function decodeSettings(
 		1,
 		warnings,
 	);
-	const episodeListLimit = sanitizeEpisodeListLimit(root.episodeListLimit);
-	if (
-		root.episodeListLimit !== undefined &&
-		(typeof root.episodeListLimit !== "number" || root.episodeListLimit !== episodeListLimit)
-	) {
-		warn(warnings, "episodeListLimit", "value was normalized");
-	}
+	const episodeListLimit = decodeNormalized(
+		root,
+		"episodeListLimit",
+		sanitizeEpisodeListLimit,
+		warnings,
+	);
 
 	return {
 		savedFeeds: decodeSavedFeeds(root.savedFeeds, warnings),
@@ -81,16 +78,16 @@ export function decodeSettings(
 		),
 		episodeListLimit,
 		playedEpisodes: decodePlayedEpisodes(root.playedEpisodes, warnings),
-		skipBackwardLength: decodeSkipLength(
-			root.skipBackwardLength,
-			DEFAULT_SETTINGS.skipBackwardLength,
+		skipBackwardLength: decodeNormalized(
+			root,
 			"skipBackwardLength",
+			(value) => migrateSkipLength(value, DEFAULT_SETTINGS.skipBackwardLength),
 			warnings,
 		),
-		skipForwardLength: decodeSkipLength(
-			root.skipForwardLength,
-			DEFAULT_SETTINGS.skipForwardLength,
+		skipForwardLength: decodeNormalized(
+			root,
 			"skipForwardLength",
+			(value) => migrateSkipLength(value, DEFAULT_SETTINGS.skipForwardLength),
 			warnings,
 		),
 		headsetPreviousTrack: readOption(
@@ -240,13 +237,15 @@ function decodeTranscript(value: unknown, warnings: Set<string>): IPodNotesSetti
 	};
 }
 
-function decodeSkipLength(
-	value: unknown,
-	fallback: number,
-	path: string,
+/** The normalized number, with a warning when it differs from a stored value. */
+function decodeNormalized(
+	root: UnknownRecord,
+	key: string,
+	normalize: (value: unknown) => number,
 	warnings: Set<string>,
 ): number {
-	const decoded = migrateSkipLength(value, fallback);
-	if (value !== undefined && value !== decoded) warn(warnings, path, "value was normalized");
+	const value = root[key];
+	const decoded = normalize(value);
+	if (value !== undefined && value !== decoded) warn(warnings, key, "value was normalized");
 	return decoded;
 }
