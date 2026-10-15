@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ParsedEpisodeDocument, ParsedFeedEpisodes } from "src/parser/feedDocumentParser";
 import { encodeEpisode } from "src/persistence/episodeCodec";
 import type { PodcastFeed } from "src/types/PodcastFeed";
+import { getPlayedEpisode } from "src/utility/episodeStatus";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { deferred, MemoryStorage, stubLegacyStorage } from "../../tests/mocks/feeds";
 import { FeedRepository } from "./FeedRepository";
@@ -594,6 +595,30 @@ describe("FeedRepository", () => {
 		const guids = new Map(t.feed("Alpha")!.episodes.map(({ title, guid }) => [title, guid]));
 		expect(guids.get("Episode 76")).toBeUndefined();
 		expect(guids.get("Episode 75")).toBe("own-75");
+	});
+
+	test("a title whose twin the cache cut still lends neither its old record after a failed refresh (#448)", async () => {
+		const first = setup();
+		const items = Array.from({ length: 76 }, (_, index) => item(76 - index));
+		items[0] = item(76, { title: "Rerun", guid: "rerun" });
+		items[75] = item(1, { title: "Rerun", guid: "original" });
+		await loaded(first, { Alpha: alpha }, doc("Alpha", items));
+
+		const t = setup({ storage: first.storage });
+		t.repo.setSubscriptions({ Alpha: alpha });
+		const refresh = t.repo.load(["Alpha"], "network");
+		t.requests[0].respond.reject(new Error("503"));
+		await refresh;
+
+		const rerun = t.feed("Alpha")!.episodes.find(({ guid }) => guid === "rerun")!;
+		const saved = {
+			title: "Rerun",
+			podcastName: "Alpha",
+			time: 40,
+			duration: 40,
+			finished: true,
+		};
+		expect(getPlayedEpisode({ "Alpha::Rerun": saved }, rerun)).toBeUndefined();
 	});
 
 	test("reads an episode's transcripts from its own subscription's feed, by guid first", async () => {
