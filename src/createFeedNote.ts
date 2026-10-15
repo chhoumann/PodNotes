@@ -25,14 +25,8 @@ function getFeedNotePath(feed: PodcastFeed): string {
 }
 
 export function getFeedNote(feed: PodcastFeed): TFile | null {
-	const filePathDotMd = getFeedNotePath(feed);
-	const file = get(plugin).app.vault.getAbstractFileByPath(filePathDotMd);
-
-	if (!file || !(file instanceof TFile)) {
-		return null;
-	}
-
-	return file;
+	const file = get(plugin).app.vault.getAbstractFileByPath(getFeedNotePath(feed));
+	return file instanceof TFile ? file : null;
 }
 
 export function openFeedNote(feed: PodcastFeed): void {
