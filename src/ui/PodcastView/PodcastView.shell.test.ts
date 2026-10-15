@@ -170,7 +170,7 @@ describe("library", () => {
 		name,
 		episodes,
 	});
-	const flair = (name: RegExp) => button(name).querySelector(".flair")?.textContent;
+	const flair = (name: RegExp) => button(name).querySelector(".pn-flair")?.textContent;
 
 	test("is the one the view's services hold", async () => {
 		const { library } = services;
@@ -281,7 +281,7 @@ describe("list pages", () => {
 		expect(screen.getByRole("heading", { name: "Walks" }).nextElementSibling).toHaveTextContent(
 			"1",
 		);
-		expect(document.querySelectorAll(".flair")).toHaveLength(1);
+		expect(document.querySelectorAll(".pn-flair")).toHaveLength(1);
 	});
 
 	test("a playlist of the user's deletes from its head and leaves for Playlists; Favorites has no menu", async () => {

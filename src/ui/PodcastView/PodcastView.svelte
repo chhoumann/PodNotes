@@ -136,7 +136,7 @@
 					{:else}
 						{#if head.title}
 							<h1 class="pn-head-title">{head.title}</h1>
-							{#if head.flair}<span class="flair">{head.flair}</span>{/if}
+							{#if head.flair}<span class="pn-flair">{head.flair}</span>{/if}
 						{/if}
 						<span class="pn-spacer"></span>
 					{/if}
@@ -215,7 +215,7 @@
 						{#if head.pageTitle}
 							<div class="pn-title">
 								<h1>{head.pageTitle}</h1>
-								{#if head.flair}<span class="flair">{head.flair}</span>{/if}
+								{#if head.flair}<span class="pn-flair">{head.flair}</span>{/if}
 							</div>
 						{/if}
 						{#if page.kind === "library"}
@@ -399,7 +399,7 @@
 			text-overflow: ellipsis;
 		}
 
-		.pn-head .flair {
+		.pn-head .pn-flair {
 			align-self: center;
 			margin-left: var(--size-4-2);
 			padding-top: 3px;
@@ -623,21 +623,15 @@
 			text-overflow: ellipsis;
 		}
 
-		/* Obsidian styles .flair as an uppercase tag; here it is plain muted text. */
-		.flair {
+		.pn-flair {
 			flex: none;
-			margin-inline-start: 0;
-			padding: 0;
-			background: none;
-			letter-spacing: normal;
-			text-transform: none;
 			color: var(--text-muted);
 			font-size: var(--font-ui-small);
 			white-space: nowrap;
 			font-variant-numeric: tabular-nums;
 		}
 
-		.pn-navitem .flair {
+		.pn-navitem .pn-flair {
 			font-size: var(--font-ui-smaller);
 		}
 

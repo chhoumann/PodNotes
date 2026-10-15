@@ -25,7 +25,7 @@
 			>
 				<span class="pn-navicon" {@attach icon(root.icon)}></span>
 				<span class="lbl">{root.label}</span>
-				{#if counts[root.kind]}<span class="flair">{counts[root.kind]}</span>{/if}
+				{#if counts[root.kind]}<span class="pn-flair">{counts[root.kind]}</span>{/if}
 			</button>
 		{/each}
 	</nav>
