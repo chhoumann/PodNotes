@@ -129,7 +129,6 @@ function parseIpv6(value: string): bigint | undefined {
 	}
 
 	const combined = [...left, ...right];
-	if (combined.some((piece) => piece.includes("."))) return undefined;
 	if (combined.some((piece) => !/^[0-9a-f]{1,4}$/.test(piece))) return undefined;
 	if (compressionIndex === -1 && combined.length !== 8) return undefined;
 	if (compressionIndex !== -1 && combined.length >= 8) return undefined;
@@ -139,7 +138,6 @@ function parseIpv6(value: string): bigint | undefined {
 		compressionIndex === -1
 			? combined
 			: [...left, ...Array.from({ length: missing }, () => "0"), ...right];
-	if (hextets.length !== 8) return undefined;
 
 	let address = 0n;
 	for (const hextet of hextets) address = (address << 16n) | BigInt(`0x${hextet}`);
