@@ -2,6 +2,7 @@
 import Default from "@astrojs/starlight/components/MarkdownContent.astro";
 import { withScreenshots } from "../screenshots.mjs";
 import { withStackedTables } from "../tables.mjs";
+import { withVideos } from "../videos.mjs";
 
 // Short inline code, such as `12: Interview`, never splits across two lines.
 const withShortCode = (html: string) =>
@@ -16,8 +17,39 @@ const withPathBreaks = (html: string) =>
 	);
 
 const html = withPathBreaks(
-	withShortCode(withStackedTables(await withScreenshots(await Astro.slots.render("default")))),
+	withShortCode(
+		withStackedTables(
+			await withVideos(await withScreenshots(await Astro.slots.render("default"))),
+		),
+	),
 );
+const hasClips = html.includes('<video class="clip');
 ---
 
 <Default><Fragment set:html={html} /></Default>
+{
+	hasClips && (
+		<script is:inline>
+			// Clips play on a loop for readers who allow motion. Readers who prefer
+			// reduced motion get the poster and the controls. Only the clip that the
+			// theme shows loads, so its twin for the other theme never downloads.
+			{
+				const still = matchMedia("(prefers-reduced-motion: reduce)");
+				const clips = document.querySelectorAll("video.clip");
+				const sync = () => {
+					for (const clip of clips) {
+						const shown = clip.getClientRects().length > 0;
+						clip.controls = still.matches;
+						if (!shown || still.matches) clip.pause();
+						else clip.play().catch(() => (clip.controls = true));
+					}
+				};
+				sync();
+				still.addEventListener("change", sync);
+				new MutationObserver(sync).observe(document.documentElement, {
+					attributeFilter: ["data-theme"],
+				});
+			}
+		</script>
+	)
+}

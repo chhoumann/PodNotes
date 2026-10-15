@@ -195,19 +195,22 @@ starlight-toc a {
  * Screenshots
  * ------------------------------------------------------------------------ */
 
-/* Captured screenshots (see src/screenshots.mjs) sit in a quiet frame and
- * center when they are narrower than the column. Never set `display` here:
- * the light/dark twins rely on Starlight's sl-hidden utilities. */
-.sl-markdown-content p:has(img.screenshot) {
+/* Captured screenshots (see src/screenshots.mjs) and clips (see src/videos.mjs)
+ * sit in a quiet frame and center when they are narrower than the column.
+ * Never set `display` here: the light/dark twins rely on Starlight's sl-hidden
+ * utilities. */
+.sl-markdown-content p:has(img.screenshot, video.clip) {
 	text-align: center;
 }
-.sl-markdown-content img.screenshot {
+.sl-markdown-content :is(img.screenshot, video.clip) {
+	max-width: 100%;
+	height: auto;
 	margin-inline: auto;
 	border: 1px solid var(--sl-color-hairline);
 	border-radius: 0.75rem;
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -12px rgb(0 0 0 / 0.25);
 }
-.sl-markdown-content img.screenshot.narrow {
+.sl-markdown-content :is(img.screenshot, video.clip).narrow {
 	max-width: min(100%, 21rem);
 }
 

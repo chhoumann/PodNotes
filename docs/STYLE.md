@@ -85,6 +85,17 @@ other than the home page.
       captured in Obsidian's phone layout. The site shows it on narrow screens.
 - [ ] Alt text says what the screenshot shows in under 150 characters.
 
+## Clips
+
+- [ ] A clip shows a task of a few steps in 10 to 20 seconds. The steps stay in
+      the text.
+- [ ] `docs/scripts/videos.mjs` records every clip from the same fixtures.
+      Never add one by hand. Rerun the script after a UI change.
+- [ ] One sentence before the clip says what it shows, and its alt text names
+      it in under 150 characters. Alt text leaves out times such as 38:28,
+      because the site's directive syntax drops the `:28` from an alt.
+- [ ] Each clip is under about 1.5 MB.
+
 ## Before you merge
 
 - [ ] `npm run docs:build` passes. It checks links, legacy fragments, and that

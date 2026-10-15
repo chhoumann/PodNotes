@@ -11,30 +11,45 @@ Create a note for the episode you are listening to, with the episode's details a
 1. Play an episode in PodNotes. You can pause it.
 2. Run **PodNotes: Create episode note** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-PodNotes creates the note and opens it. With the default settings, the note for the Acquired episode "The Home Depot" is `PodNotes/Acquired/The Home Depot.md`. When the note exists, the command opens it instead. To add timestamps while you listen, see [Capture timestamps](/timestamps/).
+**Create note** in the [full player](/player/), beside **Timestamp**, does the same. PodNotes creates the note and opens it, as [Where a note opens](/notes/#where-a-note-opens) describes. With the default settings, the note for the Acquired episode "The Home Depot" is `PodNotes/Acquired/The Home Depot.md`. When the note exists, the command opens it instead, and the full player's button reads **Open note**. To add timestamps while you listen, see [Capture timestamps](/timestamps/).
 
 ## Create a note for another episode
 
-1. In an episode list, right-click the episode, or select its three-dot **More options** button.
-2. Select **Create Note**. Once the note exists, the item reads **Open Note**.
+The episode does not have to play.
+
+1. In an episode list, right-click the episode, or select the three-dot button at the end of its row.
+2. Select **Create note**. Once the note exists, the item reads **Open note**.
 
 The [episode menu reference](/podcasts/#episode-menu-reference) lists the other items.
 
-## Create a feed note for a podcast
+With no episode loaded, **PodNotes: Create episode note** also creates a note for any episode. Select a podcast, then an episode, and PodNotes creates or opens that episode's note.
 
-A feed note describes a whole podcast, with its artwork, author, description, website, and feed URL.
+## <span id="create-a-feed-note-for-a-podcast"></span>Create a podcast note
 
-1. Run **PodNotes: Create podcast feed note** from the command palette.
-2. Select the podcast. If an episode is loaded, its podcast is first in the list.
+A podcast note describes a whole podcast, with its artwork, author, description, website, and feed URL.
 
-PodNotes creates the note and opens it, or opens the note if it exists. With the default settings, the feed note for Acquired is `PodNotes/Podcasts/Acquired.md`. The episode menu's **Create feed note** does the same.
+1. Open the podcast's page in the PodNotes view.
+2. Select **Podcast options**, the three-dot button at the top right.
+3. Select **Create podcast note**.
 
-The default episode note template links each episode note to its feed note in the `podcast` property, such as `[[PodNotes/Podcasts/Acquired|Acquired]]`, even when you create the feed note later.
+PodNotes creates the note and opens it, as [Where a note opens](/notes/#where-a-note-opens) describes. Once the note exists, the item reads **Open podcast note**. With the default settings, the podcast note for Acquired is `PodNotes/Podcasts/Acquired.md`. **PodNotes: Create podcast feed note** does the same from the command palette. Select the podcast, and if an episode is loaded, its podcast is first in the list.
+
+The default episode note template links each episode note to its podcast note in the `podcast` property, such as `[[PodNotes/Podcasts/Acquired|Acquired]]`, even when you create the podcast note later.
+
+## Where a note opens
+
+Where an episode note, a podcast note, or a transcript opens depends on where the PodNotes view is:
+
+- With the view in a sidebar, the note opens in the main area, in the last tab you used there, as a link does.
+- With the view in the main area or in a popout window, the note opens next to the view, never in a tab over it. If an unpinned note or other file is shown next to the view, the note opens in its tab. Otherwise, the note opens in a new split beside the view.
+- On a phone, which shows one tab at a time, the note opens in the last tab you used, as a link does.
+
+These cases apply while you are in the PodNotes view, as when you select **Create note** or **Save as note**. If you are in another tab when the note opens, the note opens in that tab, as a link does. For example, when you run **PodNotes: Create episode note** while you edit a note, the episode note opens in that note's tab. A transcript that finishes while you edit a note opens there too.
 
 ## Change where notes go
 
 1. Open **Settings → PodNotes**.
-2. Under **Episode notes**, edit **Note creation file path**.
+2. Under **Notes**, edit **Episode note path**.
 
 The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts` folder instead:
 
@@ -42,15 +57,15 @@ The default is `PodNotes/{{podcast}}/{{title}}.md`. To keep notes in a `Podcasts
 - `Podcasts/{{podcast}}/{{title}}.md` adds a subfolder per podcast.
 - `Podcasts/{{date:YYYY}}/{{podcast}} - {{title}}.md` adds a subfolder per publication year.
 
-After you edit the path, a preview shows the result for one of your episodes. [File path tags](/templates/#file-path-tags) lists every tag a path accepts.
+Below the setting's name, a preview shows the result for one of your episodes. [File path tags](/templates/#file-path-tags) lists every tag a path accepts.
 
-PodNotes looks for notes at the new path, so move your existing notes to match. Otherwise it can create a second note for an episode.
+PodNotes finds a note that has the `guid` and `feedUrl` properties wherever it is. It finds other notes, including every note created before PodNotes 2.22.0, only at the new path or by their title in that path's folder, so move them to match. Otherwise PodNotes can create a second note for such an episode. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note).
 
-Feed notes and downloads have their own paths: **Feed note file path** under **Feed notes**, and **Episode download path** under **Downloads**.
+Podcast notes and downloads have their own paths: **Podcast note path** under **Notes**, and **Download path** under **Downloads**.
 
 ## Change what notes contain
 
-**Note creation template** under **Episode notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This example replaces the [default template](/templates/#default-episode-note-template). It adds the episode's duration, shows the artwork at 96 pixels wide, folds the description into a callout, and keeps the `status` and `rating` properties for [Bases](#browse-your-notes-with-bases). It leaves out the `# {{title}}` heading, the episode URL, and `favorite`. Obsidian still shows the file name as the note's title:
+**Episode note template** under **Notes** sets the content of each new episode note, and PodNotes fills in its `{{tag}}` placeholders. This example replaces the [default template](/templates/#default-episode-note-template). It adds the episode's duration, shows the artwork at 96 pixels wide, folds the description into a callout, and keeps the `status` and `rating` properties for [Bases](/notes/#browse-your-notes-with-bases). It leaves out the `# {{title}}` heading, the episode URL, and `favorite`. Obsidian still shows the file name as the note's title:
 
 ```md
 ---
@@ -65,7 +80,7 @@ rating:
 ---
 ![|96]({{artwork}})
 
-[Resume in PodNotes]({{episodelink}})
+{{episodelink:Resume in PodNotes}}
 
 > [!summary]- Episode description
 {{description:> }}
@@ -75,9 +90,18 @@ rating:
 
 A note made with this template looks like this:
 
-![An episode note made with this template, with its properties, artwork, a Resume in PodNotes link, and the description folded into a callout](/screenshots/episode-note.webp)
+![An episode note made with this template, with its properties, artwork, and a Resume in PodNotes link](/screenshots/episode-note.webp)
 
-**Resume in PodNotes** continues the episode from where you stopped. A changed template applies only to new notes. Feed notes use **Feed note template** under **Feed notes**. [Template tags](/templates/) lists every tag and the [default episode note template](/templates/#default-episode-note-template).
+**Resume in PodNotes** continues the episode from where you stopped. `{{episodelink:Resume in PodNotes}}` makes that link, and leaves the line empty when the episode has nothing to link to. A changed template applies only to new notes. Podcast notes use **Podcast note template** under **Notes**. [Template tags](/templates/) lists every tag and the [default episode note template](/templates/#default-episode-note-template).
+
+### Update the resume link in an existing template
+
+New installs of PodNotes 2.22.0 get a default template whose resume line is `{{episodelink:Resume in PodNotes}}`. PodNotes never changes a saved template, so if you used PodNotes before, your template keeps `[Resume in PodNotes]({{episodelink}})`. That line leaves an empty link in a note for an episode that PodNotes cannot link to, such as one from a private feed that you have not added. To leave the line out instead:
+
+1. Under **Notes**, open **Episode note template**.
+2. Replace `[Resume in PodNotes]({{episodelink}})` with `{{episodelink:Resume in PodNotes}}`.
+
+The change applies to new notes. PodNotes does not rewrite notes you created before.
 
 ## Browse your notes with Bases
 
@@ -111,8 +135,36 @@ A note made with this template looks like this:
 
 The same lines also work as the content of a `.base` file, such as `PodNotes/Episodes.base`. If your template has no `type` property, filter on a property or tag that it sets.
 
+## How PodNotes finds a note
+
+When the feed gives an episode an ID, PodNotes adds two properties to the episode's new note: `guid`, the episode's ID in its feed, and `feedUrl`, the address of its feed. To find an episode's note, PodNotes tries these in order:
+
+1. The one note in the vault whose `guid` and `feedUrl` match the episode.
+2. The note at the path that **Episode note path** gives for the episode.
+3. The one note in that folder whose name matches the episode title.
+
+So a note with both properties keeps working after you rename it or move it to another folder. If you used PodNotes before 2.22.0, every note you created before the update lacks these properties, and PodNotes cannot add them. Keep such a note at the path that **Episode note path** gives for the episode, or in that path's folder with the episode's title as its name. Otherwise PodNotes no longer finds it for the episode.
+
+To get a note that you can rename and move:
+
+1. On the podcast's page, open the episode's menu.
+2. If the menu shows **Open note**, PodNotes still finds the old note, so move the old note to a folder that PodNotes does not use for episode notes, such as a new `Archive` folder.
+3. Open the episode's menu again.
+4. Select **Create note**. Use the menu, not the command, because an episode that PodNotes restored from an older version can lack the ID from its feed.
+5. Check that the new note's properties include `guid` and `feedUrl`. If either is missing, keep the new note at its path. The cases after these steps explain why PodNotes may not add them.
+6. Copy your text from the old note into the new one, below its properties.
+
+PodNotes adds the properties at the end of the template's properties, or in a new properties block when the template has none. It skips a property that your template sets itself. PodNotes adds neither property in these cases:
+
+- The episode is a local file.
+- The feed gives the same ID to several episodes.
+- PodNotes cannot extend the template's properties, as with invalid YAML.
+- The properties would show a private feed's address, as for a private feed that you have not added.
+
+For a private feed that you added and that PodNotes recognizes, `feedUrl` holds the feed's placeholder, not its address. See [Private feeds in notes and links](/private-feeds/#private-feeds-in-notes-and-links).
+
 ## Limits of note creation
 
-- **PodNotes: Create episode note** needs both **Note creation file path** and **Note creation template**. With either one empty, the command is missing and the episode menu shows "Please set a note path and template in the settings."
-- PodNotes finds an existing note by its path, or by a matching title in the same folder. After you rename or move a note, it can create a second note for the episode.
-- After you change **Feed note file path**, new episode notes link to the new path. Existing episode notes keep their old links.
+- **PodNotes: Create episode note** needs both **Episode note path** and **Episode note template**. With either one empty, the command is missing, and **Create note** shows "Please set a note path and template in the settings."
+- PodNotes finds a note without the `guid` and `feedUrl` properties, such as one created before PodNotes 2.22.0 or one for a local file, only by its path or by its title in the same folder. After you rename or move such a note, PodNotes can create a second note for the episode.
+- After you change **Podcast note path**, new episode notes link to the new path. Existing episode notes keep their old links.

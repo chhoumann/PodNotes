@@ -16,6 +16,7 @@ export const sidebar = [
 		items: [
 			{ label: "Overview", slug: "index" },
 			{ label: "Getting started", slug: "getting-started" },
+			{ label: "Update to 2.22.0", slug: "upgrade" },
 			{ label: "Use PodNotes on your phone", slug: "mobile" },
 		],
 	},
@@ -23,6 +24,8 @@ export const sidebar = [
 		label: "Listen",
 		items: [
 			{ label: "Add and play podcasts", slug: "podcasts" },
+			{ label: "Use the player", slug: "player" },
+			{ label: "Use private feeds", slug: "private-feeds" },
 			{ label: "Use the queue and playlists", slug: "playlists" },
 			{ label: "Downloads and local files", slug: "local_files" },
 			{ label: "Transcribe episodes", slug: "transcripts" },
@@ -39,6 +42,7 @@ export const sidebar = [
 		label: "Your library",
 		items: [
 			{ label: "Sync between devices", slug: "sync" },
+			{ label: "Fix save problems", slug: "save-problems" },
 			{ label: "Import and export", slug: "import_export" },
 		],
 	},

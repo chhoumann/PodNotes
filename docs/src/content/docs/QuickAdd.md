@@ -7,7 +7,7 @@ description: Call the PodNotes API from QuickAdd to capture timestamps with comm
 
 Build your own capture and note workflows with the [QuickAdd](https://quickadd.obsidian.guide/docs/) plugin and the [PodNotes API](/api/), such as a comment next to each timestamp or a note template that asks you questions. PodNotes alone [captures timestamps](/timestamps/) and [creates episode notes](/notes/).
 
-Install and enable QuickAdd from **Settings → Community plugins** first.
+Install and enable QuickAdd from **Settings → Community plugins** first.
 
 ## <span id="timestamp-capture"></span>Capture a timestamp with a comment
 
@@ -107,7 +107,7 @@ This macro runs a user script that saves the loaded episode's fields as QuickAdd
 
 QuickAdd asks you for `guest`, which the script does not set. For the other episode fields, see [`podcast`](/api/#podcast).
 
-PodNotes finds an episode note only at **Note creation file path**, or by the episode title in that folder. **Open Note**, **PodNotes: Create episode note**, and headset capture do not find a note that QuickAdd saves anywhere else. QuickAdd's [Macros](https://quickadd.obsidian.guide/docs/Choices/MacroChoice/) and [User Scripts](https://quickadd.obsidian.guide/docs/UserScripts/) docs describe the macro settings.
+PodNotes finds an episode note at **Episode note path**, by the episode title in that folder, or by the note's `guid` and `feedUrl` properties. **Open note**, **PodNotes: Create episode note**, and a capture into the episode note do not find a note that QuickAdd saves anywhere else without those properties. See [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note). QuickAdd's [Macros](https://quickadd.obsidian.guide/docs/Choices/MacroChoice/) and [User Scripts](https://quickadd.obsidian.guide/docs/UserScripts/) docs describe the macro settings.
 
 ## Send a transcript to an AI prompt
 
@@ -117,11 +117,11 @@ This recipe has QuickAdd's AI Assistant summarize the current episode and write 
 
 Do this once, as QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe:
 
-1. In **Settings → QuickAdd**, under **AI & online**, turn off **Disable AI & online features**.
+1. In **Settings → QuickAdd**, under **AI & online**, turn off **Disable AI & online features**.
 2. Under **AI & online**, select **AI Assistant**.
 3. Under **Defaults**, set **Prompt template folder**, for example to `Prompts`.
 4. Under **Providers**, select **OpenAI** or **Gemini**.
-5. On the provider's page, set **API key**. It links a secret from **Settings → Keychain**.
+5. On the provider's page, set **API key**. It links a secret from **Settings → Keychain**.
 
 For another provider:
 
@@ -154,7 +154,7 @@ For another provider:
    };
    ```
 
-2. In **Settings → QuickAdd**, select **New choice**.
+2. In **Settings → QuickAdd**, select **New choice**.
 3. Select **Macro**.
 4. Set **Name** to `Transcript prompt`.
 5. On the **Transcript prompt** page, under **Commands**, next to **User scripts**, select **Browse**.
@@ -163,7 +163,7 @@ For another provider:
 
 ### Write the summary into your note
 
-1. In **Settings → QuickAdd**, select **New choice**.
+1. In **Settings → QuickAdd**, select **New choice**.
 2. Select **Macro**.
 3. Set **Name** to `Summarize episode`.
 4. On the **Summarize episode** page, select **Add AI Assistant command**, the robot icon in the command bar.

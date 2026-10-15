@@ -15,46 +15,49 @@ In about five minutes, you get a podcast playing in Obsidian, a timestamp in a n
 5. Select **Install**.
 6. Select **Enable**.
 
-On a computer, the PodNotes view opens in the right sidebar. To open it again later, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select the **Show PodNotes** podcast icon in the ribbon. On a phone, see [Open the player](/mobile/#open-the-player).
+On a new install, the PodNotes view opens once, in the right sidebar. To open it again later, run **PodNotes: Show player** from the command palette (`Ctrl+P`, or `Command+P` on macOS), or select **Show PodNotes**, the podcast icon in the ribbon. On a phone, see [Open the player](/mobile/#open-the-player).
 
 ## Add a podcast
 
-1. Open **Settings → PodNotes**.
-2. Under **Search Podcasts**, type a show's name. Results appear as you type.
-3. Select **Add** on the show you want.
+The empty PodNotes view shows **Add your first podcast**.
 
-![PodNotes settings with Search Podcasts results for "the daily", each with an Add button](/screenshots/add-podcast.webp)
+![The empty PodNotes view in the sidebar, with Add your first podcast above a search field and the Play a vault file and Import OPML buttons](/screenshots/add-podcast.webp)
 
-The button changes to **Remove**, and the show appears in the PodNotes view.
+1. In the search field, type a show's name. Results appear as you type.
+2. Select the show you want.
 
-You can also paste the show's RSS feed URL or its Apple Podcasts link into the search box. One result then appears, with an **Add** button. If a show does not appear, see [Which podcasts can I add?](/faq/#which-podcasts-can-i-add)
+PodNotes adds the show and opens its page, which lists its episodes.
+
+You can also paste the show's RSS feed URL or its Apple Podcasts link into the search field. One result then appears. If a show does not appear, see [Which podcasts can I add?](/faq/#which-podcasts-can-i-add)
 
 ## Play an episode
 
-1. At the top of the PodNotes view, select **Podcast grid**, the first of the three buttons.
-2. Select the show's artwork.
-3. Select an episode.
+1. On the show's page, select an episode.
 
-The episode starts, and the view switches to the player. Select the artwork in the player to pause or play.
+The episode starts, and the full player opens over the view. Select **Play** or **Pause** to pause and play again. To see your lists again, select **Collapse player**, the down arrow at the top left. The episode keeps playing in the mini player at the bottom of the view. [Use the player](/player/) covers every control.
+
+This clip searches for "archive", adds Notes from the Archive, and plays its first episode:
+
+![A search for archive in the empty PodNotes view adds Notes from the Archive, and its first episode plays in the full player](/videos/add-and-play.mp4)
 
 ## Create an episode note
 
-1. With the episode still loaded, run **PodNotes: Create episode note** from the command palette.
+1. In the full player, select **Create note**, beside **Timestamp**.
 
-PodNotes creates the note, opens it, and puts it in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback. To change what a new note holds, see [Change what notes contain](/notes/#change-what-notes-contain).
+PodNotes creates the note in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback. Except on a phone, the note opens next to the PodNotes view. The button then reads **Open note**. To change what a new note holds, see [Change what notes contain](/notes/#change-what-notes-contain).
 
 ## Capture a timestamp
 
 1. In the episode note, in editing view, place the cursor where you want the timestamp.
-2. Run **PodNotes: Capture Timestamp** from the command palette.
+2. Run **PodNotes: Capture Timestamp** from the command palette. **Timestamp** in the full player does the same.
 
-PodNotes inserts the playback time as a link:
+PodNotes inserts the playback time as a link, and a notice says "Timestamp added to" and the note's name:
 
 ```md wrap
 - [00:12:41](obsidian://podnotes?...)
 ```
 
-Select the link, in Live Preview or reading view, to play the episode from that moment. Capture works the same in any note.
+Select the link, in Live Preview or reading view, to play the episode from that moment. Capture works the same in any note. To take the timestamp back before you type more, select **Undo** in the notice. See [Undo a capture](/timestamps/#undo-a-capture).
 
 ## Other ways to install
 
@@ -76,6 +79,7 @@ To install a release by hand:
 
 ## Next steps
 
+- [Use the player](/player/) with chapters, the transcript, and the queue.
 - [Capture timestamps](/timestamps/) from a hotkey, a phone toolbar, or a headset.
 - [Create episode notes](/notes/) with your own template, and browse them with Bases.
 - [Use PodNotes on your phone](/mobile/).

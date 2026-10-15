@@ -21,18 +21,18 @@
       <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/hero-phone-dark.webp">
       <source media="(max-width: 600px)" srcset="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/hero-phone.webp">
       <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/demo-dark.gif">
-      <img src="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/demo.gif" width="880" alt="An episode note in Obsidian with timestamp links captured while the episode plays in PodNotes">
+      <img src="https://raw.githubusercontent.com/chhoumann/PodNotes/HEAD/docs/public/screenshots/demo.gif" width="880" alt="An episode note in Obsidian with timestamp links captured from the episode in PodNotes">
     </picture>
   </a>
 </p>
 
 ## What you can do
 
-- **Listen beside your notes.** Search Apple Podcasts or paste any RSS feed, then play audio and video with speed control, a queue, and playlists.
+- **Listen beside your notes.** Search Apple Podcasts or paste any RSS feed, then play audio and video with chapters, the feed's transcript, speed control, a queue, and playlists.
 - **Capture the moment.** One command inserts a timestamp link, such as `00:12:41`, into your note. Select it later to play from that second.
 - **Create a note for any episode.** A template fills in the show, date, description, and a link that resumes playback. Browse the notes as a table with Obsidian Bases.
 - **Take it with you.** PodNotes works on iOS and Android. Download episodes for offline listening, or play your own audio and video files.
-- **Transcribe episodes.** Use your own OpenAI API key, or a Deepgram key when you turn on speaker labels and choose Deepgram.
+- **Transcribe episodes.** Save the transcript a podcast publishes for free, or transcribe the audio with your own OpenAI or Deepgram key.
 - **Build your own workflows.** Use the commands, the JavaScript API, and QuickAdd.
 
 ## Get started
@@ -40,8 +40,9 @@
 PodNotes needs Obsidian 1.13 or later.
 
 1. In Obsidian, open **Settings → Community plugins**. If you see **Exit Restricted mode**, select it. Select **Browse**, search for PodNotes, then select **Install** and **Enable**.
-2. In **Settings → PodNotes**, search for a show or paste its RSS feed URL, then select **Add**.
-3. From the command palette, run **PodNotes: Show player**, then select the show and an episode to play it. In a note in editing view, run **PodNotes: Capture Timestamp**.
+2. In the PodNotes view, which opens in the right sidebar, search for a show or paste its RSS feed URL, then select the show.
+3. On the show's page, select an episode to play it.
+4. In a note in editing view, run **PodNotes: Capture Timestamp**, or select **Timestamp** in the player.
 
 [Getting started](https://podnotes.obsidian.guide/getting-started/) walks through each step.
 
