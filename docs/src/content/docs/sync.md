@@ -69,7 +69,7 @@ A new device that starts PodNotes before sync delivers `data.json` starts a libr
 
 - A change from another device that sync delivers after PodNotes reads `data.json` and before it writes the file can still be lost. PodNotes writes over it and shows no notice.
 - PodNotes writes `data.json` in place, so your sync service can pick up a partly written file. When another device picks up such a file and it is not empty, that device shows a notice that PodNotes could not read the file, until the complete file arrives. See [Fix save problems](/save-problems/).
-- PodNotes 2.21.1 and earlier do not merge, so a device that runs one of them can overwrite the whole file. Update PodNotes on every device.
+- PodNotes 2.21.1 and earlier do not merge, so a device that runs one of them can overwrite the whole file. Such a device also does not see the progress of an episode you played on 2.22.0 or later, and the newer device does not see that episode's progress from the older one. Update PodNotes on every device.
 
 ## When PodNotes saves
 
