@@ -18,7 +18,7 @@ The transcribe commands need a connection, so they are missing from the command 
 
 To transcribe audio, [set up an OpenAI key](/transcripts/#set-up-an-openai-key). For [speaker labels](/transcripts/#add-speaker-labels) from Deepgram, set up a Deepgram key instead.
 
-A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it. If the PodNotes view is in the main area, the note opens beside the view, so the player stays in sight. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
+A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it, as [Where a note opens](/notes/#where-a-note-opens) describes. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
 
 ### Transcribe the audio instead
 
@@ -37,7 +37,7 @@ The full player's **Transcript** panel shows the transcript that the episode's f
 1. In the full player, select **Transcript**.
 2. Select a line with a time to play the episode from that moment. A transcript without times can only be read.
 
-The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Where the panel is narrow, such as on a phone, the button shows only its icon, a page with a plus sign. Once the note exists, the button reads **Open note** and opens it. If the PodNotes view is in the main area, **Save as note** and **Open note** open the note beside the view, so the player stays in sight. See [Read the transcript](/player/#read-the-transcript) for every control.
+The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Where the panel is narrow, such as on a phone, the button shows only its icon, a page with a plus sign. Once the note exists, the button reads **Open note** and opens it. See [Read the transcript](/player/#read-the-transcript) for every control.
 
 This clip opens **Transcript**, selects a line to play from it, and finds the word "walk":
 

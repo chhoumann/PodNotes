@@ -11,7 +11,7 @@ Create a note for the episode you are listening to, with the episode's details a
 1. Play an episode in PodNotes. You can pause it.
 2. Run **PodNotes: Create episode note** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-**Create note** in the full player, beside **Timestamp**, does the same. PodNotes creates the note and opens it. If the PodNotes view is in the main area, the note opens beside the view, so the player stays in sight. With the default settings, the note for the Acquired episode "The Home Depot" is `PodNotes/Acquired/The Home Depot.md`. When the note exists, the command opens it instead, and the full player's button reads **Open note**. To add timestamps while you listen, see [Capture timestamps](/timestamps/).
+**Create note** in the [full player](/player/), beside **Timestamp**, does the same. PodNotes creates the note and opens it, as [Where a note opens](/notes/#where-a-note-opens) describes. With the default settings, the note for the Acquired episode "The Home Depot" is `PodNotes/Acquired/The Home Depot.md`. When the note exists, the command opens it instead, and the full player's button reads **Open note**. To add timestamps while you listen, see [Capture timestamps](/timestamps/).
 
 ## Create a note for another episode
 
@@ -32,9 +32,19 @@ A podcast note describes a whole podcast, with its artwork, author, description,
 2. Select **Podcast options**, the three-dot button at the top right.
 3. Select **Create podcast note**.
 
-PodNotes creates the note and opens it. If the PodNotes view is in the main area, the note opens beside the view, so the podcast's page stays in sight. Once the note exists, the item reads **Open podcast note**. With the default settings, the podcast note for Acquired is `PodNotes/Podcasts/Acquired.md`. **PodNotes: Create podcast feed note** does the same from the command palette. Select the podcast, and if an episode is loaded, its podcast is first in the list.
+PodNotes creates the note and opens it. Once the note exists, the item reads **Open podcast note**. With the default settings, the podcast note for Acquired is `PodNotes/Podcasts/Acquired.md`. **PodNotes: Create podcast feed note** does the same from the command palette. Select the podcast, and if an episode is loaded, its podcast is first in the list.
 
 The default episode note template links each episode note to its podcast note in the `podcast` property, such as `[[PodNotes/Podcasts/Acquired|Acquired]]`, even when you create the podcast note later.
+
+## Where a note opens
+
+PodNotes opens each note that you create or open from its view, such as with **Create note** or **Save as note**, so that the view stays in sight:
+
+- With the view in a sidebar, the note opens in the main area.
+- With the view in the main area or in a popout window, the note opens next to the view, never in a tab over it. If a note is shown next to the view, the new note opens in that note's tab. Otherwise, it opens in a new split beside the view.
+- On a phone, which shows one tab at a time, the note opens where Obsidian opens a link.
+
+If you are in another tab when the note opens, such as when a transcript finishes while you edit a note, the note opens where Obsidian opens a link.
 
 ## Change where notes go
 

@@ -55,7 +55,7 @@ The speed lasts until a different episode loads. That episode, and the first one
 - **Timestamp** inserts the playback time as a link in your note, and reads **Added** for a moment. See [Capture timestamps](/timestamps/).
 - **Create note** creates the episode's note and opens it. Once the note exists, the button reads **Open note**. See [Create episode notes](/notes/).
 
-If the PodNotes view is in the main area, a note opened from the player appears beside the view, so the player stays in sight. This includes the **Transcript** panel's **Save as note** and **Open note**.
+Except on a phone, a note that you open from the player, also with the **Transcript** panel's **Save as note** and **Open note**, opens next to the PodNotes view, so the player stays in sight. See [Where a note opens](/notes/#where-a-note-opens).
 
 ## Use the panels
 

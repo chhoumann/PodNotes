@@ -44,7 +44,7 @@ This clip searches for "archive", adds Notes from the Archive, and plays its fir
 
 1. In the full player, select **Create note**, beside **Timestamp**.
 
-PodNotes creates the note, opens it, and puts it in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback. The button then reads **Open note**. To change what a new note holds, see [Change what notes contain](/notes/#change-what-notes-contain).
+PodNotes creates the note, opens it next to the PodNotes view, and puts it in `PodNotes/<podcast>/` with the episode's date, a link to its podcast, and a link that resumes playback. The button then reads **Open note**. To change what a new note holds, see [Change what notes contain](/notes/#change-what-notes-contain).
 
 ## Capture a timestamp
 

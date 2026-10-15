@@ -10,7 +10,7 @@ Obsidian does not show its configuration folder. On a computer, find `data.json`
 
 ## PodNotes could not save your changes
 
-The write to `data.json` failed, for example because the disk is full or the folder does not allow writes.
+The write to `data.json` failed, or PodNotes could not read the file back after writing it. For example, the disk is full, the folder does not allow writes, or a sync service replaced the file with one that PodNotes cannot read.
 
 PodNotes keeps your changes in memory and tries again every 10 seconds. The changes stay in memory while Obsidian stays open, even if the next notice says that PodNotes could not read the file. If you quit Obsidian before a save succeeds, the unsaved changes are lost.
 
