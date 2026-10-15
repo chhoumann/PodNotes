@@ -6,6 +6,7 @@ import { ensureFolderExists } from "../utility/ensureFolderExists";
 import { toError } from "../utility/toError";
 import type { Episode } from "src/types/Episode";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
+import { openNote } from "src/ui/openNote";
 import { TimerNotice } from "src/ui/TimerNotice";
 import { createChunkFiles, getMimeType } from "./audioChunker";
 import { createTranscription, retryDelayMs } from "./openaiTranscription";
@@ -553,11 +554,11 @@ export class TranscriptionService {
 			this.assertActive();
 			const newFile = await vault.create(transcriptPath, transcriptContent);
 			this.assertActive();
-			await this.plugin.app.workspace.getLeaf().openFile(newFile);
+			await openNote(this.plugin.app, newFile);
 		} else if (file instanceof TFile) {
 			// File already exists - open it without overwriting
 			this.assertActive();
-			await this.plugin.app.workspace.getLeaf().openFile(file);
+			await openNote(this.plugin.app, file);
 		} else {
 			throw new Error("Expected a file but found a folder at transcript path.");
 		}

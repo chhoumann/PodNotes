@@ -106,6 +106,11 @@ interface EventRef {
 export class Workspace {
 	/** Obsidian makes a leaf active on focus or a press in it. */
 	activeLeaf: { view: { scope: Scope | null } } | null = null;
+
+	getActiveViewOfType<T>(type: abstract new (...args: never[]) => T): T | null {
+		const view = this.activeLeaf?.view;
+		return view instanceof type ? view : null;
+	}
 	private readonly refs = new Set<EventRef & { name: string; callback(): unknown }>();
 
 	on(name: string, callback: () => unknown): EventRef {

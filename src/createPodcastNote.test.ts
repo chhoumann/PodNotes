@@ -46,6 +46,7 @@ function bootstrapAppMock(existingFile?: TFile) {
 			}),
 		},
 		workspace: {
+			getActiveViewOfType: () => null,
 			getLeaf: vi.fn(() => leaf),
 		},
 	};
@@ -163,7 +164,7 @@ describe("a note another writer creates at the path first", () => {
 						throw new Error("File already exists.");
 					}),
 				},
-				workspace: { getLeaf: vi.fn(() => leaf) },
+				workspace: { getActiveViewOfType: () => null, getLeaf: vi.fn(() => leaf) },
 			},
 			settings: { note: { path: "PodNotes/{{title}}", template: "# {{title}}" } },
 		} as never);
@@ -274,7 +275,10 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 						return { path };
 					}),
 				},
-				workspace: { getLeaf: vi.fn(() => ({ openFile: vi.fn() })) },
+				workspace: {
+					getActiveViewOfType: () => null,
+					getLeaf: vi.fn(() => ({ openFile: vi.fn() })),
+				},
 			},
 			settings: {
 				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
@@ -346,7 +350,10 @@ describe("getPodcastNote title fallbacks (#315)", () => {
 						return { path };
 					}),
 				},
-				workspace: { getLeaf: vi.fn(() => ({ openFile: vi.fn() })) },
+				workspace: {
+					getActiveViewOfType: () => null,
+					getLeaf: vi.fn(() => ({ openFile: vi.fn() })),
+				},
 			},
 			settings: {
 				note: { path: "podcasts/{{podcast}} - {{title}}", template: "# {{title}}" },
@@ -464,7 +471,10 @@ describe("episode notes identified by guid (#349)", () => {
 						frontmatter: notes.find((note) => note.path === file.path)?.frontmatter,
 					}),
 				},
-				workspace: { getLeaf: vi.fn(() => ({ openFile: vi.fn() })) },
+				workspace: {
+					getActiveViewOfType: () => null,
+					getLeaf: vi.fn(() => ({ openFile: vi.fn() })),
+				},
 			},
 			settings: { note: { path: "podcasts/{{title}}", template } },
 		} as never);

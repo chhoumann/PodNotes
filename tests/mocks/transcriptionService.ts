@@ -122,6 +122,7 @@ export function createMockPlugin(
 				createFolder: vi.fn(),
 			},
 			workspace: {
+				getActiveViewOfType: () => null,
 				getLeaf: vi.fn(() => ({
 					openFile: vi.fn(),
 				})),

@@ -6,6 +6,7 @@
 	import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 	import { getEpisodeMediaType } from "src/utility/mediaType";
 	import { icon } from "../obsidian/icon";
+	import { openNote } from "../openNote";
 	import { useServices } from "./context";
 	import Panel, { reveal } from "./Panel.svelte";
 	import SearchField from "./SearchField.svelte";
@@ -277,7 +278,7 @@
 		type="button"
 		class="pn-btn pn-tx-save"
 		disabled={!note && !$online}
-		onclick={() => (note ? app.workspace.getLeaf(false).openFile(note) : saveTranscriptNote())}
+		onclick={() => (note ? openNote(app, note) : saveTranscriptNote())}
 		><span class="pn-tx-icon" {@attach icon(note ? "file-text" : "file-plus")}></span><span
 			>{note ? "Open note" : "Save as note"}</span
 		></button
