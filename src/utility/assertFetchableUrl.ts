@@ -225,14 +225,9 @@ function classifyHostname(hostname: string): HostClassification {
 		labels.length === 1 ||
 		labels.some((label) => label.length === 0 || label.length > 63) ||
 		hostname.length > 253 ||
-		hostname === "localhost" ||
-		hostname.endsWith(".localhost") ||
-		hostname === "local" ||
-		hostname.endsWith(".local") ||
-		hostname === "internal" ||
-		hostname.endsWith(".internal") ||
-		hostname === "home.arpa" ||
-		hostname.endsWith(".home.arpa")
+		["localhost", "local", "internal", "home.arpa"].some(
+			(domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+		)
 	) {
 		return "non-public-or-special-literal";
 	}
