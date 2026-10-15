@@ -487,6 +487,10 @@ describe("a transcript that did not load", () => {
 		fetchTextMock.mockRejectedValueOnce(new NetworkError("unexpected-status", 500));
 		await openTranscript(episodeOf([VTT_LINK]), 0);
 		await screen.findByText("Transcript didn't load");
+		expect(screen.getByRole("alert").querySelector("[data-icon]")).toHaveAttribute(
+			"data-icon",
+			"alert-triangle",
+		);
 
 		await fireEvent.click(button("Retry"));
 
@@ -574,7 +578,10 @@ describe("a transcript that did not load", () => {
 describe("an episode whose feed publishes no transcript", () => {
 	test("offers the paid transcription, off while offline", async () => {
 		await openTranscript(episodeOf([]), 0);
-		await screen.findByText("No transcript in this feed");
+		const empty = (await screen.findByText("No transcript in this feed")).parentElement!;
+		expect(empty).not.toHaveAttribute("role");
+		expect(empty.querySelector("[data-icon]")).toHaveAttribute("data-icon", "captions");
+		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 		const paid = button("Transcribe with OpenAI Paid");
 
 		await fireEvent.click(paid);

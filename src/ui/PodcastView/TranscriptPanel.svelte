@@ -167,24 +167,27 @@
 	>
 		{#if load.kind === "loading"}
 			<div class="pn-panel-empty" role="status">Loading transcript</div>
-		{:else if load.kind === "error"}
-			<div class="pn-panel-empty" role="alert">
-				<span class="pn-panel-empty-icon" {@attach icon("alert-triangle")}></span>
-				<span>Transcript didn't load</span>
-				<button type="button" class="pn-btn" onclick={() => show(episode)}>Retry</button>
-				{#if note}{@render saveNote()}{/if}
-			</div>
-		{:else if load.kind === "none"}
-			<div class="pn-panel-empty">
-				<span class="pn-panel-empty-icon" {@attach icon("captions")}></span>
+		{:else if load.kind !== "ready"}
+			{@const failed = load.kind === "error"}
+			<div class="pn-panel-empty" role={failed ? "alert" : undefined}>
 				<span
-					>{isLocalFile(episode)
-						? "No transcript yet"
-						: "No transcript in this feed"}</span
+					class="pn-panel-empty-icon"
+					{@attach icon(failed ? "alert-triangle" : "captions")}
+				></span>
+				<span
+					>{failed
+						? "Transcript didn't load"
+						: isLocalFile(episode)
+							? "No transcript yet"
+							: "No transcript in this feed"}</span
 				>
+				{#if failed}
+					<button type="button" class="pn-btn" onclick={() => show(episode)}>Retry</button
+					>
+				{/if}
 				{#if note}
 					{@render saveNote()}
-				{:else if audio}
+				{:else if !failed && audio}
 					<button
 						type="button"
 						class="pn-btn"
