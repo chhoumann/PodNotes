@@ -37,7 +37,7 @@ The settings tab is rebuilt in seven sections, and many settings have new names.
 
 - **Default Volume** is gone. The full player's volume button sets one volume for every episode. PodNotes starts with the **Default Volume** you set in 2.21.1.
 - The feed cache settings are gone. PodNotes always caches feeds on the device, and fetches a feed again when its copy is more than six hours old, even if you turned caching off before.
-- The headset's next-track button moves forward by **Skip forward (s)**. Under **Headset and lock screen**, you choose what the previous-track and next-track buttons do.
+- Under **Headset and lock screen**, you choose what a headset's previous-track and next-track buttons do. Previous track still captures a timestamp by default.
 - A text or number setting saves half a second after you stop typing.
 
 ## Check your notes and templates
