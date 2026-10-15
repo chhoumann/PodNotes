@@ -59,6 +59,10 @@ function chunkErrorPlaceholder(index: number): string {
 }
 const CHUNK_ERROR_PLACEHOLDER_PATTERN = /\[Error transcribing chunk \d+\]/g;
 
+const MAX_RETRIES = 3;
+const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
+const MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
+
 interface TranscriptionJob {
 	readonly episode: Episode;
 	readonly source:
@@ -71,9 +75,6 @@ export class TranscriptionService {
 	private disposed = false;
 	private readonly lifetimeAbortController = new AbortController();
 	private readonly activeNotices = new Set<ReturnType<typeof TimerNotice>>();
-	private MAX_RETRIES = 3;
-	private readonly MAX_CONCURRENT_TRANSCRIPTIONS = 2;
-	private readonly MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
 	private pendingJobs: TranscriptionJob[] = [];
 	private activeTranscriptions = new Set<string>();
 
@@ -179,7 +180,7 @@ export class TranscriptionService {
 			return;
 		}
 		while (
-			this.activeTranscriptions.size < this.MAX_CONCURRENT_TRANSCRIPTIONS &&
+			this.activeTranscriptions.size < MAX_CONCURRENT_TRANSCRIPTIONS &&
 			this.pendingJobs.length > 0
 		) {
 			const job = this.pendingJobs.shift();
@@ -395,7 +396,7 @@ export class TranscriptionService {
 		const segments = await diarizeWithOpenAI({
 			apiKey: this.getApiKey(),
 			chunkFiles,
-			maxRetries: this.MAX_RETRIES,
+			maxRetries: MAX_RETRIES,
 			onProgress: updateNotice,
 			signal: this.lifetimeAbortController.signal,
 		});
@@ -430,7 +431,7 @@ export class TranscriptionService {
 				const file = files[index];
 
 				let retries = 0;
-				while (retries < this.MAX_RETRIES) {
+				while (retries < MAX_RETRIES) {
 					this.assertActive();
 					try {
 						const result = await createTranscription(
@@ -450,9 +451,9 @@ export class TranscriptionService {
 					} catch (error) {
 						this.assertActive();
 						retries++;
-						if (retries >= this.MAX_RETRIES) {
+						if (retries >= MAX_RETRIES) {
 							console.error(
-								`Failed to transcribe chunk ${index} after ${this.MAX_RETRIES} attempts:`,
+								`Failed to transcribe chunk ${index} after ${MAX_RETRIES} attempts:`,
 								error,
 							);
 							transcriptions[index] = chunkErrorPlaceholder(index);
@@ -467,7 +468,7 @@ export class TranscriptionService {
 			}
 		};
 
-		const workerCount = Math.min(this.MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS, files.length);
+		const workerCount = Math.min(MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS, files.length);
 		const workers = Array.from({ length: workerCount }, () => worker());
 
 		await Promise.all(workers);
