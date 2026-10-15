@@ -93,6 +93,57 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
+describe("adopted documents that need a rewrite", () => {
+	it("rereads before writing and waits when the file becomes unreadable", async () => {
+		const { access, clock, state, writer } = setup();
+		const protectedRead = { kind: "file" as const, doc: doc(), rewrite: true };
+		state.disk = withFeed(doc(), "Raw");
+		access.read.mockImplementation(async () =>
+			state.disk?.savedFeeds.Raw ? protectedRead : found(state.disk),
+		);
+		access.read.mockResolvedValueOnce(protectedRead).mockResolvedValueOnce(refused(UNREADABLE));
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await writer.onExternalChange();
+		await settled();
+
+		expect(access.read).toHaveBeenCalledTimes(2);
+		expect(state.writes).toEqual([]);
+		expect(clock.pending()).toBe(1);
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(state.writes).toEqual([doc()]);
+	});
+
+	it("keeps rewrite work through a failed write and retries it once", async () => {
+		const { access, clock, state, writer } = setup();
+		const protectedRead = { kind: "file" as const, doc: doc(), rewrite: true };
+		state.disk = withFeed(doc(), "Raw");
+		access.read.mockImplementation(async () =>
+			state.disk?.savedFeeds.Raw ? protectedRead : found(state.disk),
+		);
+		access.read.mockResolvedValueOnce(protectedRead).mockResolvedValueOnce(protectedRead);
+		access.write.mockRejectedValueOnce(new Error("disk full"));
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await writer.onExternalChange();
+		await settled();
+
+		expect(access.write).toHaveBeenCalledTimes(1);
+		expect(state.writes).toEqual([]);
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+		expect(state.writes).toEqual([doc()]);
+		await writer.flush();
+		expect(access.write).toHaveBeenCalledTimes(2);
+		await writer.onExternalChange();
+		await writer.flush();
+		expect(access.write).toHaveBeenCalledTimes(2);
+	});
+});
+
 describe("DataFileWriter saves", () => {
 	it("saves a change right away, once for a burst of changes", async () => {
 		const { clock, state, writer } = setup();

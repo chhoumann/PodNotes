@@ -225,6 +225,104 @@ describe("when a synced private feed address is in data.json during a save", () 
 	});
 });
 
+describe("private addresses adopted from sync", () => {
+	it("protects each incoming raw address on disk once without a local save", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const externalWrite = plugin.saveData.bind(plugin);
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+
+		for (let incoming = 1; incoming <= 3; incoming++) {
+			const address = `https://priv3.supercast.com/feeds/ADOPTED_SENTINEL_${incoming}`;
+			await externalWrite({
+				...structuredClone(released2211),
+				savedFeeds: { Private: { title: "Private", url: address, artworkUrl: "" } },
+				copiedNote: `from ${address}`,
+			});
+
+			await plugin.onExternalSettingsChange();
+			await settled();
+
+			const disk = await plugin.loadData();
+			expect(JSON.stringify(disk)).not.toContain("ADOPTED_SENTINEL");
+			expect(disk).toMatchObject({
+				savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+				copiedNote: "from podnotes-private-feed:Private",
+			});
+			expect(resolveFeedUrl(disk.savedFeeds.Private, plugin.feedUrls)).toBe(address);
+			expect(save).toHaveBeenCalledTimes(incoming);
+			await plugin.onExternalSettingsChange();
+			clock.advance(30_000);
+			clock.runAll();
+			await settled();
+			expect(save).toHaveBeenCalledTimes(incoming);
+			expect(clock.pending()).toBe(0);
+		}
+	});
+
+	it("protects a copied address even when the decoded document equals memory", async () => {
+		const plugin = makePlugin();
+		const address = "https://private.example/feed.xml?auth=COPIED_ADOPTION_SENTINEL";
+		const externalWrite = plugin.saveData.bind(plugin);
+		await externalWrite({
+			...encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+			savedFeeds: { Private: { title: "Private", url: address, artworkUrl: "" } },
+			copiedNote: `from ${address}`,
+		});
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const protectedData = await plugin.loadData();
+		await externalWrite({ ...protectedData, copiedNote: `from ${address}` });
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+
+		await plugin.onExternalSettingsChange();
+		await settled();
+
+		expect(await plugin.loadData()).toEqual(protectedData);
+		expect(save).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not rewrite a 2.21.1 document just to add its library id", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const externalWrite = plugin.saveData.bind(plugin);
+		await externalWrite(structuredClone(released2211));
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+
+		await plugin.onExternalSettingsChange();
+		await settled();
+
+		expect(plugin.settings.playedEpisodes["PRIV2 Both::PRIV2 Episode"].time).toBe(30);
+		expect(await plugin.loadData()).toEqual(released2211);
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	it("does not save a public or already protected adoption", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const externalWrite = plugin.saveData.bind(plugin);
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+		for (const url of ["https://example.com/feed.xml", "podnotes-private-feed:Private"]) {
+			await externalWrite({
+				...encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+				savedFeeds: { Private: { title: "Private", url, artworkUrl: "" } },
+			});
+			await plugin.onExternalSettingsChange();
+			await settled();
+			expect(plugin.settings.savedFeeds.Private.url).toBe(url);
+			expect(save).not.toHaveBeenCalled();
+		}
+	});
+});
+
 it("takes in the file a save read back before one that lands after it", async () => {
 	const notice = vi.spyOn(obsidian, "Notice");
 	const plugin = makePlugin();
@@ -1223,7 +1321,7 @@ describe("PodNotes persistence integration", () => {
 					persistenceMerge.jsonValuesEqual(result.value, repairs.mock.calls[index][1]),
 			),
 		).toBe(true);
-		expect(redactions).toHaveBeenCalledTimes(5);
+		expect(redactions).toHaveBeenCalledTimes(6);
 		expect(saveData).toHaveBeenCalledTimes(1);
 		expect(saveData.mock.lastCall?.[0]).toMatchObject({
 			defaultVolume: 0.4,
