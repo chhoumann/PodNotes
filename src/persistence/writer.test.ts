@@ -5,6 +5,7 @@ import {
 	DataFileWriter,
 	type ReadOutcome,
 	type Refusal,
+	type WriteOutcome,
 	type WriterStart,
 } from "./writer";
 
@@ -34,6 +35,8 @@ function refused(refusal: Refusal): ReadOutcome<Doc> {
 	return { kind: "refused", refusal };
 }
 
+const VERIFIED: WriteOutcome<Doc> = { kind: "verified" };
+
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** data.json and the in-memory state as two plain documents. */
@@ -47,9 +50,10 @@ function memoryFile(initial: Doc = doc()) {
 	};
 	const access = {
 		read: vi.fn(async (): Promise<ReadOutcome<Doc>> => found(state.disk)),
-		write: vi.fn(async (next: Doc) => {
+		write: vi.fn(async (next: Doc): Promise<WriteOutcome<Doc>> => {
 			state.writes.push(structuredClone(next));
 			state.disk = structuredClone(next);
+			return VERIFIED;
 		}),
 		local: () => structuredClone(state.memory),
 		publish: (next: Doc) => {
@@ -67,6 +71,22 @@ function setup(initial: Doc = doc(), start: WriterStart<Doc> = { base: structure
 	const events = { onRefusal: vi.fn(), onWriteFailed: vi.fn() };
 	const writer = new DataFileWriter<Doc>(file.access, clock, start, events);
 	return { ...file, clock, events, writer };
+}
+
+function replacedWith(
+	state: ReturnType<typeof memoryFile>["state"],
+	replacement: (before: Doc, written: Doc) => Doc,
+) {
+	return async (next: Doc): Promise<WriteOutcome<Doc>> => {
+		state.writes.push(structuredClone(next));
+		state.disk = replacement(structuredClone(state.disk!), structuredClone(next));
+		return { kind: "different", doc: structuredClone(state.disk) };
+	};
+}
+
+function withFeed(file: Doc, title: string): Doc {
+	file.savedFeeds[title] = { title };
+	return file;
 }
 
 afterEach(() => {
@@ -128,6 +148,7 @@ describe("DataFileWriter saves", () => {
 			await new Promise<void>((resolve) => (finishWrite = resolve));
 			state.writes.push(structuredClone(next));
 			state.disk = structuredClone(next);
+			return VERIFIED;
 		});
 		state.memory.defaultVolume = 0.5;
 		writer.request();
@@ -183,6 +204,7 @@ describe("DataFileWriter saves", () => {
 		access.write.mockImplementationOnce(async (next: Doc) => {
 			await new Promise<void>((resolve) => (finishWrite = resolve));
 			state.disk = structuredClone(next);
+			return VERIFIED;
 		});
 		state.memory.defaultVolume = 0.5;
 		const saving = writer.save();
@@ -258,6 +280,7 @@ describe("DataFileWriter saves", () => {
 			state.memory.playedEpisodes["Pod::Ep"] = { time: 42 };
 			state.writes.push(structuredClone(next));
 			state.disk = structuredClone(next);
+			return VERIFIED;
 		});
 
 		await writer.save();
@@ -436,6 +459,102 @@ describe("DataFileWriter saves", () => {
 		writer.request();
 		await writer.flush();
 		expect(consoleError).toHaveBeenCalledWith("PodNotes: failed to save settings", failure);
+	});
+});
+
+describe("DataFileWriter saves another writer replaced", () => {
+	it("takes in the file a sync client put in place of a save and writes the merge once", async () => {
+		const { access, clock, events, state, writer } = setup();
+		access.write.mockImplementationOnce(
+			replacedWith(state, (before) => withFeed(before, "Synced")),
+		);
+		state.memory.defaultVolume = 0.5;
+
+		writer.request();
+		await writer.flush();
+
+		const merged = withFeed({ ...doc(), defaultVolume: 0.5 }, "Synced");
+		expect(state.writes).toEqual([{ ...doc(), defaultVolume: 0.5 }, merged]);
+		expect(state.disk).toEqual(merged);
+		expect(state.memory).toEqual(merged);
+		expect(events.onWriteFailed).not.toHaveBeenCalled();
+		expect(clock.pending()).toBe(0);
+	});
+
+	it("fails a save that left the file as it was, even when that differs from what it loaded", async () => {
+		const { access, clock, events, state, writer } = setup();
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const before = withFeed(doc(), "Synced");
+		state.disk = structuredClone(before);
+		// Obsidian's saveData resolves even when its write fails.
+		access.write.mockImplementationOnce(async () => ({
+			kind: "different",
+			doc: structuredClone(before),
+		}));
+		state.memory.defaultVolume = 0.5;
+
+		writer.request();
+		await writer.flush();
+		expect(events.onWriteFailed).toHaveBeenCalledTimes(1);
+		expect(access.write).toHaveBeenCalledTimes(1);
+		expect(state.published).toHaveLength(0);
+		expect(clock.delays).toEqual([10_000]);
+
+		clock.advance(10_000);
+		clock.runAll();
+		await writer.flush();
+		expect(state.disk).toEqual({ ...before, defaultVolume: 0.5 });
+		expect(state.memory).toEqual(state.disk);
+	});
+
+	it("keeps edits made during a replaced save, even one undoing the edit it wrote", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(
+			replacedWith(state, (_, written) => {
+				state.memory.defaultVolume = 1;
+				state.memory.playedEpisodes["Pod::Ep"] = { time: 42 };
+				return withFeed(written, "Synced");
+			}),
+		);
+		state.memory.defaultVolume = 0.5;
+
+		await writer.save();
+
+		const expected = withFeed(doc(), "Synced");
+		expected.playedEpisodes["Pod::Ep"] = { time: 42 };
+		expect(state.memory).toEqual(expected);
+		expect(state.disk).toEqual(expected);
+	});
+
+	it("finishes a strict save through every replacement in a row", async () => {
+		const { access, state, writer } = setup();
+		for (const title of ["A", "B", "C"]) {
+			access.write.mockImplementationOnce(
+				replacedWith(state, (before) => withFeed(before, title)),
+			);
+		}
+		state.memory.defaultVolume = 0.5;
+
+		await writer.save();
+
+		const expected = ["A", "B", "C"].reduce(withFeed, { ...doc(), defaultVolume: 0.5 });
+		expect(state.writes).toHaveLength(4);
+		expect(state.disk).toEqual(expected);
+		expect(state.memory).toEqual(expected);
+	});
+
+	it("writes nothing more when the file that replaced a save already holds its edit", async () => {
+		const { access, state, writer } = setup();
+		access.write.mockImplementationOnce(
+			replacedWith(state, (_, written) => withFeed(written, "Synced")),
+		);
+		state.memory.defaultVolume = 0.5;
+
+		await writer.save();
+		await writer.save();
+
+		expect(state.writes).toHaveLength(1);
+		expect(state.memory).toEqual(withFeed({ ...doc(), defaultVolume: 0.5 }, "Synced"));
 	});
 });
 

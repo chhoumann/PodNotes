@@ -97,6 +97,166 @@ it("merges a valid readback replacement without a failure Notice and writes once
 	expect(clock.pending()).toBe(0);
 });
 
+it("writes nothing more when the file that replaced a save holds it as written", async () => {
+	const plugin = makePlugin();
+	const write = plugin.saveData.bind(plugin);
+	const save = vi.fn(write).mockImplementationOnce(async (data) => {
+		const synced = JSON.parse(JSON.stringify(data));
+		synced.savedFeeds = {
+			Synced: { title: "Synced", url: "https://example.com/synced.xml", artworkUrl: "" },
+		};
+		await write(synced);
+	});
+	Object.assign(plugin, { saveData: save });
+	plugin.settings.skipForwardLength = 25;
+
+	await plugin.saveSettingsStrict();
+
+	expect(save).toHaveBeenCalledTimes(1);
+	expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["Synced"]);
+});
+
+describe("when a synced private feed address is in data.json during a save", () => {
+	const rawUrl = "https://private.example/feed.xml?auth=SYNCED_SENTINEL";
+
+	async function loaded() {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		return { plugin, clock, write: plugin.saveData.bind(plugin) };
+	}
+
+	function withPrivateFeed(file: unknown) {
+		const synced = JSON.parse(JSON.stringify(file));
+		synced.savedFeeds = { Private: { title: "Private", url: rawUrl, artworkUrl: "" } };
+		return synced;
+	}
+
+	it("fails a write that left the file as it was once, and retries it later", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const { plugin, clock, write } = await loaded();
+		await write(withPrivateFeed(await plugin.loadData()));
+		let failing = true;
+		const save = vi.fn(async (data: unknown) => {
+			if (!failing) return write(data);
+			// Obsidian's saveData resolves when its write fails. A save that keeps
+			// writing stops here.
+			if (save.mock.calls.length > 3) throw new Error("PodNotes kept writing");
+		});
+		Object.assign(plugin, { saveData: save });
+		plugin.settings.defaultVolume = 0.4;
+
+		await saveInBackground(plugin);
+		expect(notice.mock.calls).toEqual([["PodNotes could not save your changes."]]);
+		expect(save).toHaveBeenCalledTimes(1);
+		expect(clock.delays).toEqual([10_000]);
+
+		failing = false;
+		clock.advance(10_000);
+		clock.runAll();
+		await settled();
+
+		const disk = await plugin.loadData();
+		expect(disk).toMatchObject({
+			defaultVolume: 0.4,
+			savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+		});
+		expect(resolveFeedUrl(disk.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
+		expect(notice).toHaveBeenCalledTimes(1);
+		expect(save).toHaveBeenCalledTimes(2);
+	});
+
+	it("writes the file that replaced a save protected, even when it holds every edit", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { plugin, write } = await loaded();
+		const save = vi
+			.fn(write)
+			.mockImplementationOnce(async (data) => write(withPrivateFeed(data)));
+		Object.assign(plugin, { saveData: save });
+		plugin.settings.defaultVolume = 0.4;
+
+		await plugin.saveSettingsStrict();
+
+		const disk = await plugin.loadData();
+		expect(JSON.stringify(disk)).not.toContain("SYNCED_SENTINEL");
+		expect(disk).toMatchObject({
+			defaultVolume: 0.4,
+			savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+		});
+		expect(resolveFeedUrl(disk.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
+		expect(resolveFeedUrl(plugin.settings.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
+		expect(save).toHaveBeenCalledTimes(2);
+		expect(notice).not.toHaveBeenCalled();
+	});
+
+	it("writes the earlier file protected again when only an address copied into it is raw", async () => {
+		const plugin = makePlugin();
+		const write = plugin.saveData.bind(plugin);
+		const copied = (address: string) => `copied from ${address} on another device`;
+		await write({ ...withPrivateFeed(await plugin.loadData()), copiedNote: copied(rawUrl) });
+		await plugin.loadSettings();
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const earlier = await plugin.loadData();
+		expect(earlier.copiedNote).toBe(copied("podnotes-private-feed:Private"));
+		const save = vi
+			.fn(write)
+			.mockImplementationOnce(async () => write({ ...earlier, copiedNote: copied(rawUrl) }));
+		Object.assign(plugin, { saveData: save });
+		const notice = vi.spyOn(obsidian, "Notice");
+		plugin.settings.defaultVolume = 0.4;
+
+		await saveInBackground(plugin);
+		await plugin.flushSaves();
+
+		expect(notice).not.toHaveBeenCalled();
+		const disk = await plugin.loadData();
+		expect(JSON.stringify(disk)).not.toContain("SYNCED_SENTINEL");
+		expect(disk).toMatchObject({
+			defaultVolume: 0.4,
+			copiedNote: copied("podnotes-private-feed:Private"),
+			savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+		});
+		expect(resolveFeedUrl(disk.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
+		expect(save).toHaveBeenCalledTimes(2);
+		expect(clock.pending()).toBe(0);
+	});
+});
+
+it("takes in the file a save read back before one that lands after it", async () => {
+	const notice = vi.spyOn(obsidian, "Notice");
+	const plugin = makePlugin();
+	const write = plugin.saveData.bind(plugin);
+	const library = (libraryId: string, title: string) => {
+		const file = encodePodNotesData(structuredClone(DEFAULT_SETTINGS), { libraryId });
+		file.savedFeeds = {
+			[title]: { title, url: `https://example.com/${title}.xml`, artworkUrl: "" },
+		};
+		return file;
+	};
+	const save = vi.fn(write).mockImplementationOnce(async () => {
+		await write(library("", "A"));
+		// Another device's library lands after the save read the file back.
+		vi.mocked(plugin.loadData).mockImplementationOnce(async () => {
+			await write(library("2026-10-15T00:00:00.000Z other", "B"));
+			return library("2026-10-15T00:00:00.000Z other", "B");
+		});
+	});
+	Object.assign(plugin, { saveData: save });
+	plugin.settings.defaultVolume = 0.4;
+
+	await plugin.saveSettingsStrict();
+
+	expect(notice).not.toHaveBeenCalled();
+	expect(Object.keys(plugin.settings.savedFeeds)).toEqual(["A", "B"]);
+	expect(await plugin.loadData()).toMatchObject({
+		defaultVolume: 0.4,
+		savedFeeds: { A: { title: "A" }, B: { title: "B" } },
+	});
+});
+
 function savedByThisVersion(released: Record<string, unknown>): Record<string, unknown> {
 	const data: Record<string, unknown> = {
 		...structuredClone(released),
@@ -1558,6 +1718,25 @@ describe("PodNotes persistence integration", () => {
 		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
 	});
 
+	it("fails closed when another writer replaces a migration's write", async () => {
+		const plugin = makePlugin();
+		const write = plugin.saveData.bind(plugin);
+		const external = encodePodNotesData(structuredClone(DEFAULT_SETTINGS));
+		external.savedFeeds = {
+			Synced: { title: "Synced", url: "https://example.com/synced.xml", artworkUrl: "" },
+		};
+		Object.assign(plugin, {
+			loadData: vi
+				.fn()
+				.mockResolvedValue({ schemaVersion: 2, openAIApiKey: "must-stay-unread" }),
+			saveData: () => write(external),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await expect(plugin.loadSettings()).rejects.toThrow(/could not write/);
+		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
+	});
+
 	it("shows one Notice per failed-write streak and recovers silently", async () => {
 		const notice = vi.spyOn(obsidian, "Notice");
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -1716,6 +1895,41 @@ describe("PodNotes persistence integration", () => {
 			skipBackwardLength: 16,
 			defaultPlaybackRate: 1.5,
 		});
+	});
+
+	it.each([
+		["could not be read", () => Promise.reject(new Error("EBUSY: resource busy"))],
+		["is not JSON", async () => '{"schemaVersion": 2, "savedFeeds": {"Other device'],
+		[
+			"had to be repaired",
+			async () =>
+				dataFileText({
+					...encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+					savedFeeds: {
+						Synced: {
+							title: "Synced",
+							url: "https://example.com/s.xml",
+							artworkUrl: "",
+						},
+					},
+					defaultVolume: "loud",
+				}),
+		],
+		["is from a newer PodNotes", async () => dataFileText({ schemaVersion: 3 })],
+	])("fails a save whose file %s right after the write", async (_, readBack) => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const plugin = makePlugin();
+		vi.mocked(plugin.app.vault.adapter.read)
+			.mockImplementationOnce(readBack)
+			.mockImplementationOnce(readBack);
+		plugin.settings.skipForwardLength = 25;
+
+		await saveInBackground(plugin);
+		await expect(plugin.saveSettingsStrict()).rejects.toThrow(/could not write/);
+
+		expect(notice.mock.calls).toEqual([["PodNotes could not save your changes."]]);
+		expect(plugin.settings.savedFeeds).toEqual({});
 	});
 
 	describe("when a write is cut short, as on a full disk", () => {
