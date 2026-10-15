@@ -116,7 +116,6 @@
 			flex: 1;
 			min-width: 0;
 			display: flex;
-			align-items: center;
 			gap: var(--size-4-3);
 			height: auto;
 			padding: var(--size-4-1);

@@ -54,7 +54,6 @@
 	.pn-playlists :global {
 		.pn-plrow {
 			display: flex;
-			align-items: center;
 			gap: var(--size-4-3);
 			width: 100%;
 			height: auto;

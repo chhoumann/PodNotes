@@ -90,10 +90,6 @@
 			color: var(--text-muted);
 		}
 
-		.pn-input::-webkit-search-cancel-button {
-			display: none;
-		}
-
 		button.pn-clear {
 			position: absolute;
 			right: 2px;

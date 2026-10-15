@@ -410,8 +410,6 @@
 		}
 
 		.pn-back {
-			display: inline-flex;
-			align-items: center;
 			gap: var(--size-2-1);
 			min-width: 0;
 			max-width: 70%;
@@ -529,9 +527,6 @@
 		}
 
 		.pn-iconbtn {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
 			flex: none;
 			width: var(--pn-btn);
 			height: var(--pn-btn);
@@ -573,14 +568,8 @@
 		}
 
 		.pn-btn {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
 			gap: var(--size-4-2);
-			height: var(--input-height);
 			padding: 0 var(--size-4-3);
-			border-radius: var(--button-radius);
-			white-space: nowrap;
 		}
 
 		.pn-btn.mod-cta {
@@ -601,7 +590,6 @@
 
 		.pn-navitem {
 			display: flex;
-			align-items: center;
 			gap: var(--size-4-2);
 			width: 100%;
 			height: auto;

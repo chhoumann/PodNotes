@@ -167,8 +167,6 @@
 		margin-top: var(--size-4-2);
 
 		.pn-alt {
-			display: inline-flex;
-			align-items: center;
 			gap: var(--size-4-2);
 			height: var(--pn-btn);
 			padding: 0 var(--size-4-2);
@@ -194,7 +192,6 @@
 		/* Obsidian's buttons keep their text on one line; this one wraps its title. */
 		.pn-result {
 			display: flex;
-			align-items: center;
 			gap: var(--size-4-3);
 			width: 100%;
 			height: auto;

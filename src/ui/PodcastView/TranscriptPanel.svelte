@@ -363,8 +363,6 @@
 		}
 
 		.pn-tx-follow {
-			display: inline-flex;
-			align-items: center;
 			gap: 6px;
 			height: 28px;
 			padding: 0 var(--size-4-3);
