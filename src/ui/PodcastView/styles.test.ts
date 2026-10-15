@@ -209,3 +209,36 @@ describe("the player's stage", () => {
 		]);
 	});
 });
+
+describe("a disabled control", () => {
+	test("shows at Obsidian's 0.4 for a disabled icon, dimmed once, hovered or not; the scrubber at its own 0.5", () => {
+		const obsidian = 'button[disabled], button[aria-disabled="true"] { opacity: 0.7; }';
+		const css =
+			obsidian +
+			componentCss(["PodcastView", "Player", "EpisodeRow", "Scrubber"], {
+				media: ["(hover: hover)"],
+				states: ["hover"],
+			});
+		styled(
+			css,
+			`<div class="podcast-view pn-PodcastView">
+				<button id="icon" class="pn-iconbtn hover" disabled></button>
+				<button id="cta" class="pn-btn mod-cta hover" disabled></button>
+				<section class="pn-player pn-Player"><button id="switch" class="pn-sw hover" aria-pressed="true" disabled></button></section>
+				<div class="pn-ep pn-EpisodeRow hover"><button id="row" class="pn-bare pn-ep-main" aria-disabled="true"><span id="cover" class="pn-cover"></span></button></div>
+				<div id="scrub" class="pn-scrub pn-Scrubber" aria-disabled="true"></div>
+			</div>`,
+			"#icon",
+		);
+		const shown = (id: string) => {
+			let opacity = 1;
+			for (let at: Element | null = document.getElementById(id); at; at = at.parentElement)
+				opacity *= parseFloat(getComputedStyle(at).opacity) || 1;
+			return Math.round(opacity * 100) / 100;
+		};
+
+		expect(["icon", "cta", "switch", "row", "cover", "scrub"].map(shown)).toEqual([
+			0.4, 0.4, 0.4, 0.4, 0.4, 0.5,
+		]);
+	});
+});

@@ -156,18 +156,18 @@ test("a feed address missing from this device wraps in the banner, and offline e
 				await look('button[aria-label="Refresh episodes"]'),
 			],
 			[
-				{ opacity: 0.7, dimmedBy: 1 },
-				{ opacity: 0.7, dimmedBy: 1 },
+				{ opacity: 0.4, dimmedBy: 1 },
+				{ opacity: 0.4, dimmedBy: 1 },
 			],
 		),
 	).toEqual([
-		{ opacity: 0.7, dimmedBy: 1 },
-		{ opacity: 0.7, dimmedBy: 1 },
+		{ opacity: 0.4, dimmedBy: 1 },
+		{ opacity: 0.4, dimmedBy: 1 },
 	]);
 
 	await click(obsidian, ui.back);
 	await showList(obsidian, "Latest episodes");
-	expect(await look('.pn-ep-main[aria-disabled="true"]')).toEqual({ opacity: 0.7, dimmedBy: 1 });
+	expect(await look('.pn-ep-main[aria-disabled="true"]')).toEqual({ opacity: 0.4, dimmedBy: 1 });
 });
 
 test("on a phone, the Escape that closes a row's menu in the right drawer leaves focus on the row's More button", async () => {

@@ -538,16 +538,16 @@
 
 		/* A touch screen keeps a tapped control hovered until the next tap elsewhere. */
 		@media (hover: hover) {
-			:is(.pn-back, .pn-iconbtn):hover {
+			:is(.pn-back, .pn-iconbtn):hover:not(:disabled) {
 				background: var(--background-modifier-hover);
 				color: var(--text-normal);
 			}
 
-			.pn-iconbtn:hover {
+			.pn-iconbtn:hover:not(:disabled) {
 				opacity: var(--icon-opacity-hover);
 			}
 
-			.pn-btn.mod-cta:hover {
+			.pn-btn.mod-cta:hover:not(:disabled) {
 				background: var(--interactive-accent-hover);
 			}
 
@@ -557,9 +557,9 @@
 			}
 		}
 
-		.pn-iconbtn:disabled {
-			background: none;
-			opacity: 0.7;
+		/* Obsidian's 0.7 for a disabled button reads as enabled; its disabled icons use 0.4. */
+		button:is(:disabled, [aria-disabled="true"]) {
+			opacity: 0.4;
 		}
 
 		.pn-iconbtn[aria-pressed="true"] {
