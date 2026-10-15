@@ -64,7 +64,7 @@ A link that holds the private address itself, such as one from before PodNotes 2
 
 - A settings file holds each private podcast with its reference, never its address, and replaces quoted copies of the address in the same spellings as notes. An address that PodNotes does not recognize stays in the file as it is. Settings files and copies of `data.json` from before the update keep what they held. After you import it on a device that has the addresses, the podcasts work. On any other device, use **Set feed address**, or import an OPML file that lists the podcasts.
 - An OPML export holds each private feed's address in plain text, and a notice warns you. PodNotes exports a podcast whose address is not on this device with an empty address. Delete the OPML file after you import it elsewhere.
-- An OPML import gives a private podcast its address back when this device lacks it and the file lists a private feed with the podcast's exact title.
+- An OPML import gives a private podcast its address back when this device lacks it and the file lists a private feed with the podcast's exact title. A podcast that a 2.21.1 settings file left without its reference needs **Set feed address** instead, as [Limits of private feeds](/private-feeds/#limits-of-private-feeds) explains.
 
 See [Import and export](/import_export/).
 

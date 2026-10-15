@@ -28,10 +28,12 @@ To use the keyboard, press `Tab` until an episode's grip has focus, then press `
 
 ### Turn off the automatic queue
 
+With the automatic queue off, PodNotes stops adding the episode you switch away from, and when an episode ends, the next one in the queue does not start.
+
 1. On the Queue page, select **Queue options**, the three-dot button at the top right.
 2. Select **Queue episodes I switch away from** to remove its check mark.
 
-PodNotes then stops adding the episode you switch away from, and when an episode ends, the next one in the queue does not start. The same setting is under **Playback** in **Settings → PodNotes**.
+The same setting is under **Playback** in **Settings → PodNotes**.
 
 To empty the queue, select **Clear queue** in the same menu. To bring the episodes back, select **Undo** in the notice.
 

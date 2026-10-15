@@ -39,8 +39,8 @@ Your changes stay in memory. PodNotes reads the file again every 10 seconds, and
 To make PodNotes read the file again:
 
 1. Wait until your sync service has finished writing the file on every device.
-2. Check the free disk space, and free some if the disk is full.
-3. Check that the file named in the notice and its folder allow reads and writes, and fix them if they do not.
+2. If the disk is full, free some space.
+3. If the file named in the notice or its folder does not allow reads and writes, allow them.
 4. Wait a few minutes. If the read notice is still there, go to [Write a new data.json](/save-problems/#write-a-new-datajson).
 
 If the notice "PodNotes could not save your changes." came first, a failed save may have left the file incomplete. The read notice then usually stays until you write a new `data.json`.

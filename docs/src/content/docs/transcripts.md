@@ -9,7 +9,7 @@ Turn an episode into a transcript note. For a podcast you added, when its feed l
 
 ## <span id="creating-a-transcript"></span>Transcribe an episode
 
-**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, for a podcast you added to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. On a device without the key your provider needs, the command never bills you. It saves only transcripts that feeds publish, and otherwise shows a notice that asks for a key.
+**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, for a podcast you added to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. Without your provider's key on the device, the command never bills you. It saves a transcript that the feed publishes, and for any other episode it shows a notice that asks for the key.
 
 1. Play an audio episode in PodNotes. You can pause it.
 2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).

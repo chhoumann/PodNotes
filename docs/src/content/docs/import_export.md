@@ -13,7 +13,7 @@ All of these controls are in **Settings → PodNotes**. **Import OPML** is als
 2. In **Settings → PodNotes**, under **Library**, select **Import** next to **Import OPML**.
 3. Select the `.opml` file.
 
-PodNotes fetches each feed and adds it to your podcasts. A notice counts the podcasts while it works, then reports how many it saved and skipped. A second notice reports the feeds that failed to load. It skips podcasts you already have, matched by feed address or by title. A private podcast whose address is not on this device gets it back from a private feed in the file with the same title.
+PodNotes fetches each feed and adds it to your podcasts. A notice counts the podcasts while it works, then reports how many it saved and skipped. A second notice says how many feeds failed to load. It skips podcasts you already have, matched by feed address or by title. A private podcast whose address is not on this device gets it back from a private feed in the file with the same title, unless it came from a 2.21.1 settings file without its reference. Such a podcast needs **Set feed address**.
 
 ## <span id="exporting"></span>Export podcasts to OPML
 

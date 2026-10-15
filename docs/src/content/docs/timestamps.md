@@ -8,15 +8,15 @@ Capture a timestamp while you listen, and PodNotes inserts the playback time at 
 
 ## <span id="capturing-timestamps"></span>Capture a timestamp
 
-1. Play an episode in PodNotes. You can pause it before you capture.
+1. Play an episode in PodNotes, as [Add and play podcasts](/podcasts/#play-an-episode) describes. You can pause it before you capture.
 2. In a note in editing view, place the cursor where you want the timestamp.
 3. Run **PodNotes: Capture Timestamp** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
 
-![The Notes section of an episode note with four captured timestamp links, each followed by a note, and a Follow up list](/screenshots/timestamps.webp)
-
-PodNotes inserts a list item with a link such as `00:12:41`, followed by a space for your note. A capture replaces any selected text. Select the link, in Live Preview or reading view, to play the episode from that moment. To keep your timestamps in one note per episode, see [Create episode notes](/notes/).
+PodNotes inserts a list item with a link such as `00:12:41`, followed by a space for your note, and shows a notice with **Undo**. A capture replaces any selected text. Select the link, in Live Preview or reading view, to play the episode from that moment. To keep your timestamps in one note per episode, see [Create episode notes](/notes/).
 
 **Timestamp** in the full player and the clock button in the mini player capture the same way. See [Use the player](/player/).
+
+![The Notes section of an episode note with four captured timestamp links, each followed by a note, and a Follow up list](/screenshots/timestamps.webp)
 
 ## Undo a capture
 
@@ -24,7 +24,7 @@ After each capture, a notice says "Timestamp added to" and the note's name, or "
 
 1. In the notice, select **Undo**.
 
-PodNotes puts the note back as the capture found it, but only while the note is exactly as the capture left it. If you typed in the note since, the notice says "The note isn't as the capture left it, so the timestamp stays", and the note stays as it is. Delete the timestamp by hand instead. The editor's own undo, `Ctrl+Z` or `Command+Z` on macOS, also works, but it takes back your typing first. Undo never deletes a note that the capture created. It removes only the timestamp.
+PodNotes takes the timestamp out and puts the note back as the capture found it, but only while the note is exactly as the capture left it. If you typed in the note since, the notice says "The note isn't as the capture left it, so the timestamp stays", and the note stays as it is. Delete the timestamp by hand instead. The editor's own undo, `Ctrl+Z` or `Command+Z` on macOS, also works, but it takes back your typing first. Undo never deletes a note that the capture created. It removes only the timestamp.
 
 ## Choose where a timestamp goes
 

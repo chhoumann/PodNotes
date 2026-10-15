@@ -17,7 +17,7 @@ A toggle or a dropdown saves at once. A text or number field takes effect as you
 | **Skip back (s)** | 15 | Sets how many seconds the player's back button, **PodNotes: Skip Backward**, and the skip backward control of a headset or the lock screen move back. A whole number above 0. |
 | **Skip forward (s)** | 15 | Sets how many seconds the forward button, **PodNotes: Skip Forward**, and the skip forward control of a headset or the lock screen move forward. A whole number above 0. |
 | **Default speed** | `1×` | Sets the speed, `0.75×`, `1×`, `1.25×`, `1.5×`, `1.75×`, or `2×`, that PodNotes uses when Obsidian starts and whenever a different episode loads. Changing it does not change the speed of the episode that is playing. **PodNotes: Reset playback rate** returns to it. A speed saved by an older version, such as `1.3×`, stays as an extra choice until you pick another. |
-| **Queue episodes I switch away from** | On | When you select another episode, puts the one you switch away from at the top of the queue, unless it has ended, and starts the next queued episode when one ends. The Queue page's **Queue options** menu has the same switch. See [Turn off the automatic queue](/playlists/#turn-off-the-automatic-queue). |
+| **Queue episodes I switch away from** | On | When you select another episode, puts the one you switch away from at the top of the queue, unless it has ended. When an episode ends, starts the next one in the queue. The Queue page's **Queue options** menu has the same switch. See [Turn off the automatic queue](/playlists/#turn-off-the-automatic-queue). |
 
 ## Headset and lock screen
 

@@ -65,8 +65,6 @@ The full player has three panels:
 
 In a narrow view, the panel buttons are at the bottom of the full player. Select one to show its panel in place of the artwork, and select it again to hide the panel. In a wide view, such as a tab in the main area, the panels are tabs beside the player.
 
-![The Transcript panel of the full player, with timed lines, speaker names, and the current line highlighted](/screenshots/transcript.webp)
-
 ### Chapters
 
 Each chapter shows its start time and title, and the current chapter is highlighted. Select a chapter to play from its start.
@@ -74,6 +72,8 @@ Each chapter shows its start time and title, and the current chapter is highligh
 ### Read the transcript
 
 The panel loads the transcript that the episode's feed publishes. Its top line reads **Feed transcript** and **Free**.
+
+![The Transcript panel of the full player, with timed lines, speaker names, and the current line highlighted](/screenshots/transcript.webp)
 
 - Select a line to play from that moment. Lines without a time cannot be selected.
 - The panel highlights the line being spoken and scrolls with it. When you scroll yourself, it stops following. Select **Follow** to go back to the current line.

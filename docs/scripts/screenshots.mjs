@@ -576,7 +576,7 @@ async function main() {
 	await viewShot("podcast-grid", "Podcasts", below(".podcast-view .pn-grid"));
 	await show({ kind: "feed", key: episode(lib, hero.podcast, hero.title).podcastName });
 	// The view keeps room below the mini player for Obsidian's status bar, which shots hide.
-	await viewShot("episode-list", hero.title, below(".podcast-view .pn-mini", 0));
+	await viewShot("episode-list", hero.title, below(".podcast-view .pn-mini-open", 10));
 	await show({ kind: "queue" });
 	await viewShot("queue", "Queue", below(".podcast-view .pn-queue"));
 	await show({ kind: "library" }, true);
