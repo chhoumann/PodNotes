@@ -29,11 +29,46 @@ describe("FeedUrlRepository", () => {
 		expect(values.get(id)).toBe("https://p.example/rss?auth=tok");
 	});
 
-	it("allocates distinct IDs even for identical URLs (references sync, secrets don't)", () => {
-		const { api } = storage();
+	it("stores a URL this device holds under its reference, and another URL under its own", () => {
+		const { api, values } = storage();
 		const repository = new FeedUrlRepository(api);
 		const first = repository.store("https://a.example/rss?auth=1");
-		const second = repository.store("https://a.example/rss?auth=1");
+		expect(repository.store(" https://a.example/rss?auth=1 ")).toBe(first);
+		const other = repository.store("https://a.example/rss?auth=2");
+		expect(other).not.toBe(first);
+		expect([...values]).toEqual([
+			[first, "https://a.example/rss?auth=1"],
+			[other, "https://a.example/rss?auth=2"],
+		]);
+		expect(api.setSecret).toHaveBeenCalledTimes(2);
+	});
+
+	it("never reuses a cleared reference, one holding another URL here, or a foreign ID", () => {
+		const elsewhere = "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef";
+		const { api, values } = storage({
+			"other-plugin-feed": "https://a.example/rss?auth=1",
+			[elsewhere]: "https://a.example/rss?auth=other",
+		});
+		const repository = new FeedUrlRepository(api);
+		const removed = repository.store("https://a.example/rss?auth=1");
+		repository.delete(removed);
+
+		const id = repository.store("https://a.example/rss?auth=1");
+
+		expect(() => repository.store(" ")).toThrow(/must not be empty/);
+		expect([removed, elsewhere]).not.toContain(id);
+		expect([...values]).toEqual([
+			["other-plugin-feed", "https://a.example/rss?auth=1"],
+			[elsewhere, "https://a.example/rss?auth=other"],
+			[removed, ""],
+			[id, "https://a.example/rss?auth=1"],
+		]);
+	});
+
+	it("allocates IDs that two devices storing one URL never share (references sync, secrets don't)", () => {
+		const url = "https://a.example/rss?auth=1";
+		const first = new FeedUrlRepository(storage().api).store(url);
+		const second = new FeedUrlRepository(storage().api).store(url);
 		expect(first).not.toBe(second);
 		expect(isFeedUrlSecretId(first)).toBe(true);
 		expect(isFeedUrlSecretId(second)).toBe(true);

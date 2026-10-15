@@ -263,6 +263,47 @@ describe("private addresses adopted from sync", () => {
 		}
 	});
 
+	it("keeps one reference for an address that keeps arriving raw, also after a restart", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const externalWrite = plugin.saveData.bind(plugin);
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+		const storage = plugin.app.secretStorage;
+		const address = "https://priv3.supercast.com/feeds/REPEATED_SENTINEL";
+
+		for (let incoming = 1; incoming <= 3; incoming++) {
+			await externalWrite({
+				...structuredClone(released2211),
+				savedFeeds: { Private: { title: "Private", url: address, artworkUrl: "" } },
+				incoming,
+			});
+			await Promise.all([
+				plugin.onExternalSettingsChange(),
+				plugin.onExternalSettingsChange(),
+			]);
+			await settled();
+			expect(save).toHaveBeenCalledTimes(incoming);
+		}
+
+		const disk = await plugin.loadData();
+		expect(JSON.stringify(disk)).not.toContain("REPEATED_SENTINEL");
+		const reference = disk.savedFeeds.Private.urlSecretId;
+		expect(storage.listSecrets()).toEqual([reference]);
+
+		const restarted = makePlugin(vi.fn().mockResolvedValue(undefined), {
+			dataFileExists: true,
+		});
+		Object.assign(restarted, { app: { ...restarted.app, secretStorage: storage } });
+		await restarted.saveData(disk);
+		await restarted.loadSettings();
+		expect(storage.listSecrets()).toEqual([reference]);
+		expect(resolveFeedUrl(restarted.settings.savedFeeds.Private, restarted.feedUrls)).toBe(
+			address,
+		);
+	});
+
 	it("protects a copied address even when the decoded document equals memory", async () => {
 		const plugin = makePlugin();
 		const address = "https://private.example/feed.xml?auth=COPIED_ADOPTION_SENTINEL";
