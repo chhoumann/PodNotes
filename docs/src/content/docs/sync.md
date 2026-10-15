@@ -44,6 +44,8 @@ An episode that ended on the device shows its end position until you play it. Th
 Before each save, PodNotes reads `data.json` and merges it with the changes made on this device. When sync replaces `data.json` while PodNotes runs, PodNotes merges the new file into your library without a restart. This works also with sync services that keep the file's original modified time.
 Changes to different things all stay, apart from the cases in [Limits of merging](/sync/#limits-of-merging). For example, you add a podcast on your laptop while your phone saves your progress, and both changes stay.
 
+PodNotes reads `data.json` back after each save. When sync replaces the file between the save and that read, PodNotes merges the new file without a notice, and saves again if your changes are not in it yet. PodNotes shows "PodNotes could not save your changes." only when the save fails or the file it reads back is damaged. See [Fix save problems](/save-problems/).
+
 When two devices change the same setting or the same item before either sees the other's change, the device that saves later keeps its own version. PodNotes takes these items whole, without mixing their parts:
 
 - A saved podcast.
