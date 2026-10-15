@@ -1,18 +1,19 @@
 import { expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
-	setMobileEmulation,
+	asPhone,
+	placePodNotes,
 	setOffline,
 	showLibrary,
 	showList,
 	showPodNotes,
 } from "./journey/actions";
-import { cdp, click, pressKey } from "./journey/input";
+import { click, pressKey } from "./journey/input";
 import { PLAYER_VIEW, ui } from "./journey/targets";
 import { eventually, isShown, waitUntilShown } from "./journey/wait";
 import { type FixtureFeed, pubDate, startFixtureServer } from "./journey/fixtures";
 import { seedLibrary } from "./journey/library";
-import { jsLiteral, RELOAD_OPTIONS, VIEW_TYPE } from "./runtime";
+import { jsLiteral, RELOAD_OPTIONS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("view-polish");
 
@@ -172,31 +173,12 @@ test("a feed address missing from this device wraps in the banner, and offline e
 test("on a phone, the Escape that closes a row's menu in the right drawer leaves focus on the row's More button", async () => {
 	const context = getContext();
 	const { obsidian } = context;
-	const phone = { width: 390, height: 844 };
-	await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
-		...phone,
-		deviceScaleFactor: 1,
-		mobile: true,
-		screenWidth: phone.width,
-		screenHeight: phone.height,
-	});
-	onTestFinished(async () => {
-		await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
-	});
-	await setMobileEmulation(obsidian, true);
+	await asPhone(obsidian);
 	const server = await startFixtureServer([LONG]);
 	onTestFinished(() => server.stop());
 	await seedLibrary(context, server, { subscriptions: [LONG] });
-	// Where PodNotes opens on a phone. Obsidian sends focus from a sidebar to the main area
-	// on an Escape nothing handled.
-	await obsidian.dev.evalJson(`app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)}), true`);
-	await showPodNotes(obsidian);
-	expect(
-		await obsidian.dev.evalJson<boolean>(
-			`Boolean(document.querySelector(${jsLiteral(PLAYER_VIEW)})?.closest(".workspace-drawer.mod-right"))`,
-		),
-		"in the right drawer",
-	).toBe(true);
+	// Obsidian sends focus from a sidebar to the main area on an Escape nothing handled.
+	await placePodNotes(obsidian, "right drawer");
 	await showList(obsidian, "Latest episodes");
 	await click(obsidian, ui.episodeMenu("First Steps"));
 	await waitUntilShown(obsidian, ui.menuItem("Add to queue"));
@@ -221,6 +203,9 @@ test("on a phone, the Escape that closes a row's menu in the right drawer leaves
 		}, { capture: true, once: true });
 		return true;
 	})()`);
+	onTestFinished(async () => {
+		await obsidian.dev.evalJson("delete window.pnEscapeFocus");
+	});
 
 	await pressKey(obsidian, "Escape");
 

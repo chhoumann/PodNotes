@@ -2,16 +2,16 @@ import { describe, expect, onTestFinished, test } from "vitest";
 import { FIXTURE_HOST, SUPERCAST_FIXTURE_HOST } from "../../scripts/e2e-instance.mjs";
 import { createPodNotesE2EHarness } from "./harness";
 import {
+	asPhone,
 	dismissNotices,
 	runCommand,
 	placePodNotes,
-	setMobileEmulation,
 	setOffline,
 	showAddPodcast,
 	showLibrary,
 	showPodNotes,
 } from "./journey/actions";
-import { cdp, click, pressKey, typeInto, typeText } from "./journey/input";
+import { click, pressKey, typeInto, typeText } from "./journey/input";
 import { PLAYER_VIEW, ui, type UiTarget } from "./journey/targets";
 import { eventually, isDisabled, isShown, notices, waitUntilShown } from "./journey/wait";
 import {
@@ -29,7 +29,7 @@ import {
 	waitForPlayback,
 	writeVaultFile,
 } from "./journey/library";
-import { jsLiteral, PLUGIN_ID, VIEW_TYPE } from "./runtime";
+import { jsLiteral, PLUGIN_ID } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("journey-transcript");
 
@@ -226,30 +226,6 @@ function followed(): Promise<Followed> {
 			rows: [before.top - top, after.top - top, after.bottom - top, list.clientHeight].map(Math.round),
 		};
 	})()`);
-}
-
-/** Obsidian's phone layout on a 390 x 844 screen, until the test ends. */
-async function asPhone(): Promise<void> {
-	const { obsidian } = getContext();
-	await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
-		width: 390,
-		height: 844,
-		deviceScaleFactor: 1,
-		mobile: true,
-		screenWidth: 390,
-		screenHeight: 844,
-	});
-	onTestFinished(async () => {
-		await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
-	});
-	await setMobileEmulation(obsidian, true);
-}
-
-/** PodNotes where it opens on a phone, the right drawer. */
-async function inRightDrawer(): Promise<void> {
-	const { obsidian } = getContext();
-	await obsidian.dev.evalJson(`app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)}), true`);
-	await showPodNotes(obsidian);
 }
 
 /** The full player's Transcript panel, once it lists every line. */
@@ -521,7 +497,7 @@ describe("transcript journeys", () => {
 	test("on a phone, the stage gets the room the deck can spare, and Save, the Find field, Follow and Edit are 44 px", async () => {
 		const context = getContext();
 		const { obsidian } = context;
-		await asPhone();
+		await asPhone(obsidian);
 		expect(
 			await obsidian.dev.evalJson<boolean>('document.body.classList.contains("is-phone")'),
 			"a phone",
@@ -599,8 +575,8 @@ describe("transcript journeys", () => {
 		await placePodNotes(obsidian, { sidebar: 320 });
 		await openTranscriptPanel();
 		const sidebar = await transcriptHead();
-		await asPhone();
-		await inRightDrawer();
+		await asPhone(obsidian);
+		await placePodNotes(obsidian, "right drawer");
 		await openTranscriptPanel();
 		const drawer = await transcriptHead();
 		await placePodNotes(obsidian, "main area");
@@ -634,8 +610,8 @@ describe("transcript journeys", () => {
 		await placePodNotes(obsidian, { sidebar: 320 });
 		await openTranscriptPanel();
 		const sidebar = await followed();
-		await asPhone();
-		await inRightDrawer();
+		await asPhone(obsidian);
+		await placePodNotes(obsidian, "right drawer");
 		await openTranscriptPanel();
 		await obsidian.dev.evalJson(`app.plugins.plugins.${PLUGIN_ID}.api.currentTime = 33, true`);
 		await eventually(obsidian, async () => (await followed()).line, LINES[5]);

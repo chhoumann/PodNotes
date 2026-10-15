@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchPodNotesInstance } from "../../../scripts/e2e-instance.mjs";
 import type { ObsidianClient } from "obsidian-e2e";
+import { onTestFinished } from "vitest";
 import {
 	loadRunnerConfig,
 	resolveInstanceOptions,
@@ -12,7 +13,7 @@ import {
 import { jsLiteral, PLUGIN_ID, VIEW_TYPE, waitForPodNotesReady } from "../runtime";
 import { collectRuntimeErrors, POPOUT_RESIZE_LOOP } from "../runtime-evidence";
 import { cdp, click, clickAt, type Point, pressHotkey, typeInto } from "./input";
-import { ui } from "./targets";
+import { PLAYER_VIEW, ui } from "./targets";
 import { isShown, waitUntilShown } from "./wait";
 
 export async function dismissNotices(obsidian: ObsidianClient): Promise<void> {
@@ -43,13 +44,28 @@ export async function showPodNotes(obsidian: ObsidianClient): Promise<void> {
 }
 
 /**
- * Shows PodNotes in one leaf in the right sidebar, `width` px wide, or in the main area,
- * wherever an earlier test or tool left it, and closes the leaves elsewhere.
+ * Shows PodNotes in one leaf in the right sidebar, `width` px wide, in the main area,
+ * wherever an earlier test or tool left it, or in the right drawer, where it opens on a
+ * phone, and closes the leaves elsewhere.
  */
 export async function placePodNotes(
 	obsidian: ObsidianClient,
-	place: { sidebar: number } | "main area",
+	place: { sidebar: number } | "main area" | "right drawer",
 ): Promise<void> {
+	if (place === "right drawer") {
+		await obsidian.dev.evalJson(
+			`app.workspace.detachLeavesOfType(${jsLiteral(VIEW_TYPE)}), true`,
+		);
+		await showPodNotes(obsidian);
+		await obsidian.waitFor(
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					`Boolean(document.querySelector(${jsLiteral(PLAYER_VIEW)})?.closest(".workspace-drawer.mod-right"))`,
+				),
+			{ timeoutMs: 5_000, intervalMs: 100, message: "PodNotes in the right drawer" },
+		);
+		return;
+	}
 	const sidebar = place !== "main area";
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		const { workspace } = app;
@@ -78,7 +94,7 @@ export async function placePodNotes(
 	await obsidian.waitFor(
 		() =>
 			obsidian.dev.evalJson<boolean>(
-				`Math.round(document.querySelector(${jsLiteral(`.workspace-leaf-content[data-type="${VIEW_TYPE}"] .podcast-view`)})?.getBoundingClientRect().width ?? 0) === ${place.sidebar}`,
+				`Math.round(document.querySelector(${jsLiteral(PLAYER_VIEW)})?.getBoundingClientRect().width ?? 0) === ${place.sidebar}`,
 			),
 		{ timeoutMs: 5_000, intervalMs: 100, message: `PodNotes ${place.sidebar} px wide` },
 	);
@@ -498,6 +514,22 @@ export async function setOffline(obsidian: ObsidianClient, offline: boolean): Pr
 			message: `the renderer ${offline ? "offline" : "online"}`,
 		},
 	);
+}
+
+/** Obsidian's phone layout on a 390 x 844 screen, until the test ends. */
+export async function asPhone(obsidian: ObsidianClient): Promise<void> {
+	await cdp(obsidian, "Emulation.setDeviceMetricsOverride", {
+		width: 390,
+		height: 844,
+		deviceScaleFactor: 1,
+		mobile: true,
+		screenWidth: 390,
+		screenHeight: 844,
+	});
+	onTestFinished(async () => {
+		await cdp(obsidian, "Emulation.clearDeviceMetricsOverride", {});
+	});
+	await setMobileEmulation(obsidian, true);
 }
 
 /** Switches Obsidian's mobile emulation, which reloads the app, and waits for PodNotes. */
