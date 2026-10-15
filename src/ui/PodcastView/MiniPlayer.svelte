@@ -23,9 +23,9 @@
 	const capture = () => void captureTimestamp();
 </script>
 
-{#snippet progress(kind: "pn-mini-prog" | "pn-mini-track")}
+{#snippet progress(kind: "prog" | "track")}
 	<div
-		class={kind}
+		class="pn-mini-{kind}"
 		role="progressbar"
 		aria-labelledby="{id}-progress"
 		aria-valuemin={0}
@@ -42,7 +42,7 @@
 		<span id="{id}-name" hidden>Now playing</span>
 		<span id="{id}-progress" hidden>Episode progress</span>
 		{#if layout === "compact"}
-			{@render progress("pn-mini-prog")}
+			{@render progress("prog")}
 		{/if}
 		<button
 			type="button"
@@ -61,7 +61,7 @@
 		{#if layout === "wide"}
 			<div class="pn-mini-mid">
 				<span aria-hidden="true">{formatDuration(elapsed)}</span>
-				{@render progress("pn-mini-track")}
+				{@render progress("track")}
 				<span aria-hidden="true">-{formatDuration(remaining)}</span>
 			</div>
 			<button type="button" class="pn-btn mod-cta" onclick={capture}>

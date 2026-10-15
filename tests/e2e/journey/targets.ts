@@ -78,6 +78,11 @@ export const ui = {
 		name: `episode ${title}`,
 		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".pn-player") && el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)})`,
 	}),
+	/** The row at `index` among the shown episodes titled `title`, for a podcast that repeats a title. */
+	episodeAt: (title: string, index: number): UiTarget => ({
+		name: `episode ${title} #${index + 1}`,
+		elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-ep-main`)})].filter((el) => !el.closest(".pn-player") && el.getClientRects().length > 0 && el.querySelector(".pn-ep-title")?.textContent.trim() === ${jsLiteral(title)}).slice(${index}, ${index + 1})`,
+	}),
 	episodeLoading: byCss(
 		"episode list loading",
 		`${PLAYER_VIEW} .pn-count[role="status"]`,

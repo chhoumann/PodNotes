@@ -2,7 +2,7 @@ import { downloadedCopy, offlinePlayable } from "src/player/source";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
-import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
+import { getEpisodeKey, isSameFeedItem } from "src/utility/episodeKey";
 import { getPlayedEpisode, type PlayedEpisodeMap } from "src/utility/episodeStatus";
 import { isLocalFile } from "src/utility/isLocalFile";
 import { getEpisodeMediaType, isSameMediaSource } from "src/utility/mediaType";
@@ -28,6 +28,8 @@ export function availabilityOf(
 
 export interface RowState {
 	readonly played: PlayedEpisodeMap;
+	/** A Played row's record, which its episode may not find on its own. */
+	readonly playedKey?: string;
 	readonly downloads: Downloads;
 	readonly now: Episode | undefined;
 	readonly playing: boolean;
@@ -74,14 +76,11 @@ export function formatMinutes(seconds: number): string {
 	return total >= 60 ? `${Math.floor(total / 60)} h ${total % 60} min` : `${total} min`;
 }
 
-/**
- * Whether `episode` is the player's. Same-titled episodes of one podcast share a key,
- * so their media tells them apart, as it does for the player.
- */
+/** Whether `episode` is the player's: one feed item, from the same media. */
 export function isCurrentEpisode(now: Episode | undefined, episode: Episode): boolean {
 	return (
 		now !== undefined &&
-		isSameEpisode(now, episode) &&
+		isSameFeedItem(now, episode) &&
 		isSameMediaSource(now.streamUrl, episode.streamUrl)
 	);
 }
@@ -129,7 +128,9 @@ export function sourceOf(episode: Episode): string {
 }
 
 export function episodeRowModel(episode: Episode, state: RowState): EpisodeRowModel {
-	const record = getPlayedEpisode(state.played, episode);
+	const record = state.playedKey
+		? state.played[state.playedKey]
+		: getPlayedEpisode(state.played, episode);
 	const played = record?.finished ?? false;
 	const left = leftOf(record);
 	const duration = durationOf(episode, record);

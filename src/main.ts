@@ -123,7 +123,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// Before registerView, where the views Obsidian restores mount and append their sheets.
 		removePreviousStyles(this.app.workspace);
 		this.isUnloaded = false;
-		this.podcastViewMountEnabled = !this.isMobileRuntime();
+		// The mobile app keeps a restored view dormant until PodNotes is opened.
+		this.podcastViewMountEnabled = !Platform.isMobileApp && this.app.isMobile !== true;
 		this.registerDomEvent(window, "pagehide", () => {
 			this.closing = "window-unloading";
 		});
@@ -264,7 +265,10 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	// makes "Show PodNotes" and the ribbon icon reliably surface the view even
 	// when it is already open but hidden in a collapsed/overflowing sidebar (#55).
 	async activateView(): Promise<void> {
-		this.enablePodcastViewMount();
+		this.podcastViewMountEnabled = true;
+		for (const view of this.views) {
+			view.mountPodcastView();
+		}
 
 		const { workspace } = this.app;
 
@@ -308,13 +312,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		return this.podcastViewMountEnabled;
 	}
 
-	enablePodcastViewMount(): void {
-		this.podcastViewMountEnabled = true;
-		for (const view of this.views) {
-			view.mountPodcastView();
-		}
-	}
-
 	unregisterPodcastView(view: MainView): void {
 		this.views.delete(view);
 	}
@@ -328,10 +325,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		for (const extra of leaves.slice(1)) {
 			extra.detach();
 		}
-	}
-
-	private isMobileRuntime(): boolean {
-		return Platform.isMobileApp || this.app.isMobile === true;
 	}
 
 	// Public so the command registrations in src/commands.ts can reach it.
@@ -521,8 +514,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	private dataFileAccess(): DataFileAccess<PersistedPodNotesDataV2> {
-		// As found: reading a private feed URL again stores it under a new reference, so
-		// the same file never reads as the same document twice.
+		// The file as found, before decoding protects or repairs it. A readback still equal
+		// to it means the write did not land.
 		let lastRead: unknown;
 		return {
 			read: async (base): Promise<ReadOutcome<PersistedPodNotesDataV2>> => {
@@ -625,6 +618,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 			doc: (restored
 				? redactPrivateFeedAddresses(doc, addresses)
 				: doc) as PersistedPodNotesDataV2,
+			rewrite: redactPrivateFeedAddresses(data, addresses) !== data,
 		};
 	}
 

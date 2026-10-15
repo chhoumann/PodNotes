@@ -669,6 +669,7 @@ describe("PodNotes onload wiring (#55)", () => {
 			getLine: () => "",
 			lineCount: () => 1,
 			getValue: () => "",
+			listSelections: () => [],
 			replaceSelection: vi.fn(),
 		};
 		Object.assign(plugin.app.workspace, {

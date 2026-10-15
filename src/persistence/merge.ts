@@ -51,7 +51,7 @@ function isEpisodeEntry(value: unknown): value is EpisodeEntry {
 	);
 }
 
-/** The identity played state and downloads use, so same-titled episodes of two podcasts stay apart. */
+/** The identity playlists and downloads use, so same-titled episodes of two podcasts stay apart. */
 function episodeEntryKey(entry: EpisodeEntry): string {
 	return getEpisodeKey(entry as unknown as Episode);
 }

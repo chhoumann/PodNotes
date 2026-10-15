@@ -1,5 +1,7 @@
 import { requestUrl, type RequestUrlResponse } from "obsidian";
+import { isPlainObject } from "src/persistence/codecUtils";
 import { assertFetchableUrl } from "./assertFetchableUrl";
+import { ownRecord } from "./ownRecord";
 
 const DEFAULT_NETWORK_TIMEOUT_MS = 30_000;
 export const MAX_NETWORK_TIMEOUT_MS = 2_147_483_647;
@@ -35,6 +37,10 @@ const ERROR_MESSAGES = {
 } as const satisfies Record<NetworkErrorCode, string>;
 const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set(Object.keys(ERROR_MESSAGES));
 
+function isHttpStatus(value: unknown): value is number {
+	return Number.isSafeInteger(value) && (value as number) >= 100 && (value as number) <= 599;
+}
+
 export class NetworkError extends Error {
 	public readonly status?: number;
 
@@ -43,13 +49,7 @@ export class NetworkError extends Error {
 		status?: number,
 	) {
 		const safeStatus =
-			code === "unexpected-status" &&
-			Number.isSafeInteger(status) &&
-			status !== undefined &&
-			status >= 100 &&
-			status <= 599
-				? status
-				: undefined;
+			code === "unexpected-status" && isHttpStatus(status) ? status : undefined;
 		super(
 			safeStatus === undefined
 				? ERROR_MESSAGES[code]
@@ -228,12 +228,12 @@ function arrayBufferByteLength(value: unknown): number | undefined {
 
 function copyHeaders(value: unknown): Record<string, string> | undefined {
 	if (value === undefined) return undefined;
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (!isPlainObject(value)) {
 		throw invalidOptions();
 	}
 
 	try {
-		const headers = Object.create(null) as Record<string, string>;
+		const headers = ownRecord<string>();
 		for (const [name, headerValue] of Object.entries(value)) {
 			if (typeof headerValue !== "string") throw invalidOptions();
 			headers[name] = headerValue;
@@ -244,24 +244,31 @@ function copyHeaders(value: unknown): Record<string, string> | undefined {
 	}
 }
 
+/** Each field read once, in order, so a getter cannot answer differently later. */
+function readFields<K extends string>(value: object, keys: readonly K[]): Record<K, unknown> {
+	const fields = {} as Record<K, unknown>;
+	for (const key of keys) fields[key] = Reflect.get(value, key);
+	return fields;
+}
+
 function snapshotOptions(value: unknown): NetworkRequestOptionsSnapshot {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (!isPlainObject(value)) {
 		throw invalidOptions();
 	}
 
 	try {
-		return {
-			timeoutMs: Reflect.get(value, "timeoutMs"),
-			maxRequestBodyBytes: Reflect.get(value, "maxRequestBodyBytes"),
-			maxResponseBytes: Reflect.get(value, "maxResponseBytes"),
-			acceptedStatuses: Reflect.get(value, "acceptedStatuses"),
-			signal: Reflect.get(value, "signal"),
-			method: Reflect.get(value, "method"),
-			contentType: Reflect.get(value, "contentType"),
-			headers: Reflect.get(value, "headers"),
-			body: Reflect.get(value, "body"),
-			request: Reflect.get(value, "request"),
-		};
+		return readFields(value, [
+			"timeoutMs",
+			"maxRequestBodyBytes",
+			"maxResponseBytes",
+			"acceptedStatuses",
+			"signal",
+			"method",
+			"contentType",
+			"headers",
+			"body",
+			"request",
+		]);
 	} catch {
 		throw invalidOptions();
 	}
@@ -281,14 +288,8 @@ function copyAcceptedStatuses(value: unknown): ReadonlySet<number> | undefined {
 		const statuses = new Set<number>();
 		for (let index = 0; index < (length as number); index += 1) {
 			const status: unknown = Reflect.get(value, String(index));
-			if (
-				!Number.isSafeInteger(status) ||
-				(status as number) < 100 ||
-				(status as number) > 599
-			) {
-				throw invalidOptions();
-			}
-			statuses.add(status as number);
+			if (!isHttpStatus(status)) throw invalidOptions();
+			statuses.add(status);
 		}
 		return statuses;
 	} catch {
@@ -472,11 +473,7 @@ interface TextResponseFields {
 
 function snapshotBinaryResponseFields(value: object): BinaryResponseFields {
 	try {
-		return {
-			status: Reflect.get(value, "status"),
-			headers: Reflect.get(value, "headers"),
-			arrayBuffer: Reflect.get(value, "arrayBuffer"),
-		};
+		return readFields(value, ["status", "headers", "arrayBuffer"]);
 	} catch {
 		throw new NetworkError("invalid-response");
 	}
@@ -484,11 +481,7 @@ function snapshotBinaryResponseFields(value: object): BinaryResponseFields {
 
 function snapshotTextResponseFields(value: object): TextResponseFields {
 	try {
-		return {
-			status: Reflect.get(value, "status"),
-			arrayBuffer: Reflect.get(value, "arrayBuffer"),
-			text: Reflect.get(value, "text"),
-		};
+		return readFields(value, ["status", "arrayBuffer", "text"]);
 	} catch {
 		throw new NetworkError("invalid-response");
 	}
@@ -498,19 +491,17 @@ function createCommonResponseSnapshot(
 	status: unknown,
 	arrayBuffer: unknown,
 ): CommonResponseSnapshot {
-	if (!Number.isSafeInteger(status) || (status as number) < 100 || (status as number) > 599) {
-		throw new NetworkError("invalid-response");
-	}
-	return { status: status as number, arrayBuffer: arrayBuffer as ArrayBuffer };
+	if (!isHttpStatus(status)) throw new NetworkError("invalid-response");
+	return { status, arrayBuffer: arrayBuffer as ArrayBuffer };
 }
 
 function copyResponseHeaders(value: unknown): Record<string, string> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (!isPlainObject(value)) {
 		throw new NetworkError("invalid-response");
 	}
 
 	try {
-		const headers = Object.create(null) as Record<string, string>;
+		const headers = ownRecord<string>();
 		for (const [name, headerValue] of Object.entries(value)) {
 			if (typeof headerValue !== "string") {
 				throw new NetworkError("invalid-response");

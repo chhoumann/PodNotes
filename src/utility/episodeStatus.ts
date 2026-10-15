@@ -1,6 +1,6 @@
 import type { Episode } from "src/types/Episode";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
-import { getEpisodeKey } from "src/utility/episodeKey";
+import { getEpisodeKey, getProgressKey, isGuidProgressKey } from "src/utility/episodeKey";
 
 export type PlayedEpisodeMap = Record<string, PlayedEpisode>;
 
@@ -13,18 +13,34 @@ export function podcastNamesAgree(podcastName: string, otherPodcastName: string)
 	return !podcastName || !otherPodcastName || podcastName === otherPodcastName;
 }
 
+function own(playedEpisodes: PlayedEpisodeMap, key: string): PlayedEpisode | undefined {
+	return Object.prototype.hasOwnProperty.call(playedEpisodes, key)
+		? playedEpisodes[key]
+		: undefined;
+}
+
+/** A record saved under the title, as 2.21.1 saved all progress: the episode key, else the raw title when its podcast agrees. */
+function titleRecord(
+	playedEpisodes: PlayedEpisodeMap,
+	episode: Episode,
+): PlayedEpisode | undefined {
+	const legacy = own(playedEpisodes, episode.title);
+	return (
+		own(playedEpisodes, getEpisodeKey(episode)) ??
+		(legacy && podcastNamesAgree(legacy.podcastName, episode.podcastName) ? legacy : undefined)
+	);
+}
+
 export function getPlayedEpisode(
 	playedEpisodes: PlayedEpisodeMap,
 	episode: Episode | null | undefined,
 ): PlayedEpisode | undefined {
 	if (!episode) return undefined;
 
-	const own = (key: string) =>
-		Object.prototype.hasOwnProperty.call(playedEpisodes, key) ? playedEpisodes[key] : undefined;
-	const legacy = own(episode.title);
+	// A title record shared by two items of one feed cannot be told apart, so neither borrows it.
 	return (
-		own(getEpisodeKey(episode)) ??
-		(legacy && podcastNamesAgree(legacy.podcastName, episode.podcastName) ? legacy : undefined)
+		own(playedEpisodes, getProgressKey(episode)) ??
+		(episode.guid && episode.sharedTitle ? undefined : titleRecord(playedEpisodes, episode))
 	);
 }
 
@@ -54,7 +70,12 @@ export function getPlayedEpisodeAliasKeys(
 	const targetKey = getPlayedEpisodeRecordKey(episode);
 
 	for (const [key, playedEpisode] of Object.entries(playedEpisodes)) {
-		if (key === sourceKey || key === targetKey || isSamePlayedEpisode(playedEpisode, episode)) {
+		// A guid record may share its title with a twin, so only its own key names it.
+		if (
+			key === sourceKey ||
+			key === targetKey ||
+			(!isGuidProgressKey(key) && isSamePlayedEpisode(playedEpisode, episode))
+		) {
 			keys.add(key);
 		}
 	}
@@ -66,11 +87,20 @@ export function getFinishedPlayedEpisodeRecords(
 	playedEpisodes: PlayedEpisodeMap,
 ): PlayedEpisodeRecord[] {
 	const recordsByEpisodeKey = new Map<string, PlayedEpisodeRecord>();
+	const records = Object.entries(playedEpisodes);
+	// Reads prefer a guid record to the title record, and twins' title record belongs to neither.
+	const guidTitles = new Set(
+		records
+			.filter(([key]) => isGuidProgressKey(key))
+			.map(([, episode]) => getPlayedEpisodeRecordKey(episode)),
+	);
 
-	for (const [key, episode] of Object.entries(playedEpisodes)) {
+	for (const [key, episode] of records) {
 		if (!episode.finished) continue;
 
-		const episodeKey = getPlayedEpisodeRecordKey(episode);
+		const byGuid = isGuidProgressKey(key);
+		const episodeKey = byGuid ? key : getPlayedEpisodeRecordKey(episode);
+		if (!byGuid && guidTitles.has(episodeKey)) continue;
 		const existingRecord = recordsByEpisodeKey.get(episodeKey);
 		if (!existingRecord || isCompositePlayedKey(key)) {
 			recordsByEpisodeKey.set(episodeKey, { key, episode });

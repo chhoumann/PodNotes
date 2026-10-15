@@ -43,6 +43,8 @@ export interface ParsedEpisodeDocument {
 	duration?: number;
 	chaptersUrl?: string;
 	guid?: string;
+	/** In the feed cache: another item of the full feed has this title, though the cut may have dropped it. */
+	sharedTitle?: true;
 	transcripts?: TranscriptLink[];
 	mediaType: EpisodeMediaType;
 }
@@ -70,163 +72,158 @@ function isParserErrorDocument(document: Document): boolean {
 /** Pure XML parsing boundary with no network or Obsidian dependency. */
 export default class FeedDocumentParser {
 	parseEpisodes(xml: string): ParsedFeedEpisodes {
-		const document = this.parseXml(xml);
+		const document = parseXml(xml);
 		return {
-			feed: this.extractFeed(document),
-			episodes: this.parsePage(document),
+			feed: extractFeed(document),
+			episodes: parsePage(document),
 		};
 	}
+}
 
-	private parseXml(xml: string): Document {
-		const document = new DOMParser().parseFromString(xml, "text/xml");
-		if (isParserErrorDocument(document)) throw new Error("Invalid RSS feed");
-		return document;
+function parseXml(xml: string): Document {
+	const document = new DOMParser().parseFromString(xml, "text/xml");
+	if (isParserErrorDocument(document)) throw new Error("Invalid RSS feed");
+	return document;
+}
+
+function extractFeed(body: Document): ParsedFeedDocument {
+	const titleEl = body.querySelector("title");
+
+	// A feed must have a title. <link> is intentionally not required: it is the
+	// human website, but many valid feeds omit it or only include an Atom self link.
+	if (!titleEl) throw new Error("Invalid RSS feed");
+
+	const channel = body.querySelector("channel") ?? body;
+	const imageEl = findChannelImageElement(channel);
+	const artworkUrl =
+		imageEl?.getAttribute("href") || imageEl?.querySelector("url")?.textContent || "";
+	const siteUrl = findFeedLink(channel);
+	const description = findDirectChildText(channel, ["description", "itunes:summary"]);
+	const author = findDirectChildText(channel, ["itunes:author", "author", "managingEditor"]);
+	const guid = findDirectChildText(channel, ["podcast:guid", "id"]);
+
+	return {
+		title: titleEl.textContent || "",
+		...(artworkUrl ? { artworkUrl } : {}),
+		...(siteUrl ? { siteUrl } : {}),
+		...(description ? { description } : {}),
+		...(author ? { author } : {}),
+		...(guid ? { guid } : {}),
+	};
+}
+
+function findImageElement(document: Document | Element): Element | null {
+	const itunesImage = document.getElementsByTagName("itunes:image")[0];
+	return itunesImage ?? document.querySelector("image");
+}
+
+/** A nested item image must never become channel artwork. */
+function findChannelImageElement(scope: Element | Document): Element | null {
+	const directChildren = Array.from(scope.children);
+	const itunesImage = directChildren.find(
+		(element) => element.tagName.toLowerCase() === "itunes:image",
+	);
+	if (itunesImage) return itunesImage;
+	return directChildren.find((element) => element.tagName.toLowerCase() === "image") ?? null;
+}
+
+/** Resolve only the human website link, never an Atom self or hub endpoint. */
+function findFeedLink(scope: Document | Element): string {
+	const directLinks = Array.from(scope.children).filter((element) => {
+		const tag = element.tagName.toLowerCase();
+		return tag === "link" || tag === "atom:link";
+	});
+
+	for (const link of directLinks) {
+		const text = link.textContent?.trim();
+		if (text && /^https?:\/\//i.test(text)) return text;
 	}
 
-	private extractFeed(body: Document): ParsedFeedDocument {
-		const titleEl = body.querySelector("title");
-
-		// A feed must have a title. <link> is intentionally not required: it is the
-		// human website, but many valid feeds omit it or only include an Atom self link.
-		if (!titleEl) throw new Error("Invalid RSS feed");
-
-		const channel = body.querySelector("channel") ?? body;
-		const imageEl = this.findChannelImageElement(channel);
-		const artworkUrl =
-			imageEl?.getAttribute("href") || imageEl?.querySelector("url")?.textContent || "";
-		const siteUrl = this.findFeedLink(channel);
-		const description = this.findDirectChildText(channel, ["description", "itunes:summary"]);
-		const author = this.findDirectChildText(channel, [
-			"itunes:author",
-			"author",
-			"managingEditor",
-		]);
-		const guid = this.findDirectChildText(channel, ["podcast:guid", "id"]);
-
-		return {
-			title: titleEl.textContent || "",
-			...(artworkUrl ? { artworkUrl } : {}),
-			...(siteUrl ? { siteUrl } : {}),
-			...(description ? { description } : {}),
-			...(author ? { author } : {}),
-			...(guid ? { guid } : {}),
-		};
+	for (const link of directLinks) {
+		const relation = link.getAttribute("rel");
+		if (relation && relation !== "alternate") continue;
+		const href = link.getAttribute("href")?.trim();
+		if (href && /^https?:\/\//i.test(href)) return href;
 	}
 
-	private findImageElement(document: Document | Element): Element | null {
-		const itunesImage = document.getElementsByTagName("itunes:image")[0];
-		return itunesImage ?? document.querySelector("image");
-	}
+	return "";
+}
 
-	/** A nested item image must never become channel artwork. */
-	private findChannelImageElement(scope: Element | Document): Element | null {
-		const directChildren = Array.from(scope.children);
-		const itunesImage = directChildren.find(
-			(element) => element.tagName.toLowerCase() === "itunes:image",
-		);
-		if (itunesImage) return itunesImage;
-		return directChildren.find((element) => element.tagName.toLowerCase() === "image") ?? null;
-	}
-
-	/** Resolve only the human website link, never an Atom self or hub endpoint. */
-	private findFeedLink(scope: Document | Element): string {
-		const directLinks = Array.from(scope.children).filter((element) => {
-			const tag = element.tagName.toLowerCase();
-			return tag === "link" || tag === "atom:link";
-		});
-
-		for (const link of directLinks) {
-			const text = link.textContent?.trim();
-			if (text && /^https?:\/\//i.test(text)) return text;
+/** Read direct-child metadata in explicit tag-priority order. */
+function findDirectChildText(scope: Document | Element, tagNames: string[]): string {
+	const children = Array.from(scope.children);
+	for (const tag of tagNames) {
+		const wanted = tag.toLowerCase();
+		for (const child of children) {
+			if (child.tagName.toLowerCase() !== wanted) continue;
+			const text = child.textContent?.trim() ?? "";
+			if (text) return text;
 		}
+	}
+	return "";
+}
 
-		for (const link of directLinks) {
-			const relation = link.getAttribute("rel");
-			if (relation && relation !== "alternate") continue;
-			const href = link.getAttribute("href")?.trim();
-			if (href && /^https?:\/\//i.test(href)) return href;
+function findTranscripts(item: Element): TranscriptLink[] {
+	return Array.from(item.children).flatMap((child) => {
+		const url = child.getAttribute("url");
+		if (child.tagName.toLowerCase() !== "podcast:transcript" || !url) return [];
+		const transcript: TranscriptLink = { url };
+		for (const name of ["type", "language", "rel"] as const) {
+			const value = child.getAttribute(name);
+			if (value) transcript[name] = value;
 		}
+		return [transcript];
+	});
+}
 
-		return "";
-	}
+function parsePage(page: Document): ParsedEpisodeDocument[] {
+	return Array.from(page.querySelectorAll("item"))
+		.map((item) => parseItem(item))
+		.filter((episode): episode is ParsedEpisodeDocument => episode !== null);
+}
 
-	/** Read direct-child metadata in explicit tag-priority order. */
-	private findDirectChildText(scope: Document | Element, tagNames: string[]): string {
-		const children = Array.from(scope.children);
-		for (const tag of tagNames) {
-			const wanted = tag.toLowerCase();
-			for (const child of children) {
-				if (child.tagName.toLowerCase() !== wanted) continue;
-				const text = child.textContent?.trim() ?? "";
-				if (text) return text;
-			}
-		}
-		return "";
-	}
+function parseItem(item: Element): ParsedEpisodeDocument | null {
+	const titleEl = item.querySelector("title");
+	const streamUrlEl = item.querySelector("enclosure");
+	if (!titleEl || !streamUrlEl) return null;
 
-	private findTranscripts(item: Element): TranscriptLink[] {
-		return Array.from(item.children).flatMap((child) => {
-			const url = child.getAttribute("url");
-			if (child.tagName.toLowerCase() !== "podcast:transcript" || !url) return [];
-			const transcript: TranscriptLink = { url };
-			for (const name of ["type", "language", "rel"] as const) {
-				const value = child.getAttribute(name);
-				if (value) transcript[name] = value;
-			}
-			return [transcript];
-		});
-	}
+	const title = titleEl.textContent || "";
+	const streamUrl = streamUrlEl.getAttribute("url") || "";
+	const itemLink = item.querySelector("link")?.textContent || "";
+	const description = item.querySelector("description")?.textContent || "";
+	const content = item.querySelector("*|encoded")?.textContent || "";
+	const episodeDate = decodeDate(item.querySelector("pubDate")?.textContent);
+	const artworkUrl = findImageElement(item)?.getAttribute("href") || "";
+	const itunesTitle = item.getElementsByTagName("itunes:title")[0]?.textContent || "";
+	const episodeNumber = parseEpisodeNumber(
+		item.getElementsByTagName("itunes:episode")[0]?.textContent,
+		title,
+	);
+	const duration = parseDurationToSeconds(
+		item.getElementsByTagName("itunes:duration")[0]?.textContent,
+	);
+	const chaptersUrl = item.getElementsByTagName("podcast:chapters")[0]?.getAttribute("url") || "";
+	const guid = findDirectChildText(item, ["guid"]);
+	const transcripts = findTranscripts(item);
+	const enclosureType = streamUrlEl.getAttribute("type");
 
-	private parsePage(page: Document): ParsedEpisodeDocument[] {
-		return Array.from(page.querySelectorAll("item"))
-			.map((item) => this.parseItem(item))
-			.filter((episode): episode is ParsedEpisodeDocument => episode !== null);
-	}
-
-	private parseItem(item: Element): ParsedEpisodeDocument | null {
-		const titleEl = item.querySelector("title");
-		const streamUrlEl = item.querySelector("enclosure");
-		if (!titleEl || !streamUrlEl) return null;
-
-		const title = titleEl.textContent || "";
-		const streamUrl = streamUrlEl.getAttribute("url") || "";
-		const itemLink = item.querySelector("link")?.textContent || "";
-		const description = item.querySelector("description")?.textContent || "";
-		const content = item.querySelector("*|encoded")?.textContent || "";
-		const episodeDate = decodeDate(item.querySelector("pubDate")?.textContent);
-		const artworkUrl = this.findImageElement(item)?.getAttribute("href") || "";
-		const itunesTitle = item.getElementsByTagName("itunes:title")[0]?.textContent || "";
-		const episodeNumber = parseEpisodeNumber(
-			item.getElementsByTagName("itunes:episode")[0]?.textContent,
-			title,
-		);
-		const duration = parseDurationToSeconds(
-			item.getElementsByTagName("itunes:duration")[0]?.textContent,
-		);
-		const chaptersUrl =
-			item.getElementsByTagName("podcast:chapters")[0]?.getAttribute("url") || "";
-		const guid = this.findDirectChildText(item, ["guid"]);
-		const transcripts = this.findTranscripts(item);
-		const enclosureType = streamUrlEl.getAttribute("type");
-
-		return {
-			title,
-			streamUrl,
-			...(itemLink ? { itemLink } : {}),
-			description,
-			content,
-			...(artworkUrl ? { artworkUrl } : {}),
-			...(episodeDate ? { episodeDate } : {}),
-			...(itunesTitle ? { itunesTitle } : {}),
-			...(episodeNumber === undefined ? {} : { episodeNumber }),
-			...(duration === undefined ? {} : { duration }),
-			...(chaptersUrl ? { chaptersUrl } : {}),
-			...(guid ? { guid } : {}),
-			...(transcripts.length ? { transcripts } : {}),
-			mediaType:
-				getMediaTypeFromContentType(enclosureType) ??
-				getUnambiguousMediaTypeFromPath(streamUrl) ??
-				"audio",
-		};
-	}
+	return {
+		title,
+		streamUrl,
+		...(itemLink ? { itemLink } : {}),
+		description,
+		content,
+		...(artworkUrl ? { artworkUrl } : {}),
+		...(episodeDate ? { episodeDate } : {}),
+		...(itunesTitle ? { itunesTitle } : {}),
+		...(episodeNumber === undefined ? {} : { episodeNumber }),
+		...(duration === undefined ? {} : { duration }),
+		...(chaptersUrl ? { chaptersUrl } : {}),
+		...(guid ? { guid } : {}),
+		...(transcripts.length ? { transcripts } : {}),
+		mediaType:
+			getMediaTypeFromContentType(enclosureType) ??
+			getUnambiguousMediaTypeFromPath(streamUrl) ??
+			"audio",
+	};
 }

@@ -13,7 +13,7 @@ import { deferred, MemoryStorage } from "../../tests/mocks/feeds";
 import { FeedRepository, loadFeed } from "./FeedRepository";
 import { FeedUrlRepository } from "./FeedUrlRepository";
 import { createLibraryActions } from "./library";
-import { resolveFeedUrl } from "./privateFeeds";
+import { protectPrivateFeeds, resolveFeedUrl } from "./privateFeeds";
 
 vi.mock("src/utility/networkRequest", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("src/utility/networkRequest")>();
@@ -202,6 +202,26 @@ describe("removing a podcast", () => {
 		actions.removePodcast("Private Show");
 		expect(get(savedFeeds)).toEqual({});
 		expect(secrets.getSecret(reference)).toBeFalsy();
+	});
+
+	test("keeps the address of a podcast protected with the same private URL as a removed one", () => {
+		const { actions, feedUrls } = actionsOn(new obsidian.SecretStorage());
+		const raw = { title: "Private Show", url: PRIVATE_URL, artworkUrl: "" };
+		const { settings } = protectPrivateFeeds(
+			{
+				...DEFAULT_SETTINGS,
+				savedFeeds: { "Private Show": raw, Alias: { ...raw, title: "Alias" } },
+			},
+			feedUrls,
+		);
+		savedFeeds.set(settings.savedFeeds);
+		expect(settings.savedFeeds.Alias.urlSecretId).toBe(
+			settings.savedFeeds["Private Show"].urlSecretId,
+		);
+
+		actions.removePodcast("Alias");
+
+		expect(resolveFeedUrl(get(savedFeeds)["Private Show"], feedUrls)).toBe(PRIVATE_URL);
 	});
 });
 

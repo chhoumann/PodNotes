@@ -1,3 +1,4 @@
+import type { PlaylistSettings } from "src/constants";
 import type { Episode } from "src/types/Episode";
 import type { Playlist } from "src/types/Playlist";
 import {
@@ -24,8 +25,8 @@ export type PersistedPlaylist = Omit<Playlist, "episodes" | "currentEpisode"> & 
 /** Decode a standalone episode at a persistence, import, or cache boundary. */
 export function decodeEpisode(
 	value: unknown,
-	warnings: Set<string> = new Set(),
-	path = "episode",
+	warnings: Set<string>,
+	path: string,
 ): Episode | undefined {
 	if (!isPlainObject(value)) {
 		warn(warnings, path, "expected an object");
@@ -47,6 +48,10 @@ export function decodeEpisode(
 
 	setOptionalString(decoded, value, "feedUrl", warnings, path);
 	setOptionalString(decoded, value, "guid", warnings, path);
+	if (value.sharedTitle !== undefined && value.sharedTitle !== true) {
+		delete decoded.sharedTitle;
+		warn(warnings, `${path}.sharedTitle`, "expected true");
+	}
 	setOptionalString(decoded, value, "artworkUrl", warnings, path);
 	setOptionalString(decoded, value, "itunesTitle", warnings, path);
 	setOptionalString(decoded, value, "chaptersUrl", warnings, path);
@@ -98,13 +103,13 @@ export function encodeEpisode(value: Episode | undefined): PersistedEpisode | un
 /** Decode a playlist and every episode snapshot it owns. */
 export function decodePlaylist(
 	value: unknown,
-	fallback: Playlist,
-	warnings: Set<string> = new Set(),
-	path = "playlist",
+	fallback: PlaylistSettings,
+	warnings: Set<string>,
+	path: string,
 ): Playlist {
 	if (!isPlainObject(value)) {
 		if (value !== undefined) warn(warnings, path, "expected an object");
-		return clonePlaylist(fallback);
+		return { ...fallback, episodes: [], currentEpisode: undefined };
 	}
 
 	const decoded = copySafeObject(value);
@@ -132,11 +137,7 @@ export function decodePlaylist(
 		});
 	} else {
 		if (value.episodes !== undefined) warn(warnings, `${path}.episodes`, "expected an array");
-		decoded.episodes = fallback.episodes
-			.map((episode, index) =>
-				decodeEpisode(episode, warnings, `${path}.fallbackEpisodes[${index}]`),
-			)
-			.filter((episode): episode is Episode => Boolean(episode));
+		decoded.episodes = [];
 	}
 
 	const currentEpisode =
@@ -165,12 +166,4 @@ export function encodePlaylist(value: Playlist): PersistedPlaylist {
 	if (currentEpisode) encoded.currentEpisode = currentEpisode;
 	else delete encoded.currentEpisode;
 	return encoded as PersistedPlaylist;
-}
-
-function clonePlaylist(value: Playlist): Playlist {
-	return {
-		...value,
-		episodes: value.episodes.map((episode) => ({ ...episode })),
-		currentEpisode: value.currentEpisode ? { ...value.currentEpisode } : undefined,
-	};
 }

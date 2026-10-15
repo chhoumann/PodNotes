@@ -50,7 +50,7 @@
 		"@testing-library/svelte": "^5.4.2",
 		"@types/node": "^22.20.5",
 		"@typescript/native": "npm:typescript@7.0.2",
-		"acorn": "^8.18.0",
+		"acorn": "^8.19.0",
 		"eslint-plugin-obsidianmd": "^0.4.2",
 		"jsdom": "^30.1.2",
 		"obsidian": "1.14.4",
@@ -58,15 +58,15 @@
 		"oxfmt": "^0.72.0",
 		"oxlint": "^1.87.0",
 		"postcss": "^8.5.29",
-		"svelte": "^5.57.1",
+		"svelte": "^5.57.2",
 		"svelte-check": "4.7.6",
 		"svelte-policy": "^0.1.0",
 		"terser": "^5.51.2",
 		"typescript": "6.0.3",
-		"vite": "^8.3.2",
+		"vite": "^8.3.4",
 		"vitest": "^5.0.3",
 		"wrangler": "4.149.0",
-		"yaml": "^2.8.4"
+		"yaml": "^2.9.1"
 	},
 	"overrides": {
 		"@actions/http-client": {

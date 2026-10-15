@@ -477,10 +477,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 		const hidden = () => doc.visibilityState === "hidden" && complete();
 		const complete = () => {
-			if (!this.drafts.delete(complete)) return;
-			win.removeEventListener("pagehide", complete);
-			doc.removeEventListener("visibilitychange", hidden);
-			if (pendingSave !== undefined) save();
+			if (this.drafts.delete(complete)) {
+				win.removeEventListener("pagehide", complete);
+				doc.removeEventListener("visibilitychange", hidden);
+				if (pendingSave !== undefined) save();
+			}
 			show();
 		};
 		input.addEventListener("input", () => {
@@ -537,6 +538,18 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private textRow(name: string, field: TextField, desc?: string): SettingDefinitionRender {
+		const active = this.containerEl.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+			"input:focus,textarea:focus",
+		);
+		let draft =
+			active?.name === name
+				? {
+						value: active.value,
+						start: active.selectionStart,
+						end: active.selectionEnd,
+						direction: active.selectionDirection,
+					}
+				: undefined;
 		return {
 			name,
 			desc,
@@ -544,10 +557,18 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				let complete = () => {};
 				let stopPreview = () => {};
 				const bind = (control: TextComponent | TextAreaComponent) => {
+					control.inputEl.name = name;
 					control
-						.setValue(field.read())
+						.setValue(draft?.value ?? field.read())
 						.setPlaceholder(field.placeholder ?? "")
 						.onChange((value) => field.preview?.(value, setting));
+					if (draft?.start != null)
+						control.inputEl.setSelectionRange(
+							draft.start,
+							draft.end,
+							draft.direction ?? undefined,
+						);
+					draft = undefined;
 					complete = this.bindDraft(
 						control.inputEl,
 						(value) => {

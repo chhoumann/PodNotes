@@ -13,7 +13,7 @@ import {
 	showLibrary,
 	showPodNotes,
 } from "./journey/actions";
-import { accessibleName, click, pressKey, typeInto, typeText } from "./journey/input";
+import { accessibleName, click, clickAt, pressKey, typeInto, typeText } from "./journey/input";
 import { PLAYER_VIEW, ui, type UiTarget } from "./journey/targets";
 import { eventually, isDisabled, isShown, notices, waitUntilShown } from "./journey/wait";
 import {
@@ -656,6 +656,18 @@ describe("transcript journeys", () => {
 			app.workspace.setActiveLeaf(stack.children.find((leaf) => leaf.view.file?.path === ${jsLiteral(stacked)}));
 			return true;
 		})()`);
+		expect(await eventually(obsidian, () => isShown(obsidian, ui.fullPlayer), false)).toBe(
+			false,
+		);
+		const spine = await obsidian.dev.evalJson<{ x: number; y: number; hit: boolean }>(`(() => {
+			const spine = document.querySelector('.workspace-tabs.mod-stacked .workspace-tab-header[data-type="${VIEW_TYPE}"]');
+			const rect = spine.getBoundingClientRect();
+			const x = rect.left + rect.width / 2;
+			const y = rect.top + rect.height / 2;
+			return { x, y, hit: spine.contains(document.elementFromPoint(x, y)) };
+		})()`);
+		expect(spine.hit, "Podcast Player's stacked-tab spine is in sight").toBe(true);
+		await clickAt(obsidian, spine);
 		await dismissNotices(obsidian);
 		await click(obsidian, panelButton("Open note"));
 		await waitForOpened(transcript);

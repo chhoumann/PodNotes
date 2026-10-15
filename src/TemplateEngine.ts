@@ -154,13 +154,26 @@ function addEpisodeFileNameTags(
 ): void {
 	addTag("title", legalizedNameTag(episode.title, sanitizeFileName));
 	addTag("podcast", legalizedNameTag(episode.podcastName, sanitizeFileName));
-	addTag("date", (format?: string) =>
-		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
+	addEpisodeDateTags(addTag, episode);
+}
+
+function addEpisodeDateTags(addTag: AddTagFn, episode: Episode): void {
+	addTag("date", (format = "YYYY-MM-DD") =>
+		episode.episodeDate ? formatDate(episode.episodeDate, format) : "",
 	);
-	addTag("currentdate", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
+	// The current date the note is created on, distinct from {{date}} (the episode
+	// publish date). Supports the same Moment.js format arg. See issue #75.
+	addTag("currentdate", (format = "YYYY-MM-DD") => formatDate(new Date(), format));
+	// Episode number from <itunes:episode>, else best-effort from the title. See #34.
 	addTag("episodenumber", (pad?: string) =>
 		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
+}
+
+// Episode duration from <itunes:duration>. See issue #88.
+function durationTag(episode: Episode): TagValue {
+	return (format?: string) =>
+		episode.duration !== undefined ? formatDuration(episode.duration, format) : "";
 }
 
 function formatChapterTitle(title: string): string {
@@ -270,6 +283,10 @@ function feedHtmlToMarkdown(html: string, source: object): string {
 	);
 }
 
+function joinLines(lines: string[], prependToLines?: string): string {
+	return (prependToLines ? lines.map((line) => `${prependToLines}${line}`) : lines).join("\n");
+}
+
 function formatTemplateChapters(chapters: Chapter[] | undefined, prependToLines?: string): string {
 	const lines = normalizeChapters(chapters ?? []).map((chapter) => {
 		const title = formatChapterTitle(chapter.title);
@@ -278,11 +295,7 @@ function formatTemplateChapters(chapters: Chapter[] | undefined, prependToLines?
 		return `- ${formatDuration(chapter.startTime)}${escapedTitle}`;
 	});
 
-	if (!prependToLines) {
-		return lines.join("\n");
-	}
-
-	return lines.map((line) => `${prependToLines}${line}`).join("\n");
+	return joinLines(lines, prependToLines);
 }
 
 /**
@@ -317,48 +330,23 @@ export function NoteTemplateEngine(
 	const episodeUrl = resolveEpisodeUrl(episode);
 
 	addTag("title", escapeMarkdownBodyText(episode.title));
-	addTag("description", (prependToLines?: string) => {
-		// reduce multiple new lines
-		const sanitizeDescription = feedHtmlToMarkdown(episode.description, liveEpisode).replace(
-			/\n{3,}/g,
-			"\n\n",
-		);
-		if (prependToLines) {
-			return sanitizeDescription
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return sanitizeDescription;
-	});
-	addTag("content", (prependToLines?: string) => {
-		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.content, liveEpisode)
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return feedHtmlToMarkdown(episode.content, liveEpisode);
-	});
+	addTag("description", (prependToLines?: string) =>
+		joinLines(
+			// reduce multiple new lines
+			feedHtmlToMarkdown(episode.description, liveEpisode)
+				.replace(/\n{3,}/g, "\n\n")
+				.split("\n"),
+			prependToLines,
+		),
+	);
+	addTag("content", (prependToLines?: string) =>
+		joinLines(feedHtmlToMarkdown(episode.content, liveEpisode).split("\n"), prependToLines),
+	);
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
 	addTag("stream", sanitizePortableResourceUrl(episode.streamUrl));
 	addTag("url", episodeUrl);
-	addTag("date", (format?: string) =>
-		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
-	);
-	// The current date the note is created on, distinct from {{date}} (the episode
-	// publish date). Supports the same Moment.js format arg. See issue #75.
-	addTag("currentdate", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
-	// Episode number from <itunes:episode>, else best-effort from the title. See #34.
-	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
-	);
-	// Episode duration from <itunes:duration>. See issue #88.
-	addTag("duration", (format?: string) =>
-		episode.duration !== undefined ? formatDuration(episode.duration, format) : "",
-	);
+	addEpisodeDateTags(addTag, episode);
+	addTag("duration", durationTag(episode));
 	// Podcasting 2.0 chapters, fetched before note creation when the template
 	// asks for them. Empty when the feed has no chapters URL or fetching fails.
 	addTag("chapters", (prependToLines?: string) =>
@@ -401,36 +389,23 @@ export function TimestampTemplateEngine(
 	const { api, settings } = get(plugin);
 	const timestampOffset = settings.timestamp.offset ?? 0;
 
-	addTag("time", (format?: string) =>
-		api.getPodcastTimeFormatted(format ?? "HH:mm:ss", false, timestampOffset),
-	);
-	addTag("linktime", (format?: string) =>
-		api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true, timestampOffset),
-	);
-	addTag("segment", (format?: string) => {
-		if (!options.segment) {
-			return api.getPodcastTimeFormatted(format ?? "HH:mm:ss", false, timestampOffset);
-		}
+	// Without a segment, {{segment}} renders the current time as {{time}} does.
+	const timeTag =
+		(linkify: boolean, segment?: PodcastSegmentTimes): TagValue =>
+		(format = "HH:mm:ss") =>
+			segment
+				? api.getPodcastSegmentFormatted(
+						format,
+						segment.startTime,
+						segment.endTime,
+						linkify,
+					)
+				: api.getPodcastTimeFormatted(format, linkify, timestampOffset);
 
-		return api.getPodcastSegmentFormatted(
-			format ?? "HH:mm:ss",
-			options.segment.startTime,
-			options.segment.endTime,
-			false,
-		);
-	});
-	addTag("linksegment", (format?: string) => {
-		if (!options.segment) {
-			return api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true, timestampOffset);
-		}
-
-		return api.getPodcastSegmentFormatted(
-			format ?? "HH:mm:ss",
-			options.segment.startTime,
-			options.segment.endTime,
-			true,
-		);
-	});
+	addTag("time", timeTag(false));
+	addTag("linktime", timeTag(true));
+	addTag("segment", timeTag(false, options.segment));
+	addTag("linksegment", timeTag(true, options.segment));
 
 	return replacer(template);
 }
@@ -453,12 +428,10 @@ export function DownloadPathTemplateEngine(template: string, episode: Episode) {
 	// FIRST '.ext' followed by '?'/'#'/end, which need not be the trailing one, so
 	// a positional `.replace(ext, "")` could corrupt a folder name that happens to
 	// contain the same string earlier in the path (#DL-04).
+	// getUrlExtension returns letters and digits only, so the extension needs no escaping.
 	const templateExtension = getUrlExtension(template);
 	const templateWithoutExtension = templateExtension
-		? template.replace(
-				new RegExp(`\\.${templateExtension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-				"",
-			)
+		? template.replace(new RegExp(`\\.${templateExtension}$`, "i"), "")
 		: template;
 
 	const [replacer, addTag] = useTemplateEngine();
@@ -480,20 +453,11 @@ export function TranscriptTemplateEngine(
 	] as const);
 
 	addEpisodeFileNameTags(addTag, episode);
-	addTag("duration", (format?: string) =>
-		episode.duration !== undefined ? formatDuration(episode.duration, format) : "",
-	);
+	addTag("duration", durationTag(episode));
 	addTag("transcript", transcription);
-	addTag("description", (prependToLines?: string) => {
-		if (prependToLines) {
-			return feedHtmlToMarkdown(episode.description, liveEpisode)
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return feedHtmlToMarkdown(episode.description, liveEpisode);
-	});
+	addTag("description", (prependToLines?: string) =>
+		joinLines(feedHtmlToMarkdown(episode.description, liveEpisode).split("\n"), prependToLines),
+	);
 	addTag("url", resolveEpisodeUrl(episode));
 	addTag("artwork", sanitizePortableResourceUrl(episode.artworkUrl ?? ""));
 
@@ -522,21 +486,15 @@ export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) 
 	addTag("artwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("feedartwork", sanitizePortableResourceUrl(feed.artworkUrl ?? ""));
 	addTag("author", escapeMarkdownBodyText(feed.author ?? ""));
-	addTag("description", (prependToLines?: string) => {
-		const sanitizeDescription = feedHtmlToMarkdown(feed.description ?? "", context).replace(
-			/\n{3,}/g,
-			"\n\n",
-		);
-		if (prependToLines) {
-			return sanitizeDescription
-				.split("\n")
-				.map((str) => `${prependToLines}${str}`)
-				.join("\n");
-		}
-
-		return sanitizeDescription;
-	});
-	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
+	addTag("description", (prependToLines?: string) =>
+		joinLines(
+			feedHtmlToMarkdown(feed.description ?? "", context)
+				.replace(/\n{3,}/g, "\n\n")
+				.split("\n"),
+			prependToLines,
+		),
+	);
+	addTag("date", (format = "YYYY-MM-DD") => formatDate(new Date(), format));
 
 	return replacer(template);
 }
@@ -547,7 +505,7 @@ export function FeedFilePathTemplateEngine(template: string, feed: PodcastFeed) 
 	const nameTag = legalizedNameTag(withoutFeedAddresses(feed).title);
 	addTag("title", nameTag);
 	addTag("podcast", nameTag);
-	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
+	addTag("date", (format = "YYYY-MM-DD") => formatDate(new Date(), format));
 
 	return replacer(template);
 }

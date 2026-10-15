@@ -375,6 +375,83 @@ describe("text fields", () => {
 		expect((await disk()).note.path).toBe("Synced/{{title}}.md");
 	});
 
+	test.each(["Episode note path", "Episode note template"])(
+		"a settings refresh keeps the focused %s text and selection until completion",
+		async (name) => {
+			fakeTypingTime();
+			const { tab, field, sync, writes, disk } = open();
+			const input = field(name);
+			input.focus();
+			enter(input, "Local");
+			input.setSelectionRange(1, 4, "backward");
+			vi.advanceTimersByTime(500);
+			expect(await writes()).toBe(1);
+
+			await sync({ note: { path: "Remote path", template: "Remote template" } });
+			tab.update();
+
+			expect(field(name).value).toBe("Local");
+			expect([
+				field(name).selectionStart,
+				field(name).selectionEnd,
+				field(name).selectionDirection,
+			]).toEqual([1, 4, "backward"]);
+			complete(field(name));
+			expect(field(name).value).toBe(
+				name === "Episode note path" ? "Remote path" : "Remote template",
+			);
+			expect((await disk()).note).toEqual({
+				path: "Remote path",
+				template: "Remote template",
+			});
+			expect(await writes()).toBe(1);
+		},
+	);
+
+	test("a refresh keeps a focused number without trying to restore a text selection", async () => {
+		fakeTypingTime();
+		const { tab, field, sync, writes, disk } = open();
+		const input = field("Skip back (s)");
+		input.focus();
+		enter(input, "7");
+		vi.advanceTimersByTime(500);
+		expect(await writes()).toBe(1);
+		await sync({ skipBackwardLength: 15 });
+		tab.update();
+
+		expect(field("Skip back (s)").value).toBe("7");
+		expect(field("Skip back (s)").selectionStart).toBeNull();
+		complete(field("Skip back (s)"));
+		expect(field("Skip back (s)").value).toBe("15");
+		expect((await disk()).skipBackwardLength).toBe(15);
+		expect(await writes()).toBe(1);
+	});
+
+	test.each(["Episode note path", "Episode note template"])(
+		"typing in %s after a synced refresh saves the new edit on completion",
+		async (name) => {
+			fakeTypingTime();
+			const { tab, field, sync, writes, disk } = open();
+			field(name).focus();
+			enter(field(name), "Local");
+			vi.advanceTimersByTime(500);
+			expect(await writes()).toBe(1);
+			await sync({ note: { path: "Remote path", template: "Remote template" } });
+			tab.update();
+
+			enter(field(name), "Continued");
+			if (name === "Episode note path") pressEnter(field(name));
+			else field(name).dispatchEvent(new Event("blur"));
+
+			expect(await writes()).toBe(2);
+			expect((await disk()).note).toEqual(
+				name === "Episode note path"
+					? { path: "Continued", template: "Remote template" }
+					: { path: "Remote path", template: "Continued" },
+			);
+		},
+	);
+
 	test("Enter completes a one-line edit; in a template it is a new line", async () => {
 		fakeTypingTime();
 		const { field, writes, disk } = open();

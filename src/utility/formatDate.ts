@@ -101,10 +101,10 @@ export function formatDate(value: unknown, format: string): string {
 		a: isPM ? "pm" : "am",
 	};
 
-	// Build regex pattern: escaped literals [*], then tokens (longest first), then any char
+	// Build regex pattern: escaped literals [*], then tokens (longest first), then any char.
+	// Tokens are letters only, so they need no escaping.
 	const tokenPattern = Object.keys(tokens)
 		.sort((a, b) => b.length - a.length)
-		.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
 		.join("|");
 
 	const regex = new RegExp(`\\[([^\\]]*)]|(${tokenPattern})|.`, "g");

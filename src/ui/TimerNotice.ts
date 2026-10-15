@@ -3,42 +3,34 @@ import { Notice } from "obsidian";
 export function TimerNotice(heading: string, initialMessage: string) {
 	let currentMessage = initialMessage;
 	const startTime = Date.now();
-	let stopTime: number;
-	let interval: number | null = null;
-	let hideTimeout: number | null = null;
+	let stopTime: number | undefined;
+	let hideTimeout: number | undefined;
 	let disposed = false;
 	const notice = new Notice(initialMessage, 0);
 
-	function formatMsg(message: string): string {
-		return `${heading} (${getTime()}):\n\n${message}`;
+	function render() {
+		const elapsed = formatTime((stopTime ?? Date.now()) - startTime);
+		notice.setMessage(`${heading} (${elapsed}):\n\n${currentMessage}`);
 	}
 
 	function update(message: string) {
 		if (disposed) return;
 		currentMessage = message;
-		notice.setMessage(formatMsg(currentMessage));
+		render();
 	}
 
-	interval = window.setInterval(() => {
-		notice.setMessage(formatMsg(currentMessage));
-	}, 1000);
-
-	function getTime(): string {
-		return formatTime(stopTime ? stopTime - startTime : Date.now() - startTime);
-	}
+	const interval = window.setInterval(render, 1000);
 
 	function stop() {
-		if (interval === null) return;
+		if (stopTime !== undefined) return;
 		stopTime = Date.now();
 		window.clearInterval(interval);
-		interval = null;
 	}
 
 	function scheduleHide(delayMs: number, onHide: () => void) {
 		if (disposed) return;
-		if (hideTimeout !== null) window.clearTimeout(hideTimeout);
+		window.clearTimeout(hideTimeout);
 		hideTimeout = window.setTimeout(() => {
-			hideTimeout = null;
 			dispose();
 			onHide();
 		}, delayMs);
@@ -48,10 +40,7 @@ export function TimerNotice(heading: string, initialMessage: string) {
 		if (disposed) return;
 		disposed = true;
 		stop();
-		if (hideTimeout !== null) {
-			window.clearTimeout(hideTimeout);
-			hideTimeout = null;
-		}
+		window.clearTimeout(hideTimeout);
 		notice.hide();
 	}
 

@@ -5,6 +5,7 @@ import {
 	closeSettings,
 	openInReadingView,
 	openPodNotesSettings,
+	reloadObsidian,
 	restartObsidian,
 	runCommand,
 	showLibrary,
@@ -12,7 +13,7 @@ import {
 } from "./journey/actions";
 import { click } from "./journey/input";
 import { ui } from "./journey/targets";
-import { waitUntilShown } from "./journey/wait";
+import { eventually, listedEpisodeLabels, waitUntilShown } from "./journey/wait";
 import {
 	type FixtureEpisode,
 	type FixtureFeed,
@@ -50,6 +51,24 @@ const OTHER_SHOW: FixtureFeed = {
 	slug: "playback-other",
 	artwork: true,
 	episodes: [{ title: LONG.title, seconds: 60, pubDate: pubDate(0) }],
+};
+const RERUN: FixtureEpisode = {
+	title: "Repeat Episode",
+	seconds: 40,
+	pubDate: pubDate(0),
+	guid: "repeat-rerun",
+};
+const ORIGINAL: FixtureEpisode = {
+	title: "Repeat Episode",
+	seconds: 60,
+	pubDate: pubDate(30),
+	guid: "repeat-original",
+};
+const REPEATS: FixtureFeed = {
+	title: "Journey Repeats",
+	slug: "repeats",
+	artwork: true,
+	episodes: [RERUN, ORIGINAL],
 };
 const isolatedInstance = Boolean(process.env.OBSIDIAN_E2E_OBSIDIAN_HOME);
 
@@ -94,7 +113,97 @@ async function playFromList(episode: FixtureEpisode): Promise<void> {
 	);
 }
 
+type RepeatProgress = Readonly<{ duration: number; seconds: number; finished: boolean }>;
+
+/** Saved progress for REPEATS' title, told apart by the length of the media that wrote it. */
+async function repeatProgress(): Promise<RepeatProgress[]> {
+	const data = await getContext().plugin.data<Record<string, any>>().read();
+	return Object.values<Record<string, any>>(data.playedEpisodes ?? {})
+		.filter((record) => record.podcastName === REPEATS.title && record.title === RERUN.title)
+		.map((record) => ({
+			duration: Math.round(record.duration),
+			seconds: Math.round(record.time),
+			finished: record.finished === true,
+		}))
+		.sort((a, b) => a.duration - b.duration);
+}
+
+async function showRepeats(): Promise<string[]> {
+	const { obsidian } = getContext();
+	await showPodNotes(obsidian);
+	await showLibrary(obsidian);
+	await click(obsidian, ui.podcastCard(REPEATS.title));
+	await waitUntilShown(obsidian, ui.episodeAt(RERUN.title, 1));
+	return await listedEpisodeLabels(obsidian);
+}
+
 describe("playback journeys", () => {
+	test("#448 same-titled episodes of one podcast keep their own position and played state", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const server = await serve(REPEATS);
+		await seedLibrary(context, server, { subscriptions: [REPEATS] });
+
+		await showRepeats();
+		await click(obsidian, ui.episodeAt(ORIGINAL.title, 1));
+		await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.media?.src === server.mediaUrl(REPEATS, ORIGINAL) &&
+				playback.playing &&
+				playback.seconds > 0,
+			"the 60 s episode playing",
+		);
+		await evalApi("api.currentTime = 30");
+		await waitForPlayback(obsidian, (playback) => playback.seconds >= 30, "seeked to 30 s");
+		await click(obsidian, ui.playbackToggle);
+		await waitForPlayback(obsidian, (playback) => !playback.playing, "paused");
+		expect(
+			await eventually(obsidian, repeatProgress, [
+				{ duration: 60, seconds: 30, finished: false },
+			]),
+		).toEqual([{ duration: 60, seconds: 30, finished: false }]);
+
+		await showRepeats();
+		await click(obsidian, ui.episodeAt(RERUN.title, 0));
+		const started = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.media?.src === server.mediaUrl(REPEATS, RERUN) &&
+				playback.playing &&
+				playback.seconds > 0,
+			"the 40 s episode playing",
+		);
+		expect.soft(started.seconds, "the 40 s episode starts at its own position").toBeLessThan(5);
+		await evalApi("api.currentTime = 37");
+		const finished = [
+			{ duration: 40, seconds: 40, finished: true },
+			{ duration: 60, seconds: 30, finished: false },
+		];
+		expect.soft(await eventually(obsidian, repeatProgress, finished, 15_000)).toEqual(finished);
+
+		const rows = ["Repeat Episode, played, paused", "Repeat Episode, 30 s left"];
+		expect.soft(await showRepeats()).toEqual(rows);
+
+		await reloadObsidian(obsidian);
+		expect(await repeatProgress()).toEqual(finished);
+		expect(await showRepeats()).toEqual(rows);
+		await click(obsidian, ui.episodeAt(ORIGINAL.title, 1));
+		const resumed = await waitForPlayback(
+			obsidian,
+			(playback) =>
+				playback.media?.src === server.mediaUrl(REPEATS, ORIGINAL) &&
+				playback.playing &&
+				playback.seconds > 0,
+			"the 60 s episode playing after the reload",
+		);
+		expect(
+			resumed.seconds,
+			"the 60 s episode resumes at its own position",
+		).toBeGreaterThanOrEqual(29.5);
+		expect(resumed.seconds).toBeLessThan(34);
+	}, 90_000);
+
 	test("J-LIST-08 clicking an episode in the list plays its real media", async () => {
 		const context = getContext();
 		const server = await serve();

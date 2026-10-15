@@ -6,11 +6,14 @@ import * as obsidian from "obsidian";
 import { DEFAULT_SETTINGS } from "./constants";
 import PodNotes from "./main";
 import * as privateFeedUrls from "./utility/privateFeedUrl";
+import { getProgressKey } from "./utility/episodeKey";
+import { getPlayedEpisode } from "./utility/episodeStatus";
+import type { Episode } from "./types/Episode";
 import * as persistenceMerge from "./persistence/merge";
 import { encodePodNotesData } from "./persistence/podNotesData";
 import * as podNotesData from "./persistence/podNotesData";
 import { PlayerController } from "./player/PlayerController";
-import { downloadedEpisodes, localFiles, plugin as pluginStore } from "./store";
+import { downloadedEpisodes, localFiles, playedEpisodes, plugin as pluginStore } from "./store";
 import { bindStoresToSettings } from "./store/persistence";
 import { CredentialRepository } from "./services/CredentialRepository";
 import {
@@ -222,6 +225,147 @@ describe("when a synced private feed address is in data.json during a save", () 
 		expect(resolveFeedUrl(disk.savedFeeds.Private, plugin.feedUrls)).toBe(rawUrl);
 		expect(save).toHaveBeenCalledTimes(2);
 		expect(clock.pending()).toBe(0);
+	});
+});
+
+describe("private addresses adopted from sync", () => {
+	it("protects each incoming raw address on disk once without a local save", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		const clock = manualClock();
+		attachDataFileWriter(plugin, clock);
+		const externalWrite = plugin.saveData.bind(plugin);
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+
+		for (let incoming = 1; incoming <= 3; incoming++) {
+			const address = `https://priv3.supercast.com/feeds/ADOPTED_SENTINEL_${incoming}`;
+			await externalWrite({
+				...structuredClone(released2211),
+				savedFeeds: { Private: { title: "Private", url: address, artworkUrl: "" } },
+				copiedNote: `from ${address}`,
+			});
+
+			await plugin.onExternalSettingsChange();
+			await settled();
+
+			const disk = await plugin.loadData();
+			expect(JSON.stringify(disk)).not.toContain("ADOPTED_SENTINEL");
+			expect(disk).toMatchObject({
+				savedFeeds: { Private: { url: "podnotes-private-feed:Private" } },
+				copiedNote: "from podnotes-private-feed:Private",
+			});
+			expect(resolveFeedUrl(disk.savedFeeds.Private, plugin.feedUrls)).toBe(address);
+			expect(save).toHaveBeenCalledTimes(incoming);
+			await plugin.onExternalSettingsChange();
+			clock.advance(30_000);
+			clock.runAll();
+			await settled();
+			expect(save).toHaveBeenCalledTimes(incoming);
+			expect(clock.pending()).toBe(0);
+		}
+	});
+
+	it("keeps one reference for an address that keeps arriving raw, also after a restart", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const externalWrite = plugin.saveData.bind(plugin);
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+		const storage = plugin.app.secretStorage;
+		const address = "https://priv3.supercast.com/feeds/REPEATED_SENTINEL";
+
+		for (let incoming = 1; incoming <= 3; incoming++) {
+			await externalWrite({
+				...structuredClone(released2211),
+				savedFeeds: { Private: { title: "Private", url: address, artworkUrl: "" } },
+				incoming,
+			});
+			await Promise.all([
+				plugin.onExternalSettingsChange(),
+				plugin.onExternalSettingsChange(),
+			]);
+			await settled();
+			expect(save).toHaveBeenCalledTimes(incoming);
+		}
+
+		const disk = await plugin.loadData();
+		expect(JSON.stringify(disk)).not.toContain("REPEATED_SENTINEL");
+		const reference = disk.savedFeeds.Private.urlSecretId;
+		expect(storage.listSecrets()).toEqual([reference]);
+
+		const restarted = makePlugin(vi.fn().mockResolvedValue(undefined), {
+			dataFileExists: true,
+		});
+		Object.assign(restarted, { app: { ...restarted.app, secretStorage: storage } });
+		await restarted.saveData(disk);
+		await restarted.loadSettings();
+		expect(storage.listSecrets()).toEqual([reference]);
+		expect(resolveFeedUrl(restarted.settings.savedFeeds.Private, restarted.feedUrls)).toBe(
+			address,
+		);
+	});
+
+	it("protects a copied address even when the decoded document equals memory", async () => {
+		const plugin = makePlugin();
+		const address = "https://private.example/feed.xml?auth=COPIED_ADOPTION_SENTINEL";
+		const externalWrite = plugin.saveData.bind(plugin);
+		await externalWrite({
+			...encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+			savedFeeds: { Private: { title: "Private", url: address, artworkUrl: "" } },
+			copiedNote: `from ${address}`,
+		});
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const protectedData = await plugin.loadData();
+		await externalWrite({ ...protectedData, copiedNote: `from ${address}` });
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+
+		await plugin.onExternalSettingsChange();
+		await settled();
+
+		expect(await plugin.loadData()).toEqual(protectedData);
+		expect(save).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not rewrite a 2.21.1 document just to add its library id", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const externalWrite = plugin.saveData.bind(plugin);
+		await externalWrite(structuredClone(released2211));
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+
+		await plugin.onExternalSettingsChange();
+		await settled();
+
+		expect(plugin.settings.playedEpisodes["PRIV2 Both::PRIV2 Episode"].time).toBe(30);
+		const fromFeed = { ...plugin.settings.currentEpisode!, guid: "priv2-episode" };
+		expect(getPlayedEpisode(plugin.settings.playedEpisodes, fromFeed)?.time).toBe(30);
+		expect(await plugin.loadData()).toEqual(released2211);
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	it("does not save a public or already protected adoption", async () => {
+		const plugin = makePlugin();
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		const externalWrite = plugin.saveData.bind(plugin);
+		const save = vi.fn(externalWrite);
+		Object.assign(plugin, { saveData: save });
+		for (const url of ["https://example.com/feed.xml", "podnotes-private-feed:Private"]) {
+			await externalWrite({
+				...encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
+				savedFeeds: { Private: { title: "Private", url, artworkUrl: "" } },
+			});
+			await plugin.onExternalSettingsChange();
+			await settled();
+			expect(plugin.settings.savedFeeds.Private.url).toBe(url);
+			expect(save).not.toHaveBeenCalled();
+		}
 	});
 });
 
@@ -799,6 +943,66 @@ describe("PodNotes persistence integration", () => {
 		);
 	});
 
+	it("lends a 2.21.1 library's progress to its episode but not to two that share a title, and a write adds one key", async () => {
+		const fromFeed = (title: string, guid: string, sharedTitle?: true): Episode => ({
+			title,
+			podcastName: "PRIV2 Both",
+			guid,
+			sharedTitle,
+			streamUrl: "",
+			url: "",
+			description: "",
+			content: "",
+		});
+		const released = {
+			...structuredClone(released2211),
+			playedEpisodes: {
+				...released2211.playedEpisodes,
+				"PRIV2 Both::Rerun": {
+					title: "Rerun",
+					podcastName: "PRIV2 Both",
+					time: 180,
+					duration: 180,
+					finished: true,
+				},
+			},
+		};
+		const saveData = vi.fn().mockResolvedValue(undefined);
+		const plugin = makePlugin(saveData, { dataFileExists: true });
+		Object.assign(plugin, { loadData: vi.fn().mockResolvedValue(structuredClone(released)) });
+		const episode = fromFeed("PRIV2 Episode", "priv2-episode");
+
+		await plugin.loadSettings();
+		attachDataFileWriter(plugin);
+		(plugin as unknown as { setCollectionStores(): void }).setCollectionStores();
+		onTestFinished(bindStoresToSettings(plugin));
+
+		expect(playedEpisodes.get(episode)).toEqual(
+			released.playedEpisodes["PRIV2 Both::PRIV2 Episode"],
+		);
+		expect(playedEpisodes.get(fromFeed("Rerun", "rerun-1", true))).toBeUndefined();
+		expect(playedEpisodes.get(fromFeed("Rerun", "rerun-2", true))).toBeUndefined();
+
+		playedEpisodes.setEpisodeTime(episode, 40, 180, false);
+		await plugin.flushSaves();
+
+		expect(saveData).toHaveBeenCalledTimes(1);
+		expect(saveData.mock.calls[0][0]).toEqual({
+			...savedByThisVersion(released),
+			libraryId: "",
+			playedEpisodes: {
+				...released.playedEpisodes,
+				[getProgressKey(episode)]: {
+					title: "PRIV2 Episode",
+					podcastName: "PRIV2 Both",
+					time: 40,
+					duration: 180,
+					finished: false,
+				},
+			},
+		});
+	});
+
 	it("moves a 2.21.1 library's path-secret feed address into SecretStorage once, for each device to set", async () => {
 		const rawUrl = "https://priv3.supercast.com/feeds/RELEASED_SENTINEL";
 		const released = JSON.parse(
@@ -1223,7 +1427,7 @@ describe("PodNotes persistence integration", () => {
 					persistenceMerge.jsonValuesEqual(result.value, repairs.mock.calls[index][1]),
 			),
 		).toBe(true);
-		expect(redactions).toHaveBeenCalledTimes(5);
+		expect(redactions).toHaveBeenCalledTimes(6);
 		expect(saveData).toHaveBeenCalledTimes(1);
 		expect(saveData.mock.lastCall?.[0]).toMatchObject({
 			defaultVolume: 0.4,

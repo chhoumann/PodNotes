@@ -348,6 +348,31 @@ describe("PodNotes data schema", () => {
 		});
 	});
 
+	it("keeps a valid media type or virtual flag an object inherits or hides from enumeration", () => {
+		const inherited = Object.assign(
+			Object.create({ mediaType: "video" }) as Episode,
+			episode("Inherited"),
+		);
+		const hidden = episode("Hidden");
+		Object.defineProperty(hidden, "mediaType", { value: "video", enumerable: false });
+		const virtualList = Object.assign(
+			Object.create({ isVirtual: true }) as Playlist,
+			playlist("Virtual", episode("Listed")),
+		);
+		const settings = structuredClone(DEFAULT_SETTINGS);
+
+		const persisted = encodePodNotesData({
+			...settings,
+			currentEpisode: inherited,
+			queue: { ...settings.queue, episodes: [hidden] },
+			playlists: { Virtual: virtualList },
+		});
+
+		expect((persisted.currentEpisode as Record<string, unknown>).mediaType).toBe("video");
+		expect((persisted.queue as Playlist).episodes[0].mediaType).toBe("video");
+		expect((persisted.playlists as Record<string, Playlist>).Virtual.isVirtual).toBe(true);
+	});
+
 	it("migrates valid legacy values through the existing repair rules", () => {
 		const decoded = decodePodNotesData({
 			defaultPlaybackRate: 99,
@@ -537,6 +562,17 @@ describe("PodNotes data schema", () => {
 		expect(
 			JSON.parse(JSON.stringify(encodePodNotesData(settings, decoded.unknownFields))),
 		).toEqual(stored);
+	});
+
+	it("keeps an episode's shared title mark only when it is true", () => {
+		const decoded = decodePodNotesData({
+			currentEpisode: { ...episode("Restored"), sharedTitle: "no" },
+			queue: { episodes: [{ ...episode("Queued"), sharedTitle: true }] },
+		});
+
+		expect(decoded.settings.currentEpisode).not.toHaveProperty("sharedTitle");
+		expect(decoded.settings.queue.episodes[0].sharedTitle).toBe(true);
+		expect(decoded.warnings).toEqual(["currentEpisode.sharedTitle: expected true"]);
 	});
 
 	it("drops a guid that is not a string", () => {

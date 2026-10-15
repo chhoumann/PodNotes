@@ -1,4 +1,5 @@
 import type { Episode } from "src/types/Episode";
+import { isSameMediaSource } from "src/utility/mediaType";
 
 const KEY_DELIMITER = "::";
 
@@ -124,4 +125,30 @@ export function isSameStoredEpisode(
 /** Whether two episodes share one key: the identity the queue uses. */
 export function isSameEpisode(a: Episode, b: Episode): boolean {
 	return getEpisodeKey(a) === getEpisodeKey(b);
+}
+
+/**
+ * Starts a progress key made from a podcast name and a guid. An escaped episode
+ * key has one NUL and then a non-NUL character, and feed text has none.
+ */
+const GUID_KEY_PREFIX = "\u0000\u0000";
+
+/** The key of an episode's own played record: its guid within its podcast when it has one, else its episode key. */
+export function getProgressKey(episode: Episode): string {
+	if (!episode.guid) return getEpisodeKey(episode);
+	return `${GUID_KEY_PREFIX}${escapeKeyComponent(episode.podcastName)}:${escapeKeyComponent(episode.guid)}`;
+}
+
+export function isGuidProgressKey(key: string): boolean {
+	return key.startsWith(GUID_KEY_PREFIX);
+}
+
+/**
+ * One feed item: one episode key, and one guid when both carry one. A snapshot saved
+ * before guids still matches its item, and only its media when the title is shared.
+ */
+export function isSameFeedItem(a: Episode, b: Episode): boolean {
+	if (!isSameEpisode(a, b)) return false;
+	if (a.guid && b.guid) return a.guid === b.guid;
+	return !(a.sharedTitle || b.sharedTitle) || isSameMediaSource(a.streamUrl, b.streamUrl);
 }

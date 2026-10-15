@@ -110,7 +110,7 @@ export default async function podNotesURIHandler(
 			return;
 		}
 		// One guard ahead of both the segment and plain paths: a negative time is
-		// never valid (the segment path's own requestedTime < 0 check is now redundant).
+		// never valid.
 		if (requestedTime < 0) {
 			new Notice("Timestamp must be zero or greater");
 			return;
@@ -125,16 +125,16 @@ export default async function podNotesURIHandler(
 	if (requestedEndTime === null) return;
 
 	const nameCandidates = candidateValues(episodeName);
-	const player = get(plugin).player;
+	const { app, feedUrls, feeds, player } = get(plugin);
 	const playOptions = hasExplicitTime ? { time: requestedTime, endTime: requestedEndTime } : {};
 	const loaded = get(player.state).episode;
-	const { app, feedUrls } = get(plugin);
 	// A link carrying a saved private feed's secret URL opens as the feed's placeholder
 	// link, so the secret stays out of the episode.
 	const url =
 		Object.values(get(savedFeeds)).find((saved) => isSavedFeed(saved, linkUrl, feedUrls))
 			?.url ?? linkUrl;
-	const localFile = candidateValues(url)
+	const urlCandidates = candidateValues(url);
+	const localFile = urlCandidates
 		.map((path) => app.vault.getAbstractFileByPath(path))
 		.find((file) => file instanceof TFile);
 	// A link to the loaded episode names its feed, or its file for a local file, so a
@@ -155,7 +155,7 @@ export default async function podNotesURIHandler(
 		!!loaded &&
 		!!loadedLinkTarget &&
 		(!isLocalFile(loaded) || localFile?.path === loadedLinkTarget) &&
-		candidateValues(url).includes(loadedLinkTarget) &&
+		urlCandidates.includes(loadedLinkTarget) &&
 		(!guid || loaded.guid === guid) &&
 		(nameCandidates.includes(loaded.title) ||
 			nameCandidates.some((name) => titleTokenSimilarity(name, loaded.title) === 1));
@@ -188,8 +188,8 @@ export default async function podNotesURIHandler(
 				getUnambiguousMediaTypeFromPath(localFile.path) ??
 					(named ? getEpisodeMediaType(named) : "audio"),
 			);
-	} else if (!isPlaceholderLink && !candidateValues(url).some((u) => /^https?:\/\//i.test(u))) {
-		const { paths, name, files } = filesNamedLike(app.vault.getFiles(), candidateValues(url));
+	} else if (!isPlaceholderLink && !urlCandidates.some((u) => /^https?:\/\//i.test(u))) {
+		const { paths, name, files } = filesNamedLike(app.vault.getFiles(), urlCandidates);
 		if (files.length !== 1) {
 			new Notice(
 				files.length === 0
@@ -219,7 +219,6 @@ export default async function podNotesURIHandler(
 		// SecretStorage. An attacker-crafted placeholder link can therefore only
 		// make the user's own device fetch the user's own subscribed feed - and
 		// the resolved URL still passes the network fetchability gate.
-		const feeds = get(plugin).feeds;
 		const placeholderKey = parsePrivateFeedPlaceholder(url);
 		if (placeholderKey !== null) {
 			// Only a feed whose URL is on this device is fetched, and a newer link or play
@@ -229,7 +228,7 @@ export default async function podNotesURIHandler(
 			const saved = get(savedFeeds);
 			const fetches =
 				Object.prototype.hasOwnProperty.call(saved, placeholderKey) &&
-				resolveFeedUrl(saved[placeholderKey], get(plugin).feedUrls) !== null;
+				resolveFeedUrl(saved[placeholderKey], feedUrls) !== null;
 			const request = fetches ? ++latestRequest : latestRequest;
 			if (fetches) play = player.deferPlay();
 			// Fetch even a fresh feed so the link finds an episode published since.
@@ -299,11 +298,6 @@ function parseSegmentEndTime(
 
 	if (!hasExplicitTime) {
 		new Notice("Segment links require a start timestamp");
-		return null;
-	}
-
-	if (requestedTime < 0) {
-		new Notice("Segment start time must be zero or greater");
 		return null;
 	}
 

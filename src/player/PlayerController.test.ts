@@ -795,6 +795,32 @@ describe("switching episodes (#353)", () => {
 		expect(media().currentTime).toBe(1234);
 	});
 
+	test.each([
+		["another item of its feed", episode("Rerun", { guid: "rerun-1", sharedTitle: true })],
+		["a copy saved before guids", episode("Rerun")],
+	])(
+		"starts an episode at its own position after %s with its title paused (#448)",
+		(_, first) => {
+			const second = episode("Rerun", {
+				guid: "rerun-2",
+				sharedTitle: true,
+				streamUrl: "https://cdn.example.com/Rerun-2.mp3",
+			});
+			playedEpisodes.setEpisodeTime(second, 12, 3600, false);
+			const { player, media } = setup();
+			player.play(first);
+			metadata(media());
+			reach(media(), 30);
+			player.pause();
+
+			player.play(second);
+			metadata(media());
+
+			expect(media().currentTime).toBe(12);
+			expect(playedEpisodes.get(first)?.time).toBe(30);
+		},
+	);
+
 	test("does not queue the episode switched away from when the queue is not automatic", () => {
 		const { player } = setup({ autoQueue: false });
 		player.restore(A);
@@ -2143,7 +2169,7 @@ describe("video stage", () => {
 		const { player, doc } = setup();
 		const stage = new FakeParent(doc);
 		player.play(VIDEO);
-		const action = player.videoStage(stage as unknown as HTMLElement);
+		const detach = player.videoStage(stage as unknown as HTMLElement);
 
 		expect(stage.children).toEqual([doc.media]);
 		expect(doc.media.hidden).toBe(false);
@@ -2155,7 +2181,7 @@ describe("video stage", () => {
 		stage.migrateTo(doc);
 		expect(stage.children).toEqual([doc.media]);
 
-		action.destroy();
+		detach();
 		expect(doc.body.children).toEqual([doc.media]);
 		expect(doc.media.hidden).toBe(true);
 	});
@@ -2177,11 +2203,11 @@ describe("video stage", () => {
 	test("an older stage's teardown leaves the video in the newer stage", () => {
 		const { player, doc } = setup();
 		player.play(VIDEO);
-		const older = player.videoStage(new FakeParent(doc) as unknown as HTMLElement);
+		const detachOlder = player.videoStage(new FakeParent(doc) as unknown as HTMLElement);
 		const newer = new FakeParent(doc);
 		player.videoStage(newer as unknown as HTMLElement);
 
-		older.destroy();
+		detachOlder();
 
 		expect(newer.children).toEqual([doc.media]);
 	});
