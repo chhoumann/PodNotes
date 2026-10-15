@@ -32,13 +32,14 @@
 	/**
 	 * Listens on the grip's own window, which is a popout's when the view is in one,
 	 * until the button is released. Pointer capture is not used, because the keyed rows
-	 * move the grip's node and a moved node can lose it.
+	 * move the grip's node and a moved node can lose it. The grip takes focus for the arrow
+	 * keys, without the ring a touch would otherwise leave on it.
 	 */
 	function start(event: PointerEvent, episode: Episode) {
 		if (event.button !== 0 || drag) return;
 		const grip = event.currentTarget as HTMLElement;
 		event.preventDefault();
-		grip.focus();
+		grip.focus({ focusVisible: false });
 		const { pointerId } = event;
 		const win = grip.win;
 		const move = (moved: PointerEvent) => {

@@ -6,6 +6,7 @@ import { plugin } from "./store";
 import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
 import { ensureFolderExists } from "./utility/ensureFolderExists";
+import { openNote } from "./ui/openNote";
 
 /**
  * Resolve the on-disk path of a feed's note from the feed-note path template.
@@ -42,7 +43,7 @@ export function openFeedNote(feed: PodcastFeed): void {
 		return;
 	}
 
-	void get(plugin).app.workspace.getLeaf().openFile(file);
+	void openNote(get(plugin).app, file);
 }
 
 export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
@@ -57,7 +58,7 @@ export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
 	const existing = getFeedNote(feed);
 	if (existing) {
 		new Notice(`Note for "${feed.title}" already exists`);
-		void get(plugin).app.workspace.getLeaf().openFile(existing);
+		void openNote(get(plugin).app, existing);
 		return;
 	}
 
@@ -71,7 +72,7 @@ export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
 
 	try {
 		const file = await createFileIfNotExists(filePathDotMd, content, feed);
-		void get(plugin).app.workspace.getLeaf().openFile(file);
+		void openNote(get(plugin).app, file);
 	} catch (error) {
 		console.error(error);
 		new Notice(`Failed to create note: "${filePathDotMd}"`);

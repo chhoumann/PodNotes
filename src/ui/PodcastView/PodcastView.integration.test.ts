@@ -222,6 +222,7 @@ function bootstrapAppMock() {
 			}),
 		},
 		workspace: {
+			getActiveViewOfType: () => null,
 			getLeaf: vi.fn(() => leaf),
 		},
 	};

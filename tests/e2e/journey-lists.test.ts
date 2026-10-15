@@ -2,14 +2,16 @@ import type { ObsidianClient } from "obsidian-e2e";
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
+	asPhone,
 	closePodNotes,
+	placePodNotes,
 	reloadObsidian,
 	runFromPalette,
 	showLibrary,
 	showList,
 	showPodNotes,
 } from "./journey/actions";
-import { click, drag, pointOn, pressKey, pressMouse, typeText } from "./journey/input";
+import { click, drag, pointOn, pressKey, pressMouse, touchDrag, typeText } from "./journey/input";
 import { ui, type UiTarget } from "./journey/targets";
 import {
 	eventually,
@@ -181,6 +183,45 @@ describe("list journeys", () => {
 		await pressKey(obsidian, "ArrowUp");
 		await expectQueue(titles([ONE, THREE, TWO, FOUR]));
 		await expectGripFocused(TWO.title, 3, 4);
+	});
+
+	test("on a phone, a grip dragged by touch shows no focus ring, and one an arrow key moved does", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		await asPhone(obsidian);
+		const server = await serve();
+		await seedLibrary(context, server, {
+			subscriptions: [FEED],
+			queue: QUEUE.map((each) => storedEpisode(server, FEED, each)),
+		});
+		await placePodNotes(obsidian, "main area");
+		// As when the view reopens on its saved Queue page, so the drag is the first touch.
+		await obsidian.dev.evalJson(
+			`app.plugins.plugins.${PLUGIN_ID}.navigation.replace({ kind: "queue" }), true`,
+		);
+		await waitUntilShown(obsidian, ui.queueGrip(FOUR.title));
+		const ring = () =>
+			obsidian.dev.evalJson<{ label: string | null; ring: boolean }>(`(() => {
+				const focused = document.activeElement;
+				return {
+					label: focused?.getAttribute("aria-label") ?? null,
+					ring: Boolean(focused?.matches(":focus-visible")) && getComputedStyle(focused).outlineStyle !== "none",
+				};
+			})()`);
+		const grip = (position: number) =>
+			`Reorder ${FOUR.title}, position ${position} of 4. Use arrow keys to move.`;
+
+		await touchDrag(
+			obsidian,
+			await pointOn(obsidian, ui.queueGrip(FOUR.title)),
+			await pointOn(obsidian, ui.queueRow(TWO.title), "top"),
+		);
+		await expectQueue(titles([ONE, FOUR, TWO, THREE]));
+		expect(await ring(), "after a touch drag").toEqual({ label: grip(2), ring: false });
+
+		await pressKey(obsidian, "ArrowDown");
+		await expectQueue(titles([ONE, TWO, FOUR, THREE]));
+		expect(await ring(), "after an arrow key").toEqual({ label: grip(3), ring: true });
 	});
 
 	test("a drag places its episode by the row it ends on when playback queues another episode mid-drag", async () => {

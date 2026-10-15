@@ -165,6 +165,20 @@ describe("what the lock screen shows", () => {
 		expect(context.session.position).toEqual({ duration: 3600, playbackRate: 1, position: 40 });
 	});
 
+	test("an episode still loading shows as playing, and one that ended as paused", () => {
+		const context = setup();
+
+		context.player.play(A);
+		expect(context.state().status).toBe("loading");
+		expect(context.session.playbackState).toBe("playing");
+
+		loaded(context.media(), 60);
+		reach(context.media(), 60);
+		context.media().emit("ended");
+		expect(context.state().status).toBe("ended");
+		expect(context.session.playbackState).toBe("paused");
+	});
+
 	test("the position follows the speed, and a pause", () => {
 		const context = setup();
 		playing(context, 40);

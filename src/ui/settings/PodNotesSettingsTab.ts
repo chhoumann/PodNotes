@@ -92,7 +92,8 @@ let settingNames = 0;
 /**
  * Obsidian names no row's field after the row, and shows an aria-label as a tooltip, so
  * each field is labelled by the row's name. A toggle takes focus on its label, not its
- * checkbox.
+ * checkbox. An API key's button reads Link... or Change, so it keeps those words before the
+ * row's name.
  */
 const group = (heading: string, items: SettingDefinitionRender[]): SettingDefinitionGroup => ({
 	type: "group",
@@ -107,6 +108,10 @@ const group = (heading: string, items: SettingDefinitionRender[]): SettingDefini
 				"input, select, textarea, .checkbox-container",
 			))
 				field.setAttribute("aria-labelledby", nameEl.id);
+			for (const button of controlEl.querySelectorAll(".setting-secret-value + button")) {
+				button.id = `${nameEl.id}-button`;
+				button.setAttribute("aria-labelledby", `${button.id} ${nameEl.id}`);
+			}
 			return end;
 		},
 	})),

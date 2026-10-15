@@ -8,7 +8,8 @@
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
 	import Deck from "./Deck.svelte";
-	import { isPlaying, tileOf } from "./episodeRow";
+	import { isPlaying } from "src/player/PlayerController";
+	import { tileOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 	import { anchorOf, episodeMenu, showMenu } from "./menus";
 	import TranscriptPanel from "./TranscriptPanel.svelte";

@@ -67,14 +67,14 @@ async function settingValue(obsidian: ObsidianClient, name: string): Promise<unk
 type Field = Readonly<{ row: string; name: string; from?: string }>;
 
 /**
- * The settings field that has focus, as a screen reader reads it: its row's name, and the name
- * Chromium computes for it and where from. Undefined when focus is on anything else, such as
- * a button.
+ * The settings field or API key button that has focus, as a screen reader reads it: its row's
+ * name, and the name Chromium computes for it and where from. Undefined when focus is on
+ * anything else, such as an Import button.
  */
 async function focusedField(obsidian: ObsidianClient): Promise<Field | undefined> {
 	const named = await accessibleName(
 		obsidian,
-		`document.activeElement.matches(".modal.mod-settings .setting-item-control :is(input, select, textarea, [tabindex='0'])") ? document.activeElement : null`,
+		`document.activeElement.matches(".modal.mod-settings .setting-item-control :is(input, select, textarea, [tabindex='0'], .setting-secret-value + button)") ? document.activeElement : null`,
 	);
 	if (named === undefined) return undefined;
 	const row = await obsidian.dev.evalJson<string>(
@@ -88,9 +88,15 @@ describe("PodNotes settings tab", () => {
 		const { obsidian } = getContext();
 		await openPodNotesSettings(obsidian);
 		onTestFinished(() => closeSettings(obsidian));
-		// The diarization rows take focus only while diarization is on.
+		// The diarization rows take focus only while diarization is on, and the Deepgram key
+		// only with Deepgram, the provider after OpenAI.
 		if ((await settingValue(obsidian, "Speaker diarization")) !== true) {
 			await click(obsidian, ui.settingControl("Speaker diarization", ".checkbox-container"));
+		}
+		const provider = `(${ui.settingControl("Diarization provider", "select").elements})[0]`;
+		if ((await obsidian.dev.evalJson<string>(`${provider}.value`)) !== "deepgram") {
+			await obsidian.dev.evalJson(`${provider}.focus(), true`);
+			await pressKey(obsidian, "ArrowDown");
 		}
 		await click(obsidian, ui.settingControl("Skip back (s)", "input"));
 		const fields: Field[] = [];
@@ -113,10 +119,12 @@ describe("PodNotes settings tab", () => {
 			"Episode note template",
 			"Podcast note path",
 			"Podcast note template",
+			"OpenAI API key",
 			"Transcript path",
 			"Transcript template",
 			"Speaker diarization",
 			"Diarization provider",
+			"Deepgram API key",
 			"Speaker label format",
 			"Download path",
 			"Export OPML",
@@ -124,10 +132,17 @@ describe("PodNotes settings tab", () => {
 			"Include API keys",
 			"Export settings",
 		]);
-		// A focused toggle's label would also take the name of the checkbox inside it.
+		// A focused toggle's label would also take the name of the checkbox inside it. An API
+		// key's button keeps its own words, Link... or Change, before its row's name.
 		expect(
 			fields.filter(({ row, name, from }) => name !== row || from !== "aria-labelledby"),
-		).toEqual([]);
+		).toEqual(
+			["OpenAI API key", "Deepgram API key"].map((row) => ({
+				row,
+				name: expect.stringMatching(new RegExp(`^(Link\\.\\.\\.|Change) ${row}$`)),
+				from: "aria-labelledby",
+			})),
+		);
 	});
 
 	test("search finds a row of each section by name, and none of the removed rows", async () => {

@@ -24,6 +24,11 @@ export type PlayerStatus =
 	| "ended"
 	| "error";
 
+/** A loading episode plays once ready, so it counts as playing: it shows Pause, and Stop cancels the load. */
+export function isPlaying(status: PlayerStatus): status is "playing" | "loading" {
+	return status === "playing" || status === "loading";
+}
+
 export interface PlayerState {
 	status: PlayerStatus;
 	episode: Episode | undefined;

@@ -4,7 +4,8 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
-	import { availabilityOf, episodeRowModel, isPlaying } from "./episodeRow";
+	import { isPlaying } from "src/player/PlayerController";
+	import { availabilityOf, episodeRowModel } from "./episodeRow";
 	import { anchorOf, type MenuAnchor } from "./menus";
 
 	let {

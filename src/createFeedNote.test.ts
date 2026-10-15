@@ -56,6 +56,7 @@ function setupVault(options: {
 			}),
 		},
 		workspace: {
+			getActiveViewOfType: () => null,
 			getLeaf: () => ({
 				openFile: (file: TFile) => opened.push(file.path),
 			}),
@@ -124,6 +125,7 @@ describe("createFeedNote", () => {
 				createFolder: vi.fn(async () => {}),
 			},
 			workspace: {
+				getActiveViewOfType: () => null,
 				getLeaf: () => ({
 					openFile: (file: TFile) => opened.push(file.path),
 				}),

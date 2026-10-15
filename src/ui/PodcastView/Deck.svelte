@@ -9,7 +9,8 @@
 	import { icon } from "../obsidian/icon";
 	import { chapterAt } from "./chapters";
 	import { useServices } from "./context";
-	import { isPlaying, sourceOf } from "./episodeRow";
+	import { isPlaying } from "src/player/PlayerController";
+	import { sourceOf } from "./episodeRow";
 	import { anchorOf, noteEntry, rateMenu, showMenu } from "./menus";
 	import type { Page } from "./pages";
 	import Scrubber from "./Scrubber.svelte";
