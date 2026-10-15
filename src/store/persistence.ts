@@ -29,20 +29,14 @@ interface PersistenceBinding {
 /**
  * Captures a store and its settings-write in a type-erased binding. `apply` (and
  * the optional `shouldPersist` guard) are written against the store's real value
- * type `T`; the casts here are safe because the same store feeds both.
+ * type `T`; the cast here is safe because the same store feeds both.
  */
 function bind<T>(
 	store: Readable<T>,
 	apply: (settings: IPodNotesSettings, value: T) => void,
 	shouldPersist?: (settings: IPodNotesSettings, value: T) => boolean,
 ): PersistenceBinding {
-	return {
-		subscribe: (handler) => store.subscribe((value) => handler(value)),
-		apply: (settings, value) => apply(settings, value as T),
-		shouldPersist: shouldPersist
-			? (settings, value) => shouldPersist(settings, value as T)
-			: undefined,
-	};
+	return { subscribe: store.subscribe, apply, shouldPersist } as PersistenceBinding;
 }
 
 /**
