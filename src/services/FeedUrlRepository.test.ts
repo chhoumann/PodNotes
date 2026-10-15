@@ -40,6 +40,7 @@ describe("FeedUrlRepository", () => {
 			[first, "https://a.example/rss?auth=1"],
 			[other, "https://a.example/rss?auth=2"],
 		]);
+		expect(api.setSecret).toHaveBeenCalledTimes(2);
 	});
 
 	it("never reuses a cleared reference, one holding another URL here, or a foreign ID", () => {
@@ -54,6 +55,7 @@ describe("FeedUrlRepository", () => {
 
 		const id = repository.store("https://a.example/rss?auth=1");
 
+		expect(() => repository.store(" ")).toThrow(/must not be empty/);
 		expect([removed, elsewhere]).not.toContain(id);
 		expect([...values]).toEqual([
 			["other-plugin-feed", "https://a.example/rss?auth=1"],

@@ -17,10 +17,10 @@ import { isValidSecretId } from "src/types/Credentials";
  * neither the feed name nor the URL leaks through the ID namespace, which
  * `listSecrets` exposes.
  *
- * SecretStorage cannot delete an ID, only clear its value, so storing a URL
- * this device already holds reuses that ID. Only an ID whose value here is
- * exactly the URL qualifies. A cleared ID stays retired, since another device
- * may still reference it.
+ * SecretStorage's API has no delete, so a cleared ID stays listed for good.
+ * Storing a URL this device already holds therefore returns the ID holding it.
+ * Only an ID whose value here is exactly the URL qualifies. A cleared ID stays
+ * retired, since another device may still reference it.
  */
 const FEED_URL_SECRET_ID =
 	/^podnotes-feed-url-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -53,12 +53,16 @@ export class FeedUrlRepository {
 	/** Store a private feed URL under its ID here, else a fresh one, and verify the readback. */
 	store(url: string): string {
 		const value = url.trim();
-		const id =
+		const held =
+			value &&
 			this.storage
 				.listSecrets()
 				.find(
-					(held) => isFeedUrlSecretId(held) && this.storage.getSecret(held) === value,
-				) ?? `podnotes-feed-url-${crypto.randomUUID()}`;
+					(candidate) =>
+						isFeedUrlSecretId(candidate) && this.storage.getSecret(candidate) === value,
+				);
+		if (held) return held;
+		const id = `podnotes-feed-url-${crypto.randomUUID()}`;
 		this.attach(id, url);
 		return id;
 	}
