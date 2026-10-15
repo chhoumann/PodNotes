@@ -368,6 +368,103 @@ describe("Live Preview table captures", () => {
 		).toEqual([before, before]);
 	});
 
+	test.each(["Source mode", "the tab showed another note"])(
+		"#473 a capture after %s and a change made elsewhere keeps the table and its Undo",
+		async (away) => {
+			const { obsidian, sandbox } = getContext();
+			const table =
+				"# Captures\n\n| Moment | Notes  |\n| ------ | ------ |\n| Start  | anchor |\n| Later  | other  |\n\nAfter table\n";
+			const path = await setUp({ content: table });
+			const view = `app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(path)}).view`;
+			const changeElsewhere = `app.vault.process(app.vault.getAbstractFileByPath(${jsLiteral(path)}), (text) => text.replace("| other  |", "| other, edited elsewhere |"))`;
+			if (away === "Source mode") {
+				await obsidian.exec("command", { id: "editor:toggle-source" });
+				await obsidian.dev.evalJsonAsync(`${changeElsewhere}.then(() => true)`);
+			} else {
+				const elsewhere = sandbox.path("Elsewhere.md");
+				await writeVaultFile(obsidian, elsewhere, "Elsewhere\n");
+				await obsidian.dev.evalJsonAsync(`(async () => {
+					await ${view}.leaf.openFile(app.vault.getAbstractFileByPath(${jsLiteral(elsewhere)}));
+					await ${changeElsewhere};
+					return true;
+				})()`);
+				await obsidian.exec("command", { id: "app:go-back" });
+			}
+			const before = table.replace("| other  |", "| other, edited elsewhere |");
+			expect(
+				await eventually(
+					obsidian,
+					() => obsidian.dev.evalJson<string>(`${view}.editor.getValue()`),
+					before,
+					10_000,
+				),
+			).toBe(before);
+			expect(
+				await obsidian.dev.evalJson(
+					`${view}.editor.editorComponent.tableCell?.containerEl.isConnected ?? null`,
+				),
+				"Obsidian still holds a cell no longer in the document",
+			).toBe(false);
+
+			await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+
+			const captured = before.replace("anchor", "anchor00:00:30 \\| cut ");
+			expect(
+				await eventually(obsidian, () => readVaultText(obsidian, path), captured, 10_000),
+			).toBe(captured);
+			await click(obsidian, lastUndo);
+			expect(
+				await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
+			).toBe(before);
+			expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
+		},
+		90_000,
+	);
+
+	test("#473 Undo puts the note back after a cell of another note in its tab went stale", async () => {
+		const { obsidian, sandbox } = getContext();
+		const wide = sandbox.path("Wide header.md");
+		const header = Array(80).fill("wide").join(" ");
+		await writeVaultFile(obsidian, wide, `| ${header} |\n| --- |\n| x |\n`);
+		const path = await setUp();
+		const view = (file: string) =>
+			`app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(file)})?.view`;
+		const before = await obsidian.dev.evalJson<string>(`${view(path)}.editor.getValue()`);
+		await obsidian.exec("command", { id: "podnotes:capture-timestamp" });
+		const captured = await obsidian.dev.evalJson<string>(`${view(path)}.editor.getValue()`);
+		await obsidian.dev.evalJsonAsync(`(async () => {
+			await ${view(path)}.leaf.openFile(app.vault.getAbstractFileByPath(${jsLiteral(wide)}));
+			return true;
+		})()`);
+		await click(obsidian, {
+			name: "wide header cell",
+			elements: `[...${view(wide)}.containerEl.querySelectorAll(".markdown-source-view th")]`,
+		});
+		await obsidian.exec("command", { id: "app:go-back" });
+		expect(
+			await eventually(
+				obsidian,
+				() => obsidian.dev.evalJson<string>(`${view(path)}.editor.getValue()`),
+				captured,
+				5000,
+			),
+		).toBe(captured);
+		expect(
+			await obsidian.dev.evalJson(`(() => {
+				const cell = ${view(path)}.editor.editorComponent.tableCell;
+				return { attached: cell.containerEl.isConnected, text: cell.editor.getValue() };
+			})()`),
+			"the tab still holds the other note's header cell",
+		).toEqual({ attached: false, text: header });
+
+		await click(obsidian, lastUndo);
+
+		expect(
+			await eventually(obsidian, () => readVaultText(obsidian, path), before, 10_000),
+		).toBe(before);
+		expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
+	});
+
 	test("#445 Source mode still escapes table captures and preserves Undo", async () => {
 		const { obsidian } = getContext();
 		const path = await setUp({ source: true });
