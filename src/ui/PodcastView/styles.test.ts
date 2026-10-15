@@ -242,3 +242,24 @@ describe("a disabled control", () => {
 		]);
 	});
 });
+
+describe("the search field", () => {
+	test.each([
+		["on a desktop", "", ""],
+		["on a phone", "is-phone", ""],
+		["on a phone's first run", "is-phone", "is-large"],
+	])("%s, ends its text where the clear button starts", (_name, device, size) => {
+		const css = componentCss(["PodcastView", "SearchField"]);
+		styled(
+			css,
+			`<div class="${device}"><div class="podcast-view pn-PodcastView"><div class="pn-search pn-SearchField ${size}"><input class="pn-input"><button class="pn-iconbtn pn-clear"></button></div></div></div>`,
+			".pn-input",
+		);
+		const { paddingRight } = getComputedStyle(document.querySelector(".pn-input")!);
+		const { right, width } = getComputedStyle(document.querySelector(".pn-clear")!);
+
+		expect(parseFloat(paddingRight)).toBeGreaterThanOrEqual(
+			parseFloat(right) + parseFloat(width),
+		);
+	});
+});

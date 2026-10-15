@@ -102,7 +102,7 @@
 		.is-phone & {
 			.pn-input {
 				height: 44px;
-				padding-left: 34px;
+				padding: 0 44px 0 34px;
 			}
 
 			.pn-search-icon {
