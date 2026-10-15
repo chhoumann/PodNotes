@@ -154,13 +154,26 @@ function addEpisodeFileNameTags(
 ): void {
 	addTag("title", legalizedNameTag(episode.title, sanitizeFileName));
 	addTag("podcast", legalizedNameTag(episode.podcastName, sanitizeFileName));
-	addTag("date", (format?: string) =>
-		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
+	addEpisodeDateTags(addTag, episode);
+}
+
+function addEpisodeDateTags(addTag: AddTagFn, episode: Episode): void {
+	addTag("date", (format = "YYYY-MM-DD") =>
+		episode.episodeDate ? formatDate(episode.episodeDate, format) : "",
 	);
-	addTag("currentdate", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
+	// The current date the note is created on, distinct from {{date}} (the episode
+	// publish date). Supports the same Moment.js format arg. See issue #75.
+	addTag("currentdate", (format = "YYYY-MM-DD") => formatDate(new Date(), format));
+	// Episode number from <itunes:episode>, else best-effort from the title. See #34.
 	addTag("episodenumber", (pad?: string) =>
 		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
 	);
+}
+
+// Episode duration from <itunes:duration>. See issue #88.
+function durationTag(episode: Episode): TagValue {
+	return (format?: string) =>
+		episode.duration !== undefined ? formatDuration(episode.duration, format) : "";
 }
 
 function formatChapterTitle(title: string): string {
@@ -333,20 +346,8 @@ export function NoteTemplateEngine(
 	addTag("safetitle", replaceIllegalFileNameCharactersInString(episode.title));
 	addTag("stream", sanitizePortableResourceUrl(episode.streamUrl));
 	addTag("url", episodeUrl);
-	addTag("date", (format?: string) =>
-		episode.episodeDate ? formatDate(episode.episodeDate, format ?? "YYYY-MM-DD") : "",
-	);
-	// The current date the note is created on, distinct from {{date}} (the episode
-	// publish date). Supports the same Moment.js format arg. See issue #75.
-	addTag("currentdate", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
-	// Episode number from <itunes:episode>, else best-effort from the title. See #34.
-	addTag("episodenumber", (pad?: string) =>
-		formatEpisodeNumber(resolveEpisodeNumber(episode), pad),
-	);
-	// Episode duration from <itunes:duration>. See issue #88.
-	addTag("duration", (format?: string) =>
-		episode.duration !== undefined ? formatDuration(episode.duration, format) : "",
-	);
+	addEpisodeDateTags(addTag, episode);
+	addTag("duration", durationTag(episode));
 	// Podcasting 2.0 chapters, fetched before note creation when the template
 	// asks for them. Empty when the feed has no chapters URL or fetching fails.
 	addTag("chapters", (prependToLines?: string) =>
@@ -468,9 +469,7 @@ export function TranscriptTemplateEngine(
 	] as const);
 
 	addEpisodeFileNameTags(addTag, episode);
-	addTag("duration", (format?: string) =>
-		episode.duration !== undefined ? formatDuration(episode.duration, format) : "",
-	);
+	addTag("duration", durationTag(episode));
 	addTag("transcript", transcription);
 	addTag("description", (prependToLines?: string) =>
 		joinLines(feedHtmlToMarkdown(episode.description, liveEpisode).split("\n"), prependToLines),
@@ -511,7 +510,7 @@ export function FeedNoteTemplateEngine(template: string, liveFeed: PodcastFeed) 
 			prependToLines,
 		),
 	);
-	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
+	addTag("date", (format = "YYYY-MM-DD") => formatDate(new Date(), format));
 
 	return replacer(template);
 }
@@ -522,7 +521,7 @@ export function FeedFilePathTemplateEngine(template: string, feed: PodcastFeed) 
 	const nameTag = legalizedNameTag(withoutFeedAddresses(feed).title);
 	addTag("title", nameTag);
 	addTag("podcast", nameTag);
-	addTag("date", (format?: string) => formatDate(new Date(), format ?? "YYYY-MM-DD"));
+	addTag("date", (format = "YYYY-MM-DD") => formatDate(new Date(), format));
 
 	return replacer(template);
 }
