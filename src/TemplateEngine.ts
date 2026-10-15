@@ -390,36 +390,23 @@ export function TimestampTemplateEngine(
 	const { api, settings } = get(plugin);
 	const timestampOffset = settings.timestamp.offset ?? 0;
 
-	addTag("time", (format?: string) =>
-		api.getPodcastTimeFormatted(format ?? "HH:mm:ss", false, timestampOffset),
-	);
-	addTag("linktime", (format?: string) =>
-		api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true, timestampOffset),
-	);
-	addTag("segment", (format?: string) => {
-		if (!options.segment) {
-			return api.getPodcastTimeFormatted(format ?? "HH:mm:ss", false, timestampOffset);
-		}
+	// Without a segment, {{segment}} renders the current time as {{time}} does.
+	const timeTag =
+		(linkify: boolean, segment?: PodcastSegmentTimes): TagValue =>
+		(format = "HH:mm:ss") =>
+			segment
+				? api.getPodcastSegmentFormatted(
+						format,
+						segment.startTime,
+						segment.endTime,
+						linkify,
+					)
+				: api.getPodcastTimeFormatted(format, linkify, timestampOffset);
 
-		return api.getPodcastSegmentFormatted(
-			format ?? "HH:mm:ss",
-			options.segment.startTime,
-			options.segment.endTime,
-			false,
-		);
-	});
-	addTag("linksegment", (format?: string) => {
-		if (!options.segment) {
-			return api.getPodcastTimeFormatted(format ?? "HH:mm:ss", true, timestampOffset);
-		}
-
-		return api.getPodcastSegmentFormatted(
-			format ?? "HH:mm:ss",
-			options.segment.startTime,
-			options.segment.endTime,
-			true,
-		);
-	});
+	addTag("time", timeTag(false));
+	addTag("linktime", timeTag(true));
+	addTag("segment", timeTag(false, options.segment));
+	addTag("linksegment", timeTag(true, options.segment));
 
 	return replacer(template);
 }
