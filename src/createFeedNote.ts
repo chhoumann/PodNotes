@@ -5,7 +5,7 @@ import { get } from "svelte/store";
 import { plugin } from "./store";
 import addExtension from "./utility/addExtension";
 import { enforceMaxPathLength } from "./utility/enforceMaxPathLength";
-import { ensureFolderExists } from "./utility/ensureFolderExists";
+import { createFileIfNotExists } from "./utility/createFileIfNotExists";
 import { openNote } from "./ui/openNote";
 
 /**
@@ -71,7 +71,12 @@ export default async function createFeedNote(feed: PodcastFeed): Promise<void> {
 	const content = FeedNoteTemplateEngine(template, enrichedFeed);
 
 	try {
-		const file = await createFileIfNotExists(filePathDotMd, content, feed);
+		// Re-check immediately before creating: enrichment above awaits the network,
+		// during which a second invocation (command + context menu) could have
+		// created the note already.
+		const existing = getFeedNote(feed);
+		if (existing) new Notice(`Note for "${feed.title}" already exists`);
+		const file = existing ?? (await createFileIfNotExists(filePathDotMd, content)).file;
 		void openNote(get(plugin).app, file);
 	} catch (error) {
 		console.error(error);
@@ -101,36 +106,5 @@ async function enrichFeed(feed: PodcastFeed): Promise<PodcastFeed> {
 	} catch (error) {
 		console.error("PodNotes: failed to enrich feed metadata", error);
 		return feed;
-	}
-}
-
-async function createFileIfNotExists(
-	path: string,
-	content: string,
-	feed: PodcastFeed,
-): Promise<TFile> {
-	// Re-check immediately before creating: enrichment above awaits the network,
-	// during which a second invocation (command + context menu) could have
-	// created the note already.
-	const existing = getFeedNote(feed);
-	if (existing) {
-		new Notice(`Note for "${feed.title}" already exists`);
-		return existing;
-	}
-
-	const folderPath = path.split("/").slice(0, -1).join("/");
-	await ensureFolderExists(folderPath);
-
-	const { app } = get(plugin);
-	try {
-		return await app.vault.create(path, content);
-	} catch (error) {
-		// A racing create may have won between the check and here; treat an
-		// already-existing file as success rather than surfacing an error.
-		const raced = app.vault.getAbstractFileByPath(path);
-		if (raced instanceof TFile) {
-			return raced;
-		}
-		throw error;
 	}
 }
