@@ -204,7 +204,7 @@ describe("an episode's menu", () => {
 		expect(titles(menu(local))).not.toContain("Download");
 
 		downloadedEpisodes.addEpisode(local, "Recordings/Interview.wav", 4);
-		expect(titles(menu(local))).toContain("Remove from Local Files");
+		expect(titles(menu(local))).toContain("Remove from Local files");
 	});
 
 	test("Favorites asks for the state the menu showed, so a second click changes nothing", () => {

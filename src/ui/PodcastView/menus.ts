@@ -213,7 +213,7 @@ export function episodeMenu(
 			// Removing a local file forgets it and never trashes it.
 			entries.push(
 				item(
-					"Remove from Local Files",
+					"Remove from Local files",
 					"trash",
 					() => void removeDownloadedEpisode(episode),
 				),
