@@ -5,7 +5,7 @@ import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import type { Playlist } from "src/types/Playlist";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
-import { LOCAL_FILES_SETTINGS } from "src/constants";
+import { FAVORITES_SETTINGS, LOCAL_FILES_SETTINGS, QUEUE_SETTINGS } from "src/constants";
 import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
 import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
 import { recordStore } from "./recordStore";
@@ -186,13 +186,7 @@ export function dedupeEpisodesByKey(episodes: Episode[] = []): Episode[] {
 }
 
 export const queue = (() => {
-	const store = writable<Playlist>({
-		icon: "list-ordered",
-		name: "Queue",
-		episodes: [],
-		shouldEpisodeRemoveAfterPlay: true,
-		shouldRepeat: false,
-	});
+	const store = writable<Playlist>({ ...QUEUE_SETTINGS, episodes: [] });
 	const { subscribe, update, set: setStore } = store;
 
 	// The queue identifies episodes by getEpisodeKey everywhere (remove,
@@ -249,13 +243,7 @@ export const queue = (() => {
 	};
 })();
 
-export const favorites = writable<Playlist>({
-	icon: "lucide-star",
-	name: "Favorites",
-	episodes: [],
-	shouldEpisodeRemoveAfterPlay: false,
-	shouldRepeat: false,
-});
+export const favorites = writable<Playlist>({ ...FAVORITES_SETTINGS, episodes: [] });
 
 function getEpisodeFilePath(episode: Episode): string | undefined {
 	return (episode as Partial<DownloadedEpisode>).filePath;
@@ -280,13 +268,7 @@ function sameEpisodeProjection(a: Episode[], b: Episode[]): boolean {
 }
 
 export const localFiles = (() => {
-	const store = writable<Playlist>({
-		icon: "folder",
-		name: "Local Files",
-		episodes: [],
-		shouldEpisodeRemoveAfterPlay: false,
-		shouldRepeat: false,
-	});
+	const store = writable<Playlist>({ ...LOCAL_FILES_SETTINGS, episodes: [] });
 
 	const { subscribe, update, set } = store;
 
