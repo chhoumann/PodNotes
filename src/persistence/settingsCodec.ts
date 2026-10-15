@@ -1,4 +1,9 @@
-import { DEFAULT_SETTINGS } from "src/constants";
+import {
+	DEFAULT_SETTINGS,
+	FAVORITES_SETTINGS,
+	LOCAL_FILES_SETTINGS,
+	QUEUE_SETTINGS,
+} from "src/constants";
 import {
 	migrateDownloadPath,
 	migrateFeedNoteSettings,
@@ -103,20 +108,10 @@ export function decodeSettings(
 			warnings,
 		),
 		playlists: decodePlaylists(root.playlists, warnings),
-		queue: decodePlaylist(root.queue, DEFAULT_SETTINGS.queue, warnings, "queue"),
+		queue: decodePlaylist(root.queue, QUEUE_SETTINGS, warnings, "queue"),
 		autoQueue: readBoolean(root, "autoQueue", DEFAULT_SETTINGS.autoQueue, warnings),
-		favorites: decodePlaylist(
-			root.favorites,
-			DEFAULT_SETTINGS.favorites,
-			warnings,
-			"favorites",
-		),
-		localFiles: decodePlaylist(
-			root.localFiles,
-			DEFAULT_SETTINGS.localFiles,
-			warnings,
-			"localFiles",
-		),
+		favorites: decodePlaylist(root.favorites, FAVORITES_SETTINGS, warnings, "favorites"),
+		localFiles: decodePlaylist(root.localFiles, LOCAL_FILES_SETTINGS, warnings, "localFiles"),
 		currentEpisode:
 			root.currentEpisode === undefined || root.currentEpisode === null
 				? undefined

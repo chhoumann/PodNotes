@@ -121,7 +121,6 @@ export function decodePlaylists(value: unknown, warnings: Set<string>): Record<s
 				{
 					name: key,
 					icon: "list",
-					episodes: [],
 					shouldEpisodeRemoveAfterPlay: false,
 					shouldRepeat: false,
 				},
