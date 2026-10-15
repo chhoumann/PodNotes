@@ -57,6 +57,7 @@ function open(saved: Partial<IPodNotesSettings> = {}) {
 		persistenceUnknownFields: {},
 		manifest: { dir: ".obsidian/plugins/podnotes", version: "3.0.0" },
 		app: {
+			secretStorage: new obsidian.SecretStorage(),
 			vault: {
 				adapter: {
 					exists: vi.fn().mockResolvedValue(true),
@@ -195,7 +196,7 @@ describe("sections", () => {
 		const { tab } = open();
 		const fields = [
 			...tab.containerEl.querySelectorAll(
-				'.setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"])',
+				'.setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"], .setting-secret-value + button)',
 			),
 		];
 		const rowOf = (field: Element) =>
@@ -228,9 +229,24 @@ describe("sections", () => {
 			"Export settings",
 		]);
 		for (const field of fields) {
-			expect(field).toHaveAccessibleName(rowOf(field));
+			expect(field).toHaveAccessibleName(
+				field.matches("button") ? `Link... ${rowOf(field)}` : rowOf(field),
+			);
 			expect(field).not.toHaveAttribute("aria-label");
 		}
+	});
+
+	test("an API key's button keeps its own words and adds its row's name", () => {
+		const { plugin, tab, row } = open({ openAISecretId: "podnotes-openai-api-key" });
+		plugin.app.secretStorage.setSecret("podnotes-openai-api-key", "sk-test");
+		tab.display();
+
+		expect(row("OpenAI API key").querySelector("button")).toHaveAccessibleName(
+			"Change OpenAI API key",
+		);
+		expect(row("Deepgram API key").querySelector("button")).toHaveAccessibleName(
+			"Link... Deepgram API key",
+		);
 	});
 
 	test("each row renders under its own name, and the speaker rows apply only with diarization", () => {
