@@ -42,9 +42,12 @@ describe("FeedUrlRepository", () => {
 		]);
 	});
 
-	it("never reuses a cleared reference or one holding another URL on this device", () => {
+	it("never reuses a cleared reference, one holding another URL here, or a foreign ID", () => {
 		const elsewhere = "podnotes-feed-url-12345678-9abc-4def-8123-456789abcdef";
-		const { api, values } = storage({ [elsewhere]: "https://a.example/rss?auth=other" });
+		const { api, values } = storage({
+			"other-plugin-feed": "https://a.example/rss?auth=1",
+			[elsewhere]: "https://a.example/rss?auth=other",
+		});
 		const repository = new FeedUrlRepository(api);
 		const removed = repository.store("https://a.example/rss?auth=1");
 		repository.delete(removed);
@@ -53,6 +56,7 @@ describe("FeedUrlRepository", () => {
 
 		expect([removed, elsewhere]).not.toContain(id);
 		expect([...values]).toEqual([
+			["other-plugin-feed", "https://a.example/rss?auth=1"],
 			[elsewhere, "https://a.example/rss?auth=other"],
 			[removed, ""],
 			[id, "https://a.example/rss?auth=1"],
