@@ -40,7 +40,7 @@
 </nav>
 
 <style>
-	.pn-rail {
+	.pn-rail :global {
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-4-3);
@@ -49,33 +49,33 @@
 		padding: var(--size-4-3) var(--size-4-2);
 		background: var(--background-secondary);
 		border-right: 1px solid var(--background-modifier-border);
-	}
 
-	.pn-railsearch {
-		display: flex;
-		justify-content: flex-start;
-		gap: var(--size-4-2);
-		flex: none;
-		width: 100%;
-		padding: 0 var(--size-4-2);
-		border: 1px solid var(--background-modifier-border);
-		border-radius: var(--input-radius);
-		background: var(--background-modifier-form-field);
-		box-shadow: none;
-		color: var(--text-muted);
-		text-align: left;
-	}
-
-	@media (hover: hover) {
-		.pn-railsearch:hover {
-			border-color: var(--background-modifier-border-hover);
-			color: var(--text-normal);
+		.pn-railsearch {
+			display: flex;
+			justify-content: flex-start;
+			gap: var(--size-4-2);
+			flex: none;
+			width: 100%;
+			padding: 0 var(--size-4-2);
+			border: 1px solid var(--background-modifier-border);
+			border-radius: var(--input-radius);
+			background: var(--background-modifier-form-field);
+			box-shadow: none;
+			color: var(--text-muted);
+			text-align: left;
 		}
-	}
 
-	.pn-railsearch-icon {
-		display: flex;
-		--icon-size: var(--icon-xs);
-		--icon-stroke: var(--icon-xs-stroke-width);
+		@media (hover: hover) {
+			.pn-railsearch:hover {
+				border-color: var(--background-modifier-border-hover);
+				color: var(--text-normal);
+			}
+		}
+
+		.pn-railsearch-icon {
+			display: flex;
+			--icon-size: var(--icon-xs);
+			--icon-stroke: var(--icon-xs-stroke-width);
+		}
 	}
 </style>

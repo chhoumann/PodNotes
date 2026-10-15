@@ -167,3 +167,24 @@ describe("the transcript's note button", () => {
 		]);
 	});
 });
+
+describe("on a tablet", () => {
+	test("the rail's add button keeps its own padding over Obsidian's for every button", () => {
+		const obsidian =
+			".is-tablet button:not(.clickable-icon) { padding: var(--size-4-1) var(--size-4-5); }";
+		// jsdom drops a var() in a shorthand, so Obsidian's 4 px spacing steps stand in.
+		const css = (obsidian + componentCss(["PodcastView", "Rail"])).replace(
+			/var\(--size-4-(\d)\)/g,
+			(_, step: string) => `${Number(step) * 4}px`,
+		);
+		const { padding } = getComputedStyle(
+			styled(
+				css,
+				`<div class="is-tablet">${inView("Rail", '<nav class="pn-rail {}"><button class="pn-railsearch"></button></nav>')}</div>`,
+				".pn-railsearch",
+			),
+		);
+
+		expect(padding).toBe("0px 8px");
+	});
+});
