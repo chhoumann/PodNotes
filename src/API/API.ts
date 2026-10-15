@@ -12,6 +12,7 @@ import {
 } from "src/utility/playbackRate";
 import { getEpisodeTranscriptPath } from "src/utility/getEpisodeTranscriptPath";
 import { normalizeSkipLength } from "src/utility/skipLength";
+import { isPlaying } from "src/player/PlayerController";
 
 export class API implements IAPI {
 	private get player() {
@@ -42,10 +43,8 @@ export class API implements IAPI {
 		this.player.seek(value);
 	}
 
-	/** True while loading too: it plays once the media is ready, and Stop can cancel that. */
 	public get isPlaying(): boolean {
-		const { status } = this.state;
-		return status === "playing" || status === "loading";
+		return isPlaying(this.state.status);
 	}
 
 	public get volume(): number {

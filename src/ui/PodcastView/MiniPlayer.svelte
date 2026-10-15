@@ -3,7 +3,8 @@
 	import { icon } from "../obsidian/icon";
 	import { useServices } from "./context";
 	import Cover from "./Cover.svelte";
-	import { formatMinutes, isPlaying, sourceOf, tileOf } from "./episodeRow";
+	import { isPlaying } from "src/player/PlayerController";
+	import { formatMinutes, sourceOf, tileOf } from "./episodeRow";
 	import type { Layout } from "./layout";
 
 	let { layout }: { layout: Layout } = $props();

@@ -1,12 +1,10 @@
 import { describe, expect, test } from "vitest";
-import type { PlayerStatus } from "src/player/PlayerController";
 import type { Episode } from "src/types/Episode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import {
 	availabilityOf,
 	episodeRowModel,
 	formatMinutes,
-	isPlaying,
 	rowKeys,
 	secondsLeft,
 	totalSeconds,
@@ -45,21 +43,6 @@ const record = (time: number, duration: number, finished = false) => ({
 });
 const row = (changes: Partial<RowState> = {}, of: Episode = episode) =>
 	episodeRowModel(of, { ...state, ...changes });
-
-test("counts a loading episode as playing, and no other status", () => {
-	const playing: Record<PlayerStatus, boolean> = {
-		empty: false,
-		restored: false,
-		loading: true,
-		playing: true,
-		paused: false,
-		ended: false,
-		error: false,
-	};
-
-	for (const [status, expected] of Object.entries(playing))
-		expect(isPlaying(status as PlayerStatus), status).toBe(expected);
-});
 
 describe("an episode row", () => {
 	test("shows the date and the duration of an episode not yet played", () => {

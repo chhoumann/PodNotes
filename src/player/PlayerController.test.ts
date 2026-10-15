@@ -9,7 +9,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { getEpisodeKey } from "src/utility/episodeKey";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { FakeDocument, FakeParent, type FakeMedia } from "../../tests/mocks/fakeMedia";
-import { PlayerController } from "./PlayerController";
+import { isPlaying, PlayerController, type PlayerStatus } from "./PlayerController";
 
 const episode = (title: string, extra: Partial<Episode> = {}): Episode => ({
 	title,
@@ -116,6 +116,21 @@ function seekedByBrowser(media: FakeMedia, time: number, at = now) {
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("counts a loading episode as playing, and no other status", () => {
+	const playing: Record<PlayerStatus, boolean> = {
+		empty: false,
+		restored: false,
+		loading: true,
+		playing: true,
+		paused: false,
+		ended: false,
+		error: false,
+	};
+
+	for (const [status, expected] of Object.entries(playing))
+		expect(isPlaying(status as PlayerStatus), status).toBe(expected);
+});
 
 describe("synced progress handoff", () => {
 	function paused() {
