@@ -36,9 +36,11 @@ export function createRecentPodcastSegment(
 	return normalizePodcastSegmentTimes(startTime, endTime);
 }
 
-// formatSeconds renders a negative time as zero.
 export function formatPodcastSegment(startTime: number, endTime: number, format: string): string {
-	return `${formatSeconds(startTime, format)}-${formatSeconds(endTime, format)}`;
+	return `${formatSeconds(Math.max(0, startTime), format)}-${formatSeconds(
+		Math.max(0, endTime),
+		format,
+	)}`;
 }
 
 export function getSegmentCaptureTemplate(template: string): string {
