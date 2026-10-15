@@ -12,8 +12,13 @@ import { jsLiteral, RELOAD_OPTIONS, WAIT_OPTS } from "./runtime";
 
 const getContext = createPodNotesE2EHarness("sync-private-address");
 
+const feedUrlSecretIds = (obsidian: ReturnType<typeof getContext>["obsidian"]) =>
+	obsidian.dev.evalJson<string[]>(
+		`app.secretStorage.listSecrets().filter((id) => id.startsWith("podnotes-feed-url-"))`,
+	);
+
 test.each(["raw event", "external settings handler"])(
-	"protects a synced 2.21.1 private address on disk once per incoming change through %s",
+	"protects a synced 2.21.1 private address on disk once per incoming change, under one reference, through %s",
 	async (trigger) => {
 		const { obsidian, plugin } = getContext();
 		await plugin.updateDataAndReload<Record<string, unknown>>((data) => {
@@ -46,6 +51,7 @@ test.each(["raw event", "external settings handler"])(
 			copiedNote: `from ${address}`,
 		};
 		delete data.currentEpisode;
+		const before = await feedUrlSecretIds(obsidian);
 		const evidence = [];
 		for (let incoming = 1; incoming <= 3; incoming++) {
 			const recorder = await recordWrites(obsidian);
@@ -77,13 +83,32 @@ test.each(["raw event", "external settings handler"])(
 			expect(writes).toMatchObject({ attempted: 1, completed: 1, failed: 0, intact: true });
 			evidence.push({ incoming, writes, sentinelOnDisk: text.includes(sentinel) });
 		}
+		const disk = await plugin
+			.data<{ savedFeeds: { Private: { urlSecretId: string } } }>()
+			.read();
+		const listed = await feedUrlSecretIds(obsidian);
+		expect(listed.filter((id) => !before.includes(id))).toEqual([
+			disk.savedFeeds.Private.urlSecretId,
+		]);
+		await plugin.reload(RELOAD_OPTIONS);
+		expect(await feedUrlSecretIds(obsidian)).toEqual(listed);
+		expect(
+			await obsidian.dev.evalJson<string | null>(
+				"(() => { const p = app.plugins.plugins.podnotes; return p.feedUrls.resolve(p.settings.savedFeeds.Private.urlSecretId); })()",
+			),
+		).toBe(address);
 		await showLibrary(obsidian);
 		expect(await shownPodcasts(obsidian)).toContain("Private");
 		const directory = resolve(".obsidian-e2e-artifacts/fix488");
 		await mkdir(directory, { recursive: true });
 		await obsidian.dev.screenshot(resolve(directory, `${trigger.replaceAll(" ", "-")}.png`));
 		console.info(
-			JSON.stringify({ trigger, evidence, version: await obsidian.exec("version") }),
+			JSON.stringify({
+				trigger,
+				evidence,
+				feedUrlSecretIds: { before: before.length, after: listed.length },
+				version: await obsidian.exec("version"),
+			}),
 		);
 	},
 );

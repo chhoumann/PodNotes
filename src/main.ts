@@ -514,8 +514,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	}
 
 	private dataFileAccess(): DataFileAccess<PersistedPodNotesDataV2> {
-		// As found: reading a private feed URL again stores it under a new reference, so
-		// the same file never reads as the same document twice.
+		// The file as found, before decoding protects or repairs it. A readback still equal
+		// to it means the write did not land.
 		let lastRead: unknown;
 		return {
 			read: async (base): Promise<ReadOutcome<PersistedPodNotesDataV2>> => {
