@@ -1,4 +1,5 @@
 import type { Episode } from "src/types/Episode";
+import { isSameMediaSource } from "src/utility/mediaType";
 
 const KEY_DELIMITER = "::";
 
@@ -142,7 +143,12 @@ export function isGuidProgressKey(key: string): boolean {
 	return key.startsWith(GUID_KEY_PREFIX);
 }
 
-/** One feed item: one episode key, and one guid when both carry one. A snapshot saved before guids still matches its item. */
+/**
+ * One feed item: one episode key, and one guid when both carry one. A snapshot saved
+ * before guids still matches its item, and only its media when the title is shared.
+ */
 export function isSameFeedItem(a: Episode, b: Episode): boolean {
-	return isSameEpisode(a, b) && (!a.guid || !b.guid || a.guid === b.guid);
+	if (!isSameEpisode(a, b)) return false;
+	if (a.guid && b.guid) return a.guid === b.guid;
+	return !(a.sharedTitle || b.sharedTitle) || isSameMediaSource(a.streamUrl, b.streamUrl);
 }

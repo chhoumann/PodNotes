@@ -6,12 +6,8 @@ import type { Playlist } from "src/types/Playlist";
 import type DownloadedEpisode from "src/types/DownloadedEpisode";
 import type { LocalEpisode } from "src/types/LocalEpisode";
 import { FAVORITES_SETTINGS, LOCAL_FILES_SETTINGS, QUEUE_SETTINGS } from "src/constants";
-import { getEpisodeKey, isSameEpisode } from "src/utility/episodeKey";
-import {
-	getPlayedEpisode,
-	getPlayedEpisodeAliasKeys,
-	getPlayedEpisodeKey,
-} from "src/utility/episodeStatus";
+import { getEpisodeKey, getProgressKey, isSameEpisode } from "src/utility/episodeKey";
+import { getPlayedEpisode, getPlayedEpisodeAliasKeys } from "src/utility/episodeStatus";
 import { recordStore } from "./recordStore";
 
 // `src/store` is the single import surface for the store layer. The saved-feed
@@ -46,7 +42,7 @@ export const playedEpisodes = (() => {
 			if (!episode) return;
 
 			update((playedEpisodes) => {
-				const key = getPlayedEpisodeKey(playedEpisodes, episode);
+				const key = getProgressKey(episode);
 				if (!key) return playedEpisodes;
 
 				playedEpisodes[key] = {
@@ -64,7 +60,7 @@ export const playedEpisodes = (() => {
 			if (!episode) return;
 
 			update((playedEpisodes) => {
-				const key = getPlayedEpisodeKey(playedEpisodes, episode);
+				const key = getProgressKey(episode);
 				if (!key) return playedEpisodes;
 
 				const duration = getPlayedEpisode(playedEpisodes, episode)?.duration ?? 0;
@@ -82,7 +78,7 @@ export const playedEpisodes = (() => {
 			if (!episode) return;
 
 			update((playedEpisodes) => {
-				const key = getPlayedEpisodeKey(playedEpisodes, episode);
+				const key = getProgressKey(episode);
 				if (!key) return playedEpisodes;
 
 				markPlayedEpisodeAliasesAsUnplayed(

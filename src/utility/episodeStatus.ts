@@ -31,25 +31,6 @@ function titleRecord(
 	);
 }
 
-/** The guid key a guid-less copy of an episode (a snapshot saved before guids) shares with it: the only guid record with its podcast and title. */
-function guidKeyFor(playedEpisodes: PlayedEpisodeMap, episode: Episode): string | undefined {
-	const keys = Object.keys(playedEpisodes).filter(
-		(key) =>
-			isGuidProgressKey(key) &&
-			playedEpisodes[key].title === episode.title &&
-			playedEpisodes[key].podcastName === episode.podcastName,
-	);
-	return keys.length === 1 ? keys[0] : undefined;
-}
-
-/** Where `episode`'s progress is written. */
-export function getPlayedEpisodeKey(playedEpisodes: PlayedEpisodeMap, episode: Episode): string {
-	return (
-		(!episode.guid && !episode.sharedTitle && guidKeyFor(playedEpisodes, episode)) ||
-		getProgressKey(episode)
-	);
-}
-
 export function getPlayedEpisode(
 	playedEpisodes: PlayedEpisodeMap,
 	episode: Episode | null | undefined,
@@ -58,7 +39,7 @@ export function getPlayedEpisode(
 
 	// A title record shared by two items of one feed cannot be told apart, so neither borrows it.
 	return (
-		own(playedEpisodes, getPlayedEpisodeKey(playedEpisodes, episode)) ??
+		own(playedEpisodes, getProgressKey(episode)) ??
 		(episode.guid && episode.sharedTitle ? undefined : titleRecord(playedEpisodes, episode))
 	);
 }

@@ -48,6 +48,10 @@ export function decodeEpisode(
 
 	setOptionalString(decoded, value, "feedUrl", warnings, path);
 	setOptionalString(decoded, value, "guid", warnings, path);
+	if (value.sharedTitle !== undefined && value.sharedTitle !== true) {
+		delete decoded.sharedTitle;
+		warn(warnings, `${path}.sharedTitle`, "expected true");
+	}
 	setOptionalString(decoded, value, "artworkUrl", warnings, path);
 	setOptionalString(decoded, value, "itunesTitle", warnings, path);
 	setOptionalString(decoded, value, "chaptersUrl", warnings, path);

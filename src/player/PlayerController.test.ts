@@ -795,26 +795,31 @@ describe("switching episodes (#353)", () => {
 		expect(media().currentTime).toBe(1234);
 	});
 
-	test("starts an episode with the paused one's title at its own position (#448)", () => {
-		const first = episode("Rerun", { guid: "rerun-1", sharedTitle: true });
-		const second = episode("Rerun", {
-			guid: "rerun-2",
-			sharedTitle: true,
-			streamUrl: "https://cdn.example.com/Rerun-2.mp3",
-		});
-		playedEpisodes.setEpisodeTime(second, 12, 3600, false);
-		const { player, media } = setup();
-		player.play(first);
-		metadata(media());
-		reach(media(), 30);
-		player.pause();
+	test.each([
+		["another item of its feed", episode("Rerun", { guid: "rerun-1", sharedTitle: true })],
+		["a copy saved before guids", episode("Rerun")],
+	])(
+		"starts an episode at its own position after %s with its title paused (#448)",
+		(_, first) => {
+			const second = episode("Rerun", {
+				guid: "rerun-2",
+				sharedTitle: true,
+				streamUrl: "https://cdn.example.com/Rerun-2.mp3",
+			});
+			playedEpisodes.setEpisodeTime(second, 12, 3600, false);
+			const { player, media } = setup();
+			player.play(first);
+			metadata(media());
+			reach(media(), 30);
+			player.pause();
 
-		player.play(second);
-		metadata(media());
+			player.play(second);
+			metadata(media());
 
-		expect(media().currentTime).toBe(12);
-		expect(playedEpisodes.get(first)?.time).toBe(30);
-	});
+			expect(media().currentTime).toBe(12);
+			expect(playedEpisodes.get(first)?.time).toBe(30);
+		},
+	);
 
 	test("does not queue the episode switched away from when the queue is not automatic", () => {
 		const { player } = setup({ autoQueue: false });

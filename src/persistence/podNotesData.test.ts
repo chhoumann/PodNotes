@@ -564,6 +564,17 @@ describe("PodNotes data schema", () => {
 		).toEqual(stored);
 	});
 
+	it("keeps an episode's shared title mark only when it is true", () => {
+		const decoded = decodePodNotesData({
+			currentEpisode: { ...episode("Restored"), sharedTitle: "no" },
+			queue: { episodes: [{ ...episode("Queued"), sharedTitle: true }] },
+		});
+
+		expect(decoded.settings.currentEpisode).not.toHaveProperty("sharedTitle");
+		expect(decoded.settings.queue.episodes[0].sharedTitle).toBe(true);
+		expect(decoded.warnings).toEqual(["currentEpisode.sharedTitle: expected true"]);
+	});
+
 	it("drops a guid that is not a string", () => {
 		const decoded = decodePodNotesData({
 			currentEpisode: { ...episode("Restored"), guid: 12345 },

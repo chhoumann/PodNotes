@@ -151,16 +151,6 @@ describe("playedEpisodes store", () => {
 			},
 		);
 
-		test("a copy saved before guids reads and writes its episode's guid record", () => {
-			playedEpisodes.set({ "Design Podcast::Shared title": { ...legacy } });
-			playedEpisodes.setEpisodeTime(unshared, 50, 120, false);
-
-			expect(playedEpisodes.get(episode)?.time).toBe(50);
-			playedEpisodes.setEpisodeTime(episode, 70, 120, false);
-			expect(playedEpisodes.get(unshared)?.time).toBe(70);
-			expect(get(playedEpisodes)["Design Podcast::Shared title"]).toEqual(legacy);
-		});
-
 		test("marking one unplayed leaves the other played", () => {
 			playedEpisodes.markAsPlayed(twinA);
 			playedEpisodes.markAsPlayed(twinB);

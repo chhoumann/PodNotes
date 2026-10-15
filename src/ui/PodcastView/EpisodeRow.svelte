@@ -13,6 +13,7 @@
 		cover = false,
 		date = !cover,
 		resolved = true,
+		playedKey,
 		queue = false,
 		dragging = false,
 		onplay,
@@ -26,6 +27,8 @@
 		date?: boolean;
 		/** False for a Played record that matched no episode. */
 		resolved?: boolean;
+		/** A Played row's record, which its episode may not find on its own. */
+		playedKey?: string;
 		/** A queue row: centered, flush left, without a progress bar. */
 		queue?: boolean;
 		/** Lifted while its grip drags it. */
@@ -48,6 +51,7 @@
 	const row = $derived(
 		episodeRowModel(episode, {
 			played: $playedEpisodes,
+			playedKey,
 			downloads: $downloadedEpisodes,
 			now,
 			playing,

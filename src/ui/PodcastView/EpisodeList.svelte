@@ -31,6 +31,7 @@
 				{cover}
 				{date}
 				resolved={isAvailable}
+				playedKey={entry.playedEpisodeKey}
 				onplay={() => openEpisode(services, episode, isAvailable)}
 				onmenu={(at) =>
 					showMenu(
