@@ -102,7 +102,7 @@ test("a private feed first opened offline explains that its address is not on th
 	).toBeFalsy();
 });
 
-test("a private feed whose address is on this device, opened offline hours later, lists the episodes it cached and no missing address", async () => {
+test("a private feed whose address is on this device, opened offline hours later, lists the episodes it cached and no missing address or earlier failure", async () => {
 	const context = getContext();
 	const { obsidian, plugin } = context;
 	const show: FixtureFeed = {
@@ -141,10 +141,17 @@ test("a private feed whose address is on this device, opened offline hours later
 		timeoutMs: 10_000,
 		message: "the feed cached",
 	});
+	server.disconnect();
+	await click(obsidian, ui.refreshEpisodes);
+	await waitUntilShown(obsidian, ui.feedError);
+	await setOffline(obsidian, true);
+	await waitUntilShown(obsidian, ui.offlineStrip);
+	expect(
+		await holdsFor(obsidian, () => isShown(obsidian, ui.feedError), false),
+		"offline, the Offline strip says why the last load failed",
+	).toBe(false);
 	await closePodNotes(obsidian);
 	await ageFeedCache(obsidian, 7 * 60 * 60 * 1000);
-	server.disconnect();
-	await setOffline(obsidian, true);
 	await plugin.reload(RELOAD_OPTIONS);
 	await showPodNotes(obsidian);
 	await showLibrary(obsidian);
