@@ -4,9 +4,9 @@ import type { PodcastFeed } from "src/types/PodcastFeed";
 import type { PodNote } from "src/types/PodNotes";
 import type { PlayedEpisode } from "src/types/PlayedEpisode";
 import { ownRecord } from "src/utility/ownRecord";
+import { isPlainObject } from "src/utility/isPlainObject";
 import {
 	copySafeObject,
-	isPlainObject,
 	readBoolean,
 	readNonNegativeNumber,
 	readString,

@@ -1,5 +1,5 @@
 import { parseYaml } from "obsidian";
-import { isPlainObject } from "src/persistence/codecUtils";
+import { isPlainObject } from "src/utility/isPlainObject";
 
 /**
  * Adds each field the content's frontmatter lacks, before its closing line, or as a new

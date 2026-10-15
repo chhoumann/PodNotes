@@ -1,5 +1,5 @@
 import { requestUrl, type RequestUrlResponse } from "obsidian";
-import { isPlainObject } from "src/persistence/codecUtils";
+import { isPlainObject } from "src/utility/isPlainObject";
 import { assertFetchableUrl } from "./assertFetchableUrl";
 import { ownRecord } from "./ownRecord";
 
