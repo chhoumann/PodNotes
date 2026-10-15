@@ -262,7 +262,7 @@ export class PlayerController {
 		const { status, episode } = this.snapshot;
 		if (!episode) return;
 		this.requests++;
-		if (status === "playing" || status === "loading") return;
+		if (isPlaying(status)) return;
 		this.endPreview();
 		if (!this.session) {
 			const source = selectSource(episode, get(downloadedEpisodes), this.plugin.app.vault);
@@ -276,14 +276,14 @@ export class PlayerController {
 		if (this.disposed) return;
 		this.requests++;
 		const { status } = this.snapshot;
-		if (status !== "playing" && status !== "loading") return;
+		if (!isPlaying(status)) return;
 		this.el.pause();
 		this.settlePaused();
 	}
 
 	toggle(): void {
 		const { status } = this.snapshot;
-		if (status === "playing" || status === "loading") this.pause();
+		if (isPlaying(status)) this.pause();
 		else this.resume();
 	}
 
@@ -461,7 +461,7 @@ export class PlayerController {
 	/** play() unpauses the element at once, so the next intent can act on the new status. */
 	private start(): void {
 		const { status } = this.snapshot;
-		if (status === "playing" || status === "loading") return;
+		if (isPlaying(status)) return;
 		this.setState({ status: this.holdsMedia() ? "playing" : "loading" });
 		this.playElement();
 	}
@@ -474,7 +474,7 @@ export class PlayerController {
 			// A play that has since started, such as the next load's, keeps playing.
 			const { status } = this.snapshot;
 			if (this.disposed || !this.el.paused) return;
-			if (status === "loading" || status === "playing") this.settlePaused();
+			if (isPlaying(status)) this.settlePaused();
 		});
 	}
 
@@ -554,14 +554,14 @@ export class PlayerController {
 		const { status } = this.snapshot;
 		if (!this.holdsMedia() || this.el.paused) return;
 		// A play the player did not start, such as from a media key, is the user's.
-		if (status !== "playing" && status !== "loading") this.requests++;
+		if (!isPlaying(status)) this.requests++;
 		this.setState({ status: "playing" });
 	}
 
 	/** A reset pauses without this event (see onEmptied), so a pause while loading is a real one. */
 	private onPause(): void {
 		const { status } = this.snapshot;
-		if ((status !== "playing" && status !== "loading") || !this.el.paused) return;
+		if (!isPlaying(status) || !this.el.paused) return;
 		// A pause the player did not make and no natural end made, such as from a media key.
 		if (!this.el.ended) this.requests++;
 		this.settlePaused();
