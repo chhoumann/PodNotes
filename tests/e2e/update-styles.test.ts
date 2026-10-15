@@ -182,8 +182,9 @@ test.each(["main window", "popout"] as const)(
 				"the view's window",
 			).toBe(placement === "popout");
 		} finally {
+			// An install that failed part way may have removed an artifact already.
 			for (const name of ARTIFACTS) {
-				await rm(path.join(dir, name));
+				await rm(path.join(dir, name), { force: true });
 				await symlink(links[name], path.join(dir, name));
 			}
 			if (placement === "popout") await closePopoutAndReload(obsidian);
