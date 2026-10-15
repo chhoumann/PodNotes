@@ -63,6 +63,10 @@ const MAX_RETRIES = 3;
 const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 const MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
 
+function queueKey(episode: Episode): string {
+	return `${episode.podcastName}:${episode.title}`;
+}
+
 interface TranscriptionJob {
 	readonly episode: Episode;
 	readonly source:
@@ -158,11 +162,10 @@ export class TranscriptionService {
 			return;
 		}
 
-		const episodeKey = this.getEpisodeKey(job.episode);
+		const episodeKey = queueKey(job.episode);
 		const isAlreadyQueued =
-			this.pendingJobs.some(
-				(pending) => this.getEpisodeKey(pending.episode) === episodeKey,
-			) || this.activeTranscriptions.has(episodeKey);
+			this.pendingJobs.some((pending) => queueKey(pending.episode) === episodeKey) ||
+			this.activeTranscriptions.has(episodeKey);
 
 		if (isAlreadyQueued) {
 			new Notice("This episode is already queued or transcribing.");
@@ -188,7 +191,7 @@ export class TranscriptionService {
 				return;
 			}
 
-			const episodeKey = this.getEpisodeKey(job.episode);
+			const episodeKey = queueKey(job.episode);
 			this.activeTranscriptions.add(episodeKey);
 
 			void this.transcribeEpisode(job).finally(() => {
@@ -196,10 +199,6 @@ export class TranscriptionService {
 				if (!this.disposed) this.drainQueue();
 			});
 		}
-	}
-
-	private getEpisodeKey(episode: Episode): string {
-		return `${episode.podcastName}:${episode.title}`;
 	}
 
 	private async transcribeEpisode({ episode, source }: TranscriptionJob): Promise<void> {
