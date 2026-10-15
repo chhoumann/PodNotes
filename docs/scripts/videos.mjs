@@ -590,10 +590,13 @@ const CLIPS = {
 			await input.tap("section.pn-player button", "Up next");
 			await sleep(1100);
 			mark();
-			await sleep(300);
-			// The panel shows two episodes at a time.
+			await sleep(800);
+			// The panel shows two episodes at a time, so it scrolls to the last one and
+			// back, to end on the new order.
 			await input.swipe(".pn-panel-scroll .pn-ep-main", "The case for boredom", -120);
-			await sleep(2200);
+			await sleep(1300);
+			await input.swipe(".pn-panel-scroll .pn-ep-main", "The case for boredom", 120);
+			await sleep(1500);
 		},
 	},
 	// Use private feeds: on another device, a private podcast shows Address not
@@ -622,8 +625,9 @@ const CLIPS = {
 			await input.click(".modal input");
 			await sleep(300);
 			await input.paste(PRIVATE_ADDRESS);
-			// After the click's ring fades.
-			await sleep(600);
+			// Off the address, so the poster shows all of it.
+			await input.away();
+			await sleep(300);
 			mark();
 			await sleep(700);
 			await input.click(".modal button.mod-cta", "Save");
