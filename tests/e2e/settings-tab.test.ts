@@ -268,7 +268,11 @@ describe("PodNotes settings tab", () => {
 		synced.note.path = remote;
 		await plugin.data<PodNotesData>().write(synced);
 		await obsidian.dev.evalJsonAsync(
-			"app.plugins.plugins.podnotes.onExternalSettingsChange().then(() => true)",
+			`(async () => {
+				await app.plugins.plugins.podnotes.onExternalSettingsChange();
+				app.setting.pluginTabs.find(tab => tab.id === "podnotes").update();
+				return true;
+			})()`,
 		);
 		expect(
 			await obsidian.dev.evalJson(`({
