@@ -37,6 +37,10 @@ const ERROR_MESSAGES = {
 } as const satisfies Record<NetworkErrorCode, string>;
 const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set(Object.keys(ERROR_MESSAGES));
 
+function isHttpStatus(value: unknown): value is number {
+	return Number.isSafeInteger(value) && (value as number) >= 100 && (value as number) <= 599;
+}
+
 export class NetworkError extends Error {
 	public readonly status?: number;
 
@@ -45,13 +49,7 @@ export class NetworkError extends Error {
 		status?: number,
 	) {
 		const safeStatus =
-			code === "unexpected-status" &&
-			Number.isSafeInteger(status) &&
-			status !== undefined &&
-			status >= 100 &&
-			status <= 599
-				? status
-				: undefined;
+			code === "unexpected-status" && isHttpStatus(status) ? status : undefined;
 		super(
 			safeStatus === undefined
 				? ERROR_MESSAGES[code]
@@ -290,14 +288,8 @@ function copyAcceptedStatuses(value: unknown): ReadonlySet<number> | undefined {
 		const statuses = new Set<number>();
 		for (let index = 0; index < (length as number); index += 1) {
 			const status: unknown = Reflect.get(value, String(index));
-			if (
-				!Number.isSafeInteger(status) ||
-				(status as number) < 100 ||
-				(status as number) > 599
-			) {
-				throw invalidOptions();
-			}
-			statuses.add(status as number);
+			if (!isHttpStatus(status)) throw invalidOptions();
+			statuses.add(status);
 		}
 		return statuses;
 	} catch {
@@ -499,10 +491,8 @@ function createCommonResponseSnapshot(
 	status: unknown,
 	arrayBuffer: unknown,
 ): CommonResponseSnapshot {
-	if (!Number.isSafeInteger(status) || (status as number) < 100 || (status as number) > 599) {
-		throw new NetworkError("invalid-response");
-	}
-	return { status: status as number, arrayBuffer: arrayBuffer as ArrayBuffer };
+	if (!isHttpStatus(status)) throw new NetworkError("invalid-response");
+	return { status, arrayBuffer: arrayBuffer as ArrayBuffer };
 }
 
 function copyResponseHeaders(value: unknown): Record<string, string> {
