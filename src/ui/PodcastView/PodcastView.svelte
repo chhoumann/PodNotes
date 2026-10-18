@@ -311,18 +311,18 @@
 		font-size: var(--font-ui-small);
 		line-height: var(--line-height-tight);
 
-		/* A sidebar is secondary-colored, and a mobile drawer has its own color. The mini
-		   player stands out from the page above it. */
+		/* A sidebar is secondary-colored. The mini player stands out from the page above it. */
 		.mod-sidedock & {
 			--pn-bg: var(--background-secondary);
 		}
 
-		.workspace-drawer & {
-			--pn-bg: var(--mobile-sidebar-background);
-		}
-
 		.mod-sidedock &.is-compact {
 			--pn-surface: var(--background-primary);
+		}
+
+		/* A mobile drawer has its own color. */
+		.workspace-drawer & {
+			--pn-bg: var(--mobile-sidebar-background);
 		}
 
 		&.is-wide {
