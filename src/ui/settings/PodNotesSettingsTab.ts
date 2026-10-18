@@ -734,14 +734,25 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				let clear!: ExtraButtonComponent;
 				setting
 					.addButton((button) => {
-						choose = button.onClick(async () => {
+						// Returns no promise, or Obsidian swaps the label for a spinner while the picker is open.
+						choose = button.onClick(() => {
 							const quickAdd = findQuickAdd(this.app);
 							if ("fix" in quickAdd) {
 								(this.app as App2).setting.openTabById("community-plugins");
 								return;
 							}
-							const picked = await quickAdd.api.pickChoice().catch(() => null);
-							if (picked) select(picked.id);
+							quickAdd.api.pickChoice().then(
+								({ id }) => select(id),
+								() => {},
+							);
+						});
+						// A long choice name ends in an ellipsis inside the button, so the row's name
+						// and Clear keep their place.
+						setting.controlEl.setCssStyles({ minWidth: "0" });
+						choose.buttonEl.setCssStyles({
+							display: "block",
+							overflow: "hidden",
+							textOverflow: "ellipsis",
 						});
 					})
 					.addButton((button) => {

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, onTestFinished, test } from "vitest";
 import { createPodNotesE2EHarness } from "./harness";
 import {
+	asPhone,
 	closeSettings,
 	openPodNotesSettings,
 	runCommand,
@@ -427,6 +428,17 @@ describe("captures with a QuickAdd choice", () => {
 		await click(obsidian, rowControl("Choose..."));
 		const picker = '[...document.querySelectorAll(".qa-choice-suggester")]';
 		await waitUntilShown(obsidian, { name: "QuickAdd's choice picker", elements: picker });
+		expect(
+			await obsidian.dev.evalJson(`(() => {
+				const button = ${rowControl("Choose...").elements}[0];
+				const { left, top, width, height } = button.getBoundingClientRect();
+				return {
+					label: getComputedStyle(button).color !== "rgba(0, 0, 0, 0)",
+					clickable: button.contains(document.elementFromPoint(left + width / 2, top + height / 2)),
+				};
+			})()`),
+			"Choose... behind the open picker keeps its label and takes no second click",
+		).toEqual({ label: true, clickable: false });
 		await obsidian.dev.screenshot(path.join(EVIDENCE, "picker-open.png"));
 		await typeText(obsidian, "Log");
 		await screenshot("picker", picker);
@@ -511,6 +523,67 @@ describe("captures with a QuickAdd choice", () => {
 			"The QuickAdd choice no longer exists. Choose another in PodNotes settings.",
 		);
 	}, 90_000);
+
+	test("a long choice name stays on one line in its button, beside the row's name and Clear, in a narrow window and on a phone", async () => {
+		const { obsidian, plugin } = getContext();
+		const name = "Podcast research notes for my weekly engineering and product review";
+		await installQuickAdd(await quickAddBuild(), [logChoice(name)]);
+		await plugin.updateDataAndReload<IPodNotesSettings>((data) => {
+			data.timestamp.quickAddChoiceId = LOG_ID;
+		});
+		const size = await obsidian.dev.evalJson<[number, number]>(
+			'require("@electron/remote").getCurrentWindow().getContentSize()',
+		);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(
+				`require("@electron/remote").getCurrentWindow().setContentSize(${size[0]}, ${size[1]}), true`,
+			),
+		);
+		const fits = async (where: string) =>
+			expect(
+				await obsidian.dev.evalJson(`(() => {
+					const row = ${QUICKADD_ROW}[0];
+					const [button, clear] = [...row.querySelector(".setting-item-control").children].filter((control) => control.getClientRects().length > 0);
+					const label = row.querySelector(".setting-item-name");
+					const text = document.createRange();
+					text.selectNodeContents(button);
+					const [r, b, c] = [row, button, clear].map((element) => element.getBoundingClientRect());
+					return {
+						rowOverflows: row.scrollWidth > row.clientWidth,
+						labelSqueezed: label.scrollWidth > label.clientWidth,
+						nameCut: button.scrollWidth > button.clientWidth,
+						buttonInRow: b.left >= r.left && b.right <= r.right,
+						nameStartsInButton: text.getBoundingClientRect().left >= b.left,
+						clearInRow: c.left >= b.right && c.right <= r.right,
+					};
+				})()`),
+				`the QuickAdd choice row ${where}`,
+			).toEqual({
+				rowOverflows: false,
+				labelSqueezed: false,
+				nameCut: true,
+				buttonInRow: true,
+				nameStartsInButton: true,
+				clearInRow: true,
+			});
+
+		// 900 px keeps the row's name beside its controls; 720 px stacks them.
+		for (const width of [900, 720]) {
+			await obsidian.dev.evalJson(
+				`require("@electron/remote").getCurrentWindow().setContentSize(${width}, ${Math.max(size[1], 760)}), true`,
+			);
+			await settingsShow([name, "Clear"], `row-long-${width}`);
+			await fits(`in a ${width} px window`);
+			await closeSettings(obsidian);
+		}
+
+		await asPhone(obsidian);
+		await obsidian.dev.evalJsonAsync(
+			'(async () => { await app.plugins.enablePlugin("quickadd"); return true; })()',
+		);
+		await settingsShow([name, "Clear"], "row-long-phone");
+		await fits("on a phone");
+	}, 120_000);
 
 	test("QuickAdd 2.32.1, from before choice picking, asks for an update and runs nothing", async () => {
 		await installQuickAdd(await oldQuickAdd(), [LOG]);
