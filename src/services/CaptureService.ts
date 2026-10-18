@@ -36,7 +36,11 @@ interface Rendered {
 	readonly end?: number;
 }
 
-/** What a QuickAdd choice reads about a capture, as {{VALUE:<name>}}. */
+/**
+ * What a QuickAdd choice reads about a capture, as {{VALUE:<name>}}. Values are plain text,
+ * not escaped for a note body as note templates are, since a choice can also put them in a
+ * path or a property.
+ */
 export type QuickAddVariables = Record<
 	"timestamp" | "time" | "seconds" | "link" | "episode" | "podcast" | "url" | "episodeNote",
 	string
