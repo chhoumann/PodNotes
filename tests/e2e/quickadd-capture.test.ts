@@ -422,7 +422,7 @@ describe("captures with a QuickAdd choice", () => {
 	test("Choose... picks a choice in QuickAdd's own picker, by typing and Enter", async () => {
 		const { obsidian } = getContext();
 		await installQuickAdd(await quickAddBuild(), [MEETING, LOG]);
-		await settingsShow(["Choose..."], "row-unset");
+		await settingsShow(["Choose...", "Create"], "row-unset");
 
 		await click(obsidian, rowControl("Choose..."));
 		const picker = '[...document.querySelectorAll(".modal.qa-choice-suggester")]';
@@ -439,6 +439,47 @@ describe("captures with a QuickAdd choice", () => {
 		await screenshot("row-set", QUICKADD_ROW);
 		expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
 	}, 60_000);
+
+	test("Create adds QuickAdd's ready-made choice, whose captures create the note and add one bullet each", async () => {
+		const { obsidian } = getContext();
+		await installQuickAdd(await quickAddBuild(), []);
+		const { server, notePath } = await playAt(30, {});
+		await settingsShow(["Choose...", "Create"], "row-before-create");
+
+		await click(obsidian, rowControl("Create"));
+
+		expect(await eventually(obsidian, quickAddRow, ["Podcast capture", "Clear"])).toEqual([
+			"Podcast capture",
+			"Clear",
+		]);
+		expect(await eventually(obsidian, savedChoiceId, "podnotes-capture")).toBe(
+			"podnotes-capture",
+		);
+		await closeSettings(obsidian);
+		expect(
+			await obsidian.dev.evalJson("app.vault.getFileByPath(" + jsLiteral(notePath) + ")"),
+			"no episode note before the capture",
+		).toBeNull();
+
+		await runCommand(obsidian, `${PLUGIN_ID}:capture-timestamp`);
+		const first = `## Notes\n- ${link(server, 30)} \n`;
+		expect(
+			await eventually(
+				obsidian,
+				() => readVaultText(obsidian, notePath).catch(() => ""),
+				first,
+			),
+			"the first capture",
+		).toBe(first);
+		await seek(40);
+		await runCommand(obsidian, `${PLUGIN_ID}:capture-timestamp`);
+		const second = `${first}- ${link(server, 40)} \n`;
+		expect(
+			await eventually(obsidian, () => readVaultText(obsidian, notePath), second),
+			"the second capture, last in the section",
+		).toBe(second);
+		expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
+	}, 90_000);
 
 	test("a choice renamed in QuickAdd still runs and shows its new name; a deleted one writes nothing", async () => {
 		const { obsidian } = getContext();

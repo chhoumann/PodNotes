@@ -936,7 +936,7 @@ describe("capture", () => {
 			expect(said()).toEqual([]);
 		});
 
-		it("captures as before when the choice is blank", async () => {
+		it("captures as before with an empty choice id in data.json", async () => {
 			const { plugin, run, openNote, focusPodNotes } = await loadPlugin(linkedPlaying);
 			const executeChoice = withQuickAdd(plugin);
 			plugin.settings.timestamp.quickAddChoiceId = "";

@@ -659,7 +659,7 @@ describe("QuickAdd choice", () => {
 		const quickAdd = fakeQuickAdd({ log: "Log" });
 		quickAdd.api.pickChoice.mockResolvedValue({ id: "log", name: "Log" });
 		const { shown, click, disk } = withQuickAdd(quickAdd.plugins);
-		expect(shown()).toEqual(["Choose..."]);
+		expect(shown()).toEqual(["Choose...", "Create"]);
 
 		click("Choose...");
 
@@ -687,8 +687,48 @@ describe("QuickAdd choice", () => {
 		click("Clear");
 
 		expect((await disk()).timestamp).toEqual(TIMESTAMP);
-		expect(shown()).toEqual(["Choose..."]);
+		expect(shown()).toEqual(["Choose...", "Create"]);
 		expect(quickAdd.choices).toEqual({ log: "Log" });
+	});
+
+	test("Create adds QuickAdd's ready-made choice and stores it", async () => {
+		const quickAdd = fakeQuickAdd({ log: "Log" });
+		const { shown, click, disk } = withQuickAdd(quickAdd.plugins);
+
+		click("Create");
+
+		expect((await disk()).timestamp).toEqual({
+			...TIMESTAMP,
+			quickAddChoiceId: "podnotes-capture",
+		});
+		expect(quickAdd.choices).toEqual({ log: "Log", "podnotes-capture": "Podcast capture" });
+		expect(shown()).toEqual(["Podcast capture", "Clear"]);
+	});
+
+	test("Create again keeps the ready-made choice QuickAdd already has, under its name there", async () => {
+		const quickAdd = fakeQuickAdd({ "podnotes-capture": "Episode log" });
+		const { shown, click, disk } = withQuickAdd(quickAdd.plugins);
+
+		click("Create");
+
+		expect((await disk()).timestamp.quickAddChoiceId).toBe("podnotes-capture");
+		expect(shown()).toEqual(["Episode log", "Clear"]);
+	});
+
+	test("Create says so when QuickAdd fails to import its choice, and stores nothing", async () => {
+		const quickAdd = fakeQuickAdd();
+		quickAdd.api.importPackage.mockRejectedValue(new Error("Could not save settings"));
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { shown, click, writes } = withQuickAdd(quickAdd.plugins);
+
+		click("Create");
+
+		await vi.waitFor(() =>
+			expect(notice).toHaveBeenCalledWith("Could not create the QuickAdd choice"),
+		);
+		expect(await writes()).toBe(0);
+		expect(shown()).toEqual(["Choose...", "Create"]);
 	});
 
 	test("shows the choice under its name in QuickAdd, after a rename too", () => {

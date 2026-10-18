@@ -16,7 +16,7 @@ import {
 } from "obsidian";
 import type App2 from "src/global";
 import type PodNotes from "../../main";
-import { findQuickAdd } from "src/quickAdd";
+import { CAPTURE_CHOICE_ID, CAPTURE_PACKAGE, findQuickAdd } from "src/quickAdd";
 import { pickFile } from "../pickFile";
 import {
 	DownloadPathTemplateEngine,
@@ -730,6 +730,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					this.changed();
 				};
 				let choose!: ButtonComponent;
+				let create!: ButtonComponent;
 				let clear!: ExtraButtonComponent;
 				setting
 					.addButton((button) => {
@@ -742,6 +743,26 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 							const picked = await quickAdd.api.pickChoice().catch(() => null);
 							if (picked) select(picked.id);
 						});
+					})
+					.addButton((button) => {
+						create = button
+							.setButtonText("Create")
+							.setClass(NAMED_BY_ROW)
+							.onClick(async () => {
+								const quickAdd = findQuickAdd(this.app);
+								if ("fix" in quickAdd) return;
+								await quickAdd.api
+									.importPackage(CAPTURE_PACKAGE)
+									.catch((error) =>
+										console.error(
+											"PodNotes: QuickAdd could not import the choice",
+											error,
+										),
+									);
+								if (quickAdd.api.getChoice({ id: CAPTURE_CHOICE_ID }))
+									select(CAPTURE_CHOICE_ID);
+								else new Notice("Could not create the QuickAdd choice");
+							});
 					})
 					.addExtraButton((button) => {
 						clear = button
@@ -758,6 +779,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 								? (quickAdd.api.getChoice({ id })?.name ?? "Missing choice")
 								: "Choose...",
 					);
+					create.buttonEl.toggle("api" in quickAdd && !id);
 					clear.extraSettingsEl.toggle(Boolean(id));
 				});
 			},
