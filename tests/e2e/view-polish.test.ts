@@ -236,34 +236,6 @@ test("on a phone, a podcast's header keeps its cover at the left under a theme t
 	const server = await startFixtureServer([SHORT]);
 	onTestFinished(() => server.stop());
 	await seedLibrary(context, server, { subscriptions: [SHORT] });
-	const theme = await obsidian.dev.evalJson<string>(`(() => {
-		const style = document.head.appendChild(document.createElement("style"));
-		style.id = "theme-centered-images";
-		style.textContent = "img { margin-inline: auto !important; }";
-		return app.vault.getConfig("theme");
-	})()`);
-	// The window may have reloaded out of mobile emulation already, without the rule.
-	onTestFinished(async () => {
-		await obsidian.dev.evalJson(
-			`(document.getElementById("theme-centered-images")?.remove(), app.changeTheme(${jsLiteral(theme)}), true)`,
-		);
-	});
-	const header = () =>
-		obsidian.dev.evalJson(`(() => {
-			if (!document.getElementById("theme-centered-images")) throw new Error("The theme's rule is gone");
-			const view = document.querySelector(${jsLiteral(PLAYER_VIEW)});
-			const hero = view.querySelector(".pn-hero");
-			const cover = hero.querySelector(".pn-cover").getBoundingClientRect();
-			const filter = view.querySelector(".pn-filter");
-			let page = filter.parentElement;
-			while (getComputedStyle(page).backgroundColor === "rgba(0, 0, 0, 0)") page = page.parentElement;
-			return {
-				coverFromEdge: Math.round(cover.left - hero.getBoundingClientRect().left),
-				titleFromCover: Math.round(hero.querySelector("h1").getBoundingClientRect().left - cover.right),
-				band: getComputedStyle(filter).backgroundColor,
-				page: getComputedStyle(page).backgroundColor,
-			};
-		})()`);
 
 	const headers: Record<string, unknown> = {};
 	for (const place of ["right drawer", "main area"] as const) {
@@ -271,20 +243,34 @@ test("on a phone, a podcast's header keeps its cover at the left under a theme t
 		await showLibrary(obsidian);
 		await click(obsidian, ui.podcastCard(SHORT.title));
 		await waitUntilShown(obsidian, ui.podcastPage(SHORT.title));
-		for (const [name, id] of [
-			["dark", "obsidian"],
-			["light", "moonstone"],
-		]) {
-			await obsidian.dev.evalJson(`(app.changeTheme(${jsLiteral(id)}), true)`);
-			await obsidian.waitFor(
-				() =>
-					obsidian.dev.evalJson<boolean>(
-						`document.body.classList.contains("theme-${name}")`,
-					),
-				{ timeoutMs: 5_000, intervalMs: 100, message: `the ${name} theme` },
-			);
-			headers[`${place}, ${name}`] = await header();
-		}
+		// A theme or snippet that centers every image, as on the phone in #506.
+		const shown = await obsidian.dev.evalJson<Record<string, unknown>>(`(() => {
+			const view = document.querySelector(${jsLiteral(PLAYER_VIEW)});
+			const hero = view.querySelector(".pn-hero");
+			const filter = view.querySelector(".pn-filter");
+			const centered = document.head.appendChild(document.createElement("style"));
+			centered.textContent = "img { margin-inline: auto !important; }";
+			const classes = document.body.className;
+			try {
+				return Object.fromEntries(["dark", "light"].map((theme) => {
+					document.body.classList.remove("theme-dark", "theme-light");
+					document.body.classList.add("theme-" + theme);
+					const cover = hero.querySelector(".pn-cover").getBoundingClientRect();
+					let page = filter.parentElement;
+					while (getComputedStyle(page).backgroundColor === "rgba(0, 0, 0, 0)") page = page.parentElement;
+					return [${jsLiteral(place)} + ", " + theme, {
+						coverFromEdge: Math.round(cover.left - hero.getBoundingClientRect().left),
+						titleFromCover: Math.round(hero.querySelector("h1").getBoundingClientRect().left - cover.right),
+						band: getComputedStyle(filter).backgroundColor,
+						page: getComputedStyle(page).backgroundColor,
+					}];
+				}));
+			} finally {
+				centered.remove();
+				document.body.className = classes;
+			}
+		})()`);
+		Object.assign(headers, shown);
 	}
 
 	const atLeft = { coverFromEdge: 0, titleFromCover: 12 };
