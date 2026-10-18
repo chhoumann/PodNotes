@@ -23,6 +23,12 @@ const LONG: FixtureFeed = {
 	artwork: false,
 	episodes: [{ title: "First Steps", seconds: 60, pubDate: pubDate(0) }],
 };
+const SHORT: FixtureFeed = {
+	title: "Short Show",
+	slug: "short-show",
+	artwork: true,
+	episodes: [{ title: "First Steps", seconds: 60, pubDate: pubDate(0) }],
+};
 const PRIVATE = "Missing Address";
 const SECRET_ID = "podnotes-feed-url-4b0c7e1a-2f6d-4c3b-9a8e-5d1f0e2c7b9a";
 
@@ -221,4 +227,75 @@ test("on a phone, the Escape that closes a row's menu in the right drawer leaves
 	expect(
 		await eventually(obsidian, () => isShown(obsidian, ui.menuItem("Add to queue")), false),
 	).toBe(false);
+});
+
+test("on a phone, a podcast's header keeps its cover at the left under a theme that centers images, over a search row in the color of the page behind it", async () => {
+	const context = getContext();
+	const { obsidian } = context;
+	await asPhone(obsidian);
+	const server = await startFixtureServer([SHORT]);
+	onTestFinished(() => server.stop());
+	await seedLibrary(context, server, { subscriptions: [SHORT] });
+	const theme = await obsidian.dev.evalJson<string>(`(() => {
+		const style = document.head.appendChild(document.createElement("style"));
+		style.id = "theme-centered-images";
+		style.textContent = "img { margin-inline: auto !important; }";
+		return app.vault.getConfig("theme");
+	})()`);
+	// The window may have reloaded out of mobile emulation already, without the rule.
+	onTestFinished(async () => {
+		await obsidian.dev.evalJson(
+			`(document.getElementById("theme-centered-images")?.remove(), app.changeTheme(${jsLiteral(theme)}), true)`,
+		);
+	});
+	const header = () =>
+		obsidian.dev.evalJson(`(() => {
+			if (!document.getElementById("theme-centered-images")) throw new Error("The theme's rule is gone");
+			const view = document.querySelector(${jsLiteral(PLAYER_VIEW)});
+			const hero = view.querySelector(".pn-hero");
+			const cover = hero.querySelector(".pn-cover").getBoundingClientRect();
+			const filter = view.querySelector(".pn-filter");
+			let page = filter.parentElement;
+			while (getComputedStyle(page).backgroundColor === "rgba(0, 0, 0, 0)") page = page.parentElement;
+			return {
+				coverFromEdge: Math.round(cover.left - hero.getBoundingClientRect().left),
+				titleFromCover: Math.round(hero.querySelector("h1").getBoundingClientRect().left - cover.right),
+				band: getComputedStyle(filter).backgroundColor,
+				page: getComputedStyle(page).backgroundColor,
+			};
+		})()`);
+
+	const headers: Record<string, unknown> = {};
+	for (const place of ["right drawer", "main area"] as const) {
+		await placePodNotes(obsidian, place);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(SHORT.title));
+		await waitUntilShown(obsidian, ui.podcastPage(SHORT.title));
+		for (const [name, id] of [
+			["dark", "obsidian"],
+			["light", "moonstone"],
+		]) {
+			await obsidian.dev.evalJson(`(app.changeTheme(${jsLiteral(id)}), true)`);
+			await obsidian.waitFor(
+				() =>
+					obsidian.dev.evalJson<boolean>(
+						`document.body.classList.contains("theme-${name}")`,
+					),
+				{ timeoutMs: 5_000, intervalMs: 100, message: `the ${name} theme` },
+			);
+			headers[`${place}, ${name}`] = await header();
+		}
+	}
+
+	const atLeft = { coverFromEdge: 0, titleFromCover: 12 };
+	expect(headers).toEqual({
+		"right drawer, dark": { ...atLeft, band: "rgb(30, 30, 30)", page: "rgb(30, 30, 30)" },
+		"right drawer, light": {
+			...atLeft,
+			band: "rgb(255, 255, 255)",
+			page: "rgb(255, 255, 255)",
+		},
+		"main area, dark": { ...atLeft, band: "rgb(0, 0, 0)", page: "rgb(0, 0, 0)" },
+		"main area, light": { ...atLeft, band: "rgb(255, 255, 255)", page: "rgb(255, 255, 255)" },
+	});
 });
