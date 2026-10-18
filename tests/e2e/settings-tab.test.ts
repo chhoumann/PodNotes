@@ -115,6 +115,7 @@ describe("PodNotes settings tab", () => {
 			"Next track",
 			"Timestamp template",
 			"Timestamp offset (s)",
+			"QuickAdd choice",
 			"Episode note path",
 			"Episode note template",
 			"Podcast note path",

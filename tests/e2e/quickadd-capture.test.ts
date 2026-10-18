@@ -22,7 +22,7 @@ const QUICKADD_SHA256: Record<string, string> = {
 };
 const QUICKADD_CACHE = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
-	`../../node_modules/.cache/podnotes-e2e/quickadd-${QUICKADD_VERSION}`,
+	`../../.obsidian-e2e-artifacts/releases/quickadd-${QUICKADD_VERSION}`,
 );
 const CHOICE = "Log timestamp";
 const EVIDENCE = path.resolve(".obsidian-e2e-artifacts/quickadd-capture");
@@ -35,26 +35,23 @@ const FEED: FixtureFeed = {
 };
 const NOTE_TEMPLATE = "# {{title}}\n\n## Notes\n- Earlier thought\n\n## Later\n";
 
-/** QuickAdd's released files, downloaded once and checked on every use. */
+const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+
+/** QuickAdd's released files, cached in the git-ignored artifacts folder. */
 async function quickAddRelease(): Promise<Map<string, Buffer>> {
 	const files = new Map<string, Buffer>();
 	await fs.mkdir(QUICKADD_CACHE, { recursive: true });
-	for (const [name, sha256] of Object.entries(QUICKADD_SHA256)) {
+	for (const [name, digest] of Object.entries(QUICKADD_SHA256)) {
 		const cached = path.join(QUICKADD_CACHE, name);
 		let bytes = await fs.readFile(cached).catch(() => null);
-		if (!bytes) {
-			const response = await fetch(
-				`https://github.com/chhoumann/quickadd/releases/download/${QUICKADD_VERSION}/${name}`,
-			);
-			if (!response.ok) throw new Error(`QuickAdd ${name}: HTTP ${response.status}`);
+		if (!bytes || sha256(bytes) !== digest) {
+			const url = `https://github.com/chhoumann/quickadd/releases/download/${QUICKADD_VERSION}/${name}`;
+			const response = await fetch(url);
+			if (!response.ok) throw new Error(`${url} answered ${response.status}.`);
 			bytes = Buffer.from(await response.arrayBuffer());
+			expect(sha256(bytes), `the QuickAdd ${QUICKADD_VERSION} ${name} digest`).toBe(digest);
+			await fs.writeFile(cached, bytes);
 		}
-		const actual = createHash("sha256").update(bytes).digest("hex");
-		if (actual !== sha256) {
-			await fs.rm(cached, { force: true });
-			throw new Error(`QuickAdd ${name} has SHA-256 ${actual}, expected ${sha256}`);
-		}
-		await fs.writeFile(cached, bytes);
 		files.set(name, bytes);
 	}
 	return files;
