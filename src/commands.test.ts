@@ -184,7 +184,6 @@ async function loadPlugin(data: Record<string, unknown>) {
 		closing: null,
 		writeInFlight: null,
 		storeUnsubscribers: [],
-		views: new Set(),
 		manifest: { dir: ".obsidian/plugins/podnotes" },
 		app: {
 			secretStorage: {

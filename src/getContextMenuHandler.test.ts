@@ -115,7 +115,6 @@ function makeApp(workspace: unknown, file: TFile) {
 		app,
 		player,
 		navigation: new Navigation(),
-		views: new Set(),
 	});
 	plugin.set(podnotes);
 	return app;

@@ -64,8 +64,6 @@ async function openPodcastPage(notes: string[]) {
 	const plugin = {
 		...services,
 		feedUrls: new FeedUrlRepository(app.secretStorage),
-		shouldMountPodcastView: () => true,
-		unregisterPodcastView: () => {},
 	} as unknown as IPodNotes;
 	const view = new MainView({} as WorkspaceLeaf, plugin);
 	const contentEl = document.body.appendChild(document.createElement("div"));

@@ -66,18 +66,6 @@ export class MainView extends ItemView {
 			this.app.workspace.requestSaveLayout();
 		});
 
-		if (!this.plugin.shouldMountPodcastView()) {
-			return;
-		}
-
-		this.mountPodcastView();
-	}
-
-	mountPodcastView(): void {
-		if (this.podcastView) {
-			return;
-		}
-
 		this.podcastView = mount(PodcastView, {
 			target: this.contentEl,
 			props: { services: this.services() },
@@ -159,6 +147,5 @@ export class MainView extends ItemView {
 		}
 
 		this.contentEl.empty();
-		this.plugin.unregisterPodcastView(this);
 	}
 }
