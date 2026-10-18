@@ -74,7 +74,7 @@ type Field = Readonly<{ row: string; name: string; from?: string }>;
 async function focusedField(obsidian: ObsidianClient): Promise<Field | undefined> {
 	const named = await accessibleName(
 		obsidian,
-		`document.activeElement.matches(".modal.mod-settings .setting-item-control :is(input, select, textarea, [tabindex='0'], .setting-secret-value + button)") ? document.activeElement : null`,
+		`document.activeElement.matches(".modal.mod-settings .setting-item-control :is(input, select, textarea, [tabindex='0'], button[aria-labelledby])") ? document.activeElement : null`,
 	);
 	if (named === undefined) return undefined;
 	const row = await obsidian.dev.evalJson<string>(
@@ -134,15 +134,18 @@ describe("PodNotes settings tab", () => {
 			"Export settings",
 		]);
 		// A focused toggle's label would also take the name of the checkbox inside it. An API
-		// key's button keeps its own words, Link... or Change, before its row's name.
+		// key's button keeps its own words, Link... or Change, before its row's name, and so
+		// does the QuickAdd choice button, which asks for QuickAdd in this vault.
 		expect(
 			fields.filter(({ row, name, from }) => name !== row || from !== "aria-labelledby"),
 		).toEqual(
-			["OpenAI API key", "Deepgram API key"].map((row) => ({
-				row,
-				name: expect.stringMatching(new RegExp(`^(Link\\.\\.\\.|Change) ${row}$`)),
-				from: "aria-labelledby",
-			})),
+			[
+				{ row: "QuickAdd choice", name: "Install QuickAdd QuickAdd choice" },
+				...["OpenAI API key", "Deepgram API key"].map((row) => ({
+					row,
+					name: expect.stringMatching(new RegExp(`^(Link\\.\\.\\.|Change) ${row}$`)),
+				})),
+			].map((field) => ({ ...field, from: "aria-labelledby" })),
 		);
 	});
 

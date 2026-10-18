@@ -11,6 +11,7 @@ import { fetchTextWithTimeout } from "./utility/networkRequest";
 import { privateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { fakeEditor, editInTableCell } from "../tests/mocks/captureEditor";
+import { fakeQuickAdd, unusableQuickAdd } from "../tests/mocks/quickAdd";
 
 vi.mock("./utility/networkRequest", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./utility/networkRequest")>()),
@@ -253,14 +254,12 @@ async function undo() {
 
 const REFUSED = "The note isn't as the capture left it, so the timestamp stays";
 
-/** QuickAdd as Obsidian holds it while it is enabled, with "Log" set as the QuickAdd choice. */
-function withQuickAdd(
-	plugin: PodNotes,
-	executeChoice = vi.fn(async (_choice: string, _variables: Record<string, string>) => {}),
-) {
-	Object.assign(plugin.app, { plugins: { plugins: { quickadd: { api: { executeChoice } } } } });
-	plugin.settings.timestamp.quickAddChoice = "Log";
-	return executeChoice;
+/** QuickAdd as Obsidian holds it while it is enabled, with its choice "Log" set as the QuickAdd choice. */
+function withQuickAdd(plugin: PodNotes) {
+	const quickAdd = fakeQuickAdd({ log: "Log" });
+	Object.assign(plugin.app, { plugins: quickAdd.plugins });
+	plugin.settings.timestamp.quickAddChoiceId = "log";
+	return quickAdd.api.executeChoice;
 }
 
 /** A note's tab, and the changes a user can make to it. */
@@ -879,8 +878,8 @@ describe("capture", () => {
 
 			await vi.waitFor(() => expect(executeChoice).toHaveBeenCalledTimes(2));
 			expect(executeChoice.mock.calls.map(([choice, { time }]) => [choice, time])).toEqual([
-				["Log", "20:24-20:34"],
-				["Log", "20:34"],
+				[{ id: "log" }, "20:24-20:34"],
+				[{ id: "log" }, "20:34"],
 			]);
 			expect(notes.size).toBe(0);
 		});
@@ -898,13 +897,15 @@ describe("capture", () => {
 			episodeNote: NOTE_PATH,
 		};
 
-		it("runs it once with the capture, and writes nothing itself", async () => {
+		it("runs it by its id once with the capture, and writes nothing itself", async () => {
 			const { plugin, run, notes } = await loadPlugin(linkedPlaying);
 			const executeChoice = withQuickAdd(plugin);
 
 			run("capture-timestamp");
 
-			await vi.waitFor(() => expect(executeChoice.mock.calls).toEqual([["Log", moment]]));
+			await vi.waitFor(() =>
+				expect(executeChoice.mock.calls).toEqual([[{ id: "log" }, moment]]),
+			);
 			expect(notes.size).toBe(0);
 			expect(said()).toEqual([]);
 		});
@@ -920,7 +921,7 @@ describe("capture", () => {
 			await vi.waitFor(() =>
 				expect(executeChoice.mock.calls).toEqual([
 					[
-						"Log",
+						{ id: "log" },
 						{
 							...moment,
 							timestamp: "- 00:20:24-00:20:34",
@@ -938,7 +939,7 @@ describe("capture", () => {
 		it("captures as before when the choice is blank", async () => {
 			const { plugin, run, openNote, focusPodNotes } = await loadPlugin(linkedPlaying);
 			const executeChoice = withQuickAdd(plugin);
-			plugin.settings.timestamp.quickAddChoice = " ";
+			plugin.settings.timestamp.quickAddChoiceId = "";
 			const { editor } = openNote("Journal.md", "Notes\n");
 			focusPodNotes();
 
@@ -949,10 +950,32 @@ describe("capture", () => {
 			expect(executeChoice.mock.calls).toEqual([]);
 		});
 
-		it("says QuickAdd is needed, and writes nothing, while QuickAdd is not enabled", async () => {
+		it.each(["Install", "Enable", "Update"] as const)(
+			"says %s QuickAdd, and writes nothing, until QuickAdd can run the choice",
+			async (fix) => {
+				const { plugin, run, openNote, focusPodNotes, notes } =
+					await loadPlugin(linkedPlaying);
+				const { executeChoice, plugins } = unusableQuickAdd(fix);
+				Object.assign(plugin.app, { plugins });
+				plugin.settings.timestamp.quickAddChoiceId = "log";
+				const { editor } = openNote("Journal.md", "Notes\n");
+				focusPodNotes();
+
+				run("capture-timestamp");
+
+				await vi.waitFor(() =>
+					expect(said()).toEqual([`${fix} QuickAdd to capture with a QuickAdd choice`]),
+				);
+				expect(executeChoice).not.toHaveBeenCalled();
+				expect(editor.getValue()).toBe("Notes\n");
+				expect(notes.size).toBe(0);
+			},
+		);
+
+		it("says the choice no longer exists, and writes nothing, once QuickAdd deletes it", async () => {
 			const { plugin, run, openNote, focusPodNotes, notes } = await loadPlugin(linkedPlaying);
-			withQuickAdd(plugin);
-			Object.assign(plugin.app, { plugins: { plugins: {} } });
+			const executeChoice = withQuickAdd(plugin);
+			plugin.settings.timestamp.quickAddChoiceId = "deleted";
 			const { editor } = openNote("Journal.md", "Notes\n");
 			focusPodNotes();
 
@@ -960,9 +983,10 @@ describe("capture", () => {
 
 			await vi.waitFor(() =>
 				expect(said()).toEqual([
-					"Install and enable QuickAdd to capture with a QuickAdd choice",
+					"The QuickAdd choice no longer exists. Choose another in PodNotes settings.",
 				]),
 			);
+			expect(executeChoice).not.toHaveBeenCalled();
 			expect(editor.getValue()).toBe("Notes\n");
 			expect(notes.size).toBe(0);
 		});
@@ -970,7 +994,7 @@ describe("capture", () => {
 		it("logs a choice that fails or is cancelled, and leaves no unhandled rejection", async () => {
 			const { plugin, run } = await loadPlugin(linkedPlaying);
 			const failure = new Error("Input cancelled by user");
-			withQuickAdd(plugin, vi.fn().mockRejectedValue(failure));
+			withQuickAdd(plugin).mockRejectedValue(failure);
 			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 			const unhandled: unknown[] = [];
 			const listen = (reason: unknown) => unhandled.push(reason);

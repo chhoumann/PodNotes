@@ -158,7 +158,7 @@ function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettin
 			"timestamp",
 		),
 	};
-	setOptionalString(timestamp, record, "quickAddChoice", warnings, "timestamp");
+	setOptionalString(timestamp, record, "quickAddChoiceId", warnings, "timestamp");
 	return timestamp;
 }
 

@@ -7,7 +7,7 @@ import {
 	type TFile,
 	type WorkspaceLeaf,
 } from "obsidian";
-import type App2 from "src/global";
+import { findQuickAdd, MISSING_CHOICE } from "src/quickAdd";
 import { resolveEpisodeUrl, TimestampTemplateEngine } from "src/TemplateEngine";
 import { createPodcastNoteFileIfNotExists, getPodcastNotePath } from "src/createPodcastNote";
 import { withoutPrivateFeedAddresses } from "src/services/privateFeeds";
@@ -144,9 +144,9 @@ export class CaptureService {
 		}
 		const rendered = render(settings.timestamp.template);
 		if (rendered === null) return null;
-		const choice = settings.timestamp.quickAddChoice?.trim();
-		if (choice) {
-			await this.runQuickAdd(choice, quickAddVariables(episode, rendered));
+		const choiceId = settings.timestamp.quickAddChoiceId;
+		if (choiceId) {
+			await this.runQuickAdd(choiceId, quickAddVariables(episode, rendered));
 			return null;
 		}
 		const { text } = rendered;
@@ -207,14 +207,19 @@ export class CaptureService {
 		}
 	}
 
-	private async runQuickAdd(choice: string, variables: QuickAddVariables): Promise<void> {
-		const quickAdd = (this.plugin.app as App2).plugins.plugins.quickadd?.api;
-		if (!quickAdd) {
-			new Notice("Install and enable QuickAdd to capture with a QuickAdd choice");
+	/** Runs the QuickAdd choice. When QuickAdd can't, one notice names the fix and nothing is written. */
+	private async runQuickAdd(id: string, variables: QuickAddVariables): Promise<void> {
+		const quickAdd = findQuickAdd(this.plugin.app);
+		if ("fix" in quickAdd) {
+			new Notice(`${quickAdd.fix} QuickAdd to capture with a QuickAdd choice`);
+			return;
+		}
+		if (!quickAdd.api.getChoice({ id })) {
+			new Notice(MISSING_CHOICE);
 			return;
 		}
 		try {
-			await quickAdd.executeChoice(choice, variables);
+			await quickAdd.api.executeChoice({ id }, variables);
 		} catch (error) {
 			console.error("PodNotes: the QuickAdd choice failed", error);
 		}

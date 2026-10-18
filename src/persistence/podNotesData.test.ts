@@ -942,14 +942,14 @@ describe("QuickAdd choice", () => {
 	const persisted = ({ settings, unknownFields }: ReturnType<typeof decodePodNotesData>) =>
 		JSON.stringify(encodePodNotesData(settings, unknownFields).timestamp);
 
-	it("keeps the choice through load and save", () => {
-		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoice: "Log" });
+	it("keeps the choice's id through load and save", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoiceId: "log" });
 
 		expect(decoded.warnings).toEqual([]);
 		expect(decoded.changed).toBe(false);
-		expect(decoded.settings.timestamp.quickAddChoice).toBe("Log");
+		expect(decoded.settings.timestamp.quickAddChoiceId).toBe("log");
 		expect(persisted(decoded)).toBe(
-			'{"template":"- {{time}} ","offset":0,"quickAddChoice":"Log"}',
+			'{"template":"- {{time}} ","offset":0,"quickAddChoiceId":"log"}',
 		);
 	});
 
@@ -962,14 +962,15 @@ describe("QuickAdd choice", () => {
 		);
 	});
 
-	it("drops a choice that is not text, with a warning", () => {
-		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoice: 42 });
+	it("drops a choice id that is not text, with a warning", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoiceId: 42 });
 
-		expect(decoded.warnings).toEqual(["timestamp.quickAddChoice: expected a string"]);
+		expect(decoded.warnings).toEqual(["timestamp.quickAddChoiceId: expected a string"]);
 		expect(persisted(decoded)).toBe('{"template":"- {{time}} ","offset":0}');
 	});
 
-	// 2.22.0 decodes the timestamp setting as this version decodes a field it does not know.
+	// 2.22.0 knows no quickAddChoiceId, and decodes the timestamp setting as this version
+	// decodes a field it does not know, so a 2.22.0 device keeps the id when it saves.
 	it("keeps a timestamp field this version does not know through load and save", () => {
 		const decoded = saved({ template: "- {{time}} ", offset: 0, nextField: "kept" });
 
