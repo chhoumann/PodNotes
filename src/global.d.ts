@@ -26,7 +26,13 @@ interface App2 extends App {
 				manifest: Manifest;
 				app: App;
 			}
-		>;
+		> & {
+			quickadd?: {
+				api: {
+					executeChoice(choice: string, variables: Record<string, string>): Promise<void>;
+				};
+			};
+		};
 		requestSaveConfig: () => void;
 		updates: Record<string, unknown>;
 	};

@@ -7,9 +7,14 @@ import {
 	type TFile,
 	type WorkspaceLeaf,
 } from "obsidian";
-import { TimestampTemplateEngine } from "src/TemplateEngine";
-import { createPodcastNoteFileIfNotExists } from "src/createPodcastNote";
+import type App2 from "src/global";
+import { resolveEpisodeUrl, TimestampTemplateEngine } from "src/TemplateEngine";
+import { createPodcastNoteFileIfNotExists, getPodcastNotePath } from "src/createPodcastNote";
+import { withoutPrivateFeedAddresses } from "src/services/privateFeeds";
+import type { Episode } from "src/types/Episode";
 import { noticeWithUndo } from "src/ui/undoNotice";
+import { episodeTimestampLink } from "src/utility/formatEpisodeTimestamp";
+import { formatDuration } from "src/utility/formatDuration";
 import { prepareTimestampForInsertion } from "src/utility/prepareTimestampInsertion";
 import { createRecentPodcastSegment, getSegmentCaptureTemplate } from "src/utility/podcastSegment";
 import type PodNotes from "src/main";
@@ -22,6 +27,40 @@ export interface Capture {
 	text: string;
 	/** The episode note did not exist and was created for this capture. */
 	created: boolean;
+}
+
+/** A capture's text and the position it marks: a moment, or a segment's range. */
+interface Rendered {
+	readonly text: string;
+	readonly start: number;
+	readonly end?: number;
+}
+
+/** What a QuickAdd choice reads about a capture, as {{VALUE:<name>}}. */
+export type QuickAddVariables = Record<
+	"timestamp" | "time" | "seconds" | "link" | "episode" | "podcast" | "url" | "episodeNote",
+	string
+>;
+
+export function quickAddVariables(
+	episode: Episode,
+	{ text, start, end }: Rendered,
+): QuickAddVariables {
+	const variables: QuickAddVariables = {
+		timestamp: text,
+		time:
+			end === undefined
+				? formatDuration(start)
+				: `${formatDuration(start)}-${formatDuration(end)}`,
+		seconds: String(Math.floor(start)),
+		link: episodeTimestampLink(episode, start, end),
+		episode: episode.title,
+		podcast: episode.podcastName,
+		url: resolveEpisodeUrl(withoutPrivateFeedAddresses(episode)),
+		episodeNote: getPodcastNotePath(episode),
+	};
+	// The episode names its feed's address, so redaction finds it even when no saved feed does.
+	return withoutPrivateFeedAddresses([variables, episode] as const)[0];
 }
 
 /** A note's text as a capture found it and as it left it, and the caret it found in its editor. */
@@ -62,7 +101,11 @@ export class CaptureService {
 	}
 
 	timestamp(): Promise<Capture | null> {
-		return this.capture((template) => TimestampTemplateEngine(template));
+		const { api, settings } = this.plugin;
+		return this.capture((template) => ({
+			text: TimestampTemplateEngine(template),
+			start: Math.max(0, api.currentTime - (settings.timestamp.offset ?? 0)),
+		}));
 	}
 
 	segment(seconds: number): Promise<Capture | null> {
@@ -76,11 +119,15 @@ export class CaptureService {
 				new Notice("Play more of the episode before capturing a segment");
 				return null;
 			}
-			return TimestampTemplateEngine(getSegmentCaptureTemplate(template), { segment });
+			return {
+				text: TimestampTemplateEngine(getSegmentCaptureTemplate(template), { segment }),
+				start: segment.startTime,
+				end: segment.endTime,
+			};
 		});
 	}
 
-	private async capture(render: (template: string) => string | null): Promise<Capture | null> {
+	private async capture(render: (template: string) => Rendered | null): Promise<Capture | null> {
 		const { api, settings } = this.plugin;
 		const episode = api.podcast;
 		if (!episode) {
@@ -91,8 +138,14 @@ export class CaptureService {
 			new Notice("Set a Timestamp template in settings to capture a timestamp.");
 			return null;
 		}
-		const text = render(settings.timestamp.template);
-		if (text === null) return null;
+		const rendered = render(settings.timestamp.template);
+		if (rendered === null) return null;
+		const choice = settings.timestamp.quickAddChoice?.trim();
+		if (choice) {
+			await this.runQuickAdd(choice, quickAddVariables(episode, rendered));
+			return null;
+		}
+		const { text } = rendered;
 
 		const target = this.editorTarget();
 		if (target?.editor) {
@@ -147,6 +200,19 @@ export class CaptureService {
 			console.error("PodNotes: failed to capture timestamp into episode note", error);
 			new Notice("Failed to capture timestamp into episode note");
 			return null;
+		}
+	}
+
+	private async runQuickAdd(choice: string, variables: QuickAddVariables): Promise<void> {
+		const quickAdd = (this.plugin.app as App2).plugins.plugins.quickadd?.api;
+		if (!quickAdd) {
+			new Notice("Install and enable QuickAdd to capture with a QuickAdd choice");
+			return;
+		}
+		try {
+			await quickAdd.executeChoice(choice, variables);
+		} catch (error) {
+			console.error("PodNotes: the QuickAdd choice failed", error);
 		}
 	}
 
