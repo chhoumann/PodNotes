@@ -260,10 +260,22 @@ async function noteAt(
 	seconds: number,
 	quickAddChoiceId = LOG_ID,
 ): Promise<{ server: FixtureServer; notePath: string }> {
-	const { obsidian, sandbox } = getContext();
+	const { obsidian } = getContext();
 	const played = await playAt(seconds, { template: "{{linktime}}", quickAddChoiceId });
 	await runCommand(obsidian, `${PLUGIN_ID}:create-podcast-note`);
-	await sandbox.waitForExists(NOTE, { timeoutMs: 10_000 });
+	// Obsidian closes Settings when it focuses a note, so a test opens Settings only after this.
+	expect(
+		await eventually(
+			obsidian,
+			() =>
+				obsidian.dev.evalJson<boolean>(
+					`Boolean(app.workspace.getLeavesOfType("markdown").find((leaf) => leaf.view.file?.path === ${jsLiteral(played.notePath)})?.containerEl.contains(document.activeElement))`,
+				),
+			true,
+			10_000,
+		),
+		"the new episode note opened, with focus",
+	).toBe(true);
 	return played;
 }
 
