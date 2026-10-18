@@ -425,8 +425,9 @@ describe("captures with a QuickAdd choice", () => {
 		await settingsShow(["Choose...", "Create"], "row-unset");
 
 		await click(obsidian, rowControl("Choose..."));
-		const picker = '[...document.querySelectorAll(".modal.qa-choice-suggester")]';
+		const picker = '[...document.querySelectorAll(".qa-choice-suggester")]';
 		await waitUntilShown(obsidian, { name: "QuickAdd's choice picker", elements: picker });
+		await obsidian.dev.screenshot(path.join(EVIDENCE, "picker-open.png"));
 		await typeText(obsidian, "Log");
 		await screenshot("picker", picker);
 		await pressKey(obsidian, "Enter");
@@ -462,7 +463,7 @@ describe("captures with a QuickAdd choice", () => {
 		).toBeNull();
 
 		await runCommand(obsidian, `${PLUGIN_ID}:capture-timestamp`);
-		const first = `## Notes\n- ${link(server, 30)} \n`;
+		const first = `## Notes\n- ${link(server, 30)} `;
 		expect(
 			await eventually(
 				obsidian,
@@ -473,7 +474,7 @@ describe("captures with a QuickAdd choice", () => {
 		).toBe(first);
 		await seek(40);
 		await runCommand(obsidian, `${PLUGIN_ID}:capture-timestamp`);
-		const second = `${first}- ${link(server, 40)} \n`;
+		const second = `${first}\n- ${link(server, 40)} `;
 		expect(
 			await eventually(obsidian, () => readVaultText(obsidian, notePath), second),
 			"the second capture, last in the section",
