@@ -41,10 +41,6 @@ function setupPlugin({
 	// Build a bare instance so we exercise activateView without running the full
 	// onload() side effects (store wiring, command registration, etc.).
 	const plugin = Object.create(PodNotes.prototype) as PodNotes;
-	Object.assign(plugin as unknown as Record<string, unknown>, {
-		podcastViewMountEnabled: true,
-		views: new Set(),
-	});
 	(plugin as unknown as { app: { workspace: typeof workspace } }).app = {
 		workspace,
 	};
@@ -87,25 +83,6 @@ describe("PodNotes.activateView", () => {
 
 		await expect(plugin.activateView()).resolves.toBeUndefined();
 		expect(workspace.revealLeaf).not.toHaveBeenCalled();
-	});
-
-	it("enables and mounts a dormant restored view before revealing it", async () => {
-		const existing = makeLeaf();
-		const firstRestoredView = { mountPodcastView: vi.fn() };
-		const secondRestoredView = { mountPodcastView: vi.fn() };
-		const { plugin } = setupPlugin({ existingLeaves: [existing] });
-		Object.assign(plugin as unknown as Record<string, unknown>, {
-			podcastViewMountEnabled: false,
-			views: new Set([firstRestoredView, secondRestoredView]),
-		});
-
-		expect(plugin.shouldMountPodcastView()).toBe(false);
-
-		await plugin.activateView();
-
-		expect(plugin.shouldMountPodcastView()).toBe(true);
-		expect(firstRestoredView.mountPodcastView).toHaveBeenCalledTimes(1);
-		expect(secondRestoredView.mountPodcastView).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -150,9 +127,6 @@ describe("PodNotes.onLayoutReady", () => {
 			isUnloaded: false,
 			isReady: true,
 			storeUnsubscribers: [],
-			views: new Set(),
-			// onload leaves the view dormant in the mobile app.
-			podcastViewMountEnabled: runtime === "desktop",
 			settings: structuredClone(DEFAULT_SETTINGS),
 			persistenceUnknownFields: {},
 			loadData: vi.fn(async () => structuredClone(disk) ?? null),
@@ -250,21 +224,6 @@ describe("PodNotes.onLayoutReady", () => {
 			expect(workspace.detachLeavesOfType).not.toHaveBeenCalled();
 		});
 	});
-
-	it("mounts the dormant view when the mobile app opens it on the first start", async () => {
-		const { plugin } = await start("mobile");
-
-		expect(plugin.shouldMountPodcastView()).toBe(true);
-	});
-
-	it("keeps the view dormant on a later mobile start", async () => {
-		const { plugin } = await start(
-			"mobile",
-			encodePodNotesData(structuredClone(DEFAULT_SETTINGS)),
-		);
-
-		expect(plugin.shouldMountPodcastView()).toBe(false);
-	});
 });
 
 // Locks the actual #55 wiring (not just activateView's internals): the
@@ -328,7 +287,6 @@ describe("PodNotes onload wiring (#55)", () => {
 			closing: null,
 			writeInFlight: null,
 			storeUnsubscribers: [],
-			views: new Set(),
 			manifest: { dir: ".obsidian/plugins/podnotes" },
 			app: {
 				loadLocalStorage: vi.fn(() => null),

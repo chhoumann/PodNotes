@@ -12,7 +12,7 @@ import {
 } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import { registerCommands } from "src/commands";
-import { normalizePath, Notice, Platform, Plugin, type WorkspaceLeaf } from "obsidian";
+import { normalizePath, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 import { API } from "src/API/API";
 import type { IAPI } from "src/API/IAPI";
 import { VIEW_TYPE } from "src/constants";
@@ -96,8 +96,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	public navigation!: Navigation;
 	public online!: Readable<boolean>;
 
-	private views = new Set<MainView>();
-
 	// Store subscriptions tied to the plugin lifetime. Disposed together in onunload.
 	private storeUnsubscribers: Unsubscriber[] = [];
 	private transcriptionService?: TranscriptionService;
@@ -106,7 +104,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 
 	private isUnloaded = false;
 	private freshInstall = false;
-	private podcastViewMountEnabled = true;
 	private isReady = false;
 	// Set once the window starts unloading or Obsidian quits: a write started then is
 	// cut off after it truncates the file, which leaves data.json empty.
@@ -123,8 +120,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		// Before registerView, where the views Obsidian restores mount and append their sheets.
 		removePreviousStyles(this.app.workspace);
 		this.isUnloaded = false;
-		// The mobile app keeps a restored view dormant until PodNotes is opened.
-		this.podcastViewMountEnabled = !Platform.isMobileApp && this.app.isMobile !== true;
 		this.registerDomEvent(window, "pagehide", () => {
 			this.closing = "window-unloading";
 		});
@@ -202,11 +197,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.addSettingTab(new PodNotesSettingsTab(this.app, this));
 
 		this.navigation = new Navigation();
-		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => {
-			const view = new MainView(leaf, this);
-			this.views.add(view);
-			return view;
-		});
+		this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => new MainView(leaf, this));
 
 		// PodNotes is a single-instance view, and onunload deliberately does NOT
 		// detach its leaves (detaching there would reset a leaf the user moved back
@@ -265,11 +256,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 	// makes "Show PodNotes" and the ribbon icon reliably surface the view even
 	// when it is already open but hidden in a collapsed/overflowing sidebar (#55).
 	async activateView(): Promise<void> {
-		this.podcastViewMountEnabled = true;
-		for (const view of this.views) {
-			view.mountPodcastView();
-		}
-
 		const { workspace } = this.app;
 
 		const existing = workspace.getLeavesOfType(VIEW_TYPE);
@@ -308,14 +294,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		void this.saveSettings();
 	}
 
-	shouldMountPodcastView(): boolean {
-		return this.podcastViewMountEnabled;
-	}
-
-	unregisterPodcastView(view: MainView): void {
-		this.views.delete(view);
-	}
-
 	// Collapse the single-instance player view back to one leaf, keeping the
 	// first (earliest) so a cold-restart-restored leaf is preserved while a
 	// hot-reload's duplicate auto-open is dropped. Runs on layout-change; a no-op
@@ -352,7 +330,6 @@ export default class PodNotes extends Plugin implements IPodNotes {
 		this.localFilesMirrorUnsubscribe?.();
 		this.transcriptionService?.dispose();
 		this.transcriptionService = undefined;
-		this.views.clear();
 
 		// Intentionally do NOT detach the view's leaves here. Obsidian persists and
 		// restores plugin leaves across reloads; detaching in onunload would reset a

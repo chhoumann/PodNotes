@@ -73,7 +73,6 @@ async function loadPlugin(data: Record<string, unknown>): Promise<PodNotes> {
 		closing: null,
 		writeInFlight: null,
 		storeUnsubscribers: [],
-		views: new Set(),
 		manifest: { dir: ".obsidian/plugins/podnotes" },
 		app: {
 			loadLocalStorage: vi.fn(() => null),
