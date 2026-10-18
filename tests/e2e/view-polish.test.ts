@@ -255,7 +255,7 @@ test("on a phone, a podcast's header keeps its cover at the left under a theme t
 				return Object.fromEntries(["dark", "light"].map((theme) => {
 					document.body.classList.remove("theme-dark", "theme-light");
 					document.body.classList.add("theme-" + theme);
-					const cover = hero.querySelector(".pn-cover").getBoundingClientRect();
+					const cover = hero.querySelector("img.pn-cover").getBoundingClientRect();
 					let page = filter.parentElement;
 					while (getComputedStyle(page).backgroundColor === "rgba(0, 0, 0, 0)") page = page.parentElement;
 					return [${jsLiteral(place)} + ", " + theme, {
