@@ -23,6 +23,12 @@ const LONG: FixtureFeed = {
 	artwork: false,
 	episodes: [{ title: "First Steps", seconds: 60, pubDate: pubDate(0) }],
 };
+const SHORT: FixtureFeed = {
+	title: "Short Show",
+	slug: "short-show",
+	artwork: true,
+	episodes: [{ title: "First Steps", seconds: 60, pubDate: pubDate(0) }],
+};
 const PRIVATE = "Missing Address";
 const SECRET_ID = "podnotes-feed-url-4b0c7e1a-2f6d-4c3b-9a8e-5d1f0e2c7b9a";
 
@@ -221,4 +227,61 @@ test("on a phone, the Escape that closes a row's menu in the right drawer leaves
 	expect(
 		await eventually(obsidian, () => isShown(obsidian, ui.menuItem("Add to queue")), false),
 	).toBe(false);
+});
+
+test("on a phone, a podcast's header keeps its cover at the left under a theme that centers images, over a search row in the color of the page behind it", async () => {
+	const context = getContext();
+	const { obsidian } = context;
+	await asPhone(obsidian);
+	const server = await startFixtureServer([SHORT]);
+	onTestFinished(() => server.stop());
+	await seedLibrary(context, server, { subscriptions: [SHORT] });
+
+	const headers: Record<string, unknown> = {};
+	for (const place of ["right drawer", "main area"] as const) {
+		await placePodNotes(obsidian, place);
+		await showLibrary(obsidian);
+		await click(obsidian, ui.podcastCard(SHORT.title));
+		await waitUntilShown(obsidian, ui.podcastPage(SHORT.title));
+		// A theme or snippet that centers every image, as on the phone in #506.
+		const shown = await obsidian.dev.evalJson<Record<string, unknown>>(`(() => {
+			const view = document.querySelector(${jsLiteral(PLAYER_VIEW)});
+			const hero = view.querySelector(".pn-hero");
+			const filter = view.querySelector(".pn-filter");
+			const centered = document.head.appendChild(document.createElement("style"));
+			centered.textContent = "img { margin-inline: auto !important; }";
+			const classes = document.body.className;
+			try {
+				return Object.fromEntries(["dark", "light"].map((theme) => {
+					document.body.classList.remove("theme-dark", "theme-light");
+					document.body.classList.add("theme-" + theme);
+					const cover = hero.querySelector("img.pn-cover").getBoundingClientRect();
+					let page = filter.parentElement;
+					while (getComputedStyle(page).backgroundColor === "rgba(0, 0, 0, 0)") page = page.parentElement;
+					return [${jsLiteral(place)} + ", " + theme, {
+						coverFromEdge: Math.round(cover.left - hero.getBoundingClientRect().left),
+						titleFromCover: Math.round(hero.querySelector("h1").getBoundingClientRect().left - cover.right),
+						band: getComputedStyle(filter).backgroundColor,
+						page: getComputedStyle(page).backgroundColor,
+					}];
+				}));
+			} finally {
+				centered.remove();
+				document.body.className = classes;
+			}
+		})()`);
+		Object.assign(headers, shown);
+	}
+
+	const atLeft = { coverFromEdge: 0, titleFromCover: 12 };
+	expect(headers).toEqual({
+		"right drawer, dark": { ...atLeft, band: "rgb(30, 30, 30)", page: "rgb(30, 30, 30)" },
+		"right drawer, light": {
+			...atLeft,
+			band: "rgb(255, 255, 255)",
+			page: "rgb(255, 255, 255)",
+		},
+		"main area, dark": { ...atLeft, band: "rgb(0, 0, 0)", page: "rgb(0, 0, 0)" },
+		"main area, light": { ...atLeft, band: "rgb(255, 255, 255)", page: "rgb(255, 255, 255)" },
+	});
 });

@@ -131,7 +131,10 @@
 			border-radius: 8px;
 		}
 
+		/* The text takes the rest of the row, so no space is left for a theme's auto
+		   margins on images to move the cover into. */
 		> div {
+			flex: 1;
 			min-width: 0;
 		}
 
