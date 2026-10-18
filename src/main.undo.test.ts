@@ -52,7 +52,6 @@ async function loadPlugin(secrets: obsidian.SecretStorage): Promise<PodNotes> {
 		closing: null,
 		writeInFlight: null,
 		storeUnsubscribers: [],
-		views: new Set(),
 		manifest: { dir: ".obsidian/plugins/podnotes" },
 		app: {
 			loadLocalStorage: vi.fn(() => null),

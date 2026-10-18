@@ -49,18 +49,8 @@ function createVault() {
 	return vault;
 }
 
-function createView({
-	shouldMount,
-	layoutReady = true,
-}: {
-	shouldMount: boolean;
-	layoutReady?: boolean;
-}) {
-	const plugin = {
-		navigation: new Navigation(),
-		shouldMountPodcastView: vi.fn(() => shouldMount),
-		unregisterPodcastView: vi.fn(),
-	} as unknown as IPodNotes;
+function createView({ layoutReady = true }: { layoutReady?: boolean } = {}) {
+	const plugin = { navigation: new Navigation() } as unknown as IPodNotes;
 	const view = new MainView({} as WorkspaceLeaf, plugin);
 	const contentEl = document.createElement("div");
 	const pending: Array<() => void> = [];
@@ -96,22 +86,13 @@ async function closeView(view: MainView): Promise<void> {
 	await (view as unknown as { close(): Promise<void> }).close();
 }
 
-describe("MainView mobile startup mounting", () => {
+describe("MainView mounting", () => {
 	afterEach(() => {
 		vi.clearAllMocks();
 	});
 
-	it("does not mount the Svelte UI when plugin startup keeps the view dormant", async () => {
-		const { plugin, view } = createView({ shouldMount: false });
-
-		await openView(view);
-
-		expect(plugin.shouldMountPodcastView).toHaveBeenCalled();
-		expect(svelte.mount).not.toHaveBeenCalled();
-	});
-
-	it("mounts the Svelte UI when the plugin allows the view to wake", async () => {
-		const { contentEl, plugin, view } = createView({ shouldMount: true });
+	it("mounts the Svelte UI when Obsidian opens the view", async () => {
+		const { contentEl, plugin, view } = createView();
 
 		await openView(view);
 
@@ -123,7 +104,7 @@ describe("MainView mobile startup mounting", () => {
 	});
 
 	it("gives its components the view's own key scope, the one Obsidian hands keys to", async () => {
-		const { view } = createView({ shouldMount: true });
+		const { view } = createView();
 
 		await openView(view);
 
@@ -132,7 +113,7 @@ describe("MainView mobile startup mounting", () => {
 	});
 
 	it("Save as note asks for the feed's transcript without the paid fallback; Transcribe uses the audio", async () => {
-		const { plugin, view } = createView({ shouldMount: true });
+		const { plugin, view } = createView();
 		const transcription = {
 			transcribeCurrentEpisode: vi.fn(async () => {}),
 			transcribeCurrentEpisodeFromAudio: vi.fn(),
@@ -149,21 +130,8 @@ describe("MainView mobile startup mounting", () => {
 		expect(transcription.transcribeCurrentEpisodeFromAudio).toHaveBeenCalledExactlyOnceWith();
 	});
 
-	it("mountPodcastView wakes a dormant restored view exactly once", () => {
-		const { contentEl, plugin, view } = createView({ shouldMount: false });
-
-		view.mountPodcastView();
-		view.mountPodcastView();
-
-		expect(svelte.mount).toHaveBeenCalledTimes(1);
-		expect(svelte.mount).toHaveBeenCalledWith(expect.anything(), {
-			target: contentEl,
-			props: { services: expect.objectContaining({ navigation: plugin.navigation }) },
-		});
-	});
-
 	it("gives the view the plugin's settings, current through a toggle and an import", async () => {
-		const { plugin, view } = createView({ shouldMount: true });
+		const { plugin, view } = createView();
 		const settings = (autoQueue: boolean): IPodNotesSettings => ({
 			...structuredClone(DEFAULT_SETTINGS),
 			autoQueue,
@@ -184,13 +152,12 @@ describe("MainView mobile startup mounting", () => {
 	});
 
 	it("unmounts a mounted PodcastView", async () => {
-		const { plugin, view } = createView({ shouldMount: true });
+		const { view } = createView();
 
 		await openView(view);
 		await closeView(view);
 
 		expect(svelte.unmount).toHaveBeenCalledTimes(1);
-		expect(plugin.unregisterPodcastView).toHaveBeenCalledWith(view);
 	});
 });
 
@@ -199,7 +166,7 @@ describe("MainView episode notes", () => {
 	const notePath = "podcasts/Episode One.md";
 
 	function createNotesView(options: { layoutReady?: boolean } = {}) {
-		const created = createView({ shouldMount: true, ...options });
+		const created = createView(options);
 		pluginStore.set({
 			app: created.app,
 			settings: { note: { path: "podcasts/{{title}}" } },
@@ -317,12 +284,12 @@ describe("MainView episode notes", () => {
 
 describe("MainView workspace state", () => {
 	it("saves the open page and restores it in a new session", async () => {
-		const first = createView({ shouldMount: true });
+		const first = createView();
 		first.plugin.navigation.go({ kind: "feed", key: "Test Podcast" });
 		first.plugin.navigation.expand();
 		const saved = JSON.parse(JSON.stringify(first.view.getState()));
 
-		const next = createView({ shouldMount: true });
+		const next = createView();
 		await next.view.setState(saved, { history: false });
 
 		expect(next.plugin.navigation.current).toEqual({
@@ -336,7 +303,7 @@ describe("MainView workspace state", () => {
 	it.each([undefined, null, {}, { page: { kind: "feed" } }, { page: "queue" }])(
 		"keeps the page for the saved state %j",
 		async (state) => {
-			const { plugin, view } = createView({ shouldMount: true });
+			const { plugin, view } = createView();
 			plugin.navigation.go({ kind: "latest" });
 
 			await view.setState(state, { history: false });
@@ -347,7 +314,7 @@ describe("MainView workspace state", () => {
 	);
 
 	it("asks Obsidian to save the layout when the page changes, until the view closes", async () => {
-		const { plugin, view, workspace } = createView({ shouldMount: true });
+		const { plugin, view, workspace } = createView();
 		await openView(view);
 
 		plugin.navigation.expand();
