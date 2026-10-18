@@ -734,7 +734,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				let clear!: ExtraButtonComponent;
 				setting
 					.addButton((button) => {
-						choose = button.setClass(NAMED_BY_ROW).onClick(async () => {
+						choose = button.onClick(async () => {
 							const quickAdd = findQuickAdd(this.app);
 							if ("fix" in quickAdd) {
 								(this.app as App2).setting.openTabById("community-plugins");
@@ -779,6 +779,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 								? (quickAdd.api.getChoice({ id })?.name ?? "Missing choice")
 								: "Choose...",
 					);
+					choose.buttonEl.classList.toggle(NAMED_BY_ROW, "api" in quickAdd);
 					create.buttonEl.toggle("api" in quickAdd && !id);
 					clear.extraSettingsEl.toggle(Boolean(id));
 				});

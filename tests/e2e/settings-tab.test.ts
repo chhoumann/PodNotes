@@ -115,7 +115,6 @@ describe("PodNotes settings tab", () => {
 			"Next track",
 			"Timestamp template",
 			"Timestamp offset (s)",
-			"QuickAdd choice",
 			"Episode note path",
 			"Episode note template",
 			"Podcast note path",
@@ -134,18 +133,15 @@ describe("PodNotes settings tab", () => {
 			"Export settings",
 		]);
 		// A focused toggle's label would also take the name of the checkbox inside it. An API
-		// key's button keeps its own words, Link... or Change, before its row's name, and so
-		// does the QuickAdd choice button, which asks for QuickAdd in this vault.
+		// key's button keeps its own words, Link... or Change, before its row's name.
 		expect(
 			fields.filter(({ row, name, from }) => name !== row || from !== "aria-labelledby"),
 		).toEqual(
-			[
-				{ row: "QuickAdd choice", name: "Install QuickAdd QuickAdd choice" },
-				...["OpenAI API key", "Deepgram API key"].map((row) => ({
-					row,
-					name: expect.stringMatching(new RegExp(`^(Link\\.\\.\\.|Change) ${row}$`)),
-				})),
-			].map((field) => ({ ...field, from: "aria-labelledby" })),
+			["OpenAI API key", "Deepgram API key"].map((row) => ({
+				row,
+				name: expect.stringMatching(new RegExp(`^(Link\\.\\.\\.|Change) ${row}$`)),
+				from: "aria-labelledby",
+			})),
 		);
 	});
 

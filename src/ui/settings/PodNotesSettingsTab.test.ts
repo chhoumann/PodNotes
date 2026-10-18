@@ -197,7 +197,9 @@ describe("sections", () => {
 	});
 
 	test("each field is named after its row where it takes focus, without an aria-label Obsidian would show as a tooltip", () => {
-		const { tab } = open();
+		const { plugin, tab } = open();
+		Object.assign(plugin.app, { plugins: fakeQuickAdd().plugins });
+		tab.display();
 		const fields = [
 			...tab.containerEl.querySelectorAll<HTMLElement>(
 				'.setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"], button[aria-labelledby])',
@@ -215,6 +217,7 @@ describe("sections", () => {
 			"Next track",
 			"Timestamp template",
 			"Timestamp offset (s)",
+			"QuickAdd choice",
 			"QuickAdd choice",
 			"Episode note path",
 			"Episode note template",
@@ -752,6 +755,14 @@ describe("QuickAdd choice", () => {
 
 		expect((await disk()).timestamp.quickAddChoiceId).toBe("log");
 		expect(shown()).toEqual(["Log", "Clear"]);
+	});
+
+	test("a button that asks for QuickAdd is named by its own words alone", () => {
+		const { row } = withQuickAdd(unusableQuickAdd("Install").plugins);
+
+		expect(row("QuickAdd choice").querySelector("button")).toHaveAccessibleName(
+			"Install QuickAdd",
+		);
 	});
 
 	test.each(["Install", "Enable", "Update"] as const)(
