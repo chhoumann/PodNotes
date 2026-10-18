@@ -320,6 +320,11 @@
 			--pn-surface: var(--background-primary);
 		}
 
+		/* A mobile drawer has its own color. */
+		.workspace-drawer & {
+			--pn-bg: var(--mobile-sidebar-background);
+		}
+
 		&.is-wide {
 			--pn-pad: var(--size-4-6);
 			--pn-head: 44px;
