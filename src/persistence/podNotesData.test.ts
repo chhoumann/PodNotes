@@ -929,3 +929,51 @@ describe("timestamp template (#345)", () => {
 		expect(decoded.warnings).toEqual(warnings);
 	});
 });
+
+describe("QuickAdd choice", () => {
+	const saved = (timestamp: Record<string, unknown>) =>
+		decodePodNotesData({
+			...listenerData,
+			schemaVersion: 2,
+			openAISecretId: "",
+			deepgramSecretId: "",
+			timestamp,
+		});
+	const persisted = ({ settings, unknownFields }: ReturnType<typeof decodePodNotesData>) =>
+		JSON.stringify(encodePodNotesData(settings, unknownFields).timestamp);
+
+	it("keeps the choice through load and save", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoice: "Log" });
+
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.changed).toBe(false);
+		expect(decoded.settings.timestamp.quickAddChoice).toBe("Log");
+		expect(persisted(decoded)).toBe(
+			'{"template":"- {{time}} ","offset":0,"quickAddChoice":"Log"}',
+		);
+	});
+
+	it("writes no choice for data without one", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0 });
+
+		expect(persisted(decoded)).toBe('{"template":"- {{time}} ","offset":0}');
+		expect(persisted(decodePodNotesData(null))).toBe(
+			'{"template":"- {{linktime}} ","offset":0}',
+		);
+	});
+
+	it("drops a choice that is not text, with a warning", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoice: 42 });
+
+		expect(decoded.warnings).toEqual(["timestamp.quickAddChoice: expected a string"]);
+		expect(persisted(decoded)).toBe('{"template":"- {{time}} ","offset":0}');
+	});
+
+	// 2.22.0 decodes the timestamp setting as this version decodes a field it does not know.
+	it("keeps a timestamp field this version does not know through load and save", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, nextField: "kept" });
+
+		expect(decoded.warnings).toEqual([]);
+		expect(persisted(decoded)).toBe('{"template":"- {{time}} ","offset":0,"nextField":"kept"}');
+	});
+});

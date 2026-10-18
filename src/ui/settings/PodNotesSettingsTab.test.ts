@@ -168,6 +168,7 @@ describe("sections", () => {
 				[
 					"Timestamp template",
 					"Timestamp offset (s)",
+					"QuickAdd choice",
 					"Episode note path",
 					"Episode note template",
 					"Podcast note path",
@@ -211,6 +212,7 @@ describe("sections", () => {
 			"Next track",
 			"Timestamp template",
 			"Timestamp offset (s)",
+			"QuickAdd choice",
 			"Episode note path",
 			"Episode note template",
 			"Podcast note path",
@@ -290,6 +292,22 @@ describe("text fields", () => {
 		complete(field("Timestamp offset (s)"));
 
 		expect(preview()).toBe("00:01:32");
+	});
+
+	test("the QuickAdd choice shows the saved one and saves the one typed", async () => {
+		const { field, disk } = open({
+			timestamp: { template: "- {{time}} ", offset: 0, quickAddChoice: "Log" },
+		});
+		expect(field("QuickAdd choice").value).toBe("Log");
+
+		retype(field("QuickAdd choice"), "Podcast log");
+		complete(field("QuickAdd choice"));
+
+		expect((await disk()).timestamp).toEqual({
+			template: "- {{time}} ",
+			offset: 0,
+			quickAddChoice: "Podcast log",
+		});
 	});
 
 	test("each keystroke applies at once; the save waits for 500 ms without one and tells an open view", async () => {

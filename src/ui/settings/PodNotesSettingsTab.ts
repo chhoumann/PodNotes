@@ -320,6 +320,12 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					},
 					"Captures this many seconds earlier.",
 				),
+				this.textRow("QuickAdd choice", {
+					read: () => this.plugin.settings.timestamp.quickAddChoice ?? "",
+					write: (value) => {
+						this.plugin.settings.timestamp.quickAddChoice = value;
+					},
+				}),
 				this.textRow("Episode note path", {
 					...this.text((settings) => settings.note, "path"),
 					preview: pathPreview(FilePathTemplateEngine),
