@@ -7,9 +7,9 @@
 //                                                for the fixture server, OpenAI and Deepgram
 //   node .claude/skills/verify/net.mjs unwatch   restore fetch and requestUrl
 //
-// PodNotes sends OpenAI uploads through window.fetch and everything else
-// (feeds, audio, transcripts, Deepgram) through requestUrl, which Obsidian
-// forwards to its main process on the `request-url` IPC channel.
+// PodNotes sends its requests (feeds, audio, transcripts, OpenAI, Deepgram)
+// through requestUrl, which Obsidian forwards to its main process on the
+// `request-url` IPC channel. The fetch log catches anything that bypasses it.
 import { fileURLToPath } from "node:url";
 import {
 	cliSocketExists,
@@ -78,11 +78,6 @@ const WATCH = `(() => {
 	window.fetch = async function (input, init) {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 		const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-		if (url.startsWith("https://api.openai.com/")) {
-			const file = init?.body instanceof FormData ? init.body.get("file") : null;
-			entries.push({ via: "fetch", method, url: logged(url), answeredBy: "fixture provider", uploadBytes: file instanceof Blob ? file.size : 0 });
-			return new Response(JSON.stringify({ text, segments: [{ speaker: "A", text, start: 0, end: 1 }] }), { status: 200, headers: { "content-type": "application/json" } });
-		}
 		entries.push({ via: "fetch", method, url: logged(url) });
 		return originalFetch.call(this, input, init);
 	};
@@ -91,9 +86,14 @@ const WATCH = `(() => {
 	ipc.send = function (channel, replyChannel, request, ...rest) {
 		if (channel === "request-url" && typeof request?.url === "string") {
 			const method = (request.method ?? "GET").toUpperCase();
-			if (request.url.startsWith("https://api.deepgram.com/")) {
+			const answer = request.url.startsWith("https://api.openai.com/")
+				? { text, segments: [{ speaker: "A", text, start: 0, end: 1 }] }
+				: request.url.startsWith("https://api.deepgram.com/")
+					? { results: { utterances: [{ speaker: 0, transcript: text, start: 0, end: 1 }] } }
+					: null;
+			if (answer) {
 				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", uploadBytes: request.body?.byteLength ?? 0 });
-				const body = new TextEncoder().encode(JSON.stringify({ results: { utterances: [{ speaker: 0, transcript: text, start: 0, end: 1 }] } })).buffer;
+				const body = new TextEncoder().encode(JSON.stringify(answer)).buffer;
 				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
 				return;
 			}

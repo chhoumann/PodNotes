@@ -328,7 +328,7 @@ export class TranscriptionService {
 		const files = await createChunkFiles(audio);
 		this.assertActive();
 		updateNotice("Starting transcription...");
-		const { text, failedChunks } = await this.transcribeChunks(files, updateNotice);
+		const { text, failedChunks, lastError } = await this.transcribeChunks(files, updateNotice);
 		this.assertActive();
 
 		// Strip the error placeholders (and trim) to see whether ANY real speech was
@@ -337,10 +337,10 @@ export class TranscriptionService {
 		// saving a body of pure error markers (empty chunks join to " ", not "").
 		const realText = text.replace(CHUNK_ERROR_PLACEHOLDER_PATTERN, " ").trim();
 		if (realText.length === 0) {
+			if (failedChunks === 0) throw new Error("Transcription returned no text.");
+			const detail = lastError instanceof Error ? lastError.message : String(lastError);
 			throw new Error(
-				failedChunks > 0
-					? `Transcription failed: all ${files.length} audio chunk(s) failed or returned no text.`
-					: "Transcription returned no text.",
+				`all ${files.length} audio chunk(s) failed or returned no text. Last error: ${detail}`,
 			);
 		}
 
@@ -402,11 +402,12 @@ export class TranscriptionService {
 	private async transcribeChunks(
 		files: File[],
 		updateNotice: (message: string) => void,
-	): Promise<{ text: string; failedChunks: number }> {
+	): Promise<{ text: string; failedChunks: number; lastError: unknown }> {
 		const apiKey = this.getApiKey();
 		const transcriptions: string[] = Array.from({ length: files.length });
 		let completedChunks = 0;
 		let failedChunks = 0;
+		let lastError: unknown;
 		let nextIndex = 0;
 
 		const updateProgress = () => {
@@ -453,6 +454,7 @@ export class TranscriptionService {
 							);
 							transcriptions[index] = chunkErrorPlaceholder(index);
 							failedChunks++;
+							lastError = error;
 							completedChunks++;
 							updateProgress();
 						} else {
@@ -469,7 +471,7 @@ export class TranscriptionService {
 		await Promise.all(workers);
 		this.assertActive();
 
-		return { text: transcriptions.join(" "), failedChunks };
+		return { text: transcriptions.join(" "), failedChunks, lastError };
 	}
 
 	private waitForRetry(delayMs: number): Promise<void> {

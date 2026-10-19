@@ -443,32 +443,36 @@ const OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcription
 export async function installOpenAIStub(obsidian: ObsidianClient, text: string): Promise<void> {
 	await obsidian.dev.evalJsonAsync(`(async () => {
 		if (window.__podnotesJourneyOpenAI) throw new Error("The OpenAI stub is already installed.");
-		const originalFetch = window.fetch;
+		const ipc = window.electron.ipcRenderer;
+		const originalSend = ipc.send;
 		const uploads = [];
-		window.fetch = async function (input, init) {
-			const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-			if (url !== ${jsLiteral(OPENAI_TRANSCRIPTIONS_URL)}) return originalFetch.call(this, input, init);
-			const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-			if (method !== "POST") throw new TypeError("The transcription upload must use POST.");
-			const body = init?.body;
-			const file = body instanceof FormData ? body.get("file") : null;
+		const answer = async (replyChannel, request) => {
+			const form = await new Response(request.body, {
+				headers: { "content-type": request.contentType ?? "" },
+			}).formData();
+			const file = form.get("file");
 			const bytes = file instanceof Blob ? new Uint8Array(await file.arrayBuffer()) : new Uint8Array();
 			const ascii = (from, to) => String.fromCharCode(...bytes.slice(from, to));
 			uploads.push({
-				method,
-				authorization: new Headers(init?.headers).get("authorization"),
-				model: body instanceof FormData ? body.get("model") : null,
+				method: (request.method ?? "GET").toUpperCase(),
+				authorization: new Headers(request.headers).get("authorization"),
+				model: form.get("model"),
 				fileName: file instanceof File ? file.name : null,
 				fileBytes: bytes.byteLength,
 				riffWave: ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE",
 				sha256: require("node:crypto").createHash("sha256").update(bytes).digest("hex"),
 			});
-			return new Response(JSON.stringify({ text: ${jsLiteral(text)} }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
-			});
+			const body = new TextEncoder().encode(JSON.stringify({ text: ${jsLiteral(text)} })).buffer;
+			ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body });
 		};
-		window.__podnotesJourneyOpenAI = { originalFetch, uploads };
+		ipc.send = function (channel, replyChannel, request, ...rest) {
+			if (channel === "request-url" && request?.url === ${jsLiteral(OPENAI_TRANSCRIPTIONS_URL)}) {
+				void answer(replyChannel, request);
+				return;
+			}
+			return originalSend.call(ipc, channel, replyChannel, request, ...rest);
+		};
+		window.__podnotesJourneyOpenAI = { ipc, originalSend, uploads };
 		return true;
 	})()`);
 }
@@ -484,7 +488,7 @@ export async function transcriptionUploads(
 export async function removeOpenAIStub(obsidian: ObsidianClient): Promise<void> {
 	await obsidian.dev.evalJson(`(() => {
 		const stub = window.__podnotesJourneyOpenAI;
-		if (stub) window.fetch = stub.originalFetch;
+		if (stub) stub.ipc.send = stub.originalSend;
 		delete window.__podnotesJourneyOpenAI;
 		return true;
 	})()`);

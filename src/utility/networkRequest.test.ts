@@ -387,6 +387,25 @@ describe("requestWithTimeout response policy", () => {
 		expect(jsonGetter).not.toHaveBeenCalled();
 	});
 
+	it("keeps a response whose Set-Cookie header Obsidian returns as an array", async () => {
+		const response = {
+			...makeResponse(),
+			headers: {
+				"retry-after": "4",
+				"set-cookie": ["__cf_bm=a; Path=/", "_cfuvid=b; Path=/"],
+			},
+		} as unknown as RequestUrlResponse;
+
+		const projected = await requestWithTimeout("https://example.com/feed", {
+			request: implementation(Promise.resolve(response)),
+		});
+
+		expect(projected.headers).toEqual({
+			"retry-after": "4",
+			"set-cookie": "__cf_bm=a; Path=/, _cfuvid=b; Path=/",
+		});
+	});
+
 	it("returns the exact status and body snapshots that passed validation", async () => {
 		const smallBody = new ArrayBuffer(2);
 		const largeBody = new ArrayBuffer(20);

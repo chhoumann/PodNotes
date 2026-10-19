@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rateLimited } from "../../../tests/mocks/openaiFailures";
+import { corsBlockedFetch, openAIMock, sentForm } from "../../../tests/mocks/openaiRequestUrl";
 import { diarizeWithOpenAI } from "./openaiProvider";
 
-const fetchMock = vi.fn<typeof fetch>();
+vi.mock("obsidian", async (importOriginal) => ({
+	...(await importOriginal<typeof import("obsidian")>()),
+	requestUrl: (await import("../../../tests/mocks/openaiRequestUrl")).openAIRequestUrl,
+}));
 
 function chunk(name: string): File {
 	return new File([new ArrayBuffer(8)], name, { type: "audio/mpeg" });
@@ -13,10 +17,10 @@ const diarized = (speaker: string, text: string) => async () =>
 		segments: [{ type: "transcript.text.segment", id: "1", speaker, start: 0, end: 1, text }],
 	});
 
-const sentForm = (call: number) => fetchMock.mock.calls[call][1]?.body as FormData;
+const sentFormOf = (call: number) => sentForm(openAIMock.mock.calls[call][0]);
 
 beforeEach(() => {
-	vi.stubGlobal("fetch", fetchMock);
+	vi.stubGlobal("fetch", corsBlockedFetch);
 	// In Obsidian's renderer `window` is the global object; the code under test uses its timers.
 	vi.stubGlobal("window", globalThis);
 });
@@ -24,12 +28,12 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
-	fetchMock.mockReset();
+	openAIMock.mockReset();
 });
 
 describe("diarizeWithOpenAI (#168)", () => {
 	it("concatenates parsed segments across chunks in order", async () => {
-		fetchMock
+		openAIMock
 			.mockImplementationOnce(diarized("A", "First."))
 			.mockImplementationOnce(diarized("B", "Second."));
 		const chunks = [chunk("a.mp3"), chunk("b.mp3")];
@@ -46,18 +50,18 @@ describe("diarizeWithOpenAI (#168)", () => {
 			{ speaker: "A", text: "First.", start: 0, end: 1 },
 			{ speaker: "B", text: "Second.", start: 0, end: 1 },
 		]);
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect([...sentForm(0).entries()]).toEqual([
+		expect(openAIMock).toHaveBeenCalledTimes(2);
+		expect([...(await sentFormOf(0)).entries()]).toEqual([
 			["model", "gpt-4o-transcribe-diarize"],
 			["file", expect.objectContaining({ name: "a.mp3" })],
 			["response_format", "diarized_json"],
 			["chunking_strategy", "auto"],
 		]);
-		expect((sentForm(1).get("file") as File).name).toBe("b.mp3");
+		expect(((await sentFormOf(1)).get("file") as File).name).toBe("b.mp3");
 	});
 
 	it("keeps a partial transcript with a marker when only some chunks fail", async () => {
-		fetchMock
+		openAIMock
 			.mockImplementationOnce(diarized("A", "Good chunk."))
 			.mockImplementation(async () => new Response("Bad Gateway", { status: 502 }));
 
@@ -76,7 +80,7 @@ describe("diarizeWithOpenAI (#168)", () => {
 	});
 
 	it("throws (writes no transcript) when every chunk fails", async () => {
-		fetchMock.mockImplementation(async () =>
+		openAIMock.mockImplementation(async () =>
 			Response.json(
 				{ error: { message: "Incorrect API key provided: sk-test." } },
 				{ status: 401 },
@@ -101,7 +105,7 @@ describe("diarizeWithOpenAI (#168)", () => {
 	it("waits out the server's Retry-After and recovers the chunk", async () => {
 		vi.useFakeTimers();
 		const sentAt: number[] = [];
-		fetchMock.mockImplementation(async () => {
+		openAIMock.mockImplementation(async () => {
 			sentAt.push(Date.now());
 			return Date.now() - sentAt[0] < 4000
 				? rateLimited({ "retry-after": "4" })
@@ -125,7 +129,7 @@ describe("diarizeWithOpenAI (#168)", () => {
 		vi.useFakeTimers();
 		const controller = new AbortController();
 		const abortReason = new Error("plugin unloaded");
-		fetchMock.mockImplementation(async () => rateLimited({ "retry-after": "30" }));
+		openAIMock.mockImplementation(async () => rateLimited({ "retry-after": "30" }));
 
 		let outcome: unknown = "pending";
 		void diarizeWithOpenAI({
@@ -143,26 +147,19 @@ describe("diarizeWithOpenAI (#168)", () => {
 			},
 		);
 		await vi.advanceTimersByTimeAsync(29_000);
-		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(openAIMock).toHaveBeenCalledOnce();
 
 		controller.abort(abortReason);
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(outcome).toBe(abortReason);
-		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(openAIMock).toHaveBeenCalledOnce();
 	});
 
-	it("aborts an in-flight request without retrying or logging a failure", async () => {
+	it("stops waiting for an in-flight request on abort without retrying or logging a failure", async () => {
 		const controller = new AbortController();
 		const abortError = new DOMException("plugin unloaded", "AbortError");
-		fetchMock.mockImplementation(
-			(_url, init) =>
-				new Promise((_resolve, reject) => {
-					init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
-						once: true,
-					});
-				}),
-		);
+		openAIMock.mockImplementation(() => new Promise<Response>(() => {}));
 		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		try {
@@ -173,13 +170,12 @@ describe("diarizeWithOpenAI (#168)", () => {
 				onProgress: () => {},
 				signal: controller.signal,
 			});
-			await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+			await vi.waitFor(() => expect(openAIMock).toHaveBeenCalledOnce());
 
 			controller.abort(abortError);
 
 			await expect(pending).rejects.toBe(abortError);
-			expect(fetchMock).toHaveBeenCalledTimes(1);
-			expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+			expect(openAIMock).toHaveBeenCalledTimes(1);
 			expect(consoleError).not.toHaveBeenCalled();
 		} finally {
 			consoleError.mockRestore();
