@@ -1,56 +1,52 @@
+import {
+	TimeoutError,
+	requestWithTimeout,
+	type NetworkBinaryResponse,
+} from "../utility/networkRequest";
+
 const TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions";
 const REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_REQUEST_BYTES = 25 * 1024 * 1024;
 const MAX_SERVER_RETRY_DELAY_MS = 60 * 1000;
+const EVERY_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => 100 + index);
 
+// OpenAI's responses do not allow Obsidian's origin, so the renderer's fetch
+// cannot read them. requestUrl has no CORS check but cannot cancel an upload,
+// so a timeout or abort only stops waiting and drops the late response.
 export async function createTranscription(
 	apiKey: string,
 	fields: Record<string, string | File>,
 	signal: AbortSignal,
 ): Promise<unknown> {
-	const body = new FormData();
-	for (const [name, value] of Object.entries(fields)) body.append(name, value);
+	const form = new FormData();
+	for (const [name, value] of Object.entries(fields)) form.append(name, value);
+	const multipart = new Request(TRANSCRIPTIONS_URL, { method: "POST", body: form });
 
-	const controller = new AbortController();
-	const forwardAbort = () => controller.abort(signal.reason);
-	signal.addEventListener("abort", forwardAbort, { once: true });
-	if (signal.aborted) forwardAbort();
-	let timedOut = false;
-	const timeout = window.setTimeout(() => {
-		timedOut = true;
-		controller.abort();
-	}, REQUEST_TIMEOUT_MS);
-
+	let response: NetworkBinaryResponse;
 	try {
-		let response: Response;
-		let text: string;
-		try {
-			// oxlint-disable-next-line no-restricted-globals -- requestUrl cannot cancel an in-flight upload.
-			response = await fetch(TRANSCRIPTIONS_URL, {
-				method: "POST",
-				headers: { Authorization: `Bearer ${apiKey}` },
-				body,
-				signal: controller.signal,
-			});
-			text = await response.text();
-		} catch (error) {
-			if (signal.aborted) throw signal.reason;
-			const mentionsTimeout = /timed? ?out/i.test(String(error));
-			throw new Error(
-				timedOut || mentionsTimeout ? "Request timed out." : "Connection error.",
-			);
-		}
-
-		if (!response.ok) {
-			throw new OpenAIStatusError(
-				`${response.status} ${errorDetail(text) || "status code (no body)"}`,
-				serverRetryDelayMs(response.headers),
-			);
-		}
-		return JSON.parse(text);
-	} finally {
-		window.clearTimeout(timeout);
-		signal.removeEventListener("abort", forwardAbort);
+		response = await requestWithTimeout(TRANSCRIPTIONS_URL, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${apiKey}` },
+			contentType: multipart.headers.get("content-type") ?? undefined,
+			body: await multipart.arrayBuffer(),
+			timeoutMs: REQUEST_TIMEOUT_MS,
+			maxRequestBodyBytes: MAX_REQUEST_BYTES,
+			acceptedStatuses: EVERY_HTTP_STATUS,
+			signal,
+		});
+	} catch (error) {
+		if (signal.aborted) throw signal.reason;
+		throw new Error(error instanceof TimeoutError ? "Request timed out." : "Connection error.");
 	}
+
+	const text = new TextDecoder().decode(response.arrayBuffer);
+	if (response.status < 200 || response.status >= 300) {
+		throw new OpenAIStatusError(
+			`${response.status} ${errorDetail(text) || "status code (no body)"}`,
+			serverRetryDelayMs(new Headers(response.headers)),
+		);
+	}
+	return JSON.parse(text);
 }
 
 export function retryDelayMs(error: unknown, fallbackMs: number): number {
