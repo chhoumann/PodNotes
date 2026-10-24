@@ -44,17 +44,14 @@ export function launchPodNotesInstance(target, deps = {}) {
 	});
 }
 
-/** @param {() => void} [onLaunch] @returns {import("obsidian-e2e/runner").CliDependencies} */
-export function podNotesRunnerDependencies(onLaunch = () => {}) {
+/** @returns {import("obsidian-e2e/runner").CliDependencies} */
+export function podNotesRunnerDependencies() {
 	return {
 		reapOrphanedInstances: async () => ({ reaped: [], scanned: 0 }),
 		ensureObsidianInstance: (options, config, deps) =>
 			ensureObsidianInstance(options, config, {
 				...deps,
-				launchObsidianInstance: async (target, execDeps) => {
-					onLaunch();
-					await launchPodNotesInstance(target, execDeps);
-				},
+				launchObsidianInstance: launchPodNotesInstance,
 			}),
 	};
 }

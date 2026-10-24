@@ -40,9 +40,10 @@ root symlinks for local Obsidian loading.
 - `npm run check:a11y`: run `lint:tsconfig`, then run `svelte-check --tsgo-experimental-api --fail-on-warnings` for source and test projects.
 - `npm run lint:tsconfig`: fail with TS18003 when `tsconfig.json` or `tsconfig.test.json` matches no files, using the native compiler without type checking.
 - `npm run test`: run Svelte checks and the application Vitest suite.
-- `npm run test:unit`: run the application Vitest suite without the Svelte checks.
+- `npm run test:unit`: run `typecheck`, then the application Vitest suite, without the Svelte checks. Bare `vitest` does not type-check.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test, including rejection of tagged templates that disable Obsidian's eval cache. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
+- `npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]`: plant a defect and pass only when the exactly named test fails on it and the command passes again once restored. Each search must match exactly once, and the plant must type-check. The files are restored on exit or interrupt. The command defaults to the unit suite filtered to the test name.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 
 `@typescript/native` aliases TypeScript 7. `typecheck` and `lint:tsconfig` call
@@ -52,13 +53,10 @@ compiler's API (`--tsgo-experimental-api`), but it still loads the `typescript`
 package, as do the TypeScript ESLint packages loaded by oxlint's Obsidian rules.
 Keep `typescript` on version 6.
 
-svelte-check exits non-zero when its check throws, for example when the native
-compiler cannot start, since 4.7.7 includes
-[sveltejs/language-tools#3133](https://github.com/sveltejs/language-tools/pull/3133).
-The native API path still passes when a tsconfig matches no files, which
-`lint:tsconfig` catches.
-`tests/tooling/svelteCheck.test.ts` runs the real `check:a11y` in temporary
-workspaces and requires it to fail on each of these cases.
+svelte-check's native API path passes when a tsconfig matches no files, which
+`lint:tsconfig` catches. `tests/tooling/svelteCheck.test.ts` runs the real
+`check:a11y` in temporary workspaces and requires it to fail on that case and
+when the native compiler cannot start.
 
 After `npm run build`, `npm run size` enforces 330,000 raw bytes and 104,000 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 
@@ -85,6 +83,13 @@ the suite's largest cost. A Node test that loads Svelte code or reads `window`
 or `document` fails with that hint. Prefer unit tests for pure utility, parser,
 store, API, and component behavior. Use Testing Library for Svelte component
 behavior instead of asserting on implementation details.
+
+A new or strengthened test counts only once it fails on a planted defect: the
+revert of the fix, and each plausible wrong fix (the right check through the
+wrong API, the right handler on the wrong scope). Prove each with
+`npm run plant`, make the plant reproduce the old code exactly, imports and
+timing included, and list the plants and the tests that caught them in the PR
+body.
 
 When a bug depends on real Obsidian runtime behavior, reproduce it in Obsidian
 before changing code and verify it there after the fix. Timestamp links, URI
@@ -145,8 +150,8 @@ npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins
 | Evidence | `npx obsidian-e2e capture launch` (a separate instance) | the capture commands below, against this instance |
 
 - `obsidian:e2e` brings the instance up when needed. A warm instance is used as
-  is: since obsidian-e2e 0.11 `run` does not reload the plugin, so pass
-  `--reload` after every rebuild or you test the old bundle.
+  is: `run` does not reload the plugin, so pass `--reload` after every rebuild
+  or you test the old bundle.
 - `npm run start:e2e-obsidian -- --print-env` prints only `export` lines
   (`OBSIDIAN_E2E_VAULT`, `_VAULT_PATH`, `_OBSIDIAN_HOME`, legacy `PODNOTES_E2E_*`
   aliases). On macOS, after
@@ -161,8 +166,11 @@ npm run build && npm run obsidian:e2e -- --reload eval code='app.plugins.plugins
 ### Obsidian versions (Linux)
 The isolated instance runs Obsidian 1.14.4 by default. `manifest.json`
 `minAppVersion` is 1.13.0, so the suite must also pass on 1.13.x, which the
-`.deb` installs at `/opt/Obsidian`. Install 1.14.4 once, without root, from the
-official release asset, and check its SHA-256:
+`.deb` installs at `/opt/Obsidian`. Never run an Obsidian executable yourself,
+not even with `--version`: it opens the host's real profile. Launch it only
+through the npm scripts, with `PODNOTES_OBSIDIAN_APP` below to pick a build.
+Install 1.14.4 once, without root, from the official release asset, and check
+its SHA-256:
 
 ```bash
 dir="$HOME/.local/share/obsidian-versions"
@@ -181,32 +189,30 @@ side by side. Two variables select another build:
   next to `PODNOTES_OBSIDIAN_APP`, so set it only when the client lives
   elsewhere.
 
-Stop this worktree's instance before you switch builds. The runner refuses to
-reuse an instance that a different build launched, and its error calls that a
-mid-session update. Run the suite on 1.13.x with:
+Run the suite on 1.13.x with:
 
 ```bash
-npm run stop:e2e-obsidian
 PODNOTES_OBSIDIAN_APP=/opt/Obsidian/obsidian npm run test:e2e
 ```
 
-`test:e2e` stops the instance it launched, so the next command starts 1.14.4
-again. Any other command against a 1.13.x instance needs the same variable.
+For other commands, stop this worktree's instance before you switch builds.
+The runner refuses to reuse an instance that a different build launched, and
+its error calls that a mid-session update. Every command against a 1.13.x
+instance needs the same variable.
 
 ### E2E suite
 `npm run test:e2e` is the one command. Vitest arguments pass through
 (`npm run test:e2e -- -t "timestamp"`), every test is listed, and a filter that
 matches no test fails the run.
 
-- On both platforms it builds, starts or reuses this worktree's isolated
-  instance, runs `tests/e2e` against it, and stops the instance afterwards only
-  if this run launched it. It never uses the shared `dev` vault.
-- The suite fails before any test runs when the instance lacks these
-  resolver rules. Stop the instance, then run
-  `npm run start:e2e-obsidian`.
+- On both platforms it builds, stops this worktree's isolated instance,
+  provisions a fresh vault, starts the instance, runs `tests/e2e` against it,
+  and stops it afterwards. State left by manual work or an interrupted run
+  never reaches the suite. It never uses the shared `dev` vault. A second run
+  in the same worktree fails at once instead of replacing the first's bundle
+  or vault.
 - The suite fails when Obsidian has more than one window open, because a second
-  vault window keeps Obsidian from quitting. Close it, or stop the instance,
-  before you rerun.
+  vault window keeps Obsidian from quitting.
 - The harness snapshots the workspace, app settings in `app.json`, the core
   plugins with `core-plugins.json`, and PodNotes' `data.json` before each test,
   and restores them after it. A test can turn on a core plugin, such as the file
@@ -220,17 +226,12 @@ matches no test fails the run.
   restores the original layout after its last test.
 - Settings must open in the main window. A test fails at once, naming the
   `settingsPopoutWindow` config, when Obsidian would open it in a popout.
-  The harness reapplies the runner's required app settings on every restart,
-  because a quit can leave `app.json` empty and Obsidian then opens Settings
-  in a popout. Workspace cleanup restores the original app settings in memory
-  and the exact `app.json` bytes.
+  The harness reapplies the runner's required app settings on every restart.
+- Each test gets its own `sandbox` folder inside its file's sandbox.
 - Build code for Obsidian to evaluate with `jsLiteral` from
   `tests/e2e/runtime.ts`, never with `JSON.stringify` alone.
 - `harness-lifecycle.test.ts` runs the suites in `tests/e2e/harness-fixtures`
   in their own Vitest processes and checks how each run ends.
-- An interrupted run can leave test fixtures in the vault's `data.json`, the
-  280 px sidebar, and the interrupted test's layout. Reset the vault with
-  `npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults`.
 
 ### Evidence (Linux)
 Screenshots and recordings come from the same instance. Write them under the
@@ -394,13 +395,10 @@ also matches the `Test` workflow by its top-level `name:`, so renaming the
 workflow stops release planning without failing any check.
 
 The `Test`, `Documentation`, `PR Title`, `Dependency Review`, and `Platforms`
-workflows have no `concurrency` block, so GitHub does not cancel their runs.
-Duplicate events on one PR head, such as a reopen or an edit right after a
-push, start duplicate runs of the required checks, and every run must finish. A
-cancelled run on the head turns the commit's check rollup to `FAILURE`. Do not
-add a `concurrency` group to these workflows. By default a group cancels a
-pending run when a newer run joins it, even with `cancel-in-progress: false`.
-Runs for a superseded head also finish. They cost CI minutes but block nothing.
+workflows have no `concurrency` block. Do not add one: a group cancels a
+pending run when a newer run joins it, even with `cancel-in-progress: false`,
+and a cancelled run on a PR head turns its check rollup to `FAILURE`. Duplicate
+runs on one head, such as after a reopen, must all finish.
 
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit
