@@ -23,6 +23,7 @@ import {
 	resolveInstanceOptions,
 	resolveProvisionOptions,
 } from "obsidian-e2e/runner";
+import { jsLiteral } from "../../../scripts/js-literal.mjs";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const config = await loadRunnerConfig(root);
@@ -79,8 +80,8 @@ async function locate(css, text) {
 	const output = await obsidian([
 		"eval",
 		`code=(() => {
-			const text = ${JSON.stringify(text ?? "")};
-			const matches = [...document.querySelectorAll(${JSON.stringify(css)})].filter((el) => {
+			const text = ${jsLiteral(text ?? "")};
+			const matches = [...document.querySelectorAll(${jsLiteral(css)})].filter((el) => {
 				const rect = el.getBoundingClientRect();
 				return rect.width > 0 && rect.height > 0 && (text === "" ||
 					(${exact} ? el.innerText.trim() === text : el.textContent.includes(text)));
@@ -177,10 +178,7 @@ async function openUri(uri) {
 				split === -1 ? "true" : decodeURIComponent(pair.slice(split + 1));
 	}
 	data.action = action.replace(/\/+$/, "");
-	const output = await obsidian([
-		"eval",
-		`code=window.OBS_ACT(${JSON.stringify(data)}), "delivered"`,
-	]);
+	const output = await obsidian(["eval", `code=window.OBS_ACT(${jsLiteral(data)}), "delivered"`]);
 	if (!output.endsWith("=> delivered")) throw new Error(output);
 }
 

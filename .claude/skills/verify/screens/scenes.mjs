@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { FIXTURE_HOST } from "../../../../scripts/e2e-instance.mjs";
 import { config, evaluate, FIXTURES, provision, waitFor } from "./instance.mjs";
+import { jsLiteral } from "../../../../scripts/js-literal.mjs";
 
 const DATA_PATH = path.join(provision.vaultPath, ".obsidian/plugins/podnotes/data.json");
 
@@ -382,14 +383,14 @@ async function localFiles(data) {
 		LOCAL_FILES.map(([file]) => [file, fs.statSync(path.join(provision.vaultPath, file)).size]),
 	);
 	await waitFor(
-		`const sizes = ${JSON.stringify(sizes)};
+		`const sizes = ${jsLiteral(sizes)};
 		return Object.entries(sizes).every(([file, size]) => app.vault.getAbstractFileByPath(file)?.stat.size === size);`,
 		"Obsidian did not index the local media files",
 		10000,
 	);
 	/** @type {{ file: string, title: string, url: string, streamUrl: string, ctime: number }[]} */
 	const files = await evaluate(`
-		return ${JSON.stringify(Object.keys(sizes))}.map((file) => {
+		return ${jsLiteral(Object.keys(sizes))}.map((file) => {
 			const found = app.vault.getAbstractFileByPath(file);
 			return { file, title: found.basename, url: app.fileManager.generateMarkdownLink(found, ""),
 				streamUrl: app.vault.getResourcePath(found), ctime: found.stat.ctime };
