@@ -74,7 +74,7 @@ type Field = Readonly<{ row: string; name: string; from?: string }>;
 async function focusedField(obsidian: ObsidianClient): Promise<Field | undefined> {
 	const named = await accessibleName(
 		obsidian,
-		`document.activeElement.matches(".modal.mod-settings .setting-item-control :is(input, select, textarea, [tabindex='0'], .setting-secret-value + button)") ? document.activeElement : null`,
+		`document.activeElement.matches(".modal.mod-settings .setting-item-control :is(input, select, textarea, [tabindex='0'], button[aria-labelledby])") ? document.activeElement : null`,
 	);
 	if (named === undefined) return undefined;
 	const row = await obsidian.dev.evalJson<string>(

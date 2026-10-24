@@ -82,6 +82,11 @@ const NESTED_KEYS: readonly (keyof IPodNotesSettings)[] = [
 	"transcript",
 ];
 
+/** Optional nested fields, which DEFAULT_SETTINGS leaves out, each with a value of its type. */
+const OPTIONAL_NESTED_FIELDS: Partial<Record<string, object>> = {
+	timestamp: { quickAddChoiceId: "" } satisfies Partial<IPodNotesSettings["timestamp"]>,
+};
+
 export interface SettingsEnvelope {
 	type: typeof SETTINGS_EXPORT_TYPE;
 	version: number;
@@ -333,7 +338,10 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 
 		if ((NESTED_KEYS as readonly string[]).includes(key)) {
 			out[key] = sanitizeNestedObject(
-				defaultValue as Record<string, unknown>,
+				{
+					...(defaultValue as object),
+					...OPTIONAL_NESTED_FIELDS[key],
+				},
 				value as Record<string, unknown>,
 			);
 		} else if (key === "favorites") {

@@ -16,8 +16,16 @@ export function formatEpisodeTimestamp(
 		endSeconds === undefined
 			? formatSeconds(seconds, format)
 			: formatPodcastSegment(seconds, endSeconds, format);
-	const target = linkify ? vaultSafeLinkTarget(episode, episodeLinkTarget(episode)) : undefined;
-	return target
-		? `[${time}](${encodePodnotesURI(episode, target, seconds, endSeconds).href})`
-		: time;
+	const link = linkify ? episodeTimestampLink(episode, seconds, endSeconds) : "";
+	return link ? `[${time}](${link})` : time;
+}
+
+/** The obsidian://podnotes link that plays `episode` from `seconds`, or "" when no link may address it. */
+export function episodeTimestampLink(
+	episode: Episode,
+	seconds: number,
+	endSeconds?: number,
+): string {
+	const target = vaultSafeLinkTarget(episode, episodeLinkTarget(episode));
+	return target ? encodePodnotesURI(episode, target, seconds, endSeconds).href : "";
 }

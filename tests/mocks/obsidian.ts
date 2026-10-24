@@ -361,7 +361,7 @@ export class ButtonComponent extends BaseInteractiveElement {
 	}
 
 	setClass(value: string) {
-		this.buttonEl.className = value;
+		this.buttonEl.classList.add(value);
 		return this;
 	}
 
@@ -415,6 +415,38 @@ export class DropdownComponent extends BaseInteractiveElement {
 
 	onChange(callback: (value: string) => void) {
 		this.selectEl.addEventListener("change", () => callback(this.selectEl.value));
+		return this;
+	}
+}
+
+/** Obsidian 1.14's markup: a focusable icon named by its tooltip. */
+export class ExtraButtonComponent {
+	readonly extraSettingsEl: HTMLDivElement;
+	private clickCallback?: () => void;
+
+	constructor(container: HTMLElement) {
+		this.extraSettingsEl = container.createDiv({ cls: "clickable-icon extra-setting-button" });
+		this.extraSettingsEl.tabIndex = 0;
+		this.extraSettingsEl.addEventListener("click", () => this.clickCallback?.());
+	}
+
+	setIcon(icon: string) {
+		this.extraSettingsEl.setAttribute("data-icon", icon);
+		return this;
+	}
+
+	setTooltip(tooltip: string) {
+		this.extraSettingsEl.setAttribute("aria-label", tooltip);
+		return this;
+	}
+
+	setDisabled(disabled: boolean) {
+		this.extraSettingsEl.classList.toggle("is-disabled", disabled);
+		return this;
+	}
+
+	onClick(callback: () => void) {
+		this.clickCallback = callback;
 		return this;
 	}
 }
@@ -639,6 +671,10 @@ export class Setting {
 
 	addButton(callback: (component: ButtonComponent) => unknown) {
 		return this.add(new ButtonComponent(this.controlEl), callback);
+	}
+
+	addExtraButton(callback: (component: ExtraButtonComponent) => unknown) {
+		return this.add(new ExtraButtonComponent(this.controlEl), callback);
 	}
 
 	addComponent<T extends Disableable>(callback: (container: HTMLElement) => T) {

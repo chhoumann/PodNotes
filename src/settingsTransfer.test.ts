@@ -505,6 +505,34 @@ describe("parseImport", () => {
 		}
 	});
 
+	it("imports an exported QuickAdd choice into a vault with none", () => {
+		const settings = makeSettings();
+		settings.timestamp.quickAddChoiceId = "podnotes-capture";
+		const result = parseImport(
+			JSON.stringify(serializeSettings(settings, {}, "3.0.0", NOW, new Map())),
+		);
+		if (!result.ok) throw new Error(result.error);
+		expect(
+			mergeImportedSettings(makeSettings(), result.settings).timestamp.quickAddChoiceId,
+		).toBe("podnotes-capture");
+	});
+
+	it("drops a QuickAdd choice id that is not a string", () => {
+		const result = parseImport(
+			JSON.stringify({ timestamp: { template: "keep", quickAddChoiceId: 42 } }),
+		);
+		if (!result.ok) throw new Error(result.error);
+		expect(result.settings.timestamp).toEqual({ template: "keep" });
+	});
+
+	it("drops a timestamp field PodNotes does not know", () => {
+		const result = parseImport(
+			JSON.stringify({ timestamp: { template: "keep", choiceName: "Log timestamp" } }),
+		);
+		if (!result.ok) throw new Error(result.error);
+		expect(result.settings.timestamp).toEqual({ template: "keep" });
+	});
+
 	it("rejects a typed envelope without a numeric version", () => {
 		const result = parseImport(
 			JSON.stringify({

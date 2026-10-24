@@ -4,13 +4,14 @@ import { MarkdownView, TFile, TFolder, type WorkspaceLeaf } from "obsidian";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import PodNotes from "./main";
-import { VIEW_TYPE } from "./constants";
+import { QUEUE_SETTINGS, VIEW_TYPE } from "./constants";
 import type { Episode } from "./types/Episode";
 import { PickerModal } from "./ui/PickerModal";
 import { fetchTextWithTimeout } from "./utility/networkRequest";
 import { privateFeedPlaceholder } from "./utility/privateFeedUrl";
 import { dataFileText } from "../tests/mocks/dataFileWriter";
 import { fakeEditor, editInTableCell } from "../tests/mocks/captureEditor";
+import { fakeQuickAdd, unusableQuickAdd } from "../tests/mocks/quickAdd";
 
 vi.mock("./utility/networkRequest", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./utility/networkRequest")>()),
@@ -41,6 +42,17 @@ const playing = {
 	note: { path: "PodNotes/{{podcast}}/{{title}}.md", template: "# {{title}}" },
 };
 const NOTE_PATH = "PodNotes/Pod/Saved Episode.md";
+/** Playing an episode its feed can link to, with another episode next in the queue. */
+const linkedPlaying = {
+	...playing,
+	currentEpisode: { ...episode, feedUrl: "https://example.com/feed.xml", guid: "saved-1" },
+	queue: {
+		...QUEUE_SETTINGS,
+		episodes: [{ ...episode, title: "Queued Episode", url: "https://example.com/queued" }],
+	},
+};
+const LINK =
+	"obsidian://podnotes?episodeName=Saved%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&guid=saved-1";
 
 function vaultFile(path: string): TFile {
 	const name = path.split("/").pop() ?? path;
@@ -241,6 +253,14 @@ async function undo() {
 }
 
 const REFUSED = "The note isn't as the capture left it, so the timestamp stays";
+
+/** QuickAdd as Obsidian holds it while it is enabled, with its choice "Log" set as the QuickAdd choice. */
+function withQuickAdd(plugin: PodNotes) {
+	const quickAdd = fakeQuickAdd({ log: "Log" });
+	Object.assign(plugin.app, { plugins: quickAdd.plugins });
+	plugin.settings.timestamp.quickAddChoiceId = "log";
+	return quickAdd.api.executeChoice;
+}
 
 /** A note's tab, and the changes a user can make to it. */
 interface Tab {
@@ -847,6 +867,147 @@ describe("capture", () => {
 			await vi.waitFor(() =>
 				expect(read(NOTE_PATH)).toBe("# Saved Episode\n- 00:20:24-00:20:34\n- 00:20:34\n"),
 			);
+		});
+
+		it("go to the QuickAdd choice when one is set", async () => {
+			const { plugin, run, notes } = await loadPlugin(linkedPlaying);
+			const executeChoice = withQuickAdd(plugin);
+
+			run("capture-segment-10s");
+			handlers.get("previoustrack")!();
+
+			await vi.waitFor(() => expect(executeChoice).toHaveBeenCalledTimes(2));
+			expect(executeChoice.mock.calls.map(([choice, { time }]) => [choice, time])).toEqual([
+				[{ id: "log" }, "20:24-20:34"],
+				[{ id: "log" }, "20:34"],
+			]);
+			expect(notes.size).toBe(0);
+		});
+	});
+
+	describe("with a QuickAdd choice", () => {
+		const moment = {
+			timestamp: "- 00:20:34",
+			time: "20:34",
+			seconds: "1234",
+			link: `${LINK}&time=1234`,
+			episode: "Saved Episode",
+			podcast: "Pod",
+			url: "https://example.com/saved",
+			episodeNote: NOTE_PATH,
+		};
+
+		it("runs it by its id once with the capture, and writes nothing itself", async () => {
+			const { plugin, run, notes } = await loadPlugin(linkedPlaying);
+			const executeChoice = withQuickAdd(plugin);
+
+			run("capture-timestamp");
+
+			await vi.waitFor(() =>
+				expect(executeChoice.mock.calls).toEqual([[{ id: "log" }, moment]]),
+			);
+			expect(notes.size).toBe(0);
+			expect(said()).toEqual([]);
+		});
+
+		it("runs it with a segment's range, and leaves the editor as it is", async () => {
+			const { plugin, run, openNote, focusPodNotes } = await loadPlugin(linkedPlaying);
+			const executeChoice = withQuickAdd(plugin);
+			const { editor } = openNote("Journal.md", "Notes\n");
+			focusPodNotes();
+
+			run("capture-segment-10s");
+
+			await vi.waitFor(() =>
+				expect(executeChoice.mock.calls).toEqual([
+					[
+						{ id: "log" },
+						{
+							...moment,
+							timestamp: "- 00:20:24-00:20:34",
+							time: "20:24-20:34",
+							seconds: "1224",
+							link: `${LINK}&time=1224&endTime=1234`,
+						},
+					],
+				]),
+			);
+			expect(editor.getValue()).toBe("Notes\n");
+			expect(said()).toEqual([]);
+		});
+
+		it("captures as before with an empty choice id in data.json", async () => {
+			const { plugin, run, openNote, focusPodNotes } = await loadPlugin(linkedPlaying);
+			const executeChoice = withQuickAdd(plugin);
+			plugin.settings.timestamp.quickAddChoiceId = "";
+			const { editor } = openNote("Journal.md", "Notes\n");
+			focusPodNotes();
+
+			run("capture-timestamp");
+
+			expect(editor.getValue()).toBe("Notes\n- 00:20:34");
+			expect(said()).toEqual(["Timestamp added to Journal"]);
+			expect(executeChoice.mock.calls).toEqual([]);
+		});
+
+		it.each(["Install", "Enable", "Update"] as const)(
+			"says %s QuickAdd, and writes nothing, until QuickAdd can run the choice",
+			async (fix) => {
+				const { plugin, run, openNote, focusPodNotes, notes } =
+					await loadPlugin(linkedPlaying);
+				const { executeChoice, plugins } = unusableQuickAdd(fix);
+				Object.assign(plugin.app, { plugins });
+				plugin.settings.timestamp.quickAddChoiceId = "log";
+				const { editor } = openNote("Journal.md", "Notes\n");
+				focusPodNotes();
+
+				run("capture-timestamp");
+
+				await vi.waitFor(() =>
+					expect(said()).toEqual([`${fix} QuickAdd to capture with a QuickAdd choice`]),
+				);
+				expect(executeChoice).not.toHaveBeenCalled();
+				expect(editor.getValue()).toBe("Notes\n");
+				expect(notes.size).toBe(0);
+			},
+		);
+
+		it("says the choice no longer exists, and writes nothing, once QuickAdd deletes it", async () => {
+			const { plugin, run, openNote, focusPodNotes, notes } = await loadPlugin(linkedPlaying);
+			const executeChoice = withQuickAdd(plugin);
+			plugin.settings.timestamp.quickAddChoiceId = "deleted";
+			const { editor } = openNote("Journal.md", "Notes\n");
+			focusPodNotes();
+
+			run("capture-timestamp");
+
+			await vi.waitFor(() =>
+				expect(said()).toEqual([
+					"The QuickAdd choice no longer exists. Choose another in PodNotes settings.",
+				]),
+			);
+			expect(executeChoice).not.toHaveBeenCalled();
+			expect(editor.getValue()).toBe("Notes\n");
+			expect(notes.size).toBe(0);
+		});
+
+		it("logs a choice that fails or is cancelled, and leaves no unhandled rejection", async () => {
+			const { plugin, run } = await loadPlugin(linkedPlaying);
+			const failure = new Error("Input cancelled by user");
+			withQuickAdd(plugin).mockRejectedValue(failure);
+			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+			const unhandled: unknown[] = [];
+			const listen = (reason: unknown) => unhandled.push(reason);
+			process.on("unhandledRejection", listen);
+			try {
+				run("capture-timestamp");
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			} finally {
+				process.off("unhandledRejection", listen);
+			}
+
+			expect(unhandled).toEqual([]);
+			expect(logged.mock.calls).toEqual([["PodNotes: the QuickAdd choice failed", failure]]);
 		});
 	});
 });

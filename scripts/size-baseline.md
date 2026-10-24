@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 103,000 bytes. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 104,000 bytes. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -22,6 +22,16 @@ budget. With the panel:
 ```text
 main.js raw: 320728 bytes; budget 330000 bytes; 9272 bytes remaining
 main.js gzip (level 9): 101619 bytes; budget 103000 bytes; 1381 bytes remaining
+```
+
+On 2026-10-24 it rose from 103,000 for captures that run a QuickAdd choice,
+picked in QuickAdd's own picker from settings. Fixes and the ID3 chapters
+had taken master to 102,325 bytes, and the QuickAdd captures measured 1,072
+more. The coordinator set 104,000. With both:
+
+```text
+main.js raw: 318989 bytes; budget 330000 bytes; 11011 bytes remaining
+main.js gzip (level 9): 103397 bytes; budget 104000 bytes; 603 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
