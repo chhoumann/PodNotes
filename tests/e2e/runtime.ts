@@ -1,5 +1,9 @@
 import type { ObsidianClient, PluginReloadOptions } from "obsidian-e2e";
 
+import { jsLiteral } from "../../scripts/js-literal.mjs";
+
+export { jsLiteral };
+
 export const PLUGIN_ID = "podnotes";
 export const VIEW_TYPE = "podcast_player_view";
 export const WAIT_OPTS = { timeoutMs: 15_000, intervalMs: 200 };
@@ -12,20 +16,6 @@ export const RELOAD_OPTIONS: PluginReloadOptions = {
 		...WAIT_OPTS,
 	},
 };
-
-export function jsLiteral(value: unknown): string {
-	if (value === undefined) return "undefined";
-	const json: string | undefined = JSON.stringify(value, (_key, item: unknown) => {
-		if (typeof item === "number" && (!Number.isFinite(item) || Object.is(item, -0)))
-			throw new TypeError(`${Object.is(item, -0) ? "-0" : item} has no JSON literal.`);
-		return item;
-	});
-	if (json === undefined) throw new TypeError(`${String(value)} has no JavaScript literal.`);
-	return json.replace(
-		/[<>\u2028\u2029]/g,
-		(char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
-	);
-}
 
 export async function runAllSteps(...steps: Array<() => Promise<unknown>>): Promise<void> {
 	const failures: unknown[] = [];

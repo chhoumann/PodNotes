@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { jsLiteral } from "./js-literal.mjs";
 
 /** @param {{write: (path: string, contents: string, ...rest: unknown[]) => Promise<unknown>}} adapter @param {string} dataPath */
 export function installWriteRecorder(adapter, dataPath) {
@@ -79,7 +80,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 		const code = `(() => {
 			const key = "__podnotesWriteRecorder";
 			const plugin = app.plugins.plugins.podnotes;
-			if (${JSON.stringify(action)} === "start") {
+			if (${jsLiteral(action)} === "start") {
 				if (!plugin) throw new Error("PodNotes is not loaded.");
 				if (window[key]) throw new Error("A write recorder is already installed; stop it first.");
 				const path = plugin.manifest.dir + "/data.json";
@@ -88,10 +89,10 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 			}
 			const recorder = window[key];
 			if (!recorder) throw new Error("No write recorder is installed.");
-			const report = ${JSON.stringify(action)} === "stop" ? recorder.control.stop() : recorder.control.report();
+			const report = ${jsLiteral(action)} === "stop" ? recorder.control.stop() : recorder.control.report();
 			report.pluginUnchanged = recorder.plugin === plugin;
 			report.complete = report.complete && report.pluginUnchanged;
-			if (${JSON.stringify(action)} === "stop") delete window[key];
+			if (${jsLiteral(action)} === "stop") delete window[key];
 			return report;
 		})()`;
 		const result = spawnSync(

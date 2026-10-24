@@ -18,6 +18,7 @@ import type { IAPI } from "src/API/IAPI";
 import { VIEW_TYPE } from "src/constants";
 import { PodNotesSettingsTab } from "src/ui/settings/PodNotesSettingsTab";
 import { MainView } from "src/ui/PodcastView";
+import { loadChapters } from "src/ui/PodcastView/chapters";
 import { Navigation } from "src/ui/PodcastView/Navigation";
 import { dismissUndoNotices } from "src/ui/undoNotice";
 import { removePreviousStyles } from "src/ui/removePreviousStyles";
@@ -57,7 +58,6 @@ import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { privateFeedAddresses, protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
 import { redactPrivateFeedAddresses } from "./utility/privateFeedUrl";
 import { FeedRepository, loadFeed } from "./services/FeedRepository";
-import { fetchChapters } from "./utility/fetchChapters";
 import { onlineStatus } from "./services/online";
 
 type Closing = "window-unloading" | "obsidian-closing";
@@ -235,7 +235,7 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				captureTimestamp: () => void this.capture.timestamp(),
 				skipBackward: () => this.api.skipBackward(),
 				skipForward: () => this.api.skipForward(),
-				chapters: fetchChapters,
+				chapters: loadChapters,
 			}),
 		);
 		this.isReady = true;

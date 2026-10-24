@@ -242,6 +242,62 @@ describe("player journeys", () => {
 		);
 	});
 
+	test("an MP3's ID3 chapters load once it plays, and a chapter seeks", async () => {
+		const context = getContext();
+		const { obsidian } = context;
+		const chaptered: FixtureEpisode = {
+			title: "Chaptered MP3",
+			seconds: 60,
+			guid: "chaptered",
+			chapters: [
+				{ startTime: 0, title: "Cold open" },
+				{ startTime: 20, title: "Ünïcode 🍕" },
+				{ startTime: 40, title: "Outro" },
+			],
+		};
+		const feed: FixtureFeed = {
+			title: "Journey ID3",
+			slug: "id3",
+			artwork: true,
+			episodes: [chaptered],
+		};
+		const server = await startFixtureServer([feed]);
+		onTestFinished(() => server.stop());
+		await seedLibrary(context, server, {
+			subscriptions: [feed],
+			current: storedEpisode(server, feed, chaptered),
+		});
+		await showPodNotes(obsidian);
+		if (!(await isShown(obsidian, ui.fullPlayer))) await click(obsidian, ui.openPlayer);
+		await waitUntilShown(obsidian, ui.fullPlayer);
+		const media = new URL(server.mediaUrl(feed, chaptered)).pathname;
+
+		expect(
+			await holdsFor(obsidian, () => isShown(obsidian, ui.playerPanel("Chapters")), false),
+			"no Chapters before it plays",
+		).toBe(false);
+		expect(server.requests(), "a restored player loads no media").not.toContain(media);
+
+		await click(obsidian, ui.playbackToggle);
+		await click(obsidian, ui.playerPanel("Chapters"));
+		const rows = () =>
+			obsidian.dev.evalJson<string[]>(
+				`[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-player ol.pn-panel-scroll button.pn-row`)})].map((row) => row.textContent.replace(/\\s+/g, " ").trim())`,
+			);
+		const expected = ["0:00 Cold open", "0:20 Ünïcode 🍕", "0:40 Outro"];
+		expect(await eventually(obsidian, rows, expected)).toEqual(expected);
+
+		await click(obsidian, {
+			name: "the Outro chapter",
+			elements: `[...document.querySelectorAll(${jsLiteral(`${PLAYER_VIEW} .pn-player ol.pn-panel-scroll button.pn-row`)})].filter((row) => row.textContent.includes("Outro"))`,
+		});
+		await waitForPlayback(
+			obsidian,
+			(playback) => playback.playing && playback.seconds >= 40,
+			"playing from the Outro chapter",
+		);
+	});
+
 	test("Up next reorders the queue in place, writing data.json once per completed move", async () => {
 		const { obsidian } = getContext();
 		await openPlayer([ONE, TWO, THREE, FOUR]);

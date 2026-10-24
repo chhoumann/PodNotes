@@ -23,12 +23,15 @@ import {
 } from "../../../tests/mocks/services";
 import PodcastView from "./PodcastView.svelte";
 
-vi.mock("src/utility/fetchChapters", () => ({
-	fetchChapters: async () =>
-		["Intro", "Memory palaces", "Questions"].map((title, index) => ({
-			title,
-			startTime: index * 600,
-		})),
+vi.mock("src/utility/fetchChapters", async (importOriginal) => ({
+	...(await importOriginal<typeof import("src/utility/fetchChapters")>()),
+	fetchChapters: async ({ chaptersUrl }: Episode) =>
+		chaptersUrl
+			? ["Intro", "Memory palaces", "Questions"].map((title, index) => ({
+					title,
+					startTime: index * 600,
+				}))
+			: [],
 }));
 
 const episode: Episode = {

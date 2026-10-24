@@ -61,7 +61,7 @@ Except on a phone, a note that you open from the player opens next to the PodNot
 
 The full player has three panels:
 
-- **Chapters** lists the episode's chapters. It appears only when the episode's feed gives chapters.
+- **Chapters** lists the episode's chapters. It appears only when the episode has chapters.
 - **Transcript** shows the transcript that the episode's feed publishes.
 - **Up next** shows the queue.
 
@@ -70,6 +70,8 @@ In a narrow view, the panel buttons are at the bottom of the full player. Select
 ### Chapters
 
 Each chapter shows its start time and title, and the current chapter is highlighted. Select a chapter to play from its start.
+
+The chapters come from the chapters file in the episode's feed. Without one, PodNotes reads the chapters that many hosts embed in an episode's MP3 file, and it asks for only the start of the file to find them. After a restart, it waits until you select **Play**. Episodes that you play from your vault get no chapters this way.
 
 ### Read the transcript
 

@@ -3,26 +3,27 @@ import { afterEach, beforeEach, vi } from "vitest";
 import type PodNotes from "src/main";
 import type { TranscriptLink } from "src/parser/feedDocumentParser";
 import type { Episode } from "src/types/Episode";
+import { corsBlockedFetch, openAIMock, openAIRequestUrl } from "./openaiRequestUrl";
 
 /** What each Notice opened with, oldest first. */
 export const noticeMessages: string[] = [];
 
-/** Stand-ins for the audio download, OpenAI (through `fetch`) and Deepgram. */
+/** Stand-ins for the audio download and Deepgram. OpenAI answers through `openAIMock`. */
 export const getEpisodeAudioBufferMock = vi.fn();
-export const fetchMock = vi.fn<typeof fetch>();
 export const diarizeWithDeepgramMock = vi.fn();
 
 /**
- * Resets the mocks above and `noticeMessages` before each test of the calling file,
- * and stubs `fetch` with `fetchMock`. The file still mocks `../downloadEpisode` and
- * `./diarization` with these handles, because `vi.mock` applies only to its own file.
+ * Resets the mocks above, `openAIMock` and `noticeMessages` before each test of the
+ * calling file, and blocks `fetch` as Obsidian's CORS check does for OpenAI. The file
+ * still mocks `obsidian`, `../downloadEpisode` and `./diarization` with these handles,
+ * because `vi.mock` applies only to its own file.
  */
 export function installTranscriptionMocks(): void {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		noticeMessages.length = 0;
-		fetchMock.mockReset();
-		vi.stubGlobal("fetch", fetchMock);
+		openAIMock.mockReset();
+		vi.stubGlobal("fetch", corsBlockedFetch);
 		diarizeWithDeepgramMock.mockReset();
 		getEpisodeAudioBufferMock.mockResolvedValue({
 			buffer: new ArrayBuffer(1024),
@@ -36,15 +37,22 @@ export function installTranscriptionMocks(): void {
 	});
 }
 
-/** The `obsidian` module whose Notice records its opening message in `noticeMessages`. */
-export function recordingNotices(obsidian: typeof import("obsidian")): typeof import("obsidian") {
+/**
+ * The `obsidian` module whose Notice records its opening message in `noticeMessages`
+ * and whose requestUrl answers with `openAIMock`.
+ */
+export function mockedObsidian(obsidian: typeof import("obsidian")): typeof import("obsidian") {
 	class RecordingNotice extends obsidian.Notice {
 		constructor(message: string | DocumentFragment, duration?: number) {
 			super(message, duration);
 			noticeMessages.push(String(message));
 		}
 	}
-	return { ...obsidian, Notice: RecordingNotice };
+	return {
+		...obsidian,
+		Notice: RecordingNotice,
+		requestUrl: openAIRequestUrl as typeof obsidian.requestUrl,
+	};
 }
 
 export const mockEpisode: Episode = {

@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
+import { corsBlockedFetch, openAIMock, sentForm } from "../../tests/mocks/openaiRequestUrl";
 import { createTranscription, retryDelayMs } from "./openaiTranscription";
 
-const fetchMock = vi.fn<typeof fetch>();
+vi.mock("obsidian", async (importOriginal) => ({
+	...(await importOriginal<typeof import("obsidian")>()),
+	requestUrl: (await import("../../tests/mocks/openaiRequestUrl")).openAIRequestUrl,
+}));
 
-const pendingUntilAborted: typeof fetch = (_url, init) =>
-	new Promise((_resolve, reject) => {
-		init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-	});
+const neverAnswers = () => new Promise<Response>(() => {});
 
 const send = (signal = new AbortController().signal) =>
 	createTranscription("sk-test", { model: "whisper-1" }, signal);
@@ -34,20 +35,10 @@ const EDGE_FAILURES: typeof OPENAI_FAILURES = [
 	["500 error is a string", status500('{"error":"busy"}'), '500 "busy"'],
 	["500 JSON number", status500("42"), "500 status code (no body)"],
 	["500 JSON null", status500("null"), "500 null"],
-	[
-		"transport timeout message",
-		() => Promise.reject(new TypeError("The request timed out.")),
-		"Request timed out.",
-	],
-	[
-		"transport WebKit load failed",
-		() => Promise.reject(new TypeError("Load failed")),
-		"Connection error.",
-	],
 ];
 
 beforeEach(() => {
-	vi.stubGlobal("fetch", fetchMock);
+	vi.stubGlobal("fetch", corsBlockedFetch);
 	// In Obsidian's renderer `window` is the global object; the code under test uses its timers.
 	vi.stubGlobal("window", globalThis);
 });
@@ -55,12 +46,12 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
-	fetchMock.mockReset();
+	openAIMock.mockReset();
 });
 
 describe("createTranscription", () => {
 	it("posts multipart form data that parses back to the same fields and file bytes", async () => {
-		fetchMock.mockImplementation(async () => Response.json({ text: "Hi." }));
+		openAIMock.mockImplementation(async () => Response.json({ text: "Hi." }));
 		const bytes = new Uint8Array(70_000).map((_, i) => (i * 31) % 256);
 		const file = new File([bytes], "episode.mp3", { type: "audio/mp3" });
 
@@ -75,16 +66,13 @@ describe("createTranscription", () => {
 			new AbortController().signal,
 		);
 
-		expect(fetchMock).toHaveBeenCalledOnce();
-		const [url, init] = fetchMock.mock.calls[0];
-		expect(url).toBe("https://api.openai.com/v1/audio/transcriptions");
-		expect(init?.method).toBe("POST");
-		expect(Object.fromEntries(new Headers(init?.headers))).toEqual({
-			authorization: "Bearer sk-test",
-		});
-		const encoded = new Response(init?.body);
-		expect(encoded.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/);
-		const form = await encoded.formData();
+		expect(openAIMock).toHaveBeenCalledOnce();
+		const [request] = openAIMock.mock.calls[0];
+		expect(request.url).toBe("https://api.openai.com/v1/audio/transcriptions");
+		expect(request.method).toBe("POST");
+		expect(request.headers).toEqual({ Authorization: "Bearer sk-test" });
+		expect(request.contentType).toMatch(/^multipart\/form-data; boundary=/);
+		const form = await sentForm(request);
 		expect([...form.keys()]).toEqual(["model", "file", "response_format", "chunking_strategy"]);
 		expect(form.get("model")).toBe("gpt-4o-transcribe-diarize");
 		expect(form.get("response_format")).toBe("diarized_json");
@@ -100,7 +88,7 @@ describe("createTranscription", () => {
 			text: "Hi.",
 			segments: [{ type: "transcript.text.segment", speaker: "A", start: 0, end: 1 }],
 		};
-		fetchMock.mockImplementation(async () => Response.json(payload));
+		openAIMock.mockImplementation(async () => Response.json(payload));
 
 		await expect(send()).resolves.toEqual(payload);
 	});
@@ -108,15 +96,15 @@ describe("createTranscription", () => {
 	it.each([...OPENAI_FAILURES, ...EDGE_FAILURES])(
 		"%s rejects with the openai SDK's message after one send",
 		async (_name, respond, message) => {
-			fetchMock.mockImplementation(respond);
+			openAIMock.mockImplementation(respond);
 
 			await expect(send()).rejects.toThrow(new Error(message));
-			expect(fetchMock).toHaveBeenCalledOnce();
+			expect(openAIMock).toHaveBeenCalledOnce();
 		},
 	);
 
 	it("keeps the openai SDK's message for a 429 with retry headers", async () => {
-		fetchMock.mockImplementation(async () =>
+		openAIMock.mockImplementation(async () =>
 			rateLimited({ "retry-after": "4", "retry-after-ms": "4000" }),
 		);
 
@@ -143,16 +131,16 @@ describe("createTranscription", () => {
 		["retry-after zero", { "retry-after": "0" }, 0],
 	])("%s gives the same retry delay as openai-node", async (_name, headers, delayMs) => {
 		vi.useFakeTimers({ now: new Date("2026-01-01T00:00:00Z") });
-		fetchMock.mockImplementation(async () => rateLimited(headers));
+		openAIMock.mockImplementation(async () => rateLimited(headers));
 
 		const error = await send().catch((caught: unknown) => caught);
 
 		expect(retryDelayMs(error, 1234)).toBe(delayMs);
 	});
 
-	it("times out a stalled request after 10 minutes", async () => {
+	it("stops waiting for a stalled request after 10 minutes", async () => {
 		vi.useFakeTimers();
-		fetchMock.mockImplementation(pendingUntilAborted);
+		openAIMock.mockImplementation(neverAnswers);
 		let settled = false;
 		const pending = send().finally(() => {
 			settled = true;
@@ -164,23 +152,20 @@ describe("createTranscription", () => {
 		await vi.advanceTimersByTimeAsync(1);
 
 		await assertion;
-		expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
 	});
 
-	it("aborts the request and rejects with the caller's abort reason", async () => {
-		fetchMock.mockImplementation(pendingUntilAborted);
+	it("stops waiting on abort and rejects with the caller's abort reason", async () => {
+		openAIMock.mockImplementation(neverAnswers);
 		const controller = new AbortController();
 		const reason = new DOMException(
 			"PodNotes was unloaded during transcription.",
 			"AbortError",
 		);
 		const pending = send(controller.signal);
+		await vi.waitFor(() => expect(openAIMock).toHaveBeenCalledOnce());
 
 		controller.abort(reason);
 
 		await expect(pending).rejects.toBe(reason);
-		const requestSignal = fetchMock.mock.calls[0][1]?.signal;
-		expect(requestSignal?.aborted).toBe(true);
-		expect(requestSignal?.reason).toBe(reason);
 	});
 });

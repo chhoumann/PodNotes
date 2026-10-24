@@ -104,13 +104,13 @@ describe("hover", () => {
 			".pn-back",
 			"rgba(0, 0, 0, 0)",
 		],
-		["a row", "EpisodeRow", '<div class="pn-ep {}%"></div>', ".pn-ep", ""],
+		["a row", "EpisodeRow", '<div class="pn-ep {}%"></div>', ".pn-ep", "rgba(0, 0, 0, 0)"],
 		[
 			"the skip button",
 			"Deck",
 			'<div class="pn-deck {}"><button class="pn-skip%"></button></div>',
 			".pn-skip",
-			"",
+			"rgba(0, 0, 0, 0)",
 		],
 		[
 			"the panel switch that is on",
@@ -123,9 +123,13 @@ describe("hover", () => {
 		"%s keeps its resting background after a tap",
 		(_name, component, html, selector, resting) => {
 			const background = (hovered: boolean, media: string[] = []) => {
-				const css = componentCss(["PodcastView", component], { media, states: ["hover"] });
+				// jsdom drops a var() in a shorthand, so each background stands in as its color.
+				const css = componentCss(["PodcastView", component], {
+					media,
+					states: ["hover"],
+				}).replaceAll("background: var(", "background-color: var(");
 				const markup = inView(component, html.replace("%", hovered ? " hover" : ""));
-				return getComputedStyle(styled(css, markup, selector)).background;
+				return getComputedStyle(styled(css, markup, selector)).backgroundColor;
 			};
 
 			expect([background(false), background(true), background(true, [HOVER])]).toEqual([
@@ -205,7 +209,7 @@ describe("the player's stage", () => {
 
 		expect([look("art"), look("row")]).toEqual([
 			{ shadow: "var(--shadow-s)", icon: "25cqw" },
-			{ shadow: "", icon: "18px" },
+			{ shadow: expect.not.stringContaining("--shadow-s"), icon: "18px" },
 		]);
 	});
 });
