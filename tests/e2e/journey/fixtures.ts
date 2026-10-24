@@ -20,6 +20,8 @@ export type FixtureEpisode = Readonly<{
 	description?: string;
 	guid?: string;
 	transcripts?: readonly FixtureTranscript[];
+	/** Serves the episode as an MP3 whose ID3 tag carries these chapters. */
+	chapters?: readonly Readonly<{ title: string; startTime: number }>[];
 }>;
 
 export type FixtureFeed = Readonly<{
@@ -105,7 +107,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		`http://${feed.host ?? FIXTURE_HOST}:${port}${feedPath(feed)}`;
 	const artworkUrl = (feed: FixtureFeed) => `${origin}/${feed.slug}/artwork.svg`;
 	const mediaPath = (feed: FixtureFeed, episode: FixtureEpisode) =>
-		`/${feed.slug}/${feed.episodes.indexOf(episode) + 1}.wav`;
+		`/${feed.slug}/${feed.episodes.indexOf(episode) + 1}.${episode.chapters ? "mp3" : "wav"}`;
 	const audio = (feed: FixtureFeed, episode: FixtureEpisode) => {
 		const route = routes.get(mediaPath(feed, episode));
 		if (!route) throw new Error(`${feed.title} / ${episode.title} has no audio.`);
@@ -124,6 +126,7 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 							? null
 							: {
 									url: `${origin}${mediaPath(feed, episode)}`,
+									type: episode.chapters ? "audio/mpeg" : "audio/wav",
 									bytes: audio(feed, episode).length,
 								},
 					(transcript) =>
@@ -136,7 +139,10 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 
 	for (const feed of feeds) {
 		feed.episodes.forEach((episode, index) => {
-			if (episode.seconds !== null) {
+			if (episode.chapters && episode.seconds !== null) {
+				const body = chapteredMp3(episode.seconds, episode.chapters);
+				routes.set(mediaPath(feed, episode), { type: "audio/mpeg", body });
+			} else if (episode.seconds !== null) {
 				const body = wav(episode.seconds, 300 + 40 * index + 7 * feed.slug.length);
 				routes.set(mediaPath(feed, episode), { type: "audio/wav", body });
 			}
@@ -250,6 +256,29 @@ export function wav(seconds: number, frequency = 440): Buffer {
 	return buffer;
 }
 
+/** Silent MPEG-1 Layer III frames, 36 ms each, behind an ID3v2.3 tag of CHAP frames. */
+function chapteredMp3(seconds: number, chapters: NonNullable<FixtureEpisode["chapters"]>): Buffer {
+	const frame = (id: string, body: Buffer) => {
+		const header = Buffer.alloc(10);
+		header.write(id, 0, "latin1");
+		header.writeUInt32BE(body.length, 4);
+		return Buffer.concat([header, body]);
+	};
+	const frames = chapters.map(({ title, startTime }, index) => {
+		const times = Buffer.alloc(16, 0xff);
+		times.writeUInt32BE(startTime * 1000, 0);
+		times.writeUInt32BE((chapters[index + 1]?.startTime ?? seconds) * 1000, 4);
+		const tit2 = frame("TIT2", Buffer.concat([Buffer.from([3]), Buffer.from(title, "utf8")]));
+		return frame("CHAP", Buffer.concat([Buffer.from(`ch${index}\0`, "latin1"), times, tit2]));
+	});
+	const body = Buffer.concat(frames);
+	const size = [21, 14, 7, 0].map((shift) => (body.length >> shift) & 0x7f);
+	const tag = Buffer.concat([Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, ...size]), body]);
+	const audio = Buffer.alloc(Math.ceil(seconds / 0.036) * 144);
+	for (let at = 0; at < audio.length; at += 144) audio.set([0xff, 0xfb, 0x18, 0xc0], at);
+	return Buffer.concat([tag, audio]);
+}
+
 function serveRange(
 	request: http.IncomingMessage,
 	response: http.ServerResponse,
@@ -282,7 +311,7 @@ function serveRange(
 function rss(
 	feed: FixtureFeed,
 	artworkUrl: string | null,
-	enclosure: (episode: FixtureEpisode) => { url: string; bytes: number } | null,
+	enclosure: (episode: FixtureEpisode) => { url: string; type: string; bytes: number } | null,
 	transcriptUrl: (transcript: FixtureTranscript) => string,
 ): string {
 	const items = feed.episodes.map((episode) => {
@@ -296,7 +325,7 @@ function rss(
 				? `\t\t\t<description>${escapeXml(episode.description)}</description>`
 				: "",
 			media
-				? `\t\t\t<enclosure url="${escapeXml(media.url)}" type="audio/wav" length="${media.bytes}"/>`
+				? `\t\t\t<enclosure url="${escapeXml(media.url)}" type="${media.type}" length="${media.bytes}"/>`
 				: "",
 			...(episode.transcripts ?? []).map(
 				(transcript) =>
