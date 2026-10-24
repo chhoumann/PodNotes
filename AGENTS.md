@@ -43,7 +43,7 @@ root symlinks for local Obsidian loading.
 - `npm run test:unit`: run `typecheck`, then the application Vitest suite, without the Svelte checks. Bare `vitest` does not type-check.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test, including rejection of tagged templates that disable Obsidian's eval cache. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
-- `npm run plant -- <file> <search> <replace> <test name> [-- <command...>]`: plant a defect and pass only when the named test fails on it. It requires exactly one match, type-checks the plant, restores the file from a backup, and rebuilds after a `test:e2e` command. The command defaults to the unit suite filtered to the test name.
+- `npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]`: plant a defect and pass only when the exactly named test fails on it. The command must pass first. Each search must match exactly once, the plant must type-check, the files are restored on exit or interrupt, and `main.js` is rebuilt after a `test:e2e` command. The command defaults to the unit suite filtered to the test name.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 
 `@typescript/native` aliases TypeScript 7. `typecheck` and `lint:tsconfig` call
