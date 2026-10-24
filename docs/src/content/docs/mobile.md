@@ -14,7 +14,7 @@ On a new install, PodNotes opens its view once. After that, PodNotes opens the v
 1. Pull down on a note to open the command palette.
 2. Run **PodNotes: Show player**.
 
-You can also open the menu from the three-line button in the navigation bar at the bottom of the screen, and select **Show PodNotes**. The PodNotes view opens in the right sidebar. When you use the command and an episode is loaded, the full player opens in it. To see your lists, select **Collapse player**, the down arrow at the top left. To return to your note, select outside the sidebar.
+You can also open the menu from the three-line button in the navigation bar at the bottom of the screen, and select **Show PodNotes**. If PodNotes is already in your layout, swipe left from the right edge to open the sidebar, then select **Podcast Player** in its view picker. The PodNotes view opens in the right sidebar. When you use the command and an episode is loaded, the full player opens in it. To see your lists, select **Collapse player**, the down arrow at the top left. To return to your note, select outside the sidebar.
 
 ![The full player on a phone: artwork, title, a progress bar split into chapters, playback controls, Timestamp and Open note, and the panel buttons](/screenshots/mobile-player.webp)
 
