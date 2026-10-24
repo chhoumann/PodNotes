@@ -314,8 +314,8 @@ when the GitHub release is public, its tag points at the release commit, and
 `main.js` and `manifest.json` match their recorded SHA-256 digests.
 
 Three workflows in `.github/workflows/` call reusable workflows in
-`chhoumann/obsidian-plugin-workflows` pinned to v4.1.0
-(`149e37801b35c120660a1fd5e78a5471fda55726`):
+`chhoumann/obsidian-plugin-workflows` pinned to v5.0.0
+(`d6b3b8c2cf460059238043b32a08dcaa3be4828f`):
 
 1. `Prepare release` (`release-prepare.yml`) runs after a green `Test` push run
    on `master`, or by `workflow_dispatch` with an optional `targetSha`. It skips
@@ -365,7 +365,7 @@ When a feature requires a newer Obsidian API, raise `manifest.json`
 unchanged. The floor can only go up, and the release PR records it under the
 new version.
 
-Setup: install the `podnotes-release-bot` App with the `RELEASE_APP_ID`
+Setup: install the `podnotes-release-bot` App with the `RELEASE_APP_CLIENT_ID`
 variable and the `RELEASE_APP_PRIVATE_KEY` secret. The default `GITHUB_TOKEN`
 stays read-only. The pipeline writes only `release/*` and `release-run/*`
 branches and tags, never `master`, so the master ruleset needs no bypass actor.
