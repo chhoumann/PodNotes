@@ -16,6 +16,7 @@
 		"size": "node scripts/size.mjs",
 		"size:data": "node scripts/persistence-size.mjs",
 		"count:writes": "node scripts/write-counts.mjs",
+		"plant": "node scripts/plant.mjs",
 		"typecheck": "node node_modules/@typescript/native/bin/tsc --project tsconfig.json --noEmit && node node_modules/@typescript/native/bin/tsc --project tsconfig.test.json --noEmit",
 		"lint": "oxlint --deny-warnings src tests/e2e tests/tooling scripts .claude/skills/verify && svelte-policy",
 		"lint:tsconfig": "node node_modules/@typescript/native/bin/tsc --project tsconfig.json --noEmit --noCheck && node node_modules/@typescript/native/bin/tsc --project tsconfig.test.json --noEmit --noCheck",
