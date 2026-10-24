@@ -13,7 +13,7 @@ import {
 	showPodNotes,
 } from "./journey/actions";
 import { startFixtureServer, type FixtureFeed, type FixtureServer } from "./journey/fixtures";
-import { cdp, click, pressKey, typeText } from "./journey/input";
+import { cdp, chooseFile, click, pressKey, typeInto, typeText } from "./journey/input";
 import { readVaultText, seedLibrary, waitForPlayback } from "./journey/library";
 import { ui, type UiTarget } from "./journey/targets";
 import { eventually, notices, waitUntilShown } from "./journey/wait";
@@ -517,6 +517,69 @@ describe("captures with a QuickAdd choice", () => {
 			episodeNote(server, [30]),
 			"The QuickAdd choice no longer exists. Choose another in PodNotes settings.",
 		);
+	}, 90_000);
+
+	test("Import settings brings back the choice that Export settings wrote, and captures run it", async () => {
+		const { obsidian, sandbox } = getContext();
+		await installQuickAdd(await quickAddRelease("2.33.1"), [LOG]);
+		const { server, notePath } = await noteAt(30);
+		const fileName = sandbox.path("PodNotes_Settings.json");
+		onTestFinished(() =>
+			obsidian.dev.evalJsonAsync(`(async () => {
+				const file = app.vault.getFileByPath(${jsLiteral(fileName)});
+				if (file) await app.vault.delete(file);
+				return true;
+			})()`),
+		);
+		await openPodNotesSettings(obsidian);
+		onTestFinished(() => closeSettings(obsidian));
+
+		await typeInto(obsidian, ui.settingControl("Export settings", "input"), fileName, {
+			replace: true,
+		});
+		await click(obsidian, ui.settingControl("Export settings", "button"));
+		const exported = () =>
+			readVaultText(obsidian, fileName).then(
+				(text) => JSON.parse(text).settings.timestamp.quickAddChoiceId as string,
+				() => null,
+			);
+		expect(await eventually(obsidian, exported, LOG_ID), "the exported choice").toBe(LOG_ID);
+
+		await click(obsidian, rowControl("Clear"));
+		expect(await eventually(obsidian, savedChoiceId, undefined), "the cleared choice").toBe(
+			undefined,
+		);
+		await chooseFile(
+			obsidian,
+			ui.settingControl("Import settings", "button"),
+			path.join(await obsidian.vaultPath(), fileName),
+		);
+		await click(obsidian, {
+			name: "Import confirmation",
+			elements:
+				'[...document.querySelectorAll(".modal button.mod-destructive")].filter((button) => button.textContent.trim() === "Import")',
+		});
+		expect(await eventually(obsidian, quickAddRow, ["Log timestamp", "Clear"])).toEqual([
+			"Log timestamp",
+			"Clear",
+		]);
+		expect(await eventually(obsidian, savedChoiceId, LOG_ID), "the imported choice").toBe(
+			LOG_ID,
+		);
+		await screenshot("row-imported", QUICKADD_ROW);
+
+		await closeSettings(obsidian);
+		await runCommand(obsidian, `${PLUGIN_ID}:capture-timestamp`);
+		expect(
+			await eventually(
+				obsidian,
+				() => readVaultText(obsidian, notePath),
+				episodeNote(server, [30]),
+				10_000,
+			),
+			"the capture through the imported choice",
+		).toBe(episodeNote(server, [30]));
+		expect((await obsidian.exec("dev:errors")).stdout.trim()).toBe("No errors captured.");
 	}, 90_000);
 
 	test("a long choice name stays on one line in its button, beside the row's name and Clear, in a narrow window and on a phone", async () => {
