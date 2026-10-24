@@ -118,11 +118,8 @@ async function getTemplateChapters(
 	template: string,
 	episode: Episode,
 ): Promise<Chapter[] | undefined> {
-	if (!episode.chaptersUrl || !templateHasTag(template, "chapters")) {
-		return undefined;
-	}
-
-	return await fetchChapters(episode.chaptersUrl);
+	if (!templateHasTag(template, "chapters")) return undefined;
+	return (await fetchChapters(episode)) ?? [];
 }
 
 export function getPodcastNote(episode: Episode): TFile | null {
