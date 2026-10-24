@@ -229,6 +229,15 @@ if (!(HTMLElement.prototype as unknown as { empty?: () => void }).empty) {
 	};
 }
 
+if (!(HTMLElement.prototype as unknown as { toggle?: unknown }).toggle) {
+	(HTMLElement.prototype as unknown as { toggle: (show: boolean) => void }).toggle = function (
+		this: HTMLElement,
+		show: boolean,
+	) {
+		this.style.display = show ? "" : "none";
+	};
+}
+
 // Obsidian augments HTMLElement with setCssStyles (assigns a batch of inline
 // styles, the sanctioned alternative to direct `el.style.x = y` writes). jsdom
 // has no such method, so mirror Obsidian's behaviour for component/DOM tests.

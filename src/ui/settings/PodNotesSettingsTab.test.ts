@@ -14,6 +14,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { PodNotesSettingsTab } from "./PodNotesSettingsTab";
 import { attachDataFileWriter, dataFileText } from "../../../tests/mocks/dataFileWriter";
 import { FakeDocument } from "../../../tests/mocks/fakeMedia";
+import { fakeQuickAdd, unusableQuickAdd } from "../../../tests/mocks/quickAdd";
 
 const openTabs = new Set<PodNotesSettingsTab>();
 
@@ -58,6 +59,8 @@ function open(saved: Partial<IPodNotesSettings> = {}) {
 		manifest: { dir: ".obsidian/plugins/podnotes", version: "3.0.0" },
 		app: {
 			secretStorage: new obsidian.SecretStorage(),
+			plugins: unusableQuickAdd("Install").plugins,
+			setting: { openTabById: vi.fn() },
 			vault: {
 				adapter: {
 					exists: vi.fn().mockResolvedValue(true),
@@ -168,6 +171,7 @@ describe("sections", () => {
 				[
 					"Timestamp template",
 					"Timestamp offset (s)",
+					"QuickAdd choice",
 					"Episode note path",
 					"Episode note template",
 					"Podcast note path",
@@ -193,12 +197,14 @@ describe("sections", () => {
 	});
 
 	test("each field is named after its row where it takes focus, without an aria-label Obsidian would show as a tooltip", () => {
-		const { tab } = open();
+		const { plugin, tab } = open();
+		Object.assign(plugin.app, { plugins: fakeQuickAdd().plugins });
+		tab.display();
 		const fields = [
-			...tab.containerEl.querySelectorAll(
-				'.setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"], .setting-secret-value + button)',
+			...tab.containerEl.querySelectorAll<HTMLElement>(
+				'.setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"], button[aria-labelledby])',
 			),
-		];
+		].filter((field) => field.style.display !== "none");
 		const rowOf = (field: Element) =>
 			field.closest(".setting-item")?.querySelector(".setting-item-name")?.textContent;
 
@@ -211,6 +217,8 @@ describe("sections", () => {
 			"Next track",
 			"Timestamp template",
 			"Timestamp offset (s)",
+			"QuickAdd choice",
+			"QuickAdd choice",
 			"Episode note path",
 			"Episode note template",
 			"Podcast note path",
@@ -230,7 +238,7 @@ describe("sections", () => {
 		]);
 		for (const field of fields) {
 			expect(field).toHaveAccessibleName(
-				field.matches("button") ? `Link... ${rowOf(field)}` : rowOf(field),
+				field.matches("button") ? `${field.textContent} ${rowOf(field)}` : rowOf(field),
 			);
 			expect(field).not.toHaveAttribute("aria-label");
 		}
@@ -618,6 +626,162 @@ describe("text fields", () => {
 		type(path, "/{{title}}");
 		expect(warning()).toBeUndefined();
 	});
+});
+
+describe("QuickAdd choice", () => {
+	const TIMESTAMP = { template: "- {{time}} ", offset: 0 };
+
+	/** Opens the tab with `plugins` as `app.plugins`. */
+	function withQuickAdd(plugins: object, quickAddChoiceId?: string) {
+		const opened = open({ timestamp: { ...TIMESTAMP, quickAddChoiceId } });
+		Object.assign(opened.plugin.app, { plugins });
+		opened.tab.display();
+		const controls = () => [
+			...opened
+				.row("QuickAdd choice")
+				.querySelectorAll<HTMLElement>(".setting-item-control > *"),
+		];
+		return {
+			...opened,
+			/** The row's controls a user sees, by their text, or an icon by its tooltip. */
+			shown: () =>
+				controls()
+					.filter((control) => control.style.display !== "none")
+					.map((control) => control.textContent || control.getAttribute("aria-label")),
+			click: (label: string) =>
+				controls()
+					.find(
+						(control) =>
+							(control.textContent || control.getAttribute("aria-label")) === label,
+					)!
+					.click(),
+		};
+	}
+
+	test("Choose... opens QuickAdd's picker and stores the id of the choice picked", async () => {
+		const quickAdd = fakeQuickAdd({ log: "Log" });
+		quickAdd.api.pickChoice.mockResolvedValue({ id: "log", name: "Log" });
+		const { shown, click, disk } = withQuickAdd(quickAdd.plugins);
+		expect(shown()).toEqual(["Choose...", "Create"]);
+
+		click("Choose...");
+
+		expect((await disk()).timestamp).toEqual({ ...TIMESTAMP, quickAddChoiceId: "log" });
+		expect(shown()).toEqual(["Log", "Clear"]);
+	});
+
+	test("Escape in the picker keeps the choice set before", async () => {
+		const quickAdd = fakeQuickAdd({ log: "Log" });
+		quickAdd.api.pickChoice.mockRejectedValue(new Error("No input given."));
+		const { shown, click, writes, plugin } = withQuickAdd(quickAdd.plugins, "log");
+
+		click("Log");
+
+		expect(await writes()).toBe(0);
+		expect(quickAdd.api.pickChoice).toHaveBeenCalledOnce();
+		expect(plugin.settings.timestamp.quickAddChoiceId).toBe("log");
+		expect(shown()).toEqual(["Log", "Clear"]);
+	});
+
+	test("Clear unsets the choice and leaves QuickAdd's choices alone", async () => {
+		const quickAdd = fakeQuickAdd({ log: "Log" });
+		const { shown, click, disk } = withQuickAdd(quickAdd.plugins, "log");
+
+		click("Clear");
+
+		expect((await disk()).timestamp).toEqual(TIMESTAMP);
+		expect(shown()).toEqual(["Choose...", "Create"]);
+		expect(quickAdd.choices).toEqual({ log: "Log" });
+	});
+
+	test("Create adds QuickAdd's ready-made choice and stores it", async () => {
+		const quickAdd = fakeQuickAdd({ log: "Log" });
+		const { shown, click, disk } = withQuickAdd(quickAdd.plugins);
+
+		click("Create");
+
+		expect((await disk()).timestamp).toEqual({
+			...TIMESTAMP,
+			quickAddChoiceId: "podnotes-capture",
+		});
+		expect(quickAdd.choices).toEqual({ log: "Log", "podnotes-capture": "Podcast capture" });
+		expect(shown()).toEqual(["Podcast capture", "Clear"]);
+	});
+
+	test("Create again keeps the ready-made choice QuickAdd already has, under its name there", async () => {
+		const quickAdd = fakeQuickAdd({ "podnotes-capture": "Episode log" });
+		const { shown, click, disk } = withQuickAdd(quickAdd.plugins);
+
+		click("Create");
+
+		expect((await disk()).timestamp.quickAddChoiceId).toBe("podnotes-capture");
+		expect(shown()).toEqual(["Episode log", "Clear"]);
+	});
+
+	test("Create says so when QuickAdd fails to import its choice, and stores nothing", async () => {
+		const quickAdd = fakeQuickAdd();
+		quickAdd.api.importPackage.mockRejectedValue(new Error("Could not save settings"));
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const notice = vi.spyOn(obsidian, "Notice");
+		const { shown, click, writes } = withQuickAdd(quickAdd.plugins);
+
+		click("Create");
+
+		await vi.waitFor(() =>
+			expect(notice).toHaveBeenCalledWith("Could not create the QuickAdd choice"),
+		);
+		expect(await writes()).toBe(0);
+		expect(shown()).toEqual(["Choose...", "Create"]);
+	});
+
+	test("shows the choice under its name in QuickAdd, after a rename too", () => {
+		const quickAdd = fakeQuickAdd({ log: "Log" });
+		const { shown, tab } = withQuickAdd(quickAdd.plugins, "log");
+		expect(shown()).toEqual(["Log", "Clear"]);
+
+		quickAdd.choices.log = "Podcast log";
+		tab.display();
+
+		expect(shown()).toEqual(["Podcast log", "Clear"]);
+	});
+
+	test("says Missing choice for a choice QuickAdd no longer has, and picks another", async () => {
+		const quickAdd = fakeQuickAdd({ log: "Log" });
+		quickAdd.api.pickChoice.mockResolvedValue({ id: "log", name: "Log" });
+		const { shown, click, disk } = withQuickAdd(quickAdd.plugins, "deleted");
+		expect(shown()).toEqual(["Missing choice", "Clear"]);
+
+		click("Missing choice");
+
+		expect((await disk()).timestamp.quickAddChoiceId).toBe("log");
+		expect(shown()).toEqual(["Log", "Clear"]);
+	});
+
+	test("a button that asks for QuickAdd is named by its own words alone", () => {
+		const { row } = withQuickAdd(unusableQuickAdd("Install").plugins);
+
+		expect(row("QuickAdd choice").querySelector("button")).toHaveAccessibleName(
+			"Install QuickAdd",
+		);
+	});
+
+	test.each(["Install", "Enable", "Update"] as const)(
+		"says %s QuickAdd, which opens Community plugins, until QuickAdd can pick choices",
+		async (fix) => {
+			const { plugins } = unusableQuickAdd(fix);
+			const { shown, click, writes, plugin } = withQuickAdd(plugins);
+			expect(shown()).toEqual([`${fix} QuickAdd`]);
+
+			click(`${fix} QuickAdd`);
+
+			expect(
+				(plugin.app as unknown as { setting: { openTabById: unknown } }).setting
+					.openTabById,
+			).toHaveBeenCalledWith("community-plugins");
+			expect(await writes()).toBe(0);
+			expect(withQuickAdd(plugins, "log").shown()).toEqual([`${fix} QuickAdd`, "Clear"]);
+		},
+	);
 });
 
 describe("Default speed", () => {

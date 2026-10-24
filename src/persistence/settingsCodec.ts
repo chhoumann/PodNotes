@@ -32,6 +32,7 @@ import {
 	readNullableString,
 	readOption,
 	readString,
+	setOptionalString,
 	type UnknownRecord,
 	warn,
 } from "./codecUtils";
@@ -146,7 +147,7 @@ const LEGACY_TIMESTAMP_TEMPLATE = "- {{time}} ";
 
 function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettings["timestamp"] {
 	const record = optionalRecord(value, warnings, "timestamp");
-	return {
+	const timestamp = {
 		...copySafeObject(record),
 		template: readString(record, "template", LEGACY_TIMESTAMP_TEMPLATE, warnings, "timestamp"),
 		offset: readFiniteNumber(
@@ -157,6 +158,8 @@ function decodeTimestamp(value: unknown, warnings: Set<string>): IPodNotesSettin
 			"timestamp",
 		),
 	};
+	setOptionalString(timestamp, record, "quickAddChoiceId", warnings, "timestamp");
+	return timestamp;
 }
 
 function decodeNote(

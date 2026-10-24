@@ -929,3 +929,52 @@ describe("timestamp template (#345)", () => {
 		expect(decoded.warnings).toEqual(warnings);
 	});
 });
+
+describe("QuickAdd choice", () => {
+	const saved = (timestamp: Record<string, unknown>) =>
+		decodePodNotesData({
+			...listenerData,
+			schemaVersion: 2,
+			openAISecretId: "",
+			deepgramSecretId: "",
+			timestamp,
+		});
+	const persisted = ({ settings, unknownFields }: ReturnType<typeof decodePodNotesData>) =>
+		JSON.stringify(encodePodNotesData(settings, unknownFields).timestamp);
+
+	it("keeps the choice's id through load and save", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoiceId: "log" });
+
+		expect(decoded.warnings).toEqual([]);
+		expect(decoded.changed).toBe(false);
+		expect(decoded.settings.timestamp.quickAddChoiceId).toBe("log");
+		expect(persisted(decoded)).toBe(
+			'{"template":"- {{time}} ","offset":0,"quickAddChoiceId":"log"}',
+		);
+	});
+
+	it("writes no choice for data without one", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0 });
+
+		expect(persisted(decoded)).toBe('{"template":"- {{time}} ","offset":0}');
+		expect(persisted(decodePodNotesData(null))).toBe(
+			'{"template":"- {{linktime}} ","offset":0}',
+		);
+	});
+
+	it("drops a choice id that is not text, with a warning", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, quickAddChoiceId: 42 });
+
+		expect(decoded.warnings).toEqual(["timestamp.quickAddChoiceId: expected a string"]);
+		expect(persisted(decoded)).toBe('{"template":"- {{time}} ","offset":0}');
+	});
+
+	// 2.22.0 knows no quickAddChoiceId, and decodes the timestamp setting as this version
+	// decodes a field it does not know, so a 2.22.0 device keeps the id when it saves.
+	it("keeps a timestamp field this version does not know through load and save", () => {
+		const decoded = saved({ template: "- {{time}} ", offset: 0, nextField: "kept" });
+
+		expect(decoded.warnings).toEqual([]);
+		expect(persisted(decoded)).toBe('{"template":"- {{time}} ","offset":0,"nextField":"kept"}');
+	});
+});

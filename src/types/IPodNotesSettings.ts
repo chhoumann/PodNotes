@@ -41,6 +41,8 @@ export interface IPodNotesSettings {
 	timestamp: {
 		template: string;
 		offset: number;
+		/** The id of the QuickAdd choice a capture runs instead of writing the timestamp itself. */
+		quickAddChoiceId?: string;
 	};
 
 	note: {
