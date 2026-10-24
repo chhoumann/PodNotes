@@ -44,7 +44,6 @@ root symlinks for local Obsidian loading.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test, including rejection of tagged templates that disable Obsidian's eval cache. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
-- `npm run docs:deploy`: build docs and deploy `docs/dist` to Cloudflare Pages.
 
 `@typescript/native` aliases TypeScript 7. `typecheck` and `lint:tsconfig` call
 its compiler by path because npm can link the shared `tsc` command to either

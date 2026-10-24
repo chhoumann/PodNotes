@@ -39,7 +39,6 @@
 		"mobile:stop": "bash scripts/omd.sh stop",
 		"check:a11y": "npm run lint:tsconfig && svelte-check --tsconfig ./tsconfig.json --tsgo-experimental-api --fail-on-warnings && svelte-check --tsconfig ./tsconfig.test.json --tsgo-experimental-api --fail-on-warnings",
 		"docs:build": "npm ci --prefix docs && npm run build --prefix docs",
-		"docs:deploy": "npm run docs:build && wrangler pages deploy docs/dist --project-name podnotes --branch master",
 		"format": "oxfmt src tests scripts .claude/skills/verify .github package.json manifest.json versions.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json svelte-policy.json vite.config.ts vitest.config.ts vitest.e2e.config.ts vitest.setup.ts vitest.setup.dom.ts obsidian-e2e.config.mjs docs/wrangler.jsonc docs/astro.config.mjs docs/package.json docs/src/content.config.ts docs/src/markdown.ts docs/src/site.mjs docs/src/pages docs/scripts docs/legacy-fragments.json docs/tsconfig.json",
 		"test:tooling": "vitest run --config tests/tooling/vitest.config.ts"
 	},
@@ -64,7 +63,6 @@
 		"typescript": "6.0.3",
 		"vite": "^8.3.4",
 		"vitest": "^5.0.5",
-		"wrangler": "4.151.0",
 		"yaml": "^2.9.1"
 	},
 	"overrides": {
