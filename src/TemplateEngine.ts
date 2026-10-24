@@ -347,8 +347,8 @@ export function NoteTemplateEngine(
 	addTag("url", episodeUrl);
 	addEpisodeDateTags(addTag, episode);
 	addTag("duration", durationTag(episode));
-	// Podcasting 2.0 chapters, fetched before note creation when the template
-	// asks for them. Empty when the feed has no chapters URL or fetching fails.
+	// The chapters, fetched before note creation when the template
+	// asks for them. Empty when the episode has none or fetching fails.
 	addTag("chapters", (prependToLines?: string) =>
 		formatTemplateChapters(chapters, prependToLines),
 	);

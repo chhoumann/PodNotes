@@ -85,7 +85,7 @@ class FakeMediaSession {
 function setup({
 	mediaSession = new FakeMediaSession() as FakeMediaSession | null,
 	Metadata = FakeMetadata as typeof FakeMetadata | null,
-	chapters = (_url: string): Promise<Chapter[]> => Promise.resolve([]),
+	chapters = (_episode: Episode): Promise<Chapter[]> => Promise.resolve([]),
 } = {}) {
 	const doc = new FakeDocument();
 	const host = {
@@ -445,7 +445,7 @@ describe("headset mapping", () => {
 		});
 
 		test("next and previous chapter seek to the episode's chapter starts", async () => {
-			const chapters = vi.fn(() => Promise.resolve(CHAPTERS));
+			const chapters = vi.fn((_episode: Episode) => Promise.resolve(CHAPTERS));
 			const context = setup({ chapters });
 			context.host.settings.headsetPreviousTrack = "previousChapter";
 			context.host.settings.headsetNextTrack = "nextChapter";
@@ -469,7 +469,9 @@ describe("headset mapping", () => {
 			context.session.act("nexttrack");
 			await flush();
 			expect(context.media().currentTime).toBe(130);
-			expect(chapters.mock.calls).toEqual([[WITH_CHAPTERS.chaptersUrl]]);
+			expect(chapters.mock.calls.map(([episode]) => episode.chaptersUrl)).toEqual([
+				WITH_CHAPTERS.chaptersUrl,
+			]);
 		});
 
 		test("chapters that arrive after the episode changed move nothing", async () => {
@@ -493,7 +495,7 @@ describe("headset mapping", () => {
 			"%s with no chapters is a no-op and retries",
 			async (action) => {
 				const chapters = vi
-					.fn<(url: string) => Promise<Chapter[]>>()
+					.fn<(episode: Episode) => Promise<Chapter[]>>()
 					.mockRejectedValueOnce(new Error("offline"))
 					.mockResolvedValueOnce([])
 					.mockResolvedValue(CHAPTERS);
@@ -511,8 +513,8 @@ describe("headset mapping", () => {
 				playing(context, 30, 3600, B);
 				context.session.act(action);
 				await flush();
-				expect(chapters).toHaveBeenCalledTimes(3);
-				expect(context.media().currentTime).toBe(30);
+				expect(chapters).toHaveBeenCalledTimes(4);
+				expect(chapters).toHaveBeenLastCalledWith(expect.objectContaining({ title: "B" }));
 			},
 		);
 

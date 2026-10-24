@@ -11,6 +11,7 @@ import {
 	resolveProvisionOptions,
 } from "obsidian-e2e/runner";
 import { pngSize } from "./sheet.mjs";
+import { jsLiteral } from "../../../../scripts/js-literal.mjs";
 
 /** @typedef {import("./scenes.mjs").Page} Page */
 
@@ -204,7 +205,7 @@ export async function theme(name) {
 export async function go(page) {
 	await evaluate(`
 		const plugin = app.plugins.plugins.podnotes;
-		plugin.navigation.replace(${JSON.stringify(page)});
+		plugin.navigation.replace(${jsLiteral(page)});
 		await plugin.activateView();
 		return true;
 	`);
@@ -267,7 +268,7 @@ export async function episodeNote() {
  */
 export async function press(text) {
 	const button = `[...document.querySelectorAll("section.pn-player button")].find((button) =>
-		button.getBoundingClientRect().width > 0 && button.innerText.trim() === ${JSON.stringify(text)})`;
+		button.getBoundingClientRect().width > 0 && button.innerText.trim() === ${jsLiteral(text)})`;
 	// "true" or "false" for a panel switch or tab.
 	const state = `((button) => !button ? "missing" :
 		button.getAttribute("aria-pressed") ?? button.getAttribute("aria-selected") ?? "action")(${button})`;
@@ -359,7 +360,7 @@ async function settle(text = "") {
 			const moving = document.getAnimations().filter(
 				(animation) => animation.playState === "running" && view.contains(animation.effect?.target),
 			).length;
-			const shown = view.innerText.includes(${JSON.stringify(text)});
+			const shown = view.innerText.includes(${jsLiteral(text)});
 			return { loading, moving, shown, markup: view.innerHTML.length };
 		`);
 		const ready = state.loading === 0 && state.moving === 0 && state.shown;
@@ -391,7 +392,7 @@ export async function shot(file, text, themeName, statusBar = false, notice = ""
 		document.querySelectorAll(".tooltip").forEach((tooltip) => tooltip.remove());
 		const notices = [...document.querySelectorAll(".notice")].map((notice) => {
 			const said = notice.innerText.trim();
-			if (!${JSON.stringify(notice)}) notice.remove();
+			if (!${jsLiteral(notice)}) notice.remove();
 			return said;
 		});
 		// Obsidian's status bar floats over the view's bottom-right corner.

@@ -1,4 +1,5 @@
 import type { ObsidianClient } from "obsidian-e2e";
+import { jsLiteral } from "../runtime";
 import { ui, type UiTarget } from "./targets";
 import { pageScrollTop } from "./wait";
 
@@ -197,28 +198,36 @@ export async function drag(
 	await mouse.release();
 }
 
-/** Drags a finger from `from` to `to` at a hand's pace: a short hold, then `steps` even steps. */
+/**
+ * Swipes a finger from `from` to `to` in `steps` even steps, each sent once the last is
+ * handled. Obsidian drops a swipe whose first move comes over 200 ms after the touch. A
+ * CLI call per event can take that long on a busy host, and a renderer timer set after the
+ * touch fires about 100 ms late, so the renderer sends the events back to back.
+ */
 export async function touchDrag(
 	obsidian: ObsidianClient,
 	from: Point,
 	to: Point,
 	steps = 8,
 ): Promise<void> {
-	const touch = (type: string, points: Point[]) =>
-		cdp(obsidian, "Input.dispatchTouchEvent", { type, touchPoints: points });
-	const pause = () => new Promise((resolve) => setTimeout(resolve, 120));
-	await touch("touchStart", [from]);
-	await pause();
-	for (let step = 1; step <= steps; step++) {
-		await touch("touchMove", [
-			{
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		const devtools = require("@electron/remote").getCurrentWebContents().debugger;
+		if (!devtools.isAttached()) devtools.attach("1.3");
+		const touch = (type, touchPoints) =>
+			devtools.sendCommand("Input.dispatchTouchEvent", { type, touchPoints });
+		const from = ${jsLiteral(from)};
+		const to = ${jsLiteral(to)};
+		const steps = ${jsLiteral(steps)};
+		await touch("touchStart", [from]);
+		for (let step = 1; step <= steps; step++) {
+			await touch("touchMove", [{
 				x: from.x + ((to.x - from.x) * step) / steps,
 				y: from.y + ((to.y - from.y) * step) / steps,
-			},
-		]);
-		await pause();
-	}
-	await touch("touchEnd", []);
+			}]);
+		}
+		await touch("touchEnd", []);
+		return true;
+	})()`);
 }
 
 export async function typeInto(

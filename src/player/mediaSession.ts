@@ -4,6 +4,7 @@ import type { Episode } from "src/types/Episode";
 import type { NextTrackAction, PreviousTrackAction } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { getEpisodeKey } from "src/utility/episodeKey";
+import { chaptersKey } from "src/utility/fetchChapters";
 import {
 	isPlaying,
 	type PlayerController,
@@ -18,7 +19,7 @@ interface MediaSessionHost {
 	captureTimestamp(): void;
 	skipBackward(): void;
 	skipForward(): void;
-	chapters(url: string): Promise<Chapter[]>;
+	chapters(episode: Episode): Promise<Chapter[]>;
 }
 
 const CHAPTER_RESTART_S = 2;
@@ -81,15 +82,15 @@ export function bindMediaSession(
 	const { mediaSession, MediaMetadata } = host;
 	let episodeKey = "";
 	let activation = 0;
-	let chapters: { url: string; loading: Promise<Chapter[]> } | undefined;
+	let chapters: { key: string; loading: Promise<Chapter[]> } | undefined;
 
 	async function seekChapter(direction: 1 | -1): Promise<void> {
 		const { episode } = get(player.state);
-		const url = episode?.chaptersUrl;
-		if (!url) return;
+		if (!episode) return;
 		const requestedActivation = activation;
-		if (chapters?.url !== url) {
-			chapters = { url, loading: host.chapters(url).catch(() => []) };
+		const key = chaptersKey(episode);
+		if (chapters?.key !== key) {
+			chapters = { key, loading: host.chapters(episode).catch(() => []) };
 		}
 		const asked = chapters;
 		const loaded = await asked.loading;

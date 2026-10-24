@@ -32,6 +32,7 @@ import {
 } from "../../.claude/skills/verify/screens/instance.mjs";
 import { library, seed } from "../../.claude/skills/verify/screens/scenes.mjs";
 import { API, cdp, docsLibrary, episode, instance, plan, seedDir, writeNote } from "./scene.mjs";
+import { jsLiteral } from "../../scripts/js-literal.mjs";
 
 const outDir = fileURLToPath(new URL("../public/screenshots", import.meta.url));
 const work = path.join(root, ".obsidian-e2e-artifacts", "docs-screenshots");
@@ -85,7 +86,7 @@ async function desktop({ width, height, sidebar }) {
 /** Opens a vault file in the one main-area tab and shows it in the file explorer. */
 async function openFile(/** @type {string} */ file) {
 	await evaluate(`
-		const file = app.vault.getAbstractFileByPath(${JSON.stringify(file)});
+		const file = app.vault.getAbstractFileByPath(${jsLiteral(file)});
 		let leaf;
 		app.workspace.iterateRootLeaves((candidate) => (leaf ??= candidate));
 		await leaf.openFile(file);
@@ -104,7 +105,7 @@ async function openFile(/** @type {string} */ file) {
 		return true;
 	`);
 	await waitFor(
-		`return app.workspace.getActiveFile()?.path === ${JSON.stringify(file)};`,
+		`return app.workspace.getActiveFile()?.path === ${jsLiteral(file)};`,
 		`${file} did not open`,
 	);
 }
@@ -125,7 +126,7 @@ async function capture(name, rect, { css = "", focus = false } = {}) {
 		await evaluate(`
 			document.getElementById("docs-capture")?.remove();
 			document.head.createEl("style", { attr: { id: "docs-capture" },
-				text: ${JSON.stringify(`${CAPTURE_CSS} .status-bar { display: none; } ${css}`)} });
+				text: ${jsLiteral(`${CAPTURE_CSS} .status-bar { display: none; } ${css}`)} });
 			if (!${focus}) document.activeElement?.blur?.();
 			document.querySelectorAll(".tooltip, .notice").forEach((el) => el.remove());
 			return true;
@@ -205,7 +206,7 @@ async function show(
 
 /** A crop down to the last element matching `selector`, plus `pad`, as page source. */
 const below = (/** @type {string} */ selector, pad = 16) =>
-	`() => ({ bottom: Math.max(...[...document.querySelectorAll(${JSON.stringify(selector)})]
+	`() => ({ bottom: Math.max(...[...document.querySelectorAll(${jsLiteral(selector)})]
 		.filter((el) => el.getClientRects().length > 0)
 		.map((el) => el.getBoundingClientRect().bottom)) + ${pad} })`;
 // The first-run screen centers a short block in a tall sidebar.
@@ -302,7 +303,7 @@ async function load(/** @type {{ title: string, podcastName: string }} */ item) 
 	);
 	await waitFor(
 		`let state; app.plugins.plugins.podnotes.player.state.subscribe((value) => (state = value))();
-		return state.status === "playing" && state.episode.title === ${JSON.stringify(item.title)};`,
+		return state.status === "playing" && state.episode.title === ${jsLiteral(item.title)};`,
 		`${item.title} did not play`,
 	);
 	await evaluate(`app.plugins.plugins.podnotes.player.pause(); return true;`);
@@ -321,7 +322,7 @@ async function writeFeedNote(/** @type {string} */ podcast) {
 	});
 	await waitFor(
 		`const file = app.workspace.getActiveFile()?.path;
-		return Boolean(file) && file !== ${JSON.stringify(before)} && file.startsWith("PodNotes/Podcasts/");`,
+		return Boolean(file) && file !== ${jsLiteral(before)} && file.startsWith("PodNotes/Podcasts/");`,
 		`The feed note for ${podcast} did not open`,
 	);
 }
@@ -341,8 +342,8 @@ async function scrollNote(/** @type {string} */ line) {
 	await evaluate(`
 		const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
 		const view = editor.cm;
-		const index = [...Array(editor.lineCount()).keys()].find((i) => editor.getLine(i) === ${JSON.stringify(line)}) ?? 0;
-		view.scrollDOM.scrollTop = ${JSON.stringify(line)} ? view.lineBlockAt(view.state.doc.line(index + 1).from).top - 40 : 0;
+		const index = [...Array(editor.lineCount()).keys()].find((i) => editor.getLine(i) === ${jsLiteral(line)}) ?? 0;
+		view.scrollDOM.scrollTop = ${jsLiteral(line)} ? view.lineBlockAt(view.state.doc.line(index + 1).from).top - 40 : 0;
 		await new Promise((resolve) => setTimeout(resolve, 300));
 		return true;
 	`);
@@ -366,15 +367,13 @@ async function cursorAfterLastTimestamp() {
  * @param {string} heroNote @param {"light" | "dark"} themeName
  */
 async function recordDemo(heroNote, themeName) {
-	const text = await evaluate(
-		`return await app.vault.adapter.read(${JSON.stringify(heroNote)});`,
-	);
+	const text = await evaluate(`return await app.vault.adapter.read(${jsLiteral(heroNote)});`);
 	await theme(themeName);
 	await evaluate(`
 		app.internalPlugins.getPluginById("command-palette").instance.recentCommands = [];
 		document.getElementById("docs-capture")?.remove();
 		document.head.createEl("style", { attr: { id: "docs-capture" },
-			text: ${JSON.stringify(`${CAPTURE_CSS} .status-bar { display: none; }`)} });
+			text: ${jsLiteral(`${CAPTURE_CSS} .status-bar { display: none; }`)} });
 		app.workspace.leftSplit.collapse();
 		const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
 		const lines = [...Array(editor.lineCount()).keys()];
@@ -415,7 +414,7 @@ async function recordDemo(heroNote, themeName) {
 				await sleep(900);
 				await evaluate(`
 					const editor = app.workspace.getLeavesOfType("markdown")[0].view.editor;
-					for (const ch of ${JSON.stringify(plan.demo.note)}) {
+					for (const ch of ${jsLiteral(plan.demo.note)}) {
 						editor.replaceSelection(ch);
 						await new Promise((resolve) => setTimeout(resolve, 45));
 					}
@@ -435,7 +434,7 @@ async function recordDemo(heroNote, themeName) {
 	console.log(`docs/public/screenshots/demo${themeName === "dark" ? "-dark" : ""}.gif`);
 	await evaluate(`
 		${API}.stop();
-		await app.vault.adapter.write(${JSON.stringify(heroNote)}, ${JSON.stringify(text)});
+		await app.vault.adapter.write(${jsLiteral(heroNote)}, ${jsLiteral(text)});
 		document.getElementById("docs-capture")?.remove();
 		app.workspace.leftSplit.expand();
 		return true;

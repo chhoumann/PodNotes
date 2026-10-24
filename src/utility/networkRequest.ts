@@ -503,10 +503,15 @@ function copyResponseHeaders(value: unknown): Record<string, string> {
 	try {
 		const headers = ownRecord<string>();
 		for (const [name, headerValue] of Object.entries(value)) {
-			if (typeof headerValue !== "string") {
+			// Obsidian's desktop requestUrl returns Set-Cookie as an array of strings.
+			const combined: unknown =
+				Array.isArray(headerValue) && headerValue.every((item) => typeof item === "string")
+					? headerValue.join(", ")
+					: headerValue;
+			if (typeof combined !== "string") {
 				throw new NetworkError("invalid-response");
 			}
-			headers[name] = headerValue;
+			headers[name] = combined;
 		}
 		return Object.freeze(headers);
 	} catch {

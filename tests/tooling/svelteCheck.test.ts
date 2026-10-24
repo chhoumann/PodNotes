@@ -66,7 +66,6 @@ function withWorkspace(files: Files, run: (workspace: string) => void) {
 	const workspace = realpathSync(mkdtempSync(join(tmpdir(), "podnotes-svelte-check-")));
 	try {
 		symlinkSync(join(root, "node_modules"), join(workspace, "node_modules"), "junction");
-		symlinkSync(join(root, "patches"), join(workspace, "patches"), "junction");
 		const { scripts } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 		const project: Files = { "package.json": JSON.stringify({ scripts }) };
 		for (const name of ["tsconfig.base.json", "tsconfig.json", "tsconfig.test.json"]) {
@@ -198,38 +197,4 @@ describe("npm run check:a11y", () => {
 		},
 		90_000,
 	);
-});
-
-describe("patches/svelte-check.mjs", () => {
-	function install(version: string, entry: string) {
-		const project = mkdtempSync(join(tmpdir(), "podnotes-svelte-check-patch-"));
-		try {
-			const svelteCheck = join(project, "node_modules/svelte-check");
-			mkdirSync(join(svelteCheck, "dist/src"), { recursive: true });
-			writeFileSync(join(svelteCheck, "package.json"), JSON.stringify({ version }));
-			writeFileSync(join(svelteCheck, "dist/src/index.js"), entry);
-			const result = spawnSync(process.execPath, [join(root, "patches/svelte-check.mjs")], {
-				cwd: project,
-				encoding: "utf8",
-			});
-			const after = readFileSync(join(svelteCheck, "dist/src/index.js"), "utf8");
-			return { status: result.status, stderr: result.stderr, entry: after };
-		} finally {
-			rmSync(project, { recursive: true, force: true });
-		}
-	}
-
-	it("refuses another svelte-check version and leaves an unrecognized file alone", () => {
-		const upgraded = install("4.7.7", "");
-		expect(upgraded.status, upgraded.stderr).toBe(1);
-		expect(upgraded.stderr).toContain("patches svelte-check 4.7.6, but 4.7.7 is installed");
-
-		const edited = "console.error('svelte-check failed');\n";
-		const unknown = install("4.7.6", edited);
-		expect(unknown.status, unknown.stderr).toBe(1);
-		expect(unknown.stderr).toContain(
-			"is neither svelte-check 4.7.6 as published nor as patched",
-		);
-		expect(unknown.entry).toBe(edited);
-	});
 });
