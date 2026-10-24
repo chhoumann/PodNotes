@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import {
 	type ObsidianClient,
 	createObsidianClient,
+	createSandboxApi,
 	resolveObsidianEnvOptions,
 	type SandboxApi,
 } from "obsidian-e2e";
@@ -127,9 +128,17 @@ export function createPodNotesE2EHarness(testName: string) {
 			async () => lock?.release(),
 		);
 	}, 60_000);
-	const getContext = createSharedHarness(testName);
-	aroundEach(async (runTest) => {
-		const { obsidian, plugin } = getContext();
+	const getFileContext = createSharedHarness(testName);
+	let testSandbox: SandboxApi | undefined;
+	const getContext = () => ({ ...getFileContext(), sandbox: testSandbox! });
+	aroundEach(async (runTest, { task }) => {
+		const { obsidian, plugin, sandbox } = getFileContext();
+		// The file's sandbox is removed at teardown, and each test's folder with it.
+		testSandbox = await createSandboxApi({
+			obsidian,
+			sandboxRoot: sandbox.root,
+			testName: task.name,
+		});
 		await assertNoNewRuntimeErrors(obsidian, "before this test started");
 		await assertSingleWindow(obsidian);
 		await assertSettingsOpenInMainWindow(obsidian);
@@ -337,7 +346,7 @@ export type PlaybackState = {
 	title: string | null;
 };
 
-// The seeded file outlives a test, so each harness sandbox writes it once.
+// Each sandbox writes the seeded file once.
 const seededAudioPaths = new Set<string>();
 
 export async function seedAudio(

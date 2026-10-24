@@ -184,6 +184,15 @@ test("closes a leaked window and reports it during workspace rollback", async ()
 	}
 });
 
+describe("each test's sandbox", () => {
+	test.each(["first", "second"])("lets the %s test create the same folder", async () => {
+		const { obsidian, sandbox } = getContext();
+		await obsidian.dev.evalJsonAsync(
+			`(async () => { await app.vault.createFolder(${jsLiteral(sandbox.path("Moved"))}); return true; })()`,
+		);
+	});
+});
+
 const TRICKY = `say "hi" \\ to\n</script> \u2028\u2029 end`;
 
 test("evaluates quoted values as the same values, and matches attributes holding them", async () => {

@@ -220,6 +220,7 @@ matches no test fails the run.
   because a quit can leave `app.json` empty and Obsidian then opens Settings
   in a popout. Workspace cleanup restores the original app settings in memory
   and the exact `app.json` bytes.
+- Each test gets its own `sandbox` folder inside its file's sandbox.
 - Build code for Obsidian to evaluate with `jsLiteral` from
   `tests/e2e/runtime.ts`, never with `JSON.stringify` alone.
 - `harness-lifecycle.test.ts` runs the suites in `tests/e2e/harness-fixtures`
