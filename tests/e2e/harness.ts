@@ -144,12 +144,6 @@ export function createPodNotesE2EHarness(testName: string) {
 	};
 	aroundEach(async (runTest, { task }) => {
 		const { obsidian, plugin, sandbox } = getFileContext();
-		// The file's sandbox is removed at teardown, and each test's folder with it.
-		testSandbox = await createSandboxApi({
-			obsidian,
-			sandboxRoot: sandbox.root,
-			testName: task.name,
-		});
 		await assertNoNewRuntimeErrors(obsidian, "before this test started");
 		await assertSingleWindow(obsidian);
 		await assertSettingsOpenInMainWindow(obsidian);
@@ -160,6 +154,12 @@ export function createPodNotesE2EHarness(testName: string) {
 				// for tests that change settings through Obsidian instead.
 				await plugin.data().patch(() => undefined);
 				try {
+					// The file's sandbox is removed at teardown, and each test's folder with it.
+					testSandbox = await createSandboxApi({
+						obsidian,
+						sandboxRoot: sandbox.root,
+						testName: task.name,
+					});
 					await runTest();
 				} finally {
 					testSandbox = undefined;
