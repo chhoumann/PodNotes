@@ -79,7 +79,7 @@ If another episode's file already exists at that path, the download fails. See [
 
 Inserts a timestamp, formatted by **Timestamp template**, at the cursor of the note you are editing. If you are not editing a note, it goes to the note you edited last, if that note is still open in editing view. Otherwise, it goes to the end of the episode's note. See [Choose where a timestamp goes](/timestamps/#choose-where-a-timestamp-goes).
 The default format is `- {{linktime}}` with a space at the end. It makes a list item with a timestamp link.
-After each capture, a notice says where the timestamp went and offers **Undo**. See [Undo a capture](/timestamps/#undo-a-capture).
+After each capture, a notice says where the timestamp went and offers **Undo**. With **QuickAdd choice** set, the choice decides where it goes, and there is no **Undo**. See [Undo a capture](/timestamps/#undo-a-capture).
 Obsidian always lists the command, so you can add it to the mobile toolbar before you play anything. Without a loaded episode, it shows "Play an episode to capture". See [Capture timestamps](/timestamps/).
 
 ## <span id="capture-last-10-seconds-capture-last-20-seconds"></span>Capture Last 10 Seconds / Capture Last 20 Seconds

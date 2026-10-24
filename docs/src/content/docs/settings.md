@@ -34,6 +34,7 @@ These settings decide what the previous-track and next-track buttons of a headse
 | --- | --- | --- |
 | **Timestamp template** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. While an episode is loaded, the setting shows the result for it. Its time tag also sets the times in transcripts that feeds publish. See [Capture timestamps](/timestamps/). |
 | **Timestamp offset (s)** | 0 | Subtracts this many seconds from each capture, to make up for reaction time. |
+| **QuickAdd choice** | None | Runs this QuickAdd choice for each capture, instead of inserting the timestamp. **Choose...** picks one of your QuickAdd choices, and **Create** adds a ready-made one. See [Capture with QuickAdd](/QuickAdd/#capture-with-quickadd). |
 | **Episode note path** | `PodNotes/{{podcast}}/{{title}}.md` | Sets where PodNotes creates episode notes, and shows the path for one of your episodes. See [Create episode notes](/notes/). |
 | **Episode note template** | [The default episode note template](/templates/#default-episode-note-template) | Sets the content of a new episode note. |
 | **Podcast note path** | `PodNotes/Podcasts/{{podcast}}.md` | Sets where PodNotes creates the note for a whole podcast. See [Create a podcast note](/notes/#create-a-podcast-note). |

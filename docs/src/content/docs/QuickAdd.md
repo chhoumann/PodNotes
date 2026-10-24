@@ -9,6 +9,24 @@ Build your own capture and note workflows with the [QuickAdd](https://quickadd.o
 
 Install and enable QuickAdd from **Settings → Community plugins** first.
 
+## Capture with QuickAdd
+
+Set a QuickAdd choice in PodNotes, and each capture runs it instead of inserting the timestamp at your cursor. The choice decides where the timestamp goes. Every capture runs it: **PodNotes: Capture Timestamp**, **PodNotes: Capture Last 10 Seconds**, **PodNotes: Capture Last 20 Seconds**, the player's capture buttons, and the headset or lock-screen capture. You need QuickAdd 2.33.0 or later.
+
+To add each timestamp to the end of a `## Notes` section in the episode's note:
+
+1. In **Settings → PodNotes**, under **Notes**, select **Create** next to **QuickAdd choice**.
+2. Play an episode.
+3. Run **PodNotes: Capture Timestamp**.
+
+**Create** adds a Capture choice named **Podcast capture** to QuickAdd, and you can change it there like any other choice. When the episode's note doesn't exist yet, the first capture creates it with only the `## Notes` heading and the timestamp. To start from your episode note template, create the note with **PodNotes: Create episode note** first.
+
+To use a choice you built yourself, select **Choose...** and pick it. In the choice, `{{VALUE:timestamp}}` is the text a capture inserts without QuickAdd. [Capture values](/QuickAdd/#capture-values) lists the others.
+
+PodNotes shows no **Undo** for these captures, because QuickAdd writes the text. A Capture choice shows QuickAdd's own notice. When QuickAdd can't run the choice, the capture writes nothing, and a notice says what to do: install, enable, or update QuickAdd, or choose another choice. To capture at your cursor again, select **Clear**, the x next to the choice.
+
+QuickAdd's API docs describe how PodNotes picks, looks up, and runs a choice, under [Choice Execution](https://quickadd.obsidian.guide/docs/QuickAddAPI/#choice-execution), and how **Create** imports one, under [Packages](https://quickadd.obsidian.guide/docs/QuickAddAPI/#packages).
+
 ## <span id="timestamp-capture"></span>Capture a timestamp with a comment
 
 A Capture choice, with no macro, writes a timestamp link and your comment on a new line below the cursor:
@@ -184,3 +202,22 @@ For another provider:
 19. Select **Summarize episode**.
 
 The AI Assistant puts the model's answer in `{{VALUE:output}}`, which only the later commands of the same macro can read. QuickAdd's [AI Assistant docs](https://quickadd.obsidian.guide/docs/AIAssistant/) describe the model and output settings.
+
+## Reference
+
+### Capture values
+
+A choice that a capture runs reads these values as `{{VALUE:<name>}}`:
+
+| Name | Value |
+| --- | --- |
+| `timestamp` | The text a capture inserts without QuickAdd, from **Timestamp template**. For a range, the range. |
+| `time` | The playback position as the player shows it, such as `12:34`. For a range, `12:24-12:34`. |
+| `seconds` | The position in whole seconds. For a range, its start. |
+| `link` | The `obsidian://podnotes` link that plays the episode from that position. |
+| `episode` | The episode title. |
+| `podcast` | The podcast name. |
+| `url` | The episode's URL, as `{{url}}` writes it in a note. |
+| `episodeNote` | The path of the episode's note, from **Episode note path**. |
+
+A value PodNotes doesn't have is empty, and QuickAdd doesn't ask for it. No value contains a private feed's address. `link` is empty for an episode PodNotes can't link to.
