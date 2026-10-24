@@ -314,8 +314,8 @@ when the GitHub release is public, its tag points at the release commit, and
 `main.js` and `manifest.json` match their recorded SHA-256 digests.
 
 Three workflows in `.github/workflows/` call reusable workflows in
-`chhoumann/obsidian-plugin-workflows` pinned to v4
-(`ebcf84b80dc48ba15e0eec1f3575d41519a78ed5`):
+`chhoumann/obsidian-plugin-workflows` pinned to v4.1.0
+(`149e37801b35c120660a1fd5e78a5471fda55726`):
 
 1. `Prepare release` (`release-prepare.yml`) runs after a green `Test` push run
    on `master`, or by `workflow_dispatch` with an optional `targetSha`. It skips
