@@ -1,5 +1,5 @@
-// The repo's e2e command. `test` runs tests/e2e against this worktree's isolated
-// Obsidian instance, `screenshot` and `record` capture the PodNotes view,
+// The repo's e2e command. `test` runs tests/e2e against a fresh instance on a
+// freshly provisioned vault, `screenshot` and `record` capture the PodNotes view,
 // `capture` is upstream `obsidian-e2e capture` against the instance, and
 // provision, start, stop and run go to the obsidian-e2e instance runner.
 import { spawn } from "node:child_process";
@@ -67,7 +67,6 @@ async function defaultInstance() {
 async function runTests(args) {
 	const instance = await defaultInstance();
 	const results = path.join(os.tmpdir(), `podnotes-e2e-${process.pid}.json`);
-	let launched = false;
 	/** @type {import("node:child_process").ChildProcess | undefined} */
 	let child;
 	/** @type {NodeJS.Signals | undefined} */
@@ -83,10 +82,12 @@ async function runTests(args) {
 	};
 	for (const signal of FORWARDED_SIGNALS) process.on(signal, onSignal);
 	try {
-		const deps = podNotesRunnerDependencies(() => {
-			launched = true;
-		});
-		const started = await runObsidianE2ECli(["start"], deps);
+		// Manual work and interrupted runs leave fixtures, layout and errors in the
+		// vault that fail later tests.
+		const stopped = await runObsidianE2ECli(["stop"]);
+		if (stopped !== 0) return stopped;
+		await fsp.rm(instance.vaultPath, { recursive: true, force: true });
+		const started = await runObsidianE2ECli(["start"], podNotesRunnerDependencies());
 		if (started !== 0) return started;
 		if (interrupted) return 128 + os.constants.signals[interrupted];
 		child = spawn(
@@ -130,7 +131,7 @@ async function runTests(args) {
 	} finally {
 		for (const signal of FORWARDED_SIGNALS) process.off(signal, onSignal);
 		await fsp.rm(results, { force: true });
-		if (launched) await runObsidianE2ECli(["stop"]);
+		await runObsidianE2ECli(["stop"]);
 	}
 }
 

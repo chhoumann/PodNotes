@@ -49,7 +49,7 @@ Tests sit next to the code as `*.test.ts`. A test file that needs a DOM starts w
 
 Behavior such as playback, timestamp links, downloads, local files, and settings migrations depends on Obsidian itself. Check it in a real Obsidian before you open a pull request.
 
-The end-to-end suite in `tests/e2e` runs against the isolated Obsidian. On Linux, `npm run test:e2e` starts it, or reuses the one already running. It stops the instance afterwards only if it started it. On macOS, start it first:
+The end-to-end suite in `tests/e2e` runs against the isolated Obsidian. On Linux, `npm run test:e2e` stops it, starts it on a fresh vault, and stops it afterwards. On macOS, start it first:
 
 ```
 eval "$(npm run --silent \

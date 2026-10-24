@@ -181,32 +181,28 @@ side by side. Two variables select another build:
   next to `PODNOTES_OBSIDIAN_APP`, so set it only when the client lives
   elsewhere.
 
-Stop this worktree's instance before you switch builds. The runner refuses to
-reuse an instance that a different build launched, and its error calls that a
-mid-session update. Run the suite on 1.13.x with:
+Run the suite on 1.13.x with:
 
 ```bash
-npm run stop:e2e-obsidian
 PODNOTES_OBSIDIAN_APP=/opt/Obsidian/obsidian npm run test:e2e
 ```
 
-`test:e2e` stops the instance it launched, so the next command starts 1.14.4
-again. Any other command against a 1.13.x instance needs the same variable.
+For other commands, stop this worktree's instance before you switch builds.
+The runner refuses to reuse an instance that a different build launched, and
+its error calls that a mid-session update. Every command against a 1.13.x
+instance needs the same variable.
 
 ### E2E suite
 `npm run test:e2e` is the one command. Vitest arguments pass through
 (`npm run test:e2e -- -t "timestamp"`), every test is listed, and a filter that
 matches no test fails the run.
 
-- On both platforms it builds, starts or reuses this worktree's isolated
-  instance, runs `tests/e2e` against it, and stops the instance afterwards only
-  if this run launched it. It never uses the shared `dev` vault.
-- The suite fails before any test runs when the instance lacks these
-  resolver rules. Stop the instance, then run
-  `npm run start:e2e-obsidian`.
+- On both platforms it builds, stops this worktree's isolated instance,
+  provisions a fresh vault, starts the instance, runs `tests/e2e` against it,
+  and stops it afterwards. State left by manual work or an interrupted run
+  never reaches the suite. It never uses the shared `dev` vault.
 - The suite fails when Obsidian has more than one window open, because a second
-  vault window keeps Obsidian from quitting. Close it, or stop the instance,
-  before you rerun.
+  vault window keeps Obsidian from quitting.
 - The harness snapshots the workspace, app settings in `app.json`, the core
   plugins with `core-plugins.json`, and PodNotes' `data.json` before each test,
   and restores them after it. A test can turn on a core plugin, such as the file
@@ -228,9 +224,6 @@ matches no test fails the run.
   `tests/e2e/runtime.ts`, never with `JSON.stringify` alone.
 - `harness-lifecycle.test.ts` runs the suites in `tests/e2e/harness-fixtures`
   in their own Vitest processes and checks how each run ends.
-- An interrupted run can leave test fixtures in the vault's `data.json`, the
-  280 px sidebar, and the interrupted test's layout. Reset the vault with
-  `npm run stop:e2e-obsidian && rm -rf .obsidian-e2e-vaults`.
 
 ### Evidence (Linux)
 Screenshots and recordings come from the same instance. Write them under the
