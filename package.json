@@ -54,7 +54,7 @@
 		"eslint-plugin-obsidianmd": "^0.4.2",
 		"jsdom": "^30.1.3",
 		"obsidian": "1.14.4",
-		"obsidian-e2e": "^0.13.0",
+		"obsidian-e2e": "^0.14.0",
 		"oxfmt": "^0.73.0",
 		"oxlint": "^1.88.0",
 		"postcss": "^8.5.30",
@@ -74,9 +74,6 @@
 		},
 		"eslint-plugin-obsidianmd": {
 			"moment": "2.31.0"
-		},
-		"vite-plus": {
-			"oxfmt": "$oxfmt"
 		}
 	},
 	"engines": {
