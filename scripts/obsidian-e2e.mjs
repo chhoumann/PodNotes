@@ -88,6 +88,7 @@ async function runTests(args) {
 		lockRoot: path.join(os.tmpdir(), "podnotes-e2e-runs"),
 		onBusy: "fail",
 	}).catch((/** @type {Error} */ error) => {
+		if (!error.message.includes(" is locked by ")) throw error;
 		throw new Error(
 			`Another npm run test:e2e is running in this worktree. Wait for it to finish. (${error.message})`,
 		);
@@ -95,7 +96,8 @@ async function runTests(args) {
 	for (const signal of FORWARDED_SIGNALS) process.on(signal, onSignal);
 	try {
 		const [built] = await once(spawn("npm", ["run", "build"], { stdio: "inherit" }), "close");
-		if (built !== 0) return built;
+		if (interrupted) return 128 + os.constants.signals[interrupted];
+		if (built !== 0) return built ?? 1;
 		// Manual work and interrupted runs leave fixtures, layout and errors in the
 		// vault that fail later tests.
 		const stopped = await runObsidianE2ECli(["stop"]);
