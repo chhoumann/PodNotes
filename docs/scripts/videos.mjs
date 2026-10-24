@@ -30,6 +30,7 @@ import {
 } from "../../.claude/skills/verify/screens/instance.mjs";
 import { library, seed } from "../../.claude/skills/verify/screens/scenes.mjs";
 import { API, cdp, docsLibrary, episode, instance, plan, writeNote } from "./scene.mjs";
+import { jsLiteral } from "../../scripts/js-literal.mjs";
 
 const outDir = fileURLToPath(new URL("../public/videos", import.meta.url));
 const work = path.join(root, ".obsidian-e2e-artifacts", "docs-videos");
@@ -139,8 +140,8 @@ async function locate(client, css, text = "") {
 	const deadline = Date.now() + 10000;
 	for (;;) {
 		const { value, exception } = await client.evaluate(`(() => {
-			const text = ${JSON.stringify(text)};
-			const matches = [...document.querySelectorAll(${JSON.stringify(css)})].filter((el) => {
+			const text = ${jsLiteral(text)};
+			const matches = [...document.querySelectorAll(${jsLiteral(css)})].filter((el) => {
 				const rect = el.getBoundingClientRect();
 				return rect.width > 0 && rect.height > 0 && (!text || el.innerText.includes(text));
 			});
@@ -277,7 +278,7 @@ async function record(name, clip, lib) {
 		await evaluate(`
 			document.getElementById("docs-capture")?.remove();
 			document.head.createEl("style", { attr: { id: "docs-capture" },
-				text: ${JSON.stringify(CAPTURE_CSS + POINTER_CSS)} });
+				text: ${jsLiteral(CAPTURE_CSS + POINTER_CSS)} });
 			document.activeElement?.blur?.();
 			document.querySelectorAll(".tooltip, .notice").forEach((el) => el.remove());
 			return ${POINTER};
@@ -350,7 +351,7 @@ async function encode(master, rect, name, posterAt) {
 /** @param {string} text */
 async function waitForText(text) {
 	await waitFor(
-		`return document.querySelector(".podcast-view")?.innerText.includes(${JSON.stringify(text)});`,
+		`return document.querySelector(".podcast-view")?.innerText.includes(${jsLiteral(text)});`,
 		`The view did not show "${text}"`,
 		10000,
 	);
@@ -372,8 +373,8 @@ const network = (shows, aliases) => `(() => {
 	// Staging again replaces the stub instead of wrapping the last one.
 	ipc.send = window.__docsSend ??= ipc.send;
 	const send = ipc.send;
-	const shows = ${JSON.stringify(shows)};
-	const aliases = ${JSON.stringify(aliases)};
+	const shows = ${jsLiteral(shows)};
+	const aliases = ${jsLiteral(aliases)};
 	ipc.send = function (channel, reply, request, ...rest) {
 		if (channel === "request-url" && request?.url?.startsWith("https://itunes.apple.com/search?")) {
 			const term = new URL(request.url).searchParams.get("term").toLowerCase();

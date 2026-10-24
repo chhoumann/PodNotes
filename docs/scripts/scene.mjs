@@ -12,6 +12,7 @@ import {
 	root,
 	waitFor,
 } from "../../.claude/skills/verify/screens/instance.mjs";
+import { jsLiteral } from "../../scripts/js-literal.mjs";
 
 export const seedDir = fileURLToPath(new URL("../screenshots", import.meta.url));
 export const plan = JSON.parse(fs.readFileSync(path.join(seedDir, "seed.json"), "utf8"));
@@ -72,18 +73,18 @@ export async function writeNote(entry) {
 	await evaluate(`app.commands.executeCommandById("podnotes:create-podcast-note"); return true;`);
 	await waitFor(
 		`const file = app.workspace.getActiveFile()?.path;
-		return Boolean(file) && file !== ${JSON.stringify(before)} && file.startsWith("PodNotes/");`,
+		return Boolean(file) && file !== ${jsLiteral(before)} && file.startsWith("PodNotes/");`,
 		`The note for ${entry.title} did not open`,
 	);
 	await evaluate(`
 		await app.fileManager.processFrontMatter(app.workspace.getActiveFile(), (fm) => {
-			fm.status = ${JSON.stringify(entry.status)};
-			if (${JSON.stringify(entry.rating ?? null)} !== null) fm.rating = ${JSON.stringify(entry.rating ?? null)};
+			fm.status = ${jsLiteral(entry.status)};
+			if (${jsLiteral(entry.rating ?? null)} !== null) fm.rating = ${jsLiteral(entry.rating ?? null)};
 		});
 		return true;
 	`);
 	await waitFor(
-		`return app.workspace.activeEditor?.editor?.getValue().includes(${JSON.stringify(`status: ${entry.status}`)});`,
+		`return app.workspace.activeEditor?.editor?.getValue().includes(${jsLiteral(`status: ${entry.status}`)});`,
 		`The properties of ${entry.title} did not reach the editor`,
 	);
 	const lines = entry.notes
@@ -111,14 +112,14 @@ export async function writeNote(entry) {
 			}
 		}
 		await evaluate(
-			`app.workspace.activeEditor.editor.replaceSelection(${JSON.stringify(`${at ? at[4] : line}\n`)}); return true;`,
+			`app.workspace.activeEditor.editor.replaceSelection(${jsLiteral(`${at ? at[4] : line}\n`)}); return true;`,
 		);
 	}
 	await evaluate(`await app.workspace.activeEditor.save(); return true;`);
 	if (!entry.rename) return await evaluate(`return app.workspace.getActiveFile().path;`);
 	return await evaluate(`
 		const file = app.workspace.getActiveFile();
-		await app.fileManager.renameFile(file, file.parent.path + "/" + ${JSON.stringify(`${entry.rename}.md`)});
+		await app.fileManager.renameFile(file, file.parent.path + "/" + ${jsLiteral(`${entry.rename}.md`)});
 		return file.path;
 	`);
 }

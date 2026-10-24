@@ -37,14 +37,13 @@ root symlinks for local Obsidian loading.
 - `npm run typecheck`: run TypeScript 7's native `tsc --noEmit` for source and test projects.
 - `npm run lint`: run oxlint against TypeScript sources and tooling scripts (includes the obsidianmd guideline rules and the `svelte-policy` internals guard via jsPlugins), then the `svelte-policy` component checker, configured by `svelte-policy.json`.
 - `npm run format:check`: run the configured oxfmt check (`npm run format` to write).
-- `npm run check:a11y`: patch svelte-check if needed, run `lint:tsconfig`, then run `svelte-check --tsgo-experimental-api --fail-on-warnings` for source and test projects.
+- `npm run check:a11y`: run `lint:tsconfig`, then run `svelte-check --tsgo-experimental-api --fail-on-warnings` for source and test projects.
 - `npm run lint:tsconfig`: fail with TS18003 when `tsconfig.json` or `tsconfig.test.json` matches no files, using the native compiler without type checking.
 - `npm run test`: run Svelte checks and the application Vitest suite.
 - `npm run test:unit`: run the application Vitest suite without the Svelte checks.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test, including rejection of tagged templates that disable Obsidian's eval cache. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
-- `npm run docs:deploy`: build docs and deploy `docs/dist` to Cloudflare Pages.
 
 `@typescript/native` aliases TypeScript 7. `typecheck` and `lint:tsconfig` call
 its compiler by path because npm can link the shared `tsc` command to either
@@ -53,16 +52,11 @@ compiler's API (`--tsgo-experimental-api`), but it still loads the `typescript`
 package, as do the TypeScript ESLint packages loaded by oxlint's Obsidian rules.
 Keep `typescript` on version 6.
 
-svelte-check 4.7.6 exits 0 when its check throws, for example when the native
-compiler cannot start. `patches/svelte-check.mjs` applies the upstream fix,
-[sveltejs/language-tools#3133](https://github.com/sveltejs/language-tools/pull/3133),
-to exactly that version. It runs on `postinstall` and again at the start of
-`check:a11y`, so an install with `--ignore-scripts` is patched before the check
-runs. It fails on any other svelte-check version or an unrecognized file, so
-svelte-check is pinned and Dependabot skips it. Once a svelte-check release
-includes the fix, upgrade to it and delete the script, its two calls and the
-`patches` lint/format paths in `package.json`, and the Dependabot ignore. The native API path also passes when
-a tsconfig matches no files, which `lint:tsconfig` catches.
+svelte-check exits non-zero when its check throws, for example when the native
+compiler cannot start, since 4.7.7 includes
+[sveltejs/language-tools#3133](https://github.com/sveltejs/language-tools/pull/3133).
+The native API path still passes when a tsconfig matches no files, which
+`lint:tsconfig` catches.
 `tests/tooling/svelteCheck.test.ts` runs the real `check:a11y` in temporary
 workspaces and requires it to fail on each of these cases.
 

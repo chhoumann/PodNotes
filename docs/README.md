@@ -108,6 +108,5 @@ Cloudflare Pages builds through its GitHub integration with `docs/` as the root
 directory. It installs this package's dependencies, runs the dashboard build
 command (which ends in `npm run docs:build`, an alias of `npm run build` here),
 and publishes `dist`, set by `pages_build_output_dir` in `wrangler.jsonc`.
-`npm run docs:deploy` from the repo root builds and deploys with Wrangler
-instead. The `Docs` check in the Documentation GitHub workflow builds the docs
+The `Docs` check in the Documentation GitHub workflow builds the docs
 on every pull request and push to master.

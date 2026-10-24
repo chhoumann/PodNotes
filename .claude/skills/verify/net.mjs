@@ -20,6 +20,7 @@ import {
 	resolveProvisionOptions,
 } from "obsidian-e2e/runner";
 import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
+import { jsLiteral } from "../../../scripts/js-literal.mjs";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const config = await loadRunnerConfig(root);
@@ -64,7 +65,7 @@ const WATCH = `(() => {
 	}
 	const entries = [];
 	// Other hosts log only their origin, because a private feed's path can hold its token.
-	const pathHosts = new Set(${JSON.stringify(PATH_HOSTS)});
+	const pathHosts = new Set(${jsLiteral(PATH_HOSTS)});
 	const logged = (url) => {
 		try {
 			const parsed = new URL(url);
@@ -73,7 +74,7 @@ const WATCH = `(() => {
 			return "(unparsable URL)";
 		}
 	};
-	const text = ${JSON.stringify(FIXTURE_TRANSCRIPTION)};
+	const text = ${jsLiteral(FIXTURE_TRANSCRIPTION)};
 	const originalFetch = window.fetch;
 	window.fetch = async function (input, init) {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;

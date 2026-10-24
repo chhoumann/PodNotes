@@ -17,6 +17,7 @@ import {
 	runObsidianE2ECli,
 } from "obsidian-e2e/runner";
 import { podNotesRunnerDependencies } from "./e2e-instance.mjs";
+import { jsLiteral } from "./js-literal.mjs";
 
 /** @typedef {import("obsidian-e2e/runner").InstanceOptions} InstanceOptions */
 
@@ -45,7 +46,7 @@ const OPEN_PLAYER = `(async () => {
 	let last = "";
 	for (let i = 0; i < 100; i++) {
 		await new Promise((resolve) => setTimeout(resolve, 100));
-		const rect = document.querySelector(${JSON.stringify(PLAYER_SELECTOR)})?.getBoundingClientRect();
+		const rect = document.querySelector(${jsLiteral(PLAYER_SELECTOR)})?.getBoundingClientRect();
 		const box = rect && rect.width > 0 && rect.height > 0 ? JSON.stringify(rect) : "";
 		if (box && box === last) return true;
 		last = box;
