@@ -41,9 +41,6 @@ updates:
       - dependency-name: "typescript"
         update-types:
           - "version-update:semver-major"
-      # patches/svelte-check.mjs patches exactly this version and fails on any other.
-      # Upgrade it by hand to a release that includes the fix, and delete the patch.
-      - dependency-name: "svelte-check"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
