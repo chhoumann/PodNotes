@@ -147,8 +147,11 @@ async function runTests(args) {
 	} finally {
 		for (const signal of FORWARDED_SIGNALS) process.off(signal, onSignal);
 		await fsp.rm(results, { force: true });
-		await runObsidianE2ECli(["stop"]);
-		await lock.release();
+		try {
+			await runObsidianE2ECli(["stop"]);
+		} finally {
+			await lock.release();
+		}
 	}
 }
 

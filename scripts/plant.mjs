@@ -49,14 +49,21 @@ function restore() {
 process.stdout.on("error", () => {});
 process.stderr.on("error", () => {});
 process.on("exit", restore);
+let interrupted = false;
 for (const signal of /** @type {NodeJS.Signals[]} */ (["SIGINT", "SIGTERM", "SIGHUP"])) {
 	process.on(signal, () => {
-		child?.kill(signal);
+		const exit = () => process.exit(128 + os.constants.signals[signal]);
+		if (interrupted) exit();
+		interrupted = true;
 		restore();
 		process.stderr.write(
 			"Interrupted: a build in the run may hold the plant. Run npm run build.\n",
 		);
-		process.exit(128 + os.constants.signals[signal]);
+		// The command cleans up after itself, test:e2e its instance and lock, so wait for it.
+		if (child && child.exitCode === null && child.signalCode === null) {
+			child.once("close", exit);
+			child.kill(signal);
+		} else exit();
 	});
 }
 
