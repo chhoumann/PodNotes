@@ -331,6 +331,8 @@ Three workflows in `.github/workflows/` call reusable workflows in
    `release(version): Release <version>`, with the generated notes in its body.
    It changes exactly `package.json`, `package-lock.json`, `manifest.json`, and
    `versions.json`. Release PRs that a newer plan supersedes are closed.
+   Dispatch it with `dryRun` set to `true` to plan without opening or
+   refreshing the release PR.
 2. `Trigger release` (`release-trigger.yml`) runs on `pull_request_target`
    `closed` for a merged `release/*` PR into `master`. It validates the bot
    author, branch, title, exact version-file diff, merger, squash parent, and

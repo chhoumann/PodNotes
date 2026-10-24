@@ -22,6 +22,11 @@ on:
         description: "Commit SHA to plan from (defaults to the default-branch head)"
         required: false
         type: string
+      dryRun:
+        description: "Plan only: compute the version and notes, open no release PR"
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -52,6 +57,6 @@ jobs:
       target-sha: ${{ github.event.workflow_run.head_sha || inputs.targetSha }}
       release-bot-app-slug: podnotes-release-bot
       app-id: ${{ vars.RELEASE_APP_ID }}
-      # dry-run: true   # plan only; skip opening the PR (smoke test)
+      dry-run: ${{ inputs.dryRun == true }}
     secrets:
       release-app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
