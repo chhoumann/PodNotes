@@ -16,6 +16,7 @@ import {
 	resolveProvisionOptions,
 	runObsidianE2ECli,
 } from "obsidian-e2e/runner";
+import { acquireVaultRunLock } from "obsidian-e2e";
 import { podNotesRunnerDependencies } from "./e2e-instance.mjs";
 import { jsLiteral } from "./js-literal.mjs";
 
@@ -80,6 +81,13 @@ async function runTests(args) {
 			if (child?.pid) process.kill(-child.pid, signal);
 		} catch {}
 	};
+	// The reset below would destroy another run's instance and vault.
+	const lock = await acquireVaultRunLock({
+		vaultName: instance.vaultName,
+		vaultPath: instance.vaultPath,
+		lockRoot: path.join(os.tmpdir(), "podnotes-e2e-runs"),
+		onBusy: "fail",
+	});
 	for (const signal of FORWARDED_SIGNALS) process.on(signal, onSignal);
 	try {
 		// Manual work and interrupted runs leave fixtures, layout and errors in the
@@ -132,6 +140,7 @@ async function runTests(args) {
 		for (const signal of FORWARDED_SIGNALS) process.off(signal, onSignal);
 		await fsp.rm(results, { force: true });
 		await runObsidianE2ECli(["stop"]);
+		await lock.release();
 	}
 }
 
