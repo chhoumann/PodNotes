@@ -72,7 +72,9 @@ describe("npm run plant", () => {
 				".shift()",
 			]);
 			expect(status, output).toBe(0);
-			expect(output).toContain('Caught: "reads the extension"');
+			expect(output).toContain(
+				"Caught by:\nFAIL  src/extension.test.mjs > reads the extension\n",
+			);
 			expect(sourceOf(workspace)).toBe(source);
 		}),
 		60_000,
@@ -129,10 +131,30 @@ describe("npm run plant", () => {
 		}),
 	);
 
+	it(
+		"applies every edit to a file named two ways, and restores it",
+		withWorkspace((workspace) => {
+			// Only the two renames together keep the code working.
+			const { status, output } = runPlant(workspace, [
+				"reads the extension",
+				"src/extension.mjs",
+				"(url)",
+				"(link)",
+				join(workspace, "src/extension.mjs"),
+				"url.split",
+				"link.split",
+			]);
+			expect(status, output).toBe(1);
+			expect(output).toContain("Not caught");
+			expect(sourceOf(workspace)).toBe(source);
+		}),
+		60_000,
+	);
+
 	it.skipIf(process.platform === "win32")(
 		"restores the file when it is stopped mid-run",
 		withWorkspace(async (workspace) => {
-			// Passes at once on the baseline and hangs once the plant is in.
+			// Hangs while the plant is in.
 			const hang =
 				'require("fs").readFileSync("src/extension.mjs", "utf8").includes("shift") && setTimeout(() => {}, 30_000)';
 			const child = spawn(

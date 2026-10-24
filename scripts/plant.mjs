@@ -1,6 +1,6 @@
 // Proves a test catches a defect. Each edit replaces the one occurrence of
-// <search> in <file>. The command must pass first; with the edits in place it
-// must type-check and fail <test name>. Files are always restored from memory.
+// <search> in <file>. With the edits in place the code must type-check and the
+// command must fail <test name>; with them restored, the command must pass.
 //
 //   npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]
 //
@@ -14,19 +14,34 @@ import { fileURLToPath } from "node:url";
 const USAGE =
 	"Usage: npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]";
 const VITEST = fileURLToPath(new URL("../node_modules/vitest/vitest.mjs", import.meta.url));
+// npm's own entry point, so no shell has to launch npm's Windows shim.
+const NPM = process.env.npm_execpath ? [process.execPath, process.env.npm_execpath] : ["npm"];
 
-/** @type {Map<string, string>} */
-const originals = new Map();
+/** @type {Map<string, { original: string, planted: string }>} */
+const files = new Map();
 // Only a SIGKILL skips the restore, and then this copy is the way back.
 const backups = fs.mkdtempSync(path.join(os.tmpdir(), "podnotes-plant-"));
 /** @type {import("node:child_process").ChildProcess | undefined} */
 let child;
 
+/** Restores every planted file, unless one changed during the run. */
 function restore() {
-	for (const [file, original] of originals) fs.writeFileSync(file, original);
-	if (originals.size > 0) process.stderr.write(`Restored ${[...originals.keys()].join(", ")}.\n`);
-	originals.clear();
+	const changed = [...files.keys()].filter(
+		(file) => fs.readFileSync(file, "utf8") !== files.get(file)?.planted,
+	);
+	if (changed.length > 0) {
+		files.clear();
+		process.stderr.write(
+			`${changed.join(", ")} changed during the run, so nothing was restored. Originals: ${backups}\n`,
+		);
+		process.exitCode = 1;
+		return false;
+	}
+	for (const [file, { original }] of files) fs.writeFileSync(file, original);
+	if (files.size > 0) process.stderr.write(`Restored ${[...files.keys()].join(", ")}.\n`);
+	files.clear();
 	fs.rmSync(backups, { recursive: true, force: true });
+	return true;
 }
 
 process.stdout.on("error", () => {});
@@ -36,21 +51,22 @@ for (const signal of /** @type {NodeJS.Signals[]} */ (["SIGINT", "SIGTERM", "SIG
 	process.on(signal, () => {
 		child?.kill(signal);
 		restore();
+		process.stderr.write(
+			"Interrupted: a build in the run may hold the plant. Run npm run build.\n",
+		);
 		process.exit(128 + os.constants.signals[signal]);
 	});
 }
 
 /**
- * @param {string} command @param {string[]} args
+ * @param {string[]} command
  * @returns {Promise<{ code: number | null, output: string }>}
  */
-function run(command, args) {
+function run([command, ...args]) {
 	return new Promise((resolve, reject) => {
 		const spawned = spawn(command, args, {
 			stdio: ["ignore", "pipe", "pipe"],
 			env: { ...process.env, NO_COLOR: "1" },
-			// npm is a .cmd shim on Windows, which only a shell can launch.
-			shell: process.platform === "win32" && command !== process.execPath,
 		});
 		child = spawned;
 		let output = "";
@@ -67,19 +83,13 @@ function run(command, args) {
 	});
 }
 
-/** @param {string} output @param {string} testName */
-function failed(output, testName) {
-	return output
-		.split(/\r?\n/)
-		.some((line) => /^\s*FAIL\s/.test(line) && line.trimEnd().endsWith(` > ${testName}`));
-}
-
 async function main() {
 	const argv = process.argv.slice(2);
 	const split = argv.indexOf("--");
 	const [testName, ...edits] = split === -1 ? argv : argv.slice(0, split);
 	if (!testName || edits.length === 0 || edits.length % 3 !== 0) throw new Error(USAGE);
-	const [command, ...args] =
+	const [first, ...rest] = split === -1 ? [] : argv.slice(split + 1);
+	const command =
 		split === -1
 			? [
 					process.execPath,
@@ -90,50 +100,53 @@ async function main() {
 					"-t",
 					`${testName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
 				]
-			: argv.slice(split + 1);
+			: [...(first === "npm" ? NPM : [first]), ...rest];
 
 	/** @type {Map<string, string>} */
-	const planted = new Map();
+	const originals = new Map();
+	/** @type {Map<string, string>} */
+	const sources = new Map();
 	for (let index = 0; index < edits.length; index += 3) {
-		const [file, search, replace] = edits.slice(index, index + 3);
-		const source = planted.get(file) ?? fs.readFileSync(file, "utf8");
+		const [name, search, replace] = edits.slice(index, index + 3);
+		const file = path.resolve(name);
+		if (!originals.has(file)) originals.set(file, fs.readFileSync(file, "utf8"));
+		const source = sources.get(file) ?? /** @type {string} */ (originals.get(file));
 		const matches = source.split(search).length - 1;
 		if (matches !== 1)
-			throw new Error(`<search> matched ${matches} times in ${file}, not once.`);
-		planted.set(
+			throw new Error(`<search> matched ${matches} times in ${name}, not once.`);
+		sources.set(
 			file,
 			source.replace(search, () => replace),
 		);
 	}
 
-	if ((await run(command, args)).code !== 0) {
-		throw new Error("The command fails without the plant, so a failure would prove nothing.");
-	}
 	process.stderr.write(`Backups: ${backups}\n`);
-	for (const [index, [file, source]] of [...planted].entries()) {
-		const original = fs.readFileSync(file, "utf8");
-		fs.writeFileSync(path.join(backups, `${index}-${path.basename(file)}`), original);
-		originals.set(file, original);
-		fs.writeFileSync(file, source);
+	for (const [file, planted] of sources) {
+		const original = /** @type {string} */ (originals.get(file));
+		fs.writeFileSync(path.join(backups, `${files.size}-${path.basename(file)}`), original);
+		files.set(file, { original, planted });
+		fs.writeFileSync(file, planted);
 	}
-	const check = [...planted.keys()].some((file) => file.endsWith(".svelte"))
+	const check = [...sources.keys()].some((file) => file.endsWith(".svelte"))
 		? "check:a11y"
 		: "typecheck";
-	if ((await run("npm", ["run", "--silent", check])).code !== 0) {
+	if ((await run([...NPM, "run", "--silent", check])).code !== 0) {
 		throw new Error("The plant does not type-check, so no test ran. Make it compile.");
 	}
-	const { code, output } = await run(command, args);
-	restore();
-	// test:e2e built root main.js from the planted source.
-	if (args.includes("test:e2e") && (await run("npm", ["run", "--silent", "build"])).code !== 0) {
-		throw new Error(
-			"Rebuilding main.js failed, so it still holds the plant. Run npm run build.",
-		);
-	}
-	if (code === 0 || !failed(output, testName)) {
+	const { code, output } = await run(command);
+	if (!restore()) return;
+	const caught = output
+		.split(/\r?\n/)
+		.filter((line) => /^\s*FAIL\s/.test(line) && line.trimEnd().endsWith(` > ${testName}`));
+	if (code === 0 || caught.length === 0) {
 		throw new Error(`Not caught: "${testName}" is not a failed test in the run's summary.`);
 	}
-	process.stderr.write(`Caught: "${testName}" failed on the plant.\n`);
+	// Restored, the command must pass, or the failure proves nothing. A build in it
+	// also replaces anything built from the plant.
+	if ((await run(command)).code !== 0) {
+		throw new Error("The command also fails without the plant, so its failure proves nothing.");
+	}
+	process.stderr.write(`Caught by:\n${caught.map((line) => line.trim()).join("\n")}\n`);
 }
 
 main().catch((error) => {

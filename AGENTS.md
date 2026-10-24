@@ -43,7 +43,7 @@ root symlinks for local Obsidian loading.
 - `npm run test:unit`: run `typecheck`, then the application Vitest suite, without the Svelte checks. Bare `vitest` does not type-check.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test, including rejection of tagged templates that disable Obsidian's eval cache. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
-- `npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]`: plant a defect and pass only when the exactly named test fails on it. The command must pass first. Each search must match exactly once, the plant must type-check, the files are restored on exit or interrupt, and `main.js` is rebuilt after a `test:e2e` command. The command defaults to the unit suite filtered to the test name.
+- `npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]`: plant a defect and pass only when the exactly named test fails on it and the command passes again once restored. Each search must match exactly once, and the plant must type-check. The files are restored on exit or interrupt. The command defaults to the unit suite filtered to the test name.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 
 `@typescript/native` aliases TypeScript 7. `typecheck` and `lint:tsconfig` call
@@ -208,7 +208,9 @@ matches no test fails the run.
 - On both platforms it builds, stops this worktree's isolated instance,
   provisions a fresh vault, starts the instance, runs `tests/e2e` against it,
   and stops it afterwards. State left by manual work or an interrupted run
-  never reaches the suite. It never uses the shared `dev` vault.
+  never reaches the suite. It never uses the shared `dev` vault. A second run
+  in the same worktree fails at once instead of replacing the first's bundle
+  or vault.
 - The suite fails when Obsidian has more than one window open, because a second
   vault window keeps Obsidian from quitting.
 - The harness snapshots the workspace, app settings in `app.json`, the core
