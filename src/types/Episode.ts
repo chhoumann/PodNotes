@@ -22,7 +22,7 @@ export interface Episode {
 	episodeNumber?: number;
 	/** Episode duration in whole seconds, from `<itunes:duration>` where present. */
 	duration?: number;
-	/** URL to the podcast:chapters JSON file. Without one, chapters come from the media's ID3 tag. */
+	/** URL to the podcast:chapters JSON file. Without one, a streamed episode's chapters come from its ID3 tag. */
 	chaptersUrl?: string;
 	/** Media element type used to play the enclosure/local file. */
 	mediaType?: EpisodeMediaType;
