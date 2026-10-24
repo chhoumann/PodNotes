@@ -22,19 +22,18 @@ import type { IPodNotesSettings } from "../../src/types/IPodNotesSettings";
 
 const getContext = createPodNotesE2EHarness("quickadd-capture");
 
-/** The last QuickAdd release before choice picking. */
-const OLD_QUICKADD_VERSION = "2.32.1";
-const OLD_QUICKADD_SHA256: Record<string, string> = {
-	"main.js": "6423b2d14b60bc51fc6b6f61f835e08c5842d28e5a1a43ab5601ccd37b4e44c5",
-	"manifest.json": "b7610b4c1d37c2c73f781c294c1a380e731e797f9858d2d825e7facc1ac3add1",
+/** Each file's SHA-256, as QuickAdd attests it. 2.32.1 is the last release before choice picking. */
+const QUICKADD_RELEASES = {
+	"2.32.1": {
+		"main.js": "6423b2d14b60bc51fc6b6f61f835e08c5842d28e5a1a43ab5601ccd37b4e44c5",
+		"manifest.json": "b7610b4c1d37c2c73f781c294c1a380e731e797f9858d2d825e7facc1ac3add1",
+	},
+	"2.33.1": {
+		"main.js": "641ae5f5683c69472a8a8890d83ec67173b7a574b6ae4bca8751df7b9fe56c33",
+		"manifest.json": "04a7b033247507e81b041c5e596ce2224c293dda8100461b6c03d6c3aca20486",
+		"styles.css": "349a2972e2e274fbe6293a4479200114c5057a148c8f3edf3716d437ff89d39e",
+	},
 };
-const OLD_QUICKADD_CACHE = path.resolve(
-	path.dirname(fileURLToPath(import.meta.url)),
-	`../../.obsidian-e2e-artifacts/releases/quickadd-${OLD_QUICKADD_VERSION}`,
-);
-/** A QuickAdd build with choice picking, until a QuickAdd release has it. */
-const QUICKADD_DIR = process.env.OBSIDIAN_E2E_QUICKADD_DIR;
-const QUICKADD_FILES = ["main.js", "manifest.json", "styles.css"];
 const EVIDENCE = path.resolve(".obsidian-e2e-artifacts/quickadd-capture");
 
 const FEED: FixtureFeed = {
@@ -51,41 +50,25 @@ const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex
 
 type QuickAddFiles = Map<string, Buffer>;
 
-/** QuickAdd 2.32.1's released files, cached in the git-ignored artifacts folder. */
-async function oldQuickAdd(): Promise<QuickAddFiles> {
+/** A QuickAdd release's files, cached in the git-ignored artifacts folder. */
+async function quickAddRelease(version: keyof typeof QUICKADD_RELEASES): Promise<QuickAddFiles> {
+	const cache = path.resolve(
+		path.dirname(fileURLToPath(import.meta.url)),
+		`../../.obsidian-e2e-artifacts/releases/quickadd-${version}`,
+	);
 	const files = new Map<string, Buffer>();
-	await fs.mkdir(OLD_QUICKADD_CACHE, { recursive: true });
-	for (const [name, digest] of Object.entries(OLD_QUICKADD_SHA256)) {
-		const cached = path.join(OLD_QUICKADD_CACHE, name);
+	await fs.mkdir(cache, { recursive: true });
+	for (const [name, digest] of Object.entries(QUICKADD_RELEASES[version])) {
+		const cached = path.join(cache, name);
 		let bytes = await fs.readFile(cached).catch(() => null);
 		if (!bytes || sha256(bytes) !== digest) {
-			const url = `https://github.com/chhoumann/quickadd/releases/download/${OLD_QUICKADD_VERSION}/${name}`;
+			const url = `https://github.com/chhoumann/quickadd/releases/download/${version}/${name}`;
 			const response = await fetch(url);
 			if (!response.ok) throw new Error(`${url} answered ${response.status}.`);
 			bytes = Buffer.from(await response.arrayBuffer());
-			expect(sha256(bytes), `the QuickAdd ${OLD_QUICKADD_VERSION} ${name} digest`).toBe(
-				digest,
-			);
+			expect(sha256(bytes), `the QuickAdd ${version} ${name} digest`).toBe(digest);
 			await fs.writeFile(cached, bytes);
 		}
-		files.set(name, bytes);
-	}
-	return files;
-}
-
-/** The QuickAdd build in OBSIDIAN_E2E_QUICKADD_DIR, each file checked against its build.json. */
-async function quickAddBuild(): Promise<QuickAddFiles> {
-	if (!QUICKADD_DIR)
-		throw new Error(
-			"Set OBSIDIAN_E2E_QUICKADD_DIR to a QuickAdd build with choice picking: main.js, manifest.json, styles.css and build.json.",
-		);
-	const build = JSON.parse(await fs.readFile(path.join(QUICKADD_DIR, "build.json"), "utf8")) as {
-		files: Record<string, string>;
-	};
-	const files = new Map<string, Buffer>();
-	for (const name of QUICKADD_FILES) {
-		const bytes = await fs.readFile(path.join(QUICKADD_DIR, name));
-		expect(sha256(bytes), `${name} as build.json records it`).toBe(build.files[name]);
 		files.set(name, bytes);
 	}
 	return files;
@@ -381,7 +364,7 @@ describe("captures with a QuickAdd choice", () => {
 				return true;
 			})()`);
 		});
-		await installQuickAdd(await quickAddBuild(), [LOG]);
+		await installQuickAdd(await quickAddRelease("2.33.1"), [LOG]);
 		const { server, notePath } = await noteAt(30);
 		expect(await readVaultText(obsidian, notePath), "the new episode note").toBe(
 			episodeNote(server, []),
@@ -434,7 +417,7 @@ describe("captures with a QuickAdd choice", () => {
 
 	test("Choose... picks a choice in QuickAdd's own picker, by typing and Enter", async () => {
 		const { obsidian } = getContext();
-		await installQuickAdd(await quickAddBuild(), [MEETING, LOG]);
+		await installQuickAdd(await quickAddRelease("2.33.1"), [MEETING, LOG]);
 		await settingsShow(["Choose...", "Create"], "row-unset");
 
 		await click(obsidian, rowControl("Choose..."));
@@ -467,7 +450,7 @@ describe("captures with a QuickAdd choice", () => {
 
 	test("Create adds QuickAdd's ready-made choice, whose captures create the note and add one bullet each", async () => {
 		const { obsidian } = getContext();
-		await installQuickAdd(await quickAddBuild(), []);
+		await installQuickAdd(await quickAddRelease("2.33.1"), []);
 		const { server, notePath } = await playAt(30, {});
 		await settingsShow(["Choose...", "Create"], "row-before-create");
 
@@ -508,7 +491,7 @@ describe("captures with a QuickAdd choice", () => {
 
 	test("a choice renamed in QuickAdd still runs and shows its new name; a deleted one writes nothing", async () => {
 		const { obsidian } = getContext();
-		await installQuickAdd(await quickAddBuild(), [LOG]);
+		await installQuickAdd(await quickAddRelease("2.33.1"), [LOG]);
 		const { server, notePath } = await noteAt(30);
 
 		await syncQuickAddChoices([logChoice("Podcast log")]);
@@ -539,7 +522,7 @@ describe("captures with a QuickAdd choice", () => {
 	test("a long choice name stays on one line in its button, beside the row's name and Clear, in a narrow window and on a phone", async () => {
 		const { obsidian, plugin } = getContext();
 		const name = "Podcast research notes for my weekly engineering and product review";
-		await installQuickAdd(await quickAddBuild(), [logChoice(name)]);
+		await installQuickAdd(await quickAddRelease("2.33.1"), [logChoice(name)]);
 		await plugin.updateDataAndReload<IPodNotesSettings>((data) => {
 			data.timestamp.quickAddChoiceId = LOG_ID;
 		});
@@ -598,7 +581,7 @@ describe("captures with a QuickAdd choice", () => {
 	}, 120_000);
 
 	test("QuickAdd 2.32.1, from before choice picking, asks for an update and runs nothing", async () => {
-		await installQuickAdd(await oldQuickAdd(), [LOG]);
+		await installQuickAdd(await quickAddRelease("2.32.1"), [LOG]);
 		const { server, notePath } = await noteAt(30);
 		await settingsShow(["Update QuickAdd", "Clear"], "row-update");
 		await closeSettings(getContext().obsidian);
@@ -631,7 +614,7 @@ describe("captures with a QuickAdd choice", () => {
 		);
 		expect(await editorText()).toBe(episodeNote(server, []));
 
-		await installQuickAdd(await oldQuickAdd(), [LOG], { enable: false });
+		await installQuickAdd(await quickAddRelease("2.32.1"), [LOG], { enable: false });
 		await settingsShow(["Enable QuickAdd", "Clear"], "row-enable");
 		await closeSettings(obsidian);
 		await captureRefused(
