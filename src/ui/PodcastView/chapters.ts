@@ -1,5 +1,5 @@
 import type { Chapter } from "src/types/Chapter";
-import { fetchChapters } from "src/utility/fetchChapters";
+import { chaptersKey, fetchChapters, type ChaptersSource } from "src/utility/fetchChapters";
 
 /** The chapter under way at `time`: the last to start at or before it. -1 before the first. */
 export function chapterAt(chapters: readonly Chapter[], time: number): number {
@@ -22,13 +22,13 @@ export function segmentsOf(chapters: readonly Chapter[], duration: number): [num
 
 const loaded = new Map<string, Chapter[]>();
 
-export function cachedChapters(url: string): Chapter[] | undefined {
-	return loaded.get(url);
+export function cachedChapters(episode: ChaptersSource): Chapter[] | undefined {
+	return loaded.get(chaptersKey(episode));
 }
 
-/** The chapters at `url`. A failed load, as offline, is not kept, so the next one fetches again. */
-export async function loadChapters(url: string): Promise<Chapter[]> {
-	const chapters = await fetchChapters(url);
-	if (chapters.length > 0) loaded.set(url, chapters);
-	return chapters;
+/** The episode's chapters. A failed load, as offline, is not kept, so the next one fetches again. */
+export async function loadChapters(episode: ChaptersSource): Promise<Chapter[]> {
+	const chapters = await fetchChapters(episode);
+	if (chapters) loaded.set(chaptersKey(episode), chapters);
+	return chapters ?? [];
 }

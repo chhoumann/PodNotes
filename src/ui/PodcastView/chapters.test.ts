@@ -2,7 +2,10 @@ import { describe, expect, test, vi } from "vitest";
 import { fetchChapters } from "src/utility/fetchChapters";
 import { cachedChapters, chapterAt, loadChapters, segmentsOf } from "./chapters";
 
-vi.mock("src/utility/fetchChapters", () => ({ fetchChapters: vi.fn() }));
+vi.mock("src/utility/fetchChapters", async (importOriginal) => ({
+	...(await importOriginal<typeof import("src/utility/fetchChapters")>()),
+	fetchChapters: vi.fn(),
+}));
 
 const chapters = [0, 60, 120].map((startTime) => ({ startTime, title: `At ${startTime}` }));
 
@@ -37,21 +40,32 @@ describe("chapters", () => {
 	});
 
 	test("a load that failed, as offline, fetches again the next time", async () => {
-		const url = "https://pod.test/chapters.json";
-		vi.mocked(fetchChapters).mockResolvedValueOnce([]).mockResolvedValueOnce(chapters);
+		const episode = { chaptersUrl: "https://pod.test/chapters.json", streamUrl: "" };
+		vi.mocked(fetchChapters).mockResolvedValueOnce(undefined).mockResolvedValueOnce(chapters);
 
-		expect(await loadChapters(url)).toEqual([]);
-		expect(cachedChapters(url)).toBeUndefined();
-		expect(await loadChapters(url)).toEqual(chapters);
+		expect(await loadChapters(episode)).toEqual([]);
+		expect(cachedChapters(episode)).toBeUndefined();
+		expect(await loadChapters(episode)).toEqual(chapters);
 
 		expect(fetchChapters).toHaveBeenCalledTimes(2);
-		expect(cachedChapters(url)).toEqual(chapters);
-		expect(cachedChapters("https://pod.test/other.json")).toBeUndefined();
+		expect(cachedChapters(episode)).toEqual(chapters);
+		expect(
+			cachedChapters({ ...episode, chaptersUrl: "https://pod.test/other.json" }),
+		).toBeUndefined();
+	});
+
+	test("media found to have no chapters is not asked again", async () => {
+		const episode = { streamUrl: "https://pod.test/plain.mp3" };
+		vi.mocked(fetchChapters).mockClear().mockResolvedValueOnce([]);
+
+		expect(await loadChapters(episode)).toEqual([]);
+		expect(cachedChapters(episode)).toEqual([]);
+		expect(fetchChapters).toHaveBeenCalledOnce();
 	});
 
 	test("each episode keeps the chapters it loaded, whichever load finishes first", async () => {
-		const earlier = "https://pod.test/earlier.json";
-		const latest = "https://pod.test/latest.json";
+		const earlier = { chaptersUrl: "https://pod.test/earlier.json", streamUrl: "" };
+		const latest = { streamUrl: "https://pod.test/latest.mp3" };
 		let finishEarlier: (loaded: typeof chapters) => void = () => {};
 		vi.mocked(fetchChapters)
 			.mockReturnValueOnce(new Promise((resolve) => (finishEarlier = resolve)))

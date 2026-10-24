@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from "svelte";
+	import { tick, untrack } from "svelte";
 	import type { Chapter } from "src/types/Chapter";
 	import type { Episode } from "src/types/Episode";
 	import { icon } from "../obsidian/icon";
@@ -63,16 +63,23 @@
 		return wide ? panels.find((kind) => kind !== "transcript") : undefined;
 	});
 	const chaptersUrl = $derived(episode.chaptersUrl);
+	const streamUrl = $derived(episode.streamUrl);
+	// Chapters without a chapters file come from the media, which a restored player has not loaded.
+	const chaptersReady = $derived(!!chaptersUrl || $playerState.status !== "restored");
 
 	$effect.pre(() => {
-		const url = chaptersUrl;
+		void [chaptersUrl, streamUrl];
 		// A choice of Chapters belongs to the episode it was made on.
-		panel = undefined;
-		const cached = url && cachedChapters(url);
-		chapters = cached || [];
-		if (!url || cached) return;
+		if (untrack(() => panel) === "chapters") panel = undefined;
+	});
+
+	$effect.pre(() => {
+		const source = { chaptersUrl, streamUrl };
+		const cached = cachedChapters(source);
+		chapters = cached ?? [];
+		if (cached || !chaptersReady) return;
 		let latest = true;
-		void loadChapters(url).then((loaded) => latest && (chapters = loaded));
+		void loadChapters(source).then((loaded) => latest && (chapters = loaded));
 		return () => (latest = false);
 	});
 
