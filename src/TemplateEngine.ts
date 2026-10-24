@@ -308,7 +308,7 @@ function formatTemplateChapters(chapters: Chapter[] | undefined, prependToLines?
  * Every other (feed) episode's url is attacker-controlled and is sanitized so it
  * cannot inject Markdown/wikilinks on the bare `{{url}}` line.
  */
-function resolveEpisodeUrl(episode: Episode): string {
+export function resolveEpisodeUrl(episode: Episode): string {
 	return isLocalFile(episode) && episode.filePath
 		? episode.url
 		: sanitizeUrlForTemplate(episode.url);

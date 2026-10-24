@@ -1,6 +1,8 @@
 import {
 	type App,
+	type ButtonComponent,
 	Component,
+	type ExtraButtonComponent,
 	MarkdownRenderer,
 	Modal,
 	Notice,
@@ -12,7 +14,9 @@ import {
 	type TextAreaComponent,
 	type TextComponent,
 } from "obsidian";
+import type App2 from "src/global";
 import type PodNotes from "../../main";
+import { CAPTURE_CHOICE_ID, CAPTURE_PACKAGE, findQuickAdd } from "src/quickAdd";
 import { pickFile } from "../pickFile";
 import {
 	DownloadPathTemplateEngine,
@@ -89,11 +93,13 @@ const HEADSET_ALIASES = ["headset", "lock screen", "media keys"];
 
 let settingNames = 0;
 
+const NAMED_BY_ROW = "pn-named-by-row";
+
 /**
  * Obsidian names no row's field after the row, and shows an aria-label as a tooltip, so
  * each field is labelled by the row's name. A toggle takes focus on its label, not its
- * checkbox. An API key's button reads Link... or Change, so it keeps those words before the
- * row's name.
+ * checkbox. An API key's button reads Link... or Change, and a QuickAdd choice button
+ * Choose... or the choice's name, so they keep those words before the row's name.
  */
 const group = (heading: string, items: SettingDefinitionRender[]): SettingDefinitionGroup => ({
 	type: "group",
@@ -108,8 +114,10 @@ const group = (heading: string, items: SettingDefinitionRender[]): SettingDefini
 				"input, select, textarea, .checkbox-container",
 			))
 				field.setAttribute("aria-labelledby", nameEl.id);
-			for (const button of controlEl.querySelectorAll(".setting-secret-value + button")) {
-				button.id = `${nameEl.id}-button`;
+			for (const [index, button] of controlEl
+				.querySelectorAll(`.setting-secret-value + button, .${NAMED_BY_ROW}`)
+				.entries()) {
+				button.id = `${nameEl.id}-${index}`;
 				button.setAttribute("aria-labelledby", `${button.id} ${nameEl.id}`);
 			}
 			return end;
@@ -320,6 +328,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					},
 					"Captures this many seconds earlier.",
 				),
+				this.quickAddRow(),
 				this.textRow("Episode note path", {
 					...this.text((settings) => settings.note, "path"),
 					preview: pathPreview(FilePathTemplateEngine),
@@ -706,6 +715,84 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						this.handleSecretSelection(key, value, secret, describe),
 					);
 					return secret;
+				});
+			},
+		};
+	}
+
+	/** QuickAdd owns the choices, their names and the picker; the row stores a choice's id. */
+	private quickAddRow(): SettingDefinitionRender {
+		return {
+			name: "QuickAdd choice",
+			render: (setting) => {
+				const select = (id?: string) => {
+					this.plugin.settings.timestamp.quickAddChoiceId = id;
+					this.changed();
+				};
+				let choose!: ButtonComponent;
+				let create!: ButtonComponent;
+				let clear!: ExtraButtonComponent;
+				setting
+					.addButton((button) => {
+						// Returns no promise, or Obsidian swaps the label for a spinner while the picker is open.
+						choose = button.onClick(() => {
+							const quickAdd = findQuickAdd(this.app);
+							if ("fix" in quickAdd) {
+								(this.app as App2).setting.openTabById("community-plugins");
+								return;
+							}
+							quickAdd.api.pickChoice().then(
+								({ id }) => select(id),
+								() => {},
+							);
+						});
+						// A long choice name ends in an ellipsis inside the button, so the row's name
+						// and Clear keep their place.
+						setting.controlEl.setCssStyles({ minWidth: "0" });
+						choose.buttonEl.setCssStyles({
+							display: "block",
+							overflow: "hidden",
+							textOverflow: "ellipsis",
+						});
+					})
+					.addButton((button) => {
+						create = button
+							.setButtonText("Create")
+							.setClass(NAMED_BY_ROW)
+							.onClick(async () => {
+								const quickAdd = findQuickAdd(this.app);
+								if ("fix" in quickAdd) return;
+								await quickAdd.api
+									.importPackage(CAPTURE_PACKAGE)
+									.catch((error) =>
+										console.error(
+											"PodNotes: QuickAdd could not import the choice",
+											error,
+										),
+									);
+								if (quickAdd.api.getChoice({ id: CAPTURE_CHOICE_ID }))
+									select(CAPTURE_CHOICE_ID);
+								else new Notice("Could not create the QuickAdd choice");
+							});
+					})
+					.addExtraButton((button) => {
+						clear = button
+							.setIcon("x")
+							.setTooltip("Clear")
+							.onClick(() => select());
+					});
+				return this.follow(setting, ({ timestamp: { quickAddChoiceId: id } }) => {
+					const quickAdd = findQuickAdd(this.app);
+					choose.setButtonText(
+						"fix" in quickAdd
+							? `${quickAdd.fix} QuickAdd`
+							: id
+								? (quickAdd.api.getChoice({ id })?.name ?? "Missing choice")
+								: "Choose...",
+					);
+					choose.buttonEl.classList.toggle(NAMED_BY_ROW, "api" in quickAdd);
+					create.buttonEl.toggle("api" in quickAdd && !id);
+					clear.extraSettingsEl.toggle(Boolean(id));
 				});
 			},
 		};
