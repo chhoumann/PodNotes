@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import {
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
@@ -147,6 +148,30 @@ describe("npm run plant", () => {
 			expect(status, output).toBe(1);
 			expect(output).toContain("Not caught");
 			expect(sourceOf(workspace)).toBe(source);
+		}),
+		60_000,
+	);
+
+	it(
+		"keeps the backups and the file when the file changed during the run",
+		withWorkspace((workspace) => {
+			const { status, output } = runPlant(workspace, [
+				"reads the extension",
+				"src/extension.mjs",
+				".pop()",
+				".shift()",
+				"--",
+				process.execPath,
+				"-e",
+				'require("fs").writeFileSync("src/extension.mjs", "edited")',
+			]);
+			expect(status, output).toBe(1);
+			expect(sourceOf(workspace)).toBe("edited");
+			const backups = /Originals: (\S+)/.exec(output)?.[1] ?? "";
+			expect(
+				readdirSync(backups).map((name) => readFileSync(join(backups, name), "utf8")),
+			).toEqual([source]);
+			rmSync(backups, { recursive: true });
 		}),
 		60_000,
 	);

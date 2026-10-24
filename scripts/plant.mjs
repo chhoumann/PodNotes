@@ -23,6 +23,7 @@ const files = new Map();
 const backups = fs.mkdtempSync(path.join(os.tmpdir(), "podnotes-plant-"));
 /** @type {import("node:child_process").ChildProcess | undefined} */
 let child;
+let keepBackups = false;
 
 /** Restores every planted file, unless one changed during the run. */
 function restore() {
@@ -31,6 +32,7 @@ function restore() {
 	);
 	if (changed.length > 0) {
 		files.clear();
+		keepBackups = true;
 		process.stderr.write(
 			`${changed.join(", ")} changed during the run, so nothing was restored. Originals: ${backups}\n`,
 		);
@@ -40,7 +42,7 @@ function restore() {
 	for (const [file, { original }] of files) fs.writeFileSync(file, original);
 	if (files.size > 0) process.stderr.write(`Restored ${[...files.keys()].join(", ")}.\n`);
 	files.clear();
-	fs.rmSync(backups, { recursive: true, force: true });
+	if (!keepBackups) fs.rmSync(backups, { recursive: true, force: true });
 	return true;
 }
 
@@ -135,15 +137,16 @@ async function main() {
 	}
 	const { code, output } = await run(command);
 	if (!restore()) return;
+	// Restored, the command must pass, or a failure proves nothing. A build in it
+	// also replaces anything built from the plant.
+	const baseline = await run(command);
 	const caught = output
 		.split(/\r?\n/)
 		.filter((line) => /^\s*FAIL\s/.test(line) && line.trimEnd().endsWith(` > ${testName}`));
 	if (code === 0 || caught.length === 0) {
 		throw new Error(`Not caught: "${testName}" is not a failed test in the run's summary.`);
 	}
-	// Restored, the command must pass, or the failure proves nothing. A build in it
-	// also replaces anything built from the plant.
-	if ((await run(command)).code !== 0) {
+	if (baseline.code !== 0) {
 		throw new Error("The command also fails without the plant, so its failure proves nothing.");
 	}
 	process.stderr.write(`Caught by:\n${caught.map((line) => line.trim()).join("\n")}\n`);
