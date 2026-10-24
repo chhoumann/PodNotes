@@ -46,7 +46,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-prepare.yml@149e37801b35c120660a1fd5e78a5471fda55726 # v4.1.0
+    uses: chhoumann/obsidian-plugin-workflows/.github/workflows/release-prepare.yml@d6b3b8c2cf460059238043b32a08dcaa3be4828f # v5.0.0
     with:
       plugin-name: podnotes
       package-manager: npm
@@ -56,7 +56,7 @@ jobs:
       node-version: "22"
       target-sha: ${{ github.event.workflow_run.head_sha || inputs.targetSha }}
       release-bot-app-slug: podnotes-release-bot
-      app-id: ${{ vars.RELEASE_APP_ID }}
+      client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
       dry-run: ${{ inputs.dryRun == true }}
     secrets:
       release-app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
