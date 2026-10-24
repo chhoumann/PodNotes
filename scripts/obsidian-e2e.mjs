@@ -81,15 +81,21 @@ async function runTests(args) {
 			if (child?.pid) process.kill(-child.pid, signal);
 		} catch {}
 	};
-	// The reset below would destroy another run's instance and vault.
+	// The build and reset below would replace another run's bundle, instance and vault.
 	const lock = await acquireVaultRunLock({
 		vaultName: instance.vaultName,
 		vaultPath: instance.vaultPath,
 		lockRoot: path.join(os.tmpdir(), "podnotes-e2e-runs"),
 		onBusy: "fail",
+	}).catch((/** @type {Error} */ error) => {
+		throw new Error(
+			`Another npm run test:e2e is running in this worktree. Wait for it to finish. (${error.message})`,
+		);
 	});
 	for (const signal of FORWARDED_SIGNALS) process.on(signal, onSignal);
 	try {
+		const [built] = await once(spawn("npm", ["run", "build"], { stdio: "inherit" }), "close");
+		if (built !== 0) return built;
 		// Manual work and interrupted runs leave fixtures, layout and errors in the
 		// vault that fail later tests.
 		const stopped = await runObsidianE2ECli(["stop"]);
