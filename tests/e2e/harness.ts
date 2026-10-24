@@ -50,8 +50,9 @@ import {
  * Suite-scoped PodNotes E2E harness built on obsidian-e2e's shared
  * `createPluginHarness`: one vault lock + sandbox + reload per file, per-test
  * diagnostics reset and data restore, failure-artifact capture, and the dev
- * vault symlink preflight. Returns the `(testName) => () => context` getter the
- * test bodies already consume.
+ * vault symlink preflight. Each test gets its own sandbox inside the file's.
+ * Returns the `(testName) => () => context` getter the test bodies already
+ * consume.
  *
  * PodNotes flushes pending saves and detaches its player views before every
  * `restoreData()` via `beforeDataRestore`, preserving the original
@@ -130,7 +131,17 @@ export function createPodNotesE2EHarness(testName: string) {
 	}, 60_000);
 	const getFileContext = createSharedHarness(testName);
 	let testSandbox: SandboxApi | undefined;
-	const getContext = () => ({ ...getFileContext(), sandbox: testSandbox! });
+	const getContext = () => {
+		const { obsidian, plugin } = getFileContext();
+		return {
+			obsidian,
+			plugin,
+			get sandbox(): SandboxApi {
+				if (!testSandbox) throw new Error("The sandbox exists only inside a test.");
+				return testSandbox;
+			},
+		};
+	};
 	aroundEach(async (runTest, { task }) => {
 		const { obsidian, plugin, sandbox } = getFileContext();
 		// The file's sandbox is removed at teardown, and each test's folder with it.
@@ -148,7 +159,11 @@ export function createPodNotesE2EHarness(testName: string) {
 				// The shared harness tracks writes through its client; this snapshots data.json
 				// for tests that change settings through Obsidian instead.
 				await plugin.data().patch(() => undefined);
-				await runTest();
+				try {
+					await runTest();
+				} finally {
+					testSandbox = undefined;
+				}
 			},
 			async () => {
 				if (!hasJourneySnapshot(obsidian)) return;

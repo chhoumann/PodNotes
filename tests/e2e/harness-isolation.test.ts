@@ -185,11 +185,18 @@ test("closes a leaked window and reports it during workspace rollback", async ()
 });
 
 describe("each test's sandbox", () => {
+	const roots: string[] = [];
 	test.each(["first", "second"])("lets the %s test create the same folder", async () => {
 		const { obsidian, sandbox } = getContext();
+		roots.push(sandbox.root);
 		await obsidian.dev.evalJsonAsync(
 			`(async () => { await app.vault.createFolder(${jsLiteral(sandbox.path("Moved"))}); return true; })()`,
 		);
+	});
+	test("sits inside the file's sandbox, which teardown removes", () => {
+		const [first, second] = roots.map((root) => path.posix.dirname(root));
+		expect(first).toBe(second);
+		expect(first).toMatch(/harness-isolation/);
 	});
 });
 
