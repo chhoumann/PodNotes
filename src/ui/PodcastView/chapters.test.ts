@@ -59,6 +59,7 @@ describe("chapters", () => {
 		vi.mocked(fetchChapters).mockClear().mockResolvedValueOnce([]);
 
 		expect(await loadChapters(episode)).toEqual([]);
+		expect(await loadChapters(episode)).toEqual([]);
 		expect(cachedChapters(episode)).toEqual([]);
 		expect(fetchChapters).toHaveBeenCalledOnce();
 	});

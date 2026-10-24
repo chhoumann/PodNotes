@@ -8,6 +8,7 @@ const FIRST_REQUEST_BYTES = 64 * 1024;
 const MAX_TAG_BYTES = 16 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
 const RETRYABLE: ReadonlySet<string> = new Set(["timeout", "transport-failure", "aborted"]);
+const RETRYABLE_STATUSES: ReadonlySet<number> = new Set([408, 429, 500, 502, 503, 504]);
 const TEXT_ENCODINGS = ["iso-8859-1", "utf-16le", "utf-16be", "utf-8"];
 
 /**
@@ -28,7 +29,10 @@ export async function fetchId3Chapters(url: string): Promise<Chapter[] | undefin
 		return parseId3Chapters(tag);
 	} catch (error) {
 		// A server that ignores Range answers with the whole file, and asking again would too.
-		return error instanceof NetworkError && RETRYABLE.has(error.code) ? undefined : [];
+		const retryable =
+			error instanceof NetworkError &&
+			(RETRYABLE.has(error.code) || RETRYABLE_STATUSES.has(error.status ?? 0));
+		return retryable ? undefined : [];
 	}
 }
 

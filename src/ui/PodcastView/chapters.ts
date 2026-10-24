@@ -28,6 +28,8 @@ export function cachedChapters(episode: ChaptersSource): Chapter[] | undefined {
 
 /** The episode's chapters. A failed load, as offline, is not kept, so the next one fetches again. */
 export async function loadChapters(episode: ChaptersSource): Promise<Chapter[]> {
+	const cached = cachedChapters(episode);
+	if (cached) return cached;
 	const chapters = await fetchChapters(episode);
 	if (chapters) loaded.set(chaptersKey(episode), chapters);
 	return chapters ?? [];

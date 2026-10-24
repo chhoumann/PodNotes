@@ -186,6 +186,8 @@ describe("fetchId3Chapters", () => {
 	it("tries again after a network failure, but not after a server that ignores Range", async () => {
 		mockRequest.mockRejectedValueOnce(new TimeoutError());
 		await expect(fetchId3Chapters(url)).resolves.toBeUndefined();
+		mockRequest.mockRejectedValueOnce(new NetworkError("unexpected-status", 503));
+		await expect(fetchId3Chapters(url)).resolves.toBeUndefined();
 
 		mockRequest.mockRejectedValueOnce(new NetworkError("unexpected-status", 200));
 		await expect(fetchId3Chapters(url)).resolves.toEqual([]);
