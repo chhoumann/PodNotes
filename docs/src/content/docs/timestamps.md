@@ -38,6 +38,8 @@ The capture commands work from anywhere, so you can capture while you browse epi
 2. The note you edited last, at its cursor, if it is still open in editing view. A capture from the PodNotes view, or from a headset, usually goes here.
 3. The end of the episode's note, found as [How PodNotes finds a note](/notes/#how-podnotes-finds-a-note) describes. If PodNotes finds none, it creates the note, without opening it. For a note created before PodNotes 2.22.0 that you renamed or moved, PodNotes then creates a second note. Creating the note needs **Episode note path** and **Episode note template**.
 
+To choose where every capture goes, such as under a heading in the episode note, set **QuickAdd choice**. See [Capture with QuickAdd](/QuickAdd/#capture-with-quickadd).
+
 ## Capture from a hotkey, the toolbar, or a headset
 
 To capture from a hotkey:
