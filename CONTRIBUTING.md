@@ -49,14 +49,10 @@ Tests sit next to the code as `*.test.ts`. A test file that needs a DOM starts w
 
 Behavior such as playback, timestamp links, downloads, local files, and settings migrations depends on Obsidian itself. Check it in a real Obsidian before you open a pull request.
 
-The end-to-end suite in `tests/e2e` runs against the isolated Obsidian. On Linux, `npm run test:e2e` starts it, or reuses the one already running. It stops the instance afterwards only if it started it. On macOS, start it first:
+The end-to-end suite in `tests/e2e` runs against the isolated Obsidian on Linux and macOS. `npm run test:e2e` stops it, starts it on a fresh vault, and stops it afterwards:
 
 ```
-eval "$(npm run --silent \
-  start:e2e-obsidian \
-  -- --print-env)"
 npm run test:e2e
-npm run stop:e2e-obsidian
 ```
 
 The runner does not support Windows, so check your change by hand there. [AGENTS.md](AGENTS.md#isolated-worktree-instance-macos-and-linux) shows how to send commands to the isolated Obsidian and how to stop leftover instances.
