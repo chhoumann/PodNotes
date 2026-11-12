@@ -20,21 +20,21 @@ describe("reduced motion", () => {
 			"Deck",
 			'<div class="pn-deck {}"><button class="pn-play"></button></div>',
 			".pn-play",
-			["transform 120ms ease", ""],
+			["transform 0.12s", "none"],
 		],
 		[
 			"a podcast card",
 			"LibraryPage",
 			'<div class="pn-grid {}"><button class="pn-gridcard"></button></div>',
 			".pn-gridcard",
-			["transform 120ms ease", ""],
+			["transform 0.12s", "none"],
 		],
 		[
 			"a playing row's bars",
 			"EpisodeRow",
 			'<div class="pn-ep {}"><span class="pn-eq"><i></i></span></div>',
 			".pn-eq i",
-			["", "pn-eq 1s ease-in-out infinite"],
+			["all", "1s ease-in-out -0.8s infinite pn-eq"],
 		],
 	])(
 		"%s stops moving when the user prefers reduced motion",
@@ -54,7 +54,9 @@ describe("reduced motion", () => {
 
 describe("focus ring", () => {
 	test("draws the video's play button ring inside the frame that clips it, and others outside", () => {
-		const css = componentCss(["PodcastView", "Player"], { states: ["focus-visible"] });
+		const obsidian = "body { --interactive-accent: rgb(138, 92, 245); }";
+		const css =
+			obsidian + componentCss(["PodcastView", "Player"], { states: ["focus-visible"] });
 		styled(
 			css,
 			inView(
@@ -69,8 +71,8 @@ describe("focus ring", () => {
 		};
 
 		expect([ring(".pn-vplay"), ring(".pn-iconbtn")]).toEqual([
-			["2px solid var(--interactive-accent)", "-2px"],
-			["2px solid var(--interactive-accent)", "1px"],
+			["2px solid rgb(138, 92, 245)", "-2px"],
+			["2px solid rgb(138, 92, 245)", "1px"],
 		]);
 	});
 });
@@ -108,7 +110,7 @@ describe("hover", () => {
 		[
 			"the skip button",
 			"Deck",
-			'<div class="pn-deck {}"><button class="pn-skip%"></button></div>',
+			'<div class="pn-deck {}"><button class="pn-bare pn-skip%"></button></div>',
 			".pn-skip",
 			"rgba(0, 0, 0, 0)",
 		],
@@ -117,17 +119,17 @@ describe("hover", () => {
 			"Player",
 			'<section class="pn-player {}"><button class="pn-sw%" aria-pressed="true"></button></section>',
 			".pn-sw",
-			"var(--background-modifier-border)",
+			"rgb(224, 224, 224)",
 		],
 	])(
 		"%s keeps its resting background after a tap",
 		(_name, component, html, selector, resting) => {
 			const background = (hovered: boolean, media: string[] = []) => {
-				// jsdom drops a var() in a shorthand, so each background stands in as its color.
-				const css = componentCss(["PodcastView", component], {
-					media,
-					states: ["hover"],
-				}).replaceAll("background: var(", "background-color: var(");
+				const obsidian =
+					"body { --background-modifier-hover: rgb(240, 240, 240); --background-modifier-border: rgb(224, 224, 224); }";
+				const css =
+					obsidian +
+					componentCss(["PodcastView", component], { media, states: ["hover"] });
 				const markup = inView(component, html.replace("%", hovered ? " hover" : ""));
 				return getComputedStyle(styled(css, markup, selector)).backgroundColor;
 			};
@@ -135,7 +137,7 @@ describe("hover", () => {
 			expect([background(false), background(true), background(true, [HOVER])]).toEqual([
 				resting,
 				resting,
-				"var(--background-modifier-hover)",
+				"rgb(240, 240, 240)",
 			]);
 		},
 	);
@@ -162,7 +164,7 @@ describe("the transcript's note button", () => {
 
 		expect([label("pn-panel-head"), label("pn-panel-empty")]).toEqual([
 			{
-				display: "inline",
+				display: "block",
 				visibility: "visible",
 				position: "absolute",
 				clipPath: "inset(50%)",
@@ -195,7 +197,8 @@ describe("on a tablet", () => {
 
 describe("the player's stage", () => {
 	test("dresses its own artwork, not the covers of a panel's rows shown in it", () => {
-		const css = componentCss(["PodcastView", "Player", "EpisodeRow"]);
+		const obsidian = "body { --shadow-s: 0 1px 2px rgb(0, 0, 0); }";
+		const css = obsidian + componentCss(["PodcastView", "Player", "EpisodeRow"]);
 		const tile = (id: string) => `<span id="${id}" class="pn-cover pn-filetile"></span>`;
 		styled(
 			css,
@@ -208,8 +211,8 @@ describe("the player's stage", () => {
 		};
 
 		expect([look("art"), look("row")]).toEqual([
-			{ shadow: "var(--shadow-s)", icon: "25cqw" },
-			{ shadow: expect.not.stringContaining("--shadow-s"), icon: "18px" },
+			{ shadow: "rgb(0, 0, 0) 0px 1px 2px", icon: "25cqw" },
+			{ shadow: expect.not.stringContaining("0px 1px 2px"), icon: "18px" },
 		]);
 	});
 });
