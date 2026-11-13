@@ -1,0 +1,20 @@
+/** Constant-bitrate Layer III streams with silent frames, so a test knows each frame's bytes and duration. */
+export const MP3_STREAMS = {
+	/** MPEG-1, 96 kbps, 48 kHz, mono: the issue #532 episode's format. */
+	mpeg1At96Kbps: { header: [0xff, 0xfb, 0x74, 0xc4], frameBytes: 288, frameSeconds: 0.024 },
+	/** MPEG-2.5, 8 kbps, 8 kHz, mono: an hour fits in 3.6 MB. */
+	mpeg25At8Kbps: { header: [0xff, 0xe3, 0x18, 0xc0], frameBytes: 72, frameSeconds: 0.072 },
+} as const;
+
+export type Mp3Stream = (typeof MP3_STREAMS)[keyof typeof MP3_STREAMS];
+
+export function mp3Bytes(stream: Mp3Stream, frames: number): Uint8Array {
+	const bytes = new Uint8Array(frames * stream.frameBytes);
+	for (let frame = 0; frame < frames; frame++) bytes.set(stream.header, frame * stream.frameBytes);
+	return bytes;
+}
+
+/** The seconds of audio in `bytes` of `stream`, counted from its fixed frame size. */
+export function mp3Seconds(stream: Mp3Stream, bytes: number): number {
+	return (bytes / stream.frameBytes) * stream.frameSeconds;
+}

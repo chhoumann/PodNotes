@@ -11,6 +11,7 @@ import {
 	mockEpisode,
 	noticeMessages,
 } from "../../tests/mocks/transcriptionService";
+import { MP3_STREAMS, mp3Bytes, mp3Seconds } from "../../tests/mocks/mp3";
 import { openAIMock, sentForm } from "../../tests/mocks/openaiRequestUrl";
 import { TranscriptionService } from "./TranscriptionService";
 import type PodNotes from "src/main";
@@ -627,5 +628,41 @@ describe("TranscriptionService", () => {
 				expect(openAIMock).toHaveBeenCalledTimes(3);
 			},
 		);
+
+		test("OpenAI diarization sends no part longer than the model's 1400 s limit (#532)", async () => {
+			const stream = MP3_STREAMS.mpeg25At8Kbps;
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, 44_667).buffer,
+				extension: "mp3",
+				basename: "episode",
+			});
+			const sentSeconds: number[] = [];
+			openAIMock.mockImplementation(async (request: RequestUrlParam) => {
+				const seconds = mp3Seconds(stream, (await sentFile(request)).size);
+				sentSeconds.push(seconds);
+				return seconds > 1400
+					? Response.json(
+							{
+								error: {
+									message: `audio duration ${seconds} seconds is longer than 1400 seconds which is the maximum for this model`,
+								},
+							},
+							{ status: 400 },
+						)
+					: Response.json({
+							segments: [{ speaker: "A", text: `${seconds} s.`, start: 0, end: 1 }],
+						});
+			});
+			const plugin = createMockPlugin();
+			plugin.settings.transcript.diarization = {
+				enabled: true,
+				provider: "openai",
+				speakerTemplate: "**{{speaker}}:** {{text}}",
+			};
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+			expect(Math.max(...sentSeconds)).toBeLessThanOrEqual(1400);
+			expect(sentSeconds.reduce((total, seconds) => total + seconds)).toBeCloseTo(3216.024);
+		});
 	});
 });
