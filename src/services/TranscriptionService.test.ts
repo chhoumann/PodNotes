@@ -2,7 +2,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { Notice, type RequestUrlParam } from "obsidian";
 import { deferred } from "../../tests/mocks/feeds";
-import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
+import { OPENAI_FAILURES, OPENAI_REJECTIONS, rateLimited } from "../../tests/mocks/openaiFailures";
 import {
 	createMockPlugin,
 	diarizeWithDeepgramMock,
@@ -523,6 +523,18 @@ describe("TranscriptionService", () => {
 			},
 		);
 
+		test.each(OPENAI_REJECTIONS)(
+			"Whisper %s shows the API error after one send",
+			async (_name, respond, message) => {
+				openAIMock.mockImplementation(respond);
+
+				await expect(finalNotice(createMockPlugin())).resolves.toBe(
+					`Transcription failed: all 1 audio chunk(s) failed or returned no text. Last error: ${message}`,
+				);
+				expect(openAIMock).toHaveBeenCalledOnce();
+			},
+		);
+
 		test("Whisper answering without text fails the run after three sends", async () => {
 			openAIMock.mockImplementation(async () => Response.json({}));
 
@@ -626,6 +638,24 @@ describe("TranscriptionService", () => {
 					`Transcription failed: OpenAI diarization failed for every chunk: ${message}`,
 				);
 				expect(openAIMock).toHaveBeenCalledTimes(3);
+			},
+		);
+
+		test.each(OPENAI_REJECTIONS)(
+			"OpenAI diarization %s shows the API error after one send",
+			async (_name, respond, message) => {
+				openAIMock.mockImplementation(respond);
+				const plugin = createMockPlugin();
+				plugin.settings.transcript.diarization = {
+					enabled: true,
+					provider: "openai",
+					speakerTemplate: "**{{speaker}}:** {{text}}",
+				};
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					`Transcription failed: OpenAI diarization failed for every chunk: ${message}`,
+				);
+				expect(openAIMock).toHaveBeenCalledOnce();
 			},
 		);
 
