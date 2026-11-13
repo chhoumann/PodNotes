@@ -52,17 +52,28 @@ export function shouldConvertToWav(extension: string, mimeType: string): boolean
 	return !isMp3;
 }
 
+/**
+ * `maxSeconds` also caps each chunk's audio length, for MP3 only. Other formats
+ * over 20 MB become WAV chunks of under four minutes, and smaller ones go up whole.
+ */
 export async function createChunkFiles({
 	buffer,
 	basename,
 	extension,
 	mimeType,
+	maxSeconds,
 }: {
 	buffer: ArrayBuffer;
 	basename: string;
 	extension: string;
 	mimeType: string;
+	maxSeconds?: number;
 }): Promise<File[]> {
+	if (maxSeconds !== undefined && !shouldConvertToWav(extension, mimeType)) {
+		const ends = mp3ChunkEnds(new Uint8Array(buffer), CHUNK_SIZE_BYTES, maxSeconds);
+		return sliceIntoFiles(buffer, ends, basename, extension, mimeType);
+	}
+
 	// A file that already fits in a single request needs neither conversion nor
 	// splitting: send the original (compressed) bytes. OpenAI accepts m4a/mp3/etc.
 	// directly under the upload limit, so this skips the m4a->WAV path below for
@@ -99,29 +110,120 @@ export function createBinaryChunkFiles(
 	extension: string,
 	mimeType: string,
 ): File[] {
-	if (buffer.byteLength <= CHUNK_SIZE_BYTES) {
-		return [
-			new File([buffer], `${basename}.${extension}`, {
-				type: mimeType,
-			}),
-		];
+	const ends: number[] = [];
+	for (let end = CHUNK_SIZE_BYTES; end < buffer.byteLength; end += CHUNK_SIZE_BYTES) {
+		ends.push(end);
 	}
+	ends.push(buffer.byteLength);
+	return sliceIntoFiles(buffer, ends, basename, extension, mimeType);
+}
 
-	const files: File[] = [];
-	for (
-		let offset = 0, index = 0;
-		offset < buffer.byteLength;
-		offset += CHUNK_SIZE_BYTES, index++
-	) {
-		const chunk = buffer.slice(offset, offset + CHUNK_SIZE_BYTES);
-		files.push(
-			new File([chunk], `${basename}.part${index}.${extension}`, {
-				type: mimeType,
-			}),
-		);
+/** One file per chunk, where `ends` holds each chunk's end offset in order. */
+function sliceIntoFiles(
+	buffer: ArrayBuffer,
+	ends: number[],
+	basename: string,
+	extension: string,
+	mimeType: string,
+): File[] {
+	if (ends.length === 1) {
+		return [new File([buffer], `${basename}.${extension}`, { type: mimeType })];
 	}
+	return ends.map(
+		(end, index) =>
+			new File(
+				[buffer.slice(index === 0 ? 0 : ends[index - 1], end)],
+				`${basename}.part${index}.${extension}`,
+				{ type: mimeType },
+			),
+	);
+}
 
-	return files;
+interface Mp3Frame {
+	offset: number;
+	length: number;
+	seconds: number;
+}
+
+const MPEG1_LAYER3_KBPS = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const MPEG2_LAYER3_KBPS = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+/** Indexed by the header's version bits: 0 is MPEG-2.5, 2 is MPEG-2, 3 is MPEG-1. */
+const SAMPLE_RATES = [
+	[11025, 12000, 8000],
+	undefined,
+	[22050, 24000, 16000],
+	[44100, 48000, 32000],
+];
+
+/**
+ * Where each chunk of an MP3 ends. Chunks end at frame starts, there are as few as
+ * both limits allow, and they hold an equal number of frames, so no short last
+ * chunk resets the speaker labels for a few seconds of speech.
+ */
+function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: number): number[] {
+	const frames = mp3Frames(bytes);
+	const seconds = frames.reduce((total, frame) => total + frame.seconds, 0);
+	const chunks = Math.max(Math.ceil(bytes.length / maxBytes), Math.ceil(seconds / maxSeconds));
+	const framesPerChunk = Math.ceil(frames.length / chunks);
+	const ends: number[] = [];
+	let start = 0;
+	let chunkFrames = 0;
+	let chunkSeconds = 0;
+	for (const frame of frames) {
+		if (
+			chunkFrames === framesPerChunk ||
+			frame.offset + frame.length - start > maxBytes ||
+			chunkSeconds + frame.seconds > maxSeconds
+		) {
+			ends.push(frame.offset);
+			start = frame.offset;
+			chunkFrames = 0;
+			chunkSeconds = 0;
+		}
+		chunkFrames++;
+		chunkSeconds += frame.seconds;
+	}
+	ends.push(bytes.length);
+	return ends;
+}
+
+/**
+ * The Layer III frames in `bytes`. A frame counts only when another frame or the
+ * end of the buffer follows it, so sync-like bytes in a tag or cover art don't.
+ */
+function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
+	const frames: Mp3Frame[] = [];
+	let offset = 0;
+	while (offset + 4 <= bytes.length) {
+		const frame = mp3FrameAt(bytes, offset);
+		const next = frame ? offset + frame.length : 0;
+		if (frame && (next === bytes.length || mp3FrameAt(bytes, next))) {
+			frames.push(frame);
+			offset = next;
+		} else {
+			offset++;
+		}
+	}
+	return frames;
+}
+
+function mp3FrameAt(bytes: Uint8Array, offset: number): Mp3Frame | undefined {
+	if (offset + 4 > bytes.length || bytes[offset] !== 0xff) return undefined;
+	const versionAndLayer = bytes[offset + 1];
+	const rates = bytes[offset + 2];
+	const version = (versionAndLayer >> 3) & 3;
+	const isLayer3 = ((versionAndLayer >> 1) & 3) === 1;
+	if ((versionAndLayer & 0xe0) !== 0xe0 || !isLayer3) return undefined;
+	const kbps = (version === 3 ? MPEG1_LAYER3_KBPS : MPEG2_LAYER3_KBPS)[rates >> 4];
+	const sampleRate = SAMPLE_RATES[version]?.[(rates >> 2) & 3];
+	if (!kbps || !sampleRate) return undefined;
+	const samples = version === 3 ? 1152 : 576;
+	const padding = (rates >> 1) & 1;
+	return {
+		offset,
+		length: Math.floor(((samples / 8) * kbps * 1000) / sampleRate) + padding,
+		seconds: samples / sampleRate,
+	};
 }
 
 async function convertToWavChunks(buffer: ArrayBuffer, basename: string): Promise<File[]> {

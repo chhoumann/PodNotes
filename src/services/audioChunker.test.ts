@@ -8,6 +8,7 @@ import {
 	shouldConvertToWav,
 	writeWavHeader,
 } from "./audioChunker";
+import { MP3_STREAMS, mp3Bytes, mp3Seconds } from "../../tests/mocks/mp3";
 
 describe("getMimeType", () => {
 	test("returns correct mime types for audio formats", () => {
@@ -167,6 +168,87 @@ describe("createChunkFiles small-file fast path (#168 / PR #204 review)", () => 
 			expect(files).toHaveLength(1);
 			expect(files[0].name).toBe(`episode.${extension}`);
 		}
+	});
+});
+
+describe("createChunkFiles with maxSeconds (#532)", () => {
+	const chunk = async (bytes: Uint8Array, maxSeconds: number) =>
+		Promise.all(
+			(
+				await createChunkFiles({
+					buffer: bytes.buffer as ArrayBuffer,
+					basename: "episode",
+					extension: "mp3",
+					mimeType: "audio/mp3",
+					maxSeconds,
+				})
+			).map(async (file) => ({
+				name: file.name,
+				bytes: new Uint8Array(await file.arrayBuffer()),
+			})),
+		);
+	const joinsInto = (parts: { bytes: Uint8Array }[], episode: Uint8Array) =>
+		Buffer.concat(parts.map((part) => part.bytes)).equals(episode);
+
+	test("splits an MP3 under the size limit into equal parts no longer than maxSeconds", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		const episode = mp3Bytes(stream, 134_000);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.name)).toEqual([
+			"episode.part0.mp3",
+			"episode.part1.mp3",
+			"episode.part2.mp3",
+		]);
+		expect(parts.map((part) => part.bytes.length / stream.frameBytes)).toEqual([
+			44_667, 44_667, 44_666,
+		]);
+		expect(mp3Seconds(stream, parts[0].bytes.length)).toBeLessThanOrEqual(1400);
+		for (const part of parts)
+			expect(Array.from(part.bytes.subarray(0, 4))).toEqual(stream.header);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("sends an MP3 that fits both limits as the original file", async () => {
+		const episode = mp3Bytes(MP3_STREAMS.mpeg1At96Kbps, 58_000);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.name)).toEqual(["episode.mp3"]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("keeps parts under the size limit when it is the tighter one", async () => {
+		const stream = MP3_STREAMS.mpeg1At320Kbps;
+		const episode = mp3Bytes(stream, 50_000);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts).toHaveLength(3);
+		for (const part of parts) {
+			expect(part.bytes.length).toBeLessThanOrEqual(CHUNK_SIZE_BYTES);
+			expect(Array.from(part.bytes.subarray(0, 4))).toEqual(stream.header);
+		}
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("keeps a leading ID3 tag in the first part without counting sync-like bytes in it as audio", async () => {
+		const stream = MP3_STREAMS.mpeg25At8Kbps;
+		const tag = new Uint8Array(8192);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x3f, 0x76]);
+		for (let offset = 100; offset <= 5000; offset += 100) tag.set(stream.header, offset);
+		const frames = mp3Bytes(stream, 36_000);
+		const episode = Buffer.concat([tag, frames]);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			tag.length + 18_000 * stream.frameBytes,
+			18_000 * stream.frameBytes,
+		]);
+		expect(Array.from(parts[0].bytes.subarray(0, 3))).toEqual([0x49, 0x44, 0x33]);
+		expect(joinsInto(parts, episode)).toBe(true);
 	});
 });
 
