@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { within } from "@testing-library/svelte";
 import { derived, get, readable } from "svelte/store";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import * as obsidian from "obsidian";
@@ -273,46 +274,66 @@ describe("Transcripts", () => {
 	const transcript = (chosen: Partial<IPodNotesSettings["transcript"]>) => ({
 		transcript: { ...DEFAULT_SETTINGS.transcript, ...chosen },
 	});
-	const speakerLabels = (enabled: boolean) => ({
+	const withSpeakerLabels = (enabled: boolean) => ({
 		diarization: { ...DEFAULT_SETTINGS.transcript.diarization, enabled },
 	});
+	/** The tab with its controls as a user finds them: by role and by the name of their row. */
+	const openTranscripts = (saved?: Partial<IPodNotesSettings>) => {
+		const opened = open(saved);
+		const ui = within(opened.tab.containerEl);
+		const dropdown = (name: string) => ui.getByRole<HTMLSelectElement>("combobox", { name });
+		return {
+			...opened,
+			ui,
+			provider: () => dropdown("Transcription provider"),
+			model: () => dropdown("Model"),
+			speakerLabels: () =>
+				ui.getByRole<HTMLInputElement>("checkbox", { name: "Speaker labels" }),
+			labelFormat: () => ui.queryByRole("textbox", { name: "Speaker label format" }),
+			/** The buttons of the API key rows on screen, by their names. */
+			keyButtons: () =>
+				ui
+					.queryAllByRole("button", { name: / API key$/ })
+					.map((button) => `${button.textContent} ${rowName(button)}`),
+		};
+	};
+	const rowName = (control: Element) =>
+		control.closest(".setting-item")?.querySelector(".setting-item-name")?.textContent;
 	const options = (select: HTMLSelectElement) =>
 		[...select.options].map(({ value, text }) => [value, text]);
 
 	test("a new install is on ElevenLabs Scribe v3 with speaker labels on", () => {
-		const { row, select, toggle } = open();
+		const { provider, model, speakerLabels, labelFormat, keyButtons } = openTranscripts();
 
-		expect(select("Transcription provider").value).toBe("elevenlabs");
-		expect(row("ElevenLabs API key")).toBeVisible();
-		expect(options(select("Model"))).toEqual([
+		expect(provider()).toHaveDisplayValue("ElevenLabs");
+		expect(keyButtons()).toEqual(["Link... ElevenLabs API key"]);
+		expect(options(model())).toEqual([
 			["", "Recommended (Scribe v3)"],
 			["scribe_v3", "Scribe v3"],
 		]);
-		expect(select("Model").value).toBe("");
-		expect(toggle("Speaker labels")).toBeChecked();
-		expect(toggle("Speaker labels")).toBeEnabled();
-		expect(row("Speaker label format")).toBeVisible();
+		expect(model()).toHaveDisplayValue("Recommended (Scribe v3)");
+		expect(speakerLabels()).toBeChecked();
+		expect(speakerLabels()).toBeEnabled();
+		expect(labelFormat()).toBeVisible();
 	});
 
 	test("offers each provider and shows the API key row of the one chosen, keeping the other keys", async () => {
-		const { row, select, disk } = open({
+		const { provider, keyButtons, disk } = openTranscripts({
 			...transcript({ provider: "openai" }),
 			openAISecretId: "podnotes-openai-api-key",
 		});
 
-		expect(options(select("Transcription provider"))).toEqual([
+		expect(options(provider())).toEqual([
 			["elevenlabs", "ElevenLabs"],
 			["deepgram", "Deepgram"],
 			["openai", "OpenAI"],
 		]);
-		expect(select("Transcription provider").value).toBe("openai");
-		expect(row("OpenAI API key")).toBeVisible();
-		expect(row("Deepgram API key")).not.toBeVisible();
+		expect(provider()).toHaveDisplayValue("OpenAI");
+		expect(keyButtons()).toEqual(["Link... OpenAI API key"]);
 
-		choose(select("Transcription provider"), "deepgram");
+		choose(provider(), "deepgram");
 
-		expect(row("OpenAI API key")).not.toBeVisible();
-		expect(row("Deepgram API key")).toBeVisible();
+		expect(keyButtons()).toEqual(["Link... Deepgram API key"]);
 		expect(await disk()).toMatchObject({
 			transcript: { provider: "deepgram" },
 			openAISecretId: "podnotes-openai-api-key",
@@ -320,87 +341,89 @@ describe("Transcripts", () => {
 	});
 
 	test("Model offers the recommended model and each of the provider's, and saves the one chosen", async () => {
-		const { select, disk } = open(transcript({ provider: "openai" }));
+		const { model, disk } = openTranscripts(transcript({ provider: "openai" }));
 
-		expect(options(select("Model"))).toEqual([
+		expect(options(model())).toEqual([
 			["", "Recommended (GPT Transcribe)"],
 			["gpt-transcribe", "GPT Transcribe"],
 		]);
-		expect(select("Model").value).toBe("");
+		expect(model()).toHaveDisplayValue("Recommended (GPT Transcribe)");
 
-		choose(select("Model"), "gpt-transcribe");
+		choose(model(), "gpt-transcribe");
 
 		expect((await disk()).transcript.model).toBe("gpt-transcribe");
 	});
 
 	test("another provider brings its own models, on the recommended one", async () => {
-		const { select, disk } = open(transcript({ provider: "openai", model: "gpt-transcribe" }));
+		const { provider, model, disk } = openTranscripts(
+			transcript({ provider: "openai", model: "gpt-transcribe" }),
+		);
 
-		choose(select("Transcription provider"), "deepgram");
+		choose(provider(), "deepgram");
 
-		expect(options(select("Model"))).toEqual([
+		expect(options(model())).toEqual([
 			["", "Recommended (Nova-3)"],
 			["nova-3", "Nova-3"],
 		]);
-		expect(select("Model").value).toBe("");
+		expect(model()).toHaveDisplayValue("Recommended (Nova-3)");
 		expect((await disk()).transcript).toMatchObject({ provider: "deepgram", model: "" });
 	});
 
 	test("Speaker labels cannot be changed for a model without them, and the row says why", () => {
-		const { row, select, toggle } = open(
-			transcript({ provider: "openai", ...speakerLabels(true) }),
+		const { ui, provider, speakerLabels } = openTranscripts(
+			transcript({ provider: "openai", ...withSpeakerLabels(true) }),
 		);
-		const description = () => row("Speaker labels").querySelector(".setting-item-description");
+		const reason = "GPT Transcribe does not label speakers.";
 
-		expect(toggle("Speaker labels")).toBeChecked();
-		expect(toggle("Speaker labels")).toBeDisabled();
-		expect(description()).toHaveTextContent("GPT Transcribe does not label speakers.");
+		expect(speakerLabels()).toBeChecked();
+		expect(speakerLabels()).toBeDisabled();
+		expect(ui.getByText(reason)).toBeVisible();
 
-		choose(select("Transcription provider"), "deepgram");
+		choose(provider(), "deepgram");
 
-		expect(toggle("Speaker labels")).toBeEnabled();
-		expect(description()).toBeEmptyDOMElement();
+		expect(speakerLabels()).toBeEnabled();
+		expect(ui.queryByText(reason)).toBeNull();
 	});
 
 	test("Speaker labels saves the choice, and Speaker label format shows only while they are on", async () => {
-		const { row, toggle, disk } = open(
-			transcript({ provider: "deepgram", ...speakerLabels(false) }),
+		const { speakerLabels, labelFormat, disk } = openTranscripts(
+			transcript({ provider: "deepgram", ...withSpeakerLabels(false) }),
 		);
-		expect(row("Speaker label format")).not.toBeVisible();
+		expect(labelFormat()).toBeNull();
 
-		toggle("Speaker labels").click();
+		speakerLabels().click();
 
-		expect(row("Speaker label format")).toBeVisible();
+		expect(labelFormat()).toBeVisible();
 		expect((await disk()).transcript.diarization.enabled).toBe(true);
 
-		toggle("Speaker labels").click();
+		speakerLabels().click();
 
-		expect(row("Speaker label format")).not.toBeVisible();
+		expect(labelFormat()).toBeNull();
 		expect((await disk()).transcript.diarization.enabled).toBe(false);
 	});
 
 	test("a provider this version does not have stays selected under its stored name, with no key or model row", async () => {
-		const { row, select, writes } = open(
+		const { ui, provider, keyButtons, writes } = openTranscripts(
 			transcript({ provider: "openrouter", model: "x-ai/grok-stt-2.0" }),
 		);
 
-		expect(select("Transcription provider").value).toBe("openrouter");
-		expect(select("Transcription provider").selectedOptions[0]).toHaveTextContent("openrouter");
-		for (const name of ["OpenAI API key", "Deepgram API key", "ElevenLabs API key", "Model"]) {
-			expect(row(name)).not.toBeVisible();
-		}
+		expect(provider()).toHaveDisplayValue("openrouter");
+		expect(keyButtons()).toEqual([]);
+		expect(ui.queryByRole("combobox", { name: "Model" })).toBeNull();
 		expect(await writes()).toBe(0);
 	});
 
 	test("a model this version does not have stays selected under its stored name", async () => {
-		const { select, writes } = open(transcript({ provider: "deepgram", model: "nova-9" }));
+		const { model, writes } = openTranscripts(
+			transcript({ provider: "deepgram", model: "nova-9" }),
+		);
 
-		expect(options(select("Model"))).toEqual([
+		expect(options(model())).toEqual([
 			["", "Recommended (Nova-3)"],
 			["nova-3", "Nova-3"],
 			["nova-9", "nova-9"],
 		]);
-		expect(select("Model").value).toBe("nova-9");
+		expect(model()).toHaveDisplayValue("nova-9");
 		expect(await writes()).toBe(0);
 	});
 });
