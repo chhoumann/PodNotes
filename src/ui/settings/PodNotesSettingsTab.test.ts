@@ -181,13 +181,14 @@ describe("sections", () => {
 			[
 				"Transcripts",
 				[
+					"Transcription provider",
 					"OpenAI API key",
+					"Deepgram API key",
+					"Model",
+					"Speaker labels",
+					"Speaker label format",
 					"Transcript path",
 					"Transcript template",
-					"Speaker diarization",
-					"Diarization provider",
-					"Deepgram API key",
-					"Speaker label format",
 				],
 			],
 			["Downloads", ["Download path"]],
@@ -204,7 +205,11 @@ describe("sections", () => {
 			...tab.containerEl.querySelectorAll<HTMLElement>(
 				'.setting-item-control :is(input:not([tabindex="-1"]), select, textarea, [tabindex="0"], button[aria-labelledby])',
 			),
-		].filter((field) => field.style.display !== "none");
+		].filter(
+			(field) =>
+				field.style.display !== "none" &&
+				field.closest<HTMLElement>(".setting-item")?.style.display !== "none",
+		);
 		const rowOf = (field: Element) =>
 			field.closest(".setting-item")?.querySelector(".setting-item-name")?.textContent;
 
@@ -223,13 +228,12 @@ describe("sections", () => {
 			"Episode note template",
 			"Podcast note path",
 			"Podcast note template",
+			"Transcription provider",
 			"OpenAI API key",
+			"Model",
+			"Speaker labels",
 			"Transcript path",
 			"Transcript template",
-			"Speaker diarization",
-			"Diarization provider",
-			"Deepgram API key",
-			"Speaker label format",
 			"Download path",
 			"Export OPML",
 			"Latest episodes per podcast",
@@ -245,33 +249,138 @@ describe("sections", () => {
 	});
 
 	test("an API key's button keeps its own words and adds its row's name", () => {
-		const { plugin, tab, row } = open({ openAISecretId: "podnotes-openai-api-key" });
+		const { plugin, tab, row, select } = open({ openAISecretId: "podnotes-openai-api-key" });
 		plugin.app.secretStorage.setSecret("podnotes-openai-api-key", "sk-test");
 		tab.display();
 
 		expect(row("OpenAI API key").querySelector("button")).toHaveAccessibleName(
 			"Change OpenAI API key",
 		);
+
+		choose(select("Transcription provider"), "deepgram");
 		expect(row("Deepgram API key").querySelector("button")).toHaveAccessibleName(
 			"Link... Deepgram API key",
 		);
 	});
+});
 
-	test("each row renders under its own name, and the speaker rows apply only with diarization", () => {
-		const { row, toggle, select } = open();
-		const disabled = (name: string) => row(name).classList.contains("is-disabled");
+describe("Transcripts", () => {
+	const transcript = (chosen: Partial<IPodNotesSettings["transcript"]>) => ({
+		transcript: { ...DEFAULT_SETTINGS.transcript, ...chosen },
+	});
+	const speakerLabels = (enabled: boolean) => ({
+		diarization: { ...DEFAULT_SETTINGS.transcript.diarization, enabled },
+	});
+	const options = (select: HTMLSelectElement) =>
+		[...select.options].map(({ value, text }) => [value, text]);
 
-		expect(
-			["Diarization provider", "Deepgram API key", "Speaker label format"].map(disabled),
-		).toEqual([true, true, true]);
+	test("offers each provider and shows the API key row of the one chosen, keeping the other keys", async () => {
+		const { row, select, disk } = open({
+			...transcript({ provider: "openai" }),
+			openAISecretId: "podnotes-openai-api-key",
+		});
 
-		toggle("Speaker diarization").click();
-		expect(
-			["Diarization provider", "Deepgram API key", "Speaker label format"].map(disabled),
-		).toEqual([false, true, false]);
+		expect(options(select("Transcription provider"))).toEqual([
+			["deepgram", "Deepgram"],
+			["openai", "OpenAI"],
+		]);
+		expect(select("Transcription provider").value).toBe("openai");
+		expect(row("OpenAI API key")).toBeVisible();
+		expect(row("Deepgram API key")).not.toBeVisible();
 
-		choose(select("Diarization provider"), "deepgram");
-		expect(disabled("Deepgram API key")).toBe(false);
+		choose(select("Transcription provider"), "deepgram");
+
+		expect(row("OpenAI API key")).not.toBeVisible();
+		expect(row("Deepgram API key")).toBeVisible();
+		expect(await disk()).toMatchObject({
+			transcript: { provider: "deepgram" },
+			openAISecretId: "podnotes-openai-api-key",
+		});
+	});
+
+	test("Model offers the recommended model and each of the provider's, and saves the one chosen", async () => {
+		const { select, disk } = open(transcript({ provider: "openai" }));
+
+		expect(options(select("Model"))).toEqual([
+			["", "Recommended (GPT Transcribe)"],
+			["gpt-transcribe", "GPT Transcribe"],
+		]);
+		expect(select("Model").value).toBe("");
+
+		choose(select("Model"), "gpt-transcribe");
+
+		expect((await disk()).transcript.model).toBe("gpt-transcribe");
+	});
+
+	test("another provider brings its own models, on the recommended one", async () => {
+		const { select, disk } = open(transcript({ provider: "openai", model: "gpt-transcribe" }));
+
+		choose(select("Transcription provider"), "deepgram");
+
+		expect(options(select("Model"))).toEqual([
+			["", "Recommended (Nova-3)"],
+			["nova-3", "Nova-3"],
+		]);
+		expect(select("Model").value).toBe("");
+		expect((await disk()).transcript).toMatchObject({ provider: "deepgram", model: "" });
+	});
+
+	test("Speaker labels cannot be changed for a model without them, and the row says why", () => {
+		const { row, select, toggle } = open(
+			transcript({ provider: "openai", ...speakerLabels(true) }),
+		);
+		const description = () => row("Speaker labels").querySelector(".setting-item-description");
+
+		expect(toggle("Speaker labels")).toBeChecked();
+		expect(toggle("Speaker labels")).toBeDisabled();
+		expect(description()).toHaveTextContent("GPT Transcribe does not label speakers.");
+
+		choose(select("Transcription provider"), "deepgram");
+
+		expect(toggle("Speaker labels")).toBeEnabled();
+		expect(description()).toBeEmptyDOMElement();
+	});
+
+	test("Speaker labels saves the choice, and Speaker label format shows only while they are on", async () => {
+		const { row, toggle, disk } = open(
+			transcript({ provider: "deepgram", ...speakerLabels(false) }),
+		);
+		expect(row("Speaker label format")).not.toBeVisible();
+
+		toggle("Speaker labels").click();
+
+		expect(row("Speaker label format")).toBeVisible();
+		expect((await disk()).transcript.diarization.enabled).toBe(true);
+
+		toggle("Speaker labels").click();
+
+		expect(row("Speaker label format")).not.toBeVisible();
+		expect((await disk()).transcript.diarization.enabled).toBe(false);
+	});
+
+	test("a provider this version does not have stays selected under its stored name, with no key or model row", async () => {
+		const { row, select, writes } = open(
+			transcript({ provider: "openrouter", model: "x-ai/grok-stt-2.0" }),
+		);
+
+		expect(select("Transcription provider").value).toBe("openrouter");
+		expect(select("Transcription provider").selectedOptions[0]).toHaveTextContent("openrouter");
+		for (const name of ["OpenAI API key", "Deepgram API key", "Model"]) {
+			expect(row(name)).not.toBeVisible();
+		}
+		expect(await writes()).toBe(0);
+	});
+
+	test("a model this version does not have stays selected under its stored name", async () => {
+		const { select, writes } = open(transcript({ provider: "deepgram", model: "nova-9" }));
+
+		expect(options(select("Model"))).toEqual([
+			["", "Recommended (Nova-3)"],
+			["nova-3", "Nova-3"],
+			["nova-9", "nova-9"],
+		]);
+		expect(select("Model").value).toBe("nova-9");
+		expect(await writes()).toBe(0);
 	});
 });
 
@@ -544,12 +653,9 @@ describe("text fields", () => {
 		expect(field("Episode note path").value).toBe("Imported/{{title}}.md");
 	});
 
-	test("diarization controls stay locked during import and unlock with the imported applicability", async () => {
-		const { plugin, tab, select } = open({
-			transcript: {
-				...DEFAULT_SETTINGS.transcript,
-				diarization: { ...DEFAULT_SETTINGS.transcript.diarization, enabled: true },
-			},
+	test("Speaker labels stays locked during import and unlocks once it ends", async () => {
+		const { plugin, tab, toggle } = open({
+			transcript: { ...DEFAULT_SETTINGS.transcript, provider: "deepgram" },
 		});
 		let release!: () => void;
 		vi.spyOn(plugin, "saveSettingsStrict")
@@ -566,15 +672,15 @@ describe("text fields", () => {
 			}
 		).applyImportedSettings({ defaultPlaybackRate: 1.25 });
 		await Promise.resolve();
-		expect(select("Diarization provider").disabled).toBe(true);
+		expect(toggle("Speaker labels").disabled).toBe(true);
 
 		plugin.setAutoQueue(!plugin.settings.autoQueue);
-		const disabledDuringImport = select("Diarization provider").disabled;
+		const disabledDuringImport = toggle("Speaker labels").disabled;
 		release();
 		await importing;
 
 		expect(disabledDuringImport).toBe(true);
-		expect(select("Diarization provider").disabled).toBe(false);
+		expect(toggle("Speaker labels").disabled).toBe(false);
 	});
 
 	test("a number field applies a usable entry as typed and shows the saved value for one it cannot use once the edit completes", async () => {

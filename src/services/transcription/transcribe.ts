@@ -6,11 +6,11 @@ import { publicAudioUrl } from "./audioSource";
 import { type TranscribedPart, transcriptFromParts } from "./cues";
 import { createSender, failure, type FailureKind, TranscriptionError } from "./http";
 import type { AudioInput } from "./providers/types";
-import { PROVIDERS, providersWithSpeakers, type TranscriptionChoice } from "./registry";
+import { PROVIDERS, type ProviderChoice, providersWithSpeakers } from "./registry";
 import { splitAudio } from "./split";
 
 export interface TranscriptionJob {
-	readonly choice: TranscriptionChoice;
+	readonly choice: ProviderChoice;
 	readonly apiKey: string;
 	readonly episode: Episode;
 	/** Read to tell whether the provider may be given the episode's address. */
@@ -43,8 +43,9 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	const provider = PROVIDERS[choice.provider];
 	const context = { provider: choice.label, model: model.id, timeoutMs: provider.timeoutMs };
 	const send = createSender(provider.failure, context, signal);
+	const speakers = choice.speakers && model.speakers;
 	const transcribeOne = (audio: AudioInput) =>
-		provider.transcribe({ apiKey, model, audio }, send);
+		provider.transcribe({ apiKey, model, speakers, audio }, send);
 	const progress = `Transcribing with ${choice.label}...`;
 
 	const parts: TranscribedPart[] = [];
@@ -89,7 +90,7 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 		}
 	}
 
-	const content = transcriptFromParts(parts);
+	const content = transcriptFromParts(parts, speakers);
 	if (!content) throw lastFailure ?? failure("empty", context);
 
 	const warnings: string[] = [];
@@ -97,6 +98,11 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	if (failed > 0) {
 		warnings.push(
 			`Transcription saved, but ${failed} of ${parts.length} chunk(s) failed - look for [Error transcribing chunk N] markers and re-run after deleting the note to retry.`,
+		);
+	}
+	if (choice.unknownModel) {
+		warnings.push(
+			`This version of PodNotes has no ${choice.unknownModel} model, so ${choice.label} used ${model.label}.`,
 		);
 	}
 	if (choice.speakers && !model.speakers) {

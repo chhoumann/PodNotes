@@ -1,2 +1,7 @@
 export { transcribe } from "./transcribe";
-export { transcriptionChoice } from "./registry";
+export {
+	offeredModels,
+	PROVIDER_LABELS,
+	type ProviderChoice,
+	transcriptionChoice,
+} from "./registry";

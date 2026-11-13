@@ -25,6 +25,7 @@ import { attachDataFileWriter, dataFileText, manualClock } from "../tests/mocks/
 import { FakeDocument } from "../tests/mocks/fakeMedia";
 import released2200 from "../tests/fixtures/persistence/released-2.20.0.json";
 import released2211 from "../tests/fixtures/persistence/released-2.21.1.json";
+import released2240 from "../tests/fixtures/persistence/released-2.24.0.json";
 
 function memorySecretStorage(initial: Record<string, string> = {}) {
 	const values = new Map(Object.entries(initial));
@@ -401,11 +402,14 @@ it("takes in the file a save read back before one that lands after it", async ()
 	});
 });
 
+/** A released library with no API key and no speaker labels, as this version saves it. */
 function savedByThisVersion(released: Record<string, unknown>): Record<string, unknown> {
 	const data: Record<string, unknown> = {
+		libraryId: "",
 		...structuredClone(released),
 		headsetPreviousTrack: "captureTimestamp",
 		headsetNextTrack: "skipForward",
+		transcript: { ...(released.transcript as object), provider: "openai", model: "" },
 	};
 	delete data.feedCache;
 	return data;
@@ -964,6 +968,7 @@ describe("PodNotes persistence integration", () => {
 	it.each([
 		["2.20.0", released2200],
 		["2.21.1", released2211],
+		["2.24.0", released2240],
 	])("loads a %s library with a private feed unchanged", async (_version, released) => {
 		const id = "podnotes-feed-url-00000000-0000-4000-8000-000000000211";
 		const secretUrl = "http://podnotes.test:41627/private.xml?auth=released";
@@ -984,7 +989,6 @@ describe("PodNotes persistence integration", () => {
 		expect(saveData.mock.calls[0][0]).toEqual({
 			...savedByThisVersion(released),
 			defaultVolume: 0.4,
-			libraryId: "",
 		});
 		expect(values.get(id)).toBe(secretUrl);
 		expect(resolveFeedUrl(plugin.settings.savedFeeds["PRIV2 Both"], plugin.feedUrls)).toBe(

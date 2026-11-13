@@ -9,7 +9,10 @@ import {
 	parseImport,
 	serializeSettings,
 } from "./settingsTransfer";
+import { decodePodNotesData } from "./persistence/podNotesData";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
+import released2240 from "../tests/fixtures/persistence/released-2.24.0.json";
+import released2240Export from "../tests/fixtures/persistence/released-2.24.0-export.json";
 
 function makeSettings(overrides: Partial<IPodNotesSettings> = {}): IPodNotesSettings {
 	return structuredClone({ ...DEFAULT_SETTINGS, ...overrides });
@@ -830,27 +833,142 @@ describe("mergeImportedSettings", () => {
 		expect(merged.feedNote.template).toBe(DEFAULT_SETTINGS.feedNote.template);
 	});
 
-	it("clamps an imported invalid diarization provider and backfills its fields (#168)", () => {
+	it("keeps the speaker settings an import leaves out", () => {
 		const current = makeSettings();
+		current.transcript.diarization.speakerTemplate = "{{speaker}} said: ";
 
 		const merged = mergeImportedSettings(current, {
 			transcript: {
 				path: "t/{{title}}.md",
 				template: "{{transcript}}",
-				diarization: { enabled: true, provider: "macwhisper" },
+				diarization: { enabled: true },
 			} as never,
 		});
 
-		// Unknown provider falls back to the default; the missing speakerTemplate is
-		// backfilled — the import path converges with the load path (#168).
-		expect(merged.transcript.diarization.provider).toBe(
-			DEFAULT_SETTINGS.transcript.diarization.provider,
-		);
-		expect(merged.transcript.diarization.enabled).toBe(true);
-		expect(merged.transcript.diarization.speakerTemplate).toBe(
-			DEFAULT_SETTINGS.transcript.diarization.speakerTemplate,
-		);
+		expect(merged.transcript.diarization).toEqual({
+			enabled: true,
+			speakerTemplate: "{{speaker}} said: ",
+		});
 	});
+});
+
+describe("the transcription provider in a settings file", () => {
+	/** Settings as loaded from a 2.24.0 library that labels speakers with Deepgram. */
+	const releasedDeepgramLibrary = () =>
+		decodePodNotesData({
+			...structuredClone(released2240),
+			deepgramSecretId: "podnotes-deepgram-api-key",
+			transcript: {
+				...released2240.transcript,
+				diarization: {
+					...released2240.transcript.diarization,
+					enabled: true,
+					provider: "deepgram",
+				},
+			},
+		}).settings;
+	const releasedExport = (diarization: { enabled: boolean; provider: string }) =>
+		JSON.stringify({
+			...released2240Export,
+			settings: {
+				...released2240Export.settings,
+				transcript: {
+					...released2240Export.settings.transcript,
+					diarization: {
+						...released2240Export.settings.transcript.diarization,
+						...diarization,
+					},
+				},
+			},
+		});
+	const imported = (current: IPodNotesSettings, file: string) => {
+		const parsed = parseImport(file);
+		if (!parsed.ok) throw new Error(parsed.error);
+		return mergeImportedSettings(current, parsed.settings);
+	};
+
+	it("exports the provider and model, without the provider field of versions up to 2.24.0", () => {
+		const settings = releasedDeepgramLibrary();
+		settings.transcript.model = "nova-3";
+
+		const { settings: exported } = serializeSettings(settings, {}, "2.25.0", NOW, new Map());
+
+		expect(exported.transcript).toEqual({
+			path: released2240.transcript.path,
+			template: released2240.transcript.template,
+			provider: "deepgram",
+			model: "nova-3",
+			diarization: { enabled: true, speakerTemplate: "**{{speaker}}:** " },
+		});
+	});
+
+	it("imports the provider and model a file names, also ones this version does not have", () => {
+		const settings = makeSettings();
+		settings.transcript.provider = "openrouter";
+		settings.transcript.model = "x-ai/grok-stt-2.0";
+		const file = JSON.stringify(serializeSettings(settings, {}, "2.26.0", NOW, new Map()));
+
+		const { transcript } = imported(makeSettings(), file);
+
+		expect([transcript.provider, transcript.model]).toEqual([
+			"openrouter",
+			"x-ai/grok-stt-2.0",
+		]);
+	});
+
+	it("imports a 2.24.0 export that labels speakers with Deepgram as Deepgram, on its recommended model", () => {
+		const current = makeSettings();
+		current.transcript.provider = "openai";
+		current.transcript.model = "gpt-transcribe";
+
+		const { transcript } = imported(current, JSON.stringify(released2240Export));
+
+		expect(released2240Export.settings.transcript.diarization).toMatchObject({
+			enabled: true,
+			provider: "deepgram",
+		});
+		expect(transcript.provider).toBe("deepgram");
+		expect(transcript.model).toBe("");
+		expect(transcript.diarization.enabled).toBe(true);
+	});
+
+	it.each([
+		["speaker labels with OpenAI", { enabled: true, provider: "openai" }],
+		["Deepgram picked while speaker labels are off", { enabled: false, provider: "deepgram" }],
+	])("a 2.24.0 export with %s keeps this library's provider and model", (_state, diarization) => {
+		const current = makeSettings();
+		current.transcript.provider = "deepgram";
+		current.transcript.model = "nova-3";
+
+		const { transcript } = imported(current, releasedExport(diarization));
+
+		expect([transcript.provider, transcript.model]).toEqual(["deepgram", "nova-3"]);
+		expect(transcript.diarization.enabled).toBe(diarization.enabled);
+	});
+
+	it.each([
+		[
+			"this version's export",
+			() => serializeSettings(makeSettings(), {}, "2.25.0", NOW, new Map()),
+		],
+		[
+			"a 2.24.0 export that names OpenAI there",
+			() => JSON.parse(releasedExport({ enabled: false, provider: "openai" })),
+		],
+	])(
+		"importing %s leaves the provider field of versions up to 2.24.0 as the library stored it",
+		(_file, file) => {
+			const current = releasedDeepgramLibrary();
+
+			const { transcript } = imported(current, JSON.stringify(file()));
+
+			expect(transcript.diarization).toEqual({
+				enabled: false,
+				provider: "deepgram",
+				speakerTemplate: "**{{speaker}}:** ",
+			});
+		},
+	);
 });
 
 describe("describeSecrets (#168)", () => {

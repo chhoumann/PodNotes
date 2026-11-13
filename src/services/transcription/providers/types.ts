@@ -35,6 +35,8 @@ export type AudioInput = { readonly url: PublicAudioUrl } | { readonly file: Fil
 export interface PartInput {
 	readonly apiKey: string;
 	readonly model: ModelProfile;
+	/** Label who spoke. Only ever true for a model whose profile says `speakers`. */
+	readonly speakers: boolean;
 	/** A `url` only for a model whose profile says `url`. */
 	readonly audio: AudioInput;
 }

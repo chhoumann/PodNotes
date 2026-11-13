@@ -19,10 +19,10 @@ export const deepgram: Provider = {
 	],
 	timeoutMs: 30 * 60_000,
 
-	async transcribe({ apiKey, model, audio }, send) {
+	async transcribe({ apiKey, model, speakers, audio }, send) {
 		return parse(
 			await send({
-				url: `https://api.deepgram.com/v1/listen?model=${model.id}&diarize=true&punctuate=true&smart_format=true&utterances=true`,
+				url: `https://api.deepgram.com/v1/listen?model=${model.id}&diarize=${speakers}&punctuate=true&smart_format=true&utterances=true`,
 				headers: { Authorization: `Token ${apiKey}` },
 				body: "url" in audio ? { url: audio.url } : audio.file,
 			}),

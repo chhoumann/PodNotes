@@ -140,8 +140,8 @@ describe("TranscriptionService", () => {
 			]);
 		});
 
-		test("asks for the Deepgram key when speaker labels use Deepgram", async () => {
-			const service = new TranscriptionService(createMockPlugin({ speakers: "deepgram" }));
+		test("asks for the key of the provider the settings choose", async () => {
+			const service = new TranscriptionService(createMockPlugin({ provider: "deepgram" }));
 
 			await service.transcribeCurrentEpisode();
 
@@ -149,6 +149,37 @@ describe("TranscriptionService", () => {
 				"Select or create a Deepgram API key in the transcript settings on this device.",
 			]);
 		});
+
+		test.each([
+			[
+				"Transcribe current episode",
+				(service: TranscriptionService) => service.transcribeCurrentEpisode(),
+			],
+			[
+				"Transcribe current episode from audio",
+				(service: TranscriptionService) => service.transcribeCurrentEpisodeFromAudio(),
+			],
+		])(
+			"%s refuses a provider this version does not have, and sends nothing",
+			async (_command, run) => {
+				const plugin = createMockPlugin({
+					provider: "openrouter",
+					model: "x-ai/grok-stt-2.0",
+				});
+
+				await run(new TranscriptionService(plugin));
+
+				expect(noticeMessages).toEqual([
+					"This version of PodNotes cannot transcribe with openrouter. Update PodNotes, or choose another provider in the transcript settings.",
+				]);
+				expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+				expect(providerMock).not.toHaveBeenCalled();
+				expect(plugin.settings.transcript).toMatchObject({
+					provider: "openrouter",
+					model: "x-ai/grok-stt-2.0",
+				});
+			},
+		);
 
 		test("refuses an episode whose note is already at the transcript path", async () => {
 			const path = "Transcripts/Test Podcast/Test Episode.md";
@@ -273,7 +304,12 @@ describe("TranscriptionService", () => {
 			});
 			feeds.setSubscriptions({ [publicFeed.title]: publicFeed });
 			const service = new TranscriptionService(
-				createMockPlugin({ speakers: "deepgram", deepgramKey: "deepgram-key", feeds }),
+				createMockPlugin({
+					provider: "deepgram",
+					speakers: true,
+					deepgramKey: "deepgram-key",
+					feeds,
+				}),
 			);
 			const pending = (
 				service as unknown as {
@@ -296,7 +332,7 @@ describe("TranscriptionService", () => {
 			["OpenAI", {}, { text: "This must not be saved." }],
 			[
 				"Deepgram",
-				{ speakers: "deepgram", deepgramKey: "deepgram-key" } as const,
+				{ provider: "deepgram", speakers: true, deepgramKey: "deepgram-key" } as const,
 				deepgramAnswer([{ word: "Unsaved.", start: 0, end: 1, speaker: 0 }]),
 			],
 		])(
@@ -444,7 +480,7 @@ describe("TranscriptionService", () => {
 			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
 			try {
 				openAIReturns("Hello there. Hi!");
-				const plugin = createMockPlugin({ speakers: "openai" });
+				const plugin = createMockPlugin({ speakers: true });
 
 				await transcribe(plugin);
 				await vi.advanceTimersByTimeAsync(60 * 60_000);
@@ -462,6 +498,20 @@ describe("TranscriptionService", () => {
 				setMessage.mockRestore();
 				vi.useRealTimers();
 			}
+		});
+
+		test("a model this version does not have runs the recommended model, and the notice says so", async () => {
+			openAIReturns("Hello there.");
+			const plugin = createMockPlugin({ model: "gpt-transcribe-2" });
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"This version of PodNotes has no gpt-transcribe-2 model, so OpenAI used GPT Transcribe.",
+			);
+
+			const form = await sentForm(providerMock.mock.calls[0][0]);
+			expect(form.get("model")).toBe("gpt-transcribe");
+			expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there.");
+			expect(plugin.settings.transcript.model).toBe("gpt-transcribe-2");
 		});
 
 		test("reads the current OpenAI key for each transcription", async () => {
@@ -718,7 +768,8 @@ describe("TranscriptionService", () => {
 					),
 				);
 				const plugin = createMockPlugin({
-					speakers: "deepgram",
+					provider: "deepgram",
+					speakers: true,
 					deepgramKey: "deepgram-key",
 				});
 
@@ -752,7 +803,12 @@ describe("TranscriptionService", () => {
 				buffer: audio.buffer,
 				extension: "mp3",
 			});
-			return createMockPlugin({ speakers: "deepgram", deepgramKey: "deepgram-key", feeds });
+			return createMockPlugin({
+				provider: "deepgram",
+				speakers: true,
+				deepgramKey: "deepgram-key",
+				feeds,
+			});
 		};
 		const answers = deepgramAnswer([
 			{ word: "hello", punctuated_word: "Hello", start: 1.2, end: 1.5, speaker: 1 },
@@ -782,6 +838,21 @@ describe("TranscriptionService", () => {
 			expect(savedNote(plugin)).toBe(
 				`# Test Episode\n\n[00:00:01](${link("1.2")}) **1:** Hello there.\n\n` +
 					`[00:00:10](${link("10.16")}) **2:** Hi!`,
+			);
+		});
+
+		test("with speaker labels off asks for none, and the note names no speaker", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const plugin = createMockPlugin({ provider: "deepgram", deepgramKey: "deepgram-key" });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock.mock.calls[0][0].url).toBe(
+				LISTEN.replace("diarize=true", "diarize=false"),
+			);
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.\n\n` +
+					`[00:00:10](${link("10.16")}) Hi!`,
 			);
 		});
 

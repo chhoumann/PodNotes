@@ -45,6 +45,7 @@ import { exportOPML, importOPML } from "src/opml";
 import { isOption } from "src/persistence/codecUtils";
 import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import { privateFeedAddresses, protectPrivateFeeds } from "src/services/privateFeeds";
+import { offeredModels, PROVIDER_LABELS, transcriptionChoice } from "src/services/transcription";
 import {
 	describeSecrets,
 	mergeImportedSettings,
@@ -66,7 +67,6 @@ type SettingsControl =
 	| HTMLInputElement
 	| HTMLSelectElement
 	| HTMLTextAreaElement;
-type Diarization = IPodNotesSettings["transcript"]["diarization"];
 
 interface SecretReferenceSaveResult {
 	persistedId: string;
@@ -85,11 +85,6 @@ interface TextField {
 	max?: number;
 	preview?(value: string, setting: Setting): void;
 }
-
-const DIARIZATION_PROVIDERS = {
-	openai: "OpenAI (no speaker labels)",
-	deepgram: "Deepgram",
-};
 
 const TYPING_SAVE_DELAY_MS = 500;
 
@@ -259,7 +254,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	override getSettingDefinitions(): SettingDefinitionGroup[] {
-		const diarization = () => this.plugin.settings.transcript.diarization;
 		const pathPreview =
 			(engine: (template: string, episode: Episode) => string, suffix = "") =>
 			(value: string, setting: Setting) =>
@@ -349,7 +343,21 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				}),
 			]),
 			group("Transcripts", [
-				this.secretRow("openai"),
+				this.providerRow(),
+				...CREDENTIAL_KINDS.map((kind) => ({
+					...this.secretRow(kind),
+					visible: () => transcriptionChoice(this.plugin.settings).provider === kind,
+				})),
+				this.modelRow(),
+				this.speakerLabelsRow(),
+				{
+					...this.textRow(
+						"Speaker label format",
+						this.text((settings) => settings.transcript.diarization, "speakerTemplate"),
+						"{{speaker}} is the speaker's label.",
+					),
+					visible: () => this.plugin.settings.transcript.diarization.enabled,
+				},
 				this.textRow("Transcript path", {
 					...this.text((settings) => settings.transcript, "path"),
 					preview: pathPreview(FilePathTemplateEngine),
@@ -358,41 +366,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					...this.text((settings) => settings.transcript, "template"),
 					kind: "template",
 				}),
-				{
-					name: "Speaker diarization",
-					desc: "Label transcript turns by speaker.",
-					render: (setting) =>
-						void setting.addToggle((toggle) =>
-							toggle.setValue(diarization().enabled).onChange((on) => {
-								diarization().enabled = on;
-								this.changed();
-							}),
-						),
-				},
-				this.whenDiarizing(
-					this.dropdownRow(
-						"Diarization provider",
-						DIARIZATION_PROVIDERS,
-						() => diarization().provider,
-						(provider) => {
-							diarization().provider = provider;
-						},
-						"Deepgram needs its own API key.",
-					),
-					({ enabled }) => enabled,
-				),
-				this.whenDiarizing(
-					this.secretRow("deepgram"),
-					({ enabled, provider }) => enabled && provider === "deepgram",
-				),
-				this.whenDiarizing(
-					this.textRow(
-						"Speaker label format",
-						this.text((settings) => settings.transcript.diarization, "speakerTemplate"),
-						"{{speaker}} is the speaker's label.",
-					),
-					({ enabled }) => enabled,
-				),
 			]),
 			group("Downloads", [
 				this.textRow("Download path", {
@@ -672,24 +645,81 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 	}
 
-	private whenDiarizing(
-		row: SettingDefinitionRender,
-		applies: (diarization: Diarization) => boolean,
-	): SettingDefinitionRender {
+	private providerRow(): SettingDefinitionRender {
 		return {
-			...row,
-			render: (setting, settingGroup) => {
-				const end = row.render(setting, settingGroup);
-				const stop = this.follow(setting, ({ transcript }) => {
-					const off = !applies(transcript.diarization);
-					setting.setDisabled(off || this.settingsInteractionLockCount > 0);
-					// Obsidian dims only disabled action rows.
-					setting.settingEl.setCssStyles({ opacity: off ? "0.5" : "" });
+			name: "Transcription provider",
+			render: (setting) =>
+				void setting.addDropdown((dropdown) => {
+					const stored = this.plugin.settings.transcript.provider;
+					dropdown.addOptions(PROVIDER_LABELS);
+					// A provider a newer PodNotes stored stays selected, under its stored name.
+					if (!isOption(PROVIDER_LABELS, stored)) dropdown.addOption(stored, stored);
+					dropdown.setValue(stored).onChange((provider) => {
+						const { transcript } = this.plugin.settings;
+						transcript.provider = provider;
+						// The model belonged to the provider before.
+						transcript.model = "";
+						this.changed();
+						this.refreshDomState();
+					});
+				}),
+		};
+	}
+
+	private modelRow(): SettingDefinitionRender {
+		return {
+			name: "Model",
+			visible: () => transcriptionChoice(this.plugin.settings).provider !== undefined,
+			render: (setting) => {
+				let stop = () => {};
+				setting.addDropdown((dropdown) => {
+					dropdown.onChange((model) => {
+						this.plugin.settings.transcript.model = model;
+						this.changed();
+					});
+					stop = this.follow(setting, (settings) => {
+						const choice = transcriptionChoice(settings);
+						if (choice.provider === undefined) return;
+						const models = offeredModels(choice.provider);
+						dropdown.selectEl.empty();
+						dropdown.addOption("", `Recommended (${models[0].label})`);
+						for (const { id, label } of models) dropdown.addOption(id, label);
+						// A model a newer PodNotes stored stays selected, under its stored name.
+						if (choice.unknownModel) {
+							dropdown.addOption(choice.unknownModel, choice.unknownModel);
+						}
+						dropdown.setValue(settings.transcript.model);
+					});
 				});
-				return () => {
-					stop();
-					if (typeof end === "function") end();
-				};
+				return stop;
+			},
+		};
+	}
+
+	private speakerLabelsRow(): SettingDefinitionRender {
+		return {
+			name: "Speaker labels",
+			render: (setting) => {
+				let stop = () => {};
+				setting.addToggle((toggle) => {
+					toggle.onChange((on) => {
+						const { diarization } = this.plugin.settings.transcript;
+						if (diarization.enabled === on) return;
+						diarization.enabled = on;
+						this.changed();
+						this.refreshDomState();
+					});
+					stop = this.follow(setting, (settings) => {
+						const choice = transcriptionChoice(settings);
+						const unable = choice.provider !== undefined && !choice.model.speakers;
+						toggle.setValue(choice.speakers);
+						setting.setDesc(
+							unable ? `${choice.model.label} does not label speakers.` : "",
+						);
+						setting.setDisabled(unable || this.settingsInteractionLockCount > 0);
+					});
+				});
+				return stop;
 			},
 		};
 	}

@@ -121,67 +121,131 @@ describe("migrateNoteSettings (#160)", () => {
 	});
 });
 
-describe("migrateTranscriptSettings (#168)", () => {
+describe("migrateTranscriptSettings", () => {
 	const DEFAULT_DIARIZATION = DEFAULT_SETTINGS.transcript.diarization;
 
-	it("backfills diarization defaults onto a legacy { path, template } transcript", () => {
+	it("fills the speaker settings a { path, template } transcript lacks, with speaker labels off", () => {
 		const legacy = {
 			path: "transcripts/{{title}}.md",
 			template: "# {{title}}\n\n{{transcript}}",
 		};
 
-		expect(migrateTranscriptSettings(legacy)).toEqual({
+		expect(migrateTranscriptSettings(legacy, false)).toEqual({
+			...DEFAULT_SETTINGS.transcript,
 			path: legacy.path,
 			template: legacy.template,
-			diarization: DEFAULT_DIARIZATION,
+			diarization: { ...DEFAULT_DIARIZATION, enabled: false },
 		});
 	});
 
-	it("treats an absent transcript (undefined/null) as all defaults", () => {
-		expect(migrateTranscriptSettings(undefined)).toEqual(DEFAULT_SETTINGS.transcript);
-		expect(migrateTranscriptSettings(null)).toEqual(DEFAULT_SETTINGS.transcript);
+	it("treats an absent transcript (undefined/null) as the defaults with speaker labels off", () => {
+		const expected = {
+			...DEFAULT_SETTINGS.transcript,
+			diarization: { ...DEFAULT_DIARIZATION, enabled: false },
+		};
+
+		expect(migrateTranscriptSettings(undefined, false)).toEqual(expected);
+		expect(migrateTranscriptSettings(null, false)).toEqual(expected);
 	});
 
-	it("preserves a fully-configured diarization block verbatim", () => {
+	it("keeps a stored provider, model and speaker settings as they are", () => {
 		const stored = {
 			path: "t/{{title}}.md",
 			template: "{{transcript}}",
-			diarization: {
-				enabled: true,
-				provider: "deepgram" as const,
-				speakerTemplate: "Speaker {{speaker}}: ",
-			},
+			provider: "deepgram",
+			model: "nova-3",
+			diarization: { enabled: true, speakerTemplate: "Speaker {{speaker}}: " },
 		};
 
-		expect(migrateTranscriptSettings(stored)).toEqual(stored);
+		expect(migrateTranscriptSettings(stored, true)).toEqual(stored);
 	});
 
-	it("clamps a malformed/unknown provider back to the default", () => {
-		const result = migrateTranscriptSettings({
-			path: "t.md",
-			template: "{{transcript}}",
-			diarization: { enabled: true, provider: "macwhisper", speakerTemplate: "x" },
-		});
+	it.each([
+		[
+			"speaker labels with Deepgram",
+			{ enabled: true, provider: "deepgram" },
+			false,
+			"deepgram",
+		],
+		[
+			"speaker labels with Deepgram beside an OpenAI key",
+			{ enabled: true, provider: "deepgram" },
+			true,
+			"deepgram",
+		],
+		["speaker labels with OpenAI", { enabled: true, provider: "openai" }, false, "openai"],
+		["speaker labels with no provider stored", { enabled: true }, false, "openai"],
+		[
+			"an OpenAI key and no speaker labels",
+			{ enabled: false, provider: "openai" },
+			true,
+			"openai",
+		],
+		[
+			"Deepgram picked while speaker labels are off, beside an OpenAI key",
+			{ enabled: false, provider: "deepgram" },
+			true,
+			"openai",
+		],
+	])(
+		"a library saved up to 2.24.0 with %s goes on with the provider it ran with",
+		(_state, diarization, holdsOpenAIKey, provider) => {
+			const migrated = migrateTranscriptSettings({ diarization }, holdsOpenAIKey);
 
-		expect(result.diarization.provider).toBe(DEFAULT_DIARIZATION.provider);
-		expect(result.diarization.enabled).toBe(true);
+			expect(migrated.provider).toBe(provider);
+			expect(migrated.model).toBe("");
+			expect(migrated.diarization.enabled).toBe(diarization.enabled);
+		},
+	);
+
+	it.each([
+		["no key and no speaker labels", { enabled: false, provider: "openai" }],
+		["Deepgram picked while speaker labels are off", { enabled: false, provider: "deepgram" }],
+		["no speaker settings", undefined],
+	])(
+		"a library saved up to 2.24.0 with %s starts on the default provider",
+		(_state, diarization) => {
+			expect(migrateTranscriptSettings({ diarization }, false).provider).toBe(
+				DEFAULT_SETTINGS.transcript.provider,
+			);
+		},
+	);
+
+	it("keeps a provider and a model this version does not have", () => {
+		const migrated = migrateTranscriptSettings(
+			{ provider: "openrouter", model: "x-ai/grok-stt-2.0" },
+			true,
+		);
+
+		expect(migrated.provider).toBe("openrouter");
+		expect(migrated.model).toBe("x-ai/grok-stt-2.0");
 	});
 
 	it("coalesces non-boolean enabled / non-string fields to defaults", () => {
-		const result = migrateTranscriptSettings({
-			path: null,
-			template: undefined,
-			diarization: { enabled: "yes", provider: 5, speakerTemplate: 42 },
-		} as never);
+		const result = migrateTranscriptSettings(
+			{
+				path: null,
+				template: undefined,
+				provider: 7,
+				model: null,
+				diarization: { enabled: "yes", provider: 5, speakerTemplate: 42 },
+			},
+			false,
+		);
 
-		expect(result.path).toBe(DEFAULT_SETTINGS.transcript.path);
-		expect(result.template).toBe(DEFAULT_SETTINGS.transcript.template);
-		expect(result.diarization).toEqual(DEFAULT_DIARIZATION);
+		expect(result).toEqual({
+			...DEFAULT_SETTINGS.transcript,
+			diarization: { ...DEFAULT_DIARIZATION, enabled: false },
+		});
 	});
 
-	it("is idempotent on the current default", () => {
-		const once = migrateTranscriptSettings(DEFAULT_SETTINGS.transcript);
-		expect(migrateTranscriptSettings(once)).toEqual(DEFAULT_SETTINGS.transcript);
+	it("gives the same settings when run on its own result", () => {
+		const once = migrateTranscriptSettings(
+			{ diarization: { enabled: true, provider: "deepgram" } },
+			true,
+		);
+
+		expect(migrateTranscriptSettings(once, false)).toEqual(once);
 	});
 });
 

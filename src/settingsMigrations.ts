@@ -92,29 +92,33 @@ export function migrateNoteSettings(storedNote: StoredNote | null | undefined): 
 	return { path, template };
 }
 
+type StoredDiarization = {
+	enabled?: unknown;
+	provider?: unknown;
+	speakerTemplate?: unknown;
+};
+
 type StoredTranscript = {
-	path?: string | null;
-	template?: string | null;
-	diarization?: {
-		enabled?: unknown;
-		provider?: unknown;
-		speakerTemplate?: unknown;
-	} | null;
+	path?: unknown;
+	template?: unknown;
+	provider?: unknown;
+	model?: unknown;
+	diarization?: StoredDiarization | null;
 };
 
 /**
- * Backfill the transcript settings with the diarization defaults (issue #168).
+ * Fills the transcript settings a stored library lacks, keeping every value it has.
  *
- * An existing user who has only `{ path, template }` saved would otherwise get an
- * `undefined` `transcript.diarization` and crash where the service reads it. This deep-merges
- * the new nested default while preserving any path/template the user configured,
- * and clamps a malformed/unknown provider back to the default so a hand-edited or
- * corrupted `data.json` can't select a provider that does not exist.
+ * A library saved before `transcript.provider` existed (up to 2.24.0) gets the provider it
+ * ran with, from `releasedProvider`. A provider or model ID this version does not know is
+ * kept as it is: a newer version on another device wrote it, and clamping it here would
+ * save the clamp back over that device's choice.
  *
- * Pure (no Obsidian/UI deps) so the merge is unit-testable.
+ * Pure, so every device computes the same settings from the same file.
  */
 export function migrateTranscriptSettings(
 	storedTranscript: StoredTranscript | null | undefined,
+	holdsOpenAIKey: boolean,
 ): IPodNotesSettings["transcript"] {
 	const defaults = DEFAULT_SETTINGS.transcript;
 	const stored = storedTranscript ?? {};
@@ -123,12 +127,13 @@ export function migrateTranscriptSettings(
 	return {
 		path: typeof stored.path === "string" ? stored.path : defaults.path,
 		template: typeof stored.template === "string" ? stored.template : defaults.template,
+		provider:
+			typeof stored.provider === "string" && stored.provider
+				? stored.provider
+				: releasedProvider(storedDiarization, holdsOpenAIKey),
+		model: typeof stored.model === "string" ? stored.model : "",
 		diarization: {
-			enabled:
-				typeof storedDiarization.enabled === "boolean"
-					? storedDiarization.enabled
-					: defaults.diarization.enabled,
-			provider: sanitizeDiarizationProvider(storedDiarization.provider),
+			enabled: storedDiarization.enabled === true,
 			speakerTemplate:
 				typeof storedDiarization.speakerTemplate === "string"
 					? storedDiarization.speakerTemplate
@@ -137,12 +142,25 @@ export function migrateTranscriptSettings(
 	};
 }
 
-function sanitizeDiarizationProvider(
-	value: unknown,
-): IPodNotesSettings["transcript"]["diarization"]["provider"] {
-	return value === "openai" || value === "deepgram"
-		? value
-		: DEFAULT_SETTINGS.transcript.diarization.provider;
+/**
+ * An affirmative Deepgram choice in settings saved up to 2.24.0. Those versions sent audio
+ * to Deepgram only with speaker labels on, and to OpenAI otherwise.
+ */
+export function choseDeepgram(diarization: StoredDiarization): boolean {
+	return diarization.enabled === true && diarization.provider === "deepgram";
+}
+
+/**
+ * The provider a library saved up to 2.24.0 ran with. With speaker labels on that is the
+ * one it picked, whether or not its key is linked, so a missing key still asks for that
+ * provider's key. With them off audio went to OpenAI, so a library holding an OpenAI key
+ * stays there, and one that never set transcription up starts on the default.
+ */
+function releasedProvider(diarization: StoredDiarization, holdsOpenAIKey: boolean): string {
+	if (choseDeepgram(diarization)) return "deepgram";
+	return diarization.enabled === true || holdsOpenAIKey
+		? "openai"
+		: DEFAULT_SETTINGS.transcript.provider;
 }
 
 type StoredFeedNote = { path?: string | null; template?: string | null };

@@ -62,14 +62,20 @@ export interface IPodNotesSettings extends CredentialReferenceSettings {
 	transcript: {
 		path: string;
 		template: string;
+		/** The ID of the provider that transcribes audio. One this version does not have is kept as stored. */
+		provider: string;
+		/** The ID of one of the provider's models, or "" to follow the model PodNotes recommends. */
+		model: string;
 		/**
-		 * Speaker labels for transcripts. When `enabled` and `provider` is `"deepgram"`, audio
-		 * goes to Deepgram, which labels speakers. Otherwise it goes to OpenAI, which does not.
+		 * `enabled` asks for speaker labels, which the chosen model may not have.
 		 * `speakerTemplate` shapes each label, where `{{speaker}}` is the speaker's name.
+		 *
+		 * Versions up to 2.24.0 kept their provider here, as `provider`. It fills
+		 * `transcript.provider` in a library that has none, and stays in data.json as found
+		 * for the devices that still run those versions.
 		 */
 		diarization: {
 			enabled: boolean;
-			provider: "openai" | "deepgram";
 			speakerTemplate: string;
 		};
 	};

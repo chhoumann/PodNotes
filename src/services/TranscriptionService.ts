@@ -43,6 +43,11 @@ export function transcriptNote(
 
 const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 
+/** What the user reads when the settings name a provider this version does not have. */
+function unknownProvider(storedId: string): string {
+	return `This version of PodNotes cannot transcribe with ${storedId}. Update PodNotes, or choose another provider in the transcript settings.`;
+}
+
 function queueKey(episode: Episode): string {
 	return `${episode.podcastName}:${episode.title}`;
 }
@@ -99,17 +104,18 @@ export class TranscriptionService {
 			this.enqueue({ episode, source: { kind: "published", transcript } });
 		} else if (!paid) {
 			new Notice("No published transcript was found for this episode.");
-		} else if (this.hasRequiredKey()) {
-			this.enqueue({ episode, source: { kind: "audio" } });
 		} else {
-			this.noticeMissingKey();
+			const refusal = this.refusal();
+			if (refusal) new Notice(refusal);
+			else this.enqueue({ episode, source: { kind: "audio" } });
 		}
 	}
 
 	transcribeCurrentEpisodeFromAudio(): void {
 		if (this.disposed) return;
-		if (!this.hasRequiredKey()) {
-			this.noticeMissingKey();
+		const refusal = this.refusal();
+		if (refusal) {
+			new Notice(refusal);
 			return;
 		}
 		const episode = this.plugin.api.podcast;
@@ -120,19 +126,15 @@ export class TranscriptionService {
 		this.enqueue({ episode, source: { kind: "audio" } });
 	}
 
-	private hasRequiredKey(): boolean {
-		const { settings, credentials } = this.plugin;
-		return credentials.has(settings, transcriptionChoice(settings).provider);
-	}
-
-	private noticeMissingKey(): void {
+	/** Why audio cannot go to the chosen provider from this device, or undefined when it can. */
+	private refusal(): string | undefined {
 		const { settings, credentials } = this.plugin;
 		const { provider, label } = transcriptionChoice(settings);
-		new Notice(
-			credentials.status(settings, provider) === "missing"
-				? `The selected ${label} API key is not available on this device. Select or create it in the transcript settings.`
-				: `Select or create ${/^[AEIOU]/.test(label) ? "an" : "a"} ${label} API key in the transcript settings on this device.`,
-		);
+		if (provider === undefined) return unknownProvider(label);
+		if (credentials.has(settings, provider)) return undefined;
+		return credentials.status(settings, provider) === "missing"
+			? `The selected ${label} API key is not available on this device. Select or create it in the transcript settings.`
+			: `Select or create ${/^[AEIOU]/.test(label) ? "an" : "a"} ${label} API key in the transcript settings on this device.`;
 	}
 
 	private enqueue(job: TranscriptionJob): void {
@@ -255,6 +257,7 @@ export class TranscriptionService {
 	): Promise<Outcome> {
 		const { settings, credentials, feeds } = this.plugin;
 		const choice = transcriptionChoice(settings);
+		if (choice.provider === undefined) throw new Error(unknownProvider(choice.label));
 		const apiKey = credentials.get(settings, choice.provider);
 		if (!apiKey) throw new Error(`Missing ${choice.label} API key on this device.`);
 		const { content, warnings } = await this.waitForLifecycle(
@@ -284,7 +287,7 @@ export class TranscriptionService {
 	}
 
 	private publishedTranscriptFailure(error: PublishedTranscriptError): string {
-		if (!this.hasRequiredKey()) return error.message;
+		if (this.refusal()) return error.message;
 		const { label } = transcriptionChoice(this.plugin.settings);
 		return `${error.message} Run "${TRANSCRIBE_FROM_AUDIO_COMMAND}" to transcribe it with ${label} instead, which uses your API credit.`;
 	}

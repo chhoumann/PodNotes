@@ -11,6 +11,7 @@ import {
 	PodNotesDataError,
 } from "./podNotesData";
 import released2211 from "../../tests/fixtures/persistence/released-2.21.1.json";
+import released2240 from "../../tests/fixtures/persistence/released-2.24.0.json";
 
 const episodeDate = new Date("2024-03-01T10:05:03.000Z");
 
@@ -618,6 +619,178 @@ describe("PodNotes data schema", () => {
 			headsetPreviousTrack: "captureTimestamp",
 			headsetNextTrack: "skipForward",
 			libraryId: "",
+			transcript: { ...rest.transcript, provider: "openai", model: "" },
+		});
+	});
+
+	describe("the transcription provider of a library saved by 2.24.0", () => {
+		type Released = typeof released2240;
+		const DEEPGRAM_KEY = "podnotes-deepgram-api-key";
+		const OPENAI_KEY = "podnotes-openai-api-key";
+		/** The 2.24.0 library after its settings tab set these fields. */
+		const library = (
+			diarization: Partial<Released["transcript"]["diarization"]>,
+			keys: Partial<Pick<Released, "openAISecretId" | "deepgramSecretId">> = {},
+		) => ({
+			...structuredClone(released2240),
+			...keys,
+			transcript: {
+				...released2240.transcript,
+				diarization: { ...released2240.transcript.diarization, ...diarization },
+			},
+		});
+		const saved = (data: unknown) => {
+			const decoded = decodePodNotesData(data);
+			return JSON.parse(
+				JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields)),
+			);
+		};
+
+		it.each([
+			[
+				"speaker labels with Deepgram and its key linked",
+				library(
+					{ enabled: true, provider: "deepgram" },
+					{ deepgramSecretId: DEEPGRAM_KEY },
+				),
+				"deepgram",
+			],
+			[
+				"speaker labels with Deepgram and no Deepgram key, beside an OpenAI key",
+				library({ enabled: true, provider: "deepgram" }, { openAISecretId: OPENAI_KEY }),
+				"deepgram",
+			],
+			[
+				"speaker labels with Deepgram and no key at all",
+				library({ enabled: true, provider: "deepgram" }),
+				"deepgram",
+			],
+			[
+				"speaker labels with OpenAI",
+				library({ enabled: true, provider: "openai" }, { openAISecretId: OPENAI_KEY }),
+				"openai",
+			],
+			[
+				"speaker labels with OpenAI and no key",
+				library({ enabled: true, provider: "openai" }),
+				"openai",
+			],
+			[
+				"no speaker labels and an OpenAI key linked",
+				library({ enabled: false, provider: "openai" }, { openAISecretId: OPENAI_KEY }),
+				"openai",
+			],
+			[
+				"Deepgram picked while speaker labels are off, beside an OpenAI key",
+				library(
+					{ enabled: false, provider: "deepgram" },
+					{ openAISecretId: OPENAI_KEY, deepgramSecretId: DEEPGRAM_KEY },
+				),
+				"openai",
+			],
+		])(
+			"%s goes on with it, on the recommended model, without a repair",
+			(_state, data, provider) => {
+				const decoded = decodePodNotesData(structuredClone(data));
+
+				expect(decoded.settings.transcript.provider).toBe(provider);
+				expect(decoded.settings.transcript.model).toBe("");
+				expect(decoded.settings.transcript.diarization.enabled).toBe(
+					data.transcript.diarization.enabled,
+				);
+				expect(decoded.warnings).toEqual([]);
+				expect(decoded.changed).toBe(false);
+			},
+		);
+
+		it.each([
+			[
+				"speaker labels with Deepgram",
+				library(
+					{ enabled: true, provider: "deepgram" },
+					{ deepgramSecretId: DEEPGRAM_KEY },
+				),
+			],
+			[
+				"speaker labels with OpenAI",
+				library({ enabled: true, provider: "openai" }, { openAISecretId: OPENAI_KEY }),
+			],
+			["no key", structuredClone(released2240)],
+		])(
+			"a save of a library with %s adds the provider and model and changes nothing else",
+			(_state, data) => {
+				const decoded = decodePodNotesData(structuredClone(data));
+				const { provider, model } = decoded.settings.transcript;
+
+				const file = saved(data);
+
+				expect(file).toEqual({
+					...data,
+					transcript: { ...data.transcript, provider, model },
+				});
+				expect(JSON.stringify(file.transcript.diarization)).toBe(
+					JSON.stringify(data.transcript.diarization),
+				);
+				expect(saved(file)).toEqual(file);
+				expect(decodePodNotesData(file).changed).toBe(false);
+			},
+		);
+
+		it("a provider chosen since stays, whatever the 2.24.0 fields say", () => {
+			const data = library({ enabled: true, provider: "deepgram" });
+			const file = {
+				...data,
+				transcript: { ...data.transcript, provider: "openai", model: "gpt-transcribe" },
+			};
+
+			const decoded = decodePodNotesData(structuredClone(file));
+
+			expect(decoded.settings.transcript).toMatchObject({
+				provider: "openai",
+				model: "gpt-transcribe",
+			});
+			expect(saved(file)).toEqual(file);
+		});
+
+		it("a provider and a model this version does not have are kept as stored, without a repair", () => {
+			const file = {
+				...structuredClone(released2240),
+				transcript: {
+					...released2240.transcript,
+					provider: "openrouter",
+					model: "x-ai/grok-stt-2.0",
+				},
+			};
+
+			const decoded = decodePodNotesData(structuredClone(file));
+
+			expect(decoded.settings.transcript).toMatchObject({
+				provider: "openrouter",
+				model: "x-ai/grok-stt-2.0",
+			});
+			expect(decoded.warnings).toEqual([]);
+			expect(decoded.changed).toBe(false);
+			expect(saved(file)).toEqual(file);
+		});
+
+		it("a value 2.24.0 would have clamped in its provider field is left as found", () => {
+			const file = library({ enabled: true, provider: "elevenlabs" });
+
+			const decoded = decodePodNotesData(structuredClone(file));
+
+			expect(decoded.warnings).toEqual([]);
+			expect(saved(file).transcript.diarization).toEqual(file.transcript.diarization);
+		});
+
+		it("a library from before 2.19.0 that holds its OpenAI key as text stays on OpenAI", () => {
+			const decoded = decodePodNotesData({
+				schemaVersion: 1,
+				openAIApiKey: "sk-legacy",
+				transcript: { path: "t/{{title}}.md", template: "{{transcript}}" },
+			});
+
+			expect(decoded.settings.transcript.provider).toBe("openai");
+			expect(decoded.settings.transcript.diarization.enabled).toBe(false);
 		});
 	});
 

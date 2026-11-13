@@ -70,6 +70,7 @@ export function decodeSettings(
 		sanitizeEpisodeListLimit,
 		warnings,
 	);
+	const secretIds = decodeSecretIds(root, warnings);
 
 	return {
 		savedFeeds: decodeSavedFeeds(root.savedFeeds, warnings),
@@ -124,8 +125,12 @@ export function decodeSettings(
 		feedNote: decodeFeedNote(root.feedNote, warnings),
 		download: decodeDownload(root.download, warnings),
 		downloadedEpisodes: decodeDownloadedEpisodes(root.downloadedEpisodes, warnings),
-		...decodeSecretIds(root, warnings),
-		transcript: decodeTranscript(root.transcript, warnings),
+		...secretIds,
+		transcript: decodeTranscript(
+			root.transcript,
+			warnings,
+			Boolean(secretIds.openAISecretId) || holdsPlaintextOpenAIKey(root, sourceVersion),
+		),
 	};
 }
 
@@ -207,30 +212,34 @@ function decodeDownload(value: unknown, warnings: Set<string>): IPodNotesSetting
 	};
 }
 
-function decodeTranscript(value: unknown, warnings: Set<string>): IPodNotesSettings["transcript"] {
+/** Versions before 2.19.0 stored the OpenAI key itself, which startup moves into SecretStorage. */
+function holdsPlaintextOpenAIKey(
+	root: UnknownRecord,
+	sourceVersion: PodNotesDataSchemaVersion,
+): boolean {
+	return (
+		sourceVersion < 2 &&
+		typeof root.openAIApiKey === "string" &&
+		root.openAIApiKey.trim() !== ""
+	);
+}
+
+function decodeTranscript(
+	value: unknown,
+	warnings: Set<string>,
+	holdsOpenAIKey: boolean,
+): IPodNotesSettings["transcript"] {
 	const record = optionalRecord(value, warnings, "transcript");
 	const diarization = optionalRecord(record.diarization, warnings, "transcript.diarization");
-	const migrated = migrateTranscriptSettings({
-		path: record.path as string | null | undefined,
-		template: record.template as string | null | undefined,
-		diarization,
-	});
+	const migrated = migrateTranscriptSettings({ ...record, diarization }, holdsOpenAIKey);
 
-	if (record.path !== undefined && typeof record.path !== "string") {
-		warn(warnings, "transcript.path", "expected a string");
-	}
-	if (record.template !== undefined && typeof record.template !== "string") {
-		warn(warnings, "transcript.template", "expected a string");
+	for (const key of ["path", "template", "provider", "model"]) {
+		if (record[key] !== undefined && typeof record[key] !== "string") {
+			warn(warnings, `transcript.${key}`, "expected a string");
+		}
 	}
 	if (diarization.enabled !== undefined && typeof diarization.enabled !== "boolean") {
 		warn(warnings, "transcript.diarization.enabled", "expected a boolean");
-	}
-	if (
-		diarization.provider !== undefined &&
-		diarization.provider !== "openai" &&
-		diarization.provider !== "deepgram"
-	) {
-		warn(warnings, "transcript.diarization.provider", "unknown provider");
 	}
 	if (
 		diarization.speakerTemplate !== undefined &&
