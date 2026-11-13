@@ -113,6 +113,12 @@ function savedFeedRepository(
 	return feeds;
 }
 
+const publicFeed: PodcastFeed = {
+	title: "Test Podcast",
+	url: "https://example.com/feed.xml",
+	artworkUrl: "",
+};
+
 /** An hour of MP3 in 3.2 MB, which OpenAI takes in two parts of 26 min 48 s. */
 const twoPartStream = MP3_STREAMS.mpeg25At8Kbps;
 const twoPartFrames = 44_668;
@@ -221,6 +227,68 @@ describe("TranscriptionService", () => {
 			audioRequest.resolve({ buffer: new ArrayBuffer(1024), extension: "mp3" });
 			await new Promise((resolve) => setTimeout(resolve, 0));
 
+			expect(providerMock).not.toHaveBeenCalled();
+		});
+
+		test("decodes no audio that arrives after unload", async () => {
+			const audioRequest = deferred<{ buffer: ArrayBuffer; extension: string }>();
+			getEpisodeAudioBufferMock.mockReturnValue(audioRequest.promise);
+			// A count, because a failed assertion on the call would print its 24 MB argument.
+			let decodes = 0;
+			vi.stubGlobal(
+				"AudioContext",
+				class {
+					async decodeAudioData(): Promise<never> {
+						decodes++;
+						throw new Error("Unsupported codec");
+					}
+					async close(): Promise<void> {}
+				},
+			);
+			const service = new TranscriptionService(createMockPlugin());
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
+				}
+			).transcribeEpisode(audioJob);
+			await vi.waitFor(() => expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce());
+
+			service.dispose();
+			await pending;
+			// Over OpenAI's size cap, so it would be decoded into WAV parts.
+			audioRequest.resolve({ buffer: new ArrayBuffer(24_000_001), extension: "ogg" });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(decodes).toBe(0);
+		});
+
+		test("downloads no audio when unloaded while it looks the episode up in its feed", async () => {
+			const lookup = deferred<ReturnType<typeof feedDocument>>();
+			const load = vi.fn(() => lookup.promise);
+			const feeds = new FeedRepository({
+				load,
+				resolveUrl: ({ url }) => url,
+				storage: new MemoryStorage(),
+				now: Date.now,
+			});
+			feeds.setSubscriptions({ [publicFeed.title]: publicFeed });
+			const service = new TranscriptionService(
+				createMockPlugin({ speakers: "deepgram", deepgramKey: "deepgram-key", feeds }),
+			);
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
+				}
+			).transcribeEpisode(audioJob);
+			await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+
+			service.dispose();
+			await pending;
+			// The feed does not list the episode, so its audio would be uploaded.
+			lookup.resolve(feedDocument(publicFeed.title, []));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 			expect(providerMock).not.toHaveBeenCalled();
 		});
 
@@ -557,6 +625,12 @@ describe("TranscriptionService", () => {
 				() => Promise.reject(new TypeError("Failed to fetch")),
 				"Could not reach OpenAI. Check your connection.",
 			],
+			[
+				"429 that asks to wait over a minute",
+				1,
+				async () => rateLimited({ "retry-after": "61" }),
+				"OpenAI is limiting how fast your key may be used. Try again in a few minutes.",
+			],
 			["timeout", 1, neverAnswers, "OpenAI did not answer within 10 minutes."],
 		])("%s saves no note after %i of 3 sends", async (_name, sends, respond, shown) => {
 			providerMock.mockImplementation(respond);
@@ -571,7 +645,6 @@ describe("TranscriptionService", () => {
 		test.each<[name: string, failure: () => Response, waitMs: number]>([
 			["429 with Retry-After", () => rateLimited({ "retry-after": "4" }), 4000],
 			["429 with retry-after-ms", () => rateLimited({ "retry-after-ms": "1500" }), 1500],
-			["429 asking for over a minute", () => rateLimited({ "retry-after": "61" }), 1000],
 			["503", () => new Response("", { status: 503 }), 1000],
 		])("%s is sent again after the wait and the note is saved", async (_name, fail, waitMs) => {
 			vi.useFakeTimers();
@@ -673,11 +746,6 @@ describe("TranscriptionService", () => {
 	});
 
 	describe("a Deepgram transcript", () => {
-		const publicFeed: PodcastFeed = {
-			title: "Test Podcast",
-			url: "https://example.com/feed.xml",
-			artworkUrl: "",
-		};
 		const audio = new Uint8Array(2048).map((_, index) => (index * 31) % 251);
 		const useDeepgram = (feeds?: ReturnType<typeof savedFeedRepository>) => {
 			getEpisodeAudioBufferMock.mockResolvedValue({

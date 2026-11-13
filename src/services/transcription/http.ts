@@ -82,8 +82,9 @@ function kindOf(status: number): FailureKind {
 /**
  * A request goes out at most three times, and only again after a failure another send can
  * get past. A timeout is not one: Obsidian's requestUrl cannot cancel, so the provider may
- * still be working, and a second send would be billed too. requestUrl is used because
- * providers do not allow Obsidian's origin, which rules out `fetch`.
+ * still be working, and a second send would be billed too. Neither is an answer that asks
+ * to wait over a minute, because a sooner send would only upload the audio to be refused.
+ * requestUrl is used because providers do not allow Obsidian's origin, which rules out `fetch`.
  */
 export function createSender(
 	readFailure: Provider["failure"],
@@ -134,7 +135,8 @@ export function createSender(
 				const again =
 					error instanceof TranscriptionError &&
 					RETRIED.has(error.kind) &&
-					sends < MAX_SENDS;
+					sends < MAX_SENDS &&
+					(error.retryAfterMs ?? 0) <= MAX_SERVER_RETRY_DELAY_MS;
 				if (!again) throw error;
 				await wait(error.retryAfterMs ?? 1000 * sends, signal);
 			}
@@ -161,7 +163,7 @@ async function encode({
 	};
 }
 
-/** The server's `Retry-After`, when it asks for a minute or less. */
+/** How long the server's `Retry-After` asks to wait. */
 function serverRetryDelayMs(headers: Headers): number | undefined {
 	let delayMs = parseFloat(headers.get("retry-after-ms") ?? "");
 	const retryAfter = headers.get("retry-after");
@@ -169,7 +171,7 @@ function serverRetryDelayMs(headers: Headers): number | undefined {
 		const seconds = parseFloat(retryAfter);
 		delayMs = Number.isNaN(seconds) ? Date.parse(retryAfter) - Date.now() : seconds * 1000;
 	}
-	return delayMs >= 0 && delayMs <= MAX_SERVER_RETRY_DELAY_MS ? delayMs : undefined;
+	return delayMs >= 0 ? delayMs : undefined;
 }
 
 function wait(delayMs: number, signal: AbortSignal): Promise<void> {

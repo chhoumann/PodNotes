@@ -62,8 +62,12 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	}
 
 	if (parts.length === 0) {
+		// An aborted job downloads and decodes nothing more. The sender refuses its requests.
+		if (signal.aborted) throw signal.reason;
 		onProgress("Fetching episode audio...");
-		const files = await splitAudio(await getEpisodeAudioBuffer(episode), {
+		const audio = await getEpisodeAudioBuffer(episode);
+		if (signal.aborted) throw signal.reason;
+		const files = await splitAudio(audio, {
 			maxBytes: model.maxUploadBytes,
 			maxSeconds: model.maxSeconds,
 		});
