@@ -82,7 +82,7 @@ interface TextField {
 }
 
 const DIARIZATION_PROVIDERS = {
-	openai: "OpenAI (gpt-4o-transcribe-diarize)",
+	openai: "OpenAI (no speaker labels)",
 	deepgram: "Deepgram",
 };
 
@@ -376,7 +376,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						(provider) => {
 							diarization().provider = provider;
 						},
-						"Deepgram needs its own API key and keeps speaker labels consistent across long episodes.",
+						"Deepgram needs its own API key.",
 					),
 					({ enabled }) => enabled,
 				),

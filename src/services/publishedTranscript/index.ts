@@ -10,6 +10,7 @@ import {
 } from "src/utility/privateFeedUrl";
 import { type ParsedTranscript, parseTranscript, type TranscriptFormat } from "./parse";
 
+export type { ParsedTranscript } from "./parse";
 export { renderTranscriptBody, timestampStyle } from "./render";
 
 const FORMATS_BY_PREFERENCE: ReadonlyArray<readonly [TranscriptFormat, readonly string[]]> = [

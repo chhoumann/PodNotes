@@ -632,7 +632,7 @@ describe("resilience journeys", () => {
 			sandbox.path("Transcripts/Journey Transcribe/Spoken Episode.md"),
 		);
 		expect(transcript).toMatch(
-			/^# Spoken Episode\n\nPodcast: Journey Transcribe\nDate: .+\n\nJourney transcript opens here\.\n\nIt closes with a second sentence\.$/,
+			/^# Spoken Episode\n\nPodcast: Journey Transcribe\nDate: .+\n\nJourney transcript opens here\. It closes with a second sentence\.$/,
 		);
 
 		const uploads = await transcriptionUploads(obsidian);
@@ -640,7 +640,9 @@ describe("resilience journeys", () => {
 		expect(uploads[0]).toMatchObject({
 			method: "POST",
 			authorization: "Bearer sk-journey-test",
-			model: "whisper-1",
+			model: "gpt-transcribe",
+			responseFormat: "json",
+			fileName: "audio.wav",
 			fileBytes: server.audio(show, spoken).length,
 			riffWave: true,
 			sha256: createHash("sha256").update(server.audio(show, spoken)).digest("hex"),
@@ -801,7 +803,7 @@ describe("resilience journeys", () => {
 		await sandbox.waitForExists(notePath, { timeoutMs: 30_000 });
 
 		expect(await readVaultText(obsidian, sandbox.path(notePath))).toMatch(
-			/^# Spoken Episode\n\nPodcast: Journey Missing Captions\nDate: .+\n\nPaid transcript opens here\.\n\nIt closes here\.$/,
+			/^# Spoken Episode\n\nPodcast: Journey Missing Captions\nDate: .+\n\nPaid transcript opens here\. It closes here\.$/,
 		);
 		const uploads = await transcriptionUploads(obsidian);
 		expect(uploads).toHaveLength(1);
