@@ -1,5 +1,5 @@
 import { toError } from "../../utility/toError";
-import { createTranscription, retryDelayMs } from "../openaiTranscription";
+import { canRetry, createTranscription, retryDelayMs } from "../openaiTranscription";
 import { type DiarizedSegment, OPENAI_DIARIZE_MODEL } from "./types";
 import { parseOpenAIDiarizedSegments } from "./segments";
 
@@ -62,9 +62,9 @@ export async function diarizeWithOpenAI(opts: {
 			} catch (error) {
 				throwIfAborted(signal);
 				attempt++;
-				if (attempt >= maxRetries) {
+				if (attempt >= maxRetries || !canRetry(error)) {
 					console.error(
-						`OpenAI diarization failed for chunk ${index + 1} after ${maxRetries} attempts:`,
+						`OpenAI diarization failed for chunk ${index + 1} after ${attempt} attempt(s):`,
 						error,
 					);
 					failedChunks++;

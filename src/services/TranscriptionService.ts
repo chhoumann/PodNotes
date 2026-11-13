@@ -10,7 +10,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { openNote } from "src/ui/openNote";
 import { TimerNotice } from "src/ui/TimerNotice";
 import { createChunkFiles, getMimeType } from "./audioChunker";
-import { createTranscription, retryDelayMs } from "./openaiTranscription";
+import { canRetry, createTranscription, retryDelayMs } from "./openaiTranscription";
 import {
 	type DiarizationAudio,
 	type DiarizationProviderId,
@@ -450,9 +450,9 @@ export class TranscriptionService {
 					} catch (error) {
 						this.assertActive();
 						retries++;
-						if (retries >= MAX_RETRIES) {
+						if (retries >= MAX_RETRIES || !canRetry(error)) {
 							console.error(
-								`Failed to transcribe chunk ${index} after ${MAX_RETRIES} attempts:`,
+								`Failed to transcribe chunk ${index} after ${retries} attempt(s):`,
 								error,
 							);
 							transcriptions[index] = chunkErrorPlaceholder(index);
@@ -460,6 +460,7 @@ export class TranscriptionService {
 							lastError = error;
 							completedChunks++;
 							updateProgress();
+							break;
 						} else {
 							await this.waitForRetry(retryDelayMs(error, 1000 * retries));
 						}

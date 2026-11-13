@@ -98,7 +98,7 @@ describe("createTranscription", () => {
 		async (_name, respond, message) => {
 			openAIMock.mockImplementation(respond);
 
-			await expect(send()).rejects.toThrow(new Error(message));
+			await expect(send()).rejects.toHaveProperty("message", message);
 			expect(openAIMock).toHaveBeenCalledOnce();
 		},
 	);

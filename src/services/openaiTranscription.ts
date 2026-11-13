@@ -43,6 +43,7 @@ export async function createTranscription(
 	if (response.status < 200 || response.status >= 300) {
 		throw new OpenAIStatusError(
 			`${response.status} ${errorDetail(text) || "status code (no body)"}`,
+			response.status,
 			serverRetryDelayMs(new Headers(response.headers)),
 		);
 	}
@@ -53,9 +54,17 @@ export function retryDelayMs(error: unknown, fallbackMs: number): number {
 	return (error instanceof OpenAIStatusError ? error.retryAfterMs : undefined) ?? fallbackMs;
 }
 
+/** Whether sending the request again can succeed. Statuses follow openai-node's retry rule. */
+export function canRetry(error: unknown): boolean {
+	if (!(error instanceof OpenAIStatusError)) return true;
+	const { status } = error;
+	return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
 class OpenAIStatusError extends Error {
 	constructor(
 		message: string,
+		readonly status: number,
 		readonly retryAfterMs: number | undefined,
 	) {
 		super(message);
