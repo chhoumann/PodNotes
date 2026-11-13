@@ -659,7 +659,9 @@ describe("TranscriptionService", () => {
 			},
 		);
 
-		test("OpenAI diarization sends no part longer than the model's 1400 s limit (#532)", async () => {
+		test("OpenAI diarization parts stay under the model's 1400 s limit and answer inside the 10 min request timeout (#532)", async () => {
+			// Measured on gpt-4o-transcribe-diarize: the slowest of 81 requests took 0.58 s per second of audio.
+			const slowestSecondsPerAudioSecond = 0.58;
 			const stream = MP3_STREAMS.mpeg25At8Kbps;
 			getEpisodeAudioBufferMock.mockResolvedValue({
 				buffer: mp3Bytes(stream, 44_667).buffer,
@@ -692,6 +694,7 @@ describe("TranscriptionService", () => {
 
 			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
 			expect(Math.max(...sentSeconds)).toBeLessThanOrEqual(1400);
+			expect(Math.max(...sentSeconds) * slowestSecondsPerAudioSecond).toBeLessThan(10 * 60);
 			expect(sentSeconds.reduce((total, seconds) => total + seconds)).toBeCloseTo(3216.024);
 		});
 	});

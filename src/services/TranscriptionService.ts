@@ -17,7 +17,7 @@ import {
 	type DiarizedSegment,
 	diarizeWithDeepgram,
 	diarizeWithOpenAI,
-	OPENAI_DIARIZE_MAX_SECONDS,
+	OPENAI_DIARIZE_PART_SECONDS,
 	renderDiarizedTranscript,
 	requiredTranscriptionKeyPresent,
 } from "./diarization";
@@ -383,12 +383,12 @@ export class TranscriptionService {
 			return segments;
 		}
 
-		// OpenAI diarization takes Whisper's ~20 MB chunks, also capped at the
-		// model's 1400 s. Speaker labels can differ across chunks on a long episode.
+		// OpenAI diarization takes Whisper's ~20 MB chunks, capped at 600 s so each request
+		// answers inside the timeout. Speaker labels can differ across chunks.
 		updateNotice("Creating audio chunks...");
 		const chunkFiles = await createChunkFiles({
 			...audio,
-			maxSeconds: OPENAI_DIARIZE_MAX_SECONDS,
+			maxSeconds: OPENAI_DIARIZE_PART_SECONDS,
 		});
 		this.assertActive();
 		const segments = await diarizeWithOpenAI({

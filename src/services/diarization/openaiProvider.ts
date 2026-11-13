@@ -7,7 +7,7 @@ import { parseOpenAIDiarizedSegments } from "./segments";
  * Diarize with OpenAI's `gpt-4o-transcribe-diarize` model (issue #168).
  *
  * Each chunk stays under ~20 MB (a conservative margin under OpenAI's 25 MB
- * request cap) and the model's 1400 s. `chunking_strategy: "auto"` is required
+ * request cap) and 600 s, which the model answers inside the 10 min timeout. `chunking_strategy: "auto"` is required
  * for audio longer than 30s and lets the model segment within a chunk.
  * Speaker labels are assigned per request, so on a multi-chunk (long) episode
  * the labels can differ across chunk boundaries — the caller documents this; a

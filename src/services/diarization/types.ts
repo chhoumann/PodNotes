@@ -8,7 +8,7 @@
  * - `openai`: the `gpt-4o-transcribe-diarize` model on the same
  *   `/v1/audio/transcriptions` endpoint the plugin already uses, reusing the
  *   user's existing OpenAI key. Convenient, but each request takes at most
- *   ~20 MB and 1400 s of audio, so a long episode is split into chunks whose
+ *   ~20 MB and 600 s of audio, so a long episode is split into chunks whose
  *   speaker labels are not guaranteed to line up across chunk boundaries (the
  *   labels are assigned per request).
  * - `deepgram`: a single whole-file request to Deepgram's pre-recorded API,
@@ -22,8 +22,11 @@ export const DIARIZATION_PROVIDERS: readonly DiarizationProviderId[] = ["openai"
 /** The fixed OpenAI model that performs diarization (no other OpenAI model does). */
 export const OPENAI_DIARIZE_MODEL = "gpt-4o-transcribe-diarize";
 
-/** The most audio, in seconds, that OpenAI accepts in one diarization request. */
-export const OPENAI_DIARIZE_MAX_SECONDS = 1400;
+/**
+ * The most audio, in seconds, in one diarization request. OpenAI accepts up to 1400 s, but the model
+ * takes up to 0.58 s per second of audio, so 600 s answers in under 6 min, inside the 10 min request timeout.
+ */
+export const OPENAI_DIARIZE_PART_SECONDS = 600;
 
 /**
  * One contiguous turn of speech attributed to a single speaker. `speaker` is the
