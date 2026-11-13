@@ -12,6 +12,10 @@ in `src/main.ts`; public API code is under `src/API/`; parsing code is under
 are under `src/utility/`; Svelte UI lives under `src/ui/`; shared types live in
 `src/types/`.
 
+Audio transcription lives in `src/services/transcription/`. A provider is one
+file under `providers/` and one line in `registry.ts`. Code outside the folder
+imports only its `index.ts`, which `npm run lint` enforces.
+
 Tests are colocated with source files as `*.test.ts` where practical. Shared
 test mocks live in `tests/mocks/`. User-facing documentation lives in `docs/`
 and is built with Astro Starlight.
