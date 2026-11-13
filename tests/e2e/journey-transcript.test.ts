@@ -817,21 +817,21 @@ describe("transcript journeys", () => {
 	test("an episode whose feed publishes no transcript offers the paid transcription", async () => {
 		const { obsidian } = getContext();
 		await openTranscript(PLAIN);
-		const transcribe = panelButton("Transcribe with OpenAI");
+		const transcribe = panelButton("Transcribe with ElevenLabs");
 		await waitUntilShown(obsidian, transcribe);
 
 		expect(
 			await obsidian.dev.evalJson<string>(
 				`(${transcribe.elements})[0].closest(".pn-panel").textContent.replace(/\\s+/g, " ").trim()`,
 			),
-		).toBe("No transcript in this feed Transcribe with OpenAI Paid");
+		).toBe("No transcript in this feed Transcribe with ElevenLabs Paid");
 		expect(await isDisabled(obsidian, transcribe)).toBe(false);
 	}, 60_000);
 
 	test("offline, the paid transcription is disabled", async () => {
 		const { obsidian } = getContext();
 		await openTranscript(PLAIN);
-		const transcribe = panelButton("Transcribe with OpenAI");
+		const transcribe = panelButton("Transcribe with ElevenLabs");
 		await waitUntilShown(obsidian, transcribe);
 
 		await setOffline(obsidian, true);
