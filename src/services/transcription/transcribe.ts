@@ -41,11 +41,11 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	const { choice, apiKey, episode, signal, onProgress } = job;
 	const { model } = choice;
 	const provider = PROVIDERS[choice.provider];
-	const context = { provider: provider.label, model: model.id, timeoutMs: provider.timeoutMs };
+	const context = { provider: choice.label, model: model.id, timeoutMs: provider.timeoutMs };
 	const send = createSender(provider.failure, context, signal);
 	const transcribeOne = (audio: AudioInput) =>
 		provider.transcribe({ apiKey, model, audio }, send);
-	const progress = `Transcribing with ${provider.label}...`;
+	const progress = `Transcribing with ${choice.label}...`;
 
 	const parts: TranscribedPart[] = [];
 	let lastFailure: TranscriptionError | undefined;
@@ -101,7 +101,7 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	}
 	if (choice.speakers && !model.speakers) {
 		warnings.push(
-			`Saved without speaker labels, because ${provider.label} does not label speakers. These providers do: ${providersWithSpeakers().join(", ")}.`,
+			`Saved without speaker labels, because ${choice.label} does not label speakers. These providers do: ${providersWithSpeakers().join(", ")}.`,
 		);
 	}
 	return { content, warnings };

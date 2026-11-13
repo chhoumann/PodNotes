@@ -1,10 +1,13 @@
-import type { CredentialKind } from "src/types/Credentials";
+import { CREDENTIAL_KINDS, CREDENTIALS, type CredentialKind } from "src/types/Credentials";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { deepgram } from "./providers/deepgram";
 import { openai } from "./providers/openai";
 import type { ModelProfile, Provider } from "./providers/types";
 
-/** A provider is keyed by the API key it needs, so one without a credential kind fails the build. */
+/**
+ * A provider is keyed by the API key it needs, so one without a credential kind fails the
+ * build. Its name is that key's.
+ */
 export const PROVIDERS = { openai, deepgram } satisfies Record<CredentialKind, Provider>;
 
 export interface TranscriptionChoice {
@@ -25,13 +28,17 @@ export function transcriptionChoice({
 }: Pick<IPodNotesSettings, "transcript">): TranscriptionChoice {
 	const { enabled, provider: selected } = transcript.diarization;
 	const provider = enabled && selected === "deepgram" ? "deepgram" : "openai";
-	const { label, models } = PROVIDERS[provider];
-	return { provider, label, model: models[0], speakers: enabled };
+	return {
+		provider,
+		label: CREDENTIALS[provider].label,
+		model: PROVIDERS[provider].models[0],
+		speakers: enabled,
+	};
 }
 
 /** The names of the providers that label speakers. */
 export function providersWithSpeakers(): string[] {
-	return Object.values(PROVIDERS)
-		.filter(({ models }) => models[0].speakers)
-		.map(({ label }) => label);
+	return CREDENTIAL_KINDS.filter((kind) => PROVIDERS[kind].models[0].speakers).map(
+		(kind) => CREDENTIALS[kind].label,
+	);
 }
