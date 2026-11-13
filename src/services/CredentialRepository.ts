@@ -1,33 +1,17 @@
 import type { SecretStorage } from "obsidian";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import {
+	CREDENTIAL_KINDS,
+	CREDENTIALS,
 	isPodNotesSecretId,
 	isValidSecretId,
+	secretBaseId,
 	type CredentialKind,
 	type CredentialReferences,
 	type CredentialValues,
 } from "src/types/Credentials";
 
-export type { CredentialKind, CredentialReferences, CredentialValues } from "src/types/Credentials";
-
 export type CredentialStatus = "unconfigured" | "available" | "missing";
-
-const CREDENTIALS: Record<
-	CredentialKind,
-	{
-		baseId: string;
-		settingsKey: keyof Pick<IPodNotesSettings, "openAISecretId" | "deepgramSecretId">;
-	}
-> = {
-	openai: {
-		baseId: "podnotes-openai-api-key",
-		settingsKey: "openAISecretId",
-	},
-	deepgram: {
-		baseId: "podnotes-deepgram-api-key",
-		settingsKey: "deepgramSecretId",
-	},
-};
 
 /**
  * Narrow boundary around Obsidian's vault-local SecretStorage.
@@ -64,25 +48,18 @@ export class CredentialRepository {
 		settings: IPodNotesSettings,
 		options: { requireConfigured?: boolean } = {},
 	): CredentialValues {
-		const openAI = this.get(settings, "openai");
-		const deepgram = this.get(settings, "deepgram");
-		if (options.requireConfigured) {
-			if (settings.openAISecretId.trim() && !openAI) {
+		const values: CredentialValues = {};
+		for (const kind of CREDENTIAL_KINDS) {
+			const { settingsKey, exportKey, label } = CREDENTIALS[kind];
+			const value = this.get(settings, kind);
+			if (options.requireConfigured && settings[settingsKey].trim() && !value) {
 				throw new Error(
-					"The selected OpenAI API key is not available in SecretStorage on this device.",
+					`The selected ${label} API key is not available in SecretStorage on this device.`,
 				);
 			}
-			if (settings.deepgramSecretId.trim() && !deepgram) {
-				throw new Error(
-					"The selected Deepgram API key is not available in SecretStorage on this device.",
-				);
-			}
+			if (value) values[exportKey] = value;
 		}
-
-		return {
-			...(openAI ? { openAI } : {}),
-			...(deepgram ? { deepgram } : {}),
-		};
+		return values;
 	}
 
 	/**
@@ -92,12 +69,11 @@ export class CredentialRepository {
 	 */
 	storeValues(values: CredentialValues): CredentialReferences {
 		const references: CredentialReferences = {};
-		const openAI = values.openAI?.trim();
-		const deepgram = values.deepgram?.trim();
-
-		if (openAI) references.openAISecretId = this.store("openai", openAI);
-		if (deepgram) references.deepgramSecretId = this.store("deepgram", deepgram);
-
+		for (const kind of CREDENTIAL_KINDS) {
+			const { settingsKey, exportKey } = CREDENTIALS[kind];
+			const value = values[exportKey]?.trim();
+			if (value) references[settingsKey] = this.store(kind, value);
+		}
 		return references;
 	}
 
@@ -122,7 +98,7 @@ export class CredentialRepository {
 	}
 
 	private store(kind: CredentialKind, secret: string): string {
-		const { baseId } = CREDENTIALS[kind];
+		const baseId = secretBaseId(kind);
 
 		for (let suffix = 1; suffix <= 10_000; suffix++) {
 			const id = suffix === 1 ? baseId : `${baseId}-${suffix}`;

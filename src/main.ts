@@ -54,6 +54,7 @@ import {
 	WriteRefusedError,
 } from "./persistence/writer";
 import { CredentialRepository } from "./services/CredentialRepository";
+import { CREDENTIAL_KINDS, CREDENTIALS } from "./types/Credentials";
 import { FeedUrlRepository } from "./services/FeedUrlRepository";
 import { privateFeedAddresses, protectPrivateFeeds, resolveFeedUrl } from "./services/privateFeeds";
 import { redactPrivateFeedAddresses } from "./utility/privateFeedUrl";
@@ -370,6 +371,9 @@ export default class PodNotes extends Plugin implements IPodNotes {
 				decoded.retiredPlaintextPresent ||
 				movedFeeds
 			) {
+				const migratedProviders = CREDENTIAL_KINDS.filter(
+					(kind) => decoded.legacySecrets[CREDENTIALS[kind].exportKey],
+				).map((kind) => CREDENTIALS[kind].label);
 				// SecretStorage writes are synchronous. Store every legacy value and
 				// verify it first, then write the v2 snapshot directly because the normal
 				// save queue intentionally stays dormant until onload finishes. A v2 file
@@ -388,15 +392,8 @@ export default class PodNotes extends Plugin implements IPodNotes {
 					);
 					if (written.kind !== "verified") throw this.writeFailure();
 				} catch (error) {
-					throw new PodNotesSchemaMigrationError(
-						error,
-						Boolean(decoded.legacySecrets.openAI || decoded.legacySecrets.deepgram),
-					);
+					throw new PodNotesSchemaMigrationError(error, migratedProviders.length > 0);
 				}
-				const migratedProviders = [
-					decoded.legacySecrets.openAI ? "OpenAI" : null,
-					decoded.legacySecrets.deepgram ? "Deepgram" : null,
-				].filter((provider): provider is string => provider !== null);
 				if (migratedProviders.length > 0) {
 					new Notice(
 						`Moved your ${migratedProviders.join(" and ")} API ${migratedProviders.length === 1 ? "key" : "keys"} into Obsidian SecretStorage.`,
