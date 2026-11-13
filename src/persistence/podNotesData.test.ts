@@ -467,6 +467,25 @@ describe("PodNotes data schema", () => {
 		);
 	});
 
+	it("keeps every numbered SecretStorage ID that released versions accept", () => {
+		const accepted = decodePodNotesData({
+			schemaVersion: 2,
+			openAISecretId: "podnotes-openai-api-key-1",
+			deepgramSecretId: "podnotes-deepgram-api-key-10",
+		});
+		const rejected = decodePodNotesData({
+			schemaVersion: 2,
+			openAISecretId: "podnotes-openai-api-key-0",
+			deepgramSecretId: "podnotes-deepgram-api-key-01",
+		});
+
+		expect(accepted.settings.openAISecretId).toBe("podnotes-openai-api-key-1");
+		expect(accepted.settings.deepgramSecretId).toBe("podnotes-deepgram-api-key-10");
+		expect(accepted.warnings).toEqual([]);
+		expect(rejected.settings.openAISecretId).toBe("");
+		expect(rejected.settings.deepgramSecretId).toBe("");
+	});
+
 	it("salvages valid fields and only drops individually invalid collection entries", () => {
 		const validEpisode = {
 			...episode("Valid"),

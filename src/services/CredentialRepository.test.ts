@@ -178,4 +178,21 @@ describe("CredentialRepository", () => {
 			}),
 		).toThrow("not available in SecretStorage on this device");
 	});
+
+	it("names the provider whose configured key is missing from an explicit export", () => {
+		const { api } = storage({ "podnotes-openai-api-key": "sk" });
+		const repository = new CredentialRepository(api);
+
+		expect(() =>
+			repository.exportValues(
+				settings({
+					openAISecretId: "podnotes-openai-api-key",
+					deepgramSecretId: "podnotes-deepgram-api-key",
+				}),
+				{ requireConfigured: true },
+			),
+		).toThrow(
+			"The selected Deepgram API key is not available in SecretStorage on this device.",
+		);
+	});
 });
