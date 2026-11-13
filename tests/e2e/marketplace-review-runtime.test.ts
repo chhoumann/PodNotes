@@ -382,7 +382,7 @@ describe("marketplace review runtime paths", () => {
 		const { obsidian } = getContext();
 		const result = await evalJsonAsync<{
 			lifecycle: { isError: boolean; message: string };
-			retryAbort: { isError: boolean; message: string };
+			abort: { isError: boolean; message: string };
 			save: { isError: boolean; message: string };
 		}>(
 			obsidian,
@@ -410,23 +410,23 @@ describe("marketplace review runtime paths", () => {
 					lifecycle = { isError: error instanceof Error, message: error?.message ?? String(error) };
 				}
 
-				const retryPromise = service.waitForRetry(10_000);
+				const pending = service.waitForLifecycle(new Promise(() => {}));
 				service.lifetimeAbortController.abort("raw abort reason");
-				let retryAbort;
+				let abort;
 				try {
-					await retryPromise;
-					retryAbort = { isError: false, message: "resolved" };
+					await pending;
+					abort = { isError: false, message: "resolved" };
 				} catch (error) {
-					retryAbort = { isError: error instanceof Error, message: error?.message ?? String(error) };
+					abort = { isError: error instanceof Error, message: error?.message ?? String(error) };
 				}
 
-				return { lifecycle, retryAbort, save };
+				return { abort, lifecycle, save };
 			})()`,
 		);
 
 		expect(result).toEqual({
 			lifecycle: { isError: true, message: "PodNotes transcription failed." },
-			retryAbort: { isError: true, message: "PodNotes transcription was aborted." },
+			abort: { isError: true, message: "PodNotes transcription was aborted." },
 			save: { isError: true, message: "PodNotes could not save its settings." },
 		});
 		expect(await obsidian.dev.runtimeErrors()).toEqual([]);
