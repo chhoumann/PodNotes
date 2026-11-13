@@ -409,7 +409,8 @@ function savedByThisVersion(released: Record<string, unknown>): Record<string, u
 		...structuredClone(released),
 		headsetPreviousTrack: "captureTimestamp",
 		headsetNextTrack: "skipForward",
-		transcript: { ...(released.transcript as object), provider: "openai", model: "" },
+		elevenLabsSecretId: "",
+		transcript: { ...(released.transcript as object), provider: "elevenlabs", model: "" },
 	};
 	delete data.feedCache;
 	return data;

@@ -411,7 +411,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				),
 				{
 					name: "Include API keys",
-					desc: "Adds this device's OpenAI and Deepgram keys to the file as plain text. The file is in your vault, so it may sync to other devices and other plugins can read it.",
+					desc: "Adds this device's API keys to the file as plain text. The file is in your vault, so it may sync to other devices and other plugins can read it.",
 					render: (setting) => {
 						this.includeApiKeys = false;
 						setting.addToggle((toggle) =>

@@ -2,6 +2,7 @@ import { isOption } from "src/persistence/codecUtils";
 import { CREDENTIALS, type CredentialKind } from "src/types/Credentials";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { deepgram } from "./providers/deepgram";
+import { elevenlabs } from "./providers/elevenlabs";
 import { openai } from "./providers/openai";
 import type { ModelProfile, Provider } from "./providers/types";
 
@@ -9,7 +10,11 @@ import type { ModelProfile, Provider } from "./providers/types";
  * In the order the settings offer them. A provider is keyed by the API key it needs, so
  * one without a credential kind fails the build. Its name is that key's.
  */
-export const PROVIDERS = { deepgram, openai } satisfies Record<CredentialKind, Provider>;
+export const PROVIDERS = {
+	elevenlabs,
+	deepgram,
+	openai,
+} satisfies Record<CredentialKind, Provider>;
 
 const PROVIDER_IDS = Object.keys(PROVIDERS) as CredentialKind[];
 

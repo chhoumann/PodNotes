@@ -184,6 +184,7 @@ describe("sections", () => {
 					"Transcription provider",
 					"OpenAI API key",
 					"Deepgram API key",
+					"ElevenLabs API key",
 					"Model",
 					"Speaker labels",
 					"Speaker label format",
@@ -229,9 +230,10 @@ describe("sections", () => {
 			"Podcast note path",
 			"Podcast note template",
 			"Transcription provider",
-			"OpenAI API key",
+			"ElevenLabs API key",
 			"Model",
 			"Speaker labels",
+			"Speaker label format",
 			"Transcript path",
 			"Transcript template",
 			"Download path",
@@ -249,7 +251,10 @@ describe("sections", () => {
 	});
 
 	test("an API key's button keeps its own words and adds its row's name", () => {
-		const { plugin, tab, row, select } = open({ openAISecretId: "podnotes-openai-api-key" });
+		const { plugin, tab, row, select } = open({
+			transcript: { ...DEFAULT_SETTINGS.transcript, provider: "openai" },
+			openAISecretId: "podnotes-openai-api-key",
+		});
 		plugin.app.secretStorage.setSecret("podnotes-openai-api-key", "sk-test");
 		tab.display();
 
@@ -274,6 +279,21 @@ describe("Transcripts", () => {
 	const options = (select: HTMLSelectElement) =>
 		[...select.options].map(({ value, text }) => [value, text]);
 
+	test("a new install is on ElevenLabs Scribe v3 with speaker labels on", () => {
+		const { row, select, toggle } = open();
+
+		expect(select("Transcription provider").value).toBe("elevenlabs");
+		expect(row("ElevenLabs API key")).toBeVisible();
+		expect(options(select("Model"))).toEqual([
+			["", "Recommended (Scribe v3)"],
+			["scribe_v3", "Scribe v3"],
+		]);
+		expect(select("Model").value).toBe("");
+		expect(toggle("Speaker labels")).toBeChecked();
+		expect(toggle("Speaker labels")).toBeEnabled();
+		expect(row("Speaker label format")).toBeVisible();
+	});
+
 	test("offers each provider and shows the API key row of the one chosen, keeping the other keys", async () => {
 		const { row, select, disk } = open({
 			...transcript({ provider: "openai" }),
@@ -281,6 +301,7 @@ describe("Transcripts", () => {
 		});
 
 		expect(options(select("Transcription provider"))).toEqual([
+			["elevenlabs", "ElevenLabs"],
 			["deepgram", "Deepgram"],
 			["openai", "OpenAI"],
 		]);
@@ -365,7 +386,7 @@ describe("Transcripts", () => {
 
 		expect(select("Transcription provider").value).toBe("openrouter");
 		expect(select("Transcription provider").selectedOptions[0]).toHaveTextContent("openrouter");
-		for (const name of ["OpenAI API key", "Deepgram API key", "Model"]) {
+		for (const name of ["OpenAI API key", "Deepgram API key", "ElevenLabs API key", "Model"]) {
 			expect(row(name)).not.toBeVisible();
 		}
 		expect(await writes()).toBe(0);

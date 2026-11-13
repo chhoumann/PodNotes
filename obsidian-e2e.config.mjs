@@ -114,13 +114,14 @@ export default {
 		},
 		openAISecretId: "",
 		deepgramSecretId: "",
+		elevenLabsSecretId: "",
 		transcript: {
 			path: "transcripts/{{podcast}}/{{title}}.md",
 			template: "# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
-			provider: "openai",
+			provider: "elevenlabs",
 			model: "",
 			diarization: {
-				enabled: false,
+				enabled: true,
 				speakerTemplate: "**{{speaker}}:** ",
 			},
 		},

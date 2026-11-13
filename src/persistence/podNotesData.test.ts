@@ -391,10 +391,12 @@ describe("PodNotes data schema", () => {
 		expect(decoded.settings.skipBackwardLength).toBe(DEFAULT_SETTINGS.skipBackwardLength);
 		expect(decoded.settings.download.path).toBe(DEFAULT_SETTINGS.download.path);
 		expect(decoded.settings.note).toEqual(DEFAULT_SETTINGS.note);
-		expect(decoded.settings.transcript).toMatchObject({
+		expect(decoded.settings.transcript).toEqual({
 			path: "custom.md",
 			template: "{{transcript}}",
-			diarization: DEFAULT_SETTINGS.transcript.diarization,
+			provider: "elevenlabs",
+			model: "",
+			diarization: { enabled: false, speakerTemplate: "**{{speaker}}:** " },
 		});
 		expect(decoded.settings.feedNote).toEqual({
 			path: "custom-feed.md",
@@ -619,7 +621,8 @@ describe("PodNotes data schema", () => {
 			headsetPreviousTrack: "captureTimestamp",
 			headsetNextTrack: "skipForward",
 			libraryId: "",
-			transcript: { ...rest.transcript, provider: "openai", model: "" },
+			elevenLabsSecretId: "",
+			transcript: { ...rest.transcript, provider: "elevenlabs", model: "" },
 		});
 	});
 
@@ -645,6 +648,8 @@ describe("PodNotes data schema", () => {
 				JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields)),
 			);
 		};
+		/** The root field this version adds to a 2.24.0 library when it saves. */
+		const ADDED = { elevenLabsSecretId: "" };
 
 		it.each([
 			[
@@ -688,8 +693,17 @@ describe("PodNotes data schema", () => {
 				),
 				"openai",
 			],
+			["no speaker labels and no key", structuredClone(released2240), "elevenlabs"],
+			[
+				"Deepgram picked while speaker labels are off, with only its key",
+				library(
+					{ enabled: false, provider: "deepgram" },
+					{ deepgramSecretId: DEEPGRAM_KEY },
+				),
+				"elevenlabs",
+			],
 		])(
-			"%s goes on with it, on the recommended model, without a repair",
+			"%s gets its provider, on the recommended model, without a repair",
 			(_state, data, provider) => {
 				const decoded = decodePodNotesData(structuredClone(data));
 
@@ -717,7 +731,7 @@ describe("PodNotes data schema", () => {
 			],
 			["no key", structuredClone(released2240)],
 		])(
-			"a save of a library with %s adds the provider and model and changes nothing else",
+			"a save of a library with %s adds the provider, the model and an empty ElevenLabs key reference, and changes nothing else",
 			(_state, data) => {
 				const decoded = decodePodNotesData(structuredClone(data));
 				const { provider, model } = decoded.settings.transcript;
@@ -726,6 +740,7 @@ describe("PodNotes data schema", () => {
 
 				expect(file).toEqual({
 					...data,
+					...ADDED,
 					transcript: { ...data.transcript, provider, model },
 				});
 				expect(JSON.stringify(file.transcript.diarization)).toBe(
@@ -749,7 +764,7 @@ describe("PodNotes data schema", () => {
 				provider: "openai",
 				model: "gpt-transcribe",
 			});
-			expect(saved(file)).toEqual(file);
+			expect(saved(file)).toEqual({ ...file, ...ADDED });
 		});
 
 		it("a provider and a model this version does not have are kept as stored, without a repair", () => {
@@ -770,7 +785,7 @@ describe("PodNotes data schema", () => {
 			});
 			expect(decoded.warnings).toEqual([]);
 			expect(decoded.changed).toBe(false);
-			expect(saved(file)).toEqual(file);
+			expect(saved(file)).toEqual({ ...file, ...ADDED });
 		});
 
 		it("a value 2.24.0 would have clamped in its provider field is left as found", () => {
@@ -783,14 +798,41 @@ describe("PodNotes data schema", () => {
 		});
 
 		it("a library from before 2.19.0 that holds its OpenAI key as text stays on OpenAI", () => {
-			const decoded = decodePodNotesData({
+			const legacy = {
 				schemaVersion: 1,
-				openAIApiKey: "sk-legacy",
 				transcript: { path: "t/{{title}}.md", template: "{{transcript}}" },
+			};
+			const providerOf = (data: unknown) =>
+				decodePodNotesData(data).settings.transcript.provider;
+
+			expect(providerOf({ ...legacy, openAIApiKey: "sk-legacy" })).toBe("openai");
+			expect(providerOf(legacy)).toBe("elevenlabs");
+		});
+
+		it("a library saved before speaker labels existed keeps them off", () => {
+			const { path, template } = released2240.transcript;
+
+			const decoded = decodePodNotesData({
+				...structuredClone(released2240),
+				transcript: { path, template },
 			});
 
-			expect(decoded.settings.transcript.provider).toBe("openai");
-			expect(decoded.settings.transcript.diarization.enabled).toBe(false);
+			expect(decoded.settings.transcript.diarization).toEqual({
+				enabled: false,
+				speakerTemplate: "**{{speaker}}:** ",
+			});
+			expect(decoded.warnings).toEqual([]);
+		});
+
+		it("a new install starts on ElevenLabs with speaker labels on", () => {
+			const { transcript, elevenLabsSecretId } = decodePodNotesData(undefined).settings;
+
+			expect(transcript).toMatchObject({
+				provider: "elevenlabs",
+				model: "",
+				diarization: { enabled: true },
+			});
+			expect(elevenLabsSecretId).toBe("");
 		});
 	});
 

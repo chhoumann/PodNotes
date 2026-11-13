@@ -133,6 +133,8 @@ export function migrateTranscriptSettings(
 				: releasedProvider(storedDiarization, holdsOpenAIKey),
 		model: typeof stored.model === "string" ? stored.model : "",
 		diarization: {
+			// Only a new install starts with speaker labels on. A library that never
+			// stored the choice ran without them.
 			enabled: storedDiarization.enabled === true,
 			speakerTemplate:
 				typeof storedDiarization.speakerTemplate === "string"

@@ -486,7 +486,7 @@ describe("TranscriptionService", () => {
 				await vi.advanceTimersByTimeAsync(60 * 60_000);
 
 				expect(String(setMessage.mock.calls.at(-1)?.[0])).toMatch(
-					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: Deepgram\.$/,
+					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram\.$/,
 				);
 				expect(hide).not.toHaveBeenCalled();
 				expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
@@ -841,7 +841,7 @@ describe("TranscriptionService", () => {
 			);
 		});
 
-		test("with speaker labels off asks for none, and the note names no speaker", async () => {
+		test("with speaker labels off asks Deepgram for none, and the note names no speaker", async () => {
 			providerMock.mockImplementation(async () => Response.json(answers));
 			const plugin = createMockPlugin({ provider: "deepgram", deepgramKey: "deepgram-key" });
 
@@ -1018,6 +1018,207 @@ describe("TranscriptionService", () => {
 
 			expect(plugin.app.vault.create).not.toHaveBeenCalled();
 		});
+	});
+
+	describe("an ElevenLabs transcript", () => {
+		const audio = new Uint8Array(2048).map((_, index) => (index * 17) % 239);
+		const useElevenLabs = (
+			overrides: { speakers?: boolean; feeds?: ReturnType<typeof savedFeedRepository> } = {},
+		) => {
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: audio.buffer,
+				extension: "mp3",
+			});
+			return createMockPlugin({
+				provider: "elevenlabs",
+				elevenLabsKey: "elevenlabs-key",
+				speakers: true,
+				...overrides,
+			});
+		};
+		const word = (text: string, start: number, end: number, speaker: string | null) => ({
+			text,
+			type: "word",
+			start,
+			end,
+			speaker_id: speaker,
+			logprob: -0.1,
+		});
+		const spacing = (start: number, end: number, speaker: string | null) => ({
+			text: " ",
+			type: "spacing",
+			start,
+			end,
+			speaker_id: speaker,
+		});
+		const answers = {
+			language_code: "eng",
+			text: "Hello there. (laughter) Hi!",
+			words: [
+				word("Hello", 1.2, 1.5, "speaker_1"),
+				spacing(1.5, 1.5, "speaker_1"),
+				word("there.", 1.5, 1.9, "speaker_1"),
+				{
+					text: "(laughter)",
+					type: "audio_event",
+					start: 2,
+					end: 3,
+					speaker_id: "speaker_1",
+				},
+				word("Hi!", 10.16, 10.5, "speaker_0"),
+			],
+		};
+		const failed = (status: number, code: string, message: string) =>
+			Response.json({ detail: { code, message } }, { status });
+		const link = (time: string) =>
+			`obsidian://podnotes?episodeName=Test%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&time=${time}`;
+		const fields = async (request: RequestUrlParam) =>
+			Object.fromEntries(
+				[...(await sentForm(request))].filter(([, value]) => typeof value === "string"),
+			);
+		const uploaded = async (request: RequestUrlParam) =>
+			new Uint8Array(await (await sentFile(request)).arrayBuffer());
+
+		test("has a timestamp on each paragraph, numbers the speakers in the order they first speak, and leaves out sounds", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const plugin = useElevenLabs();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) **1:** Hello there.\n\n` +
+					`[00:00:10](${link("10.16")}) **2:** Hi!`,
+			);
+		});
+
+		test("a public episode goes by its address in one request without a file, and its audio is never loaded", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const plugin = useElevenLabs({ feeds: savedFeedRepository(publicFeed, [mockEpisode]) });
+
+			await transcribe(plugin);
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(providerMock).toHaveBeenCalledOnce();
+			const [request] = providerMock.mock.calls[0];
+			expect(request.url).toBe("https://api.elevenlabs.io/v1/speech-to-text");
+			expect(request.method).toBe("POST");
+			expect(request.headers).toEqual({ "xi-api-key": "elevenlabs-key" });
+			expect([...(await sentForm(request))]).toEqual([
+				["model_id", "scribe_v3"],
+				["diarize", "true"],
+				["timestamps_granularity", "word"],
+				["tag_audio_events", "false"],
+				["source_url", "https://example.com/episode.mp3"],
+			]);
+			expect(savedNote(plugin)).toContain("**1:** Hello there.");
+		});
+
+		test("a private feed's episode is uploaded to ElevenLabs, and no request holds its address or its feed's", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const secretFeed = "https://private.example.com/feed/SUBSCRIBER-TOKEN.rss";
+			const privateFeed: PodcastFeed = {
+				...publicFeed,
+				url: privateFeedPlaceholder("Test Podcast"),
+				urlSecretId: "podnotes-feed-url-1",
+			};
+			const episode: Episode = {
+				...mockEpisode,
+				streamUrl: "https://cdn.example.com/SUBSCRIBER-TOKEN/episode.mp3",
+				feedUrl: privateFeed.url,
+			};
+			const plugin = useElevenLabs({
+				feeds: savedFeedRepository(privateFeed, [episode], () => secretFeed),
+			});
+
+			await transcribe(plugin, episode);
+
+			expect(providerMock).toHaveBeenCalledOnce();
+			const [request] = providerMock.mock.calls[0];
+			expect(await fields(request)).toEqual({
+				model_id: "scribe_v3",
+				diarize: "true",
+				timestamps_granularity: "word",
+				tag_audio_events: "false",
+			});
+			expect(await uploaded(request)).toEqual(audio);
+			for (const secret of ["SUBSCRIBER-TOKEN", "cdn.example.com", "private.example.com"]) {
+				expect(sentText(request)).not.toContain(secret);
+			}
+		});
+
+		test("with speaker labels off asks ElevenLabs for none, and the note names no speaker", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const plugin = useElevenLabs({ speakers: false });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect((await fields(providerMock.mock.calls[0][0])).diarize).toBe("false");
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.\n\n` +
+					`[00:00:10](${link("10.16")}) Hi!`,
+			);
+		});
+
+		test("an address ElevenLabs could not download is followed by one upload", async () => {
+			providerMock.mockImplementation(async (request) =>
+				(await sentForm(request)).has("source_url")
+					? failed(
+							400,
+							"bad_request",
+							"Failed to download the file from the provided URL: https://example.com/episode.mp3",
+						)
+					: Response.json(answers),
+			);
+			const plugin = useElevenLabs({ feeds: savedFeedRepository(publicFeed, [mockEpisode]) });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock).toHaveBeenCalledTimes(2);
+			expect(await uploaded(providerMock.mock.calls[1][0])).toEqual(audio);
+			expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce();
+			expect(savedNote(plugin)).toContain("**1:** Hello there.");
+		});
+
+		test.each([
+			[
+				"a rejected key",
+				failed(401, "unauthorized", "Invalid API key"),
+				"ElevenLabs rejected the API key. Check it in the transcript settings.",
+			],
+			[
+				"a used-up quota",
+				failed(401, "quota_exceeded", "This request exceeds your quota of 10000."),
+				"Your ElevenLabs account is out of credit. Add credit there, then try again.",
+			],
+			[
+				"a model the key may not use",
+				failed(400, "unsupported_model", "Model scribe_v3 is not supported."),
+				"ElevenLabs does not offer the scribe_v3 model to this API key.",
+			],
+			[
+				"a request ElevenLabs could not read",
+				failed(
+					400,
+					"bad_request",
+					"The source_url https://example.com/episode.mp3 is invalid.",
+				),
+				"ElevenLabs could not transcribe this audio.",
+			],
+		])(
+			"%s for a request by address is said in PodNotes' words and is not followed by an upload",
+			async (_failure, response, shown) => {
+				providerMock.mockImplementation(async () => response.clone());
+				const plugin = useElevenLabs({
+					feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+				});
+
+				await expect(finalNotice(plugin)).resolves.toBe(`Transcription failed: ${shown}`);
+
+				expect(providerMock).toHaveBeenCalledOnce();
+				expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			},
+		);
 	});
 });
 

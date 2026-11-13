@@ -27,12 +27,20 @@ describe("CredentialRepository", () => {
 		const { api, values } = storage();
 		const repository = new CredentialRepository(api);
 
-		expect(repository.storeValues({ openAI: "  sk-openai  ", deepgram: "dg-key" })).toEqual({
+		expect(
+			repository.storeValues({
+				openAI: "  sk-openai  ",
+				deepgram: "dg-key",
+				elevenLabs: "el-key",
+			}),
+		).toEqual({
 			openAISecretId: "podnotes-openai-api-key",
 			deepgramSecretId: "podnotes-deepgram-api-key",
+			elevenLabsSecretId: "podnotes-elevenlabs-api-key",
 		});
 		expect(values.get("podnotes-openai-api-key")).toBe("sk-openai");
 		expect(values.get("podnotes-deepgram-api-key")).toBe("dg-key");
+		expect(values.get("podnotes-elevenlabs-api-key")).toBe("el-key");
 		expect(api.getSecret).toHaveBeenCalledWith("podnotes-openai-api-key");
 	});
 

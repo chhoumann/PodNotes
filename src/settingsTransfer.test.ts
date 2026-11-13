@@ -210,24 +210,22 @@ describe("serializeSettings", () => {
 		expect(withKey.secrets).toEqual({ openAI: "sk-secret" });
 	});
 
-	it("keeps both provider values in the explicit top-level payload (#168)", () => {
+	it("keeps every provider's value in the explicit top-level payload (#168)", () => {
 		const settings = makeSettings({
 			openAISecretId: "podnotes-openai-api-key",
 			deepgramSecretId: "podnotes-deepgram-api-key",
+			elevenLabsSecretId: "podnotes-elevenlabs-api-key",
 		});
+		const secrets = { openAI: "sk-secret", deepgram: "dg-secret", elevenLabs: "el-secret" };
 
 		const without = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 		expect(without.settings).not.toHaveProperty("openAISecretId");
 		expect(without.settings).not.toHaveProperty("deepgramSecretId");
+		expect(without.settings).not.toHaveProperty("elevenLabsSecretId");
 
-		const withKeys = serializeSettings(
-			settings,
-			{ secrets: { openAI: "sk-secret", deepgram: "dg-secret" } },
-			"2.16.0",
-			NOW,
-			new Map(),
-		);
-		expect(withKeys.secrets).toEqual({ openAI: "sk-secret", deepgram: "dg-secret" });
+		const withKeys = serializeSettings(settings, { secrets }, "2.16.0", NOW, new Map());
+		expect(withKeys.version).toBe(2);
+		expect(withKeys.secrets).toEqual(secrets);
 		expect(JSON.stringify(withKeys.settings)).not.toContain("secret");
 	});
 
@@ -606,14 +604,14 @@ describe("parseImport", () => {
 				type: SETTINGS_EXPORT_TYPE,
 				version: 2,
 				settings: { defaultVolume: 0.5, openAISecretId: "not-transferable" },
-				secrets: { openAI: " sk ", deepgram: "dg" },
+				secrets: { openAI: " sk ", deepgram: "dg", elevenLabs: "el" },
 			}),
 		);
 
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.settings).not.toHaveProperty("openAISecretId");
-			expect(result.secrets).toEqual({ openAI: "sk", deepgram: "dg" });
+			expect(result.secrets).toEqual({ openAI: "sk", deepgram: "dg", elevenLabs: "el" });
 		}
 	});
 
@@ -949,7 +947,11 @@ describe("the transcription provider in a settings file", () => {
 	it.each([
 		[
 			"this version's export",
-			() => serializeSettings(makeSettings(), {}, "2.25.0", NOW, new Map()),
+			() => {
+				const settings = makeSettings();
+				settings.transcript.diarization.enabled = false;
+				return serializeSettings(settings, {}, "2.25.0", NOW, new Map());
+			},
 		],
 		[
 			"a 2.24.0 export that names OpenAI there",
@@ -976,9 +978,10 @@ describe("describeSecrets (#168)", () => {
 		expect(describeSecrets({})).toEqual([]);
 		expect(describeSecrets({ openAI: "sk" })).toEqual(["OpenAI API key"]);
 		expect(describeSecrets({ deepgram: "dg" })).toEqual(["Deepgram API key"]);
-		expect(describeSecrets({ openAI: "sk", deepgram: "dg" })).toEqual([
+		expect(describeSecrets({ openAI: "sk", deepgram: "dg", elevenLabs: "el" })).toEqual([
 			"OpenAI API key",
 			"Deepgram API key",
+			"ElevenLabs API key",
 		]);
 	});
 

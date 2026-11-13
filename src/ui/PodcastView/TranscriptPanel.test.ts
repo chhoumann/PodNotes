@@ -581,7 +581,7 @@ describe("an episode whose feed publishes no transcript", () => {
 		expect(empty).not.toHaveAttribute("role");
 		expect(empty.querySelector("[data-icon]")).toHaveAttribute("data-icon", "captions");
 		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-		const paid = button("Transcribe with OpenAI Paid");
+		const paid = button("Transcribe with ElevenLabs Paid");
 
 		await fireEvent.click(paid);
 		expect(services.transcribeFromAudio).toHaveBeenCalledExactlyOnceWith();

@@ -71,6 +71,7 @@ export function createMockPlugin(
 	overrides: {
 		openAIKey?: string;
 		deepgramKey?: string;
+		elevenLabsKey?: string;
 		/** The stored provider ID. OpenAI when left out. */
 		provider?: string;
 		/** The stored model ID. The recommended model when left out. */
@@ -89,6 +90,7 @@ export function createMockPlugin(
 	const {
 		openAIKey = "test-api-key",
 		deepgramKey = "",
+		elevenLabsKey = "",
 		provider = "openai",
 		model = "",
 		speakers = false,
@@ -102,12 +104,17 @@ export function createMockPlugin(
 
 	const existing = (path: string) =>
 		path === existingTranscriptPath ? Object.assign(new TFile(), { path }) : null;
-	const keys: Record<CredentialKind, string> = { openai: openAIKey, deepgram: deepgramKey };
+	const keys: Record<CredentialKind, string> = {
+		openai: openAIKey,
+		deepgram: deepgramKey,
+		elevenlabs: elevenLabsKey,
+	};
 
 	return {
 		settings: {
 			openAISecretId: openAIKey ? "openai-secret" : "",
 			deepgramSecretId: "",
+			elevenLabsSecretId: "",
 			timestamp: { template: "- {{linktime}} ", offset: 5 },
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",

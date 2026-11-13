@@ -6,6 +6,7 @@
 export const CREDENTIALS = {
 	openai: { settingsKey: "openAISecretId", exportKey: "openAI", label: "OpenAI" },
 	deepgram: { settingsKey: "deepgramSecretId", exportKey: "deepgram", label: "Deepgram" },
+	elevenlabs: { settingsKey: "elevenLabsSecretId", exportKey: "elevenLabs", label: "ElevenLabs" },
 } as const;
 
 export type CredentialKind = keyof typeof CREDENTIALS;
