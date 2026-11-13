@@ -1,3 +1,5 @@
+import { DEFAULT_SETTINGS } from "src/constants";
+import { formatSpeakerLabel } from "src/services/publishedTranscript/render";
 import type { DiarizedSegment } from "./types";
 
 /**
@@ -7,12 +9,6 @@ import type { DiarizedSegment } from "./types";
  * `deepgramProvider.ts`; everything here is side-effect free so the risky shape
  * handling (untrusted JSON -> normalized segments -> markdown) is unit-testable.
  */
-
-/** The placeholder a speaker-label template uses to position the speaker name. */
-const SPEAKER_TOKEN = /\{\{\s*speaker\s*\}\}/gi;
-
-/** Default per-turn prefix; `{{speaker}}` is replaced with the provider's label. */
-export const DEFAULT_SPEAKER_TEMPLATE = "**{{speaker}}:** ";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -140,22 +136,6 @@ export function mergeAdjacentSpeakers(segments: DiarizedSegment[]): DiarizedSegm
 }
 
 /**
- * Replace the `{{speaker}}` token in a speaker-label template. When the template
- * has no token the label is prefixed instead, so even a tokenless template
- * (e.g. "> ") still produces a usable, speaker-prefixed line.
- */
-export function formatSpeakerLabel(template: string, speaker: string): string {
-	if (SPEAKER_TOKEN.test(template)) {
-		SPEAKER_TOKEN.lastIndex = 0;
-		// Pass a replacer function so the label is inserted verbatim: String.replace
-		// interprets `$$`, `$&`, `$\``, `$'`, `$n` in a replacement *string*, which
-		// would mangle a label that happened to contain one of those sequences.
-		return template.replace(SPEAKER_TOKEN, () => speaker);
-	}
-	return `${speaker}: ${template}`;
-}
-
-/**
  * Render normalized segments into the markdown body that fills `{{transcript}}`.
  * Each turn is `<speaker-label><text>`, turns separated by a blank line so they
  * read as paragraphs. Returns an empty string for no segments so the caller can
@@ -165,7 +145,7 @@ export function renderDiarizedTranscript(
 	segments: DiarizedSegment[],
 	speakerTemplate: string,
 ): string {
-	const template = speakerTemplate || DEFAULT_SPEAKER_TEMPLATE;
+	const template = speakerTemplate || DEFAULT_SETTINGS.transcript.diarization.speakerTemplate;
 	return segments
 		.map((segment) => `${formatSpeakerLabel(template, segment.speaker)}${segment.text}`)
 		.join("\n\n");

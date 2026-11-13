@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SETTINGS } from "src/constants";
 import {
-	DEFAULT_SPEAKER_TEMPLATE,
-	formatSpeakerLabel,
 	mergeAdjacentSpeakers,
 	parseDeepgramSegments,
 	parseOpenAIDiarizedSegments,
@@ -155,26 +154,9 @@ describe("mergeAdjacentSpeakers (#168)", () => {
 	});
 });
 
-describe("formatSpeakerLabel (#168)", () => {
-	it("substitutes the {{speaker}} token (case/space-insensitive)", () => {
-		expect(formatSpeakerLabel("**{{speaker}}:** ", "A")).toBe("**A:** ");
-		expect(formatSpeakerLabel("{{ Speaker }} - ", "2")).toBe("2 - ");
-	});
-
-	it("prefixes the label when the template has no token", () => {
-		expect(formatSpeakerLabel("> ", "A")).toBe("A: > ");
-	});
-
-	it("inserts a label containing $-replacement patterns verbatim", () => {
-		// `$&`, `$\``, `$'`, `$$` are special in a String.replace replacement string;
-		// the label must be inserted literally rather than expanded to matched text.
-		const speaker = "$`$'$&$$";
-		expect(formatSpeakerLabel("**{{speaker}}:** ", speaker)).toBe(`**${speaker}:** `);
-		expect(formatSpeakerLabel("{{speaker}} - ", speaker)).toBe(`${speaker} - `);
-	});
-});
-
 describe("renderDiarizedTranscript (#168)", () => {
+	const DEFAULT_SPEAKER_TEMPLATE = DEFAULT_SETTINGS.transcript.diarization.speakerTemplate;
+
 	it("renders speaker turns separated by blank lines", () => {
 		const body = renderDiarizedTranscript(
 			[

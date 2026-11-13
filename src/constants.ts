@@ -1,6 +1,5 @@
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import type { Playlist } from "./types/Playlist";
-import { DEFAULT_SPEAKER_TEMPLATE } from "./services/diarization/segments";
 import { ownRecord } from "./utility/ownRecord";
 
 export const VIEW_TYPE = "podcast_player_view";
@@ -167,7 +166,7 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 		diarization: {
 			enabled: false,
 			provider: "openai",
-			speakerTemplate: DEFAULT_SPEAKER_TEMPLATE,
+			speakerTemplate: "**{{speaker}}:** ",
 		},
 	},
 };

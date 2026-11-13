@@ -4,6 +4,7 @@ import { transcriptFixture } from "../../../tests/mocks/transcriptFixtures";
 import { type NonEmpty, parseTranscript, type TranscriptCue } from "./parse";
 import {
 	escapeTranscriptText,
+	formatSpeakerLabel,
 	groupCues,
 	MAX_PARAGRAPH_LENGTH,
 	renderTranscriptBody,
@@ -299,6 +300,25 @@ describe("paragraph length", () => {
 
 		expect(body.split("\n\n")).toHaveLength(2_000);
 		expect(elapsed).toBeLessThan(500);
+	});
+});
+
+describe("formatSpeakerLabel", () => {
+	test("substitutes the {{speaker}} token (case/space-insensitive)", () => {
+		expect(formatSpeakerLabel("**{{speaker}}:** ", "A")).toBe("**A:** ");
+		expect(formatSpeakerLabel("{{ Speaker }} - ", "2")).toBe("2 - ");
+	});
+
+	test("prefixes the label when the template has no token", () => {
+		expect(formatSpeakerLabel("> ", "A")).toBe("A: > ");
+	});
+
+	test("inserts a label containing $-replacement patterns verbatim", () => {
+		// `$&`, `$\``, `$'`, `$$` are special in a String.replace replacement string;
+		// the label must be inserted literally rather than expanded to matched text.
+		const speaker = "$`$'$&$$";
+		expect(formatSpeakerLabel("**{{speaker}}:** ", speaker)).toBe(`**${speaker}:** `);
+		expect(formatSpeakerLabel("{{speaker}} - ", speaker)).toBe(`${speaker} - `);
 	});
 });
 
