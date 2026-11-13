@@ -730,6 +730,55 @@ describe("PodNotes persistence integration", () => {
 		expect(persisted).not.toHaveProperty("diarizationApiKey");
 	});
 
+	it("names exactly the legacy keys it moved into SecretStorage", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const migrate = async (legacy: Record<string, string>) => {
+			notice.mockClear();
+			const { storage } = memorySecretStorage();
+			const plugin = makePlugin();
+			Object.assign(plugin, {
+				app: { ...plugin.app, secretStorage: storage },
+				credentials: new CredentialRepository(storage),
+				loadData: vi.fn().mockResolvedValue({ schemaVersion: 1, ...legacy }),
+			});
+			await plugin.loadSettings();
+			return notice.mock.calls;
+		};
+
+		expect(await migrate({ openAIApiKey: "sk", diarizationApiKey: "dg" })).toEqual([
+			["Moved your OpenAI and Deepgram API keys into Obsidian SecretStorage."],
+		]);
+		expect(await migrate({ diarizationApiKey: "dg" })).toEqual([
+			["Moved your Deepgram API key into Obsidian SecretStorage."],
+		]);
+	});
+
+	it("says its API keys could not move when only a Deepgram key fails to migrate", async () => {
+		const notice = vi.spyOn(obsidian, "Notice");
+		const storage = {
+			getSecret: vi.fn(() => null),
+			setSecret: vi.fn(() => {
+				throw new Error("keychain unavailable");
+			}),
+			listSecrets: vi.fn(() => []),
+		} as unknown as SecretStorage;
+		const plugin = makePlugin();
+		Object.assign(plugin, {
+			app: { ...plugin.app, secretStorage: storage },
+			credentials: new CredentialRepository(storage),
+			loadData: vi.fn().mockResolvedValue({ schemaVersion: 1, diarizationApiKey: "dg" }),
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+		await expect(plugin.loadSettings()).rejects.toThrow("keychain unavailable");
+		expect(notice.mock.calls).toEqual([
+			[
+				"PodNotes could not securely migrate its API keys. Your existing data was kept unchanged. Restart PodNotes to retry.",
+				0,
+			],
+		]);
+	});
+
 	it("leaves legacy data untouched when SecretStorage migration fails", async () => {
 		const saveData = vi.fn().mockResolvedValue(undefined);
 		const raw = { schemaVersion: 1, openAIApiKey: "sk", defaultVolume: 0.3 };
