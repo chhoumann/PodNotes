@@ -356,7 +356,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						this.text((settings) => settings.transcript.diarization, "speakerTemplate"),
 						"{{speaker}} is the speaker's label.",
 					),
-					visible: () => this.plugin.settings.transcript.diarization.enabled,
+					visible: () => transcriptionChoice(this.plugin.settings).speakers,
 				},
 				this.textRow("Transcript path", {
 					...this.text((settings) => settings.transcript, "path"),
@@ -650,11 +650,11 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			name: "Transcription provider",
 			render: (setting) =>
 				void setting.addDropdown((dropdown) => {
-					const stored = this.plugin.settings.transcript.provider;
+					const { provider: chosen, label } = transcriptionChoice(this.plugin.settings);
 					dropdown.addOptions(PROVIDER_LABELS);
 					// A provider a newer PodNotes stored stays selected, under its stored name.
-					if (!isOption(PROVIDER_LABELS, stored)) dropdown.addOption(stored, stored);
-					dropdown.setValue(stored).onChange((provider) => {
+					if (chosen === undefined) dropdown.addOption(label, label);
+					dropdown.setValue(chosen ?? label).onChange((provider) => {
 						const { transcript } = this.plugin.settings;
 						transcript.provider = provider;
 						// The model belonged to the provider before.
