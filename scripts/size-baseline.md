@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 108,157 bytes and the raw budget 334,096. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 108,282 bytes and the raw budget 334,096. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -104,6 +104,16 @@ headroom kept above, 2,554 raw and 97 gzip bytes. With them:
 ```text
 main.js raw: 331542 bytes; budget 334096 bytes; 2554 bytes remaining
 main.js gzip (level 9): 108060 bytes; budget 108157 bytes; 97 bytes remaining
+```
+
+Joining Whisper's word pieces then brought gzip to 108,114 bytes, 43 under the
+budget. Words that find their punctuation in the answer's text again after a
+stretch the words leave out measured 298 raw and 125 gzip bytes more. The gzip
+budget rose by those 125 bytes, so its 43 bytes of headroom stay. With them:
+
+```text
+main.js raw: 332075 bytes; budget 334096 bytes; 2021 bytes remaining
+main.js gzip (level 9): 108239 bytes; budget 108282 bytes; 43 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.

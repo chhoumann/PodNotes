@@ -2210,6 +2210,31 @@ describe("TranscriptionService", () => {
 			expect(savedNote(plugin)).toBe(timedNote);
 		});
 
+		test("words keep taking punctuation from the text after a long stretch the words leave out and a word they split", async () => {
+			const said = "so we kept re running it Then it was running".split(" ");
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					text: "Um, uh, you know, like, I mean, honestly, okay, right, well, look, so we kept re-running it. Then it was running. Hi!",
+					words: [
+						...said.map((word, index) => ({
+							word,
+							start: 1.2 + index / 5,
+							end: 1.4 + index / 5,
+						})),
+						{ word: "Hi", start: 10.16, end: 10.5 },
+					],
+				}),
+			);
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) so we kept re running it. Then it was running.\n\n` +
+					`[00:00:10](${link("10.16")}) Hi!`,
+			);
+		});
+
 		test("a 400 about anything else is not sent again", async () => {
 			providerMock.mockImplementation(async () =>
 				Response.json(

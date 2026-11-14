@@ -59,16 +59,44 @@ function punctuated(words: Word[], text: unknown): Word[] {
 	if (typeof text !== "string" || words.some((word) => /[.,?!]/.test(word.text))) return words;
 	const tokens = text.split(/\s+/).filter(Boolean);
 	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+	const keys = tokens.map(bare);
+	const single = firstFrom(keys);
+	const pair = firstFrom(keys.slice(1).map((key, index) => `${keys[index]} ${key}`));
 	let next = 0;
-	return words.map((word) => {
-		// A few tokens of lookahead get past a word `text` spells differently.
-		for (let index = next; index < Math.min(tokens.length, next + 3); index++) {
-			if (bare(tokens[index]) !== bare(word.text)) continue;
-			next = index + 1;
-			return { ...word, text: tokens[index] };
-		}
-		return word;
+	return words.map((word, index) => {
+		const key = bare(word.text);
+		const near = single(key, next);
+		// A word `text` spells differently, such as "re-running" listed as "re" and "running",
+		// matches no token. A token past the few after the last match counts only when the next
+		// word follows it there too, which finds the words again after any stretch they leave out.
+		const at =
+			near !== undefined && near - next < 3
+				? near
+				: index + 1 < words.length
+					? pair(`${key} ${bare(words[index + 1].text)}`, next)
+					: undefined;
+		if (at === undefined) return word;
+		next = at + 1;
+		return { ...word, text: tokens[at] };
 	});
+}
+
+/**
+ * Finds the first index at or after `from` that holds a key. Each call's `from` must be at least
+ * the last one's, which lets every lookup together take time linear in the keys.
+ */
+function firstFrom(keys: string[]): (key: string, from: number) => number | undefined {
+	const later = new Map<string, number[]>();
+	for (let index = keys.length - 1; index >= 0; index--) {
+		const list = later.get(keys[index]);
+		if (list) list.push(index);
+		else later.set(keys[index], [index]);
+	}
+	return (key, from) => {
+		const list = later.get(key);
+		while (list && list[list.length - 1] < from) list.pop();
+		return list?.[list.length - 1];
+	};
 }
 
 function segmentOf(item: unknown): Segment[] {
