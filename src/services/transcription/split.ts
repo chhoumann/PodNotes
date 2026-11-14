@@ -102,29 +102,34 @@ function mp3PartStarts(
 	maxSeconds: number,
 ): { offset: number; seconds: number }[] {
 	// Frames in one stream last equally long, so parts are counted in frames: summing frame
-	// durations drifts past maxSeconds and would split off a one-frame tail.
-	const framesPerCap =
-		frames.length > 0 ? Math.floor(maxSeconds / frames[0].seconds + 1e-9) : Infinity;
-	const parts = Math.max(
-		Math.ceil(byteLength / maxBytes),
-		Math.ceil(frames.length / framesPerCap),
-	);
-	const framesPerPart = Math.ceil(frames.length / parts);
-	const starts = [{ offset: 0, seconds: 0 }];
-	let elapsed = 0;
-	let partFrames = 0;
-	for (const frame of frames) {
-		if (
-			partFrames === framesPerPart ||
-			frame.offset + frame.length - starts[starts.length - 1].offset > maxBytes
-		) {
-			starts.push({ offset: frame.offset, seconds: elapsed });
-			partFrames = 0;
+	// durations drifts past maxSeconds.
+	const frameSeconds = frames[0].seconds;
+	const framesPerCap = Math.floor(maxSeconds / frameSeconds + 1e-9);
+	// The fewest parts of equal frame counts that fit both caps. A leading tag or a variable
+	// bitrate can put an equal split over maxBytes, and then one more part is tried, so no
+	// part is ever cut short and no one-frame tail is left.
+	for (
+		let parts = Math.max(
+			Math.ceil(byteLength / maxBytes),
+			Math.ceil(frames.length / framesPerCap),
+		);
+		;
+		parts++
+	) {
+		const firsts = Array.from({ length: parts }, (_, index) =>
+			Math.ceil((index * frames.length) / parts),
+		);
+		const offsets = firsts.map((first, index) => (index === 0 ? 0 : frames[first].offset));
+		const fits = offsets.every(
+			(offset, index) => (offsets[index + 1] ?? byteLength) - offset <= maxBytes,
+		);
+		if (fits || parts >= frames.length) {
+			return firsts.map((first, index) => ({
+				offset: offsets[index],
+				seconds: first * frameSeconds,
+			}));
 		}
-		partFrames++;
-		elapsed += frame.seconds;
 	}
-	return starts;
 }
 
 /**

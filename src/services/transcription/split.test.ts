@@ -117,8 +117,27 @@ describe("an MP3 over a cap", () => {
 		const parts = await split(episode, { maxBytes: 20 * MIB, maxSeconds: 1400 });
 
 		expect(parts.map((part) => part.bytes.length / stream.frameBytes)).toEqual([
-			14_584, 14_584, 14_584, 14_581,
+			14_584, 14_583, 14_583, 14_583,
 		]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("an MP3 that a leading tag pushes over the size cap splits into equal parts, with no one-frame tail", async () => {
+		const stream = MP3_STREAMS.mpeg1At320Kbps;
+		// 512 bytes of tag and 43,690 frames of 960 bytes come to 41,942,912 bytes, just under
+		// twice 20 MiB, but an equal split into two puts the tag's 512 bytes over the cap.
+		const tag = new Uint8Array(512);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x03, 0x76]);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 43_690)]);
+
+		const parts = await split(episode, { maxBytes: 20 * MIB, maxSeconds: 1400 });
+
+		expect(
+			parts.map(
+				(part, index) => (part.bytes.length - (index === 0 ? 512 : 0)) / stream.frameBytes,
+			),
+		).toEqual([14_564, 14_563, 14_563]);
+		for (const part of parts) expect(part.bytes.length).toBeLessThanOrEqual(20 * MIB);
 		expect(joinsInto(parts, episode)).toBe(true);
 	});
 
