@@ -13,7 +13,12 @@ import {
 } from "src/settingsMigrations";
 import { NEXT_TRACK_ACTIONS, PREVIOUS_TRACK_ACTIONS } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
-import { isPodNotesSecretId, type CredentialKind } from "src/types/Credentials";
+import {
+	CREDENTIAL_KINDS,
+	CREDENTIALS,
+	isPodNotesSecretId,
+	type CredentialReferenceSettings,
+} from "src/types/Credentials";
 import { sanitizeEpisodeListLimit } from "src/utility/episodeListLimit";
 import { normalizePlaybackRate } from "src/utility/playbackRate";
 import {
@@ -119,23 +124,27 @@ export function decodeSettings(
 		feedNote: decodeFeedNote(root.feedNote, warnings),
 		download: decodeDownload(root.download, warnings),
 		downloadedEpisodes: decodeDownloadedEpisodes(root.downloadedEpisodes, warnings),
-		openAISecretId: decodeSecretId(root, "openAISecretId", warnings),
-		deepgramSecretId: decodeSecretId(root, "deepgramSecretId", warnings),
+		...decodeSecretIds(root, warnings),
 		transcript: decodeTranscript(root.transcript, warnings),
 	};
 }
 
-function decodeSecretId(
-	root: UnknownRecord,
-	key: "openAISecretId" | "deepgramSecretId",
-	warnings: Set<string>,
-): string {
-	const value = readString(root, key, DEFAULT_SETTINGS[key], warnings);
-	const kind: CredentialKind = key === "openAISecretId" ? "openai" : "deepgram";
-	if (!value || isPodNotesSecretId(kind, value)) return value;
-
-	warn(warnings, key, "foreign or wrong-provider SecretStorage ID; reference was removed");
-	return "";
+function decodeSecretIds(root: UnknownRecord, warnings: Set<string>): CredentialReferenceSettings {
+	const ids = {} as CredentialReferenceSettings;
+	for (const kind of CREDENTIAL_KINDS) {
+		const key = CREDENTIALS[kind].settingsKey;
+		const value = readString(root, key, DEFAULT_SETTINGS[key], warnings);
+		const owned = !value || isPodNotesSecretId(kind, value);
+		if (!owned) {
+			warn(
+				warnings,
+				key,
+				"foreign or wrong-provider SecretStorage ID; reference was removed",
+			);
+		}
+		ids[key] = owned ? value : "";
+	}
+	return ids;
 }
 
 /**
