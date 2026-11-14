@@ -12,6 +12,10 @@ in `src/main.ts`; public API code is under `src/API/`; parsing code is under
 are under `src/utility/`; Svelte UI lives under `src/ui/`; shared types live in
 `src/types/`.
 
+Audio transcription lives in `src/services/transcription/`. A provider is one
+file under `providers/` and one line in `registry.ts`. Code outside the folder
+imports only its `index.ts`, which `npm run lint` enforces.
+
 Tests are colocated with source files as `*.test.ts` where practical. Shared
 test mocks live in `tests/mocks/`. User-facing documentation lives in `docs/`
 and is built with Astro Starlight.
@@ -58,7 +62,7 @@ svelte-check's native API path passes when a tsconfig matches no files, which
 `check:a11y` in temporary workspaces and requires it to fail on that case and
 when the native compiler cannot start.
 
-After `npm run build`, `npm run size` enforces 330,000 raw bytes and 104,145 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
+After `npm run build`, `npm run size` enforces 330,000 raw bytes and 104,290 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 
 Before opening a PR or cutting a release, run the CI-equivalent checks locally:
 

@@ -1,21 +1,23 @@
 // @vitest-environment jsdom
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, onTestFinished, test, vi } from "vitest";
 import { Notice, type RequestUrlParam } from "obsidian";
-import { deferred } from "../../tests/mocks/feeds";
-import { OPENAI_FAILURES, OPENAI_REJECTIONS, rateLimited } from "../../tests/mocks/openaiFailures";
+import { deferred, feedDocument, MemoryStorage } from "../../tests/mocks/feeds";
 import {
 	createMockPlugin,
-	diarizeWithDeepgramMock,
 	getEpisodeAudioBufferMock,
 	installTranscriptionMocks,
 	mockEpisode,
 	noticeMessages,
 } from "../../tests/mocks/transcriptionService";
 import { MP3_STREAMS, mp3Bytes, mp3Seconds } from "../../tests/mocks/mp3";
-import { openAIMock, sentForm } from "../../tests/mocks/openaiRequestUrl";
+import { providerMock, sentBytes, sentForm, sentText } from "../../tests/mocks/providerRequestUrl";
+import { FeedRepository } from "./FeedRepository";
 import { TranscriptionService } from "./TranscriptionService";
 import type PodNotes from "src/main";
 import type { Episode } from "src/types/Episode";
+import type { LocalEpisode } from "src/types/LocalEpisode";
+import type { PodcastFeed } from "src/types/PodcastFeed";
+import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 
 vi.mock("obsidian", async (importOriginal) => {
 	const { mockedObsidian } = await import("../../tests/mocks/transcriptionService");
@@ -42,22 +44,88 @@ vi.mock("../downloadEpisode", async () => ({
 		.getEpisodeAudioBufferMock,
 }));
 
-vi.mock("./diarization", async (importOriginal) => ({
-	...(await importOriginal<typeof import("./diarization")>()),
-	diarizeWithDeepgram: (await import("../../tests/mocks/transcriptionService"))
-		.diarizeWithDeepgramMock,
-}));
-
 installTranscriptionMocks();
 
 type AudioJob = { episode: Episode; source: { kind: "audio" } };
 const audioJob: AudioJob = { episode: mockEpisode, source: { kind: "audio" } };
 
-const whisperReturns = (text: string) =>
-	openAIMock.mockImplementation(async () => Response.json({ text }));
+/** Runs one audio job to its end, as the queue does. */
+const transcribe = (plugin: PodNotes, episode = mockEpisode) =>
+	(
+		new TranscriptionService(plugin) as unknown as {
+			transcribeEpisode: (job: AudioJob) => Promise<void>;
+		}
+	).transcribeEpisode({ episode, source: { kind: "audio" } });
 
-// Vitest's jsdom Request names every multipart file "blob", so these tests tell chunks apart by size.
+/** The last message of the job's progress notice, after every timer has run. */
+const finalNotice = async (plugin: PodNotes, episode = mockEpisode): Promise<string> => {
+	vi.useFakeTimers();
+	const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+	const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+	try {
+		const pending = transcribe(plugin, episode);
+		await vi.runAllTimersAsync();
+		await pending;
+		const calls = setMessage.mock.calls;
+		const message = String(calls[calls.length - 1][0]);
+		return message.slice(message.indexOf("\n\n") + 2);
+	} finally {
+		setMessage.mockRestore();
+		consoleError.mockRestore();
+		vi.useRealTimers();
+	}
+};
+
+const savedNote = (plugin: PodNotes) =>
+	String(vi.mocked(plugin.app.vault.create).mock.calls[0]?.[1]);
+
+const openAIReturns = (text: string) =>
+	providerMock.mockImplementation(async () => Response.json({ text }));
+
+// Vitest's jsdom Request names every multipart file "blob", so these tests tell parts apart by size.
 const sentFile = async (request: RequestUrlParam) => (await sentForm(request)).get("file") as File;
+
+const openAIError = (status: number, error: Record<string, unknown>) => async () =>
+	Response.json({ error }, { status });
+
+const rateLimited = (headers: Record<string, string>) =>
+	Response.json(
+		{ error: { message: "Rate limit reached for requests.", code: "rate_limit_exceeded" } },
+		{ status: 429, headers },
+	);
+
+/**
+ * A feed repository with `feed` saved under its title. Loading it gives a document that
+ * lists `episodes`, fetched from the address `resolveUrl` gives for the feed.
+ */
+function savedFeedRepository(
+	feed: PodcastFeed,
+	episodes: readonly Episode[],
+	resolveUrl: (feed: Pick<PodcastFeed, "url">) => string | null = ({ url }) => url,
+): FeedRepository {
+	const feeds = new FeedRepository({
+		load: async () => feedDocument(feed.title, episodes),
+		resolveUrl,
+		storage: new MemoryStorage(),
+		now: Date.now,
+	});
+	feeds.setSubscriptions({ [feed.title]: feed });
+	return feeds;
+}
+
+const publicFeed: PodcastFeed = {
+	title: "Test Podcast",
+	url: "https://example.com/feed.xml",
+	artworkUrl: "",
+};
+
+/** An hour of MP3 in 3.2 MB, which OpenAI takes in two parts of 26 min 48 s. */
+const twoPartStream = MP3_STREAMS.mpeg25At8Kbps;
+const twoPartFrames = 44_668;
+const twoPartAudio = () => ({
+	buffer: mp3Bytes(twoPartStream, twoPartFrames).buffer,
+	extension: "mp3",
+});
 
 describe("TranscriptionService", () => {
 	describe("transcribeCurrentEpisode validation", () => {
@@ -69,6 +137,16 @@ describe("TranscriptionService", () => {
 
 			expect(noticeMessages).toEqual([
 				"Select or create an OpenAI API key in the transcript settings on this device.",
+			]);
+		});
+
+		test("asks for the Deepgram key when speaker labels use Deepgram", async () => {
+			const service = new TranscriptionService(createMockPlugin({ speakers: "deepgram" }));
+
+			await service.transcribeCurrentEpisode();
+
+			expect(noticeMessages).toEqual([
+				"Select or create a Deepgram API key in the transcript settings on this device.",
 			]);
 		});
 
@@ -104,20 +182,13 @@ describe("TranscriptionService", () => {
 			service.dispose();
 
 			(service as unknown as { drainQueue: () => void }).drainQueue();
-			expect(() => (service as unknown as { getApiKey: () => string }).getApiKey()).toThrow(
-				"unloaded",
-			);
 
 			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 			expect(plugin.credentials.get).not.toHaveBeenCalled();
 		});
 
 		test("settles promptly when unloaded during audio acquisition", async () => {
-			const audioRequest = deferred<{
-				buffer: ArrayBuffer;
-				extension: string;
-				basename: string;
-			}>();
+			const audioRequest = deferred<{ buffer: ArrayBuffer; extension: string }>();
 			getEpisodeAudioBufferMock.mockReturnValue(audioRequest.promise);
 			const plugin = createMockPlugin();
 			const service = new TranscriptionService(plugin);
@@ -140,106 +211,189 @@ describe("TranscriptionService", () => {
 			consoleError.mockRestore();
 		});
 
-		test("aborts active OpenAI work without writing a note or updating notices", async () => {
-			const plugin = createMockPlugin();
-			const service = new TranscriptionService(plugin);
-			let finishRequest!: (response: Response) => void;
-			openAIMock.mockImplementation(
-				() =>
-					new Promise((resolve) => {
-						finishRequest = resolve;
-					}),
-			);
-			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
-			try {
-				const pending = (
-					service as unknown as {
-						transcribeEpisode: (job: AudioJob) => Promise<void>;
+		test("sends nothing for audio that arrives after unload", async () => {
+			const audioRequest = deferred<{ buffer: ArrayBuffer; extension: string }>();
+			getEpisodeAudioBufferMock.mockReturnValue(audioRequest.promise);
+			const service = new TranscriptionService(createMockPlugin());
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
+				}
+			).transcribeEpisode(audioJob);
+			await vi.waitFor(() => expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce());
+
+			service.dispose();
+			await pending;
+			audioRequest.resolve({ buffer: new ArrayBuffer(1024), extension: "mp3" });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(providerMock).not.toHaveBeenCalled();
+		});
+
+		test("decodes no audio that arrives after unload", async () => {
+			const audioRequest = deferred<{ buffer: ArrayBuffer; extension: string }>();
+			getEpisodeAudioBufferMock.mockReturnValue(audioRequest.promise);
+			// A count, because a failed assertion on the call would print its 24 MB argument.
+			let decodes = 0;
+			vi.stubGlobal(
+				"AudioContext",
+				class {
+					async decodeAudioData(): Promise<never> {
+						decodes++;
+						throw new Error("Unsupported codec");
 					}
-				).transcribeEpisode(audioJob);
-				await vi.waitFor(() => expect(openAIMock).toHaveBeenCalledOnce());
-
-				const messagesBeforeDispose = setMessage.mock.calls.length;
-				service.dispose();
-				finishRequest(Response.json({ text: "This must not be saved." }));
-				await pending;
-
-				expect(plugin.app.vault.create).not.toHaveBeenCalled();
-				expect(setMessage).toHaveBeenCalledTimes(messagesBeforeDispose);
-			} finally {
-				setMessage.mockRestore();
-			}
-		});
-
-		test("does not save Deepgram results that finish after unload", async () => {
-			const plugin = createMockPlugin();
-			plugin.settings.transcript.diarization = {
-				enabled: true,
-				provider: "deepgram",
-				speakerTemplate: "**{{speaker}}:** {{text}}",
-			};
-			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
-				kind === "deepgram" ? "deepgram-key" : "test-api-key",
+					async close(): Promise<void> {}
+				},
 			);
-			let finishRequest!: (segments: Array<{ speaker: string; text: string }>) => void;
-			diarizeWithDeepgramMock.mockImplementation(
-				() =>
-					new Promise((resolve) => {
-						finishRequest = resolve;
-					}),
-			);
-			const service = new TranscriptionService(plugin);
+			const service = new TranscriptionService(createMockPlugin());
 			const pending = (
 				service as unknown as {
 					transcribeEpisode: (job: AudioJob) => Promise<void>;
 				}
 			).transcribeEpisode(audioJob);
-			await vi.waitFor(() => expect(diarizeWithDeepgramMock).toHaveBeenCalledOnce());
+			await vi.waitFor(() => expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce());
 
 			service.dispose();
-			finishRequest([{ speaker: "A", text: "This must not be saved." }]);
 			await pending;
+			// Over OpenAI's size cap, so it would be decoded into WAV parts.
+			audioRequest.resolve({ buffer: new ArrayBuffer(24_000_001), extension: "ogg" });
+			await new Promise((resolve) => setTimeout(resolve, 0));
 
-			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			expect(decodes).toBe(0);
 		});
 
-		test("settles promptly when unloaded during a non-cancelable Deepgram request", async () => {
-			const plugin = createMockPlugin();
-			plugin.settings.transcript.diarization = {
-				enabled: true,
-				provider: "deepgram",
-				speakerTemplate: "**{{speaker}}:** {{text}}",
-			};
-			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
-				kind === "deepgram" ? "deepgram-key" : "test-api-key",
+		test("decodes no audio whose length its metadata gives after unload", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: new ArrayBuffer(4096),
+				extension: "m4a",
+			});
+			// Longer than OpenAI's length cap, so it would be decoded into WAV parts.
+			const duration = vi
+				.spyOn(HTMLMediaElement.prototype, "duration", "get")
+				.mockReturnValue(3000);
+			// The probe's element loads nothing until the test fires its metadata.
+			let probe: HTMLElement | undefined;
+			const createElement = document.createElement.bind(document);
+			const create = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+				const element = createElement(tag);
+				if (tag === "audio") probe = element;
+				return element;
+			});
+			const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+			Object.defineProperty(HTMLMediaElement.prototype, "src", { ...src, set() {} });
+			onTestFinished(() => {
+				duration.mockRestore();
+				create.mockRestore();
+				if (src) Object.defineProperty(HTMLMediaElement.prototype, "src", src);
+			});
+			let decodes = 0;
+			vi.stubGlobal(
+				"AudioContext",
+				class {
+					async decodeAudioData(): Promise<never> {
+						decodes++;
+						throw new Error("Unsupported codec");
+					}
+					async close(): Promise<void> {}
+				},
 			);
-			const request = deferred<Array<{ speaker: string; text: string }>>();
-			diarizeWithDeepgramMock.mockReturnValue(request.promise);
-			const service = new TranscriptionService(plugin);
-			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+			const service = new TranscriptionService(createMockPlugin());
 			const pending = (
 				service as unknown as {
 					transcribeEpisode: (job: AudioJob) => Promise<void>;
 				}
 			).transcribeEpisode(audioJob);
-			await vi.waitFor(() => expect(diarizeWithDeepgramMock).toHaveBeenCalledOnce());
+			await vi.waitFor(() => expect(probe).toBeDefined());
 
 			service.dispose();
-			const settledPromptly = await settlesAfterMicrotasks(pending);
-			request.reject(new Error("late Deepgram failure"));
+			probe?.dispatchEvent(new Event("loadedmetadata"));
 			await pending;
+			await new Promise((resolve) => setTimeout(resolve, 0));
 
-			expect(settledPromptly).toBe(true);
-			expect(plugin.app.vault.create).not.toHaveBeenCalled();
-			expect(consoleError).not.toHaveBeenCalled();
-			consoleError.mockRestore();
+			expect(decodes).toBe(0);
 		});
+
+		test("downloads no audio when unloaded while it looks the episode up in its feed", async () => {
+			const lookup = deferred<ReturnType<typeof feedDocument>>();
+			const load = vi.fn(() => lookup.promise);
+			const feeds = new FeedRepository({
+				load,
+				resolveUrl: ({ url }) => url,
+				storage: new MemoryStorage(),
+				now: Date.now,
+			});
+			feeds.setSubscriptions({ [publicFeed.title]: publicFeed });
+			const service = new TranscriptionService(
+				createMockPlugin({ speakers: "deepgram", deepgramKey: "deepgram-key", feeds }),
+			);
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
+				}
+			).transcribeEpisode(audioJob);
+			await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+
+			service.dispose();
+			await pending;
+			// The feed does not list the episode, so its audio would be uploaded.
+			lookup.resolve(feedDocument(publicFeed.title, []));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(providerMock).not.toHaveBeenCalled();
+		});
+
+		test.each([
+			["OpenAI", {}, { text: "This must not be saved." }],
+			[
+				"Deepgram",
+				{ speakers: "deepgram", deepgramKey: "deepgram-key" } as const,
+				deepgramAnswer([{ word: "Unsaved.", start: 0, end: 1, speaker: 0 }]),
+			],
+		])(
+			"aborts active %s work without writing a note or updating notices",
+			async (_provider, overrides, answer) => {
+				const plugin = createMockPlugin(overrides);
+				const service = new TranscriptionService(plugin);
+				let finishRequest!: (response: Response) => void;
+				providerMock.mockImplementation(
+					() =>
+						new Promise((resolve) => {
+							finishRequest = resolve;
+						}),
+				);
+				const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+				const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+				try {
+					const pending = (
+						service as unknown as {
+							transcribeEpisode: (job: AudioJob) => Promise<void>;
+						}
+					).transcribeEpisode(audioJob);
+					await vi.waitFor(() => expect(providerMock).toHaveBeenCalledOnce());
+
+					const messagesBeforeDispose = setMessage.mock.calls.length;
+					service.dispose();
+					const settledPromptly = await settlesAfterMicrotasks(pending);
+					finishRequest(Response.json(answer));
+					await pending;
+
+					expect(settledPromptly).toBe(true);
+					expect(plugin.app.vault.create).not.toHaveBeenCalled();
+					expect(setMessage).toHaveBeenCalledTimes(messagesBeforeDispose);
+					expect(consoleError).not.toHaveBeenCalled();
+				} finally {
+					setMessage.mockRestore();
+					consoleError.mockRestore();
+				}
+			},
+		);
 
 		test("cancels a completed notice hide timer when disposed", async () => {
 			vi.useFakeTimers();
 			const hide = vi.spyOn(Notice.prototype, "hide");
 			try {
-				whisperReturns("Completed transcript.");
+				openAIReturns("Completed transcript.");
 				const plugin = createMockPlugin();
 				const service = new TranscriptionService(plugin);
 				await (
@@ -261,298 +415,295 @@ describe("TranscriptionService", () => {
 		});
 	});
 
-	describe("empty Whisper transcript (TR-01)", () => {
-		// transcribeEpisode is private; drive it directly so the empty-body throw is
-		// observed as "no file written" (the throw is caught and surfaced as a
-		// "Transcription failed" notice, never as a saved transcript).
-		const runTranscribeEpisode = async (plugin: PodNotes) => {
-			const service = new TranscriptionService(plugin);
-			await (
-				service as unknown as {
-					transcribeEpisode: (job: AudioJob) => Promise<void>;
-				}
-			).transcribeEpisode(audioJob);
-			return service;
-		};
-
-		test("does not write a file when the transcript is empty", async () => {
-			whisperReturns("");
-			const plugin = createMockPlugin();
-
-			await runTranscribeEpisode(plugin);
-
-			expect(plugin.app.vault.create).not.toHaveBeenCalled();
-		});
-
-		test("does not write a file when the transcript is only whitespace", async () => {
-			// Multiple empty chunks join to " ", not "", so the trimmed-emptiness check
-			// must still treat this as failure.
-			whisperReturns("   \n\t  ");
-			const plugin = createMockPlugin();
-
-			await runTranscribeEpisode(plugin);
-
-			expect(plugin.app.vault.create).not.toHaveBeenCalled();
-		});
-
-		test("writes a file when the transcript has content", async () => {
-			whisperReturns("Hello world. This is a transcript.");
-			const plugin = createMockPlugin();
-
-			await runTranscribeEpisode(plugin);
-
-			expect(plugin.app.vault.create).toHaveBeenCalledTimes(1);
-		});
-	});
-
-	describe("buildTranscriptBody (TR-01)", () => {
-		const buildBody = (
-			plugin: PodNotes,
-			audio: {
-				buffer: ArrayBuffer;
-				mimeType: string;
-				extension: string;
-				basename: string;
-			} = {
-				buffer: new ArrayBuffer(1024),
-				mimeType: "audio/mpeg",
-				extension: "mp3",
-				basename: "episode",
-			},
-		) => {
-			const service = new TranscriptionService(plugin);
-			return (
-				service as unknown as {
-					buildTranscriptBody: (
-						audio: {
-							buffer: ArrayBuffer;
-							mimeType: string;
-							extension: string;
-							basename: string;
-						},
-						update: (message: string) => void,
-					) => Promise<{ body: string; warning?: string }>;
-				}
-			).buildTranscriptBody(audio, () => {});
-		};
-
-		test("throws when the trimmed Whisper body is empty", async () => {
-			whisperReturns("   \n  ");
-
-			await expect(buildBody(createMockPlugin())).rejects.toThrow(
-				"Transcription returned no text.",
-			);
-		});
-
-		test("returns the reflowed body when there is text", async () => {
-			whisperReturns("One. Two.");
-
-			await expect(buildBody(createMockPlugin())).resolves.toEqual({
-				body: "One.\n\nTwo.",
-				warning: undefined,
-			});
-		});
-	});
-
-	describe("failed chunks are not saved as a completed transcript (other-silent-failure)", () => {
-		const buildBodyDirect = (
-			plugin: PodNotes,
-			audio: {
-				buffer: ArrayBuffer;
-				mimeType: string;
-				extension: string;
-				basename: string;
-			},
-		) => {
-			const service = new TranscriptionService(plugin);
-			return (
-				service as unknown as {
-					buildTranscriptBody: (
-						a: typeof audio,
-						update: (message: string) => void,
-					) => Promise<{ body: string; warning?: string }>;
-				}
-			).buildTranscriptBody(audio, () => {});
-		};
-
-		const mp3Audio = (byteLength: number) => ({
-			buffer: new ArrayBuffer(byteLength),
-			mimeType: "audio/mp3",
-			extension: "mp3",
-			basename: "episode",
-		});
-
-		test("throws (no file) when the single chunk fails every retry", async () => {
-			openAIMock.mockImplementation(async () => new Response("boom", { status: 500 }));
+	describe("the progress notice", () => {
+		const hiddenAfter = async (plugin: PodNotes, ms: number): Promise<boolean> => {
 			vi.useFakeTimers();
-			try {
-				const promise = buildBodyDirect(createMockPlugin(), mp3Audio(1024));
-				const assertion = expect(promise).rejects.toThrow(
-					"all 1 audio chunk(s) failed or returned no text. Last error: 500 boom",
-				);
-				await vi.runAllTimersAsync();
-				await assertion;
-			} finally {
-				vi.useRealTimers();
-			}
-		});
-
-		test("throws when failed chunks plus empty successes leave no real text", async () => {
-			// >20 MB mp3 → two chunks. chunk 0 fails every retry; chunk 1 "succeeds"
-			// but returns empty text. The body is then only an error marker, which
-			// must NOT be saved as a completed transcript.
-			openAIMock.mockImplementation(async (request) =>
-				(await sentFile(request)).size > 1024
-					? new Response("boom", { status: 500 })
-					: Response.json({ text: "   " }),
-			);
-
-			vi.useFakeTimers();
-			try {
-				const promise = buildBodyDirect(
-					createMockPlugin(),
-					mp3Audio(20 * 1024 * 1024 + 1024),
-				);
-				const assertion = expect(promise).rejects.toThrow(
-					"all 2 audio chunk(s) failed or returned no text. Last error: 500 boom",
-				);
-				await vi.runAllTimersAsync();
-				await assertion;
-			} finally {
-				vi.useRealTimers();
-			}
-		});
-
-		test("does not write a file when transcription fails completely", async () => {
-			openAIMock.mockImplementation(async () => new Response("boom", { status: 500 }));
-			const plugin = createMockPlugin();
-			const service = new TranscriptionService(plugin);
-
-			vi.useFakeTimers();
-			try {
-				const promise = (
-					service as unknown as {
-						transcribeEpisode: (job: AudioJob) => Promise<void>;
-					}
-				).transcribeEpisode(audioJob);
-				// One chunk, MAX_RETRIES=3 → backoff 1000ms + 2000ms before it gives up.
-				await vi.advanceTimersByTimeAsync(3500);
-				await promise;
-			} finally {
-				vi.useRealTimers();
-			}
-
-			expect(plugin.app.vault.create).not.toHaveBeenCalled();
-		});
-
-		test("keeps an otherwise-good transcript but warns when only some chunks fail", async () => {
-			// A >20 MB mp3 byte-splits into two chunks; fail the second one.
-			openAIMock.mockImplementation(async (request) =>
-				(await sentFile(request)).size === 1024
-					? new Response("boom", { status: 500 })
-					: Response.json({ text: "Good chunk." }),
-			);
-
-			vi.useFakeTimers();
-			try {
-				const promise = buildBodyDirect(
-					createMockPlugin(),
-					mp3Audio(20 * 1024 * 1024 + 1024),
-				);
-				await vi.runAllTimersAsync();
-				const result = await promise;
-
-				expect(result.body).toContain("Good chunk.");
-				expect(result.body).toContain("[Error transcribing chunk 1]");
-				expect(result.warning).toContain("1 of 2 chunk(s) failed");
-			} finally {
-				vi.useRealTimers();
-			}
-		});
-	});
-
-	describe("OpenAI requests and failures", () => {
-		const transcribe = (plugin: PodNotes) =>
-			(
-				new TranscriptionService(plugin) as unknown as {
-					transcribeEpisode: (job: AudioJob) => Promise<void>;
-				}
-			).transcribeEpisode(audioJob);
-
-		const finalNotice = async (plugin: PodNotes): Promise<string> => {
-			vi.useFakeTimers();
-			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+			const hide = vi.spyOn(Notice.prototype, "hide");
 			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 			try {
-				const pending = transcribe(plugin);
-				await vi.runAllTimersAsync();
-				await pending;
-				const calls = setMessage.mock.calls;
-				const message = String(calls[calls.length - 1][0]);
-				return message.slice(message.indexOf("\n\n") + 2);
+				await transcribe(plugin);
+				await vi.advanceTimersByTimeAsync(ms);
+				return hide.mock.calls.length > 0;
 			} finally {
-				setMessage.mockRestore();
+				hide.mockRestore();
 				consoleError.mockRestore();
 				vi.useRealTimers();
 			}
 		};
 
-		test("sends Whisper only the model and the episode file", async () => {
-			whisperReturns("Hello.");
+		test("hides 5 s after a transcript is saved", async () => {
+			openAIReturns("Completed transcript.");
+
+			expect(await hiddenAfter(createMockPlugin(), 5000)).toBe(true);
+		});
+
+		test("stays until clicked after a failure", async () => {
+			providerMock.mockImplementation(openAIError(401, { message: "Incorrect API key." }));
+
+			expect(await hiddenAfter(createMockPlugin(), 60 * 60_000)).toBe(false);
+		});
+	});
+
+	describe("an OpenAI transcript", () => {
+		test("sends OpenAI the model, the episode file and the JSON format", async () => {
+			openAIReturns("Hello.");
 
 			await transcribe(createMockPlugin());
 
-			expect(openAIMock).toHaveBeenCalledOnce();
-			const form = await sentForm(openAIMock.mock.calls[0][0]);
-			expect([...form.keys()]).toEqual(["model", "file"]);
-			expect(form.get("model")).toBe("whisper-1");
+			expect(providerMock).toHaveBeenCalledOnce();
+			const [request] = providerMock.mock.calls[0];
+			expect(request.url).toBe("https://api.openai.com/v1/audio/transcriptions");
+			expect(request.method).toBe("POST");
+			expect(request.headers).toEqual({ Authorization: "Bearer test-api-key" });
+			const form = await sentForm(request);
+			expect([...form.keys()]).toEqual(["model", "file", "response_format"]);
+			expect(form.get("model")).toBe("gpt-transcribe");
+			expect(form.get("response_format")).toBe("json");
 			const file = form.get("file") as File;
 			expect(file.type).toBe("audio/mp3");
 			expect(file.size).toBe(1024);
 		});
 
-		test.each(OPENAI_FAILURES)(
-			"Whisper %s shows the API error after three sends",
-			async (_name, respond, message) => {
-				openAIMock.mockImplementation(respond);
+		test("is saved as paragraphs without timestamps", async () => {
+			const sentence = "This sentence is forty characters long. ";
+			openAIReturns(sentence.repeat(20));
+			const plugin = createMockPlugin();
 
-				await expect(finalNotice(createMockPlugin())).resolves.toBe(
-					`Transcription failed: all 1 audio chunk(s) failed or returned no text. Last error: ${message}`,
-				);
-				expect(openAIMock).toHaveBeenCalledTimes(3);
-			},
-		);
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
 
-		test.each(OPENAI_REJECTIONS)(
-			"Whisper %s shows the API error after one send",
-			async (_name, respond, message) => {
-				openAIMock.mockImplementation(respond);
-
-				await expect(finalNotice(createMockPlugin())).resolves.toBe(
-					`Transcription failed: all 1 audio chunk(s) failed or returned no text. Last error: ${message}`,
-				);
-				expect(openAIMock).toHaveBeenCalledOnce();
-			},
-		);
-
-		test("Whisper answering without text fails the run after three sends", async () => {
-			openAIMock.mockImplementation(async () => Response.json({}));
-
-			await expect(finalNotice(createMockPlugin())).resolves.toBe(
-				"Transcription failed: all 1 audio chunk(s) failed or returned no text. Last error: OpenAI returned a transcription without text.",
+			const paragraph = sentence.repeat(13).trim();
+			expect(plugin.app.vault.create).toHaveBeenCalledExactlyOnceWith(
+				"Transcripts/Test Podcast/Test Episode.md",
+				`# Test Episode\n\n${paragraph}\n\n${sentence.repeat(7).trim()}`,
 			);
-			expect(openAIMock).toHaveBeenCalledTimes(3);
 		});
 
-		test("Whisper waits out the server's Retry-After and recovers", async () => {
+		test.each(["", "   \n\t  "])("writes no note for the text %j", async (text) => {
+			openAIReturns(text);
+			const plugin = createMockPlugin();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription failed: OpenAI found no speech in this episode.",
+			);
+
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test("with speaker labels on is saved without them, and the notice names the providers that label speakers and stays", async () => {
+			vi.useFakeTimers();
+			const hide = vi.spyOn(Notice.prototype, "hide");
+			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+			try {
+				openAIReturns("Hello there. Hi!");
+				const plugin = createMockPlugin({ speakers: "openai" });
+
+				await transcribe(plugin);
+				await vi.advanceTimersByTimeAsync(60 * 60_000);
+
+				expect(String(setMessage.mock.calls.at(-1)?.[0])).toMatch(
+					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: Deepgram\.$/,
+				);
+				expect(hide).not.toHaveBeenCalled();
+				expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
+				const form = await sentForm(providerMock.mock.calls[0][0]);
+				expect([...form.keys()]).toEqual(["model", "file", "response_format"]);
+				expect(form.get("model")).toBe("gpt-transcribe");
+			} finally {
+				hide.mockRestore();
+				setMessage.mockRestore();
+				vi.useRealTimers();
+			}
+		});
+
+		test("reads the current OpenAI key for each transcription", async () => {
+			openAIReturns("Hello.");
+			const plugin = createMockPlugin({ openAIKey: "first-key" });
+			const service = new TranscriptionService(plugin) as unknown as {
+				transcribeEpisode: (job: AudioJob) => Promise<void>;
+			};
+
+			await service.transcribeEpisode(audioJob);
+			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
+				kind === "openai" ? "second-key" : null,
+			);
+			await service.transcribeEpisode(audioJob);
+
+			const authorization = (call: number) =>
+				providerMock.mock.calls[call][0].headers?.Authorization;
+			expect(providerMock).toHaveBeenCalledTimes(2);
+			expect(authorization(0)).toBe("Bearer first-key");
+			expect(authorization(1)).toBe("Bearer second-key");
+		});
+	});
+
+	describe("an episode over one request's limits", () => {
+		test("goes to OpenAI in parts no longer than 2,070 s, one at a time, and reads in order", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+			const sentSeconds: number[] = [];
+			let inFlight = 0;
+			let mostInFlight = 0;
+			providerMock.mockImplementation(async (request) => {
+				mostInFlight = Math.max(mostInFlight, ++inFlight);
+				const seconds = mp3Seconds(twoPartStream, (await sentFile(request)).size);
+				sentSeconds.push(seconds);
+				await new Promise((resolve) => setTimeout(resolve, 0));
+				inFlight--;
+				return Response.json({ text: `Part ${sentSeconds.length}.` });
+			});
+			const plugin = createMockPlugin();
+
+			await transcribe(plugin);
+
+			expect(sentSeconds).toHaveLength(2);
+			expect(Math.max(...sentSeconds)).toBeLessThanOrEqual(2070);
+			expect(sentSeconds[0] + sentSeconds[1]).toBeCloseTo(
+				mp3Seconds(twoPartStream, twoPartFrames * twoPartStream.frameBytes),
+			);
+			expect(mostInFlight).toBe(1);
+			expect(savedNote(plugin)).toBe("# Test Episode\n\nPart 1. Part 2.");
+		});
+
+		test("keeps the parts that worked, marks the one that failed, and says so", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+			let sends = 0;
+			providerMock.mockImplementation(async () =>
+				++sends === 1
+					? Response.json({ text: "Good part." })
+					: new Response("boom", { status: 500 }),
+			);
+			const plugin = createMockPlugin();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription saved, but 1 of 2 chunk(s) failed - look for [Error transcribing chunk N] markers and re-run after deleting the note to retry.",
+			);
+
+			expect(sends).toBe(4);
+			expect(savedNote(plugin)).toBe(
+				"# Test Episode\n\nGood part. \\[Error transcribing chunk 2]",
+			);
+		});
+
+		test("writes no note when one part fails and the other holds no speech", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+			let sends = 0;
+			providerMock.mockImplementation(async () =>
+				++sends <= 3 ? new Response("boom", { status: 500 }) : Response.json({ text: " " }),
+			);
+			const plugin = createMockPlugin();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription failed: OpenAI failed (HTTP 500). Try again later.",
+			);
+
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test.each([401, 402, 404, 400])(
+			"stops at a %i on the first part and sends no second part",
+			async (status) => {
+				getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+				providerMock.mockImplementation(openAIError(status, { message: "No." }));
+				const plugin = createMockPlugin();
+
+				await finalNotice(plugin);
+
+				expect(providerMock).toHaveBeenCalledOnce();
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			},
+		);
+	});
+
+	describe("a failed request", () => {
+		const neverAnswers = () => new Promise<Response>(() => {});
+		const quotaUsedUp = openAIError(429, {
+			message: "You exceeded your current quota, please check your plan and billing details.",
+			type: "insufficient_quota",
+			code: "insufficient_quota",
+		});
+
+		test.each<[name: string, sends: number, respond: () => Promise<Response>, shown: string]>([
+			[
+				"401",
+				1,
+				openAIError(401, { message: "Incorrect API key provided: sk-test." }),
+				"OpenAI rejected the API key. Check it in the transcript settings.",
+			],
+			[
+				"402",
+				1,
+				openAIError(402, { message: "Payment required." }),
+				"Your OpenAI account is out of credit. Add credit there, then try again.",
+			],
+			[
+				"404",
+				1,
+				openAIError(404, { message: "The model `gpt-transcribe` does not exist." }),
+				"OpenAI does not offer the gpt-transcribe model to this API key.",
+			],
+			[
+				"400",
+				1,
+				openAIError(400, { message: "Audio file might be corrupted or unsupported." }),
+				"OpenAI could not transcribe this audio.",
+			],
+			[
+				"429 for a used-up quota",
+				1,
+				quotaUsedUp,
+				"Your OpenAI account is out of credit. Add credit there, then try again.",
+			],
+			[
+				"429",
+				3,
+				async () => rateLimited({}),
+				"OpenAI is limiting how fast your key may be used. Try again in a few minutes.",
+			],
+			[
+				"503 with an empty body",
+				3,
+				async () => new Response("", { status: 503 }),
+				"OpenAI failed (HTTP 503). Try again later.",
+			],
+			[
+				"200 that is not JSON",
+				3,
+				async () => new Response("<html>Sign in</html>"),
+				"OpenAI failed (HTTP 200). Try again later.",
+			],
+			[
+				"lost connection",
+				3,
+				() => Promise.reject(new TypeError("Failed to fetch")),
+				"Could not reach OpenAI. Check your connection.",
+			],
+			[
+				"429 that asks to wait over a minute",
+				1,
+				async () => rateLimited({ "retry-after": "61" }),
+				"OpenAI is limiting how fast your key may be used. Try again in a few minutes.",
+			],
+			["timeout", 1, neverAnswers, "OpenAI did not answer within 10 minutes."],
+		])("%s saves no note after %i of 3 sends", async (_name, sends, respond, shown) => {
+			providerMock.mockImplementation(respond);
+			const plugin = createMockPlugin();
+
+			await expect(finalNotice(plugin)).resolves.toBe(`Transcription failed: ${shown}`);
+
+			expect(providerMock).toHaveBeenCalledTimes(sends);
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test.each<[name: string, failure: () => Response, waitMs: number]>([
+			["429 with Retry-After", () => rateLimited({ "retry-after": "4" }), 4000],
+			["429 with retry-after-ms", () => rateLimited({ "retry-after-ms": "1500" }), 1500],
+			["503", () => new Response("", { status: 503 }), 1000],
+		])("%s is sent again after the wait and the note is saved", async (_name, fail, waitMs) => {
 			vi.useFakeTimers();
 			try {
 				const sentAt: number[] = [];
-				openAIMock.mockImplementation(async () => {
+				providerMock.mockImplementation(async () => {
 					sentAt.push(Date.now());
-					return Date.now() - sentAt[0] < 4000
-						? rateLimited({ "retry-after": "4" })
-						: Response.json({ text: "Recovered." });
+					return sentAt.length === 1 ? fail() : Response.json({ text: "Recovered." });
 				});
 				const plugin = createMockPlugin();
 
@@ -560,19 +711,18 @@ describe("TranscriptionService", () => {
 				await vi.runAllTimersAsync();
 				await pending;
 
-				expect(sentAt.map((time) => time - sentAt[0])).toEqual([0, 4000]);
-				expect(plugin.app.vault.create).toHaveBeenCalledOnce();
-				expect(vi.mocked(plugin.app.vault.create).mock.calls[0][1]).toContain("Recovered.");
+				expect(sentAt.map((time) => time - sentAt[0])).toEqual([0, waitMs]);
+				expect(savedNote(plugin)).toBe("# Test Episode\n\nRecovered.");
 			} finally {
 				vi.useRealTimers();
 			}
 		});
 
-		test("unloading while Whisper waits out a Retry-After cancels the run", async () => {
+		test("unloading during a Retry-After wait cancels the run", async () => {
 			vi.useFakeTimers();
 			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
 			try {
-				openAIMock.mockImplementation(async () => rateLimited({ "retry-after": "30" }));
+				providerMock.mockImplementation(async () => rateLimited({ "retry-after": "30" }));
 				const plugin = createMockPlugin();
 				const service = new TranscriptionService(plugin);
 				let settled = false;
@@ -586,7 +736,7 @@ describe("TranscriptionService", () => {
 						settled = true;
 					});
 				await vi.advanceTimersByTimeAsync(29_000);
-				expect(openAIMock).toHaveBeenCalledOnce();
+				expect(providerMock).toHaveBeenCalledOnce();
 
 				const messagesBeforeDispose = setMessage.mock.calls.length;
 				service.dispose();
@@ -594,7 +744,8 @@ describe("TranscriptionService", () => {
 
 				expect(settled).toBe(true);
 				await pending;
-				expect(openAIMock).toHaveBeenCalledOnce();
+				await vi.advanceTimersByTimeAsync(60_000);
+				expect(providerMock).toHaveBeenCalledOnce();
 				expect(plugin.app.vault.create).not.toHaveBeenCalled();
 				expect(setMessage).toHaveBeenCalledTimes(messagesBeforeDispose);
 			} finally {
@@ -603,99 +754,298 @@ describe("TranscriptionService", () => {
 			}
 		});
 
-		test("reads the current OpenAI key for each transcription", async () => {
-			whisperReturns("Hello.");
-			const plugin = createMockPlugin({ openAIKey: "first-key" });
-			const service = new TranscriptionService(plugin) as unknown as {
-				transcribeEpisode: (job: AudioJob) => Promise<void>;
-			};
+		test("shows and logs none of the provider's own words, which can quote a private address", async () => {
+			vi.useFakeTimers();
+			const setMessage = vi.spyOn(Notice.prototype, "setMessage");
+			const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				providerMock.mockImplementation(async () =>
+					Response.json(
+						{
+							err_code: "Bad Request",
+							err_msg: "Could not read https://private.example.com/feed/SENTINEL.mp3",
+						},
+						{ status: 400 },
+					),
+				);
+				const plugin = createMockPlugin({
+					speakers: "deepgram",
+					deepgramKey: "deepgram-key",
+				});
 
-			await service.transcribeEpisode(audioJob);
-			vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
-				kind === "openai" ? "second-key" : null,
+				const pending = transcribe(plugin);
+				await vi.runAllTimersAsync();
+				await pending;
+
+				const shown = setMessage.mock.calls.map(([message]) => String(message));
+				expect(shown.at(-1)).toMatch(
+					/\n\nTranscription failed: Deepgram could not transcribe this audio\.$/,
+				);
+				expect(consoleError).toHaveBeenCalled();
+				const logged = consoleError.mock.calls.flatMap((args) =>
+					args.map((arg) => (arg instanceof Error ? `${arg.stack}` : String(arg))),
+				);
+				for (const text of [...shown, ...noticeMessages, ...logged]) {
+					expect(text).not.toContain("SENTINEL");
+				}
+			} finally {
+				setMessage.mockRestore();
+				consoleError.mockRestore();
+				vi.useRealTimers();
+			}
+		});
+	});
+
+	describe("a Deepgram transcript", () => {
+		const audio = new Uint8Array(2048).map((_, index) => (index * 31) % 251);
+		const useDeepgram = (feeds?: ReturnType<typeof savedFeedRepository>) => {
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: audio.buffer,
+				extension: "mp3",
+			});
+			return createMockPlugin({ speakers: "deepgram", deepgramKey: "deepgram-key", feeds });
+		};
+		const answers = deepgramAnswer([
+			{ word: "hello", punctuated_word: "Hello", start: 1.2, end: 1.5, speaker: 1 },
+			{ word: "there", punctuated_word: "there.", start: 1.5, end: 1.9, speaker: 1 },
+			{ word: "hi", punctuated_word: "Hi!", start: 10.16, end: 10.5, speaker: 0 },
+		]);
+		const link = (time: string) =>
+			`obsidian://podnotes?episodeName=Test%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&time=${time}`;
+		const LISTEN =
+			"https://api.deepgram.com/v1/listen?model=nova-3&diarize=true&punctuate=true&smart_format=true&utterances=true";
+
+		/** The one request a job sent, which must carry the audio and nothing of `secrets`. */
+		const expectUpload = (...secrets: string[]) => {
+			expect(providerMock).toHaveBeenCalledOnce();
+			const [request] = providerMock.mock.calls[0];
+			expect(request.contentType).toBe("audio/mp3");
+			expect(sentBytes(request)).toEqual(audio);
+			for (const secret of secrets) expect(sentText(request)).not.toContain(secret);
+		};
+
+		test("has a timestamp on each paragraph and numbers the speakers in the order they first speak", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const plugin = useDeepgram();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) **1:** Hello there.\n\n` +
+					`[00:00:10](${link("10.16")}) **2:** Hi!`,
 			);
-			await service.transcribeEpisode(audioJob);
-
-			const authorization = (call: number) =>
-				openAIMock.mock.calls[call][0].headers?.Authorization;
-			expect(openAIMock).toHaveBeenCalledTimes(2);
-			expect(authorization(0)).toBe("Bearer first-key");
-			expect(authorization(1)).toBe("Bearer second-key");
 		});
 
-		test.each(OPENAI_FAILURES)(
-			"OpenAI diarization %s shows the API error after three sends",
-			async (_name, respond, message) => {
-				openAIMock.mockImplementation(respond);
-				const plugin = createMockPlugin();
-				plugin.settings.transcript.diarization = {
-					enabled: true,
-					provider: "openai",
-					speakerTemplate: "**{{speaker}}:** {{text}}",
-				};
+		test("a public episode goes by its address, and its audio is never loaded", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [mockEpisode]));
 
-				await expect(finalNotice(plugin)).resolves.toBe(
-					`Transcription failed: OpenAI diarization failed for every chunk: ${message}`,
-				);
-				expect(openAIMock).toHaveBeenCalledTimes(3);
-			},
-		);
+			await transcribe(plugin);
 
-		test.each(OPENAI_REJECTIONS)(
-			"OpenAI diarization %s shows the API error after one send",
-			async (_name, respond, message) => {
-				openAIMock.mockImplementation(respond);
-				const plugin = createMockPlugin();
-				plugin.settings.transcript.diarization = {
-					enabled: true,
-					provider: "openai",
-					speakerTemplate: "**{{speaker}}:** {{text}}",
-				};
-
-				await expect(finalNotice(plugin)).resolves.toBe(
-					`Transcription failed: OpenAI diarization failed for every chunk: ${message}`,
-				);
-				expect(openAIMock).toHaveBeenCalledOnce();
-			},
-		);
-
-		test("OpenAI diarization parts stay under the model's 1400 s limit and answer inside the 10 min request timeout (#532)", async () => {
-			// Measured on gpt-4o-transcribe-diarize: the slowest of 81 requests took 0.58 s per second of audio.
-			const slowestSecondsPerAudioSecond = 0.58;
-			const stream = MP3_STREAMS.mpeg25At8Kbps;
-			getEpisodeAudioBufferMock.mockResolvedValue({
-				buffer: mp3Bytes(stream, 44_667).buffer,
-				extension: "mp3",
-				basename: "episode",
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(providerMock).toHaveBeenCalledOnce();
+			const [request] = providerMock.mock.calls[0];
+			expect(request.url).toBe(LISTEN);
+			expect(request.method).toBe("POST");
+			expect(request.headers).toEqual({ Authorization: "Token deepgram-key" });
+			expect(request.contentType).toBe("application/json");
+			expect(JSON.parse(new TextDecoder().decode(sentBytes(request)))).toEqual({
+				url: "https://example.com/episode.mp3",
 			});
-			const sentSeconds: number[] = [];
-			openAIMock.mockImplementation(async (request: RequestUrlParam) => {
-				const seconds = mp3Seconds(stream, (await sentFile(request)).size);
-				sentSeconds.push(seconds);
-				return seconds > 1400
+			expect(savedNote(plugin)).toContain("**1:** Hello there.");
+		});
+
+		test("an episode with no saved feed is uploaded as the released request", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const plugin = useDeepgram();
+
+			await transcribe(plugin);
+
+			expectUpload();
+			const [request] = providerMock.mock.calls[0];
+			expect(request.url).toBe(LISTEN);
+			expect(request.headers).toEqual({ Authorization: "Token deepgram-key" });
+		});
+
+		test("a private feed's episode is uploaded, and no request holds its address or its feed's", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const secretFeed = "https://private.example.com/feed/SUBSCRIBER-TOKEN.rss";
+			const privateFeed: PodcastFeed = {
+				...publicFeed,
+				url: privateFeedPlaceholder("Test Podcast"),
+				urlSecretId: "podnotes-feed-url-1",
+			};
+			const episode: Episode = {
+				...mockEpisode,
+				streamUrl: "https://cdn.example.com/SUBSCRIBER-TOKEN/episode.mp3",
+				feedUrl: privateFeed.url,
+			};
+			const plugin = useDeepgram(
+				savedFeedRepository(privateFeed, [episode], () => secretFeed),
+			);
+
+			await transcribe(plugin, episode);
+
+			expectUpload("SUBSCRIBER-TOKEN", "cdn.example.com", "private.example.com");
+		});
+
+		test("an episode whose address carries a credential is uploaded, and no request holds the address", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const episode: Episode = {
+				...mockEpisode,
+				streamUrl: "https://cdn.example.com/episode.mp3?token=SIGNED-TOKEN",
+			};
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+			await transcribe(plugin, episode);
+
+			expectUpload("SIGNED-TOKEN", "cdn.example.com");
+		});
+
+		test.each([
+			[
+				"AWS",
+				"X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=CRED&X-Amz-Signature=SIGNED",
+			],
+			[
+				"Google Cloud",
+				"X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=CRED&X-Goog-Signature=SIGNED",
+			],
+			["CloudFront", "Expires=1900000000&Signature=SIGNED&Key-Pair-Id=CRED"],
+			["Azure", "sv=2024-11-04&se=2030-01-01&sp=r&sig=SIGNED"],
+			["Akamai query token", "hdnts=exp=1900000000~acl=/*~hmac=SIGNED"],
+			["Akamai cookie token", "hdnea=exp=1900000000~acl=/*~hmac=SIGNED"],
+		])(
+			"an episode whose address is a %s signed URL is uploaded, and no request holds the address",
+			async (_, query) => {
+				providerMock.mockImplementation(async () => Response.json(answers));
+				const episode: Episode = {
+					...mockEpisode,
+					streamUrl: `https://cdn.example.com/episode.mp3?${query}`,
+				};
+				const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+				await transcribe(plugin, episode);
+
+				expectUpload("SIGNED", "cdn.example.com");
+			},
+		);
+
+		test("a public episode whose address has tracking parameters goes by its address", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const streamUrl =
+				"https://cdn.example.com/episode.mp3?aid=rss_feed&feed=AbC123&updated=1700000000&utm_source=podcast";
+			const episode: Episode = { ...mockEpisode, streamUrl };
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+			await transcribe(plugin, episode);
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			const [request] = providerMock.mock.calls[0];
+			expect(JSON.parse(new TextDecoder().decode(sentBytes(request)))).toEqual({
+				url: streamUrl,
+			});
+		});
+
+		test("an episode on a private network is uploaded, and no request holds its address", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const episode: Episode = {
+				...mockEpisode,
+				streamUrl: "http://192.168.1.20/library/episode.mp3",
+			};
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+			await transcribe(plugin, episode);
+
+			expectUpload("192.168.1.20", "library");
+		});
+
+		test("an episode its saved feed does not list is uploaded, and no request holds its address", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const unlisted: Episode = {
+				...mockEpisode,
+				streamUrl: "https://elsewhere.example.com/episode.mp3",
+			};
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [mockEpisode]));
+
+			await transcribe(plugin, unlisted);
+
+			expectUpload("elsewhere.example.com");
+		});
+
+		test("a local file is uploaded, and no request holds its path", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const local: LocalEpisode = {
+				title: "Interview",
+				streamUrl: "app://f3a9/home/me/vault/Recordings/Interview.mp3?1700000000000",
+				url: "[[Recordings/Interview.mp3]]",
+				description: "",
+				content: "",
+				podcastName: "local file",
+				filePath: "Recordings/Interview.mp3",
+			};
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [mockEpisode]));
+
+			await transcribe(plugin, local);
+
+			expectUpload("Recordings", "Interview", "app://", "vault");
+		});
+
+		test("an address Deepgram could not fetch is followed by one upload", async () => {
+			providerMock.mockImplementation(async (request) =>
+				request.contentType === "application/json"
 					? Response.json(
 							{
-								error: {
-									message: `audio duration ${seconds} seconds is longer than 1400 seconds which is the maximum for this model`,
-								},
+								err_code: "REMOTE_CONTENT_ERROR",
+								err_msg:
+									"The remote server hosting the media returned a client error: 403 Forbidden.",
 							},
 							{ status: 400 },
 						)
-					: Response.json({
-							segments: [{ speaker: "A", text: `${seconds} s.`, start: 0, end: 1 }],
-						});
-			});
-			const plugin = createMockPlugin();
-			plugin.settings.transcript.diarization = {
-				enabled: true,
-				provider: "openai",
-				speakerTemplate: "**{{speaker}}:** {{text}}",
-			};
+					: Response.json(answers),
+			);
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [mockEpisode]));
 
 			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
-			expect(Math.max(...sentSeconds)).toBeLessThanOrEqual(1400);
-			expect(Math.max(...sentSeconds) * slowestSecondsPerAudioSecond).toBeLessThan(10 * 60);
-			expect(sentSeconds.reduce((total, seconds) => total + seconds)).toBeCloseTo(3216.024);
+
+			expect(providerMock.mock.calls.map(([request]) => request.contentType)).toEqual([
+				"application/json",
+				"audio/mp3",
+			]);
+			expect(sentBytes(providerMock.mock.calls[1][0])).toEqual(audio);
+			expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce();
+			expect(savedNote(plugin)).toContain("**1:** Hello there.");
+		});
+
+		test.each([
+			[401, "Deepgram rejected the API key. Check it in the transcript settings."],
+			[400, "Deepgram could not transcribe this audio."],
+		])("a %i for a request by address is not followed by an upload", async (status, shown) => {
+			providerMock.mockImplementation(async () =>
+				Response.json({ err_code: "INVALID_AUTH", err_msg: "No." }, { status }),
+			);
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [mockEpisode]));
+
+			await expect(finalNotice(plugin)).resolves.toBe(`Transcription failed: ${shown}`);
+
+			expect(providerMock).toHaveBeenCalledOnce();
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
+		});
+
+		test("an answer without words writes no note", async () => {
+			providerMock.mockImplementation(async () => Response.json(deepgramAnswer([])));
+			const plugin = useDeepgram();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription failed: Deepgram found no speech in this episode.",
+			);
+
+			expect(plugin.app.vault.create).not.toHaveBeenCalled();
 		});
 	});
 });
+
+function deepgramAnswer(words: Record<string, unknown>[]) {
+	return { results: { channels: [{ alternatives: [{ words }] }] } };
+}

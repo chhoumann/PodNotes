@@ -4,7 +4,6 @@ import type { PlayedEpisode } from "./PlayedEpisode";
 import type { Playlist } from "./Playlist";
 import type { Episode } from "./Episode";
 import type DownloadedEpisode from "./DownloadedEpisode";
-import type { DiarizationProviderId } from "src/services/diarization/types";
 import type { NextTrackAction, PreviousTrackAction } from "./Headset";
 import type { CredentialReferenceSettings } from "./Credentials";
 
@@ -64,14 +63,13 @@ export interface IPodNotesSettings extends CredentialReferenceSettings {
 		path: string;
 		template: string;
 		/**
-		 * Opt-in speaker diarization for transcripts (issue #168). When `enabled`
-		 * the audio is routed to a diarization-capable `provider` instead of plain
-		 * Whisper, and the transcript is rendered as speaker-labeled turns using
-		 * `speakerTemplate` (where `{{speaker}}` is the per-turn speaker label).
+		 * Speaker labels for transcripts. When `enabled` and `provider` is `"deepgram"`, audio
+		 * goes to Deepgram, which labels speakers. Otherwise it goes to OpenAI, which does not.
+		 * `speakerTemplate` shapes each label, where `{{speaker}}` is the speaker's name.
 		 */
 		diarization: {
 			enabled: boolean;
-			provider: DiarizationProviderId;
+			provider: "openai" | "deepgram";
 			speakerTemplate: string;
 		};
 	};

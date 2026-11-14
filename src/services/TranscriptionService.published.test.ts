@@ -1,20 +1,18 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, type MockInstance, test, vi } from "vitest";
 import { Notice } from "obsidian";
-import type PodNotes from "src/main";
 import type { TranscriptLink } from "src/parser/feedDocumentParser";
 import { NetworkError } from "src/utility/networkRequest";
 import { privateFeedPlaceholder } from "src/utility/privateFeedUrl";
 import { deferred } from "../../tests/mocks/feeds";
 import {
 	createMockPlugin,
-	diarizeWithDeepgramMock,
 	getEpisodeAudioBufferMock,
 	installTranscriptionMocks,
 	mockEpisode,
 	noticeMessages,
 } from "../../tests/mocks/transcriptionService";
-import { openAIMock } from "../../tests/mocks/openaiRequestUrl";
+import { providerMock } from "../../tests/mocks/providerRequestUrl";
 import { TranscriptionService } from "./TranscriptionService";
 
 vi.mock("obsidian", async (importOriginal) => {
@@ -32,12 +30,6 @@ vi.mock("src/utility/networkRequest", async (importOriginal) => ({
 vi.mock("../downloadEpisode", async () => ({
 	getEpisodeAudioBuffer: (await import("../../tests/mocks/transcriptionService"))
 		.getEpisodeAudioBufferMock,
-}));
-
-vi.mock("./diarization", async (importOriginal) => ({
-	...(await importOriginal<typeof import("./diarization")>()),
-	diarizeWithDeepgram: (await import("../../tests/mocks/transcriptionService"))
-		.diarizeWithDeepgramMock,
 }));
 
 installTranscriptionMocks();
@@ -79,20 +71,7 @@ describe("published transcripts", () => {
 			.waitFor(() => expect(timerMessages()).toContain(message))
 			.finally(() => service.dispose());
 
-	const withDeepgram = (plugin: PodNotes) => {
-		plugin.settings.transcript.diarization = {
-			enabled: true,
-			provider: "deepgram",
-			speakerTemplate: "",
-		};
-		vi.mocked(plugin.credentials.has).mockImplementation(
-			(_settings, kind) => kind === "deepgram",
-		);
-		vi.mocked(plugin.credentials.get).mockImplementation((_settings, kind) =>
-			kind === "deepgram" ? "deepgram-key" : null,
-		);
-		return plugin;
-	};
+	const deepgram = { openAIKey: "", deepgramKey: "deepgram-key", speakers: "deepgram" } as const;
 
 	test("with no API key, the feed's VTT becomes the note with no audio and no provider", async () => {
 		fetchTextMock.mockResolvedValue(VTT);
@@ -116,13 +95,12 @@ describe("published transcripts", () => {
 			"Preparing to transcribe...",
 		]);
 		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
-		expect(openAIMock).not.toHaveBeenCalled();
-		expect(diarizeWithDeepgramMock).not.toHaveBeenCalled();
+		expect(providerMock).not.toHaveBeenCalled();
 	});
 
 	test("with a key and Deepgram diarization, the feed's transcript still wins", async () => {
 		fetchTextMock.mockResolvedValue(VTT);
-		const plugin = withDeepgram(createMockPlugin({ transcripts: published }));
+		const plugin = createMockPlugin({ ...deepgram, transcripts: published });
 		const service = new TranscriptionService(plugin);
 
 		await service.transcribeCurrentEpisode();
@@ -130,8 +108,7 @@ describe("published transcripts", () => {
 
 		expect(vi.mocked(plugin.app.vault.create).mock.calls[0][1]).toBe(publishedNote);
 		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
-		expect(openAIMock).not.toHaveBeenCalled();
-		expect(diarizeWithDeepgramMock).not.toHaveBeenCalled();
+		expect(providerMock).not.toHaveBeenCalled();
 	});
 
 	test("a transcript quoting its own credential-bearing address and its private feed's keeps neither in the note", async () => {
@@ -166,7 +143,7 @@ describe("published transcripts", () => {
 
 		expect(noticeMessages).toEqual(["No published transcript was found for this episode."]);
 		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
-		expect(openAIMock).not.toHaveBeenCalled();
+		expect(providerMock).not.toHaveBeenCalled();
 	});
 
 	test("links of unknown types keep today's key notice", async () => {
@@ -197,13 +174,13 @@ describe("published transcripts", () => {
 
 		expect(plugin.app.vault.create).not.toHaveBeenCalled();
 		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
-		expect(openAIMock).not.toHaveBeenCalled();
+		expect(providerMock).not.toHaveBeenCalled();
 	});
 
 	test("the offer names Deepgram when diarization uses it", async () => {
 		fetchTextMock.mockResolvedValue("WEBVTT\n");
 		const service = new TranscriptionService(
-			withDeepgram(createMockPlugin({ transcripts: published })),
+			createMockPlugin({ ...deepgram, transcripts: published }),
 		);
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -213,7 +190,7 @@ describe("published transcripts", () => {
 			`The published transcript could not be read.${fromAudioOffer.replace("OpenAI", "Deepgram")}`,
 		);
 
-		expect(diarizeWithDeepgramMock).not.toHaveBeenCalled();
+		expect(providerMock).not.toHaveBeenCalled();
 		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 	});
 
@@ -235,7 +212,7 @@ describe("published transcripts", () => {
 	});
 
 	test("transcribing from audio never looks for a published transcript", async () => {
-		openAIMock.mockImplementation(async () => Response.json({ text: "Spoken words." }));
+		providerMock.mockImplementation(async () => Response.json({ text: "Spoken words." }));
 		const plugin = createMockPlugin({ transcripts: published });
 		const service = new TranscriptionService(plugin);
 

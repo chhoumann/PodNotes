@@ -5,6 +5,8 @@
 //   node .claude/skills/verify/fixtures.mjs feed           start or reuse the feed server, print the feed URL
 //   node .claude/skills/verify/fixtures.mjs feed-b         same server, print a second feed whose episode titles repeat the first's
 //   node .claude/skills/verify/fixtures.mjs transcripts    same server, print a feed whose episodes publish transcripts
+//   node .claude/skills/verify/fixtures.mjs private        same server, print a feed at an address PodNotes keeps
+//                                                          private, as a Supercast subscriber's feed is
 //   node .claude/skills/verify/fixtures.mjs library        same server, print the URL of a JSON manifest of eight
 //                                                          podcasts as PodNotes saves them (Night Owl Science's feed
 //                                                          answers 404) and one more feed to add. Each episode's
@@ -26,7 +28,7 @@ import { Readable, pipeline } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { loadRunnerConfig, resolveProvisionOptions } from "obsidian-e2e/runner";
-import { FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
+import { FIXTURE_HOST, SUPERCAST_FIXTURE_HOST } from "../../../scripts/e2e-instance.mjs";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 // Stable per worktree, so a feed saved in the vault keeps working across restarts.
@@ -36,11 +38,14 @@ const base = `http://${host}:${port}`;
 const feedUrl = `${base}/feed.xml`;
 const feedBUrl = `${base}/feed-b.xml`;
 const transcriptsUrl = `${base}/transcripts.xml`;
+const PRIVATE_ROUTE = "/feeds/verify-subscriber-token/feed.xml";
+const privateUrl = `http://${SUPERCAST_FIXTURE_HOST}:${port}${PRIVATE_ROUTE}`;
 const libraryUrl = `${base}/library.json`;
 const local = `http://127.0.0.1:${port}`;
 const FEED_TITLE = "PodNotes Fixture";
 const FEED_B_TITLE = "PodNotes Fixture B";
 const TRANSCRIPTS_TITLE = "PodNotes Transcripts";
+const PRIVATE_TITLE = "PodNotes Private";
 const transcriptFixtures = path.join(root, "tests/fixtures/transcripts");
 // Media made here outlives the server; node_modules/.cache is where tools keep caches.
 const CACHE = path.join(root, "node_modules/.cache/podnotes-fixtures");
@@ -548,6 +553,13 @@ function serve() {
 		"/b/artwork.svg": ["image/svg+xml", Buffer.from(artwork(FEED_B_TITLE, "#0f766e"))],
 		"/b/episode-1.wav": ["audio/wav", audio],
 		"/b/episode-2.wav": ["audio/wav", audio],
+		[PRIVATE_ROUTE]: [
+			"application/rss+xml",
+			Buffer.from(feedXml(audio.length, PRIVATE_TITLE, "/p")),
+		],
+		"/p/artwork.svg": ["image/svg+xml", Buffer.from(artwork(PRIVATE_TITLE, "#be123c"))],
+		"/p/episode-1.wav": ["audio/wav", audio],
+		"/p/episode-2.wav": ["audio/wav", audio],
 		"/transcripts.xml": ["application/rss+xml", Buffer.from(transcriptsFeedXml(audio.length))],
 		"/t/artwork.svg": ["image/svg+xml", Buffer.from(artwork("Transcripts", "#b45309"))],
 		"/t/buzzcast.html": ["text/html; charset=utf-8", transcript("buzzcast.html")],
@@ -748,6 +760,7 @@ try {
 	else if (verb === "feed") await startFeed(feedUrl);
 	else if (verb === "feed-b") await startFeed(feedBUrl);
 	else if (verb === "transcripts") await startFeed(transcriptsUrl);
+	else if (verb === "private") await startFeed(privateUrl);
 	else if (verb === "library") await startFeed(libraryUrl);
 	else if (verb === "retitle") await retitleFeed();
 	else if (verb === "requests") await printRequests();
@@ -755,7 +768,7 @@ try {
 	else if (verb === "stop") await stopFeed();
 	else
 		throw new Error(
-			"Usage: fixtures.mjs feed | feed-b | transcripts | library | retitle | requests | audio [vault-relative path] | stop",
+			"Usage: fixtures.mjs feed | feed-b | transcripts | private | library | retitle | requests | audio [vault-relative path] | stop",
 		);
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));

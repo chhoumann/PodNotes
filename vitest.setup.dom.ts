@@ -293,3 +293,17 @@ if (!Element.prototype.animate) {
 		return animation as unknown as Animation;
 	};
 }
+
+// jsdom loads no media, so an element given an object URL would never fire
+// `loadedmetadata`. Fire it, with jsdom's `duration` of NaN: the length is unknown
+// unless a test stubs `duration`.
+const mediaSrc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+Object.defineProperty(HTMLMediaElement.prototype, "src", {
+	...mediaSrc,
+	set(this: HTMLMediaElement, value: string) {
+		mediaSrc?.set?.call(this, value);
+		if (value.startsWith("blob:")) {
+			queueMicrotask(() => this.dispatchEvent(new Event("loadedmetadata")));
+		}
+	},
+});

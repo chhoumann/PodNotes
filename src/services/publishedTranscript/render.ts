@@ -1,7 +1,16 @@
+import { DEFAULT_SETTINGS } from "src/constants";
 import type { Episode } from "src/types/Episode";
-import { DEFAULT_SPEAKER_TEMPLATE, formatSpeakerLabel } from "src/services/diarization/segments";
 import { formatEpisodeTimestamp } from "src/utility/formatEpisodeTimestamp";
 import { collapseWhitespace, type ParsedTranscript, type TranscriptCue } from "./parse";
+
+const SPEAKER_TOKEN = /\{\{\s*speaker\s*\}\}/gi;
+
+/** A template without `{{speaker}}` gets the name in front, so the line still says who spoke. */
+export function formatSpeakerLabel(template: string, speaker: string): string {
+	if (!template.match(SPEAKER_TOKEN)) return `${speaker}: ${template}`;
+	// A replacer function, because a replacement string would expand `$&` and `$1` in a name.
+	return template.replace(SPEAKER_TOKEN, () => speaker);
+}
 
 export interface TimestampStyle {
 	readonly format: string;
@@ -119,7 +128,8 @@ export function renderTranscriptBody(
 			.join("\n\n");
 	}
 	const { episode, timestamp } = options;
-	const speakerTemplate = options.speakerTemplate || DEFAULT_SPEAKER_TEMPLATE;
+	const speakerTemplate =
+		options.speakerTemplate || DEFAULT_SETTINGS.transcript.diarization.speakerTemplate;
 	const labels = new Map<string, string>();
 	const label = (speaker: string) => {
 		let written = labels.get(speaker);

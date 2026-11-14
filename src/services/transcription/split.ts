@@ -1,18 +1,19 @@
-/**
- * Pure audio chunking + WAV encoding for transcription uploads. Splits an episode
- * audio buffer into request-sized files, decoding and re-encoding to WAV any
- * format that can't be byte-split (everything except frame-synced MP3). Kept free
- * of any TranscriptionService/plugin state so it can be unit-tested directly — the
- * service just orchestrates it.
- */
-
-// OpenAI's per-request limit is 25 MB; we cap at 20 MB for a safety margin.
-// Buffers at or under this are sent as a single file.
-export const CHUNK_SIZE_BYTES = 20 * 1024 * 1024;
 const WAV_HEADER_SIZE = 44;
 const PCM_BYTES_PER_SAMPLE = 2;
 
-export function getMimeType(fileExtension: string): string {
+export interface AudioPart {
+	readonly file: File;
+	/** Seconds into the episode where this part starts. */
+	readonly start: number;
+}
+
+/** What one request may carry. `maxSeconds` limits MP3 parts only, because other formats are not measured without decoding them. */
+export interface PartCaps {
+	readonly maxBytes: number;
+	readonly maxSeconds?: number;
+}
+
+function getMimeType(fileExtension: string): string {
 	switch (fileExtension.toLowerCase()) {
 		case "mp3":
 			return "audio/mp3";
@@ -32,111 +33,50 @@ export function getMimeType(fileExtension: string): string {
 }
 
 /**
- * Whether a buffer too large for one request must be decoded and re-encoded to
- * standalone WAV chunks instead of sliced at raw byte boundaries.
+ * The files to send for an episode, in order. Audio within the caps goes whole, in its own
+ * format. A larger MP3 is cut at frame starts, where each part decodes on its own and its
+ * start time is known. Every other format keeps its codec setup at the start of the file,
+ * so it is decoded and sent as WAV parts.
  *
- * Only MP3 tolerates raw byte-splitting: its frames are self-synchronizing, so a
- * decoder resyncs at the next frame header even when a slice starts mid-stream.
- * Every other podcast format is container/header-dependent - m4a/mp4 (ISO-BMFF),
- * Ogg, WebM/Matroska (EBML) and FLAC all carry codec setup data only at the
- * stream start, and WAV is raw PCM behind a leading 44-byte header - so a
- * non-first arbitrary byte slice lacks the headers needed to decode standalone
- * and the transcription API rejects or garbles it. Treat anything that isn't
- * unambiguously MP3 as needing the WAV path (the safe default for unknown
- * formats); `getMimeType` only emits `audio/mp3` for an mp3 extension, while the
- * catch-all `audio/mpeg` is deliberately NOT treated as splittable.
+ * Files are named for their format only: a local file's own name is part of its path.
  */
-export function shouldConvertToWav(extension: string, mimeType: string): boolean {
-	const normalizedExtension = extension.toLowerCase();
-	const isMp3 = normalizedExtension === "mp3" || mimeType.toLowerCase() === "audio/mp3";
-	return !isMp3;
-}
+export async function splitAudio(
+	audio: { readonly buffer: ArrayBuffer; readonly extension: string },
+	{ maxBytes, maxSeconds = Infinity }: PartCaps,
+	signal?: AbortSignal,
+): Promise<AudioPart[]> {
+	const { buffer, extension } = audio;
+	const type = getMimeType(extension);
+	const whole = () => [{ file: new File([buffer], `audio.${extension}`, { type }), start: 0 }];
+	const fits = buffer.byteLength <= maxBytes;
+	if (fits && maxSeconds === Infinity) return whole();
 
-/**
- * `maxSeconds` also caps each chunk's audio length, for MP3 only. Other formats
- * over 20 MB become WAV chunks of under four minutes, and smaller ones go up whole.
- */
-export async function createChunkFiles({
-	buffer,
-	basename,
-	extension,
-	mimeType,
-	maxSeconds,
-}: {
-	buffer: ArrayBuffer;
-	basename: string;
-	extension: string;
-	mimeType: string;
-	maxSeconds?: number;
-}): Promise<File[]> {
-	if (maxSeconds !== undefined && !shouldConvertToWav(extension, mimeType)) {
-		const ends = mp3ChunkEnds(new Uint8Array(buffer), CHUNK_SIZE_BYTES, maxSeconds);
-		return sliceIntoFiles(buffer, ends, basename, extension, mimeType);
+	const frames = type === "audio/mp3" ? mp3Frames(new Uint8Array(buffer)) : [];
+	if (frames.length > 0) {
+		const starts = mp3PartStarts(frames, buffer.byteLength, maxBytes, maxSeconds);
+		if (starts.length === 1) return whole();
+		return starts.map(({ offset, seconds }, index) => ({
+			file: new File(
+				[buffer.slice(offset, starts[index + 1]?.offset)],
+				`audio.part${index}.${extension}`,
+				{ type },
+			),
+			start: seconds,
+		}));
 	}
 
-	// A file that already fits in a single request needs neither conversion nor
-	// splitting: send the original (compressed) bytes. OpenAI accepts m4a/mp3/etc.
-	// directly under the upload limit, so this skips the m4a->WAV path below for
-	// small m4a episodes — that path only exists to SAFELY SPLIT an m4a (which
-	// can't be byte-split) and would otherwise balloon a small m4a into many
-	// uncompressed WAV chunks, multiplying requests and, for diarization,
-	// resetting speaker labels at artificial chunk boundaries (#168 / PR #204 review).
-	if (buffer.byteLength <= CHUNK_SIZE_BYTES) {
-		return [new File([buffer], `${basename}.${extension}`, { type: mimeType })];
-	}
-
-	// Container/header-dependent formats must be decoded and re-encoded to WAV;
-	// only frame-synced MP3 falls through to raw byte-splitting.
-	if (shouldConvertToWav(extension, mimeType)) {
-		const wavChunks = await convertToWavChunks(buffer, basename);
-		if (wavChunks.length > 0) {
-			return wavChunks;
-		}
-		// WAV conversion produced nothing - the platform has no Web Audio decoder
-		// or couldn't decode this codec. Byte-splitting the raw container here would
-		// hand the API undecodable chunks (garbled or rejected output saved as a
-		// transcript), so fail loudly and keep the run retryable instead.
+	// Other formats are measured by their metadata, without decoding them, and audio of an
+	// unknown length goes whole.
+	const seconds = fits ? await mediaSeconds(buffer, type, signal) : NaN;
+	if (signal?.aborted) throw signal.reason;
+	if (fits && !(seconds > maxSeconds)) return whole();
+	const parts = await convertToWavParts(buffer, maxBytes, maxSeconds);
+	if (parts.length === 0) {
 		throw new Error(
 			`Could not split ${extension || "audio"} audio for transcription. This format must be decoded to WAV before splitting, but the audio decoder is unavailable or could not decode it.`,
 		);
 	}
-
-	return createBinaryChunkFiles(buffer, basename, extension, mimeType);
-}
-
-export function createBinaryChunkFiles(
-	buffer: ArrayBuffer,
-	basename: string,
-	extension: string,
-	mimeType: string,
-): File[] {
-	const ends: number[] = [];
-	for (let end = CHUNK_SIZE_BYTES; end < buffer.byteLength; end += CHUNK_SIZE_BYTES) {
-		ends.push(end);
-	}
-	ends.push(buffer.byteLength);
-	return sliceIntoFiles(buffer, ends, basename, extension, mimeType);
-}
-
-/** One file per chunk, where `ends` holds each chunk's end offset in order. */
-function sliceIntoFiles(
-	buffer: ArrayBuffer,
-	ends: number[],
-	basename: string,
-	extension: string,
-	mimeType: string,
-): File[] {
-	if (ends.length === 1) {
-		return [new File([buffer], `${basename}.${extension}`, { type: mimeType })];
-	}
-	return ends.map(
-		(end, index) =>
-			new File(
-				[buffer.slice(index === 0 ? 0 : ends[index - 1], end)],
-				`${basename}.part${index}.${extension}`,
-				{ type: mimeType },
-			),
-	);
+	return parts;
 }
 
 interface Mp3Frame {
@@ -156,24 +96,28 @@ const SAMPLE_RATES = [
 ];
 
 /**
- * Where each chunk of an MP3 ends: at frame starts, in as few chunks as both limits allow,
- * cut as close to equal frame counts as the size limit lets them be, so no chunk is a
- * one-frame tail that cannot be decoded.
+ * Where each part of an MP3 starts, in bytes and in seconds of audio: at frame starts, in as
+ * few parts as both caps allow, cut as close to equal frame counts as the size cap lets
+ * them be, so no part is a one-frame tail that cannot be decoded. The first part starts at
+ * byte 0 and keeps a leading tag.
  */
-export function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: number): number[] {
-	const frames = mp3Frames(bytes);
+function mp3PartStarts(
+	frames: Mp3Frame[],
+	byteLength: number,
+	maxBytes: number,
+	maxSeconds: number,
+): { offset: number; seconds: number }[] {
 	const count = frames.length;
-	if (count === 0) return [bytes.length];
 	// elapsed[i] is the length of frames [0, i). Summing durations drifts by a few ulps, so
 	// the time limit gets a microsecond of slack.
 	const elapsed = [0];
 	for (const frame of frames) elapsed.push(elapsed[elapsed.length - 1] + frame.seconds);
 	const startOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
-	const endOf = (end: number) => (end === count ? bytes.length : frames[end].offset);
+	const endOf = (end: number) => (end === count ? byteLength : frames[end].offset);
 	const fits = (first: number, end: number) =>
 		elapsed[end] - elapsed[first] <= maxSeconds + 1e-6 &&
 		endOf(end) - startOf(first) <= maxBytes;
-	/** The end of the longest chunk that starts at `first` and fits, or one frame. */
+	/** The end of the longest part that starts at `first` and fits, or one frame. */
 	const furthest = (first: number) => {
 		let [low, high] = [first + 1, count];
 		while (low < high) {
@@ -183,7 +127,7 @@ export function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: nu
 		}
 		return low;
 	};
-	/** The start of the longest chunk that ends at `end` and fits, or one frame. */
+	/** The start of the longest part that ends at `end` and fits, or one frame. */
 	const earliest = (end: number) => {
 		let [low, high] = [0, end - 1];
 		while (low < high) {
@@ -193,25 +137,25 @@ export function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: nu
 		}
 		return low;
 	};
-	// Filling each chunk as far as it fits gives the fewest chunks.
-	let chunks = 0;
-	for (let first = 0; first < count; first = furthest(first)) chunks++;
-	// lowest[index] is the earliest frame chunk `index` may start at and still leave the
-	// chunks after it able to reach the end.
+	// Filling each part as far as it fits gives the fewest parts.
+	let parts = 0;
+	for (let first = 0; first < count; first = furthest(first)) parts++;
+	// lowest[index] is the earliest frame part `index` may start at and still leave the parts
+	// after it able to reach the end.
 	const lowest: number[] = [];
-	for (let index = chunks - 1, end = count; index > 0; index--) {
+	for (let index = parts - 1, end = count; index > 0; index--) {
 		end = earliest(end);
 		lowest[index] = end;
 	}
-	// Each cut aims at an equal share of the frames still to place, within what keeps
-	// this chunk and the ones after it fitting.
+	// Each cut aims at an equal share of the frames still to place, within what keeps this
+	// part and the ones after it fitting.
 	const firsts = [0];
-	for (let index = 1; index < chunks; index++) {
+	for (let index = 1; index < parts; index++) {
 		const first = firsts[index - 1];
-		const share = first + Math.ceil((count - first) / (chunks - index + 1));
+		const share = first + Math.ceil((count - first) / (parts - index + 1));
 		firsts.push(Math.min(Math.max(share, lowest[index]), furthest(first)));
 	}
-	return [...firsts.slice(1).map((first) => frames[first].offset), bytes.length];
+	return firsts.map((first) => ({ offset: startOf(first), seconds: elapsed[first] }));
 }
 
 /**
@@ -270,13 +214,47 @@ function mp3FrameAt(bytes: Uint8Array, offset: number): Mp3Frame | undefined {
 	};
 }
 
-async function convertToWavChunks(buffer: ArrayBuffer, basename: string): Promise<File[]> {
+/**
+ * The audio's length from its metadata, or NaN when it has none, cannot be read within 5 s
+ * (a WebView may load no media it does not play), or the job is aborted.
+ */
+async function mediaSeconds(
+	buffer: ArrayBuffer,
+	type: string,
+	signal: AbortSignal | undefined,
+): Promise<number> {
+	if (typeof activeDocument === "undefined") return NaN;
+	const url = URL.createObjectURL(new Blob([buffer], { type }));
+	const audio = activeDocument.createElement("audio");
+	let timer = 0;
+	try {
+		return await new Promise<number>((resolve) => {
+			const unknown = () => resolve(NaN);
+			audio.onloadedmetadata = () => resolve(audio.duration);
+			audio.onerror = unknown;
+			signal?.addEventListener("abort", unknown, { once: true });
+			timer = window.setTimeout(unknown, 5000);
+			audio.preload = "metadata";
+			audio.src = url;
+		});
+	} finally {
+		window.clearTimeout(timer);
+		audio.removeAttribute("src");
+		URL.revokeObjectURL(url);
+	}
+}
+
+async function convertToWavParts(
+	buffer: ArrayBuffer,
+	maxBytes: number,
+	maxSeconds: number,
+): Promise<AudioPart[]> {
 	const audioContext = createAudioContext();
 	if (!audioContext) return [];
 
 	try {
 		const audioBuffer = await audioContext.decodeAudioData(buffer.slice(0));
-		return renderWavChunks(audioBuffer, basename);
+		return renderWavParts(audioBuffer, maxBytes, maxSeconds);
 	} catch (error) {
 		console.warn("Failed to convert audio buffer for transcription", error);
 		return [];
@@ -304,34 +282,40 @@ function createAudioContext(): AudioContext | null {
 	return new contextCtor();
 }
 
-function renderWavChunks(audioBuffer: AudioBuffer, basename: string): File[] {
+function renderWavParts(
+	audioBuffer: AudioBuffer,
+	maxBytes: number,
+	maxSeconds: number,
+): AudioPart[] {
 	const numChannels = audioBuffer.numberOfChannels;
 	const bytesPerFrame = numChannels * PCM_BYTES_PER_SAMPLE;
-	const availableBytesPerChunk = CHUNK_SIZE_BYTES - WAV_HEADER_SIZE;
-	const maxSamplesPerChunk = Math.max(1, Math.floor(availableBytesPerChunk / bytesPerFrame));
+	const maxSamplesPerPart = Math.max(
+		1,
+		Math.min(
+			Math.floor((maxBytes - WAV_HEADER_SIZE) / bytesPerFrame),
+			Math.floor(maxSeconds * audioBuffer.sampleRate),
+		),
+	);
 	const channelData = Array.from({ length: numChannels }, (_, channelIndex) =>
 		audioBuffer.getChannelData(channelIndex),
 	);
-	const files: File[] = [];
-	let chunkIndex = 0;
+	const parts: AudioPart[] = [];
 
-	for (let startSample = 0; startSample < audioBuffer.length; startSample += maxSamplesPerChunk) {
-		const endSample = Math.min(audioBuffer.length, startSample + maxSamplesPerChunk);
+	for (let startSample = 0; startSample < audioBuffer.length; startSample += maxSamplesPerPart) {
+		const endSample = Math.min(audioBuffer.length, startSample + maxSamplesPerPart);
 		const wavBuffer = renderWavBuffer(
 			channelData,
 			audioBuffer.sampleRate,
 			startSample,
 			endSample,
 		);
-		files.push(
-			new File([wavBuffer], `${basename}.part${chunkIndex}.wav`, {
-				type: "audio/wav",
-			}),
-		);
-		chunkIndex++;
+		parts.push({
+			file: new File([wavBuffer], `audio.part${parts.length}.wav`, { type: "audio/wav" }),
+			start: startSample / audioBuffer.sampleRate,
+		});
 	}
 
-	return files;
+	return parts;
 }
 
 function renderWavBuffer(
@@ -361,7 +345,7 @@ function renderWavBuffer(
 	return buffer;
 }
 
-export function writeWavHeader(
+function writeWavHeader(
 	view: DataView,
 	sampleRate: number,
 	numChannels: number,
