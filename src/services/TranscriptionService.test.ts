@@ -1336,6 +1336,7 @@ describe("TranscriptionService", () => {
 				expect(await fields(request)).toEqual({
 					model,
 					response_format: "verbose_json",
+					"timestamp_granularities[]": "word",
 					diarize: "true",
 				});
 				expect(new Uint8Array(await (await sentFile(request)).arrayBuffer())).toEqual(
@@ -1361,6 +1362,65 @@ describe("TranscriptionService", () => {
 			},
 		);
 
+		test.each(["elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
+			"with speaker labels off, %s is still asked for word times, which OpenRouter sends only when asked",
+			async (model) => {
+				openRouter((request) =>
+					Response.json(
+						/timestamp_granularities|diarize/.test(sentText(request))
+							? {
+									...answers,
+									words: answers.words.map(
+										({ speaker: _speaker, speaker_label: _label, ...rest }) =>
+											rest,
+									),
+								}
+							: {
+									text: answers.text,
+									duration: 11,
+									segments: [{ id: 0, start: 0, end: 11, text: answers.text }],
+								},
+					),
+				);
+				const plugin = useOpenRouter({ model, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+				expect(savedNote(plugin)).toBe(unlabeled);
+			},
+		);
+
+		test("Scribe v2 uploads the episode once when OpenRouter's provider cannot download its address", async () => {
+			openRouter((request) =>
+				request.contentType === "application/json"
+					? Response.json(
+							{
+								error: {
+									message:
+										"Provider could not download input_audio.url; ensure it is publicly reachable and serves a supported audio file",
+									code: 400,
+								},
+							},
+							{ status: 400 },
+						)
+					: Response.json(answers),
+			);
+			const plugin = useOpenRouter({
+				model: "elevenlabs/scribe-v2",
+				feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(sent().map(({ contentType }) => contentType === "application/json")).toEqual([
+				true,
+				false,
+			]);
+			expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce();
+			expect(savedNote(plugin)).toBe(labeled);
+		});
+
 		test("Scribe v2 takes a public episode by its address in one request, and its audio is never loaded", async () => {
 			openRouter();
 			const plugin = useOpenRouter({
@@ -1379,6 +1439,7 @@ describe("TranscriptionService", () => {
 				model: "elevenlabs/scribe-v2",
 				input_audio: { url: "https://example.com/episode.mp3", format: "mp3" },
 				response_format: "verbose_json",
+				timestamp_granularities: ["word"],
 				diarize: true,
 			});
 			expect(savedNote(plugin)).toBe(labeled);

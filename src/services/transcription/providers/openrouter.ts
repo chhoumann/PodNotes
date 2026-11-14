@@ -50,13 +50,17 @@ const grok: Body = async ({ model, speakers, audio }) => {
 	};
 };
 
-/** Scribe v2 and MAI-Transcribe 2 take `diarize` beside the model. Only Scribe v2 fetches an address. */
+/**
+ * Scribe v2 and MAI-Transcribe 2 take `diarize` beside the model, and list words only when
+ * asked for speakers or word times. Only Scribe v2 fetches an address.
+ */
 const topLevelDiarize: Body = async ({ model, speakers, audio }) => {
 	if ("url" in audio) {
 		return {
 			model: model.id,
 			input_audio: { url: audio.url, format: "mp3" },
 			response_format: "verbose_json",
+			timestamp_granularities: ["word"],
 			...(speakers && { diarize: true }),
 		};
 	}
@@ -64,6 +68,7 @@ const topLevelDiarize: Body = async ({ model, speakers, audio }) => {
 	form.append("model", model.id);
 	form.append("file", audio.file);
 	form.append("response_format", "verbose_json");
+	form.append("timestamp_granularities[]", "word");
 	if (speakers) form.append("diarize", "true");
 	return form;
 };
@@ -117,16 +122,22 @@ export const openrouter: Provider = {
 		);
 	},
 
-	// A 404 also answers a model whose every route breaks the account's privacy settings,
-	// such as zero data retention: "No endpoints found matching your data policy".
-	failure: (status, body) =>
-		status === 404 &&
-		isPlainObject(body) &&
-		isPlainObject(body.error) &&
-		typeof body.error.message === "string" &&
-		/data policy|zero data retention|\bzdr\b/i.test(body.error.message)
-			? "privacy"
-			: undefined,
+	failure(status, body) {
+		const message =
+			isPlainObject(body) &&
+			isPlainObject(body.error) &&
+			typeof body.error.message === "string"
+				? body.error.message
+				: "";
+		// A 404 also answers a model whose every route breaks the account's privacy settings,
+		// such as zero data retention: "... matching your guardrail restrictions and data policy".
+		if (status === 404 && /data policy|zero data retention|\bzdr\b/i.test(message)) {
+			return "privacy";
+		}
+		if (status === 400 && /could not download input_audio\.url/i.test(message))
+			return "unfetched";
+		return undefined;
+	},
 
 	async catalog() {
 		const answer = await fetchJsonWithTimeout<unknown>(CATALOG_URL, { timeoutMs: 15_000 });
