@@ -1415,6 +1415,43 @@ describe("TranscriptionService", () => {
 			expect(note).toContain(`Part ${partBytes.length}.`);
 		});
 
+		test("labels from two parts never name the same speaker, and the notice says labels restart in each", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+			openRouter(() =>
+				Response.json({ words: [word("Hello.", 1, 1.5, 0), word("Hi.", 10, 10.5, 1)] }),
+			);
+			const plugin = createMockPlugin({
+				provider: "openrouter",
+				openRouterKey: "openrouter-key",
+				speakers: true,
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"OpenRouter transcribed this episode in 2 parts, and speaker labels restart in each, so one person can have several labels.",
+			);
+
+			expect(sent()).toHaveLength(2);
+			const labels = [...savedNote(plugin).matchAll(/\*\*(\d+):\*\* (\w+)/g)].map(
+				([, speaker, text]) => `${speaker} ${text}`,
+			);
+			expect(labels).toEqual(["1 Hello", "2 Hi", "3 Hello", "4 Hi"]);
+		});
+
+		test("speaker labels asked for and none returned, as from a route that ignores the option, saves the note and says so", async () => {
+			openRouter(() =>
+				Response.json({ words: [word("Hello", 1.2, 1.5), word("there.", 1.5, 1.9)] }),
+			);
+			const plugin = useOpenRouter();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Saved without speaker labels, because Grok STT 2.0 returned none.",
+			);
+
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.`,
+			);
+		});
+
 		test.each<[name: string, status: number, message: string, shown: string]>([
 			[
 				"402",
