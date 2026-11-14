@@ -64,8 +64,10 @@ export async function splitAudio(
 		}));
 	}
 
-	if (fits) return whole();
-	const parts = await convertToWavParts(buffer, maxBytes);
+	// Other formats are measured by their metadata, without decoding them, and audio of an
+	// unknown length goes whole.
+	if (fits && !((await mediaSeconds(buffer, type)) > maxSeconds)) return whole();
+	const parts = await convertToWavParts(buffer, maxBytes, maxSeconds);
 	if (parts.length === 0) {
 		throw new Error(
 			`Could not split ${extension || "audio"} audio for transcription. This format must be decoded to WAV before splitting, but the audio decoder is unavailable or could not decode it.`,
@@ -209,13 +211,35 @@ function mp3FrameAt(bytes: Uint8Array, offset: number): Mp3Frame | undefined {
 	};
 }
 
-async function convertToWavParts(buffer: ArrayBuffer, maxBytes: number): Promise<AudioPart[]> {
+/** The audio's length from its metadata, or NaN when it has none or cannot be read. */
+async function mediaSeconds(buffer: ArrayBuffer, type: string): Promise<number> {
+	if (typeof activeDocument === "undefined") return NaN;
+	const url = URL.createObjectURL(new Blob([buffer], { type }));
+	const audio = activeDocument.createElement("audio");
+	try {
+		return await new Promise<number>((resolve) => {
+			audio.onloadedmetadata = () => resolve(audio.duration);
+			audio.onerror = () => resolve(NaN);
+			audio.preload = "metadata";
+			audio.src = url;
+		});
+	} finally {
+		audio.removeAttribute("src");
+		URL.revokeObjectURL(url);
+	}
+}
+
+async function convertToWavParts(
+	buffer: ArrayBuffer,
+	maxBytes: number,
+	maxSeconds: number,
+): Promise<AudioPart[]> {
 	const audioContext = createAudioContext();
 	if (!audioContext) return [];
 
 	try {
 		const audioBuffer = await audioContext.decodeAudioData(buffer.slice(0));
-		return renderWavParts(audioBuffer, maxBytes);
+		return renderWavParts(audioBuffer, maxBytes, maxSeconds);
 	} catch (error) {
 		console.warn("Failed to convert audio buffer for transcription", error);
 		return [];
@@ -243,10 +267,20 @@ function createAudioContext(): AudioContext | null {
 	return new contextCtor();
 }
 
-function renderWavParts(audioBuffer: AudioBuffer, maxBytes: number): AudioPart[] {
+function renderWavParts(
+	audioBuffer: AudioBuffer,
+	maxBytes: number,
+	maxSeconds: number,
+): AudioPart[] {
 	const numChannels = audioBuffer.numberOfChannels;
 	const bytesPerFrame = numChannels * PCM_BYTES_PER_SAMPLE;
-	const maxSamplesPerPart = Math.max(1, Math.floor((maxBytes - WAV_HEADER_SIZE) / bytesPerFrame));
+	const maxSamplesPerPart = Math.max(
+		1,
+		Math.min(
+			Math.floor((maxBytes - WAV_HEADER_SIZE) / bytesPerFrame),
+			Math.floor(maxSeconds * audioBuffer.sampleRate),
+		),
+	);
 	const channelData = Array.from({ length: numChannels }, (_, channelIndex) =>
 		audioBuffer.getChannelData(channelIndex),
 	);

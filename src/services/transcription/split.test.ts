@@ -407,7 +407,7 @@ describe("an MP3 over a cap", () => {
 	});
 });
 
-describe("audio over the size cap that cannot be cut where it is", () => {
+describe("audio without MP3 frames to cut at", () => {
 	const SAMPLE_RATE = 44_100;
 
 	// jsdom has no Web Audio, so a decoder that returns silence of the given length stands in.
@@ -474,6 +474,55 @@ describe("audio over the size cap that cannot be cut where it is", () => {
 			);
 		},
 	);
+
+	describe("an .m4a under the size cap", () => {
+		const stubSeconds = (seconds: number) =>
+			vi.spyOn(HTMLMediaElement.prototype, "duration", "get").mockReturnValue(seconds);
+		const noDecoder = () =>
+			stubAudioContext(() => {
+				throw new Error("decoded audio that goes whole");
+			});
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		test("but over maxSeconds is decoded into WAV parts no longer than maxSeconds", async () => {
+			stubSeconds(5);
+			stubAudioContext(() => new FakeAudioBuffer(5 * SAMPLE_RATE));
+
+			const parts = await split(
+				new Uint8Array(4096),
+				{ maxBytes: MIB, maxSeconds: 2 },
+				"m4a",
+			);
+
+			expect(parts.map((part) => (part.bytes.length - 44) / 2 / SAMPLE_RATE)).toEqual([
+				2, 2, 1,
+			]);
+			expect(parts.map((part) => part.start)).toEqual([0, 2, 4]);
+		});
+
+		test("within maxSeconds goes whole, without decoding", async () => {
+			stubSeconds(1.5);
+			noDecoder();
+			const episode = new Uint8Array(4096).fill(7);
+
+			const parts = await split(episode, { maxBytes: MIB, maxSeconds: 2 }, "m4a");
+
+			expect(parts).toEqual([
+				{ name: "audio.m4a", type: "audio/mp4", start: 0, bytes: episode },
+			]);
+		});
+
+		test("whose length its metadata does not give goes whole", async () => {
+			noDecoder();
+			const episode = new Uint8Array(4096).fill(7);
+
+			const parts = await split(episode, { maxBytes: MIB, maxSeconds: 2 }, "m4a");
+
+			expect(parts.map((part) => part.name)).toEqual(["audio.m4a"]);
+		});
+	});
 
 	test("throws when no decoder is available", async () => {
 		await expect(split(new Uint8Array(1025), { maxBytes: 1024 }, "flac")).rejects.toThrow(
