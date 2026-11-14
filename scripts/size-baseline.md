@@ -12,10 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 107,865 bytes and the raw budget 333,293. On 2026-10-14 it rose from 100,000 for
-```
-
-The gzip budget is now 107,181 bytes. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 108,157 bytes and the raw budget 334,096. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -67,18 +64,6 @@ main.js raw: 327446 bytes; budget 330000 bytes; 2554 bytes remaining
 main.js gzip (level 9): 106873 bytes; budget 106970 bytes; 97 bytes remaining
 ```
 
-Later on 2026-11-14 both budgets rose for the OpenAI-compatible server
-provider, the first rise of the raw budget. The branch it builds on measured
-327,446 raw and 106,873 gzip bytes. The provider, its settings rows, gate and
-failure sentences measured 3,293 raw and 895 gzip bytes more. Each budget rose
-by its delta, to 333,293 and 107,865, so the headroom stays as it was. With
-them:
-
-```text
-main.js raw: 330739 bytes; budget 333293 bytes; 2554 bytes remaining
-main.js gzip (level 9): 107768 bytes; budget 107865 bytes; 97 bytes remaining
-```
-
 Later on 2026-11-14 it rose from 106,970 for Voxtral Mini Transcribe 3 and
 Qwen3 ASR 1.7B on OpenRouter. The branch it builds on measured 106,873 bytes.
 The two models and the segment times Voxtral answers with measured 211 more.
@@ -95,6 +80,30 @@ With them:
 ```text
 main.js raw: 328482 bytes; budget 330000 bytes; 1518 bytes remaining
 main.js gzip (level 9): 107184 bytes; budget 107281 bytes; 97 bytes remaining
+```
+
+Later on 2026-11-14 both budgets rose for the OpenAI-compatible server
+provider, the first rise of the raw budget. The branch it builds on measured
+327,446 raw and 106,873 gzip bytes. The provider, its settings rows, gate and
+failure sentences measured 3,293 raw and 895 gzip bytes more. Each budget rose
+by its delta, to 333,293 and 107,865, so the headroom stays as it was. With
+them:
+
+```text
+main.js raw: 330739 bytes; budget 333293 bytes; 2554 bytes remaining
+main.js gzip (level 9): 107768 bytes; budget 107865 bytes; 97 bytes remaining
+```
+
+Both budgets then rose when the OpenAI-compatible branch merged the OpenRouter
+models' branch and was stacked on it. Apart, the two measured 107,768 and
+107,184 gzip bytes. Merged, they measured 331,775 raw and 108,094 gzip bytes.
+One verbose_json reader shared by both providers and a json fallback asked for
+once per job brought that to 331,542 and 108,060. Each budget is that plus the
+headroom kept above, 2,554 raw and 97 gzip bytes. With them:
+
+```text
+main.js raw: 331542 bytes; budget 334096 bytes; 2554 bytes remaining
+main.js gzip (level 9): 108060 bytes; budget 108157 bytes; 97 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
