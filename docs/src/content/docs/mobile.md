@@ -80,9 +80,10 @@ Long-press a media file in the file explorer, where a computer uses a right-clic
 
 **PodNotes: Transcribe current episode**, **PodNotes: Transcribe current episode from audio**, and the **Transcript** panel work on a phone as on a computer. See [Transcribe episodes](/transcripts/).
 
-- Add your provider's API key on your phone once under **Transcripts** in **Settings → PodNotes**, because Obsidian stores API keys per device. See [Choose a transcription provider](/transcription-providers/).
+- Add your provider's API key on your phone once under **Transcripts** in **Settings → PodNotes** (when your provider or server uses a key), because Obsidian stores API keys per device. See [Choose a transcription provider](/transcription-providers/).
 - For a public episode from a podcast you added, **ElevenLabs**, **Deepgram**, and OpenRouter's **ElevenLabs Scribe v2** send only the episode's public address, so your phone does not download or upload the audio file over mobile data unless the provider cannot fetch that address.
-- OpenRouter's **Grok STT 2.0** and **MAI-Transcribe 2**, **OpenAI**, private feeds, and local audio files download or read the audio on your phone and upload it, splitting long files into parts in memory.
+- OpenRouter's **Grok STT 2.0**, **MAI-Transcribe 2**, **Voxtral Mini Transcribe 3**, and **Qwen3 ASR 1.7B**, **OpenAI**, **OpenAI-compatible server**, private feeds, and local audio files download or read the audio on your phone and upload it, splitting long files into parts in memory.
+- **Server address** syncs between devices, and on a phone `localhost` or `127.0.0.1` points to the phone itself. To reach an **OpenAI-compatible server** running on your computer, enter your computer's local network or VPN address (for example `http://192.168.1.20:8000/v1`) instead of `localhost`.
 
 ## <span id="known-limits-and-verified-devices"></span>Limits on phones
 

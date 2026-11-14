@@ -4,13 +4,13 @@ slug: update-2-25
 description: What changes in audio transcription when you update from PodNotes 2.24.0 to 2.25.0, including the OpenAI model change and how to keep speaker labels.
 ---
 
-Update from PodNotes 2.24.0 to 2.25.0 to transcribe audio with **ElevenLabs**, **Deepgram**, **OpenRouter**, or **OpenAI**, and get clickable timestamps in audio transcripts. If you are updating from 2.21.1 or earlier, read [Update to 2.22.0](/upgrade/) first.
+Update from PodNotes 2.24.0 to 2.25.0 to transcribe audio with **ElevenLabs**, **Deepgram**, **OpenRouter**, **OpenAI**, or an **OpenAI-compatible server**, and get clickable timestamps in audio transcripts. If you are updating from 2.21.1 or earlier, read [Update to 2.22.0](/upgrade/) first.
 
 ## Why OpenAI transcription changed
 
 OpenAI shuts down `whisper-1` and `gpt-4o-transcribe-diarize` on `2027-02-26`. PodNotes 2.25.0 moves OpenAI transcription to **GPT Transcribe** (`gpt-transcribe`).
 
-**GPT Transcribe** returns plain text only, without timestamps and without speaker labels. **ElevenLabs**, **Deepgram**, and **OpenRouter** all return both clickable timestamps and speaker labels.
+**GPT Transcribe** returns plain text only, without timestamps and without speaker labels. **ElevenLabs**, **Deepgram**, and three **OpenRouter** models (**Grok STT 2.0**, **ElevenLabs Scribe v2**, and **MAI-Transcribe 2**) return both clickable timestamps and speaker labels. OpenRouter's **Voxtral Mini Transcribe 3** and **Qwen3 ASR 1.7B**, and an **OpenAI-compatible server** that returns word or segment times, add clickable timestamps without speaker labels.
 
 ## How your 2.24.0 settings migrate
 
@@ -23,16 +23,16 @@ PodNotes maps your 2.24.0 transcript settings automatically on first load:
 | **Speaker diarization** off, OpenAI key linked | **OpenAI** | **Recommended (GPT Transcribe)** | Off | Keeps using your OpenAI key with **GPT Transcribe** in place of `whisper-1`. Transcripts remain plain paragraphs without timestamps or speaker labels. |
 | **Speaker diarization** off, no OpenAI key linked | **ElevenLabs** | **Recommended (Scribe v3)** | Off | Ready for ElevenLabs if you decide to add a key later. Turn on **Speaker labels** under **Transcripts** when you want speaker numbers. Feed transcripts still save for free without a key. |
 
-**Transcript path**, **Transcript template**, and **Speaker label format** keep the values you set in 2.24.0. In settings under **Transcripts**, **Speaker diarization** is renamed to **Speaker labels**, and **Diarization provider** is replaced by **Transcription provider** and **Model**.
+**Transcript path**, **Transcript template**, and **Speaker label format** keep the values you set in 2.24.0. In settings under **Transcripts**, **Speaker diarization** is renamed to **Speaker labels**, and **Diarization provider** is replaced by **Transcription provider** and **Model** (plus **Server address** when you select **OpenAI-compatible server**).
 
 ## Get speaker labels and timestamps after using OpenAI
 
-If you used OpenAI for speaker labels in 2.24.0, or if you want clickable timestamps in audio transcripts, set up **ElevenLabs**, **Deepgram**, or **OpenRouter** in [Choose a transcription provider](/transcription-providers/). Then check that **Speaker labels** is on:
+If you used OpenAI for speaker labels in 2.24.0, set up **ElevenLabs**, **Deepgram**, or a speaker-labeled **OpenRouter** model in [Choose a transcription provider](/transcription-providers/), or connect a local or hosted **OpenAI-compatible server** if you want timestamps without speaker labels. For speaker labels, check that **Speaker labels** is on:
 
 1. In Obsidian, open **Settings → PodNotes**.
 2. Under **Transcripts**, turn on **Speaker labels** if it is off.
 
-If you prefer to stay on **OpenAI** without speaker labels, turn off **Speaker labels** under **Transcripts** so PodNotes stops showing the missing-labels notice after each transcription.
+If you prefer to stay on **OpenAI** (or use **OpenAI-compatible server**, **Voxtral Mini Transcribe 3**, or **Qwen3 ASR 1.7B**) without speaker labels, turn off **Speaker labels** under **Transcripts** so PodNotes stops showing the missing-labels notice after each transcription.
 
 ## Devices still on 2.24.0
 

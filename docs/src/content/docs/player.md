@@ -88,13 +88,13 @@ This clip opens **Transcript**, selects a line to play from it, and finds the wo
 
 ![The full player's Transcript panel: a selected line plays from its time, and a search for walk shows only the lines that contain it](/videos/transcript.mp4)
 
-When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with ElevenLabs**, or **Transcribe with** whichever **Transcription provider** you chose, with a **Paid** tag:
+When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with ElevenLabs**, or **Transcribe with** whichever cloud **Transcription provider** you chose, with a **Paid** tag (or **Transcribe with your server** without a **Paid** tag when **OpenAI-compatible server** is chosen):
 
-- The button transcribes the audio with your own API key, and your provider bills you for it. See [What transcription costs](/transcripts/#what-transcription-costs).
-- Without the key on this device, a notice asks you to add it. See [Choose a transcription provider](/transcription-providers/).
+- The button transcribes the audio with your chosen provider. Cloud providers bill your own account for it, and **OpenAI-compatible server** sends the audio to **Server address**. See [What transcription costs](/transcripts/#what-transcription-costs).
+- Before the provider is set up on this device, a notice asks for the missing key, **Server address**, or **Model**. See [Choose a transcription provider](/transcription-providers/).
 - The result is a transcript note, which PodNotes opens. The panel shows only transcripts that feeds publish, so it does not show the note's lines.
-- Once the episode's transcript note exists, the panel offers **Open note** in place of the paid button, and also next to **Retry** when the transcript did not load.
-- Offline, the paid button and **Save as note** are turned off, and **Open note** still works.
+- Once the episode's transcript note exists, the panel offers **Open note** in place of the transcribe button, and also next to **Retry** when the transcript did not load.
+- Offline, the transcribe button and **Save as note** are turned off, and **Open note** still works.
 
 ### Up next
 

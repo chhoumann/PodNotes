@@ -52,7 +52,7 @@ PodNotes also imports settings files from older versions and a copy of `data.jso
 
 ### API keys in a settings file
 
-With **Include API keys** on, the file contains your ElevenLabs, OpenRouter, OpenAI, and Deepgram API keys in plain text, for every provider you have set up on this device. The file sits in your vault, so it can sync to other devices, and other plugins can read it. Keep the file private, and delete it when you no longer need it.
+With **Include API keys** on, the file contains your ElevenLabs, Deepgram, OpenRouter, OpenAI, and OpenAI-compatible server API keys in plain text, for every provider whose key is linked on this device. **Server address** and **Model** are always part of the exported settings. The file sits in your vault, so it can sync to other devices, and other plugins can read it. Keep the file private, and delete it when you no longer need it.
 
 - **Include API keys** turns off again each time you open the settings.
 - If a selected key is missing on this device, the export stops with a notice. Select or create the key under **Transcripts**, then export again.
