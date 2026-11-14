@@ -486,7 +486,7 @@ describe("TranscriptionService", () => {
 				await vi.advanceTimersByTimeAsync(60 * 60_000);
 
 				expect(String(setMessage.mock.calls.at(-1)?.[0])).toMatch(
-					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
+					/\n\nSaved without speaker labels, because GPT Transcribe does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
 				);
 				expect(hide).not.toHaveBeenCalled();
 				expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
