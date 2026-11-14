@@ -163,20 +163,20 @@ describe("TranscriptionService", () => {
 			"%s refuses a provider this version does not have, and sends nothing",
 			async (_command, run) => {
 				const plugin = createMockPlugin({
-					provider: "openrouter",
-					model: "x-ai/grok-stt-2.0",
+					provider: "assemblyai",
+					model: "universal-3-6-pro",
 				});
 
 				await run(new TranscriptionService(plugin));
 
 				expect(noticeMessages).toEqual([
-					"This version of PodNotes cannot transcribe with openrouter. Update PodNotes, or choose another provider in the transcript settings.",
+					"This version of PodNotes cannot transcribe with assemblyai. Update PodNotes, or choose another provider in the transcript settings.",
 				]);
 				expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 				expect(providerMock).not.toHaveBeenCalled();
 				expect(plugin.settings.transcript).toMatchObject({
-					provider: "openrouter",
-					model: "x-ai/grok-stt-2.0",
+					provider: "assemblyai",
+					model: "universal-3-6-pro",
 				});
 			},
 		);

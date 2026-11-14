@@ -410,10 +410,10 @@ describe("Transcripts", () => {
 
 	test("a provider this version does not have stays selected under its stored name, with no key or model row", async () => {
 		const { ui, provider, keyButtons, writes } = openTranscripts(
-			transcript({ provider: "openrouter", model: "x-ai/grok-stt-2.0" }),
+			transcript({ provider: "assemblyai", model: "universal-3-6-pro" }),
 		);
 
-		expect(provider()).toHaveDisplayValue("openrouter");
+		expect(provider()).toHaveDisplayValue("assemblyai");
 		expect(keyButtons()).toEqual([]);
 		expect(ui.queryByRole("combobox", { name: "Model" })).toBeNull();
 		expect(await writes()).toBe(0);

@@ -772,16 +772,16 @@ describe("PodNotes data schema", () => {
 				...structuredClone(released2240),
 				transcript: {
 					...released2240.transcript,
-					provider: "openrouter",
-					model: "x-ai/grok-stt-2.0",
+					provider: "assemblyai",
+					model: "universal-3-6-pro",
 				},
 			};
 
 			const decoded = decodePodNotesData(structuredClone(file));
 
 			expect(decoded.settings.transcript).toMatchObject({
-				provider: "openrouter",
-				model: "x-ai/grok-stt-2.0",
+				provider: "assemblyai",
+				model: "universal-3-6-pro",
 			});
 			expect(decoded.warnings).toEqual([]);
 			expect(decoded.changed).toBe(false);

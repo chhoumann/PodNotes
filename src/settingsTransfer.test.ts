@@ -910,15 +910,15 @@ describe("the transcription provider in a settings file", () => {
 
 	it("imports the provider and model a file names, also ones this version does not have", () => {
 		const settings = makeSettings();
-		settings.transcript.provider = "openrouter";
-		settings.transcript.model = "x-ai/grok-stt-2.0";
+		settings.transcript.provider = "assemblyai";
+		settings.transcript.model = "universal-3-6-pro";
 		const file = JSON.stringify(serializeSettings(settings, {}, "2.26.0", NOW, new Map()));
 
 		const { transcript } = imported(makeSettings(), file);
 
 		expect([transcript.provider, transcript.model]).toEqual([
-			"openrouter",
-			"x-ai/grok-stt-2.0",
+			"assemblyai",
+			"universal-3-6-pro",
 		]);
 	});
 
