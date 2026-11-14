@@ -4,6 +4,7 @@ import {
 	CHUNK_SIZE_BYTES,
 	createBinaryChunkFiles,
 	createChunkFiles,
+	mp3ChunkEnds,
 	getMimeType,
 	shouldConvertToWav,
 	writeWavHeader,
@@ -306,6 +307,84 @@ describe("createChunkFiles with maxSeconds (#532)", () => {
 			),
 		).toEqual([12_501, 12_500]);
 		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("an MP3 whose bitrate rises moves the cut forward rather than adding a chunk", async () => {
+		const low = MP3_STREAMS.mpeg1At96Kbps;
+		const high = MP3_STREAMS.mpeg1At320Kbps;
+		// 21,847 low-bitrate frames, then 21,845 high-bitrate frames and an ID3v1 tag. An even
+		// cut leaves 288 + 20,971,200 + 128 bytes after it, over 20 MiB; one frame later fits.
+		const tag = new Uint8Array(128);
+		tag.set([0x54, 0x41, 0x47]);
+		const episode = Buffer.concat([mp3Bytes(low, 21_847), mp3Bytes(high, 21_845), tag]);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			21_847 * low.frameBytes,
+			21_845 * high.frameBytes + tag.length,
+		]);
+		for (const part of parts) expect(part.bytes.length).toBeLessThanOrEqual(CHUNK_SIZE_BYTES);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("cuts every MP3 into the fewest chunks that fit both limits", () => {
+		// A seeded generator, so a failure names a reproducible case.
+		let seed = 532;
+		const random = () => {
+			seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+			return seed / 2_147_483_648;
+		};
+		const kinds = [MP3_STREAMS.mpeg1At96Kbps, MP3_STREAMS.mpeg1At320Kbps];
+		for (let trial = 0; trial < 300; trial++) {
+			const sizes: number[] = [];
+			while (sizes.length < 20 + Math.floor(random() * 100)) {
+				const kind = kinds[Math.floor(random() * 2)];
+				for (let run = 1 + Math.floor(random() * 12); run > 0; run--)
+					sizes.push(kind.frameBytes);
+			}
+			const lead = random() < 0.5 ? 512 : 0;
+			const trail = random() < 0.5 ? 128 : 0;
+			const parts: Uint8Array[] = [new Uint8Array(lead)];
+			for (const size of sizes) {
+				const kind = kinds.find((stream) => stream.frameBytes === size) ?? kinds[0];
+				parts.push(mp3Bytes(kind, 1));
+			}
+			const tail = new Uint8Array(trail);
+			if (trail) tail.set([0x54, 0x41, 0x47]);
+			parts.push(tail);
+			const bytes = new Uint8Array(Buffer.concat(parts));
+			const maxBytes = 2_000 + Math.floor(random() * 20_000);
+			const framesPerCap = 3 + Math.floor(random() * 40);
+			const maxSeconds = framesPerCap * 0.024;
+
+			// Brute force: the fewest chunks, where a chunk is a run of frames within both limits.
+			const starts = [0];
+			for (const size of sizes.slice(0, -1)) starts.push(starts[starts.length - 1] + size);
+			const startOf = (index: number) => (index === 0 ? 0 : lead + starts[index]);
+			const endOf = (index: number) =>
+				index === sizes.length ? bytes.length : lead + starts[index];
+			const fewest: number[] = [0];
+			for (let end = 1; end <= sizes.length; end++) {
+				fewest[end] = Infinity;
+				for (let first = Math.max(0, end - framesPerCap); first < end; first++) {
+					if (endOf(end) - startOf(first) <= maxBytes) {
+						fewest[end] = Math.min(fewest[end], fewest[first] + 1);
+					}
+				}
+			}
+			if (fewest[sizes.length] === Infinity) continue;
+
+			const ends = mp3ChunkEnds(bytes, maxBytes, maxSeconds);
+			const context = `trial ${trial}`;
+			expect(ends.length, context).toBe(fewest[sizes.length]);
+			ends.forEach((end, index) => {
+				const begin = index === 0 ? 0 : ends[index - 1];
+				expect(end - begin, context).toBeLessThanOrEqual(maxBytes);
+				expect(end, context).toBeGreaterThan(begin);
+			});
+			expect(ends[ends.length - 1], context).toBe(bytes.length);
+		}
 	});
 
 	test("an MP3 one frame short of two full chunks splits into two, with no one-frame tail", async () => {

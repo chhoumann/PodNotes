@@ -156,43 +156,52 @@ const SAMPLE_RATES = [
 ];
 
 /**
- * Where each chunk of an MP3 ends. Chunks end at frame starts, there are as few as
- * both limits allow, and they hold an equal number of frames, so no short last
- * chunk resets the speaker labels for a few seconds of speech.
+ * Where each chunk of an MP3 ends: at frame starts, in as few chunks as both limits allow,
+ * cut as close to equal frame counts as the size limit lets them be, so no chunk is a
+ * one-frame tail that cannot be decoded.
  */
-function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: number): number[] {
+export function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: number): number[] {
 	const frames = mp3Frames(bytes);
-	if (frames.length === 0) return [bytes.length];
+	const count = frames.length;
+	if (count === 0) return [bytes.length];
 	// Frames in one stream last equally long, so chunks are counted in frames: summing
 	// frame durations drifts past maxSeconds.
 	const framesPerCap = Math.floor(maxSeconds / frames[0].seconds + 1e-9);
-	const offsetOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
-	// The fewest chunks that fit both limits, each taking an equal share of the frames
-	// still to place and stepping back a frame at a time while it is over maxBytes, so
-	// chunks differ by a frame or so and none is a one-frame tail.
-	for (
-		let chunks = Math.max(
-			Math.ceil(bytes.length / maxBytes),
-			Math.ceil(frames.length / framesPerCap),
-		);
-		;
-		chunks++
-	) {
-		const firsts = [0];
-		for (let left = chunks - 1; left > 0; left--) {
-			const first = firsts[firsts.length - 1];
-			const share = Math.ceil((frames.length - first) / (left + 1));
-			let next = Math.min(first + Math.min(share, framesPerCap), frames.length - left);
-			while (next > first + 1 && frames[next].offset - offsetOf(first) > maxBytes) next--;
-			firsts.push(next);
-		}
-		const last = firsts[firsts.length - 1];
-		const lastFits =
-			frames.length - last <= framesPerCap && bytes.length - offsetOf(last) <= maxBytes;
-		if (lastFits || chunks >= frames.length) {
-			return [...firsts.slice(1).map((first) => frames[first].offset), bytes.length];
-		}
+	const startOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
+	const endOf = (end: number) => (end === count ? bytes.length : frames[end].offset);
+	const fits = (first: number, end: number) =>
+		end - first <= framesPerCap && endOf(end) - startOf(first) <= maxBytes;
+	/** The end of the longest chunk that starts at `first` and fits. */
+	const furthest = (first: number) => {
+		let end = Math.min(count, first + framesPerCap);
+		while (end > first + 1 && !fits(first, end)) end--;
+		return end;
+	};
+	/** The start of the longest chunk that ends at `end` and fits. */
+	const earliest = (end: number) => {
+		let first = Math.max(0, end - framesPerCap);
+		while (first < end - 1 && !fits(first, end)) first++;
+		return first;
+	};
+	// Filling each chunk as far as it fits gives the fewest chunks.
+	let chunks = 0;
+	for (let first = 0; first < count; first = furthest(first)) chunks++;
+	// lowest[index] is the earliest frame chunk `index` may start at and still leave the
+	// chunks after it able to reach the end.
+	const lowest: number[] = [];
+	for (let index = chunks - 1, end = count; index > 0; index--) {
+		end = earliest(end);
+		lowest[index] = end;
 	}
+	// Each cut aims at an equal share of the frames still to place, within what keeps
+	// this chunk and the ones after it fitting.
+	const firsts = [0];
+	for (let index = 1; index < chunks; index++) {
+		const first = firsts[index - 1];
+		const share = first + Math.ceil((count - first) / (chunks - index + 1));
+		firsts.push(Math.min(Math.max(share, lowest[index]), furthest(first)));
+	}
+	return [...firsts.slice(1).map((first) => frames[first].offset), bytes.length];
 }
 
 /**
