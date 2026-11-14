@@ -74,6 +74,14 @@ main.js raw: 328174 bytes; budget 330000 bytes; 1826 bytes remaining
 main.js gzip (level 9): 107084 bytes; budget 107181 bytes; 97 bytes remaining
 ```
 
+It then rose by 100 bytes for restoring Qwen3 ASR's punctuation from its text.
+With them:
+
+```text
+main.js raw: 328482 bytes; budget 330000 bytes; 1518 bytes remaining
+main.js gzip (level 9): 107184 bytes; budget 107281 bytes; 97 bytes remaining
+```
+
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
 Budgets use decimal bytes. The brief's 96,533-byte reference is unexplained.
 This report fixes the compressor instead of comparing compressed sizes across
