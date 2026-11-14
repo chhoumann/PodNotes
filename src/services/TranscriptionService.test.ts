@@ -1545,6 +1545,34 @@ describe("TranscriptionService", () => {
 				},
 			);
 
+			test("Qwen's words, which it lists without punctuation, take their punctuation from its text", async () => {
+				// Measured live: Qwen3 ASR keeps punctuation only in `text`.
+				openRouter(() =>
+					Response.json({
+						text: "Hello there. Uh, it's re-running now. Hi!",
+						duration: 11,
+						words: [
+							{ word: "Hello", start: 1.2, end: 1.5 },
+							{ word: "there", start: 1.5, end: 1.9 },
+							{ word: "Uh", start: 2, end: 2.2 },
+							{ word: "it's", start: 2.2, end: 2.5 },
+							{ word: "re", start: 2.5, end: 2.7 },
+							{ word: "running", start: 2.7, end: 3 },
+							{ word: "now", start: 3, end: 3.3 },
+							{ word: "Hi", start: 10.16, end: 10.5 },
+						],
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there. Uh, it's re running now.\n\n[00:00:10](${link("10.16")}) Hi!`,
+				);
+			});
+
 			test("Voxtral's segments from two parts of at most 900 s become paragraphs timed from the episode's start", async () => {
 				const stream = MP3_STREAMS.mpeg25At8Kbps;
 				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });

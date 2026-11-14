@@ -194,26 +194,53 @@ function parse(answer: unknown): PartTranscript {
 		return { segments: Array.isArray(segments) ? segments.flatMap(segmentOf) : [] };
 	}
 	return {
-		words: words.flatMap((item: unknown): Word[] => {
-			// Scribe v2 also lists sounds, such as "[gentle music]", as `audio_event` items.
-			if (!isPlainObject(item) || (item.type ?? "word") !== "word") return [];
-			const { word: text, start, end, speaker } = item;
-			if (typeof text !== "string" || typeof start !== "number" || typeof end !== "number") {
-				return [];
-			}
-			return [
-				{
-					text,
-					start,
-					end,
-					speaker:
-						typeof speaker === "number" || typeof speaker === "string"
-							? `${speaker}`
-							: undefined,
-				},
-			];
-		}),
+		words: punctuated(
+			words.flatMap((item: unknown): Word[] => {
+				// Scribe v2 also lists sounds, such as "[gentle music]", as `audio_event` items.
+				if (!isPlainObject(item) || (item.type ?? "word") !== "word") return [];
+				const { word: text, start, end, speaker } = item;
+				if (
+					typeof text !== "string" ||
+					typeof start !== "number" ||
+					typeof end !== "number"
+				) {
+					return [];
+				}
+				return [
+					{
+						text,
+						start,
+						end,
+						speaker:
+							typeof speaker === "number" || typeof speaker === "string"
+								? `${speaker}`
+								: undefined,
+					},
+				];
+			}),
+			answer.text,
+		),
 	};
+}
+
+/**
+ * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`, so
+ * each word takes its token from `text` when the two spell it alike.
+ */
+function punctuated(words: Word[], text: unknown): Word[] {
+	if (typeof text !== "string" || words.some((word) => /[.,?!]/.test(word.text))) return words;
+	const tokens = text.split(/\s+/).filter(Boolean);
+	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+	let next = 0;
+	return words.map((word) => {
+		// A few tokens of lookahead get past a word `text` spells differently.
+		for (let index = next; index < Math.min(tokens.length, next + 3); index++) {
+			if (bare(tokens[index]) !== bare(word.text)) continue;
+			next = index + 1;
+			return { ...word, text: tokens[index] };
+		}
+		return word;
+	});
 }
 
 function segmentOf(item: unknown): Segment[] {
