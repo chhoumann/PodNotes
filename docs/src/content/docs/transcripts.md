@@ -2,133 +2,113 @@
 title: Transcribe episodes
 slug: transcripts
 legacyTitleId: transcripts
-description: Save the transcript an episode's feed publishes, or transcribe the audio with your own API key, add speaker labels, and see what it costs.
+description: Save the transcript a podcast feed publishes for free, or transcribe the audio with timestamps and speaker labels using your own API key.
 ---
 
-Turn an episode into a transcript note. For a podcast you added, when its feed lists a transcript in a format that PodNotes reads, PodNotes saves that one, with no API key and at no cost. Otherwise, PodNotes transcribes the audio with your own OpenAI or Deepgram account.
+Turn an episode into a transcript note with clickable timestamps and speaker labels. When a podcast you added publishes a transcript in its feed, PodNotes saves that transcript at no cost and without an API key. Otherwise, PodNotes transcribes the audio through **ElevenLabs**, **Deepgram**, **OpenRouter**, or **OpenAI** using your own key.
 
 ## <span id="creating-a-transcript"></span>Transcribe an episode
 
-**PodNotes: Transcribe current episode** first uses the transcript the episode's feed publishes, at no cost, for a podcast you added to PodNotes. For any other episode, and when the feed publishes none in a format that PodNotes reads, it transcribes the audio with your provider and API key, and your provider bills you for it. Without your provider's key on the device, the command never bills you. It saves a transcript that the feed publishes. For an episode without one, it shows a notice that asks for the key.
+**PodNotes: Transcribe current episode** uses the transcript the episode's feed publishes whenever one is available for a podcast in your library. When the feed has none in a format PodNotes reads, or for any other audio episode, it sends the audio to the provider selected in **Settings → PodNotes** under **Transcripts**. Without an API key on this device, the command still saves feed transcripts and never bills you. For an episode that needs audio transcription, it shows a notice asking for your provider's key.
 
-1. Play an audio episode in PodNotes. You can pause it.
-2. Run **PodNotes: Transcribe current episode** from the command palette (`Ctrl+P`, or `Command+P` on macOS).
+1. In PodNotes, play an audio episode.
+2. From the command palette (`Ctrl+P`, or `Command+P` on macOS), run **PodNotes: Transcribe current episode**.
 
-The transcribe commands need a connection, so they are missing from the command palette while the device is offline.
+A paused episode, or the episode PodNotes restores on startup, works too.
 
-To transcribe audio, [set up an OpenAI key](/transcripts/#set-up-an-openai-key). For [speaker labels](/transcripts/#add-speaker-labels) from Deepgram, set up a Deepgram key instead.
+<span id="setting-up"></span><span id="set-up-an-openai-key"></span><span id="cost"></span><span id="what-transcription-costs"></span><span id="how-api-keys-are-stored"></span><span id="api-key-storage"></span>To transcribe audio, [choose a transcription provider and add its API key](/transcription-providers/). That guide also covers provider pricing and how PodNotes stores keys on each device.
 
-A notice shows the progress, and you can keep listening. When the transcript is ready, PodNotes saves it as a note and opens it, as [Where a note opens](/notes/#where-a-note-opens) describes. With the default settings, the transcript of the Acquired episode "The Home Depot" is `transcripts/Acquired/The Home Depot.md`.
+A notice tracks progress while you keep listening. When the transcript finishes, PodNotes saves the note and opens it, as [Where a note opens](/notes/#where-a-note-opens) describes. With the default path, the transcript of the Slow Thinking episode "Walking as thinking" saves to `transcripts/Slow Thinking/Walking as thinking.md`.
+
+![A saved transcript note with clickable timestamps and numbered speaker labels](/screenshots/transcript-note.webp)
 
 ### Transcribe the audio instead
 
-To transcribe the audio even when the feed publishes a transcript:
+After you [set up a transcription provider](/transcription-providers/) on this device, you can transcribe the audio even when the feed publishes a transcript:
 
-1. If this device has no key for your provider, set one up. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key), or [Add speaker labels](/transcripts/#add-speaker-labels) for Deepgram.
-2. Rename, move, or delete any transcript note you saved for the episode. PodNotes does not replace an existing transcript.
-3. Run **PodNotes: Transcribe current episode from audio**.
+1. In your vault, rename, move, or delete any transcript note you already saved for the episode, because PodNotes keeps an existing note.
+2. In PodNotes, play the audio episode.
+3. From the command palette (`Ctrl+P`, or `Command+P` on macOS), run **PodNotes: Transcribe current episode from audio**.
 
-The command always uses your provider and your API key. A transcript of the audio has paragraphs without times, so its lines do not link to their moment in the episode. With speaker labels, each turn starts with a label such as **A:** with OpenAI or **1:** with Deepgram.
+This command always sends the episode to your chosen provider and uses credit on your account there.
 
 ## Read the transcript in the player
 
-The full player's **Transcript** panel shows the transcript that the episode's feed publishes, for free, without saving a note. It reads **Feed transcript** and **Free** at the top.
+The full player's **Transcript** panel displays the transcript that an episode's feed publishes, without saving a note. It shows **Feed transcript** and **Free** at the top.
 
 1. In the full player, select **Transcript**.
-2. Select a line with a time to play the episode from that moment. A transcript without times can only be read.
+2. In the transcript list, select a line with a time to play the episode from that moment. A transcript without times can only be read.
 
-The panel highlights the line being spoken and follows it. To search the transcript, select **Find in transcript**. To keep the transcript, select **Save as note**. It saves the same note as **PodNotes: Transcribe current episode**, but never transcribes the audio. Where the panel is narrow, such as in the sidebar or on a phone, the button shows only its icon, a page with a plus sign. Once the note exists, the button reads **Open note** and opens it. The note opens as [Where a note opens](/notes/#where-a-note-opens) describes. See [Read the transcript](/player/#read-the-transcript) for every control.
+The panel highlights the line being spoken and scrolls with playback. Select **Find in transcript** to filter lines by word, or select **Save as note** to save the feed transcript without calling a provider. Where the panel is narrower than 340 px, such as in a narrow sidebar, **Save as note** shows only its page-with-plus icon. Once the note exists, the button reads **Open note**. See [Read the transcript](/player/#read-the-transcript) for every control.
 
-This clip opens **Transcript**, selects a line to play from it, and finds the word "walk":
+This clip opens **Transcript**, selects a line to jump to its time, and searches for "walk":
 
 ![The full player's Transcript panel: a selected line plays from its time, and a search for walk shows only the lines that contain it](/videos/transcript.mp4)
 
-When the feed publishes no transcript, the panel says "No transcript in this feed". For an audio episode, it offers **Transcribe with OpenAI**, or **Transcribe with Deepgram** when your speaker labels come from Deepgram, with a **Paid** tag. It works like **PodNotes: Transcribe current episode from audio**, with your provider and your API key. When the episode's transcript note already exists, the panel offers **Open note** in place of that button. Offline, the panel's transcribe button and **Save as note** are turned off, and **Open note** still works.
+When an episode has no feed transcript, the panel says "No transcript in this feed", or "No transcript yet" for a local file. For an audio episode, it offers **Transcribe with ElevenLabs** (or your chosen **Transcription provider**) with a **Paid** tag, which runs the same audio transcription as **PodNotes: Transcribe current episode from audio**. Once the transcript note exists, the panel shows **Open note** instead. While your device is offline, the transcribe button and **Save as note** are disabled, and **Open note** remains available.
 
-## Transcripts that feeds publish
+## <span id="transcripts-that-feeds-publish"></span>Timestamps in transcripts
 
-Some feeds list a transcript for each episode with the Podcasting 2.0 `<podcast:transcript>` tag. PodNotes uses it for a podcast you added, while the feed still lists the episode.
+Audio transcripts from **ElevenLabs**, **Deepgram**, and **OpenRouter** include paragraph timestamps, matching timed transcripts from podcast feeds:
 
-- When an episode lists several transcripts, PodNotes picks WebVTT, then SRT, then JSON, then HTML, then plain text.
-- In a transcript with times, each paragraph starts with the time it begins. The time uses the time format in **Timestamp template**. With the default format, `- {{linktime}}` with a space at the end, the time is a link that plays the episode from that moment. With `{{time}}`, it is plain text. PodNotes ignores the rest of the format, such as the `-` list marker.
-- When the transcript names its speakers, each speaker's turn starts with **Speaker label format**, even with **Speaker diarization** off.
-- A plain text transcript, or an HTML transcript without times, has paragraphs but no times.
+- Each paragraph starts with its start time, formatted from **Timestamp template** under **Notes** in **Settings → PodNotes**.
+- With the default **Timestamp template**, `- {{linktime}}` followed by a space, each time is a link that plays the episode from that moment. With `{{time}}`, PodNotes writes plain text such as `00:00:08`. PodNotes ignores surrounding text in **Timestamp template**, such as the `-` list marker.
+- **OpenAI** (**GPT Transcribe**), plain-text feed transcripts, and HTML feed transcripts without cue times produce paragraphs without timestamps.
+- When a podcast feed lists several `<podcast:transcript>` tags for one episode, PodNotes picks WebVTT first, then SRT, JSON, HTML, and plain text.
 
-With the default settings, the Markdown of a transcript with times and speakers looks like this:
+With the default settings, the Markdown of an audio transcript with timestamps and speaker labels looks like this:
 
 ```md wrap
-[00:00:00](obsidian://podnotes?...) **Ben:** Welcome back to the show. Today we look at how the company started.
+[00:00:00](obsidian://podnotes?...) **1:** Why do so many writers say the sentence only came together once they stood up from the desk?
 
-[00:00:41](obsidian://podnotes?...) **David:** It started with two founders and one store.
+[00:00:08](obsidian://podnotes?...) **2:** At a desk your eyes stay fixed on the page, and the argument narrows to whatever is already in front of you.
 ```
 
-## <span id="setting-up"></span>Set up an OpenAI key
+## <span id="speaker-diarization"></span><span id="enabling-it"></span><span id="add-speaker-labels"></span>Speaker labels
 
-To transcribe the audio without speaker labels, PodNotes sends it to OpenAI with your API key. A transcript that the feed publishes needs no key.
+In an audio transcript with **Speaker labels** turned on, PodNotes numbers speakers `1`, `2`, `3` in the order they first speak. With the default **Speaker label format**, `**{{speaker}}:**` followed by a space, each turn starts with **1:** or **2:** right after the timestamp.
 
-1. Create a key on the [OpenAI API keys page](https://platform.openai.com/api-keys).
-2. In Obsidian, open **Settings → PodNotes**.
-3. Under **Transcripts**, select the secret picker next to **OpenAI API key**.
-4. Create a secret that holds your key, or select one that you saved before.
+In a transcript that a feed publishes, PodNotes uses the speaker names from the feed, such as **Maya Lind:**, whether **Speaker labels** is on or off.
 
-On each other device, select or create the secret again. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
+**Speaker labels** is on by default in new installs. To turn it on or off:
 
-## <span id="speaker-diarization"></span><span id="enabling-it"></span>Add speaker labels
+1. Open **Settings → PodNotes**.
+2. Under **Transcripts**, toggle **Speaker labels**.
 
-To label who speaks in a transcript of the audio:
+### Models and speaker labels
 
-1. Open **Settings → PodNotes**.
-2. Under **Transcripts**, turn on **Speaker diarization**.
-3. In **Diarization provider**, select **OpenAI (gpt-4o-transcribe-diarize)** or **Deepgram**.
-4. If you selected **Deepgram**, create a key in the [Deepgram console](https://console.deepgram.com/).
-5. If you selected **Deepgram**, under **Deepgram API key**, select or create a secret that holds the Deepgram key. With OpenAI, PodNotes uses your OpenAI key.
+- **ElevenLabs** (**Scribe v3**), **Deepgram** (**Nova-3**), and all three **OpenRouter** models (**Grok STT 2.0**, **ElevenLabs Scribe v2**, and **MAI-Transcribe 2**) label speakers.
+- **OpenAI** (**GPT Transcribe**) does not label speakers. When **OpenAI** is selected, the **Speaker labels** row reads "GPT Transcribe does not label speakers." If **Speaker labels** is off, the toggle is disabled. If **Speaker labels** was already on, the toggle stays active so you can turn it off. Transcribing with **OpenAI** while **Speaker labels** is on saves the note without speaker labels and shows a notice: "Saved without speaker labels, because OpenAI does not label speakers. These providers do: ElevenLabs, Deepgram, OpenRouter."
+- If a model that supports speaker labels returns no speaker tags for an episode, PodNotes saves the note without labels and shows "Saved without speaker labels, because \<model\> returned none."
 
-The providers differ in these ways:
+### Long episodes on OpenRouter
 
-| Provider | Key | Labels | Long episodes |
-| --- | --- | --- | --- |
-| OpenAI | Your OpenAI key | `A`, `B`, `C` | Sent in parts of about 20 MB. `A` in one part may be `B` in the next. |
-| Deepgram | A Deepgram key. No OpenAI key needed. | `1`, `2`, `3` | Sent in one request. Labels stay the same for the whole episode. |
+**ElevenLabs** and **Deepgram** transcribe a full episode in one request, so each speaker keeps the same number from start to finish. **OpenRouter** also transcribes a full public podcast episode in one request when you select **ElevenLabs Scribe v2** and OpenRouter can fetch the episode URL directly.
 
-A transcript that the feed publishes uses the speaker names in the feed, with or without **Speaker diarization**.
+When **OpenRouter** uploads audio from your device and the file is over 18 MB (or over 30 minutes for MP3), PodNotes splits the episode into parts:
+
+- **Grok STT 2.0** (the recommended OpenRouter model): for MP3 episodes, PodNotes cuts a short clip reel of voices that speak for at least 2.6 seconds and sends one extra request to match them across parts. Matched voices keep one speaker number for the whole episode.
+- **ElevenLabs Scribe v2** (on private feeds, local files, or other uploads) and **MAI-Transcribe 2**: speaker numbers restart in each part, so speaker `1` in part two may be a different person from speaker `1` in part one. The same happens on **Grok STT 2.0** when a split upload is not MP3, has fewer than two voice turns of at least 2.6 seconds across parts, or cannot complete the matching request. PodNotes saves the note and shows a warning: "OpenRouter transcribed this episode in \<N\> parts, and speaker labels restart in each, so one person can have several labels."
 
 ### <span id="speaker-label-format"></span>Change the speaker label format
 
-1. In **Settings → PodNotes**, under **Transcripts**, turn on **Speaker diarization**. **Speaker label format**, below it, becomes available.
-2. Set **Speaker label format**, for example to `**Speaker {{speaker}}:**` with a space at the end.
+If **Transcription provider** is **OpenAI** and **Speaker labels** is disabled, switch **Transcription provider** to another provider first.
 
-The format sets the text before each turn. The default, `**{{speaker}}:**` with a space at the end, starts a turn with **A:** in bold. With `**Speaker {{speaker}}:**`, a turn starts with **Speaker A:**. With Deepgram, the labels are numbers, as in **Speaker 1:**. The labeled text fills `{{transcript}}`, so **Transcript template** needs no change.
+1. In **Settings → PodNotes**, under **Transcripts**, turn on **Speaker labels** so **Speaker label format** appears below it.
+2. In **Speaker label format**, enter the text to place before each speaker's turn, such as `**Speaker {{speaker}}:**` followed by a space.
 
-Transcripts that feeds publish use the format too. If you turn **Speaker diarization** off again afterwards, they keep using it.
+`{{speaker}}` becomes the speaker number or feed speaker name, and the formatted text fills `{{transcript}}` in **Transcript template**. Transcripts that feeds publish keep using **Speaker label format** even if you turn **Speaker labels** off afterwards.
 
 ## <span id="transcript-template"></span>Change where transcripts go and what they contain
 
-**Transcript path** under **Transcripts** sets where the note goes, `transcripts/{{podcast}}/{{title}}.md` by default. Keep `.md` at the end, because PodNotes does not add it. **Transcript template** sets the content, and `{{transcript}}` is the transcript text. [Transcript and timestamp tags](/templates/#transcript-and-timestamp-tags) lists every tag and the default template.
+Under **Transcripts** in **Settings → PodNotes**, **Transcript path** sets where each transcript note is saved (`transcripts/{{podcast}}/{{title}}.md` by default). Keep `.md` at the end of **Transcript path**, because PodNotes does not add it. **Transcript template** sets the note's contents, where `{{transcript}}` inserts the transcript body. See [Transcript and timestamp tags](/templates/#transcript-and-timestamp-tags) for every available tag.
 
-## <span id="cost"></span>What transcription costs
+## <span id="limits-and-error-messages"></span>Limits
 
-A transcript that the feed publishes costs nothing. To transcribe the audio, PodNotes charges nothing, and your provider bills your account per minute of audio:
-
-- [OpenAI API pricing](https://openai.com/api/pricing/) lists the rate for plain transcription (`whisper-1`) and for speaker labels (`gpt-4o-transcribe-diarize`).
-- [Deepgram pricing](https://deepgram.com/pricing) lists the rate for pre-recorded audio with speaker labels.
-
-## Limits and error messages
-
-These cases stop a transcription or change its result:
-
-- PodNotes transcribes audio episodes only. For a video episode, both commands are missing. The **Transcript** panel can still show and save a video's transcript that the feed publishes.
-- Both commands need a connection, and they are missing while the device is offline.
-- PodNotes transcribes the audio instead of using the feed's transcript in these cases:
-  - The episode is a local file.
-  - You have not added the podcast to PodNotes.
-  - The feed no longer lists the episode, or lists no transcript in a format PodNotes reads.
-  - PodNotes cannot fetch the feed, and no copy of the feed on this device lists the episode.
-- When PodNotes would transcribe the audio but the provider's key is not on this device, it transcribes nothing, and a notice asks you to select or create the key in the transcript settings.
-- When PodNotes cannot fetch or read the feed's transcript, a notice starts with "The published transcript could not be fetched" or "The published transcript could not be read." PodNotes does not transcribe the audio on its own. If your provider's key is on this device, the notice names **Transcribe current episode from audio**, which uses your API credit. To try the feed again, run **PodNotes: Transcribe current episode** again.
-- PodNotes waits 30 seconds for a feed's transcript and reads at most about 16 MB of it.
-- When a transcript note already exists at the path, a notice gives its path and PodNotes does nothing else. To transcribe again, rename, move, or delete the note first.
-- PodNotes sends long audio to OpenAI in parts of about 20 MB. In a transcript without speaker labels, a part that fails three times leaves the marker `[Error transcribing chunk N]`. With OpenAI speaker labels, the marker is `[Error diarizing chunk N]`. To retry, delete the note and run the command again. When every part fails, PodNotes saves no note.
-
-## <span id="how-api-keys-are-stored"></span>API key storage
-
-PodNotes keeps your API keys in Obsidian's secret storage on each device, and only the name of each key syncs. On the first start after an upgrade from a version that kept plain-text keys in `data.json`, PodNotes moves them to secret storage and does not finish loading until the move succeeds. If it fails, restart PodNotes. The move cannot erase old copies in backups or settings exports, so replace a key at the provider if it may have leaked. See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
+- PodNotes transcribes audio episodes only. For video episodes, both transcribe commands are hidden, though the **Transcript** panel can still read and save a video's published feed transcript.
+- Both commands need an internet connection and are hidden while your device is offline.
+- PodNotes transcribes the audio instead of using a feed transcript when the episode is a local file, when you have not added the podcast to PodNotes, when the feed no longer lists the episode or lists no supported transcript format, or when PodNotes cannot reach the feed and has no cached copy listing the episode on this device.
+- When a published transcript fails to download or parse, PodNotes shows a notice starting with "The published transcript could not be fetched" or "The published transcript could not be read." PodNotes never falls back to paid audio transcription on its own. If your provider's API key is set on this device, the notice names **Transcribe current episode from audio** so you can choose to run it. PodNotes waits 30 seconds for a feed transcript and reads up to 16 MB.
+- When a note already exists at **Transcript path**, PodNotes leaves it untouched and shows its path. Rename, move, or delete the note to transcribe the episode again.
+- When **OpenRouter** (over 18 MB, or over 30 minutes for MP3) or **OpenAI** (over 24 MB, or over 34.5 minutes for MP3) uploads an episode in parts, a part that fails leaves `[Error transcribing chunk N]` in that spot of the note, and a notice reports how many parts failed. Delete the note and run the command again to retry. If every part fails, PodNotes saves no note.
+- For provider error notices and how to fix each one, see [Why did my transcription fail?](/faq/#why-did-my-transcription-fail).

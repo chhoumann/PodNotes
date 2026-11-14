@@ -21,6 +21,10 @@ Most commands appear only while an episode is loaded. A paused episode counts, a
 **PodNotes: Create episode note** needs **Episode note path** and **Episode note template**. With both set, it appears when an episode is loaded or you have added a podcast. The transcribe commands need an audio episode and a connection.
 **PodNotes: Show player**, **PodNotes: Reorder Queue**, and the capture commands are always available. [Commands](/commands/) lists what each command needs.
 
+### What changes when I update to 2.25.0?
+
+PodNotes transcribes audio with **ElevenLabs**, **OpenRouter**, **OpenAI**, and **Deepgram**, adds timestamps to audio transcripts, and moves OpenAI from `whisper-1` and `gpt-4o-transcribe-diarize` to **GPT Transcribe**. OpenAI no longer labels speakers, so switch to **ElevenLabs**, **OpenRouter**, or **Deepgram** if you want speaker labels. [Update to 2.25.0](/update-2-25/) lists what your existing setup becomes.
+
 ### What changes when I update to 2.22.0?
 
 The PodNotes view, the player, and the settings are redesigned, and your devices merge their changes into one library. Update PodNotes on every device before you use it there. [Update to 2.22.0](/upgrade/) lists what to do.
@@ -102,5 +106,42 @@ API keys and the private feed addresses that PodNotes recognizes stay on each de
 ### Does transcription cost money?
 
 Not for a podcast you added, when its feed lists a transcript in a format that PodNotes reads. PodNotes saves that transcript for free, with no API key.
-To transcribe the audio, PodNotes uses your own OpenAI or Deepgram account, and the provider bills you for API use. Plain transcripts use OpenAI Whisper. **Speaker diarization** uses OpenAI or Deepgram.
-PodNotes does not import transcripts from Apple Podcasts. See [What transcription costs](/transcripts/#what-transcription-costs).
+To transcribe the audio, PodNotes uses your own **ElevenLabs**, **OpenRouter**, **OpenAI**, or **Deepgram** account, and the provider bills your account for API use.
+PodNotes does not import transcripts from Apple Podcasts. See [What transcription costs](/transcripts/#what-transcription-costs) and [Choose a transcription provider](/transcription-providers/).
+
+### Which provider should I use?
+
+Start with **ElevenLabs**. It is the default on new installs, labels speakers, adds timestamps, and fetches public episodes up to 15 hours itself so your device uploads nothing.
+Use **OpenRouter** if you want speech transcription on the same OpenRouter key and balance as your other AI tools. Its default **Grok STT 2.0** model keeps one speaker number per voice across long MP3 episodes split into parts.
+Use **Deepgram** if speed comes first, or **OpenAI** if you already have an OpenAI key and do not need timestamps or speaker labels. See [Choose a transcription provider](/transcription-providers/).
+
+### Why does my transcript have no speaker labels?
+
+Check these four causes:
+
+- **The feed published the transcript.** **PodNotes: Transcribe current episode** saves the feed's own transcript when one exists, and keeps speaker names only if the publisher wrote them into that file. Run **PodNotes: Transcribe current episode from audio** to transcribe with your provider instead.
+- **Speaker labels are turned off.** In **Settings → PodNotes**, under **Transcripts**, turn on **Speaker labels**, delete the old transcript note, and run the command again.
+- **Your provider is OpenAI.** OpenAI's **GPT Transcribe** model never labels speakers, even when **Speaker labels** was left on. Switch **Transcription provider** to **ElevenLabs**, **OpenRouter**, or **Deepgram**.
+- **The model returned no speaker labels.** A recording with one voice, or a response with no speaker tags, saves with the notice `"Saved without speaker labels, because <Model> returned none."` Try another model or provider if the episode has multiple speakers.
+
+See [Speaker labels](/transcripts/#speaker-labels).
+
+### Why did my transcription fail?
+
+Match the notice PodNotes showed to find what happened and what to do. In the notices below, `<Provider>` is **ElevenLabs**, **OpenRouter**, **OpenAI**, or **Deepgram**, and `<model>` is the model ID sent to that provider.
+
+- **`"Select or create an <Provider> API key in the transcript settings on this device."`** or **`"Select or create a Deepgram API key in the transcript settings on this device."`** No key is chosen for the active provider on this device. Open **Settings → PodNotes**, scroll to **Transcripts**, and link or create the key. See [Choose a transcription provider](/transcription-providers/).
+- **`"The selected <Provider> API key is not available on this device. Select or create it in the transcript settings."`** Your synced settings name a secret that has not been added on this device yet. Under **Transcripts**, link or create the key on this device.
+- **`"This version of PodNotes cannot transcribe with <id>. Update PodNotes, or choose another provider in the transcript settings."`** Another device chose a provider that this older PodNotes version does not recognize. Update PodNotes on this device, or pick another **Transcription provider**.
+- **`"The published transcript could not be fetched: ..."`** or **`"The published transcript could not be read."`** The feed linked to a broken or unreadable transcript file. Check your connection, or run **PodNotes: Transcribe current episode from audio** to transcribe the audio with your provider instead.
+- **`"Transcription failed: <Provider> rejected the API key. Check it in the transcript settings."`** The key was revoked, mistyped, or lacks permission. Create a new key on the provider's site (on ElevenLabs, enable Speech to Text if you restrict permissions), then update the key row under **Transcripts**.
+- **`"Transcription failed: Your <Provider> account is out of credit. Add credit there, then try again."`** Your balance or monthly limit ran out on the provider's site. Add credit in your provider's billing settings, then run the command again.
+- **`"Transcription failed: <Provider> does not offer the <model> model to this API key."`** Your account or key tier cannot access the selected model. Under **Transcripts**, set **Model** to the recommended model, or check model access on the provider's site.
+- **`"Transcription failed: <Provider> does not offer the <model> model under your <Provider> privacy settings. Change them there, or choose another model in the transcript settings."`** On OpenRouter, your [OpenRouter privacy settings](https://openrouter.ai/settings/privacy) block every upstream provider for that model. Relax that setting on OpenRouter, or choose another **Model** under **Transcripts**.
+- **`"Transcription failed: <Provider> could not transcribe this audio."`** The provider rejected the audio data or request. Check that the episode plays in PodNotes, or try another provider.
+- **`"Transcription failed: <Provider> could not fetch the episode."`** When a provider cannot fetch a public episode URL itself, PodNotes automatically downloads the episode on your device and uploads it instead. If a request still ends with this notice, check that the episode plays in PodNotes and try again.
+- **`"Transcription failed: <Provider> is limiting how fast your key may be used. Try again in a few minutes."`** You hit the provider's rate limit. PodNotes retries up to three times when the server asks to wait a minute or less. Wait a few minutes, then run the command again.
+- **`"Transcription failed: <Provider> failed (HTTP <status>). Try again later."`** The provider returned a server error after up to three attempts. Wait and try again, or switch **Transcription provider** if the outage continues.
+- **`"Transcription failed: Could not reach <Provider>. Check your connection."`** PodNotes could not connect after up to three attempts. Check your internet connection, VPN, or firewall, then try again.
+- **`"Transcription failed: <Provider> did not answer within 10 minutes."`** (or **`"30 minutes."`** for **Deepgram**). The request timed out. PodNotes never retries a timed-out request automatically so you are not billed twice if the provider is still finishing it. Wait a few minutes, then try again.
+- **`"Transcription failed: <Provider> found no speech in this episode."`** The provider returned no words for the audio, for example on an instrumental or silent file.

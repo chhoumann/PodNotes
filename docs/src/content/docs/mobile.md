@@ -76,10 +76,18 @@ If the episode is playing when its download finishes, it keeps playing without a
 
 Long-press a media file in the file explorer, where a computer uses a right-click. See [Play your own audio and video](/local_files/#play-your-own-audio-and-video).
 
+## Transcribe on your phone
+
+**PodNotes: Transcribe current episode**, **PodNotes: Transcribe current episode from audio**, and the **Transcript** panel work on a phone as on a computer. See [Transcribe episodes](/transcripts/).
+
+- Add your provider's API key on your phone once under **Transcripts** in **Settings → PodNotes**, because Obsidian stores API keys per device. See [Choose a transcription provider](/transcription-providers/).
+- For a public episode from a podcast you added, **ElevenLabs**, **Deepgram**, and OpenRouter's **ElevenLabs Scribe v2** send only the episode's public address, so your phone does not download or upload the audio file over mobile data unless the provider cannot fetch that address.
+- OpenRouter's **Grok STT 2.0** and **MAI-Transcribe 2**, **OpenAI**, private feeds, and local audio files download or read the audio on your phone and upload it, splitting long files into parts in memory.
+
 ## <span id="known-limits-and-verified-devices"></span>Limits on phones
 
 - A file that plays on a computer can fail on a phone that lacks its codec.
 - On Android, headset buttons and lock screen controls do not reach PodNotes.
-- API keys and the private feed addresses that PodNotes recognizes stay on each device, so add them on your phone too. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
+- API keys and the private feed addresses that PodNotes recognizes stay on each device, so add them on your phone too. See [API keys across devices and backups](/transcription-providers/#api-keys-across-devices-and-backups) and [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).
 - A download made on another device plays only after its media file syncs to this one. See [Downloads on another device](/sync/#downloads-on-another-device).
 - Before you switch to your phone, pause on your other device and let sync finish. A paused player on the phone then moves to the synced position, unless you moved its position and PodNotes has not saved the move yet. An episode that ended on the phone plays from the synced position, if it is before the end, when you play it. See [Use PodNotes on two devices](/sync/#use-podnotes-on-two-devices).

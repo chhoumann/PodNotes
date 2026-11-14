@@ -101,9 +101,9 @@ Another device resumes from the saved position, but it cannot follow or control 
 
 ## <span id="secrets-on-each-device"></span>API keys and private feeds on each device
 
-PodNotes stores your OpenAI and Deepgram API keys in Obsidian's secret storage on each device.
+PodNotes stores your ElevenLabs, OpenRouter, OpenAI, and Deepgram API keys in Obsidian's secret storage on each device.
 Only a reference to the key syncs in `data.json`.
-Add the key on every device where you transcribe audio. See [Transcribe episodes](/transcripts/).
+Add the key on every device where you transcribe audio. See [API keys across devices and backups](/transcription-providers/#api-keys-across-devices-and-backups).
 
 PodNotes also keeps each private feed address that it [recognizes](/private-feeds/#which-addresses-podnotes-keeps-private) in secret storage on each device.
 The podcast and a reference to its address sync, but the address does not. On each other device, enter the address once. See [Use a private feed on another device](/private-feeds/#use-a-private-feed-on-another-device).

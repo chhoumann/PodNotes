@@ -31,7 +31,7 @@ A settings file copies your PodNotes setup to another vault, or keeps a backup o
 ### <span id="exporting-settings"></span>Export your settings
 
 1. In **Settings → PodNotes**, under **Import and export**, enter a file name next to **Export settings**, or keep `PodNotes_Settings.json`.
-2. To include your OpenAI and Deepgram API keys, turn on **Include API keys**. Read [API keys in a settings file](/import_export/#api-keys-in-a-settings-file) first.
+2. To include your transcription API keys, turn on **Include API keys**. Read [API keys in a settings file](/import_export/#api-keys-in-a-settings-file) first.
 3. Next to **Export settings**, select **Export**.
 
 PodNotes saves the file in your vault and never overwrites an existing file. If the name is taken, choose another name.
@@ -52,10 +52,10 @@ PodNotes also imports settings files from older versions and a copy of `data.jso
 
 ### API keys in a settings file
 
-With **Include API keys** on, the file contains your OpenAI and Deepgram API keys in plain text. The file sits in your vault, so it can sync to other devices, and other plugins can read it. Keep the file private, and delete it when you no longer need it.
+With **Include API keys** on, the file contains your ElevenLabs, OpenRouter, OpenAI, and Deepgram API keys in plain text, for every provider you have set up on this device. The file sits in your vault, so it can sync to other devices, and other plugins can read it. Keep the file private, and delete it when you no longer need it.
 
 - **Include API keys** turns off again each time you open the settings.
 - If a selected key is missing on this device, the export stops with a notice. Select or create the key under **Transcripts**, then export again.
 - An import saves the file's keys, including plain-text keys from older files, to secret storage on this device only. It never overwrites an existing secret, and an import without keys keeps the keys you selected.
 
-See [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
+See [API keys across devices and backups](/transcription-providers/#api-keys-across-devices-and-backups) and [API keys and private feeds on each device](/sync/#api-keys-and-private-feeds-on-each-device).
