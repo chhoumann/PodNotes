@@ -1269,6 +1269,8 @@ describe("TranscriptionService", () => {
 			"x-ai/grok-stt-1.0": "2026-11-15",
 			"elevenlabs/scribe-v2": null,
 			"microsoft/mai-transcribe-2": null,
+			"mistralai/voxtral-mini-transcribe-3-0": null,
+			"qwen/qwen3-asr-1.7b": null,
 		});
 		/** Answers the catalog with `listed`, and each transcription request with `answer`. */
 		const openRouter = (
@@ -1483,6 +1485,116 @@ describe("TranscriptionService", () => {
 			const times = [...note.matchAll(/time=([\d.]+)\)/g)].map(([, time]) => time);
 			expect(times).toEqual(expected.map(String));
 			expect(note).toContain(`Part ${partBytes.length}.`);
+		});
+
+		describe("models without speaker labels", () => {
+			const VOXTRAL = "mistralai/voxtral-mini-transcribe-3-0";
+			const QWEN = "qwen/qwen3-asr-1.7b";
+			/** Voxtral's verbose_json: timed segments and no words. */
+			const segmentsAnswer = {
+				text: "Hello there. Hi!",
+				duration: 11,
+				segments: [
+					{ id: 0, start: 1.2, end: 1.9, text: " Hello there." },
+					{ id: 1, start: 10.16, end: 10.5, text: " Hi!" },
+				],
+			};
+			const wordsAnswer = {
+				...answers,
+				words: answers.words.map(({ speaker: _s, speaker_label: _l, ...rest }) => rest),
+			};
+
+			test.each([
+				[
+					VOXTRAL,
+					"Voxtral Mini Transcribe 3",
+					segmentsAnswer,
+					{ model: VOXTRAL, response_format: "verbose_json" },
+				],
+				[
+					QWEN,
+					"Qwen3 ASR 1.7B",
+					wordsAnswer,
+					{
+						model: QWEN,
+						response_format: "verbose_json",
+						"timestamp_granularities[]": "word",
+					},
+				],
+			])(
+				"%s gets the upload as its measured multipart request, and with speaker labels on the note is timed, unlabeled, and the notice says why",
+				async (model, label, answer, expected) => {
+					openRouter(() => Response.json(answer));
+					const plugin = useOpenRouter({
+						model,
+						feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+					});
+
+					await expect(finalNotice(plugin)).resolves.toBe(
+						`Saved without speaker labels, because ${label} does not label speakers. These providers do: ElevenLabs, Deepgram, OpenRouter.`,
+					);
+
+					expect(sent()).toHaveLength(1);
+					const [request] = sent();
+					expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+					expect(await fields(request)).toEqual(expected);
+					expect(new Uint8Array(await (await sentFile(request)).arrayBuffer())).toEqual(
+						audio,
+					);
+					expect(savedNote(plugin)).toBe(unlabeled);
+				},
+			);
+
+			test("Voxtral's segments from two parts of at most 900 s become paragraphs timed from the episode's start", async () => {
+				const stream = MP3_STREAMS.mpeg25At8Kbps;
+				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
+				getEpisodeAudioBufferMock.mockResolvedValue({
+					buffer: mp3Bytes(stream, Math.ceil(1500 / stream.frameSeconds)).buffer,
+					extension: "mp3",
+				});
+				const partBytes: number[] = [];
+				openRouter(async (request) => {
+					partBytes.push((await sentFile(request)).size);
+					const part = partBytes.length;
+					return Response.json({
+						text: `Part ${part} opens. Part ${part} ends.`,
+						segments: [
+							{ id: 0, start: 2.5, end: 6, text: ` Part ${part} opens.` },
+							{ id: 1, start: 40, end: 43.25, text: ` Part ${part} ends.` },
+						],
+					});
+				});
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(partBytes).toHaveLength(2);
+				for (const bytes of partBytes) {
+					expect(mp3Seconds(stream, bytes)).toBeLessThanOrEqual(900);
+				}
+				const second = mp3Seconds(stream, partBytes[0]);
+				const note = savedNote(plugin);
+				expect(
+					[...note.matchAll(/time=([\d.]+)\) (.+)$/gm)].map(([, t, s]) => [t, s]),
+				).toEqual([
+					["2.5", "Part 1 opens."],
+					["40", "Part 1 ends."],
+					[`${Math.round((second + 2.5) * 1000) / 1000}`, "Part 2 opens."],
+					[`${Math.round((second + 40) * 1000) / 1000}`, "Part 2 ends."],
+				]);
+			});
+
+			test("an answer with neither words nor segments writes no note", async () => {
+				openRouter(() => Response.json({ text: "Hello there.", duration: 11 }));
+				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription failed: OpenRouter found no speech in this episode.",
+				);
+
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			});
 		});
 
 		describe("speaker labels across the parts of an episode", () => {
