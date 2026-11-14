@@ -355,6 +355,26 @@ describe("createChunkFiles with maxSeconds (#532)", () => {
 		expect(parts.map((part) => part.bytes.length)).toEqual([episode.length]);
 	});
 
+	test("audio inside a second leading tag is not cut or counted either", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// An empty ID3v2.4 tag, then one whose payload is 480 s of MP3 frames, before 720 s of
+		// real audio: two requests of 360 s.
+		const tagWith = (payload: Uint8Array) => {
+			const header = [0x49, 0x44, 0x33, 4, 0, 0];
+			for (const shift of [21, 14, 7, 0]) header.push((payload.length >> shift) & 0x7f);
+			return Buffer.concat([new Uint8Array(header), payload]);
+		};
+		const tags = Buffer.concat([tagWith(new Uint8Array(0)), tagWith(mp3Bytes(stream, 20_000))]);
+		const episode = Buffer.concat([tags, mp3Bytes(stream, 30_000)]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			tags.length + 15_000 * stream.frameBytes,
+			15_000 * stream.frameBytes,
+		]);
+	});
+
 	test("tag-like bytes where no frame could start do not hide the audio after them", async () => {
 		const stream = MP3_STREAMS.mpeg1At96Kbps;
 		// 64 bytes of junk holding "ID3" and a size of 32 MiB, before 720 s of audio.
