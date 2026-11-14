@@ -309,6 +309,29 @@ describe("createChunkFiles with maxSeconds (#532)", () => {
 		expect(joinsInto(parts, episode)).toBe(true);
 	});
 
+	test("frame-like bytes in a leading tag do not set the duration of every frame", async () => {
+		const stream = MP3_STREAMS.mpeg25At8Kbps;
+		const fake = MP3_STREAMS.mpeg1At96Kbps;
+		// An ID3v2.4 tag holding two MPEG-1 headers 288 bytes apart, which pass for two 24 ms
+		// frames, before 24,001 real 72 ms frames: 1,728 s of audio.
+		const tag = new Uint8Array(8192);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x3f, 0x76]);
+		tag.set(fake.header, 100);
+		tag.set(fake.header, 388);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 24_001)]);
+
+		const parts = await chunk(episode, 600);
+
+		const seconds = parts.map(
+			(part, index) =>
+				((part.bytes.length - (index === 0 ? tag.length : 0)) / stream.frameBytes) *
+				stream.frameSeconds,
+		);
+		expect(seconds).toHaveLength(3);
+		for (const part of seconds) expect(part).toBeLessThanOrEqual(600);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
 	test("an MP3 whose bitrate rises moves the cut forward rather than adding a chunk", async () => {
 		const low = MP3_STREAMS.mpeg1At96Kbps;
 		const high = MP3_STREAMS.mpeg1At320Kbps;
@@ -335,53 +358,61 @@ describe("createChunkFiles with maxSeconds (#532)", () => {
 			seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
 			return seed / 2_147_483_648;
 		};
-		const kinds = [MP3_STREAMS.mpeg1At96Kbps, MP3_STREAMS.mpeg1At320Kbps];
+		const kinds = [
+			MP3_STREAMS.mpeg1At96Kbps,
+			MP3_STREAMS.mpeg1At320Kbps,
+			MP3_STREAMS.mpeg25At8Kbps,
+		];
 		for (let trial = 0; trial < 300; trial++) {
-			const sizes: number[] = [];
-			while (sizes.length < 20 + Math.floor(random() * 100)) {
-				const kind = kinds[Math.floor(random() * 2)];
-				for (let run = 1 + Math.floor(random() * 12); run > 0; run--)
-					sizes.push(kind.frameBytes);
+			const frames: (typeof kinds)[number][] = [];
+			while (frames.length < 20 + Math.floor(random() * 100)) {
+				const kind = kinds[Math.floor(random() * kinds.length)];
+				for (let run = 1 + Math.floor(random() * 12); run > 0; run--) frames.push(kind);
 			}
 			const lead = random() < 0.5 ? 512 : 0;
 			const trail = random() < 0.5 ? 128 : 0;
-			const parts: Uint8Array[] = [new Uint8Array(lead)];
-			for (const size of sizes) {
-				const kind = kinds.find((stream) => stream.frameBytes === size) ?? kinds[0];
-				parts.push(mp3Bytes(kind, 1));
-			}
 			const tail = new Uint8Array(trail);
 			if (trail) tail.set([0x54, 0x41, 0x47]);
-			parts.push(tail);
-			const bytes = new Uint8Array(Buffer.concat(parts));
+			const bytes = new Uint8Array(
+				Buffer.concat([
+					new Uint8Array(lead),
+					...frames.map((kind) => mp3Bytes(kind, 1)),
+					tail,
+				]),
+			);
 			const maxBytes = 2_000 + Math.floor(random() * 20_000);
-			const framesPerCap = 3 + Math.floor(random() * 40);
-			const maxSeconds = framesPerCap * 0.024;
+			const maxSeconds = (3 + Math.floor(random() * 40)) * 0.024;
 
 			// Brute force: the fewest chunks, where a chunk is a run of frames within both limits.
-			const starts = [0];
-			for (const size of sizes.slice(0, -1)) starts.push(starts[starts.length - 1] + size);
-			const startOf = (index: number) => (index === 0 ? 0 : lead + starts[index]);
+			const starts = [lead];
+			const elapsed = [0];
+			for (const kind of frames) {
+				starts.push(starts[starts.length - 1] + kind.frameBytes);
+				elapsed.push(elapsed[elapsed.length - 1] + kind.frameSeconds);
+			}
+			const startOf = (index: number) => (index === 0 ? 0 : starts[index]);
 			const endOf = (index: number) =>
-				index === sizes.length ? bytes.length : lead + starts[index];
+				index === frames.length ? bytes.length : starts[index];
+			const fits = (first: number, end: number) =>
+				endOf(end) - startOf(first) <= maxBytes &&
+				elapsed[end] - elapsed[first] <= maxSeconds + 1e-6;
 			const fewest: number[] = [0];
-			for (let end = 1; end <= sizes.length; end++) {
+			for (let end = 1; end <= frames.length; end++) {
 				fewest[end] = Infinity;
-				for (let first = Math.max(0, end - framesPerCap); first < end; first++) {
-					if (endOf(end) - startOf(first) <= maxBytes) {
-						fewest[end] = Math.min(fewest[end], fewest[first] + 1);
-					}
+				for (let first = 0; first < end; first++) {
+					if (fits(first, end)) fewest[end] = Math.min(fewest[end], fewest[first] + 1);
 				}
 			}
-			if (fewest[sizes.length] === Infinity) continue;
+			if (fewest[frames.length] === Infinity) continue;
 
 			const ends = mp3ChunkEnds(bytes, maxBytes, maxSeconds);
 			const context = `trial ${trial}`;
-			expect(ends.length, context).toBe(fewest[sizes.length]);
+			expect(ends.length, context).toBe(fewest[frames.length]);
 			ends.forEach((end, index) => {
-				const begin = index === 0 ? 0 : ends[index - 1];
-				expect(end - begin, context).toBeLessThanOrEqual(maxBytes);
-				expect(end, context).toBeGreaterThan(begin);
+				const first = index === 0 ? 0 : starts.indexOf(ends[index - 1]);
+				const last = end === bytes.length ? frames.length : starts.indexOf(end);
+				expect(last, context).toBeGreaterThan(first);
+				expect(fits(first, last), context).toBe(true);
 			});
 			expect(ends[ends.length - 1], context).toBe(bytes.length);
 		}

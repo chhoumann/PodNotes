@@ -164,24 +164,34 @@ export function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: nu
 	const frames = mp3Frames(bytes);
 	const count = frames.length;
 	if (count === 0) return [bytes.length];
-	// Frames in one stream last equally long, so chunks are counted in frames: summing
-	// frame durations drifts past maxSeconds.
-	const framesPerCap = Math.floor(maxSeconds / frames[0].seconds + 1e-9);
+	// elapsed[i] is the length of frames [0, i). Summing durations drifts by a few ulps, so
+	// the time limit gets a microsecond of slack.
+	const elapsed = [0];
+	for (const frame of frames) elapsed.push(elapsed[elapsed.length - 1] + frame.seconds);
 	const startOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
 	const endOf = (end: number) => (end === count ? bytes.length : frames[end].offset);
 	const fits = (first: number, end: number) =>
-		end - first <= framesPerCap && endOf(end) - startOf(first) <= maxBytes;
-	/** The end of the longest chunk that starts at `first` and fits. */
+		elapsed[end] - elapsed[first] <= maxSeconds + 1e-6 &&
+		endOf(end) - startOf(first) <= maxBytes;
+	/** The end of the longest chunk that starts at `first` and fits, or one frame. */
 	const furthest = (first: number) => {
-		let end = Math.min(count, first + framesPerCap);
-		while (end > first + 1 && !fits(first, end)) end--;
-		return end;
+		let [low, high] = [first + 1, count];
+		while (low < high) {
+			const middle = Math.ceil((low + high) / 2);
+			if (fits(first, middle)) low = middle;
+			else high = middle - 1;
+		}
+		return low;
 	};
-	/** The start of the longest chunk that ends at `end` and fits. */
+	/** The start of the longest chunk that ends at `end` and fits, or one frame. */
 	const earliest = (end: number) => {
-		let first = Math.max(0, end - framesPerCap);
-		while (first < end - 1 && !fits(first, end)) first++;
-		return first;
+		let [low, high] = [0, end - 1];
+		while (low < high) {
+			const middle = Math.floor((low + high) / 2);
+			if (fits(middle, end)) high = middle;
+			else low = middle + 1;
+		}
+		return low;
 	};
 	// Filling each chunk as far as it fits gives the fewest chunks.
 	let chunks = 0;
