@@ -67,10 +67,11 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 		onProgress("Fetching episode audio...");
 		const audio = await getEpisodeAudioBuffer(episode);
 		if (signal.aborted) throw signal.reason;
-		const files = await splitAudio(audio, {
-			maxBytes: model.maxUploadBytes,
-			maxSeconds: model.maxSeconds,
-		});
+		const files = await splitAudio(
+			audio,
+			{ maxBytes: model.maxUploadBytes, maxSeconds: model.maxSeconds },
+			signal,
+		);
 		// One part at a time: an upload is held in memory whole, and a failure that ends the
 		// job ends it before the next part is sent.
 		for (const [index, { file, start }] of files.entries()) {

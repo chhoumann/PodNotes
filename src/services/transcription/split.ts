@@ -43,6 +43,7 @@ function getMimeType(fileExtension: string): string {
 export async function splitAudio(
 	audio: { readonly buffer: ArrayBuffer; readonly extension: string },
 	{ maxBytes, maxSeconds = Infinity }: PartCaps,
+	signal?: AbortSignal,
 ): Promise<AudioPart[]> {
 	const { buffer, extension } = audio;
 	const type = getMimeType(extension);
@@ -66,7 +67,9 @@ export async function splitAudio(
 
 	// Other formats are measured by their metadata, without decoding them, and audio of an
 	// unknown length goes whole.
-	if (fits && !((await mediaSeconds(buffer, type)) > maxSeconds)) return whole();
+	const seconds = fits ? await mediaSeconds(buffer, type, signal) : NaN;
+	if (signal?.aborted) throw signal.reason;
+	if (fits && !(seconds > maxSeconds)) return whole();
 	const parts = await convertToWavParts(buffer, maxBytes, maxSeconds);
 	if (parts.length === 0) {
 		throw new Error(
@@ -211,19 +214,31 @@ function mp3FrameAt(bytes: Uint8Array, offset: number): Mp3Frame | undefined {
 	};
 }
 
-/** The audio's length from its metadata, or NaN when it has none or cannot be read. */
-async function mediaSeconds(buffer: ArrayBuffer, type: string): Promise<number> {
+/**
+ * The audio's length from its metadata, or NaN when it has none, cannot be read within 5 s
+ * (a WebView may load no media it does not play), or the job is aborted.
+ */
+async function mediaSeconds(
+	buffer: ArrayBuffer,
+	type: string,
+	signal: AbortSignal | undefined,
+): Promise<number> {
 	if (typeof activeDocument === "undefined") return NaN;
 	const url = URL.createObjectURL(new Blob([buffer], { type }));
 	const audio = activeDocument.createElement("audio");
+	let timer = 0;
 	try {
 		return await new Promise<number>((resolve) => {
+			const unknown = () => resolve(NaN);
 			audio.onloadedmetadata = () => resolve(audio.duration);
-			audio.onerror = () => resolve(NaN);
+			audio.onerror = unknown;
+			signal?.addEventListener("abort", unknown, { once: true });
+			timer = window.setTimeout(unknown, 5000);
 			audio.preload = "metadata";
 			audio.src = url;
 		});
 	} finally {
+		window.clearTimeout(timer);
 		audio.removeAttribute("src");
 		URL.revokeObjectURL(url);
 	}

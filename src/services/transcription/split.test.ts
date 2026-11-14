@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import { MP3_STREAMS, mp3Bytes, mp3Seconds } from "../../../tests/mocks/mp3";
 import { type PartCaps, splitAudio } from "./split";
 
@@ -512,6 +512,48 @@ describe("audio without MP3 frames to cut at", () => {
 			expect(parts).toEqual([
 				{ name: "audio.m4a", type: "audio/mp4", start: 0, bytes: episode },
 			]);
+		});
+
+		const silentMedia = () => {
+			const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+			Object.defineProperty(HTMLMediaElement.prototype, "src", { ...src, set() {} });
+			onTestFinished(() => {
+				if (src) Object.defineProperty(HTMLMediaElement.prototype, "src", src);
+			});
+		};
+
+		test("whose metadata never loads goes whole after 5 s", async () => {
+			vi.useFakeTimers();
+			onTestFinished(() => {
+				vi.useRealTimers();
+			});
+			silentMedia();
+			noDecoder();
+			const parts = splitAudio(
+				{ buffer: new Uint8Array(4096).buffer, extension: "m4a" },
+				{ maxBytes: MIB, maxSeconds: 2 },
+			);
+
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect((await parts).map(({ file }) => file.name)).toEqual(["audio.m4a"]);
+		});
+
+		test("stops waiting for its metadata on abort and decodes nothing", async () => {
+			silentMedia();
+			const decode = vi.fn();
+			stubAudioContext(decode);
+			const controller = new AbortController();
+			const parts = splitAudio(
+				{ buffer: new Uint8Array(4096).buffer, extension: "m4a" },
+				{ maxBytes: MIB, maxSeconds: 2 },
+				controller.signal,
+			);
+
+			controller.abort(new Error("unloaded"));
+
+			await expect(parts).rejects.toThrow("unloaded");
+			expect(decode).not.toHaveBeenCalled();
 		});
 
 		test("whose length its metadata does not give goes whole", async () => {

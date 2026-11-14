@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, onTestFinished, test, vi } from "vitest";
 import { Notice, type RequestUrlParam } from "obsidian";
 import { deferred, feedDocument, MemoryStorage } from "../../tests/mocks/feeds";
 import {
@@ -257,6 +257,57 @@ describe("TranscriptionService", () => {
 			await pending;
 			// Over OpenAI's size cap, so it would be decoded into WAV parts.
 			audioRequest.resolve({ buffer: new ArrayBuffer(24_000_001), extension: "ogg" });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(decodes).toBe(0);
+		});
+
+		test("decodes no audio whose length its metadata gives after unload", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: new ArrayBuffer(4096),
+				extension: "m4a",
+			});
+			// Longer than OpenAI's length cap, so it would be decoded into WAV parts.
+			const duration = vi
+				.spyOn(HTMLMediaElement.prototype, "duration", "get")
+				.mockReturnValue(3000);
+			// The probe's element loads nothing until the test fires its metadata.
+			let probe: HTMLElement | undefined;
+			const createElement = document.createElement.bind(document);
+			const create = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+				const element = createElement(tag);
+				if (tag === "audio") probe = element;
+				return element;
+			});
+			const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+			Object.defineProperty(HTMLMediaElement.prototype, "src", { ...src, set() {} });
+			onTestFinished(() => {
+				duration.mockRestore();
+				create.mockRestore();
+				if (src) Object.defineProperty(HTMLMediaElement.prototype, "src", src);
+			});
+			let decodes = 0;
+			vi.stubGlobal(
+				"AudioContext",
+				class {
+					async decodeAudioData(): Promise<never> {
+						decodes++;
+						throw new Error("Unsupported codec");
+					}
+					async close(): Promise<void> {}
+				},
+			);
+			const service = new TranscriptionService(createMockPlugin());
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
+				}
+			).transcribeEpisode(audioJob);
+			await vi.waitFor(() => expect(probe).toBeDefined());
+
+			service.dispose();
+			probe?.dispatchEvent(new Event("loadedmetadata"));
+			await pending;
 			await new Promise((resolve) => setTimeout(resolve, 0));
 
 			expect(decodes).toBe(0);
