@@ -9,7 +9,7 @@ import {
 	mockEpisode,
 	noticeMessages,
 } from "../../tests/mocks/transcriptionService";
-import { MP3_STREAMS, mp3Bytes, mp3Seconds } from "../../tests/mocks/mp3";
+import { MP3_STREAMS, mp3Bytes, mp3Seconds, voicedMp3Bytes } from "../../tests/mocks/mp3";
 import { providerMock, sentBytes, sentForm, sentText } from "../../tests/mocks/providerRequestUrl";
 import { FeedRepository } from "./FeedRepository";
 import { TranscriptionService } from "./TranscriptionService";
@@ -1272,7 +1272,8 @@ describe("TranscriptionService", () => {
 		});
 		/** Answers the catalog with `listed`, and each transcription request with `answer`. */
 		const openRouter = (
-			answer: (request: RequestUrlParam) => Response = () => Response.json(answers),
+			answer: (request: RequestUrlParam) => Response | Promise<Response> = () =>
+				Response.json(answers),
 			listed: unknown = EVERY_MODEL,
 		) =>
 			providerMock.mockImplementation(async (request) =>
@@ -1484,26 +1485,238 @@ describe("TranscriptionService", () => {
 			expect(note).toContain(`Part ${partBytes.length}.`);
 		});
 
-		test("labels from two parts never name the same speaker, and the notice says labels restart in each", async () => {
-			getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
-			openRouter(() =>
-				Response.json({ words: [word("Hello.", 1, 1.5, 0), word("Hi.", 10, 10.5, 1)] }),
-			);
-			const plugin = createMockPlugin({
-				provider: "openrouter",
-				openRouterKey: "openrouter-key",
-				speakers: true,
+		describe("speaker labels across the parts of an episode", () => {
+			const stream = MP3_STREAMS.mpeg25At8KbpsCrcPadded;
+			const VOICES = ["", "Ann", "Bob", "Cy"];
+			const [ANN, BOB, CY] = [1, 2, 3];
+			/** The stream's header with no CRC and no padding, then nothing: a frame of silence. */
+			const SILENCE = [0xff, 0xe3, 0x18, 0xc0, ...Array<number>(68).fill(0)];
+			/**
+			 * Episode frames, start inclusive and end exclusive. 417 frames are 30.024 s, and the
+			 * second part starts at frame 22,334, 1,608.048 s in.
+			 */
+			const TURNS = [
+				{ voice: ANN, from: 0, to: 417 },
+				{ voice: BOB, from: 417, to: 834 },
+				{ voice: BOB, from: 22_500, to: 22_917 },
+				{ voice: ANN, from: 22_917, to: 23_334 },
+			];
+			const episode = (turns = TURNS, frames = twoPartFrames) => ({
+				buffer: voicedMp3Bytes(
+					stream,
+					frames,
+					(frame) =>
+						turns.find(({ from, to }) => frame >= from && frame < to)?.voice ?? 0,
+				).buffer,
+				extension: "mp3",
 			});
 
-			await expect(finalNotice(plugin)).resolves.toBe(
-				"OpenRouter transcribed this episode in 2 parts, and speaker labels restart in each, so one person can have several labels.",
+			type Frame = { readonly index: number; readonly voice: number } | "silence";
+			/** The frames of a request's audio. Throws at the first byte where no frame of the stream starts. */
+			const framesOf = (bytes: Uint8Array): Frame[] => {
+				const frames: Frame[] = [];
+				const starts = (at: number, expected: readonly number[]) =>
+					expected.every((byte, index) => bytes[at + index] === byte);
+				for (let at = 0; at < bytes.length;) {
+					if (starts(at, stream.header)) {
+						const end = at + stream.frameBytes;
+						frames.push({
+							voice: bytes[end - 3],
+							index: (bytes[end - 2] << 8) | bytes[end - 1],
+						});
+						at = end;
+					} else if (starts(at, SILENCE)) {
+						frames.push("silence");
+						at += SILENCE.length;
+					} else {
+						throw new Error(`No frame of the stream starts at byte ${at}.`);
+					}
+				}
+				return frames;
+			};
+			const sentAudio = async (request: RequestUrlParam): Promise<Uint8Array> =>
+				request.contentType === "application/json"
+					? Buffer.from(sentJson(request).input_audio.data, "base64")
+					: new Uint8Array(await (await sentFile(request)).arrayBuffer());
+			/**
+			 * Answers as a model that hears who speaks in each frame: a word for each turn,
+			 * named for its voice, with labels numbered in the order voices first speak in this request.
+			 */
+			const heard = (frames: readonly Frame[]) => {
+				const labels = new Map<number, number>();
+				const words: ReturnType<typeof word>[] = [];
+				let voiceBefore = 0;
+				frames.forEach((frame, at) => {
+					const voice = frame === "silence" ? 0 : frame.voice;
+					const [start, end] = [at, at + 1].map((n) => n * stream.frameSeconds);
+					if (voice !== 0 && voice === voiceBefore) words[words.length - 1].end = end;
+					else if (voice !== 0) {
+						if (!labels.has(voice)) labels.set(voice, labels.size);
+						words.push(word(VOICES[voice], start, end, labels.get(voice)));
+					}
+					voiceBefore = voice;
+				});
+				return { words };
+			};
+			/** OpenRouter answering each request as `heard` does, and the reel with `reel` when given. */
+			const hearing = (reel?: () => Response) =>
+				openRouter(async (request) => {
+					const frames = framesOf(await sentAudio(request));
+					const isReel = frames.length * stream.frameSeconds < 60;
+					return isReel && reel ? reel() : Response.json(heard(frames));
+				});
+			const spoken = (note: string) =>
+				[...note.matchAll(/\*\*(\d+):\*\* (\w+)/g)].map(([, n, text]) => `${n} ${text}`);
+			const grok = () =>
+				createMockPlugin({
+					provider: "openrouter",
+					openRouterKey: "openrouter-key",
+					speakers: true,
+				});
+			const RESTART =
+				"OpenRouter transcribed this episode in 2 parts, and speaker labels restart in each, so one person can have several labels.";
+
+			test("Grok STT 2.0 numbers each voice once across two parts that label them in the other order", async () => {
+				getEpisodeAudioBufferMock.mockResolvedValue(episode());
+				hearing();
+				const plugin = grok();
+
+				const notice = await finalNotice(plugin);
+
+				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Bob", "2 Bob", "1 Ann"]);
+				expect(notice).toBe("Transcription completed and saved.");
+				expect(sent()).toHaveLength(3);
+			});
+
+			test("the reel is the stream's own frames, 9 s from 0.2 s into each voice's longest turn in each part, with 1.5 s of silent frames between clips", async () => {
+				getEpisodeAudioBufferMock.mockResolvedValue(episode());
+				hearing();
+
+				await transcribe(grok());
+
+				expect(sent()).toHaveLength(3);
+				const reel = framesOf(await sentAudio(sent()[2]));
+				// A run of silent frames has no first index.
+				const indexes = reel.map((frame) => (frame === "silence" ? -1 : frame.index));
+				const runs: { first: number; frames: number }[] = [];
+				indexes.forEach((index, at) => {
+					const previous = indexes[at - 1];
+					const follows =
+						at > 0 && (index === -1 ? previous === -1 : index === previous + 1);
+					if (follows) runs[runs.length - 1].frames++;
+					else runs.push({ first: index, frames: 1 });
+				});
+				const gapFrames = Math.ceil(1.5 / stream.frameSeconds);
+				expect(runs.map(({ first, frames }) => (first === -1 ? frames : "clip"))).toEqual([
+					"clip",
+					gapFrames,
+					"clip",
+					gapFrames,
+					"clip",
+					gapFrames,
+					"clip",
+				]);
+				// 0.2 s is 2.8 frames, so each clip starts at the third frame of its turn and holds 125.
+				const clips = runs
+					.filter(({ first }) => first !== -1)
+					.map(({ first, frames }) => [first, frames])
+					.sort(([a], [b]) => a - b);
+				expect(clips).toEqual(TURNS.map(({ from }) => [from + 3, 125]));
+				expect(reel.length * stream.frameSeconds).toBeCloseTo(
+					4 * 9 + 3 * gapFrames * 0.072,
+					6,
+				);
+			});
+
+			test("a voice whose turns are all under 2.6 s gets no clip and keeps its own number", async () => {
+				// Cy speaks 2.016 s, after Ann in the second part.
+				getEpisodeAudioBufferMock.mockResolvedValue(
+					episode([...TURNS, { voice: CY, from: 23_334, to: 23_362 }]),
+				);
+				hearing();
+				const plugin = grok();
+
+				const notice = await finalNotice(plugin);
+
+				expect(spoken(savedNote(plugin))).toEqual([
+					"1 Ann",
+					"2 Bob",
+					"2 Bob",
+					"1 Ann",
+					"3 Cy",
+				]);
+				expect(notice).toBe("Transcription completed and saved.");
+				expect(sent()).toHaveLength(3);
+				const reelVoices = framesOf(await sentAudio(sent()[2])).map((frame) =>
+					frame === "silence" ? 0 : frame.voice,
+				);
+				expect(new Set(reelVoices)).toEqual(new Set([0, ANN, BOB]));
+			});
+
+			test("a reel OpenRouter refuses keeps the parts' labels, saves the note and says labels restart", async () => {
+				getEpisodeAudioBufferMock.mockResolvedValue(episode());
+				hearing(() =>
+					Response.json(
+						{ error: { message: "Invalid audio SENTINEL", code: 400 } },
+						{ status: 400 },
+					),
+				);
+				const plugin = grok();
+
+				await expect(finalNotice(plugin)).resolves.toBe(RESTART);
+
+				expect(sent()).toHaveLength(3);
+				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Bob", "3 Bob", "4 Ann"]);
+			});
+
+			test.each(["elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
+				"%s sends no reel: labels from two parts never name the same speaker, and the notice says labels restart in each",
+				async (model) => {
+					getEpisodeAudioBufferMock.mockResolvedValue(episode());
+					hearing();
+					const plugin = createMockPlugin({
+						provider: "openrouter",
+						openRouterKey: "openrouter-key",
+						speakers: true,
+						model,
+					});
+
+					await expect(finalNotice(plugin)).resolves.toBe(RESTART);
+
+					expect(sent()).toHaveLength(2);
+					expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Bob", "3 Bob", "4 Ann"]);
+				},
 			);
 
-			expect(sent()).toHaveLength(2);
-			const labels = [...savedNote(plugin).matchAll(/\*\*(\d+):\*\* (\w+)/g)].map(
-				([, speaker, text]) => `${speaker} ${text}`,
-			);
-			expect(labels).toEqual(["1 Hello", "2 Hi", "3 Hello", "4 Hi"]);
+			test("with speaker labels off, Grok STT 2.0 sends no reel, even when its answers label speakers", async () => {
+				getEpisodeAudioBufferMock.mockResolvedValue(episode());
+				hearing();
+				const plugin = createMockPlugin({
+					provider: "openrouter",
+					openRouterKey: "openrouter-key",
+					speakers: false,
+				});
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(sent()).toHaveLength(2);
+				expect(savedNote(plugin)).not.toContain("**");
+			});
+
+			test("an episode in one part sends no reel", async () => {
+				getEpisodeAudioBufferMock.mockResolvedValue(episode(TURNS, 834));
+				hearing();
+				const plugin = grok();
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(sent()).toHaveLength(1);
+				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Bob"]);
+			});
 		});
 
 		test("speaker labels asked for and none returned, as from a route that ignores the option, saves the note and says so", async () => {
